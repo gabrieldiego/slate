@@ -88,6 +88,28 @@ struct box *box_find_by_id(struct box *box, lwc_string *id);
  */
 bool box_visible(struct box *box);
 
+/**
+ * Determine whether a box's DOM node has a class token.
+ *
+ * \param box Box to inspect
+ * \param class_name Class token to find
+ * \return true if the box has the class token, false otherwise
+ */
+bool box_has_class(struct box *box, const char *class_name);
+
+/**
+ * Get a dynamic draw offset from a box's inline style.
+ *
+ * This is intentionally narrow and only applies to dynamic Leaflet panes,
+ * where JavaScript mutates inline position after NetSurf's static layout.
+ *
+ * \param box Box to inspect
+ * \param x Updated with horizontal offset
+ * \param y Updated with vertical offset
+ * \return true if an offset was found, false otherwise
+ */
+bool box_dynamic_style_offset(struct box *box, int *x, int *y);
+
 
 /**
  * Print a box tree to a file.

@@ -1248,10 +1248,17 @@ bool html_redraw_box(const html_content *html, struct box *box,
 	enum css_overflow_e overflow_y = CSS_OVERFLOW_VISIBLE;
 	dom_exception exc;
 	dom_html_element_type tag_type;
+	int dynamic_x = 0;
+	int dynamic_y = 0;
 
 
 	if (html_redraw_printing && (box->flags & PRINTED))
 		return true;
+
+	if (box_dynamic_style_offset(box, &dynamic_x, &dynamic_y)) {
+		x_parent += dynamic_x;
+		y_parent += dynamic_y;
+	}
 
 	if (box->style != NULL) {
 		overflow_x = css_computed_overflow_x(box->style);
@@ -1386,8 +1393,9 @@ bool html_redraw_box(const html_content *html, struct box *box,
 	}
 
 	/* if visibility is hidden render children only */
-	if (box->style && css_computed_visibility(box->style) ==
-			CSS_VISIBILITY_HIDDEN) {
+	if (box->style &&
+	    css_computed_visibility(box->style) == CSS_VISIBILITY_HIDDEN &&
+	    box_visible(box) == false) {
 		if ((ctx->plot->group_start) &&
 		    (ctx->plot->group_start(ctx, "hidden box") != NSERROR_OK))
 			return false;

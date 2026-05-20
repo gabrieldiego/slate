@@ -199,6 +199,11 @@ html_object_callback(hlcache_handle *object,
 
 		html_object_done(box, object, o->background);
 
+		if (o->background == false && box->node != NULL) {
+			fire_generic_dom_event(corestring_dom_load, box->node,
+					false, false);
+		}
+
 		if (c->base.status != CONTENT_STATUS_LOADING &&
 				box->flags & REPLACE_DIM) {
 			union content_msg_data data;

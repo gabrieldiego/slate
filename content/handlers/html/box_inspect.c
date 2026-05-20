@@ -22,9 +22,14 @@
  * implementation of box tree inspection.
  */
 
+#include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
 #include <dom/dom.h>
 
+#include "utils/corestrings.h"
 #include "utils/utils.h"
 #include "utils/nsurl.h"
 #include "utils/errors.h"
@@ -633,11 +638,171 @@ struct box *box_find_by_id(struct box *box, lwc_string *id)
 
 
 /* Exported function documented in html/box.h */
+bool box_has_class(struct box *box, const char *class_name)
+{
+	dom_string *classes = NULL;
+	dom_exception err;
+	const char *haystack;
+	const char *pos;
+	size_t class_len;
+	bool found = false;
+
+	if (box == NULL || box->node == NULL || class_name == NULL) {
+		return false;
+	}
+
+	err = dom_element_get_attribute((dom_element *)box->node,
+			corestring_dom_class, &classes);
+	if (err != DOM_NO_ERR || classes == NULL) {
+		return false;
+	}
+
+	haystack = dom_string_data(classes);
+	class_len = strlen(class_name);
+	for (pos = strstr(haystack, class_name);
+			pos != NULL;
+			pos = strstr(pos + class_len, class_name)) {
+		const char before = (pos == haystack) ? ' ' : pos[-1];
+		const char after = pos[class_len];
+
+		if ((before == ' ' || before == '\t' || before == '\n' ||
+				before == '\r' || before == '\f') &&
+		    (after == '\0' || after == ' ' || after == '\t' ||
+				after == '\n' || after == '\r' ||
+				after == '\f')) {
+			found = true;
+			break;
+		}
+	}
+
+	dom_string_unref(classes);
+	return found;
+}
+
+static bool box_style_property_px(const char *style, const char *property,
+		int *value)
+{
+	const char *pos = style;
+	const char *end;
+	size_t property_len = strlen(property);
+
+	if (style == NULL || property == NULL || value == NULL) {
+		return false;
+	}
+
+	end = style + strlen(style);
+	while (pos < end) {
+		const char *decl_start = pos;
+		const char *decl_end;
+		const char *colon;
+		char *num_end;
+
+		while ((decl_start < end) &&
+				((*decl_start == ';') || (*decl_start == ' ') ||
+				 (*decl_start == '\t') || (*decl_start == '\n') ||
+				 (*decl_start == '\r'))) {
+			decl_start++;
+		}
+
+		decl_end = decl_start;
+		while ((decl_end < end) && (*decl_end != ';')) {
+			decl_end++;
+		}
+
+		colon = memchr(decl_start, ':', (size_t)(decl_end - decl_start));
+		if (colon != NULL &&
+		    (size_t)(colon - decl_start) == property_len &&
+		    strncasecmp(decl_start, property, property_len) == 0) {
+			*value = (int)strtol(colon + 1, &num_end, 10);
+			return num_end != colon + 1;
+		}
+
+		pos = decl_end;
+		if (pos < end) {
+			pos++;
+		}
+	}
+
+	return false;
+}
+
+static bool box_style_transform_offset(const char *style, int *x, int *y)
+{
+	const char *transform;
+	const char *open;
+	char *num_end;
+
+	if (style == NULL || x == NULL || y == NULL) {
+		return false;
+	}
+
+	transform = strstr(style, "transform");
+	if (transform == NULL) {
+		return false;
+	}
+
+	open = strchr(transform, '(');
+	if (open == NULL) {
+		return false;
+	}
+
+	*x = (int)strtol(open + 1, &num_end, 10);
+	if (num_end == open + 1) {
+		return false;
+	}
+
+	while (*num_end != '\0' && *num_end != ',') {
+		num_end++;
+	}
+	if (*num_end != ',') {
+		return false;
+	}
+
+	*y = (int)strtol(num_end + 1, &num_end, 10);
+	return true;
+}
+
+bool box_dynamic_style_offset(struct box *box, int *x, int *y)
+{
+	dom_string *style = NULL;
+	dom_exception err;
+	const char *style_text;
+	bool found = false;
+
+	*x = 0;
+	*y = 0;
+
+	if (box == NULL || box->node == NULL ||
+	    box_has_class(box, "leaflet-map-pane") == false) {
+		return false;
+	}
+
+	err = dom_element_get_attribute((dom_element *)box->node,
+			corestring_dom_style, &style);
+	if (err != DOM_NO_ERR || style == NULL) {
+		return false;
+	}
+
+	style_text = dom_string_data(style);
+	found = box_style_transform_offset(style_text, x, y);
+	if (found == false) {
+		bool got_left = box_style_property_px(style_text, "left", x);
+		bool got_top = box_style_property_px(style_text, "top", y);
+		found = got_left || got_top;
+	}
+
+	dom_string_unref(style);
+	return found;
+}
+
 bool box_visible(struct box *box)
 {
 	/* visibility: hidden */
 	if (box->style &&
 	    css_computed_visibility(box->style) == CSS_VISIBILITY_HIDDEN) {
+		if (box_has_class(box, "leaflet-tile-loaded")) {
+			return true;
+		}
 		return false;
 	}
 
