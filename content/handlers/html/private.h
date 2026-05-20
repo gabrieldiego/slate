@@ -26,6 +26,7 @@
 
 #include <dom/bindings/hubbub/parser.h>
 
+#include "netsurf/mouse.h"
 #include "netsurf/types.h"
 #include "content/content_protected.h"
 #include "content/handlers/css/utils.h"
@@ -191,6 +192,12 @@ typedef struct html_content {
 	/** Widget capturing all mouse events */
 	union html_drag_owner drag_owner;
 
+	/** Mouse buttons currently pressed for DOM event synthesis */
+	browser_mouse_state dom_mouse_buttons;
+
+	/** Whether JavaScript has cancelled the current mouse gesture */
+	bool dom_mouse_captured;
+
 	/** Current selection state */
 	html_selection_type selection_type;
 	/** Current selection owner */
@@ -344,6 +351,13 @@ bool fire_generic_dom_event(dom_string *type, dom_node *target,
  */
 bool fire_dom_keyboard_event(dom_string *type, dom_node *target,
 		bool bubbles, bool cancelable, uint32_t key);
+
+/**
+ * Construct a mouse event and fire it at the DOM
+ */
+bool fire_dom_mouse_event(dom_string *type, dom_node *target,
+		bool bubbles, bool cancelable, int x, int y,
+		browser_mouse_state mouse);
 
 /* Useful dom_string pointers */
 struct dom_string;

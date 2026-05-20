@@ -207,6 +207,67 @@ bool fire_dom_keyboard_event(dom_string *type, dom_node *target,
 	return result;
 }
 
+/* Exported interface, see html_internal.h */
+bool fire_dom_mouse_event(dom_string *type, dom_node *target,
+		bool bubbles, bool cancelable, int x, int y,
+		browser_mouse_state mouse)
+{
+	dom_exception exc;
+	dom_event *evt;
+	dom_document *doc = NULL;
+	dom_string *mouse_event_type = NULL;
+	bool result;
+	bool ctrl = (mouse & BROWSER_MOUSE_MOD_2) != 0;
+	bool alt = (mouse & BROWSER_MOUSE_MOD_3) != 0;
+	bool shift = (mouse & BROWSER_MOUSE_MOD_1) != 0;
+	bool meta = (mouse & BROWSER_MOUSE_MOD_4) != 0;
+	unsigned short button = 0;
+
+	if (target == NULL) {
+		return false;
+	}
+
+	exc = dom_node_get_owner_document(target, &doc);
+	if (exc != DOM_NO_ERR || doc == NULL) {
+		return false;
+	}
+
+	if ((mouse & (BROWSER_MOUSE_PRESS_2 | BROWSER_MOUSE_CLICK_2 |
+			BROWSER_MOUSE_DRAG_2 | BROWSER_MOUSE_HOLDING_2)) != 0) {
+		button = 1;
+	}
+
+	exc = dom_string_create((const uint8_t *)"MouseEvent",
+			SLEN("MouseEvent"), &mouse_event_type);
+	if (exc != DOM_NO_ERR) {
+		dom_node_unref(doc);
+		return false;
+	}
+
+	exc = dom_document_event_create_event((dom_document_event *)doc,
+			mouse_event_type, &evt);
+	dom_node_unref(doc);
+	dom_string_unref(mouse_event_type);
+	if (exc != DOM_NO_ERR) {
+		return false;
+	}
+
+	exc = dom_mouse_event_init((dom_mouse_event *)evt, type, bubbles,
+			cancelable, NULL, 0, x, y, x, y, ctrl, alt, shift,
+			meta, button, NULL);
+	if (exc != DOM_NO_ERR) {
+		dom_event_unref(evt);
+		return false;
+	}
+
+	NSLOG(netsurf, INFO, "Dispatching mouse '%*s' at %d,%d against %p",
+	      (int)dom_string_length(type), dom_string_data(type), x, y,
+	      target);
+	result = fire_dom_event(evt, target);
+	dom_event_unref(evt);
+	return result;
+}
+
 /**
  * Perform post-box-creation conversion of a document
  *
@@ -492,6 +553,8 @@ html_create_html_data(html_content *c, const http_parameter *params)
 	c->font_func = guit->layout;
 	c->drag_type = HTML_DRAG_NONE;
 	c->drag_owner.no_owner = true;
+	c->dom_mouse_buttons = BROWSER_MOUSE_HOVER;
+	c->dom_mouse_captured = false;
 	c->selection_type = HTML_SELECTION_NONE;
 	c->selection_owner.none = true;
 	c->focus_type = HTML_FOCUS_SELF;
@@ -1334,6 +1397,8 @@ html_open(struct content *c,
 
 	html->drag_type = HTML_DRAG_NONE;
 	html->drag_owner.no_owner = true;
+	html->dom_mouse_buttons = BROWSER_MOUSE_HOVER;
+	html->dom_mouse_captured = false;
 
 	/* text selection */
 	selection_init(html->sel);

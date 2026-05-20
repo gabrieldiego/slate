@@ -821,6 +821,73 @@ get_mouse_action_node(html_content *html,
 
 
 /**
+ * Dispatch DOM mouse events for page JavaScript.
+ *
+ * Front ends report a real drag as press, drag start, tracking events, and
+ * finally a zero mouse state for release.  DOM consumers expect mousedown,
+ * mousemove while a button is held, and mouseup.  Keep just enough state to
+ * bridge those two models, and let cancelled JS gestures suppress NetSurf's
+ * native drag handling.
+ */
+static nserror
+html_mouse_action_dom_event(html_content *html,
+			    browser_mouse_state mouse,
+			    int x, int y,
+			    bool *handled)
+{
+	static struct mouse_action_state mas;
+	browser_mouse_state event_mouse = mouse;
+	dom_string *type;
+	bool captured_before;
+	bool dispatch_result;
+	nserror res;
+
+	*handled = false;
+
+	if (html->layout == NULL) {
+		return NSERROR_OK;
+	}
+
+	res = get_mouse_action_node(html, x, y, &mas);
+	if (res != NSERROR_OK) {
+		return res;
+	}
+
+	captured_before = html->dom_mouse_captured;
+
+	if ((mouse & (BROWSER_MOUSE_PRESS_1 | BROWSER_MOUSE_PRESS_2)) != 0) {
+		type = corestring_dom_mousedown;
+		html->dom_mouse_buttons = mouse &
+				(BROWSER_MOUSE_PRESS_1 | BROWSER_MOUSE_PRESS_2 |
+				 BROWSER_MOUSE_MOD_1 | BROWSER_MOUSE_MOD_2 |
+				 BROWSER_MOUSE_MOD_3 | BROWSER_MOUSE_MOD_4);
+	} else if ((mouse & (BROWSER_MOUSE_CLICK_1 | BROWSER_MOUSE_CLICK_2)) != 0 ||
+			(mouse == BROWSER_MOUSE_HOVER &&
+			 html->dom_mouse_buttons != BROWSER_MOUSE_HOVER)) {
+		type = corestring_dom_mouseup;
+		event_mouse |= html->dom_mouse_buttons;
+	} else {
+		type = corestring_dom_mousemove;
+		event_mouse |= html->dom_mouse_buttons;
+	}
+
+	dispatch_result = fire_dom_mouse_event(type, mas.node, true, true,
+			x, y, event_mouse);
+
+	if (type == corestring_dom_mousedown && dispatch_result == false) {
+		html->dom_mouse_captured = true;
+	} else if (type == corestring_dom_mouseup) {
+		html->dom_mouse_buttons = BROWSER_MOUSE_HOVER;
+		html->dom_mouse_captured = false;
+	}
+
+	*handled = captured_before || html->dom_mouse_captured;
+
+	return NSERROR_OK;
+}
+
+
+/**
  * process mouse activity on a form gadget
  */
 static nserror
@@ -1477,10 +1544,19 @@ html_mouse_action(struct content *c,
 {
 	html_content *html = (html_content *)c;
 	nserror res = NSERROR_OK;
+	bool dom_handled = false;
 
 	/* handle open select menu */
 	if (html->visible_select_menu != NULL) {
 		return mouse_action_select_menu(html, bw, mouse, x, y);
+	}
+
+	res = html_mouse_action_dom_event(html, mouse, x, y, &dom_handled);
+	if (res != NSERROR_OK) {
+		return res;
+	}
+	if (dom_handled) {
+		return NSERROR_OK;
 	}
 
 	/* handle content drag */
