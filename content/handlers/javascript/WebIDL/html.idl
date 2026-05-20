@@ -1418,6 +1418,7 @@ dictionary DragEventInit : MouseEventInit {
 
   // the user agent
   readonly attribute Navigator navigator;
+  readonly attribute object screen;
   [Replaceable, SameObject] readonly attribute External external;
   readonly attribute ApplicationCache applicationCache;
 
@@ -1655,10 +1656,10 @@ WorkerGlobalScope implements WindowBase64;
 interface WindowTimers {
   long setTimeout(Function handler, optional long timeout = 0, any... arguments);
   long setTimeout(DOMString handler, optional long timeout = 0, any... arguments);
-  void clearTimeout(optional long handle = 0);
+  void clearTimeout(optional any handle = 0);
   long setInterval(Function handler, optional long timeout = 0, any... arguments);
   long setInterval(DOMString handler, optional long timeout = 0, any... arguments);
-  void clearInterval(optional long handle = 0);
+  void clearInterval(optional any handle = 0);
 };
 Window implements WindowTimers;
 WorkerGlobalScope implements WindowTimers;
@@ -2285,4 +2286,3 @@ partial interface Window {
   void captureEvents();
   void releaseEvents();
 };
-

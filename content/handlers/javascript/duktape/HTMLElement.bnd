@@ -154,9 +154,16 @@ setter HTMLElement::onwheel();
 
 getter HTMLElement::style()
 %{
-	/* Minimal implementation to avoid infinite-loop in Modernizr (c.f. #2413) */
-	if (dukky_create_object(ctx, PROTO_NAME(CSSSTYLEDECLARATION), 0) != DUK_EXEC_SUCCESS) {
-		return 0;
+	duk_push_this(ctx);
+	duk_get_prop_string(ctx, -1, MAGIC(style));
+	if (duk_is_undefined(ctx, -1)) {
+		duk_pop(ctx);
+		duk_push_pointer(ctx, (dom_element *)priv->parent.parent.node);
+		if (dukky_create_object(ctx, PROTO_NAME(CSSSTYLEDECLARATION), 1) != DUK_EXEC_SUCCESS) {
+			return 0;
+		}
+		duk_dup(ctx, -1);
+		duk_put_prop_string(ctx, -3, MAGIC(style));
 	}
 	return 1;
 %}

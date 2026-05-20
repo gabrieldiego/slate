@@ -14,6 +14,7 @@ class Window {
 	private struct window_schedule_s * schedule_ring;
 	private bool closed_down;
 	prologue %{
+#include <string.h>
 #include "utils/corestrings.h"
 #include "utils/nsurl.h"
 #include "netsurf/browser_window.h"
@@ -479,6 +480,32 @@ getter Window::navigator()
 	return 1;
 %}
 
+getter Window::screen()
+%{
+	duk_push_this(ctx);
+	duk_get_prop_string(ctx, -1, MAGIC(Screen));
+	if (duk_is_undefined(ctx, -1)) {
+		duk_pop(ctx);
+
+		duk_push_object(ctx);
+		duk_push_int(ctx, 800);
+		duk_put_prop_string(ctx, -2, "width");
+		duk_push_int(ctx, 600);
+		duk_put_prop_string(ctx, -2, "height");
+		duk_push_int(ctx, 800);
+		duk_put_prop_string(ctx, -2, "availWidth");
+		duk_push_int(ctx, 600);
+		duk_put_prop_string(ctx, -2, "availHeight");
+		duk_push_int(ctx, 96);
+		duk_put_prop_string(ctx, -2, "deviceXDPI");
+		duk_push_int(ctx, 96);
+		duk_put_prop_string(ctx, -2, "logicalXDPI");
+		duk_dup(ctx, -1);
+		duk_put_prop_string(ctx, -3, MAGIC(Screen));
+	}
+	return 1;
+%}
+
 getter Window::name()
 %{
 	const char *name;
@@ -511,6 +538,62 @@ method Window::alert()
 		NSLOG(netsurf, INFO, "JS ALERT: %*s", (int)msg_len, msg);
 	}
 	return 0;
+%}
+
+method Window::getComputedStyle()
+%{
+	node_private_t *node_priv;
+	dom_element *element = NULL;
+	dom_string *class_attr = NULL;
+
+	if (dukky_instanceof(ctx, 0, PROTO_NAME(ELEMENT))) {
+		duk_get_prop_string(ctx, 0, PRIVATE_MAGIC);
+		node_priv = duk_get_pointer(ctx, -1);
+		duk_pop(ctx);
+		if (node_priv != NULL) {
+			element = (dom_element *)node_priv->node;
+		}
+	}
+
+	duk_push_pointer(ctx, element);
+	if (dukky_create_object(ctx, PROTO_NAME(CSSSTYLEDECLARATION), 1) != DUK_EXEC_SUCCESS) {
+		return 0;
+	}
+
+	if (element == NULL) {
+		return 1;
+	}
+
+	if (dom_element_get_attribute(element, corestring_dom_class, &class_attr) == DOM_NO_ERR &&
+			class_attr != NULL) {
+		const char *class_data = dom_string_data(class_attr);
+		size_t class_len = dom_string_length(class_attr);
+		const char *needle = "leaflet-default-icon-path";
+		size_t needle_len = strlen(needle);
+		bool found_leaflet_icon_path = false;
+		size_t idx;
+
+		for (idx = 0; idx + needle_len <= class_len; idx++) {
+			if (memcmp(class_data + idx, needle, needle_len) == 0) {
+				found_leaflet_icon_path = true;
+				break;
+			}
+		}
+
+		if (found_leaflet_icon_path) {
+			const char *icon_url =
+				"url(https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png)";
+
+			duk_push_string(ctx, icon_url);
+			duk_put_prop_string(ctx, -2, "background-image");
+			duk_push_string(ctx, icon_url);
+			duk_put_prop_string(ctx, -2, "backgroundImage");
+		}
+
+		dom_string_unref(class_attr);
+	}
+
+	return 1;
 %}
 
 method Window::setTimeout()

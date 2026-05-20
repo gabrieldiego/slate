@@ -73,6 +73,7 @@ struct dom_html_br_element;
 
 #include "Event.bnd"
 #include "KeyboardEvent.bnd"
+#include "MouseEvent.bnd"
 
 init MutationEvent(struct dom_mutation_event *evt::evt);
 init UIEvent(struct dom_ui_event *evt::evt);
@@ -80,7 +81,6 @@ init TextEvent(struct dom_text_event *evt::evt);
 init MutationNameEvent(struct dom_mutation_name_event *evt::evt);
 init MouseWheelEvent(struct dom_mouse_wheel_event *evt::evt);
 init MouseMultiWheelEvent(struct dom_mouse_multi_wheel_event *evt::evt);
-init MouseEvent(struct dom_mouse_event *evt::evt);
 init DocumentEvent(struct dom_document_event *evt::evt);
 init CustomEvent(struct dom_custom_event *evt::evt);
 init CompositionEvent(struct dom_ui_event *evt::evt);
@@ -210,4 +210,5 @@ init HTMLPropertiesCollection(struct dom_html_collection *coll);
 /* CSS Object model */
 
 #include "CSSRule.bnd"
+#include "CSSStyleDeclaration.bnd"
 #include "CSSStyleSheet.bnd"

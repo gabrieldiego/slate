@@ -308,9 +308,16 @@ interface Element : Node {
   Element? closest(DOMString selectors);
   boolean matches(DOMString selectors);
 
+  readonly attribute long clientWidth;
+  readonly attribute long clientHeight;
+  readonly attribute long offsetWidth;
+  readonly attribute long offsetHeight;
+  object getBoundingClientRect();
+
   HTMLCollection getElementsByTagName(DOMString localName);
   HTMLCollection getElementsByTagNameNS(DOMString? namespace, DOMString localName);
   HTMLCollection getElementsByClassName(DOMString classNames);
+  object createSVGRect();
 };
 [Exposed=Window]
 interface NamedNodeMap {
@@ -475,5 +482,3 @@ interface DOMTokenList {
 interface DOMSettableTokenList : DOMTokenList {
             attribute DOMString value;
 };
-
-

@@ -23,6 +23,12 @@ prologue Document()
 
 init Document(struct dom_document *document::node);
 
+getter Document::defaultView()
+%{
+	duk_push_global_object(ctx);
+	return 1;
+%}
+
 method Document::write()
 %{
 	struct html_content *htmlc;
@@ -154,7 +160,7 @@ method Document::createElementNS()
 	duk_size_t text_len;
 	duk_size_t ns_len;
 	const char *ns = duk_safe_to_lstring(ctx, 0, &ns_len);
-	const char *text = duk_safe_to_lstring(ctx, 0, &text_len);
+	const char *text = duk_safe_to_lstring(ctx, 1, &text_len);
 	dom_string *text_str;
 	dom_string *ns_str;
 

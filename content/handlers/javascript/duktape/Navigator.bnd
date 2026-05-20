@@ -39,7 +39,7 @@ getter Navigator::appVersion()
 
 getter Navigator::platform()
 %{
-	duk_push_string(ctx, NULL);
+	duk_push_string(ctx, "Linux x86_64");
 	return 1;
 %}
 
@@ -57,13 +57,13 @@ getter Navigator::productSub()
 
 getter Navigator::vendor()
 %{
-	duk_push_string(ctx, NULL);
+	duk_push_string(ctx, "");
 	return 1;
 %}
 
 getter Navigator::vendorSub()
 %{
-	duk_push_string(ctx, NULL);
+	duk_push_string(ctx, "");
 	return 1;
 %}
 

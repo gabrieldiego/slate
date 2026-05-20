@@ -115,7 +115,28 @@ interface CSSStyleDeclaration  {
   void setPropertyPriority(DOMString property , [TreatNullAs=EmptyString] DOMString priority );
   DOMString removeProperty(DOMString property );
   readonly attribute CSSRule? parentRule;
+  [TreatNullAs=EmptyString] attribute DOMString backgroundImage;
   [TreatNullAs=EmptyString] attribute DOMString cssFloat;
+  [TreatNullAs=EmptyString] attribute DOMString backgroundPosition;
+  [TreatNullAs=EmptyString] attribute DOMString behavior;
+  [TreatNullAs=EmptyString] attribute DOMString bottom;
+  [TreatNullAs=EmptyString] attribute DOMString display;
+  [TreatNullAs=EmptyString] attribute DOMString filter;
+  [TreatNullAs=EmptyString] attribute DOMString height;
+  [TreatNullAs=EmptyString] attribute DOMString left;
+  [TreatNullAs=EmptyString] attribute DOMString marginLeft;
+  [TreatNullAs=EmptyString] attribute DOMString marginBottom;
+  [TreatNullAs=EmptyString] attribute DOMString marginTop;
+  [TreatNullAs=EmptyString] attribute DOMString objectFit;
+  [TreatNullAs=EmptyString] attribute DOMString opacity;
+  [TreatNullAs=EmptyString] attribute DOMString outlineStyle;
+  [TreatNullAs=EmptyString] attribute DOMString position;
+  [TreatNullAs=EmptyString] attribute DOMString top;
+  [TreatNullAs=EmptyString] attribute DOMString transform;
+  [TreatNullAs=EmptyString] attribute DOMString visibility;
+  [TreatNullAs=EmptyString] attribute DOMString whiteSpace;
+  [TreatNullAs=EmptyString] attribute DOMString width;
+  [TreatNullAs=EmptyString] attribute DOMString zIndex;
 };
 
 partial interface CSSStyleDeclaration {
@@ -142,6 +163,7 @@ partial interface Window {
 };
 
 partial interface Element {
+  [SameObject, PutForwards=cssText] readonly attribute CSSStyleDeclaration style;
   PseudoElement? pseudo(DOMString pseudoElt );
 };
 

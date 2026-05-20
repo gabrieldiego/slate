@@ -9,13 +9,196 @@
  */
 
 class Element {
-	prologue %{
+prologue %{
 #include <utils/corestrings.h>
 #include <dom/bindings/hubbub/parser.h>
+#include "content/content.h"
+#include "content/content_protected.h"
+#include "html/box.h"
+#include "html/box_inspect.h"
+#include "html/box_construct.h"
+#include "html/private.h"
+
+static struct html_content *
+element_get_html_content(dom_node *node)
+{
+	dom_document *doc = NULL;
+	struct html_content *htmlc = NULL;
+	dom_exception exc;
+
+	exc = dom_node_get_owner_document(node, &doc);
+	if (exc != DOM_NO_ERR || doc == NULL) {
+		return NULL;
+	}
+
+	exc = dom_node_get_user_data(doc,
+			corestring_dom___ns_key_html_content_data,
+			&htmlc);
+	dom_node_unref(doc);
+	if (exc != DOM_NO_ERR) {
+		return NULL;
+	}
+
+	return htmlc;
+}
+
+static int
+element_pre_layout_width(dom_node *node)
+{
+	struct html_content *htmlc = element_get_html_content(node);
+	unsigned width = 0;
+	unsigned height = 0;
+	union content_msg_data msg_data = {
+		.getdims = {
+			.viewport_width = &width,
+			.viewport_height = &height,
+		},
+	};
+
+	if (htmlc != NULL) {
+		content_broadcast(&htmlc->base, CONTENT_MSG_GETDIMS, &msg_data);
+	}
+
+	return width > 0 ? (int)width : 800;
+}
+
+static int
+element_pre_layout_height(dom_node *node)
+{
+	dom_string *id = NULL;
+	dom_exception exc;
+
+	exc = dom_element_get_attribute((dom_element *)node,
+			corestring_dom_id, &id);
+	if (exc == DOM_NO_ERR && id != NULL) {
+		bool is_map = dom_string_caseless_isequal(id,
+				corestring_dom_map);
+		dom_string_unref(id);
+		if (is_map) {
+			return 400;
+		}
+	}
+
+	return 300;
+}
+
+static int
+element_box_width(dom_node *node, bool include_border)
+{
+	struct box *box = box_for_node(node);
+
+	if (box == NULL) {
+		return element_pre_layout_width(node);
+	}
+
+	return box->padding[LEFT] + box->width + box->padding[RIGHT] +
+			(include_border ?
+			box->border[LEFT].width + box->border[RIGHT].width : 0);
+}
+
+static int
+element_box_height(dom_node *node, bool include_border)
+{
+	struct box *box = box_for_node(node);
+
+	if (box == NULL) {
+		return element_pre_layout_height(node);
+	}
+
+	return box->padding[TOP] + box->height + box->padding[BOTTOM] +
+			(include_border ?
+			box->border[TOP].width + box->border[BOTTOM].width : 0);
+}
 %};
 };
 
 init Element(struct dom_element *element::node);
+
+method Element::createSVGRect()
+%{
+	duk_push_object(ctx);
+	duk_push_int(ctx, 0);
+	duk_put_prop_string(ctx, -2, "x");
+	duk_push_int(ctx, 0);
+	duk_put_prop_string(ctx, -2, "y");
+	duk_push_int(ctx, 0);
+	duk_put_prop_string(ctx, -2, "width");
+	duk_push_int(ctx, 0);
+	duk_put_prop_string(ctx, -2, "height");
+	return 1;
+%}
+
+getter Element::style()
+%{
+	duk_push_this(ctx);
+	duk_get_prop_string(ctx, -1, MAGIC(style));
+	if (duk_is_undefined(ctx, -1)) {
+		duk_pop(ctx);
+		duk_push_pointer(ctx, (dom_element *)priv->parent.node);
+		if (dukky_create_object(ctx, PROTO_NAME(CSSSTYLEDECLARATION), 1) != DUK_EXEC_SUCCESS) {
+			return 0;
+		}
+		duk_dup(ctx, -1);
+		duk_put_prop_string(ctx, -3, MAGIC(style));
+	}
+	return 1;
+%}
+
+getter Element::clientWidth()
+%{
+	duk_push_int(ctx, element_box_width(priv->parent.node, false));
+	return 1;
+%}
+
+getter Element::clientHeight()
+%{
+	duk_push_int(ctx, element_box_height(priv->parent.node, false));
+	return 1;
+%}
+
+getter Element::offsetWidth()
+%{
+	duk_push_int(ctx, element_box_width(priv->parent.node, true));
+	return 1;
+%}
+
+getter Element::offsetHeight()
+%{
+	duk_push_int(ctx, element_box_height(priv->parent.node, true));
+	return 1;
+%}
+
+method Element::getBoundingClientRect()
+%{
+	struct box *box = box_for_node(priv->parent.node);
+	int x = 0;
+	int y = 0;
+	int width = element_box_width(priv->parent.node, true);
+	int height = element_box_height(priv->parent.node, true);
+
+	if (box != NULL) {
+		box_coords(box, &x, &y);
+	}
+
+	duk_push_object(ctx);
+	duk_push_int(ctx, x);
+	duk_put_prop_string(ctx, -2, "left");
+	duk_push_int(ctx, y);
+	duk_put_prop_string(ctx, -2, "top");
+	duk_push_int(ctx, x + width);
+	duk_put_prop_string(ctx, -2, "right");
+	duk_push_int(ctx, y + height);
+	duk_put_prop_string(ctx, -2, "bottom");
+	duk_push_int(ctx, width);
+	duk_put_prop_string(ctx, -2, "width");
+	duk_push_int(ctx, height);
+	duk_put_prop_string(ctx, -2, "height");
+	duk_push_int(ctx, x);
+	duk_put_prop_string(ctx, -2, "x");
+	duk_push_int(ctx, y);
+	duk_put_prop_string(ctx, -2, "y");
+	return 1;
+%}
 
 getter Element::firstElementChild()
 %{
