@@ -193,11 +193,11 @@ $$(OBJROOT)/$(2): $(1) $$(OBJROOT)/created $$(DEPROOT)/created
 	$$(VQ)echo "     DEP: $(1)"
 	$$(Q)$$(RM) $$(DEPROOT)/$(3)
 	$$(Q)$$(CC) $$(IFLAGS) $$(CFLAGS) -MM  \
-		    $(1) | sed 's,^.*:,$$(DEPROOT)/$(3) $$(OBJROOT)/$(2):,' \
+		    $(1) $$(CFLAGS_$$(subst /,_,$(1))) | sed 's,^.*:,$$(DEPROOT)/$(3) $$(OBJROOT)/$(2):,' \
 		    > $$(DEPROOT)/$(3)
 	$$(VQ)echo " COMPILE: $(1)"
 	$$(Q)$$(RM) $$(OBJROOT)/$(2)
-	$$(Q)$$(CC) $$(COMMON_WARNFLAGS) $$(CWARNFLAGS) $$(IFLAGS) $$(CFLAGS) $(CFLAGS_ENV) -o $$(OBJROOT)/$(2) -c $(1)
+	$$(Q)$$(CC) $$(COMMON_WARNFLAGS) $$(CWARNFLAGS) $$(IFLAGS) $$(CFLAGS) $$(CFLAGS_$$(subst /,_,$(1))) $(CFLAGS_ENV) -o $$(OBJROOT)/$(2) -c $(1)
 
 endef
 else
@@ -207,7 +207,7 @@ $$(OBJROOT)/$(2): $(1) $$(OBJROOT)/created $$(DEPROOT)/created
 	$$(Q)$$(RM) $$(DEPROOT)/$(3)
 	$$(Q)$$(RM) $$(OBJROOT)/$(2)
 	$$(Q)$$(CC) $$(COMMON_WARNFLAGS) $$(CWARNFLAGS) $$(IFLAGS) $$(CFLAGS) $(CFLAGS_ENV) \
-		    -MMD -MP -MT '$$(DEPROOT)/$(3) $$(OBJROOT)/$(2)' \
+		    $$(CFLAGS_$$(subst /,_,$(1))) -MMD -MP -MT '$$(DEPROOT)/$(3) $$(OBJROOT)/$(2)' \
 		    -MF $$(DEPROOT)/$(3) -o $$(OBJROOT)/$(2) -c $(1)
 
 endef
@@ -224,11 +224,11 @@ $$(OBJROOT)/$(2): $(1) $$(OBJROOT)/created $$(DEPROOT)/created
 	$$(VQ)echo "     DEP: $(1)"
 	$$(Q)$$(RM) $$(DEPROOT)/$(3)
 	$$(Q)$$(CC) $$(IFLAGS) $$(CXXFLAGS) $$(COMMON_WARNFLAGS) $$(CXXWARNFLAGS) -MM  \
-		    $(1) | sed 's,^.*:,$$(DEPROOT)/$(3) $$(OBJROOT)/$(2):,' \
+		    $(1) $$(CXXFLAGS_$$(subst /,_,$(1))) | sed 's,^.*:,$$(DEPROOT)/$(3) $$(OBJROOT)/$(2):,' \
 		    > $$(DEPROOT)/$(3)
 	$$(VQ)echo " COMPILE: $(1)"
 	$$(Q)$$(RM) $$(OBJROOT)/$(2)
-	$$(Q)$$(CXX) $$(COMMON_WARNFLAGS) $$(CXXWARNFLAGS) $$(IFLAGS) $$(CXXFLAGS) $(CXXFLAGS_ENV) -o $$(OBJROOT)/$(2) -c $(1)
+	$$(Q)$$(CXX) $$(COMMON_WARNFLAGS) $$(CXXWARNFLAGS) $$(IFLAGS) $$(CXXFLAGS) $$(CXXFLAGS_$$(subst /,_,$(1))) $(CXXFLAGS_ENV) -o $$(OBJROOT)/$(2) -c $(1)
 
 endef
 
