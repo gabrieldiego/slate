@@ -25,6 +25,8 @@
  */
 
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 #include <nsutils/time.h>
 
 #include "netsurf/inttypes.h"
@@ -853,6 +855,270 @@ duk_bool_t dukky_check_timeout(void *udata)
 			now > (heap->exec_start_time + JS_EXEC_TIMEOUT_MS);
 }
 
+static bool dukky_jsbuf_append(char **buf, size_t *len, size_t *cap, const char *data, size_t data_len)
+{
+	char *nbuf;
+	size_t ncap;
+
+	if (data_len == 0) {
+		return true;
+	}
+
+	if (*len + data_len + 1 <= *cap) {
+		memcpy(*buf + *len, data, data_len);
+		*len += data_len;
+		(*buf)[*len] = '\0';
+		return true;
+	}
+
+	ncap = *cap;
+	while (*len + data_len + 1 > ncap) {
+		ncap *= 2;
+	}
+
+	nbuf = realloc(*buf, ncap);
+	if (nbuf == NULL) {
+		return false;
+	}
+
+	*buf = nbuf;
+	*cap = ncap;
+	memcpy(*buf + *len, data, data_len);
+	*len += data_len;
+	(*buf)[*len] = '\0';
+	return true;
+}
+
+static bool dukky_jsbuf_append_ch(char **buf, size_t *len, size_t *cap, char ch)
+{
+	return dukky_jsbuf_append(buf, len, cap, &ch, 1);
+}
+
+static bool dukky_jsbuf_append_js_string_ch(char **buf, size_t *len, size_t *cap, char ch)
+{
+	switch (ch) {
+	case '"':
+		return dukky_jsbuf_append(buf, len, cap, "\\\"", 2);
+	case '\\':
+		return dukky_jsbuf_append(buf, len, cap, "\\\\", 2);
+	case '\n':
+		return dukky_jsbuf_append(buf, len, cap, "\\n", 2);
+	case '\r':
+		return dukky_jsbuf_append(buf, len, cap, "\\r", 2);
+	case '\t':
+		return dukky_jsbuf_append(buf, len, cap, "\\t", 2);
+	default:
+		return dukky_jsbuf_append_ch(buf, len, cap, ch);
+	}
+}
+
+static bool dukky_transform_template_literal(const char *src, size_t src_len, size_t *idx,
+		char **buf, size_t *len, size_t *cap)
+{
+	size_t i = *idx + 1; /* skip opening backtick */
+	unsigned int expr_depth;
+	char quote;
+
+	if (!dukky_jsbuf_append(buf, len, cap, "(\"", 2)) {
+		return false;
+	}
+
+	while (i < src_len) {
+		char ch = src[i];
+
+		if (ch == '`') {
+			if (!dukky_jsbuf_append(buf, len, cap, "\")", 2)) {
+				return false;
+			}
+			*idx = i + 1;
+			return true;
+		}
+
+		if (ch == '\\') {
+			if (i + 1 >= src_len) {
+				return false;
+			}
+			i++;
+			if (!dukky_jsbuf_append_js_string_ch(buf, len, cap, src[i])) {
+				return false;
+			}
+			i++;
+			continue;
+		}
+
+		if (ch == '$' && i + 1 < src_len && src[i + 1] == '{') {
+			if (!dukky_jsbuf_append(buf, len, cap, "\"+(", 3)) {
+				return false;
+			}
+			i += 2;
+			expr_depth = 1;
+
+			while (i < src_len && expr_depth > 0) {
+				ch = src[i];
+
+				if (ch == '\'' || ch == '"') {
+					quote = ch;
+					if (!dukky_jsbuf_append_ch(buf, len, cap, ch)) {
+						return false;
+					}
+					i++;
+					while (i < src_len) {
+						ch = src[i];
+						if (!dukky_jsbuf_append_ch(buf, len, cap, ch)) {
+							return false;
+						}
+						i++;
+						if (ch == '\\' && i < src_len) {
+							if (!dukky_jsbuf_append_ch(buf, len, cap, src[i])) {
+								return false;
+							}
+							i++;
+						} else if (ch == quote) {
+							break;
+						}
+					}
+					continue;
+				}
+
+				if (ch == '{') {
+					expr_depth++;
+				} else if (ch == '}') {
+					expr_depth--;
+					if (expr_depth == 0) {
+						i++;
+						break;
+					}
+				}
+
+				if (!dukky_jsbuf_append_ch(buf, len, cap, ch)) {
+					return false;
+				}
+				i++;
+			}
+
+			if (expr_depth != 0 || !dukky_jsbuf_append(buf, len, cap, ")+\"", 3)) {
+				return false;
+			}
+			continue;
+		}
+
+		if (!dukky_jsbuf_append_js_string_ch(buf, len, cap, ch)) {
+			return false;
+		}
+		i++;
+	}
+
+	return false;
+}
+
+static bool dukky_transform_template_literals(const uint8_t *txt, size_t txtlen,
+		char **out, size_t *outlen)
+{
+	const char *src = (const char *) txt;
+	char *buf;
+	size_t len = 0;
+	size_t cap = txtlen * 2 + 64;
+	size_t i = 0;
+	char quote;
+
+	*out = NULL;
+	*outlen = 0;
+
+	if (memchr(txt, '`', txtlen) == NULL) {
+		return true;
+	}
+
+	buf = malloc(cap);
+	if (buf == NULL) {
+		return false;
+	}
+	buf[0] = '\0';
+
+	while (i < txtlen) {
+		char ch = src[i];
+
+		if (ch == '\'' || ch == '"') {
+			quote = ch;
+			if (!dukky_jsbuf_append_ch(&buf, &len, &cap, ch)) {
+				goto error;
+			}
+			i++;
+			while (i < txtlen) {
+				ch = src[i];
+				if (!dukky_jsbuf_append_ch(&buf, &len, &cap, ch)) {
+					goto error;
+				}
+				i++;
+				if (ch == '\\' && i < txtlen) {
+					if (!dukky_jsbuf_append_ch(&buf, &len, &cap, src[i])) {
+						goto error;
+					}
+					i++;
+				} else if (ch == quote) {
+					break;
+				}
+			}
+			continue;
+		}
+
+		if (ch == '/' && i + 1 < txtlen && src[i + 1] == '/') {
+			while (i < txtlen) {
+				ch = src[i];
+				if (!dukky_jsbuf_append_ch(&buf, &len, &cap, ch)) {
+					goto error;
+				}
+				i++;
+				if (ch == '\n') {
+					break;
+				}
+			}
+			continue;
+		}
+
+		if (ch == '/' && i + 1 < txtlen && src[i + 1] == '*') {
+			if (!dukky_jsbuf_append(&buf, &len, &cap, "/*", 2)) {
+				goto error;
+			}
+			i += 2;
+			while (i < txtlen) {
+				ch = src[i];
+				if (!dukky_jsbuf_append_ch(&buf, &len, &cap, ch)) {
+					goto error;
+				}
+				i++;
+				if (ch == '*' && i < txtlen && src[i] == '/') {
+					if (!dukky_jsbuf_append_ch(&buf, &len, &cap, src[i])) {
+						goto error;
+					}
+					i++;
+					break;
+				}
+			}
+			continue;
+		}
+
+		if (ch == '`') {
+			if (!dukky_transform_template_literal(src, txtlen, &i, &buf, &len, &cap)) {
+				goto error;
+			}
+			continue;
+		}
+
+		if (!dukky_jsbuf_append_ch(&buf, &len, &cap, ch)) {
+			goto error;
+		}
+		i++;
+	}
+
+	*out = buf;
+	*outlen = len;
+	return true;
+
+error:
+	free(buf);
+	return false;
+}
+
 static void dukky_dump_error(duk_context *ctx)
 {
 	/* stack is ..., errobj */
@@ -922,6 +1188,10 @@ bool
 js_exec(jsthread *thread, const uint8_t *txt, size_t txtlen, const char *name)
 {
 	bool ret = false;
+	char *transformed = NULL;
+	size_t transformed_len = 0;
+	const char *compile_txt;
+	size_t compile_len;
 	assert(thread);
 
 	if (txt == NULL || txtlen == 0) {
@@ -939,6 +1209,14 @@ js_exec(jsthread *thread, const uint8_t *txt, size_t txtlen, const char *name)
 	NSLOG(dukky, DEEPDEBUG, "Running %"PRIsizet" bytes from %s", txtlen, name);
 	/* NSLOG(dukky, DEEPDEBUG, "\n%s\n", txt); */
 
+	if (!dukky_transform_template_literals(txt, txtlen, &transformed, &transformed_len)) {
+		NSLOG(dukky, DEBUG, "Failed to transform JavaScript template literals");
+		goto out;
+	}
+
+	compile_txt = transformed != NULL ? transformed : (const char *) txt;
+	compile_len = transformed != NULL ? transformed_len : txtlen;
+
 	dukky_reset_start_time(CTX);
 	if (name != NULL) {
 		duk_push_string(CTX, name);
@@ -947,8 +1225,8 @@ js_exec(jsthread *thread, const uint8_t *txt, size_t txtlen, const char *name)
 	}
 	if (duk_pcompile_lstring_filename(CTX,
 					  DUK_COMPILE_EVAL,
-					  (const char *)txt,
-					  txtlen) != 0) {
+					  compile_txt,
+					  compile_len) != 0) {
 		NSLOG(dukky, DEBUG, "Failed to compile JavaScript input");
 		goto handle_error;
 	}
@@ -967,6 +1245,7 @@ js_exec(jsthread *thread, const uint8_t *txt, size_t txtlen, const char *name)
 handle_error:
 	dukky_dump_error(CTX);
 out:
+	free(transformed);
 	dukky_leave_thread(thread);
 	return ret;
 }

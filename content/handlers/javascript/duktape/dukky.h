@@ -39,6 +39,8 @@ bool dukky_get_current_value_of_event_handler(duk_context *ctx,
 void dukky_push_event(duk_context *ctx, dom_event *evt);
 bool dukky_event_target_push_listeners(duk_context *ctx, bool dont_create);
 
+duk_bool_t dukky_check_timeout(void *udata);
+
 typedef enum {
 	ELF_CAPTURE = 1 << 0,
 	ELF_PASSIVE = 1 << 1,
