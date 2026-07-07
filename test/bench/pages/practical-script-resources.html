@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench Script Resources</title>
+<link rel="stylesheet" href="bench-shared.css">
+<script src="bench-sync.js"></script>
+<script src="bench-async.js" async></script>
+<script src="bench-defer.js" defer></script>
+<style>
+.script-grid {
+	display: table;
+	border-collapse: collapse;
+	margin-top: 16px;
+}
+.script-row {
+	display: table-row;
+}
+.script-row span {
+	display: table-cell;
+	border: 1px solid #b6c1cd;
+	padding: 7px 10px;
+	background: #ffffff;
+}
+</style>
+</head>
+<body class="bench-page">
+<header class="site-head">
+<img src="assets/bench-logo.png" width="120" height="48" alt="Practical Bench logo">
+<h1>Practical Bench Script Resources</h1>
+</header>
+<main>
+<p class="bench-kicker"></p>
+<p>This practical page fetches synchronous, asynchronous, and deferred local JavaScript files.</p>
+<div class="script-grid">
+<p class="script-row"><span>Sync</span><span id="sync-script-result">waiting</span></p>
+<p class="script-row"><span>Async</span><span id="async-script-result">waiting</span></p>
+<p class="script-row"><span>Defer</span><span id="defer-script-result">waiting</span></p>
+</div>
+</main>
+</body>
+</html>

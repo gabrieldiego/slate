@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stress Bench Special Elements</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+.legacy-grid {
+	display: table;
+	border-collapse: collapse;
+}
+.legacy-row {
+	display: table-row;
+}
+.legacy-cell {
+	display: table-cell;
+	border: 1px solid #aab6c2;
+	padding: 8px;
+	vertical-align: top;
+	background: #ffffff;
+}
+canvas, embed, object {
+	border: 1px solid #657789;
+	background: #eef3f7;
+	margin: 5px 0;
+}
+</style>
+</head>
+<body class="bench-page">
+<h1>Stress Bench Special Elements</h1>
+<p>This page keeps legacy and replaced-element handlers active without requiring network resources.</p>
+<div class="legacy-grid">
+<div class="legacy-row">
+<section class="legacy-cell">
+<h2>Canvas and embed</h2>
+<canvas width="180" height="80">Canvas fallback text for Stress Bench.</canvas>
+<embed src="assets/icon-store.png" type="image/png" width="96" height="96" data-mode="stress" data-label="embed bench">
+<noscript><p>Noscript fallback is suppressed when scripting is enabled.</p></noscript>
+</section>
+<section class="legacy-cell">
+<h2>Object parameters</h2>
+<object data="assets/icon-news.png" type="image/png" width="96" height="96" codebase=".">
+<param name="quality" value="bench">
+<param name="loop" value="false" valuetype="data">
+Object fallback text for Stress Bench.
+</object>
+<object classid="assets/icon-issue.png" codetype="image/png" width="96" height="96">
+<param name="classid-mode" value="local">
+</object>
+</section>
+</div>
+<div class="legacy-row">
+<section class="legacy-cell">
+<h2>Input variants</h2>
+<form action="about:blank" method="post" enctype="multipart/form-data">
+<label>File <input type="file" name="stress-file"></label>
+<label>Image submit <input type="image" name="stress-image" src="assets/icon-travel.png" alt="Image Submit Stress"></label>
+<label>Plain submit <input type="submit" name="stress-submit" value="Submit Stress Form"></label>
+<label>Button <input type="button" value="Plain Button"></label>
+</form>
+</section>
+<section class="legacy-cell">
+<h2>Named targets</h2>
+<p><a href="#local-target" name="legacy-anchor" target="_self">Stress Bench anchor target</a></p>
+<p id="local-target">Stress Bench local target text.</p>
+</section>
+</div>
+</div>
+</body>
+</html>

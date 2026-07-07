@@ -19,9 +19,11 @@ steps:
   - ${NETSURF_BENCH_ROOT}/practical-css-layout.html
   - ${NETSURF_BENCH_ROOT}/practical-media-objects.html
   - ${NETSURF_BENCH_ROOT}/practical-interaction.html
+  - ${NETSURF_BENCH_ROOT}/practical-script-resources.html
   - ${NETSURF_BENCH_ROOT}/practical-search-results.html
   - ${NETSURF_BENCH_ROOT}/practical-product-listing.html
   - ${NETSURF_BENCH_ROOT}/practical-checkout.html
+  - ${NETSURF_BENCH_ROOT}/practical-submit-inputs.html
   - ${NETSURF_BENCH_ROOT}/practical-profile-settings.html
   - ${NETSURF_BENCH_ROOT}/practical-social-thread.html
   - ${NETSURF_BENCH_ROOT}/practical-issue-tracker.html
@@ -113,6 +115,25 @@ steps:
   conditions:
   - window: win1
     status: complete
+- action: window-new
+  tag: win2
+- action: navigate
+  window: win2
+  url: ${NETSURF_BENCH_ROOT}/practical-submit-inputs.html
+- action: block
+  conditions:
+  - window: win2
+    status: complete
+- action: click
+  window: win2
+  target:
+    text: Submit Input Bench
+- action: block
+  conditions:
+  - window: win2
+    status: complete
+- action: window-close
+  window: win2
 - action: window-close
   window: win1
 - action: quit

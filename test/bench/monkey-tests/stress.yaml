@@ -20,6 +20,7 @@ steps:
   - ${NETSURF_BENCH_ROOT}/stress-form-controls.html
   - ${NETSURF_BENCH_ROOT}/stress-inline-flow.html
   - ${NETSURF_BENCH_ROOT}/stress-object-media.html
+  - ${NETSURF_BENCH_ROOT}/stress-special-elements.html
   - ${NETSURF_BENCH_ROOT}/stress-deep-dom.html
   - ${NETSURF_BENCH_ROOT}/stress-wide-table.html
   - ${NETSURF_BENCH_ROOT}/stress-complex-table.html
@@ -28,6 +29,7 @@ steps:
   - ${NETSURF_BENCH_ROOT}/stress-form-controls.html
   - ${NETSURF_BENCH_ROOT}/stress-inline-flow.html
   - ${NETSURF_BENCH_ROOT}/stress-object-media.html
+  - ${NETSURF_BENCH_ROOT}/stress-special-elements.html
   steps:
   - action: navigate
     window: win1

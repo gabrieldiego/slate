@@ -15,6 +15,7 @@ steps:
   - ${NETSURF_BENCH_ROOT}/smoke-basic.html
   - ${NETSURF_BENCH_ROOT}/smoke-css.html
   - ${NETSURF_BENCH_ROOT}/smoke-inline.html
+  - ${NETSURF_BENCH_ROOT}/smoke-noscript-canvas.html
   steps:
   - action: navigate
     window: win1

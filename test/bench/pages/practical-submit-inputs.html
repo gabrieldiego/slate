@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench Submit Inputs</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+.submit-form {
+	max-width: 760px;
+	background: #ffffff;
+	border: 1px solid #c1cbd4;
+	padding: 14px;
+}
+.submit-form label {
+	display: block;
+	margin: 8px 0;
+}
+.submit-actions {
+	margin-top: 14px;
+}
+</style>
+</head>
+<body class="bench-page">
+<header class="site-head">
+<img src="assets/bench-logo.png" width="120" height="48" alt="Practical Bench logo">
+<h1>Practical Bench Submit Inputs</h1>
+</header>
+<main>
+<p class="bench-kicker"></p>
+<form class="submit-form" action="about:blank" method="post" enctype="multipart/form-data" accept-charset="KOI8-R, UTF-8">
+<input type="hidden" name="hidden-token" value="bench-hidden">
+<p class="submit-actions">
+<input type="submit" name="submit-input" value="Submit Input Bench">
+<input type="reset" value="Reset Input Bench">
+</p>
+<label>Search phrase <input type="search" name="search" value="memory compact browser"></label>
+<label>Password <input type="password" name="password" value="secret"></label>
+<label>Attach file <input type="file" name="attachment"></label>
+<label><input type="checkbox" name="flag-default" checked> Use default checkbox value</label>
+<label><input type="radio" name="priority" value="normal" checked> Normal priority</label>
+<label><input type="radio" name="priority" value="urgent"> Urgent priority</label>
+<label>Category
+<select name="category" multiple size="3">
+<option value="html" selected>HTML</option>
+<option value="css">CSS</option>
+<option value="js" selected>JavaScript</option>
+</select>
+</label>
+<label>Notes <textarea name="notes">Submit input serialization bench.</textarea></label>
+</form>
+</main>
+</body>
+</html>
