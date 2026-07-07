@@ -236,7 +236,10 @@ def run_test_step_action_window_new(ctx, step):
     tag = step['tag']
     assert_browser(ctx)
     assert ctx['windows'].get(tag) is None
-    ctx['windows'][tag] = ctx['browser'].new_window(url=step.get('url'))
+    url = step.get('url')
+    if url is not None:
+        url = os.path.expandvars(url)
+    ctx['windows'][tag] = ctx['browser'].new_window(url=url)
 
 
 def run_test_step_action_window_close(ctx, step):
@@ -258,12 +261,12 @@ def run_test_step_action_navigate(ctx, step):
     print(get_indent(ctx) + "Action: " + step["action"])
     assert_browser(ctx)
     if 'url' in step.keys():
-        url = step['url']
+        url = os.path.expandvars(step['url'])
     elif 'repeaturl' in step.keys():
         repeat = ctx['repeats'].get(step['repeaturl'])
         assert repeat is not None
         assert repeat.get('values') is not None
-        url = repeat['values'][repeat['i']]
+        url = os.path.expandvars(repeat['values'][repeat['i']])
     else:
         url = None
     assert url is not None

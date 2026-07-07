@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench News</title>
+<style>
+body {
+	margin: 0;
+	font: 15px sans-serif;
+	color: #222831;
+	background: #f7f7f4;
+}
+header,
+footer {
+	background: #203040;
+	color: #ffffff;
+	padding: 14px 22px;
+}
+nav a {
+	color: #ffffff;
+	margin-right: 18px;
+	text-decoration: none;
+}
+main {
+	max-width: 920px;
+	margin: 0 auto;
+	padding: 20px;
+	background: #ffffff;
+}
+article {
+	border-bottom: 1px solid #d7dce0;
+	padding: 14px 0;
+}
+.meta {
+	color: #5f6b75;
+	font-size: 13px;
+}
+.summary {
+	border-left: 4px solid #5d8aa8;
+	padding-left: 12px;
+}
+</style>
+</head>
+<body>
+<header>
+<h1>Practical Bench News</h1>
+<nav>
+<a href="#lead">Lead</a>
+<a href="#markets">Markets</a>
+<a href="#weather">Weather</a>
+</nav>
+</header>
+<main>
+<p class="summary">Practical Bench page with article text, navigation, links, nested inline markup, and light scripting.</p>
+<article id="lead">
+<h2>Morning briefing</h2>
+<p class="meta">Updated 08:30 by the local desk</p>
+<p>The council approved a transport plan after public comment. The page uses ordinary article structure, a few links, and several paragraphs to resemble a daily news visit.</p>
+<p>Residents asked for better bus shelters, clearer pedestrian crossings, and more reliable evening service.</p>
+</article>
+<article id="markets">
+<h2>Market notes</h2>
+<p class="meta">Bench feed count: <span id="feed-count">3</span></p>
+<p>Analysts tracked energy, logistics, and retail demand. <strong>Practical Bench</strong> content includes emphasis, anchors, and repeated text blocks.</p>
+<ol>
+<li>Regional shipping remained steady.</li>
+<li>Food prices moved within the expected range.</li>
+<li>Local hiring reports were mixed.</li>
+</ol>
+</article>
+<article id="weather">
+<h2>Weather</h2>
+<p>Morning fog clears before noon. Winds stay light and the afternoon high remains comfortable.</p>
+</article>
+</main>
+<footer>Practical Bench footer</footer>
+<script>
+(function () {
+	var count = document.getElementById("feed-count");
+	if (count) {
+		count.appendChild(document.createTextNode(" active"));
+	}
+}());
+</script>
+</body>
+</html>

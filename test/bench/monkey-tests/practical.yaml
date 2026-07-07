@@ -1,0 +1,33 @@
+title: local practical browsing memory pages
+group: bench-practical
+steps:
+- action: launch
+  language: en
+  options:
+  - enable_javascript=1
+  - memory_cache_size=4194304
+  - disc_cache_size=0
+- action: window-new
+  tag: win1
+- action: repeat
+  tag: pages
+  values:
+  - ${NETSURF_BENCH_ROOT}/practical-news.html
+  - ${NETSURF_BENCH_ROOT}/practical-form.html
+  - ${NETSURF_BENCH_ROOT}/practical-dashboard.html
+  steps:
+  - action: navigate
+    window: win1
+    repeaturl: pages
+  - action: block
+    conditions:
+    - window: win1
+      status: complete
+  - action: plot-check
+    window: win1
+    area: extent
+    checks:
+    - text-contains: Practical Bench
+- action: window-close
+  window: win1
+- action: quit

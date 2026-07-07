@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stress Bench DOM</title>
+<style>
+body {
+	margin: 12px;
+	font: 13px sans-serif;
+	color: #111827;
+	background: #ffffff;
+}
+section section section section {
+	border-left: 1px solid #ccd4dc;
+	margin-left: 6px;
+	padding-left: 6px;
+}
+.bucket:nth-child(2n) {
+	background: #f3f6f9;
+}
+.bucket:nth-child(3n) {
+	border-top: 1px solid #d8dee4;
+}
+.tag {
+	display: inline-block;
+	margin: 1px 3px;
+	padding: 1px 4px;
+	border: 1px solid #b6c2cf;
+}
+</style>
+</head>
+<body>
+<h1>Stress Bench DOM</h1>
+<p>This page creates many nested and repeated nodes to pressure DOM storage and layout.</p>
+<section>
+<h2>Static nesting</h2>
+<section><section><section><section><section><p>Deep static node chain</p></section></section></section></section></section>
+</section>
+<div id="generated"></div>
+<script>
+(function () {
+	var root = document.getElementById("generated");
+	var i;
+	var j;
+	for (i = 0; root && i < 240; i++) {
+		var section = document.createElement("section");
+		section.setAttribute("class", "bucket");
+		var title = document.createElement("h2");
+		title.appendChild(document.createTextNode("Bucket " + i));
+		section.appendChild(title);
+		for (j = 0; j < 8; j++) {
+			var span = document.createElement("span");
+			span.setAttribute("class", "tag");
+			span.appendChild(document.createTextNode("tag-" + i + "-" + j));
+			section.appendChild(span);
+		}
+		root.appendChild(section);
+	}
+}());
+</script>
+</body>
+</html>

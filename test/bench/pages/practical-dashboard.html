@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench Dashboard</title>
+<style>
+body {
+	margin: 0;
+	font: 14px sans-serif;
+	color: #24292f;
+	background: #f0f3f6;
+}
+header {
+	background: #334155;
+	color: #ffffff;
+	padding: 12px 18px;
+}
+main {
+	padding: 16px;
+}
+.cards {
+	display: block;
+}
+.card {
+	display: inline-block;
+	vertical-align: top;
+	width: 180px;
+	margin: 0 10px 12px 0;
+	padding: 10px;
+	background: #ffffff;
+	border: 1px solid #c9d1d9;
+}
+table {
+	border-collapse: collapse;
+	width: 100%;
+	background: #ffffff;
+}
+th,
+td {
+	border: 1px solid #c9d1d9;
+	padding: 5px;
+	text-align: left;
+}
+.ok {
+	color: #116329;
+}
+.warn {
+	color: #8a4600;
+}
+</style>
+</head>
+<body>
+<header><h1>Practical Bench Dashboard</h1></header>
+<main>
+<p>Practical Bench dashboard page with repeated summary blocks and a scannable data table.</p>
+<section class="cards">
+<div class="card"><h2>Visits</h2><p>12,408</p><p class="ok">steady</p></div>
+<div class="card"><h2>Errors</h2><p>37</p><p class="warn">watch</p></div>
+<div class="card"><h2>Cache</h2><p>72%</p><p class="ok">healthy</p></div>
+<div class="card"><h2>Images</h2><p>148</p><p class="ok">decoded</p></div>
+</section>
+<table>
+<thead>
+<tr><th>Page</th><th>HTML</th><th>CSS</th><th>JS</th><th>Status</th></tr>
+</thead>
+<tbody id="rows">
+<tr><td>/news</td><td>34 KiB</td><td>8 KiB</td><td>2 KiB</td><td class="ok">OK</td></tr>
+<tr><td>/account</td><td>22 KiB</td><td>5 KiB</td><td>1 KiB</td><td class="ok">OK</td></tr>
+<tr><td>/reports</td><td>67 KiB</td><td>12 KiB</td><td>9 KiB</td><td class="warn">Busy</td></tr>
+<tr><td>/settings</td><td>18 KiB</td><td>4 KiB</td><td>1 KiB</td><td class="ok">OK</td></tr>
+</tbody>
+</table>
+</main>
+<script>
+(function () {
+	var rows = document.getElementById("rows");
+	var i;
+	for (i = 0; rows && i < 16; i++) {
+		var tr = document.createElement("tr");
+		var values = ["/item-" + i, (20 + i) + " KiB", "4 KiB", "1 KiB", "OK"];
+		var j;
+		for (j = 0; j < values.length; j++) {
+			var td = document.createElement("td");
+			td.appendChild(document.createTextNode(values[j]));
+			tr.appendChild(td);
+		}
+		rows.appendChild(tr);
+	}
+}());
+</script>
+</body>
+</html>

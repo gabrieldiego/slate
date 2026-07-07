@@ -213,12 +213,41 @@ $(eval $(foreach SOURCE,$(sort $(filter %.c,$(NOCOV_TESTSOURCES))), \
 	$(call compile_test_nocov_target_c,$(SOURCE),$(subst /,_,$(SOURCE:.c=.o)),$(subst /,_,$(SOURCE:.c=.d)))))
 
 
-.PHONY:test coverage sanitize
+.PHONY:test coverage sanitize bench bench-smoke bench-practical bench-stress
 
 test: $(TESTROOT)/created $(TESTROOT)/libmalloc_fig.so $(addsuffix _test,$(TESTS))
 
 coverage: test
 sanitize: test
+
+BENCH_MONKEY ?= ./nsmonkey
+BENCH_WRAPPER ?= /usr/bin/time -v
+BENCH_ROOT ?= file://$(CURDIR)/test/bench/pages
+BENCH_SETS := smoke practical stress
+
+ifeq ($(TARGET),monkey)
+  BENCH_BUILD_DEPS := all-program
+else
+  BENCH_BUILD_DEPS :=
+endif
+
+define gen_bench_target
+bench-$(1): $$(BENCH_BUILD_DEPS)
+	$$(VQ)echo "RUN BENCH: $(1)"
+	$$(Q)if [ ! -x "$$(BENCH_MONKEY)" ]; then \
+		echo "Missing $$(BENCH_MONKEY). Build it with: make TARGET=monkey"; \
+		exit 1; \
+	fi
+	$$(Q)NETSURF_BENCH_ROOT="$$(BENCH_ROOT)" ./test/monkey_driver.py \
+		-m "$$(BENCH_MONKEY)" \
+		-w "$$(BENCH_WRAPPER)" \
+		-t test/bench/monkey-tests/$(1).yaml
+
+endef
+
+$(eval $(foreach BENCH,$(BENCH_SETS),$(call gen_bench_target,$(BENCH))))
+
+bench: $(addprefix bench-,$(BENCH_SETS))
 
 $(TESTROOT)/created:
 	$(VQ)echo "   MKDIR: $(TESTROOT)"

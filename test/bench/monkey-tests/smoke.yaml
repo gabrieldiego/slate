@@ -1,0 +1,25 @@
+title: local memory smoke pages
+group: bench-smoke
+steps:
+- action: launch
+  language: en
+  options:
+  - enable_javascript=0
+  - memory_cache_size=1048576
+  - disc_cache_size=0
+- action: window-new
+  tag: win1
+- action: navigate
+  window: win1
+  url: ${NETSURF_BENCH_ROOT}/smoke-basic.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: plot-check
+  window: win1
+  checks:
+  - text-contains: Smoke Bench OK
+- action: window-close
+  window: win1
+- action: quit

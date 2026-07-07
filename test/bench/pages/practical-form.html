@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench Form</title>
+<style>
+body {
+	margin: 20px;
+	font: 15px sans-serif;
+	color: #202124;
+	background: #eef2f5;
+}
+main {
+	max-width: 760px;
+	background: #ffffff;
+	padding: 18px;
+	border: 1px solid #c8d1da;
+}
+fieldset {
+	margin: 14px 0;
+	border: 1px solid #aab5bf;
+}
+label {
+	display: block;
+	margin: 8px 0;
+}
+input,
+select,
+textarea {
+	margin-left: 8px;
+}
+table {
+	border-collapse: collapse;
+	width: 100%;
+}
+td,
+th {
+	border: 1px solid #b8c0c8;
+	padding: 6px;
+}
+</style>
+</head>
+<body>
+<main>
+<h1>Practical Bench Form</h1>
+<p>Practical Bench form page with labels, controls, a table, and modest layout work.</p>
+<form action="about:blank" method="get">
+<fieldset>
+<legend>Account</legend>
+<label>Name <input name="name" value="Ada Lovelace"></label>
+<label>Email <input name="email" value="ada@example.test"></label>
+<label>Plan
+<select name="plan">
+<option>Compact</option>
+<option selected>Balanced</option>
+<option>Compatibility</option>
+</select>
+</label>
+</fieldset>
+<fieldset>
+<legend>Preferences</legend>
+<label><input type="checkbox" checked> Keep images enabled</label>
+<label><input type="checkbox"> Enable large background images</label>
+<label><input type="radio" name="mode" checked> Normal mode</label>
+<label><input type="radio" name="mode"> Low memory mode</label>
+<label>Notes <textarea rows="4" cols="42">Keep memory use visible while adding compatibility.</textarea></label>
+</fieldset>
+<button type="submit">Save</button>
+</form>
+<h2>Recent activity</h2>
+<table>
+<thead><tr><th>Time</th><th>Action</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>09:00</td><td>Loaded profile</td><td>Complete</td></tr>
+<tr><td>09:03</td><td>Edited options</td><td>Pending</td></tr>
+<tr><td>09:05</td><td>Submitted form</td><td>Ready</td></tr>
+</tbody>
+</table>
+</main>
+</body>
+</html>

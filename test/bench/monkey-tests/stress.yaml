@@ -1,0 +1,43 @@
+title: local stress memory pages
+group: bench-stress
+steps:
+- action: launch
+  language: en
+  options:
+  - enable_javascript=1
+  - memory_cache_size=4194304
+  - disc_cache_size=0
+- action: window-new
+  tag: win1
+- action: repeat
+  tag: pass
+  min: 0
+  max: 2
+  steps:
+  - action: navigate
+    window: win1
+    url: ${NETSURF_BENCH_ROOT}/stress-deep-dom.html
+  - action: block
+    conditions:
+    - window: win1
+      status: complete
+  - action: plot-check
+    window: win1
+    area: extent
+    checks:
+    - text-contains: Stress Bench DOM
+  - action: navigate
+    window: win1
+    url: ${NETSURF_BENCH_ROOT}/stress-wide-table.html
+  - action: block
+    conditions:
+    - window: win1
+      status: complete
+  - action: plot-check
+    window: win1
+    area: extent
+    checks:
+    - text-contains: Stress Bench Table
+- action: window-close
+  window: win1
+- action: quit

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stress Bench Table</title>
+<style>
+body {
+	margin: 10px;
+	font: 12px sans-serif;
+	color: #1f2937;
+	background: #ffffff;
+}
+table {
+	border-collapse: collapse;
+	width: 100%;
+}
+th,
+td {
+	border: 1px solid #c7d0d9;
+	padding: 3px;
+}
+tbody tr:nth-child(2n) {
+	background: #f5f7fa;
+}
+tbody tr:nth-child(5n) td:nth-child(3n) {
+	background: #e7eef6;
+}
+</style>
+</head>
+<body>
+<h1>Stress Bench Table</h1>
+<p>This table is intentionally wide and repetitive to pressure table layout.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th><th>H</th><th>I</th><th>J</th><th>K</th><th>L</th>
+</tr>
+</thead>
+<tbody id="grid">
+<tr><td>seed</td><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td><td>9</td><td>10</td><td>11</td><td>12</td></tr>
+</tbody>
+</table>
+<script>
+(function () {
+	var grid = document.getElementById("grid");
+	var r;
+	var c;
+	for (r = 0; grid && r < 90; r++) {
+		var tr = document.createElement("tr");
+		var first = document.createElement("td");
+		first.appendChild(document.createTextNode("row-" + r));
+		tr.appendChild(first);
+		for (c = 0; c < 12; c++) {
+			var td = document.createElement("td");
+			td.appendChild(document.createTextNode(String((r + 1) * (c + 1))));
+			tr.appendChild(td);
+		}
+		grid.appendChild(tr);
+	}
+}());
+</script>
+</body>
+</html>
