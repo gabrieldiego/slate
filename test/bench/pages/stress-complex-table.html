@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stress Bench Complex Table</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+body {
+	margin: 10px;
+	font: 12px sans-serif;
+}
+table {
+	width: 100%;
+	table-layout: auto;
+}
+caption {
+	font-weight: bold;
+	padding: 6px;
+}
+tbody tr:nth-child(2n) {
+	background: #f4f7fb;
+}
+tbody td:nth-child(4n) {
+	background: #fff7d6;
+}
+.tight {
+	white-space: nowrap;
+}
+</style>
+</head>
+<body>
+<h1>Stress Bench Complex Table</h1>
+<p>Stress Bench table with colgroups, row spans, column spans, captions, headers, and generated rows.</p>
+<table>
+<caption>Stress Bench table matrix</caption>
+<colgroup>
+<col class="tight">
+<col span="4">
+<col span="2">
+</colgroup>
+<thead>
+<tr>
+<th rowspan="2">Region</th>
+<th colspan="4">Quarter</th>
+<th colspan="2">Status</th>
+</tr>
+<tr>
+<th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th>Trend</th><th>Owner</th>
+</tr>
+</thead>
+<tbody id="complex-table-body">
+<tr><th rowspan="2">Seed</th><td>12</td><td>14</td><td>18</td><td>21</td><td>up</td><td>bench</td></tr>
+<tr><td colspan="4">Seed row span detail with a fairly long inline text segment.</td><td colspan="2">ready</td></tr>
+</tbody>
+<tfoot>
+<tr><td colspan="7">Stress Bench Complex Table footer</td></tr>
+</tfoot>
+</table>
+<script>
+(function () {
+	var body = document.getElementById("complex-table-body");
+	var r;
+	var c;
+	for (r = 0; body && r < 70; r++) {
+		var tr = document.createElement("tr");
+		var th = document.createElement("th");
+		th.appendChild(document.createTextNode("region-" + r));
+		tr.appendChild(th);
+		for (c = 0; c < 6; c++) {
+			var td = document.createElement("td");
+			if ((r + c) % 11 === 0) {
+				td.setAttribute("colspan", "2");
+			}
+			td.appendChild(document.createTextNode("value-" + r + "-" + c));
+			tr.appendChild(td);
+		}
+		body.appendChild(tr);
+	}
+}());
+</script>
+</body>
+</html>

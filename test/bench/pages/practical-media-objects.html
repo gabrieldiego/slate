@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench Media Objects</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+.media-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+}
+.media-row > section {
+	flex: 1 1 220px;
+	border: 1px solid #b9c2cc;
+	background: #ffffff;
+	padding: 10px;
+}
+img {
+	border: 2px solid #34495e;
+}
+iframe,
+object {
+	border: 1px solid #6c757d;
+	background: #eef6ff;
+}
+</style>
+</head>
+<body>
+<main>
+<h1>Practical Bench Media Objects</h1>
+<p>Practical Bench page for replaced elements, image maps, embedded HTML objects, fallback content, and image redraw.</p>
+<div class="media-row">
+<section>
+<h2>Image map</h2>
+<p><img alt="Bench map image" width="180" height="120" usemap="#bench-map" src="assets/article-transit.jpg"></p>
+<map name="bench-map">
+<area shape="rect" coords="0,0,60,120" href="#rect" alt="Rectangle">
+<area shape="circle" coords="105,60,30" href="#circle" alt="Circle">
+<area shape="poly" coords="142,10,178,60,142,110" href="#poly" alt="Poly">
+<area shape="default" href="#default" alt="Default">
+</map>
+<p id="rect">Map rectangle target.</p>
+</section>
+<section>
+<h2>Object</h2>
+<object data="object-child.html" type="text/html" width="220" height="80">
+Practical Bench object fallback text.
+</object>
+<p>Object content should either embed the child page or show the fallback text.</p>
+</section>
+<section>
+<h2>Iframe</h2>
+<iframe src="object-child.html" width="220" height="80">Practical Bench iframe fallback text.</iframe>
+<p>Iframe content pressures nested HTML content handling.</p>
+</section>
+</div>
+</main>
+</body>
+</html>

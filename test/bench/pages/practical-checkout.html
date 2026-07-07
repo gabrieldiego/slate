@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench Checkout</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+body {
+	background: #f6f7f9;
+}
+.checkout {
+	max-width: 980px;
+	margin: 0 auto;
+}
+.columns {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 14px;
+}
+.columns > section {
+	flex: 1 1 280px;
+	background: #ffffff;
+	border: 1px solid #c8d1da;
+	padding: 12px;
+}
+label {
+	display: block;
+	margin: 7px 0;
+}
+input[type="text"],
+input[type="email"],
+select,
+textarea {
+	width: 92%;
+	padding: 5px;
+}
+.summary td:last-child {
+	text-align: right;
+}
+.cart-thumb {
+	float: left;
+	width: 96px;
+	height: 64px;
+	margin: 0 10px 8px 0;
+	border: 1px solid #8a99a8;
+}
+</style>
+</head>
+<body>
+<header class="site-head">
+<img src="assets/bench-logo.png" width="120" height="48" alt="Practical Bench logo">
+<h1>Practical Bench Checkout</h1>
+</header>
+<main class="checkout">
+<h1>Practical Bench Checkout</h1>
+<p>Practical Bench checkout page with shipping, payment, order summary, textarea notes, and a real submit control.</p>
+<form action="about:blank" method="get">
+<p><button type="submit">Quick Place Bench Order</button></p>
+<div class="columns">
+<section>
+<h2>Shipping</h2>
+<label>Full name <input type="text" name="name" value="Ada Lovelace"></label>
+<label>Email <input type="email" name="email" value="ada@example.test"></label>
+<label>Address <input type="text" name="address" value="42 Analytical Engine Way"></label>
+<label>Country
+<select name="country">
+<option selected>United States</option>
+<option>Canada</option>
+<option>United Kingdom</option>
+</select>
+</label>
+</section>
+<section>
+<h2>Payment</h2>
+<label><input type="radio" name="payment" checked> Card ending in 4242</label>
+<label><input type="radio" name="payment"> Pay on delivery</label>
+<label><input type="checkbox" checked> Save details for this browser</label>
+<label>Delivery notes <textarea name="notes" rows="4" cols="40">Leave by the front desk.</textarea></label>
+</section>
+<section>
+<h2>Order summary</h2>
+<img class="cart-thumb" width="96" height="64" src="assets/product-camera.jpg" alt="cart product thumbnail">
+<table class="summary">
+<tr><td>Bench Camera</td><td>$149.00</td></tr>
+<tr><td>Shipping</td><td>$0.00</td></tr>
+<tr><td>Tax estimate</td><td>$12.29</td></tr>
+<tr><th>Total</th><th>$161.29</th></tr>
+</table>
+<p><button type="submit">Place Bench Order</button></p>
+</section>
+</div>
+</form>
+</main>
+</body>
+</html>

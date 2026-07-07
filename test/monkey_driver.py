@@ -425,6 +425,7 @@ def run_test_step_action_click(ctx, step):
                     y = textentry[1] + 2
 
     # Now we want to click on the x/y coordinate given
+    assert x is not None and y is not None, "Click target not found: {}".format(targets)
     print(get_indent(ctx) + "        Clicking at {}, {} (button={} kind={})".format(x, y, button, kind))
     win.click(x, y, button, kind)
 

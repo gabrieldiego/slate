@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench Docs</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+main {
+	max-width: 860px;
+}
+pre {
+	background: #f1f3f5;
+	border: 1px solid #c9d1d9;
+	overflow: auto;
+	padding: 10px;
+}
+blockquote {
+	border-left: 4px solid #7a8a99;
+	margin-left: 0;
+	padding-left: 12px;
+}
+dt {
+	font-weight: bold;
+}
+</style>
+</head>
+<body>
+<main>
+<h1>Practical Bench Docs</h1>
+<p>Practical Bench documentation page with nested lists, a definition list, preformatted code, and a table with spans.</p>
+<nav>
+<a href="#intro">Intro</a> |
+<a href="#api">API</a> |
+<a href="#matrix">Matrix</a>
+</nav>
+<section id="intro">
+<h2>Intro</h2>
+<p>Pages like this are common in manuals and project documentation. They mix paragraphs, links, inline code, and ordinary block layout.</p>
+<blockquote>Keep the renderer compatible while making every expensive representation measurable.</blockquote>
+<ol>
+<li>Parse the document.</li>
+<li>Apply the cascade.</li>
+<li>Lay out boxes and line boxes.
+<ul>
+<li>Inline text</li>
+<li>Lists</li>
+<li>Tables</li>
+</ul>
+</li>
+</ol>
+</section>
+<section id="api">
+<h2>API</h2>
+<dl>
+<dt>bench_smoke</dt>
+<dd>Fast check for parser, CSS, layout, and shutdown.</dd>
+<dt>bench_practical</dt>
+<dd>Ordinary browsing workload with realistic document shapes.</dd>
+<dt>bench_stress</dt>
+<dd>Pathological pages for memory pressure tracking.</dd>
+</dl>
+<pre><code>struct bench_result {
+	const char *suite;
+	unsigned long max_rss_kib;
+};</code></pre>
+</section>
+<section id="matrix">
+<h2>Matrix</h2>
+<table>
+<caption>Renderer feature matrix</caption>
+<thead>
+<tr><th>Area</th><th colspan="2">Coverage target</th><th>Memory target</th></tr>
+</thead>
+<tbody>
+<tr><th rowspan="2">HTML</th><td>Elements</td><td>Forms</td><td>Compact nodes</td></tr>
+<tr><td>Objects</td><td>Maps</td><td>Lazy wrappers</td></tr>
+<tr><th>CSS</th><td>Selectors</td><td>Layout</td><td>Shared style</td></tr>
+</tbody>
+</table>
+</section>
+</main>
+</body>
+</html>

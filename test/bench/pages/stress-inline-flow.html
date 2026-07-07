@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stress Bench Inline Flow</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+body {
+	margin: 10px;
+	font: 13px serif;
+}
+.narrow {
+	width: 360px;
+	border: 1px solid #c8d1da;
+	padding: 8px;
+}
+.nowrap {
+	white-space: nowrap;
+}
+.pre {
+	white-space: pre-wrap;
+	background: #f1f3f5;
+}
+.inline-sample span:nth-child(4n) {
+	font-weight: bold;
+}
+.inline-sample span:nth-child(5n) {
+	font-style: italic;
+}
+.inline-sample span:nth-child(7n) {
+	text-decoration: underline;
+}
+</style>
+</head>
+<body>
+<h1>Stress Bench Inline Flow</h1>
+<p>Stress Bench inline layout page with many inline boxes, long words, whitespace modes, and wrapping pressure.</p>
+<div class="narrow">
+<p id="inline-root" class="inline-sample"></p>
+<p class="nowrap">StressBenchUnbrokenWordStressBenchUnbrokenWordStressBenchUnbrokenWordStressBenchUnbrokenWord</p>
+<p class="pre">pre wrapped text
+  with indentation
+    and multiple spaces preserved for line layout.</p>
+</div>
+<script>
+(function () {
+	var root = document.getElementById("inline-root");
+	var words = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta"];
+	var i;
+	for (i = 0; root && i < 420; i++) {
+		var span = document.createElement("span");
+		span.appendChild(document.createTextNode(words[i % words.length] + "-" + i + " "));
+		root.appendChild(span);
+		if (i % 17 === 0) {
+			root.appendChild(document.createElement("br"));
+		}
+	}
+}());
+</script>
+</body>
+</html>

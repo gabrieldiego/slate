@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stress Bench Object Media</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+body {
+	margin: 10px;
+	font: 12px sans-serif;
+}
+.media-grid {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+.media-grid section {
+	flex: 1 1 180px;
+	border: 1px solid #b9c2cc;
+	padding: 6px;
+}
+img {
+	margin: 3px;
+	border: 1px solid #59636e;
+}
+</style>
+</head>
+<body>
+<h1>Stress Bench Object Media</h1>
+<p>Stress Bench page for repeated images, imagemap extraction, object parameters, iframes, and fallback handling.</p>
+<div class="media-grid">
+<section>
+<h2>Images</h2>
+<p id="image-list"></p>
+</section>
+<section>
+<h2>Image maps</h2>
+<p><img alt="Stress map image" width="180" height="120" usemap="#stress-map" src="assets/product-monitor.jpg"></p>
+<map name="stress-map">
+<area shape="rect" coords="0,0,60,60" href="#rect-a" alt="rect a">
+<area shape="rect" coords="60,0,120,60" href="#rect-b" alt="rect b">
+<area shape="circle" coords="150,35,24" href="#circle" alt="circle">
+<area shape="poly" coords="20,82,80,82,40,116" href="#poly-a" alt="poly a">
+<area shape="poly" coords="100,82,170,82,130,116" href="#poly-b" alt="poly b">
+<area shape="default" href="#default" alt="default">
+</map>
+</section>
+<section>
+<h2>Objects</h2>
+<object data="object-child.html" type="text/html" width="170" height="70">
+Stress Bench object fallback.
+<param name="quality" value="low">
+<param name="mode" value="bench">
+</object>
+<iframe src="object-child.html" width="170" height="70">Stress Bench iframe fallback.</iframe>
+</section>
+</div>
+<script>
+(function () {
+	var list = document.getElementById("image-list");
+	var src = "assets/icon-store.png";
+	var i;
+	for (i = 0; list && i < 64; i++) {
+		var img = document.createElement("img");
+		img.setAttribute("alt", "generated image " + i);
+		img.setAttribute("width", "16");
+		img.setAttribute("height", "16");
+		img.setAttribute("src", src);
+		list.appendChild(img);
+	}
+}());
+</script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stress Bench Form Controls</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+body {
+	margin: 10px;
+	font: 12px sans-serif;
+}
+.form-grid {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+.form-grid fieldset {
+	flex: 1 1 230px;
+	background: #f7f9fb;
+}
+label {
+	display: block;
+	margin: 4px 0;
+}
+textarea {
+	width: 95%;
+}
+</style>
+</head>
+<body>
+<h1>Stress Bench Form Controls</h1>
+<p>Stress Bench form page with many input types, select menus, textareas, buttons, hidden controls, and repeated labels.</p>
+<form action="about:blank" method="post" enctype="multipart/form-data">
+<div id="form-grid" class="form-grid"></div>
+<p>
+<button type="submit">Submit Stress Bench</button>
+<button type="reset">Reset Stress Bench</button>
+</p>
+</form>
+<script>
+(function () {
+	var grid = document.getElementById("form-grid");
+	var i;
+	for (i = 0; grid && i < 48; i++) {
+		var fs = document.createElement("fieldset");
+		var legend = document.createElement("legend");
+		legend.appendChild(document.createTextNode("Group " + i));
+		fs.appendChild(legend);
+		fs.innerHTML += '<label>Text <input name="text' + i + '" value="value-' + i + '"></label>';
+		fs.innerHTML += '<label>Password <input type="password" name="pass' + i + '" value="secret"></label>';
+		fs.innerHTML += '<label><input type="checkbox" name="check' + i + '" checked> checkbox</label>';
+		fs.innerHTML += '<label><input type="radio" name="radio' + i + '" checked> first radio</label>';
+		fs.innerHTML += '<label><input type="radio" name="radio' + i + '"> second radio</label>';
+		fs.innerHTML += '<label>Select <select name="select' + i + '"><option>One</option><option selected>Two</option><option>Three</option></select></label>';
+		fs.innerHTML += '<label>Notes <textarea name="notes' + i + '" rows="3" cols="24">textarea value ' + i + '</textarea></label>';
+		fs.innerHTML += '<input type="hidden" name="hidden' + i + '" value="hidden-value">';
+		grid.appendChild(fs);
+	}
+}());
+</script>
+</body>
+</html>

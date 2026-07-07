@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench Interaction</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+.action {
+	display: inline-block;
+	border: 1px solid #446688;
+	background: #e8f1fa;
+	padding: 8px 10px;
+	text-decoration: none;
+}
+#action-result {
+	margin-top: 12px;
+	padding: 8px;
+	border: 1px solid #9aa8b4;
+}
+</style>
+</head>
+<body>
+<main>
+<h1>Practical Bench Interaction</h1>
+<p>This page gives the Monkey driver a stable text target for DOM event dispatch and script-driven DOM mutation.</p>
+<p><a class="action" href="#clicked" onclick="return runBenchAction();">Run Practical Action</a></p>
+<p id="action-result">Waiting for action.</p>
+<form action="about:blank" method="get">
+<fieldset>
+<legend>Interactive controls</legend>
+<label><input type="checkbox" checked> checkbox control</label>
+<label><input type="radio" name="choice" checked> first radio</label>
+<label><input type="radio" name="choice"> second radio</label>
+<label>Text <input name="text" value="editable value"></label>
+<label>Menu
+<select name="menu">
+<option>Alpha</option>
+<option selected>Beta</option>
+<option>Gamma</option>
+</select>
+</label>
+</fieldset>
+</form>
+</main>
+<script>
+function runBenchAction() {
+	var result = document.getElementById("action-result");
+	while (result && result.firstChild) {
+		result.removeChild(result.firstChild);
+	}
+	if (result) {
+		result.appendChild(document.createTextNode("Clicked Action Complete"));
+	}
+	return false;
+}
+</script>
+</body>
+</html>

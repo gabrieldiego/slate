@@ -1,0 +1,17 @@
+aside.notice {
+	background: #fff7d6;
+	border: 1px solid #d0a100;
+	padding: 8px;
+}
+
+.imported-token {
+	color: #26547c;
+	font-weight: bold;
+}
+
+@media screen {
+	.media-rule {
+		border-left: 4px solid #2a9d8f;
+		padding-left: 8px;
+	}
+}

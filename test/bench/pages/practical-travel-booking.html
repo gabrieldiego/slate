@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench Travel Booking</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+body {
+	background: #edf3f7;
+}
+.travel {
+	max-width: 1050px;
+	margin: 0 auto;
+}
+.search-card,
+.trip-card {
+	background: #ffffff;
+	border: 1px solid #c8d1da;
+	margin: 12px 0;
+	padding: 12px;
+}
+.fields {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+.fields label {
+	flex: 1 1 180px;
+}
+.trip-card {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+}
+.trip-card img {
+	width: 120px;
+	height: 84px;
+	border: 1px solid #8a99a8;
+}
+.trip-card .details {
+	flex: 1 1 280px;
+}
+.fare {
+	font-weight: bold;
+	color: #7a2e0e;
+}
+</style>
+</head>
+<body>
+<header class="site-head">
+<img src="assets/bench-logo.png" width="120" height="48" alt="Practical Bench logo">
+<h1>Practical Bench Travel Booking</h1>
+</header>
+<main class="travel">
+<p class="bench-kicker"></p>
+<form class="search-card" action="about:blank" method="get">
+<h2>Search trips</h2>
+<div class="fields">
+<label>From <input type="text" name="from" value="Portland"></label>
+<label>To <input type="text" name="to" value="San Francisco"></label>
+<label>Depart <input type="text" name="depart" value="2026-08-12"></label>
+<label>Passengers
+<select name="passengers">
+<option>1 adult</option>
+<option selected>2 adults</option>
+<option>Family</option>
+</select>
+</label>
+</div>
+<label><input type="checkbox" checked> Include nearby airports</label>
+<button type="submit">Search Bench Trips</button>
+</form>
+<section class="trip-card">
+<img width="120" height="84" alt="hotel preview" src="assets/travel-hotel.jpg">
+<div class="details">
+<h2>Downtown Bench Hotel</h2>
+<p>Four nights, breakfast included, walkable to transit and conference space.</p>
+<p class="fare">$612 total</p>
+<p><a href="#hotel-details">View Bench Hotel Details</a></p>
+</div>
+</section>
+<section class="trip-card">
+<img width="120" height="84" alt="flight preview" src="assets/travel-flight.jpg">
+<div class="details">
+<h2>Morning Bench Flight</h2>
+<p>One stop, compact baggage rules, and a clear fare table for comparison.</p>
+<table>
+<tr><th>Fare</th><th>Carry-on</th><th>Change</th></tr>
+<tr><td>Basic</td><td>Yes</td><td>No</td></tr>
+<tr><td>Flexible</td><td>Yes</td><td>Yes</td></tr>
+</table>
+</div>
+</section>
+</main>
+</body>
+</html>

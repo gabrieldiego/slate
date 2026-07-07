@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stress Bench Flex</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+body {
+	margin: 10px;
+	font: 12px sans-serif;
+}
+.flex-root {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: stretch;
+	justify-content: space-between;
+	border: 1px solid #8a99a8;
+	padding: 6px;
+}
+.flex-root > section {
+	flex: 1 1 140px;
+	min-width: 90px;
+	max-width: 260px;
+	margin: 4px;
+	padding: 6px;
+	border: 1px solid #b8c4cf;
+	background: #f7f9fb;
+}
+.flex-root > section:nth-child(3n) {
+	flex-grow: 2;
+}
+.nested-flex {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+.nested-flex span {
+	border: 1px solid #d0d7de;
+	padding: 2px;
+}
+</style>
+</head>
+<body>
+<h1>Stress Bench Flex</h1>
+<p>Stress Bench flex layout with generated flex items, nested flex containers, min widths, and variable growth.</p>
+<div id="flex-root" class="flex-root"></div>
+<script>
+(function () {
+	var root = document.getElementById("flex-root");
+	var i;
+	var j;
+	for (i = 0; root && i < 96; i++) {
+		var section = document.createElement("section");
+		var h = document.createElement("h2");
+		h.appendChild(document.createTextNode("Flex " + i));
+		section.appendChild(h);
+		var nested = document.createElement("p");
+		nested.setAttribute("class", "nested-flex");
+		for (j = 0; j < 4; j++) {
+			var span = document.createElement("span");
+			span.appendChild(document.createTextNode("cell-" + i + "-" + j));
+			nested.appendChild(span);
+		}
+		section.appendChild(nested);
+		root.appendChild(section);
+	}
+}());
+</script>
+</body>
+</html>

@@ -10,13 +10,28 @@ steps:
 - action: window-new
   tag: win1
 - action: repeat
-  tag: pass
-  min: 0
-  max: 2
+  tag: pages
+  values:
+  - ${NETSURF_BENCH_ROOT}/stress-deep-dom.html
+  - ${NETSURF_BENCH_ROOT}/stress-wide-table.html
+  - ${NETSURF_BENCH_ROOT}/stress-complex-table.html
+  - ${NETSURF_BENCH_ROOT}/stress-flex.html
+  - ${NETSURF_BENCH_ROOT}/stress-css-cascade.html
+  - ${NETSURF_BENCH_ROOT}/stress-form-controls.html
+  - ${NETSURF_BENCH_ROOT}/stress-inline-flow.html
+  - ${NETSURF_BENCH_ROOT}/stress-object-media.html
+  - ${NETSURF_BENCH_ROOT}/stress-deep-dom.html
+  - ${NETSURF_BENCH_ROOT}/stress-wide-table.html
+  - ${NETSURF_BENCH_ROOT}/stress-complex-table.html
+  - ${NETSURF_BENCH_ROOT}/stress-flex.html
+  - ${NETSURF_BENCH_ROOT}/stress-css-cascade.html
+  - ${NETSURF_BENCH_ROOT}/stress-form-controls.html
+  - ${NETSURF_BENCH_ROOT}/stress-inline-flow.html
+  - ${NETSURF_BENCH_ROOT}/stress-object-media.html
   steps:
   - action: navigate
     window: win1
-    url: ${NETSURF_BENCH_ROOT}/stress-deep-dom.html
+    repeaturl: pages
   - action: block
     conditions:
     - window: win1
@@ -25,19 +40,7 @@ steps:
     window: win1
     area: extent
     checks:
-    - text-contains: Stress Bench DOM
-  - action: navigate
-    window: win1
-    url: ${NETSURF_BENCH_ROOT}/stress-wide-table.html
-  - action: block
-    conditions:
-    - window: win1
-      status: complete
-  - action: plot-check
-    window: win1
-    area: extent
-    checks:
-    - text-contains: Stress Bench Table
+    - text-contains: Stress Bench
 - action: window-close
   window: win1
 - action: quit

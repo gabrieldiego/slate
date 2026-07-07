@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench Search Results</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+body {
+	background: #f8fafc;
+}
+.search-shell {
+	max-width: 980px;
+	margin: 0 auto;
+}
+.search-box {
+	background: #ffffff;
+	border: 1px solid #c7d0d9;
+	padding: 12px;
+}
+.search-box input[type="search"] {
+	width: 65%;
+	padding: 6px;
+}
+.result {
+	background: #ffffff;
+	border-bottom: 1px solid #d7dce0;
+	padding: 12px 0;
+	min-height: 108px;
+}
+.result h2 {
+	margin-bottom: 3px;
+}
+.url {
+	color: #116329;
+	font-size: 13px;
+}
+.filters {
+	float: right;
+	width: 220px;
+	margin-left: 20px;
+	background: #ffffff;
+	border: 1px solid #c7d0d9;
+	padding: 10px;
+}
+.snippet mark {
+	background: #fff1a8;
+}
+</style>
+</head>
+<body>
+<header class="site-head">
+<img src="assets/bench-logo.png" width="120" height="48" alt="Practical Bench logo">
+<h1>Practical Bench Search Results</h1>
+</header>
+<main class="search-shell">
+<p class="bench-kicker"></p>
+<form class="search-box" action="about:blank" method="get">
+<label>Search <input type="search" name="q" value="small memory browser"></label>
+<button type="submit">Search Practical Bench</button>
+</form>
+<aside class="filters">
+<h2>Filters</h2>
+<label><input type="checkbox" checked> Documentation</label>
+<label><input type="checkbox"> Discussions</label>
+<label><input type="checkbox"> Downloads</label>
+<label>Date
+<select name="date">
+<option>Any time</option>
+<option selected>Past year</option>
+<option>Past month</option>
+</select>
+</label>
+</aside>
+<section>
+<article class="result" id="alpha-result">
+<img class="result-thumb" src="assets/article-transit.jpg" width="144" height="96" alt="Transit search result thumbnail">
+<h2><a href="#alpha-result">Open Bench Result Alpha</a></h2>
+<p class="url">https://example.test/browser/memory</p>
+<p class="snippet">A practical result about <mark>small memory</mark> HTML rendering, cache policy, and renderer test benches.</p>
+<p class="clear"></p>
+</article>
+<article class="result">
+<img class="result-thumb" src="assets/icon-news.png" width="96" height="96" alt="News result icon">
+<h2><a href="#beta-result">Compact layout compatibility notes</a></h2>
+<p class="url">https://example.test/browser/layout</p>
+<p class="snippet">Guidance for tables, forms, CSS selectors, and embedded resources without excessive resident memory.</p>
+<p class="clear"></p>
+</article>
+<article class="result">
+<img class="result-thumb" src="assets/icon-issue.png" width="96" height="96" alt="Image cache result icon">
+<h2><a href="#gamma-result">Image cache measurements</a></h2>
+<p class="url">https://example.test/browser/images</p>
+<p class="snippet">Decoded image budgets, external resource caches, and lazy rendering for local pages.</p>
+<p class="clear"></p>
+</article>
+</section>
+</main>
+</body>
+</html>

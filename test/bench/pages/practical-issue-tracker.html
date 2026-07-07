@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench Issue Tracker</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+body {
+	background: #f6f8fa;
+}
+.tracker {
+	max-width: 1040px;
+	margin: 0 auto;
+}
+.toolbar,
+.issue,
+.comment-box {
+	background: #ffffff;
+	border: 1px solid #c8d1da;
+	margin: 10px 0;
+	padding: 10px;
+}
+.labels span {
+	display: inline-block;
+	margin-right: 5px;
+	padding: 2px 6px;
+	border: 1px solid #9aa8b4;
+	background: #eef2f5;
+}
+.issue-grid {
+	width: 100%;
+}
+.issue-grid th {
+	text-align: left;
+}
+.open {
+	color: #116329;
+}
+.closed {
+	color: #8250df;
+}
+.issue-icon {
+	float: right;
+	margin: 0 0 8px 12px;
+}
+</style>
+</head>
+<body>
+<header class="site-head">
+<img src="assets/bench-logo.png" width="120" height="48" alt="Practical Bench logo">
+<h1>Practical Bench Issue Tracker</h1>
+</header>
+<main class="tracker">
+<h1>Practical Bench Issue Tracker</h1>
+<form class="toolbar" action="about:blank" method="get">
+<label>Search issues <input type="search" name="q" value="renderer memory"></label>
+<label>Status
+<select name="status">
+<option selected>Open</option>
+<option>Closed</option>
+<option>All</option>
+</select>
+</label>
+<label><input type="checkbox" checked> Assigned to me</label>
+<button type="submit">Filter Bench Issues</button>
+</form>
+<section class="issue">
+<img class="issue-icon" width="96" height="96" src="assets/icon-issue.png" alt="issue icon">
+<h2>Issue #1842: Reduce layout cache lifetime</h2>
+<p class="labels"><span>html</span><span>memory</span><span>layout</span></p>
+<table class="issue-grid">
+<thead>
+<tr><th>State</th><th>Assignee</th><th>Milestone</th><th>Updated</th></tr>
+</thead>
+<tbody>
+<tr><td class="open">Open</td><td>Ada Bench</td><td>Renderer memory</td><td><time datetime="2026-07-07">Today</time></td></tr>
+<tr><td class="closed">Closed</td><td>Grace Bench</td><td>CSS fetch</td><td><time datetime="2026-07-01">Last week</time></td></tr>
+</tbody>
+</table>
+<p>The issue body includes normal paragraphs, links, labels, tables, and code-like identifiers such as <code>layout_flex</code> and <code>redraw_border</code>.</p>
+<details open>
+<summary>Bench reproduction details</summary>
+<ol>
+<li>Run the practical suite.</li>
+<li>Compare Max RSS and HTML renderer coverage.</li>
+<li>Check whether the regression is in style, layout, or redraw.</li>
+</ol>
+</details>
+</section>
+<form class="comment-box" action="about:blank" method="post">
+<h2>Add comment</h2>
+<label>Comment <textarea name="comment" rows="5" cols="65">I can reproduce this on the local bench suite.</textarea></label>
+<button type="submit">Comment On Bench Issue</button>
+</form>
+</main>
+</body>
+</html>

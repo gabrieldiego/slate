@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench Product Listing</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+body {
+	background: #f4f6f8;
+}
+.store-shell {
+	max-width: 1050px;
+	margin: 0 auto;
+}
+.toolbar {
+	background: #ffffff;
+	border: 1px solid #c8d1da;
+	margin-bottom: 12px;
+	padding: 10px;
+}
+.catalog {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+}
+.product {
+	flex: 1 1 210px;
+	background: #ffffff;
+	border: 1px solid #c8d1da;
+	padding: 10px;
+}
+.price {
+	font-weight: bold;
+	color: #7a2e0e;
+}
+.rating {
+	color: #5f6b75;
+}
+.thumb {
+	width: 96px;
+	height: 64px;
+	border: 1px solid #8a99a8;
+	background: #e9eef3;
+}
+</style>
+</head>
+<body>
+<header class="site-head">
+<img src="assets/bench-logo.png" width="120" height="48" alt="Practical Bench logo">
+<h1>Practical Bench Product Listing</h1>
+</header>
+<main class="store-shell">
+<p class="bench-kicker"></p>
+<form class="toolbar" action="about:blank" method="get">
+<label>Category
+<select name="category">
+<option>All departments</option>
+<option selected>Electronics</option>
+<option>Office</option>
+</select>
+</label>
+<label>Sort
+<select name="sort">
+<option selected>Featured</option>
+<option>Price low to high</option>
+<option>Top rated</option>
+</select>
+</label>
+<label><input type="checkbox" checked> Prime Bench Delivery</label>
+<button type="submit">Apply Product Filters</button>
+</form>
+<section class="catalog">
+<article class="product">
+<figure>
+<img class="product-media" width="220" height="147" alt="camera thumbnail" src="assets/product-camera.jpg">
+<figcaption>Camera product JPEG.</figcaption>
+</figure>
+<h2>Bench Camera</h2>
+<p class="rating">Rating 4.4 from 318 reviews</p>
+<p class="price">$149.00</p>
+<label><input type="checkbox"> Compare Bench Camera</label>
+<p><a href="#camera-detail">View Bench Camera Details</a></p>
+</article>
+<article class="product">
+<figure>
+<img class="product-media" width="220" height="147" alt="keyboard thumbnail" src="assets/product-keyboard.jpg">
+<figcaption>Keyboard product JPEG.</figcaption>
+</figure>
+<h2>Compact Keyboard</h2>
+<p class="rating">Rating 4.7 from 851 reviews</p>
+<p class="price">$79.00</p>
+<label><input type="checkbox"> Compare Compact Keyboard</label>
+<p><a href="#keyboard-detail">View keyboard details</a></p>
+</article>
+<article class="product">
+<figure>
+<img class="product-media" width="220" height="147" alt="monitor thumbnail" src="assets/product-monitor.jpg">
+<figcaption>Monitor product JPEG.</figcaption>
+</figure>
+<h2>Low Power Monitor</h2>
+<p class="rating">Rating 4.2 from 126 reviews</p>
+<p class="price">$229.00</p>
+<label><input type="checkbox"> Compare Low Power Monitor</label>
+<p><a href="#monitor-detail">View monitor details</a></p>
+</article>
+</section>
+</main>
+</body>
+</html>

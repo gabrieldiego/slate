@@ -213,7 +213,7 @@ $(eval $(foreach SOURCE,$(sort $(filter %.c,$(NOCOV_TESTSOURCES))), \
 	$(call compile_test_nocov_target_c,$(SOURCE),$(subst /,_,$(SOURCE:.c=.o)),$(subst /,_,$(SOURCE:.c=.d)))))
 
 
-.PHONY:test coverage sanitize bench bench-smoke bench-practical bench-stress
+.PHONY:test coverage sanitize bench bench-smoke bench-practical bench-stress bench-report bench-report-memory bench-report-coverage
 
 test: $(TESTROOT)/created $(TESTROOT)/libmalloc_fig.so $(addsuffix _test,$(TESTS))
 
@@ -248,6 +248,15 @@ endef
 $(eval $(foreach BENCH,$(BENCH_SETS),$(call gen_bench_target,$(BENCH))))
 
 bench: $(addprefix bench-,$(BENCH_SETS))
+
+bench-report: $(BENCH_BUILD_DEPS)
+	$(Q)scripts/bench-report.sh --mode both
+
+bench-report-memory: $(BENCH_BUILD_DEPS)
+	$(Q)scripts/bench-report.sh --mode memory
+
+bench-report-coverage:
+	$(Q)scripts/bench-report.sh --mode coverage
 
 $(TESTROOT)/created:
 	$(VQ)echo "   MKDIR: $(TESTROOT)"

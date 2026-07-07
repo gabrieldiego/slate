@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Practical Bench News</title>
+<link rel="stylesheet" href="bench-shared.css">
 <style>
 body {
 	margin: 0;
@@ -39,10 +40,16 @@ article {
 	border-left: 4px solid #5d8aa8;
 	padding-left: 12px;
 }
+.lead-photo {
+	float: right;
+	width: 260px;
+	margin: 0 0 10px 16px;
+}
 </style>
 </head>
 <body>
-<header>
+<header class="site-head">
+<img src="assets/bench-logo.png" width="120" height="48" alt="Practical Bench logo">
 <h1>Practical Bench News</h1>
 <nav>
 <a href="#lead">Lead</a>
@@ -54,9 +61,14 @@ article {
 <p class="summary">Practical Bench page with article text, navigation, links, nested inline markup, and light scripting.</p>
 <article id="lead">
 <h2>Morning briefing</h2>
+<figure class="lead-photo bench-photo-framed">
+<img class="bench-photo" src="assets/article-transit.jpg" width="260" height="174" alt="Transit improvement preview">
+<figcaption>Local transit update preview image.</figcaption>
+</figure>
 <p class="meta">Updated 08:30 by the local desk</p>
 <p>The council approved a transport plan after public comment. The page uses ordinary article structure, a few links, and several paragraphs to resemble a daily news visit.</p>
 <p>Residents asked for better bus shelters, clearer pedestrian crossings, and more reliable evening service.</p>
+<p class="clear">The image is a local JPEG asset for practical image decode and redraw coverage.</p>
 </article>
 <article id="markets">
 <h2>Market notes</h2>

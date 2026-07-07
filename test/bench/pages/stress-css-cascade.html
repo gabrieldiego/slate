@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stress Bench CSS Cascade</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+body {
+	margin: 10px;
+	font: 12px sans-serif;
+}
+#cascade-root article {
+	border: 1px solid #cbd5df;
+	margin: 3px 0;
+	padding: 4px;
+}
+#cascade-root article[data-state="active"] {
+	background: #eef7f4;
+}
+#cascade-root article[data-state="idle"] {
+	background: #f7f7f4;
+}
+#cascade-root article:nth-child(2n) .token {
+	color: #7f1d1d;
+}
+#cascade-root article:nth-child(3n) .token {
+	font-weight: bold;
+}
+#cascade-root article:nth-child(5n) p:first-child {
+	border-left: 3px solid #26547c;
+	padding-left: 5px;
+}
+#cascade-root article:nth-child(7n) span + span {
+	text-decoration: underline;
+}
+#cascade-root article:nth-child(11n) span[title] {
+	background: #fff7d6;
+}
+.cascade-a .token { font-size: 12px; }
+.cascade-b .token { font-size: 13px; }
+.cascade-c .token { font-style: italic; }
+.cascade-d .token { letter-spacing: 0; }
+</style>
+</head>
+<body>
+<h1>Stress Bench CSS Cascade</h1>
+<p>Stress Bench selector and cascade page with many generated elements, attributes, classes, and nth-child matches.</p>
+<div id="cascade-root"></div>
+<script>
+(function () {
+	var root = document.getElementById("cascade-root");
+	var classes = ["cascade-a", "cascade-b", "cascade-c", "cascade-d"];
+	var i;
+	var j;
+	for (i = 0; root && i < 180; i++) {
+		var article = document.createElement("article");
+		article.setAttribute("class", classes[i % classes.length]);
+		article.setAttribute("data-state", i % 2 ? "idle" : "active");
+		var p = document.createElement("p");
+		p.appendChild(document.createTextNode("Cascade item " + i + " "));
+		for (j = 0; j < 5; j++) {
+			var span = document.createElement("span");
+			span.setAttribute("class", "token");
+			if (j === 2) {
+				span.setAttribute("title", "marker");
+			}
+			span.appendChild(document.createTextNode("token-" + j + " "));
+			p.appendChild(span);
+		}
+		article.appendChild(p);
+		root.appendChild(article);
+	}
+}());
+</script>
+</body>
+</html>

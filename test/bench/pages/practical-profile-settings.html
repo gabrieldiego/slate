@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench Profile Settings</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+body {
+	background: #eef2f5;
+}
+.settings {
+	max-width: 900px;
+	margin: 0 auto;
+	background: #ffffff;
+	border: 1px solid #c8d1da;
+	padding: 14px;
+}
+.avatar {
+	float: left;
+	width: 96px;
+	height: 96px;
+	margin: 0 16px 8px 0;
+	border: 1px solid #59636e;
+	background: #dbe5ef;
+}
+label {
+	display: block;
+	margin: 8px 0;
+}
+.privacy {
+	clear: both;
+}
+</style>
+</head>
+<body>
+<header class="site-head">
+<img src="assets/bench-logo.png" width="120" height="48" alt="Practical Bench logo">
+<h1>Practical Bench Profile Settings</h1>
+</header>
+<main class="settings">
+<h1>Practical Bench Profile Settings</h1>
+<img class="avatar" width="96" height="96" alt="profile avatar" src="assets/avatar-profile.png">
+<p>Practical Bench account settings page with profile fields, notification toggles, privacy choices, and a submit button.</p>
+<form action="about:blank" method="post">
+<fieldset>
+<legend>Profile</legend>
+<label>Display name <input type="text" name="display" value="Ada Bench"></label>
+<label>Bio <textarea name="bio" rows="3" cols="50">Working on a compact browser renderer.</textarea></label>
+</fieldset>
+<fieldset>
+<legend>Notifications</legend>
+<label><input type="checkbox" checked> Receive weekly bench digest</label>
+<label><input type="checkbox"> Alert on memory baseline changes</label>
+<label><input type="checkbox" checked> Notify when coverage improves</label>
+</fieldset>
+<fieldset class="privacy">
+<legend>Privacy</legend>
+<label><input type="radio" name="visibility" checked> Public profile</label>
+<label><input type="radio" name="visibility"> Private profile</label>
+<label>Locale
+<select name="locale">
+<option selected>English</option>
+<option>French</option>
+<option>Portuguese</option>
+</select>
+</label>
+</fieldset>
+<button type="submit">Save Profile Bench</button>
+</form>
+</main>
+</body>
+</html>

@@ -15,6 +15,17 @@ steps:
   - ${NETSURF_BENCH_ROOT}/practical-news.html
   - ${NETSURF_BENCH_ROOT}/practical-form.html
   - ${NETSURF_BENCH_ROOT}/practical-dashboard.html
+  - ${NETSURF_BENCH_ROOT}/practical-docs.html
+  - ${NETSURF_BENCH_ROOT}/practical-css-layout.html
+  - ${NETSURF_BENCH_ROOT}/practical-media-objects.html
+  - ${NETSURF_BENCH_ROOT}/practical-interaction.html
+  - ${NETSURF_BENCH_ROOT}/practical-search-results.html
+  - ${NETSURF_BENCH_ROOT}/practical-product-listing.html
+  - ${NETSURF_BENCH_ROOT}/practical-checkout.html
+  - ${NETSURF_BENCH_ROOT}/practical-profile-settings.html
+  - ${NETSURF_BENCH_ROOT}/practical-social-thread.html
+  - ${NETSURF_BENCH_ROOT}/practical-issue-tracker.html
+  - ${NETSURF_BENCH_ROOT}/practical-travel-booking.html
   steps:
   - action: navigate
     window: win1
@@ -28,6 +39,80 @@ steps:
     area: extent
     checks:
     - text-contains: Practical Bench
+- action: navigate
+  window: win1
+  url: ${NETSURF_BENCH_ROOT}/practical-search-results.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: click
+  window: win1
+  target:
+    text: Search Practical Bench
+- action: sleep-ms
+  time: 50
+- action: navigate
+  window: win1
+  url: ${NETSURF_BENCH_ROOT}/practical-product-listing.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: click
+  window: win1
+  target:
+    text: Compare Bench Camera
+- action: sleep-ms
+  time: 50
+- action: navigate
+  window: win1
+  url: ${NETSURF_BENCH_ROOT}/practical-profile-settings.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: click
+  window: win1
+  target:
+    text: Receive weekly bench digest
+- action: sleep-ms
+  time: 50
+- action: navigate
+  window: win1
+  url: ${NETSURF_BENCH_ROOT}/practical-social-thread.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: click
+  window: win1
+  kind: double
+  target:
+    text: Practical Bench thread content
+- action: sleep-ms
+  time: 50
+- action: navigate
+  window: win1
+  url: ${NETSURF_BENCH_ROOT}/practical-checkout.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: click
+  window: win1
+  target:
+    text: Leave by the front desk.
+- action: sleep-ms
+  time: 50
+- action: click
+  window: win1
+  target:
+    text: Quick Place Bench Order
+- action: block
+  conditions:
+  - window: win1
+    status: complete
 - action: window-close
   window: win1
 - action: quit

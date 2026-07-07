@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench CSS Layout</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+body {
+	background: #f4f6f8;
+}
+.shell {
+	max-width: 960px;
+	margin: 0 auto;
+}
+.hero {
+	background: #ffffff;
+	border: 1px solid #c8d1da;
+	padding: 14px;
+}
+.sidebar {
+	float: right;
+	width: 210px;
+	margin: 0 0 10px 16px;
+	background: #fff7d6;
+	border: 1px solid #d0a100;
+	padding: 8px;
+}
+.cards article:nth-child(2n) {
+	background: #eef7f4;
+}
+.cards article:nth-child(3n) {
+	border-color: #6a8caf;
+}
+.clear {
+	clear: both;
+}
+</style>
+</head>
+<body>
+<main class="shell">
+<section class="hero">
+<h1>Practical Bench CSS Layout</h1>
+<aside class="sidebar">Practical Bench floated sidebar with selector and background work.</aside>
+<p>This page combines floats, flex layout, imported CSS, borders, backgrounds, and selector matching in a realistic component page.</p>
+<p class="media-rule">The external stylesheet contributes shared flex and imported media-rule styling.</p>
+<div class="bench-flex cards">
+<article class="bench-panel"><h2>Parser</h2><p>HTML tree construction and box normalisation.</p></article>
+<article class="bench-panel"><h2>Cascade</h2><p>External CSS, imported CSS, classes, descendants, and nth-child selectors.</p></article>
+<article class="bench-panel"><h2>Layout</h2><p>Flex items, floats, inline text, and table sizing.</p></article>
+<article class="bench-panel"><h2>Redraw</h2><p>Borders, backgrounds, text, and form controls.</p></article>
+</div>
+<div class="clear"></div>
+</section>
+<section>
+<h2>Border samples</h2>
+<p class="border-samples">
+<span class="border-solid">solid</span>
+<span class="border-dashed">dashed</span>
+<span class="border-dotted">dotted</span>
+<span class="border-double">double</span>
+<span class="border-inset">inset</span>
+<span class="border-outset">outset</span>
+</p>
+</section>
+</main>
+</body>
+</html>
