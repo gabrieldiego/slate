@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Smoke Bench Interactions</title>
+<style>
+body {
+  font: 14px sans-serif;
+  margin: 0;
+  color: #17202a;
+  background: #f8fafc;
+}
+main {
+  padding: 18px;
+}
+.toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid #aeb8c4;
+  background: #eef3f7;
+}
+label {
+  display: block;
+  font-weight: bold;
+}
+input {
+  width: 220px;
+  padding: 6px;
+  border: 1px solid #516173;
+}
+button {
+  padding: 7px 12px;
+  border: 1px solid #2d5f7d;
+  background: #2f759b;
+  color: white;
+}
+.hover-target {
+  margin-top: 16px;
+  padding: 10px;
+  border: 1px solid #8b6f47;
+  background: #fff8e8;
+}
+.hover-target:hover {
+  background: #f4dfaa;
+}
+.spacer {
+  height: 760px;
+  margin: 18px 0;
+  border-left: 4px solid #4d7c59;
+  background: linear-gradient(#ffffff, #e8f0ea);
+}
+.bottom {
+  padding: 14px;
+  border: 1px solid #667085;
+  background: #ffffff;
+}
+</style>
+</head>
+<body>
+<main>
+<h1>Smoke Bench Interactions</h1>
+<div class="toolbar">
+  <label for="query">Search term<br><input id="query" name="query" value=""></label>
+  <button type="button">Apply Filter</button>
+</div>
+<div class="hover-target">Hover target for pointer tracking.</div>
+<div class="spacer">Scrollable smoke content.</div>
+<p class="bottom">Bottom Marker for Smoke Bench scroll checks.</p>
+</main>
+</body>
+</html>

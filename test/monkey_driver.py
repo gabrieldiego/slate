@@ -385,18 +385,33 @@ def run_test_step_action_repeat(ctx, step):
         ctx["depth"] -= 1
 
 
-def run_test_step_action_click(ctx, step):
-    print(get_indent(ctx) + "Action: " + step["action"])
-    assert_browser(ctx)
-    win = ctx['windows'][step['window']]
-    targets = step['target']
+def get_redraw_area(step):
+    if 'area' not in step.keys():
+        return None
+
+    if step["area"] == "extent":
+        # ought to capture the extent updates and use that, instead use a
+        # big area and have the browser clip it
+        return ["0", "0", "1000", "1000000"]
+
+    area = step["area"]
+    if isinstance(area, list):
+        return [str(coord) for coord in area]
+    return [str(area)]
+
+
+def find_window_target(ctx, win, step, action_name):
+    if 'x' in step.keys() and 'y' in step.keys():
+        return int(step['x']), int(step['y'])
+
+    targets = step.get('target')
+    assert targets is not None, "{} requires either x/y or target".format(action_name)
     if type(targets) == dict:
         targets = [targets]
-    button = step.get('button', 'left').upper()
-    kind = step.get('kind', 'single').upper()
+
     all_text_list = []
     bitmaps = []
-    for plot in win.redraw():
+    for plot in win.redraw(coords=get_redraw_area(step)):
         if plot[0] == 'TEXT':
             all_text_list.append((int(plot[2]), int(plot[4]), " ".join(plot[6:])))
         if plot[0] == 'BITMAP':
@@ -406,13 +421,15 @@ def run_test_step_action_click(ctx, step):
     y = None
 
     for target in targets:
+        found = False
         if 'bitmap' in target:
             if x is not None:
                 assert False, "Found more than one thing to click on, oh well"
             bmap = int(target['bitmap'])
-            assert bmap < 0 or bmap >= len(bitmaps)
-            x = bitmaps[bmap][0] + bitmaps[bmap][2] / 2
-            y = bitmaps[bmap][1] + bitmaps[bmap][3] / 2
+            assert 0 <= bmap < len(bitmaps), "Bitmap target out of range: {}".format(bmap)
+            x = bitmaps[bmap][0] + bitmaps[bmap][2] // 2
+            y = bitmaps[bmap][1] + bitmaps[bmap][3] // 2
+            found = True
         elif 'text' in target:
             if x is not None:
                 assert False, "Found more than one thing to click on, oh well"
@@ -423,11 +440,68 @@ def run_test_step_action_click(ctx, step):
                         assert False, "Text {} found more than once".format(text)
                     x = textentry[0] + 2
                     y = textentry[1] + 2
+                    found = True
+        if found:
+            x += int(target.get('offset-x', 0))
+            y += int(target.get('offset-y', 0))
+
+    assert x is not None and y is not None, "{} target not found: {}".format(action_name, targets)
+    return x, y
+
+
+def run_test_step_action_click(ctx, step):
+    print(get_indent(ctx) + "Action: " + step["action"])
+    assert_browser(ctx)
+    win = ctx['windows'][step['window']]
+    button = step.get('button', 'left').upper()
+    kind = step.get('kind', 'single').upper()
+    x, y = find_window_target(ctx, win, step, "Click")
 
     # Now we want to click on the x/y coordinate given
-    assert x is not None and y is not None, "Click target not found: {}".format(targets)
     print(get_indent(ctx) + "        Clicking at {}, {} (button={} kind={})".format(x, y, button, kind))
     win.click(x, y, button, kind)
+
+
+def run_test_step_action_keypress(ctx, step):
+    print(get_indent(ctx) + "Action: " + step["action"])
+    assert_browser(ctx)
+    win = ctx['windows'][step['window']]
+    if 'key' in step.keys():
+        print(get_indent(ctx) + "        Key {}".format(step['key']))
+        win.key(key=step['key'])
+    elif 'value' in step.keys():
+        print(get_indent(ctx) + "        Key value {}".format(step['value']))
+        win.key(value=step['value'])
+    elif 'text' in step.keys():
+        print(get_indent(ctx) + "        Text {}".format(repr(step['text'])))
+        win.key(text=step['text'])
+    else:
+        raise AssertionError("keypress requires key, value, or text")
+
+
+def run_test_step_action_mouse(ctx, step):
+    print(get_indent(ctx) + "Action: " + step["action"])
+    assert_browser(ctx)
+    win = ctx['windows'][step['window']]
+    state = step.get('state', 'hover')
+    x, y = find_window_target(ctx, win, step, "Mouse")
+    print(get_indent(ctx) + "        Mouse at {}, {} (state={})".format(x, y, state))
+    win.mouse_track(x, y, state=state)
+
+
+def run_test_step_action_scroll(ctx, step):
+    print(get_indent(ctx) + "Action: " + step["action"])
+    assert_browser(ctx)
+    win = ctx['windows'][step['window']]
+    if 'target' in step.keys() or ('x' in step.keys() and 'y' in step.keys()):
+        x, y = find_window_target(ctx, win, step, "Scroll")
+    else:
+        x = int(step.get('x', (win.width or 800) // 2))
+        y = int(step.get('y', (win.height or 600) // 2))
+    dx = int(step.get('dx', 0))
+    dy = int(step.get('dy', 0))
+    print(get_indent(ctx) + "        Scroll at {}, {} (dx={} dy={})".format(x, y, dx, dy))
+    win.scroll(x, y, dx=dx, dy=dy)
 
 
 def run_test_step_action_wait_loading(ctx, step):
@@ -441,15 +515,7 @@ def run_test_step_action_plot_check(ctx, step):
     assert_browser(ctx)
     win = ctx['windows'][step['window']]
 
-    if 'area' in step.keys():
-        if step["area"] == "extent":
-            # ought to capture the extent updates and use that, instead use a
-            # big area and have the browser clip it
-            area=["0","0","1000","1000000"]
-        else:
-            area = [step["area"]]
-    else:
-        area = None
+    area = get_redraw_area(step)
 
     # get the list of checks
     if 'checks' in step.keys():
@@ -624,6 +690,11 @@ STEP_HANDLERS = {
     "timer-check":   run_test_step_action_timer_check,
     "plot-check":    run_test_step_action_plot_check,
     "click":         run_test_step_action_click,
+    "keypress":      run_test_step_action_keypress,
+    "key":           run_test_step_action_keypress,
+    "mouse":         run_test_step_action_mouse,
+    "mouse-track":   run_test_step_action_mouse,
+    "scroll":        run_test_step_action_scroll,
     "wait-loading":  run_test_step_action_wait_loading,
     "add-auth":      run_test_step_action_add_auth,
     "remove-auth":   run_test_step_action_remove_auth,

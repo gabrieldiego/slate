@@ -26,36 +26,33 @@ Python code.
 
 # pylint: disable=locally-disabled, missing-docstring
 
-import asyncore
 import os
+import selectors
 import socket
 import subprocess
 import time
-import errno
 import sys
 
-class StderrEcho(asyncore.dispatcher):
+class StderrEcho:
     def __init__(self, sockend):
-        asyncore.dispatcher.__init__(self, sock=sockend)
+        self.sock = sockend
+        self.sock.setblocking(False)
         self.incoming = b""
+        self.closed = False
 
-    def handle_connect(self):
-        pass
-
-    def handle_close(self):
-        # the pipe to the monkey process has closed
-        self.close()
+    def close(self):
+        self.closed = True
+        if self.sock.fileno() != -1:
+            self.sock.close()
 
     def handle_read(self):
         try:
-            got = self.recv(8192)
+            got = self.sock.recv(8192)
             if not got:
+                self.closed = True
                 return
-        except socket.error as error:
-            if error.errno == errno.EAGAIN or error.errno == errno.EWOULDBLOCK:
-                return
-            else:
-                raise
+        except BlockingIOError:
+            return
 
         self.incoming += got
         if b"\n" in self.incoming:
@@ -71,18 +68,19 @@ class StderrEcho(asyncore.dispatcher):
                 sys.stderr.write("{}\n".format(line))
 
 
-class MonkeyFarmer(asyncore.dispatcher):
+class MonkeyFarmer:
 
     # pylint: disable=locally-disabled, too-many-instance-attributes
 
     def __init__(self, monkey_cmd, monkey_env, online, quiet=False, *, wrapper=None):
         (mine, monkeys) = socket.socketpair()
-
-        asyncore.dispatcher.__init__(self, sock=mine)
-
         (mine2, monkeyserr) = socket.socketpair()
 
+        self.sock = mine
+        self.sock.setblocking(False)
         self._errwrapper = StderrEcho(mine2)
+        self.selector = selectors.DefaultSelector()
+        self._monkey_events = selectors.EVENT_READ
 
         if wrapper is not None:
             new_cmd = list(wrapper)
@@ -95,10 +93,12 @@ class MonkeyFarmer(asyncore.dispatcher):
             stdin=monkeys,
             stdout=monkeys,
             stderr=monkeyserr,
-            close_fds=[mine, mine2])
+            close_fds=True)
 
         monkeys.close()
         monkeyserr.close()
+        self.selector.register(self.sock, self._monkey_events, "monkey")
+        self.selector.register(self._errwrapper.sock, selectors.EVENT_READ, "stderr")
 
         self.buffer = b""
         self.incoming = b""
@@ -110,33 +110,54 @@ class MonkeyFarmer(asyncore.dispatcher):
         self.discussion = []
         self.maybe_slower = wrapper is not None
 
-    def handle_connect(self):
-        pass
+    def _set_monkey_events(self):
+        if self.deadmonkey:
+            return
+        events = selectors.EVENT_READ
+        if len(self.buffer) > 0:
+            events |= selectors.EVENT_WRITE
+        if events != self._monkey_events:
+            self._monkey_events = events
+            self.selector.modify(self.sock, events, "monkey")
 
-    def handle_close(self):
-        # the pipe to the monkey process has closed
-        self.close()
+    def _close_stderr(self):
+        if self._errwrapper.sock.fileno() == -1:
+            return
+        try:
+            self.selector.unregister(self._errwrapper.sock)
+        except (KeyError, ValueError):
+            pass
+        self._errwrapper.close()
+
+    def _monkey_exited(self):
+        if self.deadmonkey:
+            return
+        self.deadmonkey = True
+        try:
+            self.selector.unregister(self.sock)
+        except (KeyError, ValueError):
+            pass
+        self.sock.close()
+        # ensure the child process is finished and report the exit
+        if self.monkey.poll() is None:
+            self.monkey.terminate()
+            self.monkey.wait()
+        print("Handling an exit {}".format(self.monkey.returncode))
+        print("The following are present in the queue: {}".format(self.lines))
+        self.lines.append("GENERIC EXIT {}".format(
+            self.monkey.returncode).encode('utf-8'))
+        print("The queue is now: {}".format(self.lines))
+        self._close_stderr()
+        self.selector.close()
 
     def handle_read(self):
         try:
-            got = self.recv(8192)
+            got = self.sock.recv(8192)
             if not got:
-                self.deadmonkey = True
-                #  ensure the child process is finished and report the exit
-                if self.monkey.poll() is None:
-                    self.monkey.terminate()
-                    self.monkey.wait()
-                print("Handling an exit {}".format(self.monkey.returncode))
-                print("The following are present in the queue: {}".format(self.lines))
-                self.lines.append("GENERIC EXIT {}".format(
-                    self.monkey.returncode).encode('utf-8'))
-                print("The queue is now: {}".format(self.lines))
+                self._monkey_exited()
                 return
-        except socket.error as error:
-            if error.errno == errno.EAGAIN or error.errno == errno.EWOULDBLOCK:
-                return
-            else:
-                raise
+        except BlockingIOError:
+            return
 
         self.incoming += got
         if b"\n" in self.incoming:
@@ -144,12 +165,22 @@ class MonkeyFarmer(asyncore.dispatcher):
             self.incoming = lines.pop()
             self.lines.extend(lines)
 
-    def writable(self):
-        return len(self.buffer) > 0
-
     def handle_write(self):
-        sent = self.send(self.buffer)
+        if len(self.buffer) == 0:
+            self._set_monkey_events()
+            return
+        try:
+            sent = self.sock.send(self.buffer)
+        except BlockingIOError:
+            return
+        except BrokenPipeError:
+            self._monkey_exited()
+            return
+        if sent == 0:
+            self._monkey_exited()
+            return
         self.buffer = self.buffer[sent:]
+        self._set_monkey_events()
 
     def tell_monkey(self, *args):
         cmd = (" ".join(args))
@@ -158,6 +189,7 @@ class MonkeyFarmer(asyncore.dispatcher):
         self.discussion.append((">", cmd))
         cmd = cmd + "\n"
         self.buffer += cmd.encode('utf-8')
+        self._set_monkey_events()
 
     def monkey_says(self, line):
         try:
@@ -180,12 +212,32 @@ class MonkeyFarmer(asyncore.dispatcher):
     def unschedule_event(self, event):
         self.scheduled = [x for x in self.scheduled if x[1] != event]
 
-    def loop(self, once=False):
-        if len(self.lines) > 0:
+    def _handle_events(self, events):
+        for key, mask in events:
+            if key.data == "monkey":
+                if mask & selectors.EVENT_READ:
+                    self.handle_read()
+                if not self.deadmonkey and mask & selectors.EVENT_WRITE:
+                    self.handle_write()
+            elif key.data == "stderr":
+                if mask & selectors.EVENT_READ:
+                    self._errwrapper.handle_read()
+                if self._errwrapper.closed:
+                    self._close_stderr()
+
+    def _deliver_pending_lines(self, once):
+        while len(self.lines) > 0:
             self.monkey_says(self.lines.pop(0))
-            if once:
+            if once or self.deadmonkey:
+                return True
+        return False
+
+    def loop(self, once=False):
+        if self._deliver_pending_lines(once):
+            return
+        while True:
+            if self.deadmonkey:
                 return
-        while not self.deadmonkey:
             now = time.time()
             while len(self.scheduled) > 0 and now >= self.scheduled[0][0]:
                 func = self.scheduled[0][1]
@@ -193,14 +245,18 @@ class MonkeyFarmer(asyncore.dispatcher):
                 func(self)
                 now = time.time()
             if len(self.scheduled) > 0:
-                next_event = self.scheduled[0][0]
-                asyncore.loop(timeout=next_event - now, count=1)
+                timeout = max(0, self.scheduled[0][0] - now)
             else:
-                asyncore.loop(count=1)
-            while len(self.lines) > 0:
-                self.monkey_says(self.lines.pop(0))
-                if once or self.deadmonkey:
+                timeout = None
+            try:
+                events = self.selector.select(timeout)
+            except OSError:
+                if self.deadmonkey:
                     return
+                raise
+            self._handle_events(events)
+            if self._deliver_pending_lines(once):
+                return
 
 
 class Browser:
@@ -440,6 +496,28 @@ class BrowserWindow:
 
     def click(self, x, y, button="LEFT", kind="SINGLE"):
         self.browser.farmer.tell_monkey("WINDOW CLICK WIN %s X %s Y %s BUTTON %s KIND %s" % (self.winid, x, y, button, kind))
+
+    def key(self, key=None, value=None, text=None):
+        assert (key is not None) + (value is not None) + (text is not None) == 1
+        if key is not None:
+            key = str(key).upper().replace("-", "_")
+            self.browser.farmer.tell_monkey("WINDOW KEY WIN %s NAME %s" % (self.winid, key))
+        elif value is not None:
+            self.browser.farmer.tell_monkey("WINDOW KEY WIN %s VALUE %s" % (self.winid, value))
+        else:
+            text = str(text)
+            assert "\n" not in text, "Monkey key text cannot contain newlines"
+            self.browser.farmer.tell_monkey("WINDOW KEY WIN %s TEXT %s" % (self.winid, text))
+
+    def mouse_track(self, x, y, state="HOVER"):
+        if isinstance(state, (list, tuple)):
+            state = "+".join(str(part).upper().replace("-", "_") for part in state)
+        else:
+            state = str(state).upper().replace("-", "_")
+        self.browser.farmer.tell_monkey("WINDOW MOUSE WIN %s X %s Y %s STATE %s" % (self.winid, x, y, state))
+
+    def scroll(self, x, y, dx=0, dy=0):
+        self.browser.farmer.tell_monkey("WINDOW SCROLL WIN %s X %s Y %s DX %s DY %s" % (self.winid, x, y, dx, dy))
 
     def js_exec(self, src):
         self.browser.farmer.tell_monkey("WINDOW EXEC WIN %s %s" % (self.winid, src))

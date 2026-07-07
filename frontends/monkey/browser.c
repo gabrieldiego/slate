@@ -27,6 +27,7 @@
 #include "utils/log.h"
 #include "utils/messages.h"
 #include "utils/nsurl.h"
+#include "netsurf/keypress.h"
 #include "netsurf/mouse.h"
 #include "netsurf/window.h"
 #include "netsurf/browser_window.h"
@@ -448,6 +449,169 @@ gui_window_report_page_info(struct gui_window *g)
 
 /**** Handlers ****/
 
+static bool
+monkey_window_parse_uint32(const char *value, uint32_t *out)
+{
+	char *end = NULL;
+	unsigned long parsed;
+
+	if ((value == NULL) || (*value == '\0')) {
+		return false;
+	}
+
+	parsed = strtoul(value, &end, 0);
+	if ((end == NULL) || (*end != '\0')) {
+		return false;
+	}
+
+	*out = (uint32_t)parsed;
+	return true;
+}
+
+static bool
+monkey_window_key_from_name(const char *name, uint32_t *key)
+{
+	struct key_name {
+		const char *name;
+		uint32_t key;
+	};
+	static const struct key_name key_names[] = {
+		{ "SELECT_ALL", NS_KEY_SELECT_ALL },
+		{ "COPY_SELECTION", NS_KEY_COPY_SELECTION },
+		{ "BACKSPACE", NS_KEY_DELETE_LEFT },
+		{ "DELETE_LEFT", NS_KEY_DELETE_LEFT },
+		{ "TAB", NS_KEY_TAB },
+		{ "NL", NS_KEY_NL },
+		{ "NEWLINE", NS_KEY_NL },
+		{ "SHIFT_TAB", NS_KEY_SHIFT_TAB },
+		{ "CR", NS_KEY_CR },
+		{ "RETURN", NS_KEY_CR },
+		{ "ENTER", NS_KEY_CR },
+		{ "DELETE_LINE", NS_KEY_DELETE_LINE },
+		{ "PASTE", NS_KEY_PASTE },
+		{ "CUT_SELECTION", NS_KEY_CUT_SELECTION },
+		{ "CLEAR_SELECTION", NS_KEY_CLEAR_SELECTION },
+		{ "ESC", NS_KEY_ESCAPE },
+		{ "ESCAPE", NS_KEY_ESCAPE },
+		{ "LEFT", NS_KEY_LEFT },
+		{ "RIGHT", NS_KEY_RIGHT },
+		{ "UP", NS_KEY_UP },
+		{ "DOWN", NS_KEY_DOWN },
+		{ "DEL", NS_KEY_DELETE_RIGHT },
+		{ "DELETE", NS_KEY_DELETE_RIGHT },
+		{ "DELETE_RIGHT", NS_KEY_DELETE_RIGHT },
+		{ "HOME", NS_KEY_LINE_START },
+		{ "END", NS_KEY_LINE_END },
+		{ "LINE_START", NS_KEY_LINE_START },
+		{ "LINE_END", NS_KEY_LINE_END },
+		{ "TEXT_START", NS_KEY_TEXT_START },
+		{ "TEXT_END", NS_KEY_TEXT_END },
+		{ "WORD_LEFT", NS_KEY_WORD_LEFT },
+		{ "DELETE_WORD_LEFT", NS_KEY_DELETE_WORD_LEFT },
+		{ "WORD_RIGHT", NS_KEY_WORD_RIGHT },
+		{ "DELETE_WORD_RIGHT", NS_KEY_DELETE_WORD_RIGHT },
+		{ "PAGE_UP", NS_KEY_PAGE_UP },
+		{ "PAGE_DOWN", NS_KEY_PAGE_DOWN },
+		{ "DELETE_LINE_END", NS_KEY_DELETE_LINE_END },
+		{ "DELETE_LINE_START", NS_KEY_DELETE_LINE_START },
+		{ "UNDO", NS_KEY_UNDO },
+		{ "REDO", NS_KEY_REDO },
+		{ "SPACE", ' ' },
+	};
+
+	if (monkey_window_parse_uint32(name, key)) {
+		return true;
+	}
+
+	for (size_t i = 0; i < (sizeof(key_names) / sizeof(key_names[0])); i++) {
+		if (strcmp(name, key_names[i].name) == 0) {
+			*key = key_names[i].key;
+			return true;
+		}
+	}
+
+	if (strlen(name) == 1) {
+		*key = (uint8_t)name[0];
+		return true;
+	}
+
+	return false;
+}
+
+static bool
+monkey_window_mouse_state_from_name(const char *name, browser_mouse_state *state)
+{
+	struct mouse_state_name {
+		const char *name;
+		browser_mouse_state state;
+	};
+	static const struct mouse_state_name state_names[] = {
+		{ "HOVER", BROWSER_MOUSE_HOVER },
+		{ "PRESS_1", BROWSER_MOUSE_PRESS_1 },
+		{ "PRESS_2", BROWSER_MOUSE_PRESS_2 },
+		{ "PRESS_3", BROWSER_MOUSE_PRESS_3 },
+		{ "PRESS_4", BROWSER_MOUSE_PRESS_4 },
+		{ "PRESS_5", BROWSER_MOUSE_PRESS_5 },
+		{ "CLICK_1", BROWSER_MOUSE_CLICK_1 },
+		{ "CLICK_2", BROWSER_MOUSE_CLICK_2 },
+		{ "CLICK_3", BROWSER_MOUSE_CLICK_3 },
+		{ "CLICK_4", BROWSER_MOUSE_CLICK_4 },
+		{ "CLICK_5", BROWSER_MOUSE_CLICK_5 },
+		{ "DOUBLE_CLICK", BROWSER_MOUSE_DOUBLE_CLICK },
+		{ "TRIPLE_CLICK", BROWSER_MOUSE_TRIPLE_CLICK },
+		{ "DRAG_1", BROWSER_MOUSE_DRAG_1 },
+		{ "DRAG_2", BROWSER_MOUSE_DRAG_2 },
+		{ "DRAG_ON", BROWSER_MOUSE_DRAG_ON },
+		{ "HOLDING_1", BROWSER_MOUSE_HOLDING_1 },
+		{ "HOLDING_2", BROWSER_MOUSE_HOLDING_2 },
+		{ "MOD_1", BROWSER_MOUSE_MOD_1 },
+		{ "MOD_2", BROWSER_MOUSE_MOD_2 },
+		{ "MOD_3", BROWSER_MOUSE_MOD_3 },
+		{ "MOD_4", BROWSER_MOUSE_MOD_4 },
+		{ "LEAVE", BROWSER_MOUSE_LEAVE },
+	};
+	uint32_t numeric;
+
+	if (monkey_window_parse_uint32(name, &numeric)) {
+		*state = (browser_mouse_state)numeric;
+		return true;
+	}
+
+	for (size_t i = 0; i < (sizeof(state_names) / sizeof(state_names[0])); i++) {
+		if (strcmp(name, state_names[i].name) == 0) {
+			*state = state_names[i].state;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static bool
+monkey_window_parse_mouse_state(const char *value, browser_mouse_state *state)
+{
+	char buffer[128];
+	char *part;
+
+	if (strlen(value) >= sizeof(buffer)) {
+		return false;
+	}
+
+	strcpy(buffer, value);
+	*state = BROWSER_MOUSE_HOVER;
+	for (part = strtok(buffer, "+,"); part != NULL; part = strtok(NULL, "+,")) {
+		browser_mouse_state part_state;
+
+		if (!monkey_window_mouse_state_from_name(part, &part_state)) {
+			return false;
+		}
+
+		*state |= part_state;
+	}
+
+	return true;
+}
+
 static void
 monkey_window_handle_new(int argc, char **argv)
 {
@@ -621,11 +785,15 @@ static void
 monkey_window_handle_exec(int argc, char **argv)
 {
 	struct gui_window *gw;
-	if (argc < 5) {
+	uint32_t win_num;
+
+	if ((argc < 5) || (strcmp(argv[2], "WIN") != 0) ||
+	    !monkey_window_parse_uint32(argv[3], &win_num)) {
 		moutf(MOUT_ERROR, "WINDOW EXEC ARGS BAD\n");
+		return;
 	}
 
-	gw = monkey_find_window_by_num(atoi(argv[2]));
+	gw = monkey_find_window_by_num(win_num);
 
 	if (gw == NULL) {
 		moutf(MOUT_ERROR, "WINDOW NUM BAD");
@@ -637,7 +805,7 @@ monkey_window_handle_exec(int argc, char **argv)
 		}
 		char *cmd = calloc(total, 1);
 		if (cmd == NULL) {
-			moutf(MOUT_ERROR, "JS WIN %d RET ENOMEM", atoi(argv[2]));
+			moutf(MOUT_ERROR, "JS WIN %u RET ENOMEM", win_num);
 			return;
 		}
 		char *cmdcur = cmd; /* string cursor */
@@ -655,10 +823,64 @@ monkey_window_handle_exec(int argc, char **argv)
 
 		/* Now execute the JS */
 
-		moutf(MOUT_WINDOW, "JS WIN %d RET %s", atoi(argv[2]),
+		moutf(MOUT_WINDOW, "JS WIN %u RET %s", win_num,
 		      browser_window_exec(gw->bw, cmd, total - 1) ? "TRUE" : "FALSE");
 
 		free(cmd);
+	}
+}
+
+static void
+monkey_window_handle_key(int argc, char **argv)
+{
+	struct gui_window *gw;
+	uint32_t win_num;
+	uint32_t key;
+
+	/* `WINDOW KEY WIN` _%id%_ (`NAME` _%name%_ | `VALUE` _%num%_ | `TEXT` _%str...%_) */
+	/*  0      1   2    3        4       5                                      */
+	if ((argc < 6) || (strcmp(argv[2], "WIN") != 0) ||
+	    !monkey_window_parse_uint32(argv[3], &win_num)) {
+		moutf(MOUT_ERROR, "WINDOW KEY ARGS BAD\n");
+		return;
+	}
+
+	gw = monkey_find_window_by_num(win_num);
+	if (gw == NULL) {
+		moutf(MOUT_ERROR, "WINDOW NUM BAD");
+		return;
+	}
+
+	if (strcmp(argv[4], "NAME") == 0) {
+		if ((argc != 6) || !monkey_window_key_from_name(argv[5], &key)) {
+			moutf(MOUT_ERROR, "WINDOW KEY NAME BAD\n");
+			return;
+		}
+		moutf(MOUT_WINDOW, "KEY WIN %u RET %s", win_num,
+		      browser_window_key_press(gw->bw, key) ? "TRUE" : "FALSE");
+	} else if (strcmp(argv[4], "VALUE") == 0) {
+		if ((argc != 6) || !monkey_window_parse_uint32(argv[5], &key)) {
+			moutf(MOUT_ERROR, "WINDOW KEY VALUE BAD\n");
+			return;
+		}
+		moutf(MOUT_WINDOW, "KEY WIN %u RET %s", win_num,
+		      browser_window_key_press(gw->bw, key) ? "TRUE" : "FALSE");
+	} else if (strcmp(argv[4], "TEXT") == 0) {
+		bool handled = true;
+
+		for (int argi = 5; argi < argc; argi++) {
+			if (argi > 5) {
+				handled &= browser_window_key_press(gw->bw, ' ');
+			}
+			for (int i = 0; argv[argi][i] != '\0'; i++) {
+				handled &= browser_window_key_press(
+					gw->bw, (uint8_t)argv[argi][i]);
+			}
+		}
+		moutf(MOUT_WINDOW, "KEY WIN %u RET %s", win_num,
+		      handled ? "TRUE" : "FALSE");
+	} else {
+		moutf(MOUT_ERROR, "WINDOW KEY MODE BAD\n");
 	}
 }
 
@@ -669,11 +891,18 @@ monkey_window_handle_click(int argc, char **argv)
 	/* `WINDOW CLICK WIN` _%id%_ `X` _%num%_ `Y` _%num%_ `BUTTON` _%str%_ `KIND` _%str%_ */
 	/*  0      1     2    3       4  5        6  7        8       9        10    11      */
 	struct gui_window *gw;
-	if (argc != 12) {
+	uint32_t win_num;
+
+	if ((argc != 12) || (strcmp(argv[2], "WIN") != 0) ||
+	    (strcmp(argv[4], "X") != 0) || (strcmp(argv[6], "Y") != 0) ||
+	    (strcmp(argv[8], "BUTTON") != 0) ||
+	    (strcmp(argv[10], "KIND") != 0) ||
+	    !monkey_window_parse_uint32(argv[3], &win_num)) {
 		moutf(MOUT_ERROR, "WINDOW CLICK ARGS BAD\n");
+		return;
 	}
 
-	gw = monkey_find_window_by_num(atoi(argv[2]));
+	gw = monkey_find_window_by_num(win_num);
 
 	if (gw == NULL) {
 		moutf(MOUT_ERROR, "WINDOW NUM BAD");
@@ -705,6 +934,69 @@ monkey_window_handle_click(int argc, char **argv)
 	}
 }
 
+static void
+monkey_window_handle_mouse(int argc, char **argv)
+{
+	/* `WINDOW MOUSE WIN` _%id%_ `X` _%num%_ `Y` _%num%_ `STATE` _%state%_ */
+	/*  0      1     2    3       4  5        6  7        8       9         */
+	struct gui_window *gw;
+	uint32_t win_num;
+	browser_mouse_state state;
+
+	if ((argc != 10) || (strcmp(argv[2], "WIN") != 0) ||
+	    (strcmp(argv[4], "X") != 0) || (strcmp(argv[6], "Y") != 0) ||
+	    (strcmp(argv[8], "STATE") != 0) ||
+	    !monkey_window_parse_uint32(argv[3], &win_num)) {
+		moutf(MOUT_ERROR, "WINDOW MOUSE ARGS BAD\n");
+		return;
+	}
+
+	gw = monkey_find_window_by_num(win_num);
+	if (gw == NULL) {
+		moutf(MOUT_ERROR, "WINDOW NUM BAD");
+		return;
+	}
+
+	if (!monkey_window_parse_mouse_state(argv[9], &state)) {
+		moutf(MOUT_ERROR, "WINDOW MOUSE STATE BAD\n");
+		return;
+	}
+
+	browser_window_mouse_track(gw->bw, state, atoi(argv[5]), atoi(argv[7]));
+}
+
+static void
+monkey_window_handle_scroll(int argc, char **argv)
+{
+	/* `WINDOW SCROLL WIN` _%id%_ `X` _%num%_ `Y` _%num%_ `DX` _%num%_ `DY` _%num%_ */
+	/*  0      1      2    3       4  5        6  7        8   9       10   11      */
+	struct gui_window *gw;
+	uint32_t win_num;
+	bool handled;
+
+	if ((argc != 12) || (strcmp(argv[2], "WIN") != 0) ||
+	    (strcmp(argv[4], "X") != 0) || (strcmp(argv[6], "Y") != 0) ||
+	    (strcmp(argv[8], "DX") != 0) || (strcmp(argv[10], "DY") != 0) ||
+	    !monkey_window_parse_uint32(argv[3], &win_num)) {
+		moutf(MOUT_ERROR, "WINDOW SCROLL ARGS BAD\n");
+		return;
+	}
+
+	gw = monkey_find_window_by_num(win_num);
+	if (gw == NULL) {
+		moutf(MOUT_ERROR, "WINDOW NUM BAD");
+		return;
+	}
+
+	handled = browser_window_scroll_at_point(gw->bw,
+						 atoi(argv[5]),
+						 atoi(argv[7]),
+						 atoi(argv[9]),
+						 atoi(argv[11]));
+	moutf(MOUT_WINDOW, "SCROLL WIN %u RET %s",
+	      win_num, handled ? "TRUE" : "FALSE");
+}
+
 void
 monkey_window_handle_command(int argc, char **argv)
 {
@@ -725,8 +1017,14 @@ monkey_window_handle_command(int argc, char **argv)
 		monkey_window_handle_reload(argc, argv);
 	} else if (strcmp(argv[1], "EXEC") == 0) {
 		monkey_window_handle_exec(argc, argv);
+	} else if (strcmp(argv[1], "KEY") == 0) {
+		monkey_window_handle_key(argc, argv);
 	} else if (strcmp(argv[1], "CLICK") == 0) {
 		monkey_window_handle_click(argc, argv);
+	} else if (strcmp(argv[1], "MOUSE") == 0) {
+		monkey_window_handle_mouse(argc, argv);
+	} else if (strcmp(argv[1], "SCROLL") == 0) {
+		monkey_window_handle_scroll(argc, argv);
 	} else {
 		moutf(MOUT_ERROR, "WINDOW COMMAND UNKNOWN %s\n", argv[1]);
 	}

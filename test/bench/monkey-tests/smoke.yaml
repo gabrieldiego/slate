@@ -16,6 +16,7 @@ steps:
   - ${NETSURF_BENCH_ROOT}/smoke-css.html
   - ${NETSURF_BENCH_ROOT}/smoke-inline.html
   - ${NETSURF_BENCH_ROOT}/smoke-noscript-canvas.html
+  - ${NETSURF_BENCH_ROOT}/smoke-interactions.html
   steps:
   - action: navigate
     window: win1
@@ -28,6 +29,39 @@ steps:
     window: win1
     checks:
     - text-contains: Smoke Bench
+- action: navigate
+  window: win1
+  url: ${NETSURF_BENCH_ROOT}/smoke-interactions.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: mouse-track
+  window: win1
+  target:
+    text: Hover target
+  state: hover
+- action: click
+  window: win1
+  target:
+    text: Search term
+    offset-y: 20
+- action: keypress
+  window: win1
+  text: memory
+- action: keypress
+  window: win1
+  key: BACKSPACE
+- action: scroll
+  window: win1
+  x: 400
+  y: 300
+  dy: 720
+- action: plot-check
+  window: win1
+  area: extent
+  checks:
+  - text-contains: Bottom Marker
 - action: window-close
   window: win1
 - action: quit
