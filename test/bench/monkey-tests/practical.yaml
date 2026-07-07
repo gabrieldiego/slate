@@ -19,6 +19,7 @@ steps:
   - ${NETSURF_BENCH_ROOT}/practical-css-layout.html
   - ${NETSURF_BENCH_ROOT}/practical-media-objects.html
   - ${NETSURF_BENCH_ROOT}/practical-interaction.html
+  - ${NETSURF_BENCH_ROOT}/practical-interaction-advanced.html
   - ${NETSURF_BENCH_ROOT}/practical-script-resources.html
   - ${NETSURF_BENCH_ROOT}/practical-search-results.html
   - ${NETSURF_BENCH_ROOT}/practical-product-listing.html
@@ -134,6 +135,165 @@ steps:
     status: complete
 - action: window-close
   window: win2
+- action: navigate
+  window: win1
+  url: ${NETSURF_BENCH_ROOT}/practical-interaction.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: click
+  window: win1
+  target:
+    text: Run Practical Action
+- action: sleep-ms
+  time: 50
+- action: window-new
+  tag: win3
+- action: navigate
+  window: win3
+  url: ${NETSURF_BENCH_ROOT}/practical-interaction-advanced.html
+- action: block
+  conditions:
+  - window: win3
+    status: complete
+- action: mouse-track
+  window: win3
+  area: extent
+  target:
+    text: Cursor help
+  state: hover
+- action: mouse-track
+  window: win3
+  area: extent
+  target:
+    text: Cursor move
+  state: hover
+- action: mouse-track
+  window: win3
+  area: extent
+  target:
+    text: Cursor cross
+  state: hover
+- action: mouse-track
+  window: win3
+  area: extent
+  target:
+    text: Cursor text
+  state: hover
+- action: mouse-track
+  window: win3
+  area: extent
+  target:
+    text: Cursor wait
+  state: hover
+- action: mouse-track
+  window: win3
+  area: extent
+  target:
+    text: Cursor resize
+  state: hover
+- action: click
+  window: win3
+  area: extent
+  target:
+    text: editable bench value
+- action: keypress
+  window: win3
+  key: SELECT_ALL
+- action: keypress
+  window: win3
+  text: compact memory
+- action: keypress
+  window: win3
+  key: LEFT
+- action: keypress
+  window: win3
+  key: RIGHT
+- action: click
+  window: win3
+  area: extent
+  target:
+    text: drag editable textarea
+- action: keypress
+  window: win3
+  key: TEXT_END
+- action: keypress
+  window: win3
+  text: appended
+- action: click
+  window: win3
+  area: extent
+  target:
+    text: Enable interaction checkbox
+- action: click
+  window: win3
+  area: extent
+  target:
+    text: High interaction radio
+- action: click
+  window: win3
+  area: extent
+  target:
+    text: Beta
+- action: click
+  window: win3
+  x: 20
+  y: 20
+- action: click
+  window: win3
+  button: right
+  area: extent
+  target:
+    text: Secondary link target
+- action: click
+  window: win3
+  area: extent
+  target:
+    bitmap: 1
+- action: scroll
+  window: win3
+  area: extent
+  target:
+    text: Overflow item 01
+  dy: 160
+- action: mouse-click
+  window: win3
+  area: extent
+  target:
+    text: Selection start text
+  state: press_1
+- action: mouse-track
+  window: win3
+  area: extent
+  target:
+    text: Selection end text
+  state: drag_1
+- action: mouse-track
+  window: win3
+  area: extent
+  target:
+    text: Selection end text
+  state: hover
+- action: keypress
+  window: win3
+  key: COPY_SELECTION
+- action: keypress
+  window: win3
+  key: CLEAR_SELECTION
+- action: keypress
+  window: win3
+  key: SELECT_ALL
+- action: keypress
+  window: win3
+  key: ESCAPE
+- action: mouse-track
+  window: win3
+  x: 0
+  y: 0
+  state: leave
+- action: window-close
+  window: win3
 - action: window-close
   window: win1
 - action: quit

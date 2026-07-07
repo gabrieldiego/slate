@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench Advanced Interactions</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+.interaction-grid {
+	display: grid;
+	grid-template-columns: minmax(260px, 1fr) minmax(260px, 1fr);
+	gap: 16px;
+}
+.panel {
+	border: 1px solid #b8c2cc;
+	background: #ffffff;
+	padding: 12px;
+}
+.panel label {
+	display: block;
+	margin: 9px 0;
+}
+input,
+select,
+textarea {
+	max-width: 100%;
+	border: 1px solid #617284;
+	padding: 5px;
+}
+textarea {
+	width: 92%;
+}
+.cursor-row {
+	display: block;
+}
+.cursor-row span {
+	display: block;
+	width: 180px;
+	margin: 6px 0;
+	border: 1px solid #9ca8b4;
+	background: #eef3f7;
+	padding: 6px 8px;
+}
+.cursor-help { cursor: help; }
+.cursor-move { cursor: move; }
+.cursor-cross { cursor: crosshair; }
+.cursor-text { cursor: text; }
+.cursor-wait { cursor: wait; }
+.cursor-resize { cursor: e-resize; }
+.overflow-box {
+	height: 120px;
+	overflow: auto;
+	border: 1px solid #7d8b99;
+	background: #f8fafc;
+	padding: 8px;
+}
+.overflow-box p {
+	margin: 0 0 16px;
+}
+.mapped-logo {
+	border: 1px solid #4c657a;
+	background: #f3f6f8;
+}
+.selection-copy {
+	line-height: 1.45;
+}
+.status {
+	margin-top: 10px;
+	padding: 8px;
+	border: 1px solid #9db18f;
+	background: #eef7ea;
+}
+</style>
+</head>
+<body class="bench-page">
+<header class="site-head">
+<img src="assets/bench-logo.png" width="120" height="48" alt="Practical Bench logo">
+<h1>Practical Bench Advanced Interactions</h1>
+</header>
+<main>
+<p class="bench-kicker">Practical Bench page for keyboard, pointer, form, image map, scrolling, and selection paths.</p>
+
+<div class="interaction-grid">
+<section class="panel">
+<h2>Pointer Targets</h2>
+<p class="cursor-row">
+<span class="cursor-help">Cursor help target</span>
+<span class="cursor-move">Cursor move target</span>
+<span class="cursor-cross">Cursor cross target</span>
+<span class="cursor-text">Cursor text target</span>
+<span class="cursor-wait">Cursor wait target</span>
+<span class="cursor-resize">Cursor resize target</span>
+</p>
+<p>
+<img class="mapped-logo" src="assets/bench-logo.png" width="120" height="48" alt="Mapped logo link" usemap="#bench-map">
+<map name="bench-map">
+<area shape="rect" coords="0,0,120,48" href="#mapped-result" alt="Mapped logo area">
+</map>
+</p>
+<p id="mapped-result" class="status">Mapped logo destination for Practical Bench interactions.</p>
+</section>
+
+<section class="panel">
+<h2>Editable Controls</h2>
+<form action="about:blank" method="get">
+<label>Query <input name="query" value="editable bench value"></label>
+<label>Secret <input type="password" name="secret" value="masked bench"></label>
+<label><input type="checkbox" name="enabled" checked> Enable interaction checkbox</label>
+<label><input type="radio" name="priority" value="normal" checked> Normal interaction radio</label>
+<label><input type="radio" name="priority" value="high"> High interaction radio</label>
+<label>Menu
+<select name="menu">
+<option>Alpha Option</option>
+<option selected>Beta Option</option>
+<option>Gamma Option</option>
+</select>
+</label>
+<label>Notes <textarea name="notes" rows="4" cols="34">drag editable textarea content for practical interaction coverage.</textarea></label>
+</form>
+<p><a href="#secondary-link" id="secondary-link">Secondary link target</a></p>
+</section>
+
+<section class="panel">
+<h2>Scrollable Region</h2>
+<div class="overflow-box">
+<p>Overflow item 01: compact browsers still need scrollable content.</p>
+<p>Overflow item 02: this block is intentionally taller than its viewport.</p>
+<p>Overflow item 03: nested scrollbars should consume wheel deltas.</p>
+<p>Overflow item 04: rendering remains stable after scroll events.</p>
+<p>Overflow item 05: Practical Bench overflow bottom marker.</p>
+</div>
+</section>
+
+<section class="panel selection-copy">
+<h2>Selectable Text</h2>
+<p>Selection start text for Practical Bench coverage spans across a sentence with inline <strong>strong text</strong>, <em>emphasis</em>, and a trailing phrase.</p>
+<p>Selection middle text keeps the selection traversal working across more than one inline box and one block.</p>
+<p>Selection end text closes the practical selection range and gives the driver a stable drag target.</p>
+</section>
+</div>
+</main>
+</body>
+</html>

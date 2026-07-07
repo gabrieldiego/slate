@@ -966,6 +966,37 @@ monkey_window_handle_mouse(int argc, char **argv)
 }
 
 static void
+monkey_window_handle_mouseclick(int argc, char **argv)
+{
+	/* `WINDOW MOUSECLICK WIN` _%id%_ `X` _%num%_ `Y` _%num%_ `STATE` _%state%_ */
+	/*  0      1          2    3       4  5        6  7        8       9         */
+	struct gui_window *gw;
+	uint32_t win_num;
+	browser_mouse_state state;
+
+	if ((argc != 10) || (strcmp(argv[2], "WIN") != 0) ||
+	    (strcmp(argv[4], "X") != 0) || (strcmp(argv[6], "Y") != 0) ||
+	    (strcmp(argv[8], "STATE") != 0) ||
+	    !monkey_window_parse_uint32(argv[3], &win_num)) {
+		moutf(MOUT_ERROR, "WINDOW MOUSECLICK ARGS BAD\n");
+		return;
+	}
+
+	gw = monkey_find_window_by_num(win_num);
+	if (gw == NULL) {
+		moutf(MOUT_ERROR, "WINDOW NUM BAD");
+		return;
+	}
+
+	if (!monkey_window_parse_mouse_state(argv[9], &state)) {
+		moutf(MOUT_ERROR, "WINDOW MOUSECLICK STATE BAD\n");
+		return;
+	}
+
+	browser_window_mouse_click(gw->bw, state, atoi(argv[5]), atoi(argv[7]));
+}
+
+static void
 monkey_window_handle_scroll(int argc, char **argv)
 {
 	/* `WINDOW SCROLL WIN` _%id%_ `X` _%num%_ `Y` _%num%_ `DX` _%num%_ `DY` _%num%_ */
@@ -1023,6 +1054,8 @@ monkey_window_handle_command(int argc, char **argv)
 		monkey_window_handle_click(argc, argv);
 	} else if (strcmp(argv[1], "MOUSE") == 0) {
 		monkey_window_handle_mouse(argc, argv);
+	} else if (strcmp(argv[1], "MOUSECLICK") == 0) {
+		monkey_window_handle_mouseclick(argc, argv);
 	} else if (strcmp(argv[1], "SCROLL") == 0) {
 		monkey_window_handle_scroll(argc, argv);
 	} else {

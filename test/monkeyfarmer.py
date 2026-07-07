@@ -516,6 +516,13 @@ class BrowserWindow:
             state = str(state).upper().replace("-", "_")
         self.browser.farmer.tell_monkey("WINDOW MOUSE WIN %s X %s Y %s STATE %s" % (self.winid, x, y, state))
 
+    def mouse_click(self, x, y, state="CLICK_1"):
+        if isinstance(state, (list, tuple)):
+            state = "+".join(str(part).upper().replace("-", "_") for part in state)
+        else:
+            state = str(state).upper().replace("-", "_")
+        self.browser.farmer.tell_monkey("WINDOW MOUSECLICK WIN %s X %s Y %s STATE %s" % (self.winid, x, y, state))
+
     def scroll(self, x, y, dx=0, dy=0):
         self.browser.farmer.tell_monkey("WINDOW SCROLL WIN %s X %s Y %s DX %s DY %s" % (self.winid, x, y, dx, dy))
 
@@ -585,7 +592,7 @@ class BrowserWindow:
         self.scrollx = int(x)
         self.scrolly = int(y)
 
-    def handle_window_SCROLL_START(self):
+    def handle_window_SCROLL_START(self, *args):
         self.scrollx = 0
         self.scrolly = 0
 

@@ -445,7 +445,8 @@ def find_window_target(ctx, win, step, action_name):
             x += int(target.get('offset-x', 0))
             y += int(target.get('offset-y', 0))
 
-    assert x is not None and y is not None, "{} target not found: {}".format(action_name, targets)
+    assert x is not None and y is not None, "{} target not found: {}. Available text: {}".format(
+        action_name, targets, [entry[2] for entry in all_text_list])
     return x, y
 
 
@@ -487,6 +488,16 @@ def run_test_step_action_mouse(ctx, step):
     x, y = find_window_target(ctx, win, step, "Mouse")
     print(get_indent(ctx) + "        Mouse at {}, {} (state={})".format(x, y, state))
     win.mouse_track(x, y, state=state)
+
+
+def run_test_step_action_mouse_click(ctx, step):
+    print(get_indent(ctx) + "Action: " + step["action"])
+    assert_browser(ctx)
+    win = ctx['windows'][step['window']]
+    state = step.get('state', 'click_1')
+    x, y = find_window_target(ctx, win, step, "Mouse click")
+    print(get_indent(ctx) + "        Mouse click at {}, {} (state={})".format(x, y, state))
+    win.mouse_click(x, y, state=state)
 
 
 def run_test_step_action_scroll(ctx, step):
@@ -694,6 +705,7 @@ STEP_HANDLERS = {
     "key":           run_test_step_action_keypress,
     "mouse":         run_test_step_action_mouse,
     "mouse-track":   run_test_step_action_mouse,
+    "mouse-click":   run_test_step_action_mouse_click,
     "scroll":        run_test_step_action_scroll,
     "wait-loading":  run_test_step_action_wait_loading,
     "add-auth":      run_test_step_action_add_auth,
