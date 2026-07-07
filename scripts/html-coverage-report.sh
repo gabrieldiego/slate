@@ -8,8 +8,11 @@ REPORT=""
 GCOV_BIN="${GCOV:-gcov}"
 BENCH_ROOT="file://${ROOT}/test/bench/pages"
 SUITES=(smoke practical stress)
+COVERAGE_SUBTARGET="-cov"
+COVERAGE_EXETARGET="nsmonkey-cov"
 COVERAGE_CFLAGS="-O0 -g --coverage"
 COVERAGE_LDFLAGS="--coverage"
+CLEAN_COVERAGE=0
 
 usage() {
 	cat <<EOF
@@ -26,6 +29,7 @@ Suites default to: ${SUITES[*]}
 Options:
   -o, --output FILE        Markdown report path
                            default: build/bench/<timestamp>/html-coverage-report.md
+  --clean                  Rebuild coverage objects from scratch
   -h, --help               Show this help
 
 Examples:
@@ -50,6 +54,10 @@ while [ "$#" -gt 0 ]; do
 		-h|--help)
 			usage
 			exit 0
+			;;
+		--clean)
+			CLEAN_COVERAGE=1
+			shift
 			;;
 		-*)
 			die "Unknown option: $1"
@@ -82,22 +90,53 @@ source "${ROOT}/scripts/local-env.sh" >/dev/null || exit 1
 
 command -v "${GCOV_BIN}" >/dev/null 2>&1 || die "Missing gcov binary: ${GCOV_BIN}"
 
-OBJROOT="${ROOT}/build/Linux-monkey"
+HOST="$(uname -s)"
+HOST="${HOST//./_}"
+HOST="${HOST//-/_}"
+HOST="${HOST//\//_}"
+case "${HOST}" in
+	Haiku)
+		HOST="beos"
+		;;
+	FreeMiNT)
+		HOST="mint"
+		;;
+	OpenBSD)
+		HOST="openbsd"
+		;;
+	MINGW*)
+		HOST="windows"
+		;;
+esac
+
+OBJROOT="${ROOT}/build/${HOST}-monkey${COVERAGE_SUBTARGET}"
+COVERAGE_MONKEY="${ROOT}/${COVERAGE_EXETARGET}"
 BUILD_LOG="${REPORT_DIR}/build-monkey-coverage.log"
 
-printf 'Cleaning monkey build...\n' >&2
-make -C "${ROOT}" TARGET=monkey clean >"${BUILD_LOG}" 2>&1
-clean_status=$?
-if [ "${clean_status}" -ne 0 ]; then
-	printf 'Monkey clean failed; see %s\n' "${BUILD_LOG}" >&2
-	exit "${clean_status}"
+if [ "${CLEAN_COVERAGE}" -eq 1 ]; then
+	printf 'Cleaning coverage monkey build...\n' >&2
+	make -C "${ROOT}" \
+		TARGET=monkey \
+		SUBTARGET="${COVERAGE_SUBTARGET}" \
+		EXETARGET="${COVERAGE_EXETARGET}" \
+		clean >"${BUILD_LOG}" 2>&1
+	clean_status=$?
+	if [ "${clean_status}" -ne 0 ]; then
+		printf 'Coverage monkey clean failed; see %s\n' "${BUILD_LOG}" >&2
+		exit "${clean_status}"
+	fi
+else
+	: > "${BUILD_LOG}"
 fi
 
 printf 'Building monkey with coverage flags...\n' >&2
 CFLAGS="${COVERAGE_CFLAGS}" \
 CXXFLAGS="${COVERAGE_CFLAGS}" \
 LDFLAGS="${COVERAGE_LDFLAGS}" \
-make -C "${ROOT}" ${USE_CPUS} TARGET=monkey >>"${BUILD_LOG}" 2>&1
+make -C "${ROOT}" ${USE_CPUS} \
+	TARGET=monkey \
+	SUBTARGET="${COVERAGE_SUBTARGET}" \
+	EXETARGET="${COVERAGE_EXETARGET}" >>"${BUILD_LOG}" 2>&1
 build_status=$?
 if [ "${build_status}" -ne 0 ]; then
 	printf 'Coverage build failed; see %s\n' "${BUILD_LOG}" >&2
@@ -125,7 +164,7 @@ for suite in "${SUITES[@]}"; do
 	printf 'Running %s...\n' "${suite}" >&2
 	NETSURF_BENCH_ROOT="${BENCH_ROOT}" \
 		"${ROOT}/test/monkey_driver.py" \
-		-m "${ROOT}/nsmonkey" \
+		-m "${COVERAGE_MONKEY}" \
 		-t "${test_file}" >"${log_file}" 2>&1
 	status=$?
 
@@ -228,6 +267,8 @@ fi
 	printf -- '- Git revision: `%s` on `%s`\n' "${git_rev}" "${git_branch}"
 	printf -- '- Git dirty: `%s`\n' "${git_dirty}"
 	printf -- '- Target: `monkey`\n'
+	printf -- '- Coverage binary: `%s`\n' "${COVERAGE_MONKEY}"
+	printf -- '- Coverage object root: `%s`\n' "${OBJROOT}"
 	printf -- '- Coverage flags: `%s`\n' "${COVERAGE_CFLAGS}"
 	printf -- '- Bench root: `%s`\n' "${BENCH_ROOT}"
 	printf -- '- Scope: `content/handlers/html/*.c`\n'
@@ -260,8 +301,8 @@ fi
 
 	printf '\n## Notes\n\n'
 	printf -- '- This report only tallies line coverage for `content/handlers/html/*.c`.\n'
-	printf -- '- The whole Monkey binary is built with coverage instrumentation for simplicity.\n'
-	printf -- '- Rebuild normally after running this if you do not want a coverage-instrumented `nsmonkey` binary.\n'
+	printf -- '- Coverage objects are kept separately using `SUBTARGET=%s`.\n' "${COVERAGE_SUBTARGET}"
+	printf -- '- The instrumented binary is `%s`; the normal `nsmonkey` binary is not overwritten.\n' "${COVERAGE_EXETARGET}"
 	printf -- '- Platform-specific and frontend-specific browser code is intentionally outside this tally.\n'
 } > "${REPORT}"
 
