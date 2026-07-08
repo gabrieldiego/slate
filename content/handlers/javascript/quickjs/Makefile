@@ -28,13 +28,10 @@ $(OBJROOT)/quickjs/polyfill.js.inc: content/handlers/javascript/quickjs/polyfill
 # ensure genbind generates debugging files
 GBFLAGS+=-D
 
-$(OBJROOT)/quickjs/binding.stamp: content/handlers/javascript/quickjs/slate.bnd $(BINDINGS)
+$(OBJROOT)/quickjs/binding.h $(OBJROOT)/quickjs/Makefile: content/handlers/javascript/quickjs/slate.bnd $(BINDINGS)
 	$(Q)$(MKDIR) -p $(OBJROOT)/quickjs
 	$(VQ)echo " GENBIND: $<"
 	$(Q)slategenbind $(GBFLAGS) -I content/handlers/javascript/WebIDL $< $(OBJROOT)/quickjs
-	$(Q)touch $@
-
-$(OBJROOT)/quickjs/binding.h $(OBJROOT)/quickjs/Makefile: $(OBJROOT)/quickjs/binding.stamp
 
 # create unimplemented report for doxygen
 docs/UnimplementedJavascript.md: content/handlers/javascript/quickjs/slate.bnd $(BINDINGS)
