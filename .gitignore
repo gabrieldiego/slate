@@ -9,6 +9,10 @@ frontends/riscos/appdir/Resources/nl/Templates,fec
 resources/*/Messages
 frontends/*/res/*/Messages
 codedocs
+slategtk2
+slategtk3
+slatefb
+slateqt
 jotter
 jotter-cov
 Makefile.config

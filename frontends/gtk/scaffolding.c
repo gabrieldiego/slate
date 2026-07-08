@@ -1248,17 +1248,17 @@ void slategtk_scaffolding_set_title(struct gui_window *gw, const char *title)
 	}
 
 	if (title == NULL || title[0] == '\0') {
-		gtk_window_set_title(gs->window, "NetSurf");
+		gtk_window_set_title(gs->window, "Slate");
 		return;
 	}
 
-	title_len = strlen(title) + SLEN(" - NetSurf") + 1;
+	title_len = strlen(title) + SLEN(" - Slate") + 1;
 	newtitle = malloc(title_len);
 	if (newtitle == NULL) {
 		return;
 	}
 
-	snprintf(newtitle, title_len, "%s - NetSurf", title);
+	snprintf(newtitle, title_len, "%s - Slate", title);
 
 	gtk_window_set_title(gs->window, newtitle);
 
@@ -1509,7 +1509,7 @@ struct slategtk_scaffolding *slategtk_new_scaffolding(struct gui_window *topleve
 	gs->top_level = toplevel;
 
 	/* Construct UI widgets */
-	if (slategtk_builder_new_from_resname("netsurf", &gs->builder) != SLATEERROR_OK) {
+	if (slategtk_builder_new_from_resname("slate", &gs->builder) != SLATEERROR_OK) {
 		free(gs);
 		return NULL;
 	}

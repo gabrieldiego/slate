@@ -74,7 +74,7 @@ struct slategtk_resource_s {
 
 /** resources that are used for gtk builder */
 static struct slategtk_resource_s ui_resource[] = {
-	RES_ENTRY("netsurf"),
+	RES_ENTRY("slate"),
 	RES_ENTRY("tabcontents"),
 	RES_ENTRY("password"),
 	RES_ENTRY("toolbar"),

@@ -61,13 +61,13 @@ slateerror slategtk_viewsource(GtkWindow *parent, struct browser_window *bw)
 		}
 	}
 
-	titlesize = strlen(slateurl_access(browser_window_access_url(bw))) + SLEN("Source of  - NetSurf") + 1;
+	titlesize = strlen(slateurl_access(browser_window_access_url(bw))) + SLEN("Source of  - Slate") + 1;
 	title = malloc(titlesize);
 	if (title == NULL) {
 		free(filename);
 		return SLATEERROR_NOMEM;
 	}
-	snprintf(title, titlesize, "Source of %s - NetSurf",
+	snprintf(title, titlesize, "Source of %s - Slate",
 		 slateurl_access(browser_window_access_url(bw)));
 
 	ret = utf8_from_enc((const char *)source_data,

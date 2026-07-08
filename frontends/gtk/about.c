@@ -99,7 +99,7 @@ void slategtk_about_dialog_init(GtkWindow *parent)
 	GList *pixbufs;
 
 	/* Create the dialog */
-	dialog = gtk_dialog_new_with_buttons("About NetSurf",
+	dialog = gtk_dialog_new_with_buttons("About Slate",
 					     parent,
 					     GTK_DIALOG_DESTROY_WITH_PARENT,
 					     "Licence", ABOUT_RESPONSE_ID_LICENCE,
@@ -111,7 +111,7 @@ void slategtk_about_dialog_init(GtkWindow *parent)
 
 	gtk_box_pack_start(GTK_BOX(slategtk_dialog_get_content_area(GTK_DIALOG(dialog))), vbox, TRUE, TRUE, 0);
 
-	/* NetSurf icon */
+	/* Slate icon */
 	pixbufs = gtk_window_get_default_icon_list();
 	if (pixbufs != NULL) {
 		GtkWidget *image;
@@ -125,7 +125,7 @@ void slategtk_about_dialog_init(GtkWindow *parent)
 
 	/* version string */
 	label = gtk_label_new (NULL);
-	name_string = g_markup_printf_escaped("<span size=\"xx-large\" weight=\"bold\">NetSurf %s</span>", slate_version);
+	name_string = g_markup_printf_escaped("<span size=\"xx-large\" weight=\"bold\">Slate %s</span>", slate_version);
 	gtk_label_set_markup (GTK_LABEL (label), name_string);
 	g_free(name_string);
 	gtk_label_set_selectable (GTK_LABEL (label), TRUE);
@@ -138,7 +138,7 @@ void slategtk_about_dialog_init(GtkWindow *parent)
 	gtk_label_set_line_wrap (GTK_LABEL (label), TRUE);
 	gtk_box_pack_start (GTK_BOX (vbox), label, FALSE, FALSE, 0);
 
-	label = gtk_label_new(messages_get("NetSurfCopyright"));
+	label = gtk_label_new(messages_get("SlateCopyright"));
 	gtk_label_set_selectable(GTK_LABEL(label), TRUE);
 	gtk_label_set_justify(GTK_LABEL(label), GTK_JUSTIFY_CENTER);
 	gtk_box_pack_start(GTK_BOX (vbox), label, FALSE, FALSE, 0);

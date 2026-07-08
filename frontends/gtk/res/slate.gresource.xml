@@ -1,60 +1,60 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
   <gresource prefix="/org/slate">
-    <file preprocess="to-pixdata">favicon.png</file>
+    <file alias="favicon.png" preprocess="to-pixdata">../../../resources/favicon.png</file>
     <file preprocess="to-pixdata">slate.xpm</file>
     <file preprocess="to-pixdata">menu_cursor.png</file>
-    <file preprocess="to-pixdata">throbber/throbber0.png</file>
-    <file preprocess="to-pixdata">throbber/throbber1.png</file>
-    <file preprocess="to-pixdata">throbber/throbber2.png</file>
-    <file preprocess="to-pixdata">throbber/throbber3.png</file>
-    <file preprocess="to-pixdata">throbber/throbber4.png</file>
-    <file preprocess="to-pixdata">throbber/throbber5.png</file>
-    <file preprocess="to-pixdata">throbber/throbber6.png</file>
-    <file preprocess="to-pixdata">throbber/throbber7.png</file>
-    <file preprocess="to-pixdata">throbber/throbber8.png</file>
-    <file>credits.html</file>
-    <file>fr/credits.html</file>
-    <file>it/credits.html</file>
-    <file>nl/credits.html</file>
-    <file>zh_CN/credits.html</file>
-    <file>licence.html</file>
-    <file>fr/licence.html</file>
-    <file>it/licence.html</file>
-    <file>nl/licence.html</file>
-    <file>zh_CN/licence.html</file>
-    <file>welcome.html</file>
-    <file>de/welcome.html</file>
-    <file>fr/welcome.html</file>
-    <file>it/welcome.html</file>
-    <file>ja/welcome.html</file>
-    <file>nl/welcome.html</file>
-    <file>zh_CN/welcome.html</file>
-    <file>adblock.css</file>
-    <file>default.css</file>
-    <file>internal.css</file>
-    <file>quirks.css</file>
-    <file>slate.png</file>
+    <file alias="throbber/throbber0.png" preprocess="to-pixdata">../../../resources/throbber/throbber0.png</file>
+    <file alias="throbber/throbber1.png" preprocess="to-pixdata">../../../resources/throbber/throbber1.png</file>
+    <file alias="throbber/throbber2.png" preprocess="to-pixdata">../../../resources/throbber/throbber2.png</file>
+    <file alias="throbber/throbber3.png" preprocess="to-pixdata">../../../resources/throbber/throbber3.png</file>
+    <file alias="throbber/throbber4.png" preprocess="to-pixdata">../../../resources/throbber/throbber4.png</file>
+    <file alias="throbber/throbber5.png" preprocess="to-pixdata">../../../resources/throbber/throbber5.png</file>
+    <file alias="throbber/throbber6.png" preprocess="to-pixdata">../../../resources/throbber/throbber6.png</file>
+    <file alias="throbber/throbber7.png" preprocess="to-pixdata">../../../resources/throbber/throbber7.png</file>
+    <file alias="throbber/throbber8.png" preprocess="to-pixdata">../../../resources/throbber/throbber8.png</file>
+    <file alias="credits.html">../../../resources/en/credits.html</file>
+    <file alias="fr/credits.html">../../../resources/fr/credits.html</file>
+    <file alias="it/credits.html">../../../resources/it/credits.html</file>
+    <file alias="nl/credits.html">../../../resources/nl/credits.html</file>
+    <file alias="zh_CN/credits.html">../../../resources/zh_CN/credits.html</file>
+    <file alias="licence.html">../../../resources/en/licence.html</file>
+    <file alias="fr/licence.html">../../../resources/fr/licence.html</file>
+    <file alias="it/licence.html">../../../resources/it/licence.html</file>
+    <file alias="nl/licence.html">../../../resources/nl/licence.html</file>
+    <file alias="zh_CN/licence.html">../../../resources/zh_CN/licence.html</file>
+    <file alias="welcome.html">../../../resources/en/welcome.html</file>
+    <file alias="de/welcome.html">../../../resources/de/welcome.html</file>
+    <file alias="fr/welcome.html">../../../resources/fr/welcome.html</file>
+    <file alias="it/welcome.html">../../../resources/it/welcome.html</file>
+    <file alias="ja/welcome.html">../../../resources/ja/welcome.html</file>
+    <file alias="nl/welcome.html">../../../resources/nl/welcome.html</file>
+    <file alias="zh_CN/welcome.html">../../../resources/zh_CN/welcome.html</file>
+    <file alias="adblock.css">../../../resources/adblock.css</file>
+    <file alias="default.css">../../../resources/default.css</file>
+    <file alias="internal.css">../../../resources/internal.css</file>
+    <file alias="quirks.css">../../../resources/quirks.css</file>
+    <file alias="slate.png">../../../resources/slate.png</file>
     <file>default.ico</file>
-    <file>icons/show-cookie.png</file>
-    <file>icons/local-history.png</file>
-    <file>icons/arrow-l.png</file>
-    <file>icons/content.png</file>
-    <file>icons/directory2.png</file>
-    <file>icons/directory.png</file>
-    <file>icons/hotlist-add.png</file>
-    <file>icons/hotlist-rmv.png</file>
-    <file>icons/search.png</file>
-    <file>icons/24x24/actions/page-info-insecure.png</file>
-    <file>icons/24x24/actions/page-info-internal.png</file>
-    <file>icons/24x24/actions/page-info-local.png</file>
-    <file>icons/24x24/actions/page-info-secure.png</file>
-    <file>icons/24x24/actions/page-info-warning.png</file>
-    <file>icons/48x48/actions/page-info-insecure.png</file>
-    <file>icons/48x48/actions/page-info-internal.png</file>
-    <file>icons/48x48/actions/page-info-local.png</file>
-    <file>icons/48x48/actions/page-info-secure.png</file>
-    <file>icons/48x48/actions/page-info-warning.png</file>
+    <file alias="icons/show-cookie.png">../../../resources/icons/show-cookie.png</file>
+    <file alias="icons/local-history.png">../../../resources/icons/local-history.png</file>
+    <file alias="icons/arrow-l.png">../../../resources/icons/arrow-l.png</file>
+    <file alias="icons/content.png">../../../resources/icons/content.png</file>
+    <file alias="icons/directory2.png">../../../resources/icons/directory2.png</file>
+    <file alias="icons/directory.png">../../../resources/icons/directory.png</file>
+    <file alias="icons/hotlist-add.png">../../../resources/icons/hotlist-add.png</file>
+    <file alias="icons/hotlist-rmv.png">../../../resources/icons/hotlist-rmv.png</file>
+    <file alias="icons/search.png">../../../resources/icons/search.png</file>
+    <file alias="icons/24x24/actions/page-info-insecure.png">../../../resources/icons/24x24/actions/page-info-insecure.png</file>
+    <file alias="icons/24x24/actions/page-info-internal.png">../../../resources/icons/24x24/actions/page-info-internal.png</file>
+    <file alias="icons/24x24/actions/page-info-local.png">../../../resources/icons/24x24/actions/page-info-local.png</file>
+    <file alias="icons/24x24/actions/page-info-secure.png">../../../resources/icons/24x24/actions/page-info-secure.png</file>
+    <file alias="icons/24x24/actions/page-info-warning.png">../../../resources/icons/24x24/actions/page-info-warning.png</file>
+    <file alias="icons/48x48/actions/page-info-insecure.png">../../../resources/icons/48x48/actions/page-info-insecure.png</file>
+    <file alias="icons/48x48/actions/page-info-internal.png">../../../resources/icons/48x48/actions/page-info-internal.png</file>
+    <file alias="icons/48x48/actions/page-info-local.png">../../../resources/icons/48x48/actions/page-info-local.png</file>
+    <file alias="icons/48x48/actions/page-info-secure.png">../../../resources/icons/48x48/actions/page-info-secure.png</file>
+    <file alias="icons/48x48/actions/page-info-warning.png">../../../resources/icons/48x48/actions/page-info-warning.png</file>
     <file>languages</file>
     <file>accelerators</file>
   </gresource>

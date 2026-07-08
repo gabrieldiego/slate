@@ -1,12 +1,12 @@
-# Local NetSurf Build
+# Local Slate Build
 
-This checkout is set up so the NetSurf browser, support repositories, install
+This checkout is set up so the Slate browser, support repositories, install
 prefix, and generated build output stay under this directory.
 
 ## Layout
 
-- `projects/`: cloned NetSurf support libraries and tools.
-- `projects/inst-*`: local install prefixes used by NetSurf's build system.
+- `projects/`: cloned Slate support libraries and tools.
+- `projects/inst-*`: local install prefixes used by Slate's build system.
 - `build/`: browser build output from this checkout.
 - `scripts/`: repeatable local build helpers.
 
@@ -22,7 +22,7 @@ Build another frontend:
 
 ```sh
 ./scripts/rebuild.sh framebuffer
-./scripts/rebuild.sh monkey
+./scripts/rebuild.sh jotter
 ```
 
 Clean all local generated build output and dependency checkouts, then rebuild:
