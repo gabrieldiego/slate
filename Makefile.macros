@@ -145,7 +145,7 @@ endef
 # 1 = Language
 define split_messages
 
-$$(MESSAGES_TARGET)/$(1)/Messages: resources/FatMessages $$(TOOLROOT)/split-messages
+$$(MESSAGES_TARGET)/$(1)/Messages: resources/FatMessages $$(TOOLROOT)/split-messages Makefile Makefile.macros $$(FRONTEND_SOURCE_DIR)/Makefile
 	$$(VQ)echo "MSGSPLIT: Language: $(1) Filter: $$(MESSAGES_FILTER)"
 	$$(Q)$$(MKDIR) -p $$(MESSAGES_TARGET)/$(1)
 	$$(Q)$$(RM) $$@
