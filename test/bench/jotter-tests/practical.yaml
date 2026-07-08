@@ -23,6 +23,7 @@ steps:
   - ${SLATE_BENCH_ROOT}/practical-script-resources.html
   - ${SLATE_BENCH_ROOT}/practical-js-feed.html
   - ${SLATE_BENCH_ROOT}/practical-js-shop.html
+  - ${SLATE_BENCH_ROOT}/practical-js-editor.html
   - ${SLATE_BENCH_ROOT}/practical-map.html
   - ${SLATE_BENCH_ROOT}/practical-webmail.html
   - ${SLATE_BENCH_ROOT}/practical-calendar.html
@@ -232,6 +233,45 @@ steps:
 - action: wait-log
   window: win1
   substring: shop-checkout-drawer
+- action: navigate
+  window: win1
+  url: ${SLATE_BENCH_ROOT}/practical-js-editor.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: wait-log
+  window: win1
+  substring: practical-js-editor-ready
+- action: click
+  window: win1
+  target:
+    text: Render Preview
+- action: wait-log
+  window: win1
+  substring: editor-preview-rendered
+- action: click
+  window: win1
+  target:
+    text: Add Tag
+- action: wait-log
+  window: win1
+  substring: editor-tag-added
+- action: click
+  window: win1
+  area: extent
+  target:
+    text: Add Bench Comment
+- action: wait-log
+  window: win1
+  substring: editor-comment-added
+- action: click
+  window: win1
+  target:
+    text: Save Practical Draft
+- action: wait-log
+  window: win1
+  substring: editor-draft-saved
 - action: navigate
   window: win1
   url: ${SLATE_BENCH_ROOT}/practical-map.html

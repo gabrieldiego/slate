@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench Editorial App</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+body {
+	background: #edf1f4;
+}
+.editor-shell {
+	display: table;
+	width: 100%;
+	border-spacing: 12px;
+}
+.editor-nav,
+.editor-main,
+.editor-aside {
+	display: table-cell;
+	vertical-align: top;
+	background: #ffffff;
+	border: 1px solid #b8c4cf;
+	padding: 12px;
+}
+.editor-nav {
+	width: 18%;
+}
+.editor-aside {
+	width: 25%;
+}
+.toolbar {
+	border-bottom: 1px solid #c8d1da;
+	margin-bottom: 10px;
+	padding-bottom: 8px;
+}
+.toolbar button {
+	margin: 0 5px 6px 0;
+}
+.draft-title {
+	width: 95%;
+	border: 1px solid #687989;
+	padding: 6px;
+}
+.draft-body {
+	width: 96%;
+	min-height: 140px;
+	border: 1px solid #687989;
+	padding: 8px;
+}
+.preview {
+	border: 1px solid #9aa8b4;
+	background: #f8fafc;
+	padding: 12px;
+}
+.preview figure {
+	float: right;
+	width: 170px;
+	margin: 0 0 10px 14px;
+}
+.asset-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(100px, 1fr));
+	gap: 8px;
+}
+.asset-card {
+	border: 1px solid #c7d0d9;
+	background: #f8fafc;
+	padding: 7px;
+}
+.asset-card img {
+	display: block;
+	max-width: 100%;
+}
+.comment-row {
+	border-bottom: 1px solid #d5dde4;
+	padding: 6px 0;
+}
+.metrics td,
+.metrics th {
+	text-align: left;
+}
+.status-strip {
+	background: #eef7ea;
+	border: 1px solid #a5bd95;
+	padding: 8px;
+}
+.hidden-note {
+	display: none;
+}
+</style>
+</head>
+<body>
+<header class="site-head">
+<img src="assets/icon-news.png" width="64" height="64" alt="Practical Bench editorial icon">
+<h1>Practical Bench Editorial App</h1>
+</header>
+<main class="editor-shell">
+<nav class="editor-nav">
+<p class="bench-kicker">Practical Bench page for a script-driven publishing workflow.</p>
+<h2>Sections</h2>
+<ul>
+<li><a href="#draft">Draft</a></li>
+<li><a href="#preview">Preview</a></li>
+<li><a href="#assets">Assets</a></li>
+<li><a href="#discussion">Discussion</a></li>
+</ul>
+<details open>
+<summary>Publication State</summary>
+<p><meter id="editor-readiness" min="0" max="100" value="58">58%</meter></p>
+<p><progress id="editor-progress" max="100" value="35">35%</progress></p>
+</details>
+<menu>
+<li><button type="button" id="editor-stage">Stage Draft</button></li>
+<li><button type="button" id="editor-publish">Publish Bench Draft</button></li>
+</menu>
+</nav>
+
+<section class="editor-main">
+<div class="toolbar" role="toolbar" aria-label="Draft toolbar">
+<button type="button" id="editor-bold">Bold</button>
+<button type="button" id="editor-link">Insert Link</button>
+<button type="button" id="editor-tag">Add Tag</button>
+<button type="button" id="editor-render">Render Preview</button>
+</div>
+<form id="editor-form" action="about:blank" method="post">
+<fieldset id="draft">
+<legend>Draft</legend>
+<label>Headline <input id="editor-title" class="draft-title" name="title" value="Renderer memory profile for a practical article"></label>
+<label>Slug <input id="editor-slug" name="slug" value="renderer-memory-profile"></label>
+<label>Category
+<select id="editor-category" name="category">
+<optgroup label="Engineering">
+<option selected>Browser Internals</option>
+<option>Compatibility</option>
+</optgroup>
+<optgroup label="Operations">
+<option>Release Notes</option>
+<option>Field Report</option>
+</optgroup>
+</select>
+</label>
+<label>Body
+<textarea id="editor-body" class="draft-body" name="body" rows="8" cols="70">Practical Bench article body with paragraphs, inline markup, related links, image references, and a comment stream. The page behaves like a small editorial tool rather than a static document.</textarea>
+</label>
+<p>
+<label><input id="editor-featured" type="checkbox" checked> Feature on front page</label>
+<label><input type="radio" name="priority" value="normal" checked> Normal review</label>
+<label><input type="radio" name="priority" value="fast"> Fast review</label>
+</p>
+<input type="hidden" name="csrf" value="bench-token">
+<button type="button" id="editor-save">Save Practical Draft</button>
+<button type="reset">Reset Draft</button>
+</fieldset>
+</form>
+
+<section id="preview" class="preview">
+<h2 id="preview-title">Renderer memory profile for a practical article</h2>
+<figure>
+<img src="assets/article-transit.jpg" width="160" height="107" alt="Article preview">
+<figcaption>Inline asset preview</figcaption>
+</figure>
+<p id="preview-body">Preview waiting for the editor script.</p>
+<p id="preview-tags"><span class="bench-badge">browser</span> <span class="bench-badge">memory</span></p>
+<table class="metrics">
+<caption>Draft Metrics</caption>
+<thead><tr><th>Metric</th><th>Value</th></tr></thead>
+<tbody id="editor-metrics">
+<tr><td>Words</td><td>0</td></tr>
+<tr><td>Links</td><td>0</td></tr>
+</tbody>
+</table>
+</section>
+</section>
+
+<aside class="editor-aside">
+<section id="assets">
+<h2>Assets</h2>
+<div class="asset-grid">
+<article class="asset-card"><img src="assets/product-monitor.jpg" width="120" height="80" alt="Monitor asset"><p>Monitor asset</p></article>
+<article class="asset-card"><img src="assets/product-keyboard.jpg" width="120" height="80" alt="Keyboard asset"><p>Keyboard asset</p></article>
+</div>
+<canvas id="editor-canvas" width="180" height="96">Canvas fallback for editorial chart.</canvas>
+</section>
+<section id="discussion">
+<h2>Discussion</h2>
+<div id="editor-comments">
+<p class="comment-row">Editor: check low memory notes.</p>
+<p class="comment-row">Reviewer: add compatibility link.</p>
+</div>
+<form id="comment-form" action="about:blank" method="post">
+<label>Comment <textarea id="editor-comment" rows="3" cols="28">Looks ready for another bench pass.</textarea></label>
+<button type="button" id="editor-add-comment">Add Bench Comment</button>
+</form>
+</section>
+<p id="editor-status" class="status-strip">Editorial app waiting.</p>
+<template id="editor-template"><p>Template content for Practical Bench.</p></template>
+<p class="hidden-note">Hidden note used by practical coverage.</p>
+</aside>
+</main>
+<script src="practical-js-editor.js"></script>
+</body>
+</html>

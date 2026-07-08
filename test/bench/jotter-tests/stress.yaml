@@ -23,6 +23,7 @@ steps:
   - ${SLATE_BENCH_ROOT}/stress-special-elements.html
   - ${SLATE_BENCH_ROOT}/stress-js-dom.html
   - ${SLATE_BENCH_ROOT}/stress-js-runtime.html
+  - ${SLATE_BENCH_ROOT}/stress-js-bindings.html
   - ${SLATE_BENCH_ROOT}/stress-deep-dom.html
   - ${SLATE_BENCH_ROOT}/stress-wide-table.html
   - ${SLATE_BENCH_ROOT}/stress-complex-table.html
@@ -34,6 +35,7 @@ steps:
   - ${SLATE_BENCH_ROOT}/stress-special-elements.html
   - ${SLATE_BENCH_ROOT}/stress-js-dom.html
   - ${SLATE_BENCH_ROOT}/stress-js-runtime.html
+  - ${SLATE_BENCH_ROOT}/stress-js-bindings.html
   steps:
   - action: navigate
     window: win1
@@ -64,6 +66,77 @@ steps:
 - action: wait-log
   window: win1
   substring: stress-js-summary-expanded
+- action: navigate
+  window: win1
+  url: ${SLATE_BENCH_ROOT}/stress-js-bindings.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: wait-log
+  window: win1
+  substring: stress-js-bindings-ready
+- action: mouse-track
+  window: win1
+  area: extent
+  target:
+    text: Cursor pointer
+  state: hover
+- action: mouse-track
+  window: win1
+  area: extent
+  target:
+    text: Cursor progress
+  state: hover
+- action: click
+  window: win1
+  area: extent
+  target:
+    text: stress input value
+- action: keypress
+  window: win1
+  key: SELECT_ALL
+- action: keypress
+  window: win1
+  text: driver typed
+- action: click
+  window: win1
+  area: extent
+  target:
+    text: stress textarea value
+- action: keypress
+  window: win1
+  key: TEXT_END
+- action: keypress
+  window: win1
+  text: driver textarea
+- action: scroll
+  window: win1
+  area: extent
+  target:
+    text: Overflow text one
+  dy: 120
+- action: click
+  window: win1
+  target:
+    text: Run Binding Events
+- action: wait-log
+  window: win1
+  substring: stress-js-bindings-events
+- action: click
+  window: win1
+  target:
+    text: Run Binding Forms
+- action: wait-log
+  window: win1
+  substring: stress-js-bindings-forms
+- action: click
+  window: win1
+  target:
+    text: Plain Binding Button
+- action: wait-log
+  window: win1
+  substring: stress-js-bindings-click
 - action: navigate
   window: win1
   url: ${SLATE_BENCH_ROOT}/stress-js-runtime.html

@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<base href="./">
+<title>Stress Bench JavaScript Bindings</title>
+<meta name="bench-purpose" content="duktape bindings coverage">
+<link rel="stylesheet" href="bench-shared.css">
+<style id="bindings-style">
+body {
+	background: #f1f4f6;
+}
+.bindings-board {
+	display: grid;
+	grid-template-columns: minmax(260px, 1fr) minmax(260px, 1fr);
+	gap: 12px;
+}
+.bindings-card {
+	background: #ffffff;
+	border: 1px solid #b8c4cf;
+	padding: 10px;
+}
+.bindings-card:nth-child(2n) {
+	background: #fbfcfd;
+}
+.bindings-card h2 {
+	margin-top: 0;
+}
+.inline-sampler span {
+	display: inline-block;
+	margin: 2px 4px 2px 0;
+	padding: 2px 5px;
+	border: 1px solid #9aa8b4;
+	background: #eef3f7;
+}
+.position-sample {
+	position: relative;
+	min-height: 110px;
+	overflow: auto;
+	border: 1px solid #8392a0;
+	background: #f8fafc;
+	padding: 8px;
+}
+.position-sample .absolute-chip {
+	position: absolute;
+	right: 10px;
+	top: 10px;
+	background: #305f72;
+	color: #ffffff;
+	padding: 4px 7px;
+}
+.float-sample img {
+	float: left;
+	margin: 0 10px 6px 0;
+}
+.cursor-pointer { cursor: pointer; }
+.cursor-progress { cursor: progress; }
+.cursor-n { cursor: n-resize; }
+.cursor-s { cursor: s-resize; }
+.cursor-w { cursor: w-resize; }
+.cursor-ne { cursor: ne-resize; }
+.cursor-sw { cursor: sw-resize; }
+.cursor-se { cursor: se-resize; }
+.cursor-nw { cursor: nw-resize; }
+#binding-log {
+	max-height: 180px;
+	overflow: auto;
+	background: #111820;
+	color: #f7fafc;
+	padding: 8px;
+}
+</style>
+</head>
+<body class="bench-page">
+<header class="site-head">
+<img src="assets/bench-logo.png" width="120" height="48" alt="Stress Bench logo">
+<h1>Stress Bench JavaScript Bindings</h1>
+</header>
+<main>
+<p class="bench-kicker">Stress Bench page with broad DOM, event, form, canvas, table, media, CSS, and element wrapper probes.</p>
+<p id="binding-status">Stress JS bindings waiting</p>
+<p>
+<button id="binding-run-events" type="button">Run Binding Events</button>
+<button id="binding-run-forms" type="button">Run Binding Forms</button>
+<button id="binding-button" type="button">Plain Binding Button</button>
+</p>
+
+<section class="bindings-board" id="binding-board">
+<article class="bindings-card" id="binding-elements">
+<h2>Element Matrix</h2>
+<p class="inline-sampler">
+<span id="binding-span">span</span>
+<data id="binding-data" value="42">data value</data>
+<time id="binding-time" datetime="2026-07-08">time value</time>
+<mark>mark</mark>
+<q cite="#quote">quoted text</q>
+<ins datetime="2026-07-08">inserted</ins>
+<del datetime="2026-07-07">deleted</del>
+<keygen id="binding-keygen" name="keygen">
+<applet id="binding-applet" code="missing.class">Applet fallback</applet>
+<bdi>bidirectional isolate</bdi>
+<bdo dir="rtl">override text</bdo>
+<ruby>rb<rp>(</rp><rt>rt</rt><rp>)</rp></ruby>
+text<wbr>break
+</p>
+<pre id="binding-pre">preformatted
+stress text</pre>
+<hr>
+<details id="binding-details" open><summary>Details summary</summary><p>Details body for stress coverage.</p></details>
+<dialog id="binding-dialog" open>Dialog content for rendering coverage.</dialog>
+<menu id="binding-menu"><li><button type="button">Menu button</button></li><li><menuitem label="Menu item">Menu item fallback</menuitem></li></menu>
+<dir><li>Directory list entry</li></dir>
+<marquee>Legacy marquee fallback</marquee>
+<font color="#304050" face="sans-serif" size="3">Legacy font element</font>
+<slate-unknown id="binding-unknown">Unknown element body</slate-unknown>
+<template id="binding-template"><p>Template clone content</p></template>
+</article>
+
+<article class="bindings-card" id="binding-form-card">
+<h2>Form Matrix</h2>
+<form id="binding-form" action="about:blank" method="post" enctype="multipart/form-data" target="_self" accept-charset="utf-8">
+<fieldset>
+<legend>Controls</legend>
+<label>Text <input id="binding-input" name="text" value="stress input value" autocomplete="on"></label>
+<label>Password <input id="binding-password" type="password" name="password" value="secret"></label>
+<label>Search <input id="binding-search" type="search" name="search" value="bindings"></label>
+<label>Number <input id="binding-number" type="number" name="number" value="7"></label>
+<label><input id="binding-check" type="checkbox" name="check" checked> Checkbox</label>
+<label><input type="radio" name="choice" value="a" checked> Radio A</label>
+<label><input type="radio" name="choice" value="b"> Radio B</label>
+<label>File <input id="binding-file" type="file" name="upload"></label>
+<input id="binding-hidden" type="hidden" name="hidden" value="hidden-value">
+<label>Select
+<select id="binding-select" name="select">
+<optgroup label="Group One">
+<option value="one">One</option>
+<option value="two" selected>Two</option>
+</optgroup>
+<optgroup label="Group Two">
+<option value="three">Three</option>
+</optgroup>
+</select>
+</label>
+<label>List <input id="binding-list-input" list="binding-list" value="alpha"></label>
+<datalist id="binding-list"><option value="alpha"><option value="bravo"></datalist>
+<label>Notes <textarea id="binding-textarea" rows="5" cols="36">stress textarea value</textarea></label>
+<p><meter id="binding-meter" min="0" max="10" value="6">6</meter> <progress id="binding-progress" max="100" value="70">70</progress> <output id="binding-output" name="result">output value</output></p>
+<button id="binding-submit" type="submit">Submit Binding Form</button>
+<button id="binding-reset" type="reset">Reset Binding Form</button>
+<button id="binding-secondary-button" type="button">Secondary Binding Button</button>
+</fieldset>
+</form>
+</article>
+
+<article class="bindings-card">
+<h2>Tables And Lists</h2>
+<table id="binding-table">
+<caption>Binding Table</caption>
+<colgroup><col span="1"><col span="2"></colgroup>
+<thead><tr><th scope="col">Head A</th><th scope="col">Head B</th><th scope="col">Head C</th></tr></thead>
+<tbody>
+<tr><th scope="row">Row 1</th><td>Alpha</td><td>Bravo</td></tr>
+<tr><th scope="row">Row 2</th><td colspan="2">Charlie colspan</td></tr>
+</tbody>
+<tfoot><tr><td>Foot</td><td>Delta</td><td>Echo</td></tr></tfoot>
+</table>
+<dl id="binding-dlist"><dt>Term</dt><dd>Description</dd></dl>
+<ol id="binding-olist"><li>Ordered one</li><li>Ordered two</li></ol>
+<ul id="binding-ulist"><li>Unordered one</li><li>Unordered two</li></ul>
+</article>
+
+<article class="bindings-card">
+<h2>Media And Objects</h2>
+<picture id="binding-picture"><source srcset="assets/product-keyboard.jpg"><img id="binding-image" src="assets/product-keyboard.jpg" width="160" height="107" alt="Keyboard binding image" usemap="#binding-map"></picture>
+<map id="binding-map-node" name="binding-map"><area id="binding-area" shape="rect" coords="0,0,80,107" href="#area-target" alt="Area target"><area shape="default" href="#default-target" alt="Default target"></map>
+<p id="area-target">Area target body.</p>
+<object id="binding-object" data="object-child.html" type="text/html" width="210" height="70"><param name="fallback" value="object">Object fallback</object>
+<embed id="binding-embed" src="object-child.html" type="text/html" width="210" height="70">
+<iframe id="binding-iframe" src="object-child.html" width="210" height="70">Iframe fallback</iframe>
+<audio id="binding-audio" controls><source id="binding-audio-source" src="missing-audio.ogg" type="audio/ogg"></audio>
+<video id="binding-video" width="210" height="90" controls><source id="binding-video-source" src="missing-video.webm" type="video/webm"><track id="binding-track" kind="captions" src="missing.vtt" srclang="en" label="English"></video>
+<canvas id="binding-canvas" width="220" height="120">Canvas fallback</canvas>
+</article>
+
+<article class="bindings-card float-sample">
+<h2>CSS Interaction</h2>
+<img src="assets/avatar-profile.png" width="96" height="96" alt="Float sample">
+<p class="position-sample" id="binding-position">Overflow text one. Overflow text two. Overflow text three. Overflow text four. Overflow text five. <span class="absolute-chip">absolute</span></p>
+<p class="inline-sampler">
+<span class="cursor-pointer">Cursor pointer</span>
+<span class="cursor-progress">Cursor progress</span>
+<span class="cursor-n">Cursor north</span>
+<span class="cursor-s">Cursor south</span>
+<span class="cursor-w">Cursor west</span>
+<span class="cursor-ne">Cursor northeast</span>
+<span class="cursor-sw">Cursor southwest</span>
+<span class="cursor-se">Cursor southeast</span>
+<span class="cursor-nw">Cursor northwest</span>
+</p>
+</article>
+
+<article class="bindings-card">
+<h2>Probe Log</h2>
+<ol id="binding-log"></ol>
+</article>
+</section>
+<script src="stress-js-bindings.js"></script>
+</main>
+</body>
+</html>

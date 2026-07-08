@@ -10,6 +10,8 @@
 
 prologue Document()
 %{
+#include <string.h>
+
 #include "utils/corestrings.h"
 #include "utils/libdom.h"
 #include "utils/utils.h"
@@ -426,14 +428,103 @@ method Document::createEvent ()
 %{
 	/* Create a new event, mark it untrusted since it's new from JS */
 	dom_event *evt = NULL;
+	dom_string *event_type = NULL;
+	const char *event_name = duk_safe_to_string(ctx, 0);
+	const char *prototype = PROTO_NAME(EVENT);
 	dom_exception exc;
 
-	exc = dom_event_create(&evt);
+	if ((strcmp(event_name, "CustomEvent") == 0) ||
+	    (strcmp(event_name, "CustomEvents") == 0)) {
+		event_name = "CustomEvent";
+		prototype = PROTO_NAME(CUSTOMEVENT);
+	} else if ((strcmp(event_name, "UIEvent") == 0) ||
+		   (strcmp(event_name, "UIEvents") == 0)) {
+		event_name = "UIEvent";
+		prototype = PROTO_NAME(UIEVENT);
+	} else if ((strcmp(event_name, "KeyboardEvent") == 0) ||
+		   (strcmp(event_name, "KeyboardEvents") == 0)) {
+		event_name = "KeyboardEvent";
+		prototype = PROTO_NAME(KEYBOARDEVENT);
+	} else if ((strcmp(event_name, "MouseEvent") == 0) ||
+		   (strcmp(event_name, "MouseEvents") == 0)) {
+		event_name = "MouseEvent";
+		prototype = PROTO_NAME(MOUSEEVENT);
+	} else if (strcmp(event_name, "DragEvent") == 0) {
+		event_name = "MouseEvent";
+		prototype = PROTO_NAME(DRAGEVENT);
+	} else if (strcmp(event_name, "WheelEvent") == 0) {
+		event_name = "MouseEvent";
+		prototype = PROTO_NAME(WHEELEVENT);
+	} else if (strcmp(event_name, "FocusEvent") == 0) {
+		event_name = "UIEvent";
+		prototype = PROTO_NAME(FOCUSEVENT);
+	} else if (strcmp(event_name, "CompositionEvent") == 0) {
+		event_name = "UIEvent";
+		prototype = PROTO_NAME(COMPOSITIONEVENT);
+	} else if ((strcmp(event_name, "MutationEvent") == 0) ||
+		   (strcmp(event_name, "MutationEvents") == 0)) {
+		event_name = "MutationEvent";
+		prototype = PROTO_NAME(MUTATIONEVENT);
+	} else if (strcmp(event_name, "StorageEvent") == 0) {
+		event_name = "Event";
+		prototype = PROTO_NAME(STORAGEEVENT);
+	} else if (strcmp(event_name, "CloseEvent") == 0) {
+		event_name = "Event";
+		prototype = PROTO_NAME(CLOSEEVENT);
+	} else if (strcmp(event_name, "MessageEvent") == 0) {
+		event_name = "Event";
+		prototype = PROTO_NAME(MESSAGEEVENT);
+	} else if (strcmp(event_name, "ErrorEvent") == 0) {
+		event_name = "Event";
+		prototype = PROTO_NAME(ERROREVENT);
+	} else if (strcmp(event_name, "BeforeUnloadEvent") == 0) {
+		event_name = "Event";
+		prototype = PROTO_NAME(BEFOREUNLOADEVENT);
+	} else if (strcmp(event_name, "PageTransitionEvent") == 0) {
+		event_name = "Event";
+		prototype = PROTO_NAME(PAGETRANSITIONEVENT);
+	} else if (strcmp(event_name, "HashChangeEvent") == 0) {
+		event_name = "Event";
+		prototype = PROTO_NAME(HASHCHANGEEVENT);
+	} else if (strcmp(event_name, "PopStateEvent") == 0) {
+		event_name = "Event";
+		prototype = PROTO_NAME(POPSTATEEVENT);
+	} else if (strcmp(event_name, "RelatedEvent") == 0) {
+		event_name = "Event";
+		prototype = PROTO_NAME(RELATEDEVENT);
+	} else if (strcmp(event_name, "AutocompleteErrorEvent") == 0) {
+		event_name = "Event";
+		prototype = PROTO_NAME(AUTOCOMPLETEERROREVENT);
+	} else if (strcmp(event_name, "TrackEvent") == 0) {
+		event_name = "Event";
+		prototype = PROTO_NAME(TRACKEVENT);
+	} else {
+		event_name = "Event";
+	}
+
+	exc = dom_string_create((const uint8_t *)event_name,
+				strlen(event_name),
+				&event_type);
+	if (exc == DOM_NO_ERR) {
+		exc = dom_document_event_create_event(
+				(dom_document_event *)priv->parent.node,
+				event_type,
+				&evt);
+		dom_string_unref(event_type);
+	}
+	if (exc != DOM_NO_ERR) {
+		exc = dom_event_create(&evt);
+		prototype = PROTO_NAME(EVENT);
+	}
 	if (exc != DOM_NO_ERR) return 0;
 	exc = dom_event_set_is_trusted(evt, false);
 	if (exc != DOM_NO_ERR) { dom_event_unref(evt); return 0; }
 
-	dukky_push_event(ctx, evt);
+	duk_push_pointer(ctx, evt);
+	if (dukky_create_object(ctx, prototype, 1) != DUK_EXEC_SUCCESS) {
+		dom_event_unref(evt);
+		return 0;
+	}
 
 	dom_event_unref(evt);
 	return 1;

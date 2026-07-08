@@ -236,6 +236,9 @@ static void dukky_html_element_class_from_tag_type(dom_html_element_type type,
 	case DOM_HTML_ELEMENT_TYPE_DIV:
 		SET_HTML_CLASS(DIV)
 		break;
+	case DOM_HTML_ELEMENT_TYPE_SPAN:
+		SET_HTML_CLASS(SPAN)
+		break;
 	case DOM_HTML_ELEMENT_TYPE_FORM:
 		SET_HTML_CLASS(FORM)
 		break;
@@ -250,6 +253,9 @@ static void dukky_html_element_class_from_tag_type(dom_html_element_type type,
 		break;
 	case DOM_HTML_ELEMENT_TYPE_TEXTAREA:
 		SET_HTML_CLASS(TEXTAREA)
+		break;
+	case DOM_HTML_ELEMENT_TYPE_DATALIST:
+		SET_HTML_CLASS(DATALIST)
 		break;
 	case DOM_HTML_ELEMENT_TYPE_OPTGROUP:
 		SET_HTML_CLASS(OPTGROUP)
@@ -272,11 +278,29 @@ static void dukky_html_element_class_from_tag_type(dom_html_element_type type,
 	case DOM_HTML_ELEMENT_TYPE_MENU:
 		SET_HTML_CLASS(MENU)
 		break;
+	case DOM_HTML_ELEMENT_TYPE_MENUITEM:
+		SET_HTML_CLASS(MENUITEM)
+		break;
 	case DOM_HTML_ELEMENT_TYPE_FIELDSET:
 		SET_HTML_CLASS(FIELDSET)
 		break;
 	case DOM_HTML_ELEMENT_TYPE_LEGEND:
 		SET_HTML_CLASS(LEGEND)
+		break;
+	case DOM_HTML_ELEMENT_TYPE_OUTPUT:
+		SET_HTML_CLASS(OUTPUT)
+		break;
+	case DOM_HTML_ELEMENT_TYPE_METER:
+		SET_HTML_CLASS(METER)
+		break;
+	case DOM_HTML_ELEMENT_TYPE_PROGRESS:
+		SET_HTML_CLASS(PROGRESS)
+		break;
+	case DOM_HTML_ELEMENT_TYPE_DETAILS:
+		SET_HTML_CLASS(DETAILS)
+		break;
+	case DOM_HTML_ELEMENT_TYPE_DIALOG:
+		SET_HTML_CLASS(DIALOG)
 		break;
 	case DOM_HTML_ELEMENT_TYPE_P:
 		SET_HTML_CLASS(PARAGRAPH)
@@ -314,9 +338,18 @@ static void dukky_html_element_class_from_tag_type(dom_html_element_type type,
 	case DOM_HTML_ELEMENT_TYPE_FONT:
 		SET_HTML_CLASS(FONT)
 		break;
+	case DOM_HTML_ELEMENT_TYPE_MARQUEE:
+		SET_HTML_CLASS(MARQUEE)
+		break;
 	case DOM_HTML_ELEMENT_TYPE_DEL:
 	case DOM_HTML_ELEMENT_TYPE_INS:
 		SET_HTML_CLASS(MOD)
+		break;
+	case DOM_HTML_ELEMENT_TYPE_DATA:
+		SET_HTML_CLASS(DATA)
+		break;
+	case DOM_HTML_ELEMENT_TYPE_TIME:
+		SET_HTML_CLASS(TIME)
 		break;
 	case DOM_HTML_ELEMENT_TYPE_A:
 		SET_HTML_CLASS(ANCHOR)
@@ -326,6 +359,24 @@ static void dukky_html_element_class_from_tag_type(dom_html_element_type type,
 		break;
 	case DOM_HTML_ELEMENT_TYPE_IMG:
 		SET_HTML_CLASS(IMAGE)
+		break;
+	case DOM_HTML_ELEMENT_TYPE_AUDIO:
+		SET_HTML_CLASS(AUDIO)
+		break;
+	case DOM_HTML_ELEMENT_TYPE_VIDEO:
+		SET_HTML_CLASS(VIDEO)
+		break;
+	case DOM_HTML_ELEMENT_TYPE_SOURCE:
+		SET_HTML_CLASS(SOURCE)
+		break;
+	case DOM_HTML_ELEMENT_TYPE_TRACK:
+		SET_HTML_CLASS(TRACK)
+		break;
+	case DOM_HTML_ELEMENT_TYPE_PICTURE:
+		SET_HTML_CLASS(PICTURE)
+		break;
+	case DOM_HTML_ELEMENT_TYPE_EMBED:
+		SET_HTML_CLASS(EMBED)
 		break;
 	case DOM_HTML_ELEMENT_TYPE_OBJECT:
 		SET_HTML_CLASS(OBJECT)
@@ -349,8 +400,10 @@ static void dukky_html_element_class_from_tag_type(dom_html_element_type type,
 		SET_HTML_CLASS(TABLECAPTION)
 		break;
 	case DOM_HTML_ELEMENT_TYPE_TD:
+		SET_HTML_CLASS(TABLEDATACELL)
+		break;
 	case DOM_HTML_ELEMENT_TYPE_TH:
-		SET_HTML_CLASS(TABLECELL)
+		SET_HTML_CLASS(TABLEHEADERCELL)
 		break;
 	case DOM_HTML_ELEMENT_TYPE_COL:
 	case DOM_HTML_ELEMENT_TYPE_COLGROUP:
@@ -382,8 +435,14 @@ static void dukky_html_element_class_from_tag_type(dom_html_element_type type,
 	case DOM_HTML_ELEMENT_TYPE_ISINDEX:
 		SET_HTML_CLASS(ISINDEX)
 		break;
+	case DOM_HTML_ELEMENT_TYPE_KEYGEN:
+		SET_HTML_CLASS(KEYGEN)
+		break;
 	case DOM_HTML_ELEMENT_TYPE_CANVAS:
 		SET_HTML_CLASS(CANVAS)
+		break;
+	case DOM_HTML_ELEMENT_TYPE_TEMPLATE:
+		SET_HTML_CLASS(TEMPLATE)
 		break;
 	case DOM_HTML_ELEMENT_TYPE__COUNT:
 		assert(type != DOM_HTML_ELEMENT_TYPE__COUNT);
@@ -1250,6 +1309,19 @@ out:
 	return ret;
 }
 
+static bool dukky_event_type_is(dom_string *type, const char *name)
+{
+	size_t name_len;
+
+	if (type == NULL) {
+		return false;
+	}
+
+	name_len = strlen(name);
+	return (dom_string_length(type) == name_len) &&
+	       (memcmp(dom_string_data(type), name, name_len) == 0);
+}
+
 static const char* dukky_event_proto(dom_event *evt)
 {
 	const char *ret = PROTO_NAME(EVENT);
@@ -1258,6 +1330,9 @@ static const char* dukky_event_proto(dom_event *evt)
 
 	err = dom_event_get_type(evt, &type);
 	if (err != DOM_NO_ERR) {
+		goto out;
+	}
+	if (type == NULL) {
 		goto out;
 	}
 
@@ -1269,6 +1344,88 @@ static const char* dukky_event_proto(dom_event *evt)
 		goto out;
 	} else if (dom_string_isequal(type, corestring_dom_keypress)) {
 		ret = PROTO_NAME(KEYBOARDEVENT);
+		goto out;
+	}
+
+	if (dukky_event_type_is(type, "click") ||
+	    dukky_event_type_is(type, "dblclick") ||
+	    dukky_event_type_is(type, "mousedown") ||
+	    dukky_event_type_is(type, "mouseup") ||
+	    dukky_event_type_is(type, "mousemove") ||
+	    dukky_event_type_is(type, "mouseover") ||
+	    dukky_event_type_is(type, "mouseout") ||
+	    dukky_event_type_is(type, "mouseenter") ||
+	    dukky_event_type_is(type, "mouseleave") ||
+	    dukky_event_type_is(type, "contextmenu")) {
+		ret = PROTO_NAME(MOUSEEVENT);
+		goto out;
+	}
+	if (dukky_event_type_is(type, "wheel")) {
+		ret = PROTO_NAME(WHEELEVENT);
+		goto out;
+	}
+	if (dukky_event_type_is(type, "drag") ||
+	    dukky_event_type_is(type, "dragstart") ||
+	    dukky_event_type_is(type, "dragenter") ||
+	    dukky_event_type_is(type, "dragover") ||
+	    dukky_event_type_is(type, "dragleave") ||
+	    dukky_event_type_is(type, "drop") ||
+	    dukky_event_type_is(type, "dragend")) {
+		ret = PROTO_NAME(DRAGEVENT);
+		goto out;
+	}
+	if (dukky_event_type_is(type, "focus") ||
+	    dukky_event_type_is(type, "blur") ||
+	    dukky_event_type_is(type, "focusin") ||
+	    dukky_event_type_is(type, "focusout")) {
+		ret = PROTO_NAME(FOCUSEVENT);
+		goto out;
+	}
+	if (dukky_event_type_is(type, "compositionstart") ||
+	    dukky_event_type_is(type, "compositionupdate") ||
+	    dukky_event_type_is(type, "compositionend")) {
+		ret = PROTO_NAME(COMPOSITIONEVENT);
+		goto out;
+	}
+	if (dukky_event_type_is(type, "storage")) {
+		ret = PROTO_NAME(STORAGEEVENT);
+		goto out;
+	}
+	if (dukky_event_type_is(type, "close")) {
+		ret = PROTO_NAME(CLOSEEVENT);
+		goto out;
+	}
+	if (dukky_event_type_is(type, "message")) {
+		ret = PROTO_NAME(MESSAGEEVENT);
+		goto out;
+	}
+	if (dukky_event_type_is(type, "error")) {
+		ret = PROTO_NAME(ERROREVENT);
+		goto out;
+	}
+	if (dukky_event_type_is(type, "beforeunload")) {
+		ret = PROTO_NAME(BEFOREUNLOADEVENT);
+		goto out;
+	}
+	if (dukky_event_type_is(type, "pageshow") ||
+	    dukky_event_type_is(type, "pagehide")) {
+		ret = PROTO_NAME(PAGETRANSITIONEVENT);
+		goto out;
+	}
+	if (dukky_event_type_is(type, "hashchange")) {
+		ret = PROTO_NAME(HASHCHANGEEVENT);
+		goto out;
+	}
+	if (dukky_event_type_is(type, "popstate")) {
+		ret = PROTO_NAME(POPSTATEEVENT);
+		goto out;
+	}
+	if (dukky_event_type_is(type, "autocompleteerror")) {
+		ret = PROTO_NAME(AUTOCOMPLETEERROREVENT);
+		goto out;
+	}
+	if (dukky_event_type_is(type, "track")) {
+		ret = PROTO_NAME(TRACKEVENT);
 		goto out;
 	}
 

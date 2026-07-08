@@ -20,8 +20,12 @@ getter KeyboardEvent::key ()
 		return 0;
 	}
 
-	duk_push_lstring(ctx, dom_string_data(key), dom_string_length(key));
-	dom_string_unref(key);
+	if (key == NULL) {
+		duk_push_lstring(ctx, "", 0);
+	} else {
+		duk_push_lstring(ctx, dom_string_data(key), dom_string_length(key));
+		dom_string_unref(key);
+	}
 	return 1;
 %}
 
@@ -35,8 +39,13 @@ getter KeyboardEvent::code ()
 		return 0;
 	}
 
-	duk_push_lstring(ctx, dom_string_data(code), dom_string_length(code));
-	dom_string_unref(code);
+	if (code == NULL) {
+		duk_push_lstring(ctx, "", 0);
+	} else {
+		duk_push_lstring(ctx, dom_string_data(code),
+				dom_string_length(code));
+		dom_string_unref(code);
+	}
 	return 1;
 %}
 
