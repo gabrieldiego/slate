@@ -44,7 +44,7 @@ jobs:
 
     - name: Build and install project libs
       env:
-        REPO_BASE_URI: https://github.com/gabrieldiego
+        REPO_BASE_URI: https://github.com/netsurf-browser
       run: |
           export TARGET_WORKSPACE="$(pwd)/projects"
           source docs/env.sh
