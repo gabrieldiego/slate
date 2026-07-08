@@ -357,7 +357,7 @@ case "$BUILD_TARGET" in
         case "${HOST}" in
             i586-pc-haiku)
                 # tools required to build the browser for haiku (beos)
-                NS_TOOLS="slategenbind"
+                NS_TOOLS=""
                 # libraries required for the haiku target abi
                 NS_FRONTEND_LIBS="libsvgtiny"
                 ;;
@@ -369,25 +369,25 @@ case "$BUILD_TARGET" in
                 ;;
             arm-unknown-riscos|arm-riscos-gnueabi*)
                 # tools required to build the browser for RISC OS
-                NS_TOOLS="slategenbind"
+                NS_TOOLS=""
                 # libraries required for the risc os target abi
                 NS_FRONTEND_LIBS="libsvgtiny librufl libpencil"
                 ;;
             *-atari-mint)
                 # tools required to build the browser for atari
-                NS_TOOLS="slategenbind"
+                NS_TOOLS=""
                 # libraries required for the atari frontend
                 NS_FRONTEND_LIBS=""
                 ;;
             ppc-amigaos)
                 # default tools required to build the browser
-                NS_TOOLS="slategenbind"
+                NS_TOOLS=""
                 # default additional internal libraries
                 NS_FRONTEND_LIBS="libsvgtiny"
                 ;;
             m68k-unknown-amigaos)
                 # default tools required to build the browser
-                NS_TOOLS="slategenbind"
+                NS_TOOLS=""
                 # default additional internal libraries
                 NS_FRONTEND_LIBS="libsvgtiny"
                 ;;
@@ -401,7 +401,7 @@ case "$BUILD_TARGET" in
                 ;;
             *)
                 # default tools required to build the browser
-                NS_TOOLS="slategenbind"
+                NS_TOOLS=""
                 # default additional internal libraries
                 NS_FRONTEND_LIBS="libsvgtiny libnsfb librosprite"
                 ;;

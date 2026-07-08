@@ -1,0 +1,7 @@
+/*
+ * Test with empty IDL file
+ */
+
+binding slatejs_libdom {
+	webidl "empty.idl";
+};

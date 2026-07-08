@@ -10,4 +10,5 @@ source "${ROOT}/scripts/local-env.sh"
 # Build the support repos serially; the browser build itself remains parallel.
 USE_CPUS="-j1"
 ns-make-tools install
+"${ROOT}/scripts/build-slategenbind.sh"
 ns-make-libs install

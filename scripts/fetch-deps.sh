@@ -7,10 +7,6 @@ source "${ROOT}/scripts/local-env.sh"
 
 ns-clone -d -s "$@"
 
-if [ -d "${TARGET_WORKSPACE}/slategenbind/.git" ]; then
-	git -C "${TARGET_WORKSPACE}/slategenbind" remote set-url origin "${SLATEGENBIND_REPO_URI}"
-fi
-
 if [ -d "${TARGET_WORKSPACE}/quickjs/.git" ]; then
 	git -C "${TARGET_WORKSPACE}/quickjs" remote set-url origin "${QUICKJS_REPO_URI}"
 else

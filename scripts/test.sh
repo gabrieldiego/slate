@@ -19,9 +19,10 @@ EOF
 	exit 1
 fi
 
-if [ ! -d "${TARGET_WORKSPACE}" ] || [ ! -x "${BUILD_PREFIX}/bin/slategenbind" ]; then
+if [ ! -d "${TARGET_WORKSPACE}" ]; then
 	"${ROOT}/scripts/fetch-deps.sh"
 	"${ROOT}/scripts/build-libs.sh"
 fi
 
+"${ROOT}/scripts/build-slategenbind.sh"
 make -C "${ROOT}" ${USE_CPUS} test "$@"

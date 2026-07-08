@@ -5,7 +5,6 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 export TARGET_WORKSPACE="${TARGET_WORKSPACE:-${ROOT}/projects}"
 export REPO_BASE_URI="${REPO_BASE_URI:-https://github.com/gabrieldiego}"
-export SLATEGENBIND_REPO_URI="${SLATEGENBIND_REPO_URI:-${REPO_BASE_URI}/slategenbind.git}"
 export QUICKJS_REPO_URI="${QUICKJS_REPO_URI:-https://github.com/bellard/quickjs}"
 export TARGET_TOOLKIT="${TARGET_TOOLKIT:-gtk3}"
 
