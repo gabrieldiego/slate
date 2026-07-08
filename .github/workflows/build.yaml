@@ -63,8 +63,9 @@ jobs:
         TARGET_WORKSPACE: "${{ github.workspace }}/projects" # Same as "$(pwd)/projects"
       run: |
           source docs/env.sh
-          slate-clone -d -s -b ${GITHUB_REF_NAME}
+          ./scripts/fetch-deps.sh -b ${GITHUB_REF_NAME}
           slate-make-tools install
+          ./scripts/build-slategenbind.sh
           slate-make-libs install
 
     - name: Disable -Werror
@@ -249,9 +250,10 @@ jobs:
         echo "USE_CPUS=$USE_CPUS"
 
         echo "Cloning libs..."
-        slate-clone -d -s -b ${GITHUB_REF_NAME}
+        ./scripts/fetch-deps.sh -b ${GITHUB_REF_NAME}
         echo "Building and installing tools..."
         slate-make-tools install
+        ./scripts/build-slategenbind.sh
         echo "Building and installing libs..."
         slate-make-libs install
 

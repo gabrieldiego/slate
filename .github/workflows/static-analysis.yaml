@@ -2,6 +2,10 @@ name: "Static Analysis"
 
 on: [push]
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   codeql:
     name: codeql
@@ -48,8 +52,9 @@ jobs:
       run: |
           export TARGET_WORKSPACE="$(pwd)/projects"
           source docs/env.sh
-          slate-clone -d -s -b ${GITHUB_REF_NAME}
+          ./scripts/fetch-deps.sh -b ${GITHUB_REF_NAME}
           slate-make-tools install
+          ./scripts/build-slategenbind.sh
           slate-make-libs install
 
     - name: Initialize CodeQL

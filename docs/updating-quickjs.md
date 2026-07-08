@@ -1,13 +1,18 @@
 Updating QuickJS
 ================
 
-Slate embeds QuickJS from the `projects/quickjs` dependency checkout.
+Slate embeds QuickJS from the `projects/quickjs` dependency checkout. The
+checkout is pinned by `QUICKJS_REF` in `scripts/local-env.sh` so CI and local
+benchmark runs do not drift with upstream `HEAD`.
 
 1.  Update the QuickJS checkout to the revision Slate should consume.
 
-2.  Rebuild the local dependencies and the `jotter` target.
+2.  Update the default `QUICKJS_REF` in `scripts/local-env.sh` to the selected
+    commit.
 
-3.  Run the benchmark report in memory and coverage mode so the JavaScript
+3.  Rebuild the local dependencies and the `jotter` target.
+
+4.  Run the benchmark report in memory and coverage mode so the JavaScript
     engine footprint and exercised source lines can be compared against the
     previous baseline.
 
