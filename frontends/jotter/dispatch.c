@@ -25,20 +25,20 @@
 #include "utils/utils.h"
 #include "utils/ring.h"
 
-#include "monkey/dispatch.h"
+#include "jotter/dispatch.h"
 
 typedef struct cmdhandler {
 	struct cmdhandler *r_next, *r_prev;
 	char *cmd;
 	handle_command_fn fn;
-} monkey_cmdhandler_t;
+} jotter_cmdhandler_t;
 
-static monkey_cmdhandler_t *handler_ring = NULL;
+static jotter_cmdhandler_t *handler_ring = NULL;
 
 slateerror
-monkey_register_handler(const char *cmd, handle_command_fn fn)
+jotter_register_handler(const char *cmd, handle_command_fn fn)
 {
-	monkey_cmdhandler_t *ret = calloc(1, sizeof(*ret));
+	jotter_cmdhandler_t *ret = calloc(1, sizeof(*ret));
 	if (ret == NULL) {
 		NSLOG(netsurf, INFO, "Unable to allocate handler");
 		return SLATEERROR_NOMEM;
@@ -50,10 +50,10 @@ monkey_register_handler(const char *cmd, handle_command_fn fn)
 }
 
 void
-monkey_free_handlers(void)
+jotter_free_handlers(void)
 {
 	while (handler_ring != NULL) {
-		monkey_cmdhandler_t *handler = handler_ring;
+		jotter_cmdhandler_t *handler = handler_ring;
 		RING_REMOVE(handler_ring, handler);
 		free(handler->cmd);
 		free(handler);
@@ -61,7 +61,7 @@ monkey_free_handlers(void)
 }
 
 void
-monkey_process_command(void)
+jotter_process_command(void)
 {
 	char buffer[PATH_MAX];
 	int argc = 0;
@@ -101,7 +101,7 @@ monkey_process_command(void)
 		}
 	}
   
-	RING_ITERATE_START(monkey_cmdhandler_t, handler_ring, handler) {
+	RING_ITERATE_START(jotter_cmdhandler_t, handler_ring, handler) {
 		if (strcmp(argv[0], handler->cmd) == 0) {
 			fn = handler->fn;
 			RING_ITERATE_STOP(handler_ring, handler);

@@ -15,10 +15,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """
-Monkey Farmer
+Jotter Farmer
 
-The monkey farmer is a wrapper around `jotter` which can be used to simplify
-access to the monkey behaviours and ultimately to write useful tests in an
+The jotter farmer is a wrapper around `jotter` which can be used to simplify
+access to the jotter behaviours and ultimately to write useful tests in an
 expressive but not overcomplicated DSLish way.  Tests are, ultimately, still
 Python code.
 
@@ -68,57 +68,57 @@ class StderrEcho:
                 sys.stderr.write("{}\n".format(line))
 
 
-class MonkeyFarmer:
+class JotterFarmer:
 
     # pylint: disable=locally-disabled, too-many-instance-attributes
 
-    def __init__(self, monkey_cmd, monkey_env, online, quiet=False, *, wrapper=None):
-        (mine, monkeys) = socket.socketpair()
-        (mine2, monkeyserr) = socket.socketpair()
+    def __init__(self, jotter_cmd, jotter_env, online, quiet=False, *, wrapper=None):
+        (mine, jotters) = socket.socketpair()
+        (mine2, jotterserr) = socket.socketpair()
 
         self.sock = mine
         self.sock.setblocking(False)
         self._errwrapper = StderrEcho(mine2)
         self.selector = selectors.DefaultSelector()
-        self._monkey_events = selectors.EVENT_READ
+        self._jotter_events = selectors.EVENT_READ
 
         if wrapper is not None:
             new_cmd = list(wrapper)
-            new_cmd.extend(monkey_cmd)
-            monkey_cmd = new_cmd
+            new_cmd.extend(jotter_cmd)
+            jotter_cmd = new_cmd
 
-        self.monkey = subprocess.Popen(
-            monkey_cmd,
-            env=monkey_env,
-            stdin=monkeys,
-            stdout=monkeys,
-            stderr=monkeyserr,
+        self.jotter = subprocess.Popen(
+            jotter_cmd,
+            env=jotter_env,
+            stdin=jotters,
+            stdout=jotters,
+            stderr=jotterserr,
             close_fds=True)
 
-        monkeys.close()
-        monkeyserr.close()
-        self.selector.register(self.sock, self._monkey_events, "monkey")
+        jotters.close()
+        jotterserr.close()
+        self.selector.register(self.sock, self._jotter_events, "jotter")
         self.selector.register(self._errwrapper.sock, selectors.EVENT_READ, "stderr")
 
         self.buffer = b""
         self.incoming = b""
         self.lines = []
         self.scheduled = []
-        self.deadmonkey = False
+        self.deadjotter = False
         self.online = online
         self.quiet = quiet
         self.discussion = []
         self.maybe_slower = wrapper is not None
 
-    def _set_monkey_events(self):
-        if self.deadmonkey:
+    def _set_jotter_events(self):
+        if self.deadjotter:
             return
         events = selectors.EVENT_READ
         if len(self.buffer) > 0:
             events |= selectors.EVENT_WRITE
-        if events != self._monkey_events:
-            self._monkey_events = events
-            self.selector.modify(self.sock, events, "monkey")
+        if events != self._jotter_events:
+            self._jotter_events = events
+            self.selector.modify(self.sock, events, "jotter")
 
     def _close_stderr(self):
         if self._errwrapper.sock.fileno() == -1:
@@ -129,23 +129,23 @@ class MonkeyFarmer:
             pass
         self._errwrapper.close()
 
-    def _monkey_exited(self):
-        if self.deadmonkey:
+    def _jotter_exited(self):
+        if self.deadjotter:
             return
-        self.deadmonkey = True
+        self.deadjotter = True
         try:
             self.selector.unregister(self.sock)
         except (KeyError, ValueError):
             pass
         self.sock.close()
         # ensure the child process is finished and report the exit
-        if self.monkey.poll() is None:
-            self.monkey.terminate()
-            self.monkey.wait()
-        print("Handling an exit {}".format(self.monkey.returncode))
+        if self.jotter.poll() is None:
+            self.jotter.terminate()
+            self.jotter.wait()
+        print("Handling an exit {}".format(self.jotter.returncode))
         print("The following are present in the queue: {}".format(self.lines))
         self.lines.append("GENERIC EXIT {}".format(
-            self.monkey.returncode).encode('utf-8'))
+            self.jotter.returncode).encode('utf-8'))
         print("The queue is now: {}".format(self.lines))
         self._close_stderr()
         self.selector.close()
@@ -154,7 +154,7 @@ class MonkeyFarmer:
         try:
             got = self.sock.recv(8192)
             if not got:
-                self._monkey_exited()
+                self._jotter_exited()
                 return
         except BlockingIOError:
             return
@@ -167,31 +167,31 @@ class MonkeyFarmer:
 
     def handle_write(self):
         if len(self.buffer) == 0:
-            self._set_monkey_events()
+            self._set_jotter_events()
             return
         try:
             sent = self.sock.send(self.buffer)
         except BlockingIOError:
             return
         except BrokenPipeError:
-            self._monkey_exited()
+            self._jotter_exited()
             return
         if sent == 0:
-            self._monkey_exited()
+            self._jotter_exited()
             return
         self.buffer = self.buffer[sent:]
-        self._set_monkey_events()
+        self._set_jotter_events()
 
-    def tell_monkey(self, *args):
+    def tell_jotter(self, *args):
         cmd = (" ".join(args))
         if not self.quiet:
             print(">>> {}".format(cmd))
         self.discussion.append((">", cmd))
         cmd = cmd + "\n"
         self.buffer += cmd.encode('utf-8')
-        self._set_monkey_events()
+        self._set_jotter_events()
 
-    def monkey_says(self, line):
+    def jotter_says(self, line):
         try:
             line = line.decode('utf-8')
         except UnicodeDecodeError:
@@ -214,10 +214,10 @@ class MonkeyFarmer:
 
     def _handle_events(self, events):
         for key, mask in events:
-            if key.data == "monkey":
+            if key.data == "jotter":
                 if mask & selectors.EVENT_READ:
                     self.handle_read()
-                if not self.deadmonkey and mask & selectors.EVENT_WRITE:
+                if not self.deadjotter and mask & selectors.EVENT_WRITE:
                     self.handle_write()
             elif key.data == "stderr":
                 if mask & selectors.EVENT_READ:
@@ -227,8 +227,8 @@ class MonkeyFarmer:
 
     def _deliver_pending_lines(self, once):
         while len(self.lines) > 0:
-            self.monkey_says(self.lines.pop(0))
-            if once or self.deadmonkey:
+            self.jotter_says(self.lines.pop(0))
+            if once or self.deadjotter:
                 return True
         return False
 
@@ -236,7 +236,7 @@ class MonkeyFarmer:
         if self._deliver_pending_lines(once):
             return
         while True:
-            if self.deadmonkey:
+            if self.deadjotter:
                 return
             now = time.time()
             while len(self.scheduled) > 0 and now >= self.scheduled[0][0]:
@@ -251,7 +251,7 @@ class MonkeyFarmer:
             try:
                 events = self.selector.select(timeout)
             except OSError:
-                if self.deadmonkey:
+                if self.deadjotter:
                     return
                 raise
             self._handle_events(events)
@@ -263,11 +263,11 @@ class Browser:
 
     # pylint: disable=locally-disabled, too-many-instance-attributes, dangerous-default-value, invalid-name
 
-    def __init__(self, monkey_cmd=["./jotter"], monkey_env=None, quiet=False, *, wrapper=None):
-        self.farmer = MonkeyFarmer(
-            monkey_cmd=monkey_cmd,
-            monkey_env=monkey_env,
-            online=self.on_monkey_line,
+    def __init__(self, jotter_cmd=["./jotter"], jotter_env=None, quiet=False, *, wrapper=None):
+        self.farmer = JotterFarmer(
+            jotter_cmd=jotter_cmd,
+            jotter_env=jotter_env,
+            online=self.on_jotter_line,
             quiet=quiet,
             wrapper=wrapper)
         self.windows = {}
@@ -289,16 +289,16 @@ class Browser:
 
     def pass_options(self, *opts):
         if len(opts) > 0:
-            self.farmer.tell_monkey("OPTIONS " + (" ".join(['--' + opt for opt in opts])))
+            self.farmer.tell_jotter("OPTIONS " + (" ".join(['--' + opt for opt in opts])))
 
-    def on_monkey_line(self, line):
+    def on_jotter_line(self, line):
         parts = line.split(" ")
         handler = getattr(self, "handle_" + parts[0], None)
         if handler is not None:
             handler(*parts[1:])
 
     def quit(self):
-        self.farmer.tell_monkey("QUIT")
+        self.farmer.tell_jotter("QUIT")
 
     def quit_and_wait(self):
         self.quit()
@@ -314,7 +314,7 @@ class Browser:
             self.launchurl = args[1]
         elif what == 'EXIT':
             if not self.stopped:
-                print("Unexpected exit of monkey process with code {}".format(args[0]))
+                print("Unexpected exit of jotter process with code {}".format(args[0]))
             assert self.stopped
         else:
             pass
@@ -349,9 +349,9 @@ class Browser:
 
     def new_window(self, url=None):
         if url is None:
-            self.farmer.tell_monkey("WINDOW NEW")
+            self.farmer.tell_jotter("WINDOW NEW")
         else:
-            self.farmer.tell_monkey("WINDOW NEW %s" % url)
+            self.farmer.tell_jotter("WINDOW NEW %s" % url)
         wins_known = set(self.windows.keys())
         while len(set(self.windows.keys()).difference(wins_known)) == 0:
             self.farmer.loop(once=True)
@@ -399,13 +399,13 @@ class LoginWindow:
         assert self.alive
         if username is None:
             username = self.username
-        self.browser.farmer.tell_monkey("LOGIN USERNAME {} {}".format(self.winid, username))
+        self.browser.farmer.tell_jotter("LOGIN USERNAME {} {}".format(self.winid, username))
 
     def send_password(self, password=None):
         assert self.alive
         if password is None:
             password = self.password
-        self.browser.farmer.tell_monkey("LOGIN PASSWORD {} {}".format(self.winid, password))
+        self.browser.farmer.tell_jotter("LOGIN PASSWORD {} {}".format(self.winid, password))
 
     def _wait_dead(self):
         while self.alive:
@@ -413,12 +413,12 @@ class LoginWindow:
 
     def go(self):
         assert self.alive
-        self.browser.farmer.tell_monkey("LOGIN GO {}".format(self.winid))
+        self.browser.farmer.tell_jotter("LOGIN GO {}".format(self.winid))
         self._wait_dead()
 
     def destroy(self):
         assert self.alive
-        self.browser.farmer.tell_monkey("LOGIN DESTROY {}".format(self.winid))
+        self.browser.farmer.tell_jotter("LOGIN DESTROY {}".format(self.winid))
         self._wait_dead()
 
 
@@ -464,7 +464,7 @@ class BrowserWindow:
         self.page_info_state = "UNKNOWN"
 
     def kill(self):
-        self.browser.farmer.tell_monkey("WINDOW DESTROY %s" % self.winid)
+        self.browser.farmer.tell_jotter("WINDOW DESTROY %s" % self.winid)
 
     def wait_until_dead(self, timeout=1):
         now = time.time()
@@ -479,55 +479,55 @@ class BrowserWindow:
 
     def go(self, url, referer=None):
         if referer is None:
-            self.browser.farmer.tell_monkey("WINDOW GO %s %s" % (
+            self.browser.farmer.tell_jotter("WINDOW GO %s %s" % (
                 self.winid, url))
         else:
-            self.browser.farmer.tell_monkey("WINDOW GO %s %s %s" % (
+            self.browser.farmer.tell_jotter("WINDOW GO %s %s %s" % (
                 self.winid, url, referer))
         self.wait_start_loading()
 
     def stop(self):
-        self.browser.farmer.tell_monkey("WINDOW STOP %s" % (self.winid))
+        self.browser.farmer.tell_jotter("WINDOW STOP %s" % (self.winid))
 
     def reload(self, all=False):
         all = " ALL" if all else ""
-        self.browser.farmer.tell_monkey("WINDOW RELOAD %s%s" % (self.winid, all))
+        self.browser.farmer.tell_jotter("WINDOW RELOAD %s%s" % (self.winid, all))
         self.wait_start_loading()
 
     def click(self, x, y, button="LEFT", kind="SINGLE"):
-        self.browser.farmer.tell_monkey("WINDOW CLICK WIN %s X %s Y %s BUTTON %s KIND %s" % (self.winid, x, y, button, kind))
+        self.browser.farmer.tell_jotter("WINDOW CLICK WIN %s X %s Y %s BUTTON %s KIND %s" % (self.winid, x, y, button, kind))
 
     def key(self, key=None, value=None, text=None):
         assert (key is not None) + (value is not None) + (text is not None) == 1
         if key is not None:
             key = str(key).upper().replace("-", "_")
-            self.browser.farmer.tell_monkey("WINDOW KEY WIN %s NAME %s" % (self.winid, key))
+            self.browser.farmer.tell_jotter("WINDOW KEY WIN %s NAME %s" % (self.winid, key))
         elif value is not None:
-            self.browser.farmer.tell_monkey("WINDOW KEY WIN %s VALUE %s" % (self.winid, value))
+            self.browser.farmer.tell_jotter("WINDOW KEY WIN %s VALUE %s" % (self.winid, value))
         else:
             text = str(text)
-            assert "\n" not in text, "Monkey key text cannot contain newlines"
-            self.browser.farmer.tell_monkey("WINDOW KEY WIN %s TEXT %s" % (self.winid, text))
+            assert "\n" not in text, "Jotter key text cannot contain newlines"
+            self.browser.farmer.tell_jotter("WINDOW KEY WIN %s TEXT %s" % (self.winid, text))
 
     def mouse_track(self, x, y, state="HOVER"):
         if isinstance(state, (list, tuple)):
             state = "+".join(str(part).upper().replace("-", "_") for part in state)
         else:
             state = str(state).upper().replace("-", "_")
-        self.browser.farmer.tell_monkey("WINDOW MOUSE WIN %s X %s Y %s STATE %s" % (self.winid, x, y, state))
+        self.browser.farmer.tell_jotter("WINDOW MOUSE WIN %s X %s Y %s STATE %s" % (self.winid, x, y, state))
 
     def mouse_click(self, x, y, state="CLICK_1"):
         if isinstance(state, (list, tuple)):
             state = "+".join(str(part).upper().replace("-", "_") for part in state)
         else:
             state = str(state).upper().replace("-", "_")
-        self.browser.farmer.tell_monkey("WINDOW MOUSECLICK WIN %s X %s Y %s STATE %s" % (self.winid, x, y, state))
+        self.browser.farmer.tell_jotter("WINDOW MOUSECLICK WIN %s X %s Y %s STATE %s" % (self.winid, x, y, state))
 
     def scroll(self, x, y, dx=0, dy=0):
-        self.browser.farmer.tell_monkey("WINDOW SCROLL WIN %s X %s Y %s DX %s DY %s" % (self.winid, x, y, dx, dy))
+        self.browser.farmer.tell_jotter("WINDOW SCROLL WIN %s X %s Y %s DX %s DY %s" % (self.winid, x, y, dx, dy))
 
     def js_exec(self, src):
-        self.browser.farmer.tell_monkey("WINDOW EXEC WIN %s %s" % (self.winid, src))
+        self.browser.farmer.tell_jotter("WINDOW EXEC WIN %s %s" % (self.winid, src))
 
     def handle(self, action, *args):
         handler = getattr(self, "handle_window_" + action, None)
@@ -630,9 +630,9 @@ class BrowserWindow:
 
     def redraw(self, coords=None):
         if coords is None:
-            self.browser.farmer.tell_monkey("WINDOW REDRAW %s" % self.winid)
+            self.browser.farmer.tell_jotter("WINDOW REDRAW %s" % self.winid)
         else:
-            self.browser.farmer.tell_monkey("WINDOW REDRAW %s %s" % (
+            self.browser.farmer.tell_jotter("WINDOW REDRAW %s %s" % (
                 self.winid, (" ".join(coords))))
         while not self.plotting:
             self.browser.farmer.loop(once=True)

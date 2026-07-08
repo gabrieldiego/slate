@@ -10,7 +10,7 @@
 CWARNFLAGS += -Werror
 
 CFLAGS += -std=c99 \
-	  -Dmonkey -Djotter -g \
+	  -Djotter -g \
 	  -DJOTTER_RESPATH=\"$(SLATE_JOTTER_RESOURCES)\"
 
 LDFLAGS += -lm
@@ -23,7 +23,7 @@ LDFLAGS += -lm
 JOTTER_RESOURCES_DIR := $(FRONTEND_RESOURCES_DIR)
 
 # The filter and target for split messages
-MESSAGES_FILTER=monkey
+MESSAGES_FILTER=jotter
 MESSAGES_TARGET=$(JOTTER_RESOURCES_DIR)
 
 # ---------------------------------------------------------------------------
@@ -64,10 +64,10 @@ EXETARGET := jotter
 # Install target
 # ----------------------------------------------------------------------------
 
-install-monkey:
+install-jotter:
 
 # ----------------------------------------------------------------------------
 # Package target
 # ----------------------------------------------------------------------------
 
-package-monkey:
+package-jotter:

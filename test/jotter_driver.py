@@ -17,7 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """
-runs tests in monkey as defined in a yaml file
+runs tests in jotter as defined in a yaml file
 """
 
 # pylint: disable=locally-disabled, missing-docstring
@@ -28,7 +28,7 @@ import getopt
 import time
 import yaml
 
-from monkeyfarmer import Browser
+from jotterfarmer import Browser
 
 
 class DriverBrowser(Browser):
@@ -96,7 +96,7 @@ def parse_argv(argv):
 
     # pylint: disable=locally-disabled, unused-variable
 
-    path_monkey = ''
+    path_jotter = ''
     path_test = ''
     wrapper = None
     try:
@@ -109,7 +109,7 @@ def parse_argv(argv):
             print_usage()
             sys.exit()
         elif opt in ("-m", "--jotter"):
-            path_monkey = arg
+            path_jotter = arg
         elif opt in ("-t", "--test"):
             path_test = arg
         elif opt in ("-w", "--wrapper"):
@@ -117,14 +117,14 @@ def parse_argv(argv):
                 wrapper = []
             wrapper.extend(arg.split())
 
-    if path_monkey == '':
+    if path_jotter == '':
         print_usage()
         sys.exit()
     if path_test == '':
         print_usage()
         sys.exit()
 
-    return path_monkey, path_test, wrapper
+    return path_jotter, path_test, wrapper
 
 
 def load_test_plan(path):
@@ -200,23 +200,23 @@ def run_test_step_action_launch(ctx, step):
     assert ctx.get('windows') is None
 
     # build command line switches list
-    monkey_cmd = [ctx["monkey"]]
+    jotter_cmd = [ctx["jotter"]]
     for option in step.get('launch-options', []):
-        monkey_cmd.append("--{}".format(option))
-    print(get_indent(ctx) + "        " + "Command line: " + repr(monkey_cmd))
+        jotter_cmd.append("--{}".format(option))
+    print(get_indent(ctx) + "        " + "Command line: " + repr(jotter_cmd))
 
     # build command environment
-    monkey_env = os.environ.copy()
+    jotter_env = os.environ.copy()
     for envkey, envvalue in step.get('environment', {}).items():
-        monkey_env[envkey] = envvalue
+        jotter_env[envkey] = envvalue
         print(get_indent(ctx) + "        " + envkey + "=" + envvalue)
     if 'language' in step.keys():
-        monkey_env['LANGUAGE'] = step['language']
+        jotter_env['LANGUAGE'] = step['language']
 
     # create browser object
     ctx['browser'] = DriverBrowser(
-        monkey_cmd=monkey_cmd,
-        monkey_env=monkey_env,
+        jotter_cmd=jotter_cmd,
+        jotter_env=jotter_env,
         quiet=True,
         wrapper=ctx.get("wrapper"))
     assert_browser(ctx)
@@ -736,18 +736,18 @@ def run_test_plan(ctx, plan):
     walk_test_plan(ctx, plan)
 
 
-def run_preloaded_test(path_monkey, plan):
+def run_preloaded_test(path_jotter, plan):
     ctx = {
-        "monkey": path_monkey,
+        "jotter": path_jotter,
     }
     run_test_plan(ctx, plan)
 
 
 def main(argv):
     ctx = {}
-    path_monkey, path_test, wrapper = parse_argv(argv)
+    path_jotter, path_test, wrapper = parse_argv(argv)
     plan = load_test_plan(path_test)
-    ctx["monkey"] = path_monkey
+    ctx["jotter"] = path_jotter
     ctx["wrapper"] = wrapper
     run_test_plan(ctx, plan)
 

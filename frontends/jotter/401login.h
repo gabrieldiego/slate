@@ -16,20 +16,24 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SLATE_JOTTER_OUTPUT_H
-#define SLATE_JOTTER_OUTPUT_H
+#ifndef SLATE_JOTTER_401LOGIN_H
+#define SLATE_JOTTER_401LOGIN_H
 
-enum monkey_output_type {
-	MOUT_DIE,
-	MOUT_ERROR,
-	MOUT_WARNING,
-	MOUT_GENERIC,
-	MOUT_WINDOW,
-	MOUT_LOGIN,
-	MOUT_DOWNLOAD,
-	MOUT_PLOT,
-};
+#include "utils/errors.h"
 
-int moutf(enum monkey_output_type mout_type, const char *fmt, ...);
+struct slateurl;
+
+slateerror gui_401login_open(struct slateurl *url,
+			  const char *realm,
+			  const char *username,
+			  const char *password,
+			  slateerror (*cb)(struct slateurl *url,
+					const char *realm,
+					const char *username,
+					const char *password,
+					void *pw),
+			  void *cbpw);
+
+void jotter_login_handle_command(int argc, char **argv);
 
 #endif

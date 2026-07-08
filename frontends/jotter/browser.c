@@ -33,23 +33,23 @@
 #include "slate/browser_window.h"
 #include "slate/plotters.h"
 
-#include "monkey/output.h"
-#include "monkey/browser.h"
-#include "monkey/plot.h"
+#include "jotter/output.h"
+#include "jotter/browser.h"
+#include "jotter/plot.h"
 
 static uint32_t win_ctr = 0;
 
 static struct gui_window *gw_ring = NULL;
 
-/* exported function documented in monkey/browser.h */
-slateerror monkey_warn_user(const char *warning, const char *detail)
+/* exported function documented in jotter/browser.h */
+slateerror jotter_warn_user(const char *warning, const char *detail)
 {
 	moutf(MOUT_WARNING, "%s %s", warning, detail);
 	return SLATEERROR_OK;
 }
 
 struct gui_window *
-monkey_find_window_by_num(uint32_t win_num)
+jotter_find_window_by_num(uint32_t win_num)
 {
 	struct gui_window *ret = NULL;
 
@@ -64,7 +64,7 @@ monkey_find_window_by_num(uint32_t win_num)
 }
 
 void
-monkey_kill_browser_windows(void)
+jotter_kill_browser_windows(void)
 {
 	while (gw_ring != NULL) {
 		browser_window_destroy(gw_ring->bw);
@@ -115,7 +115,7 @@ gui_window_set_title(struct gui_window *g, const char *title)
 }
 
 /**
- * Find the current dimensions of a monkey browser window content area.
+ * Find the current dimensions of a jotter browser window content area.
  *
  * \param g The gui window to measure content area of.
  * \param width receives width of window
@@ -161,7 +161,7 @@ gui_window_stop_throbber(struct gui_window *g)
 
 
 /**
- * Set the scroll position of a monkey browser window.
+ * Set the scroll position of a jotter browser window.
  *
  * Scrolls the viewport to ensure the specified rectangle of the
  *   content is shown.
@@ -183,14 +183,14 @@ gui_window_set_scroll(struct gui_window *gw, const struct rect *rect)
 
 
 /**
- * Invalidates an area of a monkey browser window
+ * Invalidates an area of a jotter browser window
  *
  * \param gw gui_window
  * \param rect area to redraw or NULL for the entire window area
  * \return SLATEERROR_OK on success or appropriate error code
  */
 static slateerror
-monkey_window_invalidate_area(struct gui_window *gw, const struct rect *rect)
+jotter_window_invalidate_area(struct gui_window *gw, const struct rect *rect)
 {
 	if (rect != NULL) {
 		moutf(MOUT_WINDOW,
@@ -450,7 +450,7 @@ gui_window_report_page_info(struct gui_window *g)
 /**** Handlers ****/
 
 static bool
-monkey_window_parse_uint32(const char *value, uint32_t *out)
+jotter_window_parse_uint32(const char *value, uint32_t *out)
 {
 	char *end = NULL;
 	unsigned long parsed;
@@ -469,7 +469,7 @@ monkey_window_parse_uint32(const char *value, uint32_t *out)
 }
 
 static bool
-monkey_window_key_from_name(const char *name, uint32_t *key)
+jotter_window_key_from_name(const char *name, uint32_t *key)
 {
 	struct key_name {
 		const char *name;
@@ -519,7 +519,7 @@ monkey_window_key_from_name(const char *name, uint32_t *key)
 		{ "SPACE", ' ' },
 	};
 
-	if (monkey_window_parse_uint32(name, key)) {
+	if (jotter_window_parse_uint32(name, key)) {
 		return true;
 	}
 
@@ -539,7 +539,7 @@ monkey_window_key_from_name(const char *name, uint32_t *key)
 }
 
 static bool
-monkey_window_mouse_state_from_name(const char *name, browser_mouse_state *state)
+jotter_window_mouse_state_from_name(const char *name, browser_mouse_state *state)
 {
 	struct mouse_state_name {
 		const char *name;
@@ -572,7 +572,7 @@ monkey_window_mouse_state_from_name(const char *name, browser_mouse_state *state
 	};
 	uint32_t numeric;
 
-	if (monkey_window_parse_uint32(name, &numeric)) {
+	if (jotter_window_parse_uint32(name, &numeric)) {
 		*state = (browser_mouse_state)numeric;
 		return true;
 	}
@@ -588,7 +588,7 @@ monkey_window_mouse_state_from_name(const char *name, browser_mouse_state *state
 }
 
 static bool
-monkey_window_parse_mouse_state(const char *value, browser_mouse_state *state)
+jotter_window_parse_mouse_state(const char *value, browser_mouse_state *state)
 {
 	char buffer[128];
 	char *part;
@@ -602,7 +602,7 @@ monkey_window_parse_mouse_state(const char *value, browser_mouse_state *state)
 	for (part = strtok(buffer, "+,"); part != NULL; part = strtok(NULL, "+,")) {
 		browser_mouse_state part_state;
 
-		if (!monkey_window_mouse_state_from_name(part, &part_state)) {
+		if (!jotter_window_mouse_state_from_name(part, &part_state)) {
 			return false;
 		}
 
@@ -613,7 +613,7 @@ monkey_window_parse_mouse_state(const char *value, browser_mouse_state *state)
 }
 
 static void
-monkey_window_handle_new(int argc, char **argv)
+jotter_window_handle_new(int argc, char **argv)
 {
 	slateurl *url = NULL;
 	slateerror error = SLATEERROR_OK;
@@ -635,17 +635,17 @@ monkey_window_handle_new(int argc, char **argv)
 		}
 	}
 	if (error != SLATEERROR_OK) {
-		monkey_warn_user(messages_get_errorcode(error), 0);
+		jotter_warn_user(messages_get_errorcode(error), 0);
 	}
 }
 
 static void
-monkey_window_handle_destroy(int argc, char **argv)
+jotter_window_handle_destroy(int argc, char **argv)
 {
 	struct gui_window *gw;
 	uint32_t nr = atoi((argc > 2) ? argv[2] : "-1");
 
-	gw = monkey_find_window_by_num(nr);
+	gw = jotter_find_window_by_num(nr);
 
 	if (gw == NULL) {
 		moutf(MOUT_ERROR, "WINDOW NUM BAD");
@@ -655,7 +655,7 @@ monkey_window_handle_destroy(int argc, char **argv)
 }
 
 static void
-monkey_window_handle_go(int argc, char **argv)
+jotter_window_handle_go(int argc, char **argv)
 {
 	struct gui_window *gw;
 	slateurl *url;
@@ -667,7 +667,7 @@ monkey_window_handle_go(int argc, char **argv)
 		return;
 	}
 
-	gw = monkey_find_window_by_num(atoi(argv[2]));
+	gw = jotter_find_window_by_num(atoi(argv[2]));
 
 	if (gw == NULL) {
 		moutf(MOUT_ERROR, "WINDOW NUM BAD");
@@ -696,7 +696,7 @@ monkey_window_handle_go(int argc, char **argv)
 	}
 
 	if (error != SLATEERROR_OK) {
-		monkey_warn_user(messages_get_errorcode(error), 0);
+		jotter_warn_user(messages_get_errorcode(error), 0);
 	}
 }
 
@@ -704,7 +704,7 @@ monkey_window_handle_go(int argc, char **argv)
  * handle WINDOW STOP command
  */
 static void
-monkey_window_handle_stop(int argc, char **argv)
+jotter_window_handle_stop(int argc, char **argv)
 {
 	struct gui_window *gw;
 	if (argc != 3) {
@@ -712,7 +712,7 @@ monkey_window_handle_stop(int argc, char **argv)
 		return;
 	}
 
-	gw = monkey_find_window_by_num(atoi(argv[2]));
+	gw = jotter_find_window_by_num(atoi(argv[2]));
 
 	if (gw == NULL) {
 		moutf(MOUT_ERROR, "WINDOW NUM BAD");
@@ -723,14 +723,14 @@ monkey_window_handle_stop(int argc, char **argv)
 
 
 static void
-monkey_window_handle_redraw(int argc, char **argv)
+jotter_window_handle_redraw(int argc, char **argv)
 {
 	struct gui_window *gw;
 	struct rect clip;
 	struct redraw_context ctx = {
 		.interactive = true,
 		.background_images = true,
-		.plot = monkey_plotters
+		.plot = jotter_plotters
 	};
 
 	if (argc != 3 && argc != 7) {
@@ -738,7 +738,7 @@ monkey_window_handle_redraw(int argc, char **argv)
 		return;
 	}
 
-	gw = monkey_find_window_by_num(atoi(argv[2]));
+	gw = jotter_find_window_by_num(atoi(argv[2]));
 
 	if (gw == NULL) {
 		moutf(MOUT_ERROR, "WINDOW NUM BAD");
@@ -764,7 +764,7 @@ monkey_window_handle_redraw(int argc, char **argv)
 }
 
 static void
-monkey_window_handle_reload(int argc, char **argv)
+jotter_window_handle_reload(int argc, char **argv)
 {
 	struct gui_window *gw;
 	if (argc != 3 && argc != 4) {
@@ -772,7 +772,7 @@ monkey_window_handle_reload(int argc, char **argv)
 		return;
 	}
 
-	gw = monkey_find_window_by_num(atoi(argv[2]));
+	gw = jotter_find_window_by_num(atoi(argv[2]));
 
 	if (gw == NULL) {
 		moutf(MOUT_ERROR, "WINDOW NUM BAD");
@@ -782,18 +782,18 @@ monkey_window_handle_reload(int argc, char **argv)
 }
 
 static void
-monkey_window_handle_exec(int argc, char **argv)
+jotter_window_handle_exec(int argc, char **argv)
 {
 	struct gui_window *gw;
 	uint32_t win_num;
 
 	if ((argc < 5) || (strcmp(argv[2], "WIN") != 0) ||
-	    !monkey_window_parse_uint32(argv[3], &win_num)) {
+	    !jotter_window_parse_uint32(argv[3], &win_num)) {
 		moutf(MOUT_ERROR, "WINDOW EXEC ARGS BAD\n");
 		return;
 	}
 
-	gw = monkey_find_window_by_num(win_num);
+	gw = jotter_find_window_by_num(win_num);
 
 	if (gw == NULL) {
 		moutf(MOUT_ERROR, "WINDOW NUM BAD");
@@ -831,7 +831,7 @@ monkey_window_handle_exec(int argc, char **argv)
 }
 
 static void
-monkey_window_handle_key(int argc, char **argv)
+jotter_window_handle_key(int argc, char **argv)
 {
 	struct gui_window *gw;
 	uint32_t win_num;
@@ -840,26 +840,26 @@ monkey_window_handle_key(int argc, char **argv)
 	/* `WINDOW KEY WIN` _%id%_ (`NAME` _%name%_ | `VALUE` _%num%_ | `TEXT` _%str...%_) */
 	/*  0      1   2    3        4       5                                      */
 	if ((argc < 6) || (strcmp(argv[2], "WIN") != 0) ||
-	    !monkey_window_parse_uint32(argv[3], &win_num)) {
+	    !jotter_window_parse_uint32(argv[3], &win_num)) {
 		moutf(MOUT_ERROR, "WINDOW KEY ARGS BAD\n");
 		return;
 	}
 
-	gw = monkey_find_window_by_num(win_num);
+	gw = jotter_find_window_by_num(win_num);
 	if (gw == NULL) {
 		moutf(MOUT_ERROR, "WINDOW NUM BAD");
 		return;
 	}
 
 	if (strcmp(argv[4], "NAME") == 0) {
-		if ((argc != 6) || !monkey_window_key_from_name(argv[5], &key)) {
+		if ((argc != 6) || !jotter_window_key_from_name(argv[5], &key)) {
 			moutf(MOUT_ERROR, "WINDOW KEY NAME BAD\n");
 			return;
 		}
 		moutf(MOUT_WINDOW, "KEY WIN %u RET %s", win_num,
 		      browser_window_key_press(gw->bw, key) ? "TRUE" : "FALSE");
 	} else if (strcmp(argv[4], "VALUE") == 0) {
-		if ((argc != 6) || !monkey_window_parse_uint32(argv[5], &key)) {
+		if ((argc != 6) || !jotter_window_parse_uint32(argv[5], &key)) {
 			moutf(MOUT_ERROR, "WINDOW KEY VALUE BAD\n");
 			return;
 		}
@@ -886,7 +886,7 @@ monkey_window_handle_key(int argc, char **argv)
 
 
 static void
-monkey_window_handle_click(int argc, char **argv)
+jotter_window_handle_click(int argc, char **argv)
 {
 	/* `WINDOW CLICK WIN` _%id%_ `X` _%num%_ `Y` _%num%_ `BUTTON` _%str%_ `KIND` _%str%_ */
 	/*  0      1     2    3       4  5        6  7        8       9        10    11      */
@@ -897,12 +897,12 @@ monkey_window_handle_click(int argc, char **argv)
 	    (strcmp(argv[4], "X") != 0) || (strcmp(argv[6], "Y") != 0) ||
 	    (strcmp(argv[8], "BUTTON") != 0) ||
 	    (strcmp(argv[10], "KIND") != 0) ||
-	    !monkey_window_parse_uint32(argv[3], &win_num)) {
+	    !jotter_window_parse_uint32(argv[3], &win_num)) {
 		moutf(MOUT_ERROR, "WINDOW CLICK ARGS BAD\n");
 		return;
 	}
 
-	gw = monkey_find_window_by_num(win_num);
+	gw = jotter_find_window_by_num(win_num);
 
 	if (gw == NULL) {
 		moutf(MOUT_ERROR, "WINDOW NUM BAD");
@@ -935,7 +935,7 @@ monkey_window_handle_click(int argc, char **argv)
 }
 
 static void
-monkey_window_handle_mouse(int argc, char **argv)
+jotter_window_handle_mouse(int argc, char **argv)
 {
 	/* `WINDOW MOUSE WIN` _%id%_ `X` _%num%_ `Y` _%num%_ `STATE` _%state%_ */
 	/*  0      1     2    3       4  5        6  7        8       9         */
@@ -946,18 +946,18 @@ monkey_window_handle_mouse(int argc, char **argv)
 	if ((argc != 10) || (strcmp(argv[2], "WIN") != 0) ||
 	    (strcmp(argv[4], "X") != 0) || (strcmp(argv[6], "Y") != 0) ||
 	    (strcmp(argv[8], "STATE") != 0) ||
-	    !monkey_window_parse_uint32(argv[3], &win_num)) {
+	    !jotter_window_parse_uint32(argv[3], &win_num)) {
 		moutf(MOUT_ERROR, "WINDOW MOUSE ARGS BAD\n");
 		return;
 	}
 
-	gw = monkey_find_window_by_num(win_num);
+	gw = jotter_find_window_by_num(win_num);
 	if (gw == NULL) {
 		moutf(MOUT_ERROR, "WINDOW NUM BAD");
 		return;
 	}
 
-	if (!monkey_window_parse_mouse_state(argv[9], &state)) {
+	if (!jotter_window_parse_mouse_state(argv[9], &state)) {
 		moutf(MOUT_ERROR, "WINDOW MOUSE STATE BAD\n");
 		return;
 	}
@@ -966,7 +966,7 @@ monkey_window_handle_mouse(int argc, char **argv)
 }
 
 static void
-monkey_window_handle_mouseclick(int argc, char **argv)
+jotter_window_handle_mouseclick(int argc, char **argv)
 {
 	/* `WINDOW MOUSECLICK WIN` _%id%_ `X` _%num%_ `Y` _%num%_ `STATE` _%state%_ */
 	/*  0      1          2    3       4  5        6  7        8       9         */
@@ -977,18 +977,18 @@ monkey_window_handle_mouseclick(int argc, char **argv)
 	if ((argc != 10) || (strcmp(argv[2], "WIN") != 0) ||
 	    (strcmp(argv[4], "X") != 0) || (strcmp(argv[6], "Y") != 0) ||
 	    (strcmp(argv[8], "STATE") != 0) ||
-	    !monkey_window_parse_uint32(argv[3], &win_num)) {
+	    !jotter_window_parse_uint32(argv[3], &win_num)) {
 		moutf(MOUT_ERROR, "WINDOW MOUSECLICK ARGS BAD\n");
 		return;
 	}
 
-	gw = monkey_find_window_by_num(win_num);
+	gw = jotter_find_window_by_num(win_num);
 	if (gw == NULL) {
 		moutf(MOUT_ERROR, "WINDOW NUM BAD");
 		return;
 	}
 
-	if (!monkey_window_parse_mouse_state(argv[9], &state)) {
+	if (!jotter_window_parse_mouse_state(argv[9], &state)) {
 		moutf(MOUT_ERROR, "WINDOW MOUSECLICK STATE BAD\n");
 		return;
 	}
@@ -997,7 +997,7 @@ monkey_window_handle_mouseclick(int argc, char **argv)
 }
 
 static void
-monkey_window_handle_scroll(int argc, char **argv)
+jotter_window_handle_scroll(int argc, char **argv)
 {
 	/* `WINDOW SCROLL WIN` _%id%_ `X` _%num%_ `Y` _%num%_ `DX` _%num%_ `DY` _%num%_ */
 	/*  0      1      2    3       4  5        6  7        8   9       10   11      */
@@ -1008,12 +1008,12 @@ monkey_window_handle_scroll(int argc, char **argv)
 	if ((argc != 12) || (strcmp(argv[2], "WIN") != 0) ||
 	    (strcmp(argv[4], "X") != 0) || (strcmp(argv[6], "Y") != 0) ||
 	    (strcmp(argv[8], "DX") != 0) || (strcmp(argv[10], "DY") != 0) ||
-	    !monkey_window_parse_uint32(argv[3], &win_num)) {
+	    !jotter_window_parse_uint32(argv[3], &win_num)) {
 		moutf(MOUT_ERROR, "WINDOW SCROLL ARGS BAD\n");
 		return;
 	}
 
-	gw = monkey_find_window_by_num(win_num);
+	gw = jotter_find_window_by_num(win_num);
 	if (gw == NULL) {
 		moutf(MOUT_ERROR, "WINDOW NUM BAD");
 		return;
@@ -1029,35 +1029,35 @@ monkey_window_handle_scroll(int argc, char **argv)
 }
 
 void
-monkey_window_handle_command(int argc, char **argv)
+jotter_window_handle_command(int argc, char **argv)
 {
 	if (argc == 1)
 		return;
 
 	if (strcmp(argv[1], "NEW") == 0) {
-		monkey_window_handle_new(argc, argv);
+		jotter_window_handle_new(argc, argv);
 	} else if (strcmp(argv[1], "DESTROY") == 0) {
-		monkey_window_handle_destroy(argc, argv);
+		jotter_window_handle_destroy(argc, argv);
 	} else if (strcmp(argv[1], "GO") == 0) {
-		monkey_window_handle_go(argc, argv);
+		jotter_window_handle_go(argc, argv);
 	} else if (strcmp(argv[1], "STOP") == 0) {
-		monkey_window_handle_stop(argc, argv);
+		jotter_window_handle_stop(argc, argv);
 	} else if (strcmp(argv[1], "REDRAW") == 0) {
-		monkey_window_handle_redraw(argc, argv);
+		jotter_window_handle_redraw(argc, argv);
 	} else if (strcmp(argv[1], "RELOAD") == 0) {
-		monkey_window_handle_reload(argc, argv);
+		jotter_window_handle_reload(argc, argv);
 	} else if (strcmp(argv[1], "EXEC") == 0) {
-		monkey_window_handle_exec(argc, argv);
+		jotter_window_handle_exec(argc, argv);
 	} else if (strcmp(argv[1], "KEY") == 0) {
-		monkey_window_handle_key(argc, argv);
+		jotter_window_handle_key(argc, argv);
 	} else if (strcmp(argv[1], "CLICK") == 0) {
-		monkey_window_handle_click(argc, argv);
+		jotter_window_handle_click(argc, argv);
 	} else if (strcmp(argv[1], "MOUSE") == 0) {
-		monkey_window_handle_mouse(argc, argv);
+		jotter_window_handle_mouse(argc, argv);
 	} else if (strcmp(argv[1], "MOUSECLICK") == 0) {
-		monkey_window_handle_mouseclick(argc, argv);
+		jotter_window_handle_mouseclick(argc, argv);
 	} else if (strcmp(argv[1], "SCROLL") == 0) {
-		monkey_window_handle_scroll(argc, argv);
+		jotter_window_handle_scroll(argc, argv);
 	} else {
 		moutf(MOUT_ERROR, "WINDOW COMMAND UNKNOWN %s\n", argv[1]);
 	}
@@ -1112,7 +1112,7 @@ gui_window_event(struct gui_window *gw, enum gui_window_event event)
 static struct gui_window_table window_table = {
 	.create = gui_window_create,
 	.destroy = gui_window_destroy,
-	.invalidate = monkey_window_invalidate_area,
+	.invalidate = jotter_window_invalidate_area,
 	.get_scroll = gui_window_get_scroll,
 	.set_scroll = gui_window_set_scroll,
 	.get_dimensions = gui_window_get_dimensions,
@@ -1130,4 +1130,4 @@ static struct gui_window_table window_table = {
 	.console_log = gui_window_console_log,
 };
 
-struct gui_window_table *monkey_window_table = &window_table;
+struct gui_window_table *jotter_window_table = &window_table;

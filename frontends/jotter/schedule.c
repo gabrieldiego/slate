@@ -22,7 +22,7 @@
 #include "utils/sys_time.h"
 #include "utils/log.h"
 
-#include "monkey/schedule.h"
+#include "jotter/schedule.h"
 
 /* linked list of scheduled callbacks */
 static struct nscallback *schedule_list = NULL;
@@ -96,8 +96,8 @@ static slateerror schedule_remove(void (*callback)(void *p), void *p)
 	return SLATEERROR_OK;
 }
 
-/* exported function documented in monkey/schedule.h */
-slateerror monkey_schedule(int tival, void (*callback)(void *p), void *p)
+/* exported function documented in jotter/schedule.h */
+slateerror jotter_schedule(int tival, void (*callback)(void *p), void *p)
 {
 	struct nscallback *nscb;
 	struct timeval tv;
@@ -129,8 +129,8 @@ slateerror monkey_schedule(int tival, void (*callback)(void *p), void *p)
 	return SLATEERROR_OK;
 }
 
-/* exported function documented in monkey/schedule.h */
-int monkey_schedule_run(void)
+/* exported function documented in jotter/schedule.h */
+int jotter_schedule_run(void)
 {
 	struct timeval tv;
 	struct timeval nexttime;
@@ -197,7 +197,7 @@ int monkey_schedule_run(void)
 	return (rettime.tv_sec * 1000) + (rettime.tv_usec / 1000);
 }
 
-void monkey_schedule_list(void)
+void jotter_schedule_list(void)
 {
 	struct timeval tv;
 	struct nscallback *cur_nscb;

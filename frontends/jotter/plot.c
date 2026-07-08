@@ -22,7 +22,7 @@
 #include "utils/errors.h"
 #include "slate/plotters.h"
 
-#include "monkey/output.h"
+#include "jotter/output.h"
 
 /**
  * \brief Sets a clip rectangle for subsequent plot operations.
@@ -33,7 +33,7 @@
  * \return SLATEERROR_OK on success else error code.
  */
 static slateerror
-monkey_plot_clip(const struct redraw_context *ctx, const struct rect *clip)
+jotter_plot_clip(const struct redraw_context *ctx, const struct rect *clip)
 {
 	moutf(MOUT_PLOT, "CLIP X0 %d Y0 %d X1 %d Y1 %d",
 		clip->x0, clip->y0, clip->x1, clip->y1);
@@ -58,7 +58,7 @@ monkey_plot_clip(const struct redraw_context *ctx, const struct rect *clip)
  * \return SLATEERROR_OK on success else error code.
  */
 static slateerror
-monkey_plot_arc(const struct redraw_context *ctx,
+jotter_plot_arc(const struct redraw_context *ctx,
 		const plot_style_t *style,
 		int x, int y, int radius, int angle1, int angle2)
 {
@@ -81,7 +81,7 @@ monkey_plot_arc(const struct redraw_context *ctx,
  * \return SLATEERROR_OK on success else error code.
  */
 static slateerror
-monkey_plot_disc(const struct redraw_context *ctx,
+jotter_plot_disc(const struct redraw_context *ctx,
 		 const plot_style_t *style,
 		 int x, int y, int radius)
 {
@@ -102,7 +102,7 @@ monkey_plot_disc(const struct redraw_context *ctx,
  * \return SLATEERROR_OK on success else error code.
  */
 static slateerror
-monkey_plot_line(const struct redraw_context *ctx,
+jotter_plot_line(const struct redraw_context *ctx,
 		 const plot_style_t *style,
 		 const struct rect *line)
 {
@@ -126,7 +126,7 @@ monkey_plot_line(const struct redraw_context *ctx,
  * \return SLATEERROR_OK on success else error code.
  */
 static slateerror
-monkey_plot_rectangle(const struct redraw_context *ctx,
+jotter_plot_rectangle(const struct redraw_context *ctx,
 		      const plot_style_t *style,
 		      const struct rect *rect)
 {
@@ -151,7 +151,7 @@ monkey_plot_rectangle(const struct redraw_context *ctx,
  * \return SLATEERROR_OK on success else error code.
  */
 static slateerror
-monkey_plot_polygon(const struct redraw_context *ctx,
+jotter_plot_polygon(const struct redraw_context *ctx,
 		    const plot_style_t *style,
 		    const int *p,
 		    unsigned int n)
@@ -175,7 +175,7 @@ monkey_plot_polygon(const struct redraw_context *ctx,
  * \return SLATEERROR_OK on success else error code.
  */
 static slateerror
-monkey_plot_path(const struct redraw_context *ctx,
+jotter_plot_path(const struct redraw_context *ctx,
 		 const plot_style_t *pstyle,
 		 const float *p,
 		 unsigned int n,
@@ -212,7 +212,7 @@ monkey_plot_path(const struct redraw_context *ctx,
  * \return SLATEERROR_OK on success else error code.
  */
 static slateerror
-monkey_plot_bitmap(const struct redraw_context *ctx,
+jotter_plot_bitmap(const struct redraw_context *ctx,
 		   struct bitmap *bitmap,
 		   int x, int y,
 		   int width,
@@ -238,7 +238,7 @@ monkey_plot_bitmap(const struct redraw_context *ctx,
  * \return SLATEERROR_OK on success else error code.
  */
 static slateerror
-monkey_plot_text(const struct redraw_context *ctx,
+jotter_plot_text(const struct redraw_context *ctx,
 		 const struct plot_font_style *fstyle,
 		 int x,
 		 int y,
@@ -250,18 +250,18 @@ monkey_plot_text(const struct redraw_context *ctx,
 }
 
 
-/** monkey plotter operations table */
+/** jotter plotter operations table */
 static const struct plotter_table plotters = {
-	.clip = monkey_plot_clip,
-	.arc = monkey_plot_arc,
-	.disc = monkey_plot_disc,
-	.line = monkey_plot_line,
-	.rectangle = monkey_plot_rectangle,
-	.polygon = monkey_plot_polygon,
-	.path = monkey_plot_path,
-	.bitmap = monkey_plot_bitmap,
-	.text = monkey_plot_text,
+	.clip = jotter_plot_clip,
+	.arc = jotter_plot_arc,
+	.disc = jotter_plot_disc,
+	.line = jotter_plot_line,
+	.rectangle = jotter_plot_rectangle,
+	.polygon = jotter_plot_polygon,
+	.path = jotter_plot_path,
+	.bitmap = jotter_plot_bitmap,
+	.text = jotter_plot_text,
 	.option_knockout = true,
 };
 
-const struct plotter_table* monkey_plotters = &plotters;
+const struct plotter_table* jotter_plotters = &plotters;

@@ -66,7 +66,7 @@ functions.
 # Integration testing
 
 NetSurf [integration tests](docs/integration-testing.md) use the
-monkey frontend to operate the browser as a whole. These tests open
+jotter frontend to operate the browser as a whole. These tests open
 windows, navigate to websites and render contents as a user might.
 
 # New frontend development

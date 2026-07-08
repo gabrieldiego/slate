@@ -21,8 +21,8 @@
 
 struct hlcache_handle;
 
-extern struct gui_window_table *monkey_window_table;
-extern struct gui_download_table *monkey_download_table;
+extern struct gui_window_table *jotter_window_table;
+extern struct gui_download_table *jotter_download_table;
 
 struct gui_window {
 	struct gui_window *r_next;
@@ -38,13 +38,13 @@ struct gui_window {
   
 };
 
-struct gui_window *monkey_find_window_by_num(uint32_t win_num);
-struct gui_window *monkey_find_window_by_content(struct hlcache_handle *content);
-void monkey_window_process_reformats(void);
+struct gui_window *jotter_find_window_by_num(uint32_t win_num);
+struct gui_window *jotter_find_window_by_content(struct hlcache_handle *content);
+void jotter_window_process_reformats(void);
 
-void monkey_window_handle_command(int argc, char **argv);
-void monkey_kill_browser_windows(void);
+void jotter_window_handle_command(int argc, char **argv);
+void jotter_kill_browser_windows(void);
 
-slateerror monkey_warn_user(const char *warning, const char *detail);
+slateerror jotter_warn_user(const char *warning, const char *detail);
 
 #endif /* SLATE_JOTTER_BROWSER_H */

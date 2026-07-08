@@ -1,5 +1,6 @@
 /*
- * Copyright 2018 Vincent Sanders <vince@netsurf-browser.org>
+ * Copyright 2007 Rob Kendrick <rjek@netsurf-browser.org>
+ * Copyright 2007 Vincent Sanders <vince@debian.org>
  *
  * This file is part of NetSurf, http://www.slate-browser.org/
  *
@@ -16,24 +17,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SLATE_JOTTER_401LOGIN_H
-#define SLATE_JOTTER_401LOGIN_H
-
-#include "utils/errors.h"
-
-struct slateurl;
-
-slateerror gui_401login_open(struct slateurl *url,
-			  const char *realm,
-			  const char *username,
-			  const char *password,
-			  slateerror (*cb)(struct slateurl *url,
-					const char *realm,
-					const char *username,
-					const char *password,
-					void *pw),
-			  void *cbpw);
-
-void monkey_login_handle_command(int argc, char **argv);
-
-#endif
+void jotter_fetch_filetype_init(const char *mimefile);
+void jotter_fetch_filetype_fin(void);
+const char *jotter_fetch_filetype(const char *unix_path);

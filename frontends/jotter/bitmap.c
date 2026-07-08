@@ -23,8 +23,8 @@
 #include "utils/errors.h"
 #include "slate/bitmap.h"
 
-#include "monkey/output.h"
-#include "monkey/bitmap.h"
+#include "jotter/output.h"
+#include "jotter/bitmap.h"
 
 struct bitmap {
 	void *ptr;
@@ -125,4 +125,4 @@ static struct gui_bitmap_table bitmap_table = {
 	.render = bitmap_render,
 };
 
-struct gui_bitmap_table *monkey_bitmap_table = &bitmap_table;
+struct gui_bitmap_table *jotter_bitmap_table = &bitmap_table;

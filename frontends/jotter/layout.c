@@ -18,7 +18,7 @@
 
 /**
  * \file
- * monkey implementation of font layout.
+ * Jotter implementation of font layout.
  */
 
 #include <stddef.h>
@@ -27,7 +27,7 @@
 #include "slate/plot_style.h"
 #include "slate/layout.h"
 
-#include "monkey/layout.h"
+#include "jotter/layout.h"
 
 static slateerror nsfont_width(const plot_font_style_t *fstyle,
 			    const char *string, size_t length,
@@ -114,4 +114,4 @@ static struct gui_layout_table layout_table = {
 	.split = nsfont_split,
 };
 
-struct gui_layout_table *monkey_layout_table = &layout_table;
+struct gui_layout_table *jotter_layout_table = &layout_table;

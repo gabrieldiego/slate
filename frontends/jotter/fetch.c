@@ -28,8 +28,8 @@
 #include "utils/filepath.h"
 #include "slate/fetch.h"
 
-#include "monkey/filetype.h"
-#include "monkey/fetch.h"
+#include "jotter/filetype.h"
+#include "jotter/fetch.h"
 
 extern char **respaths;
 
@@ -45,9 +45,9 @@ static slateurl *gui_get_resource_url(const char *path)
 }
 
 static struct gui_fetch_table fetch_table = {
-	.filetype = monkey_fetch_filetype,
+	.filetype = jotter_fetch_filetype,
 
 	.get_resource_url = gui_get_resource_url,
 };
 
-struct gui_fetch_table *monkey_fetch_table = &fetch_table;
+struct gui_fetch_table *jotter_fetch_table = &fetch_table;

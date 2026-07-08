@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
+ * Copyright 2018 Vincent Sanders <vince@nexturf-browser.org>
  *
  * This file is part of NetSurf, http://www.slate-browser.org/
  *
@@ -16,11 +16,38 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SLATE_JOTTER_PLOT_H
-#define SLATE_JOTTER_PLOT_H
+#include <stdio.h>
+#include <stdarg.h>
 
-struct plotter_table;
+#include "jotter/output.h"
 
-extern const struct plotter_table *monkey_plotters;
+/**
+ * output type prefixes
+ */
+static const char *type_text[]={
+	"DIE",
+	"ERROR",
+	"WARN",
+	"GENERIC",
+	"WINDOW",
+	"LOGIN",
+	"DOWNLOAD",
+	"PLOT",
+};
 
-#endif
+/* exported interface documented in jotter/output.h */
+int moutf(enum jotter_output_type mout_type, const char *fmt, ...)
+{
+	va_list ap;
+	int res;
+
+	res = fprintf(stdout, "%s ", type_text[mout_type]);
+
+	va_start(ap, fmt);
+	res += vfprintf(stdout, fmt, ap);
+	va_end(ap);
+
+	fputc('\n', stdout);
+
+	return res + 1;
+}

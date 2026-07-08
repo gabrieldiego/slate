@@ -25,8 +25,8 @@
 #include "slate/download.h"
 #include "desktop/download.h"
 
-#include "monkey/output.h"
-#include "monkey/browser.h"
+#include "jotter/output.h"
+#include "jotter/browser.h"
 
 static uint32_t dwin_ctr = 0;
 
@@ -92,4 +92,4 @@ static struct gui_download_table download_table = {
 	.done = gui_download_window_done,
 };
 
-struct gui_download_table *monkey_download_table = &download_table;
+struct gui_download_table *jotter_download_table = &download_table;

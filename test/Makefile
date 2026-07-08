@@ -225,7 +225,7 @@ BENCH_WRAPPER ?= /usr/bin/time -v
 BENCH_ROOT ?= file://$(CURDIR)/test/bench/pages
 BENCH_SETS := smoke practical stress
 
-ifeq ($(TARGET),monkey)
+ifeq ($(FRONTEND_TARGET),jotter)
   BENCH_BUILD_DEPS := all-program
 else
   BENCH_BUILD_DEPS :=
@@ -238,10 +238,10 @@ bench-$(1): $$(BENCH_BUILD_DEPS)
 		echo "Missing $$(BENCH_JOTTER). Build it with: make TARGET=jotter"; \
 		exit 1; \
 	fi
-	$$(Q)SLATE_BENCH_ROOT="$$(BENCH_ROOT)" ./test/monkey_driver.py \
+	$$(Q)SLATE_BENCH_ROOT="$$(BENCH_ROOT)" ./test/jotter_driver.py \
 		-m "$$(BENCH_JOTTER)" \
 		-w "$$(BENCH_WRAPPER)" \
-		-t test/bench/monkey-tests/$(1).yaml
+		-t test/bench/jotter-tests/$(1).yaml
 
 endef
 

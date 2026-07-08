@@ -47,8 +47,8 @@ benchmark suites, and tallies only `content/handlers/html/*.c`. It only needs
 
 Coverage builds are kept separate from the normal Jotter binary:
 
-* normal objects: `build/<host>-monkey/`
-* coverage objects: `build/<host>-monkey-cov/`
+* normal objects: `build/<host>-jotter/`
+* coverage objects: `build/<host>-jotter-cov/`
 * normal binary: `jotter`
 * coverage binary: `jotter-cov`
 

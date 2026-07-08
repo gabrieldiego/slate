@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 Daniel Silverstone <dsilvers@digital-scurf.org>
+ * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
  *
  * This file is part of NetSurf, http://www.slate-browser.org/
  *
@@ -16,15 +16,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SLATE_JOTTER_DISPATCH_H
-#define SLATE_JOTTER_DISPATCH_H 1
+#ifndef SLATE_JOTTER_LAYOUT_H
+#define SLATE_JOTTER_LAYOUT_H
 
-typedef void (*handle_command_fn)(int argc, char **argv);
-  
-slateerror monkey_register_handler(const char *cmd, handle_command_fn fn);
+extern struct gui_layout_table *jotter_layout_table;
 
-void monkey_process_command(void);
-
-void monkey_free_handlers(void);
-
-#endif /* SLATE_JOTTER_DISPATCH_H */
+#endif /* SLATE_JOTTER_LAYOUT_H */

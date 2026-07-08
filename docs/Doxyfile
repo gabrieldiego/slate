@@ -801,7 +801,7 @@ INPUT                  = docs \
                          frontends/framebuffer \
                          frontends/framebuffer/fbtk \
                          frontends/gtk \
-                         frontends/monkey \
+                         frontends/jotter \
                          frontends/riscos \
                          frontends/riscos/configure \
                          frontends/riscos/gui \

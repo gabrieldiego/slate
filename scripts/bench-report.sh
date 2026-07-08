@@ -202,14 +202,14 @@ run_memory_report() {
 	} > "${report}"
 
 	for suite in "${SUITES[@]}"; do
-		local test_file="${ROOT}/test/bench/monkey-tests/${suite}.yaml"
+		local test_file="${ROOT}/test/bench/jotter-tests/${suite}.yaml"
 		local log_file="${OUTPUT_DIR}/memory-${suite}.log"
 		local time_file="${OUTPUT_DIR}/memory-${suite}.time"
 		local status result max_rss elapsed user_cpu sys_cpu time_exit max_rss_mib
 
 		printf 'Running memory %s...\n' "${suite}" >&2
 		SLATE_BENCH_ROOT="${BENCH_ROOT}" \
-			"${ROOT}/test/monkey_driver.py" \
+			"${ROOT}/test/jotter_driver.py" \
 			-m "${JOTTER}" \
 			-w "${TIME_BIN} -v -o ${time_file}" \
 			-t "${test_file}" >"${log_file}" 2>&1
@@ -265,7 +265,7 @@ run_coverage_report() {
 	command -v "${GCOV_BIN}" >/dev/null 2>&1 || die "Missing gcov binary: ${GCOV_BIN}"
 
 	host="$(host_name)"
-	objroot="${ROOT}/build/${host}-monkey${COVERAGE_SUBTARGET}"
+	objroot="${ROOT}/build/${host}-jotter${COVERAGE_SUBTARGET}"
 	coverage_jotter="${ROOT}/${COVERAGE_EXETARGET}"
 	build_log="${OUTPUT_DIR}/coverage-build-jotter.log"
 	run_summary="${OUTPUT_DIR}/coverage-suite-summary.tsv"
@@ -307,13 +307,13 @@ run_coverage_report() {
 	: > "${run_summary}"
 
 	for suite in "${SUITES[@]}"; do
-		local test_file="${ROOT}/test/bench/monkey-tests/${suite}.yaml"
+		local test_file="${ROOT}/test/bench/jotter-tests/${suite}.yaml"
 		local log_file="${OUTPUT_DIR}/coverage-${suite}.log"
 		local status result
 
 		printf 'Running coverage %s...\n' "${suite}" >&2
 		SLATE_BENCH_ROOT="${BENCH_ROOT}" \
-			"${ROOT}/test/monkey_driver.py" \
+			"${ROOT}/test/jotter_driver.py" \
 			-m "${coverage_jotter}" \
 			-t "${test_file}" >"${log_file}" 2>&1
 		status=$?
@@ -439,7 +439,7 @@ run_coverage_report() {
 
 		printf '\n## Notes\n\n'
 		printf -- '- This report only tallies line coverage for `content/handlers/html/*.c`.\n'
-		printf -- '- Coverage objects are kept separately using `SUBTARGET=%s` on the internal monkey target.\n' "${COVERAGE_SUBTARGET}"
+		printf -- '- Coverage objects are kept separately using `TARGET=jotter SUBTARGET=%s`.\n' "${COVERAGE_SUBTARGET}"
 		printf -- '- The instrumented binary is `%s`; the normal `jotter` binary is not overwritten.\n' "${COVERAGE_EXETARGET}"
 		printf -- '- Platform-specific and frontend-specific browser code is intentionally outside this tally.\n'
 	} > "${report}"

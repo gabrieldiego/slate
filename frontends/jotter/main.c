@@ -40,15 +40,15 @@
 #include "content/fetch.h"
 #include "content/backing_store.h"
 
-#include "monkey/output.h"
-#include "monkey/dispatch.h"
-#include "monkey/browser.h"
-#include "monkey/401login.h"
-#include "monkey/filetype.h"
-#include "monkey/fetch.h"
-#include "monkey/schedule.h"
-#include "monkey/bitmap.h"
-#include "monkey/layout.h"
+#include "jotter/output.h"
+#include "jotter/dispatch.h"
+#include "jotter/browser.h"
+#include "jotter/401login.h"
+#include "jotter/filetype.h"
+#include "jotter/fetch.h"
+#include "jotter/schedule.h"
+#include "jotter/bitmap.h"
+#include "jotter/layout.h"
 
 /** maximum number of languages in language vector */
 #define LANGV_SIZE 32
@@ -58,7 +58,7 @@
 /** resource search path vector */
 char **respaths;
 
-static bool monkey_done = false;
+static bool jotter_done = false;
 
 /**
  * Cause an abnormal program termination.
@@ -204,11 +204,11 @@ jotter_init_resource(const char *resource_path)
 	return respath;
 }
 
-static void monkey_quit(void)
+static void jotter_quit(void)
 {
 	urldb_save_cookies(slateoption_charp(cookie_jar));
 	urldb_save(slateoption_charp(url_file));
-	monkey_fetch_filetype_fin();
+	jotter_fetch_filetype_fin();
 }
 
 static slateerror gui_launch_url(struct slateurl *url)
@@ -229,10 +229,10 @@ static slateerror gui_present_cookies(const char *search_term)
 
 static void quit_handler(int argc, char **argv)
 {
-	monkey_done = true;
+	jotter_done = true;
 }
 
-static void monkey_options_handle_command(int argc, char **argv)
+static void jotter_options_handle_command(int argc, char **argv)
 {
 	slateoption_commandline(&argc, argv, slateoptions);
 }
@@ -265,16 +265,16 @@ static bool nslog_stream_configure(FILE *fptr)
 	return true;
 }
 
-static struct gui_misc_table monkey_misc_table = {
-	.schedule = monkey_schedule,
+static struct gui_misc_table jotter_misc_table = {
+	.schedule = jotter_schedule,
 
-	.quit = monkey_quit,
+	.quit = jotter_quit,
 	.launch_url = gui_launch_url,
 	.login = gui_401login_open,
 	.present_cookies = gui_present_cookies,
 };
 
-static void monkey_run(void)
+static void jotter_run(void)
 {
 	fd_set read_fd_set, write_fd_set, exc_fd_set;
 	int max_fd;
@@ -283,10 +283,10 @@ static void monkey_run(void)
 	struct timeval tv;
 	struct timeval* timeout;
 
-	while (!monkey_done) {
+	while (!jotter_done) {
 
 		/* discover the next scheduled event time */
-		schedtm = monkey_schedule_run();
+		schedtm = jotter_schedule_run();
 
 		/* clears fdset */
 		fetch_fdset(&read_fd_set, &write_fd_set, &exc_fd_set, &max_fd);
@@ -329,10 +329,10 @@ static void monkey_run(void)
 				timeout);
 		if (rdy_fd < 0) {
 			NSLOG(netsurf, CRITICAL, "Unable to select: %s", strerror(errno));
-			monkey_done = true;
+			jotter_done = true;
 		} else if (rdy_fd > 0) {
 			if (FD_ISSET(0, &read_fd_set)) {
-				monkey_process_command();
+				jotter_process_command();
 			}
 		}
 	}
@@ -392,13 +392,13 @@ main(int argc, char **argv)
 	char *options;
 	char buf[PATH_MAX];
 	slateerror ret;
-	struct slate_table monkey_table = {
-		.misc = &monkey_misc_table,
-		.window = monkey_window_table,
-		.download = monkey_download_table,
-		.fetch = monkey_fetch_table,
-		.bitmap = monkey_bitmap_table,
-		.layout = monkey_layout_table,
+	struct slate_table jotter_table = {
+		.misc = &jotter_misc_table,
+		.window = jotter_window_table,
+		.download = jotter_download_table,
+		.fetch = jotter_fetch_table,
+		.bitmap = jotter_bitmap_table,
+		.layout = jotter_layout_table,
                 .llcache = filesystem_llcache_table,
 	};
 
@@ -411,7 +411,7 @@ main(int argc, char **argv)
 	signal(SIGBUS, signal_handler);
 #endif
 
-	ret = slate_register(&monkey_table);
+	ret = slate_register(&jotter_table);
 	if (ret != SLATEERROR_OK) {
 		die("NetSurf operation table failed registration");
 	}
@@ -422,7 +422,7 @@ main(int argc, char **argv)
 	setbuf(stderr, NULL);
 
 	/* Prep the search paths */
-	respaths = jotter_init_resource("${HOME}/.slate/:${SLATERES}:"JOTTER_RESPATH":./frontends/monkey/res");
+	respaths = jotter_init_resource("${HOME}/.slate/:${SLATERES}:"JOTTER_RESPATH":./frontends/jotter/res");
 
 	/* initialise logging. Not fatal if it fails but not much we can do
 	 * about it either.
@@ -453,7 +453,7 @@ main(int argc, char **argv)
 	}
 
 	filepath_sfinddef(respaths, buf, "mime.types", "/etc/");
-	monkey_fetch_filetype_init(buf);
+	jotter_fetch_filetype_init(buf);
 
 	urldb_load(slateoption_charp(url_file));
 	urldb_load_cookies(slateoption_charp(cookie_file));
@@ -464,32 +464,32 @@ main(int argc, char **argv)
 	}
 	free(respaths);
 
-	ret = monkey_register_handler("QUIT", quit_handler);
+	ret = jotter_register_handler("QUIT", quit_handler);
 	if (ret != SLATEERROR_OK) {
 		die("quit handler failed to register");
 	}
 
-	ret = monkey_register_handler("WINDOW", monkey_window_handle_command);
+	ret = jotter_register_handler("WINDOW", jotter_window_handle_command);
 	if (ret != SLATEERROR_OK) {
 		die("window handler failed to register");
 	}
 
-	ret = monkey_register_handler("OPTIONS", monkey_options_handle_command);
+	ret = jotter_register_handler("OPTIONS", jotter_options_handle_command);
 	if (ret != SLATEERROR_OK) {
 		die("options handler failed to register");
 	}
 
-	ret = monkey_register_handler("LOGIN", monkey_login_handle_command);
+	ret = jotter_register_handler("LOGIN", jotter_login_handle_command);
 	if (ret != SLATEERROR_OK) {
 		die("login handler failed to register");
 	}
 
 
 	moutf(MOUT_GENERIC, "STARTED");
-	monkey_run();
+	jotter_run();
 
 	moutf(MOUT_GENERIC, "CLOSING_DOWN");
-	monkey_kill_browser_windows();
+	jotter_kill_browser_windows();
 
 	slate_exit();
 	moutf(MOUT_GENERIC, "FINISHED");
@@ -500,8 +500,8 @@ main(int argc, char **argv)
 	/* finalise logging */
 	nslog_finalise();
 
-	/* And free any monkey-specific bits */
-	monkey_free_handlers();
+	/* And free any Jotter-specific bits */
+	jotter_free_handlers();
 
 	return 0;
 }

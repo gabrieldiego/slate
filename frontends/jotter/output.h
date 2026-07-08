@@ -1,5 +1,5 @@
 /*
- * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
+ * Copyright 2018 Vincent Sanders <vince@netsurf-browser.org>
  *
  * This file is part of NetSurf, http://www.slate-browser.org/
  *
@@ -16,9 +16,20 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SLATE_JOTTER_FETCH_H
-#define SLATE_JOTTER_FETCH_H
+#ifndef SLATE_JOTTER_OUTPUT_H
+#define SLATE_JOTTER_OUTPUT_H
 
-extern struct gui_fetch_table *monkey_fetch_table;
+enum jotter_output_type {
+	MOUT_DIE,
+	MOUT_ERROR,
+	MOUT_WARNING,
+	MOUT_GENERIC,
+	MOUT_WINDOW,
+	MOUT_LOGIN,
+	MOUT_DOWNLOAD,
+	MOUT_PLOT,
+};
 
-#endif /* SLATE_JOTTER_FETCH_H */
+int moutf(enum jotter_output_type mout_type, const char *fmt, ...);
+
+#endif

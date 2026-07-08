@@ -37,7 +37,7 @@ INSTALL?=install
 BUILD_CC := cc
 
 # target specific tool overrides
-include frontends/$(TARGET)/Makefile.tools
+include frontends/$(FRONTEND_TARGET)/Makefile.tools
 
 # CCACHE
 ifeq ($(origin CCACHE),undefined)

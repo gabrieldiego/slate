@@ -1,4 +1,4 @@
-name: "Monkey Test"
+name: "Jotter Test"
 
 on: [pull_request]
 
@@ -38,7 +38,6 @@ jobs:
                libutf8proc-dev
                llvm
                pkg-config
-               python3-pyasyncore
                wbritish # Needed for `/usr/share/dict/words`, used by test
 
     - name: ccache
@@ -70,4 +69,4 @@ jobs:
 
     - name: Run Jotter Test
       run: |
-          LC_ALL=C.UTF-8 test/monkey-see-monkey-do -v -d ${{ matrix.test }}
+          LC_ALL=C.UTF-8 test/jotter-see-jotter-do -v -d ${{ matrix.test }}

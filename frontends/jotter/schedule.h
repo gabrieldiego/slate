@@ -30,7 +30,7 @@
  * passed.
  */
 
-slateerror monkey_schedule(int tival, void (*callback)(void *p), void *p);
+slateerror jotter_schedule(int tival, void (*callback)(void *p), void *p);
 
 /**
  * Process scheduled callbacks up to current time.
@@ -38,11 +38,11 @@ slateerror monkey_schedule(int tival, void (*callback)(void *p), void *p);
  * @return The number of milliseconds untill the next scheduled event
  * or -1 for no event.
  */
-int monkey_schedule_run(void);
+int jotter_schedule_run(void);
 
 /**
  * Log a list of all scheduled callbacks.
  */
-void monkey_schedule_list(void);
+void jotter_schedule_list(void);
 
 #endif

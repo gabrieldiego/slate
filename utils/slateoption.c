@@ -77,7 +77,7 @@ static struct slateoption_s defaults[] = {
 #elif defined(slateatari)
 #include "atari/options.h"
 #elif defined(jotter)
-#include "monkey/options.h"
+#include "jotter/options.h"
 #elif defined(slatewin32)
 #include "windows/options.h"
 #elif defined(slateqt)

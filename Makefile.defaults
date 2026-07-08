@@ -163,7 +163,7 @@ endif
 # ----------------------------------------------------------------------------
 # Option overrides determined by specific TARGET
 # ----------------------------------------------------------------------------
--include frontends/$(TARGET)/Makefile.defaults
+-include frontends/$(FRONTEND_TARGET)/Makefile.defaults
 
 
 # ----------------------------------------------------------------------------

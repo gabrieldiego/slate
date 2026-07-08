@@ -4,7 +4,7 @@
 NetSurf automated test runner
 
 This script retrives a test plan from the NetSurf infrastructure and
-  executes it using the monkey frontend
+  executes it using the jotter frontend
 '''
 
 # If you have any poo, fling it now!
@@ -15,12 +15,12 @@ import multiprocessing as mp
 from urllib import request, parse
 from io import StringIO
 import yaml
-import monkey_driver as driver
+import jotter_driver as driver
 
 # Otherwise let's begin...
 
-BASE_PATH = "https://test.slate-browser.org/cgi-bin/monkey-index.cgi"
-MONKEY_PATH = "./jotter"
+BASE_PATH = "https://test.slate-browser.org/cgi-bin/jotter-index.cgi"
+JOTTER_PATH = "./jotter"
 
 mp.set_start_method('fork')
 
@@ -34,7 +34,7 @@ def decode_trace_line(l):
 
     exitcode, output = getstatusoutput(
         "addr2line -e {} -a -p -f -C {} 2>/dev/null".format(
-            MONKEY_PATH, caps[0]))
+            JOTTER_PATH, caps[0]))
     if exitcode != 0:
         return './jotter(+{})'.format(caps[0])
 
@@ -54,7 +54,7 @@ def child_run_test(verbose, parts):
     sys.stdout = outcapture
     sys.stderr = errcapture
     try:
-        driver.run_preloaded_test(MONKEY_PATH, parts)
+        driver.run_preloaded_test(JOTTER_PATH, parts)
     except:
         sys.stdout = oldout
         sys.stderr = olderr

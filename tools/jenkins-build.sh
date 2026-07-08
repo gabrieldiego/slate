@@ -396,8 +396,8 @@ case ${TARGET} in
 	;;
 
 
-    "monkey")
-	# monkey target can be built anywhere
+    "jotter")
+	# jotter target can be built anywhere
 	case ${HOST} in
 	    amd64-unknown-openbsd*)
 		MAKE=gmake

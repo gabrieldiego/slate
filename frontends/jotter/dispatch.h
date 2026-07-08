@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Vincent Sanders <vince@nexturf-browser.org>
+ * Copyright 2011 Daniel Silverstone <dsilvers@digital-scurf.org>
  *
  * This file is part of NetSurf, http://www.slate-browser.org/
  *
@@ -16,38 +16,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <stdio.h>
-#include <stdarg.h>
+#ifndef SLATE_JOTTER_DISPATCH_H
+#define SLATE_JOTTER_DISPATCH_H 1
 
-#include "monkey/output.h"
+typedef void (*handle_command_fn)(int argc, char **argv);
+  
+slateerror jotter_register_handler(const char *cmd, handle_command_fn fn);
 
-/**
- * output type prefixes
- */
-static const char *type_text[]={
-	"DIE",
-	"ERROR",
-	"WARN",
-	"GENERIC",
-	"WINDOW",
-	"LOGIN",
-	"DOWNLOAD",
-	"PLOT",
-};
+void jotter_process_command(void);
 
-/* exported interface documented in monkey/output.h */
-int moutf(enum monkey_output_type mout_type, const char *fmt, ...)
-{
-	va_list ap;
-	int res;
+void jotter_free_handlers(void);
 
-	res = fprintf(stdout, "%s ", type_text[mout_type]);
-
-	va_start(ap, fmt);
-	res += vfprintf(stdout, fmt, ap);
-	va_end(ap);
-
-	fputc('\n', stdout);
-
-	return res + 1;
-}
+#endif /* SLATE_JOTTER_DISPATCH_H */

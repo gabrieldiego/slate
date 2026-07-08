@@ -5,12 +5,12 @@ NetSurf Integration Testing
 
 # Overview
 
-The monkey frontend is used to perform complex tests involving
+The jotter frontend is used to perform complex tests involving
 operating the browser as a user might (opening windows, navigating to
 websites and rendering the contents etc.)
 
 A test is written as a set of operations in a yaml file. These files
-are parsed and executed by the monkey driver script.
+are parsed and executed by the jotter driver script.
 
 There are very few tests within the NetSurf repository. The large
 majority of integration tests are instead held within the
@@ -29,18 +29,18 @@ extend test capabilities.
 
 # Running a test
 
-An individual test can be run using the monkey_driver.py python script
+An individual test can be run using the jotter_driver.py python script
 from within the NetSurf repository
 
     $ make TARGET=jotter
-    $ ./test/monkey_driver.py -m ./jotter -t test/monkey-tests/start-stop.yaml
+    $ ./test/jotter_driver.py -m ./jotter -t test/jotter-tests/start-stop.yaml
 
 The command actually executed can be augmented using the wrapper
 switch, this allows the test to be run under a debugger or profiler.
 
 For example to wrap execution under valgrind memory checker
 
-    $ ./test/monkey_driver.py -m ./jotter -w 'valgrind -v --track-origins=yes' -t test/monkey-tests/start-stop.yaml
+    $ ./test/jotter_driver.py -m ./jotter -w 'valgrind -v --track-origins=yes' -t test/jotter-tests/start-stop.yaml
 
 
 # Running more than one test
@@ -49,11 +49,11 @@ Each test is a member of a group and the tests within each group are
 run together. Groups are listed within division index files. A group
 of tests may occur within more than one division.
 
-To run the integration tests the monkey-see-monkey-do python script is
+To run the integration tests the jotter-see-jotter-do python script is
 used. It downloads the test plan for a division from the NetSurf test
 infrastructure and executes it.
 
-    $ ./test/monkey-see-monkey-do
+    $ ./test/jotter-see-jotter-do
     Fetching tests...
     Parsing tests...
     Running tests...
@@ -73,12 +73,12 @@ If no division is specified on the command line the "default" division
 is used. Other divisions are specified with the d switch for example
 to specify the "short-internet" division:
 
-    $ ./test/monkey-see-monkey-do -d short-internet
+    $ ./test/jotter-see-jotter-do -d short-internet
 
 Additionally the g switch allows the limiting of tests within a single
 group to be executed.
 
-    $ ./test/monkey-see-monkey-do -g no-networking
+    $ ./test/jotter-see-jotter-do -g no-networking
     Fetching tests...
     Parsing tests...
     Running tests...

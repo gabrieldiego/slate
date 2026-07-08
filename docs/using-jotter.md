@@ -8,7 +8,7 @@ Jotter has been tested on Ubuntu and Debian.
 Automated testing
 -----------------
 
-If you want to run the monkey_driver.py or monkey-see-monkey-do tools then
+If you want to run the jotter_driver.py or jotter-see-jotter-do tools then
 you will need python3 and pyyaml installed.  The latter also needs internet
 access to test.slate-browser.org to acquire test data.
 
@@ -197,29 +197,29 @@ Responses
 
 *   `GENERIC STARTED`
 
-    Monkey has started and is ready for commands
+    Jotter has started and is ready for commands
 
 *   `GENERIC CLOSING_DOWN`
 
-    Monkey has been told to shut down and is doing so
+    Jotter has been told to shut down and is doing so
 
 *   `GENERIC FINISHED`
 
-    Monkey has finished and will now exit
+    Jotter has finished and will now exit
 
 *   `GENERIC LAUNCH URL` _%url%_
 
-    The core asked monkey to launch the given URL
+    The core asked jotter to launch the given URL
 
 *   `GENERIC THUMBNAIL URL` _%url%_
 
-    The core asked monkey to thumbnail a content without
+    The core asked jotter to thumbnail a content without
     a window.
 
 *   `GENERIC POLL BLOCKING`
 *   `GENERIC POLL TIMED` _%n%_
 
-    Monkey reached a point where it could sleep waiting for
+    Jotter reached a point where it could sleep waiting for
     commands or scheduled timeouts.  No fetches nor redraws
     were pending.  If there are no timeouts or other pending
     jobs then this will be a BLOCKING poll, otherwise the number
@@ -229,8 +229,8 @@ Responses
 
 *   `WINDOW NEW WIN` _%id%_ `FOR` _%id%_ `CLONE` _%id%_ `NEWTAB` _%bool%_
 
-    The core asked Monkey to open a new window.  The IDs for `FOR` and
-    `CLONE` are core window IDs, the `WIN` id is a Monkey window ID.
+    The core asked Jotter to open a new window.  The IDs for `FOR` and
+    `CLONE` are core window IDs, the `WIN` id is a Jotter window ID.
 
 *   `WINDOW SIZE WIN` _%id%_ `WIDTH` _%n%_ `HEIGHT` _%n%_
 
@@ -238,7 +238,7 @@ Responses
 
 *   `WINDOW DESTROY WIN` _%id%_
 
-    The core has instructed Monkey to destroy the named window.
+    The core has instructed Jotter to destroy the named window.
 
 *   `WINDOW TITLE WIN` _%id%_ `STR` _%str%_
 
@@ -246,44 +246,44 @@ Responses
 
 *   `WINDOW REDRAW WIN` _%id%_
 
-    The core asked that Monkey redraw the given window.
+    The core asked that Jotter redraw the given window.
 
 *   `WINDOW GET_DIMENSIONS WIN` _%id%_ `WIDTH` _%n%_ `HEIGHT` _%n%_
 
-    The core asked Monkey what the dimensions of the window are.
-    Monkey has to respond immediately and returned the supplied width
+    The core asked Jotter what the dimensions of the window are.
+    Jotter has to respond immediately and returned the supplied width
     and height values to the core.
 
 *   `WINDOW NEW_CONTENT WIN` _%id%_
 
-    The core has informed Monkey that the named window has a new
+    The core has informed Jotter that the named window has a new
     content object.
 
 *   `WINDOW NEW_ICON WIN` _%id%_
 
-    The core has informed Monkey that the named window has a new
+    The core has informed Jotter that the named window has a new
     icon (favicon) available.
 
 *   `WINDOW START_THROBBER WIN` _%id%_
 
-    The core asked Monkey to start the throbber for the named
+    The core asked Jotter to start the throbber for the named
     window.  This indicates to the user that the window is busy.
 
 *   `WINDOW STOP_THROBBER WIN` _%id%_
 
-    The core asked Monkey to stop the throbber for the named
+    The core asked Jotter to stop the throbber for the named
     window.  This indicates to the user that the window is finished.
 
 *   `WINDOW SET_SCROLL WIN` _%id%_ `X` _%n%_ `Y` _%n%_
 
-    The core asked Monkey to set the named window's scroll offsets
+    The core asked Jotter to set the named window's scroll offsets
     to the given X and Y position.
 
 *   `WINDOW UPDATE_BOX WIN` _%id%_ `X` _%n%_ `Y` _%n%_ `WIDTH` _%n%_ `HEIGHT` _%n%_
 
-    The core asked Monkey to redraw the given portion of the content
+    The core asked Jotter to redraw the given portion of the content
     display.  Note these coordinates refer to the content, not the
-    viewport which Monkey is simulating.
+    viewport which Jotter is simulating.
 
 *   `WINDOW UPDATE_EXTENT WIN` _%id%_ `WIDTH` _%n%_ `HEIGHT` _%n%_
 
@@ -313,50 +313,50 @@ Responses
 
 *   `WINDOW GET_SCROLL WIN` _%id%_ `X` _%n%_ `Y` _%n%_
 
-    The core asked Monkey for the scroll offsets.  Monkey returned the
+    The core asked Jotter for the scroll offsets.  Jotter returned the
     numbers shown for the window named.
 
 *   `WINDOW SCROLL_START WIN` _%id%_
 
-    The core asked Monkey to scroll the named window to the top/left.
+    The core asked Jotter to scroll the named window to the top/left.
 
 *   `WINDOW POSITION_FRAME WIN` _%id%_ `X0` _%n%_ `Y0` _%n%_ `X1` _%n%_ `Y1` _%n%_
 
-    The core asked Monkey to position the named window as a frame at
+    The core asked Jotter to position the named window as a frame at
     the given coordinates of its parent.
 
 *   `WINDOW SCROLL_VISIBLE WIN` _%id%_ `X0` _%n%_ `Y0` _%n%_ `X1` _%n%_ `Y1` _%n%_
 
-    The core asked Monkey to scroll the named window until the
+    The core asked Jotter to scroll the named window until the
     indicated box is visible.
 
 *   `WINDOW PLACE_CARET WIN` _%id%_ `X` _%n%_ `Y` _%n%_ `HEIGHT` _%n%_
 
-    The core asked Monkey to render a caret in the named window at the
+    The core asked Jotter to render a caret in the named window at the
     indicated position with the indicated height.
 
 *   `WINDOW REMOVE_CARET WIN` _%id%_
 
-    The core asked Monkey to remove any caret in the named window.
+    The core asked Jotter to remove any caret in the named window.
 
 *   `WINDOW SCROLL_START WIN` _%id%_ `X0` _%n%_ `Y0` _%n%_ `X1` _%n%_ `Y1` _%n%_
 
-    The core asked Monkey to scroll the named window to the start of
+    The core asked Jotter to scroll the named window to the start of
     the given box.
 
 *   `WINDOW SELECT_MENU WIN` _%id%_
 
-    The core asked Monkey to produce a selection menu for the named
+    The core asked Jotter to produce a selection menu for the named
     window.
 
 *   `WINDOW SAVE_LINK WIN` _%id%_ `URL` _%url%_ `TITLE` _%str%_
 
-    The core asked Monkey to save a link from the given window with
+    The core asked Jotter to save a link from the given window with
     the given URL and anchor title.
 
 *   `WINDOW THUMBNAIL WIN` _%id%_ `URL` _%url%_
 
-    The core asked Monkey to render a thumbnail for the given window
+    The core asked Jotter to render a thumbnail for the given window
     which is currently at the given URL.
 
 *   `WINDOW REDRAW WIN` _%id%_ `START`
@@ -384,28 +384,28 @@ Responses
 
 *   `DOWNLOAD CREATE DWIN` _%id%_ `WIN` _%id%_
 
-    The core asked Monkey to create a download window owned by the
+    The core asked Jotter to create a download window owned by the
     given browser window.
 
 *   `DOWNLOAD DATA DWIN` _%id%_ `SIZE` _%n%_ `DATA` _%str%_
 
-    The core asked Monkey to update the named download window with
+    The core asked Jotter to update the named download window with
     the given byte size and data string.
 
 *   `DOWNLOAD ERROR DWIN` _%id%_ `ERROR` _%str%_
 
-    The core asked Monkey to update the named download window with
+    The core asked Jotter to update the named download window with
     the given error message.
 
 *   `DOWNLOAD DONE DWIN` _%id%_
 
-    The core asked Monkey to destroy the named download window.
+    The core asked Jotter to destroy the named download window.
 
 ### SSL Certificate messages
 
 *   `SSLCERT VERIFY CWIN` _%id%_ `URL` _%url%_
 
-    The core asked Monkey to say whether or not a given SSL
+    The core asked Jotter to say whether or not a given SSL
     certificate is OK.
 
 *   `LOGIN DESTROY CWIN` _%id%_
@@ -417,7 +417,7 @@ Responses
 
 *   `LOGIN OPEN LWIN` _%id%_ `URL` _%url%_
 
-    The core asked Monkey to ask for identification for the given URL.
+    The core asked Jotter to ask for identification for the given URL.
 
     This will be *immediately* followed by:
 
@@ -437,7 +437,7 @@ Responses
 
     The given login window has a realm of the given string
 
-    Subsequent to this message, the user of monkey is at liberty to issue
+    Subsequent to this message, the user of jotter is at liberty to issue
     `LOGIN` commands to control the response of the `401LOGIN` process.
 
 *   `LOGIN DESTROY LWIN` _%id%_
@@ -447,31 +447,31 @@ Responses
 
 ### Plotter messages
 
-> **Note, Monkey won't clip coordinates, but sometimes the core does.**
+> **Note, Jotter won't clip coordinates, but sometimes the core does.**
 
 *   `PLOT CLIP X0` _%n%_ `Y0` _%n%_ `X1` _%n%_ `Y1` _%n%_
 
-    The core asked Monkey to clip plotting to the given clipping
+    The core asked Jotter to clip plotting to the given clipping
     rectangle (X0,Y0) (X1,Y1)
 
 *   `PLOT TEXT X` _%n%_ `Y` _%n%_ `STR` _%str%_
 
-    The core asked Monkey to plot the given string at the
+    The core asked Jotter to plot the given string at the
     given coordinates.
 
 *   `PLOT LINE X0` _%n%_ `Y0` _%n%_ `X1` _%n%_ `Y1` _%n%_
 
-    The core asked Monkey to plot a line with the given start
+    The core asked Jotter to plot a line with the given start
     and end coordinates.
 
 *   `PLOT RECT X0` _%n%_ `Y0` _%n%_ `X1` _%n%_ `Y1` _%n%_
 
-    The core asked Monkey to plot a rectangle with the given
+    The core asked Jotter to plot a rectangle with the given
     coordinates as the corners.
 
 *   `PLOT BITMAP X` _%n%_ `Y` _%n%_ `WIDTH` _%n%_ `HEIGHT` _%n%_
 
-    The core asked Monkey to plot a bitmap at the given
+    The core asked Jotter to plot a bitmap at the given
     coordinates, scaled to the given width/height.
 
 > TODO: Check if other things are implemented and add them to the docs

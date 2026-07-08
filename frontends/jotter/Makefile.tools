@@ -1,6 +1,6 @@
 # -*- mode: makefile-gmake -*-
 ##
-## monkey target tool setup
+## jotter target tool setup
 ##
 
 ifeq ($(origin GCCSDK_INSTALL_ENV),undefined)

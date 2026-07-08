@@ -24,11 +24,11 @@
 #include "utils/ring.h"
 #include "utils/slateurl.h"
 
-#include "monkey/output.h"
-#include "monkey/401login.h"
+#include "jotter/output.h"
+#include "jotter/401login.h"
 
-struct monkey401 {
-	struct monkey401 *r_next, *r_prev;
+struct jotter401 {
+	struct jotter401 *r_next, *r_prev;
 	uint32_t num;
 	slateerror (*cb)(struct slateurl*, const char *, const char *, const char *, void *);
 	void *cbpw;
@@ -38,7 +38,7 @@ struct monkey401 {
 	struct slateurl *url;
 };
 
-static struct monkey401 *m401_ring = NULL;
+static struct jotter401 *m401_ring = NULL;
 static uint32_t m401_ctr = 0;
 
 
@@ -54,7 +54,7 @@ gui_401login_open(struct slateurl *url,
 				void *pw),
 		  void *cbpw)
 {
-	struct monkey401 *m401_ctx;
+	struct jotter401 *m401_ctx;
 
 	m401_ctx = calloc(1, sizeof(*m401_ctx));
 	if (m401_ctx == NULL) {
@@ -88,12 +88,12 @@ gui_401login_open(struct slateurl *url,
 	return SLATEERROR_OK;
 }
 
-static struct monkey401 *
-monkey_find_login_by_num(uint32_t login_num)
+static struct jotter401 *
+jotter_find_login_by_num(uint32_t login_num)
 {
-	struct monkey401 *ret = NULL;
+	struct jotter401 *ret = NULL;
 
-	RING_ITERATE_START(struct monkey401, m401_ring, c_ring) {
+	RING_ITERATE_START(struct jotter401, m401_ring, c_ring) {
 		if (c_ring->num == login_num) {
 			ret = c_ring;
 			RING_ITERATE_STOP(m401_ring, c_ring);
@@ -103,7 +103,7 @@ monkey_find_login_by_num(uint32_t login_num)
 	return ret;
 }
 
-static void free_login_context(struct monkey401 *m401_ctx) {
+static void free_login_context(struct jotter401 *m401_ctx) {
 	moutf(MOUT_LOGIN, "DESTROY LWIN %u", m401_ctx->num);
 	RING_REMOVE(m401_ring, m401_ctx);
 	if (m401_ctx->username != NULL) {
@@ -118,16 +118,16 @@ static void free_login_context(struct monkey401 *m401_ctx) {
 }
 
 static void
-monkey_login_handle_go(int argc, char **argv)
+jotter_login_handle_go(int argc, char **argv)
 {
-	struct monkey401 *m401_ctx;
+	struct jotter401 *m401_ctx;
 
 	if (argc != 3) {
 		moutf(MOUT_ERROR, "LOGIN GO ARGS BAD");
 		return;
 	}
 
-	m401_ctx = monkey_find_login_by_num(atoi(argv[2]));
+	m401_ctx = jotter_find_login_by_num(atoi(argv[2]));
 	if (m401_ctx == NULL) {
 		moutf(MOUT_ERROR, "LOGIN NUM BAD");
 		return;
@@ -139,16 +139,16 @@ monkey_login_handle_go(int argc, char **argv)
 }
 
 static void
-monkey_login_handle_destroy(int argc, char **argv)
+jotter_login_handle_destroy(int argc, char **argv)
 {
-	struct monkey401 *m401_ctx;
+	struct jotter401 *m401_ctx;
 
 	if (argc != 3) {
 		moutf(MOUT_ERROR, "LOGIN DESTROY ARGS BAD");
 		return;
 	}
 
-	m401_ctx = monkey_find_login_by_num(atoi(argv[2]));
+	m401_ctx = jotter_find_login_by_num(atoi(argv[2]));
 	if (m401_ctx == NULL) {
 		moutf(MOUT_ERROR, "LOGIN NUM BAD");
 		return;
@@ -158,16 +158,16 @@ monkey_login_handle_destroy(int argc, char **argv)
 }
 
 static void
-monkey_login_handle_username(int argc, char **argv)
+jotter_login_handle_username(int argc, char **argv)
 {
-	struct monkey401 *m401_ctx;
+	struct jotter401 *m401_ctx;
 
 	if (argc != 4) {
 		moutf(MOUT_ERROR, "LOGIN USERNAME ARGS BAD");
 		return;
 	}
 
-	m401_ctx = monkey_find_login_by_num(atoi(argv[2]));
+	m401_ctx = jotter_find_login_by_num(atoi(argv[2]));
 	if (m401_ctx == NULL) {
 		moutf(MOUT_ERROR, "LOGIN NUM BAD");
 		return;
@@ -181,16 +181,16 @@ monkey_login_handle_username(int argc, char **argv)
 }
 
 static void
-monkey_login_handle_password(int argc, char **argv)
+jotter_login_handle_password(int argc, char **argv)
 {
-	struct monkey401 *m401_ctx;
+	struct jotter401 *m401_ctx;
 
 	if (argc != 4) {
 		moutf(MOUT_ERROR, "LOGIN PASSWORD ARGS BAD");
 		return;
 	}
 
-	m401_ctx = monkey_find_login_by_num(atoi(argv[2]));
+	m401_ctx = jotter_find_login_by_num(atoi(argv[2]));
 	if (m401_ctx == NULL) {
 		moutf(MOUT_ERROR, "LOGIN NUM BAD");
 		return;
@@ -204,19 +204,19 @@ monkey_login_handle_password(int argc, char **argv)
 }
 
 void
-monkey_login_handle_command(int argc, char **argv)
+jotter_login_handle_command(int argc, char **argv)
 {
 	if (argc == 1)
 		return;
 
 	if (strcmp(argv[1], "USERNAME") == 0) {
-		monkey_login_handle_username(argc, argv);
+		jotter_login_handle_username(argc, argv);
 	} else if (strcmp(argv[1], "PASSWORD") == 0) {
-		monkey_login_handle_password(argc, argv);
+		jotter_login_handle_password(argc, argv);
 	} else if (strcmp(argv[1], "DESTROY") == 0) {
-		monkey_login_handle_destroy(argc, argv);
+		jotter_login_handle_destroy(argc, argv);
 	} else if (strcmp(argv[1], "GO") == 0) {
-		monkey_login_handle_go(argc, argv);
+		jotter_login_handle_go(argc, argv);
 	} else {
 		moutf(MOUT_ERROR, "LOGIN COMMAND UNKNOWN %s\n", argv[1]);
 	}

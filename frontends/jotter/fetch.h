@@ -1,6 +1,5 @@
 /*
- * Copyright 2007 Rob Kendrick <rjek@netsurf-browser.org>
- * Copyright 2007 Vincent Sanders <vince@debian.org>
+ * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
  * This file is part of NetSurf, http://www.slate-browser.org/
  *
@@ -17,6 +16,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-void monkey_fetch_filetype_init(const char *mimefile);
-void monkey_fetch_filetype_fin(void);
-const char *monkey_fetch_filetype(const char *unix_path);
+#ifndef SLATE_JOTTER_FETCH_H
+#define SLATE_JOTTER_FETCH_H
+
+extern struct gui_fetch_table *jotter_fetch_table;
+
+#endif /* SLATE_JOTTER_FETCH_H */

@@ -44,14 +44,14 @@
 #include "utils/ascii.h"
 #include "utils/hashtable.h"
 
-#include "monkey/filetype.h"
+#include "jotter/filetype.h"
 
 #define HASH_SIZE 117
 #define MAX_LINE_LEN 256
 
 static struct hash_table *mime_hash = NULL;
 
-void monkey_fetch_filetype_init(const char *mimefile)
+void jotter_fetch_filetype_init(const char *mimefile)
 {
 	struct stat statbuf;
 	FILE *fh = NULL;
@@ -165,7 +165,7 @@ void monkey_fetch_filetype_init(const char *mimefile)
 	fclose(fh);
 }
 
-void monkey_fetch_filetype_fin(void)
+void jotter_fetch_filetype_fin(void)
 {
 	hash_destroy(mime_hash);
 }
@@ -179,7 +179,7 @@ void monkey_fetch_filetype_fin(void)
  * \return Pointer to static MIME type string (should not be freed) not NULL.
  *	   invalidated on next call to fetch_filetype.
  */
-const char *monkey_fetch_filetype(const char *unix_path)
+const char *jotter_fetch_filetype(const char *unix_path)
 {
 	struct stat statbuf;
 	char *ext;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Vincent Sanders <vince@netsurf-browser.org>
+ * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
  *
  * This file is part of NetSurf, http://www.slate-browser.org/
  *
@@ -16,9 +16,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SLATE_JOTTER_BITMAP_H
-#define SLATE_JOTTER_BITMAP_H
+#ifndef SLATE_JOTTER_PLOT_H
+#define SLATE_JOTTER_PLOT_H
 
-extern struct gui_bitmap_table *monkey_bitmap_table;
+struct plotter_table;
 
-#endif /* SLATE_JOTTER_BITMAP_H */
+extern const struct plotter_table *jotter_plotters;
+
+#endif
