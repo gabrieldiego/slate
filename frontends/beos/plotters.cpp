@@ -3,7 +3,7 @@
  * Copyright 2006 Rob Kendrick <rjek@rjek.com>
  * Copyright 2005 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,9 +34,9 @@
 extern "C" {
 #include "utils/log.h"
 #include "utils/utils.h"
-#include "utils/nsoption.h"
-#include "utils/nsurl.h"
-#include "netsurf/plotters.h"
+#include "utils/slateoption.h"
+#include "utils/slateurl.h"
+#include "slate/plotters.h"
 }
 #include "beos/font.h"
 #include "beos/gui.h"
@@ -67,13 +67,13 @@ static const rgb_color kBlackColor = {
 
 // #pragma mark - implementation
 
-BView *nsbeos_current_gc(void)
+BView *slatebeos_current_gc(void)
 {
         return current_view;
 }
 
 
-BView *nsbeos_current_gc_lock(void)
+BView *slatebeos_current_gc_lock(void)
 {
         BView *view = current_view;
         if (view && view->LockLooper())
@@ -82,7 +82,7 @@ BView *nsbeos_current_gc_lock(void)
 }
 
 
-void nsbeos_current_gc_unlock(void)
+void slatebeos_current_gc_unlock(void)
 {
         if (current_view) {
                 current_view->UnlockLooper();
@@ -90,30 +90,30 @@ void nsbeos_current_gc_unlock(void)
 }
 
 
-void nsbeos_current_gc_set(BView *view)
+void slatebeos_current_gc_set(BView *view)
 {
         // XXX: (un)lock previous ?
         current_view = view;
 }
 
 
-static nserror
-nsbeos_plot_bbitmap(int x, int y, int width, int height, BBitmap *b, colour bg)
+static slateerror
+slatebeos_plot_bbitmap(int x, int y, int width, int height, BBitmap *b, colour bg)
 {
         /* XXX: This currently ignores the background colour supplied.
          * Does this matter?
          */
 
         if (width == 0 || height == 0) {
-                return NSERROR_OK;
+                return SLATEERROR_OK;
         }
 
         BView *view;
 
-        view = nsbeos_current_gc/*_lock*/();
+        view = slatebeos_current_gc/*_lock*/();
         if (view == NULL) {
                 beos_warn_user("No GC", 0);
-                return NSERROR_INVALID;
+                return SLATEERROR_INVALID;
         }
 
         drawing_mode oldmode = view->DrawingMode();
@@ -132,7 +132,7 @@ nsbeos_plot_bbitmap(int x, int y, int width, int height, BBitmap *b, colour bg)
         /*
           rgb_color old = view->LowColor();
           if (bg != NS_TRANSPARENT) {
-          view->SetLowColor(nsbeos_rgb_colour(bg));
+          view->SetLowColor(slatebeos_rgb_colour(bg));
           view->FillRect(rect, B_SOLID_LOW);
           }
         */
@@ -142,9 +142,9 @@ nsbeos_plot_bbitmap(int x, int y, int width, int height, BBitmap *b, colour bg)
         view->SetBlendingMode(alpha, func);
         view->SetDrawingMode(oldmode);
 
-        //nsbeos_current_gc_unlock();
+        //slatebeos_current_gc_unlock();
 
-        return NSERROR_OK;
+        return SLATEERROR_OK;
 }
 
 
@@ -166,7 +166,7 @@ static BPoint transform_pt(float x, float y, const float transform[6])
 }
 
 
-rgb_color nsbeos_rgb_colour(colour c)
+rgb_color slatebeos_rgb_colour(colour c)
 {
         rgb_color color;
         if (c == NS_TRANSPARENT)
@@ -178,10 +178,10 @@ rgb_color nsbeos_rgb_colour(colour c)
 }
 
 
-void nsbeos_set_colour(colour c)
+void slatebeos_set_colour(colour c)
 {
-        rgb_color color = nsbeos_rgb_colour(c);
-        BView *view = nsbeos_current_gc();
+        rgb_color color = slatebeos_rgb_colour(c);
+        BView *view = slatebeos_current_gc();
         view->SetHighColor(color);
 }
 
@@ -191,11 +191,11 @@ void nsbeos_set_colour(colour c)
  *
  * It is assumed that the plotters have been set up.
  */
-void nsbeos_plot_caret(int x, int y, int h)
+void slatebeos_plot_caret(int x, int y, int h)
 {
         BView *view;
 
-        view = nsbeos_current_gc/*_lock*/();
+        view = slatebeos_current_gc/*_lock*/();
         if (view == NULL)
                 /* TODO: report an error here */
                 return;
@@ -209,7 +209,7 @@ void nsbeos_plot_caret(int x, int y, int h)
 #endif
         view->StrokeLine(start, end);
 
-        //nsbeos_current_gc_unlock();
+        //slatebeos_current_gc_unlock();
 }
 
 
@@ -219,18 +219,18 @@ void nsbeos_plot_caret(int x, int y, int h)
  * \param ctx The current redraw context.
  * \param ns_clip The rectangle to limit all subsequent plot
  *              operations within.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsbeos_plot_clip(const struct redraw_context *ctx, const struct rect *ns_clip)
+static slateerror
+slatebeos_plot_clip(const struct redraw_context *ctx, const struct rect *ns_clip)
 {
         BView *view;
         //fprintf(stderr, "%s(%d, %d, %d, %d)\n", __FUNCTION__, clip_x0, clip_y0, clip_x1, clip_y1);
 
-        view = nsbeos_current_gc/*_lock*/();
+        view = slatebeos_current_gc/*_lock*/();
         if (view == NULL) {
                 beos_warn_user("No GC", 0);
-                return NSERROR_INVALID;
+                return SLATEERROR_INVALID;
         }
 
         BRect rect(ns_clip->x0, ns_clip->y0, ns_clip->x1 - 1, ns_clip->y1 - 1);
@@ -240,9 +240,9 @@ nsbeos_plot_clip(const struct redraw_context *ctx, const struct rect *ns_clip)
                 view->ConstrainClippingRegion(&clip);
         }
 
-        //nsbeos_current_gc_unlock();
+        //slatebeos_current_gc_unlock();
 
-        return NSERROR_OK;
+        return SLATEERROR_OK;
 }
 
 
@@ -260,31 +260,31 @@ nsbeos_plot_clip(const struct redraw_context *ctx, const struct rect *ns_clip)
  * \param radius The radius of the arc.
  * \param angle1 The start angle of the arc.
  * \param angle2 The finish angle of the arc.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsbeos_plot_arc(const struct redraw_context *ctx,
+static slateerror
+slatebeos_plot_arc(const struct redraw_context *ctx,
                 const plot_style_t *style,
                 int x, int y, int radius, int angle1, int angle2)
 {
         BView *view;
 
-        view = nsbeos_current_gc/*_lock*/();
+        view = slatebeos_current_gc/*_lock*/();
         if (view == NULL) {
                 beos_warn_user("No GC", 0);
-                return NSERROR_INVALID;
+                return SLATEERROR_INVALID;
         }
 
-        nsbeos_set_colour(style->fill_colour);
+        slatebeos_set_colour(style->fill_colour);
 
         BPoint center(x, y);
         float angle = angle1; // in degree
         float span = angle2 - angle1; // in degree
         view->StrokeArc(center, radius, radius, angle, span);
 
-        //nsbeos_current_gc_unlock();
+        //slatebeos_current_gc_unlock();
 
-        return NSERROR_OK;
+        return SLATEERROR_OK;
 }
 
 
@@ -298,22 +298,22 @@ nsbeos_plot_arc(const struct redraw_context *ctx,
  * \param x x coordinate of circle centre.
  * \param y y coordinate of circle centre.
  * \param radius circle radius.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsbeos_plot_disc(const struct redraw_context *ctx,
+static slateerror
+slatebeos_plot_disc(const struct redraw_context *ctx,
                  const plot_style_t *style,
                  int x, int y, int radius)
 {
         BView *view;
 
-        view = nsbeos_current_gc/*_lock*/();
+        view = slatebeos_current_gc/*_lock*/();
         if (view == NULL) {
                 beos_warn_user("No GC", 0);
-                return NSERROR_INVALID;
+                return SLATEERROR_INVALID;
         }
 
-        nsbeos_set_colour(style->fill_colour);
+        slatebeos_set_colour(style->fill_colour);
 
         BPoint center(x, y);
         if (style->fill_type != PLOT_OP_TYPE_NONE)
@@ -321,9 +321,9 @@ nsbeos_plot_disc(const struct redraw_context *ctx,
         else
                 view->StrokeEllipse(center, radius, radius);
 
-        //nsbeos_current_gc_unlock();
+        //slatebeos_current_gc_unlock();
 
-        return NSERROR_OK;
+        return SLATEERROR_OK;
 }
 
 
@@ -336,10 +336,10 @@ nsbeos_plot_disc(const struct redraw_context *ctx,
  * \param ctx The current redraw context.
  * \param style Style controlling the line plot.
  * \param line A rectangle defining the line to be drawn
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsbeos_plot_line(const struct redraw_context *ctx,
+static slateerror
+slatebeos_plot_line(const struct redraw_context *ctx,
                  const plot_style_t *style,
                  const struct rect *line)
 {
@@ -361,13 +361,13 @@ nsbeos_plot_line(const struct redraw_context *ctx,
                 break;
         }
 
-        view = nsbeos_current_gc/*_lock*/();
+        view = slatebeos_current_gc/*_lock*/();
         if (view == NULL) {
                 beos_warn_user("No GC", 0);
-                return NSERROR_OK;
+                return SLATEERROR_OK;
         }
 
-        nsbeos_set_colour(style->stroke_colour);
+        slatebeos_set_colour(style->stroke_colour);
 
         float pensize = view->PenSize();
         view->SetPenSize(plot_style_fixed_to_float(style->stroke_width));
@@ -378,9 +378,9 @@ nsbeos_plot_line(const struct redraw_context *ctx,
 
         view->SetPenSize(pensize);
 
-        //nsbeos_current_gc_unlock();
+        //slatebeos_current_gc_unlock();
 
-        return NSERROR_OK;
+        return SLATEERROR_OK;
 }
 
 
@@ -395,28 +395,28 @@ nsbeos_plot_line(const struct redraw_context *ctx,
  * \param ctx The current redraw context.
  * \param style Style controlling the rectangle plot.
  * \param nsrect A rectangle defining the line to be drawn
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsbeos_plot_rectangle(const struct redraw_context *ctx,
+static slateerror
+slatebeos_plot_rectangle(const struct redraw_context *ctx,
                       const plot_style_t *style,
                       const struct rect *nsrect)
 {
         if (style->fill_type != PLOT_OP_TYPE_NONE) {
                 BView *view;
 
-                view = nsbeos_current_gc/*_lock*/();
+                view = slatebeos_current_gc/*_lock*/();
                 if (view == NULL) {
                         beos_warn_user("No GC", 0);
-                        return NSERROR_INVALID;
+                        return SLATEERROR_INVALID;
                 }
 
-                nsbeos_set_colour(style->fill_colour);
+                slatebeos_set_colour(style->fill_colour);
 
                 BRect rect(nsrect->x0, nsrect->y0, nsrect->x1 - 1, nsrect->y1 - 1);
                 view->FillRect(rect);
 
-                //nsbeos_current_gc_unlock();
+                //slatebeos_current_gc_unlock();
         }
 
         if (style->stroke_type != PLOT_OP_TYPE_NONE) {
@@ -438,13 +438,13 @@ nsbeos_plot_rectangle(const struct redraw_context *ctx,
                         break;
                 }
 
-                view = nsbeos_current_gc/*_lock*/();
+                view = slatebeos_current_gc/*_lock*/();
                 if (view == NULL) {
                         beos_warn_user("No GC", 0);
-                        return NSERROR_INVALID;
+                        return SLATEERROR_INVALID;
                 }
 
-                nsbeos_set_colour(style->stroke_colour);
+                slatebeos_set_colour(style->stroke_colour);
 
                 float pensize = view->PenSize();
                 view->SetPenSize(plot_style_fixed_to_float(style->stroke_width));
@@ -454,10 +454,10 @@ nsbeos_plot_rectangle(const struct redraw_context *ctx,
 
                 view->SetPenSize(pensize);
 
-                //nsbeos_current_gc_unlock();
+                //slatebeos_current_gc_unlock();
         }
 
-        return NSERROR_OK;
+        return SLATEERROR_OK;
 }
 
 
@@ -473,10 +473,10 @@ nsbeos_plot_rectangle(const struct redraw_context *ctx,
  * \param style Style controlling the polygon plot.
  * \param p verticies of polygon
  * \param n number of verticies.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsbeos_plot_polygon(const struct redraw_context *ctx,
+static slateerror
+slatebeos_plot_polygon(const struct redraw_context *ctx,
                     const plot_style_t *style,
                     const int *p,
                     unsigned int n)
@@ -484,13 +484,13 @@ nsbeos_plot_polygon(const struct redraw_context *ctx,
         unsigned int i;
         BView *view;
 
-        view = nsbeos_current_gc/*_lock*/();
+        view = slatebeos_current_gc/*_lock*/();
         if (view == NULL) {
                 beos_warn_user("No GC", 0);
-                return NSERROR_INVALID;
+                return SLATEERROR_INVALID;
         }
 
-        nsbeos_set_colour(style->fill_colour);
+        slatebeos_set_colour(style->fill_colour);
 
         BPoint points[n];
 
@@ -504,7 +504,7 @@ nsbeos_plot_polygon(const struct redraw_context *ctx,
                 view->FillPolygon(points, (int32)n);
         }
 
-        return NSERROR_OK;
+        return SLATEERROR_OK;
 }
 
 
@@ -519,10 +519,10 @@ nsbeos_plot_polygon(const struct redraw_context *ctx,
  * \param p elements of path
  * \param n nunber of elements on path
  * \param transform A transform to apply to the path.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsbeos_plot_path(const struct redraw_context *ctx,
+static slateerror
+slatebeos_plot_path(const struct redraw_context *ctx,
                  const plot_style_t *pstyle,
                  const float *p,
                  unsigned int n,
@@ -532,12 +532,12 @@ nsbeos_plot_path(const struct redraw_context *ctx,
         BShape shape;
 
         if (n == 0) {
-                return NSERROR_OK;
+                return SLATEERROR_OK;
         }
 
         if (p[0] != PLOTTER_PATH_MOVE) {
                 NSLOG(netsurf, INFO, "path doesn't start with a move");
-                return NSERROR_INVALID;
+                return SLATEERROR_INVALID;
         }
 
         for (i = 0; i < n; ) {
@@ -562,16 +562,16 @@ nsbeos_plot_path(const struct redraw_context *ctx,
                         i += 7;
                 } else {
                         NSLOG(netsurf, INFO, "bad path command %f", p[i]);
-                        return NSERROR_INVALID;
+                        return SLATEERROR_INVALID;
                 }
         }
         shape.Close();
 
         BView *view;
 
-        view = nsbeos_current_gc/*_lock*/();
+        view = slatebeos_current_gc/*_lock*/();
         if (view == NULL) {
-                return NSERROR_INVALID;
+                return SLATEERROR_INVALID;
         }
 
         rgb_color old_high = view->HighColor();
@@ -579,20 +579,20 @@ nsbeos_plot_path(const struct redraw_context *ctx,
         view->SetPenSize(plot_style_fixed_to_float(pstyle->stroke_width));
         view->MovePenTo(0, 0);
         if (pstyle->fill_colour != NS_TRANSPARENT) {
-                view->SetHighColor(nsbeos_rgb_colour(pstyle->fill_colour));
+                view->SetHighColor(slatebeos_rgb_colour(pstyle->fill_colour));
                 view->FillShape(&shape);
         }
         if (pstyle->stroke_colour != NS_TRANSPARENT) {
-                view->SetHighColor(nsbeos_rgb_colour(pstyle->stroke_colour));
+                view->SetHighColor(slatebeos_rgb_colour(pstyle->stroke_colour));
                 view->StrokeShape(&shape);
         }
         // restore
         view->SetPenSize(old_pen);
         view->SetHighColor(old_high);
 
-        //nsbeos_current_gc_unlock();
+        //slatebeos_current_gc_unlock();
 
-        return NSERROR_OK;
+        return SLATEERROR_OK;
 }
 
 
@@ -618,10 +618,10 @@ nsbeos_plot_path(const struct redraw_context *ctx,
  * \param height The height of area to plot the bitmap into
  * \param bg the background colour to alpha blend into
  * \param flags the flags controlling the type of plot operation
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsbeos_plot_bitmap(const struct redraw_context *ctx,
+static slateerror
+slatebeos_plot_bitmap(const struct redraw_context *ctx,
                    struct bitmap *bitmap,
                    int x, int y,
                    int width,
@@ -637,17 +637,17 @@ nsbeos_plot_bitmap(const struct redraw_context *ctx,
 
         if (!(repeat_x || repeat_y)) {
                 /* Not repeating at all, so just plot it */
-                primary = nsbeos_bitmap_get_primary(bitmap);
-                return nsbeos_plot_bbitmap(x, y, width, height, primary, bg);
+                primary = slatebeos_bitmap_get_primary(bitmap);
+                return slatebeos_plot_bbitmap(x, y, width, height, primary, bg);
         }
 
         if (repeat_x && !repeat_y)
-                pretiled = nsbeos_bitmap_get_pretile_x(bitmap);
+                pretiled = slatebeos_bitmap_get_pretile_x(bitmap);
         if (repeat_x && repeat_y)
-                pretiled = nsbeos_bitmap_get_pretile_xy(bitmap);
+                pretiled = slatebeos_bitmap_get_pretile_xy(bitmap);
         if (!repeat_x && repeat_y)
-                pretiled = nsbeos_bitmap_get_pretile_y(bitmap);
-        primary = nsbeos_bitmap_get_primary(bitmap);
+                pretiled = slatebeos_bitmap_get_pretile_y(bitmap);
+        primary = slatebeos_bitmap_get_primary(bitmap);
 
         /* use the primary and pretiled widths to scale the w/h provided */
         width *= pretiled->Bounds().Width() + 1;
@@ -657,10 +657,10 @@ nsbeos_plot_bitmap(const struct redraw_context *ctx,
 
         BView *view;
 
-        view = nsbeos_current_gc/*_lock*/();
+        view = slatebeos_current_gc/*_lock*/();
         if (view == NULL) {
                 beos_warn_user("No GC", 0);
-                return NSERROR_INVALID;
+                return SLATEERROR_INVALID;
         }
 
         // XXX: do we really need to use clipping reg ?
@@ -687,7 +687,7 @@ nsbeos_plot_bitmap(const struct redraw_context *ctx,
                 }
 
                 while (donewidth < (cliprect.right)) {
-                        nsbeos_plot_bbitmap(donewidth, doneheight,
+                        slatebeos_plot_bbitmap(donewidth, doneheight,
                                             width, height, pretiled, bg);
                         donewidth += width;
                         if (!repeat_x) {
@@ -702,7 +702,7 @@ nsbeos_plot_bitmap(const struct redraw_context *ctx,
 
 #warning WRITEME
 
-        return NSERROR_OK;
+        return SLATEERROR_OK;
 }
 
 
@@ -715,10 +715,10 @@ nsbeos_plot_bitmap(const struct redraw_context *ctx,
  * \param y y coordinate
  * \param text UTF-8 string to plot
  * \param length length of string, in bytes
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsbeos_plot_text(const struct redraw_context *ctx,
+static slateerror
+slatebeos_plot_text(const struct redraw_context *ctx,
                  const struct plot_font_style *fstyle,
                  int x,
                  int y,
@@ -726,26 +726,26 @@ nsbeos_plot_text(const struct redraw_context *ctx,
                  size_t length)
 {
         if (!nsfont_paint(fstyle, text, length, x, y)) {
-                return NSERROR_INVALID;
+                return SLATEERROR_INVALID;
         }
 
-        return NSERROR_OK;
+        return SLATEERROR_OK;
 }
 
 
 /**
  * beos plotter operation table
  */
-const struct plotter_table nsbeos_plotters = {
-        nsbeos_plot_clip,
-        nsbeos_plot_arc,
-        nsbeos_plot_disc,
-        nsbeos_plot_line,
-        nsbeos_plot_rectangle,
-        nsbeos_plot_polygon,
-        nsbeos_plot_path,
-        nsbeos_plot_bitmap,
-        nsbeos_plot_text,
+const struct plotter_table slatebeos_plotters = {
+        slatebeos_plot_clip,
+        slatebeos_plot_arc,
+        slatebeos_plot_disc,
+        slatebeos_plot_line,
+        slatebeos_plot_rectangle,
+        slatebeos_plot_polygon,
+        slatebeos_plot_path,
+        slatebeos_plot_bitmap,
+        slatebeos_plot_text,
         NULL, // Group Start
         NULL, // Group End
         NULL, // Flush
@@ -816,13 +816,13 @@ extern "C" void test_plotters_main(void);
 void test_plotters_main(void)
 {
         BApplication app("application/x-vnd.NetSurf");
-        memcpy(&plot, &nsbeos_plotters, sizeof(plot));
+        memcpy(&plot, &slatebeos_plotters, sizeof(plot));
         BRect frame(0,0,300,300);
         PTView *view = new PTView(frame);
         frame.OffsetBySelf(100,100);
         BWindow *win = new BWindow(frame, "NetSurfPlotterTest", B_TITLED_WINDOW, B_QUIT_ON_WINDOW_CLOSE);
         win->AddChild(view);
-        nsbeos_current_gc_set(view);
+        slatebeos_current_gc_set(view);
         win->Show();
         app.Run();
 }

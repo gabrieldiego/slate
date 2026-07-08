@@ -1,7 +1,7 @@
 /*
  * Copyright 2005 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,8 +24,8 @@
  * Tinct SWI numbers and flags for version 0.11
  */
 
-#ifndef _NETSURF_RISCOS_TINCT_H_
-#define _NETSURF_RISCOS_TINCT_H_
+#ifndef _SLATE_RISCOS_TINCT_H_
+#define _SLATE_RISCOS_TINCT_H_
 
 
 /**

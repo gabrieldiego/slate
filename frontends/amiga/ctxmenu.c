@@ -1,7 +1,7 @@
 /*
  * Copyright 2015 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,12 +38,12 @@
 #include "utils/utils.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "utils/nsoption.h"
-#include "utils/nsurl.h"
-#include "netsurf/content.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/mouse.h"
-#include "netsurf/keypress.h"
+#include "utils/slateoption.h"
+#include "utils/slateurl.h"
+#include "slate/content.h"
+#include "slate/browser_window.h"
+#include "slate/mouse.h"
+#include "slate/keypress.h"
 #include "desktop/browser_history.h"
 #include "desktop/searchweb.h"
 
@@ -113,14 +113,14 @@ HOOKF(void, ami_ctxmenu_item_selcopy, APTR, window, struct IntuiMessage *)
 
 HOOKF(void, ami_ctxmenu_item_websearch, APTR, window, struct IntuiMessage *)
 {
-	nserror ret = NSERROR_OK;
-	nsurl *url;
+	slateerror ret = SLATEERROR_OK;
+	slateurl *url;
 
 	struct gui_window_2 *gwin = (struct gui_window_2 *)hook->h_Data;
 	char *sel = browser_window_get_selection(ami_gui2_get_browser_window(gwin));
 
 	ret = search_web_omni(sel, SEARCH_WEB_OMNI_SEARCHONLY, &url);
-	if (ret == NSERROR_OK) {
+	if (ret == SLATEERROR_OK) {
 			browser_window_navigate(ami_gui2_get_browser_window(gwin),
 					url,
 					NULL,
@@ -128,9 +128,9 @@ HOOKF(void, ami_ctxmenu_item_websearch, APTR, window, struct IntuiMessage *)
 					NULL,
 					NULL,
 					NULL);
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		amiga_warn_user(messages_get_errorcode(ret), 0);
 	}
 
@@ -140,40 +140,40 @@ HOOKF(void, ami_ctxmenu_item_websearch, APTR, window, struct IntuiMessage *)
 HOOKF(void, ami_ctxmenu_item_urlopentab, APTR, window, struct IntuiMessage *)
 {
 	struct browser_window *bw;
-	nsurl *url = (nsurl *)hook->h_Data;
+	slateurl *url = (slateurl *)hook->h_Data;
 	struct gui_window_2 *gwin;
 
 	GetAttr(WINDOW_UserData, (Object *)window, (ULONG *)&gwin);
-	nserror error = browser_window_create(BW_CREATE_CLONE | BW_CREATE_HISTORY | BW_CREATE_TAB,
+	slateerror error = browser_window_create(BW_CREATE_CLONE | BW_CREATE_HISTORY | BW_CREATE_TAB,
 								      url,
 								      browser_window_access_url(ami_gui2_get_browser_window(gwin)),
 								      ami_gui2_get_browser_window(gwin),
 								      &bw);
 
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		amiga_warn_user(messages_get_errorcode(error), 0);		
 }
 
 HOOKF(void, ami_ctxmenu_item_urlopenwin, APTR, window, struct IntuiMessage *)
 {
 	struct browser_window *bw;
-	nsurl *url = (nsurl *)hook->h_Data;
+	slateurl *url = (slateurl *)hook->h_Data;
 	struct gui_window_2 *gwin;
 
 	GetAttr(WINDOW_UserData, (Object *)window, (ULONG *)&gwin);
-	nserror error = browser_window_create(BW_CREATE_CLONE | BW_CREATE_HISTORY,
+	slateerror error = browser_window_create(BW_CREATE_CLONE | BW_CREATE_HISTORY,
 								      url,
 								      browser_window_access_url(ami_gui2_get_browser_window(gwin)),
 								      ami_gui2_get_browser_window(gwin),
 								      &bw);
 
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		amiga_warn_user(messages_get_errorcode(error), 0);		
 }
 
 HOOKF(void, ami_ctxmenu_item_urldownload, APTR, window, struct IntuiMessage *)
 {
-	nsurl *url = (nsurl *)hook->h_Data;
+	slateurl *url = (slateurl *)hook->h_Data;
 	struct gui_window_2 *gwin;
 
 	GetAttr(WINDOW_UserData, (Object *)window, (ULONG *)&gwin);
@@ -189,8 +189,8 @@ HOOKF(void, ami_ctxmenu_item_urldownload, APTR, window, struct IntuiMessage *)
 
 HOOKF(void, ami_ctxmenu_item_urlcopy, APTR, window, struct IntuiMessage *)
 {
-	nsurl *url = (nsurl *)hook->h_Data;
-	ami_easy_clipboard(nsurl_access(url));		
+	slateurl *url = (slateurl *)hook->h_Data;
+	ami_easy_clipboard(slateurl_access(url));		
 }
 
 HOOKF(void, ami_ctxmenu_item_objshow, APTR, window, struct IntuiMessage *)
@@ -309,7 +309,7 @@ static uint32 ami_ctxmenu_hook_func(struct Hook *hook, struct Window *window, st
 	char *sel;
 
 	if(msg->State != CM_QUERY) return 0;
-	if(nsoption_bool(kiosk_mode) == true) return 0;
+	if(slateoption_bool(kiosk_mode) == true) return 0;
 // check window is active
 
 	if(ctxmenu_obj != NULL) DisposeObject(ctxmenu_obj);

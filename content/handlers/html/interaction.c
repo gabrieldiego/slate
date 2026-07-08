@@ -4,7 +4,7 @@
  * Copyright 2008 Michael Drake <tlsa@netsurf-browser.org>
  * Copyright 2009 Paul Blokus <paul_pl@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,13 +34,13 @@
 #include "utils/messages.h"
 #include "utils/utils.h"
 #include "utils/log.h"
-#include "utils/nsoption.h"
-#include "netsurf/content.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/mouse.h"
-#include "netsurf/misc.h"
-#include "netsurf/layout.h"
-#include "netsurf/keypress.h"
+#include "utils/slateoption.h"
+#include "slate/content.h"
+#include "slate/browser_window.h"
+#include "slate/mouse.h"
+#include "slate/misc.h"
+#include "slate/layout.h"
+#include "slate/keypress.h"
 #include "content/hlcache.h"
 #include "content/textsearch.h"
 #include "desktop/browser_history.h"
@@ -325,7 +325,7 @@ html_overflow_scroll_drag_end(struct scrollbar *scrollbar,
  * handle html mouse action when select menu is open
  *
  */
-static nserror
+static slateerror
 mouse_action_select_menu(html_content *html,
 			 struct browser_window *bw,
 			 browser_mouse_state mouse,
@@ -365,7 +365,7 @@ mouse_action_select_menu(html_content *html,
 		content_broadcast((struct content *)html,
 				  CONTENT_MSG_STATUS,
 				  &msg_data);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* close menu and redraw where it was */
@@ -379,7 +379,7 @@ mouse_action_select_menu(html_content *html,
 			       box_y,
 			       width,
 			       height);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -387,7 +387,7 @@ mouse_action_select_menu(html_content *html,
  * handle html mouse action when a selection drag is being performed
  *
  */
-static nserror
+static slateerror
 mouse_action_drag_selection(html_content *html,
 			    struct browser_window *bw,
 			    browser_mouse_state mouse,
@@ -416,7 +416,7 @@ mouse_action_drag_selection(html_content *html,
 		drag_owner.no_owner = true;
 		html_set_drag_type(html, HTML_DRAG_NONE, drag_owner, NULL);
 
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	if (selection_dragging_start(html->sel)) {
@@ -436,7 +436,7 @@ mouse_action_drag_selection(html_content *html,
 
 		selection_track(html->sel, mouse, box->byte_offset + idx);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -444,7 +444,7 @@ mouse_action_drag_selection(html_content *html,
  * handle html mouse action when a scrollbar drag is being performed
  *
  */
-static nserror
+static slateerror
 mouse_action_drag_scrollbar(html_content *html,
 			    struct browser_window *bw,
 			    browser_mouse_state mouse,
@@ -503,14 +503,14 @@ mouse_action_drag_scrollbar(html_content *html,
 				  &msg_data);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * handle mouse actions while dragging in a text area
  */
-static nserror
+static slateerror
 mouse_action_drag_textarea(html_content *html,
 			    struct browser_window *bw,
 			    browser_mouse_state mouse,
@@ -534,14 +534,14 @@ mouse_action_drag_textarea(html_content *html,
 			      y - box_y);
 
 	/* TODO: Set appropriate statusbar message */
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * handle mouse actions while dragging in a content
  */
-static nserror
+static slateerror
 mouse_action_drag_content(html_content *html,
 			  struct browser_window *bw,
 			  browser_mouse_state mouse,
@@ -559,7 +559,7 @@ mouse_action_drag_content(html_content *html,
 			    bw, mouse,
 			    x - box_x,
 			    y - box_y);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -600,7 +600,7 @@ struct mouse_action_state {
 	/** link either from href or imagemap */
 	struct {
 		struct box *box;
-		nsurl *url;
+		slateurl *url;
 		const char *target;
 		bool is_imagemap;
 	} link;
@@ -670,7 +670,7 @@ struct mouse_action_state {
  * text_box - text box
  * text_box_x - text_box
  */
-static nserror
+static slateerror
 get_mouse_action_node(html_content *html,
 		      int x, int y,
 		      struct mouse_action_state *man)
@@ -816,7 +816,7 @@ get_mouse_action_node(html_content *html,
 
 	assert(man->node != NULL);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -829,7 +829,7 @@ get_mouse_action_node(html_content *html,
  * bridge those two models, and let cancelled JS gestures suppress NetSurf's
  * native drag handling.
  */
-static nserror
+static slateerror
 html_mouse_action_dom_event(html_content *html,
 			    browser_mouse_state mouse,
 			    int x, int y,
@@ -840,16 +840,16 @@ html_mouse_action_dom_event(html_content *html,
 	dom_string *type;
 	bool captured_before;
 	bool dispatch_result;
-	nserror res;
+	slateerror res;
 
 	*handled = false;
 
 	if (html->layout == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	res = get_mouse_action_node(html, x, y, &mas);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -883,14 +883,14 @@ html_mouse_action_dom_event(html_content *html,
 
 	*handled = captured_before || html->dom_mouse_captured;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * process mouse activity on a form gadget
  */
-static nserror
+static slateerror
 gadget_mouse_action(html_content *html,
 		    browser_mouse_state mouse,
 		    int x, int y,
@@ -899,7 +899,7 @@ gadget_mouse_action(html_content *html,
 	struct content *c = (struct content *)html;
 	textarea_mouse_status ta_status;
 	union content_msg_data msg_data;
-	nserror res;
+	slateerror res;
 	bool click;
 	click = mouse & (BROWSER_MOUSE_PRESS_1 | BROWSER_MOUSE_PRESS_2 |
 			 BROWSER_MOUSE_CLICK_1 | BROWSER_MOUSE_CLICK_2 |
@@ -910,13 +910,13 @@ gadget_mouse_action(html_content *html,
 		mas->result.status = messages_get("FormSelect");
 		mas->result.pointer = BROWSER_POINTER_MENU;
 		if (mouse & BROWSER_MOUSE_CLICK_1 &&
-		    nsoption_bool(core_select_menu)) {
+		    slateoption_bool(core_select_menu)) {
 			html->visible_select_menu = mas->gadget.control;
 			res = form_open_select_menu(c,
 						    mas->gadget.control,
 						    form_select_menu_callback,
 						    c);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				NSLOG(netsurf, ERROR, "%s",
 				      messages_get_errorcode(res));
 				html->visible_select_menu = NULL;
@@ -955,7 +955,7 @@ gadget_mouse_action(html_content *html,
 			/** \todo Find a way to not ignore errors */
 			coords = calloc(1, sizeof(*coords));
 			if (coords == NULL) {
-				return NSERROR_OK;
+				return SLATEERROR_OK;
 			}
 			coords->x = x - mas->gadget.box_x;
 			coords->y = y - mas->gadget.box_y;
@@ -965,7 +965,7 @@ gadget_mouse_action(html_content *html,
 				coords,
 				html__image_coords_dom_user_data_handler,
 				&oldcoords) != DOM_NO_ERR) {
-				return NSERROR_OK;
+				return SLATEERROR_OK;
 			}
 			free(oldcoords);
 		}
@@ -1048,14 +1048,14 @@ gadget_mouse_action(html_content *html,
 		break;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * process mouse activity on an iframe
  */
-static nserror
+static slateerror
 iframe_mouse_action(struct browser_window *bw,
 		    browser_mouse_state mouse,
 		    int x, int y,
@@ -1082,14 +1082,14 @@ iframe_mouse_action(struct browser_window *bw,
 	}
 	mas->result.action = ACTION_NOSEND;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * process mouse activity on an html object
  */
-static nserror
+static slateerror
 html_object_mouse_action(html_content *html,
 			 struct browser_window *bw,
 			 browser_mouse_state mouse,
@@ -1125,7 +1125,7 @@ html_object_mouse_action(html_content *html,
 	}
 
 	mas->result.action = ACTION_NOSEND;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1135,12 +1135,12 @@ html_object_mouse_action(html_content *html,
  * \param urm The url to check.
  * \return true if the url is a javascript scheme else false
  */
-static bool is_javascript_navigate_url(nsurl *url)
+static bool is_javascript_navigate_url(slateurl *url)
 {
 	bool is_js = false;
 	lwc_string *scheme;
 
-	scheme = nsurl_get_component(url, NSURL_SCHEME);
+	scheme = slateurl_get_component(url, SLATEURL_SCHEME);
 	if (scheme != NULL) {
 		if (scheme == corestring_lwc_javascript) {
 			is_js = true;
@@ -1154,22 +1154,22 @@ static bool is_javascript_navigate_url(nsurl *url)
 /**
  * process mouse activity on a link
  */
-static nserror
+static slateerror
 link_mouse_action(html_content *html,
 		  struct browser_window *bw,
 		  browser_mouse_state mouse,
 		  int x, int y,
 		  struct mouse_action_state *mas)
 {
-	nserror res;
+	slateerror res;
 	char *url_s = NULL;
 	size_t url_l = 0;
 	static char status_buffer[200];
 	union content_msg_data msg_data;
 
-	if (nsoption_bool(display_decoded_idn) == true) {
-		res = nsurl_get_utf8(mas->link.url, &url_s, &url_l);
-		if (res != NSERROR_OK) {
+	if (slateoption_bool(display_decoded_idn) == true) {
+		res = slateurl_get_utf8(mas->link.url, &url_s, &url_l);
+		if (res != SLATEERROR_OK) {
 			/* Unable to obtain a decoded IDN. This is not
 			 *  a fatal error.  Ensure the string pointer
 			 *  is NULL so we use the encoded version.
@@ -1182,13 +1182,13 @@ link_mouse_action(html_content *html,
 		snprintf(status_buffer,
 			 sizeof status_buffer,
 			 "%s: %s",
-			 url_s ? url_s : nsurl_access(mas->link.url),
+			 url_s ? url_s : slateurl_access(mas->link.url),
 			 mas->title);
 	} else {
 		snprintf(status_buffer,
 			 sizeof status_buffer,
 			 "%s",
-			 url_s ? url_s : nsurl_access(mas->link.url));
+			 url_s ? url_s : slateurl_access(mas->link.url));
 	}
 
 	if (url_s != NULL) {
@@ -1227,11 +1227,11 @@ link_mouse_action(html_content *html,
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-static nserror
+static slateerror
 default_mouse_action_focus(html_content *html, browser_mouse_state mouse)
 {
 	if (mouse && mouse < BROWSER_MOUSE_MOD_1) {
@@ -1241,14 +1241,14 @@ default_mouse_action_focus(html_content *html, browser_mouse_state mouse)
 		html_set_focus(html, HTML_FOCUS_SELF, fo, true, 0, 0, 0, NULL);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * process mouse activity if it is not anything else
  */
-static nserror
+static slateerror
 default_mouse_action(html_content *html,
 		  struct browser_window *bw,
 		  browser_mouse_state mouse,
@@ -1387,13 +1387,13 @@ default_mouse_action(html_content *html,
 /**
  * handle non dragging mouse actions
  */
-static nserror
+static slateerror
 mouse_action_drag_none(html_content *html,
 		       struct browser_window *bw,
 		       browser_mouse_state mouse,
 		       int x, int y)
 {
-	nserror res;
+	slateerror res;
 	struct content *c = (struct content *)html;
 	union content_msg_data msg_data;
 	lwc_string *path;
@@ -1406,7 +1406,7 @@ mouse_action_drag_none(html_content *html,
 	static struct mouse_action_state mas;
 
 	res = get_mouse_action_node(html, x, y, &mas);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -1453,7 +1453,7 @@ mouse_action_drag_none(html_content *html,
 		res = default_mouse_action(html, bw, mouse, x, y, &mas);
 
 	}
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -1498,7 +1498,7 @@ mouse_action_drag_none(html_content *html,
 		break;
 
 	case ACTION_JS:
-		path = nsurl_get_component(mas.link.url, NSURL_PATH);
+		path = slateurl_get_component(mas.link.url, SLATEURL_PATH);
 		if (path != NULL) {
 			html_exec(c,
 				  lwc_string_data(path),
@@ -1517,7 +1517,7 @@ mouse_action_drag_none(html_content *html,
 
 	case ACTION_NOSEND:
 	case ACTION_NONE:
-		res = NSERROR_OK;
+		res = SLATEERROR_OK;
 		break;
 	}
 
@@ -1526,7 +1526,7 @@ mouse_action_drag_none(html_content *html,
 
 
 /* exported interface documented in html/interaction.h */
-nserror html_mouse_track(struct content *c,
+slateerror html_mouse_track(struct content *c,
 			 struct browser_window *bw,
 			 browser_mouse_state mouse,
 			 int x, int y)
@@ -1536,14 +1536,14 @@ nserror html_mouse_track(struct content *c,
 
 
 /* exported interface documented in html/interaction.h */
-nserror
+slateerror
 html_mouse_action(struct content *c,
 		  struct browser_window *bw,
 		  browser_mouse_state mouse,
 		  int x, int y)
 {
 	html_content *html = (html_content *)c;
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 	bool dom_handled = false;
 
 	/* handle open select menu */
@@ -1552,11 +1552,11 @@ html_mouse_action(struct content *c,
 	}
 
 	res = html_mouse_action_dom_event(html, mouse, x, y, &dom_handled);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 	if (dom_handled) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* handle content drag */
@@ -1588,7 +1588,7 @@ html_mouse_action(struct content *c,
 		assert(0 && "Unknown content related drag type");
 	}
 
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, ERROR, "%s", messages_get_errorcode(res));
 	}
 
@@ -1649,7 +1649,7 @@ bool html_keypress(struct content *c, uint32_t key)
 		return content_keypress(html->focus_owner.content->object, key);
 
 	case HTML_FOCUS_TEXTAREA:
-		if (box_textarea_keypress(html, html->focus_owner.textarea, key) == NSERROR_OK) {
+		if (box_textarea_keypress(html, html->focus_owner.textarea, key) == SLATEERROR_OK) {
 			return true;
 		} else {
 			return false;

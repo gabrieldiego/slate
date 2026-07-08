@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,8 +33,8 @@
 
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/plotters.h"
-#include "netsurf/content.h"
+#include "slate/plotters.h"
+#include "slate/content.h"
 #include "html/box.h"
 #include "content/llcache.h"
 #include "content/content_protected.h"
@@ -51,7 +51,7 @@ typedef struct amiga_dt_sound_content {
 	bool immediate;
 } amiga_dt_sound_content;
 
-static nserror amiga_dt_sound_create(const content_handler *handler,
+static slateerror amiga_dt_sound_create(const content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		llcache_handle *llcache, const char *fallback_charset,
 		bool quirks, struct content **c);
@@ -60,9 +60,9 @@ static void amiga_dt_sound_destroy(struct content *c);
 static bool amiga_dt_sound_redraw(struct content *c,
 		struct content_redraw_data *data, const struct rect *clip,
 		const struct redraw_context *ctx);
-static nserror amiga_dt_sound_open(struct content *c, struct browser_window *bw,
+static slateerror amiga_dt_sound_open(struct content *c, struct browser_window *bw,
 		struct content *page, struct object_params *params);
-static nserror amiga_dt_sound_clone(const struct content *old, struct content **newc);
+static slateerror amiga_dt_sound_clone(const struct content *old, struct content **newc);
 static content_type amiga_dt_sound_content_type(void);
 
 static const content_handler amiga_dt_sound_content_handler = {
@@ -84,11 +84,11 @@ static void amiga_dt_sound_play(Object *dto)
 }
 
 
-nserror amiga_dt_sound_init(void)
+slateerror amiga_dt_sound_init(void)
 {
 	struct DataType *dt, *prevdt = NULL;
 	lwc_string *type;
-	nserror error;
+	slateerror error;
 	struct Node *node = NULL;
 
 	while((dt = ObtainDataType(DTST_RAM, NULL,
@@ -108,7 +108,7 @@ nserror amiga_dt_sound_init(void)
 					lwc_string_data(type), 
 					&amiga_dt_sound_content_handler);
 
-				if (error != NSERROR_OK)
+				if (error != SLATEERROR_OK)
 					return error;
 			}
 
@@ -118,33 +118,33 @@ nserror amiga_dt_sound_init(void)
 
 	ReleaseDataType(prevdt);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-nserror amiga_dt_sound_create(const content_handler *handler,
+slateerror amiga_dt_sound_create(const content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		llcache_handle *llcache, const char *fallback_charset,
 		bool quirks, struct content **c)
 {
 	amiga_dt_sound_content *plugin;
-	nserror error;
+	slateerror error;
 
 	NSLOG(netsurf, INFO, "amiga_dt_sound_create");
 
 	plugin = calloc(1, sizeof(amiga_dt_sound_content));
 	if (plugin == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__init(&plugin->base, handler, imime_type, params,
 			llcache, fallback_charset, quirks);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(plugin);
 		return error;
 	}
 
 	*c = (struct content *) plugin;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 bool amiga_dt_sound_convert(struct content *c)
@@ -218,12 +218,12 @@ bool amiga_dt_sound_redraw(struct content *c,
 				data->x,
 				data->y+20,
 				lwc_string_data(content__get_mime_type(c)),
-				lwc_string_length(content__get_mime_type(c))) == NSERROR_OK);
+				lwc_string_length(content__get_mime_type(c))) == SLATEERROR_OK);
 
 }
 
 
-nserror amiga_dt_sound_open(struct content *c, struct browser_window *bw,
+slateerror amiga_dt_sound_open(struct content *c, struct browser_window *bw,
 	struct content *page, struct object_params *params)
 {
 	amiga_dt_sound_content *plugin = (amiga_dt_sound_content *) c;
@@ -250,23 +250,23 @@ nserror amiga_dt_sound_open(struct content *c, struct browser_window *bw,
 	if(plugin->dto && (plugin->immediate == true))
 		amiga_dt_sound_play(plugin->dto);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-nserror amiga_dt_sound_clone(const struct content *old, struct content **newc)
+slateerror amiga_dt_sound_clone(const struct content *old, struct content **newc)
 {
 	amiga_dt_sound_content *plugin;
-	nserror error;
+	slateerror error;
 
 	NSLOG(netsurf, INFO, "amiga_dt_sound_clone");
 
 	plugin = calloc(1, sizeof(amiga_dt_sound_content));
 	if (plugin == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__clone(old, &plugin->base);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&plugin->base);
 		return error;
 	}
@@ -276,13 +276,13 @@ nserror amiga_dt_sound_clone(const struct content *old, struct content **newc)
 			old->status == CONTENT_STATUS_DONE) {
 		if (amiga_dt_sound_convert(&plugin->base) == false) {
 			content_destroy(&plugin->base);
-			return NSERROR_CLONE_FAILED;
+			return SLATEERROR_CLONE_FAILED;
 		}
 	}
 
 	*newc = (struct content *) plugin;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 content_type amiga_dt_sound_content_type(void)

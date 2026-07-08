@@ -1,7 +1,7 @@
 /*
  * Copyright 2023 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,7 +33,7 @@
 #include "utils/utils.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/bitmap.h"
+#include "slate/bitmap.h"
 #include "content/llcache.h"
 #include "content/content.h"
 #include "content/content_protected.h"
@@ -59,29 +59,29 @@ static const JxlPixelFormat jxl_output_format = {
 /**
  * Content create entry point.
  */
-static nserror
+static slateerror
 nsjpegxl_create(const content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		llcache_handle *llcache, const char *fallback_charset,
 		bool quirks, struct content **c)
 {
 	struct content *jpeg;
-	nserror error;
+	slateerror error;
 
 	jpeg = calloc(1, sizeof(struct content));
 	if (jpeg == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__init(jpeg, handler, imime_type, params,
 			      llcache, fallback_charset, quirks);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(jpeg);
 		return error;
 	}
 
 	*c = jpeg;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -204,7 +204,7 @@ static bool jxl_report_fail(struct content *c, JxlDecoderStatus decstatus, const
 {
 	union content_msg_data msg_data;
 	NSLOG(netsurf, ERROR, "%s decoder status:%d", msg, decstatus);
-	msg_data.errordata.errorcode = NSERROR_UNKNOWN;
+	msg_data.errordata.errorcode = SLATEERROR_UNKNOWN;
 	msg_data.errordata.errormsg = msg;
 	content_broadcast(c, CONTENT_MSG_ERROR, &msg_data);
 	return false;
@@ -231,7 +231,7 @@ static bool nsjpegxl_convert(struct content *c)
 	decsig = JxlSignatureCheck(data,size);
 	if ((decsig != JXL_SIG_CODESTREAM) && (decsig != JXL_SIG_CONTAINER)) {
 		NSLOG(netsurf, ERROR, "signature failed");
-		msg_data.errordata.errorcode = NSERROR_UNKNOWN;
+		msg_data.errordata.errorcode = SLATEERROR_UNKNOWN;
 		msg_data.errordata.errormsg = "Signature failed";
 		content_broadcast(c, CONTENT_MSG_ERROR, &msg_data);
 		return false;
@@ -274,7 +274,7 @@ static bool nsjpegxl_convert(struct content *c)
 
 	/* set title text */
 	title = messages_get_buff("JPEGXLTitle",
-			nsurl_access_leaf(llcache_handle_get_url(c->llcache)),
+			slateurl_access_leaf(llcache_handle_get_url(c->llcache)),
 			c->width, c->height);
 	if (title != NULL) {
 		content__set_title(c, title);
@@ -292,17 +292,17 @@ static bool nsjpegxl_convert(struct content *c)
 /**
  * Clone content.
  */
-static nserror nsjpegxl_clone(const struct content *old, struct content **newc)
+static slateerror nsjpegxl_clone(const struct content *old, struct content **newc)
 {
 	struct content *jpegxl_c;
-	nserror error;
+	slateerror error;
 
 	jpegxl_c = calloc(1, sizeof(struct content));
 	if (jpegxl_c == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__clone(old, jpegxl_c);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(jpegxl_c);
 		return error;
 	}
@@ -312,13 +312,13 @@ static nserror nsjpegxl_clone(const struct content *old, struct content **newc)
 	    (old->status == CONTENT_STATUS_DONE)) {
 		if (nsjpegxl_convert(jpegxl_c) == false) {
 			content_destroy(jpegxl_c);
-			return NSERROR_CLONE_FAILED;
+			return SLATEERROR_CLONE_FAILED;
 		}
 	}
 
 	*newc = jpegxl_c;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static const content_handler nsjpegxl_content_handler = {

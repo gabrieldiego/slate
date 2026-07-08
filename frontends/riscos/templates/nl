@@ -1491,7 +1491,7 @@ wimp_window {
     icon_esg:0
     icon_fg:wimp_COLOUR_BLACK
     icon_bg:wimp_COLOUR_VERY_LIGHT_GREY
-    text.text:"ADFS::A7000+.$.netsurf"
+    text.text:"ADFS::A7000+.$.slate"
     text.size:23
     text.validation:"R2"
   }

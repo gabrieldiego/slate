@@ -25,9 +25,9 @@
 #include <stddef.h>
 #include <stdio.h>
 
-#include "netsurf/types.h"
+#include "slate/types.h"
 #include "utils/errors.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 
 #include "private.h"
 #include "choices.h"
@@ -58,7 +58,7 @@ bool fetch_about_choices_handler(struct fetch_about_context *ctx)
 		 "# Automatically generated current NetSurf browser Choices\n");
 
 	do {
-		res = nsoption_snoptionf(buffer + slen,
+		res = slateoption_snoptionf(buffer + slen,
 				sizeof buffer - slen,
 				opt_loop,
 				"%k:%v\n");
@@ -68,7 +68,7 @@ bool fetch_about_choices_handler(struct fetch_about_context *ctx)
 		if (res >= (int) (sizeof buffer - slen)) {
 			/* last entry would not fit in buffer, submit buffer */
 			res = fetch_about_senddata(ctx, (const uint8_t *)buffer, slen);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				goto fetch_about_choices_handler_aborted;
 			}
 			slen = 0;
@@ -80,7 +80,7 @@ bool fetch_about_choices_handler(struct fetch_about_context *ctx)
 	} while (res > 0);
 
 	res = fetch_about_senddata(ctx, (const uint8_t *)buffer, slen);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_choices_handler_aborted;
 	}
 

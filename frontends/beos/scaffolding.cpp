@@ -3,7 +3,7 @@
  * Copyright 2008 François Revol <mmu_man@users.sourceforge.net>
  * Copyright 2006 Rob Kendrick <rjek@rjek.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -56,17 +56,17 @@ extern "C" {
 #include "utils/messages.h"
 #include "utils/utils.h"
 #include "utils/log.h"
-#include "utils/nsurl.h"
-#include "utils/nsoption.h"
-#include "netsurf/netsurf.h"
-#include "netsurf/plotters.h"
-#include "netsurf/clipboard.h"
-#include "netsurf/content.h"
-#include "netsurf/content_type.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/form.h"
-#include "netsurf/keypress.h"
-#include "netsurf/inttypes.h"
+#include "utils/slateurl.h"
+#include "utils/slateoption.h"
+#include "slate/slate.h"
+#include "slate/plotters.h"
+#include "slate/clipboard.h"
+#include "slate/content.h"
+#include "slate/content_type.h"
+#include "slate/browser_window.h"
+#include "slate/form.h"
+#include "slate/keypress.h"
+#include "slate/inttypes.h"
 #include "desktop/browser_history.h"
 #include "desktop/version.h"
 #include "desktop/searchweb.h"
@@ -162,9 +162,9 @@ static NSBaseView *replicant_view = NULL; /**< if not NULL, the replicant View w
 static sem_id replicant_done_sem = -1;
 static thread_id replicant_thread = -1;
 
-static void nsbeos_window_update_back_forward(struct beos_scaffolding *);
-static void nsbeos_throb(void *);
-static int32 nsbeos_replicant_main_thread(void *_arg);
+static void slatebeos_window_update_back_forward(struct beos_scaffolding *);
+static void slatebeos_throb(void *);
+static int32 slatebeos_replicant_main_thread(void *_arg);
 
 // in beos_gui.cpp
 extern int main(int argc, char** argv);
@@ -449,7 +449,7 @@ NSBaseView::~NSBaseView()
 	//beos_warn_user("~NSBaseView()", NULL);
 	if (replicated) {
 		BMessage *message = new BMessage(B_QUIT_REQUESTED);
-		nsbeos_pipe_message_top(message, NULL, fScaffolding);
+		slatebeos_pipe_message_top(message, NULL, fScaffolding);
 		while (acquire_sem(replicant_done_sem) == EINTR);
 		//debugger("plop");
 		status_t status = -1;
@@ -567,7 +567,7 @@ NSBaseView::MessageReceived(BMessage *message)
 		case APPLICATION_QUIT:
 			if (Window())
 				Window()->DetachCurrentMessage();
-			nsbeos_pipe_message_top(message, NULL, fScaffolding);
+			slatebeos_pipe_message_top(message, NULL, fScaffolding);
 			break;
 		default:
 			//message->PrintToStream();
@@ -609,7 +609,7 @@ NSBaseView::Instantiate(BMessage *archive)
 
 	struct replicant_thread_info *info = new replicant_thread_info;
 	info->url = BString(url);
-	if (nsbeos_find_app_path(info->app) < B_OK) {
+	if (slatebeos_find_app_path(info->app) < B_OK) {
                 delete info;
 		return NULL;
         }
@@ -626,7 +626,7 @@ NSBaseView::Instantiate(BMessage *archive)
 	gui_init_replicant(2, info->args);
 
 	replicant_done_sem = create_sem(0, "NS Replicant created");
-	replicant_thread = spawn_thread(nsbeos_replicant_main_thread,
+	replicant_thread = spawn_thread(slatebeos_replicant_main_thread,
 		"NetSurf Main Thread", B_NORMAL_PRIORITY, info);
 	if (replicant_thread < B_OK) {
 		delete_sem(replicant_done_sem);
@@ -721,7 +721,7 @@ NSBrowserWindow::DispatchMessage(BMessage *message, BHandler *handler)
 	switch (message->what) {
 		case B_UI_SETTINGS_CHANGED:
 			msg = new BMessage(*message);
-			nsbeos_pipe_message_top(msg, this, fScaffolding);
+			slatebeos_pipe_message_top(msg, this, fScaffolding);
 			break;
 	}
 	BWindow::DispatchMessage(message, handler);
@@ -745,7 +745,7 @@ NSBrowserWindow::MessageReceived(BMessage *message)
 		case B_NETPOSITIVE_DOWN:
 		case B_NETPOSITIVE_UP:
 			DetachCurrentMessage();
-			nsbeos_pipe_message_top(message, this, fScaffolding);
+			slatebeos_pipe_message_top(message, this, fScaffolding);
 			break;
 		default:
 			BWindow::MessageReceived(message);
@@ -760,7 +760,7 @@ NSBrowserWindow::QuitRequested(void)
 	// BApplication::Quit() calls us directly...
 	if (message == NULL)
 		message = new BMessage(B_QUIT_REQUESTED);
-	nsbeos_pipe_message_top(message, this, fScaffolding);
+	slatebeos_pipe_message_top(message, this, fScaffolding);
 	return false; // we will Quit() ourselves from the main thread
 }
 
@@ -777,16 +777,16 @@ NSBrowserWindow::WindowActivated(bool active)
 
 // #pragma mark - implementation
 
-int32 nsbeos_replicant_main_thread(void *_arg)
+int32 slatebeos_replicant_main_thread(void *_arg)
 {
 	struct replicant_thread_info *info = (struct replicant_thread_info *)_arg;
 	int32 ret = 0;
 
-	while (!nsbeos_done) {
-		nsbeos_gui_poll();
+	while (!slatebeos_done) {
+		slatebeos_gui_poll();
 	}
 
-	netsurf_exit();
+	slate_exit();
 	delete info;
 	delete_sem(replicant_done_sem);
 	return ret;
@@ -795,12 +795,12 @@ int32 nsbeos_replicant_main_thread(void *_arg)
 
 /* event handlers and support functions for them */
 
-static void nsbeos_window_destroy_event(NSBrowserWindow *window, nsbeos_scaffolding *g, BMessage *event)
+static void slatebeos_window_destroy_event(NSBrowserWindow *window, slatebeos_scaffolding *g, BMessage *event)
 {
 	NSLOG(netsurf, INFO, "Being Destroyed = %d", g->being_destroyed);
 
 	if (--open_windows == 0)
-		nsbeos_done = true;
+		slatebeos_done = true;
 
 	if (window) {
 		window->Lock();
@@ -809,12 +809,12 @@ static void nsbeos_window_destroy_event(NSBrowserWindow *window, nsbeos_scaffold
 
 	if (!g->being_destroyed) {
 		g->being_destroyed = 1;
-		nsbeos_window_destroy_browser(g->top_level);
+		slatebeos_window_destroy_browser(g->top_level);
 	}
 }
 
 
-static void nsbeos_scaffolding_update_colors(nsbeos_scaffolding *g)
+static void slatebeos_scaffolding_update_colors(slatebeos_scaffolding *g)
 {
 	if (!g->top_view->LockLooper())
 		return;
@@ -849,22 +849,22 @@ static void nsbeos_scaffolding_update_colors(nsbeos_scaffolding *g)
 NSBrowserWindow::activeWindow = NULL;
 
 
-void nsbeos_scaffolding_dispatch_event(nsbeos_scaffolding *scaffold, BMessage *message)
+void slatebeos_scaffolding_dispatch_event(slatebeos_scaffolding *scaffold, BMessage *message)
 {
 	struct browser_window *bw;
-	bw = nsbeos_get_browser_for_gui(scaffold->top_level);
+	bw = slatebeos_get_browser_for_gui(scaffold->top_level);
 	bool reloadAll = false;
 
 	NSLOG(netsurf, INFO,
-	      "nsbeos_scaffolding_dispatch_event() what = 0x%08" PRIx32,
+	      "slatebeos_scaffolding_dispatch_event() what = 0x%08" PRIx32,
 	      message->what);
 	switch (message->what) {
 		case B_QUIT_REQUESTED:
-			nsbeos_scaffolding_destroy(scaffold);
+			slatebeos_scaffolding_destroy(scaffold);
 			break;
 		case B_ABOUT_REQUESTED:
 		{
-			nsbeos_about(scaffold->top_level);
+			slatebeos_about(scaffold->top_level);
 			break;
 		}
 		case B_NETPOSITIVE_DOWN:
@@ -915,26 +915,26 @@ void nsbeos_scaffolding_dispatch_event(nsbeos_scaffolding *scaffold, BMessage *m
 				} else
 					url << path.Path();
 
-                nsurl *nsurl;
-                nserror error;
+                slateurl *slateurl;
+                slateerror error;
 
-                error = nsurl_create(url.String(), &nsurl);
-				if (error == NSERROR_OK) {
+                error = slateurl_create(url.String(), &slateurl);
+				if (error == SLATEERROR_OK) {
 					if (/*message->WasDropped() &&*/ i == 0) {
-						browser_window_navigate(bw, nsurl, NULL,
+						browser_window_navigate(bw, slateurl, NULL,
 							(browser_window_nav_flags)
 							(BW_NAVIGATE_HISTORY),
 							NULL, NULL, NULL);
 					} else {
 						error = browser_window_create(BW_CREATE_CLONE,
-								nsurl,
+								slateurl,
 								NULL,
 								bw,
 								NULL);
 					}
-					nsurl_unref(nsurl);
+					slateurl_unref(slateurl);
 				}
-				if (error != NSERROR_OK) {
+				if (error != SLATEERROR_OK) {
 					beos_warn_user(messages_get_errorcode(error), 0);
 				}
 			}
@@ -944,28 +944,28 @@ void nsbeos_scaffolding_dispatch_event(nsbeos_scaffolding *scaffold, BMessage *m
 		{
 			int32 i;
 			BString urltxt;
-                        nsurl *url;
-                        nserror error;
+                        slateurl *url;
+                        slateerror error;
 
 			for (i = 1; message->FindString("argv", i, &urltxt) >= B_OK; i++) {
-                                error = nsurl_create(urltxt.String(), &url);
-                                if (error == NSERROR_OK) {
+                                error = slateurl_create(urltxt.String(), &url);
+                                if (error == SLATEERROR_OK) {
                                         error = browser_window_create(BW_CREATE_CLONE,
                                                                       url,
                                                                       NULL,
                                                                       bw,
                                                                       NULL);
-                                        nsurl_unref(url);
+                                        slateurl_unref(url);
                                 }
-                                if (error != NSERROR_OK) {
+                                if (error != SLATEERROR_OK) {
                                         beos_warn_user(messages_get_errorcode(error), 0);
                                 }
 			}
 			break;
 		}
 		case B_UI_SETTINGS_CHANGED:
-			nsbeos_update_system_ui_colors();
-			nsbeos_scaffolding_update_colors(scaffold);
+			slatebeos_update_system_ui_colors();
+			slatebeos_scaffolding_update_colors(scaffold);
 			break;
 		case B_NETPOSITIVE_OPEN_URL:
 		{
@@ -973,21 +973,21 @@ void nsbeos_scaffolding_dispatch_event(nsbeos_scaffolding *scaffold, BMessage *m
 			if (message->FindString("be:url", &url) < B_OK)
 				break;
 
-			nsurl *nsurl;
-			nserror error;
+			slateurl *slateurl;
+			slateerror error;
 
-			error = nsurl_create(url.String(), &nsurl);
-			if (error != NSERROR_OK) {
+			error = slateurl_create(url.String(), &slateurl);
+			if (error != SLATEERROR_OK) {
 				beos_warn_user(messages_get_errorcode(error), 0);
 			} else {
 				browser_window_navigate(bw,
-						nsurl,
+						slateurl,
 						NULL,
 						(browser_window_nav_flags)(BW_NAVIGATE_HISTORY | BW_NAVIGATE_UNVERIFIABLE),
 						NULL,
 						NULL,
 						NULL);
-				nsurl_unref(nsurl);
+				slateurl_unref(slateurl);
 			}
 			break;
 		}
@@ -1010,7 +1010,7 @@ void nsbeos_scaffolding_dispatch_event(nsbeos_scaffolding *scaffold, BMessage *m
 			if (!browser_window_history_back_available(bw))
 				break;
 			browser_window_history_back(bw, false);
-			nsbeos_window_update_back_forward(scaffold);
+			slatebeos_window_update_back_forward(scaffold);
 			break;
 		case B_NETPOSITIVE_FORWARD:
 		case BROWSER_NAVIGATE_FORWARD:
@@ -1018,7 +1018,7 @@ void nsbeos_scaffolding_dispatch_event(nsbeos_scaffolding *scaffold, BMessage *m
 			if (!browser_window_history_forward_available(bw))
 				break;
 			browser_window_history_forward(bw, false);
-			nsbeos_window_update_back_forward(scaffold);
+			slatebeos_window_update_back_forward(scaffold);
 			break;
 		case B_NETPOSITIVE_STOP:
 		case BROWSER_NAVIGATE_STOP:
@@ -1037,17 +1037,17 @@ void nsbeos_scaffolding_dispatch_event(nsbeos_scaffolding *scaffold, BMessage *m
 		case BROWSER_NAVIGATE_HOME:
 		case 'home':
 		{
-			nsurl *url;
-			nserror error;
+			slateurl *url;
+			slateerror error;
 
-			static const char *addr = NETSURF_HOMEPAGE;
+			static const char *addr = SLATE_HOMEPAGE;
 
-			if (nsoption_charp(homepage_url) != NULL) {
-				addr = nsoption_charp(homepage_url);
+			if (slateoption_charp(homepage_url) != NULL) {
+				addr = slateoption_charp(homepage_url);
 			}
 
-			error = nsurl_create(addr, &url);
-			if (error != NSERROR_OK) {
+			error = slateurl_create(addr, &url);
+			if (error != SLATEERROR_OK) {
 				beos_warn_user(messages_get_errorcode(error), 0);
 			} else {
 				browser_window_navigate(bw,
@@ -1057,14 +1057,14 @@ void nsbeos_scaffolding_dispatch_event(nsbeos_scaffolding *scaffold, BMessage *m
 					NULL,
 					NULL,
 					NULL);
-				nsurl_unref(url);
+				slateurl_unref(url);
 			}
 			break;
 		}
 		case 'urle':
 		{
-            nsurl *url;
-            nserror error;
+            slateurl *url;
+            slateerror error;
 			BString text;
 
 			if (!scaffold->url_bar->LockLooper())
@@ -1074,8 +1074,8 @@ void nsbeos_scaffolding_dispatch_event(nsbeos_scaffolding *scaffold, BMessage *m
 			scaffold->scroll_view->Target()->MakeFocus();
 			scaffold->url_bar->UnlockLooper();
 
-                        error = nsurl_create(text.String(), &url);
-                        if (error != NSERROR_OK) {
+                        error = slateurl_create(text.String(), &url);
+                        if (error != SLATEERROR_OK) {
                                 beos_warn_user(messages_get_errorcode(error), 0);
                         } else {
                                 browser_window_navigate(bw,
@@ -1085,7 +1085,7 @@ void nsbeos_scaffolding_dispatch_event(nsbeos_scaffolding *scaffold, BMessage *m
 					NULL,
 					NULL,
 					NULL);
-                                nsurl_unref(url);
+                                slateurl_unref(url);
                         }
 			break;
 		}
@@ -1096,13 +1096,13 @@ void nsbeos_scaffolding_dispatch_event(nsbeos_scaffolding *scaffold, BMessage *m
 				break;
 			text = scaffold->url_bar->Text();
 			scaffold->url_bar->UnlockLooper();
-			//nsbeos_completion_update(text.String());
+			//slatebeos_completion_update(text.String());
 			break;
 		}
 		case 'sear':
 		{
-			nserror ret;
-			nsurl* url;
+			slateerror ret;
+			slateurl* url;
 			BString text;
 			if (!scaffold->search_bar->LockLooper())
 				break;
@@ -1116,17 +1116,17 @@ void nsbeos_scaffolding_dispatch_event(nsbeos_scaffolding *scaffold, BMessage *m
 
 			ret = search_web_omni(text.String(),SEARCH_WEB_OMNI_SEARCHONLY
 				,&url);
-			if (ret == NSERROR_OK) {
+			if (ret == SLATEERROR_OK) {
 				ret = browser_window_create(
 					(browser_window_create_flags)(BW_CREATE_HISTORY | BW_CREATE_TAB),
 					url,
 					NULL,
 					bw,
 					NULL);
-				nsurl_unref(url);
+				slateurl_unref(url);
 			}
 
-			if (ret != NSERROR_OK) {
+			if (ret != SLATEERROR_OK) {
 				beos_warn_user(messages_get_errorcode(ret), 0);
 			}
 
@@ -1165,17 +1165,17 @@ void nsbeos_scaffolding_dispatch_event(nsbeos_scaffolding *scaffold, BMessage *m
 		case HELP_OPEN_ABOUT:
 		{
 			const char *goto_url = "about:credits";
-			nserror nserr;
-			nsurl *url;
-			nserr = nsurl_create(goto_url, &url);
-			if (nserr == NSERROR_OK) {
+			slateerror nserr;
+			slateurl *url;
+			nserr = slateurl_create(goto_url, &url);
+			if (nserr == SLATEERROR_OK) {
 				nserr = browser_window_navigate(bw,
 		    			url, NULL,
 						(browser_window_nav_flags)(BW_NAVIGATE_HISTORY),
 					    NULL, NULL, NULL);
-				nsurl_unref(url);
+				slateurl_unref(url);
 			}
-			if (nserr != NSERROR_OK) {
+			if (nserr != SLATEERROR_OK) {
 				beos_warn_user(messages_get_errorcode(nserr), 0);
 			}
 		}
@@ -1183,17 +1183,17 @@ void nsbeos_scaffolding_dispatch_event(nsbeos_scaffolding *scaffold, BMessage *m
 		case HELP_OPEN_LICENCE:
 		{
 			const char *goto_url = "about:licence";
-			nserror nserr;
-			nsurl *url;
-			nserr = nsurl_create(goto_url, &url);
-			if (nserr == NSERROR_OK) {
+			slateerror nserr;
+			slateurl *url;
+			nserr = slateurl_create(goto_url, &url);
+			if (nserr == SLATEERROR_OK) {
 				nserr = browser_window_navigate(bw,
 		    			url, NULL,
 						(browser_window_nav_flags)(BW_NAVIGATE_HISTORY),
 					    NULL, NULL, NULL);
-				nsurl_unref(url);
+				slateurl_unref(url);
 			}
-			if (nserr != NSERROR_OK) {
+			if (nserr != SLATEERROR_OK) {
 				beos_warn_user(messages_get_errorcode(nserr), 0);
 			}
 		}
@@ -1210,12 +1210,12 @@ void nsbeos_scaffolding_dispatch_event(nsbeos_scaffolding *scaffold, BMessage *m
 			break;
 		case COOKIES_SHOW:
 		{
-			nsbeos_cookies_init();
+			slatebeos_cookies_init();
 			break;
 		}
 		case COOKIES_DELETE:
 		{
-			nsbeos_cookies_init();
+			slatebeos_cookies_init();
 			break;
 		}
 		case BROWSER_PAGE:
@@ -1227,8 +1227,8 @@ void nsbeos_scaffolding_dispatch_event(nsbeos_scaffolding *scaffold, BMessage *m
 		case BROWSER_NEW_WINDOW:
 		{
 			BString text;
-                        nsurl *url;
-                        nserror error;
+                        slateurl *url;
+                        slateerror error;
 
 			if (!scaffold->url_bar->LockLooper())
 				break;
@@ -1237,16 +1237,16 @@ void nsbeos_scaffolding_dispatch_event(nsbeos_scaffolding *scaffold, BMessage *m
 
 			NSBrowserWindow::activeWindow = scaffold->window;
 
-                        error = nsurl_create(text.String(), &url);
-                        if (error == NSERROR_OK) {
+                        error = slateurl_create(text.String(), &url);
+                        if (error == SLATEERROR_OK) {
                                 error = browser_window_create(BW_CREATE_CLONE,
                                                               url,
                                                               NULL,
                                                               bw,
                                                               NULL);
-                                nsurl_unref(url);
+                                slateurl_unref(url);
                         }
-                        if (error != NSERROR_OK) {
+                        if (error != SLATEERROR_OK) {
                                 beos_warn_user(messages_get_errorcode(error), 0);
                         }
 			break;
@@ -1255,7 +1255,7 @@ void nsbeos_scaffolding_dispatch_event(nsbeos_scaffolding *scaffold, BMessage *m
 		{
 			if (!bw || browser_window_has_content(bw) == false)
 				break;
-			nsbeos_gui_view_source(browser_window_get_content(bw));
+			slatebeos_gui_view_source(browser_window_get_content(bw));
 			break;
 		}
 		case BROWSER_OBJECT:
@@ -1354,26 +1354,26 @@ void nsbeos_scaffolding_dispatch_event(nsbeos_scaffolding *scaffold, BMessage *m
 		case CHOICES_SHOW:
 			break;
 		case APPLICATION_QUIT:
-			nsbeos_done = true;
+			slatebeos_done = true;
 			break;
 		default:
 			break;
 	}
 }
 
-void nsbeos_scaffolding_destroy(nsbeos_scaffolding *scaffold)
+void slatebeos_scaffolding_destroy(slatebeos_scaffolding *scaffold)
 {
 	NSLOG(netsurf, INFO, "Being Destroyed = %d",
 	      scaffold->being_destroyed);
 	if (scaffold->being_destroyed) return;
 	scaffold->being_destroyed = 1;
-	nsbeos_window_destroy_event(scaffold->window, scaffold, NULL);
+	slatebeos_window_destroy_event(scaffold->window, scaffold, NULL);
 }
 
 
-void nsbeos_window_update_back_forward(struct beos_scaffolding *g)
+void slatebeos_window_update_back_forward(struct beos_scaffolding *g)
 {
-	struct browser_window *bw = nsbeos_get_browser_for_gui(g->top_level);
+	struct browser_window *bw = slatebeos_get_browser_for_gui(g->top_level);
 
 	if (!g->top_view->LockLooper())
 		return;
@@ -1385,11 +1385,11 @@ void nsbeos_window_update_back_forward(struct beos_scaffolding *g)
 
 }
 
-void nsbeos_throb(void *p)
+void slatebeos_throb(void *p)
 {
 	struct beos_scaffolding *g = (struct beos_scaffolding *)p;
 
-	if (g->throb_frame >= (nsbeos_throbber->nframes - 1))
+	if (g->throb_frame >= (slatebeos_throbber->nframes - 1))
 		g->throb_frame = 1;
 	else
 		g->throb_frame++;
@@ -1397,17 +1397,17 @@ void nsbeos_throb(void *p)
 	if (!g->top_view->LockLooper())
 		return;
 
-	g->throbber->SetBitmap(nsbeos_throbber->framedata[g->throb_frame]);
+	g->throbber->SetBitmap(slatebeos_throbber->framedata[g->throb_frame]);
 	g->throbber->Invalidate();
 
 	g->top_view->UnlockLooper();
 
-	beos_schedule(100, nsbeos_throb, p);
+	beos_schedule(100, slatebeos_throb, p);
 
 }
 
 
-NSBrowserWindow *nsbeos_find_last_window(void)
+NSBrowserWindow *slatebeos_find_last_window(void)
 {
 	int32 i;
 	if (!be_app || !be_app->Lock())
@@ -1427,12 +1427,12 @@ NSBrowserWindow *nsbeos_find_last_window(void)
 	return NULL;
 }
 
-NSBrowserWindow *nsbeos_get_bwindow_for_scaffolding(nsbeos_scaffolding *scaffold)
+NSBrowserWindow *slatebeos_get_bwindow_for_scaffolding(slatebeos_scaffolding *scaffold)
 {
 	 return scaffold->window;
 }
 
-NSBaseView *nsbeos_get_baseview_for_scaffolding(nsbeos_scaffolding *scaffold)
+NSBaseView *slatebeos_get_baseview_for_scaffolding(slatebeos_scaffolding *scaffold)
 {
 	 return scaffold->top_view;
 }
@@ -1447,7 +1447,7 @@ static void recursively_set_menu_items_target(BMenu *menu, BHandler *handler)
 	}
 }
 
-void nsbeos_attach_toplevel_view(nsbeos_scaffolding *g, BView *view)
+void slatebeos_attach_toplevel_view(slatebeos_scaffolding *g, BView *view)
 {
 	NSLOG(netsurf, INFO, "Attaching view to scaffolding %p", g);
 
@@ -1527,7 +1527,7 @@ void nsbeos_attach_toplevel_view(nsbeos_scaffolding *g, BView *view)
 	g->url_bar->SetTarget(view);
 	g->search_bar->SetTarget(view);
 
-	nsbeos_scaffolding_update_colors(g);
+	slatebeos_scaffolding_update_colors(g);
 
 	recursively_set_menu_items_target(g->popup_menu, view);
 
@@ -1723,7 +1723,7 @@ void BBitmapButton::SetBitmap(const char* attrname)
 }
 
 
-nsbeos_scaffolding *nsbeos_new_scaffolding(struct gui_window *toplevel)
+slatebeos_scaffolding *slatebeos_new_scaffolding(struct gui_window *toplevel)
 {
 	struct beos_scaffolding *g = (struct beos_scaffolding *)malloc(sizeof(*g));
 
@@ -1751,13 +1751,13 @@ nsbeos_scaffolding *nsbeos_new_scaffolding(struct gui_window *toplevel)
 
 	if (!replicant_view) {
 		BRect frame(0, 0, 600-1, 500-1);
-		if (nsoption_int(window_width) > 0) {
-			frame.Set(0, 0, nsoption_int(window_width) - 1, nsoption_int(window_height) - 1);
-			frame.OffsetToSelf(nsoption_int(window_x), nsoption_int(window_y));
+		if (slateoption_int(window_width) > 0) {
+			frame.Set(0, 0, slateoption_int(window_width) - 1, slateoption_int(window_height) - 1);
+			frame.OffsetToSelf(slateoption_int(window_x), slateoption_int(window_y));
 		} else {
 			BPoint pos(50, 50);
 			// XXX: use last BApplication::WindowAt()'s dynamic_cast<NSBrowserWindow *> Frame()
-			NSBrowserWindow *win = nsbeos_find_last_window();
+			NSBrowserWindow *win = slatebeos_find_last_window();
 			if (win) {
 				pos = win->Frame().LeftTop();
 				win->UnlockLooper();
@@ -2222,13 +2222,13 @@ nsbeos_scaffolding *nsbeos_new_scaffolding(struct gui_window *toplevel)
 	g->throbber->SetDrawingMode(B_OP_ALPHA);
 	g->throbber->SetBlendingMode(B_PIXEL_ALPHA, B_ALPHA_OVERLAY);
 	/* set up the throbber. */
-	g->throbber->SetBitmap(nsbeos_throbber->framedata[0]);
+	g->throbber->SetBitmap(slatebeos_throbber->framedata[0]);
 	g->throb_frame = 0;
 
 
 	// the status bar at the bottom
 	BString status("NetSurf");
-	status << " " << netsurf_version;
+	status << " " << slate_version;
 	g->status_bar = new BStringView(BRect(0,0,-1,-1), "StatusBar", 
 		status.String(), B_FOLLOW_LEFT/*_RIGHT*/ | B_FOLLOW_BOTTOM);
 
@@ -2245,7 +2245,7 @@ nsbeos_scaffolding *nsbeos_new_scaffolding(struct gui_window *toplevel)
 
 void gui_window_set_title(struct gui_window *_g, const char *title)
 {
-	struct beos_scaffolding *g = nsbeos_get_scaffold(_g);
+	struct beos_scaffolding *g = slatebeos_get_scaffold(_g);
 	if (g->top_level != _g) return;
 
 	// if we're a replicant, discard
@@ -2267,7 +2267,7 @@ void gui_window_set_title(struct gui_window *_g, const char *title)
 
 void gui_window_set_status(struct gui_window *_g, const char *text)
 {
-	struct beos_scaffolding *g = nsbeos_get_scaffold(_g);
+	struct beos_scaffolding *g = slatebeos_get_scaffold(_g);
 	assert(g);
 	assert(g->status_bar);
 
@@ -2277,7 +2277,7 @@ void gui_window_set_status(struct gui_window *_g, const char *text)
 	if (text == NULL || text[0] == '\0')
 	{
 		BString status("NetSurf");
-		status << " " << netsurf_version;
+		status << " " << slate_version;
 		g->status_bar->SetText(status.String());
 	}
 	else
@@ -2287,28 +2287,28 @@ void gui_window_set_status(struct gui_window *_g, const char *text)
 	g->top_view->UnlockLooper();
 }
 
-nserror gui_window_set_url(struct gui_window *gw, nsurl *url)
+slateerror gui_window_set_url(struct gui_window *gw, slateurl *url)
 {
 	struct beos_scaffolding *g;
 
-        g = nsbeos_get_scaffold(gw);
+        g = slatebeos_get_scaffold(gw);
 	if (g->top_level != gw)
-                return NSERROR_OK;
+                return SLATEERROR_OK;
 
 	assert(g->status_bar);
 
 	if (g->top_view->LockLooper()) {
-                g->url_bar->SetText(nsurl_access(url));
+                g->url_bar->SetText(slateurl_access(url));
 
                 g->top_view->UnlockLooper();
         }
 
-        return NSERROR_OK;
+        return SLATEERROR_OK;
 }
 
 void gui_window_start_throbber(struct gui_window* _g)
 {
-	struct beos_scaffolding *g = nsbeos_get_scaffold(_g);
+	struct beos_scaffolding *g = slatebeos_get_scaffold(_g);
 
 	if (!g->top_view->LockLooper())
 		return;
@@ -2318,18 +2318,18 @@ void gui_window_start_throbber(struct gui_window* _g)
 
 	g->top_view->UnlockLooper();
 
-	nsbeos_window_update_back_forward(g);
+	slatebeos_window_update_back_forward(g);
 
-	beos_schedule(100, nsbeos_throb, g);
+	beos_schedule(100, slatebeos_throb, g);
 }
 
 void gui_window_stop_throbber(struct gui_window* _g)
 {
-	struct beos_scaffolding *g = nsbeos_get_scaffold(_g);
+	struct beos_scaffolding *g = slatebeos_get_scaffold(_g);
 
-	nsbeos_window_update_back_forward(g);
+	slatebeos_window_update_back_forward(g);
 
-	beos_schedule(-1, nsbeos_throb, g);
+	beos_schedule(-1, slatebeos_throb, g);
 
 	if (!g->top_view->LockLooper())
 		return;
@@ -2337,7 +2337,7 @@ void gui_window_stop_throbber(struct gui_window* _g)
 	g->stop_button->SetEnabled(false);
 	g->reload_button->SetEnabled(true);
 
-	g->throbber->SetBitmap(nsbeos_throbber->framedata[0]);
+	g->throbber->SetBitmap(slatebeos_throbber->framedata[0]);
 	g->throbber->Invalidate();
 
 	g->top_view->UnlockLooper();
@@ -2354,10 +2354,10 @@ void gui_window_set_icon(struct gui_window *_g, hlcache_handle *icon)
     bmp_icon = (icon != NULL) ? content_get_bitmap(icon) : NULL;
 
 	if (bmp_icon) {
-		bitmap = nsbeos_bitmap_get_primary(bmp_icon);
+		bitmap = slatebeos_bitmap_get_primary(bmp_icon);
 	}
 
-	struct beos_scaffolding *g = nsbeos_get_scaffold(_g);
+	struct beos_scaffolding *g = slatebeos_get_scaffold(_g);
 
 	if (!g->top_view->LockLooper())
 		return;
@@ -2368,7 +2368,7 @@ void gui_window_set_icon(struct gui_window *_g, hlcache_handle *icon)
 }
 
 
-void nsbeos_scaffolding_popup_menu(nsbeos_scaffolding *scaffold, struct browser_window *bw, BPoint where, BPoint screenWhere)
+void slatebeos_scaffolding_popup_menu(slatebeos_scaffolding *scaffold, struct browser_window *bw, BPoint where, BPoint screenWhere)
 {
 	struct browser_window_features cont;
 

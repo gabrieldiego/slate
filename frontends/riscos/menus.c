@@ -4,7 +4,7 @@
  * Copyright 2003 John M Bell <jmb202@ecs.soton.ac.uk>
  * Copyright 2005 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -48,7 +48,7 @@
 #include "riscos/help.h"
 #include "riscos/hotlist.h"
 #include "riscos/menus.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "riscos/save.h"
 #include "riscos/tinct.h"
 #include "riscos/toolbar.h"
@@ -968,7 +968,7 @@ bool ro_gui_menu_translate(struct menu_definition *menu)
 	int alphabet;
 	struct menu_definition_entry *entry;
 	char *translated;
-	nserror err;
+	slateerror err;
 
 	/* read current alphabet */
 	error = xosbyte1(osbyte_ALPHABET_NUMBER, 127, 0, &alphabet);
@@ -987,8 +987,8 @@ bool ro_gui_menu_translate(struct menu_definition *menu)
 	free(menu->menu->title_data.indirected_text.text);
 	err = utf8_to_local_encoding(messages_get(menu->title_key),
 			0, &translated);
-	if (err != NSERROR_OK) {
-		assert(err != NSERROR_BAD_ENCODING);
+	if (err != SLATEERROR_OK) {
+		assert(err != SLATEERROR_BAD_ENCODING);
 		NSLOG(netsurf, INFO, "utf8_to_enc failed");
 		return false;
 	}
@@ -1004,8 +1004,8 @@ bool ro_gui_menu_translate(struct menu_definition *menu)
 		free(entry->menu_entry->data.indirected_text.text);
 		err = utf8_to_local_encoding(messages_get(entry->entry_key),
 				0, &translated);
-		if (err != NSERROR_OK) {
-			assert(err != NSERROR_BAD_ENCODING);
+		if (err != SLATEERROR_OK) {
+			assert(err != SLATEERROR_BAD_ENCODING);
 			NSLOG(netsurf, INFO, "utf8_to_enc failed");
 			return false;
 		}

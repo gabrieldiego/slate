@@ -1,7 +1,7 @@
 /*
  * Copyright 2005 John M Bell <jmb202@ecs.soton.ac.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,7 +32,7 @@
 #include "utils/log.h"
 #include "utils/utf8.h"
 #include "utils/utils.h"
-#include "netsurf/utf8.h"
+#include "slate/utf8.h"
 
 #include "riscos/ucstables.h"
 
@@ -448,16 +448,16 @@ static const char *special_chars[] = {
  * \param string The string to convert
  * \param len The length (in bytes) of the string, or 0
  * \param result Pointer to location in which to store result
- * \return An nserror code
+ * \return An slateerror code
  */
-nserror utf8_to_local_encoding(const char *string, size_t len, char **result)
+slateerror utf8_to_local_encoding(const char *string, size_t len, char **result)
 {
 	os_error *error;
 	int alphabet, i;
 	size_t off, prev_off;
 	char *temp, *cur_pos;
 	const char *enc;
-	nserror err;
+	slateerror err;
 
 	assert(string);
 	assert(result);
@@ -476,7 +476,7 @@ nserror utf8_to_local_encoding(const char *string, size_t len, char **result)
 	/* UTF-8 -> simply copy string */
 	if (alphabet == territory_ALPHABET_UTF8) {
 		*result = strndup(string, len);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* get encoding name */
@@ -488,7 +488,7 @@ nserror utf8_to_local_encoding(const char *string, size_t len, char **result)
 	/* create output buffer */
 	*(result) = malloc(len + 1);
 	if (!(*result))
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	*(*result) = '\0';
 
 	prev_off = 0;
@@ -530,10 +530,10 @@ nserror utf8_to_local_encoding(const char *string, size_t len, char **result)
 			if (off - prev_off > 0) {
 				err = utf8_to_enc(string + prev_off, enc,
 						off - prev_off, &temp);
-				if (err != NSERROR_OK) {
-					assert(err != NSERROR_BAD_ENCODING);
+				if (err != SLATEERROR_OK) {
+					assert(err != SLATEERROR_BAD_ENCODING);
 					free(*result);
-					return NSERROR_NOMEM;
+					return SLATEERROR_NOMEM;
 				}
 
 				strcat(cur_pos, temp);
@@ -559,10 +559,10 @@ nserror utf8_to_local_encoding(const char *string, size_t len, char **result)
 	if (prev_off < len) {
 		err = utf8_to_enc(string + prev_off, enc, len - prev_off,
 				&temp);
-		if (err != NSERROR_OK) {
-			assert(err != NSERROR_BAD_ENCODING);
+		if (err != SLATEERROR_OK) {
+			assert(err != SLATEERROR_BAD_ENCODING);
 			free(*result);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 
 		strcat(cur_pos, temp);
@@ -570,7 +570,7 @@ nserror utf8_to_local_encoding(const char *string, size_t len, char **result)
 		free(temp);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -579,9 +579,9 @@ nserror utf8_to_local_encoding(const char *string, size_t len, char **result)
  * \param string The string to convert
  * \param len The length (in bytes) of the string, or 0
  * \param result Pointer to location in which to store result
- * \return An nserror code
+ * \return An slateerror code
  */
-nserror utf8_from_local_encoding(const char *string, size_t len, char **result)
+slateerror utf8_from_local_encoding(const char *string, size_t len, char **result)
 {
 	os_error *error;
 	int alphabet, num_specials = 0, result_alloc;
@@ -589,7 +589,7 @@ nserror utf8_from_local_encoding(const char *string, size_t len, char **result)
 	size_t off, prev_off, cur_off;
 	char *temp;
 	const char *enc;
-	nserror err;
+	slateerror err;
 
 	assert(string && result);
 
@@ -608,10 +608,10 @@ nserror utf8_from_local_encoding(const char *string, size_t len, char **result)
 	if (alphabet == territory_ALPHABET_UTF8) {
 		temp = strndup(string, len);
 		if (!temp)
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 
 		*result = temp;
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* get encoding name */
@@ -625,7 +625,7 @@ nserror utf8_from_local_encoding(const char *string, size_t len, char **result)
 
 	*(result) = malloc(result_alloc);
 	if (!(*result))
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	*(*result) = '\0';
 
 	prev_off = 0;
@@ -643,11 +643,11 @@ nserror utf8_from_local_encoding(const char *string, size_t len, char **result)
 		if (off - prev_off > 0) {
 			err = utf8_from_enc(string + prev_off, enc,
 					off - prev_off, &temp, NULL);
-			if (err != NSERROR_OK) {
-				assert(err != NSERROR_BAD_ENCODING);
+			if (err != SLATEERROR_OK) {
+				assert(err != SLATEERROR_BAD_ENCODING);
 				NSLOG(netsurf, INFO, "utf8_from_enc failed");
 				free(*result);
-				return NSERROR_NOMEM;
+				return SLATEERROR_NOMEM;
 			}
 
 			strcat((*result) + cur_off, temp);
@@ -678,7 +678,7 @@ nserror utf8_from_local_encoding(const char *string, size_t len, char **result)
 					(3 * SPECIAL_CHUNK_SIZE));
 			if (!temp) {
 				free(*result);
-				return NSERROR_NOMEM;
+				return SLATEERROR_NOMEM;
 			}
 
 			*result = temp;
@@ -691,11 +691,11 @@ nserror utf8_from_local_encoding(const char *string, size_t len, char **result)
 	if (prev_off < len) {
 		err = utf8_from_enc(string + prev_off, enc, len - prev_off,
 				    &temp, NULL);
-		if (err != NSERROR_OK) {
-			assert(err != NSERROR_BAD_ENCODING);
+		if (err != SLATEERROR_OK) {
+			assert(err != SLATEERROR_BAD_ENCODING);
 			NSLOG(netsurf, INFO, "utf8_from_enc failed");
 			free(*result);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 
 		strcat((*result) + cur_off, temp);
@@ -710,11 +710,11 @@ nserror utf8_from_local_encoding(const char *string, size_t len, char **result)
 	if (!temp) {
 		NSLOG(netsurf, INFO, "realloc failed");
 		free(*result);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 	*result = temp;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static struct gui_utf8_table utf8_table = {

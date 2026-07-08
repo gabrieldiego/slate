@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -58,7 +58,7 @@ static bool mimesniff__has_binary_octets(const uint8_t *data, size_t len)
 	return data != end;
 }
 
-static nserror mimesniff__match_mp4(const uint8_t *data, size_t len,
+static slateerror mimesniff__match_mp4(const uint8_t *data, size_t len,
 		lwc_string **effective_type)
 {
 	uint32_t box_size, i;
@@ -88,24 +88,24 @@ static nserror mimesniff__match_mp4(const uint8_t *data, size_t len,
 	 * information out of an 'ftyp' box (i.e. the size, type,
 	 * and major_brand words). */
 	if (len < 12)
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 
 	/* Box size is big-endian */
 	box_size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
 
 	/* Require that we can read the entire box, and reject bad box sizes */
 	if (len < box_size || box_size % 4 != 0)
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 
 	/* Ensure this is an 'ftyp' box */
 	if (data[4] != 'f' || data[5] != 't' ||
 			data[6] != 'y' || data[7] != 'p')
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 
 	/* Check if major brand begins with 'mp4' */
 	if (data[8] == 'm' && data[9] == 'p' && data[10] == '4') {
 		*effective_type = lwc_string_ref(corestring_lwc_video_mp4);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* Search each compatible brand in the box for "mp4" */
@@ -114,14 +114,14 @@ static nserror mimesniff__match_mp4(const uint8_t *data, size_t len,
 		    data[i+1] == 'p' &&
 		    data[i+2] == '4') {
 			*effective_type = lwc_string_ref(corestring_lwc_video_mp4);
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 	}
 
-	return NSERROR_NOT_FOUND;
+	return SLATEERROR_NOT_FOUND;
 }
 
-static nserror mimesniff__match_unknown_ws(const uint8_t *data, size_t len,
+static slateerror mimesniff__match_unknown_ws(const uint8_t *data, size_t len,
 		lwc_string **effective_type)
 {
 #define SIG(t, s, x) { (const uint8_t *) s, SLEN(s), x, t }
@@ -166,14 +166,14 @@ static nserror mimesniff__match_unknown_ws(const uint8_t *data, size_t len,
 	}
 
 	if (data == end)
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 
 	len = end - data;
 
 	for (it = ws_exact_match_types; it->sig != NULL; it++) {
 		if (it->len <= len && memcmp(data, it->sig, it->len) == 0) {
 			*effective_type = lwc_string_ref(*it->type);
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 	}
 
@@ -187,14 +187,14 @@ static nserror mimesniff__match_unknown_ws(const uint8_t *data, size_t len,
 				(data[it->len] == ' ' ||
 				data[it->len] == '>')) {
 			*effective_type = lwc_string_ref(*it->type);
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 	}
 
-	return NSERROR_NOT_FOUND;
+	return SLATEERROR_NOT_FOUND;
 }
 
-static nserror mimesniff__match_unknown_bom(const uint8_t *data, size_t len,
+static slateerror mimesniff__match_unknown_bom(const uint8_t *data, size_t len,
 		lwc_string **effective_type)
 {
 #define SIG(t, s, x) { (const uint8_t *) s, SLEN(s), x, t }
@@ -210,14 +210,14 @@ static nserror mimesniff__match_unknown_bom(const uint8_t *data, size_t len,
 	for (it = bom_match_types; it->sig != NULL; it++) {
 		if (it->len <= len && memcmp(data, it->sig, it->len) == 0) {
 			*effective_type = lwc_string_ref(*it->type);
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 	}
 
-	return NSERROR_NOT_FOUND;
+	return SLATEERROR_NOT_FOUND;
 }
 
-static nserror mimesniff__match_unknown_riff(const uint8_t *data, size_t len,
+static slateerror mimesniff__match_unknown_riff(const uint8_t *data, size_t len,
 		lwc_string **effective_type)
 {
 #define SIG(t, s, x) { (const uint8_t *) s, SLEN(s), x, t }
@@ -235,14 +235,14 @@ static nserror mimesniff__match_unknown_riff(const uint8_t *data, size_t len,
 				memcmp(data + SLEN("RIFF????"),
 						it->sig, it->len) == 0) {
 			*effective_type = lwc_string_ref(*it->type);
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 	}
 
-	return NSERROR_NOT_FOUND;
+	return SLATEERROR_NOT_FOUND;
 }
 
-static nserror mimesniff__match_unknown_exact(const uint8_t *data, size_t len,
+static slateerror mimesniff__match_unknown_exact(const uint8_t *data, size_t len,
 		bool allow_unsafe, lwc_string **effective_type)
 {
 #define SIG(t, s, x) { (const uint8_t *) s, SLEN(s), x, t }
@@ -276,70 +276,70 @@ static nserror mimesniff__match_unknown_exact(const uint8_t *data, size_t len,
 		if (it->len <= len && memcmp(data, it->sig, it->len) == 0 &&
 				(allow_unsafe || it->safe)) {
 			*effective_type = lwc_string_ref(*it->type);
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 	}
 
-	return NSERROR_NOT_FOUND;
+	return SLATEERROR_NOT_FOUND;
 }
 
-static nserror mimesniff__match_unknown(const uint8_t *data, size_t len,
+static slateerror mimesniff__match_unknown(const uint8_t *data, size_t len,
 		bool allow_unsafe, lwc_string **effective_type)
 {
 	if (mimesniff__match_unknown_exact(data, len, allow_unsafe,
-			effective_type) == NSERROR_OK)
-		return NSERROR_OK;
+			effective_type) == SLATEERROR_OK)
+		return SLATEERROR_OK;
 
 	if (mimesniff__match_unknown_riff(data, len,
-			effective_type) == NSERROR_OK)
-		return NSERROR_OK;
+			effective_type) == SLATEERROR_OK)
+		return SLATEERROR_OK;
 
 	if (allow_unsafe == false)
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 
 	if (mimesniff__match_unknown_bom(data, len,
-			effective_type) == NSERROR_OK)
-		return NSERROR_OK;
+			effective_type) == SLATEERROR_OK)
+		return SLATEERROR_OK;
 
 	if (mimesniff__match_unknown_ws(data, len,
-			effective_type) == NSERROR_OK)
-		return NSERROR_OK;
+			effective_type) == SLATEERROR_OK)
+		return SLATEERROR_OK;
 
-	if (mimesniff__match_mp4(data, len, effective_type) == NSERROR_OK)
-		return NSERROR_OK;
+	if (mimesniff__match_mp4(data, len, effective_type) == SLATEERROR_OK)
+		return SLATEERROR_OK;
 
-	return NSERROR_NOT_FOUND;
+	return SLATEERROR_NOT_FOUND;
 }
 
-static nserror mimesniff__compute_unknown(const uint8_t *data, size_t len,
+static slateerror mimesniff__compute_unknown(const uint8_t *data, size_t len,
 		lwc_string **effective_type)
 {
 	if (data == NULL)
-		return NSERROR_NEED_DATA;
+		return SLATEERROR_NEED_DATA;
 
 	len = min(len, 512);
 
 	if (mimesniff__match_unknown(data, len, true,
-				     effective_type) == NSERROR_OK) {
-		return NSERROR_OK;
+				     effective_type) == SLATEERROR_OK) {
+		return SLATEERROR_OK;
 	}
 
 	if (mimesniff__has_binary_octets(data, len) == false) {
 		/* No binary octets => text/plain */
 		*effective_type = lwc_string_ref(corestring_lwc_text_plain);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	*effective_type = lwc_string_ref(corestring_lwc_application_octet_stream);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror mimesniff__compute_text_or_binary(const uint8_t *data,
+static slateerror mimesniff__compute_text_or_binary(const uint8_t *data,
 		size_t len, lwc_string **effective_type)
 {
 	if (data == NULL) {
-		return NSERROR_NEED_DATA;
+		return SLATEERROR_NEED_DATA;
 	}
 
 	len = min(len, 512);
@@ -350,25 +350,25 @@ static nserror mimesniff__compute_text_or_binary(const uint8_t *data,
 				data[2] == 0xbf))) {
 		/* Found a BOM => text/plain */
 		*effective_type = lwc_string_ref(corestring_lwc_text_plain);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	if (mimesniff__has_binary_octets(data, len) == false) {
 		/* No binary octets => text/plain */
 		*effective_type = lwc_string_ref(corestring_lwc_text_plain);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	if (mimesniff__match_unknown(data, len, false,
-			effective_type) == NSERROR_OK)
-		return NSERROR_OK;
+			effective_type) == SLATEERROR_OK)
+		return SLATEERROR_OK;
 
 	*effective_type = lwc_string_ref(corestring_lwc_application_octet_stream);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror mimesniff__compute_image(lwc_string *official_type,
+static slateerror mimesniff__compute_image(lwc_string *official_type,
 		const uint8_t *data, size_t len, lwc_string **effective_type)
 {
 #define SIG(t, s) { (const uint8_t *) s, SLEN(s), t }
@@ -397,14 +397,14 @@ static nserror mimesniff__compute_image(lwc_string *official_type,
 
 	if (data == NULL) {
 		lwc_string_unref(official_type);
-		return NSERROR_NEED_DATA;
+		return SLATEERROR_NEED_DATA;
 	}
 
 	for (it = image_types; it->sig != NULL; it++) {
 		if (it->len <= len && memcmp(data, it->sig, it->len) == 0) {
 			lwc_string_unref(official_type);
 			*effective_type = lwc_string_ref(*it->type);
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 	}
 
@@ -415,15 +415,15 @@ static nserror mimesniff__compute_image(lwc_string *official_type,
 					"WEBPVP", SLEN("WEBPVP")) == 0 ) {
 		lwc_string_unref(official_type);
 		*effective_type = lwc_string_ref(corestring_lwc_image_webp);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	*effective_type = official_type;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror mimesniff__compute_feed_or_html(const uint8_t *data,
+static slateerror mimesniff__compute_feed_or_html(const uint8_t *data,
 		size_t len, lwc_string **effective_type)
 {
 #define RDF_NS "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -445,7 +445,7 @@ static nserror mimesniff__compute_feed_or_html(const uint8_t *data,
 	const uint8_t *end;
 
 	if (data == NULL)
-		return NSERROR_NEED_DATA;
+		return SLATEERROR_NEED_DATA;
 
 	end = data + min(len, 512);
 
@@ -519,11 +519,11 @@ static nserror mimesniff__compute_feed_or_html(const uint8_t *data,
 			if (MATCH("rss")) {
 				*effective_type =
 					lwc_string_ref(corestring_lwc_application_rss_xml);
-				return NSERROR_OK;
+				return SLATEERROR_OK;
 			} else if (MATCH("feed")) {
 				*effective_type =
 					lwc_string_ref(corestring_lwc_application_atom_xml);
-				return NSERROR_OK;
+				return SLATEERROR_OK;
 			} else if (MATCH("rdf:RDF")) {
 				state = IN_RDF;
 				data += SLEN("rdf:RDF");
@@ -542,7 +542,7 @@ static nserror mimesniff__compute_feed_or_html(const uint8_t *data,
 
 			if (rdf && rss) {
 				*effective_type = lwc_string_ref(corestring_lwc_application_rss_xml);
-				return NSERROR_OK;
+				return SLATEERROR_OK;
 			}
 
 			break;
@@ -552,14 +552,14 @@ static nserror mimesniff__compute_feed_or_html(const uint8_t *data,
 
 	*effective_type = lwc_string_ref(corestring_lwc_text_html);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 
 #undef RSS_NS
 #undef RDF_NS
 }
 
 /* See mimesniff.h for documentation */
-nserror
+slateerror
 mimesniff_compute_effective_type(const char *content_type_header,
 				 const uint8_t *data,
 				 size_t len,
@@ -584,11 +584,11 @@ mimesniff_compute_effective_type(const char *content_type_header,
 	http_content_type *ct;
 	const struct tt_s *tt;
 	bool match;
-	nserror error;
+	slateerror error;
 
 	if (content_type_header == NULL) {
 		if (sniff_allowed == false) {
-			return NSERROR_NOT_FOUND;
+			return SLATEERROR_NOT_FOUND;
 		}
 
 		/* No official type => unknown */
@@ -596,9 +596,9 @@ mimesniff_compute_effective_type(const char *content_type_header,
 	}
 
 	error = http_parse_content_type(content_type_header, &ct);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		if (sniff_allowed == false)
-			return NSERROR_NOT_FOUND;
+			return SLATEERROR_NOT_FOUND;
 
 		/* Unparseable => unknown */
 		return mimesniff__compute_unknown(data, len, effective_type);
@@ -607,7 +607,7 @@ mimesniff_compute_effective_type(const char *content_type_header,
 	if (sniff_allowed == false) {
 		*effective_type = lwc_string_ref(ct->media_type);
 		http_content_type_destroy(ct);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	if (image_only) {
@@ -618,7 +618,7 @@ mimesniff_compute_effective_type(const char *content_type_header,
 						&match) == lwc_error_ok && match) {
 			*effective_type = lwc_string_ref(corestring_lwc_image_svg);
 			http_content_type_destroy(ct);
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 
 		official_type = lwc_string_ref(ct->media_type);
@@ -664,7 +664,7 @@ mimesniff_compute_effective_type(const char *content_type_header,
 		/* Use official type */
 		*effective_type = lwc_string_ref(ct->media_type);
 		http_content_type_destroy(ct);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* text/xml, application/xml */
@@ -677,7 +677,7 @@ mimesniff_compute_effective_type(const char *content_type_header,
 		/* Use official type */
 		*effective_type = lwc_string_ref(ct->media_type);
 		http_content_type_destroy(ct);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* Image types */
@@ -703,5 +703,5 @@ mimesniff_compute_effective_type(const char *content_type_header,
 
 	http_content_type_destroy(ct);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }

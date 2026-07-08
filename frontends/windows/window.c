@@ -1,7 +1,7 @@
 /*
  * Copyright 2011-2016 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,13 +31,13 @@
 #include "utils/errors.h"
 #include "utils/log.h"
 #include "utils/utils.h"
-#include "utils/nsoption.h"
-#include "utils/nsurl.h"
+#include "utils/slateoption.h"
+#include "utils/slateurl.h"
 #include "utils/messages.h"
 #include "content/content.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/window.h"
-#include "netsurf/keypress.h"
+#include "slate/browser_window.h"
+#include "slate/window.h"
+#include "slate/keypress.h"
 #include "desktop/browser_history.h"
 
 #include "windows/gui.h"
@@ -78,7 +78,7 @@ static const LPCWSTR windowclassname_main = L"nswsmainwindow";
 /**
  * height of the Page Information bitmap button
  */
-#define NSW32_PGIBUTTON_HEIGHT 16
+#define SLATEW32_PGIBUTTON_HEIGHT 16
 
 /**
  * Number of open windows
@@ -149,14 +149,14 @@ static HWND nsws_window_create(HINSTANCE hInstance, struct gui_window *gw)
 	int width = CW_USEDEFAULT;
 	int height = CW_USEDEFAULT;
 
-	if ((nsoption_int(window_width) >= 100) &&
-	    (nsoption_int(window_height) >= 100) &&
-	    (nsoption_int(window_x) >= 0) &&
-	    (nsoption_int(window_y) >= 0)) {
-		xpos = nsoption_int(window_x);
-		ypos = nsoption_int(window_y);
-		width = nsoption_int(window_width);
-		height = nsoption_int(window_height);
+	if ((slateoption_int(window_width) >= 100) &&
+	    (slateoption_int(window_height) >= 100) &&
+	    (slateoption_int(window_x) >= 0) &&
+	    (slateoption_int(window_y) >= 0)) {
+		xpos = slateoption_int(window_x);
+		ypos = slateoption_int(window_y);
+		width = slateoption_int(window_width);
+		height = slateoption_int(window_height);
 
 		NSLOG(netsurf, DEBUG, "Setting Window position %d,%d %d,%d",
 		      xpos, ypos, width, height);
@@ -380,7 +380,7 @@ static void set_urlbar_edit_size(HWND hwnd)
 {
 	RECT rc;
 	GetClientRect(hwnd, &rc);
-	rc.left += NSW32_PGIBUTTON_HEIGHT;
+	rc.left += SLATEW32_PGIBUTTON_HEIGHT;
 	SendMessage(hwnd, EM_SETRECT, 0, (LPARAM)&rc);
 	NSLOG(netsurf, DEBUG, "left:%ld right:%ld top:%ld bot:%ld",
 	      rc.left,rc.right,rc.top,rc.bottom);
@@ -524,10 +524,10 @@ nsws_window_urlbar_create(HINSTANCE hInstance,
 				 TEXT("BUTTON"),
 				 NULL,
 				 WS_CHILD | WS_VISIBLE | BS_BITMAP | BS_FLAT,
-				 (NSWS_URLBAR_HEIGHT - NSW32_PGIBUTTON_HEIGHT) /2,
-				 (NSWS_URLBAR_HEIGHT - NSW32_PGIBUTTON_HEIGHT) /2,
-				 NSW32_PGIBUTTON_HEIGHT,
-				 NSW32_PGIBUTTON_HEIGHT,
+				 (NSWS_URLBAR_HEIGHT - SLATEW32_PGIBUTTON_HEIGHT) /2,
+				 (NSWS_URLBAR_HEIGHT - SLATEW32_PGIBUTTON_HEIGHT) /2,
+				 SLATEW32_PGIBUTTON_HEIGHT,
+				 SLATEW32_PGIBUTTON_HEIGHT,
 				 hwnd,
 				 (HMENU)IDC_PAGEINFO,
 				 hInstance,
@@ -919,7 +919,7 @@ static void nsws_window_update_forward_back(struct gui_window *w)
 			    MAKELONG((back ? TBSTATE_ENABLED :
 				      TBSTATE_INDETERMINATE), 0));
 	}
-	nsw32_local_history_hide();
+	slatew32_local_history_hide();
 }
 
 
@@ -928,9 +928,9 @@ static void nsws_window_update_forward_back(struct gui_window *w)
  *
  * \param gw The netsurf window being invalidated.
  * \param rect area to redraw or NULL for entrire window area.
- * \return NSERROR_OK or appropriate error code.
+ * \return SLATEERROR_OK or appropriate error code.
  */
-static nserror
+static slateerror
 win32_window_invalidate_area(struct gui_window *gw, const struct rect *rect)
 {
 	RECT *redrawrectp = NULL;
@@ -952,7 +952,7 @@ win32_window_invalidate_area(struct gui_window *gw, const struct rect *rect)
 		     NULL,
 		     RDW_INVALIDATE | RDW_NOERASE);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -960,28 +960,28 @@ win32_window_invalidate_area(struct gui_window *gw, const struct rect *rect)
  * Create a new window due to menu selection
  *
  * \param gw frontends graphical window.
- * \return NSERROR_OK on success else appropriate error code.
+ * \return SLATEERROR_OK on success else appropriate error code.
  */
-static nserror win32_open_new_window(struct gui_window *gw)
+static slateerror win32_open_new_window(struct gui_window *gw)
 {
 	const char *addr;
-	nsurl *url;
-	nserror ret;
+	slateurl *url;
+	slateerror ret;
 
-	if (nsoption_charp(homepage_url) != NULL) {
-		addr = nsoption_charp(homepage_url);
+	if (slateoption_charp(homepage_url) != NULL) {
+		addr = slateoption_charp(homepage_url);
 	} else {
-		addr = NETSURF_HOMEPAGE;
+		addr = SLATE_HOMEPAGE;
 	}
 
-	ret = nsurl_create(addr, &url);
-	if (ret == NSERROR_OK) {
+	ret = slateurl_create(addr, &url);
+	if (ret == SLATEERROR_OK) {
 		ret = browser_window_create(BW_CREATE_HISTORY,
 					    url,
 					    NULL,
 					    gw->bw,
 					    NULL);
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
 
 	return ret;
@@ -1005,7 +1005,7 @@ nsws_window_command(HWND hwnd,
 		    int identifier,
 		    HWND ctrl_window)
 {
-	nserror ret;
+	slateerror ret;
 
 	NSLOG(netsurf, INFO,
 	      "notification_code %x identifier %x ctrl_window %p",
@@ -1032,7 +1032,7 @@ nsws_window_command(HWND hwnd,
 
 	case IDM_FILE_OPEN_WINDOW:
 		ret = win32_open_new_window(gw);
-		if (ret != NSERROR_OK) {
+		if (ret != SLATEERROR_OK) {
 			win32_warning(messages_get_errorcode(ret), 0);
 		}
 		break;
@@ -1123,11 +1123,11 @@ nsws_window_command(HWND hwnd,
 
 	case IDM_NAV_HOME:
 	{
-		nsurl *url;
-		ret = nsurl_create(nsoption_charp(homepage_url), &url);
+		slateurl *url;
+		ret = slateurl_create(slateoption_charp(homepage_url), &url);
 
-		if (ret != NSERROR_OK) {
-			win32_report_nserror(ret, 0);
+		if (ret != SLATEERROR_OK) {
+			win32_report_slateerror(ret, 0);
 		} else {
 			browser_window_navigate(gw->bw,
 						url,
@@ -1136,7 +1136,7 @@ nsws_window_command(HWND hwnd,
 						NULL,
 						NULL,
 						NULL);
-			nsurl_unref(url);
+			slateurl_unref(url);
 		}
 		break;
 	}
@@ -1150,19 +1150,19 @@ nsws_window_command(HWND hwnd,
 		break;
 
 	case IDM_NAV_LOCALHISTORY:
-		nsw32_local_history_present(gw->main, gw->bw);
+		slatew32_local_history_present(gw->main, gw->bw);
 		break;
 
 	case IDM_NAV_GLOBALHISTORY:
-		nsw32_global_history_present(hinst);
+		slatew32_global_history_present(hinst);
 		break;
 
 	case IDM_TOOLS_COOKIES:
-		nsw32_cookies_present(NULL);
+		slatew32_cookies_present(NULL);
 		break;
 
 	case IDM_NAV_BOOKMARKS:
-		nsw32_hotlist_present(hinst);
+		slatew32_hotlist_present(hinst);
 		break;
 
 	case IDM_VIEW_ZOOMPLUS:
@@ -1183,10 +1183,10 @@ nsws_window_command(HWND hwnd,
 	case IDM_VIEW_SAVE_WIN_METRICS: {
 		RECT r;
 		GetWindowRect(gw->main, &r);
-		nsoption_set_int(window_x, r.left);
-		nsoption_set_int(window_y, r.top);
-		nsoption_set_int(window_width, r.right - r.left);
-		nsoption_set_int(window_height, r.bottom - r.top);
+		slateoption_set_int(window_x, r.left);
+		slateoption_set_int(window_y, r.top);
+		slateoption_set_int(window_width, r.right - r.left);
+		slateoption_set_int(window_height, r.bottom - r.top);
 
 		nsws_prefs_save();
 		break;
@@ -1250,27 +1250,27 @@ nsws_window_command(HWND hwnd,
 
 	case IDM_HELP_CONTENTS:
 		nsws_window_go(hwnd,
-			       "https://www.netsurf-browser.org/documentation/");
+			       "https://www.slate-browser.org/documentation/");
 		break;
 
 	case IDM_HELP_GUIDE:
 		nsws_window_go(hwnd,
-			       "https://www.netsurf-browser.org/documentation/guide");
+			       "https://www.slate-browser.org/documentation/guide");
 		break;
 
 	case IDM_HELP_INFO:
 		nsws_window_go(hwnd,
-			       "https://www.netsurf-browser.org/documentation/info");
+			       "https://www.slate-browser.org/documentation/info");
 		break;
 
 	case IDM_HELP_ABOUT:
-		nsw32_about_dialog_init(hinst, gw->main);
+		slatew32_about_dialog_init(hinst, gw->main);
 		break;
 
 	case IDC_MAIN_LAUNCH_URL:
 	{
-		nsurl *url;
-		nserror err;
+		slateurl *url;
+		slateerror err;
 
 		if (GetFocus() != gw->urlbar)
 			break;
@@ -1280,10 +1280,10 @@ nsws_window_command(HWND hwnd,
 		SendMessage(gw->urlbar, WM_GETTEXT, (WPARAM)(len + 1), (LPARAM)addr);
 		NSLOG(netsurf, INFO, "launching %s\n", addr);
 
-		err = nsurl_create(addr, &url);
+		err = slateurl_create(addr, &url);
 
-		if (err != NSERROR_OK) {
-			win32_report_nserror(err, 0);
+		if (err != SLATEERROR_OK) {
+			win32_report_slateerror(err, 0);
 		} else {
 			browser_window_navigate(gw->bw,
 						url,
@@ -1292,7 +1292,7 @@ nsws_window_command(HWND hwnd,
 						NULL,
 						NULL,
 						NULL);
-			nsurl_unref(url);
+			slateurl_unref(url);
 		}
 
 		break;
@@ -1446,7 +1446,7 @@ nsws_window_event_callback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
 	case WM_NCDESTROY:
 		RemoveProp(hwnd, TEXT("GuiWnd"));
-		nsw32_local_history_hide();
+		slatew32_local_history_hide();
 		browser_window_destroy(gw->bw);
 		if (--open_windows <= 0) {
 			win32_set_quit(true);
@@ -1621,9 +1621,9 @@ static void win32_window_destroy(struct gui_window *w)
  * \param gw gui_window to measure
  * \param width	 receives width of window
  * \param height receives height of window
- * \return NSERROR_OK and width and height updated
+ * \return SLATEERROR_OK and width and height updated
  */
-static nserror
+static slateerror
 win32_window_get_dimensions(struct gui_window *gw, int *width, int *height)
 {
 	*width = gw->width;
@@ -1631,7 +1631,7 @@ win32_window_get_dimensions(struct gui_window *gw, int *width, int *height)
 
 	NSLOG(netsurf, INFO, "gw:%p w=%d h=%d", gw, *width, *height);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1670,7 +1670,7 @@ static void win32_window_set_title(struct gui_window *w, const char *title)
 	fulltitle = malloc(strlen(title) + SLEN("  -  NetSurf") + 1);
 	if (fulltitle == NULL) {
 		NSLOG(netsurf, ERROR, "%s",
-		      messages_get_errorcode(NSERROR_NOMEM));
+		      messages_get_errorcode(SLATEERROR_NOMEM));
 		return;
 	}
 
@@ -1687,7 +1687,7 @@ static void win32_window_set_title(struct gui_window *w, const char *title)
 	enctitle = malloc(2 * (wlen + 1));
 	if (enctitle == NULL) {
 		NSLOG(netsurf, ERROR, "%s encoding \"%s\" len %d",
-		      messages_get_errorcode(NSERROR_NOMEM), fulltitle, wlen);
+		      messages_get_errorcode(SLATEERROR_NOMEM), fulltitle, wlen);
 		free(fulltitle);
 		return;
 	}
@@ -1705,11 +1705,11 @@ static void win32_window_set_title(struct gui_window *w, const char *title)
  * \param gw window to update.
  * \param url The url to use as icon.
  */
-static nserror win32_window_set_url(struct gui_window *gw, nsurl *url)
+static slateerror win32_window_set_url(struct gui_window *gw, slateurl *url)
 {
-	SendMessage(gw->urlbar, WM_SETTEXT, 0, (LPARAM) nsurl_access(url));
+	SendMessage(gw->urlbar, WM_SETTEXT, 0, (LPARAM) slateurl_access(url));
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1867,9 +1867,9 @@ static void win32_window_page_info_change(struct gui_window *gw)
  *
  * \param gw The window receiving the event.
  * \param event The event code.
- * \return NSERROR_OK when processed ok
+ * \return SLATEERROR_OK when processed ok
  */
-static nserror
+static slateerror
 win32_window_event(struct gui_window *gw, enum gui_window_event event)
 {
 	switch (event) {
@@ -1896,7 +1896,7 @@ win32_window_event(struct gui_window *gw, enum gui_window_event event)
 	default:
 		break;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -1954,16 +1954,16 @@ struct gui_window *nsws_get_gui_window(HWND hwnd)
 bool nsws_window_go(HWND hwnd, const char *urltxt)
 {
 	struct gui_window *gw;
-	nsurl *url;
-	nserror ret;
+	slateurl *url;
+	slateerror ret;
 
 	gw = nsws_get_gui_window(hwnd);
 	if (gw == NULL)
 		return false;
-	ret = nsurl_create(urltxt, &url);
+	ret = slateurl_create(urltxt, &url);
 
-	if (ret != NSERROR_OK) {
-		win32_report_nserror(ret, 0);
+	if (ret != SLATEERROR_OK) {
+		win32_report_slateerror(ret, 0);
 	} else {
 		browser_window_navigate(gw->bw,
 					url,
@@ -1972,7 +1972,7 @@ bool nsws_window_go(HWND hwnd, const char *urltxt)
 					NULL,
 					NULL,
 					NULL);
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
 
 	return true;
@@ -1980,20 +1980,20 @@ bool nsws_window_go(HWND hwnd, const char *urltxt)
 
 
 /* exported interface documented in windows/window.h */
-nserror win32_window_set_scroll(struct gui_window *gw, const struct rect *rect)
+slateerror win32_window_set_scroll(struct gui_window *gw, const struct rect *rect)
 {
 	SCROLLINFO si;
-	nserror res;
+	slateerror res;
 	int height;
 	int width;
 	POINT p;
 
 	if ((gw == NULL) || (gw->bw == NULL)) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	res = browser_window_get_extents(gw->bw, true, &width, &height);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -2074,15 +2074,15 @@ nserror win32_window_set_scroll(struct gui_window *gw, const struct rect *rect)
 	gw->requestscrollx = 0;
 	gw->requestscrolly = 0;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in windows/window.h */
-nserror
+slateerror
 nsws_create_main_class(HINSTANCE hinstance)
 {
-	nserror ret = NSERROR_OK;
+	slateerror ret = SLATEERROR_OK;
 	WNDCLASSEXW wc;
 
 	/* main window */
@@ -2092,16 +2092,16 @@ nsws_create_main_class(HINSTANCE hinstance)
 	wc.cbClsExtra = 0;
 	wc.cbWndExtra = 0;
 	wc.hInstance = hinstance;
-	wc.hIcon = LoadIcon(hinstance, MAKEINTRESOURCE(IDR_NETSURF_ICON));
+	wc.hIcon = LoadIcon(hinstance, MAKEINTRESOURCE(IDR_SLATE_ICON));
 	wc.hCursor = NULL;
 	wc.hbrBackground = (HBRUSH)(COLOR_MENU + 1);
 	wc.lpszMenuName = NULL;
 	wc.lpszClassName = windowclassname_main;
-	wc.hIconSm = LoadIcon(hinstance, MAKEINTRESOURCE(IDR_NETSURF_ICON));
+	wc.hIconSm = LoadIcon(hinstance, MAKEINTRESOURCE(IDR_SLATE_ICON));
 
 	if (RegisterClassExW(&wc) == 0) {
 		win_perror("MainWindowClass");
-		ret = NSERROR_INIT_FAILED;
+		ret = SLATEERROR_INIT_FAILED;
 	}
 
 	return ret;

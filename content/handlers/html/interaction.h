@@ -1,7 +1,7 @@
 /*
  * Copyright 2004 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * HTML content user interaction handling
  */
 
-#ifndef NETSURF_HTML_INTERACTION_H
-#define NETSURF_HTML_INTERACTION_H
+#ifndef SLATE_HTML_INTERACTION_H
+#define SLATE_HTML_INTERACTION_H
 
 #include "desktop/search.h" /* search flags enum */
 
@@ -43,7 +43,7 @@ struct html_scrollbar_data {
  * \param  x	  coordinate of mouse
  * \param  y	  coordinate of mouse
  */
-nserror html_mouse_track(struct content *c, struct browser_window *bw,
+slateerror html_mouse_track(struct content *c, struct browser_window *bw,
 			browser_mouse_state mouse, int x, int y);
 
 
@@ -61,9 +61,9 @@ nserror html_mouse_track(struct content *c, struct browser_window *bw,
  * \param mouse state of mouse buttons and modifier keys
  * \param x x coordinate of mouse
  * \param y y coordinate of mouse
- * \return NSERROR_OK or appropriate error code.
+ * \return SLATEERROR_OK or appropriate error code.
  */
-nserror html_mouse_action(struct content *c, struct browser_window *bw,
+slateerror html_mouse_action(struct content *c, struct browser_window *bw,
 			browser_mouse_state mouse, int x, int y);
 
 

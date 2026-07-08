@@ -1,7 +1,7 @@
 /*
  * Copyright 2013 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,10 +25,10 @@
 
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "utils/nsoption.h"
-#include "utils/nsurl.h"
-#include "netsurf/inttypes.h"
-#include "netsurf/keypress.h"
+#include "utils/slateoption.h"
+#include "utils/slateurl.h"
+#include "slate/inttypes.h"
+#include "slate/keypress.h"
 #include "content/content.h"
 #include "desktop/hotlist.h"
 
@@ -38,7 +38,7 @@
 #include "atari/hotlist.h"
 #include "atari/findfile.h"
 #include "atari/gemtk/gemtk.h"
-#include "atari/res/netsurf.rsh"
+#include "atari/res/slate.rsh"
 
 extern GRECT desk_area;
 
@@ -47,7 +47,7 @@ const char *tree_hotlist_path;
 struct atari_hotlist hl;
 
 /* Setup Atari Treeview Callbacks: */
-static nserror atari_hotlist_init_phase2(struct core_window *cw);
+static slateerror atari_hotlist_init_phase2(struct core_window *cw);
 static void atari_hotlist_finish(struct core_window *cw);
 static void atari_hotlist_keypress(struct core_window *cw,
 				   uint32_t ucs4);
@@ -68,7 +68,7 @@ static struct atari_treeview_callbacks atari_hotlist_treeview_callbacks = {
 	.gemtk_user_func = handle_event
 };
 
-static nserror atari_hotlist_init_phase2(struct core_window *cw)
+static slateerror atari_hotlist_init_phase2(struct core_window *cw)
 {
 	NSLOG(netsurf, INFO, "cw:%p", cw);
 	return hotlist_manager_init(cw);
@@ -190,10 +190,10 @@ static short handle_event(GUIWIN *win, EVMULT_OUT *ev_out, short msg[8])
 void atari_hotlist_init(void)
 {
 	if (hl.init == false) {
-		if( strcmp(nsoption_charp(hotlist_file), "") == 0 ){
+		if( strcmp(slateoption_charp(hotlist_file), "") == 0 ){
 			atari_find_resource( (char*)&hl.path, "hotlist", "hotlist" );
 		} else {
-			strncpy( (char*)&hl.path, nsoption_charp(hotlist_file), PATH_MAX-1 );
+			strncpy( (char*)&hl.path, slateoption_charp(hotlist_file), PATH_MAX-1 );
 		}
 
 		NSLOG(netsurf, INFO, "Hotlist: %s", (char *)&hl.path);
@@ -287,29 +287,29 @@ struct node;
 
 void atari_hotlist_add_page( const char * url, const char * title )
 {
-	nsurl *nsurl;
+	slateurl *slateurl;
 
 	if(hl.tv == NULL)
 		return;
 
 	atari_hotlist_open();
 
-	if (nsurl_create(url, &nsurl) != NSERROR_OK)
+	if (slateurl_create(url, &slateurl) != SLATEERROR_OK)
 		return;
 
-	if (hotlist_has_url(nsurl)) {
+	if (hotlist_has_url(slateurl)) {
 		NSLOG(netsurf, INFO, "URL already added as Bookmark");
-		nsurl_unref(nsurl);
+		slateurl_unref(slateurl);
 		return;
 	}
 
 	/* doesn't look nice:
 	   if( hl.tv->click.x >= 0 && hl.tv->click.y >= 0 ){
-	   hotlist_add_entry( nsurl, title, true, hl.tv->click.y );
+	   hotlist_add_entry( slateurl, title, true, hl.tv->click.y );
 	   } else {
 
 	   }*/
-	//hotlist_add_url(nsurl);
-	hotlist_add_entry(nsurl, title, 0, 0);
-	nsurl_unref(nsurl);
+	//hotlist_add_url(slateurl);
+	hotlist_add_entry(slateurl, title, 0, 0);
+	slateurl_unref(slateurl);
 }

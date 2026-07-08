@@ -1,7 +1,7 @@
 /*
  * Copyright 2019 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,11 +25,11 @@
 #include "utils/errors.h"
 #include "utils/log.h"
 #include "utils/utils.h"
-#include "netsurf/browser.h"
+#include "slate/browser.h"
 #include "css/utils.h"
 
 /* exported interface documented in netsurf/browser.h */
-nserror browser_set_dpi(int dpi)
+slateerror browser_set_dpi(int dpi)
 {
 	if (dpi < 72 || dpi > 250) {
 		int bad = dpi;
@@ -38,7 +38,7 @@ nserror browser_set_dpi(int dpi)
 	}
 	nscss_screen_dpi = INTTOFIX(dpi);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in netsurf/browser.h */

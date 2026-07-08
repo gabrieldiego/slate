@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,8 +20,8 @@
  * RISC OS font interface.
  */
 
-#ifndef _NETSURF_RISCOS_FONT_H_
-#define _NETSURF_RISCOS_FONT_H_
+#ifndef _SLATE_RISCOS_FONT_H_
+#define _SLATE_RISCOS_FONT_H_
 
 #include <rufl.h>
 

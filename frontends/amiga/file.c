@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,12 +25,12 @@
 #include <string.h>
 
 #include "utils/utils.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/file.h"
 #include "utils/messages.h"
-#include "utils/nsurl.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/content.h"
+#include "utils/slateurl.h"
+#include "slate/browser_window.h"
+#include "slate/content.h"
 #include "content/content_factory.h"
 #include "desktop/save_complete.h"
 #include "desktop/save_pdf.h"
@@ -83,7 +83,7 @@ HOOKF(ULONG, ami_file_asl_mime_hook, struct FileRequester *, fr, struct AnchorPa
 void ami_file_open(struct gui_window_2 *gwin)
 {
 	char *temp;
-	nsurl *url;
+	slateurl *url;
 
 	if(AslRequestTags(filereq,
 			ASLFR_TitleText, messages_get("NetSurf"),
@@ -100,7 +100,7 @@ void ami_file_open(struct gui_window_2 *gwin)
 			strlcpy(temp, filereq->fr_Drawer, 1024);
 			AddPart(temp, filereq->fr_File, 1024);
 
-			if (netsurf_path_to_nsurl(temp, &url) != NSERROR_OK) {
+			if (slate_path_to_slateurl(temp, &url) != SLATEERROR_OK) {
 				amiga_warn_user("NoMemory", 0);
 			} else {
 				browser_window_navigate(ami_gui2_get_browser_window(gwin),
@@ -110,7 +110,7 @@ void ami_file_open(struct gui_window_2 *gwin)
 					NULL,
 					NULL,
 					NULL);
-				nsurl_unref(url);
+				slateurl_unref(url);
 			}
 
 			free(temp);
@@ -216,7 +216,7 @@ void ami_file_save(int type, char *fname, struct Window *win,
 				}
 			break;
 		}
-		if(object) SetComment(fname, nsurl_access(hlcache_handle_get_url(object)));
+		if(object) SetComment(fname, slateurl_access(hlcache_handle_get_url(object)));
 	}
 
 	ami_update_pointer(win, GUI_POINTER_DEFAULT);
@@ -232,7 +232,7 @@ void ami_file_save_req(int type, struct gui_window_2 *gwin,
 
 	if(object) {
 		if(type == AMINS_SAVE_SOURCE) strip_ext = false;
-		nsurl_nice(hlcache_handle_get_url(object), &initial_fname, strip_ext);
+		slateurl_nice(hlcache_handle_get_url(object), &initial_fname, strip_ext);
 	}
 
 	if(initial_fname != NULL) {
@@ -280,7 +280,7 @@ void ami_file_save_req(int type, struct gui_window_2 *gwin,
 
 void ami_file_req_init(void)
 {
-	const char *initial_dir = nsoption_charp(download_dir);
+	const char *initial_dir = slateoption_charp(download_dir);
 	Tag initial_dir_tag = ASLFR_InitialDrawer;
 
 	if(initial_dir == NULL) initial_dir_tag = TAG_IGNORE;

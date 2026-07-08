@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,8 +17,8 @@
  */
 
 
-#ifndef NETSURF_FB_FETCH_H
-#define NETSURF_FB_FETCH_H
+#ifndef SLATE_FB_FETCH_H
+#define SLATE_FB_FETCH_H
 
 extern struct gui_fetch_table *framebuffer_fetch_table;
 

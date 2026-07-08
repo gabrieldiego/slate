@@ -1,7 +1,7 @@
 /*
  * Copyright 2013 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,10 +25,10 @@
 
 #include "testament.h"
 #include "utils/useragent.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/messages.h"
 #include "desktop/version.h"
-#include "netsurf/browser_window.h"
+#include "slate/browser_window.h"
 
 #include "curl/curlver.h"
 
@@ -37,7 +37,7 @@
 #include "atari/misc.h"
 #include "atari/plot/plot.h"
 #include "atari/gemtk/gemtk.h"
-#include "atari/res/netsurf.rsh"
+#include "atari/res/slate.rsh"
 #include "atari/about.h"
 
 static OBJECT * about_form = NULL;
@@ -118,8 +118,8 @@ void atari_about_show(void)
 	static USERBLK userblk;
 	short elem = 0;
 	const char * goto_url = NULL;
-	nserror nserr;
-	nsurl *url;
+	slateerror nserr;
+	slateurl *url;
 
 	vdihandle = plot_get_vdi_handle();
 
@@ -146,7 +146,7 @@ void atari_about_show(void)
 			LIBCURL_VERSION);
 
 	about_form = gemtk_obj_get_tree(ABOUT);
-	snprintf(version, 32, "%s%s", "NetSurf ", (char*)netsurf_version);
+	snprintf(version, 32, "%s%s", "NetSurf ", (char*)slate_version);
 	set_string(about_form, ABOUT_LBL_VERSION, version);
 
 	userblk.ub_code = about_userdraw;
@@ -167,16 +167,16 @@ void atari_about_show(void)
 	free(infocontent);
 
 	if (goto_url != NULL) {
-		nserr = nsurl_create(goto_url, &url);
-		if (nserr == NSERROR_OK) {
+		nserr = slateurl_create(goto_url, &url);
+		if (nserr == SLATEERROR_OK) {
 			nserr = browser_window_create(BW_CREATE_HISTORY,
 				    url,
 				    NULL,
 				    NULL,
 				    NULL);
-			nsurl_unref(url);
+			slateurl_unref(url);
 		}
-		if (nserr != NSERROR_OK) {
+		if (nserr != SLATEERROR_OK) {
 			atari_warn_user(messages_get_errorcode(nserr), 0);
 		}
 	}

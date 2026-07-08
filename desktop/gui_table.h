@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,8 +24,8 @@
  * through netsurf.h or gui_internal.h
  */
 
-#ifndef _NETSURF_DESKTOP_GUI_TABLE_H_
-#define _NETSURF_DESKTOP_GUI_TABLE_H_
+#ifndef _SLATE_DESKTOP_GUI_TABLE_H_
+#define _SLATE_DESKTOP_GUI_TABLE_H_
 
 struct gui_misc_table;
 struct gui_window_table;
@@ -45,7 +45,7 @@ struct gui_layout_table;
  *
  * Function table implementing interface operations for the browser core.
  */
-struct netsurf_table {
+struct slate_table {
 
 	/**
 	 * Browser table.

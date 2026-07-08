@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 Mark Benjamin <MarkBenjamin@dfgh.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,17 +22,17 @@
 
 #include "utils/utils.h"
 #include "utils/utf8.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/messages.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/content.h"
+#include "slate/browser_window.h"
+#include "slate/content.h"
 
 #include "gtk/viewdata.h"
 #include "gtk/viewsource.h"
 
-nserror nsgtk_viewsource(GtkWindow *parent, struct browser_window *bw)
+slateerror slategtk_viewsource(GtkWindow *parent, struct browser_window *bw)
 {
-	nserror ret;
+	slateerror ret;
 	struct hlcache_handle *hlcontent;
 	const uint8_t *source_data;
 	size_t source_size;
@@ -44,31 +44,31 @@ nserror nsgtk_viewsource(GtkWindow *parent, struct browser_window *bw)
 
 	hlcontent = browser_window_get_content(bw);
 	if (hlcontent == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if (content_get_type(hlcontent) != CONTENT_HTML) {
-		return NSERROR_BAD_CONTENT;
+		return SLATEERROR_BAD_CONTENT;
 	}
 
 	source_data = content_get_source_data(hlcontent, &source_size);
 
-	ret = nsurl_nice(browser_window_access_url(bw), &filename, false);
-	if (ret != NSERROR_OK) {
+	ret = slateurl_nice(browser_window_access_url(bw), &filename, false);
+	if (ret != SLATEERROR_OK) {
 		filename = strdup(messages_get("SaveSource"));
 		if (filename == NULL) {
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 	}
 
-	titlesize = strlen(nsurl_access(browser_window_access_url(bw))) + SLEN("Source of  - NetSurf") + 1;
+	titlesize = strlen(slateurl_access(browser_window_access_url(bw))) + SLEN("Source of  - NetSurf") + 1;
 	title = malloc(titlesize);
 	if (title == NULL) {
 		free(filename);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 	snprintf(title, titlesize, "Source of %s - NetSurf",
-		 nsurl_access(browser_window_access_url(bw)));
+		 slateurl_access(browser_window_access_url(bw)));
 
 	ret = utf8_from_enc((const char *)source_data,
 			    content_get_encoding(hlcontent,
@@ -76,8 +76,8 @@ nserror nsgtk_viewsource(GtkWindow *parent, struct browser_window *bw)
 			    source_size,
 			    &ndata,
 			    &ndata_len);
-	if (ret == NSERROR_OK) {
-		ret = nsgtk_viewdata(title, filename, ndata, ndata_len);
+	if (ret == SLATEERROR_OK) {
+		ret = slategtk_viewdata(title, filename, ndata, ndata_len);
 	}
 
 	free(filename);

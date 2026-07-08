@@ -28,16 +28,16 @@
  *
  */
 
-#ifndef NETSURF_CONTENT_FETCHERS_FETCH_RESOURCE_H
-#define NETSURF_CONTENT_FETCHERS_FETCH_RESOURCE_H
+#ifndef SLATE_CONTENT_FETCHERS_FETCH_RESOURCE_H
+#define SLATE_CONTENT_FETCHERS_FETCH_RESOURCE_H
 
 /**
  * Register the resource scheme.
  * 
  * should only be called from the fetch initialise
  *
- * \return NSERROR_OK on successful registration or error code on failure.
+ * \return SLATEERROR_OK on successful registration or error code on failure.
  */
-nserror fetch_resource_register(void);
+slateerror fetch_resource_register(void);
 
 #endif

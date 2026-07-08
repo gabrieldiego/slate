@@ -2,7 +2,7 @@
  * Copyright 2004 John M Bell <jmb202@ecs.soton.ac.uk>
  * Copyright 2008 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,11 +31,11 @@
 #include "utils/log.h"
 #include "utils/utf8.h"
 #include "utils/utils.h"
-#include "netsurf/content.h"
+#include "slate/content.h"
 #include "html/box.h"
 #include "html/html_save.h"
 
-#include "netsurf/utf8.h"
+#include "slate/utf8.h"
 #include "desktop/gui_internal.h"
 #include "desktop/save_text.h"
 
@@ -60,7 +60,7 @@ void save_as_text(struct hlcache_handle *c, char *path)
 	struct save_text_state save = { NULL, 0, 0 };
 	save_text_whitespace before = WHITESPACE_NONE;
 	bool first = true;
-	nserror ret;
+	slateerror ret;
 	char *result;
 
 	if (!c || content_get_type(c) != CONTENT_HTML) {
@@ -74,7 +74,7 @@ void save_as_text(struct hlcache_handle *c, char *path)
 	ret = guit->utf8->utf8_to_local(save.block, save.length, &result);
 	free(save.block);
 
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO,
 		      "failed to convert to local encoding, return %d", ret);
 		return;

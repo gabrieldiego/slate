@@ -2,7 +2,7 @@
  * Copyright 2008 Vincent Sanders <vince@simtec.co.uk>
  * Copyright 2009 Mark Benjamin <netsurf-browser.org.MarkBenjamin@dfgh.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,8 +22,8 @@
  * Windows mouse cursor interface.
  */
 
-#ifndef _NETSURF_WINDOWS_POINTERS_H_
-#define _NETSURF_WINDOWS_POINTERS_H_
+#ifndef _SLATE_WINDOWS_POINTERS_H_
+#define _SLATE_WINDOWS_POINTERS_H_
 
 
 /**

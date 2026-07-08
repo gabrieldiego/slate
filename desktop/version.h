@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,22 +22,22 @@
  * Version information interface.
  */
 
-#ifndef _NETSURF_DESKTOP_VERSION_H_
-#define _NETSURF_DESKTOP_VERSION_H_
+#ifndef _SLATE_DESKTOP_VERSION_H_
+#define _SLATE_DESKTOP_VERSION_H_
 
 /**
  * User friendly version string.
  */
-extern const char * const netsurf_version;
+extern const char * const slate_version;
 
 /**
  * NetSuf browser major version number.
  */
-extern const int netsurf_version_major;
+extern const int slate_version_major;
 
 /**
  * NetSuf browser minor version number.
  */
-extern const int netsurf_version_minor;
+extern const int slate_version_minor;
 
 #endif

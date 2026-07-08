@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,7 +22,7 @@
 
 #include <mt_gem.h>
 
-#include "netsurf/types.h"
+#include "slate/types.h"
 
 /**
  * This is the number of redraw requests that the slotlist can store.

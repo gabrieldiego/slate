@@ -14,7 +14,7 @@ are parsed and executed by the monkey driver script.
 
 There are very few tests within the NetSurf repository. The large
 majority of integration tests are instead held within the
-[netsurf-test](http://source.netsurf-browser.org/netsurf-test.git/)
+[netsurf-test](http://source.slate-browser.org/netsurf-test.git/)
 repository.
 
 To allow more effective use of these tests additional infrastructure
@@ -32,15 +32,15 @@ extend test capabilities.
 An individual test can be run using the monkey_driver.py python script
 from within the NetSurf repository
 
-    $ make TARGET=monkey
-    $ ./test/monkey_driver.py -m ./nsmonkey -t test/monkey-tests/start-stop.yaml
+    $ make TARGET=jotter
+    $ ./test/monkey_driver.py -m ./jotter -t test/monkey-tests/start-stop.yaml
 
 The command actually executed can be augmented using the wrapper
 switch, this allows the test to be run under a debugger or profiler.
 
 For example to wrap execution under valgrind memory checker
 
-    $ ./test/monkey_driver.py -m ./nsmonkey -w 'valgrind -v --track-origins=yes' -t test/monkey-tests/start-stop.yaml
+    $ ./test/monkey_driver.py -m ./jotter -w 'valgrind -v --track-origins=yes' -t test/monkey-tests/start-stop.yaml
 
 
 # Running more than one test
@@ -138,7 +138,7 @@ with the `accept_language` user option.
 
 The following launch action would start a browser:
  * Passing `--verbose` on the commandline
- * The `NETSURFRES` environment variable set to `/home/netsurf/resources`
+ * The `SLATERES` environment variable set to `/home/netsurf/resources`
  * The user options `enable_javascript` and `send_referer` set to false.
  * The `LANGUAGE` environment variable set to `en`
 
@@ -147,7 +147,7 @@ The following launch action would start a browser:
   launch-options:
   - verbose
   environment:
-    NETSURFRES: /home/netsurf/resources
+    SLATERES: /home/netsurf/resources
   options:
   - enable_javascript=0
   - send_referer=0
@@ -479,7 +479,7 @@ realm parameters the associated username and password are returned to
 answer the challenge.
 
     - action: add-auth
-      url: http://test.netsurf-browser.org/cgi-bin/auth.cgi?user=foo&pass=bar
+      url: http://test.slate-browser.org/cgi-bin/auth.cgi?user=foo&pass=bar
       realm: Fake Realm
       username: foo
       password: bar
@@ -490,7 +490,7 @@ answer the challenge.
 Remove a previously added authentication details.
 
     - action: remove-auth
-      url: http://test.netsurf-browser.org/cgi-bin/auth.cgi?user=foo&pass=bar
+      url: http://test.slate-browser.org/cgi-bin/auth.cgi?user=foo&pass=bar
       realm: Fake Realm
       username: foo
       password: bar

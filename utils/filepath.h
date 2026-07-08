@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Vincent Sanders <vince@kyllikki.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * @brief Utility routines to obtain paths to file resources.
  */
 
-#ifndef _NETSURF_UTILS_FILEPATH_H_
-#define _NETSURF_UTILS_FILEPATH_H_
+#ifndef _SLATE_UTILS_FILEPATH_H_
+#define _SLATE_UTILS_FILEPATH_H_
 
 #include <stdarg.h>
 
@@ -134,4 +134,4 @@ void filepath_free_strvec(char **pathv);
 
 
 
-#endif /* _NETSURF_UTILS_FILEPATH_H_ */
+#endif /* _SLATE_UTILS_FILEPATH_H_ */

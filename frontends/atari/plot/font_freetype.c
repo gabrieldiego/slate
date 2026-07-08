@@ -2,7 +2,7 @@
  * Copyright 2005 James Bursa <bursa@users.sourceforge.net>
  *           2008 Vincent Sanders <vince@simtec.co.uk>
  *           2011 Ole Loots <ole@monochrom.net>
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,10 +23,10 @@
 #include FT_CACHE_H
 
 #include "utils/log.h"
-#include "utils/nsoption.h"
-#include "netsurf/mouse.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/plot_style.h"
+#include "utils/slateoption.h"
+#include "slate/mouse.h"
+#include "slate/bitmap.h"
+#include "slate/plot_style.h"
 
 #include "atari/gui.h"
 #include "atari/bitmap.h"
@@ -332,7 +332,7 @@ static bool ft_font_init(void)
 	/* Default font, Sans Serif */
 	font_faces[FONT_FACE_SANS_SERIF] = NULL;
 	font_faces[FONT_FACE_SANS_SERIF] = ft_new_face(
-											nsoption_charp(font_face_sans_serif),
+											slateoption_charp(font_face_sans_serif),
 							FONT_RESOURCE_PATH "ss.ttf",
 							FONT_PKG_PATH FONT_FILE_SANS
 										);
@@ -346,55 +346,55 @@ static bool ft_font_init(void)
 
 	/* Sans Serif Bold*/
 	font_faces[FONT_FACE_SANS_SERIF_BOLD] =
-			ft_new_face(nsoption_charp(font_face_sans_serif_bold),
+			ft_new_face(slateoption_charp(font_face_sans_serif_bold),
 			    FONT_RESOURCE_PATH "ssb.ttf",
 			    FONT_PKG_PATH FONT_FILE_SANS_BOLD);
 
 	/* Sans Serif Italic */
 	font_faces[FONT_FACE_SANS_SERIF_ITALIC] =
-			ft_new_face(nsoption_charp(font_face_sans_serif_italic),
+			ft_new_face(slateoption_charp(font_face_sans_serif_italic),
 			    FONT_RESOURCE_PATH "ssi.ttf",
 			    FONT_PKG_PATH FONT_FILE_SANS_OBLIQUE);
 
 	/* Sans Serif Italic Bold */
 	font_faces[FONT_FACE_SANS_SERIF_ITALIC_BOLD] =
-			ft_new_face(nsoption_charp(font_face_sans_serif_italic_bold),
+			ft_new_face(slateoption_charp(font_face_sans_serif_italic_bold),
 			    FONT_RESOURCE_PATH "ssib.ttf",
 			    FONT_PKG_PATH FONT_FILE_SANS_BOLD_OBLIQUE);
 
 	/* Monospaced */
 	font_faces[FONT_FACE_MONOSPACE] =
-			ft_new_face(nsoption_charp(font_face_monospace),
+			ft_new_face(slateoption_charp(font_face_monospace),
 			    FONT_RESOURCE_PATH "mono.ttf",
 			    FONT_PKG_PATH FONT_FILE_MONO);
 
 	/* Mospaced Bold */
 	font_faces[FONT_FACE_MONOSPACE_BOLD] =
-			ft_new_face(nsoption_charp(font_face_monospace_bold),
+			ft_new_face(slateoption_charp(font_face_monospace_bold),
 			    FONT_RESOURCE_PATH "monob.ttf",
 			    FONT_PKG_PATH FONT_FILE_MONO_BOLD);
 
 	/* Serif */
 	font_faces[FONT_FACE_SERIF] =
-			ft_new_face(nsoption_charp(font_face_serif),
+			ft_new_face(slateoption_charp(font_face_serif),
 			    FONT_RESOURCE_PATH "s.ttf",
 			    FONT_PKG_PATH FONT_FILE_SERIF);
 
 	/* Serif Bold */
 	font_faces[FONT_FACE_SERIF_BOLD] =
-			ft_new_face(nsoption_charp(font_face_serif_bold),
+			ft_new_face(slateoption_charp(font_face_serif_bold),
 			    FONT_RESOURCE_PATH "sb.ttf",
 			    FONT_PKG_PATH FONT_FILE_SERIF_BOLD);
 
 	/* Cursive */
 	font_faces[FONT_FACE_CURSIVE] =
-			ft_new_face(nsoption_charp(font_face_cursive),
+			ft_new_face(slateoption_charp(font_face_cursive),
 			    FONT_RESOURCE_PATH "cursive.ttf",
 			    FONT_PKG_PATH FONT_FILE_OBLIQUE);
 
 	/* Fantasy */
 	font_faces[FONT_FACE_FANTASY] =
-			ft_new_face(nsoption_charp(font_face_fantasy),
+			ft_new_face(slateoption_charp(font_face_fantasy),
 			    FONT_RESOURCE_PATH "fantasy.ttf",
 			    FONT_PKG_PATH FONT_FILE_FANTASY);
 

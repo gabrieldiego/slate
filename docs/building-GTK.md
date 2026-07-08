@@ -139,7 +139,7 @@ Now you should have all the NetSurf project libraries built and installed.
 From your workspace directory, run the following command to get the NetSurf
 source:
 
-    $ git clone git://git.netsurf-browser.org/netsurf.git
+    $ git clone git://git.slate-browser.org/netsurf.git
 
 And change to the 'netsurf' directory:
 
@@ -171,9 +171,9 @@ below. Or turn off the complaining features in a Makefile.config
 file. You may need to "make clean" before attempting to build after
 installing the dependencies.
 
-Run NetSurf by executing "nsgtk3":
+Run NetSurf by executing "slategtk3":
 
-    $ ./nsgtk3
+    $ ./slategtk3
 
 
 ### Builtin resources
@@ -188,13 +188,13 @@ library on which GTK is based provides this functionality to
 NetSurf.
 
 Up until GLib version 2.32 only the GDK pixbuf could be integrated
-in this way and is controlled with the NETSURF_USE_INLINE_PIXBUF
+in this way and is controlled with the SLATE_USE_INLINE_PIXBUF
 variable (set in makefile.config).
 
 Glib version 2.32 and later integrated support for any file to be a
 resource while depreciating the old inline pixbuf interface. NetSurf
 gtk executables can integrate many resources using this interface,
-configuration is controlled with the NETSURF_USE_GRESOURCE variable.
+configuration is controlled with the SLATE_USE_GRESOURCE variable.
 
 Loading from file is the fallback if a resource has not been
 compiled in, because of this if both of these features are

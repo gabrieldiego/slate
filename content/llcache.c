@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,17 +38,17 @@
 #include <nsutils/time.h>
 #include <nsutils/base64.h>
 
-#include "netsurf/inttypes.h"
+#include "slate/inttypes.h"
 #include "utils/config.h"
 #include "utils/corestrings.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/utils.h"
 #include "utils/time.h"
 #include "utils/http.h"
-#include "utils/nsoption.h"
-#include "netsurf/misc.h"
+#include "utils/slateoption.h"
+#include "slate/misc.h"
 #include "desktop/gui_internal.h"
 
 #include "content/fetch.h"
@@ -101,7 +101,7 @@ typedef struct llcache_object_user {
  */
 typedef struct {
 	uint32_t flags;			/**< Fetch flags */
-	nsurl *referer;			/**< Referring URL, or NULL if none */
+	slateurl *referer;			/**< Referring URL, or NULL if none */
 	llcache_post_data *post;	/**< POST data, or NULL for GET */
 
 	struct fetch *fetch;		/**< Fetch handle for this object */
@@ -170,7 +170,7 @@ struct llcache_object {
 	llcache_object *prev;	     /**< Previous in list */
 	llcache_object *next;	     /**< Next in list */
 
-	nsurl *url;		     /**< Post-redirect URL for object */
+	slateurl *url;		     /**< Post-redirect URL for object */
 
 	/** \todo We need a generic dynamic buffer object */
 	uint8_t *source_data;	     /**< Source data for object */
@@ -283,9 +283,9 @@ static void llcache_users_not_caught_up(void);
  * \param cb Callback routine.
  * \param pw Private data for callback.
  * \param user Pointer to location to receive result.
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror llcache_object_user_new(llcache_handle_callback cb, void *pw,
+static slateerror llcache_object_user_new(llcache_handle_callback cb, void *pw,
 		llcache_object_user **user)
 {
 	llcache_handle *h;
@@ -293,13 +293,13 @@ static nserror llcache_object_user_new(llcache_handle_callback cb, void *pw,
 
 	h = calloc(1, sizeof(llcache_handle));
 	if (h == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	u = calloc(1, sizeof(llcache_object_user));
 	if (u == NULL) {
 		free(h);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	h->cb = cb;
@@ -312,18 +312,18 @@ static nserror llcache_object_user_new(llcache_handle_callback cb, void *pw,
 
 	*user = u;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * Destroy an object user
  *
  * \param user	User to destroy
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  *
  * \pre User is not attached to an object
  */
-static nserror llcache_object_user_destroy(llcache_object_user *user)
+static slateerror llcache_object_user_destroy(llcache_object_user *user)
 {
 	NSLOG(llcache, DEBUG, "Destroyed user %p", user);
 
@@ -335,7 +335,7 @@ static nserror llcache_object_user_destroy(llcache_object_user *user)
 
 	free(user);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -343,9 +343,9 @@ static nserror llcache_object_user_destroy(llcache_object_user *user)
  *
  * \param object  Object to remove user from
  * \param user	  User to remove
- * \return NSERROR_OK.
+ * \return SLATEERROR_OK.
  */
-static nserror llcache_object_remove_user(llcache_object *object,
+static slateerror llcache_object_remove_user(llcache_object *object,
 		llcache_object_user *user)
 {
 	assert(user != NULL);
@@ -371,7 +371,7 @@ static nserror llcache_object_remove_user(llcache_object *object,
 
 	NSLOG(llcache, DEBUG, "Removing user %p from %p", user, object);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -379,12 +379,12 @@ static nserror llcache_object_remove_user(llcache_object *object,
  *
  * \param object	The object to iterate
  * \param event		The event to pass to the callback.
- * \return NSERROR_OK on success, appropriate error otherwise.
+ * \return SLATEERROR_OK on success, appropriate error otherwise.
  */
-static nserror llcache_send_event_to_users(llcache_object *object,
+static slateerror llcache_send_event_to_users(llcache_object *object,
 					   llcache_event *event)
 {
-	nserror error = NSERROR_OK;
+	slateerror error = SLATEERROR_OK;
 	llcache_object_user *user, *next_user;
 
 	user = object->users;
@@ -404,7 +404,7 @@ static nserror llcache_send_event_to_users(llcache_object *object,
 			llcache_object_user_destroy(user);
 		}
 
-		if (error != NSERROR_OK)
+		if (error != SLATEERROR_OK)
 			break;
 
 		user = next_user;
@@ -418,21 +418,21 @@ static nserror llcache_send_event_to_users(llcache_object *object,
  *
  * \param url	  URL of object to create
  * \param result  Pointer to location to receive result
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror llcache_object_new(nsurl *url, llcache_object **result)
+static slateerror llcache_object_new(slateurl *url, llcache_object **result)
 {
 	llcache_object *obj = calloc(1, sizeof(llcache_object));
 	if (obj == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
-	NSLOG(llcache, DEBUG, "Created object %p (%s)", obj, nsurl_access(url));
+	NSLOG(llcache, DEBUG, "Created object %p (%s)", obj, slateurl_access(url));
 
-	obj->url = nsurl_ref(url);
+	obj->url = slateurl_ref(url);
 
 	*result = obj;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -440,16 +440,16 @@ static nserror llcache_object_new(nsurl *url, llcache_object **result)
  *
  * \param orig	 Object to clone
  * \param clone	 Pointer to location to receive clone
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror llcache_post_data_clone(const llcache_post_data *orig,
+static slateerror llcache_post_data_clone(const llcache_post_data *orig,
 		llcache_post_data **clone)
 {
 	llcache_post_data *post_clone;
 
 	post_clone = calloc(1, sizeof(llcache_post_data));
 	if (post_clone == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	post_clone->type = orig->type;
 
@@ -459,7 +459,7 @@ static nserror llcache_post_data_clone(const llcache_post_data *orig,
 		if (post_clone->data.urlenc == NULL) {
 			free(post_clone);
 
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 	} else {
 		post_clone->data.multipart = fetch_multipart_data_clone(
@@ -467,13 +467,13 @@ static nserror llcache_post_data_clone(const llcache_post_data *orig,
 		if (post_clone->data.multipart == NULL) {
 			free(post_clone);
 
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 	}
 
 	*clone = post_clone;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -491,9 +491,9 @@ static nserror llcache_post_data_clone(const llcache_post_data *orig,
  * \param len	 Byte length of header
  * \param name	 Pointer to location to receive header name
  * \param value	 Pointer to location to receive header value
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror llcache_fetch_split_header(const uint8_t *data, size_t len,
+static slateerror llcache_fetch_split_header(const uint8_t *data, size_t len,
 		char **name, char **value)
 {
 	char *n, *v;
@@ -519,12 +519,12 @@ static nserror llcache_fetch_split_header(const uint8_t *data, size_t len,
 		}
 		n = strndup((const char *) data, colon - data);
 		if (n == NULL)
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 
 		v = strdup("");
 		if (v == NULL) {
 			free(n);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 	} else {
 		/* Split header into name & value */
@@ -537,7 +537,7 @@ static nserror llcache_fetch_split_header(const uint8_t *data, size_t len,
 
 		n = strndup((const char *) data, colon - data);
 		if (n == NULL)
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 
 		/* Find colon again */
 		while (*colon != ':') {
@@ -561,14 +561,14 @@ static nserror llcache_fetch_split_header(const uint8_t *data, size_t len,
 		v = strndup((const char *) colon, len - (colon - data));
 		if (v == NULL) {
 			free(n);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 	}
 
 	*name = n;
 	*value = v;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -576,18 +576,18 @@ static nserror llcache_fetch_split_header(const uint8_t *data, size_t len,
  *
  * \param object Object to parse header for
  * \param value header value
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror
+static slateerror
 llcache_fetch_parse_cache_control(llcache_object *object, char *value)
 {
 	http_cache_control *cc;
-	nserror error;
+	slateerror error;
 
 	error = http_parse_cache_control(value, &cc);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		/* Ignore parse errors */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	if (http_cache_control_no_cache(cc) ||
@@ -605,7 +605,7 @@ llcache_fetch_parse_cache_control(llcache_object *object, char *value)
 
 	http_cache_control_destroy(cc);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -614,14 +614,14 @@ llcache_fetch_parse_cache_control(llcache_object *object, char *value)
  * \param object Object to parse header for
  * \param name header name
  * \param value header value
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror
+static slateerror
 llcache_fetch_header_cache_control(llcache_object *object,
 				   char *name,
 				   char *value)
 {
-	nserror res;
+	slateerror res;
 	size_t name_len;
 
 	/* Parse cache headers to populate cache control data */
@@ -644,7 +644,7 @@ llcache_fetch_header_cache_control(llcache_object *object,
 			res = nsc_strntimet(value,
 					    strlen(value),
 					    &object->cache.date);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				NSLOG(llcache, INFO,
 				      "Processing Date header value \"%s\" returned %d",
 				      value, res);
@@ -656,7 +656,7 @@ llcache_fetch_header_cache_control(llcache_object *object,
 			if (object->cache.etag == NULL) {
 				NSLOG(llcache, INFO,
 				      "No memory to duplicate ETag");
-				return NSERROR_NOMEM;
+				return SLATEERROR_NOMEM;
 			}
 		}
 		break;
@@ -667,7 +667,7 @@ llcache_fetch_header_cache_control(llcache_object *object,
 			res = nsc_strntimet(value,
 					    strlen(value),
 					    &object->cache.expires);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				NSLOG(llcache, INFO,
 				      "Processing Expires header value \"%s\" returned %d",
 				      value, res);
@@ -689,7 +689,7 @@ llcache_fetch_header_cache_control(llcache_object *object,
 		break;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -729,12 +729,12 @@ static inline void llcache_invalidate_cache_control_data(llcache_object *object)
  * \param object  Object being fetched
  * \param data	  Header string
  * \param len	  Byte length of header
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror llcache_fetch_process_header(llcache_object *object,
+static slateerror llcache_fetch_process_header(llcache_object *object,
 		const uint8_t *data, size_t len)
 {
-	nserror res;
+	slateerror res;
 	char *name, *value;
 	llcache_header *temp;
 
@@ -769,7 +769,7 @@ static nserror llcache_fetch_process_header(llcache_object *object,
 
 	/* Parse header into name-value pair */
 	res = llcache_fetch_split_header(data, len, &name, &value);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -777,12 +777,12 @@ static nserror llcache_fetch_process_header(llcache_object *object,
 	if (name[0] == 0) {
 		free(name);
 		free(value);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* update cache control data from header */
 	res = llcache_fetch_header_cache_control(object, name, value);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		free(name);
 		free(value);
 		return res;
@@ -794,7 +794,7 @@ static nserror llcache_fetch_process_header(llcache_object *object,
 	if (temp == NULL) {
 		free(name);
 		free(value);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	object->headers = temp;
@@ -804,7 +804,7 @@ static nserror llcache_fetch_process_header(llcache_object *object,
 
 	object->num_headers++;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -814,11 +814,11 @@ static nserror llcache_fetch_process_header(llcache_object *object,
  * \param referer The referring url
  * \param header_out A pointer to receive the header. The buffer must
  *                    be freed by the caller.
- * \return NSERROR_OK and \a header_out updated on success else error code
+ * \return SLATEERROR_OK and \a header_out updated on success else error code
  */
-static nserror get_referer_header(nsurl *url, nsurl *referer, char **header_out)
+static slateerror get_referer_header(slateurl *url, slateurl *referer, char **header_out)
 {
-	nserror res = NSERROR_INVALID;
+	slateerror res = SLATEERROR_INVALID;
 	lwc_string *ref_scheme;
 	lwc_string *scheme;
 	bool match;
@@ -827,20 +827,20 @@ static nserror get_referer_header(nsurl *url, nsurl *referer, char **header_out)
 	char *header;
 
 	/* Determine whether to send the Referer header */
-	if (!nsoption_bool(send_referer)) {
-		return NSERROR_INVALID;
+	if (!slateoption_bool(send_referer)) {
+		return SLATEERROR_INVALID;
 	}
 
-	scheme = nsurl_get_component(url, NSURL_SCHEME);
+	scheme = slateurl_get_component(url, SLATEURL_SCHEME);
 	if (scheme == NULL) {
-		return NSERROR_BAD_URL;
+		return SLATEERROR_BAD_URL;
 	}
 
-	ref_scheme = nsurl_get_component(referer, NSURL_SCHEME);
+	ref_scheme = slateurl_get_component(referer, SLATEURL_SCHEME);
 	if (ref_scheme == NULL) {
 		/* referer has no scheme so no header */
 		lwc_string_unref(scheme);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	/* User permits us to send the header
@@ -867,17 +867,17 @@ static nserror get_referer_header(nsurl *url, nsurl *referer, char **header_out)
 	}
 	if (match == true || (match1 == true && match2 == true)) {
 		const size_t len = SLEN("Referer: ") +
-			nsurl_length(referer) + 1;
+			slateurl_length(referer) + 1;
 
 		header = malloc(len);
 		if (header == NULL) {
-			res = NSERROR_NOMEM;
+			res = SLATEERROR_NOMEM;
 		} else {
 			snprintf(header, len, "Referer: %s",
-				 nsurl_access(referer));
+				 slateurl_access(referer));
 
 			*header_out = header;
-			res = NSERROR_OK;
+			res = SLATEERROR_OK;
 		}
 	}
 
@@ -898,15 +898,15 @@ static nserror get_referer_header(nsurl *url, nsurl *referer, char **header_out)
  * \pre The fetch parameters in object->fetch must be populated
  *
  * \param object Object to refetch
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror llcache_object_refetch(llcache_object *object)
+static slateerror llcache_object_refetch(llcache_object *object)
 {
 	const char *urlenc = NULL;
 	struct fetch_multipart_data *multipart = NULL;
 	char **headers = NULL;
 	int header_idx = 0;
-	nserror res;
+	slateerror res;
 
 	if (object->fetch.post != NULL) {
 		if (object->fetch.post->type == LLCACHE_POST_URL_ENCODED) {
@@ -919,7 +919,7 @@ static nserror llcache_object_refetch(llcache_object *object)
 	/* Generate headers */
 	headers = malloc(4 * sizeof(char *));
 	if (headers == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* cache-control header for etag */
@@ -930,7 +930,7 @@ static nserror llcache_object_refetch(llcache_object *object)
 		headers[header_idx] = malloc(len);
 		if (headers[header_idx] == NULL) {
 			free(headers);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 
 		snprintf(headers[header_idx], len, "If-None-Match: %s",
@@ -949,7 +949,7 @@ static nserror llcache_object_refetch(llcache_object *object)
 			while (--header_idx >= 0)
 				free(headers[header_idx]);
 			free(headers);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 
 		snprintf(headers[header_idx], len, "If-Modified-Since: %s",
@@ -962,7 +962,7 @@ static nserror llcache_object_refetch(llcache_object *object)
 	if (object->fetch.referer != NULL) {
 		if (get_referer_header(object->url,
 				       object->fetch.referer,
-				       &headers[header_idx]) == NSERROR_OK) {
+				       &headers[header_idx]) == SLATEERROR_OK) {
 			header_idx++;
 		}
 	}
@@ -1014,26 +1014,26 @@ static nserror llcache_object_refetch(llcache_object *object)
  * \param post		  POST data, or NULL for GET
  * \param redirect_count  Number of redirects followed so far
  * \param hsts_in_use     Whether HSTS applies to this fetch
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror llcache_object_fetch(llcache_object *object, uint32_t flags,
-		nsurl *referer, const llcache_post_data *post,
+static slateerror llcache_object_fetch(llcache_object *object, uint32_t flags,
+		slateurl *referer, const llcache_post_data *post,
 		uint32_t redirect_count, bool hsts_in_use)
 {
-	nserror error;
-	nsurl *referer_clone = NULL;
+	slateerror error;
+	slateurl *referer_clone = NULL;
 	llcache_post_data *post_clone = NULL;
 
 	NSLOG(llcache, DEBUG, "Starting fetch for %p", object);
 
 	if (post != NULL) {
 		error = llcache_post_data_clone(post, &post_clone);
-		if (error != NSERROR_OK)
+		if (error != SLATEERROR_OK)
 			return error;
 	}
 
 	if (referer != NULL)
-		referer_clone = nsurl_ref(referer);
+		referer_clone = slateurl_ref(referer);
 
 	object->fetch.flags = flags;
 	object->fetch.referer = referer_clone;
@@ -1053,14 +1053,14 @@ static nserror llcache_object_fetch(llcache_object *object, uint32_t flags,
  * \pre Object is not a candidate (i.e. object::candidate_count == 0)
  *
  * \param object  Object to destroy
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror llcache_object_destroy(llcache_object *object)
+static slateerror llcache_object_destroy(llcache_object *object)
 {
 	size_t i;
 
 	NSLOG(llcache, DEBUG, "Destroying object %p, %s", object,
-	      nsurl_access(object->url));
+	      slateurl_access(object->url));
 
 	cert_chain_free(object->chain);
 
@@ -1072,7 +1072,7 @@ static nserror llcache_object_destroy(llcache_object *object)
 		}
 	}
 
-	nsurl_unref(object->url);
+	slateurl_unref(object->url);
 
 	if (object->fetch.fetch != NULL) {
 		fetch_abort(object->fetch.fetch);
@@ -1080,7 +1080,7 @@ static nserror llcache_object_destroy(llcache_object *object)
 	}
 
 	if (object->fetch.referer != NULL)
-		nsurl_unref(object->fetch.referer);
+		slateurl_unref(object->fetch.referer);
 
 	if (object->fetch.post != NULL) {
 		if (object->fetch.post->type == LLCACHE_POST_URL_ENCODED) {
@@ -1103,7 +1103,7 @@ static nserror llcache_object_destroy(llcache_object *object)
 
 	free(object);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -1111,9 +1111,9 @@ static nserror llcache_object_destroy(llcache_object *object)
  *
  * \param object  Object to add
  * \param list	  List to add to
- * \return NSERROR_OK
+ * \return SLATEERROR_OK
  */
-static nserror llcache_object_add_to_list(llcache_object *object,
+static slateerror llcache_object_add_to_list(llcache_object *object,
 		llcache_object **list)
 {
 	object->prev = NULL;
@@ -1123,7 +1123,7 @@ static nserror llcache_object_add_to_list(llcache_object *object,
 		(*list)->prev = object;
 	*list = object;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -1206,9 +1206,9 @@ static bool llcache_object_is_fresh(const llcache_object *object)
  * \param source       Source object containing cache data to clone
  * \param destination  Destination object to clone cache data into
  * \param deep	       Whether to deep-copy the data or not
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror llcache_object_clone_cache_data(llcache_object *source,
+static slateerror llcache_object_clone_cache_data(llcache_object *source,
 		llcache_object *destination, bool deep)
 {
 	/* ETag must be first, as it can fail when deep cloning */
@@ -1219,7 +1219,7 @@ static nserror llcache_object_clone_cache_data(llcache_object *source,
 			/* Copy the etag */
 			etag = strdup(source->cache.etag);
 			if (etag == NULL)
-				return NSERROR_NOMEM;
+				return SLATEERROR_NOMEM;
 		} else {
 			/* Destination takes ownership */
 			source->cache.etag = NULL;
@@ -1253,7 +1253,7 @@ static nserror llcache_object_clone_cache_data(llcache_object *source,
 	if (source->cache.last_modified != 0)
 		destination->cache.last_modified = source->cache.last_modified;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -1261,9 +1261,9 @@ static nserror llcache_object_clone_cache_data(llcache_object *source,
  *
  * \param object  Object to remove
  * \param list	  List to remove from
- * \return NSERROR_OK
+ * \return SLATEERROR_OK
  */
-static nserror
+static slateerror
 llcache_object_remove_from_list(llcache_object *object, llcache_object **list)
 {
 	if (object == *list)
@@ -1274,7 +1274,7 @@ llcache_object_remove_from_list(llcache_object *object, llcache_object **list)
 	if (object->next != NULL)
 		object->next->prev = object->prev;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -1287,7 +1287,7 @@ llcache_object_remove_from_list(llcache_object *object, llcache_object **list)
  * \param object the object to operate on.
  * \return appropriate error code.
  */
-static nserror llcache_retrieve_persisted_data(llcache_object *object)
+static slateerror llcache_retrieve_persisted_data(llcache_object *object)
 {
 	/* ensure the source data is present if necessary */
 	if ((object->source_data != NULL) ||
@@ -1295,7 +1295,7 @@ static nserror llcache_retrieve_persisted_data(llcache_object *object)
 		/* source data does not require retrieving from
 		 * persistent store.
 		 */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* Source data for the object may be in the persistent store */
@@ -1313,12 +1313,12 @@ static nserror llcache_retrieve_persisted_data(llcache_object *object)
  * \param object The cache object to serialise the metadata of.
  * \param data_out Where the serialised buffer will be placed.
  * \param datasize_out The size of the serialised data.
- * \return NSERROR_OK on success with \a data_out and \a datasize_out
- *         updated, NSERROR_NOMEM on memory exhaustion or
- *         NSERROR_INVALID if there was an error serialising the
+ * \return SLATEERROR_OK on success with \a data_out and \a datasize_out
+ *         updated, SLATEERROR_NOMEM on memory exhaustion or
+ *         SLATEERROR_INVALID if there was an error serialising the
  *         stream.
  */
-static nserror
+static slateerror
 llcache_serialise_metadata(llcache_object *object,
 			   uint8_t **data_out,
 			   size_t *datasize_out)
@@ -1352,7 +1352,7 @@ llcache_serialise_metadata(llcache_object *object,
 		allocsize += strlen(object->headers[hloop].value) + 1;
 	}
 
-	allocsize += nsurl_length(object->url) + 1;
+	allocsize += slateurl_length(object->url) + 1;
 
 	/* space for number of DER formatted certificates */
 	allocsize += 10 + 1;
@@ -1364,14 +1364,14 @@ llcache_serialise_metadata(llcache_object *object,
 
 	data = malloc(allocsize);
 	if (data == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	op = (char *)data;
 	datasize = allocsize;
 
 	/* the url, used for checking for collisions */
-	use = snprintf(op, datasize, "%s", nsurl_access(object->url));
+	use = snprintf(op, datasize, "%s", slateurl_access(object->url));
 	if (use < 0) {
 		goto operror;
 	}
@@ -1499,19 +1499,19 @@ llcache_serialise_metadata(llcache_object *object,
 	*data_out = data;
 	*datasize_out = allocsize - datasize;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 
 overflow:
 	/* somehow we overflowed the buffer - hth? */
 	NSLOG(llcache, INFO, "Overflowed metadata buffer");
 	free(data);
-	return NSERROR_INVALID;
+	return SLATEERROR_INVALID;
 
 operror:
 	/* output error */
 	NSLOG(llcache, INFO, "Output error");
 	free(data);
-	return NSERROR_INVALID;
+	return SLATEERROR_INVALID;
 }
 
 /**
@@ -1524,18 +1524,18 @@ operror:
  * to debug crashes happen later by using bad leftover object state.
  *
  * \param object The object to retrieve the metadata for.
- * \return NSERROR_OK if the metatdata was retrieved and deserialised
+ * \return SLATEERROR_OK if the metatdata was retrieved and deserialised
  *         or error code if URL is not in persistent storage or in
  *         event of deserialisation error.
  */
-static nserror
+static slateerror
 llcache_process_metadata(llcache_object *object)
 {
-	nserror res;
+	slateerror res;
 	uint8_t *metadata = NULL;
 	size_t metadatalen = 0;
 	size_t remaining = 0;
-	nsurl *metadataurl;
+	slateurl *metadataurl;
 	unsigned int line;
 	char *ln;
 	int lnsize;
@@ -1556,7 +1556,7 @@ llcache_process_metadata(llcache_object *object)
 				   BACKING_STORE_META,
 				   &metadata,
 				   &metadatalen);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -1578,15 +1578,15 @@ llcache_process_metadata(llcache_object *object)
 	remaining -= lnsize + 1;
 
 	if (lnsize < 7) {
-		res = NSERROR_INVALID;
+		res = SLATEERROR_INVALID;
 		goto format_error;
 	}
 
-	res = nsurl_create(ln, &metadataurl);
-	if (res != NSERROR_OK)
+	res = slateurl_create(ln, &metadataurl);
+	if (res != SLATEERROR_OK)
 		goto format_error;
 
-	if (nsurl_compare(object->url, metadataurl, NSURL_COMPLETE) != true) {
+	if (slateurl_compare(object->url, metadataurl, SLATEURL_COMPLETE) != true) {
 		/* backing store returned the wrong object for the
 		 * request. This may occur if the backing store had
 		 * a collision in its storage method. We cope with this
@@ -1594,15 +1594,15 @@ llcache_process_metadata(llcache_object *object)
 		 */
 
 		NSLOG(llcache, INFO, "Got metadata for %s instead of %s",
-		      nsurl_access(metadataurl), nsurl_access(object->url));
+		      slateurl_access(metadataurl), slateurl_access(object->url));
 
-		nsurl_unref(metadataurl);
+		slateurl_unref(metadataurl);
 
 		guit->llcache->release(object->url, BACKING_STORE_META);
 
-		return NSERROR_BAD_URL;
+		return SLATEERROR_BAD_URL;
 	}
-	nsurl_unref(metadataurl);
+	slateurl_unref(metadataurl);
 
 
 	/* metadata line 2 is the object's length */
@@ -1612,7 +1612,7 @@ llcache_process_metadata(llcache_object *object)
 	remaining -= lnsize + 1;
 
 	if ((lnsize < 1) || (sscanf(ln, "%" PRIsizet, &source_length) != 1)) {
-		res = NSERROR_INVALID;
+		res = SLATEERROR_INVALID;
 		goto format_error;
 	}
 
@@ -1624,7 +1624,7 @@ llcache_process_metadata(llcache_object *object)
 	remaining -= lnsize + 1;
 
 	res = nsc_snptimet(ln, lnsize, &request_time);
-	if (res != NSERROR_OK)
+	if (res != SLATEERROR_OK)
 		goto format_error;
 
 
@@ -1635,7 +1635,7 @@ llcache_process_metadata(llcache_object *object)
 	remaining -= lnsize + 1;
 
 	res = nsc_snptimet(ln, lnsize, &response_time);
-	if (res != NSERROR_OK)
+	if (res != SLATEERROR_OK)
 		goto format_error;
 
 
@@ -1646,7 +1646,7 @@ llcache_process_metadata(llcache_object *object)
 	remaining -= lnsize + 1;
 
 	res = nsc_snptimet(ln, lnsize, &completion_time);
-	if (res != NSERROR_OK)
+	if (res != SLATEERROR_OK)
 		goto format_error;
 
 
@@ -1657,7 +1657,7 @@ llcache_process_metadata(llcache_object *object)
 	remaining -= lnsize + 1;
 
 	if ((lnsize < 1) || (sscanf(ln, "%" PRIsizet, &num_headers) != 1)) {
-		res = NSERROR_INVALID;
+		res = SLATEERROR_INVALID;
 		goto format_error;
 	}
 
@@ -1671,7 +1671,7 @@ llcache_process_metadata(llcache_object *object)
 		res = llcache_fetch_process_header(object,
 						   (uint8_t *)ln,
 						   lnsize);
-		if (res != NSERROR_OK)
+		if (res != SLATEERROR_OK)
 			goto format_error;
 	}
 
@@ -1686,7 +1686,7 @@ llcache_process_metadata(llcache_object *object)
 	remaining -= lnsize + 1;
 
 	if ((lnsize < 1) || (sscanf(ln, "%" PRIsizet, &ssl_cert_count) != 1)) {
-		res = NSERROR_INVALID;
+		res = SLATEERROR_INVALID;
 		goto format_error;
 	}
 
@@ -1695,12 +1695,12 @@ llcache_process_metadata(llcache_object *object)
 	}
 
 	if (ssl_cert_count > MAX_CERT_DEPTH) {
-		res = NSERROR_INVALID;
+		res = SLATEERROR_INVALID;
 		goto format_error;
 	}
 
 	res = cert_chain_alloc(ssl_cert_count, &chain);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto format_error;
 	}
 
@@ -1714,7 +1714,7 @@ llcache_process_metadata(llcache_object *object)
 		lnsize = strlen(ln);
 		remaining -= lnsize + 1;
 		if ((lnsize < 1) || (sscanf(ln, "%d", &errcode) != 1)) {
-			res = NSERROR_INVALID;
+			res = SLATEERROR_INVALID;
 			goto format_error;
 		}
 		if (errcode < SSL_CERT_ERR_OK ||
@@ -1736,7 +1736,7 @@ llcache_process_metadata(llcache_object *object)
 					&chain->certs[hloop].der,
 					&chain->certs[hloop].der_length);
 			if (nsures != NSUERROR_OK) {
-				res = NSERROR_NOMEM;
+				res = SLATEERROR_NOMEM;
 				goto format_error;
 			}
 		}
@@ -1760,7 +1760,7 @@ skip_ssl_certificates:
 	/* object stored in backing store */
 	object->store_state = LLCACHE_STATE_DISC;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 
 format_error:
 	NSLOG(llcache, INFO,
@@ -1779,13 +1779,13 @@ format_error:
  * \param url  URL to check.
  * \return true iff url has a persistable scheme.
  */
-static inline bool llcache__scheme_is_persistable(const nsurl *url)
+static inline bool llcache__scheme_is_persistable(const slateurl *url)
 {
-	lwc_string *scheme = nsurl_get_component(url, NSURL_SCHEME);
+	lwc_string *scheme = slateurl_get_component(url, SLATEURL_SCHEME);
 	bool persistable = false;
 	bool match;
 
-	/* nsurl ensures lower case schemes, and corestrings are lower
+	/* slateurl ensures lower case schemes, and corestrings are lower
 	 * case, so it's safe to use case-sensitive comparison. */
 	if ((lwc_string_isequal(scheme, corestring_lwc_http,
 			&match) == lwc_error_ok &&
@@ -1807,13 +1807,13 @@ static inline bool llcache__scheme_is_persistable(const nsurl *url)
  * \param url  URL to check.
  * \return true iff url has a cachable scheme.
  */
-static inline bool llcache__scheme_is_cachable(const nsurl *url)
+static inline bool llcache__scheme_is_cachable(const slateurl *url)
 {
-	lwc_string *scheme = nsurl_get_component(url, NSURL_SCHEME);
+	lwc_string *scheme = slateurl_get_component(url, SLATEURL_SCHEME);
 	bool cachable = false;
 	bool match;
 
-	/* nsurl ensures lower case schemes, and corestrings are lower
+	/* slateurl ensures lower case schemes, and corestrings are lower
 	 * case, so it's safe to use case-sensitive comparison. */
 	if ((lwc_string_isequal(scheme, corestring_lwc_http,
 			&match) == lwc_error_ok &&
@@ -1846,24 +1846,24 @@ static inline bool llcache__scheme_is_cachable(const nsurl *url)
  * \param referer The referring url.
  * \param post Post data for fetch.
  * \param redirect_count how many times this fetch has been redirected.
- * \return NSERROR_OK if the object was successfully retrieved from the
+ * \return SLATEERROR_OK if the object was successfully retrieved from the
  *         cache else appropriate error code.
  */
-static nserror
+static slateerror
 llcache_object_fetch_persistent(llcache_object *object,
 				uint32_t flags,
-				nsurl *referer,
+				slateurl *referer,
 				const llcache_post_data *post,
 				uint32_t redirect_count)
 {
-	nserror error;
-	nsurl *referer_clone = NULL;
+	slateerror error;
+	slateurl *referer_clone = NULL;
 	llcache_post_data *post_clone = NULL;
 
 	if (!llcache__scheme_is_persistable(object->url)) {
 		/* Don't bother looking up non-http(s) stuff; we don't
 		 * persist it. */
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	object->cache.req_time = time(NULL);
@@ -1871,19 +1871,19 @@ llcache_object_fetch_persistent(llcache_object *object,
 
 	/* retrieve and process metadata */
 	error = llcache_process_metadata(object);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		return error;
 	}
 
 	/* entry came out of cache - need to setup object state */
 	if (post != NULL) {
 		error = llcache_post_data_clone(post, &post_clone);
-		if (error != NSERROR_OK)
+		if (error != SLATEERROR_OK)
 			return error;
 	}
 
 	if (referer != NULL) {
-		referer_clone = nsurl_ref(referer);
+		referer_clone = slateurl_ref(referer);
 	}
 
 	object->fetch.flags = flags;
@@ -1895,7 +1895,7 @@ llcache_object_fetch_persistent(llcache_object *object,
 	object->fetch.state = LLCACHE_FETCH_COMPLETE;
 	object->fetch.fetch = NULL;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -1908,24 +1908,24 @@ llcache_object_fetch_persistent(llcache_object *object,
  * \param redirect_count  Number of redirects followed so far
  * \param hsts_in_use     Whether HSTS applies to this fetch
  * \param result	  Pointer to location to receive retrieved object
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror
-llcache_object_retrieve_from_cache(nsurl *url,
+static slateerror
+llcache_object_retrieve_from_cache(slateurl *url,
 				   uint32_t flags,
-				   nsurl *referer,
+				   slateurl *referer,
 				   const llcache_post_data *post,
 				   uint32_t redirect_count,
 				   bool hsts_in_use,
 				   llcache_object **result)
 {
-	nserror error;
+	slateerror error;
 	llcache_object *obj, *newest = NULL;
 
 	NSLOG(llcache, DEBUG,
 	      "Searching cache for %s flags:%"PRIx32" referer:%s post:%p",
-	      nsurl_access(url), flags,
-	      referer==NULL?"":nsurl_access(referer),
+	      slateurl_access(url), flags,
+	      referer==NULL?"":slateurl_access(referer),
 	      post);
 
 	/* Search for the most recently fetched matching object */
@@ -1933,8 +1933,8 @@ llcache_object_retrieve_from_cache(nsurl *url,
 
 		if ((newest == NULL ||
 		     obj->cache.req_time > newest->cache.req_time) &&
-		    nsurl_compare(obj->url, url,
-				  NSURL_COMPLETE) == true) {
+		    slateurl_compare(obj->url, url,
+				  SLATEURL_COMPLETE) == true) {
 			newest = obj;
 		}
 	}
@@ -1946,12 +1946,12 @@ llcache_object_retrieve_from_cache(nsurl *url,
 		NSLOG(llcache, DEBUG, "No viable object found in llcache");
 
 		error = llcache_object_new(url, &obj);
-		if (error != NSERROR_OK)
+		if (error != SLATEERROR_OK)
 			return error;
 
 		/* attempt to retrieve object from persistent store */
 		error = llcache_object_fetch_persistent(obj, flags, referer, post, redirect_count);
-		if (error == NSERROR_OK) {
+		if (error == SLATEERROR_OK) {
 			NSLOG(llcache, DEBUG, "retrieved object from persistent store");
 
 			/* set newest object from persistent store which
@@ -1978,13 +1978,13 @@ llcache_object_retrieve_from_cache(nsurl *url,
 
 		/* ensure the source data is present */
 		error = llcache_retrieve_persisted_data(newest);
-		if (error == NSERROR_OK) {
+		if (error == SLATEERROR_OK) {
 			/* source data was successfully retrieved from
 			 * persistent store
 			 */
 			*result = newest;
 
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 
 		/* retrieval of source data from persistent store
@@ -1997,7 +1997,7 @@ llcache_object_retrieve_from_cache(nsurl *url,
 		llcache_object_destroy(newest);
 
 		error = llcache_object_new(url, &obj);
-		if (error != NSERROR_OK) {
+		if (error != SLATEERROR_OK) {
 			return error;
 		}
 	} else if (newest != NULL) {
@@ -2005,18 +2005,18 @@ llcache_object_retrieve_from_cache(nsurl *url,
 
 		/* ensure the source data is present */
 		error = llcache_retrieve_persisted_data(newest);
-		if (error == NSERROR_OK) {
+		if (error == SLATEERROR_OK) {
 
 			/* Create a new object */
 			error = llcache_object_new(url, &obj);
-			if (error != NSERROR_OK)
+			if (error != SLATEERROR_OK)
 				return error;
 
 			NSLOG(llcache, DEBUG, "Found candidate %p (%p)", obj, newest);
 
 			/* Clone candidate's cache data */
 			error = llcache_object_clone_cache_data(newest, obj, true);
-			if (error != NSERROR_OK) {
+			if (error != SLATEERROR_OK) {
 				llcache_object_destroy(obj);
 				return error;
 			}
@@ -2028,7 +2028,7 @@ llcache_object_retrieve_from_cache(nsurl *url,
 			/* Attempt to kick-off fetch */
 			error = llcache_object_fetch(obj, flags, referer, post,
 						     redirect_count, hsts_in_use);
-			if (error != NSERROR_OK) {
+			if (error != SLATEERROR_OK) {
 				newest->candidate_count--;
 				llcache_object_destroy(obj);
 				return error;
@@ -2039,7 +2039,7 @@ llcache_object_retrieve_from_cache(nsurl *url,
 
 			*result = obj;
 
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 
 		NSLOG(llcache, DEBUG, "Persistent retrieval failed for %p", newest);
@@ -2053,7 +2053,7 @@ llcache_object_retrieve_from_cache(nsurl *url,
 		llcache_object_destroy(newest);
 
 		error = llcache_object_new(url, &obj);
-		if (error != NSERROR_OK) {
+		if (error != SLATEERROR_OK) {
 			return error;
 		}
 	}
@@ -2061,7 +2061,7 @@ llcache_object_retrieve_from_cache(nsurl *url,
 	/* Attempt to kick-off fetch */
 	error = llcache_object_fetch(obj, flags, referer, post,
 			redirect_count, hsts_in_use);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		llcache_object_destroy(obj);
 		return error;
 	}
@@ -2071,7 +2071,7 @@ llcache_object_retrieve_from_cache(nsurl *url,
 
 	*result = obj;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -2084,29 +2084,29 @@ llcache_object_retrieve_from_cache(nsurl *url,
  * \param redirect_count  Number of redirects followed so far
  * \param hsts_in_use     Whether HSTS applies to this fetch
  * \param result	  Pointer to location to receive retrieved object
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror
-llcache_object_retrieve(nsurl *url,
+static slateerror
+llcache_object_retrieve(slateurl *url,
 			uint32_t flags,
-			nsurl *referer,
+			slateurl *referer,
 			const llcache_post_data *post,
 			uint32_t redirect_count,
 			bool hsts_in_use,
 			llcache_object **result)
 {
-	nserror error;
+	slateerror error;
 	llcache_object *obj;
-	nsurl *defragmented_url;
+	slateurl *defragmented_url;
 	bool uncachable = false;
 
-	NSLOG(llcache, DEBUG, "Retrieve %s (%"PRIx32", %s, %p)", nsurl_access(url), flags,
-		     referer==NULL?"":nsurl_access(referer), post);
+	NSLOG(llcache, DEBUG, "Retrieve %s (%"PRIx32", %s, %p)", slateurl_access(url), flags,
+		     referer==NULL?"":slateurl_access(referer), post);
 
 
 	/* Get rid of any url fragment */
-	error = nsurl_defragment(url, &defragmented_url);
-	if (error != NSERROR_OK)
+	error = slateurl_defragment(url, &defragmented_url);
+	if (error != SLATEERROR_OK)
 		return error;
 
 	/* determine if content is cachable */
@@ -2123,17 +2123,17 @@ llcache_object_retrieve(nsurl *url,
 	if (uncachable) {
 		/* Create new object */
 		error = llcache_object_new(defragmented_url, &obj);
-		if (error != NSERROR_OK) {
-			nsurl_unref(defragmented_url);
+		if (error != SLATEERROR_OK) {
+			slateurl_unref(defragmented_url);
 			return error;
 		}
 
 		/* Attempt to kick-off fetch */
 		error = llcache_object_fetch(obj, flags, referer, post,
 				redirect_count, hsts_in_use);
-		if (error != NSERROR_OK) {
+		if (error != SLATEERROR_OK) {
 			llcache_object_destroy(obj);
-			nsurl_unref(defragmented_url);
+			slateurl_unref(defragmented_url);
 			return error;
 		}
 
@@ -2143,8 +2143,8 @@ llcache_object_retrieve(nsurl *url,
 		error = llcache_object_retrieve_from_cache(defragmented_url,
 				flags, referer, post, redirect_count,
 				hsts_in_use, &obj);
-		if (error != NSERROR_OK) {
-			nsurl_unref(defragmented_url);
+		if (error != SLATEERROR_OK) {
+			slateurl_unref(defragmented_url);
 			return error;
 		}
 
@@ -2155,9 +2155,9 @@ llcache_object_retrieve(nsurl *url,
 
 	*result = obj;
 
-	nsurl_unref(defragmented_url);
+	slateurl_unref(defragmented_url);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -2166,9 +2166,9 @@ llcache_object_retrieve(nsurl *url,
  *
  * \param object Object to add user to
  * \param user User to add
- * \return NSERROR_OK.
+ * \return SLATEERROR_OK.
  */
-static nserror llcache_object_add_user(llcache_object *object,
+static slateerror llcache_object_add_user(llcache_object *object,
 		llcache_object_user *user)
 {
 	assert(user->next == NULL);
@@ -2186,7 +2186,7 @@ static nserror llcache_object_add_user(llcache_object *object,
 
 	NSLOG(llcache, DEBUG, "Adding user %p to %p", user, object);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -2195,16 +2195,16 @@ static nserror llcache_object_add_user(llcache_object *object,
  * \param url URL to transform
  * \param result Pointer to location to receive transformed URL
  * \param hsts_in_use Pointer to location to receive HSTS in-use flag
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror llcache_hsts_transform_url(nsurl *url, nsurl **result,
+static slateerror llcache_hsts_transform_url(slateurl *url, slateurl **result,
 		bool *hsts_in_use)
 {
 	lwc_string *scheme = NULL;
 	bool match;
-	nserror error = NSERROR_OK;
+	slateerror error = SLATEERROR_OK;
 
-	scheme = nsurl_get_component(url, NSURL_SCHEME);
+	scheme = slateurl_get_component(url, SLATEURL_SCHEME);
 	if (lwc_string_caseless_isequal(scheme, corestring_lwc_http,
 			&match) != lwc_error_ok || match == false) {
 		/* Non-HTTP fetch: no transform required */
@@ -2217,20 +2217,20 @@ static nserror llcache_hsts_transform_url(nsurl *url, nsurl **result,
 			*hsts_in_use = false;
 		}
 		lwc_string_unref(scheme);
-		*result = nsurl_ref(url);
+		*result = slateurl_ref(url);
 		return error;
 	}
 	lwc_string_unref(scheme);
 
 	if (urldb_get_hsts_enabled(url)) {
 		/* Only need to force HTTPS. If original port was explicitly
-		 * specified as 80, nsurl_create/join will remove it (as
+		 * specified as 80, slateurl_create/join will remove it (as
 		 * it's redundant) */
-		error = nsurl_replace_scheme(url, corestring_lwc_https,
+		error = slateurl_replace_scheme(url, corestring_lwc_https,
 				result);
-		*hsts_in_use = (error == NSERROR_OK);
+		*hsts_in_use = (error == SLATEERROR_OK);
 	} else {
-		*result = nsurl_ref(url);
+		*result = slateurl_ref(url);
 		*hsts_in_use = false;
 	}
 
@@ -2241,26 +2241,26 @@ static nserror llcache_hsts_transform_url(nsurl *url, nsurl **result,
  * Update HSTS policy for target domain.
  *
  * \param object Newly-fetched cache object
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror llcache_hsts_update_policy(llcache_object *object)
+static slateerror llcache_hsts_update_policy(llcache_object *object)
 {
 	size_t i;
 	lwc_string *scheme = NULL;
 	bool match = false;
 
-	scheme = nsurl_get_component(object->url, NSURL_SCHEME);
+	scheme = slateurl_get_component(object->url, SLATEURL_SCHEME);
 	if (lwc_string_caseless_isequal(scheme, corestring_lwc_https,
 			&match) != lwc_error_ok || match == false) {
 		/* Non-HTTPS fetch: ignore */
 		lwc_string_unref(scheme);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 	lwc_string_unref(scheme);
 
 	if (object->fetch.tainted_tls) {
 		/* Transport is tainted: ignore */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	for (i = 0; i < object->num_headers; i++) {
@@ -2273,7 +2273,7 @@ static nserror llcache_hsts_update_policy(llcache_object *object)
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -2285,16 +2285,16 @@ static nserror llcache_hsts_update_policy(llcache_object *object)
  *
  * \param src_url source URL of redirect
  * \param dst_url destination URL of redirect
- * \return NSERROR_OK if safe else error code
+ * \return SLATEERROR_OK if safe else error code
  */
-static nserror check_redirect_safety(nsurl *src_url, nsurl *dst_url)
+static slateerror check_redirect_safety(slateurl *src_url, slateurl *dst_url)
 {
 	lwc_string *scheme;
 	lwc_string *object_scheme;
 	bool match;
 
-	object_scheme = nsurl_get_component(src_url, NSURL_SCHEME);
-	scheme = nsurl_get_component(dst_url, NSURL_SCHEME);
+	object_scheme = slateurl_get_component(src_url, SLATEURL_SCHEME);
+	scheme = slateurl_get_component(dst_url, SLATEURL_SCHEME);
 
 	/* resource: and about: are allowed to redirect anywhere */
 	if ((lwc_string_isequal(object_scheme, corestring_lwc_resource,
@@ -2311,7 +2311,7 @@ static nserror check_redirect_safety(nsurl *src_url, nsurl *dst_url)
 			lwc_string_unref(object_scheme);
 			lwc_string_unref(scheme);
 
-			return NSERROR_UNSAFE_REDIRECT;
+			return SLATEERROR_UNSAFE_REDIRECT;
 		}
 	}
 
@@ -2320,10 +2320,10 @@ static nserror check_redirect_safety(nsurl *src_url, nsurl *dst_url)
 
 	/* Bail out if we've no way of handling this URL */
 	if (fetch_can_fetch(dst_url) == false) {
-		return NSERROR_UNSAFE_REDIRECT;
+		return SLATEERROR_UNSAFE_REDIRECT;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -2332,16 +2332,16 @@ static nserror check_redirect_safety(nsurl *src_url, nsurl *dst_url)
  * \param object       Object being redirected
  * \param target       Target of redirect (may be relative)
  * \param replacement  Pointer to location to receive replacement object
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror llcache_fetch_redirect(llcache_object *object,
+static slateerror llcache_fetch_redirect(llcache_object *object,
 		const char *target, llcache_object **replacement)
 {
-	nserror res;
+	slateerror res;
 	llcache_object *dest;
 	llcache_object_user *user, *next;
 	const llcache_post_data *post = object->fetch.post;
-	nsurl *url, *hsts_url;
+	slateurl *url, *hsts_url;
 	bool hsts_in_use;
 	http_response_code http_code;
 	llcache_event event;
@@ -2362,30 +2362,30 @@ static nserror llcache_fetch_redirect(llcache_object *object,
 	(void) llcache_hsts_update_policy(object);
 
 	/* Forcibly stop redirecting if we've followed too many redirects */
-	if (object->fetch.redirect_count > nsoption_uint(fetch_redirect_limit)) {
+	if (object->fetch.redirect_count > slateoption_uint(fetch_redirect_limit)) {
 		NSLOG(llcache, INFO, "Too many nested redirects");
-		return NSERROR_CYCLIC_REDIRECT;
+		return SLATEERROR_CYCLIC_REDIRECT;
 	}
 
 	/* Make target absolute */
-	res = nsurl_join(object->url, target, &url);
-	if (res != NSERROR_OK) {
+	res = slateurl_join(object->url, target, &url);
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
 	/* Perform HSTS transform */
 	res = llcache_hsts_transform_url(url, &hsts_url, &hsts_in_use);
-	nsurl_unref(url);
-	if (res != NSERROR_OK) {
+	slateurl_unref(url);
+	if (res != SLATEERROR_OK) {
 		NSLOG(llcache, INFO, "hsts transform failed");
 		return res;
 	}
 
 	/* check redirect allowed before informing users */
 	res = check_redirect_safety(object->url, hsts_url);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		NSLOG(llcache, INFO, "unsafe redirect");
-		nsurl_unref(hsts_url);
+		slateurl_unref(hsts_url);
 		return res;
 	}
 
@@ -2409,8 +2409,8 @@ static nserror llcache_fetch_redirect(llcache_object *object,
 		 * HTTP_RESPONSE_USE_PROXY (305)
 		 */
 		NSLOG(llcache, INFO, "unsupported redirect %d", http_code);
-		nsurl_unref(hsts_url);
-		return NSERROR_BAD_REDIRECT;
+		slateurl_unref(hsts_url);
+		return SLATEERROR_BAD_REDIRECT;
 	}
 
 	/* Inform users of redirect */
@@ -2419,8 +2419,8 @@ static nserror llcache_fetch_redirect(llcache_object *object,
 	event.data.redirect.to = hsts_url;
 
 	res = llcache_send_event_to_users(object, &event);
-	if (res != NSERROR_OK) {
-		nsurl_unref(hsts_url);
+	if (res != SLATEERROR_OK) {
+		slateurl_unref(hsts_url);
 		return res;
 	}
 
@@ -2434,9 +2434,9 @@ static nserror llcache_fetch_redirect(llcache_object *object,
 					&dest);
 
 	/* No longer require url */
-	nsurl_unref(hsts_url);
+	slateurl_unref(hsts_url);
 
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		/* successfully started redirected fetch */
 
 		/* Move user(s) to replacement object */
@@ -2458,14 +2458,14 @@ static nserror llcache_fetch_redirect(llcache_object *object,
  * Update an object's cache state
  *
  * \param object  Object to update cache for
- * \return NSERROR_OK.
+ * \return SLATEERROR_OK.
  */
-static nserror llcache_object_cache_update(llcache_object *object)
+static slateerror llcache_object_cache_update(llcache_object *object)
 {
 	if (object->cache.date == 0)
 		object->cache.date = time(NULL);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -2473,9 +2473,9 @@ static nserror llcache_object_cache_update(llcache_object *object)
  *
  * \param object       Object to process
  * \param replacement  Pointer to location to receive replacement object
- * \return NSERROR_OK.
+ * \return SLATEERROR_OK.
  */
-static nserror llcache_fetch_notmodified(llcache_object *object,
+static slateerror llcache_fetch_notmodified(llcache_object *object,
 		llcache_object **replacement)
 {
 	/* There may be no candidate if the server erroneously responded
@@ -2531,7 +2531,7 @@ static nserror llcache_fetch_notmodified(llcache_object *object,
 
 	/* Old object will be flushed from the cache on the next poll */
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -2540,9 +2540,9 @@ static nserror llcache_fetch_notmodified(llcache_object *object,
  * \param object  Object being fetched
  * \param data	  Data to process
  * \param len	  Byte length of data
- * \return NSERROR_OK on success, appropriate error otherwise.
+ * \return SLATEERROR_OK on success, appropriate error otherwise.
  */
-static nserror
+static slateerror
 llcache_fetch_process_data(llcache_object *object,
 			   const uint8_t *data,
 			   size_t len)
@@ -2565,7 +2565,7 @@ llcache_fetch_process_data(llcache_object *object,
 		long http_code = fetch_http_code(object->fetch.fetch);
 
 		if ((http_code != 200 && http_code != 203) ||
-		    (nsurl_has_component(object->url, NSURL_QUERY) &&
+		    (slateurl_has_component(object->url, SLATEURL_QUERY) &&
 		     (object->cache.max_age == INVALID_AGE &&
 		      object->cache.expires == 0))) {
 			/* Invalidate cache control data */
@@ -2586,7 +2586,7 @@ llcache_fetch_process_data(llcache_object *object,
 		const size_t new_len = object->source_len + len + 64 * 1024;
 		uint8_t *temp = realloc(object->source_data, new_len);
 		if (temp == NULL)
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 
 		object->source_data = temp;
 		object->source_alloc = new_len;
@@ -2596,7 +2596,7 @@ llcache_fetch_process_data(llcache_object *object,
 	memcpy(object->source_data + object->source_len, data, len);
 	object->source_len += len;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -2605,12 +2605,12 @@ llcache_fetch_process_data(llcache_object *object,
  *
  * \param object  Object being fetched
  * \param realm	  Authentication realm
- * \return NSERROR_OK on success, appropriate error otherwise.
+ * \return SLATEERROR_OK on success, appropriate error otherwise.
  */
-static nserror llcache_fetch_auth(llcache_object *object, const char *realm)
+static slateerror llcache_fetch_auth(llcache_object *object, const char *realm)
 {
 	const char *auth;
-	nserror error = NSERROR_OK;
+	slateerror error = SLATEERROR_OK;
 
 	/* Abort fetch for this object */
 	fetch_abort(object->fetch.fetch);
@@ -2625,7 +2625,7 @@ static nserror llcache_fetch_auth(llcache_object *object, const char *realm)
 	/* If there was no realm, then default to the URL */
 	/** \todo If there was no WWW-Authenticate header, use response body */
 	if (realm == NULL)
-		realm = nsurl_access(object->url);
+		realm = slateurl_access(object->url);
 
 	auth = urldb_get_auth_details(object->url, realm);
 
@@ -2640,7 +2640,7 @@ static nserror llcache_fetch_auth(llcache_object *object, const char *realm)
 		/* Inform client(s) that object fetch failed */
 		event.type = LLCACHE_EVENT_ERROR;
 		/** \todo More appropriate error message */
-		event.data.error.code = NSERROR_BAD_AUTH;
+		event.data.error.code = SLATEERROR_BAD_AUTH;
 		event.data.error.msg = realm;
 
 		error = llcache_send_event_to_users(object, &event);
@@ -2658,11 +2658,11 @@ static nserror llcache_fetch_auth(llcache_object *object, const char *realm)
  * Handle a TLS certificate verification failure
  *
  * \param object  Object being fetched
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror llcache_fetch_cert_error(llcache_object *object)
+static slateerror llcache_fetch_cert_error(llcache_object *object)
 {
-	nserror error = NSERROR_OK;
+	slateerror error = SLATEERROR_OK;
 
 	/* Fetch has been stopped, and destroyed. Invalidate object's pointer */
 	object->fetch.fetch = NULL;
@@ -2683,7 +2683,7 @@ static nserror llcache_fetch_cert_error(llcache_object *object)
 		/* Inform client(s) that object fetch failed */
 		event.type = LLCACHE_EVENT_ERROR;
 		/** \todo More appropriate error message */
-		event.data.error.code = NSERROR_BAD_CERTS;
+		event.data.error.code = SLATEERROR_BAD_CERTS;
 		event.data.error.msg = messages_get("FetchFailed");
 
 		error = llcache_send_event_to_users(object, &event);
@@ -2696,7 +2696,7 @@ static nserror llcache_fetch_cert_error(llcache_object *object)
 		/* Inform client(s) that object fetch failed */
 		event.type = LLCACHE_EVENT_ERROR;
 		/** \todo More appropriate error message */
-		event.data.error.code = NSERROR_UNKNOWN;
+		event.data.error.code = SLATEERROR_UNKNOWN;
 		event.data.error.msg = messages_get("FetchFailed");
 
 		error = llcache_send_event_to_users(object, &event);
@@ -2710,11 +2710,11 @@ static nserror llcache_fetch_cert_error(llcache_object *object)
  * Handle a TLS connection setup failure
  *
  * \param object  Object being fetched
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror llcache_fetch_ssl_error(llcache_object *object)
+static slateerror llcache_fetch_ssl_error(llcache_object *object)
 {
-	nserror error = NSERROR_OK;
+	slateerror error = SLATEERROR_OK;
 
 	/* Fetch has been stopped, and destroyed. Invalidate object's pointer */
 	object->fetch.fetch = NULL;
@@ -2738,7 +2738,7 @@ static nserror llcache_fetch_ssl_error(llcache_object *object)
 		/* Inform client(s) that object fetch failed */
 		event.type = LLCACHE_EVENT_ERROR;
 		/** \todo More appropriate error message */
-		event.data.error.code = NSERROR_UNKNOWN;
+		event.data.error.code = SLATEERROR_UNKNOWN;
 		event.data.error.msg = messages_get("FetchFailed");
 
 		error = llcache_send_event_to_users(object, &event);
@@ -2757,9 +2757,9 @@ static nserror llcache_fetch_ssl_error(llcache_object *object)
  * handle time out while trying to fetch.
  *
  * \param object Object being fetched
- * \return NSERROR_OK on success otherwise error code
+ * \return SLATEERROR_OK on success otherwise error code
  */
-static nserror llcache_fetch_timeout(llcache_object *object)
+static slateerror llcache_fetch_timeout(llcache_object *object)
 {
 	llcache_event event;
 
@@ -2785,7 +2785,7 @@ static nserror llcache_fetch_timeout(llcache_object *object)
 	llcache_invalidate_cache_control_data(object);
 
 	event.type = LLCACHE_EVENT_ERROR;
-	event.data.error.code = NSERROR_TIMEOUT;
+	event.data.error.code = SLATEERROR_TIMEOUT;
 	event.data.error.msg = NULL;
 
 	return llcache_send_event_to_users(object, &event);
@@ -2804,10 +2804,10 @@ static nserror llcache_fetch_timeout(llcache_object *object)
  *
  * \param[out] lst_out list of candidate objects.
  * \param[out] lst_len_out Number of candidate objects in result.
- * \return NSERROR_OK with \a lst_out and \a lst_len_out updated or
+ * \return SLATEERROR_OK with \a lst_out and \a lst_len_out updated or
  *         error code.
  */
-static nserror
+static slateerror
 build_candidate_list(struct llcache_object ***lst_out, int *lst_len_out)
 {
 	llcache_object *object, *next;
@@ -2819,7 +2819,7 @@ build_candidate_list(struct llcache_object ***lst_out, int *lst_len_out)
 
 	lst = calloc(MAX_PERSIST_PER_RUN, sizeof(struct llcache_object *));
 	if (lst == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	for (object = llcache->cached_objects; object != NULL; object = next) {
@@ -2850,7 +2850,7 @@ build_candidate_list(struct llcache_object ***lst_out, int *lst_len_out)
 
 	if (lst_len == 0) {
 		free(lst);
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	/** \todo sort list here */
@@ -2860,7 +2860,7 @@ build_candidate_list(struct llcache_object ***lst_out, int *lst_len_out)
 
 #undef MAX_PERSIST_PER_RUN
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -2869,14 +2869,14 @@ build_candidate_list(struct llcache_object ***lst_out, int *lst_len_out)
  * \param object The object to put in the backing store.
  * \param written_out The amount of data written out.
  * \param elapsed The time in ms it took to complete the write to backing store.
- * \return NSERROR_OK on success or appropriate error code.
+ * \return SLATEERROR_OK on success or appropriate error code.
  */
-static nserror
+static slateerror
 write_backing_store(struct llcache_object *object,
 		    size_t *written_out,
 		    unsigned long *elapsed)
 {
-	nserror ret;
+	slateerror ret;
 	uint8_t *metadata;
 	size_t metadatasize;
 	uint64_t startms = 0;
@@ -2889,13 +2889,13 @@ write_backing_store(struct llcache_object *object,
 				   BACKING_STORE_NONE,
 				   object->source_data,
 				   object->source_len);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		/* unable to put source data in backing store */
 		return ret;
 	}
 
 	ret = llcache_serialise_metadata(object, &metadata, &metadatasize);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		/* There has been a metadata serialisation error. Ensure the
 		 * already written data object is invalidated.
 		 */
@@ -2908,7 +2908,7 @@ write_backing_store(struct llcache_object *object,
 				   metadata,
 				   metadatasize);
 	guit->llcache->release(object->url, BACKING_STORE_META);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		/* There has been an error putting the metadata in the
 		 * backing store. Ensure the data object is invalidated.
 		 */
@@ -2933,7 +2933,7 @@ write_backing_store(struct llcache_object *object,
 		*elapsed = 1;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -2973,7 +2973,7 @@ static void llcache_persist_slowcheck(void *p)
  */
 static void llcache_persist(void *p)
 {
-	nserror ret;
+	slateerror ret;
 	struct llcache_object **lst; /* candidate object list */
 	int lst_count; /* number of candidates in list */
 	int idx; /* current candidate object index in list */
@@ -2989,7 +2989,7 @@ static void llcache_persist(void *p)
 	unsigned long total_bandwidth = 0; /* total bandwidth */
 
 	ret = build_candidate_list(&lst, &lst_count);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		NSLOG(llcache, DEBUG, "Unable to construct candidate list for persistent writeout");
 		return;
 	}
@@ -2999,7 +2999,7 @@ static void llcache_persist(void *p)
 	/* obtained a candidate list, make each object persistent in turn */
 	for (idx = 0; idx < lst_count; idx++) {
 		ret = write_backing_store(lst[idx], &written, &elapsed);
-		if (ret != NSERROR_OK) {
+		if (ret != SLATEERROR_OK) {
 			continue;
 		}
 
@@ -3011,7 +3011,7 @@ static void llcache_persist(void *p)
 		NSLOG(llcache, DEBUG,
 		      "Wrote %"PRIsizet" bytes in %lums bw:%lu %s",
 		      written, elapsed, (written * 1000) / elapsed,
-		      nsurl_access(lst[idx]->url) );
+		      slateurl_access(lst[idx]->url) );
 
 		/* check to for the time quantum or the size
 		 * (bandwidth) for this run being exceeded.
@@ -3093,7 +3093,7 @@ static void llcache_persist(void *p)
  */
 static void llcache_fetch_callback(const fetch_msg *msg, void *p)
 {
-	nserror error = NSERROR_OK;
+	slateerror error = SLATEERROR_OK;
 	llcache_object *object = p;
 	llcache_event event;
 
@@ -3128,7 +3128,7 @@ static void llcache_fetch_callback(const fetch_msg *msg, void *p)
 
 		error = llcache_fetch_redirect(object,
 				msg->data.redirect, &object);
-		if (error != NSERROR_OK) {
+		if (error != SLATEERROR_OK) {
 			event.type = LLCACHE_EVENT_ERROR;
 			event.data.error.code = error;
 			event.data.error.msg = NULL;
@@ -3201,7 +3201,7 @@ static void llcache_fetch_callback(const fetch_msg *msg, void *p)
 		/** \todo Consider using errorcode for something */
 
 		event.type = LLCACHE_EVENT_ERROR;
-		event.data.error.code = NSERROR_UNKNOWN;
+		event.data.error.code = SLATEERROR_UNKNOWN;
 		event.data.error.msg = msg->data.error;
 
 		error = llcache_send_event_to_users(object, &event);
@@ -3227,7 +3227,7 @@ static void llcache_fetch_callback(const fetch_msg *msg, void *p)
 
 		/* Persist the chain onto our object */
 		error = cert_chain_dup(msg->data.chain, &object->chain);
-		if (error != NSERROR_OK) {
+		if (error != SLATEERROR_OK) {
 			NSLOG(llcache, ERROR,
 			      "Unable to duplicate cert chain into cache: %s",
 			      messages_get_errorcode(error));
@@ -3280,8 +3280,8 @@ static void llcache_fetch_callback(const fetch_msg *msg, void *p)
 	}
 
 	/* Deal with any errors reported by event handlers */
-	if (error != NSERROR_OK) {
-		if (error == NSERROR_NOMEM) {
+	if (error != SLATEERROR_OK) {
+		if (error == SLATEERROR_NOMEM) {
 			/* attempt to purge the cache to free some
 			 * memory. will not help this fetch, but may
 			 * allow the UI to report errors etc.
@@ -3350,11 +3350,11 @@ static bool llcache_object_in_list(const llcache_object *object,
  * Notify users of an object's current state
  *
  * \param object  Object to notify users about
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror llcache_object_notify_users(llcache_object *object)
+static slateerror llcache_object_notify_users(llcache_object *object)
 {
-	nserror error;
+	slateerror error;
 	llcache_object_user *user, *next_user;
 	llcache_event event;
 	bool emitted_notify = false;
@@ -3444,7 +3444,7 @@ static nserror llcache_object_notify_users(llcache_object *object)
 				event.data.chain = object->chain;
 				error = handle->cb(handle, &event, handle->pw);
 			} else {
-				error = NSERROR_OK;
+				error = SLATEERROR_OK;
 			}
 
 			if (user->queued_for_delete) {
@@ -3452,11 +3452,11 @@ static nserror llcache_object_notify_users(llcache_object *object)
 				llcache_object_remove_user(object, user);
 				llcache_object_user_destroy(user);
 
-				if (error != NSERROR_OK)
+				if (error != SLATEERROR_OK)
 					return error;
 
 				continue;
-			} else if (error == NSERROR_NEED_DATA) {
+			} else if (error == SLATEERROR_NEED_DATA) {
 				/* User requested replay */
 				handle->state = LLCACHE_FETCH_HEADERS;
 
@@ -3466,7 +3466,7 @@ static nserror llcache_object_notify_users(llcache_object *object)
 				next_user = user->next;
 				llcache_users_not_caught_up();
 				continue;
-			} else if (error != NSERROR_OK) {
+			} else if (error != SLATEERROR_OK) {
 				user->iterator_target = false;
 				return error;
 			}
@@ -3487,11 +3487,11 @@ static nserror llcache_object_notify_users(llcache_object *object)
 				llcache_object_remove_user(object, user);
 				llcache_object_user_destroy(user);
 
-				if (error != NSERROR_OK)
+				if (error != SLATEERROR_OK)
 					return error;
 
 				continue;
-			} else if (error == NSERROR_NEED_DATA) {
+			} else if (error == SLATEERROR_NEED_DATA) {
 				/* User requested replay */
 				handle->state = LLCACHE_FETCH_HEADERS;
 
@@ -3501,7 +3501,7 @@ static nserror llcache_object_notify_users(llcache_object *object)
 				next_user = user->next;
 				llcache_users_not_caught_up();
 				continue;
-			} else if (error != NSERROR_OK) {
+			} else if (error != SLATEERROR_OK) {
 				user->iterator_target = false;
 				return error;
 			}
@@ -3541,11 +3541,11 @@ static nserror llcache_object_notify_users(llcache_object *object)
 				llcache_object_remove_user(object, user);
 				llcache_object_user_destroy(user);
 
-				if (error != NSERROR_OK)
+				if (error != SLATEERROR_OK)
 					return error;
 
 				continue;
-			} else if (error == NSERROR_NEED_DATA) {
+			} else if (error == SLATEERROR_NEED_DATA) {
 				/* User requested replay */
 				handle->bytes = orig_handle_read;
 
@@ -3555,7 +3555,7 @@ static nserror llcache_object_notify_users(llcache_object *object)
 				next_user = user->next;
 				llcache_users_not_caught_up();
 				continue;
-			} else if (error != NSERROR_OK) {
+			} else if (error != SLATEERROR_OK) {
 				user->iterator_target = false;
 				return error;
 			}
@@ -3575,11 +3575,11 @@ static nserror llcache_object_notify_users(llcache_object *object)
 				llcache_object_remove_user(object, user);
 				llcache_object_user_destroy(user);
 
-				if (error != NSERROR_OK)
+				if (error != SLATEERROR_OK)
 					return error;
 
 				continue;
-			} else if (error == NSERROR_NEED_DATA) {
+			} else if (error == SLATEERROR_NEED_DATA) {
 				/* User requested replay */
 				handle->state = LLCACHE_FETCH_DATA;
 
@@ -3589,7 +3589,7 @@ static nserror llcache_object_notify_users(llcache_object *object)
 				next_user = user->next;
 				llcache_users_not_caught_up();
 				continue;
-			} else if (error != NSERROR_OK) {
+			} else if (error != SLATEERROR_OK) {
 				user->iterator_target = false;
 				return error;
 			}
@@ -3601,7 +3601,7 @@ static nserror llcache_object_notify_users(llcache_object *object)
 		next_user = user->next;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -3616,17 +3616,17 @@ static nserror llcache_object_notify_users(llcache_object *object)
  *
  * \param object  The object to take a snapshot of
  * \param snapshot  Pointer to receive snapshot of \a object
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror
+static slateerror
 llcache_object_snapshot(llcache_object *object,	llcache_object **snapshot)
 {
 	llcache_object *newobj;
-	nserror error;
+	slateerror error;
 
 	error = llcache_object_new(object->url, &newobj);
 
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 
 	newobj->source_alloc = newobj->source_len = object->source_len;
@@ -3635,7 +3635,7 @@ llcache_object_snapshot(llcache_object *object,	llcache_object **snapshot)
 		newobj->source_data = malloc(newobj->source_alloc);
 		if (newobj->source_data == NULL) {
 			llcache_object_destroy(newobj);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 		memcpy(newobj->source_data, object->source_data,
 				newobj->source_len);
@@ -3646,7 +3646,7 @@ llcache_object_snapshot(llcache_object *object,	llcache_object **snapshot)
 				sizeof(llcache_header));
 		if (newobj->headers == NULL) {
 			llcache_object_destroy(newobj);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 		while (newobj->num_headers < object->num_headers) {
 			llcache_header *nh =
@@ -3658,14 +3658,14 @@ llcache_object_snapshot(llcache_object *object,	llcache_object **snapshot)
 			nh->value = strdup(oh->value);
 			if (nh->name == NULL || nh->value == NULL) {
 				llcache_object_destroy(newobj);
-				return NSERROR_NOMEM;
+				return SLATEERROR_NOMEM;
 			}
 		}
 	}
 
 	if (object->chain != NULL) {
 		error = cert_chain_dup(object->chain, &newobj->chain);
-		if (error != NSERROR_OK) {
+		if (error != SLATEERROR_OK) {
 			llcache_object_destroy(newobj);
 			return error;
 		}
@@ -3675,7 +3675,7 @@ llcache_object_snapshot(llcache_object *object,	llcache_object **snapshot)
 
 	*snapshot = newobj;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -3691,7 +3691,7 @@ total_object_size(llcache_object *object)
 	size_t hdrc;
 
 	tot = sizeof(*object);
-	tot += nsurl_length(object->url);
+	tot += slateurl_length(object->url);
 
 	if (object->source_data != NULL) {
 		tot += object->source_len;
@@ -3791,7 +3791,7 @@ void llcache_clean(bool purge)
 		    (object->candidate_count == 0) &&
 		    (object->fetch.fetch == NULL)) {
 			NSLOG(llcache, DEBUG, "Discarding uncachable object with no users (%p) %s",
-				    object, nsurl_access(object->url));
+				    object, slateurl_access(object->url));
 
 			llcache_object_remove_from_list(object,
 					&llcache->uncached_objects);
@@ -3818,7 +3818,7 @@ void llcache_clean(bool purge)
 			/* object is stale */
 			NSLOG(llcache, DEBUG, "discarding stale cacheable object with no "
 					"users or pending fetches (%p) %s",
-					object, nsurl_access(object->url));
+					object, slateurl_access(object->url));
 
 				llcache_object_remove_from_list(object,
 						&llcache->cached_objects);
@@ -3885,7 +3885,7 @@ void llcache_clean(bool purge)
 			      object->source_len,
 			      (long)(time(NULL) - object->last_used),
 			      object,
-			      nsurl_access(object->url));
+			      slateurl_access(object->url));
 
 			llcache_size -=	total_object_size(object);
 
@@ -3915,7 +3915,7 @@ void llcache_clean(bool purge)
 			      object->source_len,
 			      (long)(time(NULL) - object->last_used),
 			      object,
-			      nsurl_access(object->url));
+			      slateurl_access(object->url));
 
 			llcache_size -=	object->source_len + sizeof(*object);
 
@@ -3929,12 +3929,12 @@ void llcache_clean(bool purge)
 }
 
 /* Exported interface documented in content/llcache.h */
-nserror
+slateerror
 llcache_initialise(const struct llcache_parameters *prm)
 {
 	llcache = calloc(1, sizeof(struct llcache_s));
 	if (llcache == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	llcache->limit = prm->limit;
@@ -4028,36 +4028,36 @@ void llcache_finalise(void)
 
 
 /* Exported interface documented in content/llcache.h */
-nserror
-llcache_handle_retrieve(nsurl *url,
+slateerror
+llcache_handle_retrieve(slateurl *url,
 			uint32_t flags,
-			nsurl *referer,
+			slateurl *referer,
 			const llcache_post_data *post,
 			llcache_handle_callback cb, void *pw,
 			llcache_handle **result)
 {
-	nserror error;
+	slateerror error;
 	llcache_object_user *user;
 	llcache_object *object;
-	nsurl *hsts_url;
+	slateurl *hsts_url;
 	bool hsts_in_use;
 
 	/* Perform HSTS transform */
 	error = llcache_hsts_transform_url(url, &hsts_url, &hsts_in_use);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		return error;
 	}
 
 	/* Can we fetch this URL at all? */
 	if (fetch_can_fetch(hsts_url) == false) {
-		nsurl_unref(hsts_url);
-		return NSERROR_NO_FETCH_HANDLER;
+		slateurl_unref(hsts_url);
+		return SLATEERROR_NO_FETCH_HANDLER;
 	}
 
 	/* Create a new object user */
 	error = llcache_object_user_new(cb, pw, &user);
-	if (error != NSERROR_OK) {
-		nsurl_unref(hsts_url);
+	if (error != SLATEERROR_OK) {
+		slateurl_unref(hsts_url);
 		return error;
 	}
 
@@ -4065,9 +4065,9 @@ llcache_handle_retrieve(nsurl *url,
 	 * creating a new one if needed. */
 	error = llcache_object_retrieve(hsts_url, flags, referer, post, 0,
 			hsts_in_use, &object);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		llcache_object_user_destroy(user);
-		nsurl_unref(hsts_url);
+		slateurl_unref(hsts_url);
 		return error;
 	}
 
@@ -4079,27 +4079,27 @@ llcache_handle_retrieve(nsurl *url,
 	/* Users exist which are now not caught up! */
 	llcache_users_not_caught_up();
 
-	nsurl_unref(hsts_url);
+	slateurl_unref(hsts_url);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* Exported interface documented in content/llcache.h */
-nserror llcache_handle_change_callback(llcache_handle *handle,
+slateerror llcache_handle_change_callback(llcache_handle *handle,
 		llcache_handle_callback cb, void *pw)
 {
 	handle->cb = cb;
 	handle->pw = pw;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* Exported interface documented in content/llcache.h */
-nserror llcache_handle_release(llcache_handle *handle)
+slateerror llcache_handle_release(llcache_handle *handle)
 {
-	nserror error = NSERROR_OK;
+	slateerror error = SLATEERROR_OK;
 	llcache_object *object = handle->object;
 	llcache_object_user *user = llcache_object_find_user(handle);
 
@@ -4112,7 +4112,7 @@ nserror llcache_handle_release(llcache_handle *handle)
 	} else {
 		/* Remove the user from the object and destroy it */
 		error = llcache_object_remove_user(object, user);
-		if (error == NSERROR_OK) {
+		if (error == SLATEERROR_OK) {
 			error = llcache_object_user_destroy(user);
 		}
 	}
@@ -4121,13 +4121,13 @@ nserror llcache_handle_release(llcache_handle *handle)
 }
 
 /* Exported interface documented in content/llcache.h */
-nserror llcache_handle_clone(llcache_handle *handle, llcache_handle **result)
+slateerror llcache_handle_clone(llcache_handle *handle, llcache_handle **result)
 {
-	nserror error;
+	slateerror error;
 	llcache_object_user *newuser;
 
 	error = llcache_object_user_new(handle->cb, handle->pw, &newuser);
-	if (error == NSERROR_OK) {
+	if (error == SLATEERROR_OK) {
 		llcache_object_add_user(handle->object, newuser);
 		newuser->handle->state = handle->state;
 		*result = newuser->handle;
@@ -4137,11 +4137,11 @@ nserror llcache_handle_clone(llcache_handle *handle, llcache_handle **result)
 }
 
 /* See llcache.h for documentation */
-nserror llcache_handle_abort(llcache_handle *handle)
+slateerror llcache_handle_abort(llcache_handle *handle)
 {
 	llcache_object_user *user = llcache_object_find_user(handle);
 	llcache_object *object = handle->object, *newobject;
-	nserror error = NSERROR_OK;
+	slateerror error = SLATEERROR_OK;
 	bool all_alone = true;
 
 	/* Determine if we are the only user */
@@ -4153,7 +4153,7 @@ nserror llcache_handle_abort(llcache_handle *handle)
 	if (all_alone == false) {
 		/* We must snapshot this object */
 		error = llcache_object_snapshot(object, &newobject);
-		if (error != NSERROR_OK)
+		if (error != SLATEERROR_OK)
 			return error;
 
 		/* Move across to the new object */
@@ -4163,7 +4163,7 @@ nserror llcache_handle_abort(llcache_handle *handle)
 					calloc(1, sizeof(llcache_object_user));
 			if (newuser == NULL) {
 				llcache_object_destroy(newobject);
-				return NSERROR_NOMEM;
+				return SLATEERROR_NOMEM;
 			}
 
 			/* Move handle across to clone */
@@ -4199,14 +4199,14 @@ nserror llcache_handle_abort(llcache_handle *handle)
 }
 
 /* See llcache.h for documentation */
-nserror llcache_handle_force_stream(llcache_handle *handle)
+slateerror llcache_handle_force_stream(llcache_handle *handle)
 {
 	llcache_object_user *user = llcache_object_find_user(handle);
 	llcache_object *object = handle->object;
 
 	/* Cannot stream if there are multiple users */
 	if (user->prev != NULL || user->next != NULL)
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 
 	/* Forcibly uncache this object */
 	if (llcache_object_in_list(object, llcache->cached_objects)) {
@@ -4217,11 +4217,11 @@ nserror llcache_handle_force_stream(llcache_handle *handle)
 
 	object->fetch.flags |= LLCACHE_RETRIEVE_STREAM_DATA;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* See llcache.h for documentation */
-nserror llcache_handle_invalidate_cache_data(llcache_handle *handle)
+slateerror llcache_handle_invalidate_cache_data(llcache_handle *handle)
 {
 	if ((handle->object != NULL) &&
 	    (handle->object->fetch.fetch == NULL) &&
@@ -4230,11 +4230,11 @@ nserror llcache_handle_invalidate_cache_data(llcache_handle *handle)
 		handle->object->cache.no_cache = LLCACHE_VALIDATE_ONCE;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* See llcache.h for documentation */
-nsurl *llcache_handle_get_url(const llcache_handle *handle)
+slateurl *llcache_handle_get_url(const llcache_handle *handle)
 {
 	return handle->object != NULL ? handle->object->url : NULL;
 }

@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 - 2013 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,17 +16,17 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
  
-#ifndef _NETSURF_DESKTOP_GLOBAL_HISTORY_H_
-#define _NETSURF_DESKTOP_GLOBAL_HISTORY_H_
+#ifndef _SLATE_DESKTOP_GLOBAL_HISTORY_H_
+#define _SLATE_DESKTOP_GLOBAL_HISTORY_H_
 
 #include <stdbool.h>
 #include <stdint.h>
 
 #include "utils/errors.h"
-#include "netsurf/mouse.h"
+#include "slate/mouse.h"
 
 struct redraw_context;
-struct nsurl;
+struct slateurl;
 struct rect;
 
 /**
@@ -38,9 +38,9 @@ struct rect;
  * This must be called before any other global_history_* function.
  *
  * \param core_window_handle The core_window in which the global history is shown.
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror global_history_init(void *core_window_handle);
+slateerror global_history_init(void *core_window_handle);
 
 /**
  * Finalise the global history.
@@ -49,9 +49,9 @@ nserror global_history_init(void *core_window_handle);
  * internal data.  After calling this if global history is required again,
  * global_history_init must be called.
  *
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror global_history_fini(void);
+slateerror global_history_fini(void);
 
 /**
  * Add an entry to the global history.
@@ -59,18 +59,18 @@ nserror global_history_fini(void);
  * If the URL already exists in the global history, the old node is removed.
  *
  * \param url		URL for node being added
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror global_history_add(struct nsurl *url);
+slateerror global_history_add(struct slateurl *url);
 
 /**
  * Save global history to file (html)
  *
  * \param path		The path to save history to
  * \param title		The title to give the document, or NULL for default
- * \return NSERROR_OK on success, or appropriate error otherwise
+ * \return SLATEERROR_OK on success, or appropriate error otherwise
  */
-nserror global_history_export(const char *path, const char *title);
+slateerror global_history_export(const char *path, const char *title);
 
 /**
  * Redraw the global history.
@@ -114,22 +114,22 @@ bool global_history_has_selection(void);
  * \param title		Updated to the selected entry's title, or NULL
  * \return true iff global history has a selection
  */
-bool global_history_get_selection(struct nsurl **url, const char **title);
+bool global_history_get_selection(struct slateurl **url, const char **title);
 
 /**
  * Expand the treeview's nodes
  *
  * \param only_folders	Iff true, only folders are expanded.
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror global_history_expand(bool only_folders);
+slateerror global_history_expand(bool only_folders);
 
 /**
  * Contract the treeview's nodes
  *
  * \param all		Iff false, only entries are contracted.
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror global_history_contract(bool all);
+slateerror global_history_contract(bool all);
 
 #endif

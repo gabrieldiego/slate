@@ -1,7 +1,7 @@
 /*
  * Copyright 2003 Rob Jackson <jacko@xms.ms>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,9 +32,9 @@
 
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "content/fetch.h"
-#include "netsurf/browser_window.h"
+#include "slate/browser_window.h"
 
 #include "riscos/gui.h"
 #include "riscos/uri.h"
@@ -46,21 +46,21 @@ void ro_uri_message_received(wimp_message *msg)
 	uri_h uri_handle;
 	char* uri_requested;
 	int uri_length;
-	nsurl *url;
-	nserror error;
+	slateurl *url;
+	slateerror error;
 
 	uri_handle = uri_message->handle;
 
-	if (nsurl_create(uri_message->uri, &url) != NSERROR_OK) {
+	if (slateurl_create(uri_message->uri, &url) != SLATEERROR_OK) {
 		return;
 	}
 
 	if (!fetch_can_fetch(url)) {
-		nsurl_unref(url);
+		slateurl_unref(url);
 		return;
 	}
 
-	nsurl_unref(url);
+	slateurl_unref(url);
 
 	uri_message->your_ref = uri_message->my_ref;
 	uri_message->action = message_URI_PROCESS_ACK;
@@ -75,17 +75,17 @@ void ro_uri_message_received(wimp_message *msg)
 
 	xuri_request_uri(0, uri_requested, uri_length, uri_handle, NULL);
 
-	error = nsurl_create(uri_requested, &url);
+	error = slateurl_create(uri_requested, &url);
 	free(uri_requested);
-	if (error == NSERROR_OK) {
+	if (error == SLATEERROR_OK) {
 		error = browser_window_create(BW_CREATE_HISTORY,
 					      url,
 					      NULL,
 					      NULL,
 					      NULL);
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		ro_warn_user(messages_get_errorcode(error), 0);
 	}
 }

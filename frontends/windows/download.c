@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 Mark Benjamin <netsurf-browser.org.MarkBenjamin@dfgh.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,11 +32,11 @@
 #include "utils/log.h"
 #include "utils/messages.h"
 #include "utils/url.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/utils.h"
 #include "utils/string.h"
 #include "content/fetch.h"
-#include "netsurf/download.h"
+#include "slate/download.h"
 #include "desktop/download.h"
 
 #include "windows/download.h"
@@ -214,13 +214,13 @@ gui_download_window_create(download_context *ctx, struct gui_window *gui)
 	}
 	int total_size = download_context_get_total_length(ctx);
 	char *domain, *filename, *destination;
-	nsurl *url = download_context_get_url(ctx);
+	slateurl *url = download_context_get_url(ctx);
 	bool unknown_size = (total_size == 0);
 	const char *size = (unknown_size) ?
 		messages_get("UnknownSize") :
 		human_friendly_bytesize(total_size);
 
-	if (nsurl_nice(url, &filename, false) != NSERROR_OK) {
+	if (slateurl_nice(url, &filename, false) != SLATEERROR_OK) {
 		filename = strdup(messages_get("UnknownFile"));
 	}
 	if (filename == NULL) {
@@ -229,8 +229,8 @@ gui_download_window_create(download_context *ctx, struct gui_window *gui)
 		return NULL;
 	}
 
-	if (nsurl_has_component(url, NSURL_HOST)) {
-		domain = strdup(lwc_string_data(nsurl_get_component(url, NSURL_HOST)));
+	if (slateurl_has_component(url, SLATEURL_HOST)) {
+		domain = strdup(lwc_string_data(slateurl_get_component(url, SLATEURL_HOST)));
 	} else {
 		domain = strdup(messages_get("UnknownHost"));
 	}
@@ -305,12 +305,12 @@ gui_download_window_create(download_context *ctx, struct gui_window *gui)
 }
 
 
-static nserror
+static slateerror
 gui_download_window_data(struct gui_download_window *w, const char *data,
 			 unsigned int size)
 {
 	if ((w == NULL) || (w->file == NULL))
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
 	size_t res;
 	struct timeval val;
 	res = fwrite((void *)data, 1, size, w->file);
@@ -324,7 +324,7 @@ gui_download_window_data(struct gui_download_window *w, const char *data,
 	w->time_remaining = (w->progress == 0) ? -1 :
 		(int)((val.tv_sec - w->start_time.tv_sec) *
 		      (10000 - w->progress) / w->progress);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void gui_download_window_error(struct gui_download_window *w,

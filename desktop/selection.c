@@ -2,7 +2,7 @@
  * Copyright 2005 Adrian Lees <adrianl@users.sourceforge.net>
  * Copyright 2008 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,9 +25,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "netsurf/clipboard.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/window.h"
+#include "slate/clipboard.h"
+#include "slate/browser_window.h"
+#include "slate/window.h"
 #include "utils/utils.h"
 #include "content/content_protected.h"
 
@@ -42,7 +42,7 @@ struct selection_string {
 	size_t length;
 
 	int n_styles;
-	nsclipboard_styles *styles;
+	slateclipboard_styles *styles;
 };
 
 
@@ -72,17 +72,17 @@ struct selection {
  * \param start_idx start offset (bytes) within the textual representation
  * \param end_idx end offset (bytes) within the textual representation
  */
-static nserror
+static slateerror
 selection_redraw(struct selection *s, unsigned start_idx, unsigned end_idx)
 {
-	nserror res;
+	slateerror res;
 
 	if (s->c->handler->textselection_redraw != NULL) {
 		res = s->c->handler->textselection_redraw(s->c,
 							  start_idx,
 							  end_idx);
 	} else {
-		res = NSERROR_NOT_IMPLEMENTED;
+		res = SLATEERROR_NOT_IMPLEMENTED;
 	}
 
 	return res;
@@ -159,7 +159,7 @@ static void selection_set_end(struct selection *s, unsigned offset)
 static bool
 selection_copy(struct selection *s, struct selection_string *selstr)
 {
-	nserror res;
+	slateerror res;
 
 	if (s->c->handler->textselection_copy != NULL) {
 		res = s->c->handler->textselection_copy(s->c,
@@ -167,10 +167,10 @@ selection_copy(struct selection *s, struct selection_string *selstr)
 							s->end_idx,
 							selstr);
 	} else {
-		res = NSERROR_NOT_IMPLEMENTED;
+		res = SLATEERROR_NOT_IMPLEMENTED;
 	}
 
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return false;
 	}
 	return true;
@@ -198,7 +198,7 @@ selection_string_append(const char *text,
 
 	if (style != NULL) {
 		/* Add text run style */
-		nsclipboard_styles *new_styles;
+		slateclipboard_styles *new_styles;
 
 		if (sel_string->n_styles == 0) {
 			assert(sel_string->length == 0);
@@ -206,7 +206,7 @@ selection_string_append(const char *text,
 
 		new_styles = realloc(sel_string->styles,
 				     (sel_string->n_styles + 1) *
-				     sizeof(nsclipboard_styles));
+				     sizeof(slateclipboard_styles));
 		if (new_styles == NULL) {
 			return false;
 		}

@@ -12,7 +12,7 @@ S_CONTENT :=			\
 	no_backing_store.c
 
 # Make filesystem backing store available
-ifeq ($(NETSURF_FS_BACKING_STORE),YES)
+ifeq ($(SLATE_FS_BACKING_STORE),YES)
 	S_CONTENT += fs_backing_store.c
 endif
 

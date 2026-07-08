@@ -1,7 +1,7 @@
 /*
  * Copyright 2008-9, 2013, 2017 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -438,7 +438,7 @@ void ami_menu_free_menu(struct ami_menu_data **md, int max, struct Menu *imenu)
 }
 
 void ami_menu_refresh(struct Menu *menu, struct ami_menu_data **md, int menu_item, int max,
-	nserror (*cb)(struct ami_menu_data **md))
+	slateerror (*cb)(struct ami_menu_data **md))
 {
 #ifdef __amigaos4__
 	Object *restrict obj;

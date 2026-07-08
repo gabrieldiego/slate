@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,11 +22,11 @@
 #include <string.h>
 
 #include "utils/messages.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/file.h"
 #include "utils/log.h"
-#include "utils/nsurl.h"
-#include "netsurf/browser_window.h"
+#include "utils/slateurl.h"
+#include "slate/browser_window.h"
 #include "desktop/searchweb.h"
 
 #include "gtk/compat.h"
@@ -67,86 +67,86 @@ static struct ppref ppref;
  */
 #define TOGGLEBUTTON_SIGNALS(WIDGET, OPTION)				\
 G_MODULE_EXPORT void							\
-nsgtk_preferences_##WIDGET##_toggled(GtkToggleButton *togglebutton,	\
+slategtk_preferences_##WIDGET##_toggled(GtkToggleButton *togglebutton,	\
 				     struct ppref *priv);		\
 G_MODULE_EXPORT void							\
-nsgtk_preferences_##WIDGET##_toggled(GtkToggleButton *togglebutton,	\
+slategtk_preferences_##WIDGET##_toggled(GtkToggleButton *togglebutton,	\
 				     struct ppref *priv)		\
 {									\
-	nsoption_set_bool(OPTION,					\
+	slateoption_set_bool(OPTION,					\
 			  gtk_toggle_button_get_active(togglebutton));	\
 }									\
 									\
 G_MODULE_EXPORT void							\
-nsgtk_preferences_##WIDGET##_realize(GtkWidget *widget,			\
+slategtk_preferences_##WIDGET##_realize(GtkWidget *widget,			\
 				     struct ppref *priv);		\
 G_MODULE_EXPORT void							\
-nsgtk_preferences_##WIDGET##_realize(GtkWidget *widget,			\
+slategtk_preferences_##WIDGET##_realize(GtkWidget *widget,			\
 				     struct ppref *priv)		\
 {									\
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(widget),		\
-				     nsoption_bool(OPTION));		\
+				     slateoption_bool(OPTION));		\
 }
 
 #define SPINBUTTON_SIGNALS(WIDGET, OPTION, MULTIPLIER)			\
 G_MODULE_EXPORT void							\
-nsgtk_preferences_##WIDGET##_valuechanged(GtkSpinButton *spinbutton,	\
+slategtk_preferences_##WIDGET##_valuechanged(GtkSpinButton *spinbutton,	\
 					  struct ppref *priv);		\
 G_MODULE_EXPORT void							\
-nsgtk_preferences_##WIDGET##_valuechanged(GtkSpinButton *spinbutton,	\
+slategtk_preferences_##WIDGET##_valuechanged(GtkSpinButton *spinbutton,	\
 					  struct ppref *priv)		\
 {									\
-	nsoption_set_int(OPTION,					\
+	slateoption_set_int(OPTION,					\
 		round(gtk_spin_button_get_value(spinbutton) * MULTIPLIER)); \
 }									\
 									\
 G_MODULE_EXPORT void							\
-nsgtk_preferences_##WIDGET##_realize(GtkWidget *widget, struct ppref *priv); \
+slategtk_preferences_##WIDGET##_realize(GtkWidget *widget, struct ppref *priv); \
 G_MODULE_EXPORT void							\
-nsgtk_preferences_##WIDGET##_realize(GtkWidget *widget, struct ppref *priv) \
+slategtk_preferences_##WIDGET##_realize(GtkWidget *widget, struct ppref *priv) \
 {									\
 	gtk_spin_button_set_value(GTK_SPIN_BUTTON(widget),		\
-		((gdouble)nsoption_int(OPTION)) / MULTIPLIER);		\
+		((gdouble)slateoption_int(OPTION)) / MULTIPLIER);		\
 }
 
 #define SPINBUTTON_UINT_SIGNALS(WIDGET, OPTION, MULTIPLIER)		\
 G_MODULE_EXPORT void							\
-nsgtk_preferences_##WIDGET##_valuechanged(GtkSpinButton *spinbutton,	\
+slategtk_preferences_##WIDGET##_valuechanged(GtkSpinButton *spinbutton,	\
 					  struct ppref *priv);		\
 G_MODULE_EXPORT void							\
-nsgtk_preferences_##WIDGET##_valuechanged(GtkSpinButton *spinbutton,	\
+slategtk_preferences_##WIDGET##_valuechanged(GtkSpinButton *spinbutton,	\
 					  struct ppref *priv)		\
 {									\
-	nsoption_set_uint(OPTION,					\
+	slateoption_set_uint(OPTION,					\
 		round(gtk_spin_button_get_value(spinbutton) * MULTIPLIER)); \
 }									\
 									\
 G_MODULE_EXPORT void							\
-nsgtk_preferences_##WIDGET##_realize(GtkWidget *widget, struct ppref *priv); \
+slategtk_preferences_##WIDGET##_realize(GtkWidget *widget, struct ppref *priv); \
 G_MODULE_EXPORT void							\
-nsgtk_preferences_##WIDGET##_realize(GtkWidget *widget, struct ppref *priv) \
+slategtk_preferences_##WIDGET##_realize(GtkWidget *widget, struct ppref *priv) \
 {									\
 	gtk_spin_button_set_value(GTK_SPIN_BUTTON(widget),		\
-		((gdouble)nsoption_uint(OPTION)) / MULTIPLIER);		\
+		((gdouble)slateoption_uint(OPTION)) / MULTIPLIER);		\
 }
 
 #define ENTRY_SIGNALS(WIDGET, OPTION)					\
 G_MODULE_EXPORT void							\
-nsgtk_preferences_##WIDGET##_changed(GtkEditable *editable, struct ppref *priv); \
+slategtk_preferences_##WIDGET##_changed(GtkEditable *editable, struct ppref *priv); \
 G_MODULE_EXPORT void							\
-nsgtk_preferences_##WIDGET##_changed(GtkEditable *editable, struct ppref *priv)\
+slategtk_preferences_##WIDGET##_changed(GtkEditable *editable, struct ppref *priv)\
 {									\
-	nsoption_set_charp(OPTION,					\
+	slateoption_set_charp(OPTION,					\
 		strdup(gtk_entry_get_text(GTK_ENTRY(editable))));	\
 }									\
 									\
 G_MODULE_EXPORT void							\
-nsgtk_preferences_##WIDGET##_realize(GtkWidget *widget,	struct ppref *priv); \
+slategtk_preferences_##WIDGET##_realize(GtkWidget *widget,	struct ppref *priv); \
 G_MODULE_EXPORT void							\
-nsgtk_preferences_##WIDGET##_realize(GtkWidget *widget,	struct ppref *priv) \
+slategtk_preferences_##WIDGET##_realize(GtkWidget *widget,	struct ppref *priv) \
 {									\
 	const char *OPTION;						\
-	OPTION = nsoption_charp(OPTION);				\
+	OPTION = slateoption_charp(OPTION);				\
 	if (OPTION != NULL) {						\
 		gtk_entry_set_text(GTK_ENTRY(widget), OPTION);		\
 	}								\
@@ -155,32 +155,32 @@ nsgtk_preferences_##WIDGET##_realize(GtkWidget *widget,	struct ppref *priv) \
 /* GTK module requires these to be exported symbols so these all need
  * forward declaring to avoid warnings
  */
-G_MODULE_EXPORT void nsgtk_preferences_comboProxyType_changed(GtkComboBox *combo, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_comboProxyType_realize(GtkWidget *widget, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_comboboxLoadImages_changed(GtkComboBox *combo, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_comboboxLoadImages_realize(GtkWidget *widget, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_comboDefault_changed(GtkComboBox *combo, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_comboDefault_realize(GtkWidget *widget, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_fontPreview_clicked(GtkButton *button, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_comboboxLanguage_changed(GtkComboBox *combo, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_comboboxLanguage_realize(GtkWidget *widget, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_checkShowSingleTab_toggled(GtkToggleButton *togglebutton, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_checkShowSingleTab_realize(GtkWidget *widget, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_comboTabPosition_changed(GtkComboBox *widget, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_comboTabPosition_realize(GtkWidget *widget, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_comboDeveloperView_changed(GtkComboBox *widget, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_comboDeveloperView_realize(GtkWidget *widget, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_comboButtonType_changed(GtkComboBox *widget, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_comboButtonType_realize(GtkWidget *widget, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_setCurrentPage_clicked(GtkButton *button, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_setDefaultPage_clicked(GtkButton *button, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_comboSearch_changed(GtkComboBox *widget, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_comboSearch_realize(GtkWidget *widget, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_fileChooserDownloads_selectionchanged(GtkFileChooser *chooser, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_fileChooserDownloads_realize(GtkWidget *widget, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_dialogPreferences_response(GtkDialog *dlg, gint resid);
-G_MODULE_EXPORT gboolean nsgtk_preferences_dialogPreferences_deleteevent(GtkDialog *dlg, struct ppref *priv);
-G_MODULE_EXPORT void nsgtk_preferences_dialogPreferences_destroy(GtkDialog *dlg, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_comboProxyType_changed(GtkComboBox *combo, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_comboProxyType_realize(GtkWidget *widget, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_comboboxLoadImages_changed(GtkComboBox *combo, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_comboboxLoadImages_realize(GtkWidget *widget, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_comboDefault_changed(GtkComboBox *combo, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_comboDefault_realize(GtkWidget *widget, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_fontPreview_clicked(GtkButton *button, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_comboboxLanguage_changed(GtkComboBox *combo, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_comboboxLanguage_realize(GtkWidget *widget, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_checkShowSingleTab_toggled(GtkToggleButton *togglebutton, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_checkShowSingleTab_realize(GtkWidget *widget, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_comboTabPosition_changed(GtkComboBox *widget, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_comboTabPosition_realize(GtkWidget *widget, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_comboDeveloperView_changed(GtkComboBox *widget, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_comboDeveloperView_realize(GtkWidget *widget, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_comboButtonType_changed(GtkComboBox *widget, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_comboButtonType_realize(GtkWidget *widget, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_setCurrentPage_clicked(GtkButton *button, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_setDefaultPage_clicked(GtkButton *button, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_comboSearch_changed(GtkComboBox *widget, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_comboSearch_realize(GtkWidget *widget, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_fileChooserDownloads_selectionchanged(GtkFileChooser *chooser, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_fileChooserDownloads_realize(GtkWidget *widget, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_dialogPreferences_response(GtkDialog *dlg, gint resid);
+G_MODULE_EXPORT gboolean slategtk_preferences_dialogPreferences_deleteevent(GtkDialog *dlg, struct ppref *priv);
+G_MODULE_EXPORT void slategtk_preferences_dialogPreferences_destroy(GtkDialog *dlg, struct ppref *priv);
 
 
 /********* PDF **********/
@@ -279,34 +279,34 @@ static void set_proxy_widgets_sensitivity(int proxyval, struct ppref *priv)
 }
 
 G_MODULE_EXPORT void
-nsgtk_preferences_comboProxyType_changed(GtkComboBox *combo, struct ppref *priv)
+slategtk_preferences_comboProxyType_changed(GtkComboBox *combo, struct ppref *priv)
 {
 	int proxy_sel;
 	proxy_sel = gtk_combo_box_get_active(combo);
 
 	switch (proxy_sel) {
 	case 0: /* no proxy */
-		nsoption_set_bool(http_proxy, false);
+		slateoption_set_bool(http_proxy, false);
 		break;
 
 	case 1: /* proxy with no auth */
-		nsoption_set_bool(http_proxy, true);
-		nsoption_set_int(http_proxy_auth, OPTION_HTTP_PROXY_AUTH_NONE);
+		slateoption_set_bool(http_proxy, true);
+		slateoption_set_int(http_proxy_auth, OPTION_HTTP_PROXY_AUTH_NONE);
 		break;
 
 	case 2: /* proxy with basic auth */
-		nsoption_set_bool(http_proxy, true);
-		nsoption_set_int(http_proxy_auth, OPTION_HTTP_PROXY_AUTH_BASIC);
+		slateoption_set_bool(http_proxy, true);
+		slateoption_set_int(http_proxy_auth, OPTION_HTTP_PROXY_AUTH_BASIC);
 		break;
 
 	case 3: /* proxy with ntlm auth */
-		nsoption_set_bool(http_proxy, true);
-		nsoption_set_int(http_proxy_auth, OPTION_HTTP_PROXY_AUTH_NTLM);
+		slateoption_set_bool(http_proxy, true);
+		slateoption_set_int(http_proxy_auth, OPTION_HTTP_PROXY_AUTH_NTLM);
 		break;
 
 	case 4: /* system proxy */
-		nsoption_set_bool(http_proxy, true);
-		nsoption_set_int(http_proxy_auth, OPTION_HTTP_PROXY_AUTH_NONE);
+		slateoption_set_bool(http_proxy, true);
+		slateoption_set_int(http_proxy_auth, OPTION_HTTP_PROXY_AUTH_NONE);
 		break;
 	}
 
@@ -314,23 +314,23 @@ nsgtk_preferences_comboProxyType_changed(GtkComboBox *combo, struct ppref *priv)
 }
 
 G_MODULE_EXPORT void
-nsgtk_preferences_comboProxyType_realize(GtkWidget *widget, struct ppref *priv)
+slategtk_preferences_comboProxyType_realize(GtkWidget *widget, struct ppref *priv)
 {
 	int proxytype = 0; /* no proxy by default */
 
-	if (nsoption_bool(http_proxy) == true) {
+	if (slateoption_bool(http_proxy) == true) {
 		/* proxy type combo box starts with disabled, to allow
 		 * for this the http_proxy option needs combining with
 		 * the http_proxy_auth option
 		 */
-		proxytype = nsoption_int(http_proxy_auth) + 1;
-		if (nsoption_charp(http_proxy_host) == NULL) {
+		proxytype = slateoption_int(http_proxy_auth) + 1;
+		if (slateoption_charp(http_proxy_host) == NULL) {
 			/* set to use a proxy without a host, turn proxy off */
 			proxytype = 0;
 		} else if (((proxytype == 2) ||
 			    (proxytype == 3)) &&
-			   ((nsoption_charp(http_proxy_auth_user) == NULL) ||
-			    (nsoption_charp(http_proxy_auth_pass) == NULL))) {
+			   ((slateoption_charp(http_proxy_auth_user) == NULL) ||
+			    (slateoption_charp(http_proxy_auth_pass) == NULL))) {
 			/* authentication selected with empty credentials, turn proxy off */
 			proxytype = 0;
 		}
@@ -414,7 +414,7 @@ TOGGLEBUTTON_SIGNALS(checkEnableJavascript, enable_javascript)
 
 /* load and display of images */
 G_MODULE_EXPORT void
-nsgtk_preferences_comboboxLoadImages_changed(GtkComboBox *combo,
+slategtk_preferences_comboboxLoadImages_changed(GtkComboBox *combo,
 					     struct ppref *priv)
 {
 	int img_sel;
@@ -423,36 +423,36 @@ nsgtk_preferences_comboboxLoadImages_changed(GtkComboBox *combo,
 	switch (img_sel) {
 	case 0:
 		/* background and foreground */
-		nsoption_set_bool(foreground_images, true);
-		nsoption_set_bool(background_images, true);
+		slateoption_set_bool(foreground_images, true);
+		slateoption_set_bool(background_images, true);
 		break;
 
 	case 1:
 		/* foreground only */
-		nsoption_set_bool(foreground_images, true);
-		nsoption_set_bool(background_images, false);
+		slateoption_set_bool(foreground_images, true);
+		slateoption_set_bool(background_images, false);
 		break;
 
 	case 2:
 		/* background only */
-		nsoption_set_bool(foreground_images, false);
-		nsoption_set_bool(background_images, true);
+		slateoption_set_bool(foreground_images, false);
+		slateoption_set_bool(background_images, true);
 		break;
 
 	case 3:
 		/* no images */
-		nsoption_set_bool(foreground_images, false);
-		nsoption_set_bool(background_images, false);
+		slateoption_set_bool(foreground_images, false);
+		slateoption_set_bool(background_images, false);
 		break;
 	}
 }
 
 G_MODULE_EXPORT void
-nsgtk_preferences_comboboxLoadImages_realize(GtkWidget *widget,
+slategtk_preferences_comboboxLoadImages_realize(GtkWidget *widget,
 					   struct ppref *priv)
 {
-	if (nsoption_bool(foreground_images)) {
-		if (nsoption_bool(background_images)) {
+	if (slateoption_bool(foreground_images)) {
+		if (slateoption_bool(background_images)) {
 			/* background and foreground */
 			gtk_combo_box_set_active(GTK_COMBO_BOX(widget), 0);
 		} else {
@@ -460,7 +460,7 @@ nsgtk_preferences_comboboxLoadImages_realize(GtkWidget *widget,
 			gtk_combo_box_set_active(GTK_COMBO_BOX(widget), 1);
 		}
 	} else {
-		if (nsoption_bool(background_images)) {
+		if (slateoption_bool(background_images)) {
 			/* background only */
 			gtk_combo_box_set_active(GTK_COMBO_BOX(widget), 2);
 		} else {
@@ -479,21 +479,21 @@ TOGGLEBUTTON_SIGNALS(checkEnableAnimations, animate_images)
 
 /* default font */
 G_MODULE_EXPORT void
-nsgtk_preferences_comboDefault_changed(GtkComboBox *combo, struct ppref *priv)
+slategtk_preferences_comboDefault_changed(GtkComboBox *combo, struct ppref *priv)
 {
 	int font_sel;
 	/* get the row number for the selection */
 	font_sel = gtk_combo_box_get_active(combo);
 	if ((font_sel >= 0) && (font_sel <= 4)) {
-		nsoption_set_int(font_default, font_sel);
+		slateoption_set_int(font_default, font_sel);
 	}
 }
 
 G_MODULE_EXPORT void
-nsgtk_preferences_comboDefault_realize(GtkWidget *widget, struct ppref *priv)
+slategtk_preferences_comboDefault_realize(GtkWidget *widget, struct ppref *priv)
 {
 	gtk_combo_box_set_active(GTK_COMBO_BOX(widget),
-				 nsoption_int(font_default));
+				 slateoption_int(font_default));
 }
 
 /* default font size */
@@ -501,9 +501,9 @@ SPINBUTTON_SIGNALS(spinDefaultSize, font_size, 10.0)
 
 /* preview - actually reflow all views */
 G_MODULE_EXPORT void
-nsgtk_preferences_fontPreview_clicked(GtkButton *button, struct ppref *priv)
+slategtk_preferences_fontPreview_clicked(GtkButton *button, struct ppref *priv)
 {
-	nsgtk_window_update_all();
+	slategtk_window_update_all();
 }
 
 
@@ -511,7 +511,7 @@ nsgtk_preferences_fontPreview_clicked(GtkButton *button, struct ppref *priv)
 
 /* accept language */
 G_MODULE_EXPORT void
-nsgtk_preferences_comboboxLanguage_changed(GtkComboBox *combo,
+slategtk_preferences_comboboxLanguage_changed(GtkComboBox *combo,
 					   struct ppref *priv)
 {
 	gchar *lang = NULL;
@@ -530,7 +530,7 @@ nsgtk_preferences_comboboxLanguage_changed(GtkComboBox *combo,
 	}
 
 	if (lang != NULL) {
-		nsoption_set_charp(accept_language, strdup(lang));
+		slateoption_set_charp(accept_language, strdup(lang));
 		g_free(lang);
 	}
 }
@@ -538,7 +538,7 @@ nsgtk_preferences_comboboxLanguage_changed(GtkComboBox *combo,
 /**
  * populate language combo from data
  */
-static nserror
+static slateerror
 comboboxLanguage_add_from_data(GtkListStore *liststore,
 			       GtkComboBox *combobox,
 			       const char *accept_language,
@@ -588,13 +588,13 @@ comboboxLanguage_add_from_data(GtkListStore *liststore,
 
 	gtk_combo_box_set_active(combobox, active_language);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * populate language combo from file
  */
-static nserror
+static slateerror
 comboboxLanguage_add_from_file(GtkListStore *liststore,
 			       GtkComboBox *combobox,
 			       const char *accept_language,
@@ -608,7 +608,7 @@ comboboxLanguage_add_from_file(GtkListStore *liststore,
 
 	fp = fopen(file_location, "r");
 	if (fp == NULL) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	gtk_list_store_clear(liststore);
@@ -643,17 +643,17 @@ comboboxLanguage_add_from_file(GtkListStore *liststore,
 
 	gtk_combo_box_set_active(combobox, active_language);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * Fill content language list store.
  */
 G_MODULE_EXPORT void
-nsgtk_preferences_comboboxLanguage_realize(GtkWidget *widget,
+slategtk_preferences_comboboxLanguage_realize(GtkWidget *widget,
 					   struct ppref *priv)
 {
-	nserror res;
+	slateerror res;
 	const uint8_t *data;
 	size_t data_size;
 	const char *languages_file;
@@ -665,14 +665,14 @@ nsgtk_preferences_comboboxLanguage_realize(GtkWidget *widget,
 	}
 
 	/* get current accept language */
-	accept_language = nsoption_charp(accept_language);
+	accept_language = slateoption_charp(accept_language);
 	if (accept_language == NULL) {
 		accept_language = "en";
 	}
 
 	/* attempt to read languages from inline resource */
-	res = nsgtk_data_from_resname("languages", &data, &data_size);
-	if (res == NSERROR_OK) {
+	res = slategtk_data_from_resname("languages", &data, &data_size);
+	if (res == SLATEERROR_OK) {
 		res = comboboxLanguage_add_from_data(priv->content_language,
 						     GTK_COMBO_BOX(widget),
 						     accept_language,
@@ -680,15 +680,15 @@ nsgtk_preferences_comboboxLanguage_realize(GtkWidget *widget,
 						     data_size);
 	} else {
 		/* attempt to read languages from file */
-		res = nsgtk_path_from_resname("languages", &languages_file);
-		if (res == NSERROR_OK) {
+		res = slategtk_path_from_resname("languages", &languages_file);
+		if (res == SLATEERROR_OK) {
 			res = comboboxLanguage_add_from_file(priv->content_language,
 					GTK_COMBO_BOX(widget),
 					accept_language,
 					languages_file);
 		}
 	}
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "error populatiung languages combo");
 	}
 }
@@ -700,20 +700,20 @@ nsgtk_preferences_comboboxLanguage_realize(GtkWidget *widget,
 
 /* always show tab bar */
 G_MODULE_EXPORT void
-nsgtk_preferences_checkShowSingleTab_toggled(GtkToggleButton *togglebutton,
+slategtk_preferences_checkShowSingleTab_toggled(GtkToggleButton *togglebutton,
 					     struct ppref *priv)
 {
-	nsoption_set_bool(show_single_tab,
+	slateoption_set_bool(show_single_tab,
 			  gtk_toggle_button_get_active(togglebutton));
-	nsgtk_window_update_all();
+	slategtk_window_update_all();
 }
 
 G_MODULE_EXPORT void
-nsgtk_preferences_checkShowSingleTab_realize(GtkWidget *widget,
+slategtk_preferences_checkShowSingleTab_realize(GtkWidget *widget,
 				     struct ppref *priv)
 {
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(widget),
-				     nsoption_bool(show_single_tab));
+				     slateoption_bool(show_single_tab));
 }
 
 /* switch to newly opened tabs immediately */
@@ -724,41 +724,41 @@ TOGGLEBUTTON_SIGNALS(checkNewBlank, new_blank)
 
 /* tab position */
 G_MODULE_EXPORT void
-nsgtk_preferences_comboTabPosition_changed(GtkComboBox *widget,
+slategtk_preferences_comboTabPosition_changed(GtkComboBox *widget,
 					   struct ppref *priv)
 {
 	/* set the option */
-	nsoption_set_int(position_tab, gtk_combo_box_get_active(widget));
+	slateoption_set_int(position_tab, gtk_combo_box_get_active(widget));
 
 	/* update all windows */
-	nsgtk_window_update_all();
+	slategtk_window_update_all();
 }
 
 G_MODULE_EXPORT void
-nsgtk_preferences_comboTabPosition_realize(GtkWidget *widget,
+slategtk_preferences_comboTabPosition_realize(GtkWidget *widget,
 					   struct ppref *priv)
 {
 	gtk_combo_box_set_active(GTK_COMBO_BOX(widget),
-				 nsoption_int(position_tab));
+				 slateoption_int(position_tab));
 }
 
 /* Tools */
 
 /* developer view opening */
 G_MODULE_EXPORT void
-nsgtk_preferences_comboDeveloperView_changed(GtkComboBox *widget,
+slategtk_preferences_comboDeveloperView_changed(GtkComboBox *widget,
 					   struct ppref *priv)
 {
 	/* set the option */
-	nsoption_set_int(developer_view, gtk_combo_box_get_active(widget));
+	slateoption_set_int(developer_view, gtk_combo_box_get_active(widget));
 }
 
 G_MODULE_EXPORT void
-nsgtk_preferences_comboDeveloperView_realize(GtkWidget *widget,
+slategtk_preferences_comboDeveloperView_realize(GtkWidget *widget,
 					   struct ppref *priv)
 {
 	gtk_combo_box_set_active(GTK_COMBO_BOX(widget),
-				 nsoption_int(developer_view));
+				 slateoption_int(developer_view));
 }
 
 
@@ -771,21 +771,21 @@ TOGGLEBUTTON_SIGNALS(checkDisplayRecentURLs, url_suggestion)
 
 /* button position */
 G_MODULE_EXPORT void
-nsgtk_preferences_comboButtonType_changed(GtkComboBox *widget,
+slategtk_preferences_comboButtonType_changed(GtkComboBox *widget,
 					   struct ppref *priv)
 {
-	nsoption_set_int(button_type, gtk_combo_box_get_active(widget) + 1);
+	slateoption_set_int(button_type, gtk_combo_box_get_active(widget) + 1);
 
 	/* update all windows to adopt change */
-	nsgtk_window_update_all();
+	slategtk_window_update_all();
 }
 
 G_MODULE_EXPORT void
-nsgtk_preferences_comboButtonType_realize(GtkWidget *widget,
+slategtk_preferences_comboButtonType_realize(GtkWidget *widget,
 					   struct ppref *priv)
 {
 	gtk_combo_box_set_active(GTK_COMBO_BOX(widget),
-				 nsoption_int(button_type) - 1);
+				 slateoption_int(button_type) - 1);
 }
 
 
@@ -799,25 +799,25 @@ ENTRY_SIGNALS(entryHomePageURL, homepage_url)
 
 /* put current page into homepage url */
 G_MODULE_EXPORT void
-nsgtk_preferences_setCurrentPage_clicked(GtkButton *button, struct ppref *priv)
+slategtk_preferences_setCurrentPage_clicked(GtkButton *button, struct ppref *priv)
 {
-	const gchar *url = nsurl_access(browser_window_access_url(priv->bw));
+	const gchar *url = slateurl_access(browser_window_access_url(priv->bw));
 
 	if (priv->entryHomePageURL != NULL) {
 		gtk_entry_set_text(GTK_ENTRY(priv->entryHomePageURL), url);
-		nsoption_set_charp(homepage_url, strdup(url));
+		slateoption_set_charp(homepage_url, strdup(url));
 	}
 }
 
 /* put default page into homepage */
 G_MODULE_EXPORT void
-nsgtk_preferences_setDefaultPage_clicked(GtkButton *button, struct ppref *priv)
+slategtk_preferences_setDefaultPage_clicked(GtkButton *button, struct ppref *priv)
 {
-	const gchar *url = NETSURF_HOMEPAGE;
+	const gchar *url = SLATE_HOMEPAGE;
 
 	if (priv->entryHomePageURL != NULL) {
 		gtk_entry_set_text(GTK_ENTRY(priv->entryHomePageURL), url);
-		nsoption_set_charp(homepage_url, strdup(url));
+		slateoption_set_charp(homepage_url, strdup(url));
 	}
 }
 
@@ -828,7 +828,7 @@ TOGGLEBUTTON_SIGNALS(checkUrlSearch, search_url_bar)
 
 /* provider combo */
 G_MODULE_EXPORT void
-nsgtk_preferences_comboSearch_changed(GtkComboBox *widget, struct ppref *priv)
+slategtk_preferences_comboSearch_changed(GtkComboBox *widget, struct ppref *priv)
 {
 	gboolean set;
 	GtkTreeIter iter;
@@ -856,11 +856,11 @@ nsgtk_preferences_comboSearch_changed(GtkComboBox *widget, struct ppref *priv)
 	}
 
 	/* set the option which takes owership of the provider allocation */
-	nsoption_set_charp(search_web_provider, provider);
+	slateoption_set_charp(search_web_provider, provider);
 }
 
 G_MODULE_EXPORT void
-nsgtk_preferences_comboSearch_realize(GtkWidget *widget, struct ppref *priv)
+slategtk_preferences_comboSearch_realize(GtkWidget *widget, struct ppref *priv)
 {
 	int iter;
 	const char *name;
@@ -872,7 +872,7 @@ nsgtk_preferences_comboSearch_realize(GtkWidget *widget, struct ppref *priv)
 	}
 	gtk_list_store_clear(priv->search_providers);
 
-	provider = nsoption_charp(search_web_provider);
+	provider = slateoption_charp(search_web_provider);
 
 	iter = search_web_iterate_providers(-1, &name);
 	while (iter != -1) {
@@ -905,21 +905,21 @@ TOGGLEBUTTON_SIGNALS(checkRequestOverwrite, request_overwrite)
  * does update frequently often with the same data.
  */
 G_MODULE_EXPORT void
-nsgtk_preferences_fileChooserDownloads_selectionchanged(GtkFileChooser *chooser,
+slategtk_preferences_fileChooserDownloads_selectionchanged(GtkFileChooser *chooser,
 					       struct ppref *priv)
 {
 	gchar *dir;
 	dir = gtk_file_chooser_get_filename(chooser);
-	nsoption_set_charp(downloads_directory, strdup(dir));
+	slateoption_set_charp(downloads_directory, strdup(dir));
 	g_free(dir);
 }
 
 G_MODULE_EXPORT void
-nsgtk_preferences_fileChooserDownloads_realize(GtkWidget *widget,
+slategtk_preferences_fileChooserDownloads_realize(GtkWidget *widget,
 					       struct ppref *priv)
 {
 	gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(widget),
-					   nsoption_charp(downloads_directory));
+					   slateoption_charp(downloads_directory));
 }
 
 
@@ -927,14 +927,14 @@ nsgtk_preferences_fileChooserDownloads_realize(GtkWidget *widget,
 
 /* dialog close and destroy events */
 G_MODULE_EXPORT void
-nsgtk_preferences_dialogPreferences_response(GtkDialog *dlg, gint resid)
+slategtk_preferences_dialogPreferences_response(GtkDialog *dlg, gint resid)
 {
 	char *choices = NULL;
 
 	if (resid == GTK_RESPONSE_CLOSE) {
-		netsurf_mkpath(&choices, NULL, 2, nsgtk_config_home, "Choices");
+		slate_mkpath(&choices, NULL, 2, slategtk_config_home, "Choices");
 		if (choices != NULL) {
-			nsoption_write(choices, NULL, NULL);
+			slateoption_write(choices, NULL, NULL);
 			free(choices);
 		}
 		gtk_widget_hide(GTK_WIDGET(dlg));
@@ -942,14 +942,14 @@ nsgtk_preferences_dialogPreferences_response(GtkDialog *dlg, gint resid)
 }
 
 G_MODULE_EXPORT gboolean
-nsgtk_preferences_dialogPreferences_deleteevent(GtkDialog *dlg,
+slategtk_preferences_dialogPreferences_deleteevent(GtkDialog *dlg,
 						struct ppref *priv)
 {
 	char *choices = NULL;
 
-	netsurf_mkpath(&choices, NULL, 2, nsgtk_config_home, "Choices");
+	slate_mkpath(&choices, NULL, 2, slategtk_config_home, "Choices");
 	if (choices != NULL) {
-		nsoption_write(choices, NULL, NULL);
+		slateoption_write(choices, NULL, NULL);
 		free(choices);
 	}
 
@@ -962,24 +962,24 @@ nsgtk_preferences_dialogPreferences_deleteevent(GtkDialog *dlg,
 }
 
 G_MODULE_EXPORT void
-nsgtk_preferences_dialogPreferences_destroy(GtkDialog *dlg, struct ppref *priv)
+slategtk_preferences_dialogPreferences_destroy(GtkDialog *dlg, struct ppref *priv)
 {
 	char *choices = NULL;
 
-	netsurf_mkpath(&choices, NULL, 2, nsgtk_config_home, "Choices");
+	slate_mkpath(&choices, NULL, 2, slategtk_config_home, "Choices");
 	if (choices != NULL) {
-		nsoption_write(choices, NULL, NULL);
+		slateoption_write(choices, NULL, NULL);
 		free(choices);
 	}
 }
 
 
 /* exported interface documented in gtk/preferences.h */
-GtkWidget* nsgtk_preferences(struct browser_window *bw, GtkWindow *parent)
+GtkWidget* slategtk_preferences(struct browser_window *bw, GtkWindow *parent)
 {
 	GtkBuilder *preferences_builder;
 	struct ppref *priv = &ppref;
-	nserror res;
+	slateerror res;
 
 	priv->bw = bw; /* for setting "current" page */
 
@@ -989,8 +989,8 @@ GtkWidget* nsgtk_preferences(struct browser_window *bw, GtkWindow *parent)
 		return GTK_WIDGET(priv->dialog);
 	}
 
-	res = nsgtk_builder_new_from_resname("options", &preferences_builder);
-	if (res != NSERROR_OK) {
+	res = slategtk_builder_new_from_resname("options", &preferences_builder);
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Preferences UI builder init failed");
 		return NULL;
 	}

@@ -1,7 +1,7 @@
 /*
  * Copyright 2003 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * HTML layout private interface.
  */
 
-#ifndef NETSURF_HTML_LAYOUT_INTERNAL_H
-#define NETSURF_HTML_LAYOUT_INTERNAL_H
+#ifndef SLATE_HTML_LAYOUT_INTERNAL_H
+#define SLATE_HTML_LAYOUT_INTERNAL_H
 
 #define AUTO INT_MIN
 

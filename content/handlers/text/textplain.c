@@ -2,7 +2,7 @@
  * Copyright 2006 James Bursa <bursa@users.sourceforge.net>
  * Copyright 2006 Adrian Lees <adrianl@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,12 +33,12 @@
 #include "utils/messages.h"
 #include "utils/utils.h"
 #include "utils/utf8.h"
-#include "utils/nsoption.h"
-#include "netsurf/content.h"
-#include "netsurf/keypress.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/plotters.h"
-#include "netsurf/layout.h"
+#include "utils/slateoption.h"
+#include "slate/content.h"
+#include "slate/keypress.h"
+#include "slate/browser_window.h"
+#include "slate/plotters.h"
+#include "slate/layout.h"
 #include "content/content_protected.h"
 #include "content/content_factory.h"
 #include "content/hlcache.h"
@@ -131,16 +131,16 @@ textplain_charset_hack(const uint8_t *data,
  *
  * \param[in] c content object.
  * \param[in] encoding the encoding of the content.
- * \return NSERROR_OK else appropriate error code.
+ * \return SLATEERROR_OK else appropriate error code.
  */
-static nserror
+static slateerror
 textplain_create_internal(textplain_content *c, lwc_string *encoding)
 {
 	char *utf8_data;
 	parserutils_inputstream *stream;
 	parserutils_error error;
 
-	textplain_style.size = (nsoption_int(font_size) * PLOT_STYLE_SCALE) / 10;
+	textplain_style.size = (slateoption_int(font_size) * PLOT_STYLE_SCALE) / 10;
 
 	utf8_data = malloc(CHUNK);
 	if (utf8_data == NULL)
@@ -169,19 +169,19 @@ textplain_create_internal(textplain_content *c, lwc_string *encoding)
 	c->bw = NULL;
 	c->sel = selection_create((struct content *)c);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 
 no_memory:
-	content_broadcast_error(&c->base, NSERROR_NOMEM, NULL);
+	content_broadcast_error(&c->base, SLATEERROR_NOMEM, NULL);
 
-	return NSERROR_NOMEM;
+	return SLATEERROR_NOMEM;
 }
 
 
 /**
  * Create a CONTENT_TEXTPLAIN.
  */
-static nserror
+static slateerror
 textplain_create(const content_handler *handler,
 		 lwc_string *imime_type,
 		 const struct http_parameter *params,
@@ -191,29 +191,29 @@ textplain_create(const content_handler *handler,
 		 struct content **c)
 {
 	textplain_content *text;
-	nserror error;
+	slateerror error;
 	lwc_string *encoding;
 
 	text = calloc(1, sizeof(textplain_content));
 	if (text == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	error = content__init(&text->base, handler, imime_type, params,
 			      llcache, fallback_charset, quirks);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(text);
 		return error;
 	}
 
 	error = http_parameter_list_find_item(params, corestring_lwc_charset,
 					      &encoding);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		encoding = lwc_string_ref(textplain_default_charset);
 	}
 
 	error = textplain_create_internal(text, encoding);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		lwc_string_unref(encoding);
 		free(text);
 		return error;
@@ -223,7 +223,7 @@ textplain_create(const content_handler *handler,
 
 	*c = (struct content *) text;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -347,7 +347,7 @@ textplain_process_data(struct content *c, const char *data, unsigned int size)
 	return true;
 
 no_memory:
-	content_broadcast_error(c, NSERROR_NOMEM, NULL);
+	content_broadcast_error(c, SLATEERROR_NOMEM, NULL);
 	return false;
 }
 
@@ -409,7 +409,7 @@ static void textplain_reformat(struct content *c, int width, int height)
 	size_t columns = 80;
 	int character_width;
 	size_t line_start;
-	nserror res;
+	slateerror res;
 
 	NSLOG(netsurf, INFO, "content %p w:%d h:%d", c, width, height);
 
@@ -419,7 +419,7 @@ static void textplain_reformat(struct content *c, int width, int height)
 	res = guit->layout->width(&textplain_style,
 				  "ABCDEFGH", 8,
 				  &character_width);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return;
 	}
 
@@ -543,27 +543,27 @@ static void textplain_destroy(struct content *c)
 }
 
 
-static nserror textplain_clone(const struct content *old, struct content **newc)
+static slateerror textplain_clone(const struct content *old, struct content **newc)
 {
 	const textplain_content *old_text = (textplain_content *) old;
 	textplain_content *text;
-	nserror error;
+	slateerror error;
 	const uint8_t *data;
 	size_t size;
 
 	text = calloc(1, sizeof(textplain_content));
 	if (text == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__clone(old, &text->base);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&text->base);
 		return error;
 	}
 
 	/* Simply replay create/process/convert */
 	error = textplain_create_internal(text, old_text->encoding);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&text->base);
 		return error;
 	}
@@ -574,7 +574,7 @@ static nserror textplain_clone(const struct content *old, struct content **newc)
 					   (const char *)data,
 					   size) == false) {
 			content_destroy(&text->base);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 	}
 
@@ -582,11 +582,11 @@ static nserror textplain_clone(const struct content *old, struct content **newc)
 	    old->status == CONTENT_STATUS_DONE) {
 		if (textplain_convert(&text->base) == false) {
 			content_destroy(&text->base);
-			return NSERROR_CLONE_FAILED;
+			return SLATEERROR_CLONE_FAILED;
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -693,7 +693,7 @@ textplain_offset_from_coords(struct content *c, int x, int y, int dir)
  * \param x	  coordinate of mouse
  * \param y	  coordinate of mouse
  */
-static nserror
+static slateerror
 textplain_mouse_action(struct content *c,
 		       struct browser_window *bw,
 		       browser_mouse_state mouse,
@@ -730,7 +730,7 @@ textplain_mouse_action(struct content *c,
 	msg_data.pointer = pointer;
 	content_broadcast(c, CONTENT_MSG_POINTER, &msg_data);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -743,7 +743,7 @@ textplain_mouse_action(struct content *c,
  * \param  x	  coordinate of mouse
  * \param  y	  coordinate of mouse
  */
-static nserror
+static slateerror
 textplain_mouse_track(struct content *c,
 		      struct browser_window *bw,
 		      browser_mouse_state mouse,
@@ -782,7 +782,7 @@ textplain_mouse_track(struct content *c,
 		break;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -853,7 +853,7 @@ text_draw(const char *utf8_text,
 {
 	bool highlighted = false;
 	plot_font_style_t plot_fstyle;
-	nserror res;
+	slateerror res;
 
 	/* Need scaled text size to pass to plotters */
 	plot_fstyle = textplain_style;
@@ -907,7 +907,7 @@ text_draw(const char *utf8_text,
 						  utf8_text,
 						  start_idx,
 						  &startx);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				startx = 0;
 			}
 
@@ -915,7 +915,7 @@ text_draw(const char *utf8_text,
 						  utf8_text,
 						  endtxt_idx,
 						  &endx);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				endx = 0;
 			}
 
@@ -932,7 +932,7 @@ text_draw(const char *utf8_text,
 					      y + (int)(height * 0.75 * scale),
 					      utf8_text,
 					      start_idx);
-				if (res != NSERROR_OK) {
+				if (res != SLATEERROR_OK) {
 					return false;
 				}
 			}
@@ -945,7 +945,7 @@ text_draw(const char *utf8_text,
 			r.x1 = x + endx;
 			r.y1 = y + height * scale;
 			res = ctx->plot->rectangle(ctx, &pstyle_fill_hback, &r);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return false;
 			}
 
@@ -959,7 +959,7 @@ text_draw(const char *utf8_text,
 					r.x1 = px1;
 					r.y1 = clip->y1;
 					res = ctx->plot->clip(ctx, &r);
-					if (res != NSERROR_OK) {
+					if (res != SLATEERROR_OK) {
 						return false;
 					}
 
@@ -980,7 +980,7 @@ text_draw(const char *utf8_text,
 					     x,
 					     y + (int)(height * 0.75 * scale),
 					     utf8_text,
-					     endtxt_idx) != NSERROR_OK)) {
+					     endtxt_idx) != SLATEERROR_OK)) {
 				return false;
 			}
 
@@ -994,7 +994,7 @@ text_draw(const char *utf8_text,
 					r.x1 = clip->x1;
 					r.y1 = clip->y1;
 					res = ctx->plot->clip(ctx, &r);
-					if (res != NSERROR_OK) {
+					if (res != SLATEERROR_OK) {
 						return false;
 					}
 
@@ -1006,14 +1006,14 @@ text_draw(const char *utf8_text,
 							      y + (int)(height * 0.75 * scale),
 							      utf8_text,
 							      utf8_len);
-					if (res != NSERROR_OK) {
+					if (res != SLATEERROR_OK) {
 						return false;
 					}
 				}
 			}
 
 			if (clip_changed &&
-			    (ctx->plot->clip(ctx, clip) != NSERROR_OK)) {
+			    (ctx->plot->clip(ctx, clip) != SLATEERROR_OK)) {
 				return false;
 			}
 		}
@@ -1026,7 +1026,7 @@ text_draw(const char *utf8_text,
 				      y + (int) (height * 0.75 * scale),
 				      utf8_text,
 				      utf8_len);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return false;
 		}
 	}
@@ -1065,7 +1065,7 @@ textplain_redraw(struct content *c,
 	struct textplain_line *line = text->physical_line;
 	size_t length;
 	plot_style_t *plot_style_highlight;
-	nserror res;
+	slateerror res;
 
 	if (line0 < 0)
 		line0 = 0;
@@ -1079,7 +1079,7 @@ textplain_redraw(struct content *c,
 		line1 = line0;
 
 	res = ctx->plot->rectangle(ctx, plot_style_fill_white, clip);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return false;
 	}
 
@@ -1113,7 +1113,7 @@ textplain_redraw(struct content *c,
 			size_t next_offset = offset;
 			int width;
 			int ntx;
-			nserror res;
+			slateerror res;
 
 			while ((next_offset < length) &&
 			       (text_d[next_offset] != '\t')) {
@@ -1144,7 +1144,7 @@ textplain_redraw(struct content *c,
 						  next_offset - offset,
 						  &width);
 			/* locate end of string and align to next tab position */
-			if (res == NSERROR_OK) {
+			if (res == SLATEERROR_OK) {
 				tx += (int)(width * data->scale);
 			}
 
@@ -1193,7 +1193,7 @@ textplain_redraw(struct content *c,
 					res = ctx->plot->rectangle(ctx,
 								   plot_style_highlight,
 								   &rect);
-					if (res != NSERROR_OK) {
+					if (res != SLATEERROR_OK) {
 						return false;
 					}
 				}
@@ -1211,7 +1211,7 @@ textplain_redraw(struct content *c,
 /**
  * Handle a window containing a CONTENT_TEXTPLAIN being opened.
  */
-static nserror
+static slateerror
 textplain_open(struct content *c,
 	       struct browser_window *bw,
 	       struct content *page,
@@ -1224,20 +1224,20 @@ textplain_open(struct content *c,
 	/* text selection */
 	selection_init(text->sel);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * Handle a window containing a CONTENT_TEXTPLAIN being closed.
  */
-static nserror textplain_close(struct content *c)
+static slateerror textplain_close(struct content *c)
 {
 	textplain_content *text = (textplain_content *) c;
 
 	text->bw = NULL;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1388,9 +1388,9 @@ static int textplain_find_line(struct content *c, unsigned offset)
  * \param pattern the string pattern to search for
  * \param p_len pattern length
  * \param case_sens whether to perform a case sensitive search
- * \return NSERROR_OK on success else error code on faliure
+ * \return SLATEERROR_OK on success else error code on faliure
  */
-static nserror
+static slateerror
 textplain_textsearch_find(struct content *c,
 			  struct textsearch_context *context,
 			  const char *pattern,
@@ -1399,7 +1399,7 @@ textplain_textsearch_find(struct content *c,
 {
 	int nlines = textplain_line_count(c);
 	int line;
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 
 	for(line = 0; line < nlines; line++) {
 		size_t offset, length;
@@ -1430,7 +1430,7 @@ textplain_textsearch_find(struct content *c,
 						start_idx + match_length,
 						NULL,
 						NULL);
-				if (res != NSERROR_OK) {
+				if (res != SLATEERROR_OK) {
 					return res;
 				}
 
@@ -1548,7 +1548,7 @@ textplain_get_raw_data(struct content *c,
 /**
  * get bounds of a free text search match
  */
-static nserror
+static slateerror
 textplain_textsearch_bounds(struct content *c,
 			    unsigned start_idx,
 			    unsigned end_idx,
@@ -1558,14 +1558,14 @@ textplain_textsearch_bounds(struct content *c,
 {
 	textplain_coords_from_range(c, start_idx, end_idx, bounds);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * invalidate a region based on offsets into the text cauing a redraw
  */
-static nserror
+static slateerror
 textplain_textselection_redraw(struct content *c,
 			       unsigned start_idx,
 			       unsigned end_idx)
@@ -1573,17 +1573,17 @@ textplain_textselection_redraw(struct content *c,
 	struct rect r;
 
 	if (end_idx <= start_idx) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	textplain_coords_from_range(c, start_idx, end_idx, &r);
 
 	content__request_redraw(c, r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror
+static slateerror
 textplain_textselection_copy(struct content *c,
 			     unsigned start_idx,
 			     unsigned end_idx,
@@ -1598,9 +1598,9 @@ textplain_textselection_copy(struct content *c,
 		res = selection_string_append(text, length, false, NULL, selstr);
 	}
 	if (res == false) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1610,13 +1610,13 @@ textplain_textselection_copy(struct content *c,
  * \param[in] c Content to retrieve size of
  * \return Size, in bytes, of data
  */
-static nserror
+static slateerror
 textplain_textselection_get_end(struct content *c, unsigned *end_idx)
 {
 	textplain_content *text = (textplain_content *)c;
 
 	*end_idx = text->utf8_data_size;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1649,27 +1649,27 @@ static const content_handler textplain_content_handler = {
 
 
 /* exported interface documented in html/textplain.h */
-nserror textplain_init(void)
+slateerror textplain_init(void)
 {
 	lwc_error lerror;
-	nserror error;
+	slateerror error;
 
 	lerror = lwc_intern_string("Windows-1252",
 				   SLEN("Windows-1252"),
 				   &textplain_default_charset);
 	if (lerror != lwc_error_ok) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	error = content_factory_register_handler("text/plain",
 						 &textplain_content_handler);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		lwc_string_unref(textplain_default_charset);
 	}
 
 	error = content_factory_register_handler("application/json",
 						 &textplain_content_handler);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		lwc_string_unref(textplain_default_charset);
 	}
 

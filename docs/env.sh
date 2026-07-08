@@ -293,14 +293,14 @@ fi
 # Setup GTK major version if required (either 2 or 3 currently)
 case "${TARGET_TOOLKIT}" in
     gtk2)
-	NETSURF_GTK_MAJOR=2
+	SLATE_GTK_MAJOR=2
 	;;
     gtk3)
-	NETSURF_GTK_MAJOR=3
+	SLATE_GTK_MAJOR=3
 	;;
     *)
-	if [ "x${NETSURF_GTK_MAJOR}" = "x" ]; then
-	    NETSURF_GTK_MAJOR=2
+	if [ "x${SLATE_GTK_MAJOR}" = "x" ]; then
+	    SLATE_GTK_MAJOR=2
 	fi
 	;;
 esac
@@ -316,13 +316,13 @@ export BUILD_PREFIX=${TARGET_WORKSPACE}/inst-${BUILD}
 export PKG_CONFIG_PATH=${PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH}::
 export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${PREFIX}/lib
 export PATH=${PATH}:${BUILD_PREFIX}/bin
-export NETSURF_GTK_MAJOR
+export SLATE_GTK_MAJOR
 
 # make tool
 MAKE=make
 
 # NetSurf GIT repositories
-NS_GIT="${REPO_BASE_URI:-git://git.netsurf-browser.org}"
+NS_GIT="${REPO_BASE_URI:-git://git.slate-browser.org}"
 
 # Buildsystem: everything depends on this
 NS_BUILDSYSTEM="buildsystem"

@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _NETSURF_WINDOWS_FILETYPE_H_
-#define _NETSURF_WINDOWS_FILETYPE_H_
+#ifndef _SLATE_WINDOWS_FILETYPE_H_
+#define _SLATE_WINDOWS_FILETYPE_H_
 
 /**
  * win32 API fetch operation table
@@ -32,9 +32,9 @@ extern struct gui_fetch_table *win32_fetch_table;
  * \param path The path of the resource to locate.
  * \param data Pointer to recive data into
  * \param data_len Pointer to length of returned data
- * \return NSERROR_OK and the data and length values updated
+ * \return SLATEERROR_OK and the data and length values updated
  *         else appropriate error code.
  */
-nserror nsw32_get_resource_data(const char *path, const uint8_t **data_out, size_t *data_len_out);
+slateerror slatew32_get_resource_data(const char *path, const uint8_t **data_out, size_t *data_len_out);
 
 #endif

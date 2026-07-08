@@ -3,7 +3,7 @@
  * Copyright 2004 Richard Wilson <not_ginger_matt@users.sourceforge.net>
  * Copyright 2008 Sean Fox <dyntryx@gmail.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -42,10 +42,10 @@
 #include "utils/log.h"
 #include "utils/utils.h"
 #include "utils/messages.h"
-#include "utils/nsoption.h"
-#include "netsurf/misc.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/content.h"
+#include "utils/slateoption.h"
+#include "slate/misc.h"
+#include "slate/bitmap.h"
+#include "slate/content.h"
 #include "content/llcache.h"
 #include "content/content.h"
 #include "content/content_protected.h"
@@ -63,16 +63,16 @@ typedef struct gif_content {
 	uint32_t current_frame;   /**< current frame to display [0...(max-1)] */
 } gif_content;
 
-static inline nserror gif__nsgif_error_to_ns(nsgif_error gif_res)
+static inline slateerror gif__nsgif_error_to_ns(nsgif_error gif_res)
 {
-	nserror err;
+	slateerror err;
 
 	switch (gif_res) {
 	case NSGIF_ERR_OOM:
-		err = NSERROR_NOMEM;
+		err = SLATEERROR_NOMEM;
 		break;
 	default:
-		err = NSERROR_GIF_ERROR;
+		err = SLATEERROR_GIF_ERROR;
 		break;
 	}
 
@@ -108,7 +108,7 @@ static nsgif_bitmap_fmt_t nsgif__get_bitmap_format(void)
 	return (nsgif_bitmap_fmt_t)bitmap_fmt.layout;
 }
 
-static nserror gif_create_gif_data(gif_content *c)
+static slateerror gif_create_gif_data(gif_content *c)
 {
 	nsgif_error gif_res;
 	const nsgif_bitmap_cb_vt gif_bitmap_callbacks = {
@@ -123,42 +123,42 @@ static nserror gif_create_gif_data(gif_content *c)
 	gif_res = nsgif_create(&gif_bitmap_callbacks,
 			nsgif__get_bitmap_format(), &c->gif);
 	if (gif_res != NSGIF_OK) {
-		nserror err = gif__nsgif_error_to_ns(gif_res);
+		slateerror err = gif__nsgif_error_to_ns(gif_res);
 		content_broadcast_error(&c->base, err, NULL);
 		return err;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror gif_create(const content_handler *handler,
+static slateerror gif_create(const content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		llcache_handle *llcache, const char *fallback_charset,
 		bool quirks, struct content **c)
 {
 	gif_content *result;
-	nserror error;
+	slateerror error;
 
 	result = calloc(1, sizeof(gif_content));
 	if (result == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__init(&result->base, handler, imime_type, params,
 			llcache, fallback_charset, quirks);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(result);
 		return error;
 	}
 
 	error = gif_create_gif_data(result);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(result);
 		return error;
 	}
 
 	*c = (struct content *) result;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -173,7 +173,7 @@ static void gif_animate_cb(void *p);
  *
  * \param p  The content to animate
 */
-static nserror gif__animate(gif_content *gif, bool redraw)
+static slateerror gif__animate(gif_content *gif, bool redraw)
 {
 	nsgif_error gif_res;
 	nsgif_rect_t rect;
@@ -188,7 +188,7 @@ static nserror gif__animate(gif_content *gif, bool redraw)
 	gif->current_frame = f;
 
 	/* Continue animating if we should */
-	if (nsoption_bool(animate_images) && delay != NSGIF_INFINITE) {
+	if (slateoption_bool(animate_images) && delay != NSGIF_INFINITE) {
 		guit->misc->schedule(delay * 10, gif_animate_cb, gif);
 	}
 
@@ -204,7 +204,7 @@ static nserror gif__animate(gif_content *gif, bool redraw)
 		content_broadcast(&gif->base, CONTENT_MSG_REDRAW, &data);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void gif_animate_cb(void *p)
@@ -220,7 +220,7 @@ static bool gif_convert(struct content *c)
 	const nsgif_info_t *gif_info;
 	const uint8_t *data;
 	nsgif_error gif_err;
-	nserror err;
+	slateerror err;
 	size_t size;
 	char *title;
 
@@ -257,7 +257,7 @@ static bool gif_convert(struct content *c)
 
 	/* set title text */
 	title = messages_get_buff("GIFTitle",
-			nsurl_access_leaf(llcache_handle_get_url(c->llcache)),
+			slateurl_access_leaf(llcache_handle_get_url(c->llcache)),
 			c->width, c->height);
 	if (title != NULL) {
 		content__set_title(c, title);
@@ -265,8 +265,8 @@ static bool gif_convert(struct content *c)
 	}
 
 	err = gif__animate(gif, false);
-	if (err != NSERROR_OK) {
-		content_broadcast_error(c, NSERROR_GIF_ERROR, NULL);
+	if (err != SLATEERROR_OK) {
+		content_broadcast_error(c, SLATEERROR_GIF_ERROR, NULL);
 		return false;
 	}
 
@@ -289,7 +289,7 @@ static nsgif_error gif_get_frame(gif_content *gif,
 		nsgif_bitmap_t **bitmap)
 {
 	uint32_t current_frame = gif->current_frame;
-	if (!nsoption_bool(animate_images)) {
+	if (!slateoption_bool(animate_images)) {
 		current_frame = 0;
 	}
 
@@ -318,24 +318,24 @@ static void gif_destroy(struct content *c)
 	nsgif_destroy(gif->gif);
 }
 
-static nserror gif_clone(const struct content *old, struct content **newc)
+static slateerror gif_clone(const struct content *old, struct content **newc)
 {
 	gif_content *gif;
-	nserror error;
+	slateerror error;
 
 	gif = calloc(1, sizeof(gif_content));
 	if (gif == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__clone(old, &gif->base);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&gif->base);
 		return error;
 	}
 
 	/* Simply replay creation and conversion of content */
 	error = gif_create_gif_data(gif);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&gif->base);
 		return error;
 	}
@@ -344,13 +344,13 @@ static nserror gif_clone(const struct content *old, struct content **newc)
 			old->status == CONTENT_STATUS_DONE) {
 		if (gif_convert(&gif->base) == false) {
 			content_destroy(&gif->base);
-			return NSERROR_CLONE_FAILED;
+			return SLATEERROR_CLONE_FAILED;
 		}
 	}
 
 	*newc = (struct content *) gif;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void gif_add_user(struct content *c)

@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 Vincent Sanders <vince@simtec.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,10 +16,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _NETSURF_WINDOWS_DRAWABLE_H_
-#define _NETSURF_WINDOWS_DRAWABLE_H_
+#ifndef _SLATE_WINDOWS_DRAWABLE_H_
+#define _SLATE_WINDOWS_DRAWABLE_H_
 
-nserror nsws_create_drawable_class(HINSTANCE hinstance);
+slateerror nsws_create_drawable_class(HINSTANCE hinstance);
 HWND nsws_window_create_drawable(HINSTANCE hinstance, HWND hparent, struct gui_window *gw);
 
-#endif /* _NETSURF_WINDOWS_DRAWABLE_H_ */
+#endif /* _SLATE_WINDOWS_DRAWABLE_H_ */

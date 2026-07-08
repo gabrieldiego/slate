@@ -3,7 +3,7 @@
  * Copyright 2009 Stephen Fellner <sf.amiga@gmail.com>
  * Copyright 2009 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,9 +27,9 @@
 
 #include "amiga/os3support.h"
 
-#include "utils/nsoption.h"
-#include "utils/nsurl.h"
-#include "netsurf/url_db.h"
+#include "utils/slateoption.h"
+#include "utils/slateurl.h"
+#include "slate/url_db.h"
 
 #include "urlhistory.h"
 
@@ -77,7 +77,7 @@ struct List * URLHistory_GetList( void )
 	return &PageList;
 }
 
-static bool URLHistoryFound(nsurl *url, const struct url_data *data)
+static bool URLHistoryFound(slateurl *url, const struct url_data *data)
 {
 	struct Node *node;
 
@@ -86,17 +86,17 @@ static bool URLHistoryFound(nsurl *url, const struct url_data *data)
 	*/
 
 	/* skip this URL if it is already in the list */
-	if(URLHistory_FindPage(nsurl_access(url))) return true;
+	if(URLHistory_FindPage(slateurl_access(url))) return true;
 
 	node = ALLOCVEC_SHARED(sizeof(struct Node));
 
 	if ( node )
 	{
-		STRPTR urladd = (STRPTR) ALLOCVEC_SHARED( strlen ( nsurl_access(url) ) + 1);
+		STRPTR urladd = (STRPTR) ALLOCVEC_SHARED( strlen ( slateurl_access(url) ) + 1);
 
 		if ( urladd )
 		{
-			strcpy(urladd, nsurl_access(url));
+			strcpy(urladd, slateurl_access(url));
 			node->ln_Name = urladd;
 			AddTail( &PageList, node );
 		}
@@ -116,7 +116,7 @@ struct Node * URLHistory_FindPage( const char *urlString )
 
 void URLHistory_AddPage( const char * urlString )
 {
-	if(!nsoption_bool(url_suggestion)) return;
+	if(!slateoption_bool(url_suggestion)) return;
 
 	// Only search if length > 0
 	if( strlen( urlString ) > 0 )

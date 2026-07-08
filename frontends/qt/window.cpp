@@ -1,7 +1,7 @@
 /*
  * Copyright 2023 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,17 +27,17 @@ extern "C" {
 
 #include "utils/errors.h"
 #include "utils/log.h"
-#include "utils/nsoption.h"
-#include "utils/nsurl.h"
+#include "utils/slateoption.h"
+#include "utils/slateurl.h"
 #include "utils/messages.h"
 
-#include "netsurf/types.h"
-#include "netsurf/mouse.h"
-#include "netsurf/window.h"
-#include "netsurf/plotters.h"
-#include "netsurf/content.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/mouse.h"
+#include "slate/types.h"
+#include "slate/mouse.h"
+#include "slate/window.h"
+#include "slate/plotters.h"
+#include "slate/content.h"
+#include "slate/browser_window.h"
+#include "slate/mouse.h"
 
 #include "desktop/browser_history.h"
 
@@ -76,7 +76,7 @@ NS_Window::NS_Window(QWidget *parent, struct browser_window *bw)
 	m_actions = new NS_Actions(this, m_bw);
 
 	// url bar
-	m_nsurlbar = new NS_URLBar(this, m_actions, m_bw);
+	m_slateurlbar = new NS_URLBar(this, m_actions, m_bw);
 
 	// browser drawing canvas widget
 	m_nswidget = new NS_Widget(this, m_actions, bw);
@@ -106,7 +106,7 @@ NS_Window::NS_Window(QWidget *parent, struct browser_window *bw)
 	layout->setContentsMargins(0,0,0,0);
 	layout->setHorizontalSpacing(0);
 	layout->setVerticalSpacing(0);
-	layout->addWidget(m_nsurlbar, 0, 0, 1, 2);
+	layout->addWidget(m_slateurlbar, 0, 0, 1, 2);
 	layout->addWidget(m_nswidget,1,0);
 	layout->addWidget(m_vscrollbar, 1,1);
 	layout->setRowStretch(1,1);
@@ -211,21 +211,21 @@ void NS_Window::set_status(const char *text)
 }
 
 
-nserror NS_Window::set_scroll(const struct rect *rect)
+slateerror NS_Window::set_scroll(const struct rect *rect)
 {
 	m_hscrollbar->setValue(rect->x0);
 	m_vscrollbar->setValue(rect->y0);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-nserror NS_Window::update_extent()
+slateerror NS_Window::update_extent()
 {
 	int ew, eh;
-	nserror res;
+	slateerror res;
 	res = browser_window_get_extents(m_bw, true, &ew, &eh);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -238,7 +238,7 @@ nserror NS_Window::update_extent()
 	m_vscrollbar->setPageStep(height);
 	m_vscrollbar->setSingleStep(height / 16);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void next_throbber_frame(void *p)
@@ -247,13 +247,13 @@ static void next_throbber_frame(void *p)
 	window->advance_throbber(true);
 }
 
-nserror NS_Window::advance_throbber(bool cont)
+slateerror NS_Window::advance_throbber(bool cont)
 {
 	if (cont == false) {
-		nsqt_schedule(-1, next_throbber_frame, this);
+		slateqt_schedule(-1, next_throbber_frame, this);
 		m_throbber_frame = 0;
 		iconChanged(*m_favicon);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	m_throbber_frame++;
@@ -264,8 +264,8 @@ nserror NS_Window::advance_throbber(bool cont)
 	QIcon frame(":throbber" + QString().setNum(m_throbber_frame) + ".png");
 	iconChanged(frame);
 
-	nsqt_schedule(THROBBER_FRAME_TIME, next_throbber_frame, this);
-	return NSERROR_OK;
+	slateqt_schedule(THROBBER_FRAME_TIME, next_throbber_frame, this);
+	return SLATEERROR_OK;
 }
 
 void NS_Window::set_favicon(QIcon *icon)
@@ -360,9 +360,9 @@ bool NS_Window::static_get_scroll(struct gui_window *gw, int *sx, int *sy)
  *
  * \param gw The gui window to scroll.
  * \param rect The rectangle to ensure is shown.
- * \return NSERROR_OK on success or appropriate error code.
+ * \return SLATEERROR_OK on success or appropriate error code.
  */
-nserror
+slateerror
 NS_Window::static_set_scroll(struct gui_window *gw, const struct rect *rect)
 {
 	return gw->window->set_scroll(rect);
@@ -375,10 +375,10 @@ NS_Window::static_set_scroll(struct gui_window *gw, const struct rect *rect)
  * \param gw window to update.
  * \param url The url to use as icon.
  */
-nserror NS_Window::static_set_url(struct gui_window *gw, struct nsurl *url)
+slateerror NS_Window::static_set_url(struct gui_window *gw, struct slateurl *url)
 {
-	nserror res;
-	res = gw->window->m_nsurlbar->set_url(url);
+	slateerror res;
+	res = gw->window->m_slateurlbar->set_url(url);
 	gw->window->m_actions->update(NS_Actions::UpdateUnchanged);
 	return res;
 }
@@ -392,12 +392,12 @@ nserror NS_Window::static_set_url(struct gui_window *gw, struct nsurl *url)
  *
  * \param gw The gui window the event occurred for
  * \param event Which event has occurred.
- * \return NSERROR_OK if the event was processed else error code.
+ * \return SLATEERROR_OK if the event was processed else error code.
  */
-nserror
+slateerror
 NS_Window::static_event(struct gui_window *gw, enum gui_window_event event)
 {
-	nserror res;
+	slateerror res;
 
 	switch (event) {
 	case GW_EVENT_UPDATE_EXTENT:
@@ -423,7 +423,7 @@ NS_Window::static_event(struct gui_window *gw, enum gui_window_event event)
 		break;
 
 	default:
-		res = NSERROR_OK;
+		res = SLATEERROR_OK;
 		break;
 	}
 	return res;
@@ -445,9 +445,9 @@ NS_Window::static_event(struct gui_window *gw, enum gui_window_event event)
  *
  * \param gw The gui window to invalidate.
  * \param rect area to redraw or NULL for the entire window area
- * \return NSERROR_OK on success or appropriate error code
+ * \return SLATEERROR_OK on success or appropriate error code
  */
-nserror
+slateerror
 NS_Window::static_invalidate(struct gui_window *gw, const struct rect *rect)
 {
 	return gw->window->m_nswidget->invalidate(rect);
@@ -465,10 +465,10 @@ NS_Window::static_invalidate(struct gui_window *gw, const struct rect *rect)
  * \param gw The gui window to measure content area of.
  * \param width receives width of window
  * \param height receives height of window
- * \return NSERROR_OK on success and width and height updated
+ * \return SLATEERROR_OK on success and width and height updated
  *          else error code.
  */
-nserror
+slateerror
 NS_Window::static_get_dimensions(struct gui_window *gw, int *width, int *height)
 {
 	return gw->window->m_nswidget->get_dimensions(width, height);
@@ -611,4 +611,4 @@ static struct gui_window_table window_table = {
 	.console_log = NULL,
 };
 
-struct gui_window_table *nsqt_window_table = &window_table;
+struct gui_window_table *slateqt_window_table = &window_table;

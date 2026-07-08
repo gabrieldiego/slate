@@ -1,7 +1,7 @@
 /*
  * Copyright 2005 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@
 #include <stdlib.h>
 
 #include "utils/messages.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 
 #include "riscos/gui.h"
 #include "riscos/menus.h"
@@ -47,11 +47,11 @@ bool ro_gui_options_home_initialise(wimp_w w)
 {
 	/* set the current values */
 	ro_gui_set_icon_string(w, HOME_URL_FIELD,
-                               nsoption_charp(homepage_url) ? 
-                               nsoption_charp(homepage_url) : "", true);
+                               slateoption_charp(homepage_url) ? 
+                               slateoption_charp(homepage_url) : "", true);
 
 	ro_gui_set_icon_selected_state(w, HOME_OPEN_STARTUP,
-                                       nsoption_bool(open_browser_at_startup));
+                                       slateoption_bool(open_browser_at_startup));
 
 	ro_gui_set_icon_shaded_state(w,
 			HOME_URL_GRIGHT, !ro_gui_url_suggest_prepare_menu());
@@ -82,10 +82,10 @@ void ro_gui_options_home_default(wimp_pointer *pointer)
 
 bool ro_gui_options_home_ok(wimp_w w)
 {
-	nsoption_set_charp(homepage_url,
+	slateoption_set_charp(homepage_url,
 		       strdup(ro_gui_get_icon_string(w, HOME_URL_FIELD)));
 
-	nsoption_set_bool(open_browser_at_startup,
+	slateoption_set_bool(open_browser_at_startup,
 			  ro_gui_get_icon_selected_state(w, HOME_OPEN_STARTUP));
 
 	ro_gui_save_options();

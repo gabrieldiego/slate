@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,10 +19,10 @@
 #include <string.h>
 #include <strings.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/corestrings.h"
 #include "utils/log.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/utils.h"
 
 #include "css/hints.h"
@@ -558,7 +558,7 @@ static bool parse_font_size(const char *size, uint8_t *val,
 
 	if (value == 7) {
 		/* Manufacture xxx-large */
-	  *len = FDIV(FMUL(INTTOFIX(3), INTTOFIX(nsoption_int(font_size))),
+	  *len = FDIV(FMUL(INTTOFIX(3), INTTOFIX(slateoption_int(font_size))),
 				F_10);
 	} else {
 		/* Len is irrelevant */
@@ -585,15 +585,15 @@ struct css_hint_ctx {
 
 struct css_hint_ctx hint_ctx;
 
-nserror css_hint_init(void)
+slateerror css_hint_init(void)
 {
 	hint_ctx.hints = malloc(sizeof(struct css_hint) *
 			MAX_HINTS_PER_ELEMENT);
 	if (hint_ctx.hints == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 void css_hint_fini(void)
@@ -1542,16 +1542,16 @@ static void css_hint_bg_image(
 	err = dom_element_get_attribute(node,
 			corestring_dom_background, &attr);
 	if (err == DOM_NO_ERR && attr != NULL) {
-		nsurl *url;
-		nserror error = nsurl_join(ctx->base_url,
+		slateurl *url;
+		slateerror error = slateurl_join(ctx->base_url,
 				(const char *)dom_string_data(attr), &url);
 		dom_string_unref(attr);
 
-		if (error == NSERROR_OK) {
+		if (error == SLATEERROR_OK) {
 			lwc_string *iurl;
-			lwc_error lerror = lwc_intern_string(nsurl_access(url),
-					nsurl_length(url), &iurl);
-			nsurl_unref(url);
+			lwc_error lerror = lwc_intern_string(slateurl_access(url),
+					slateurl_length(url), &iurl);
+			slateurl_unref(url);
 
 			if (lerror == lwc_error_ok) {
 				hint->prop = CSS_PROP_BACKGROUND_IMAGE;
@@ -1631,7 +1631,7 @@ css_error node_presentational_hint(void *pw, void *node,
 	dom_exception exc;
 	dom_html_element_type tag_type;
 
-	if (nsoption_bool(author_level_css) == false) {
+	if (slateoption_bool(author_level_css) == false) {
 		*nhints = 0;
 		*hints = NULL;
 		return CSS_OK;

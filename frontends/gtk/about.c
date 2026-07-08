@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,9 +26,9 @@
 #include <stdint.h>
 
 #include "utils/messages.h"
-#include "utils/nsoption.h"
-#include "utils/nsurl.h"
-#include "netsurf/browser_window.h"
+#include "utils/slateoption.h"
+#include "utils/slateurl.h"
+#include "slate/browser_window.h"
 #include "desktop/version.h"
 
 #include "gtk/warn.h"
@@ -46,22 +46,22 @@
  */
 static void about_open(const char *url_text)
 {
-	nsurl *url;
-	nserror ret;
+	slateurl *url;
+	slateerror ret;
 	enum browser_window_create_flags flags = BW_CREATE_HISTORY;
 
-	if (nsoption_bool(show_single_tab) == true) {
+	if (slateoption_bool(show_single_tab) == true) {
 		flags |= BW_CREATE_TAB;
 	}
 
-	ret = nsurl_create(url_text, &url);
-	if (ret == NSERROR_OK) {
+	ret = slateurl_create(url_text, &url);
+	if (ret == SLATEERROR_OK) {
 		ret = browser_window_create(flags, url, NULL, NULL, NULL);
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
 
-	if (ret != NSERROR_OK) {
-		nsgtk_warning(messages_get_errorcode(ret), 0);
+	if (ret != SLATEERROR_OK) {
+		slategtk_warning(messages_get_errorcode(ret), 0);
 	}
 }
 
@@ -73,7 +73,7 @@ static void about_open(const char *url_text)
  * \param user_data The value from the signal connection.
  */
 static void
-nsgtk_about_dialog_response(GtkDialog *dialog,
+slategtk_about_dialog_response(GtkDialog *dialog,
 			    gint response_id,
 			    gpointer user_data)
 {
@@ -92,7 +92,7 @@ nsgtk_about_dialog_response(GtkDialog *dialog,
 	gtk_widget_destroy(GTK_WIDGET(dialog));
 }
 
-void nsgtk_about_dialog_init(GtkWindow *parent)
+void slategtk_about_dialog_init(GtkWindow *parent)
 {
 	GtkWidget *dialog, *vbox, *label;
 	gchar *name_string;
@@ -107,16 +107,16 @@ void nsgtk_about_dialog_init(GtkWindow *parent)
 					     "Close", GTK_RESPONSE_CANCEL,
 					     NULL, NULL);
 
-	vbox = nsgtk_vbox_new(FALSE, 8);
+	vbox = slategtk_vbox_new(FALSE, 8);
 
-	gtk_box_pack_start(GTK_BOX(nsgtk_dialog_get_content_area(GTK_DIALOG(dialog))), vbox, TRUE, TRUE, 0);
+	gtk_box_pack_start(GTK_BOX(slategtk_dialog_get_content_area(GTK_DIALOG(dialog))), vbox, TRUE, TRUE, 0);
 
 	/* NetSurf icon */
 	pixbufs = gtk_window_get_default_icon_list();
 	if (pixbufs != NULL) {
 		GtkWidget *image;
 
-		image = nsgtk_image_new_from_pixbuf_icon(GDK_PIXBUF(g_list_nth_data(pixbufs, 0)),
+		image = slategtk_image_new_from_pixbuf_icon(GDK_PIXBUF(g_list_nth_data(pixbufs, 0)),
 							 GTK_ICON_SIZE_DIALOG);
 		g_list_free(pixbufs);
 
@@ -125,7 +125,7 @@ void nsgtk_about_dialog_init(GtkWindow *parent)
 
 	/* version string */
 	label = gtk_label_new (NULL);
-	name_string = g_markup_printf_escaped("<span size=\"xx-large\" weight=\"bold\">NetSurf %s</span>", netsurf_version);
+	name_string = g_markup_printf_escaped("<span size=\"xx-large\" weight=\"bold\">NetSurf %s</span>", slate_version);
 	gtk_label_set_markup (GTK_LABEL (label), name_string);
 	g_free(name_string);
 	gtk_label_set_selectable (GTK_LABEL (label), TRUE);
@@ -144,12 +144,12 @@ void nsgtk_about_dialog_init(GtkWindow *parent)
 	gtk_box_pack_start(GTK_BOX (vbox), label, FALSE, FALSE, 0);
 
 	/* Remove separator */
-	nsgtk_dialog_set_has_separator(GTK_DIALOG (dialog), FALSE);
+	slategtk_dialog_set_has_separator(GTK_DIALOG (dialog), FALSE);
 
 	/* Ensure that the dialog box response is processed. */
 	g_signal_connect_swapped(dialog,
 				  "response",
-				  G_CALLBACK(nsgtk_about_dialog_response),
+				  G_CALLBACK(slategtk_about_dialog_response),
 				  dialog);
 
 	/* Add the label, and show everything we've added to the dialog. */

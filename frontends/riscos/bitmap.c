@@ -3,7 +3,7 @@
  * Copyright 2005 Richard Wilson <info@tinct.net>
  * Copyright 2008 Adrian Lees <adrianl@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,11 +39,11 @@
 #include <oslib/osspriteop.h>
 #include <oslib/wimp.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/plotters.h"
-#include "netsurf/content.h"
+#include "slate/plotters.h"
+#include "slate/content.h"
 
 #include "riscos/filename.h"
 #include "riscos/gui.h"
@@ -721,7 +721,7 @@ static void thumbnail_test(void)
 
 
 /* exported interface documented in riscos/bitmap.h */
-nserror riscos_bitmap_render(struct bitmap *bitmap,
+slateerror riscos_bitmap_render(struct bitmap *bitmap,
 			     struct hlcache_handle *content)
 {
 	struct thumbnail_save_area *save_area;
@@ -799,7 +799,7 @@ nserror riscos_bitmap_render(struct bitmap *bitmap,
 
 	bitmap_modified(bitmap);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static struct gui_bitmap_table bitmap_table = {

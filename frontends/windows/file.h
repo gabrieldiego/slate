@@ -1,7 +1,7 @@
 /*
  * Copyright 2015 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * Windows file operation table interface.
  */
 
-#ifndef _NETSURF_WINDOWS_FILE_H_
-#define _NETSURF_WINDOWS_FILE_H_
+#ifndef _SLATE_WINDOWS_FILE_H_
+#define _SLATE_WINDOWS_FILE_H_
 
 extern struct gui_file_table *win32_file_table;
 

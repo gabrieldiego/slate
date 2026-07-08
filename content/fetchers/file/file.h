@@ -21,14 +21,14 @@
  * file scheme fetcher handler interface.
  */
 
-#ifndef NETSURF_CONTENT_FETCHERS_FETCH_FILE_H
-#define NETSURF_CONTENT_FETCHERS_FETCH_FILE_H
+#ifndef SLATE_CONTENT_FETCHERS_FETCH_FILE_H
+#define SLATE_CONTENT_FETCHERS_FETCH_FILE_H
 
 /**
  * Register file scheme handler.
  *
- * \return NSERROR_OK on successful registration or error code on failure.
+ * \return SLATEERROR_OK on successful registration or error code on failure.
  */
-nserror fetch_file_register(void);
+slateerror fetch_file_register(void);
 
 #endif

@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,28 +16,28 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_CONTENT_CONTENT_FACTORY_H_
-#define NETSURF_CONTENT_CONTENT_FACTORY_H_
+#ifndef SLATE_CONTENT_CONTENT_FACTORY_H_
+#define SLATE_CONTENT_CONTENT_FACTORY_H_
 
 #include <stdbool.h>
 
 #include <libwapcaplet/libwapcaplet.h>
 
-#include "netsurf/content_type.h"
+#include "slate/content_type.h"
 #include "utils/errors.h"
 
 #define CONTENT_FACTORY_REGISTER_TYPES(HNAME, HTYPELIST, HHANDLER)	\
 									\
-nserror HNAME##_init(void)						\
+slateerror HNAME##_init(void)						\
 {									\
 	uint32_t i;							\
-	nserror error = NSERROR_OK;					\
+	slateerror error = SLATEERROR_OK;					\
 									\
 	for (i = 0; i < NOF_ELEMENTS(HTYPELIST); i++) {			\
 		error = content_factory_register_handler(		\
 			HTYPELIST[i],					\
 			&HHANDLER);					\
-		if (error != NSERROR_OK)				\
+		if (error != SLATEERROR_OK)				\
 			break;						\
 	}								\
 									\
@@ -50,7 +50,7 @@ struct content_handler;
 
 void content_factory_fini(void);
 
-nserror content_factory_register_handler(const char *mime_type,
+slateerror content_factory_register_handler(const char *mime_type,
 		const struct content_handler *handler);
 
 struct content *content_factory_create_content(struct llcache_handle *llcache, 

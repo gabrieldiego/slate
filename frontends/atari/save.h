@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NSATARI_SAVE_H
-#define NSATARI_SAVE_H
+#ifndef SLATEATARI_SAVE_H
+#define SLATEATARI_SAVE_H
 
 #endif

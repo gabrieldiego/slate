@@ -1,7 +1,7 @@
 /*
  * Copyright 2013 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,13 +30,13 @@
 #include <gem.h>
 
 #include "utils/dirent.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/utils.h"
-#include "netsurf/plot_style.h"
+#include "slate/plot_style.h"
 
 #include "atari/gui.h"
-#include "atari/res/netsurf.rsh"
+#include "atari/res/slate.rsh"
 #include "atari/settings.h"
 #include "atari/deskmenu.h"
 #include "atari/misc.h"
@@ -204,8 +204,8 @@ static void save_settings(void)
 {
     apply_settings();
     // Save settings
-    nsoption_write( (const char*)&options, NULL, NULL);
-    nsoption_read( (const char*)&options , NULL);
+    slateoption_write( (const char*)&options, NULL, NULL);
+    slateoption_read( (const char*)&options , NULL);
     close_settings();
     form_alert(1, "[1][Some options require an netsurf restart!][OK]");
     deskmenu_update();
@@ -219,130 +219,130 @@ static void display_settings(void)
 
 
     /* "Browser" tab: */
-    set_text( SETTINGS_EDIT_HOMEPAGE, nsoption_charp(homepage_url),
+    set_text( SETTINGS_EDIT_HOMEPAGE, slateoption_charp(homepage_url),
               INPUT_HOMEPAGE_URL_MAX_LEN );
 
-    if( nsoption_bool(block_advertisements) ) {
+    if( slateoption_bool(block_advertisements) ) {
         OBJ_CHECK( SETTINGS_CB_HIDE_ADVERTISEMENT );
     } else {
         OBJ_UNCHECK( SETTINGS_CB_HIDE_ADVERTISEMENT );
     }
-    if( nsoption_bool(target_blank) ) {
+    if( slateoption_bool(target_blank) ) {
         OBJ_UNCHECK( SETTINGS_CB_DISABLE_POPUP_WINDOWS );
     } else {
         OBJ_CHECK( SETTINGS_CB_DISABLE_POPUP_WINDOWS );
     }
-    if( nsoption_bool(send_referer) ) {
+    if( slateoption_bool(send_referer) ) {
         OBJ_CHECK( SETTINGS_CB_SEND_HTTP_REFERRER );
     } else {
         OBJ_UNCHECK( SETTINGS_CB_SEND_HTTP_REFERRER );
     }
-    if( nsoption_bool(do_not_track) ) {
+    if( slateoption_bool(do_not_track) ) {
         OBJ_CHECK( SETTINGS_CB_SEND_DO_NOT_TRACK );
     } else {
         OBJ_UNCHECK( SETTINGS_CB_SEND_DO_NOT_TRACK );
     }
 
     set_text( SETTINGS_BT_SEL_LOCALE,
-              nsoption_charp(accept_language) ? nsoption_charp(accept_language) : (char*)"en",
+              slateoption_charp(accept_language) ? slateoption_charp(accept_language) : (char*)"en",
               INPUT_LOCALE_MAX_LEN );
 
-    sprintf(spare, "%d", nsoption_int(atari_gui_poll_timeout));
+    sprintf(spare, "%d", slateoption_int(atari_gui_poll_timeout));
     set_text(SETTINGS_BT_GUI_TOUT, spare, 2);
 
-    tmp_option_expire_url = nsoption_int(expire_url);
-    snprintf( spare, 255, "%02d", nsoption_int(expire_url) );
+    tmp_option_expire_url = slateoption_int(expire_url);
+    snprintf( spare, 255, "%02d", slateoption_int(expire_url) );
     set_text( SETTINGS_EDIT_HISTORY_AGE, spare,  3);
 
     /* "Cache" tab: */
-    tmp_option_memory_cache_size = nsoption_int(memory_cache_size) / (1024*1024);
+    tmp_option_memory_cache_size = slateoption_int(memory_cache_size) / (1024*1024);
     snprintf( spare, 255, "%u", tmp_option_memory_cache_size );
     set_text( SETTINGS_STR_MAX_MEM_CACHE, spare, 4 );
 
-    tmp_option_disc_cache_size = nsoption_int(disc_cache_size) / (1024*1024);
+    tmp_option_disc_cache_size = slateoption_int(disc_cache_size) / (1024*1024);
     snprintf( spare, 255, "%u", tmp_option_disc_cache_size );
     set_text( SETTINGS_STR_MAX_DISC_CACHE, spare, 4 );
 
-    tmp_option_disc_cache_age = nsoption_int(disc_cache_age);
+    tmp_option_disc_cache_age = slateoption_int(disc_cache_age);
     snprintf( spare, 255, "%02u", tmp_option_disc_cache_age );
     set_text( SETTINGS_EDIT_CACHE_AGE, spare, 3 );
 
     /* "Paths" tab: */
-    set_text( SETTINGS_EDIT_DOWNLOAD_PATH, nsoption_charp(downloads_path),
+    set_text( SETTINGS_EDIT_DOWNLOAD_PATH, slateoption_charp(downloads_path),
               LABEL_PATH_MAX_LEN );
-    set_text( SETTINGS_EDIT_HOTLIST_FILE, nsoption_charp(hotlist_file),
+    set_text( SETTINGS_EDIT_HOTLIST_FILE, slateoption_charp(hotlist_file),
               LABEL_PATH_MAX_LEN );
-    set_text( SETTINGS_EDIT_CA_BUNDLE, nsoption_charp(ca_bundle),
+    set_text( SETTINGS_EDIT_CA_BUNDLE, slateoption_charp(ca_bundle),
               LABEL_PATH_MAX_LEN );
-    set_text( SETTINGS_EDIT_CA_CERTS_PATH, nsoption_charp(ca_path),
+    set_text( SETTINGS_EDIT_CA_CERTS_PATH, slateoption_charp(ca_path),
               LABEL_PATH_MAX_LEN );
-    set_text( SETTINGS_EDIT_EDITOR, nsoption_charp(atari_editor),
+    set_text( SETTINGS_EDIT_EDITOR, slateoption_charp(atari_editor),
               LABEL_PATH_MAX_LEN );
 
     /* "Rendering" tab: */
-    set_text( SETTINGS_BT_SEL_FONT_RENDERER, nsoption_charp(atari_font_driver),
+    set_text( SETTINGS_BT_SEL_FONT_RENDERER, slateoption_charp(atari_font_driver),
               LABEL_FONT_RENDERER_MAX_LEN );
     SET_BIT(dlgtree[SETTINGS_CB_TRANSPARENCY].ob_state,
-            OS_SELECTED, nsoption_int(atari_transparency) ? 1 : 0 );
+            OS_SELECTED, slateoption_int(atari_transparency) ? 1 : 0 );
     SET_BIT(dlgtree[SETTINGS_CB_ENABLE_ANIMATION].ob_state,
-            OS_SELECTED, nsoption_bool(animate_images) ? 1 : 0 );
+            OS_SELECTED, slateoption_bool(animate_images) ? 1 : 0 );
     SET_BIT(dlgtree[SETTINGS_CB_FG_IMAGES].ob_state,
-            OS_SELECTED, nsoption_bool(foreground_images) ? 1 : 0 );
+            OS_SELECTED, slateoption_bool(foreground_images) ? 1 : 0 );
     SET_BIT(dlgtree[SETTINGS_CB_BG_IMAGES].ob_state,
-            OS_SELECTED, nsoption_bool(background_images) ? 1 : 0 );
+            OS_SELECTED, slateoption_bool(background_images) ? 1 : 0 );
 
 
     // TODO: enable this option?
     /*	SET_BIT(dlgtree[SETTINGS_CB_INCREMENTAL_REFLOW].ob_state,
-    			OS_SELECTED, nsoption_bool(incremental_reflow) ? 1 : 0 );*/
+    			OS_SELECTED, slateoption_bool(incremental_reflow) ? 1 : 0 );*/
 
     SET_BIT(dlgtree[SETTINGS_CB_ANTI_ALIASING].ob_state,
-            OS_SELECTED, nsoption_int(atari_font_monochrom) ? 0 : 1 );
+            OS_SELECTED, slateoption_int(atari_font_monochrom) ? 0 : 1 );
 
 
     // TODO: activate this option?
-    tmp_option_min_reflow_period = nsoption_int(min_reflow_period);
+    tmp_option_min_reflow_period = slateoption_int(min_reflow_period);
     snprintf( spare, 255, "%04u", tmp_option_min_reflow_period );
     set_text( SETTINGS_EDIT_MIN_REFLOW_PERIOD, spare,
               INPUT_MIN_REFLOW_PERIOD_MAX_LEN );
 
 
     /* "Network" tab: */
-    set_text( SETTINGS_EDIT_PROXY_HOST, nsoption_charp(http_proxy_host),
+    set_text( SETTINGS_EDIT_PROXY_HOST, slateoption_charp(http_proxy_host),
               INPUT_PROXY_HOST_MAX_LEN );
-    snprintf( spare, 255, "%5d", nsoption_int(http_proxy_port) );
+    snprintf( spare, 255, "%5d", slateoption_int(http_proxy_port) );
     set_text( SETTINGS_EDIT_PROXY_PORT, spare,
               INPUT_PROXY_PORT_MAX_LEN );
 
-    set_text( SETTINGS_EDIT_PROXY_USERNAME, nsoption_charp(http_proxy_auth_user),
+    set_text( SETTINGS_EDIT_PROXY_USERNAME, slateoption_charp(http_proxy_auth_user),
               INPUT_PROXY_USERNAME_MAX_LEN );
-    set_text( SETTINGS_EDIT_PROXY_PASSWORD, nsoption_charp(http_proxy_auth_pass),
+    set_text( SETTINGS_EDIT_PROXY_PASSWORD, slateoption_charp(http_proxy_auth_pass),
               INPUT_PROXY_PASSWORD_MAX_LEN );
     SET_BIT(dlgtree[SETTINGS_CB_USE_PROXY].ob_state,
-            OS_SELECTED, nsoption_bool(http_proxy) ? 1 : 0 );
+            OS_SELECTED, slateoption_bool(http_proxy) ? 1 : 0 );
     SET_BIT(dlgtree[SETTINGS_CB_PROXY_AUTH].ob_state,
-            OS_SELECTED, nsoption_int(http_proxy_auth) ? 1 : 0 );
+            OS_SELECTED, slateoption_int(http_proxy_auth) ? 1 : 0 );
 
-    tmp_option_max_cached_fetch_handles = nsoption_int(max_cached_fetch_handles);
-    snprintf( spare, 255, "%2d", nsoption_int(max_cached_fetch_handles) );
+    tmp_option_max_cached_fetch_handles = slateoption_int(max_cached_fetch_handles);
+    snprintf( spare, 255, "%2d", slateoption_int(max_cached_fetch_handles) );
     set_text( SETTINGS_EDIT_MAX_CACHED_CONNECTIONS, spare , 2 );
 
-    tmp_option_max_fetchers = nsoption_int(max_fetchers);
-    snprintf( spare, 255, "%2d", nsoption_int(max_fetchers) );
+    tmp_option_max_fetchers = slateoption_int(max_fetchers);
+    snprintf( spare, 255, "%2d", slateoption_int(max_fetchers) );
     set_text( SETTINGS_EDIT_MAX_FETCHERS, spare , 2 );
 
-    tmp_option_max_fetchers_per_host = nsoption_int(max_fetchers_per_host);
-    snprintf( spare, 255, "%2d", nsoption_int(max_fetchers_per_host) );
+    tmp_option_max_fetchers_per_host = slateoption_int(max_fetchers_per_host);
+    snprintf( spare, 255, "%2d", slateoption_int(max_fetchers_per_host) );
     set_text( SETTINGS_EDIT_MAX_FETCHERS_PER_HOST, spare , 2 );
 
 
     /* "Style" tab: */
-    tmp_option_font_min_size = nsoption_int(font_min_size);
-    snprintf( spare, 255, "%3d", nsoption_int(font_min_size) );
+    tmp_option_font_min_size = slateoption_int(font_min_size);
+    snprintf( spare, 255, "%3d", slateoption_int(font_min_size) );
     set_text( SETTINGS_EDIT_MIN_FONT_SIZE, spare , 3 );
 
-    tmp_option_font_size = nsoption_int(font_size);
-    snprintf( spare, 255, "%3d", nsoption_int(font_size) );
+    tmp_option_font_size = slateoption_int(font_size);
+    snprintf( spare, 255, "%3d", slateoption_int(font_size) );
     set_text( SETTINGS_EDIT_DEF_FONT_SIZE, spare , 3 );
 
     toggle_objects();
@@ -754,60 +754,60 @@ static void form_event(int index, int external)
 static void apply_settings(void)
 {
     /* "Network" tab: */
-    nsoption_set_bool(http_proxy, OBJ_SELECTED(SETTINGS_CB_USE_PROXY));
+    slateoption_set_bool(http_proxy, OBJ_SELECTED(SETTINGS_CB_USE_PROXY));
     if ( OBJ_SELECTED(SETTINGS_CB_PROXY_AUTH) ) {
-        nsoption_set_int(http_proxy_auth, OPTION_HTTP_PROXY_AUTH_BASIC);
+        slateoption_set_int(http_proxy_auth, OPTION_HTTP_PROXY_AUTH_BASIC);
     } else {
-        nsoption_set_int(http_proxy_auth, OPTION_HTTP_PROXY_AUTH_NONE);
+        slateoption_set_int(http_proxy_auth, OPTION_HTTP_PROXY_AUTH_NONE);
     }
-    nsoption_set_charp(http_proxy_auth_pass,
+    slateoption_set_charp(http_proxy_auth_pass,
                        gemtk_obj_get_text(dlgtree, SETTINGS_EDIT_PROXY_PASSWORD));
-    nsoption_set_charp(http_proxy_auth_user,
+    slateoption_set_charp(http_proxy_auth_user,
                        gemtk_obj_get_text(dlgtree, SETTINGS_EDIT_PROXY_USERNAME));
-    nsoption_set_charp(http_proxy_host,
+    slateoption_set_charp(http_proxy_host,
                        gemtk_obj_get_text(dlgtree, SETTINGS_EDIT_PROXY_HOST));
-    nsoption_set_int(http_proxy_port,
+    slateoption_set_int(http_proxy_port,
                      atoi( gemtk_obj_get_text(dlgtree, SETTINGS_EDIT_PROXY_PORT) ));
-    nsoption_set_int(max_fetchers_per_host,
+    slateoption_set_int(max_fetchers_per_host,
                      atoi( gemtk_obj_get_text(dlgtree, SETTINGS_EDIT_MAX_FETCHERS_PER_HOST)));
-    nsoption_set_int(max_cached_fetch_handles,
+    slateoption_set_int(max_cached_fetch_handles,
                      atoi( gemtk_obj_get_text(dlgtree, SETTINGS_EDIT_MAX_CACHED_CONNECTIONS)));
-    nsoption_set_int(max_fetchers,
+    slateoption_set_int(max_fetchers,
                      atoi( gemtk_obj_get_text(dlgtree, SETTINGS_EDIT_MAX_FETCHERS) ));
-    nsoption_set_bool(foreground_images,
+    slateoption_set_bool(foreground_images,
                       OBJ_SELECTED( SETTINGS_CB_FG_IMAGES ));
-    nsoption_set_bool(background_images,
+    slateoption_set_bool(background_images,
                       OBJ_SELECTED( SETTINGS_CB_BG_IMAGES ));
 
     /* "Style" tab: */
-    nsoption_set_int(font_min_size, tmp_option_font_min_size);
-    nsoption_set_int(font_size, tmp_option_font_size);
+    slateoption_set_int(font_min_size, tmp_option_font_min_size);
+    slateoption_set_int(font_size, tmp_option_font_size);
 
     /* "Rendering" tab: */
-    nsoption_set_charp(atari_font_driver,
+    slateoption_set_charp(atari_font_driver,
                        gemtk_obj_get_text(dlgtree, SETTINGS_BT_SEL_FONT_RENDERER));
-    nsoption_set_int(atari_transparency,
+    slateoption_set_int(atari_transparency,
                       OBJ_SELECTED(SETTINGS_CB_TRANSPARENCY));
-    nsoption_set_bool(animate_images,
+    slateoption_set_bool(animate_images,
                       OBJ_SELECTED(SETTINGS_CB_ENABLE_ANIMATION));
-    /*	nsoption_set_bool(incremental_reflow,
+    /*	slateoption_set_bool(incremental_reflow,
     			  OBJ_SELECTED(SETTINGS_CB_INCREMENTAL_REFLOW));*/
-    nsoption_set_int(min_reflow_period, tmp_option_min_reflow_period);
-    nsoption_set_int(atari_font_monochrom,
+    slateoption_set_int(min_reflow_period, tmp_option_min_reflow_period);
+    slateoption_set_int(atari_font_monochrom,
                      !OBJ_SELECTED( SETTINGS_CB_ANTI_ALIASING ));
 
     /* "Paths" tabs: */
-    nsoption_set_charp(ca_bundle,
+    slateoption_set_charp(ca_bundle,
                        gemtk_obj_get_text(dlgtree, SETTINGS_EDIT_CA_BUNDLE));
-    nsoption_set_charp(ca_path,
+    slateoption_set_charp(ca_path,
                        gemtk_obj_get_text(dlgtree, SETTINGS_EDIT_CA_CERTS_PATH));
-    nsoption_set_charp(homepage_url,
+    slateoption_set_charp(homepage_url,
                        gemtk_obj_get_text(dlgtree, SETTINGS_EDIT_CA_CERTS_PATH));
-    nsoption_set_charp(hotlist_file,
+    slateoption_set_charp(hotlist_file,
                        gemtk_obj_get_text(dlgtree, SETTINGS_EDIT_HOTLIST_FILE));
-    nsoption_set_charp(atari_editor,
+    slateoption_set_charp(atari_editor,
                        gemtk_obj_get_text(dlgtree, SETTINGS_EDIT_EDITOR));
-    nsoption_set_charp(downloads_path,
+    slateoption_set_charp(downloads_path,
                        gemtk_obj_get_text(dlgtree, SETTINGS_EDIT_DOWNLOAD_PATH));
 
     /* "Cache" tab: */
@@ -819,30 +819,30 @@ static void apply_settings(void)
                                                     SETTINGS_STR_MAX_DISC_CACHE));
     tmp_option_disc_cache_age = atoi(gemtk_obj_get_text(dlgtree,
                                                     SETTINGS_EDIT_CACHE_AGE));
-    nsoption_set_int(memory_cache_size,
+    slateoption_set_int(memory_cache_size,
                      tmp_option_memory_cache_size * (1024*1024));
 
-    nsoption_set_int(expire_url, tmp_option_expire_url);
+    slateoption_set_int(expire_url, tmp_option_expire_url);
 
-    nsoption_set_int(disc_cache_size, tmp_option_disc_cache_size * (1024*1024));
+    slateoption_set_int(disc_cache_size, tmp_option_disc_cache_size * (1024*1024));
 
-    nsoption_set_int(disc_cache_age, tmp_option_disc_cache_age);
+    slateoption_set_int(disc_cache_age, tmp_option_disc_cache_age);
 
 
     /* "Browser" tab: */
-    nsoption_set_bool(target_blank,
+    slateoption_set_bool(target_blank,
                       !OBJ_SELECTED(SETTINGS_CB_DISABLE_POPUP_WINDOWS));
-    nsoption_set_bool(block_advertisements,
+    slateoption_set_bool(block_advertisements,
                       OBJ_SELECTED(SETTINGS_CB_HIDE_ADVERTISEMENT));
-    nsoption_set_charp(accept_language,
+    slateoption_set_charp(accept_language,
                        gemtk_obj_get_text(dlgtree, SETTINGS_BT_SEL_LOCALE));
-    nsoption_set_int(atari_gui_poll_timeout,
+    slateoption_set_int(atari_gui_poll_timeout,
                      atoi(gemtk_obj_get_text(dlgtree, SETTINGS_BT_GUI_TOUT)));
-    nsoption_set_bool(send_referer,
+    slateoption_set_bool(send_referer,
                       OBJ_SELECTED(SETTINGS_CB_SEND_HTTP_REFERRER));
-    nsoption_set_bool(do_not_track,
+    slateoption_set_bool(do_not_track,
                       OBJ_SELECTED(SETTINGS_CB_SEND_DO_NOT_TRACK));
-    nsoption_set_charp(homepage_url,
+    slateoption_set_charp(homepage_url,
                        gemtk_obj_get_text(dlgtree, SETTINGS_EDIT_HOMEPAGE));
 }
 

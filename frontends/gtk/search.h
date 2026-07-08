@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 Mark Benjamin <netsurf-browser.org.MarkBenjamin@dfgh.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,10 +21,10 @@
  * free text page search for gtk interface
  */
 
-#ifndef NETSURF_GTK_SEARCH_H_
-#define NETSURF_GTK_SEARCH_H_
+#ifndef SLATE_GTK_SEARCH_H_
+#define SLATE_GTK_SEARCH_H_
 
-extern struct gui_search_table *nsgtk_search_table;
+extern struct gui_search_table *slategtk_search_table;
 
 struct gtk_search;
 
@@ -34,18 +34,18 @@ struct gtk_search;
  * \param builder the gtk builder containing the search toolbar
  * \param bw The browsing context to run the find operations against
  * \param search search context result
- * \return NSERROR_OK and search_out updated
+ * \return SLATEERROR_OK and search_out updated
  */
-nserror nsgtk_search_create(GtkBuilder *builder, struct browser_window *bw, struct gtk_search **search);
+slateerror slategtk_search_create(GtkBuilder *builder, struct browser_window *bw, struct gtk_search **search);
 
 /**
  * update search toolbar size and style
  */
-nserror nsgtk_search_restyle(struct gtk_search *search);
+slateerror slategtk_search_restyle(struct gtk_search *search);
 
 /**
  * toggle search bar visibility
  */
-nserror nsgtk_search_toggle_visibility(struct gtk_search *search);
+slateerror slategtk_search_toggle_visibility(struct gtk_search *search);
 
 #endif

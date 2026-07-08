@@ -1,7 +1,7 @@
 /*
  * Copyright 2004 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,15 +23,15 @@
  * These functions should in general be called via the content interface.
  */
 
-#ifndef NETSURF_HTML_HTML_H
-#define NETSURF_HTML_HTML_H
+#ifndef SLATE_HTML_HTML_H
+#define SLATE_HTML_HTML_H
 
 #include <stdbool.h>
 
-#include "netsurf/types.h"
-#include "netsurf/content_type.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/mouse.h"
+#include "slate/types.h"
+#include "slate/content_type.h"
+#include "slate/browser_window.h"
+#include "slate/mouse.h"
 #include "desktop/frame_types.h"
 
 struct fetch_multipart_data;
@@ -49,7 +49,7 @@ struct scrollbar;
 struct scrollbar_msg_data;
 struct search_context;
 struct selection;
-struct nsurl;
+struct slateurl;
 struct plot_font_style;
 
 /**
@@ -115,7 +115,7 @@ struct content_html_frames {
 	int margin_height;	/** frame margin height */
 
 	char *name;	/** frame name (for targetting) */
-	struct nsurl *url;	/** frame url */
+	struct slateurl *url;	/** frame url */
 
 	bool no_resize;	/** frame is not resizable */
 	browser_scrolling scrolling;	/** scrolling characteristics */
@@ -135,7 +135,7 @@ struct content_html_iframe {
 	int margin_height;	/** frame margin height */
 
 	char *name;	/** frame name (for targetting) */
-	struct nsurl *url;	/** frame url */
+	struct slateurl *url;	/** frame url */
 
 	browser_scrolling scrolling;	/** scrolling characteristics */
 	bool border;	/** frame has a border */
@@ -154,9 +154,9 @@ struct content_html_iframe {
 /**
  * initialise content handler
  *
- * \return NSERROR_OK on success otherwise appropriate error code
+ * \return SLATEERROR_OK on success otherwise appropriate error code
  */
-nserror html_init(void);
+slateerror html_init(void);
 
 /**
  * redraw a specific box

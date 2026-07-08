@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,14 +16,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_CSS_HINTS_H_
-#define NETSURF_CSS_HINTS_H_
+#ifndef SLATE_CSS_HINTS_H_
+#define SLATE_CSS_HINTS_H_
 
 #include <stdint.h>
 
 #include <libcss/libcss.h>
 
-nserror css_hint_init(void);
+slateerror css_hint_init(void);
 void css_hint_fini(void);
 
 /**

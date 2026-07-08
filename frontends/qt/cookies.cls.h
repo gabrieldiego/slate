@@ -1,7 +1,7 @@
 /*
  * Copyright 2024 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,7 +39,7 @@ public:
 	 * @param search_term The search term to set on the cookies view or
 	 *                    NULL to clear.
 	 */
-	nserror setSearch(const char *search_term);
+	slateerror setSearch(const char *search_term);
 
 private:
 	void draw(struct rect *clip, struct redraw_context *ctx);

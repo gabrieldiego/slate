@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 Mike Lester <element3260@gmail.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,6 @@
 #ifndef GTK_SELECTION_H
 #define GTK_SELECTION_H
 
-extern struct gui_clipboard_table *nsgtk_clipboard_table;
+extern struct gui_clipboard_table *slategtk_clipboard_table;
 
 #endif

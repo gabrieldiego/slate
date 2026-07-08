@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -52,20 +52,20 @@ static void http_destroy_challenge(http_challenge *self)
  *
  * \param input      Pointer to current input byte. Updated on exit.
  * \param challenge  Pointer to location to receive challenge
- * \return NSERROR_OK on success,
- * 	   NSERROR_NOMEM on memory exhaustion,
- * 	   NSERROR_NOT_FOUND if no parameter could be parsed
+ * \return SLATEERROR_OK on success,
+ * 	   SLATEERROR_NOMEM on memory exhaustion,
+ * 	   SLATEERROR_NOT_FOUND if no parameter could be parsed
  *
  * The returned challenge is owned by the caller.
  */
-nserror http__parse_challenge(const char **input, http_challenge **challenge)
+slateerror http__parse_challenge(const char **input, http_challenge **challenge)
 {
 	const char *pos = *input;
 	http_challenge *result;
 	lwc_string *scheme;
 	http_parameter *first = NULL;
 	http_parameter *params = NULL;
-	nserror error;
+	slateerror error;
 
 	/* challenge   = auth-scheme 1*SP 1#auth-param
 	 * auth-scheme = token
@@ -73,18 +73,18 @@ nserror http__parse_challenge(const char **input, http_challenge **challenge)
 	 */
 
 	error = http__parse_token(&pos, &scheme);
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 
 	if (*pos != ' ' && *pos != '\t') {
 		lwc_string_unref(scheme);
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	http__skip_LWS(&pos);
 
 	error = http__parse_parameter(&pos, &first);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		lwc_string_unref(scheme);
 		return error;
 	}
@@ -94,7 +94,7 @@ nserror http__parse_challenge(const char **input, http_challenge **challenge)
 	if (*pos == ',') {
 		error = http__item_list_parse(&pos,
 				http__parse_parameter, first, &params);
-		if (error != NSERROR_OK && error != NSERROR_NOT_FOUND) {
+		if (error != SLATEERROR_OK && error != SLATEERROR_NOT_FOUND) {
 			lwc_string_unref(scheme);
 			return error;
 		}
@@ -106,7 +106,7 @@ nserror http__parse_challenge(const char **input, http_challenge **challenge)
 	if (result == NULL) {
 		http_parameter_list_destroy(params);
 		lwc_string_unref(scheme);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	HTTP__ITEM_INIT(result, NULL, http_destroy_challenge);
@@ -116,7 +116,7 @@ nserror http__parse_challenge(const char **input, http_challenge **challenge)
 	*challenge = result;
 	*input = pos;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* See challenge.h for documentation */

@@ -95,14 +95,14 @@ jobs:
           source docs/env.sh
           make -j"$(nproc)" TARGET=gtk
 
-    - name: Build NetSurf Monkey
+    - name: Build Slate Jotter
       env:
         CC: ${{ matrix.compiler.CC }}
         CXX: ${{ matrix.compiler.CXX }}
         TARGET_WORKSPACE: "${{ github.workspace }}/projects" # Same as "$(pwd)/projects"
       run: |
           source docs/env.sh
-          make -j"$(nproc)" TARGET=monkey
+          make -j"$(nproc)" TARGET=jotter
 
     - name: Build NetSurf Framebuffer
       env:

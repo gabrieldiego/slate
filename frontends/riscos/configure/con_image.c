@@ -1,7 +1,7 @@
 /*
  * Copyright 2006 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,7 @@
 #include <oslib/osspriteop.h>
 #include <oslib/wimp.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/utils.h"
 
@@ -65,7 +65,7 @@ bool ro_gui_options_image_initialise(wimp_w w)
 	/* load the sprite file */
 	if (example_users == 0) {
 		char pathname[256];
-		snprintf(pathname, 256, "%s.Resources.Image", NETSURF_DIR);
+		snprintf(pathname, 256, "%s.Resources.Image", SLATE_DIR);
 		pathname[255] = '\0';
 		example_images = ro_gui_load_sprite_file(pathname);
 		if (!example_images)
@@ -75,17 +75,17 @@ bool ro_gui_options_image_initialise(wimp_w w)
 
 	/* set the current values */
 	for (i = 0; (i < 4); i++) {
-		if ((unsigned int)nsoption_int(plot_fg_quality) == tinct_options[i])
+		if ((unsigned int)slateoption_int(plot_fg_quality) == tinct_options[i])
 			ro_gui_set_icon_string(w, IMAGE_FOREGROUND_FIELD,
 					image_quality_menu->entries[i].
 						data.indirected_text.text, true);
-		if ((unsigned int)nsoption_int(plot_bg_quality) == tinct_options[i])
+		if ((unsigned int)slateoption_int(plot_bg_quality) == tinct_options[i])
 			ro_gui_set_icon_string(w, IMAGE_BACKGROUND_FIELD,
 					image_quality_menu->entries[i].
 						data.indirected_text.text, true);
 	}
 	ro_gui_set_icon_selected_state(w, IMAGE_DISABLE_ANIMATION,
-				       !nsoption_bool(animate_images));
+				       !slateoption_bool(animate_images));
 	ro_gui_options_update_shading(w);
 
 	/* register icons */
@@ -239,10 +239,10 @@ void ro_gui_options_update_shading(wimp_w w)
 bool ro_gui_options_image_ok(wimp_w w)
 {
 	ro_gui_options_image_read(w, 
-				  (unsigned int *)&nsoption_int(plot_bg_quality),
-				  (unsigned int *)&nsoption_int(plot_fg_quality));
+				  (unsigned int *)&slateoption_int(plot_bg_quality),
+				  (unsigned int *)&slateoption_int(plot_fg_quality));
 
-	nsoption_set_bool(animate_images,
+	slateoption_set_bool(animate_images,
 			  !ro_gui_get_icon_selected_state(w,
 					IMAGE_DISABLE_ANIMATION));
 	ro_gui_save_options();

@@ -1,7 +1,7 @@
 /*
  * Copyright 2006 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -189,7 +189,7 @@ bool filename_initialise(void)
 		if (*start == '/') {
 			*start = '\0';
 			NSLOG(netsurf, INFO, "Creating \"%s\"", directory);
-			ret = nsmkdir(directory, S_IRWXU);
+			ret = slatemkdir(directory, S_IRWXU);
 			if (ret != 0 && errno != EEXIST) {
 				NSLOG(netsurf, INFO,
 				      "Failed to create directory \"%s\"",
@@ -203,7 +203,7 @@ bool filename_initialise(void)
 	}
 
 	NSLOG(netsurf, INFO, "Temporary directory location: %s", directory);
-	ret = nsmkdir(directory, S_IRWXU);
+	ret = slatemkdir(directory, S_IRWXU);
 
 	free(directory);
 
@@ -365,8 +365,8 @@ bool filename_flush_directory(const char *folder, int depth)
 		/* delete or recurse */
 		if (del) {
 			if (S_ISDIR(statbuf.st_mode)) {
-				changed = (netsurf_recursive_rm(child) ==
-					   NSERROR_OK);
+				changed = (slate_recursive_rm(child) ==
+					   SLATEERROR_OK);
 			} else {
 #if (defined(HAVE_DIRFD) && defined(HAVE_UNLINKAT))
 				if (unlinkat(dirfd(parent), entry->d_name, 0)) {
@@ -473,7 +473,7 @@ static struct directory *filename_create_directory(const char *prefix)
 		new_dir->prefix[8] = '/';
 
 		if (!is_dir(filename_directory)) {
-			if (!nsmkdir(filename_directory, S_IRWXU))
+			if (!slatemkdir(filename_directory, S_IRWXU))
 				return new_dir;
 
 			/* the user has probably deleted the parent directory
@@ -501,7 +501,7 @@ static struct directory *filename_create_directory(const char *prefix)
 			last_1[0] = '\0';
 
 			if (!is_dir(filename_directory)) {
-				if (nsmkdir(filename_directory, S_IRWXU)) {
+				if (slatemkdir(filename_directory, S_IRWXU)) {
 					NSLOG(netsurf, INFO,
 					      "Failed to create directory '%s'",
 					      filename_directory);

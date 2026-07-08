@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Rob Kendrick <rjek@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * Compatibility functions for older GTK versions (interface)
  */
 
-#ifndef NETSURF_GTK_COMPAT_H_
-#define NETSURF_GTK_COMPAT_H_
+#ifndef SLATE_GTK_COMPAT_H_
+#define SLATE_GTK_COMPAT_H_
 
 #include <stdint.h>
 
@@ -30,40 +30,40 @@
 
 /* gtk 3.10 depricated the use of stock names */
 #if GTK_CHECK_VERSION(3,10,0)
-#define NSGTK_USE_ICON_NAME
+#define SLATEGTK_USE_ICON_NAME
 #else
-#undef NSGTK_USE_ICON_NAME
+#undef SLATEGTK_USE_ICON_NAME
 #endif
 
 /* icon names instead of stock */
-#ifdef NSGTK_USE_ICON_NAME
-#define NSGTK_STOCK_ADD "list-add"
-#define NSGTK_STOCK_CANCEL "_Cancel"
-#define NSGTK_STOCK_CLEAR "edit-clear"
-#define NSGTK_STOCK_CLOSE "window-close"
-#define NSGTK_STOCK_HOME "go-home"
-#define NSGTK_STOCK_INFO "dialog-information"
-#define NSGTK_STOCK_REFRESH "view-refresh"
-#define NSGTK_STOCK_SAVE "document-save"
-#define NSGTK_STOCK_SAVE_AS "document-save-as"
-#define NSGTK_STOCK_STOP "process-stop"
-#define NSGTK_STOCK_OK "_OK"
-#define NSGTK_STOCK_OPEN "_Open"
-#define NSGTK_STOCK_OPEN_MENU "open-menu"
+#ifdef SLATEGTK_USE_ICON_NAME
+#define SLATEGTK_STOCK_ADD "list-add"
+#define SLATEGTK_STOCK_CANCEL "_Cancel"
+#define SLATEGTK_STOCK_CLEAR "edit-clear"
+#define SLATEGTK_STOCK_CLOSE "window-close"
+#define SLATEGTK_STOCK_HOME "go-home"
+#define SLATEGTK_STOCK_INFO "dialog-information"
+#define SLATEGTK_STOCK_REFRESH "view-refresh"
+#define SLATEGTK_STOCK_SAVE "document-save"
+#define SLATEGTK_STOCK_SAVE_AS "document-save-as"
+#define SLATEGTK_STOCK_STOP "process-stop"
+#define SLATEGTK_STOCK_OK "_OK"
+#define SLATEGTK_STOCK_OPEN "_Open"
+#define SLATEGTK_STOCK_OPEN_MENU "open-menu"
 #else
-#define NSGTK_STOCK_ADD GTK_STOCK_ADD
-#define NSGTK_STOCK_CANCEL GTK_STOCK_CANCEL
-#define NSGTK_STOCK_CLEAR GTK_STOCK_CLEAR
-#define NSGTK_STOCK_CLOSE GTK_STOCK_CLOSE
-#define NSGTK_STOCK_HOME GTK_STOCK_HOME
-#define NSGTK_STOCK_INFO GTK_STOCK_INFO
-#define NSGTK_STOCK_REFRESH GTK_STOCK_REFRESH
-#define NSGTK_STOCK_SAVE GTK_STOCK_SAVE
-#define NSGTK_STOCK_SAVE_AS GTK_STOCK_SAVE_AS
-#define NSGTK_STOCK_STOP GTK_STOCK_STOP
-#define NSGTK_STOCK_OK GTK_STOCK_OK
-#define NSGTK_STOCK_OPEN GTK_STOCK_OPEN
-#define NSGTK_STOCK_OPEN_MENU GTK_STOCK_JUSTIFY_FILL
+#define SLATEGTK_STOCK_ADD GTK_STOCK_ADD
+#define SLATEGTK_STOCK_CANCEL GTK_STOCK_CANCEL
+#define SLATEGTK_STOCK_CLEAR GTK_STOCK_CLEAR
+#define SLATEGTK_STOCK_CLOSE GTK_STOCK_CLOSE
+#define SLATEGTK_STOCK_HOME GTK_STOCK_HOME
+#define SLATEGTK_STOCK_INFO GTK_STOCK_INFO
+#define SLATEGTK_STOCK_REFRESH GTK_STOCK_REFRESH
+#define SLATEGTK_STOCK_SAVE GTK_STOCK_SAVE
+#define SLATEGTK_STOCK_SAVE_AS GTK_STOCK_SAVE_AS
+#define SLATEGTK_STOCK_STOP GTK_STOCK_STOP
+#define SLATEGTK_STOCK_OK GTK_STOCK_OK
+#define SLATEGTK_STOCK_OPEN GTK_STOCK_OPEN
+#define SLATEGTK_STOCK_OPEN_MENU GTK_STOCK_JUSTIFY_FILL
 #endif
 
 /* widget alignment only available since 3.0 */
@@ -95,7 +95,7 @@ typedef enum  {
  * \param halign The horizontal alignment to set.
  * \param valign The vertical alignment to set
  */
-void nsgtk_widget_set_alignment(GtkWidget *widget, GtkAlign halign, GtkAlign valign);
+void slategtk_widget_set_alignment(GtkWidget *widget, GtkAlign halign, GtkAlign valign);
 
 /**
  * Set the margins of a widget
@@ -109,18 +109,18 @@ void nsgtk_widget_set_alignment(GtkWidget *widget, GtkAlign halign, GtkAlign val
  * \param hmargin The horizontal margin.
  * \param vmargin The vertical margin.
  */
-void nsgtk_widget_set_margins(GtkWidget *widget, gint hmargin, gint vmargin);
+void slategtk_widget_set_margins(GtkWidget *widget, gint hmargin, gint vmargin);
 
-void nsgtk_widget_set_can_focus(GtkWidget *widget, gboolean can_focus);
-gboolean nsgtk_widget_has_focus(GtkWidget *widget);
-gboolean nsgtk_widget_get_visible(GtkWidget *widget);
-gboolean nsgtk_widget_get_realized(GtkWidget *widget);
-gboolean nsgtk_widget_get_mapped(GtkWidget *widget);
-gboolean nsgtk_widget_is_drawable(GtkWidget *widget);
-void nsgtk_dialog_set_has_separator(GtkDialog *dialog, gboolean setting);
-GtkWidget *nsgtk_combo_box_text_new(void);
-void nsgtk_combo_box_text_append_text(GtkWidget *combo_box, const gchar *text);
-gchar *nsgtk_combo_box_text_get_active_text(GtkWidget *combo_box);
+void slategtk_widget_set_can_focus(GtkWidget *widget, gboolean can_focus);
+gboolean slategtk_widget_has_focus(GtkWidget *widget);
+gboolean slategtk_widget_get_visible(GtkWidget *widget);
+gboolean slategtk_widget_get_realized(GtkWidget *widget);
+gboolean slategtk_widget_get_mapped(GtkWidget *widget);
+gboolean slategtk_widget_is_drawable(GtkWidget *widget);
+void slategtk_dialog_set_has_separator(GtkDialog *dialog, gboolean setting);
+GtkWidget *slategtk_combo_box_text_new(void);
+void slategtk_combo_box_text_append_text(GtkWidget *combo_box, const gchar *text);
+gchar *slategtk_combo_box_text_get_active_text(GtkWidget *combo_box);
 
 /**
  * creates a new image widget of an appropriate icon size from a pixbuf.
@@ -129,7 +129,7 @@ gchar *nsgtk_combo_box_text_get_active_text(GtkWidget *combo_box);
  * \param size The size of icon to create
  * \return An image widget.
  */
-GtkWidget *nsgtk_image_new_from_pixbuf_icon(GdkPixbuf *pixbuf, GtkIconSize size);
+GtkWidget *slategtk_image_new_from_pixbuf_icon(GdkPixbuf *pixbuf, GtkIconSize size);
 
 /* GTK prior to 2.16 needs the sexy interface for icons */
 #if !GTK_CHECK_VERSION(2,16,0)
@@ -141,7 +141,7 @@ typedef enum {
   GTK_ENTRY_ICON_SECONDARY = SEXY_ICON_ENTRY_SECONDARY
 } GtkEntryIconPosition;
 
-GtkStateType nsgtk_widget_get_state(GtkWidget *widget);
+GtkStateType slategtk_widget_get_state(GtkWidget *widget);
 
 #endif
 
@@ -182,7 +182,7 @@ enum {
  * \param icon_pos The position of the icon.
  * \param stock_id the name of the stock item.
  */
-void nsgtk_entry_set_icon_from_icon_name(GtkWidget *entry, GtkEntryIconPosition icon_pos, const gchar *stock_id);
+void slategtk_entry_set_icon_from_icon_name(GtkWidget *entry, GtkEntryIconPosition icon_pos, const gchar *stock_id);
 
 /**
  * Creates a GtkImage displaying a stock icon.
@@ -193,7 +193,7 @@ void nsgtk_entry_set_icon_from_icon_name(GtkWidget *entry, GtkEntryIconPosition 
  * \param size The size of icon to create.
  * \return The created image widget or NULL on error
  */
-GtkWidget *nsgtk_image_new_from_stock(const gchar *stock_id, GtkIconSize size);
+GtkWidget *slategtk_image_new_from_stock(const gchar *stock_id, GtkIconSize size);
 
 /**
  * Creates a new GtkButton containing the image and text from a stock item.
@@ -202,7 +202,7 @@ GtkWidget *nsgtk_image_new_from_stock(const gchar *stock_id, GtkIconSize size);
  *
  * \param stock_id the name of the stock item
  */
-GtkWidget *nsgtk_button_new_from_stock(const gchar *stock_id);
+GtkWidget *slategtk_button_new_from_stock(const gchar *stock_id);
 
 /**
  * Fills item with the registered values for stock_id.
@@ -213,7 +213,7 @@ GtkWidget *nsgtk_button_new_from_stock(const gchar *stock_id);
  * \param item The structure to update if the stock_id was known.
  * \return TRUE if stock_id was known.
  */
-gboolean nsgtk_stock_lookup(const gchar *stock_id, GtkStockItem *item);
+gboolean slategtk_stock_lookup(const gchar *stock_id, GtkStockItem *item);
 
 /**
  * Sets whether the button will grab focus when it is clicked with the mouse.
@@ -223,41 +223,41 @@ gboolean nsgtk_stock_lookup(const gchar *stock_id, GtkStockItem *item);
  * \param button The button alter
  * \param focus_on_click whether the button grabs focus when clicked with the mouse
  */
-void nsgtk_button_set_focus_on_click(GtkButton *button, gboolean focus_on_click);
+void slategtk_button_set_focus_on_click(GtkButton *button, gboolean focus_on_click);
 
-void nsgtk_window_set_opacity(GtkWindow *window, gdouble opacity);
+void slategtk_window_set_opacity(GtkWindow *window, gdouble opacity);
 
-void nsgtk_scrolled_window_add_with_viewport(GtkScrolledWindow *window, GtkWidget *child);
+void slategtk_scrolled_window_add_with_viewport(GtkScrolledWindow *window, GtkWidget *child);
 
-GtkWidget *nsgtk_entry_new(void);
+GtkWidget *slategtk_entry_new(void);
 
-void nsgtk_entry_set_icon_from_pixbuf(GtkWidget *entry, GtkEntryIconPosition icon_pos, GdkPixbuf *pixbuf);
+void slategtk_entry_set_icon_from_pixbuf(GtkWidget *entry, GtkEntryIconPosition icon_pos, GdkPixbuf *pixbuf);
 
-void nsgtk_widget_override_background_color(GtkWidget *widget, GtkStateFlags state, uint16_t a, uint16_t r, uint16_t g, uint16_t b);
-GtkWidget* nsgtk_hbox_new(gboolean homogeneous, gint spacing);
-GtkWidget* nsgtk_vbox_new(gboolean homogeneous, gint spacing);
-GtkStateFlags nsgtk_widget_get_state_flags(GtkWidget *widget);
-GtkStyleContext* nsgtk_widget_get_style_context(GtkWidget *widget);
-const PangoFontDescription* nsgtk_style_context_get_font(GtkStyleContext *style, GtkStateFlags state);
-gulong nsgtk_connect_draw_event(GtkWidget *widget, GCallback callback, gpointer g);
+void slategtk_widget_override_background_color(GtkWidget *widget, GtkStateFlags state, uint16_t a, uint16_t r, uint16_t g, uint16_t b);
+GtkWidget* slategtk_hbox_new(gboolean homogeneous, gint spacing);
+GtkWidget* slategtk_vbox_new(gboolean homogeneous, gint spacing);
+GtkStateFlags slategtk_widget_get_state_flags(GtkWidget *widget);
+GtkStyleContext* slategtk_widget_get_style_context(GtkWidget *widget);
+const PangoFontDescription* slategtk_style_context_get_font(GtkStyleContext *style, GtkStateFlags state);
+gulong slategtk_connect_draw_event(GtkWidget *widget, GCallback callback, gpointer g);
 void nsgdk_cursor_unref(GdkCursor *cursor);
-void nsgtk_widget_modify_font(GtkWidget *widget, PangoFontDescription *font_desc);
-GdkWindow *nsgtk_widget_get_window(GtkWidget *widget);
-GtkWidget *nsgtk_dialog_get_content_area(GtkDialog *dialog);
-gboolean nsgtk_show_uri(GdkScreen *screen, const gchar *uri, guint32 timestamp, GError **error);
-GdkWindow *nsgtk_layout_get_bin_window(GtkLayout *layout);
-void nsgtk_widget_get_allocation(GtkWidget *widget, GtkAllocation *allocation);
+void slategtk_widget_modify_font(GtkWidget *widget, PangoFontDescription *font_desc);
+GdkWindow *slategtk_widget_get_window(GtkWidget *widget);
+GtkWidget *slategtk_dialog_get_content_area(GtkDialog *dialog);
+gboolean slategtk_show_uri(GdkScreen *screen, const gchar *uri, guint32 timestamp, GError **error);
+GdkWindow *slategtk_layout_get_bin_window(GtkLayout *layout);
+void slategtk_widget_get_allocation(GtkWidget *widget, GtkAllocation *allocation);
 
-gboolean nsgtk_icon_size_lookup_for_settings (GtkSettings *settings, GtkIconSize size, gint *width, gint *height);
+gboolean slategtk_icon_size_lookup_for_settings (GtkSettings *settings, GtkIconSize size, gint *width, gint *height);
 
-GtkAdjustment *nsgtk_layout_get_vadjustment(GtkLayout *layout);
-GtkAdjustment *nsgtk_layout_get_hadjustment(GtkLayout *layout);
-void nsgtk_layout_set_hadjustment(GtkLayout *layout, GtkAdjustment *adj); 
-void nsgtk_layout_set_vadjustment(GtkLayout *layout, GtkAdjustment *adj);
-gdouble nsgtk_adjustment_get_step_increment(GtkAdjustment *adjustment);
-gdouble nsgtk_adjustment_get_upper(GtkAdjustment *adjustment);
-gdouble nsgtk_adjustment_get_lower(GtkAdjustment *adjustment);
-gdouble nsgtk_adjustment_get_page_increment(GtkAdjustment *adjustment);
+GtkAdjustment *slategtk_layout_get_vadjustment(GtkLayout *layout);
+GtkAdjustment *slategtk_layout_get_hadjustment(GtkLayout *layout);
+void slategtk_layout_set_hadjustment(GtkLayout *layout, GtkAdjustment *adj); 
+void slategtk_layout_set_vadjustment(GtkLayout *layout, GtkAdjustment *adj);
+gdouble slategtk_adjustment_get_step_increment(GtkAdjustment *adjustment);
+gdouble slategtk_adjustment_get_upper(GtkAdjustment *adjustment);
+gdouble slategtk_adjustment_get_lower(GtkAdjustment *adjustment);
+gdouble slategtk_adjustment_get_page_increment(GtkAdjustment *adjustment);
 
 /* menu compatability */
 
@@ -271,7 +271,7 @@ gdouble nsgtk_adjustment_get_page_increment(GtkAdjustment *adjustment);
  *        the mnemonic character.
  * \return a new GtkMenuItem
  */
-GtkWidget *nsgtk_image_menu_item_new_with_mnemonic(const gchar *label);
+GtkWidget *slategtk_image_menu_item_new_with_mnemonic(const gchar *label);
 
 /**
  * Sets the image of image_menu_item to the given widget.
@@ -282,7 +282,7 @@ GtkWidget *nsgtk_image_menu_item_new_with_mnemonic(const gchar *label);
  * \param image_menu_item The image menu entry item.
  * \param image The image to set.
  */
-void nsgtk_image_menu_item_set_image(GtkWidget *image_menu_item, GtkWidget *image);
+void slategtk_image_menu_item_set_image(GtkWidget *image_menu_item, GtkWidget *image);
 
 /**
  * Displays menu and makes it available for selection
@@ -292,7 +292,7 @@ void nsgtk_image_menu_item_set_image(GtkWidget *image_menu_item, GtkWidget *imag
  * \param image_menu_item The image menu entry item.
  * \param trigger_event the GdkEvent that initiated this request or NULL if it's the current event.
  */
-void nsgtk_menu_popup_at_pointer(GtkMenu *menu, const GdkEvent *trigger_event);
+void slategtk_menu_popup_at_pointer(GtkMenu *menu, const GdkEvent *trigger_event);
 
 /**
  * Parses a resource file containing a GtkBuilder UI definition and
@@ -316,6 +316,6 @@ void nsgtk_menu_popup_at_pointer(GtkMenu *menu, const GdkEvent *trigger_event);
  * \param error return location for an error, or NULL.
  * \return A positive value on success, 0 if an error occurred.
  */
-guint nsgtk_builder_add_from_resource(GtkBuilder *builder, const gchar *resource_path, GError **error);
+guint slategtk_builder_add_from_resource(GtkBuilder *builder, const gchar *resource_path, GError **error);
 
-#endif /* NETSURF_GTK_COMPAT_H */
+#endif /* SLATE_GTK_COMPAT_H */

@@ -2,7 +2,7 @@
  * Copyright 2007 James Bursa <bursa@users.sourceforge.net>
  * Copyright 2010 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,22 +38,22 @@
 #include "utils/messages.h"
 #include "utils/talloc.h"
 #include "utils/utf8.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/string.h"
 #include "utils/ascii.h"
-#include "netsurf/content.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/utf8.h"
-#include "netsurf/keypress.h"
-#include "netsurf/layout.h"
-#include "netsurf/misc.h"
+#include "slate/content.h"
+#include "slate/browser_window.h"
+#include "slate/utf8.h"
+#include "slate/keypress.h"
+#include "slate/layout.h"
+#include "slate/misc.h"
 #include "content/hlcache.h"
 #include "content/content_factory.h"
 #include "content/textsearch.h"
 #include "desktop/selection.h"
 #include "desktop/scrollbar.h"
 #include "desktop/textarea.h"
-#include "netsurf/bitmap.h"
+#include "slate/bitmap.h"
 #include "javascript/js.h"
 #include "desktop/gui_internal.h"
 
@@ -276,7 +276,7 @@ bool fire_dom_mouse_event(dom_string *type, dom_node *target,
  */
 static void html_box_convert_done(html_content *c, bool success)
 {
-	nserror err;
+	slateerror err;
 	dom_exception exc; /* returned by libdom functions */
 	dom_node *html;
 
@@ -289,9 +289,9 @@ static void html_box_convert_done(html_content *c, bool success)
 		html_object_free_objects(c);
 
 		if (success == false) {
-			content_broadcast_error(&c->base, NSERROR_BOX_CONVERT, NULL);
+			content_broadcast_error(&c->base, SLATEERROR_BOX_CONVERT, NULL);
 		} else {
-			content_broadcast_error(&c->base, NSERROR_STOPPED, NULL);
+			content_broadcast_error(&c->base, SLATEERROR_STOPPED, NULL);
 		}
 
 		content_set_error(&c->base);
@@ -313,14 +313,14 @@ static void html_box_convert_done(html_content *c, bool success)
 		 * like the other error paths
 		 */
 		NSLOG(netsurf, INFO, "error retrieving html element from dom");
-		content_broadcast_error(&c->base, NSERROR_DOM, NULL);
+		content_broadcast_error(&c->base, SLATEERROR_DOM, NULL);
 		content_set_error(&c->base);
 		return;
 	}
 
 	/* extract image maps - can't do this sensibly in dom_to_box */
 	err = imagemap_extract(c);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "imagemap extraction failed");
 		html_object_free_objects(c);
 		content_broadcast_error(&c->base, err, NULL);
@@ -342,25 +342,25 @@ static void html_box_convert_done(html_content *c, bool success)
 }
 
 /* Documented in html_internal.h */
-nserror
+slateerror
 html_proceed_to_done(html_content *html)
 {
 	switch (content__get_status(&html->base)) {
 	case CONTENT_STATUS_READY:
 		if (html->base.active == 0) {
 			content_set_done(&html->base);
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 		break;
 	case CONTENT_STATUS_DONE:
 		/* fallthrough */
 	case CONTENT_STATUS_LOADING:
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	default:
 		NSLOG(netsurf, ERROR, "Content status unexpectedly not LOADING/READY/DONE");
 		break;
 	}
-	return NSERROR_UNKNOWN;
+	return SLATEERROR_UNKNOWN;
 }
 
 
@@ -390,9 +390,9 @@ static void html_get_dimensions(html_content *htmlc)
 	htmlc->unit_len_ctx.viewport_height = h;
 	htmlc->unit_len_ctx.device_dpi = device_dpi;
 
-	/** \todo Change nsoption font sizes to px. */
-	f_size = FDIV(FMUL(F_96, FDIV(INTTOFIX(nsoption_int(font_size)), F_10)), F_72);
-	f_min  = FDIV(FMUL(F_96, FDIV(INTTOFIX(nsoption_int(font_min_size)), F_10)), F_72);
+	/** \todo Change slateoption font sizes to px. */
+	f_size = FDIV(FMUL(F_96, FDIV(INTTOFIX(slateoption_int(font_size)), F_10)), F_72);
+	f_min  = FDIV(FMUL(F_96, FDIV(INTTOFIX(slateoption_int(font_min_size)), F_10)), F_72);
 
 	htmlc->unit_len_ctx.font_size_default = f_size;
 	htmlc->unit_len_ctx.font_size_minimum = f_min;
@@ -404,11 +404,11 @@ void html_finish_conversion(html_content *htmlc)
 	union content_msg_data msg_data;
 	dom_exception exc; /* returned by libdom functions */
 	dom_node *html;
-	nserror error;
+	slateerror error;
 
 	/* Bail out if we've been aborted */
 	if (htmlc->aborted) {
-		content_broadcast_error(&htmlc->base, NSERROR_STOPPED, NULL);
+		content_broadcast_error(&htmlc->base, SLATEERROR_STOPPED, NULL);
 		content_set_error(&htmlc->base);
 		return;
 	}
@@ -431,7 +431,7 @@ void html_finish_conversion(html_content *htmlc)
 
 	/* create new css selection context */
 	error = html_css_new_selection_context(htmlc, &htmlc->select_ctx);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_broadcast_error(&htmlc->base, error, NULL);
 		content_set_error(&htmlc->base);
 		return;
@@ -455,7 +455,7 @@ void html_finish_conversion(html_content *htmlc)
 	exc = dom_document_get_document_element(htmlc->document, (void *) &html);
 	if ((exc != DOM_NO_ERR) || (html == NULL)) {
 		NSLOG(netsurf, INFO, "error retrieving html element from dom");
-		content_broadcast_error(&htmlc->base, NSERROR_DOM, NULL);
+		content_broadcast_error(&htmlc->base, SLATEERROR_DOM, NULL);
 		content_set_error(&htmlc->base);
 		return;
 	}
@@ -463,7 +463,7 @@ void html_finish_conversion(html_content *htmlc)
 	html_get_dimensions(htmlc);
 
 	error = dom_to_box(html, htmlc, html_box_convert_done, &htmlc->box_conversion_context);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "box conversion failed");
 		dom_node_unref(html);
 		html_object_free_objects(htmlc);
@@ -510,16 +510,16 @@ html_document_user_data_handler(dom_node_operation operation,
 }
 
 
-static nserror
+static slateerror
 html_create_html_data(html_content *c, const http_parameter *params)
 {
 	lwc_string *charset;
-	nserror nerror;
+	slateerror nerror;
 	dom_hubbub_parser_params parse_params;
 	dom_hubbub_error error;
 	dom_exception err;
 	void *old_node_data;
-	const char *prefer_color_mode = (nsoption_bool(prefer_dark_mode)) ?
+	const char *prefer_color_mode = (slateoption_bool(prefer_dark_mode)) ?
 			"dark" : "light";
 
 	c->parser = NULL;
@@ -528,7 +528,7 @@ html_create_html_data(html_content *c, const http_parameter *params)
 	c->document = NULL;
 	c->quirks = DOM_DOCUMENT_QUIRKS_MODE_NONE;
 	c->encoding = NULL;
-	c->base_url = nsurl_ref(content_get_url(&c->base));
+	c->base_url = slateurl_ref(content_get_url(&c->base));
 	c->base_target = NULL;
 	c->aborted = false;
 	c->refresh = false;
@@ -563,24 +563,24 @@ html_create_html_data(html_content *c, const http_parameter *params)
 	c->scripts = NULL;
 	c->jsthread = NULL;
 
-	c->enable_scripting = nsoption_bool(enable_javascript);
+	c->enable_scripting = slateoption_bool(enable_javascript);
 	c->base.active = 1; /* The html content itself is active */
 
 	if (lwc_intern_string("*", SLEN("*"), &c->universal) != lwc_error_ok) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	if (lwc_intern_string(prefer_color_mode, strlen(prefer_color_mode),
 			&c->media.prefers_color_scheme) != lwc_error_ok) {
 		lwc_string_unref(c->universal);
 		c->universal = NULL;
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	c->sel = selection_create((struct content *)c);
 
 	nerror = http_parameter_list_find_item(params, corestring_lwc_charset, &charset);
-	if (nerror == NSERROR_OK) {
+	if (nerror == SLATEERROR_OK) {
 		c->encoding = strdup(lwc_string_data(charset));
 
 		lwc_string_unref(charset);
@@ -590,7 +590,7 @@ html_create_html_data(html_content *c, const http_parameter *params)
 			c->universal = NULL;
 			lwc_string_unref(c->media.prefers_color_scheme);
 			c->media.prefers_color_scheme = NULL;
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 
 		}
 		c->encoding_source = DOM_HUBBUB_ENCODING_SOURCE_HEADER;
@@ -621,7 +621,7 @@ html_create_html_data(html_content *c, const http_parameter *params)
 						 &c->document);
 	}
 	if (error != DOM_HUBBUB_OK) {
-		nsurl_unref(c->base_url);
+		slateurl_unref(c->base_url);
 		c->base_url = NULL;
 
 		lwc_string_unref(c->universal);
@@ -629,7 +629,7 @@ html_create_html_data(html_content *c, const http_parameter *params)
 		lwc_string_unref(c->media.prefers_color_scheme);
 		c->media.prefers_color_scheme = NULL;
 
-		return libdom_hubbub_error_to_nserror(error);
+		return libdom_hubbub_error_to_slateerror(error);
 	}
 
 	err = dom_node_set_user_data(c->document,
@@ -639,7 +639,7 @@ html_create_html_data(html_content *c, const http_parameter *params)
 	if (err != DOM_NO_ERR) {
 		dom_hubbub_parser_destroy(c->parser);
 		c->parser = NULL;
-		nsurl_unref(c->base_url);
+		slateurl_unref(c->base_url);
 		c->base_url = NULL;
 
 		lwc_string_unref(c->universal);
@@ -648,12 +648,12 @@ html_create_html_data(html_content *c, const http_parameter *params)
 		c->media.prefers_color_scheme = NULL;
 
 		NSLOG(netsurf, INFO, "Unable to set user data.");
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	assert(old_node_data == NULL);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 
 }
 
@@ -664,7 +664,7 @@ html_create_html_data(html_content *c, const http_parameter *params)
  * created.
  */
 
-static nserror
+static slateerror
 html_create(const content_handler *handler,
 	    lwc_string *imime_type,
 	    const http_parameter *params,
@@ -674,28 +674,28 @@ html_create(const content_handler *handler,
 	    struct content **c)
 {
 	html_content *html;
-	nserror error;
+	slateerror error;
 
 	html = calloc(1, sizeof(html_content));
 	if (html == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__init(&html->base, handler, imime_type, params,
 			llcache, fallback_charset, quirks);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(html);
 		return error;
 	}
 
 	error = html_create_html_data(html, params);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_broadcast_error(&html->base, error, NULL);
 		free(html);
 		return error;
 	}
 
 	error = html_css_new_stylesheets(html);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_broadcast_error(&html->base, error, NULL);
 		free(html);
 		return error;
@@ -703,12 +703,12 @@ html_create(const content_handler *handler,
 
 	*c = (struct content *) html;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 
-static nserror
+static slateerror
 html_process_encoding_change(struct content *c,
 			     const char *data,
 			     unsigned int size)
@@ -724,7 +724,7 @@ html_process_encoding_change(struct content *c,
 	encoding = dom_hubbub_parser_get_encoding(html->parser,
 						  &html->encoding_source);
 	if (encoding == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	if (html->encoding != NULL) {
@@ -734,7 +734,7 @@ html_process_encoding_change(struct content *c,
 
 	html->encoding = strdup(encoding);
 	if (html->encoding == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* Destroy binding */
@@ -763,7 +763,7 @@ html_process_encoding_change(struct content *c,
 		free(html->encoding);
 		html->encoding = strdup("Windows-1252");
 		if (html->encoding == NULL) {
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 		parse_params.enc = html->encoding;
 
@@ -772,7 +772,7 @@ html_process_encoding_change(struct content *c,
 						 &html->document);
 
 		if (error != DOM_HUBBUB_OK) {
-			return libdom_hubbub_error_to_nserror(error);
+			return libdom_hubbub_error_to_slateerror(error);
 		}
 
 	}
@@ -787,7 +787,7 @@ html_process_encoding_change(struct content *c,
 					      source_data,
 					      source_size);
 
-	return libdom_hubbub_error_to_nserror(error);
+	return libdom_hubbub_error_to_slateerror(error);
 }
 
 
@@ -800,21 +800,21 @@ html_process_data(struct content *c, const char *data, unsigned int size)
 {
 	html_content *html = (html_content *) c;
 	dom_hubbub_error dom_ret;
-	nserror err = NSERROR_OK; /* assume its all going to be ok */
+	slateerror err = SLATEERROR_OK; /* assume its all going to be ok */
 
 	dom_ret = dom_hubbub_parser_parse_chunk(html->parser,
 					      (const uint8_t *) data,
 					      size);
 
-	err = libdom_hubbub_error_to_nserror(dom_ret);
+	err = libdom_hubbub_error_to_slateerror(dom_ret);
 
 	/* deal with encoding change */
-	if (err == NSERROR_ENCODING_CHANGE) {
+	if (err == SLATEERROR_ENCODING_CHANGE) {
 		 err = html_process_encoding_change(c, data, size);
 	}
 
 	/* broadcast the error if necessary */
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		content_broadcast_error(c, err, NULL);
 		return false;
 	}
@@ -896,7 +896,7 @@ bool
 html_begin_conversion(html_content *htmlc)
 {
 	dom_node *html;
-	nserror ns_error;
+	slateerror ns_error;
 	struct form *f;
 	dom_exception exc; /* returned by libdom functions */
 	dom_string *node_name = NULL;
@@ -928,7 +928,7 @@ html_begin_conversion(html_content *htmlc)
 			NSLOG(netsurf, INFO, "Parsing failed");
 
 			content_broadcast_error(&htmlc->base,
-						libdom_hubbub_error_to_nserror(error),
+						libdom_hubbub_error_to_slateerror(error),
 						NULL);
 
 			return false;
@@ -947,7 +947,7 @@ html_begin_conversion(html_content *htmlc)
 		NSLOG(netsurf, INFO, "Conversion aborted (%p) (active: %u)",
 		      htmlc, htmlc->base.active);
 		content_set_error(&htmlc->base);
-		content_broadcast_error(&htmlc->base, NSERROR_STOPPED, NULL);
+		content_broadcast_error(&htmlc->base, SLATEERROR_STOPPED, NULL);
 		return false;
 	}
 
@@ -969,7 +969,7 @@ html_begin_conversion(html_content *htmlc)
 					&htmlc->encoding_source);
 		if (encoding == NULL) {
 			content_broadcast_error(&htmlc->base,
-						NSERROR_NOMEM,
+						SLATEERROR_NOMEM,
 						NULL);
 			return false;
 		}
@@ -977,7 +977,7 @@ html_begin_conversion(html_content *htmlc)
 		htmlc->encoding = strdup(encoding);
 		if (htmlc->encoding == NULL) {
 			content_broadcast_error(&htmlc->base,
-						NSERROR_NOMEM,
+						SLATEERROR_NOMEM,
 						NULL);
 			return false;
 		}
@@ -987,7 +987,7 @@ html_begin_conversion(html_content *htmlc)
 	exc = dom_document_get_document_element(htmlc->document, (void *) &html);
 	if ((exc != DOM_NO_ERR) || (html == NULL)) {
 		NSLOG(netsurf, INFO, "error retrieving html element from dom");
-		content_broadcast_error(&htmlc->base, NSERROR_DOM, NULL);
+		content_broadcast_error(&htmlc->base, SLATEERROR_DOM, NULL);
 		return false;
 	}
 
@@ -997,7 +997,7 @@ html_begin_conversion(html_content *htmlc)
 	    (!dom_string_caseless_lwc_isequal(node_name,
 			corestring_lwc_html))) {
 		NSLOG(netsurf, INFO, "root element not html");
-		content_broadcast_error(&htmlc->base, NSERROR_DOM, NULL);
+		content_broadcast_error(&htmlc->base, SLATEERROR_DOM, NULL);
 		dom_node_unref(html);
 		return false;
 	}
@@ -1007,22 +1007,22 @@ html_begin_conversion(html_content *htmlc)
 	htmlc->forms = html_forms_get_forms(htmlc->encoding,
 			(dom_html_document *) htmlc->document);
 	for (f = htmlc->forms; f != NULL; f = f->prev) {
-		nsurl *action;
+		slateurl *action;
 
 		/* Make all actions absolute */
 		if (f->action == NULL || f->action[0] == '\0') {
 			/* HTML5 4.10.22.3 step 9 */
-			nsurl *doc_addr = content_get_url(&htmlc->base);
-			ns_error = nsurl_join(htmlc->base_url,
-					      nsurl_access(doc_addr),
+			slateurl *doc_addr = content_get_url(&htmlc->base);
+			ns_error = slateurl_join(htmlc->base_url,
+					      slateurl_access(doc_addr),
 					      &action);
 		} else {
-			ns_error = nsurl_join(htmlc->base_url,
+			ns_error = slateurl_join(htmlc->base_url,
 					      f->action,
 					      &action);
 		}
 
-		if (ns_error != NSERROR_OK) {
+		if (ns_error != SLATEERROR_OK) {
 			content_broadcast_error(&htmlc->base, ns_error, NULL);
 
 			dom_node_unref(html);
@@ -1030,11 +1030,11 @@ html_begin_conversion(html_content *htmlc)
 		}
 
 		free(f->action);
-		f->action = strdup(nsurl_access(action));
-		nsurl_unref(action);
+		f->action = strdup(slateurl_access(action));
+		slateurl_unref(action);
 		if (f->action == NULL) {
 			content_broadcast_error(&htmlc->base,
-						NSERROR_NOMEM,
+						SLATEERROR_NOMEM,
 						NULL);
 
 			dom_node_unref(html);
@@ -1046,7 +1046,7 @@ html_begin_conversion(html_content *htmlc)
 			f->document_charset = strdup(htmlc->encoding);
 			if (f->document_charset == NULL) {
 				content_broadcast_error(&htmlc->base,
-							NSERROR_NOMEM,
+							SLATEERROR_NOMEM,
 							NULL);
 				dom_node_unref(html);
 				return false;
@@ -1157,8 +1157,8 @@ static void html_reformat(struct content *c, int width, int height)
 	nsu_getmonotonic_ms(&ms_after);
 
 	ms_interval = (ms_after - ms_before) * 3;
-	if (ms_interval < (nsoption_uint(min_reflow_period) * 10)) {
-		ms_interval = nsoption_uint(min_reflow_period) * 10;
+	if (ms_interval < (slateoption_uint(min_reflow_period) * 10)) {
+		ms_interval = slateoption_uint(min_reflow_period) * 10;
 	}
 	c->reformat_time = ms_after + ms_interval;
 }
@@ -1220,7 +1220,7 @@ static void html_destroy_frameset(struct content_html_frames *frameset)
 				frameset->children[i].name = NULL;
 			}
 			if (frameset->children[i].url) {
-				nsurl_unref(frameset->children[i].url);
+				slateurl_unref(frameset->children[i].url);
 				frameset->children[i].url = NULL;
 			}
 			if (frameset->children[i].children)
@@ -1240,7 +1240,7 @@ static void html_destroy_iframe(struct content_html_iframe *iframe)
 		if (iframe->name)
 			talloc_free(iframe->name);
 		if (iframe->url) {
-			nsurl_unref(iframe->url);
+			slateurl_unref(iframe->url);
 			iframe->url = NULL;
 		}
 		talloc_free(iframe);
@@ -1271,7 +1271,7 @@ static void html_destroy(struct content *c)
 
 	/* If we're still converting a layout, cancel it */
 	if (html->box_conversion_context != NULL) {
-		if (cancel_dom_to_box(html->box_conversion_context) != NSERROR_OK) {
+		if (cancel_dom_to_box(html->box_conversion_context) != SLATEERROR_OK) {
 			NSLOG(netsurf, CRITICAL, "WARNING, Unable to cancel conversion context, browser may crash");
 		}
 	}
@@ -1288,10 +1288,10 @@ static void html_destroy(struct content *c)
 	imagemap_destroy(html);
 
 	if (c->refresh)
-		nsurl_unref(c->refresh);
+		slateurl_unref(c->refresh);
 
 	if (html->base_url)
-		nsurl_unref(html->base_url);
+		slateurl_unref(html->base_url);
 
 	/* At this point we can be moderately confident the JS is offline
 	 * so we destroy the JS thread.
@@ -1367,7 +1367,7 @@ static void html_destroy(struct content *c)
 }
 
 
-static nserror html_clone(const struct content *old, struct content **newc)
+static slateerror html_clone(const struct content *old, struct content **newc)
 {
 	/** \todo Clone HTML specifics */
 
@@ -1384,7 +1384,7 @@ static nserror html_clone(const struct content *old, struct content **newc)
  * Handle a window containing a CONTENT_HTML being opened.
  */
 
-static nserror
+static slateerror
 html_open(struct content *c,
 	  struct browser_window *bw,
 	  struct content *page,
@@ -1407,7 +1407,7 @@ html_open(struct content *c,
 
 	html_object_open_objects(html, bw);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1415,10 +1415,10 @@ html_open(struct content *c,
  * Handle a window containing a CONTENT_HTML being closed.
  */
 
-static nserror html_close(struct content *c)
+static slateerror html_close(struct content *c)
 {
 	html_content *htmlc = (html_content *) c;
-	nserror ret = NSERROR_OK;
+	slateerror ret = SLATEERROR_OK;
 
 	selection_clear(htmlc->sel, false);
 
@@ -1510,9 +1510,9 @@ static char *html_get_selection(struct content *c)
  * \param[in] y y-coordinate of point of interest
  * \param[out] data Positional features struct to be updated with any
  *             relevent content, or set to NULL if none.
- * \return NSERROR_OK on success else appropriate error code.
+ * \return SLATEERROR_OK on success else appropriate error code.
  */
-static nserror
+static slateerror
 html_get_contextual_content(struct content *c, int x, int y,
 			    struct browser_window_features *data)
 {
@@ -1555,7 +1555,7 @@ html_get_contextual_content(struct content *c, int x, int y,
 
 		if (box->usemap) {
 			const char *target = NULL;
-			nsurl *url = imagemap_get(html, box->usemap, box_x,
+			slateurl *url = imagemap_get(html, box->usemap, box_x,
 					box_y, x, y, &target);
 			/* Box might have imagemap, but no actual link area
 			 * at point */
@@ -1580,7 +1580,7 @@ html_get_contextual_content(struct content *c, int x, int y,
 			}
 		}
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1698,14 +1698,14 @@ static void html__dom_user_data_handler(dom_node_operation operation,
 static void html__set_file_gadget_filename(struct content *c,
 	struct form_control *gadget, const char *fn)
 {
-	nserror ret;
+	slateerror ret;
 	char *utf8_fn, *oldfile = NULL;
 	html_content *html = (html_content *)c;
 	struct box *file_box = gadget->box;
 
 	ret = guit->utf8->local_to_utf8(fn, 0, &utf8_fn);
-	if (ret != NSERROR_OK) {
-		assert(ret != NSERROR_BAD_ENCODING);
+	if (ret != SLATEERROR_OK) {
+		assert(ret != SLATEERROR_BAD_ENCODING);
 		NSLOG(netsurf, INFO,
 		      "utf8 to local encoding conversion failed");
 		/* Load was for us - just no memory */
@@ -1815,7 +1815,7 @@ static bool html_drop_file_at_point(struct content *c, int x, int y, char *file)
 		FILE *fp = NULL;
 		char *buffer;
 		char *utf8_buff;
-		nserror ret;
+		slateerror ret;
 		unsigned int size;
 		int bx, by;
 
@@ -1863,12 +1863,12 @@ static bool html_drop_file_at_point(struct content *c, int x, int y, char *file)
 
 		/* Convert to UTF-8 */
 		ret = guit->utf8->local_to_utf8(buffer, file_len, &utf8_buff);
-		if (ret != NSERROR_OK) {
+		if (ret != SLATEERROR_OK) {
 			/* bad encoding shouldn't happen */
 			NSLOG(netsurf, ERROR,
 			      "local to utf8 encoding failed (%s)",
 			      messages_get_errorcode(ret));
-			assert(ret != NSERROR_BAD_ENCODING);
+			assert(ret != SLATEERROR_BAD_ENCODING);
 			free(buffer);
 			return true;
 		}
@@ -1901,12 +1901,12 @@ static bool html_drop_file_at_point(struct content *c, int x, int y, char *file)
  * \param c The content to debug
  * \param op The debug operation type
  */
-static nserror
+static slateerror
 html_debug(struct content *c, enum content_debug op)
 {
 	html_redraw_debug = !html_redraw_debug;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1917,30 +1917,30 @@ html_debug(struct content *c, enum content_debug op)
  * \param f The file to dump to
  * \param op The debug dump type
  */
-static nserror
+static slateerror
 html_debug_dump(struct content *c, FILE *f, enum content_debug op)
 {
 	html_content *htmlc = (html_content *)c;
 	dom_node *html;
 	dom_exception exc; /* returned by libdom functions */
-	nserror ret;
+	slateerror ret;
 
 	assert(htmlc != NULL);
 
 	if (op == CONTENT_DEBUG_RENDER) {
 		assert(htmlc->layout != NULL);
 		box_dump(f, htmlc->layout, 0, true);
-		ret = NSERROR_OK;
+		ret = SLATEERROR_OK;
 	} else {
 		if (htmlc->document == NULL) {
 			NSLOG(netsurf, INFO, "No document to dump");
-			return NSERROR_DOM;
+			return SLATEERROR_DOM;
 		}
 
 		exc = dom_document_get_document_element(htmlc->document, (void *) &html);
 		if ((exc != DOM_NO_ERR) || (html == NULL)) {
 			NSLOG(netsurf, INFO, "Unable to obtain root node");
-			return NSERROR_DOM;
+			return SLATEERROR_DOM;
 		}
 
 		ret = libdom_dump_structure(html, f, 0);
@@ -2100,7 +2100,7 @@ struct content_html_iframe *html_get_iframe(hlcache_handle *h)
  * \param h  Content to retrieve base target from
  * \return Pointer to URL
  */
-nsurl *html_get_base_url(hlcache_handle *h)
+slateurl *html_get_base_url(hlcache_handle *h)
 {
 	html_content *c = (html_content *) hlcache_handle_get_content(h);
 
@@ -2290,7 +2290,7 @@ static void html_fini(void)
  * \param context   The search context to add the entry to.
  * \return true on success, false on memory allocation failure
  */
-static nserror
+static slateerror
 find_occurrences_html_box(const char *pattern,
 			  int p_len,
 			  struct box *cur,
@@ -2298,7 +2298,7 @@ find_occurrences_html_box(const char *pattern,
 			  struct textsearch_context *context)
 {
 	struct box *a;
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 
 	/* ignore this box, if there's no visible text */
 	if (!cur->object && cur->text) {
@@ -2328,7 +2328,7 @@ find_occurrences_html_box(const char *pattern,
 					cur->byte_offset + match_offset + match_length,
 					cur,
 					cur);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return res;
 			}
 
@@ -2345,7 +2345,7 @@ find_occurrences_html_box(const char *pattern,
 						a,
 						case_sens,
 						context);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 	}
@@ -2363,7 +2363,7 @@ find_occurrences_html_box(const char *pattern,
  * \param context   The search context to add the entry to.
  * \return true on success, false on memory allocation failure
  */
-static nserror
+static slateerror
 html_textsearch_find(struct content *c,
 		     struct textsearch_context *context,
 		     const char *pattern,
@@ -2373,7 +2373,7 @@ html_textsearch_find(struct content *c,
 	html_content *html = (html_content *)c;
 
 	if (html->layout == NULL) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	return find_occurrences_html_box(pattern,
@@ -2384,7 +2384,7 @@ html_textsearch_find(struct content *c,
 }
 
 
-static nserror
+static slateerror
 html_textsearch_bounds(struct content *c,
 		       unsigned start_idx,
 		       unsigned end_idx,
@@ -2400,7 +2400,7 @@ html_textsearch_bounds(struct content *c,
 	bounds->x1 += end_box->width;
 	bounds->y1 += end_box->height;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -2443,23 +2443,23 @@ static const content_handler html_content_handler = {
 
 
 /* exported function documented in html/html.h */
-nserror html_init(void)
+slateerror html_init(void)
 {
 	uint32_t i;
-	nserror error;
+	slateerror error;
 
 	error = html_css_init();
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		goto error;
 
 	for (i = 0; i < NOF_ELEMENTS(html_types); i++) {
 		error = content_factory_register_handler(html_types[i],
 				&html_content_handler);
-		if (error != NSERROR_OK)
+		if (error != SLATEERROR_OK)
 			goto error;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 
 error:
 	html_fini();

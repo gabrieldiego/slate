@@ -7,7 +7,7 @@
  * Copyright 2005 Adrian Lees <adrianl@users.sourceforge.net>
  * Copyright 2014 Stephen Fryatt <stevef@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,13 +34,13 @@
 #include <oslib/osspriteop.h>
 #include <oslib/wimp.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "desktop/version.h"
 #include "desktop/searchweb.h"
-#include "netsurf/browser_window.h"
+#include "slate/browser_window.h"
 
 #include "riscos/configure.h"
 #include "riscos/cookies.h"
@@ -131,7 +131,7 @@ void ro_gui_dialog_init(void)
 
 	/* about us */
 	dialog_info = ro_gui_dialog_create("info");
-	ro_gui_set_icon_string(dialog_info, 4, netsurf_version, true);
+	ro_gui_set_icon_string(dialog_info, 4, slate_version, true);
 	ro_gui_wimp_event_set_help_prefix(dialog_info, "HelpAppInfo");
 
 	/* page info */
@@ -669,7 +669,7 @@ void ro_gui_dialog_close_persistent(wimp_w parent) {
 
 void ro_gui_save_options(void)
 {
-	nsoption_write("<NetSurf$ChoicesSave>", NULL, NULL);
+	slateoption_write("<NetSurf$ChoicesSave>", NULL, NULL);
 }
 
 bool ro_gui_dialog_zoom_apply(wimp_w w)
@@ -774,24 +774,24 @@ static bool ro_gui_dialog_open_url_init(void)
 
 bool ro_gui_dialog_openurl_apply(wimp_w w)
 {
-	nserror res;
+	slateerror res;
 	const char *url_s;
-	nsurl *url;
+	slateurl *url;
 
 	url_s = ro_gui_get_icon_string(w, ICON_OPENURL_URL);
 
 	res = search_web_omni(url_s, SEARCH_WEB_OMNI_NONE, &url);
 
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		res = browser_window_create(BW_CREATE_HISTORY,
 					    url,
 					    NULL,
 					    NULL,
 					    NULL);
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
 
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		ro_warn_user(messages_get_errorcode(res), 0);
 		return false;
 	}

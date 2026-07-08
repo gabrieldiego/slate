@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,13 +22,13 @@
  * Interface for fetchers factory.
  */
 
-#ifndef _NETSURF_DESKTOP_FETCHERS_H_
-#define _NETSURF_DESKTOP_FETCHERS_H_
+#ifndef _SLATE_DESKTOP_FETCHERS_H_
+#define _SLATE_DESKTOP_FETCHERS_H_
 
 #include "utils/inet.h" /* this is necessary for the fd_set definition */
 #include <libwapcaplet/libwapcaplet.h>
 
-struct nsurl;
+struct slateurl;
 struct fetch_multipart_data;
 struct fetch;
 
@@ -60,12 +60,12 @@ struct fetcher_operation_table {
 	 * \param url the URL to check
 	 * \return true if the fetcher can handle the url else false.
 	 */
-	bool (*acceptable)(const struct nsurl *url);
+	bool (*acceptable)(const struct slateurl *url);
 
 	/**
 	 * Setup a fetch
 	 */
-	void *(*setup)(struct fetch *parent_fetch, struct nsurl *url,
+	void *(*setup)(struct fetch *parent_fetch, struct slateurl *url,
 		bool only_2xx, bool downgrade_tls, const char *post_urlenc,
 		const struct fetch_multipart_data *post_multipart,
 		const char **headers);
@@ -108,17 +108,17 @@ struct fetcher_operation_table {
  *
  * \param scheme The scheme fetcher is for (caller relinquishes ownership)
  * \param ops The operations for the fetcher.
- * \return NSERROR_OK or appropriate error code.
+ * \return SLATEERROR_OK or appropriate error code.
  */
-nserror fetcher_add(lwc_string *scheme, const struct fetcher_operation_table *ops);
+slateerror fetcher_add(lwc_string *scheme, const struct fetcher_operation_table *ops);
 
 
 /**
  * Initialise all registered fetchers.
  *
- * \return NSERROR_OK or error code
+ * \return SLATEERROR_OK or error code
  */
-nserror fetcher_init(void);
+slateerror fetcher_init(void);
 
 
 /**

@@ -2,9 +2,9 @@
 # NetSurf unit tests
 
 TESTS := \
-	nsurl \
+	slateurl \
 	urldbtest \
-	nsoption \
+	slateoption \
 	bloom \
 	hashtable \
 	hashmap \
@@ -15,16 +15,16 @@ TESTS := \
 	mimesniff \
 	corestrings #llcache
 
-# sources necessary to use nsurl functionality
-NSURL_SOURCES := utils/nsurl/nsurl.c utils/nsurl/parse.c utils/idna.c \
+# sources necessary to use slateurl functionality
+SLATEURL_SOURCES := utils/slateurl/slateurl.c utils/slateurl/parse.c utils/idna.c \
 	utils/punycode.c
 
-# nsurl test sources
-nsurl_SRCS := $(NSURL_SOURCES) utils/corestrings.c test/log.c test/nsurl.c
+# slateurl test sources
+slateurl_SRCS := $(SLATEURL_SOURCES) utils/corestrings.c test/log.c test/slateurl.c
 
 # url database test sources
-urldbtest_SRCS := $(NSURL_SOURCES) \
-	utils/bloom.c utils/nsoption.c utils/corestrings.c utils/time.c	\
+urldbtest_SRCS := $(SLATEURL_SOURCES) \
+	utils/bloom.c utils/slateoption.c utils/corestrings.c utils/time.c	\
 	utils/hashtable.c utils/messages.c utils/utils.c \
 	utils/http/primitives.c utils/http/generics.c \
 	utils/http/strict-transport-security.c \
@@ -37,15 +37,15 @@ llcache_SRCS := content/fetch.c content/fetchers/curl.c \
 	content/fetchers/resource.c content/llcache.c \
 	content/urldb.c \
 	image/image_cache.c \
-	$(NSURL_SOURCES) utils/base64.c utils/corestrings.c utils/hashtable.c \
+	$(SLATEURL_SOURCES) utils/base64.c utils/corestrings.c utils/hashtable.c \
 	utils/messages.c utils/url.c utils/useragent.c utils/utils.c \
 	test/log.c test/llcache.c
 
 # messages test sources
 messages_SRCS := utils/messages.c utils/hashtable.c test/log.c test/messages.c
 
-# nsoption test sources
-nsoption_SRCS := utils/nsoption.c test/log.c test/nsoption.c
+# slateoption test sources
+slateoption_SRCS := utils/slateoption.c test/log.c test/slateoption.c
 
 # Bloom filter test sources
 bloom_SRCS := utils/bloom.c test/bloom.c
@@ -54,14 +54,14 @@ bloom_SRCS := utils/bloom.c test/bloom.c
 hashtable_SRCS := utils/hashtable.c test/log.c test/hashtable.c
 
 # hashmap test sources
-hashmap_SRCS := $(NSURL_SOURCES) utils/hashmap.c utils/corestrings.c test/log.c test/hashmap.c
+hashmap_SRCS := $(SLATEURL_SOURCES) utils/hashmap.c utils/corestrings.c test/log.c test/hashmap.c
 hashmap_LD := -lmalloc_fig
 
 # url escape test sources
 urlescape_SRCS := utils/url.c test/log.c test/urlescape.c
 
 # utility test sources
-utils_SRCS := $(NSURL_SOURCES) utils/utils.c utils/messages.c \
+utils_SRCS := $(SLATEURL_SOURCES) utils/utils.c utils/messages.c \
 	utils/hashtable.c utils/corestrings.c  \
 	test/log.c test/utils.c
 
@@ -69,14 +69,14 @@ utils_SRCS := $(NSURL_SOURCES) utils/utils.c utils/messages.c \
 time_SRCS := utils/time.c test/log.c test/time.c
 
 # mimesniff test sources
-mimesniff_SRCS := $(NSURL_SOURCES) utils/hashtable.c utils/corestrings.c \
+mimesniff_SRCS := $(SLATEURL_SOURCES) utils/hashtable.c utils/corestrings.c \
 	utils/http/generics.c utils/http/content-type.c \
 	utils/http/primitives.c utils/messages.c utils/http/parameter.c \
 	content/mimesniff.c \
 	test/log.c test/mimesniff.c
 
 # corestrings test sources
-corestrings_SRCS := $(NSURL_SOURCES) utils/corestrings.c \
+corestrings_SRCS := $(SLATEURL_SOURCES) utils/corestrings.c \
 	test/log.c test/corestrings.c
 corestrings_LD := -lmalloc_fig
 
@@ -145,9 +145,9 @@ BASE_TESTCFLAGS := -std=c99 -g \
 	-D_POSIX_C_SOURCE=200809L \
 	-D_XOPEN_SOURCE=600 \
 	-Itest -Iinclude -Icontent/handlers -Ifrontends -I. -I.. \
-	-Dnsgtk \
-	-DNETSURF_BUILTIN_LOG_FILTER=\"level:WARNING\" \
-	-DNETSURF_BUILTIN_VERBOSE_FILTER=\"level:DEBUG\" \
+	-Dslategtk \
+	-DSLATE_BUILTIN_LOG_FILTER=\"level:WARNING\" \
+	-DSLATE_BUILTIN_VERBOSE_FILTER=\"level:DEBUG\" \
 	-DTESTROOT=\"$(TESTROOT)\" \
 	-DWITH_UTF8PROC \
 	$(SAN_FLAGS) \
@@ -220,7 +220,7 @@ test: $(TESTROOT)/created $(TESTROOT)/libmalloc_fig.so $(addsuffix _test,$(TESTS
 coverage: test
 sanitize: test
 
-BENCH_MONKEY ?= ./nsmonkey
+BENCH_JOTTER ?= ./jotter
 BENCH_WRAPPER ?= /usr/bin/time -v
 BENCH_ROOT ?= file://$(CURDIR)/test/bench/pages
 BENCH_SETS := smoke practical stress
@@ -234,12 +234,12 @@ endif
 define gen_bench_target
 bench-$(1): $$(BENCH_BUILD_DEPS)
 	$$(VQ)echo "RUN BENCH: $(1)"
-	$$(Q)if [ ! -x "$$(BENCH_MONKEY)" ]; then \
-		echo "Missing $$(BENCH_MONKEY). Build it with: make TARGET=monkey"; \
+	$$(Q)if [ ! -x "$$(BENCH_JOTTER)" ]; then \
+		echo "Missing $$(BENCH_JOTTER). Build it with: make TARGET=jotter"; \
 		exit 1; \
 	fi
-	$$(Q)NETSURF_BENCH_ROOT="$$(BENCH_ROOT)" ./test/monkey_driver.py \
-		-m "$$(BENCH_MONKEY)" \
+	$$(Q)SLATE_BENCH_ROOT="$$(BENCH_ROOT)" ./test/monkey_driver.py \
+		-m "$$(BENCH_JOTTER)" \
 		-w "$$(BENCH_WRAPPER)" \
 		-t test/bench/monkey-tests/$(1).yaml
 

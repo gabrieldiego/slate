@@ -28,13 +28,13 @@ $(OBJROOT)/duktape/polyfill.js.inc: content/handlers/javascript/duktape/polyfill
 # ensure genbind generates debugging files
 GBFLAGS+=-D
 
-$(OBJROOT)/duktape/binding.h $(OBJROOT)/duktape/Makefile: content/handlers/javascript/duktape/netsurf.bnd $(BINDINGS)
+$(OBJROOT)/duktape/binding.h $(OBJROOT)/duktape/Makefile: content/handlers/javascript/duktape/slate.bnd $(BINDINGS)
 	$(Q)$(MKDIR) -p $(OBJROOT)/duktape
 	$(VQ)echo " GENBIND: $<"
 	$(Q)nsgenbind $(GBFLAGS) -I content/handlers/javascript/WebIDL $< $(OBJROOT)/duktape
 
 # create unimplemented report for doxygen
-docs/UnimplementedJavascript.md: content/handlers/javascript/duktape/netsurf.bnd $(BINDINGS)
+docs/UnimplementedJavascript.md: content/handlers/javascript/duktape/slate.bnd $(BINDINGS)
 	$(Q)$(MKDIR) -p $(OBJROOT)/duktape
 	$(VQ)echo "Unimplemented javascript bindings {#unimplemented}" > $@
 	$(VQ)echo "=================================" >> $@

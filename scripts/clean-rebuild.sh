@@ -7,10 +7,10 @@ shift || true
 
 rm -rf "${ROOT}/build" \
        "${ROOT}/projects" \
-       "${ROOT}/nsgtk2" \
-       "${ROOT}/nsgtk3" \
-       "${ROOT}/nsfb" \
-       "${ROOT}/nsmonkey" \
-       "${ROOT}/nsqt"
+       "${ROOT}/slategtk2" \
+       "${ROOT}/slategtk3" \
+       "${ROOT}/slatefb" \
+       "${ROOT}/jotter" \
+       "${ROOT}/slateqt"
 
 "${ROOT}/scripts/rebuild.sh" "${TARGET_NAME}" "$@"

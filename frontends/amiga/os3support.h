@@ -2,7 +2,7 @@
  * Copyright 2010 John-Mark Bell <jmb@netsurf-browser.org>
  * Copyright 2014 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -151,7 +151,7 @@
 #define ESetInfo SetInfo
 
 /* Only used in one place we haven't ifdeffed, where it returns the charset name */
-#define ObtainCharsetInfo(A,B,C) (const char *)nsoption_charp(local_charset)
+#define ObtainCharsetInfo(A,B,C) (const char *)slateoption_charp(local_charset)
 
 /* DOS */
 #define AllocSysObjectTags(A,B,C,D) CreateMsgPort() /* Assume ASOT_PORT for now */

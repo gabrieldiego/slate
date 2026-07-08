@@ -6,7 +6,7 @@
  * Copyright 2004 Andrew Timmins <atimmins@blueyonder.co.uk>
  * Copyright 2004-2009 John Tytgat <joty@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,19 +40,19 @@
 #include <oslib/osfscontrol.h>
 
 #include "utils/utils.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/messages.h"
 #include "utils/file.h"
 #include "utils/url.h"
 #include "utils/corestrings.h"
-#include "netsurf/fetch.h"
-#include "netsurf/misc.h"
-#include "netsurf/content.h"
-#include "netsurf/netsurf.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/cookie_db.h"
-#include "netsurf/url_db.h"
+#include "slate/fetch.h"
+#include "slate/misc.h"
+#include "slate/content.h"
+#include "slate/slate.h"
+#include "slate/browser_window.h"
+#include "slate/cookie_db.h"
+#include "slate/url_db.h"
 #include "desktop/save_complete.h"
 #include "desktop/hotlist.h"
 #include "desktop/searchweb.h"
@@ -108,7 +108,7 @@ int __riscosify_control = __RISCOSIFY_NO_SUFFIX |
 extern int __dynamic_num;
 #endif
 
-const char * NETSURF_DIR;
+const char * SLATE_DIR;
 
 static const char *task_name = "NetSurf";
 #define CHOICES_PREFIX "<Choices$Write>.WWW.NetSurf."
@@ -168,19 +168,19 @@ static struct
  *
  * Transforms a resource: path into a full URL. The returned URL is
  * used as the target for a redirect. The caller takes ownership of
- * the returned nsurl including unrefing it when finished with it.
+ * the returned slateurl including unrefing it when finished with it.
  *
  * \param path The path of the resource to locate.
  * \return A string containing the full URL of the target object or
  *         NULL if no suitable resource can be found.
  */
-static nsurl *gui_get_resource_url(const char *path)
+static slateurl *gui_get_resource_url(const char *path)
 {
 	static const char base_url[] = "file:///NetSurf:/Resources/";
 	const char *lang;
 	size_t path_len, length;
 	char *raw;
-	nsurl *url = NULL;
+	slateurl *url = NULL;
 
 	/* Map paths first */
 	if (strcmp(path, "adblock.css") == 0) {
@@ -197,7 +197,7 @@ static nsurl *gui_get_resource_url(const char *path)
 
 	} else if (strcmp(path, "user.css") == 0) {
 		/* Special case; this file comes from Choices: */
-		nsurl_create("file:///Choices:WWW/NetSurf/User", &url);
+		slateurl_create("file:///Choices:WWW/NetSurf/User", &url);
 		return url;
 	}
 
@@ -231,7 +231,7 @@ static nsurl *gui_get_resource_url(const char *path)
 		/* Terminate string */
 		*ptr = '\0';
 
-		nsurl_create(raw, &url);
+		slateurl_create(raw, &url);
 		free(raw);
 	}
 
@@ -246,12 +246,12 @@ static nsurl *gui_get_resource_url(const char *path)
  * \param wimp wimp colour value
  * \param option the netsurf option enum.
  * \param def_colour The default colour value to use.
- * \return NSERROR_OK on success or error code.
+ * \return SLATEERROR_OK on success or error code.
  */
-static nserror
-set_colour_from_wimp(struct nsoption_s *opts,
+static slateerror
+set_colour_from_wimp(struct slateoption_s *opts,
 		   wimp_colour wimp,
-		   enum nsoption_e option,
+		   enum slateoption_e option,
 		   colour def_colour)
 {
 	os_error *error;
@@ -270,7 +270,7 @@ set_colour_from_wimp(struct nsoption_s *opts,
 
 	opts[option].value.c = def_colour;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -284,68 +284,68 @@ set_colour_from_wimp(struct nsoption_s *opts,
  * parts of the RISC OS desktop palette. In places this is fairly
  * arbitrary, and could probably do with re-checking.
  */
-static nserror set_defaults(struct nsoption_s *defaults)
+static slateerror set_defaults(struct slateoption_s *defaults)
 {
 	int idx;
 	static const struct {
-		enum nsoption_e option;
+		enum slateoption_e option;
 		wimp_colour wcol;
 		colour c;
 	} sys_colour_map[]= {
-		{ NSOPTION_sys_colour_AccentColor, wimp_COLOUR_CREAM, 0x00dddddd },
-		{ NSOPTION_sys_colour_AccentColorText, wimp_COLOUR_BLACK, 0x00000000 },
-		{ NSOPTION_sys_colour_ActiveText, wimp_COLOUR_BLACK, 0x00000000 },
-		{ NSOPTION_sys_colour_ButtonBorder, wimp_COLOUR_VERY_LIGHT_GREY,0x00aa0000 },
-		{ NSOPTION_sys_colour_ButtonFace, wimp_COLOUR_VERY_LIGHT_GREY, 0x00aaaaaa },
-		{ NSOPTION_sys_colour_ButtonText,  wimp_COLOUR_BLACK, 0x00000000 },
-		{ NSOPTION_sys_colour_Canvas, wimp_COLOUR_VERY_LIGHT_GREY, 0x00aaaaaa },
-		{ NSOPTION_sys_colour_CanvasText, wimp_COLOUR_BLACK, 0x00000000 },
-		{ NSOPTION_sys_colour_Field, wimp_COLOUR_WHITE, 0x00ffffff },
-		{ NSOPTION_sys_colour_FieldText, wimp_COLOUR_BLACK, 0x00000000 },
-		{ NSOPTION_sys_colour_GrayText, wimp_COLOUR_MID_LIGHT_GREY, 0x00777777 },
-		{ NSOPTION_sys_colour_Highlight, wimp_COLOUR_BLACK, 0x00ee0000 },
-		{ NSOPTION_sys_colour_HighlightText, wimp_COLOUR_WHITE, 0x00ffffff },
-		{ NSOPTION_sys_colour_LinkText, wimp_COLOUR_BLACK, 0x00ee0000 },
-		{ NSOPTION_sys_colour_Mark, wimp_COLOUR_VERY_LIGHT_GREY,0x00eeeeee },
-		{ NSOPTION_sys_colour_MarkText, wimp_COLOUR_BLACK, 0x00000000},
-		{ NSOPTION_sys_colour_SelectedItem, wimp_COLOUR_MID_LIGHT_GREY, 0x00777777 },
-		{ NSOPTION_sys_colour_SelectedItemText, wimp_COLOUR_BLACK, 0x00000000 },
-		{ NSOPTION_sys_colour_VisitedText, wimp_COLOUR_BLACK, 0x00000000 },
-		{ NSOPTION_LISTEND, 0, 0},
+		{ SLATEOPTION_sys_colour_AccentColor, wimp_COLOUR_CREAM, 0x00dddddd },
+		{ SLATEOPTION_sys_colour_AccentColorText, wimp_COLOUR_BLACK, 0x00000000 },
+		{ SLATEOPTION_sys_colour_ActiveText, wimp_COLOUR_BLACK, 0x00000000 },
+		{ SLATEOPTION_sys_colour_ButtonBorder, wimp_COLOUR_VERY_LIGHT_GREY,0x00aa0000 },
+		{ SLATEOPTION_sys_colour_ButtonFace, wimp_COLOUR_VERY_LIGHT_GREY, 0x00aaaaaa },
+		{ SLATEOPTION_sys_colour_ButtonText,  wimp_COLOUR_BLACK, 0x00000000 },
+		{ SLATEOPTION_sys_colour_Canvas, wimp_COLOUR_VERY_LIGHT_GREY, 0x00aaaaaa },
+		{ SLATEOPTION_sys_colour_CanvasText, wimp_COLOUR_BLACK, 0x00000000 },
+		{ SLATEOPTION_sys_colour_Field, wimp_COLOUR_WHITE, 0x00ffffff },
+		{ SLATEOPTION_sys_colour_FieldText, wimp_COLOUR_BLACK, 0x00000000 },
+		{ SLATEOPTION_sys_colour_GrayText, wimp_COLOUR_MID_LIGHT_GREY, 0x00777777 },
+		{ SLATEOPTION_sys_colour_Highlight, wimp_COLOUR_BLACK, 0x00ee0000 },
+		{ SLATEOPTION_sys_colour_HighlightText, wimp_COLOUR_WHITE, 0x00ffffff },
+		{ SLATEOPTION_sys_colour_LinkText, wimp_COLOUR_BLACK, 0x00ee0000 },
+		{ SLATEOPTION_sys_colour_Mark, wimp_COLOUR_VERY_LIGHT_GREY,0x00eeeeee },
+		{ SLATEOPTION_sys_colour_MarkText, wimp_COLOUR_BLACK, 0x00000000},
+		{ SLATEOPTION_sys_colour_SelectedItem, wimp_COLOUR_MID_LIGHT_GREY, 0x00777777 },
+		{ SLATEOPTION_sys_colour_SelectedItemText, wimp_COLOUR_BLACK, 0x00000000 },
+		{ SLATEOPTION_sys_colour_VisitedText, wimp_COLOUR_BLACK, 0x00000000 },
+		{ SLATEOPTION_LISTEND, 0, 0},
 	};
 
 	/* Set defaults for absent option strings */
-	nsoption_setnull_charp(ca_bundle, strdup("<NetSurf$CABundle>"));
-	nsoption_setnull_charp(cookie_file, strdup("NetSurf:Cookies"));
-	nsoption_setnull_charp(cookie_jar, strdup(CHOICES_PREFIX "Cookies"));
+	slateoption_setnull_charp(ca_bundle, strdup("<NetSurf$CABundle>"));
+	slateoption_setnull_charp(cookie_file, strdup("NetSurf:Cookies"));
+	slateoption_setnull_charp(cookie_jar, strdup(CHOICES_PREFIX "Cookies"));
 
-	if (nsoption_charp(ca_bundle) == NULL ||
-	    nsoption_charp(cookie_file) == NULL ||
-	    nsoption_charp(cookie_jar) == NULL) {
+	if (slateoption_charp(ca_bundle) == NULL ||
+	    slateoption_charp(cookie_file) == NULL ||
+	    slateoption_charp(cookie_jar) == NULL) {
 		NSLOG(netsurf, INFO, "Failed initialising default options");
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* RISC OS platform does not generally benefit from disc cache
 	 * so the default should be off.
 	 */
-	nsoption_set_uint(disc_cache_size, 0);
+	slateoption_set_uint(disc_cache_size, 0);
 
 	/* Override core default treeview font size with 12 pt.
 	 * TODO: 12 is the normal desktop font size, but users might run
 	 *       with something different.
 	 */
-	nsoption_set_int(treeview_font_size, 12 * 10);
+	slateoption_set_int(treeview_font_size, 12 * 10);
 
 	/* set default system colours for riscos ui */
-	for (idx = 0; sys_colour_map[idx].option != NSOPTION_LISTEND; idx++) {
+	for (idx = 0; sys_colour_map[idx].option != SLATEOPTION_LISTEND; idx++) {
 		set_colour_from_wimp(defaults,
 				     sys_colour_map[idx].wcol,
 				     sys_colour_map[idx].option,
 				     sys_colour_map[idx].c);
 	}
 	
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -365,23 +365,23 @@ static void ro_gui_create_dirs(void)
 		die("Failed to find NetSurf Choices save path");
 
 	snprintf(buf, sizeof(buf), "%s", path);
-	netsurf_mkdir_all(buf);
+	slate_mkdir_all(buf);
 
 	/* URL */
-	snprintf(buf, sizeof(buf), "%s", nsoption_charp(url_save));
-	netsurf_mkdir_all(buf);
+	snprintf(buf, sizeof(buf), "%s", slateoption_charp(url_save));
+	slate_mkdir_all(buf);
 
 	/* Hotlist */
-	snprintf(buf, sizeof(buf), "%s", nsoption_charp(hotlist_save));
-	netsurf_mkdir_all(buf);
+	snprintf(buf, sizeof(buf), "%s", slateoption_charp(hotlist_save));
+	slate_mkdir_all(buf);
 
 	/* Recent */
-	snprintf(buf, sizeof(buf), "%s", nsoption_charp(recent_save));
-	netsurf_mkdir_all(buf);
+	snprintf(buf, sizeof(buf), "%s", slateoption_charp(recent_save));
+	slate_mkdir_all(buf);
 
 	/* Theme */
-	snprintf(buf, sizeof(buf), "%s", nsoption_charp(theme_save));
-	netsurf_mkdir_all(buf);
+	snprintf(buf, sizeof(buf), "%s", slateoption_charp(theme_save));
+	slate_mkdir_all(buf);
 	/* and the final directory part (as theme_save is a directory) */
 	xosfile_create_dir(buf, 0);
 }
@@ -413,7 +413,7 @@ static void ro_gui_signal(int sig)
 
 	xhourglass_on();
 	xhourglass_colours(0x0000ffff, 0x000000ff, &old_sand, &old_glass);
-	nsoption_dump(stderr, NULL);
+	slateoption_dump(stderr, NULL);
 	/*rufl_dump_state();*/
 
 #ifndef __ELF__
@@ -686,26 +686,26 @@ static void ro_msg_dataopen(wimp_message *message)
 	int file_type = message->data.data_xfer.file_type;
 	char *url = 0;
 	os_error *oserror;
-	nsurl *urlns;
-	nserror error;
+	slateurl *urlns;
+	slateerror error;
 	size_t len;
 
 	switch (file_type) {
 	case 0xb28:			/* ANT URL file */
 		url = ro_gui_url_file_parse(message->data.data_xfer.file_name);
-		error = nsurl_create(url, &urlns);
+		error = slateurl_create(url, &urlns);
 		free(url);
 		break;
 
 	case 0xfaf:		/* HTML file */
-		error = netsurf_path_to_nsurl(message->data.data_xfer.file_name,
+		error = slate_path_to_slateurl(message->data.data_xfer.file_name,
 					      &urlns);
 		break;
 
 	case 0x1ba:		/* IEURL file */
 		url = ro_gui_ieurl_file_parse(message->
 				data.data_xfer.file_name);
-		error = nsurl_create(url, &urlns);
+		error = slateurl_create(url, &urlns);
 		free(url);
 		break;
 
@@ -715,12 +715,12 @@ static void ro_msg_dataopen(wimp_message *message)
 				message->data.data_xfer.file_name + len - 9))
 			return;
 
-		if (nsoption_charp(homepage_url) &&
-		    nsoption_charp(homepage_url)[0]) {
-			error = nsurl_create(nsoption_charp(homepage_url),
+		if (slateoption_charp(homepage_url) &&
+		    slateoption_charp(homepage_url)[0]) {
+			error = slateurl_create(slateoption_charp(homepage_url),
 					     &urlns);
 		} else {
-			error = nsurl_create(NETSURF_HOMEPAGE, &urlns);
+			error = slateurl_create(SLATE_HOMEPAGE, &urlns);
 		}
 		break;
 
@@ -739,7 +739,7 @@ static void ro_msg_dataopen(wimp_message *message)
 		return;
 	}
 
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		ro_warn_user(messages_get_errorcode(error), 0);
 		return;
 	}
@@ -750,8 +750,8 @@ static void ro_msg_dataopen(wimp_message *message)
 				      NULL,
 				      NULL,
 				      NULL);
-	nsurl_unref(urlns);
-	if (error != NSERROR_OK) {
+	slateurl_unref(urlns);
+	if (error != SLATEERROR_OK) {
 		ro_warn_user(messages_get_errorcode(error), 0);
 	}
 }
@@ -767,8 +767,8 @@ static void ro_msg_dataload(wimp_message *message)
 	char *title = NULL;
 	struct gui_window *g;
 	os_error *oserror;
-	nsurl *url;
-	nserror error;
+	slateurl *url;
+	slateerror error;
 
 	g = ro_gui_window_lookup(message->data.data_xfer.w);
 	if (g) {
@@ -785,19 +785,19 @@ static void ro_msg_dataload(wimp_message *message)
 		case FILETYPE_ACORN_URI:
 			urltxt = ro_gui_uri_file_parse(message->data.data_xfer.file_name,
 					&title);
-			error = nsurl_create(urltxt, &url);
+			error = slateurl_create(urltxt, &url);
 			free(urltxt);
 			break;
 
 		case FILETYPE_ANT_URL:
 			urltxt = ro_gui_url_file_parse(message->data.data_xfer.file_name);
-			error = nsurl_create(urltxt, &url);
+			error = slateurl_create(urltxt, &url);
 			free(urltxt);
 			break;
 
 		case FILETYPE_IEURL:
 			urltxt = ro_gui_ieurl_file_parse(message->data.data_xfer.file_name);
-			error = nsurl_create(urltxt, &url);
+			error = slateurl_create(urltxt, &url);
 			free(urltxt);
 			break;
 
@@ -817,7 +817,7 @@ static void ro_msg_dataload(wimp_message *message)
 		case FILETYPE_SVG:
 		case FILETYPE_WEBP:
 			/* display the actual file */
-			error = netsurf_path_to_nsurl(message->data.data_xfer.file_name, &url);
+			error = slate_path_to_slateurl(message->data.data_xfer.file_name, &url);
 			break;
 
 		default:
@@ -825,7 +825,7 @@ static void ro_msg_dataload(wimp_message *message)
 	}
 
 	/* report error to user */
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		ro_warn_user(messages_get_errorcode(error), 0);
 		return;
 	}
@@ -846,8 +846,8 @@ static void ro_msg_dataload(wimp_message *message)
 					      NULL,
 					      NULL);
 	}
-	nsurl_unref(url);
-	if (error != NSERROR_OK) {
+	slateurl_unref(url);
+	if (error != SLATEERROR_OK) {
 		ro_warn_user(messages_get_errorcode(error), 0);
 	}
 
@@ -1006,7 +1006,7 @@ static void ro_msg_save_desktop(wimp_message *message)
 				(const byte*)"Run ", 4, NULL);
 	if (!error) {
 		error = xosgbpb_writew(message->data.save_desktopw.file,
-					(const byte*)NETSURF_DIR, strlen(NETSURF_DIR), NULL);
+					(const byte*)SLATE_DIR, strlen(SLATE_DIR), NULL);
 		if (!error)
 			error = xos_bputw('\n', message->data.save_desktopw.file);
 	}
@@ -1040,7 +1040,7 @@ static void ro_msg_window_info(wimp_message *message)
 	struct gui_window *g;
 
 	/* allow the user to turn off thumbnail icons */
-	if (!nsoption_bool(thumbnail_iconise))
+	if (!slateoption_bool(thumbnail_iconise))
 		return;
 
 	wi = (wimp_full_message_window_info*)message;
@@ -1127,7 +1127,7 @@ static bool ro_gui__os_alpha_sprites_supported(void)
  * \param argc The number of command line arguments.
  * \param argv The string vector of command line arguments.
  */
-static nserror gui_init(int argc, char** argv)
+static slateerror gui_init(int argc, char** argv)
 {
 	struct {
 		void (*sigabrt)(int);
@@ -1143,8 +1143,8 @@ static nserror gui_init(int argc, char** argv)
 	int length;
 	char *nsdir_temp;
 	byte *base;
-	nsurl *url;
-	nserror ret;
+	slateurl *url;
+	slateerror ret;
 	bool open_window;
 
 	/* re-enable all FPU exceptions/traps except inexact operations,
@@ -1208,13 +1208,13 @@ static nserror gui_init(int argc, char** argv)
 	nsdir_temp = getenv("NetSurf$Dir");
 	if (!nsdir_temp)
 		die("Failed to locate NetSurf directory");
-	NETSURF_DIR = strdup(nsdir_temp);
-	if (!NETSURF_DIR)
+	SLATE_DIR = strdup(nsdir_temp);
+	if (!SLATE_DIR)
 		die("Failed duplicating NetSurf directory string");
 
         /* web search engine */
 	search_web_init("NetSurf:Resources.SearchEngines");
-	search_web_select_provider(nsoption_charp(search_web_provider));
+	search_web_select_provider(slateoption_charp(search_web_provider));
 
 	/* Initialise filename allocator */
 	filename_initialise();
@@ -1223,8 +1223,8 @@ static nserror gui_init(int argc, char** argv)
 	save_complete_init();
 
 	/* Load in visited URLs and Cookies */
-	urldb_load(nsoption_charp(url_path));
-	urldb_load_cookies(nsoption_charp(cookie_file));
+	urldb_load(slateoption_charp(url_path));
+	urldb_load_cookies(slateoption_charp(cookie_file));
 
 	/* Initialise with the wimp */
 	error = xwimp_initialise(wimp_VERSION_RO38, task_name,
@@ -1259,10 +1259,10 @@ static nserror gui_init(int argc, char** argv)
 	nsfont_init();
 
 	/* Initialise the hotlist (must be after fonts) */
-	hotlist_init(nsoption_charp(hotlist_path),
-			nsoption_bool(external_hotlists) ?
+	hotlist_init(slateoption_charp(hotlist_path),
+			slateoption_bool(external_hotlists) ?
 					NULL :
-					nsoption_charp(hotlist_save));
+					slateoption_charp(hotlist_save));
 
 	/* Initialise global information */
 	ro_gui_get_screen_properties();
@@ -1275,7 +1275,7 @@ static nserror gui_init(int argc, char** argv)
 	/* Open the templates */
 	if ((length = snprintf(path, sizeof(path),
 			"NetSurf:Resources.%s.Templates",
-			nsoption_charp(language))) < 0 || length >= (int)sizeof(path))
+			slateoption_charp(language))) < 0 || length >= (int)sizeof(path))
 		die("Failed to locate Templates resource.");
 	error = xwimp_open_template(path);
 	if (error) {
@@ -1317,16 +1317,16 @@ static nserror gui_init(int argc, char** argv)
 	/* Finally, check Inet$Resolvers for sanity */
 	ro_gui_check_resolvers();
 
-	open_window = nsoption_bool(open_browser_at_startup);
+	open_window = slateoption_bool(open_browser_at_startup);
 
 	/* parse command-line arguments */
 	if (argc == 2) {
 		NSLOG(netsurf, INFO, "parameters: '%s'", argv[1]);
 		/* this is needed for launching URI files */
 		if (strcasecmp(argv[1], "-nowin") == 0) {
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
-		ret = nsurl_create(NETSURF_HOMEPAGE, &url);
+		ret = slateurl_create(SLATE_HOMEPAGE, &url);
 	}
 	else if (argc == 3) {
 		NSLOG(netsurf, INFO, "parameters: '%s' '%s'", argv[1],
@@ -1335,7 +1335,7 @@ static nserror gui_init(int argc, char** argv)
 
 		/* HTML files */
 		if (strcasecmp(argv[1], "-html") == 0) {
-			ret = netsurf_path_to_nsurl(argv[2], &url);
+			ret = slate_path_to_slateurl(argv[2], &url);
 		}
 		/* URL files */
 		else if (strcasecmp(argv[1], "-urlf") == 0) {
@@ -1344,32 +1344,32 @@ static nserror gui_init(int argc, char** argv)
 				NSLOG(netsurf, INFO, "allocation failed");
 				die("Insufficient memory for URL");
 			}
-			ret = nsurl_create(urlf, &url);
+			ret = slateurl_create(urlf, &url);
 			free(urlf);
 		}
 		/* ANT URL Load */
 		else if (strcasecmp(argv[1], "-url") == 0) {
-			ret = nsurl_create(argv[2], &url);
+			ret = slateurl_create(argv[2], &url);
 		}
 		/* Unknown => exit here. */
 		else {
 			NSLOG(netsurf, INFO, "Unknown parameters: '%s' '%s'",
 			      argv[1], argv[2]);
-			return NSERROR_BAD_PARAMETER;
+			return SLATEERROR_BAD_PARAMETER;
 		}
 	}
 	/* get user's homepage (if configured) */
-	else if (nsoption_charp(homepage_url) &&
-		 nsoption_charp(homepage_url)[0]) {
-		ret = nsurl_create(nsoption_charp(homepage_url), &url);
+	else if (slateoption_charp(homepage_url) &&
+		 slateoption_charp(homepage_url)[0]) {
+		ret = slateurl_create(slateoption_charp(homepage_url), &url);
 	}
 	/* default homepage */
 	else {
-		ret = nsurl_create(NETSURF_HOMEPAGE, &url);
+		ret = slateurl_create(SLATE_HOMEPAGE, &url);
 	}
 
 	/* check for url creation error */
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
@@ -1380,7 +1380,7 @@ static nserror gui_init(int argc, char** argv)
 					    NULL,
 					    NULL);
 	}
-	nsurl_unref(url);
+	slateurl_unref(url);
 
 	return ret;
 }
@@ -1431,23 +1431,23 @@ const char *ro_gui_default_language(void)
 
 
 /**
- * Create a nsurl from a RISC OS pathname.
+ * Create a slateurl from a RISC OS pathname.
  *
- * Perform the necessary operations on a path to generate a nsurl.
+ * Perform the necessary operations on a path to generate a slateurl.
  *
  * @param[in] path The RISC OS pathname to convert.
- * @param[out] url_out pointer to recive the nsurl, The returned url must be
+ * @param[out] url_out pointer to recive the slateurl, The returned url must be
  *                 unreferenced by the caller.
- * @return NSERROR_OK and the url is placed in \a url or error code on faliure.
+ * @return SLATEERROR_OK and the url is placed in \a url or error code on faliure.
  */
-static nserror ro_path_to_nsurl(const char *path, struct nsurl **url_out)
+static slateerror ro_path_to_slateurl(const char *path, struct slateurl **url_out)
 {
 	int spare;
 	char *canonical_path; /* canonicalised RISC OS path */
 	char *unix_path; /* unix path */
 	char *escaped_path;
 	os_error *error;
-	nserror ret;
+	slateerror ret;
 	int urllen;
 	char *url; /* resulting url */
 
@@ -1459,13 +1459,13 @@ static nserror ro_path_to_nsurl(const char *path, struct nsurl **url_out)
 		      error->errnum,
 		      error->errmess);
 		ro_warn_user("PathToURL", error->errmess);
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	canonical_path = malloc(1 - spare);
 	if (canonical_path == NULL) {
 		free(canonical_path);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	error = xosfscontrol_canonicalise_path(path, canonical_path, 0, 0, 1 - spare, 0);
@@ -1476,7 +1476,7 @@ static nserror ro_path_to_nsurl(const char *path, struct nsurl **url_out)
 		      error->errmess);
 		ro_warn_user("PathToURL", error->errmess);
 		free(canonical_path);
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	/* create a unix path from the cananocal risc os one */
@@ -1485,13 +1485,13 @@ static nserror ro_path_to_nsurl(const char *path, struct nsurl **url_out)
 	if (unix_path == NULL) {
 		NSLOG(netsurf, INFO, "__unixify failed: %s", canonical_path);
 		free(canonical_path);
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	free(canonical_path);
 
 	/* url escape the unix path */
 	ret = url_escape(unix_path, false, "/", &escaped_path);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		free(unix_path);
 		return ret;
 	}
@@ -1503,7 +1503,7 @@ static nserror ro_path_to_nsurl(const char *path, struct nsurl **url_out)
 	if (url == NULL) {
 		NSLOG(netsurf, INFO, "Unable to allocate url");
 		free(escaped_path);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	if (*escaped_path == '/') {
@@ -1515,7 +1515,7 @@ static nserror ro_path_to_nsurl(const char *path, struct nsurl **url_out)
 	}
 	free(escaped_path);
 
-	ret = nsurl_create(url, url_out);
+	ret = slateurl_create(url, url_out);
 	free(url);
 
 	return ret;
@@ -1523,15 +1523,15 @@ static nserror ro_path_to_nsurl(const char *path, struct nsurl **url_out)
 
 
 /**
- * Create a path from a nsurl using posix file handling.
+ * Create a path from a slateurl using posix file handling.
  *
  * @param[in] url The url to encode.
  * @param[out] path_out A string containing the result path which should
  *                      be freed by the caller.
- * @return NSERROR_OK and the path is written to \a path or error code
+ * @return SLATEERROR_OK and the path is written to \a path or error code
  *         on faliure.
  */
-static nserror ro_nsurl_to_path(struct nsurl *url, char **path_out)
+static slateerror ro_slateurl_to_path(struct slateurl *url, char **path_out)
 {
 	lwc_string *urlpath;
 	size_t unpath_len;
@@ -1539,28 +1539,28 @@ static nserror ro_nsurl_to_path(struct nsurl *url, char **path_out)
 	char *path;
 	bool match;
 	lwc_string *scheme;
-	nserror res;
+	slateerror res;
 	char *r;
 
 	if ((url == NULL) || (path_out == NULL)) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
-	scheme = nsurl_get_component(url, NSURL_SCHEME);
+	scheme = slateurl_get_component(url, SLATEURL_SCHEME);
 
 	if (lwc_string_caseless_isequal(scheme, corestring_lwc_file,
 					&match) != lwc_error_ok)
 	{
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	lwc_string_unref(scheme);
 	if (match == false) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
-	urlpath = nsurl_get_component(url, NSURL_PATH);
+	urlpath = slateurl_get_component(url, SLATEURL_PATH);
 	if (urlpath == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	res = url_unescape(lwc_string_data(urlpath),
@@ -1568,7 +1568,7 @@ static nserror ro_nsurl_to_path(struct nsurl *url, char **path_out)
 			   &unpath_len,
 			   &unpath);
 	lwc_string_unref(urlpath);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -1576,7 +1576,7 @@ static nserror ro_nsurl_to_path(struct nsurl *url, char **path_out)
 	path = malloc(unpath_len + 100);
 	if (path == NULL) {
 		free(unpath);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	r = __riscosify(unpath, 0, __RISCOSIFY_NO_SUFFIX,
@@ -1584,12 +1584,12 @@ static nserror ro_nsurl_to_path(struct nsurl *url, char **path_out)
 	free(unpath);
 	if (r == NULL) {
 		free(path);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	*path_out = path;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1610,8 +1610,8 @@ static bool nslog_stream_configure(FILE *fptr)
  */
 static void gui_quit(void)
 {
-	urldb_save_cookies(nsoption_charp(cookie_jar));
-	urldb_save(nsoption_charp(url_save));
+	urldb_save_cookies(slateoption_charp(cookie_jar));
+	urldb_save(slateoption_charp(url_save));
 	ro_gui_window_quit();
 	ro_gui_local_history_finalise();
 	ro_gui_global_history_finalise();
@@ -1974,7 +1974,7 @@ void ro_gui_view_source(struct hlcache_handle *c)
 	}
 
 	/* try to load local files directly. */
-	if (netsurf_nsurl_to_path(hlcache_handle_get_url(c), &temp_name) == NSERROR_OK) {
+	if (slate_slateurl_to_path(hlcache_handle_get_url(c), &temp_name) == SLATEERROR_OK) {
 		error = xosfile_read_no_path(temp_name, &objtype, 0, 0, 0, 0);
 		if ((!error) && (objtype == osfile_IS_FILE)) {
 			snprintf(message.file_name, 212, "%s", temp_name);
@@ -2042,11 +2042,11 @@ void ro_gui_view_source(struct hlcache_handle *c)
 /**
  * Broadcast an URL that we can't handle.
  */
-static nserror gui_launch_url(struct nsurl *url)
+static slateerror gui_launch_url(struct slateurl *url)
 {
 	/* Try ant broadcast */
-	ro_url_broadcast(nsurl_access(url));
-	return NSERROR_OK;
+	ro_url_broadcast(slateurl_access(url));
+	return SLATEERROR_OK;
 }
 
 
@@ -2056,25 +2056,25 @@ static nserror gui_launch_url(struct nsurl *url)
 static void ro_gui_choose_language(void)
 {
 	/* if option_language exists and is valid, use that */
-	if (nsoption_charp(language)) {
+	if (slateoption_charp(language)) {
 		char path[40];
-		if (2 < strlen(nsoption_charp(language)))
-			nsoption_charp(language)[2] = 0;
-		sprintf(path, "NetSurf:Resources.%s", nsoption_charp(language));
+		if (2 < strlen(slateoption_charp(language)))
+			slateoption_charp(language)[2] = 0;
+		sprintf(path, "NetSurf:Resources.%s", slateoption_charp(language));
 
 		if (is_dir(path)) {
-			nsoption_setnull_charp(accept_language,
-					strdup(nsoption_charp(language)));
+			slateoption_setnull_charp(accept_language,
+					strdup(slateoption_charp(language)));
 			return;
 		}
-		nsoption_set_charp(language, NULL);
+		slateoption_set_charp(language, NULL);
 	}
 
-	nsoption_set_charp(language, strdup(ro_gui_default_language()));
-	if (nsoption_charp(language) == NULL)
+	slateoption_set_charp(language, strdup(ro_gui_default_language()));
+	if (slateoption_charp(language) == NULL)
 		die("Out of memory");
-	nsoption_set_charp(accept_language, strdup(nsoption_charp(language)));
-	if (nsoption_charp(accept_language) == NULL)
+	slateoption_set_charp(accept_language, strdup(slateoption_charp(language)));
+	if (slateoption_charp(accept_language) == NULL)
 		die("Out of memory");
 }
 
@@ -2085,7 +2085,7 @@ static void ro_gui_choose_language(void)
  * \param  warning  message key for warning message
  * \param  detail   additional message, or 0
  */
-nserror ro_warn_user(const char *warning, const char *detail)
+slateerror ro_warn_user(const char *warning, const char *detail)
 {
 	NSLOG(netsurf, INFO, "%s %s", warning, detail);
 
@@ -2118,7 +2118,7 @@ nserror ro_warn_user(const char *warning, const char *detail)
 				(osspriteop_area *) 1, 0, 0);
 	}
 	
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -2175,10 +2175,10 @@ bool ro_gui_prequit(void)
  *                     output length on output.
  * @param[in] nelm The number of elements.
  * @param[in] ap The elements of the path as string pointers.
- * @return NSERROR_OK and the complete path is written to str
+ * @return SLATEERROR_OK and the complete path is written to str
  *         or error code on faliure.
  */
-static nserror riscos_mkpath(char **str, size_t *size, size_t nelm, va_list ap)
+static slateerror riscos_mkpath(char **str, size_t *size, size_t nelm, va_list ap)
 {
 	const char *elm[16];
 	size_t elm_len[16];
@@ -2190,13 +2190,13 @@ static nserror riscos_mkpath(char **str, size_t *size, size_t nelm, va_list ap)
 
 	/* check the parameters are all sensible */
 	if ((nelm == 0) || (nelm > 16)) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if ((*str != NULL) && (size == NULL)) {
 		/* if the caller is providing the buffer they must say
 		 * how much space is available.
 		 */
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* calculate how much storage we need for the complete path
@@ -2206,7 +2206,7 @@ static nserror riscos_mkpath(char **str, size_t *size, size_t nelm, va_list ap)
 		elm[elm_idx] = va_arg(ap, const char *);
 		/* check the argument is not NULL */
 		if (elm[elm_idx] == NULL) {
-			return NSERROR_BAD_PARAMETER;
+			return SLATEERROR_BAD_PARAMETER;
 		}
 		elm_len[elm_idx] = strlen(elm[elm_idx]);
 		fname_len += elm_len[elm_idx];
@@ -2217,12 +2217,12 @@ static nserror riscos_mkpath(char **str, size_t *size, size_t nelm, va_list ap)
 	fname = *str;
 	if (fname != NULL) {
 		if (fname_len > *size) {
-			return NSERROR_NOSPACE;
+			return SLATEERROR_NOSPACE;
 		}
 	} else {
 		fname = malloc(fname_len);
 		if (fname == NULL) {
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 	}
 
@@ -2262,7 +2262,7 @@ static nserror riscos_mkpath(char **str, size_t *size, size_t nelm, va_list ap)
 		*size = fname_len;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 
 }
 
@@ -2280,17 +2280,17 @@ static nserror riscos_mkpath(char **str, size_t *size, size_t nelm, va_list ap)
  * @param[in,out] size The size of the space available if \a
  *                     str not NULL on input and set to the total
  *                     output length on output.
- * @return NSERROR_OK and the complete path is written to str
+ * @return SLATEERROR_OK and the complete path is written to str
  *         or error code on faliure.
  */
-static nserror riscos_basename(const char *path, char **str, size_t *size)
+static slateerror riscos_basename(const char *path, char **str, size_t *size)
 {
 	const char *leafname;
 	char *fname;
 	char *temp;
 
 	if (path == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	leafname = strrchr(path, DIR_SEP);
@@ -2302,7 +2302,7 @@ static nserror riscos_basename(const char *path, char **str, size_t *size)
 
 	fname = strdup(leafname);
 	if (fname == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/** @todo check this leafname translation is actually required */
@@ -2317,7 +2317,7 @@ static nserror riscos_basename(const char *path, char **str, size_t *size)
 	if (size != NULL) {
 		*size = strlen(fname);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -2327,9 +2327,9 @@ static nserror riscos_basename(const char *path, char **str, size_t *size)
  * Given a path of x.y.z directories x and x.y will be created.
  *
  * @param fname The filename to ensure the path to exists.
- * @return NSERROR_OK on success or error code on failure.
+ * @return SLATEERROR_OK on success or error code on failure.
  */
-static nserror riscos_mkdir_all(const char *fname)
+static slateerror riscos_mkdir_all(const char *fname)
 {
 	char *dname;
 	char *cur;
@@ -2345,7 +2345,7 @@ static nserror riscos_mkdir_all(const char *fname)
 
 	free(dname);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -2391,8 +2391,8 @@ void ro_gui_dump_browser_window(struct browser_window *bw)
 static struct gui_file_table riscos_file_table = {
 	.mkpath = riscos_mkpath,
 	.basename = riscos_basename,
-	.nsurl_to_path = ro_nsurl_to_path,
-	.path_to_nsurl = ro_path_to_nsurl,
+	.slateurl_to_path = ro_slateurl_to_path,
+	.path_to_slateurl = ro_path_to_slateurl,
 	.mkdir_all = riscos_mkdir_all,
 };
 
@@ -2416,15 +2416,15 @@ static char *get_cachepath(void)
 {
 	char *cachedir;
 	char *cachepath = NULL;
-	nserror ret;
+	slateerror ret;
 
 	cachedir = getenv("Cache$Dir");
 	if ((cachedir == NULL) || (cachedir[0] == 0)) {
 		NSLOG(netsurf, INFO, "cachedir was null");
 		return NULL;
 	}
-	ret = netsurf_mkpath(&cachepath, NULL, 2, cachedir, "NetSurf");
-	if (ret != NSERROR_OK) {
+	ret = slate_mkpath(&cachepath, NULL, 2, cachedir, "NetSurf");
+	if (ret != SLATEERROR_OK) {
 		return NULL;
 	}
 	return cachepath;
@@ -2441,8 +2441,8 @@ int main(int argc, char** argv)
 	os_var_type type;
 	int used = -1;  /* slightly better with older OSLib versions */
 	os_error *error;
-	nserror ret;
-	struct netsurf_table riscos_table = {
+	slateerror ret;
+	struct slate_table riscos_table = {
 		.misc = &riscos_misc_table,
 		.window = riscos_window_table,
 		.corewindow = riscos_core_window_table,
@@ -2457,8 +2457,8 @@ int main(int argc, char** argv)
 		.layout = riscos_layout_table,
 	};
 
-	ret = netsurf_register(&riscos_table);
-	if (ret != NSERROR_OK) {
+	ret = slate_register(&riscos_table);
+	if (ret != SLATEERROR_OK) {
 		die("NetSurf operation table failed registration");
 	}
 
@@ -2486,12 +2486,12 @@ int main(int argc, char** argv)
 	nslog_init(nslog_stream_configure, &argc, argv);
 
 	/* user options setup */
-	ret = nsoption_init(set_defaults, &nsoptions, &nsoptions_default);
-	if (ret != NSERROR_OK) {
+	ret = slateoption_init(set_defaults, &slateoptions, &slateoptions_default);
+	if (ret != SLATEERROR_OK) {
 		die("Options failed to initialise");
 	}
-	nsoption_read("NetSurf:Choices", NULL);
-	nsoption_commandline(&argc, argv, NULL);
+	slateoption_read("NetSurf:Choices", NULL);
+	slateoption_commandline(&argc, argv, NULL);
 
 	/* Choose the interface language to use */
 	ro_gui_choose_language();
@@ -2500,7 +2500,7 @@ int main(int argc, char** argv)
 	if (((length = snprintf(path,
 				sizeof(path),
 			       "NetSurf:Resources.%s.Messages",
-				nsoption_charp(language))) < 0) ||
+				slateoption_charp(language))) < 0) ||
 	    (length >= (int)sizeof(path))) {
 		die("Failed to locate Messages resource.");
 	}
@@ -2512,9 +2512,9 @@ int main(int argc, char** argv)
 	cachepath = get_cachepath();
 
 	/* common initialisation */
-	ret = netsurf_init(cachepath);
+	ret = slate_init(cachepath);
 	free(cachepath);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		die("NetSurf failed to initialise core");
 	}
 
@@ -2526,7 +2526,7 @@ int main(int argc, char** argv)
 	messages_add_from_file("NetSurf:Resources.LangNames");
 
 	ret = gui_init(argc, argv);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		ro_warn_user(messages_get_errorcode(ret), 0);
 	}
 
@@ -2534,8 +2534,8 @@ int main(int argc, char** argv)
 		riscos_poll();
 	}
 
-	netsurf_exit();
-	nsoption_finalise(nsoptions, nsoptions_default);
+	slate_exit();
+	slateoption_finalise(slateoptions, slateoptions_default);
 
 	/* finalise logging */
 	nslog_finalise();

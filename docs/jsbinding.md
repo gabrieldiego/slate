@@ -92,7 +92,7 @@ In principle other engines or libraries could be substituted
 engineering to do so is formidable.
 
 The bindings are kept the main [NetSurf source code
-repository](http://git.netsurf-browser.org/netsurf.git/) within the
+repository](http://git.slate-browser.org/netsurf.git/) within the
 duktape JavaScript handler directory `content/handlers/javascript/duktape/`
 
 The root binding which contains all the interfaces introduced into
@@ -103,7 +103,7 @@ binding definitions to implement the interfaces.
 The bindings are a Domain Specific Language (DSL) which allows
 implementations to be added to each WebIDL method. nsgenbind
 documentation contains a [full description of the
-language](https://ci.netsurf-browser.org/jenkins/view/Categorized/job/docs-nsgenbind/doxygen/index.html).
+language](https://ci.slate-browser.org/jenkins/view/Categorized/job/docs-nsgenbind/doxygen/index.html).
 
 The main focus on creating binding is to implement the content within
 getter, setter and method stanzas. These correspond to implementations
@@ -215,7 +215,7 @@ the attribute example used `Window.bnd`
     method Location::assign()
     %{
             window_private_t *priv_win;
-            nsurl *joined;
+            slateurl *joined;
             duk_size_t slen;
             const char *url;
 
@@ -232,7 +232,7 @@ the attribute example used `Window.bnd`
             
             url = duk_safe_to_lstring(ctx, 0, &slen);
             
-            nsurl_join(priv->url, url, &joined);
+            slateurl_join(priv->url, url, &joined);
             browser_window_navigate(priv_win->win,
                     joined,
                     NULL,
@@ -240,7 +240,7 @@ the attribute example used `Window.bnd`
                     NULL,
                     NULL,
                     NULL);
-            nsurl_unref(joined);
+            slateurl_unref(joined);
             return 0;
     %}
 

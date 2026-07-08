@@ -8,7 +8,7 @@ S_FETCHER_ABOUT := \
 	choices.c \
 	config.c \
 	imagecache.c \
-	nscolours.c \
+	slatecolors.c \
 	query.c \
 	query_auth.c \
 	query_fetcherror.c \

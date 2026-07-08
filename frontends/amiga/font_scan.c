@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,11 +45,11 @@
 
 #include <reaction/reaction_macros.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/mouse.h"
-#include "netsurf/window.h"
+#include "slate/mouse.h"
+#include "slate/window.h"
 
 #include "amiga/font_scan.h"
 #include "amiga/gui.h"
@@ -257,8 +257,8 @@ static ULONG ami_font_scan_font(const char *fontname, lwc_string **glypharray)
 		if(unicoderanges & UCR_SURROGATES) {
 			NSLOG(netsurf, INFO, "%s supports UTF-16 surrogates",
 			      fontname);
-			if (nsoption_charp(font_surrogate) == NULL) {
-				nsoption_set_charp(font_surrogate, (char *)strdup(fontname));
+			if (slateoption_charp(font_surrogate) == NULL) {
+				slateoption_set_charp(font_surrogate, (char *)strdup(fontname));
 			}
 		}
 		EReleaseInfo(AMI_OFONT_ENGINE,
@@ -490,8 +490,8 @@ void ami_font_scan_init(const char *filename, bool force_scan, bool save,
 		if((list = NewObjList())) {
 
 			/* add preferred fonts list */
-			if(nsoption_charp(font_unicode) &&
-					(csv = strdup(nsoption_charp(font_unicode))))
+			if(slateoption_charp(font_unicode) &&
+					(csv = strdup(slateoption_charp(font_unicode))))
 			{
 				char *p;
 
@@ -505,7 +505,7 @@ void ami_font_scan_init(const char *filename, bool force_scan, bool save,
 				free(csv);
 			}
 
-			if(nsoption_bool(font_unicode_only) == false)
+			if(slateoption_bool(font_unicode_only) == false)
 				entries += ami_font_scan_list(list);
 
 			NSLOG(netsurf, INFO, "Found %ld fonts", entries);

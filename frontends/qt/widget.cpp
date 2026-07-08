@@ -1,7 +1,7 @@
 /*
  * Copyright 2023 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,11 +27,11 @@
 extern "C" {
 #include "utils/errors.h"
 #include "utils/log.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 
-#include "netsurf/plotters.h"
-#include "netsurf/keypress.h"
-#include "netsurf/content.h"
+#include "slate/plotters.h"
+#include "slate/keypress.h"
+#include "slate/content.h"
 }
 
 #include "qt/application.cls.h"
@@ -126,7 +126,7 @@ void NS_Widget::next_caret_frame(void *p)
 		       widget->m_caret_y + widget->m_caret_h - widget->m_yoffset);
 
 	if (frame_time != 0) {
-		nsqt_schedule(frame_time, next_caret_frame, p);
+		slateqt_schedule(frame_time, next_caret_frame, p);
 	}
 }
 
@@ -156,7 +156,7 @@ void NS_Widget::paintEvent(QPaintEvent *event)
 	struct redraw_context ctx = {
 		.interactive = true,
 		.background_images = true,
-		.plot = &nsqt_plotters,
+		.plot = &slateqt_plotters,
 		.priv = painter,
 	};
 	/* netsurf render clip region coordinates */
@@ -441,12 +441,12 @@ bool NS_Widget::get_scroll(int *sx, int *sy)
 /**
  * get the viewable dimensions of browsing context
  */
-nserror NS_Widget::get_dimensions(int *width, int *height)
+slateerror NS_Widget::get_dimensions(int *width, int *height)
 {
 	*width = size().width();
 	*height = size().height();
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -546,7 +546,7 @@ void NS_Widget::setCaret(bool visible, int cx, int cy, int ch)
 			 * caret being shown but should no longer be visible.
 			 * remove animation scheduling.
 			 */
-			nsqt_schedule(-1, next_caret_frame, this);
+			slateqt_schedule(-1, next_caret_frame, this);
 			m_caret_frame = 0;
 		}
 		/*
@@ -575,7 +575,7 @@ void NS_Widget::setCaret(bool visible, int cx, int cy, int ch)
 /**
  * mark an area of the browsing context as invalid
  */
-nserror NS_Widget::invalidate(const struct rect *rect)
+slateerror NS_Widget::invalidate(const struct rect *rect)
 {
 	if (rect == NULL) {
 		update();
@@ -585,7 +585,7 @@ nserror NS_Widget::invalidate(const struct rect *rect)
 		       rect->x1 - rect->x0,
 		       rect->y1 - rect->y0);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -610,11 +610,11 @@ void NS_Widget::setVerticalScroll(int value)
 
 QSize NS_Widget::sizeHint() const
 {
-	int width = nsoption_int(window_width);
+	int width = slateoption_int(window_width);
 	if (width == 0) {
 		width = 1000;
 	}
-	int height = nsoption_int(window_height);
+	int height = slateoption_int(window_height);
 	if (height == 0) {
 		height = 700;
 	}

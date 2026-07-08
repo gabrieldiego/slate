@@ -34,11 +34,11 @@
 #include <stdio.h>
 
 #include "utils/config.h"
-#include "netsurf/inttypes.h"
+#include "slate/inttypes.h"
 #include "utils/config.h"
 #include "utils/utils.h"
 #include "utils/errors.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 
 #include "private.h"
 #include "chart.h"
@@ -119,7 +119,7 @@ static unsigned int colour_series[DEF_COLOUR_NUM] =
 
 
 /* ensures there are labels present for every value */
-static nserror ensure_label_count(struct chart_param *chart, unsigned int count)
+static slateerror ensure_label_count(struct chart_param *chart, unsigned int count)
 {
 	unsigned int lidx;
 	int deltac;
@@ -128,13 +128,13 @@ static nserror ensure_label_count(struct chart_param *chart, unsigned int count)
 	deltac = count - chart->data.label_len;
 	if (deltac <= 0) {
 		/* there are enough labels */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	nlabels = realloc(chart->data.label,
 			  count * sizeof(struct chart_label));
 	if (nlabels == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 	chart->data.label = nlabels;
 
@@ -146,19 +146,19 @@ static nserror ensure_label_count(struct chart_param *chart, unsigned int count)
 
 	chart->data.label_len = count;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * extract values for a series
  */
-static nserror
+static slateerror
 extract_series_values(struct chart_param *chart,
 		      unsigned int series_num,
 		      const char *valstr,
 		      size_t valstrlen)
 {
-	nserror res;
+	slateerror res;
 	unsigned int valcur;
 	size_t valstart;/* value start in valstr */
 	size_t vallen; /* value end in valstr */
@@ -181,7 +181,7 @@ extract_series_values(struct chart_param *chart,
 	/* allocate storage for values */
 	series->value = calloc(series->len, sizeof(float));
 	if (series->value == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* extract values from query string */
@@ -208,22 +208,22 @@ extract_series_values(struct chart_param *chart,
 /**
  * extract values for next series
  */
-static nserror
+static slateerror
 extract_next_series_values(struct chart_param *chart,
 		      const char *valstr,
 		      size_t valstrlen)
 {
-	nserror res;
+	slateerror res;
 
 	if (chart->data.series_len >= MAX_SERIES) {
-		return NSERROR_NOSPACE;
+		return SLATEERROR_NOSPACE;
 	}
 
 	res = extract_series_values(chart,
 				    chart->data.series_len,
 				    valstr,
 				    valstrlen);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		chart->data.series_len++;
 	}
 
@@ -234,12 +234,12 @@ extract_next_series_values(struct chart_param *chart,
 /**
  * extract label title
  */
-static nserror
+static slateerror
 extract_series_labels(struct chart_param *chart,
 		      const char *valstr,
 		      size_t valstrlen)
 {
-	nserror res;
+	slateerror res;
 	unsigned int valcount; /* count of values in valstr */
 	unsigned int valcur;
 	size_t valstart;/* value start in valstr */
@@ -252,7 +252,7 @@ extract_series_labels(struct chart_param *chart,
 	}
 
 	res = ensure_label_count(chart, valcount);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -270,28 +270,28 @@ extract_series_labels(struct chart_param *chart,
 		chart->data.label[valcur].title = strndup(valstr + valstart, vallen);
 		vallen++; /* account for , separator */
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * extract labels colour
  */
-static nserror
+static slateerror
 extract_series_colours(struct chart_param *chart,
 		      const char *valstr,
 		      size_t valstrlen)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * process a part of a query
  */
-static nserror
+static slateerror
 process_query_section(const char *str, size_t len, struct chart_param *chart)
 {
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 
 	if ((len > 6) &&
 	    (strncmp(str, "width=", 6) == 0)) {
@@ -339,17 +339,17 @@ process_query_section(const char *str, size_t len, struct chart_param *chart)
 
 
 
-static nserror
-chart_from_query(struct nsurl *url, struct chart_param *chart)
+static slateerror
+chart_from_query(struct slateurl *url, struct chart_param *chart)
 {
-	nserror res;
+	slateerror res;
 	char *querystr;
 	size_t querylen;
 	size_t kvstart;/* key value start */
 	size_t kvlen; /* key value end */
 
-	res = nsurl_get(url, NSURL_QUERY, &querystr, &querylen);
-	if (res != NSERROR_OK) {
+	res = slateurl_get(url, SLATEURL_QUERY, &querystr, &querylen);
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -362,7 +362,7 @@ chart_from_query(struct nsurl *url, struct chart_param *chart)
 		}
 
 		res = process_query_section(querystr + kvstart, kvlen, chart);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			break;
 		}
 		kvlen++; /* account for & separator */
@@ -395,14 +395,14 @@ chart_from_query(struct nsurl *url, struct chart_param *chart)
 		chart->key = CHART_KEY_RIGHT;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-static nserror
+static slateerror
 output_pie_legend(struct fetch_about_context *ctx, struct chart_param *chart)
 {
-	nserror res;
+	slateerror res;
 	unsigned int lblidx;
 	unsigned int legend_width;
 	unsigned int legend_height;
@@ -426,7 +426,7 @@ output_pie_legend(struct fetch_about_context *ctx, struct chart_param *chart)
 				vertical_spacing * 2 / 3,
 				vertical_spacing * 2 / 3,
 				chart->data.label[lblidx].colour);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return res;
 			}
 			res = fetch_about_ssenddataf(ctx,
@@ -435,7 +435,7 @@ output_pie_legend(struct fetch_about_context *ctx, struct chart_param *chart)
 				vertical_spacing * (lblidx+1),
 			     chart->data.label[lblidx].colour,
 				chart->data.label[lblidx].title);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return res;
 			}
 		}
@@ -444,7 +444,7 @@ output_pie_legend(struct fetch_about_context *ctx, struct chart_param *chart)
 		break;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static float
@@ -467,7 +467,7 @@ compute_series_total(struct chart_param *chart, unsigned int series)
 static bool
 pie_chart(struct fetch_about_context *ctx, struct chart_param *chart)
 {
-	nserror res;
+	slateerror res;
 	float ra; /* pie a radius */
 	float rb; /* pie b radius */
 	float series_total;
@@ -481,14 +481,14 @@ pie_chart(struct fetch_about_context *ctx, struct chart_param *chart)
 
 	/* ensure there is data to render */
 	if ((chart->data.series_len < 1) || (chart->data.series[0].len < 2)) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* get the first series total value */
 	series_total = compute_series_total(chart, 0);
 	if (series_total == 0) {
 		/* dividing by zero is embarasing */
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/*
@@ -532,13 +532,13 @@ pie_chart(struct fetch_about_context *ctx, struct chart_param *chart)
 			"<svg width=\"%u\" height=\"%u\" "
 			"xmlns=\"http://www.w3.org/2000/svg\">\n",
 			chart->width, chart->height);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto aborted;
 	}
 
 	/* generate the legend */
 	res = output_pie_legend(ctx, chart);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto aborted;
 	}
 
@@ -572,7 +572,7 @@ pie_chart(struct fetch_about_context *ctx, struct chart_param *chart)
 			circle_centre_x,
 			circle_centre_y,
 			chart->data.label[curdata].colour);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			goto aborted;
 		}
 		last_x = end_x;
@@ -581,7 +581,7 @@ pie_chart(struct fetch_about_context *ctx, struct chart_param *chart)
 	}
 
 	res = fetch_about_ssenddataf(ctx, "</svg>\n");
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto aborted;
 	}
 
@@ -605,12 +605,12 @@ pie_chart(struct fetch_about_context *ctx, struct chart_param *chart)
  */
 bool fetch_about_chart_handler(struct fetch_about_context *ctx)
 {
-	nserror res;
+	slateerror res;
 	struct chart_param chart;
 	memset(&chart, 0, sizeof(struct chart_param));
 
 	res = chart_from_query(fetch_about_get_url(ctx), &chart);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto aborted;
 	}
 

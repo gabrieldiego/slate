@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -100,9 +100,9 @@ void die(const char * const error) __attribute__ ((noreturn));
  *
  * \param[in] warning A warning looked up in the message translation table
  * \param[in] detail Additional text to be displayed or NULL.
- * \return NSERROR_OK on success or error code if there was a
+ * \return SLATEERROR_OK on success or error code if there was a
  *           faliure displaying the message to the user.
  */
-nserror atari_warn_user(const char *warning, const char *detail);
+slateerror atari_warn_user(const char *warning, const char *detail);
 
 #endif

@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 Paul Blokus <paul_pl@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,8 +26,8 @@
 #include <gtk/gtk.h>
 
 #include "utils/log.h"
-#include "netsurf/keypress.h"
-#include "netsurf/plotters.h"
+#include "slate/keypress.h"
+#include "slate/plotters.h"
 #include "desktop/cookie_manager.h"
 
 #include "gtk/cookies.h"
@@ -35,18 +35,18 @@
 #include "gtk/resources.h"
 #include "gtk/corewindow.h"
 
-struct nsgtk_cookie_window {
-	struct nsgtk_corewindow core;
+struct slategtk_cookie_window {
+	struct slategtk_corewindow core;
 	GtkBuilder *builder;
 	GtkWindow *wnd;
 };
 
-static struct nsgtk_cookie_window *cookie_window = NULL;
+static struct slategtk_cookie_window *cookie_window = NULL;
 
-#define MENUPROTO(x) static gboolean nsgtk_on_##x##_activate(	\
+#define MENUPROTO(x) static gboolean slategtk_on_##x##_activate(	\
 		GtkMenuItem *widget, gpointer g)
-#define MENUEVENT(x) { #x, G_CALLBACK(nsgtk_on_##x##_activate) }
-#define MENUHANDLER(x) gboolean nsgtk_on_##x##_activate(GtkMenuItem *widget, \
+#define MENUEVENT(x) { #x, G_CALLBACK(slategtk_on_##x##_activate) }
+#define MENUHANDLER(x) gboolean slategtk_on_##x##_activate(GtkMenuItem *widget, \
 		gpointer g)
 
 struct menu_events {
@@ -159,7 +159,7 @@ MENUHANDLER(collapse_cookies)
 /**
  * Connects menu events in the cookies window.
  */
-static void nsgtk_cookies_init_menu(struct nsgtk_cookie_window *ncwin)
+static void slategtk_cookies_init_menu(struct slategtk_cookie_window *ncwin)
 {
 	struct menu_events *event = menu_events;
 	GtkWidget *w;
@@ -184,80 +184,80 @@ static void nsgtk_cookies_init_menu(struct nsgtk_cookie_window *ncwin)
 /**
  * callback for mouse action on cookie window
  *
- * \param nsgtk_cw The nsgtk core window structure.
+ * \param slategtk_cw The slategtk core window structure.
  * \param mouse_state netsurf mouse state on event
  * \param x location of event
  * \param y location of event
- * \return NSERROR_OK on success otherwise appropriate error code
+ * \return SLATEERROR_OK on success otherwise appropriate error code
  */
-static nserror
-nsgtk_cookies_mouse(struct nsgtk_corewindow *nsgtk_cw,
+static slateerror
+slategtk_cookies_mouse(struct slategtk_corewindow *slategtk_cw,
 		    browser_mouse_state mouse_state,
 		    int x, int y)
 {
 	cookie_manager_mouse_action(mouse_state, x, y);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * callback for keypress on cookie window
  *
- * \param nsgtk_cw The nsgtk core window structure.
+ * \param slategtk_cw The slategtk core window structure.
  * \param nskey The netsurf key code
- * \return NSERROR_OK on success otherwise appropriate error code
+ * \return SLATEERROR_OK on success otherwise appropriate error code
  */
-static nserror
-nsgtk_cookies_key(struct nsgtk_corewindow *nsgtk_cw, uint32_t nskey)
+static slateerror
+slategtk_cookies_key(struct slategtk_corewindow *slategtk_cw, uint32_t nskey)
 {
 	if (cookie_manager_keypress(nskey)) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
-	return NSERROR_NOT_IMPLEMENTED;
+	return SLATEERROR_NOT_IMPLEMENTED;
 }
 
 /**
  * callback on draw event for cookie window
  *
- * \param nsgtk_cw The nsgtk core window structure.
+ * \param slategtk_cw The slategtk core window structure.
  * \param r The rectangle of the window that needs updating.
- * \return NSERROR_OK on success otherwise appropriate error code
+ * \return SLATEERROR_OK on success otherwise appropriate error code
  */
-static nserror
-nsgtk_cookies_draw(struct nsgtk_corewindow *nsgtk_cw, struct rect *r)
+static slateerror
+slategtk_cookies_draw(struct slategtk_corewindow *slategtk_cw, struct rect *r)
 {
 	struct redraw_context ctx = {
 		.interactive = true,
 		.background_images = true,
-		.plot = &nsgtk_plotters
+		.plot = &slategtk_plotters
 	};
 
 	cookie_manager_redraw(0, 0, r, &ctx);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * Creates the window for the cookies tree.
  *
- * \return NSERROR_OK on success else appropriate error code on failure.
+ * \return SLATEERROR_OK on success else appropriate error code on failure.
  */
-static nserror nsgtk_cookies_init(void)
+static slateerror slategtk_cookies_init(void)
 {
-	struct nsgtk_cookie_window *ncwin;
-	nserror res;
+	struct slategtk_cookie_window *ncwin;
+	slateerror res;
 
 	if (cookie_window != NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	ncwin = calloc(1, sizeof(*ncwin));
 	if (ncwin == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
-	res = nsgtk_builder_new_from_resname("cookies", &ncwin->builder);
-	if (res != NSERROR_OK) {
+	res = slategtk_builder_new_from_resname("cookies", &ncwin->builder);
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Cookie UI builder init failed");
 		free(ncwin);
 		return res;
@@ -280,20 +280,20 @@ static nserror nsgtk_cookies_init(void)
 			 G_CALLBACK(gtk_widget_hide_on_delete),
 			 NULL);
 
-	nsgtk_cookies_init_menu(ncwin);
+	slategtk_cookies_init_menu(ncwin);
 
-	ncwin->core.draw = nsgtk_cookies_draw;
-	ncwin->core.key = nsgtk_cookies_key;
-	ncwin->core.mouse = nsgtk_cookies_mouse;
+	ncwin->core.draw = slategtk_cookies_draw;
+	ncwin->core.key = slategtk_cookies_key;
+	ncwin->core.mouse = slategtk_cookies_mouse;
 
-	res = nsgtk_corewindow_init(&ncwin->core);
-	if (res != NSERROR_OK) {
+	res = slategtk_corewindow_init(&ncwin->core);
+	if (res != SLATEERROR_OK) {
 		free(ncwin);
 		return res;
 	}
 
 	res = cookie_manager_init((struct core_window *)ncwin);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		free(ncwin);
 		return res;
 	}
@@ -303,17 +303,17 @@ static nserror nsgtk_cookies_init(void)
 	 */
 	cookie_window = ncwin;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported function documented gtk/cookies.h */
-nserror nsgtk_cookies_present(const char *search_term)
+slateerror slategtk_cookies_present(const char *search_term)
 {
-	nserror res;
+	slateerror res;
 
-	res = nsgtk_cookies_init();
-	if (res == NSERROR_OK) {
+	res = slategtk_cookies_init();
+	if (res == SLATEERROR_OK) {
 		gtk_window_present(cookie_window->wnd);
 		res = cookie_manager_set_search_string(search_term);
 	}
@@ -322,17 +322,17 @@ nserror nsgtk_cookies_present(const char *search_term)
 
 
 /* exported function documented gtk/cookies.h */
-nserror nsgtk_cookies_destroy(void)
+slateerror slategtk_cookies_destroy(void)
 {
-	nserror res;
+	slateerror res;
 
 	if (cookie_window == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	res = cookie_manager_fini();
-	if (res == NSERROR_OK) {
-		res = nsgtk_corewindow_fini(&cookie_window->core);
+	if (res == SLATEERROR_OK) {
+		res = slategtk_corewindow_fini(&cookie_window->core);
 		gtk_widget_destroy(GTK_WIDGET(cookie_window->wnd));
 		g_object_unref(G_OBJECT(cookie_window->builder));
 		free(cookie_window);

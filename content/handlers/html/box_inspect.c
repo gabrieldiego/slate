@@ -2,7 +2,7 @@
  * Copyright 2008 Michael Drake <tlsa@netsurf-browser.org>
  * Copyright 2020 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,11 +31,11 @@
 
 #include "utils/corestrings.h"
 #include "utils/utils.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/errors.h"
-#include "netsurf/types.h"
-#include "netsurf/content.h"
-#include "netsurf/mouse.h"
+#include "slate/types.h"
+#include "slate/content.h"
+#include "slate/mouse.h"
 #include "css/utils.h"
 #include "css/dump.h"
 #include "desktop/scrollbar.h"
@@ -909,7 +909,7 @@ void box_dump(FILE *stream, struct box *box, unsigned int depth, bool style)
 		fprintf(stream, "space ");
 	if (box->object) {
 		fprintf(stream, "(object '%s') ",
-			nsurl_access(hlcache_handle_get_url(box->object)));
+			slateurl_access(hlcache_handle_get_url(box->object)));
 	}
 	if (box->iframe) {
 		fprintf(stream, "(iframe) ");
@@ -919,7 +919,7 @@ void box_dump(FILE *stream, struct box *box, unsigned int depth, bool style)
 	if (style && box->style)
 		nscss_dump_computed_style(stream, box->style);
 	if (box->href)
-		fprintf(stream, " -> '%s'", nsurl_access(box->href));
+		fprintf(stream, " -> '%s'", slateurl_access(box->href));
 	if (box->target)
 		fprintf(stream, " |%s|", box->target);
 	if (box->title)

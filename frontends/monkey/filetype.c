@@ -2,7 +2,7 @@
  * Copyright 2007 Rob Kendrick <rjek@netsurf-browser.org>
  * Copyright 2007 Vincent Sanders <vince@debian.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@
 
 /**
  * \file
- * file extension to mimetype mapping for the monkey frontend
+ * file extension to mimetype mapping for the jotter frontend
  *
- * allows monkey frontend to map file extension to mime types using a
+ * allows jotter frontend to map file extension to mime types using a
  * default builtin list and /etc/mime.types file if present.
  *
  * mime type and content type handling is derived from the BNF in

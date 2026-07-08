@@ -1,7 +1,7 @@
 /*
  * Copyright 2005 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,16 +21,16 @@
  * Interface to GTK layout handling using pango.
  */
 
-#ifndef _NETSURF_GTK_LAYOUT_PANGO_H_
-#define _NETSURF_GTK_LAYOUT_PANGO_H_
+#ifndef _SLATE_GTK_LAYOUT_PANGO_H_
+#define _SLATE_GTK_LAYOUT_PANGO_H_
 
 #include <stdbool.h>
 
 struct plot_font_style;
 
-extern struct gui_layout_table *nsgtk_layout_table;
+extern struct gui_layout_table *slategtk_layout_table;
 
-nserror nsfont_paint(int x, int y, const char *string, size_t length, const struct plot_font_style *fstyle);
+slateerror nsfont_paint(int x, int y, const char *string, size_t length, const struct plot_font_style *fstyle);
 
 /**
  * Convert a plot style to a PangoFontDescription.

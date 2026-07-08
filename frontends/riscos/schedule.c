@@ -1,7 +1,7 @@
 /*
  * Copyright 2004 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -60,7 +60,7 @@ os_t sched_time;
  * All scheduled callbacks matching both callback and p are removed.
  */
 
-static nserror schedule_remove(void (*callback)(void *p), void *p)
+static slateerror schedule_remove(void (*callback)(void *p), void *p)
 {
 	struct sched_entry *entry, *prev;
 
@@ -86,19 +86,19 @@ static nserror schedule_remove(void (*callback)(void *p), void *p)
 		sched_active = false;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported function documented in riscos/gui.h */
-nserror riscos_schedule(int t, void (*callback)(void *p), void *p)
+slateerror riscos_schedule(int t, void (*callback)(void *p), void *p)
 {
 	struct sched_entry *entry;
 	struct sched_entry *queue;
 	os_t time;
-	nserror ret;
+	slateerror ret;
 
 	ret = schedule_remove(callback, p);
-	if ((t < 0) || (ret != NSERROR_OK)) {
+	if ((t < 0) || (ret != SLATEERROR_OK)) {
 		return ret;
 	}
 
@@ -109,7 +109,7 @@ nserror riscos_schedule(int t, void (*callback)(void *p), void *p)
 	entry = malloc(sizeof *entry);
 	if (!entry) {
 		NSLOG(netsurf, INFO, "malloc failed");
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	entry->time = time;
@@ -126,7 +126,7 @@ nserror riscos_schedule(int t, void (*callback)(void *p), void *p)
 	sched_active = true;
 	sched_time = sched_queue.next->time;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 

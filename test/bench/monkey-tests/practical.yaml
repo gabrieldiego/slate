@@ -12,23 +12,23 @@ steps:
 - action: repeat
   tag: pages
   values:
-  - ${NETSURF_BENCH_ROOT}/practical-news.html
-  - ${NETSURF_BENCH_ROOT}/practical-form.html
-  - ${NETSURF_BENCH_ROOT}/practical-dashboard.html
-  - ${NETSURF_BENCH_ROOT}/practical-docs.html
-  - ${NETSURF_BENCH_ROOT}/practical-css-layout.html
-  - ${NETSURF_BENCH_ROOT}/practical-media-objects.html
-  - ${NETSURF_BENCH_ROOT}/practical-interaction.html
-  - ${NETSURF_BENCH_ROOT}/practical-interaction-advanced.html
-  - ${NETSURF_BENCH_ROOT}/practical-script-resources.html
-  - ${NETSURF_BENCH_ROOT}/practical-search-results.html
-  - ${NETSURF_BENCH_ROOT}/practical-product-listing.html
-  - ${NETSURF_BENCH_ROOT}/practical-checkout.html
-  - ${NETSURF_BENCH_ROOT}/practical-submit-inputs.html
-  - ${NETSURF_BENCH_ROOT}/practical-profile-settings.html
-  - ${NETSURF_BENCH_ROOT}/practical-social-thread.html
-  - ${NETSURF_BENCH_ROOT}/practical-issue-tracker.html
-  - ${NETSURF_BENCH_ROOT}/practical-travel-booking.html
+  - ${SLATE_BENCH_ROOT}/practical-news.html
+  - ${SLATE_BENCH_ROOT}/practical-form.html
+  - ${SLATE_BENCH_ROOT}/practical-dashboard.html
+  - ${SLATE_BENCH_ROOT}/practical-docs.html
+  - ${SLATE_BENCH_ROOT}/practical-css-layout.html
+  - ${SLATE_BENCH_ROOT}/practical-media-objects.html
+  - ${SLATE_BENCH_ROOT}/practical-interaction.html
+  - ${SLATE_BENCH_ROOT}/practical-interaction-advanced.html
+  - ${SLATE_BENCH_ROOT}/practical-script-resources.html
+  - ${SLATE_BENCH_ROOT}/practical-search-results.html
+  - ${SLATE_BENCH_ROOT}/practical-product-listing.html
+  - ${SLATE_BENCH_ROOT}/practical-checkout.html
+  - ${SLATE_BENCH_ROOT}/practical-submit-inputs.html
+  - ${SLATE_BENCH_ROOT}/practical-profile-settings.html
+  - ${SLATE_BENCH_ROOT}/practical-social-thread.html
+  - ${SLATE_BENCH_ROOT}/practical-issue-tracker.html
+  - ${SLATE_BENCH_ROOT}/practical-travel-booking.html
   steps:
   - action: navigate
     window: win1
@@ -44,7 +44,7 @@ steps:
     - text-contains: Practical Bench
 - action: navigate
   window: win1
-  url: ${NETSURF_BENCH_ROOT}/practical-search-results.html
+  url: ${SLATE_BENCH_ROOT}/practical-search-results.html
 - action: block
   conditions:
   - window: win1
@@ -57,7 +57,7 @@ steps:
   time: 50
 - action: navigate
   window: win1
-  url: ${NETSURF_BENCH_ROOT}/practical-product-listing.html
+  url: ${SLATE_BENCH_ROOT}/practical-product-listing.html
 - action: block
   conditions:
   - window: win1
@@ -70,7 +70,7 @@ steps:
   time: 50
 - action: navigate
   window: win1
-  url: ${NETSURF_BENCH_ROOT}/practical-profile-settings.html
+  url: ${SLATE_BENCH_ROOT}/practical-profile-settings.html
 - action: block
   conditions:
   - window: win1
@@ -83,7 +83,7 @@ steps:
   time: 50
 - action: navigate
   window: win1
-  url: ${NETSURF_BENCH_ROOT}/practical-social-thread.html
+  url: ${SLATE_BENCH_ROOT}/practical-social-thread.html
 - action: block
   conditions:
   - window: win1
@@ -97,7 +97,7 @@ steps:
   time: 50
 - action: navigate
   window: win1
-  url: ${NETSURF_BENCH_ROOT}/practical-checkout.html
+  url: ${SLATE_BENCH_ROOT}/practical-checkout.html
 - action: block
   conditions:
   - window: win1
@@ -120,7 +120,7 @@ steps:
   tag: win2
 - action: navigate
   window: win2
-  url: ${NETSURF_BENCH_ROOT}/practical-submit-inputs.html
+  url: ${SLATE_BENCH_ROOT}/practical-submit-inputs.html
 - action: block
   conditions:
   - window: win2
@@ -137,7 +137,7 @@ steps:
   window: win2
 - action: navigate
   window: win1
-  url: ${NETSURF_BENCH_ROOT}/practical-interaction.html
+  url: ${SLATE_BENCH_ROOT}/practical-interaction.html
 - action: block
   conditions:
   - window: win1
@@ -152,7 +152,7 @@ steps:
   tag: win3
 - action: navigate
   window: win3
-  url: ${NETSURF_BENCH_ROOT}/practical-interaction-advanced.html
+  url: ${SLATE_BENCH_ROOT}/practical-interaction-advanced.html
 - action: block
   conditions:
   - window: win3

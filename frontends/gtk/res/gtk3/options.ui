@@ -85,9 +85,9 @@
     <property name="window_position">center-on-parent</property>
     <property name="destroy_with_parent">True</property>
     <property name="type_hint">dialog</property>
-    <signal name="destroy" handler="nsgtk_preferences_dialogPreferences_destroy" swapped="no"/>
-    <signal name="delete-event" handler="nsgtk_preferences_dialogPreferences_deleteevent" swapped="no"/>
-    <signal name="response" handler="nsgtk_preferences_dialogPreferences_response" swapped="no"/>
+    <signal name="destroy" handler="slategtk_preferences_dialogPreferences_destroy" swapped="no"/>
+    <signal name="delete-event" handler="slategtk_preferences_dialogPreferences_deleteevent" swapped="no"/>
+    <signal name="response" handler="slategtk_preferences_dialogPreferences_response" swapped="no"/>
     <child internal-child="vbox">
       <object class="GtkBox" id="vbox_dialog">
         <property name="visible">True</property>
@@ -192,8 +192,8 @@
                                     <property name="can_focus">True</property>
                                     <property name="tooltip_text" translatable="yes">preferencesStartupPageTooltip</property>
                                     <property name="invisible_char">●</property>
-                                    <signal name="changed" handler="nsgtk_preferences_entryHomePageURL_changed" swapped="no"/>
-                                    <signal name="realize" handler="nsgtk_preferences_entryHomePageURL_realize" swapped="no"/>
+                                    <signal name="changed" handler="slategtk_preferences_entryHomePageURL_changed" swapped="no"/>
+                                    <signal name="realize" handler="slategtk_preferences_entryHomePageURL_realize" swapped="no"/>
                                   </object>
                                   <packing>
                                     <property name="expand">True</property>
@@ -226,7 +226,7 @@
                                     <property name="can_focus">True</property>
                                     <property name="receives_default">True</property>
                                     <property name="use_action_appearance">False</property>
-                                    <signal name="clicked" handler="nsgtk_preferences_setDefaultPage_clicked" swapped="no"/>
+                                    <signal name="clicked" handler="slategtk_preferences_setDefaultPage_clicked" swapped="no"/>
                                   </object>
                                   <packing>
                                     <property name="expand">False</property>
@@ -243,7 +243,7 @@
                                     <property name="can_focus">True</property>
                                     <property name="receives_default">True</property>
                                     <property name="use_action_appearance">False</property>
-                                    <signal name="clicked" handler="nsgtk_preferences_setCurrentPage_clicked" swapped="no"/>
+                                    <signal name="clicked" handler="slategtk_preferences_setCurrentPage_clicked" swapped="no"/>
                                   </object>
                                   <packing>
                                     <property name="expand">False</property>
@@ -309,8 +309,8 @@
                                 <property name="use_action_appearance">False</property>
                                 <property name="xalign">0.5</property>
                                 <property name="draw_indicator">True</property>
-                                <signal name="toggled" handler="nsgtk_preferences_checkUrlSearch_toggled" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_checkUrlSearch_realize" swapped="no"/>
+                                <signal name="toggled" handler="slategtk_preferences_checkUrlSearch_toggled" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_checkUrlSearch_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="expand">True</property>
@@ -343,8 +343,8 @@
                                     <property name="tooltip_text" translatable="yes">preferencesSearchProviderTooltip</property>
                                     <property name="halign">start</property>
                                     <property name="model">liststore_search_provider</property>
-                                    <signal name="changed" handler="nsgtk_preferences_comboSearch_changed" swapped="no"/>
-                                    <signal name="realize" handler="nsgtk_preferences_comboSearch_realize" swapped="no"/>
+                                    <signal name="changed" handler="slategtk_preferences_comboSearch_changed" swapped="no"/>
+                                    <signal name="realize" handler="slategtk_preferences_comboSearch_realize" swapped="no"/>
                                     <child>
                                       <object class="GtkCellRendererText" id="cellrenderertext1"/>
                                       <attributes>
@@ -415,8 +415,8 @@
                                 <property name="use_action_appearance">False</property>
                                 <property name="xalign">0.5</property>
                                 <property name="draw_indicator">True</property>
-                                <signal name="toggled" handler="nsgtk_preferences_checkClearDownloads_toggled" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_checkClearDownloads_realize" swapped="no"/>
+                                <signal name="toggled" handler="slategtk_preferences_checkClearDownloads_toggled" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_checkClearDownloads_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="expand">False</property>
@@ -435,8 +435,8 @@
                                 <property name="use_action_appearance">False</property>
                                 <property name="xalign">0.5</property>
                                 <property name="draw_indicator">True</property>
-                                <signal name="toggled" handler="nsgtk_preferences_checkRequestOverwrite_toggled" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_checkRequestOverwrite_realize" swapped="no"/>
+                                <signal name="toggled" handler="slategtk_preferences_checkRequestOverwrite_toggled" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_checkRequestOverwrite_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="expand">False</property>
@@ -469,8 +469,8 @@
                                     <property name="tooltip_text" translatable="yes">preferencesDownloadsLocationTooltip</property>
                                     <property name="halign">start</property>
                                     <property name="action">select-folder</property>
-                                    <signal name="selection-changed" handler="nsgtk_preferences_fileChooserDownloads_selectionchanged" swapped="no"/>
-                                    <signal name="realize" handler="nsgtk_preferences_fileChooserDownloads_realize" swapped="no"/>
+                                    <signal name="selection-changed" handler="slategtk_preferences_fileChooserDownloads_selectionchanged" swapped="no"/>
+                                    <signal name="realize" handler="slategtk_preferences_fileChooserDownloads_realize" swapped="no"/>
                                   </object>
                                   <packing>
                                     <property name="expand">True</property>
@@ -554,8 +554,8 @@
                                 <property name="use_action_appearance">False</property>
                                 <property name="xalign">0.5</property>
                                 <property name="draw_indicator">True</property>
-                                <signal name="toggled" handler="nsgtk_preferences_checkShowSingleTab_toggled" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_checkShowSingleTab_realize" swapped="no"/>
+                                <signal name="toggled" handler="slategtk_preferences_checkShowSingleTab_toggled" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_checkShowSingleTab_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="expand">True</property>
@@ -574,8 +574,8 @@
                                 <property name="use_action_appearance">False</property>
                                 <property name="xalign">0.5</property>
                                 <property name="draw_indicator">True</property>
-                                <signal name="toggled" handler="nsgtk_preferences_checkForegroundNew_toggled" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_checkForegroundNew_realize" swapped="no"/>
+                                <signal name="toggled" handler="slategtk_preferences_checkForegroundNew_toggled" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_checkForegroundNew_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="expand">True</property>
@@ -594,8 +594,8 @@
                                 <property name="use_action_appearance">False</property>
                                 <property name="xalign">0.5</property>
                                 <property name="draw_indicator">True</property>
-                                <signal name="toggled" handler="nsgtk_preferences_checkNewBlank_toggled" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_checkNewBlank_realize" swapped="no"/>
+                                <signal name="toggled" handler="slategtk_preferences_checkNewBlank_toggled" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_checkNewBlank_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="expand">True</property>
@@ -627,8 +627,8 @@
                                     <property name="can_focus">False</property>
                                     <property name="halign">start</property>
                                     <property name="model">liststore_tab_position</property>
-                                    <signal name="changed" handler="nsgtk_preferences_comboTabPosition_changed" swapped="no"/>
-                                    <signal name="realize" handler="nsgtk_preferences_comboTabPosition_realize" swapped="no"/>
+                                    <signal name="changed" handler="slategtk_preferences_comboTabPosition_changed" swapped="no"/>
+                                    <signal name="realize" handler="slategtk_preferences_comboTabPosition_realize" swapped="no"/>
                                     <child>
                                       <object class="GtkCellRendererText" id="cellrenderertext2"/>
                                       <attributes>
@@ -712,8 +712,8 @@
                                     <property name="can_focus">False</property>
                                     <property name="halign">start</property>
                                     <property name="model">liststore_developer_view</property>
-                                    <signal name="changed" handler="nsgtk_preferences_comboDeveloperView_changed" swapped="no"/>
-                                    <signal name="realize" handler="nsgtk_preferences_comboDeveloperView_realize" swapped="no"/>
+                                    <signal name="changed" handler="slategtk_preferences_comboDeveloperView_changed" swapped="no"/>
+                                    <signal name="realize" handler="slategtk_preferences_comboDeveloperView_realize" swapped="no"/>
                                     <child>
                                       <object class="GtkCellRendererText" id="cellrenderertext10"/>
                                       <attributes>
@@ -784,8 +784,8 @@
                                 <property name="use_action_appearance">False</property>
                                 <property name="xalign">0.5</property>
                                 <property name="draw_indicator">True</property>
-                                <signal name="toggled" handler="nsgtk_preferences_checkDisplayRecentURLs_toggled" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_checkDisplayRecentURLs_realize" swapped="no"/>
+                                <signal name="toggled" handler="slategtk_preferences_checkDisplayRecentURLs_toggled" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_checkDisplayRecentURLs_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="expand">True</property>
@@ -856,8 +856,8 @@
                                     <property name="can_focus">False</property>
                                     <property name="halign">start</property>
                                     <property name="model">liststore_toolbar_buttontype</property>
-                                    <signal name="changed" handler="nsgtk_preferences_comboButtonType_changed" swapped="no"/>
-                                    <signal name="realize" handler="nsgtk_preferences_comboButtonType_realize" swapped="no"/>
+                                    <signal name="changed" handler="slategtk_preferences_comboButtonType_changed" swapped="no"/>
+                                    <signal name="realize" handler="slategtk_preferences_comboButtonType_realize" swapped="no"/>
                                     <child>
                                       <object class="GtkCellRendererText" id="cellrenderertext3"/>
                                       <attributes>
@@ -951,8 +951,8 @@
                                 <property name="use_action_appearance">False</property>
                                 <property name="xalign">0.5</property>
                                 <property name="draw_indicator">True</property>
-                                <signal name="toggled" handler="nsgtk_preferences_checkDisablePopups_toggled" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_checkDisablePopups_realize" swapped="no"/>
+                                <signal name="toggled" handler="slategtk_preferences_checkDisablePopups_toggled" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_checkDisablePopups_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="expand">False</property>
@@ -971,8 +971,8 @@
                                 <property name="use_action_appearance">False</property>
                                 <property name="xalign">0.5</property>
                                 <property name="draw_indicator">True</property>
-                                <signal name="toggled" handler="nsgtk_preferences_checkHideAdverts_toggled" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_checkHideAdverts_realize" swapped="no"/>
+                                <signal name="toggled" handler="slategtk_preferences_checkHideAdverts_toggled" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_checkHideAdverts_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="expand">False</property>
@@ -991,8 +991,8 @@
                                 <property name="use_action_appearance">False</property>
                                 <property name="xalign">0.5</property>
                                 <property name="draw_indicator">True</property>
-                                <signal name="toggled" handler="nsgtk_preferences_checkEnableJavascript_toggled" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_checkEnableJavascript_realize" swapped="no"/>
+                                <signal name="toggled" handler="slategtk_preferences_checkEnableJavascript_toggled" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_checkEnableJavascript_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="expand">False</property>
@@ -1024,8 +1024,8 @@
                                     <property name="can_focus">False</property>
                                     <property name="halign">start</property>
                                     <property name="model">liststore_image_loading</property>
-                                    <signal name="changed" handler="nsgtk_preferences_comboboxLoadImages_changed" swapped="no"/>
-                                    <signal name="realize" handler="nsgtk_preferences_comboboxLoadImages_realize" swapped="no"/>
+                                    <signal name="changed" handler="slategtk_preferences_comboboxLoadImages_changed" swapped="no"/>
+                                    <signal name="realize" handler="slategtk_preferences_comboboxLoadImages_realize" swapped="no"/>
                                     <child>
                                       <object class="GtkCellRendererText" id="cellrenderertext4"/>
                                       <attributes>
@@ -1096,8 +1096,8 @@
                                 <property name="use_action_appearance">False</property>
                                 <property name="xalign">0.5</property>
                                 <property name="draw_indicator">True</property>
-                                <signal name="toggled" handler="nsgtk_preferences_checkEnableAnimations_toggled" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_checkEnableAnimations_realize" swapped="no"/>
+                                <signal name="toggled" handler="slategtk_preferences_checkEnableAnimations_toggled" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_checkEnableAnimations_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="expand">True</property>
@@ -1167,8 +1167,8 @@
                                     <property name="visible">True</property>
                                     <property name="can_focus">False</property>
                                     <property name="model">liststore_defaultfont</property>
-                                    <signal name="changed" handler="nsgtk_preferences_comboDefault_changed" swapped="no"/>
-                                    <signal name="realize" handler="nsgtk_preferences_comboDefault_realize" swapped="no"/>
+                                    <signal name="changed" handler="slategtk_preferences_comboDefault_changed" swapped="no"/>
+                                    <signal name="realize" handler="slategtk_preferences_comboDefault_realize" swapped="no"/>
                                     <child>
                                       <object class="GtkCellRendererText" id="cellrenderertext5"/>
                                       <attributes>
@@ -1220,8 +1220,8 @@
                                     <property name="climb_rate">1</property>
                                     <property name="digits">1</property>
                                     <property name="numeric">True</property>
-                                    <signal name="value-changed" handler="nsgtk_preferences_spinDefaultSize_valuechanged" swapped="no"/>
-                                    <signal name="realize" handler="nsgtk_preferences_spinDefaultSize_realize" swapped="no"/>
+                                    <signal name="value-changed" handler="slategtk_preferences_spinDefaultSize_valuechanged" swapped="no"/>
+                                    <signal name="realize" handler="slategtk_preferences_spinDefaultSize_realize" swapped="no"/>
                                   </object>
                                   <packing>
                                     <property name="expand">False</property>
@@ -1246,7 +1246,7 @@
                                 <property name="use_action_appearance">False</property>
                                 <property name="image">image1</property>
                                 <property name="use_underline">True</property>
-                                <signal name="clicked" handler="nsgtk_preferences_fontPreview_clicked" swapped="no"/>
+                                <signal name="clicked" handler="slategtk_preferences_fontPreview_clicked" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="expand">False</property>
@@ -1318,8 +1318,8 @@
                                     <property name="tooltip_text" translatable="yes">preferencesLanguagePreferredTooltip</property>
                                     <property name="halign">start</property>
                                     <property name="model">liststore_content_language</property>
-                                    <signal name="changed" handler="nsgtk_preferences_comboboxLanguage_changed" swapped="no"/>
-                                    <signal name="realize" handler="nsgtk_preferences_comboboxLanguage_realize" swapped="no"/>
+                                    <signal name="changed" handler="slategtk_preferences_comboboxLanguage_changed" swapped="no"/>
+                                    <signal name="realize" handler="slategtk_preferences_comboboxLanguage_realize" swapped="no"/>
                                     <child>
                                       <object class="GtkCellRendererText" id="cellrenderertext7">
                                         <property name="xalign">0</property>
@@ -1422,8 +1422,8 @@
                                 <property name="use_action_appearance">False</property>
                                 <property name="xalign">0.5</property>
                                 <property name="draw_indicator">True</property>
-                                <signal name="toggled" handler="nsgtk_preferences_checkSendReferer_toggled" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_checkSendReferer_realize" swapped="no"/>
+                                <signal name="toggled" handler="slategtk_preferences_checkSendReferer_toggled" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_checkSendReferer_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="expand">True</property>
@@ -1442,8 +1442,8 @@
                                 <property name="use_action_appearance">False</property>
                                 <property name="xalign">0.5</property>
                                 <property name="draw_indicator">True</property>
-                                <signal name="toggled" handler="nsgtk_preferences_checkSendDNT_toggled" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_checkSendDNT_realize" swapped="no"/>
+                                <signal name="toggled" handler="slategtk_preferences_checkSendDNT_toggled" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_checkSendDNT_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="expand">True</property>
@@ -1501,8 +1501,8 @@
                                 <property name="use_action_appearance">False</property>
                                 <property name="xalign">0.5</property>
                                 <property name="draw_indicator">True</property>
-                                <signal name="toggled" handler="nsgtk_preferences_checkHoverURLs_toggled" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_checkHoverURLs_realize" swapped="no"/>
+                                <signal name="toggled" handler="slategtk_preferences_checkHoverURLs_toggled" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_checkHoverURLs_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="expand">True</property>
@@ -1539,8 +1539,8 @@
                                     <property name="climb_rate">1</property>
                                     <property name="numeric">True</property>
                                     <property name="update_policy">if-valid</property>
-                                    <signal name="value-changed" handler="nsgtk_preferences_spinHistoryAge_valuechanged" swapped="no"/>
-                                    <signal name="realize" handler="nsgtk_preferences_spinHistoryAge_realize" swapped="no"/>
+                                    <signal name="value-changed" handler="slategtk_preferences_spinHistoryAge_valuechanged" swapped="no"/>
+                                    <signal name="realize" handler="slategtk_preferences_spinHistoryAge_realize" swapped="no"/>
                                   </object>
                                   <packing>
                                     <property name="expand">False</property>
@@ -1660,8 +1660,8 @@
                                     <property name="adjustment">adjustment_cache_memory_size</property>
                                     <property name="climb_rate">1</property>
                                     <property name="numeric">True</property>
-                                    <signal name="value-changed" handler="nsgtk_preferences_spinMemoryCacheSize_valuechanged" swapped="no"/>
-                                    <signal name="realize" handler="nsgtk_preferences_spinMemoryCacheSize_realize" swapped="no"/>
+                                    <signal name="value-changed" handler="slategtk_preferences_spinMemoryCacheSize_valuechanged" swapped="no"/>
+                                    <signal name="realize" handler="slategtk_preferences_spinMemoryCacheSize_realize" swapped="no"/>
                                   </object>
                                   <packing>
                                     <property name="left_attach">1</property>
@@ -1678,8 +1678,8 @@
                                     <property name="adjustment">adjustment_cache_disc_size</property>
                                     <property name="climb_rate">1</property>
                                     <property name="numeric">True</property>
-                                    <signal name="value-changed" handler="nsgtk_preferences_spinDiscCacheSize_valuechanged" swapped="no"/>
-                                    <signal name="realize" handler="nsgtk_preferences_spinDiscCacheSize_realize" swapped="no"/>
+                                    <signal name="value-changed" handler="slategtk_preferences_spinDiscCacheSize_valuechanged" swapped="no"/>
+                                    <signal name="realize" handler="slategtk_preferences_spinDiscCacheSize_realize" swapped="no"/>
                                   </object>
                                   <packing>
                                     <property name="left_attach">1</property>
@@ -1698,8 +1698,8 @@
                                     <property name="adjustment">adjustment_disc_cache_age</property>
                                     <property name="climb_rate">1</property>
                                     <property name="numeric">True</property>
-                                    <signal name="value-changed" handler="nsgtk_preferences_spinDiscCacheAge_valuechanged" swapped="no"/>
-                                    <signal name="realize" handler="nsgtk_preferences_spinDiscCacheAge_realize" swapped="no"/>
+                                    <signal name="value-changed" handler="slategtk_preferences_spinDiscCacheAge_valuechanged" swapped="no"/>
+                                    <signal name="realize" handler="slategtk_preferences_spinDiscCacheAge_realize" swapped="no"/>
                                   </object>
                                   <packing>
                                     <property name="left_attach">1</property>
@@ -1911,8 +1911,8 @@
                                 <property name="has_tooltip">True</property>
                                 <property name="tooltip_text" translatable="yes">preferencesProxyTypeTooltip</property>
                                 <property name="model">liststore_proxy_type</property>
-                                <signal name="changed" handler="nsgtk_preferences_comboProxyType_changed" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_comboProxyType_realize" swapped="no"/>
+                                <signal name="changed" handler="slategtk_preferences_comboProxyType_changed" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_comboProxyType_realize" swapped="no"/>
                                 <child>
                                   <object class="GtkCellRendererText" id="cellrenderertext6"/>
                                   <attributes>
@@ -1938,8 +1938,8 @@
                                     <property name="has_tooltip">True</property>
                                     <property name="tooltip_text" translatable="yes">preferencesProxyHostTooltip</property>
                                     <property name="invisible_char">●</property>
-                                    <signal name="changed" handler="nsgtk_preferences_entryProxyHost_changed" swapped="no"/>
-                                    <signal name="realize" handler="nsgtk_preferences_entryProxyHost_realize" swapped="no"/>
+                                    <signal name="changed" handler="slategtk_preferences_entryProxyHost_changed" swapped="no"/>
+                                    <signal name="realize" handler="slategtk_preferences_entryProxyHost_realize" swapped="no"/>
                                   </object>
                                   <packing>
                                     <property name="expand">True</property>
@@ -1972,8 +1972,8 @@
                                     <property name="climb_rate">1</property>
                                     <property name="numeric">True</property>
                                     <property name="update_policy">if-valid</property>
-                                    <signal name="value-changed" handler="nsgtk_preferences_spinProxyPort_valuechanged" swapped="no"/>
-                                    <signal name="realize" handler="nsgtk_preferences_spinProxyPort_realize" swapped="no"/>
+                                    <signal name="value-changed" handler="slategtk_preferences_spinProxyPort_valuechanged" swapped="no"/>
+                                    <signal name="realize" handler="slategtk_preferences_spinProxyPort_realize" swapped="no"/>
                                   </object>
                                   <packing>
                                     <property name="expand">False</property>
@@ -1996,8 +1996,8 @@
                                 <property name="has_tooltip">True</property>
                                 <property name="tooltip_text" translatable="yes">preferencesProxyUsernameTooltip</property>
                                 <property name="invisible_char">●</property>
-                                <signal name="changed" handler="nsgtk_preferences_entryProxyUser_changed" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_entryProxyUser_realize" swapped="no"/>
+                                <signal name="changed" handler="slategtk_preferences_entryProxyUser_changed" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_entryProxyUser_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="left_attach">1</property>
@@ -2014,8 +2014,8 @@
                                 <property name="tooltip_text" translatable="yes">preferencesProxyPasswordTooltip</property>
                                 <property name="visibility">False</property>
                                 <property name="invisible_char">●</property>
-                                <signal name="changed" handler="nsgtk_preferences_entryProxyPassword_changed" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_entryProxyPassword_realize" swapped="no"/>
+                                <signal name="changed" handler="slategtk_preferences_entryProxyPassword_changed" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_entryProxyPassword_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="left_attach">1</property>
@@ -2044,8 +2044,8 @@
                                 <property name="has_tooltip">True</property>
                                 <property name="tooltip_text" translatable="yes">preferencesProxyNoproxyTooltip</property>
                                 <property name="caps_lock_warning">False</property>
-                                <signal name="changed" handler="nsgtk_preferences_entryProxyNoproxy_changed" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_entryProxyNoproxy_realize" swapped="no"/>
+                                <signal name="changed" handler="slategtk_preferences_entryProxyNoproxy_changed" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_entryProxyNoproxy_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="left_attach">1</property>
@@ -2143,8 +2143,8 @@
                                 <property name="adjustment">adjustment_fetching_max</property>
                                 <property name="climb_rate">1</property>
                                 <property name="numeric">True</property>
-                                <signal name="value-changed" handler="nsgtk_preferences_spinMaxFetchers_valuechanged" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_spinMaxFetchers_realize" swapped="no"/>
+                                <signal name="value-changed" handler="slategtk_preferences_spinMaxFetchers_valuechanged" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_spinMaxFetchers_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="left_attach">1</property>
@@ -2163,8 +2163,8 @@
                                 <property name="adjustment">adjustment_fetching_perhost</property>
                                 <property name="climb_rate">1</property>
                                 <property name="numeric">True</property>
-                                <signal name="value-changed" handler="nsgtk_preferences_spinFetchesPerHost_valuechanged" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_spinFetchesPerHost_realize" swapped="no"/>
+                                <signal name="value-changed" handler="slategtk_preferences_spinFetchesPerHost_valuechanged" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_spinFetchesPerHost_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="left_attach">1</property>
@@ -2185,8 +2185,8 @@
                                 <property name="adjustment">adjustment_fetching_cached</property>
                                 <property name="climb_rate">1</property>
                                 <property name="numeric">True</property>
-                                <signal name="value-changed" handler="nsgtk_preferences_spinCachedConnections_valuechanged" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_spinCachedConnections_realize" swapped="no"/>
+                                <signal name="value-changed" handler="slategtk_preferences_spinCachedConnections_valuechanged" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_spinCachedConnections_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="left_attach">1</property>
@@ -2269,8 +2269,8 @@
                                 <property name="use_action_appearance">False</property>
                                 <property name="xalign">0.5</property>
                                 <property name="draw_indicator">True</property>
-                                <signal name="toggled" handler="nsgtk_preferences_checkSuppressImages_toggled" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_checkSuppressImages_realize" swapped="no"/>
+                                <signal name="toggled" handler="slategtk_preferences_checkSuppressImages_toggled" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_checkSuppressImages_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="expand">True</property>
@@ -2289,8 +2289,8 @@
                                 <property name="use_action_appearance">False</property>
                                 <property name="xalign">0.5</property>
                                 <property name="draw_indicator">True</property>
-                                <signal name="toggled" handler="nsgtk_preferences_checkRemoveBackgrounds_toggled" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_checkRemoveBackgrounds_realize" swapped="no"/>
+                                <signal name="toggled" handler="slategtk_preferences_checkRemoveBackgrounds_toggled" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_checkRemoveBackgrounds_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="expand">True</property>
@@ -2309,8 +2309,8 @@
                                 <property name="use_action_appearance">False</property>
                                 <property name="xalign">0.5</property>
                                 <property name="draw_indicator">True</property>
-                                <signal name="toggled" handler="nsgtk_preferences_checkFitPage_toggled" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_checkFitPage_realize" swapped="no"/>
+                                <signal name="toggled" handler="slategtk_preferences_checkFitPage_toggled" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_checkFitPage_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="expand">True</property>
@@ -2347,8 +2347,8 @@
                                     <property name="adjustment">adjustment_pdf_scale</property>
                                     <property name="climb_rate">1</property>
                                     <property name="numeric">True</property>
-                                    <signal name="value-changed" handler="nsgtk_preferences_spinExportScale_valuechanged" swapped="no"/>
-                                    <signal name="realize" handler="nsgtk_preferences_spinExportScale_realize" swapped="no"/>
+                                    <signal name="value-changed" handler="slategtk_preferences_spinExportScale_valuechanged" swapped="no"/>
+                                    <signal name="realize" handler="slategtk_preferences_spinExportScale_realize" swapped="no"/>
                                   </object>
                                   <packing>
                                     <property name="expand">False</property>
@@ -2485,8 +2485,8 @@
                                         <property name="climb_rate">1</property>
                                         <property name="digits">1</property>
                                         <property name="numeric">True</property>
-                                        <signal name="value-changed" handler="nsgtk_preferences_spinMarginTop_valuechanged" swapped="no"/>
-                                        <signal name="realize" handler="nsgtk_preferences_spinMarginTop_realize" swapped="no"/>
+                                        <signal name="value-changed" handler="slategtk_preferences_spinMarginTop_valuechanged" swapped="no"/>
+                                        <signal name="realize" handler="slategtk_preferences_spinMarginTop_realize" swapped="no"/>
                                       </object>
                                       <packing>
                                         <property name="expand">False</property>
@@ -2531,8 +2531,8 @@
                                         <property name="climb_rate">1</property>
                                         <property name="digits">1</property>
                                         <property name="numeric">True</property>
-                                        <signal name="value-changed" handler="nsgtk_preferences_spinMarginLeft_valuechanged" swapped="no"/>
-                                        <signal name="realize" handler="nsgtk_preferences_spinMarginLeft_realize" swapped="no"/>
+                                        <signal name="value-changed" handler="slategtk_preferences_spinMarginLeft_valuechanged" swapped="no"/>
+                                        <signal name="realize" handler="slategtk_preferences_spinMarginLeft_realize" swapped="no"/>
                                       </object>
                                       <packing>
                                         <property name="expand">False</property>
@@ -2576,8 +2576,8 @@
                                         <property name="climb_rate">1</property>
                                         <property name="digits">1</property>
                                         <property name="numeric">True</property>
-                                        <signal name="value-changed" handler="nsgtk_preferences_spinMarginBottom_valuechanged" swapped="no"/>
-                                        <signal name="realize" handler="nsgtk_preferences_spinMarginBottom_realize" swapped="no"/>
+                                        <signal name="value-changed" handler="slategtk_preferences_spinMarginBottom_valuechanged" swapped="no"/>
+                                        <signal name="realize" handler="slategtk_preferences_spinMarginBottom_realize" swapped="no"/>
                                       </object>
                                       <packing>
                                         <property name="expand">False</property>
@@ -2623,8 +2623,8 @@
                                         <property name="climb_rate">1</property>
                                         <property name="digits">1</property>
                                         <property name="numeric">True</property>
-                                        <signal name="value-changed" handler="nsgtk_preferences_spinMarginRight_valuechanged" swapped="no"/>
-                                        <signal name="realize" handler="nsgtk_preferences_spinMarginRight_realize" swapped="no"/>
+                                        <signal name="value-changed" handler="slategtk_preferences_spinMarginRight_valuechanged" swapped="no"/>
+                                        <signal name="realize" handler="slategtk_preferences_spinMarginRight_realize" swapped="no"/>
                                       </object>
                                       <packing>
                                         <property name="expand">False</property>
@@ -2719,8 +2719,8 @@
                                 <property name="use_action_appearance">False</property>
                                 <property name="xalign">0.5</property>
                                 <property name="draw_indicator">True</property>
-                                <signal name="toggled" handler="nsgtk_preferences_checkCompressPDF_toggled" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_checkCompressPDF_realize" swapped="no"/>
+                                <signal name="toggled" handler="slategtk_preferences_checkCompressPDF_toggled" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_checkCompressPDF_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="expand">True</property>
@@ -2739,8 +2739,8 @@
                                 <property name="use_action_appearance">False</property>
                                 <property name="xalign">0.5</property>
                                 <property name="draw_indicator">True</property>
-                                <signal name="toggled" handler="nsgtk_preferences_checkPasswordPDF_toggled" swapped="no"/>
-                                <signal name="realize" handler="nsgtk_preferences_checkPasswordPDF_realize" swapped="no"/>
+                                <signal name="toggled" handler="slategtk_preferences_checkPasswordPDF_toggled" swapped="no"/>
+                                <signal name="realize" handler="slategtk_preferences_checkPasswordPDF_realize" swapped="no"/>
                               </object>
                               <packing>
                                 <property name="expand">True</property>

@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 Vincent Sanders <vince@kyllikki.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@
  * These plot styles are globaly available and used in many places.
  */
 
-#include "netsurf/plot_style.h"
+#include "slate/plot_style.h"
 
 static plot_style_t plot_style_fill_white_static = {
 	.fill_type = PLOT_OP_TYPE_SOLID,

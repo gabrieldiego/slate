@@ -1,16 +1,16 @@
 makedir ram:NetSurf/Resources ALL
-list resources LFORMAT="copy %f%n ram:netsurf/resources followlinks" files >t:nslinks
-list resources LFORMAT="makedir ram:netsurf/resources/%n" dirs >>t:nslinks
-list resources/~(Pointers|Themes) LFORMAT="copy %f%n/(Messages|#?,faf) ram:netsurf/resources/%n/ followlinks" dirs >>t:nslinks
-list resources/Themes/~(.svn) LFORMAT="makedir ram:netsurf/resources/Themes/%n" dirs >>t:nslinks
-list resources/Themes/~(.svn) LFORMAT="copy %f%n/~(.svn) ram:netsurf/resources/Themes/%n/" dirs >>t:nslinks
+list resources LFORMAT="copy %f%n ram:slate/resources followlinks" files >t:nslinks
+list resources LFORMAT="makedir ram:slate/resources/%n" dirs >>t:nslinks
+list resources/~(Pointers|Themes) LFORMAT="copy %f%n/(Messages|#?,faf) ram:slate/resources/%n/ followlinks" dirs >>t:nslinks
+list resources/Themes/~(.svn) LFORMAT="makedir ram:slate/resources/Themes/%n" dirs >>t:nslinks
+list resources/Themes/~(.svn) LFORMAT="copy %f%n/~(.svn) ram:slate/resources/Themes/%n/" dirs >>t:nslinks
 execute t:nslinks
 delete t:nslinks
-delete ram:netsurf/resources/#?hotlist#?
-delete ram:netsurf/resources/cookies
-delete ram:netsurf/resources/urls
-delete ram:netsurf/resources/options
-delete ram:netsurf/resources/#?.user
+delete ram:slate/resources/#?hotlist#?
+delete ram:slate/resources/cookies
+delete ram:slate/resources/urls
+delete ram:slate/resources/options
+delete ram:slate/resources/#?.user
 copy resources/Pointers/~(.svn) ram:NetSurf/Resources/Pointers
 copy (COPYING|ChangeLog) ram:NetSurf/
 copy NetSurf ram:NetSurf/NetSurf

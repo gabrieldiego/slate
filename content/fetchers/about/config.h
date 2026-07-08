@@ -21,8 +21,8 @@
  * about scheme config handler interface
  */
 
-#ifndef NETSURF_CONTENT_FETCHERS_ABOUT_CONFIG_H
-#define NETSURF_CONTENT_FETCHERS_ABOUT_CONFIG_H
+#ifndef SLATE_CONTENT_FETCHERS_ABOUT_CONFIG_H
+#define SLATE_CONTENT_FETCHERS_ABOUT_CONFIG_H
 
 /**
  * Handler to generate about scheme config page.

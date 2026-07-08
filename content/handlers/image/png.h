@@ -2,7 +2,7 @@
  * Copyright 2003 James Bursa <bursa@users.sourceforge.net>
  * Copyright 2008 Daniel Silverstone <dsilvers@netsurf-browser.org>
  * 
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,9 +17,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _NETSURF_RISCOS_PNG_H_
-#define _NETSURF_RISCOS_PNG_H_
+#ifndef _SLATE_RISCOS_PNG_H_
+#define _SLATE_RISCOS_PNG_H_
 
-nserror nspng_init(void);
+slateerror nspng_init(void);
 
 #endif

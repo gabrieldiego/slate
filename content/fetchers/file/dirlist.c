@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,13 +25,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/messages.h"
-#include "utils/nscolour.h"
+#include "utils/slatecolor.h"
 
-#include "netsurf/inttypes.h"
-#include "netsurf/types.h"
-#include "netsurf/plot_style.h"
+#include "slate/inttypes.h"
+#include "slate/types.h"
+#include "slate/plot_style.h"
 
 #include "dirlist.h"
 #include "desktop/system_colour.h"
@@ -143,14 +143,14 @@ bool dirlist_generate_hide_columns(int flags, char *buffer, int buffer_length)
 bool dirlist_generate_title(const char *title, char *buffer, int buffer_length)
 {
 	const char *stylesheet;
-	nserror err;
+	slateerror err;
 	int error;
 
 	if (title == NULL)
 		title = "";
 
-	err = nscolour_get_stylesheet(&stylesheet);
-	if (err != NSERROR_OK) {
+	err = slatecolor_get_stylesheet(&stylesheet);
+	if (err != SLATEERROR_OK) {
 		return false;
 	}
 
@@ -167,7 +167,7 @@ bool dirlist_generate_title(const char *title, char *buffer, int buffer_length)
 			"<body id=\"dirlist\" class=\"ns-even-bg ns-even-fg ns-border\">\n"
 			"<h1 class=\"ns-border\">%s</h1>\n",
 			title,
-			colour_rb_swap(nscolours[NSCOLOUR_WIN_ODD_BG]),
+			colour_rb_swap(slatecolors[SLATECOLOR_WIN_ODD_BG]),
 			stylesheet, title);
 	if (error < 0 || error >= buffer_length)
 		/* Error or buffer too small */
@@ -286,7 +286,7 @@ bool dirlist_generate_headings(char *buffer, int buffer_length)
  *     dirlist_generate_bottom()
  */
 
-bool dirlist_generate_row(bool even, bool directory, nsurl *url, char *name,
+bool dirlist_generate_row(bool even, bool directory, slateurl *url, char *name,
 		const char *mimetype, long long size, char *date, char *time,
 		char *buffer, int buffer_length)
 {
@@ -311,7 +311,7 @@ bool dirlist_generate_row(bool even, bool directory, nsurl *url, char *name,
 			"<span class=\"size ns-border\">%s</span>\n"
 			"\t<span class=\"date ns-border\">%s</span>\n"
 			"\t<span class=\"time ns-border\">%s</span>\n"
-			"</a>\n", nsurl_access(url),
+			"</a>\n", slateurl_access(url),
 			even ? "even ns-even-bg" : "odd  ns-odd-bg",
 			directory ? "dir" : "file",
 			name, mimetype, size_string, unit, date, time);

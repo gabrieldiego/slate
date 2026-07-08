@@ -1,7 +1,7 @@
 /*
  * Copyright 2023 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,15 +26,15 @@
 
 extern "C" {
 #include "utils/errors.h"
-#include "netsurf/types.h"
-#include "netsurf/plotters.h"
+#include "slate/types.h"
+#include "slate/plotters.h"
 }
 
 #include "qt/corewindow.cls.h"
 #include "qt/plotters.h"
 #include "qt/keymap.h"
 
-struct nsqt_core_window {
+struct slateqt_core_window {
 	class NS_Corewindow *cw;
 };
 //QAbstractScrollArea
@@ -43,7 +43,7 @@ NS_Corewindow::NS_Corewindow(QWidget *parent, Qt::WindowFlags f)
 	  m_xoffset(0),
 	  m_yoffset(0)
 {
-	m_core_window = new struct nsqt_core_window;
+	m_core_window = new struct slateqt_core_window;
 	m_core_window->cw = this;
 
 	setFocusPolicy(Qt::StrongFocus);
@@ -57,7 +57,7 @@ void NS_Corewindow::paintEvent(QPaintEvent *event)
 	struct redraw_context ctx = {
 		.interactive = true,
 		.background_images = true,
-		.plot = &nsqt_plotters,
+		.plot = &slateqt_plotters,
 		.priv = NULL,
 	};
 
@@ -142,55 +142,55 @@ void NS_Corewindow::mouseReleaseEvent(QMouseEvent *event)
 }
 
 
-nserror NS_Corewindow::static_invalidate(struct core_window *cw,
+slateerror NS_Corewindow::static_invalidate(struct core_window *cw,
 					 const struct rect *rect)
 {
-	struct nsqt_core_window *nsqtcw = (struct nsqt_core_window *)cw;
+	struct slateqt_core_window *slateqtcw = (struct slateqt_core_window *)cw;
 	if (rect == NULL) {
-		nsqtcw->cw->update();
+		slateqtcw->cw->update();
 	} else {
-		nsqtcw->cw->update(rect->x0,
+		slateqtcw->cw->update(rect->x0,
 		       rect->y0,
 		       rect->x1 - rect->x0,
 		       rect->y1 - rect->y0);
 		       }
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-nserror NS_Corewindow::static_set_extent(struct core_window *cw,
+slateerror NS_Corewindow::static_set_extent(struct core_window *cw,
 					 int width, int height)
 {
-	struct nsqt_core_window *nsqtcw = (struct nsqt_core_window *)cw;
+	struct slateqt_core_window *slateqtcw = (struct slateqt_core_window *)cw;
 	if ((width > 0) && (height > 0)) {
-		nsqtcw->cw->resize(width, height);
+		slateqtcw->cw->resize(width, height);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-nserror NS_Corewindow::static_set_scroll(struct core_window *cw, int x, int y)
+slateerror NS_Corewindow::static_set_scroll(struct core_window *cw, int x, int y)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-nserror NS_Corewindow::static_get_scroll(const struct core_window *cw, int *x, int *y)
+slateerror NS_Corewindow::static_get_scroll(const struct core_window *cw, int *x, int *y)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-nserror NS_Corewindow::static_get_dimensions(const struct core_window *cw,
+slateerror NS_Corewindow::static_get_dimensions(const struct core_window *cw,
 					     int *width, int *height)
 {
-	struct nsqt_core_window *nsqtcw = (struct nsqt_core_window *)cw;
-	QSize size = nsqtcw->cw->size();
+	struct slateqt_core_window *slateqtcw = (struct slateqt_core_window *)cw;
+	QSize size = slateqtcw->cw->size();
 	*width = size.width();
 	*height = size.height();
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-nserror NS_Corewindow::static_drag_status(struct core_window *cw, core_window_drag_status ds)
+slateerror NS_Corewindow::static_drag_status(struct core_window *cw, core_window_drag_status ds)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static struct core_window_table cw_table = {
@@ -201,4 +201,4 @@ static struct core_window_table cw_table = {
 	.get_dimensions = NS_Corewindow::static_get_dimensions,
 	.drag_status = NS_Corewindow::static_drag_status,
 };
-struct core_window_table *nsqt_core_window_table = &cw_table;
+struct core_window_table *slateqt_core_window_table = &cw_table;

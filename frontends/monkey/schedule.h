@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 Vincent Sanders <vince@simtec.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_MONKEY_SCHEDULE_H
-#define NETSURF_MONKEY_SCHEDULE_H
+#ifndef SLATE_JOTTER_SCHEDULE_H
+#define SLATE_JOTTER_SCHEDULE_H
 
 /**
  * Schedule a callback.
@@ -30,7 +30,7 @@
  * passed.
  */
 
-nserror monkey_schedule(int tival, void (*callback)(void *p), void *p);
+slateerror monkey_schedule(int tival, void (*callback)(void *p), void *p);
 
 /**
  * Process scheduled callbacks up to current time.

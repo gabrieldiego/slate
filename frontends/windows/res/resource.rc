@@ -14,7 +14,7 @@ IDR_HOME_BITMAP    BITMAP         "home.bmp"
 
 
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
-IDR_NETSURF_BANNER BITMAP         "banner.bmp"
+IDR_SLATE_BANNER BITMAP         "banner.bmp"
 
 
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
@@ -171,7 +171,7 @@ STYLE DS_SHELLFONT | WS_CAPTION | WS_VISIBLE | WS_SYSMENU
 CAPTION "About NetSurf"
 FONT 8, "Ms Shell Dlg"
 {
-    CONTROL         IDR_NETSURF_BANNER, IDC_IMG1, WC_STATIC, SS_BITMAP | SS_REALSIZECONTROL, 0, 0, 205, 53, WS_EX_LEFT
+    CONTROL         IDR_SLATE_BANNER, IDC_IMG1, WC_STATIC, SS_BITMAP | SS_REALSIZECONTROL, 0, 0, 205, 53, WS_EX_LEFT
     LTEXT           "NetSurf", IDC_ABOUT_VERSION, 10, 60, 185, 16, NOT WS_GROUP | SS_LEFT, WS_EX_LEFT
     LTEXT           "NetSurf is a small fast browser", IDC_ABOUT_TEXT, 10, 83, 185, 8, NOT WS_GROUP | SS_LEFT, WS_EX_LEFT
     LTEXT           "Copyright 2003-2011 The NetSurf Developers", IDC_ABOUT_COPYRIGHT, 10, 96, 185, 8, NOT WS_GROUP | SS_LEFT, WS_EX_LEFT
@@ -302,7 +302,7 @@ FONT 8, "MS Shell Dlg", 0, 0, 1
 // Icon resources
 //
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
-IDR_NETSURF_ICON   ICON           "NetSurf.ico"
+IDR_SLATE_ICON   ICON           "Slate.ico"
 
 
 //
@@ -317,7 +317,7 @@ quirks.css USER "quirks.css"
 welcome.html USER "welcome.html"
 licence.html USER "licence.html"
 credits.html USER "credits.html"
-netsurf.png USER "netsurf.png"
+slate.png USER "slate.png"
 icons/arrow-l.png USER "icons/arrow-l.png"
 icons/content.png USER "icons/content.png"
 icons/directory.png USER "icons/directory.png"

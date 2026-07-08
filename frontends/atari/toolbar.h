@@ -1,7 +1,7 @@
 /*
  * Copyright 2013 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@
 #include <stdint.h>
 
 struct s_toolbar;
-struct nsurl;
+struct slateurl;
 
 enum toolbar_textarea {
 	URL_INPUT_TEXT_AREA = 1
@@ -72,7 +72,7 @@ OBJECT *toolbar_get_form(struct s_toolbar *tb);
 struct textarea *toolbar_get_textarea(struct s_toolbar *tb,
 				      enum toolbar_textarea which);
 char *toolbar_get_url(struct s_toolbar *tb);
-struct nsurl * toolbar_get_nsurl(struct s_toolbar * tb);
+struct slateurl * toolbar_get_slateurl(struct s_toolbar * tb);
 void toolbar_set_throbber_state(struct s_toolbar *tb, bool active);
 void toolbar_set_attached(struct s_toolbar *tb, bool attached);
 void toolbar_set_visible(struct s_toolbar *tb, short area, bool visible);

@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,8 +28,8 @@
  *  utils config header include.
  */
 
-#ifndef _NETSURF_UTILS_INET_H_
-#define _NETSURF_UTILS_INET_H_
+#ifndef _SLATE_UTILS_INET_H_
+#define _SLATE_UTILS_INET_H_
 
 #include "utils/config.h"
 

@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 François Revol <mmu_man@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,13 +24,13 @@
 #ifndef NS_BEOS_FONT_H
 #define NS_BEOS_FONT_H
 
-#include "netsurf/plot_style.h"
+#include "slate/plot_style.h"
 
 bool nsfont_paint(const plot_font_style_t *fstyle,
 		const char *string, size_t length,
 		int x, int y);
 
-void nsbeos_style_to_font(BFont &font, const struct plot_font_style *fstyle);
+void slatebeos_style_to_font(BFont &font, const struct plot_font_style *fstyle);
 
 extern struct gui_layout_table *beos_layout_table;
 

@@ -1,7 +1,7 @@
 /*
  * Copyright 2024 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,7 +31,7 @@
 
 extern "C" {
 #include "utils/errors.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 }
 
 #include "qt/local_history.cls.h"
@@ -40,9 +40,9 @@ extern "C" {
 class NS_Exception {
 public:
 	std::string m_str;
-	nserror m_err;
+	slateerror m_err;
 
-	NS_Exception(std::string str, nserror err):m_str(str),m_err(err) {}
+	NS_Exception(std::string str, slateerror err):m_str(str),m_err(err) {}
 };
 
 /**
@@ -52,7 +52,7 @@ class NS_Application : public QApplication
 {
 	Q_OBJECT
 public:
-	NS_Application(int &argc, char **argv, struct netsurf_table *nsqt_table);
+	NS_Application(int &argc, char **argv, struct slate_table *slateqt_table);
 	~NS_Application();
 
 	bool event(QEvent* event) override;
@@ -67,7 +67,7 @@ public:
 	void local_history_show(struct browser_window *bw, const QPoint &pos);
 	void page_info_show(struct browser_window *bw, const QPoint &pos);
 	void global_history_show();
-	nserror cookies_show(const char *search_term = NULL);
+	slateerror cookies_show(const char *search_term = NULL);
 
 	/**
 	 * apply any options changes which depend on external system
@@ -90,7 +90,7 @@ public:
 	 * \param existing an existing browser window or NULL.
 	 * \param intab if the new widget should be a window or tab in existing.
 	 */
-	static nserror create_browser_widget(nsurl *url, struct browser_window *existing, bool intab);
+	static slateerror create_browser_widget(slateurl *url, struct browser_window *existing, bool intab);
 
 	/**
 	 * create a new browsing context in a tab or window
@@ -99,7 +99,7 @@ public:
 	 * \param existing an existing browser window or NULL.
 	 * \param intab if the new widget should be a window or tab in existing.
 	 */
-	static nserror create_browser_widget(struct hlcache_handle *hlchandle, struct browser_window *existing, bool intab);
+	static slateerror create_browser_widget(struct hlcache_handle *hlchandle, struct browser_window *existing, bool intab);
 
 	/**
 	 * create a new browsing context in a tab or window
@@ -107,7 +107,7 @@ public:
 	 * \param existing an existing browser window or NULL.
 	 * \param intab if the new widget should be a window or tab in existing.
 	 */
-	static nserror create_browser_widget(struct browser_window *existing, bool intab);
+	static slateerror create_browser_widget(struct browser_window *existing, bool intab);
 
 public slots:
 	void schedule_run();
@@ -120,14 +120,14 @@ private:
 	 * @param defaults The option table to update.
 	 * @return error status.
 	 */
-	static nserror set_option_defaults(struct nsoption_s *defaults);
+	static slateerror set_option_defaults(struct slateoption_s *defaults);
 
 	void nsOptionLoad();
 
 	/**
-	 * set system-color nsoptions from QT palette
+	 * set system-color slateoptions from QT palette
 	 */
-	static void nsOptionFromPalette(struct nsoption_s *opts);
+	static void nsOptionFromPalette(struct slateoption_s *opts);
 
 	QTimer *m_schedule_timer;
 	QWidget *m_settings_window;

@@ -2,7 +2,7 @@
  * Copyright 2006 Richard Wilson <info@tinct.net>
  * Copyright 2010, 2013 Stephen Fryatt <stevef@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * Hotlist (interface).
  */
 
-#ifndef _NETSURF_RISCOS_HOTLIST_H_
-#define _NETSURF_RISCOS_HOTLIST_H_
+#ifndef _SLATE_RISCOS_HOTLIST_H_
+#define _SLATE_RISCOS_HOTLIST_H_
 
 /* Hotlist Protocol Messages, which are currently not in OSLib. */
 
@@ -34,7 +34,7 @@
 #define message_HOTLIST_CHANGED 0x4af82
 #endif
 
-struct nsurl;
+struct slateurl;
 
 /**
  * initialise the hotlist window template ready for subsequent use.
@@ -44,16 +44,16 @@ void ro_gui_hotlist_initialise(void);
 /**
  * make the cookie window visible.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-nserror ro_gui_hotlist_present(void);
+slateerror ro_gui_hotlist_present(void);
 
 /**
  * Free any resources allocated for the cookie window.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-nserror ro_gui_hotlist_finalise(void);
+slateerror ro_gui_hotlist_finalise(void);
 
 bool ro_gui_hotlist_check_window(wimp_w window);
 bool ro_gui_hotlist_check_menu(wimp_menu *menu);
@@ -67,7 +67,7 @@ bool ro_gui_hotlist_check_menu(wimp_menu *menu);
  *
  * \param *url	The URL to be added.
  */
-void ro_gui_hotlist_add_page(struct nsurl *url);
+void ro_gui_hotlist_add_page(struct slateurl *url);
 
 /**
  * Clean up RMA storage used by the Message_HotlistAddURL protocol.
@@ -82,7 +82,7 @@ void ro_gui_hotlist_add_cleanup(void);
  *
  * \param *url	The URL to be removed.
  */
-void ro_gui_hotlist_remove_page(struct nsurl *url);
+void ro_gui_hotlist_remove_page(struct slateurl *url);
 
 /**
  * Report whether the hotlist contains a given URL.
@@ -93,6 +93,6 @@ void ro_gui_hotlist_remove_page(struct nsurl *url);
  * \param url The URL to be tested.
  * \return true if the hotlist contains the URL; else false.
  */
-bool ro_gui_hotlist_has_page(struct nsurl *url);
+bool ro_gui_hotlist_has_page(struct slateurl *url);
 
 #endif

@@ -1,7 +1,7 @@
 /*
  * Copyright 2013 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -98,7 +98,7 @@ struct treeview_walk_ctx {
 	struct cookie_manager_entry *entry;
 };
 /** Callback for treeview_walk */
-static nserror cookie_manager_walk_cb(void *ctx, void *node_data,
+static slateerror cookie_manager_walk_cb(void *ctx, void *node_data,
 		enum treeview_node_type type, bool *abort)
 {
 	struct treeview_walk_ctx *tw = ctx;
@@ -125,7 +125,7 @@ static nserror cookie_manager_walk_cb(void *ctx, void *node_data,
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 /**
  * Find a cookie entry in the cookie manager's treeview
@@ -134,13 +134,13 @@ static nserror cookie_manager_walk_cb(void *ctx, void *node_data,
  * \param title		ID of the node to look for
  * \param title_len	Byte length of title string
  * \param found		Updated to the matching node's cookie maanger entry
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror cookie_manager_find_entry(treeview_node *root,
+static slateerror cookie_manager_find_entry(treeview_node *root,
 		const char *title, size_t title_len,
 		struct cookie_manager_entry **found)
 {
-	nserror err;
+	slateerror err;
 	struct treeview_walk_ctx tw = {
 		.title = title,
 		.title_len = title_len,
@@ -150,12 +150,12 @@ static nserror cookie_manager_find_entry(treeview_node *root,
 
 	err = treeview_walk(cm_ctx.tree, root, cookie_manager_walk_cb, NULL,
 			&tw, TREE_NODE_ENTRY);
-	if (err != NSERROR_OK)
+	if (err != SLATEERROR_OK)
 		return err;
 
 	*found = tw.entry;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 /**
  * Find a cookie domain folder in the cookie manager's treeview
@@ -164,13 +164,13 @@ static nserror cookie_manager_find_entry(treeview_node *root,
  * \param title		ID of the node to look for
  * \param title_len	Byte length of title string
  * \param found		Updated to the matching node's cookie maanger folder
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror cookie_manager_find_folder(treeview_node *root,
+static slateerror cookie_manager_find_folder(treeview_node *root,
 		const char *title, size_t title_len,
 		struct cookie_manager_folder **found)
 {
-	nserror err;
+	slateerror err;
 	struct treeview_walk_ctx tw = {
 		.title = title,
 		.title_len = title_len,
@@ -180,12 +180,12 @@ static nserror cookie_manager_find_folder(treeview_node *root,
 
 	err = treeview_walk(cm_ctx.tree, root, cookie_manager_walk_cb, NULL,
 			&tw, TREE_NODE_FOLDER);
-	if (err != NSERROR_OK)
+	if (err != SLATEERROR_OK)
 		return err;
 
 	*found = tw.folder;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -213,9 +213,9 @@ static void cookie_manager_free_treeview_field_data(
  * \param field		Cookie manager treeview field to build
  * \param data		Cookie manager entry field data to set
  * \param value		Text to set in field, ownership yielded
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static inline nserror
+static inline slateerror
 cookie_manager_field_builder(enum cookie_manager_field field,
 			     struct treeview_field_data *data,
 			     const char *value)
@@ -224,7 +224,7 @@ cookie_manager_field_builder(enum cookie_manager_field field,
 	data->value = value;
 	data->value_len = (value != NULL) ? strlen(value) : 0;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -235,9 +235,9 @@ cookie_manager_field_builder(enum cookie_manager_field field,
  * \param field Cookie manager treeview field to build
  * \param fdata Cookie manager entry field data to set
  * \param value Time to show in field
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static inline nserror
+static inline slateerror
 cookie_manager_field_builder_time(enum cookie_manager_field field,
 				  struct treeview_field_data *fdata,
 				  const time_t *value)
@@ -258,7 +258,7 @@ cookie_manager_field_builder_time(enum cookie_manager_field field,
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -267,9 +267,9 @@ cookie_manager_field_builder_time(enum cookie_manager_field field,
  *
  * \param e		Cookie manager entry to set up
  * \param data		Data associated with entry's cookie
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror
+static slateerror
 cookie_manager_set_treeview_field_data(struct cookie_manager_entry *e,
 				       const struct cookie_data *data)
 {
@@ -326,7 +326,7 @@ cookie_manager_set_treeview_field_data(struct cookie_manager_entry *e,
 		break;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -338,25 +338,25 @@ cookie_manager_set_treeview_field_data(struct cookie_manager_entry *e,
  *
  * \param parent      the node to link to
  * \param data	      the cookie data to use
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror cookie_manager_create_cookie_node(
+static slateerror cookie_manager_create_cookie_node(
 		struct cookie_manager_folder *parent,
 		const struct cookie_data *data)
 {
-	nserror err;
+	slateerror err;
 	struct cookie_manager_entry *cookie;
 
 	/* Create new cookie manager entry */
 	cookie = malloc(sizeof(struct cookie_manager_entry));
 	if (cookie == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	cookie->user_delete = false;
 
 	err = cookie_manager_set_treeview_field_data(cookie, data);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		free(cookie);
 		return err;
 	}
@@ -370,13 +370,13 @@ static nserror cookie_manager_create_cookie_node(
 					 cm_ctx.built ? TREE_OPTION_NONE :
 					TREE_OPTION_SUPPRESS_RESIZE |
 					TREE_OPTION_SUPPRESS_REDRAW);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		cookie_manager_free_treeview_field_data(cookie);
 		free(cookie);
 		return err;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -388,13 +388,13 @@ static nserror cookie_manager_create_cookie_node(
  *
  * \param e	      the entry to update
  * \param data	      the cookie data to use
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror cookie_manager_update_cookie_node(
+static slateerror cookie_manager_update_cookie_node(
 		struct cookie_manager_entry *e,
 		const struct cookie_data *data)
 {
-	nserror err;
+	slateerror err;
 
 	assert(e != NULL);
 
@@ -404,17 +404,17 @@ static nserror cookie_manager_update_cookie_node(
 
 	/* Set new field values from the cookie_data */
 	err = cookie_manager_set_treeview_field_data(e, data);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
 	/* Update the treeview */
 	err = treeview_update_node_entry(cm_ctx.tree, e->entry, e->data, e);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -426,19 +426,19 @@ static nserror cookie_manager_update_cookie_node(
  *
  * \param folder      updated to the new folder
  * \param data	      the cookie data to use
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror cookie_manager_create_domain_folder(
+static slateerror cookie_manager_create_domain_folder(
 		struct cookie_manager_folder **folder,
 		const struct cookie_data *data)
 {
-	nserror err;
+	slateerror err;
 	struct cookie_manager_folder *f;
 
 	/* Create new cookie manager entry */
 	f = malloc(sizeof(struct cookie_manager_folder));
 	if (f == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	f->data.field = cm_ctx.fields[COOKIE_M_N_FIELDS - 1].field;
@@ -451,7 +451,7 @@ static nserror cookie_manager_create_domain_folder(
 			cm_ctx.built ? TREE_OPTION_NONE :
 					TREE_OPTION_SUPPRESS_RESIZE |
 					TREE_OPTION_SUPPRESS_REDRAW);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		free((void *)f->data.value);
 		free(f);
 		return err;
@@ -459,7 +459,7 @@ static nserror cookie_manager_create_domain_folder(
 
 	*folder = f;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -468,7 +468,7 @@ bool cookie_manager_add(const struct cookie_data *data)
 {
 	struct cookie_manager_folder *parent = NULL;
 	struct cookie_manager_entry *cookie = NULL;
-	nserror err;
+	slateerror err;
 
 	assert(data != NULL);
 
@@ -478,21 +478,21 @@ bool cookie_manager_add(const struct cookie_data *data)
 
 	err = cookie_manager_find_folder(NULL, data->domain,
 			strlen(data->domain), &parent);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return false;
 	}
 
 	if (parent == NULL) {
 		/* Need to create domain directory */
 		err = cookie_manager_create_domain_folder(&parent, data);
-		if (err != NSERROR_OK || parent == NULL)
+		if (err != SLATEERROR_OK || parent == NULL)
 			return false;
 	}
 
 	/* Create cookie node */
 	err = cookie_manager_find_entry(parent->folder, data->name,
 			strlen(data->name), &cookie);
-	if (err != NSERROR_OK)
+	if (err != SLATEERROR_OK)
 		return false;
 
 	if (cookie == NULL) {
@@ -500,7 +500,7 @@ bool cookie_manager_add(const struct cookie_data *data)
 	} else {
 		err = cookie_manager_update_cookie_node(cookie, data);
 	}
-	if (err != NSERROR_OK)
+	if (err != SLATEERROR_OK)
 		return false;
 
 	return true;
@@ -512,7 +512,7 @@ void cookie_manager_remove(const struct cookie_data *data)
 {
 	struct cookie_manager_folder *parent = NULL;
 	struct cookie_manager_entry *cookie = NULL;
-	nserror err;
+	slateerror err;
 
 	assert(data != NULL);
 
@@ -522,14 +522,14 @@ void cookie_manager_remove(const struct cookie_data *data)
 
 	err = cookie_manager_find_folder(NULL, data->domain,
 			strlen(data->domain), &parent);
-	if (err != NSERROR_OK || parent == NULL) {
+	if (err != SLATEERROR_OK || parent == NULL) {
 		/* Nothing to delete */
 		return;
 	}
 
 	err = cookie_manager_find_entry(parent->folder, data->name,
 			strlen(data->name), &cookie);
-	if (err != NSERROR_OK || cookie == NULL) {
+	if (err != SLATEERROR_OK || cookie == NULL) {
 		/* Nothing to delete */
 		return;
 	}
@@ -540,12 +540,12 @@ void cookie_manager_remove(const struct cookie_data *data)
 
 
 /* exported interface documented in cookie_manager.h */
-nserror cookie_manager_set_search_string(
+slateerror cookie_manager_set_search_string(
 		const char *string)
 {
 	/* If we don't have a cookie manager at the moment, just return */
 	if (cm_ctx.tree == NULL) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	return treeview_set_search_string(cm_ctx.tree, string);
@@ -557,7 +557,7 @@ nserror cookie_manager_set_search_string(
  *
  * \return true on success, false on memory exhaustion
  */
-static nserror cookie_manager_init_entry_fields(void)
+static slateerror cookie_manager_init_entry_fields(void)
 {
 	int i;
 	const char *label;
@@ -648,13 +648,13 @@ static nserror cookie_manager_init_entry_fields(void)
 		return false;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 
 error:
 	for (i = 0; i < COOKIE_M_N_FIELDS; i++)
 		lwc_string_unref(cm_ctx.fields[i].field);
 
-	return NSERROR_UNKNOWN;
+	return SLATEERROR_UNKNOWN;
 }
 
 
@@ -664,7 +664,7 @@ error:
  *
  * \return true on success, false on memory exhaustion
  */
-static nserror cookie_manager_init_common_values(void)
+static slateerror cookie_manager_init_common_values(void)
 {
 	const char *temp;
 
@@ -701,7 +701,7 @@ static nserror cookie_manager_init_common_values(void)
 	cookie_manager_field_builder(COOKIE_M_VERSION,
 			&cm_ctx.values[COOKIE_M_RFC2965], strdup(temp));
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -737,7 +737,7 @@ static void cookie_manager_delete_entry(struct cookie_manager_entry *e)
 }
 
 
-static nserror cookie_manager_tree_node_folder_cb(
+static slateerror cookie_manager_tree_node_folder_cb(
 		struct treeview_node_msg msg, void *data)
 {
 	struct cookie_manager_folder *f = data;
@@ -754,11 +754,11 @@ static nserror cookie_manager_tree_node_folder_cb(
 		break;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-static nserror cookie_manager_tree_node_entry_cb(
+static slateerror cookie_manager_tree_node_entry_cb(
 		struct treeview_node_msg msg, void *data)
 {
 	struct cookie_manager_entry *e = data;
@@ -776,7 +776,7 @@ static nserror cookie_manager_tree_node_entry_cb(
 	case TREE_MSG_NODE_LAUNCH:
 		break;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -787,12 +787,12 @@ struct treeview_callback_table cm_tree_cb_t = {
 
 
 /* Exported interface, documented in cookie_manager.h */
-nserror cookie_manager_init(void *core_window_handle)
+slateerror cookie_manager_init(void *core_window_handle)
 {
-	nserror err;
+	slateerror err;
 
 	err = treeview_init();
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
@@ -800,14 +800,14 @@ nserror cookie_manager_init(void *core_window_handle)
 
 	/* Init. cookie manager treeview entry fields */
 	err = cookie_manager_init_entry_fields();
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		cm_ctx.tree = NULL;
 		return err;
 	}
 
 	/* Init. common treeview field values */
 	err = cookie_manager_init_common_values();
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		cm_ctx.tree = NULL;
 		return err;
 	}
@@ -819,7 +819,7 @@ nserror cookie_manager_init(void *core_window_handle)
 			TREEVIEW_NO_MOVES |
 			TREEVIEW_DEL_EMPTY_DIRS |
 			TREEVIEW_SEARCHABLE);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		cm_ctx.tree = NULL;
 		return err;
 	}
@@ -837,15 +837,15 @@ nserror cookie_manager_init(void *core_window_handle)
 
 	NSLOG(netsurf, INFO, "Generated cookie manager data");
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* Exported interface, documented in cookie_manager.h */
-nserror cookie_manager_fini(void)
+slateerror cookie_manager_fini(void)
 {
 	int i;
-	nserror err;
+	slateerror err;
 
 	NSLOG(netsurf, INFO, "Finalising cookie manager");
 
@@ -864,7 +864,7 @@ nserror cookie_manager_fini(void)
 		free((void *) cm_ctx.values[i].value);
 
 	err = treeview_fini();
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
@@ -904,14 +904,14 @@ bool cookie_manager_has_selection(void)
 
 
 /* Exported interface, documented in cookie_manager.h */
-nserror cookie_manager_expand(bool only_folders)
+slateerror cookie_manager_expand(bool only_folders)
 {
 	return treeview_expand(cm_ctx.tree, only_folders);
 }
 
 
 /* Exported interface, documented in cookie_manager.h */
-nserror cookie_manager_contract(bool all)
+slateerror cookie_manager_contract(bool all)
 {
 	return treeview_contract(cm_ctx.tree, all);
 }

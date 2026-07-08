@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 John Tytgat <joty@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * releases.
  */
 
-#ifndef _NETSURF_RISCOS_OSLIB_PRE7_H_
-#define _NETSURF_RISCOS_OSLIB_PRE7_H_
+#ifndef _SLATE_RISCOS_OSLIB_PRE7_H_
+#define _SLATE_RISCOS_OSLIB_PRE7_H_
 
 #include "oslib/colourtrans.h"
 

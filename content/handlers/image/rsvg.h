@@ -1,7 +1,7 @@
 /*
  * Copyright 2007 Rob Kendrick <rjek@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,9 +20,9 @@
  * Content handler for image/svg using librsvg (interface).
  */
 
-#ifndef _NETSURF_IMAGE_RSVG_H_
-#define _NETSURF_IMAGE_RSVG_H_
+#ifndef _SLATE_IMAGE_RSVG_H_
+#define _SLATE_IMAGE_RSVG_H_
 
-nserror nsrsvg_init(void);
+slateerror nsrsvg_init(void);
 
 #endif

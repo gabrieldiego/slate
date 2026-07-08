@@ -2,7 +2,7 @@
  * Copyright 2004 James Bursa <bursa@users.sourceforge.net>
  * Copyright 2004 John M Bell <jmb202@ecs.soton.ac.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,7 +31,7 @@
 #include "utils/utils.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/bitmap.h"
+#include "slate/bitmap.h"
 #include "content/llcache.h"
 #include "content/content.h"
 #include "content/content_protected.h"
@@ -61,28 +61,28 @@ static unsigned char nsjpeg_eoi[] = { 0xff, JPEG_EOI };
 /**
  * Content create entry point.
  */
-static nserror nsjpeg_create(const content_handler *handler,
+static slateerror nsjpeg_create(const content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		llcache_handle *llcache, const char *fallback_charset,
 		bool quirks, struct content **c)
 {
 	struct content *jpeg;
-	nserror error;
+	slateerror error;
 
 	jpeg = calloc(1, sizeof(struct content));
 	if (jpeg == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__init(jpeg, handler, imime_type, params,
 			      llcache, fallback_charset, quirks);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(jpeg);
 		return error;
 	}
 
 	*c = jpeg;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -407,7 +407,7 @@ static bool nsjpeg_convert(struct content *c)
 	if (setjmp(setjmp_buffer)) {
 		jpeg_destroy_decompress(&cinfo);
 
-		msg_data.errordata.errorcode = NSERROR_UNKNOWN;
+		msg_data.errordata.errorcode = SLATEERROR_UNKNOWN;
 		msg_data.errordata.errormsg = nsjpeg_error_buffer;
 		content_broadcast(c, CONTENT_MSG_ERROR, &msg_data);
 		return false;
@@ -434,7 +434,7 @@ static bool nsjpeg_convert(struct content *c)
 
 	/* set title text */
 	title = messages_get_buff("JPEGTitle",
-			nsurl_access_leaf(llcache_handle_get_url(c->llcache)),
+			slateurl_access_leaf(llcache_handle_get_url(c->llcache)),
 			c->width, c->height);
 	if (title != NULL) {
 		content__set_title(c, title);
@@ -453,17 +453,17 @@ static bool nsjpeg_convert(struct content *c)
 /**
  * Clone content.
  */
-static nserror nsjpeg_clone(const struct content *old, struct content **newc)
+static slateerror nsjpeg_clone(const struct content *old, struct content **newc)
 {
 	struct content *jpeg_c;
-	nserror error;
+	slateerror error;
 
 	jpeg_c = calloc(1, sizeof(struct content));
 	if (jpeg_c == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__clone(old, jpeg_c);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(jpeg_c);
 		return error;
 	}
@@ -473,13 +473,13 @@ static nserror nsjpeg_clone(const struct content *old, struct content **newc)
 	    (old->status == CONTENT_STATUS_DONE)) {
 		if (nsjpeg_convert(jpeg_c) == false) {
 			content_destroy(jpeg_c);
-			return NSERROR_CLONE_FAILED;
+			return SLATEERROR_CLONE_FAILED;
 		}
 	}
 
 	*newc = jpeg_c;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static const content_handler nsjpeg_content_handler = {

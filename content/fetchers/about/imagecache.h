@@ -21,8 +21,8 @@
  * about scheme imagecache handler interface
  */
 
-#ifndef NETSURF_CONTENT_FETCHERS_ABOUT_IMAGECACHE_H
-#define NETSURF_CONTENT_FETCHERS_ABOUT_IMAGECACHE_H
+#ifndef SLATE_CONTENT_FETCHERS_ABOUT_IMAGECACHE_H
+#define SLATE_CONTENT_FETCHERS_ABOUT_IMAGECACHE_H
 
 /**
  * Handler to generate about scheme imagecache page.

@@ -1,7 +1,7 @@
 /*
  * Copyright 2004 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,13 +21,13 @@
  * Private data for text/html content.
  */
 
-#ifndef NETSURF_HTML_PRIVATE_H
-#define NETSURF_HTML_PRIVATE_H
+#ifndef SLATE_HTML_PRIVATE_H
+#define SLATE_HTML_PRIVATE_H
 
 #include <dom/bindings/hubbub/parser.h>
 
-#include "netsurf/mouse.h"
-#include "netsurf/types.h"
+#include "slate/mouse.h"
+#include "slate/types.h"
 #include "content/content_protected.h"
 #include "content/handlers/css/utils.h"
 
@@ -109,7 +109,7 @@ typedef struct html_content {
 	dom_hubbub_encoding_source encoding_source;
 
 	/** Base URL (may be a copy of content->url). */
-	struct nsurl *base_url;
+	struct slateurl *base_url;
 	/** Base target */
 	char *base_target;
 
@@ -275,18 +275,18 @@ bool html_exec(struct content *c, const char *src, size_t srclen);
  *
  * \param htmlc html content.
  * \param allow_defer allow deferred execution, if not, only async scripts.
- * \return NSERROR_OK error code.
+ * \return SLATEERROR_OK error code.
  */
-nserror html_script_exec(html_content *htmlc, bool allow_defer);
+slateerror html_script_exec(html_content *htmlc, bool allow_defer);
 
 
 /**
  * Free all script resources and references for a html content.
  *
  * \param htmlc html content.
- * \return NSERROR_OK or error code.
+ * \return SLATEERROR_OK or error code.
  */
-nserror html_script_free(html_content *htmlc);
+slateerror html_script_free(html_content *htmlc);
 
 
 /**
@@ -298,7 +298,7 @@ bool html_saw_insecure_scripts(html_content *htmlc);
 /**
  * Complete the HTML content state machine *iff* all scripts are finished
  */
-nserror html_proceed_to_done(html_content *html);
+slateerror html_proceed_to_done(html_content *html);
 
 
 /* in html/redraw.c */
@@ -331,10 +331,10 @@ struct form_control *html_forms_get_control_for_node(struct form *forms,
 /**
  * Register the fetcher for the pseudo x-ns-css scheme.
  *
- * \return NSERROR_OK on successful registration or error code on failure.
+ * \return SLATEERROR_OK on successful registration or error code on failure.
  */
-nserror html_css_fetcher_register(void);
-nserror html_css_fetcher_add_item(dom_string *data, struct nsurl *base_url,
+slateerror html_css_fetcher_register(void);
+slateerror html_css_fetcher_add_item(dom_string *data, struct slateurl *base_url,
 		uint32_t *key);
 
 

@@ -3,7 +3,7 @@
  * Copyright 2004-2008 John Tytgat <joty@netsurf-browser.org>
  * Copyright 2007 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,8 +32,8 @@
 #include <pencil.h>
 
 #include "utils/log.h"
-#include "netsurf/plotters.h"
-#include "netsurf/content.h"
+#include "slate/plotters.h"
+#include "slate/content.h"
 
 #include "riscos/bitmap.h"
 #include "riscos/gui.h"
@@ -52,7 +52,7 @@ static int ro_save_draw_height;
  * \param  code  error code
  * \return  false
  */
-static nserror ro_save_draw_error(pencil_code code)
+static slateerror ro_save_draw_error(pencil_code code)
 {
 	NSLOG(netsurf, INFO, "code %i", code);
 
@@ -76,7 +76,7 @@ static nserror ro_save_draw_error(pencil_code code)
 		break;
 	}
 
-	return NSERROR_INVALID;
+	return SLATEERROR_INVALID;
 }
 
 /**
@@ -85,12 +85,12 @@ static nserror ro_save_draw_error(pencil_code code)
  * \param ctx The current redraw context.
  * \param clip The rectangle to limit all subsequent plot
  *              operations within.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ro_save_draw_clip(const struct redraw_context *ctx, const struct rect *clip)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -108,14 +108,14 @@ ro_save_draw_clip(const struct redraw_context *ctx, const struct rect *clip)
  * \param radius The radius of the arc.
  * \param angle1 The start angle of the arc.
  * \param angle2 The finish angle of the arc.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ro_save_draw_arc(const struct redraw_context *ctx,
 	       const plot_style_t *style,
 	       int x, int y, int radius, int angle1, int angle2)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -129,14 +129,14 @@ ro_save_draw_arc(const struct redraw_context *ctx,
  * \param x The x coordinate of the circle.
  * \param y The y coordinate of the circle.
  * \param radius The radius of the circle.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ro_save_draw_disc(const struct redraw_context *ctx,
 		const plot_style_t *style,
 		int x, int y, int radius)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -149,9 +149,9 @@ ro_save_draw_disc(const struct redraw_context *ctx,
  * \param ctx The current redraw context.
  * \param pstyle Style controlling the line plot.
  * \param line A rectangle defining the line to be drawn
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ro_save_draw_line(const struct redraw_context *ctx,
 		const plot_style_t *style,
 		const struct rect *line)
@@ -177,7 +177,7 @@ ro_save_draw_line(const struct redraw_context *ctx,
 	if (code != pencil_OK)
 		return ro_save_draw_error(code);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -192,9 +192,9 @@ ro_save_draw_line(const struct redraw_context *ctx,
  * \param ctx The current redraw context.
  * \param pstyle Style controlling the rectangle plot.
  * \param rect A rectangle defining the line to be drawn
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ro_save_draw_rectangle(const struct redraw_context *ctx,
 		     const plot_style_t *style,
 		     const struct rect *rect)
@@ -247,7 +247,7 @@ ro_save_draw_rectangle(const struct redraw_context *ctx,
 		if (code != pencil_OK)
 			return ro_save_draw_error(code);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -263,9 +263,9 @@ ro_save_draw_rectangle(const struct redraw_context *ctx,
  * \param pstyle Style controlling the polygon plot.
  * \param p verticies of polygon
  * \param n number of verticies.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ro_save_draw_polygon(const struct redraw_context *ctx,
 		     const plot_style_t *style,
 		     const int *p,
@@ -298,7 +298,7 @@ ro_save_draw_polygon(const struct redraw_context *ctx,
 	if (code != pencil_OK)
 		return ro_save_draw_error(code);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -313,9 +313,9 @@ ro_save_draw_polygon(const struct redraw_context *ctx,
  * \param p elements of path
  * \param n nunber of elements on path
  * \param transform A transform to apply to the path.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ro_save_draw_path(const struct redraw_context *ctx,
 		  const plot_style_t *pstyle,
 		  const float *p,
@@ -328,17 +328,17 @@ ro_save_draw_path(const struct redraw_context *ctx,
 	bool empty_path = true;
 
 	if (n == 0)
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 
 	if (p[0] != PLOTTER_PATH_MOVE) {
 		NSLOG(netsurf, INFO, "path doesn't start with a move");
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	path = malloc(sizeof *path * (n + 10));
 	if (!path) {
 		NSLOG(netsurf, INFO, "out of memory");
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	for (i = 0; i < n; ) {
@@ -389,14 +389,14 @@ ro_save_draw_path(const struct redraw_context *ctx,
 		} else {
 			NSLOG(netsurf, INFO, "bad path command %f", p[i]);
 			free(path);
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
 	}
 	path[i] = draw_END_PATH;
 
 	if (empty_path) {
 		free(path);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	code = pencil_path(ro_save_draw_diagram,
@@ -419,7 +419,7 @@ ro_save_draw_path(const struct redraw_context *ctx,
 	if (code != pencil_OK)
 		return ro_save_draw_error(code);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -445,9 +445,9 @@ ro_save_draw_path(const struct redraw_context *ctx,
  * \param height The height of area to plot the bitmap into
  * \param bg the background colour to alpha blend into
  * \param flags the flags controlling the type of plot operation
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ro_save_draw_bitmap(const struct redraw_context *ctx,
 		    struct bitmap *bitmap,
 		    int x, int y,
@@ -462,7 +462,7 @@ ro_save_draw_bitmap(const struct redraw_context *ctx,
 	buffer = riscos_bitmap_get_buffer(bitmap);
 	if (!buffer) {
 		ro_warn_user("NoMemory", 0);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	code = pencil_sprite(ro_save_draw_diagram,
@@ -473,7 +473,7 @@ ro_save_draw_bitmap(const struct redraw_context *ctx,
 	if (code != pencil_OK)
 		return ro_save_draw_error(code);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -486,9 +486,9 @@ ro_save_draw_bitmap(const struct redraw_context *ctx,
  * \param y y coordinate
  * \param text UTF-8 string to plot
  * \param length length of string, in bytes
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ro_save_draw_text(const struct redraw_context *ctx,
 		const struct plot_font_style *fstyle,
 		int x,
@@ -509,7 +509,7 @@ ro_save_draw_text(const struct redraw_context *ctx,
 	if (code != pencil_OK)
 		return ro_save_draw_error(code);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -517,9 +517,9 @@ ro_save_draw_text(const struct redraw_context *ctx,
  * Start of a group of objects.
  *
  * \param ctx The current redraw context.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ro_save_draw_group_start(const struct redraw_context *ctx, const char *name)
 {
 	pencil_code code;
@@ -528,7 +528,7 @@ ro_save_draw_group_start(const struct redraw_context *ctx, const char *name)
 	if (code != pencil_OK)
 		return ro_save_draw_error(code);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -536,9 +536,9 @@ ro_save_draw_group_start(const struct redraw_context *ctx, const char *name)
  * End of the most recently started group.
  *
  * \param ctx The current redraw context.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ro_save_draw_group_end(const struct redraw_context *ctx)
 {
 	pencil_code code;
@@ -547,7 +547,7 @@ ro_save_draw_group_end(const struct redraw_context *ctx)
 	if (code != pencil_OK)
 		return ro_save_draw_error(code);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 

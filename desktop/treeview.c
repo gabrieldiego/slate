@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 - 2013 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,16 +28,16 @@
 
 #include "utils/utils.h"
 #include "utils/log.h"
-#include "utils/nsurl.h"
-#include "utils/nscolour.h"
-#include "utils/nsoption.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/content.h"
-#include "netsurf/plotters.h"
-#include "netsurf/clipboard.h"
-#include "netsurf/layout.h"
-#include "netsurf/keypress.h"
-#include "netsurf/core_window.h"
+#include "utils/slateurl.h"
+#include "utils/slatecolor.h"
+#include "utils/slateoption.h"
+#include "slate/bitmap.h"
+#include "slate/content.h"
+#include "slate/plotters.h"
+#include "slate/clipboard.h"
+#include "slate/layout.h"
+#include "slate/keypress.h"
+#include "slate/core_window.h"
 #include "content/hlcache.h"
 #include "css/utils.h"
 
@@ -666,19 +666,19 @@ enum treeview_walk_mode {
  * \param callback_bwd	Function to call on each node in backwards order
  * \param callback_fwd	Function to call on each node in forwards order
  * \param ctx		Context to pass to callback
- * \return NSERROR_OK on success, or appropriate error otherwise
+ * \return SLATEERROR_OK on success, or appropriate error otherwise
  *
  * \note Any node deletion must happen in callback_bwd.
  */
-static nserror treeview_walk_internal(
+static slateerror treeview_walk_internal(
 		treeview *tree,
 		treeview_node *root,
 		enum treeview_walk_mode mode,
-		nserror (*callback_bwd)(
+		slateerror (*callback_bwd)(
 				treeview_node *n,
 				void *ctx,
 				bool *end),
-		nserror (*callback_fwd)(
+		slateerror (*callback_fwd)(
 				treeview_node *n,
 				void *ctx,
 				bool *skip_children,
@@ -691,7 +691,7 @@ static nserror treeview_walk_internal(
 	bool skip_children = false;
 	bool abort = false;
 	bool full = false;
-	nserror err;
+	slateerror err;
 	bool entry;
 
 	assert(root != NULL);
@@ -724,13 +724,13 @@ static nserror treeview_walk_internal(
 					/* Backwards callback */
 					err = callback_bwd(node, ctx, &abort);
 
-					if (err != NSERROR_OK) {
+					if (err != SLATEERROR_OK) {
 						return err;
 
 					} else if (abort) {
 						/* callback requested early
 						 * termination */
-						return NSERROR_OK;
+						return SLATEERROR_OK;
 					}
 				}
 				node = parent;
@@ -745,13 +745,13 @@ static nserror treeview_walk_internal(
 				/* Backwards callback */
 				err = callback_bwd(node, ctx, &abort);
 
-				if (err != NSERROR_OK) {
+				if (err != SLATEERROR_OK) {
 					return err;
 
 				} else if (abort) {
 					/* callback requested early
 					 * termination */
-					return NSERROR_OK;
+					return SLATEERROR_OK;
 				}
 			}
 			node = next_sibling;
@@ -776,16 +776,16 @@ static nserror treeview_walk_internal(
 			/* Forwards callback */
 			err = callback_fwd(node, ctx, &skip_children, &abort);
 
-			if (err != NSERROR_OK) {
+			if (err != SLATEERROR_OK) {
 				return err;
 
 			} else if (abort) {
 				/* callback requested early termination */
-				return NSERROR_OK;
+				return SLATEERROR_OK;
 			}
 		}
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -807,9 +807,9 @@ struct treeview_search_walk_data {
  * \param[in]     ctx            Treeview search context.
  * \param[in,out] skip_children  Flag to allow children to be skipped.
  * \param[in,out] end            Flag to allow iteration to be finished early.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror treeview__search_walk_cb(
+static slateerror treeview__search_walk_cb(
 		treeview_node *n,
 		void *ctx,
 		bool *skip_children,
@@ -819,13 +819,13 @@ static nserror treeview__search_walk_cb(
 
 	/* only entry nodes can be searched */
 	if (n->type != TREE_NODE_ENTRY) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* empty string will never match */
 	if (sw->len == 0) {
 		n->flags &= ~TV_NFLAGS_MATCHED;
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	struct treeview_node_entry *entry = (struct treeview_node_entry *)n;
@@ -853,7 +853,7 @@ static nserror treeview__search_walk_cb(
 		n->flags &= ~TV_NFLAGS_MATCHED;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -863,14 +863,14 @@ static nserror treeview__search_walk_cb(
  * \param[in] tree  Treeview to search.
  * \param[in] text  UTF-8 string to search for.  (NULL-terminated.)
  * \param[in] len   Byte length of UTF-8 string.
- * \return NSERROR_OK on success, appropriate error otherwise.
+ * \return SLATEERROR_OK on success, appropriate error otherwise.
  */
-static nserror treeview__search(
+static slateerror treeview__search(
 		treeview *tree,
 		const char *text,
 		unsigned int len)
 {
-	nserror err;
+	slateerror err;
 	uint32_t height;
 	uint32_t prev_height = treeview__get_display_height(tree);
 	int search_height = treeview__get_search_height(tree);
@@ -889,13 +889,13 @@ static nserror treeview__search(
 	assert(text[len] == '\0');
 
 	if (tree->root == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	err = treeview_walk_internal(tree, tree->root,
 			TREEVIEW_WALK_MODE_LOGICAL_COMPLETE, NULL,
 			treeview__search_walk_cb, &sw);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
@@ -913,7 +913,7 @@ static nserror treeview__search(
 	treeview__cw_update_size(tree, -1, height);
 	treeview__cw_scroll_top(tree);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1065,15 +1065,15 @@ static void treeview__search_update_display(
  * Create treeview's root node
  *
  * \param[out] root Returns root node
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror treeview_create_node_root(treeview_node **root)
+static slateerror treeview_create_node_root(treeview_node **root)
 {
 	treeview_node *n;
 
 	n = malloc(sizeof(struct treeview_node));
 	if (n == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	n->flags = TV_NFLAGS_EXPANDED;
@@ -1095,7 +1095,7 @@ static nserror treeview_create_node_root(treeview_node **root)
 
 	*root = n;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1109,7 +1109,7 @@ static nserror treeview_create_node_root(treeview_node **root)
  * \param[out] skip_children set to false so child nodes are not skipped.
  * \param[out] end unused flag so treewalk in not terminated early.
  */
-static nserror
+static slateerror
 treeview_set_inset_from_parent(treeview_node *n,
 			       void *ctx,
 			       bool *skip_children,
@@ -1119,7 +1119,7 @@ treeview_set_inset_from_parent(treeview_node *n,
 		n->inset = n->parent->inset + tree_g.step_width;
 
 	*skip_children = false;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1196,7 +1196,7 @@ treeview_insert_node(
 
 
 /* Exported interface, documented in treeview.h */
-nserror
+slateerror
 treeview_create_node_folder(treeview *tree,
 			    treeview_node **folder,
 			    treeview_node *relation,
@@ -1218,7 +1218,7 @@ treeview_create_node_folder(treeview *tree,
 
 	n = malloc(sizeof(struct treeview_node));
 	if (n == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	n->flags = (flags & TREE_OPTION_SPECIAL_DIR) ?
@@ -1259,12 +1259,12 @@ treeview_create_node_folder(treeview *tree,
 
 	*folder = n;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* Exported interface, documented in treeview.h */
-nserror
+slateerror
 treeview_update_node_folder(treeview *tree,
 			    treeview_node *folder,
 			    const struct treeview_field_data *field,
@@ -1307,12 +1307,12 @@ treeview_update_node_folder(treeview *tree,
 		treeview__cw_invalidate_area(tree, &r);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* Exported interface, documented in treeview.h */
-nserror
+slateerror
 treeview_update_node_entry(treeview *tree,
 			   treeview_node *entry,
 			   const struct treeview_field_data fields[],
@@ -1381,12 +1381,12 @@ treeview_update_node_entry(treeview *tree,
 		treeview__cw_invalidate_area(tree, &r);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* Exported interface, documented in treeview.h */
-nserror
+slateerror
 treeview_create_node_entry(treeview *tree,
 			   treeview_node **entry,
 			   treeview_node *relation,
@@ -1412,7 +1412,7 @@ treeview_create_node_entry(treeview *tree,
 	e = malloc(sizeof(struct treeview_node_entry) +
 			(tree->n_fields - 1) * sizeof(struct treeview_field));
 	if (e == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 
@@ -1473,7 +1473,7 @@ treeview_create_node_entry(treeview *tree,
 
 	*entry = n;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1496,7 +1496,7 @@ struct treeview_walk_ctx {
  * \param skip_children set if child nodes should be skipped
  * \param end set if iteration should end early
  */
-static nserror
+static slateerror
 treeview_walk_fwd_cb(treeview_node *n,
 		     void *ctx,
 		     bool *skip_children,
@@ -1508,7 +1508,7 @@ treeview_walk_fwd_cb(treeview_node *n,
 		return tw->enter_cb(tw->ctx, n->client_data, n->type, end);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1519,7 +1519,7 @@ treeview_walk_fwd_cb(treeview_node *n,
  * \param ctx treewalk context
  * \param end set if iteration should end early
  */
-static nserror treeview_walk_bwd_cb(treeview_node *n, void *ctx, bool *end)
+static slateerror treeview_walk_bwd_cb(treeview_node *n, void *ctx, bool *end)
 {
 	struct treeview_walk_ctx *tw = ctx;
 
@@ -1527,12 +1527,12 @@ static nserror treeview_walk_bwd_cb(treeview_node *n, void *ctx, bool *end)
 		return tw->leave_cb(tw->ctx, n->client_data, n->type, end);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* Exported interface, documented in treeview.h */
-nserror
+slateerror
 treeview_walk(treeview *tree,
 	      treeview_node *root,
 	      treeview_walk_cb enter_cb,
@@ -1701,7 +1701,7 @@ struct treeview_node_delete {
 /**
  * Treewalk node callback deleting nodes.
  */
-static nserror
+static slateerror
 treeview_delete_node_walk_cb(treeview_node *n, void *ctx, bool *end)
 {
 	struct treeview_node_delete *nd = (struct treeview_node_delete *)ctx;
@@ -1730,7 +1730,7 @@ treeview_delete_node_walk_cb(treeview_node *n, void *ctx, bool *end)
 		break;
 
 	default:
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* Cancel any edit of this node */
@@ -1742,7 +1742,7 @@ treeview_delete_node_walk_cb(treeview_node *n, void *ctx, bool *end)
 	/* Free the node */
 	free(n);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1761,15 +1761,15 @@ treeview_delete_node_walk_cb(treeview_node *n, void *ctx, bool *end)
  * \param n		Node to delete
  * \param interaction	Delete is result of user interaction with treeview
  * \param flags		Treeview node options flags
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror
+static slateerror
 treeview_delete_node_internal(treeview *tree,
 			      treeview_node *n,
 			      bool interaction,
 			      treeview_node_options_flags flags)
 {
-	nserror err;
+	slateerror err;
 	treeview_node *p = n->parent;
 	struct treeview_node_delete nd = {
 		.tree = tree,
@@ -1778,14 +1778,14 @@ treeview_delete_node_internal(treeview *tree,
 	};
 
 	if (interaction && (tree->flags & TREEVIEW_NO_DELETES)) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* Delete any children first */
 	err = treeview_walk_internal(tree, n,
 			TREEVIEW_WALK_MODE_LOGICAL_COMPLETE,
 			treeview_delete_node_walk_cb, NULL, &nd);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
@@ -1793,7 +1793,7 @@ treeview_delete_node_internal(treeview *tree,
 	if (n == tree->root)
 		tree->root = NULL;
 	err = treeview_delete_node_walk_cb(n, &nd, false);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
@@ -1814,7 +1814,7 @@ treeview_delete_node_internal(treeview *tree,
 
 	treeview__search_update_display(tree);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1823,17 +1823,17 @@ treeview_delete_node_internal(treeview *tree,
  *
  * \param tree Treeview object to delete empty nodes from
  * \param interaction Delete is result of user interaction with treeview
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  *
  * Note this must not be called within a treeview_walk.  It may delete the
  * walker's 'current' node, making it impossible to move on without invalid
  * reads.
  */
-static nserror treeview_delete_empty_nodes(treeview *tree, bool interaction)
+static slateerror treeview_delete_empty_nodes(treeview *tree, bool interaction)
 {
 	treeview_node *node, *child, *parent, *next_sibling, *p;
 	bool abort = false;
-	nserror err;
+	slateerror err;
 	struct treeview_node_delete nd = {
 		.tree = tree,
 		.h_reduction = 0,
@@ -1866,7 +1866,7 @@ static nserror treeview_delete_empty_nodes(treeview *tree, bool interaction)
 					p = node->parent;
 					err = treeview_delete_node_walk_cb(
 						node, &nd, &abort);
-					if (err != NSERROR_OK) {
+					if (err != SLATEERROR_OK) {
 						return err;
 					}
 
@@ -1893,7 +1893,7 @@ static nserror treeview_delete_empty_nodes(treeview *tree, bool interaction)
 				p = node->parent;
 				err = treeview_delete_node_walk_cb(
 					node, &nd, &abort);
-				if (err != NSERROR_OK) {
+				if (err != SLATEERROR_OK) {
 					return err;
 				}
 
@@ -1917,17 +1917,17 @@ static nserror treeview_delete_empty_nodes(treeview *tree, bool interaction)
 			node->children : NULL;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* Exported interface, documented in treeview.h */
-nserror
+slateerror
 treeview_delete_node(treeview *tree,
 		     treeview_node *n,
 		     treeview_node_options_flags flags)
 {
-	nserror err;
+	slateerror err;
 	struct rect r;
 	bool visible;
 
@@ -1941,14 +1941,14 @@ treeview_delete_node(treeview *tree,
 	r.y1 = tree->root->height;
 
 	err = treeview_delete_node_internal(tree, n, false, flags);
-	if (err != NSERROR_OK)
+	if (err != SLATEERROR_OK)
 		return err;
 
 	if (tree->flags & TREEVIEW_DEL_EMPTY_DIRS) {
 		int h = tree->root->height;
 		/* Delete any empty nodes */
 		err = treeview_delete_empty_nodes(tree, false);
-		if (err != NSERROR_OK)
+		if (err != SLATEERROR_OK)
 			return err;
 
 		/* Inform front end of change in dimensions */
@@ -1968,7 +1968,7 @@ treeview_delete_node(treeview *tree,
 		treeview__cw_invalidate_area(tree, &r);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -2020,7 +2020,7 @@ static struct textarea *treeview__create_textarea(
 
 
 /* Exported interface, documented in treeview.h */
-nserror
+slateerror
 treeview_create(treeview **treeout,
 		const struct treeview_callback_table *callbacks,
 		int n_fields,
@@ -2029,7 +2029,7 @@ treeview_create(treeview **treeout,
 		treeview_flags flags)
 {
 	treeview *tree;
-	nserror error;
+	slateerror error;
 	int fldidx;
 
 	assert(callbacks != NULL);
@@ -2041,17 +2041,17 @@ treeview_create(treeview **treeout,
 
 	tree = malloc(sizeof(struct treeview));
 	if (tree == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	tree->fields = malloc(sizeof(struct treeview_field) * n_fields);
 	if (tree->fields == NULL) {
 		free(tree);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	error = treeview_create_node_root(&(tree->root));
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(tree->fields);
 		free(tree);
 		return error;
@@ -2104,14 +2104,14 @@ treeview_create(treeview **treeout,
 	if (flags & TREEVIEW_SEARCHABLE) {
 		tree->search.textarea = treeview__create_textarea(
 				tree, 600, tree_g.line_height,
-				nscolours[NSCOLOUR_TEXT_INPUT_BG],
-				nscolours[NSCOLOUR_TEXT_INPUT_BG],
-				nscolours[NSCOLOUR_TEXT_INPUT_FG],
+				slatecolors[SLATECOLOR_TEXT_INPUT_BG],
+				slatecolors[SLATECOLOR_TEXT_INPUT_BG],
+				slatecolors[SLATECOLOR_TEXT_INPUT_FG],
 				plot_style_odd.text,
 				treeview_textarea_search_callback);
 		if (tree->search.textarea == NULL) {
 			treeview_destroy(tree);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 	} else {
 		tree->search.textarea = NULL;
@@ -2125,39 +2125,39 @@ treeview_create(treeview **treeout,
 
 	*treeout = tree;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* Exported interface, documented in treeview.h */
-nserror
+slateerror
 treeview_cw_attach(treeview *tree, struct core_window *cw)
 {
 	assert(cw != NULL);
 
 	if (tree->cw_h != NULL) {
 		NSLOG(netsurf, INFO, "Treeview already attached.");
-		return NSERROR_UNKNOWN;
+		return SLATEERROR_UNKNOWN;
 	}
 	tree->cw_h = cw;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* Exported interface, documented in treeview.h */
-nserror treeview_cw_detach(treeview *tree)
+slateerror treeview_cw_detach(treeview *tree)
 {
 	tree->cw_h = NULL;
 
 	treeview__search_cancel(tree, true);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* Exported interface, documented in treeview.h */
-nserror treeview_destroy(treeview *tree)
+slateerror treeview_destroy(treeview *tree)
 {
 	int f;
 
@@ -2183,7 +2183,7 @@ nserror treeview_destroy(treeview *tree)
 	/* Free treeview */
 	free(tree);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -2192,9 +2192,9 @@ nserror treeview_destroy(treeview *tree)
  *
  * \param tree Treeview object to expand nodes in
  * \param node The node to expand.
- * \return NSERROR_OK on success, appropriate error otherwise.
+ * \return SLATEERROR_OK on success, appropriate error otherwise.
  */
-static nserror
+static slateerror
 treeview_node_expand_internal(treeview *tree, treeview_node *node)
 {
 	treeview_node *child;
@@ -2209,7 +2209,7 @@ treeview_node_expand_internal(treeview *tree, treeview_node *node)
 	if (node->flags & TV_NFLAGS_EXPANDED) {
 		/* What madness is this? */
 		NSLOG(netsurf, INFO, "Tried to expand an expanded node.");
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	switch (node->type) {
@@ -2285,18 +2285,18 @@ treeview_node_expand_internal(treeview *tree, treeview_node *node)
 				treeview__get_display_height(tree));
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* Exported interface, documented in treeview.h */
-nserror treeview_node_expand(treeview *tree, treeview_node *node)
+slateerror treeview_node_expand(treeview *tree, treeview_node *node)
 {
-	nserror res;
+	slateerror res;
 
 	res = treeview_node_expand_internal(tree, node);
 	NSLOG(netsurf, INFO, "Expanding!");
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		/* expansion was successful, attempt redraw */
 		treeview__redraw_from_node(tree, node);
 		NSLOG(netsurf, INFO, "Expanded!");
@@ -2321,9 +2321,9 @@ struct treeview_contract_data {
  * \param n node
  * \param ctx contract iterator context
  * \param end flag to end iteration now
- * \return NSERROR_OK on success else appropriate error code
+ * \return SLATEERROR_OK on success else appropriate error code
  */
-static nserror treeview_node_contract_cb(treeview_node *n, void *ctx, bool *end)
+static slateerror treeview_node_contract_cb(treeview_node *n, void *ctx, bool *end)
 {
 	struct treeview_contract_data *data = ctx;
 	int h_reduction_folder = 0;
@@ -2337,7 +2337,7 @@ static nserror treeview_node_contract_cb(treeview_node *n, void *ctx, bool *end)
 	if ((n->flags & TV_NFLAGS_EXPANDED) == false ||
 	    (n->type == TREE_NODE_FOLDER && data->only_entries)) {
 		/* Nothing to do. */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 
@@ -2368,7 +2368,7 @@ static nserror treeview_node_contract_cb(treeview_node *n, void *ctx, bool *end)
 
 	n->flags ^= TV_NFLAGS_EXPANDED;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -2377,9 +2377,9 @@ static nserror treeview_node_contract_cb(treeview_node *n, void *ctx, bool *end)
  *
  * \param tree Treeview object to contract node in
  * \param node Node to contract
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror
+static slateerror
 treeview_node_contract_internal(treeview *tree, treeview_node *node)
 {
 	struct treeview_contract_data data;
@@ -2389,7 +2389,7 @@ treeview_node_contract_internal(treeview *tree, treeview_node *node)
 	if ((node->flags & TV_NFLAGS_EXPANDED) == false) {
 		/* What madness is this? */
 		NSLOG(netsurf, INFO, "Tried to contract a contracted node.");
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	data.tree = tree;
@@ -2409,20 +2409,20 @@ treeview_node_contract_internal(treeview *tree, treeview_node *node)
 	/* Inform front end of change in dimensions */
 	treeview__cw_update_size(tree, -1, treeview__get_display_height(tree));
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* Exported interface, documented in treeview.h */
-nserror treeview_node_contract(treeview *tree, treeview_node *node)
+slateerror treeview_node_contract(treeview *tree, treeview_node *node)
 {
-	nserror res;
+	slateerror res;
 
 	assert(tree != NULL);
 
 	res = treeview_node_contract_internal(tree, node);
 	NSLOG(netsurf, INFO, "Contracting!");
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		/* successful contraction, request redraw */
 		treeview__redraw_from_node(tree, node);
 		NSLOG(netsurf, INFO, "Contracted!");
@@ -2433,7 +2433,7 @@ nserror treeview_node_contract(treeview *tree, treeview_node *node)
 
 
 /* Exported interface, documented in treeview.h */
-nserror treeview_contract(treeview *tree, bool all)
+slateerror treeview_contract(treeview *tree, bool all)
 {
 	int search_height = treeview__get_search_height(tree);
 	struct treeview_contract_data data;
@@ -2477,7 +2477,7 @@ nserror treeview_contract(treeview *tree, bool all)
 	/* Redraw */
 	treeview__cw_invalidate_area(tree, &r);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -2497,16 +2497,16 @@ struct treeview_expand_data {
  * \param ctx node expansion context
  * \param skip_children flag to allow children to be skipped
  * \param end flag to allow iteration to be finished early.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 treeview_expand_cb(treeview_node *n,
 		   void *ctx,
 		   bool *skip_children,
 		   bool *end)
 {
 	struct treeview_expand_data *data = ctx;
-	nserror err;
+	slateerror err;
 
 	assert(n != NULL);
 	assert(n->type != TREE_NODE_ROOT);
@@ -2514,7 +2514,7 @@ treeview_expand_cb(treeview_node *n,
 	if (n->flags & TV_NFLAGS_EXPANDED ||
 	    (data->only_folders && n->type != TREE_NODE_FOLDER)) {
 		/* Nothing to do. */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	err = treeview_node_expand_internal(data->tree, n);
@@ -2524,10 +2524,10 @@ treeview_expand_cb(treeview_node *n,
 
 
 /* Exported interface, documented in treeview.h */
-nserror treeview_expand(treeview *tree, bool only_folders)
+slateerror treeview_expand(treeview *tree, bool only_folders)
 {
 	struct treeview_expand_data data;
-	nserror res;
+	slateerror res;
 	struct rect r;
 
 	assert(tree != NULL);
@@ -2539,7 +2539,7 @@ nserror treeview_expand(treeview *tree, bool only_folders)
 	res = treeview_walk_internal(tree, tree->root,
 			TREEVIEW_WALK_MODE_LOGICAL_COMPLETE,
 			NULL, treeview_expand_cb, &data);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		/* expansion succeeded, schedule redraw */
 
 		r.x0 = 0;
@@ -3157,9 +3157,9 @@ struct treeview_selection_walk_data {
  * \param ctx node selection context
  * \param skip_children flag to allow children to be skipped
  * \param end flag to allow iteration to be finished early.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 treeview_node_selection_walk_cb(treeview_node *n,
 				void *ctx,
 				bool *skip_children,
@@ -3168,7 +3168,7 @@ treeview_node_selection_walk_cb(treeview_node *n,
 	struct treeview_selection_walk_data *sw = ctx;
 	int height;
 	bool changed = false;
-	nserror err;
+	slateerror err;
 
 	height = (n->type == TREE_NODE_ENTRY) ? n->height : tree_g.line_height;
 	sw->current_y += height;
@@ -3178,7 +3178,7 @@ treeview_node_selection_walk_cb(treeview_node *n,
 		if (n->flags & TV_NFLAGS_SELECTED) {
 			sw->data.has_selection = true;
 			*end = true; /* Can abort tree walk */
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 		break;
 
@@ -3186,7 +3186,7 @@ treeview_node_selection_walk_cb(treeview_node *n,
 		if (n->flags & TV_NFLAGS_SELECTED) {
 			sw->data.first.n = n;
 			*end = true; /* Can abort tree walk */
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 		break;
 
@@ -3194,7 +3194,7 @@ treeview_node_selection_walk_cb(treeview_node *n,
 		if (n->flags & TV_NFLAGS_SELECTED) {
 			err = treeview_delete_node_internal(sw->tree, n, true,
 							    TREE_OPTION_NONE);
-			if (err != NSERROR_OK) {
+			if (err != SLATEERROR_OK) {
 				return err;
 			}
 			*skip_children = true;
@@ -3231,7 +3231,7 @@ treeview_node_selection_walk_cb(treeview_node *n,
 		    sw->data.drag.sel_max) {
 			n->flags ^= TV_NFLAGS_SELECTED;
 		}
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 
 	case TREEVIEW_WALK_YANK_SELECTION:
 		if (n->flags & TV_NFLAGS_SELECTED) {
@@ -3294,7 +3294,7 @@ treeview_node_selection_walk_cb(treeview_node *n,
 					free(sw->data.copy.text);
 					sw->data.copy.text = NULL;
 					sw->data.copy.len = 0;
-					return NSERROR_NOMEM;
+					return SLATEERROR_NOMEM;
 				}
 
 				if (sw->data.copy.len != 0) {
@@ -3320,7 +3320,7 @@ treeview_node_selection_walk_cb(treeview_node *n,
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -3494,7 +3494,7 @@ static void treeview_move_yank_selection(treeview *tree, treeview_node *fixed)
 static void treeview_copy_selection(treeview *tree)
 {
 	struct treeview_selection_walk_data sw;
-	nserror err;
+	slateerror err;
 
 	sw.purpose = TREEVIEW_WALK_COPY_SELECTION;
 	sw.data.copy.text = NULL;
@@ -3504,7 +3504,7 @@ static void treeview_copy_selection(treeview *tree)
 	err = treeview_walk_internal(tree, tree->root,
 			TREEVIEW_WALK_MODE_DISPLAY, NULL,
 			treeview_node_selection_walk_cb, &sw);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return;
 	}
 
@@ -3587,9 +3587,9 @@ static bool treeview_propagate_selection(treeview *tree, struct rect *rect)
  *
  * \param tree Treeview object to move selected nodes in
  * \param rect Redraw rectangle
- * \return NSERROR_OK on success else appropriate error code
+ * \return SLATEERROR_OK on success else appropriate error code
  */
-static nserror treeview_move_selection(treeview *tree, struct rect *rect)
+static slateerror treeview_move_selection(treeview *tree, struct rect *rect)
 {
 	treeview_node *node, *next, *parent;
 	treeview_node *relation;
@@ -3641,7 +3641,7 @@ static nserror treeview_move_selection(treeview *tree, struct rect *rect)
 
 	default:
 		NSLOG(netsurf, INFO, "Bad drop target for move.");
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if (relationship == TREE_REL_FIRST_CHILD) {
@@ -3684,7 +3684,7 @@ static nserror treeview_move_selection(treeview *tree, struct rect *rect)
 	rect->x1 = REDRAW_MAX;
 	rect->y1 = REDRAW_MAX;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -3700,7 +3700,7 @@ struct treeview_launch_walk_data {
 /**
  * Treewalk node walk backward callback for tracking folder selection.
  */
-static nserror
+static slateerror
 treeview_node_launch_walk_bwd_cb(treeview_node *n, void *ctx, bool *end)
 {
 	struct treeview_launch_walk_data *lw = ctx;
@@ -3709,7 +3709,7 @@ treeview_node_launch_walk_bwd_cb(treeview_node *n, void *ctx, bool *end)
 		lw->selected_depth--;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -3720,16 +3720,16 @@ treeview_node_launch_walk_bwd_cb(treeview_node *n, void *ctx, bool *end)
  * \param ctx node launch context
  * \param skip_children flag to allow children to be skipped
  * \param end flag to allow iteration to be finished early.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 treeview_node_launch_walk_fwd_cb(treeview_node *n,
 				 void *ctx,
 				 bool *skip_children,
 				 bool *end)
 {
 	struct treeview_launch_walk_data *lw = ctx;
-	nserror ret = NSERROR_OK;
+	slateerror ret = SLATEERROR_OK;
 
 	if (n->type == TREE_NODE_FOLDER && n->flags & TV_NFLAGS_SELECTED) {
 		lw->selected_depth++;
@@ -3754,9 +3754,9 @@ treeview_node_launch_walk_fwd_cb(treeview_node *n,
  *        of selected folders are also launched.
  *
  * \param tree Treeview object to launch selected nodes in
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror treeview_launch_selection(treeview *tree)
+static slateerror treeview_launch_selection(treeview *tree)
 {
 	struct treeview_launch_walk_data lw;
 
@@ -3774,7 +3774,7 @@ static nserror treeview_launch_selection(treeview *tree)
 
 
 /* Exported interface, documented in treeview.h */
-nserror
+slateerror
 treeview_get_relation(treeview *tree,
 		      treeview_node **relation,
 		      enum treeview_relationship *rel,
@@ -3817,7 +3817,7 @@ treeview_get_relation(treeview *tree,
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -3842,9 +3842,9 @@ struct treeview_nav_state {
  * \param ctx node context
  * \param skip_children flag to allow children to be skipped
  * \param end flag to allow iteration to be finished early.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 treeview_node_nav_cb(treeview_node *node,
 		     void *ctx,
 		     bool *skip_children,
@@ -3853,7 +3853,7 @@ treeview_node_nav_cb(treeview_node *node,
 	struct treeview_nav_state *ns = ctx;
 
 	if (node == ns->tree->root)
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 
 	if (node->flags & TV_NFLAGS_SELECTED) {
 		ns->n_selected++;
@@ -3872,7 +3872,7 @@ treeview_node_nav_cb(treeview_node *node,
 	}
 	ns->last = node;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -4443,9 +4443,9 @@ struct treeview_mouse_action {
  * \param ctx node context
  * \param skip_children flag to allow children to be skipped
  * \param end flag to allow iteration to be finished early.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 treeview_node_mouse_action_cb(treeview_node *node,
 			      void *ctx,
 			      bool *skip_children,
@@ -4461,7 +4461,7 @@ treeview_node_mouse_action_cb(treeview_node *node,
 		TV_NODE_ACTION_SELECTION	= (1 << 0)
 	} action = TV_NODE_ACTION_NONE;
 	enum treeview_node_part part = TV_NODE_PART_NONE;
-	nserror err;
+	slateerror err;
 
 	r.x0 = 0;
 	r.x1 = REDRAW_MAX;
@@ -4472,7 +4472,7 @@ treeview_node_mouse_action_cb(treeview_node *node,
 	/* Skip line if we've not reached mouse y */
 	if (ma->y > ma->current_y + height) {
 		ma->current_y += height;
-		return NSERROR_OK; /* Don't want to abort tree walk */
+		return SLATEERROR_OK; /* Don't want to abort tree walk */
 	}
 
 	/* Find where the mouse is */
@@ -4632,7 +4632,7 @@ treeview_node_mouse_action_cb(treeview_node *node,
 		} else {
 			err = treeview_node_expand_internal(ma->tree, node);
 		}
-		if (err != NSERROR_OK) {
+		if (err != SLATEERROR_OK) {
 			return err;
 		}
 
@@ -4716,7 +4716,7 @@ treeview_node_mouse_action_cb(treeview_node *node,
 	}
 
 	*end = true; /* Reached line with click; stop walking tree */
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -4921,19 +4921,19 @@ int treeview_get_height(treeview *tree)
 }
 
 /* Exported interface, documented in treeview.h */
-nserror treeview_set_search_string(
+slateerror treeview_set_search_string(
 		treeview *tree,
 		const char *string)
 {
 	if (!(tree->flags & TREEVIEW_SEARCHABLE)) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if (string == NULL || strlen(string) == 0) {
 		tree->search.active = false;
 		tree->search.search = false;
 		if (!textarea_set_text(tree->search.textarea, "")) {
-			return NSERROR_UNKNOWN;
+			return SLATEERROR_UNKNOWN;
 		}
 		return treeview__search(tree, "", 0);
 	}
@@ -4941,67 +4941,67 @@ nserror treeview_set_search_string(
 	tree->search.active = true;
 	tree->search.search = true;
 	if (!textarea_set_text(tree->search.textarea, string)) {
-		return NSERROR_UNKNOWN;
+		return SLATEERROR_UNKNOWN;
 	}
 
 	treeview__cw_full_redraw(tree);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * Initialise the plot styles from CSS system colour values.
  *
  * \param font_pt_size font size to use
- * \return NSERROR_OK on success else appropriate error code
+ * \return SLATEERROR_OK on success else appropriate error code
  */
-static nserror treeview_init_plot_styles(int font_pt_size)
+static slateerror treeview_init_plot_styles(int font_pt_size)
 {
 	/* Background colour */
 	plot_style_even.bg.stroke_type = PLOT_OP_TYPE_NONE;
 	plot_style_even.bg.stroke_width = 0;
 	plot_style_even.bg.stroke_colour = 0;
 	plot_style_even.bg.fill_type = PLOT_OP_TYPE_SOLID;
-	plot_style_even.bg.fill_colour = nscolours[NSCOLOUR_WIN_EVEN_BG];
+	plot_style_even.bg.fill_colour = slatecolors[SLATECOLOR_WIN_EVEN_BG];
 
 	/* Text colour */
 	plot_style_even.text.family = PLOT_FONT_FAMILY_SANS_SERIF;
 	plot_style_even.text.size = font_pt_size;
 	plot_style_even.text.weight = 400;
 	plot_style_even.text.flags = FONTF_NONE;
-	plot_style_even.text.foreground = nscolours[NSCOLOUR_WIN_EVEN_FG];
-	plot_style_even.text.background = nscolours[NSCOLOUR_WIN_EVEN_BG];
+	plot_style_even.text.foreground = slatecolors[SLATECOLOR_WIN_EVEN_FG];
+	plot_style_even.text.background = slatecolors[SLATECOLOR_WIN_EVEN_BG];
 
 	/* Entry field text colour */
 	plot_style_even.itext = plot_style_even.text;
-	plot_style_even.itext.foreground = nscolours[NSCOLOUR_WIN_EVEN_FG_FADED];
+	plot_style_even.itext.foreground = slatecolors[SLATECOLOR_WIN_EVEN_FG_FADED];
 
 	/* Selected background colour */
 	plot_style_even.sbg = plot_style_even.bg;
-	plot_style_even.sbg.fill_colour = nscolours[NSCOLOUR_SEL_BG];
+	plot_style_even.sbg.fill_colour = slatecolors[SLATECOLOR_SEL_BG];
 
 	/* Selected text colour */
 	plot_style_even.stext = plot_style_even.text;
-	plot_style_even.stext.foreground = nscolours[NSCOLOUR_SEL_FG];
-	plot_style_even.stext.background = nscolours[NSCOLOUR_SEL_BG];
+	plot_style_even.stext.foreground = slatecolors[SLATECOLOR_SEL_FG];
+	plot_style_even.stext.background = slatecolors[SLATECOLOR_SEL_BG];
 
 	/* Selected entry field text colour */
 	plot_style_even.sitext = plot_style_even.stext;
-	plot_style_even.sitext.foreground = nscolours[NSCOLOUR_SEL_FG_SUBTLE];
+	plot_style_even.sitext.foreground = slatecolors[SLATECOLOR_SEL_FG_SUBTLE];
 
 	/* Odd numbered node styles */
 	plot_style_odd.bg = plot_style_even.bg;
-	plot_style_odd.bg.fill_colour = nscolours[NSCOLOUR_WIN_ODD_BG];
+	plot_style_odd.bg.fill_colour = slatecolors[SLATECOLOR_WIN_ODD_BG];
 	plot_style_odd.text = plot_style_even.text;
 	plot_style_odd.text.background = plot_style_odd.bg.fill_colour;
 	plot_style_odd.itext = plot_style_odd.text;
-	plot_style_odd.itext.foreground = nscolours[NSCOLOUR_WIN_EVEN_FG_FADED];
+	plot_style_odd.itext.foreground = slatecolors[SLATECOLOR_WIN_EVEN_FG_FADED];
 
 	plot_style_odd.sbg = plot_style_even.sbg;
 	plot_style_odd.stext = plot_style_even.stext;
 	plot_style_odd.sitext = plot_style_even.sitext;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -5012,7 +5012,7 @@ static nserror treeview_init_plot_styles(int font_pt_size)
  * \param event The event that occurred on the content
  * \param pw treeview resource context
  */
-static nserror
+static slateerror
 treeview_res_cb(struct hlcache_handle *handle,
 		const hlcache_event *event,
 		void *pw)
@@ -5030,7 +5030,7 @@ treeview_res_cb(struct hlcache_handle *handle,
 		break;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -5042,16 +5042,16 @@ static void treeview_init_resources(void)
 	int i;
 
 	for (i = 0; i < TREE_RES_LAST; i++) {
-		nsurl *url;
+		slateurl *url;
 		treeview_res[i].ready = false;
 		treeview_res[i].height = 0;
-		if (nsurl_create(treeview_res[i].url, &url) == NSERROR_OK) {
+		if (slateurl_create(treeview_res[i].url, &url) == SLATEERROR_OK) {
 			hlcache_handle_retrieve(url, 0, NULL, NULL,
 						treeview_res_cb,
 						&(treeview_res[i]), NULL,
 						CONTENT_IMAGE,
 						&(treeview_res[i].c));
-			nsurl_unref(url);
+			slateurl_unref(url);
 		}
 	}
 }
@@ -5279,9 +5279,9 @@ treeview_generate_rotate_bitmap(struct bitmap *orig, int size)
 /**
  * Measures width of characters used to represent treeview furniture.
  *
- * \return NSERROR_OK on success else error code
+ * \return SLATEERROR_OK on success else error code
  */
-static nserror treeview_init_furniture(void)
+static slateerror treeview_init_furniture(void)
 {
 	int size = tree_g.line_height / 2;
 
@@ -5328,29 +5328,29 @@ static nserror treeview_init_furniture(void)
 	    plot_style_odd.furn[TREE_FURN_CONTRACT].sel == NULL ||
 	    plot_style_even.furn[TREE_FURN_CONTRACT].bmp == NULL ||
 	    plot_style_even.furn[TREE_FURN_CONTRACT].sel == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	tree_g.furniture_width = size + tree_g.line_height / 4;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* Exported interface, documented in treeview.h */
-nserror treeview_init(void)
+slateerror treeview_init(void)
 {
 	long long font_px_size;
 	long long font_pt_size;
-	nserror res;
+	slateerror res;
 
 	if (tree_g.initialised > 0) {
 		tree_g.initialised++;
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	NSLOG(netsurf, INFO, "Initialising treeview module");
 
-	font_pt_size = nsoption_int(treeview_font_size);
+	font_pt_size = slateoption_int(treeview_font_size);
 	if (font_pt_size <= 0) {
 		font_pt_size = 11 * 10;
 	}
@@ -5360,14 +5360,14 @@ nserror treeview_init(void)
 	tree_g.line_height = (font_px_size * 8 + 3) / 6;
 
 	res = treeview_init_plot_styles(font_pt_size * PLOT_STYLE_SCALE / 10);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
 	treeview_init_resources();
 
 	res = treeview_init_furniture();
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -5381,23 +5381,23 @@ nserror treeview_init(void)
 
 	NSLOG(netsurf, INFO, "Initialised treeview module");
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* Exported interface, documented in treeview.h */
-nserror treeview_fini(void)
+slateerror treeview_fini(void)
 {
 	int i;
 
 	if (tree_g.initialised > 1) {
 		tree_g.initialised--;
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 
 	} else if (tree_g.initialised == 0) {
 		NSLOG(netsurf, INFO,
 		      "Warning: tried to finalise uninitialised treeview module");
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	NSLOG(netsurf, INFO, "Finalising treeview module");
@@ -5419,5 +5419,5 @@ nserror treeview_fini(void)
 
 	NSLOG(netsurf, INFO, "Finalised treeview module");
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }

@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 Adam Blokus <adamblokus@gmail.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,8 +20,8 @@
 	PDF Plotting
 */
 
-#ifndef NETSURF_PDF_PLOTTERS_H
-#define NETSURF_PDF_PLOTTERS_H
+#ifndef SLATE_PDF_PLOTTERS_H
+#define SLATE_PDF_PLOTTERS_H
 
 #include "desktop/print.h"
 
@@ -36,6 +36,6 @@ bool pdf_next_page(void);
 /**Close pdf document and save changes to file*/
 void pdf_end(void);
 
-nserror save_pdf(const char *path);
+slateerror save_pdf(const char *path);
 
-#endif /*NETSURF_PDF_PLOTTERS_H*/
+#endif /*SLATE_PDF_PLOTTERS_H*/

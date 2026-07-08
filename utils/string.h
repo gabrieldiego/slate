@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * \brief Interface to utility string handling.
  */
 
-#ifndef _NETSURF_UTILS_STRING_H_
-#define _NETSURF_UTILS_STRING_H_
+#ifndef _SLATE_UTILS_STRING_H_
+#define _SLATE_UTILS_STRING_H_
 
 #include <stdlib.h>
 #include <stdarg.h>
@@ -84,10 +84,10 @@ char *human_friendly_bytesize(unsigned long long int bytesize);
  * @param[in] sep The character to separate the elements with.
  * @param[in] nelm The number of elements up to a maximum of 16.
  * @param[in] ap The elements of the path as string pointers.
- * @return NSERROR_OK and the complete path is written to str or error
+ * @return SLATEERROR_OK and the complete path is written to str or error
  *         code on failure.
  */
-nserror vsnstrjoin(char **str, size_t *size, char sep, size_t nelm, va_list ap);
+slateerror vsnstrjoin(char **str, size_t *size, char sep, size_t nelm, va_list ap);
 
 
 /**
@@ -107,9 +107,9 @@ nserror vsnstrjoin(char **str, size_t *size, char sep, size_t nelm, va_list ap);
  * @param[in] sep The character to separate the elements with.
  * @param[in] nelm The number of elements up to a maximum of 16.
  * @param[in] ... The elements of the path as string pointers.
- * @return NSERROR_OK and the complete path is written to str or error
+ * @return SLATEERROR_OK and the complete path is written to str or error
  *         code on failure.
  */
-nserror snstrjoin(char **str, size_t *size, char sep, size_t nelm, ...);
+slateerror snstrjoin(char **str, size_t *size, char sep, size_t nelm, ...);
 
 #endif

@@ -1,6 +1,6 @@
 
 
-                               NETSURF
+                               SLATE
 
                                   -
 
@@ -33,7 +33,7 @@ What is it? A web browser!
  NetSurf is a multi-platform web browser which is written with
  portability and speed in mind.
  This is the native Port for the FreeMiNT OS.
- More info at project website: www.netsurf-browser.org
+ More info at project website: www.slate-browser.org
 
 
 Minimum System Requirements:

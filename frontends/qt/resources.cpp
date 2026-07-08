@@ -1,7 +1,7 @@
 /*
  * Copyright 2021 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -140,7 +140,7 @@ static const char * const *get_languagev(void)
 
 
 /* exported interface documented in qt/resources.h */
-nserror nsqt_init_resource_path(const char *resource_path)
+slateerror slateqt_init_resource_path(const char *resource_path)
 {
 	const char * const *langv;
 	char **pathv; /* resource path string vector */
@@ -153,5 +153,5 @@ nserror nsqt_init_resource_path(const char *resource_path)
 
 	filepath_free_strvec(pathv);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }

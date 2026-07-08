@@ -1,7 +1,7 @@
  /*
  * Copyright 2008 James Shaw <js102@zepler.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,9 +30,9 @@
 #include "utils/utils.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/plotters.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/content.h"
+#include "slate/plotters.h"
+#include "slate/bitmap.h"
+#include "slate/content.h"
 #include "content/llcache.h"
 #include "content/content_protected.h"
 #include "content/content_factory.h"
@@ -66,28 +66,28 @@ typedef struct nssprite_content {
 
 
 
-static nserror nssprite_create(const content_handler *handler,
+static slateerror nssprite_create(const content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		struct llcache_handle *llcache, const char *fallback_charset,
 		bool quirks, struct content **c)
 {
 	nssprite_content *sprite;
-	nserror error;
+	slateerror error;
 
 	sprite = calloc(1, sizeof(nssprite_content));
 	if (sprite == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__init(&sprite->base, handler, imime_type, params,
 			llcache, fallback_charset, quirks);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(sprite);
 		return error;
 	}
 
 	*c = (struct content *) sprite;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -121,12 +121,12 @@ static bool nssprite_convert(struct content *c)
 
 	nssprite->bitmap = guit->bitmap->create(sprite->width, sprite->height, BITMAP_NONE);
 	if (!nssprite->bitmap) {
-		content_broadcast_error(c, NSERROR_NOMEM, NULL);
+		content_broadcast_error(c, SLATEERROR_NOMEM, NULL);
 		return false;
 	}
 	uint32_t* imagebuf = (uint32_t *)(void *)guit->bitmap->get_buffer(nssprite->bitmap);
 	if (!imagebuf) {
-		content_broadcast_error(c, NSERROR_NOMEM, NULL);
+		content_broadcast_error(c, SLATEERROR_NOMEM, NULL);
 		return false;
 	}
 	unsigned char *spritebuf = (unsigned char *)sprite->image;
@@ -138,7 +138,7 @@ static bool nssprite_convert(struct content *c)
 
 	/* set title text */
 	title = messages_get_buff("SpriteTitle",
-			nsurl_access_leaf(llcache_handle_get_url(c->llcache)),
+			slateurl_access_leaf(llcache_handle_get_url(c->llcache)),
 			c->width, c->height);
 	if (title != NULL) {
 		content__set_title(c, title);
@@ -160,7 +160,7 @@ ro_sprite_error:
 	if (ctx != NULL) {
 		rosprite_destroy_mem_context(ctx);
 	}
-	content_broadcast_error(c, NSERROR_SPRITE_ERROR, NULL);
+	content_broadcast_error(c, SLATEERROR_SPRITE_ERROR, NULL);
 
 	return false;
 }
@@ -206,21 +206,21 @@ nssprite_redraw(struct content *c,
 				  data->x, data->y,
 				  data->width, data->height,
 				  data->background_colour,
-				  flags) == NSERROR_OK);
+				  flags) == SLATEERROR_OK);
 }
 
 
-static nserror nssprite_clone(const struct content *old, struct content **newc)
+static slateerror nssprite_clone(const struct content *old, struct content **newc)
 {
 	nssprite_content *sprite;
-	nserror error;
+	slateerror error;
 
 	sprite = calloc(1, sizeof(nssprite_content));
 	if (sprite == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__clone(old, &sprite->base);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&sprite->base);
 		return error;
 	}
@@ -230,13 +230,13 @@ static nserror nssprite_clone(const struct content *old, struct content **newc)
 			old->status == CONTENT_STATUS_DONE) {
 		if (nssprite_convert(&sprite->base) == false) {
 			content_destroy(&sprite->base);
-			return NSERROR_CLONE_FAILED;
+			return SLATEERROR_CLONE_FAILED;
 		}
 	}
 
 	*newc = (struct content *) sprite;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void *nssprite_get_internal(const struct content *c, void *context)

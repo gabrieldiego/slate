@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 Vincent Sanders <vince@simtec.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,9 +30,9 @@
 
 #include "utils/log.h"
 #include "utils/utils.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/plotters.h"
-#include "netsurf/content.h"
+#include "slate/bitmap.h"
+#include "slate/plotters.h"
+#include "slate/content.h"
 
 #include "framebuffer/gui.h"
 #include "framebuffer/fbtk.h"
@@ -206,7 +206,7 @@ static int bitmap_get_height(void *bitmap)
  * \param content content structure to render
  * \return true on success and bitmap updated else false
  */
-static nserror
+static slateerror
 bitmap_render(struct bitmap *bitmap,
 	      struct hlcache_handle *content)
 {
@@ -240,14 +240,14 @@ bitmap_render(struct bitmap *bitmap,
 	/* create temporary surface */
 	bm = nsfb_new(NSFB_SURFACE_RAM);
 	if (bm == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	nsfb_set_geometry(bm, cwidth, cheight, NSFB_FMT_XBGR8888);
 
 	if (nsfb_init(bm) == -1) {
 		nsfb_free(bm);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	current = framebuffer_set_surface(bm);
@@ -266,7 +266,7 @@ bitmap_render(struct bitmap *bitmap,
 
 	nsfb_free(bm);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static struct gui_bitmap_table bitmap_table = {

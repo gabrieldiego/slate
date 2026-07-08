@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 Vincent Sanders <vince@simtec.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_FB_FONT_INTERNAL_H
-#define NETSURF_FB_FONT_INTERNAL_H
+#ifndef SLATE_FB_FONT_INTERNAL_H
+#define SLATE_FB_FONT_INTERNAL_H
 
 #include <stdbool.h>
 
@@ -45,5 +45,5 @@ int fb_get_font_size(const plot_font_style_t *fstyle);
 
 const uint8_t *fb_get_glyph(uint32_t ucs4, enum fb_font_style style, int scale);
 
-#endif /* NETSURF_FB_FONT_INTERNAL_H */
+#endif /* SLATE_FB_FONT_INTERNAL_H */
 

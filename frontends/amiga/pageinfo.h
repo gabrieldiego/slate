@@ -1,7 +1,7 @@
 /*
  * Copyright 2020 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,9 +23,9 @@
  * Open the page info window
  *
  * \param bw the browser window 
- * \return NSERROR_OK or error code if window creation failed.
+ * \return SLATEERROR_OK or error code if window creation failed.
  */
-nserror ami_pageinfo_open(struct browser_window *bw, ULONG left, ULONG top);
+slateerror ami_pageinfo_open(struct browser_window *bw, ULONG left, ULONG top);
 
 #endif
 

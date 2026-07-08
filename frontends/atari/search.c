@@ -1,7 +1,7 @@
 /*
  * Copyright 2013 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,9 +27,9 @@
 
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/browser_window.h"
+#include "slate/browser_window.h"
 #include "desktop/search.h"
-#include "netsurf/search.h"
+#include "slate/search.h"
 
 #include "atari/gui.h"
 #include "atari/rootwin.h"
@@ -37,23 +37,23 @@
 #include "atari/toolbar.h"
 #include "atari/search.h"
 #include "atari/gemtk/gemtk.h"
-#include "atari/res/netsurf.rsh"
+#include "atari/res/slate.rsh"
 
 extern struct gui_window * input_window;
 
 
-static void nsatari_search_set_status(bool found, void *p);
-static void nsatari_search_set_hourglass(bool active, void *p);
-static void nsatari_search_add_recent(const char *string, void *p);
-void nsatari_search_set_forward_state(bool active, void *p);
-void nsatari_search_set_back_state(bool active, void *p);
+static void slateatari_search_set_status(bool found, void *p);
+static void slateatari_search_set_hourglass(bool active, void *p);
+static void slateatari_search_add_recent(const char *string, void *p);
+void slateatari_search_set_forward_state(bool active, void *p);
+void slateatari_search_set_back_state(bool active, void *p);
 
 static struct gui_search_table search_table = {
-	nsatari_search_set_status,
-	nsatari_search_set_hourglass,
-	nsatari_search_add_recent,
-	nsatari_search_set_forward_state,
-	nsatari_search_set_back_state,
+	slateatari_search_set_status,
+	slateatari_search_set_hourglass,
+	slateatari_search_add_recent,
+	slateatari_search_set_forward_state,
+	slateatari_search_set_back_state,
 };
 
 struct gui_search_table *atari_search_table = &search_table;
@@ -65,7 +65,7 @@ struct gui_search_table *atari_search_table = &search_table;
  * \param found  search pattern matched in text
  * \param p the pointer sent to search_verify_new() / search_create_context()
  */
-void nsatari_search_set_status(bool found, void *p)
+void slateatari_search_set_status(bool found, void *p)
 {
 	NSLOG(netsurf, INFO, "%p set status: %d\n", p, found);
 	// TODO: maybe update GUI
@@ -77,7 +77,7 @@ void nsatari_search_set_status(bool found, void *p)
  * \param active start/stop indicator
  * \param p the pointer sent to search_verify_new() / search_create_context()
  */
-void nsatari_search_set_hourglass(bool active, void *p)
+void slateatari_search_set_hourglass(bool active, void *p)
 {
 	SEARCH_FORM_SESSION s = (SEARCH_FORM_SESSION)p;
 	NSLOG(netsurf, INFO, "active: %d, session: %p", active, p);
@@ -97,7 +97,7 @@ void nsatari_search_set_hourglass(bool active, void *p)
  * \param string search pattern
  * \param p the pointer sent to search_verify_new() / search_create_context()
  */
-void nsatari_search_add_recent(const char *string, void *p)
+void slateatari_search_add_recent(const char *string, void *p)
 {
 	NSLOG(netsurf, INFO, "%p add recent: %s\n", p, string);
 }
@@ -108,7 +108,7 @@ void nsatari_search_add_recent(const char *string, void *p)
  * \param active activate/inactivate
  * \param p the pointer sent to search_verify_new() / search_create_context()
  */
-void nsatari_search_set_forward_state(bool active, void *p)
+void slateatari_search_set_forward_state(bool active, void *p)
 {
 	struct gui_window *gw;
 	OBJECT *toolbar;
@@ -135,7 +135,7 @@ void nsatari_search_set_forward_state(bool active, void *p)
  * \param active activate/inactivate
  * \param p the pointer sent to search_verify_new() / search_create_context()
  */
-void nsatari_search_set_back_state(bool active, void *p)
+void slateatari_search_set_back_state(bool active, void *p)
 {
 	struct gui_window *gw;
 	OBJECT *toolbar;
@@ -196,7 +196,7 @@ static void set_text(OBJECT *obj, short idx, char * text, int len)
 }
 
 
-void nsatari_search_restore_form( struct s_search_form_session *s, OBJECT *obj)
+void slateatari_search_restore_form( struct s_search_form_session *s, OBJECT *obj)
 {
 	if ((s->state.flags & SEARCH_FLAG_SHOWALL) != 0) {
 		obj[TOOLBAR_CB_SHOWALL].ob_state |= OS_SELECTED;
@@ -221,7 +221,7 @@ void nsatari_search_restore_form( struct s_search_form_session *s, OBJECT *obj)
 }
 
 
-void nsatari_search_session_destroy(struct s_search_form_session *s)
+void slateatari_search_session_destroy(struct s_search_form_session *s)
 {
 	if (s != NULL) {
 		NSLOG(netsurf, INFO, "session %p", s);
@@ -259,7 +259,7 @@ static bool search_session_compare(struct s_search_form_session *s, OBJECT *obj)
 }
 
 
-void nsatari_search_perform(struct s_search_form_session *s, OBJECT *obj,
+void slateatari_search_perform(struct s_search_form_session *s, OBJECT *obj,
 			    search_flags_t f)
 {
 	assert(s!=null);
@@ -283,7 +283,7 @@ void nsatari_search_perform(struct s_search_form_session *s, OBJECT *obj,
 }
 
 
-struct s_search_form_session * nsatari_search_session_create(OBJECT * obj,
+struct s_search_form_session * slateatari_search_session_create(OBJECT * obj,
 							     struct gui_window *gw)
 {
 	struct s_search_form_session *sfs;

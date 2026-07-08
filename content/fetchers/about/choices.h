@@ -21,8 +21,8 @@
  * about scheme choices handler interface
  */
 
-#ifndef NETSURF_CONTENT_FETCHERS_ABOUT_CHOICES_H
-#define NETSURF_CONTENT_FETCHERS_ABOUT_CHOICES_H
+#ifndef SLATE_CONTENT_FETCHERS_ABOUT_CHOICES_H
+#define SLATE_CONTENT_FETCHERS_ABOUT_CHOICES_H
 
 /**
  * Handler to generate about scheme choices page.

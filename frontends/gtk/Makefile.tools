@@ -8,9 +8,9 @@ PKG_CONFIG := pkg-config
 
 # gtk target processing
 ifeq ($(SUBTARGET),3)
-  override NETSURF_GTK_MAJOR := 3
+  override SLATE_GTK_MAJOR := 3
 endif
 
 ifeq ($(SUBTARGET),2)
-  override NETSURF_GTK_MAJOR := 2
+  override SLATE_GTK_MAJOR := 2
 endif

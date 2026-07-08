@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 Adam Blokus <adamblokus@gmail.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,8 +20,8 @@
  * GTK printing (interface).
  */
 
-#ifndef NETSURF_GTK_PRINT_PLOTTERS_H
-#define NETSURF_GTK_PRINT_PLOTTERS_H
+#ifndef SLATE_GTK_PRINT_PLOTTERS_H
+#define SLATE_GTK_PRINT_PLOTTERS_H
 
 
 #include <gtk/gtk.h>

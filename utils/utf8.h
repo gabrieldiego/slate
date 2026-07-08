@@ -1,7 +1,7 @@
 /*
  * Copyright 2005 John M Bell <jmb202@ecs.soton.ac.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,8 +20,8 @@
  * UTF-8 manipulation functions (interface).
  */
 
-#ifndef _NETSURF_UTILS_UTF8_H_
-#define _NETSURF_UTILS_UTF8_H_
+#ifndef _SLATE_UTILS_UTF8_H_
+#define _SLATE_UTILS_UTF8_H_
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -116,9 +116,9 @@ size_t utf8_next(const char *s, size_t l, size_t o);
  * \param encname The encoding name (suitable for passing to iconv)
  * \param len     Length of input string to consider (in bytes), or 0
  * \param result  Pointer to location to store result (allocated on heap)
- * \return standard nserror value
+ * \return standard slateerror value
  */
-nserror utf8_to_enc(const char *string, const char *encname,
+slateerror utf8_to_enc(const char *string, const char *encname,
 		size_t len, char **result);
 
 /**
@@ -129,9 +129,9 @@ nserror utf8_to_enc(const char *string, const char *encname,
  * \param len     Length of input string to consider (in bytes), or 0
  * \param result  Pointer to location to store result (allocated on heap)
  * \param result_len The length of the data placed in result.
- * \return standard nserror value
+ * \return standard slateerror value
  */
-nserror utf8_from_enc(const char *string, const char *encname,
+slateerror utf8_from_enc(const char *string, const char *encname,
 		size_t len, char **result, size_t *result_len);
 
 /**
@@ -142,9 +142,9 @@ nserror utf8_from_enc(const char *string, const char *encname,
  * \param encname  Name of encoding to convert to
  * \param len      Length, in bytes, of the input string, or 0
  * \param result   Pointer to location to receive result
- * \return standard nserror code
+ * \return standard slateerror code
  */
-nserror utf8_to_html(const char *string, const char *encname,
+slateerror utf8_to_html(const char *string, const char *encname,
 		size_t len, char **result);
 
 /**
@@ -160,6 +160,6 @@ bool utf8_save_text(const char *utf8_text, const char *path);
 /**
  * Finalise the UTF-8 library
  */
-nserror utf8_finalise(void);
+slateerror utf8_finalise(void);
 
 #endif

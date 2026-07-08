@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 James Shaw <js102@zepler.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,9 +20,9 @@
  * Content for image/x-riscos-sprite (librosprite interface).
  */
 
-#ifndef _NETSURF_NS_SPRITE_H_
-#define _NETSURF_NS_SPRITE_H_
+#ifndef _SLATE_NS_SPRITE_H_
+#define _SLATE_NS_SPRITE_H_
 
-nserror nssprite_init(void);
+slateerror nssprite_init(void);
 
 #endif

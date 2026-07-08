@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,11 +34,11 @@
  * content handler complete control.
  */
 
-#ifndef NETSURF_IMAGE_IMAGE_CACHE_H_
-#define NETSURF_IMAGE_IMAGE_CACHE_H_
+#ifndef SLATE_IMAGE_IMAGE_CACHE_H_
+#define SLATE_IMAGE_IMAGE_CACHE_H_
 
 #include "utils/errors.h"
-#include "netsurf/content_type.h"
+#include "slate/content_type.h"
 
 struct content;
 struct content_redraw_data;
@@ -64,8 +64,8 @@ struct image_cache_parameters {
  *
  * @param image_cache_parameters The control parameters for the image cache
  */
-nserror image_cache_init(const struct image_cache_parameters *image_cache_parameters);
-nserror image_cache_fini(void);
+slateerror image_cache_init(const struct image_cache_parameters *image_cache_parameters);
+slateerror image_cache_fini(void);
 
 /** adds an image content to be cached. 
  * 
@@ -74,11 +74,11 @@ nserror image_cache_fini(void);
  * @param convert A function pointer to convert the content into a bitmap or NULL.
  * @return A netsurf error code.
  */
-nserror image_cache_add(struct content *content, 
+slateerror image_cache_add(struct content *content, 
 			struct bitmap *bitmap, 
 			image_cache_convert_fn *convert);
 
-nserror image_cache_remove(struct content *content);
+slateerror image_cache_remove(struct content *content);
 
 
 /** Obtain a bitmap from a content converting from source if neccessary. */

@@ -40,21 +40,21 @@
 /**
  * generate the description of the login query
  */
-static nserror
-get_authentication_description(struct nsurl *url,
+static slateerror
+get_authentication_description(struct slateurl *url,
 			       const char *realm,
 			       const char *username,
 			       const char *password,
 			       char **out_str)
 {
-	nserror res;
+	slateerror res;
 	char *url_s;
 	size_t url_l;
 	char *str = NULL;
 	const char *key;
 
-	res = nsurl_get(url, NSURL_HOST, &url_s, &url_l);
-	if (res != NSERROR_OK) {
+	res = slateurl_get(url, SLATEURL_HOST, &url_s, &url_l);
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -71,7 +71,7 @@ get_authentication_description(struct nsurl *url,
 		      key, url_s, realm, str);
 		*out_str = str;
 	} else {
-		res = NSERROR_NOMEM;
+		res = SLATEERROR_NOMEM;
 	}
 
 	free(url_s);
@@ -88,7 +88,7 @@ get_authentication_description(struct nsurl *url,
  */
 bool fetch_about_query_auth_handler(struct fetch_about_context *ctx)
 {
-	nserror res;
+	slateerror res;
 	char *url_s;
 	size_t url_l;
 	const char *realm = "";
@@ -96,15 +96,15 @@ bool fetch_about_query_auth_handler(struct fetch_about_context *ctx)
 	const char *password = "";
 	const char *title;
 	char *description = NULL;
-	struct nsurl *siteurl = NULL;
+	struct slateurl *siteurl = NULL;
 	const struct fetch_multipart_data *curmd; /* mutipart data iterator */
 
 	/* extract parameters from multipart post data */
 	curmd = fetch_about_get_multipart(ctx);
 	while (curmd != NULL) {
 		if (strcmp(curmd->name, "siteurl") == 0) {
-			res = nsurl_create(curmd->value, &siteurl);
-			if (res != NSERROR_OK) {
+			res = slateurl_create(curmd->value, &siteurl);
+			if (res != SLATEERROR_OK) {
 				return fetch_about_srverror(ctx);
 			}
 		} else if (strcmp(curmd->name, "realm") == 0) {
@@ -139,14 +139,14 @@ bool fetch_about_query_auth_handler(struct fetch_about_context *ctx)
 			"<body class=\"ns-even-bg ns-even-fg ns-border\" id =\"authentication\">\n"
 			"<h1 class=\"ns-border\">%s</h1>\n",
 			title, title);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_query_auth_handler_aborted;
 	}
 
 	res = fetch_about_ssenddataf(ctx,
 			 "<form method=\"post\""
 			 " enctype=\"multipart/form-data\">");
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_query_auth_handler_aborted;
 	}
 
@@ -155,16 +155,16 @@ bool fetch_about_query_auth_handler(struct fetch_about_context *ctx)
 					     username,
 					     password,
 					     &description);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		res = fetch_about_ssenddataf(ctx, "<p>%s</p>", description);
 		free(description);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			goto fetch_about_query_auth_handler_aborted;
 		}
 	}
 
 	res = fetch_about_ssenddataf(ctx, "<table>");
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_query_auth_handler_aborted;
 	}
 
@@ -175,7 +175,7 @@ bool fetch_about_query_auth_handler(struct fetch_about_context *ctx)
 			 "name=\"username\" value=\"%s\"></td>"
 			 "</tr>",
 			 messages_get("Username"), username);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_query_auth_handler_aborted;
 	}
 
@@ -186,12 +186,12 @@ bool fetch_about_query_auth_handler(struct fetch_about_context *ctx)
 			 "name=\"password\" value=\"%s\"></td>"
 			 "</tr>",
 			 messages_get("Password"), password);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_query_auth_handler_aborted;
 	}
 
 	res = fetch_about_ssenddataf(ctx, "</table>");
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_query_auth_handler_aborted;
 	}
 
@@ -204,43 +204,43 @@ bool fetch_about_query_auth_handler(struct fetch_about_context *ctx)
 			 "</div>",
 			 messages_get("Login"),
 			 messages_get("Cancel"));
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_query_auth_handler_aborted;
 	}
 
-	res = nsurl_get(siteurl, NSURL_COMPLETE, &url_s, &url_l);
-	if (res != NSERROR_OK) {
+	res = slateurl_get(siteurl, SLATEURL_COMPLETE, &url_s, &url_l);
+	if (res != SLATEERROR_OK) {
 		url_s = strdup("");
 	}
 	res = fetch_about_ssenddataf(ctx,
 			 "<input type=\"hidden\" name=\"siteurl\" value=\"%s\">",
 			 url_s);
 	free(url_s);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_query_auth_handler_aborted;
 	}
 
 	res = fetch_about_ssenddataf(ctx,
 			 "<input type=\"hidden\" name=\"realm\" value=\"%s\">",
 			 realm);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_query_auth_handler_aborted;
 	}
 
 	res = fetch_about_ssenddataf(ctx, "</form></body>\n</html>\n");
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_query_auth_handler_aborted;
 	}
 
 	fetch_about_send_finished(ctx);
 
-	nsurl_unref(siteurl);
+	slateurl_unref(siteurl);
 
 	return true;
 
 fetch_about_query_auth_handler_aborted:
 
-	nsurl_unref(siteurl);
+	slateurl_unref(siteurl);
 
 	return false;
 }

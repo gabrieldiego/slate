@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 Daniel Silverstone <dsilvers@digital-scurf.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,12 +26,12 @@
 #include "utils/ring.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "utils/nsurl.h"
-#include "netsurf/keypress.h"
-#include "netsurf/mouse.h"
-#include "netsurf/window.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/plotters.h"
+#include "utils/slateurl.h"
+#include "slate/keypress.h"
+#include "slate/mouse.h"
+#include "slate/window.h"
+#include "slate/browser_window.h"
+#include "slate/plotters.h"
 
 #include "monkey/output.h"
 #include "monkey/browser.h"
@@ -42,10 +42,10 @@ static uint32_t win_ctr = 0;
 static struct gui_window *gw_ring = NULL;
 
 /* exported function documented in monkey/browser.h */
-nserror monkey_warn_user(const char *warning, const char *detail)
+slateerror monkey_warn_user(const char *warning, const char *detail)
 {
 	moutf(MOUT_WARNING, "%s %s", warning, detail);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 struct gui_window *
@@ -120,9 +120,9 @@ gui_window_set_title(struct gui_window *g, const char *title)
  * \param g The gui window to measure content area of.
  * \param width receives width of window
  * \param height receives height of window
- * \return NSERROR_OK on sucess and width and height updated.
+ * \return SLATEERROR_OK on sucess and width and height updated.
  */
-static nserror
+static slateerror
 gui_window_get_dimensions(struct gui_window *g, int *width, int *height)
 {
 	*width = g->width;
@@ -132,7 +132,7 @@ gui_window_get_dimensions(struct gui_window *g, int *width, int *height)
 	      "GET_DIMENSIONS WIN %u WIDTH %d HEIGHT %d",
 	      g->win_num, *width, *height);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void
@@ -168,9 +168,9 @@ gui_window_stop_throbber(struct gui_window *g)
  *
  * \param gw gui window to scroll
  * \param rect The rectangle to ensure is shown.
- * \return NSERROR_OK on success or apropriate error code.
+ * \return SLATEERROR_OK on success or apropriate error code.
  */
-static nserror
+static slateerror
 gui_window_set_scroll(struct gui_window *gw, const struct rect *rect)
 {
 	gw->scrollx = rect->x0;
@@ -178,7 +178,7 @@ gui_window_set_scroll(struct gui_window *gw, const struct rect *rect)
 
 	moutf(MOUT_WINDOW, "SET_SCROLL WIN %u X %d Y %d",
 		gw->win_num, rect->x0, rect->y0);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -187,9 +187,9 @@ gui_window_set_scroll(struct gui_window *gw, const struct rect *rect)
  *
  * \param gw gui_window
  * \param rect area to redraw or NULL for the entire window area
- * \return NSERROR_OK on success or appropriate error code
+ * \return SLATEERROR_OK on success or appropriate error code
  */
-static nserror
+static slateerror
 monkey_window_invalidate_area(struct gui_window *gw, const struct rect *rect)
 {
 	if (rect != NULL) {
@@ -202,7 +202,7 @@ monkey_window_invalidate_area(struct gui_window *gw, const struct rect *rect)
 		moutf(MOUT_WINDOW, "INVALIDATE_AREA WIN %u ALL", gw->win_num);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void
@@ -210,7 +210,7 @@ gui_window_update_extent(struct gui_window *g)
 {
 	int width, height;
 
-	if (browser_window_get_extents(g->bw, false, &width, &height) != NSERROR_OK)
+	if (browser_window_get_extents(g->bw, false, &width, &height) != SLATEERROR_OK)
 		return;
 
 	moutf(MOUT_WINDOW, "UPDATE_EXTENT WIN %u WIDTH %d HEIGHT %d",
@@ -294,12 +294,12 @@ gui_window_set_pointer(struct gui_window *g, gui_pointer_shape shape)
 	      g->win_num, ptr_name);
 }
 
-static nserror
-gui_window_set_url(struct gui_window *g, nsurl *url)
+static slateerror
+gui_window_set_url(struct gui_window *g, slateurl *url)
 {
 	moutf(MOUT_WINDOW, "SET_URL WIN %u URL %s",
-	      g->win_num, nsurl_access(url));
-	return NSERROR_OK;
+	      g->win_num, slateurl_access(url));
+	return SLATEERROR_OK;
 }
 
 static bool
@@ -343,12 +343,12 @@ gui_window_drag_start(struct gui_window *g, gui_drag_type type,
 	return false;
 }
 
-static nserror
-gui_window_save_link(struct gui_window *g, nsurl *url, const char *title)
+static slateerror
+gui_window_save_link(struct gui_window *g, slateurl *url, const char *title)
 {
 	moutf(MOUT_WINDOW, "SAVE_LINK WIN %u URL %s TITLE %s",
-		g->win_num, nsurl_access(url), title);
-	return NSERROR_OK;
+		g->win_num, slateurl_access(url), title);
+	return SLATEERROR_OK;
 }
 
 static void
@@ -440,7 +440,7 @@ gui_window_report_page_info(struct gui_window *g)
 		break;
 
 	default:
-		assert(0 && "Monkey needs some lovin' here");
+		assert(0 && "Jotter needs some lovin' here");
 		break;
 	}
 	moutf(MOUT_WINDOW, "PAGE_STATUS WIN %u STATUS %s",
@@ -615,26 +615,26 @@ monkey_window_parse_mouse_state(const char *value, browser_mouse_state *state)
 static void
 monkey_window_handle_new(int argc, char **argv)
 {
-	nsurl *url = NULL;
-	nserror error = NSERROR_OK;
+	slateurl *url = NULL;
+	slateerror error = SLATEERROR_OK;
 
 	if (argc > 3)
 		return;
 
 	if (argc == 3) {
-		error = nsurl_create(argv[2], &url);
+		error = slateurl_create(argv[2], &url);
 	}
-	if (error == NSERROR_OK) {
+	if (error == SLATEERROR_OK) {
 		error = browser_window_create(BW_CREATE_HISTORY,
 					      url,
 					      NULL,
 					      NULL,
 					      NULL);
 		if (url != NULL) {
-			nsurl_unref(url);
+			slateurl_unref(url);
 		}
 	}
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		monkey_warn_user(messages_get_errorcode(error), 0);
 	}
 }
@@ -658,9 +658,9 @@ static void
 monkey_window_handle_go(int argc, char **argv)
 {
 	struct gui_window *gw;
-	nsurl *url;
-	nsurl *ref_url = NULL;
-	nserror error;
+	slateurl *url;
+	slateurl *ref_url = NULL;
+	slateerror error;
 
 	if (argc < 4 || argc > 5) {
 		moutf(MOUT_ERROR, "WINDOW GO ARGS BAD");
@@ -674,13 +674,13 @@ monkey_window_handle_go(int argc, char **argv)
 		return;
 	}
 
-	error = nsurl_create(argv[3], &url);
-	if (error == NSERROR_OK) {
+	error = slateurl_create(argv[3], &url);
+	if (error == SLATEERROR_OK) {
 		if (argc == 5) {
-			error = nsurl_create(argv[4], &ref_url);
+			error = slateurl_create(argv[4], &ref_url);
 		}
 
-		if (error == NSERROR_OK) {
+		if (error == SLATEERROR_OK) {
 			error = browser_window_navigate(gw->bw,
 							url,
 							ref_url,
@@ -689,13 +689,13 @@ monkey_window_handle_go(int argc, char **argv)
 							NULL,
 							NULL);
 			if (ref_url != NULL) {
-				nsurl_unref(ref_url);
+				slateurl_unref(ref_url);
 			}
 		}
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
 
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		monkey_warn_user(messages_get_errorcode(error), 0);
 	}
 }
@@ -1069,9 +1069,9 @@ monkey_window_handle_command(int argc, char **argv)
  *
  * \param gw The window receiving the event.
  * \param event The event code.
- * \return NSERROR_OK when processed ok
+ * \return SLATEERROR_OK when processed ok
  */
-static nserror
+static slateerror
 gui_window_event(struct gui_window *gw, enum gui_window_event event)
 {
 	switch (event) {
@@ -1106,7 +1106,7 @@ gui_window_event(struct gui_window *gw, enum gui_window_event event)
 	default:
 		break;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static struct gui_window_table window_table = {

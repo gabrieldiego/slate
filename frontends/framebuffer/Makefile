@@ -8,39 +8,39 @@
 # ----------------------------------------------------------------------------
 
 CFLAGS += -std=c99 -g \
-	  -Dnsframebuffer -Dsmall
+	  -Dslateframebuffer -Dsmall
 
 #resource path
-CFLAGS += '-DNETSURF_FB_RESPATH="$(NETSURF_FB_RESPATH)"'
+CFLAGS += '-DSLATE_FB_RESPATH="$(SLATE_FB_RESPATH)"'
 
 # compile time font locations
-CFLAGS += '-DNETSURF_FB_FONTPATH="$(NETSURF_FB_FONTPATH)"'
-CFLAGS += '-DNETSURF_FB_FONT_SANS_SERIF="$(NETSURF_FB_FONT_SANS_SERIF)"'
-CFLAGS += '-DNETSURF_FB_FONT_SANS_SERIF_BOLD="$(NETSURF_FB_FONT_SANS_SERIF_BOLD)"'
-CFLAGS += '-DNETSURF_FB_FONT_SANS_SERIF_ITALIC="$(NETSURF_FB_FONT_SANS_SERIF_ITALIC)"'
-CFLAGS += '-DNETSURF_FB_FONT_SANS_SERIF_ITALIC_BOLD="$(NETSURF_FB_FONT_SANS_SERIF_ITALIC_BOLD)"'
-CFLAGS += '-DNETSURF_FB_FONT_SERIF="$(NETSURF_FB_FONT_SERIF)"'
-CFLAGS += '-DNETSURF_FB_FONT_SERIF_BOLD="$(NETSURF_FB_FONT_SERIF_BOLD)"'
-CFLAGS += '-DNETSURF_FB_FONT_MONOSPACE="$(NETSURF_FB_FONT_MONOSPACE)"'
-CFLAGS += '-DNETSURF_FB_FONT_MONOSPACE_BOLD="$(NETSURF_FB_FONT_MONOSPACE_BOLD)"'
-CFLAGS += '-DNETSURF_FB_FONT_CURSIVE="$(NETSURF_FB_FONT_CURSIVE)"'
-CFLAGS += '-DNETSURF_FB_FONT_FANTASY="$(NETSURF_FB_FONT_FANTASY)"'
+CFLAGS += '-DSLATE_FB_FONTPATH="$(SLATE_FB_FONTPATH)"'
+CFLAGS += '-DSLATE_FB_FONT_SANS_SERIF="$(SLATE_FB_FONT_SANS_SERIF)"'
+CFLAGS += '-DSLATE_FB_FONT_SANS_SERIF_BOLD="$(SLATE_FB_FONT_SANS_SERIF_BOLD)"'
+CFLAGS += '-DSLATE_FB_FONT_SANS_SERIF_ITALIC="$(SLATE_FB_FONT_SANS_SERIF_ITALIC)"'
+CFLAGS += '-DSLATE_FB_FONT_SANS_SERIF_ITALIC_BOLD="$(SLATE_FB_FONT_SANS_SERIF_ITALIC_BOLD)"'
+CFLAGS += '-DSLATE_FB_FONT_SERIF="$(SLATE_FB_FONT_SERIF)"'
+CFLAGS += '-DSLATE_FB_FONT_SERIF_BOLD="$(SLATE_FB_FONT_SERIF_BOLD)"'
+CFLAGS += '-DSLATE_FB_FONT_MONOSPACE="$(SLATE_FB_FONT_MONOSPACE)"'
+CFLAGS += '-DSLATE_FB_FONT_MONOSPACE_BOLD="$(SLATE_FB_FONT_MONOSPACE_BOLD)"'
+CFLAGS += '-DSLATE_FB_FONT_CURSIVE="$(SLATE_FB_FONT_CURSIVE)"'
+CFLAGS += '-DSLATE_FB_FONT_FANTASY="$(SLATE_FB_FONT_FANTASY)"'
 
 LDFLAGS += -lm
 
 # freetype is optional but older versions do not use pkg-config
-ifeq ($(NETSURF_FB_FONTLIB),freetype)
-  NETSURF_USE_FREETYPE2 := AUTO
-  NETSURF_FEATURE_FREETYPE2_CFLAGS := -DFB_USE_FREETYPE
+ifeq ($(SLATE_FB_FONTLIB),freetype)
+  SLATE_USE_FREETYPE2 := AUTO
+  SLATE_FEATURE_FREETYPE2_CFLAGS := -DFB_USE_FREETYPE
 
   $(eval $(call pkg_config_find_and_add_enabled,FREETYPE2,freetype2,freetype2))
 
   # try and use non pkg-config method
-  ifeq ($(NETSURF_USE_FREETYPE2),NO)
+  ifeq ($(SLATE_USE_FREETYPE2),NO)
     FREETYPE_CONFIG_EXISTS := $(shell freetype-config --cflags >/dev/null && echo yes)
     ifeq ($(FREETYPE_CONFIG_EXISTS),yes)
-      NETSURF_USE_FREETYPE2 := YES
-      CFLAGS += $(shell freetype-config --cflags) $(NETSURF_FEATURE_FREETYPE2_CFLAGS)
+      SLATE_USE_FREETYPE2 := YES
+      CFLAGS += $(shell freetype-config --cflags) $(SLATE_FEATURE_FREETYPE2_CFLAGS)
       LDFLAGS += $(shell freetype-config --libs)
       $(info FT2.CNFG: freetype2 (freetype2)	enabled)
     else
@@ -165,7 +165,7 @@ endef
 
 S_FONTS :=
 
-$(eval $(foreach V,$(filter FB_FONT_$(NETSURF_FB_FONTLIB)_%,$(.VARIABLES)),$(call convert_font,$(FRONTEND_RESOURCES_DIR)/$($(V)),$(OBJROOT)/font-$(patsubst FB_FONT_$(NETSURF_FB_FONTLIB)_%,%,$(V)).c,$(OBJROOT)/font-$(patsubst FB_FONT_$(NETSURF_FB_FONTLIB)_%,%,$(V)).h,$(patsubst FB_FONT_$(NETSURF_FB_FONTLIB)_%,%,$(V)))))
+$(eval $(foreach V,$(filter FB_FONT_$(SLATE_FB_FONTLIB)_%,$(.VARIABLES)),$(call convert_font,$(FRONTEND_RESOURCES_DIR)/$($(V)),$(OBJROOT)/font-$(patsubst FB_FONT_$(SLATE_FB_FONTLIB)_%,%,$(V)).c,$(OBJROOT)/font-$(patsubst FB_FONT_$(SLATE_FB_FONTLIB)_%,%,$(V)).h,$(patsubst FB_FONT_$(SLATE_FB_FONTLIB)_%,%,$(V)))))
 
 # ----------------------------------------------------------------------------
 # Source file setup
@@ -179,7 +179,7 @@ S_FRONTEND := gui.c framebuffer.c schedule.c bitmap.c fetch.c	\
 S_FRAMEBUFFER_FBTK := fbtk.c event.c fill.c bitmap.c user.c window.c 	\
 	text.c scroll.c osk.c 
 
-S_FRONTEND += font_$(NETSURF_FB_FONTLIB).c
+S_FRONTEND += font_$(SLATE_FB_FONTLIB).c
 
 S_FRONTEND += $(addprefix fbtk/,$(S_FRAMEBUFFER_FBTK))
 
@@ -187,23 +187,23 @@ S_FRONTEND += $(addprefix fbtk/,$(S_FRAMEBUFFER_FBTK))
 # Note this is deliberately *not* expanded here as common and image
 #   are not yet available
 SOURCES = $(S_COMMON) $(S_IMAGE) $(S_BROWSER) $(S_FRONTEND) $(S_IMAGES) $(S_FONTS)
-EXETARGET := nsfb
+EXETARGET := slatefb
 
 # ----------------------------------------------------------------------------
 # Install target
 # ----------------------------------------------------------------------------
 
-NETSURF_FRAMEBUFFER_RESOURCE_LIST := adblock.css credits.html	\
+SLATE_FRAMEBUFFER_RESOURCE_LIST := adblock.css credits.html	\
 	default.css internal.css licence.html			\
-	netsurf.png quirks.css welcome.html
+	slate.png quirks.css welcome.html
 
 install-framebuffer:
 	$(VQ)echo " INSTALL: $(DESTDIR)/$(PREFIX)"
-	$(Q)$(INSTALL) -d $(DESTDIR)/$(NETSURF_FRAMEBUFFER_BIN)
-	$(Q)$(INSTALL) -T $(EXETARGET) $(DESTDIR)/$(NETSURF_FRAMEBUFFER_BIN)/netsurf-fb
-	$(Q)$(INSTALL) -d $(DESTDIR)/$(NETSURF_FRAMEBUFFER_RESOURCES)
-	$(Q)for F in $(NETSURF_FRAMEBUFFER_RESOURCE_LIST); do $(INSTALL) -m 644 $(FRONTEND_RESOURCES_DIR)/$$F $(DESTDIR)/$(NETSURF_FRAMEBUFFER_RESOURCES); done
-	$(Q)$(INSTALL) -m 644 -T $(MESSAGES_TARGET)/en/Messages $(DESTDIR)/$(NETSURF_FRAMEBUFFER_RESOURCES)/Messages
+	$(Q)$(INSTALL) -d $(DESTDIR)/$(SLATE_FRAMEBUFFER_BIN)
+	$(Q)$(INSTALL) -T $(EXETARGET) $(DESTDIR)/$(SLATE_FRAMEBUFFER_BIN)/slate-fb
+	$(Q)$(INSTALL) -d $(DESTDIR)/$(SLATE_FRAMEBUFFER_RESOURCES)
+	$(Q)for F in $(SLATE_FRAMEBUFFER_RESOURCE_LIST); do $(INSTALL) -m 644 $(FRONTEND_RESOURCES_DIR)/$$F $(DESTDIR)/$(SLATE_FRAMEBUFFER_RESOURCES); done
+	$(Q)$(INSTALL) -m 644 -T $(MESSAGES_TARGET)/en/Messages $(DESTDIR)/$(SLATE_FRAMEBUFFER_RESOURCES)/Messages
 
 # ----------------------------------------------------------------------------
 # Package target

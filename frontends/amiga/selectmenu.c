@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 - 2011 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,8 +28,8 @@
 #include "utils/errors.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/form.h"
-#include "netsurf/mouse.h"
+#include "slate/form.h"
+#include "slate/mouse.h"
 
 #include "amiga/gui.h"
 #include "amiga/selectmenu.h"

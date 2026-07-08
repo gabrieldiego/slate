@@ -1,7 +1,7 @@
 /*
  * Copyright 2024 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,9 +32,9 @@
 
 extern "C" {
 
-#include "netsurf/types.h"
-#include "netsurf/content_type.h"
-#include "netsurf/browser_window.h"
+#include "slate/types.h"
+#include "slate/content_type.h"
+#include "slate/browser_window.h"
 
 }
 
@@ -64,7 +64,7 @@ public:
         /**
 	 * change action states associated with menu context
 	 */
-	void update(struct nsurl *link, struct hlcache_handle *object, char *selection);
+	void update(struct slateurl *link, struct hlcache_handle *object, char *selection);
 
 	/**
 	 * create instance of widget action for use for a page scale menu entry
@@ -131,7 +131,7 @@ private slots:
 	void debug_render_slot(bool checked);
 	void debug_box_tree_slot(bool checked);
 	void debug_dom_tree_slot(bool checked);
-	void about_netsurf_slot(bool checked);
+	void about_slate_slot(bool checked);
 	void link_new_tab_slot(bool checked);
 	void link_new_window_slot(bool checked);
 	void link_bookmark_slot(bool checked);
@@ -164,7 +164,7 @@ private:
 	/**
 	 * generate a QString from a url
 	 */
-	static QString QStringFromNsurl(struct nsurl *url);
+	static QString QStringFromNsurl(struct slateurl *url);
 
 	/**
 	 * Change the current active navigation state for this browsing context.
@@ -203,7 +203,7 @@ private:
 	/** Current page information state */
 	browser_window_page_info_state m_pistate;
 
-	struct nsurl *m_link;
+	struct slateurl *m_link;
 	struct hlcache_handle *m_object;
 	char *m_selection;
 };

@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -73,11 +73,11 @@ void content_factory_fini(void)
  *
  * \param mime_type  MIME type to handle
  * \param handler    Content handler for MIME type
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  *
  * \note Latest registration for a MIME type wins
  */
-nserror content_factory_register_handler(const char *mime_type,
+slateerror content_factory_register_handler(const char *mime_type,
 		const content_handler *handler)
 {
 	lwc_string *imime_type;
@@ -87,7 +87,7 @@ nserror content_factory_register_handler(const char *mime_type,
 
 	lerror = lwc_intern_string(mime_type, strlen(mime_type), &imime_type);
 	if (lerror != lwc_error_ok)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	for (entry = content_handlers; entry != NULL; entry = entry->next) {
 		if (lwc_string_caseless_isequal(imime_type, entry->mime_type,
@@ -98,7 +98,7 @@ nserror content_factory_register_handler(const char *mime_type,
 	if (entry == NULL) {
 		entry = malloc(sizeof(content_handler_entry));
 		if (entry == NULL)
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 
 		entry->next = content_handlers;
 		content_handlers = entry;
@@ -110,7 +110,7 @@ nserror content_factory_register_handler(const char *mime_type,
 
 	entry->handler = handler;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -174,7 +174,7 @@ struct content *content_factory_create_content(llcache_handle *llcache,
 	const char *content_type_header;
 	const content_handler *handler;
 	http_content_type *ct = NULL;
-	nserror error;
+	slateerror error;
 
 	handler = content_lookup(effective_type);
 	if (handler == NULL)
@@ -198,7 +198,7 @@ struct content *content_factory_create_content(llcache_handle *llcache,
 	if (ct != NULL)
 		http_content_type_destroy(ct);
 
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return NULL;
 
 	return c;

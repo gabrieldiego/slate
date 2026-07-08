@@ -50,7 +50,7 @@ The version 2 layout stores cache entries in a hash map thus only uses
 memory proportional to the number of entries present removing the need
 for large fixed size indexes.
 
-The object identifier is generated from nsurl_hash() and data entries
+The object identifier is generated from slateurl_hash() and data entries
 are stored in either a fixed size disc blocks or in separate files on disc.
 
 The file path if stored on disc must conform to the limitations of all
@@ -81,7 +81,7 @@ block size.
 ## Layout version 1.1
 
 An object has an identifier value generated from the URL (the unique
-key). The value used is obtained using nsurl_hash() which is currently
+key). The value used is obtained using slateurl_hash() which is currently
 a 32 bit FNV so is directly usable.
 
 This identifier is adequate to ensure the collision rate for the

@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 Vincent Sanders <vince@simtec.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_FB_FONT_H
-#define NETSURF_FB_FONT_H
+#ifndef SLATE_FB_FONT_H
+#define SLATE_FB_FONT_H
 
 extern struct gui_layout_table *framebuffer_layout_table;
 extern struct gui_utf8_table *framebuffer_utf8_table;
@@ -41,10 +41,10 @@ bool fb_font_finalise(void);
  * \param[in] x coordinate to search for
  * \param[out] char_offset updated to offset in string of actual_x, [0..length]
  * \param[out] actual_x updated to x coordinate of character closest to x
- * \return NSERROR_OK and char_offset and actual_x updated or
+ * \return SLATEERROR_OK and char_offset and actual_x updated or
  *          appropriate error code on faliure
  */
-nserror fb_font_position(const struct plot_font_style *fstyle, const char *string, size_t length, int x, size_t *char_offset, int *actual_x);
+slateerror fb_font_position(const struct plot_font_style *fstyle, const char *string, size_t length, int x, size_t *char_offset, int *actual_x);
 
 /**
  * Measure the width of a string.
@@ -53,9 +53,9 @@ nserror fb_font_position(const struct plot_font_style *fstyle, const char *strin
  * \param[in] string UTF-8 string to measure
  * \param[in] length length of string, in bytes
  * \param[out] width updated to width of string[0..length)
- * \return NSERROR_OK and width updated or appropriate error code on faliure
+ * \return SLATEERROR_OK and width updated or appropriate error code on faliure
  */
-nserror fb_font_width(const struct plot_font_style *fstyle, const char *string, size_t length, int *width);
+slateerror fb_font_width(const struct plot_font_style *fstyle, const char *string, size_t length, int *width);
 
 
 #ifdef FB_USE_FREETYPE
@@ -64,5 +64,5 @@ nserror fb_font_width(const struct plot_font_style *fstyle, const char *string, 
 #include "framebuffer/font_internal.h"
 #endif
 
-#endif /* NETSURF_FB_FONT_H */
+#endif /* SLATE_FB_FONT_H */
 

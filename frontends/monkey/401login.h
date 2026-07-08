@@ -1,7 +1,7 @@
 /*
  * Copyright 2018 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,18 +16,18 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NS_MONKEY_401LOGIN_H
-#define NS_MONKEY_401LOGIN_H
+#ifndef SLATE_JOTTER_401LOGIN_H
+#define SLATE_JOTTER_401LOGIN_H
 
 #include "utils/errors.h"
 
-struct nsurl;
+struct slateurl;
 
-nserror gui_401login_open(struct nsurl *url,
+slateerror gui_401login_open(struct slateurl *url,
 			  const char *realm,
 			  const char *username,
 			  const char *password,
-			  nserror (*cb)(struct nsurl *url,
+			  slateerror (*cb)(struct slateurl *url,
 					const char *realm,
 					const char *username,
 					const char *password,

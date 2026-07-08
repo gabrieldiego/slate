@@ -1,7 +1,7 @@
 /*
  * Copyright 2005 Adrian Lees <adrianl@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,9 +31,9 @@
 #include "utils/log.h"
 #include "utils/utf8.h"
 #include "utils/utils.h"
-#include "netsurf/clipboard.h"
-#include "netsurf/window.h"
-#include "netsurf/browser_window.h"
+#include "slate/clipboard.h"
+#include "slate/window.h"
+#include "slate/browser_window.h"
 
 #include "riscos/gui.h"
 #include "riscos/window.h"
@@ -202,7 +202,7 @@ static void ro_gui_selection_drag_end(wimp_dragged *drag, void *data)
  * \param  n_styles  Number of text run styles in array
  */
 static void gui_set_clipboard(const char *buffer, size_t length,
-		nsclipboard_styles styles[], int n_styles)
+		slateclipboard_styles styles[], int n_styles)
 {
 	char *new_cb;
 
@@ -411,12 +411,12 @@ bool ro_gui_selection_prepare_paste_dataload(
 		if (size > 0) {
 			char *local_cb = malloc(size);
 			if (local_cb != NULL) {
-				nserror ret;
+				slateerror ret;
 				fread(local_cb, 1, size, fp);
 
 				ret = utf8_from_local_encoding(local_cb, size,
 						&clipboard);
-				if (ret == NSERROR_OK) {
+				if (ret == SLATEERROR_OK) {
 					clip_length = strlen(clipboard);
 				}
 
@@ -515,13 +515,13 @@ void ro_gui_selection_data_request(wimp_full_message_data_request *req)
 bool ro_gui_save_clipboard(const char *path)
 {
 	char *local_cb;
-	nserror ret;
+	slateerror ret;
 	os_error *error;
 
 	assert(clip_length > 0 && clipboard);
 
 	ret = utf8_to_local_encoding(clipboard, clip_length, &local_cb);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		ro_warn_user("SaveError", "Could not convert");
 		return false;
 	}

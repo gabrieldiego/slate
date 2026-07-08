@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,7 +33,7 @@
 #include "utils/corestrings.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/content.h"
+#include "slate/content.h"
 #include "javascript/js.h"
 #include "content/content_protected.h"
 #include "content/content_factory.h"
@@ -56,7 +56,7 @@ static script_handler_t *select_script_handler(content_type ctype)
 
 
 /* exported internal interface documented in html/html_internal.h */
-nserror html_script_exec(html_content *c, bool allow_defer)
+slateerror html_script_exec(html_content *c, bool allow_defer)
 {
 	unsigned int i;
 	struct html_script *s;
@@ -64,7 +64,7 @@ nserror html_script_exec(html_content *c, bool allow_defer)
 	bool have_run_something = false;
 
 	if (c->jsthread == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	for (i = 0, s = c->scripts; i != c->scripts_count; i++, s++) {
@@ -97,7 +97,7 @@ nserror html_script_exec(html_content *c, bool allow_defer)
 				data = content_get_source_data(
 						s->data.handle, &size );
 				script_handler(c->jsthread, data, size,
-					       nsurl_access(hlcache_handle_get_url(s->data.handle)));
+					       slateurl_access(hlcache_handle_get_url(s->data.handle)));
 				have_run_something = true;
 				/* We have to re-acquire this here since the
 				 * c->scripts array may have been reallocated
@@ -115,7 +115,7 @@ nserror html_script_exec(html_content *c, bool allow_defer)
 		return html_proceed_to_done(c);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* create new html script entry */
@@ -155,7 +155,7 @@ html_process_new_script(html_content *c,
 /**
  * Callback for asyncronous scripts
  */
-static nserror
+static slateerror
 convert_script_async_cb(hlcache_handle *script,
 			  const hlcache_event *event,
 			  void *pw)
@@ -181,7 +181,7 @@ convert_script_async_cb(hlcache_handle *script,
 
 	case CONTENT_MSG_DONE:
 		NSLOG(netsurf, INFO, "script %d done '%s'", i,
-		      nsurl_access(hlcache_handle_get_url(script)));
+		      slateurl_access(hlcache_handle_get_url(script)));
 		parent->base.active--;
 		NSLOG(netsurf, INFO, "%d fetches active", parent->base.active);
 
@@ -189,7 +189,7 @@ convert_script_async_cb(hlcache_handle *script,
 
 	case CONTENT_MSG_ERROR:
 		NSLOG(netsurf, INFO, "script %s failed: %s",
-		      nsurl_access(hlcache_handle_get_url(script)),
+		      slateurl_access(hlcache_handle_get_url(script)),
 		      event->data.errordata.errormsg);
 
 		hlcache_handle_release(script);
@@ -217,13 +217,13 @@ convert_script_async_cb(hlcache_handle *script,
 		return html_script_exec(parent, false);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * Callback for defer scripts
  */
-static nserror
+static slateerror
 convert_script_defer_cb(hlcache_handle *script,
 			  const hlcache_event *event,
 			  void *pw)
@@ -244,7 +244,7 @@ convert_script_defer_cb(hlcache_handle *script,
 
 	case CONTENT_MSG_DONE:
 		NSLOG(netsurf, INFO, "script %d done '%s'", i,
-		      nsurl_access(hlcache_handle_get_url(script)));
+		      slateurl_access(hlcache_handle_get_url(script)));
 		parent->base.active--;
 		NSLOG(netsurf, INFO, "%d fetches active", parent->base.active);
 
@@ -252,7 +252,7 @@ convert_script_defer_cb(hlcache_handle *script,
 
 	case CONTENT_MSG_ERROR:
 		NSLOG(netsurf, INFO, "script %s failed: %s",
-		      nsurl_access(hlcache_handle_get_url(script)),
+		      slateurl_access(hlcache_handle_get_url(script)),
 		      event->data.errordata.errormsg);
 
 		hlcache_handle_release(script);
@@ -273,13 +273,13 @@ convert_script_defer_cb(hlcache_handle *script,
 		html_begin_conversion(parent);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * Callback for syncronous scripts
  */
-static nserror
+static slateerror
 convert_script_sync_cb(hlcache_handle *script,
 			  const hlcache_event *event,
 			  void *pw)
@@ -310,7 +310,7 @@ convert_script_sync_cb(hlcache_handle *script,
 	switch (event->type) {
 	case CONTENT_MSG_DONE:
 		NSLOG(netsurf, INFO, "script %d done '%s'", i,
-		      nsurl_access(hlcache_handle_get_url(script)));
+		      slateurl_access(hlcache_handle_get_url(script)));
 		parent->base.active--;
 		NSLOG(netsurf, INFO, "%d fetches active", parent->base.active);
 
@@ -324,7 +324,7 @@ convert_script_sync_cb(hlcache_handle *script,
 			size_t size;
 			data = content_get_source_data(s->data.handle, &size );
 			script_handler(parent->jsthread, data, size,
-				       nsurl_access(hlcache_handle_get_url(s->data.handle)));
+				       slateurl_access(hlcache_handle_get_url(s->data.handle)));
 		}
 
 		/* continue parse */
@@ -339,7 +339,7 @@ convert_script_sync_cb(hlcache_handle *script,
 
 	case CONTENT_MSG_ERROR:
 		NSLOG(netsurf, INFO, "script %s failed: %s",
-		      nsurl_access(hlcache_handle_get_url(script)),
+		      slateurl_access(hlcache_handle_get_url(script)),
 		      event->data.errordata.errormsg);
 
 		hlcache_handle_release(script);
@@ -371,7 +371,7 @@ convert_script_sync_cb(hlcache_handle *script,
 		html_begin_conversion(parent);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -383,8 +383,8 @@ exec_src_script(html_content *c,
 		dom_string *mimetype,
 		dom_string *src)
 {
-	nserror ns_error;
-	nsurl *joined;
+	slateerror ns_error;
+	slateurl *joined;
 	hlcache_child_context child;
 	struct html_script *nscript;
 	bool async;
@@ -395,14 +395,14 @@ exec_src_script(html_content *c,
 	dom_exception exc; /* returned by libdom functions */
 
 	/* src url */
-	ns_error = nsurl_join(c->base_url, dom_string_data(src), &joined);
-	if (ns_error != NSERROR_OK) {
-		content_broadcast_error(&c->base, NSERROR_NOMEM, NULL);
+	ns_error = slateurl_join(c->base_url, dom_string_data(src), &joined);
+	if (ns_error != SLATEERROR_OK) {
+		content_broadcast_error(&c->base, SLATEERROR_NOMEM, NULL);
 		return DOM_HUBBUB_NOMEM;
 	}
 
 	NSLOG(netsurf, INFO, "script %i '%s'", c->scripts_count,
-	      nsurl_access(joined));
+	      slateurl_access(joined));
 
 	/* there are three ways to process the script tag at this point:
 	 *
@@ -458,8 +458,8 @@ exec_src_script(html_content *c,
 
 	nscript = html_process_new_script(c, mimetype, script_type);
 	if (nscript == NULL) {
-		nsurl_unref(joined);
-		content_broadcast_error(&c->base, NSERROR_NOMEM, NULL);
+		slateurl_unref(joined);
+		content_broadcast_error(&c->base, SLATEERROR_NOMEM, NULL);
 		return DOM_HUBBUB_NOMEM;
 	}
 
@@ -478,9 +478,9 @@ exec_src_script(html_content *c,
 					   &nscript->data.handle);
 
 
-	nsurl_unref(joined);
+	slateurl_unref(joined);
 
-	if (ns_error != NSERROR_OK) {
+	if (ns_error != SLATEERROR_OK) {
 		/* @todo Deal with fetch error better. currently assume
 		 * fetch never became active
 		 */
@@ -530,7 +530,7 @@ exec_inline_script(html_content *c, dom_node *node, dom_string *mimetype)
 	if (nscript == NULL) {
 		dom_string_unref(script);
 
-		content_broadcast_error(&c->base, NSERROR_NOMEM, NULL);
+		content_broadcast_error(&c->base, SLATEERROR_NOMEM, NULL);
 		return DOM_HUBBUB_NOMEM;
 
 	}
@@ -633,7 +633,7 @@ bool html_saw_insecure_scripts(html_content *htmlc)
 }
 
 /* exported internal interface documented in html/html_internal.h */
-nserror html_script_free(html_content *html)
+slateerror html_script_free(html_content *html)
 {
 	unsigned int i;
 
@@ -661,5 +661,5 @@ nserror html_script_free(html_content *html)
 	}
 	free(html->scripts);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }

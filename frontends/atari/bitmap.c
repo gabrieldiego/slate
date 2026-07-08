@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,11 +21,11 @@
 #include <assert.h>
 #include <stdlib.h>
 
-#include "netsurf/inttypes.h"
-#include "utils/nsoption.h"
+#include "slate/inttypes.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/mouse.h"
+#include "slate/bitmap.h"
+#include "slate/mouse.h"
 
 #include "atari/bitmap.h"
 #include "atari/plot/plot.h"
@@ -370,9 +370,9 @@ bool atari_bitmap_resize(struct bitmap *img, HermesHandle hermes_h,
 	return(true);
 }
 
-static nserror bitmap_render(struct bitmap *bitmap, struct hlcache_handle *content)
+static slateerror bitmap_render(struct bitmap *bitmap, struct hlcache_handle *content)
 {
-	return NSERROR_NOT_IMPLEMENTED;
+	return SLATEERROR_NOT_IMPLEMENTED;
 }
 
 static struct gui_bitmap_table bitmap_table = {

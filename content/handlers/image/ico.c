@@ -1,7 +1,7 @@
 /*
  * Copyright 2006 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,8 +28,8 @@
 #include "utils/utils.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/content.h"
+#include "slate/bitmap.h"
+#include "slate/content.h"
 #include "content/llcache.h"
 #include "content/content_protected.h"
 #include "content/content_factory.h"
@@ -66,7 +66,7 @@ static void *nsico_bitmap_create(int width, int height, unsigned int bmp_state)
 	return guit->bitmap->create(width, height, bitmap_state);
 }
 
-static nserror nsico_create_ico_data(nsico_content *c)
+static slateerror nsico_create_ico_data(nsico_content *c)
 {
 	bmp_bitmap_callback_vt bmp_bitmap_callbacks = {
 		.bitmap_create = nsico_bitmap_create,
@@ -76,42 +76,42 @@ static nserror nsico_create_ico_data(nsico_content *c)
 
 	c->ico = calloc(1, sizeof(ico_collection));
 	if (c->ico == NULL) {
-		content_broadcast_error(&c->base, NSERROR_NOMEM, NULL);
-		return NSERROR_NOMEM;
+		content_broadcast_error(&c->base, SLATEERROR_NOMEM, NULL);
+		return SLATEERROR_NOMEM;
 	}
 	ico_collection_create(c->ico, &bmp_bitmap_callbacks);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-static nserror nsico_create(const content_handler *handler,
+static slateerror nsico_create(const content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		llcache_handle *llcache, const char *fallback_charset,
 		bool quirks, struct content **c)
 {
 	nsico_content *result;
-	nserror error;
+	slateerror error;
 
 	result = calloc(1, sizeof(nsico_content));
 	if (result == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__init(&result->base, handler, imime_type, params,
 			llcache, fallback_charset, quirks);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(result);
 		return error;
 	}
 
 	error = nsico_create_ico_data(result);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(result);
 		return error;
 	}
 
 	*c = (struct content *) result;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -135,11 +135,11 @@ static bool nsico_convert(struct content *c)
 	case BMP_OK:
 		break;
 	case BMP_INSUFFICIENT_MEMORY:
-		content_broadcast_error(c, NSERROR_NOMEM, NULL);
+		content_broadcast_error(c, SLATEERROR_NOMEM, NULL);
 		return false;
 	case BMP_INSUFFICIENT_DATA:
 	case BMP_DATA_ERROR:
-		content_broadcast_error(c, NSERROR_ICO_ERROR, NULL);
+		content_broadcast_error(c, SLATEERROR_ICO_ERROR, NULL);
 		return false;
 	}
 
@@ -150,7 +150,7 @@ static bool nsico_convert(struct content *c)
 
 	/* set title text */
 	title = messages_get_buff("ICOTitle",
-			nsurl_access_leaf(llcache_handle_get_url(c->llcache)),
+			slateurl_access_leaf(llcache_handle_get_url(c->llcache)),
 			c->width, c->height);
 	if (title != NULL) {
 		content__set_title(c, title);
@@ -222,24 +222,24 @@ static void nsico_destroy(struct content *c)
 	free(ico->ico);
 }
 
-static nserror nsico_clone(const struct content *old, struct content **newc)
+static slateerror nsico_clone(const struct content *old, struct content **newc)
 {
 	nsico_content *ico;
-	nserror error;
+	slateerror error;
 
 	ico = calloc(1, sizeof(nsico_content));
 	if (ico == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__clone(old, &ico->base);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&ico->base);
 		return error;
 	}
 
 	/* Simply replay creation and conversion */
 	error = nsico_create_ico_data(ico);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&ico->base);
 		return error;
 	}
@@ -248,13 +248,13 @@ static nserror nsico_clone(const struct content *old, struct content **newc)
 			old->status == CONTENT_STATUS_DONE) {
 		if (nsico_convert(&ico->base) == false) {
 			content_destroy(&ico->base);
-			return NSERROR_CLONE_FAILED;
+			return SLATEERROR_CLONE_FAILED;
 		}
 	}
 
 	*newc = (struct content *) ico;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void *nsico_get_internal(const struct content *c, void *context)

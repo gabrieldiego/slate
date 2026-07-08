@@ -5,7 +5,7 @@
  * Copyright 2003 John M Bell <jmb202@ecs.soton.ac.uk>
  * Copyright 2004 John Tytgat <joty@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -104,7 +104,7 @@ bool is_dir(const char *path)
 
 
 /* exported interface documented in utils/utils.h */
-nserror vsnstrjoin(char **str, size_t *size, char sep, size_t nelm, va_list ap)
+slateerror vsnstrjoin(char **str, size_t *size, char sep, size_t nelm, va_list ap)
 {
 	const char *elm[16];
 	size_t elm_len[16];
@@ -115,13 +115,13 @@ nserror vsnstrjoin(char **str, size_t *size, char sep, size_t nelm, va_list ap)
 
 	/* check the parameters are all sensible */
 	if ((nelm == 0) || (nelm > 16)) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if ((*str != NULL) && (size == NULL)) {
 		/* if the caller is providing the buffer they must say
 		 * how much space is available.
 		 */
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* calculate how much storage we need for the complete path
@@ -131,7 +131,7 @@ nserror vsnstrjoin(char **str, size_t *size, char sep, size_t nelm, va_list ap)
 		elm[elm_idx] = va_arg(ap, const char *);
 		/* check the argument is not NULL */
 		if (elm[elm_idx] == NULL) {
-			return NSERROR_BAD_PARAMETER;
+			return SLATEERROR_BAD_PARAMETER;
 		}
 		elm_len[elm_idx] = strlen(elm[elm_idx]);
 		fname_len += elm_len[elm_idx];
@@ -142,12 +142,12 @@ nserror vsnstrjoin(char **str, size_t *size, char sep, size_t nelm, va_list ap)
 	fname = *str;
 	if (fname != NULL) {
 		if (fname_len > *size) {
-			return NSERROR_NOSPACE;
+			return SLATEERROR_NOSPACE;
 		}
 	} else {
 		fname = malloc(fname_len);
 		if (fname == NULL) {
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 	}
 
@@ -171,15 +171,15 @@ nserror vsnstrjoin(char **str, size_t *size, char sep, size_t nelm, va_list ap)
 		*size = fname_len;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in utils/utils.h */
-nserror snstrjoin(char **str, size_t *size, char sep, size_t nelm, ...)
+slateerror snstrjoin(char **str, size_t *size, char sep, size_t nelm, ...)
 {
 	va_list ap;
-	nserror ret;
+	slateerror ret;
 
 	va_start(ap, nelm);
 	ret = vsnstrjoin(str, size, sep, nelm, ap);

@@ -1,7 +1,7 @@
 /*
  * Copyright 2017 Vincent Sanders <vince@kyllikki.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,34 +21,34 @@
  * Interface to GTK local history manager
  */
 
-#ifndef NSGTK_LOCAL_HISTORY_H
-#define NSGTK_LOCAL_HISTORY_H
+#ifndef SLATEGTK_LOCAL_HISTORY_H
+#define SLATEGTK_LOCAL_HISTORY_H
 
 struct browser_window;
 
 /**
  * make the local history window visible.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-nserror nsgtk_local_history_present(GtkWindow *parent, struct browser_window *bw);
+slateerror slategtk_local_history_present(GtkWindow *parent, struct browser_window *bw);
 
 /**
  * set the local history window position.
  */
-void nsgtk_local_history_set_position(int x, int y);
+void slategtk_local_history_set_position(int x, int y);
 
 /**
  * hide the local history window from being visible.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-nserror nsgtk_local_history_hide(void);
+slateerror slategtk_local_history_hide(void);
 
 /**
  * Destroys the local history window and performs any other necessary cleanup
  * actions.
  */
-nserror nsgtk_local_history_destroy(void);
+slateerror slategtk_local_history_destroy(void);
 
 #endif

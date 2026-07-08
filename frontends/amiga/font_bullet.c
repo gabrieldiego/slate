@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 - 2019 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,7 +37,7 @@
 #include <diskfont/oterrors.h>
 
 #include "utils/log.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/utf8.h"
 #include "utils/utils.h"
 
@@ -163,7 +163,7 @@ static inline uint32 amiga_nsfont_decode_surrogate(const uint16 *char1)
 	}
 }
 
-static nserror amiga_nsfont_width(const plot_font_style_t *fstyle,
+static slateerror amiga_nsfont_width(const plot_font_style_t *fstyle,
 		const char *string, size_t length,
 		int *width)
 {
@@ -173,7 +173,7 @@ static nserror amiga_nsfont_width(const plot_font_style_t *fstyle,
 		*width = length; /* fudge */
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -188,7 +188,7 @@ static nserror amiga_nsfont_width(const plot_font_style_t *fstyle,
  * \return  true on success, false on error and error reported
  */
 
-static nserror amiga_nsfont_position_in_string(const plot_font_style_t *fstyle,
+static slateerror amiga_nsfont_position_in_string(const plot_font_style_t *fstyle,
 		const char *string, size_t length,
 		int x, size_t *char_offset, int *actual_x)
 {
@@ -201,9 +201,9 @@ static nserror amiga_nsfont_position_in_string(const plot_font_style_t *fstyle,
 	ULONG emwidth = (ULONG)NSA_FONT_EMWIDTH(fstyle->size);
 	int32 tempx;
 
-	if(utf8_to_enc(string,"UTF-16",length,(char **)&utf16) != NSERROR_OK) return NSERROR_INVALID;
+	if(utf8_to_enc(string,"UTF-16",length,(char **)&utf16) != SLATEERROR_OK) return SLATEERROR_INVALID;
 	outf16 = utf16;
-	if(!(ofont = ami_open_outline_font(fstyle, 0))) return NSERROR_INVALID;
+	if(!(ofont = ami_open_outline_font(fstyle, 0))) return SLATEERROR_INVALID;
 
 	*char_offset = 0;
 	*actual_x = 0;
@@ -236,7 +236,7 @@ static nserror amiga_nsfont_position_in_string(const plot_font_style_t *fstyle,
 				*char_offset = utf8_pos;
 			}
 			free(outf16);
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 	}
 
@@ -244,7 +244,7 @@ static nserror amiga_nsfont_position_in_string(const plot_font_style_t *fstyle,
 	*char_offset = length;
 
 	free(outf16);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -271,7 +271,7 @@ static nserror amiga_nsfont_position_in_string(const plot_font_style_t *fstyle,
  * Returning char_offset == length means no split possible
  */
 
-static nserror amiga_nsfont_split(const plot_font_style_t *fstyle,
+static slateerror amiga_nsfont_split(const plot_font_style_t *fstyle,
 		const char *string, size_t length,
 		int x, size_t *char_offset, int *actual_x)
 {
@@ -286,12 +286,12 @@ static nserror amiga_nsfont_split(const plot_font_style_t *fstyle,
 
 	/* Get utf16 conversion of string for glyph measuring routines */
 	if (utf8_to_enc(string, "UTF-16", length, (char **)&utf16_str) !=
-			NSERROR_OK)
-		return NSERROR_INVALID;
+			SLATEERROR_OK)
+		return SLATEERROR_INVALID;
 
 	utf16 = utf16_str;
 	if (!(ofont = ami_open_outline_font(fstyle, 0)))
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 
 	*char_offset = 0;
 	*actual_x = 0;
@@ -327,7 +327,7 @@ static nserror amiga_nsfont_split(const plot_font_style_t *fstyle,
 			/* Reached available width, and a space was found;
 			 * split there. */
 			free(utf16_str);
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 
 		utf16 = utf16next;
@@ -341,7 +341,7 @@ static nserror amiga_nsfont_split(const plot_font_style_t *fstyle,
 
 	*char_offset = length;
 	*actual_x = tx;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -431,25 +431,25 @@ static struct OutlineFont *ami_open_outline_font(const plot_font_style_t *fstyle
 	switch(fontfamily)
 	{
 		case PLOT_FONT_FAMILY_SANS_SERIF:
-			fontname = nsoption_charp(font_sans);
+			fontname = slateoption_charp(font_sans);
 		break;
 		case PLOT_FONT_FAMILY_SERIF:
-			fontname = nsoption_charp(font_serif);
+			fontname = slateoption_charp(font_serif);
 		break;
 		case PLOT_FONT_FAMILY_MONOSPACE:
-			fontname = nsoption_charp(font_mono);
+			fontname = slateoption_charp(font_mono);
 		break;
 		case PLOT_FONT_FAMILY_CURSIVE:
-			fontname = nsoption_charp(font_cursive);
+			fontname = slateoption_charp(font_cursive);
 		break;
 		case PLOT_FONT_FAMILY_FANTASY:
-			fontname = nsoption_charp(font_fantasy);
+			fontname = slateoption_charp(font_fantasy);
 		break;
 		case NSA_UNICODE_FONT:
 		default:
 			if(__builtin_expect((amiga_nsfont_utf16_char_length(codepoint) == 2), 0)) {
 				/* Multi-byte character */
-				fontname = nsoption_charp(font_surrogate);
+				fontname = slateoption_charp(font_surrogate);
 			} else {
 				fontname = (char *)ami_font_scan_lookup(codepoint, glypharray);
 			}
@@ -765,7 +765,7 @@ static ULONG amiga_nsfont_text(struct RastPort *rp, const char *string, ULONG le
 	if(!length) return 0;
 	if(rp == NULL) return 0;
 
-	if(utf8_to_enc(string,"UTF-16",length,(char **)&utf16) != NSERROR_OK) return 0;
+	if(utf8_to_enc(string,"UTF-16",length,(char **)&utf16) != SLATEERROR_OK) return 0;
 	outf16 = utf16;
 	if(!(ofont = ami_open_outline_font(fstyle, 0))) {
 		if(!(ofont = ami_open_outline_font(fstyle, &utf16_a))) return 0;
@@ -829,7 +829,7 @@ static inline ULONG ami_font_unicode_width(const char *string, ULONG length,
 	if(!string || string[0]=='\0') return 0;
 	if(!length) return 0;
 
-	if(utf8_to_enc(string,"UTF-16",length,(char **)&utf16) != NSERROR_OK) return 0;
+	if(utf8_to_enc(string,"UTF-16",length,(char **)&utf16) != SLATEERROR_OK) return 0;
 	outf16 = utf16;
 	if(!(ofont = ami_open_outline_font(fstyle, 0))) {
 		if(!(ofont = ami_open_outline_font(fstyle, &utf16_a))) return 0;
@@ -912,7 +912,7 @@ void ami_font_bullet_fini(void)
 /* Font scanner */
 void ami_font_initscanner(bool force, bool save)
 {
-	ami_font_scan_init(nsoption_charp(font_unicode_file), force, save, glypharray);
+	ami_font_scan_init(slateoption_charp(font_unicode_file), force, save, glypharray);
 }
 
 void ami_font_finiscanner(void)
@@ -922,6 +922,6 @@ void ami_font_finiscanner(void)
 
 void ami_font_savescanner(void)
 {
-	ami_font_scan_save(nsoption_charp(font_unicode_file), glypharray);
+	ami_font_scan_save(slateoption_charp(font_unicode_file), glypharray);
 }
 

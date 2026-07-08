@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,13 +28,13 @@
 #include <math.h>
 
 #include "utils/log.h"
-#include "utils/nsoption.h"
-#include "utils/nsurl.h"
+#include "utils/slateoption.h"
+#include "utils/slateurl.h"
 #include "utils/utf8.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/mouse.h"
-#include "netsurf/plotters.h"
-#include "netsurf/keypress.h"
+#include "slate/browser_window.h"
+#include "slate/mouse.h"
+#include "slate/plotters.h"
+#include "slate/keypress.h"
 #include "desktop/browser_history.h"
 #include "desktop/hotlist.h"
 #include "desktop/textarea.h"
@@ -48,7 +48,7 @@
 #include "atari/misc.h"
 #include "atari/plot/plot.h"
 #include "cflib.h"
-#include "atari/res/netsurf.rsh"
+#include "atari/res/slate.rsh"
 #include "atari/encoding.h"
 
 
@@ -692,17 +692,17 @@ bool toolbar_key_input(struct s_toolbar *tb, short nkc)
 		}
 
 	} else if (ik == NS_KEY_CR || ik == NS_KEY_NL) {
-		nsurl *url;
+		slateurl *url;
 		char tmp_url[PATH_MAX];
 		if ( textarea_get_text( tb->url.textarea, tmp_url, PATH_MAX) > 0 ) {
 			window_set_focus(tb->owner, BROWSER, gw->browser);
-			if (nsurl_create((const char*)&tmp_url, &url) != NSERROR_OK) {
+			if (slateurl_create((const char*)&tmp_url, &url) != SLATEERROR_OK) {
 				atari_warn_user("NoMemory", 0);
 			} else {
 				browser_window_navigate(gw->browser->bw, url, NULL,
 							BW_NAVIGATE_HISTORY,
 							NULL, NULL, NULL);
-				nsurl_unref(url);
+				slateurl_unref(url);
 			}
 
 			ret = true;
@@ -726,11 +726,11 @@ bool toolbar_key_input(struct s_toolbar *tb, short nkc)
 			int clip_length = strlen( clip );
 			if ( clip_length > 0 ) {
 				char *utf8;
-				nserror res;
+				slateerror res;
 				/* Clipboard is in local encoding so
 				 * convert to UTF8 */
 				res = utf8_from_local_encoding( clip, clip_length, &utf8 );
-				if ( res == NSERROR_OK ) {
+				if ( res == SLATEERROR_OK ) {
 					toolbar_set_url(tb, utf8);
 					free(utf8);
 					ret = true;
@@ -821,12 +821,12 @@ void toolbar_mouse_input(struct s_toolbar *tb, short obj, short button)
 	} else if (obj==TOOLBAR_BT_SEARCH_FWD) {
 		gw = tb->owner->active_gui_window;
 		assert(gw->search);
-		nsatari_search_perform(gw->search, tb->form, SEARCH_FLAG_FORWARDS);
+		slateatari_search_perform(gw->search, tb->form, SEARCH_FLAG_FORWARDS);
 
 	} else if (obj==TOOLBAR_BT_SEARCH_BACK) {
 		gw = tb->owner->active_gui_window;
 		assert(gw->search);
-		nsatari_search_perform(gw->search, tb->form, 0);
+		slateatari_search_perform(gw->search, tb->form, 0);
 
 	} else if (obj==TOOLBAR_BT_CLOSE_SEARCH) {
 		tb->form[TOOLBAR_BT_CLOSE_SEARCH].ob_state &= ~OS_SELECTED;
@@ -893,14 +893,14 @@ char *toolbar_get_url(struct s_toolbar *tb)
 	return(c_url);
 }
 
-nsurl * toolbar_get_nsurl(struct s_toolbar * tb)
+slateurl * toolbar_get_slateurl(struct s_toolbar * tb)
 {
-	nsurl * ns_url = NULL;
+	slateurl * ns_url = NULL;
 	char * c_url;
 
 	c_url = toolbar_get_url(tb);
 	if (c_url) {
-		nsurl_create(c_url, &ns_url);
+		slateurl_create(c_url, &ns_url);
 	}
 
 	return(ns_url);
@@ -961,7 +961,7 @@ void toolbar_home_click(struct s_toolbar *tb)
 {
 	struct browser_window * bw;
 	struct gui_window * gw;
-	nsurl *url;
+	slateurl *url;
 	char * use_url = NULL;
 
 	gw = window_get_active_gui_window(tb->owner);
@@ -969,12 +969,12 @@ void toolbar_home_click(struct s_toolbar *tb)
 	bw = gw->browser->bw;
 	assert(bw != NULL);
 
-	use_url = nsoption_charp(homepage_url);
+	use_url = slateoption_charp(homepage_url);
 	if (use_url == NULL || strlen(use_url) == 0){
 		use_url = (char*)"about:welcome";
 	}
 
-	if (nsurl_create(use_url, &url) != NSERROR_OK) {
+	if (slateurl_create(use_url, &url) != SLATEERROR_OK) {
 		atari_warn_user("NoMemory", 0);
 	} else {
 		browser_window_navigate(bw,
@@ -984,7 +984,7 @@ void toolbar_home_click(struct s_toolbar *tb)
 					NULL,
 					NULL,
 					NULL);
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
 }
 
@@ -1007,14 +1007,14 @@ void toolbar_stop_click(struct s_toolbar *tb)
 
 void toolbar_favorite_click(struct s_toolbar *tb)
 {
-	nsurl * ns_url = NULL;
+	slateurl * ns_url = NULL;
 	char * c_url;
 	int c_url_len = 0;
 
 	c_url = toolbar_get_url(tb);
 	c_url_len = strlen(c_url);
 
-	nsurl_create(c_url, &ns_url);
+	slateurl_create(c_url, &ns_url);
 
 	if (hotlist_has_url(ns_url)) {
 		char msg[c_url_len+100];
@@ -1029,7 +1029,7 @@ void toolbar_favorite_click(struct s_toolbar *tb)
 
 	}
 
-	nsurl_unref(ns_url);
+	slateurl_unref(ns_url);
 	free(c_url);
 }
 

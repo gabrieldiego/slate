@@ -1,7 +1,7 @@
 /*
  * Copyright 2022 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -114,7 +114,7 @@ static const char *bitmap__layout_to_str(enum bitmap_layout layout)
 	return str[layout];
 }
 
-/* Exported function, documented in include/netsurf/bitmap.h */
+/* Exported function, documented in include/slate/bitmap.h */
 void bitmap_set_format(const bitmap_fmt_t *bitmap_format)
 {
 	bitmap_fmt = *bitmap_format;

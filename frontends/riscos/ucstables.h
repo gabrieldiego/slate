@@ -1,7 +1,7 @@
 /*
  * Copyright 2005 John M Bell <jmb202@ecs.soton.ac.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@
 
 extern struct gui_utf8_table *riscos_utf8_table;
 
-nserror utf8_to_local_encoding(const char *string, size_t len, char **result);
-nserror utf8_from_local_encoding(const char *string, size_t len, char **result);
+slateerror utf8_to_local_encoding(const char *string, size_t len, char **result);
+slateerror utf8_from_local_encoding(const char *string, size_t len, char **result);
 
 const int *ucstable_from_alphabet(int alphabet);

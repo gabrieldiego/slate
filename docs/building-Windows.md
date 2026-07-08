@@ -48,12 +48,12 @@
 
   Run NetSurf by executing it:
 
-      $ wine NetSurf.exe
+      $ wine Slate.exe
 
   The staticaly linked binary which is generated may be several
   megabytes in size, this can be reduced by stripping the binary.
 
-      $ i586-mingw32msvc-strip NetSurf.exe 
+      $ i586-mingw32msvc-strip Slate.exe 
 
 
   Obtaining NetSurf's build dependencies

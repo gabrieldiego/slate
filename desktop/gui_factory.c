@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,37 +26,37 @@
 #include "utils/errors.h"
 #include "utils/file.h"
 #include "utils/inet.h"
-#include "netsurf/bitmap.h"
+#include "slate/bitmap.h"
 #include "content/hlcache.h"
 #include "content/backing_store.h"
 
 #include "desktop/save_pdf.h"
 #include "desktop/download.h"
 #include "desktop/searchweb.h"
-#include "netsurf/download.h"
-#include "netsurf/fetch.h"
-#include "netsurf/misc.h"
-#include "netsurf/window.h"
-#include "netsurf/core_window.h"
-#include "netsurf/search.h"
-#include "netsurf/clipboard.h"
-#include "netsurf/utf8.h"
-#include "netsurf/layout.h"
-#include "netsurf/netsurf.h"
+#include "slate/download.h"
+#include "slate/fetch.h"
+#include "slate/misc.h"
+#include "slate/window.h"
+#include "slate/core_window.h"
+#include "slate/search.h"
+#include "slate/clipboard.h"
+#include "slate/utf8.h"
+#include "slate/layout.h"
+#include "slate/slate.h"
 
 /**
  * The global interface table.
  */
-struct netsurf_table *guit = NULL;
+struct slate_table *guit = NULL;
 
 
 static void gui_default_window_set_title(struct gui_window *g, const char *title)
 {
 }
 
-static nserror gui_default_window_set_url(struct gui_window *g, struct nsurl *url)
+static slateerror gui_default_window_set_url(struct gui_window *g, struct slateurl *url)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static bool gui_default_window_drag_start(struct gui_window *g,
@@ -66,11 +66,11 @@ static bool gui_default_window_drag_start(struct gui_window *g,
 	return true;
 }
 
-static nserror gui_default_window_save_link(struct gui_window *g,
-					 nsurl *url,
+static slateerror gui_default_window_save_link(struct gui_window *g,
+					 slateurl *url,
 					 const char *title)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void gui_default_window_set_icon(struct gui_window *g,
@@ -128,34 +128,34 @@ gui_default_console_log(struct gui_window *gw,
 
 
 /** verify window table is valid */
-static nserror verify_window_register(struct gui_window_table *gwt)
+static slateerror verify_window_register(struct gui_window_table *gwt)
 {
 	/* check table is present */
 	if (gwt == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* check the mandantory fields are set */
 	if (gwt->create == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (gwt->destroy == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (gwt->invalidate == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (gwt->get_scroll == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (gwt->set_scroll == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (gwt->get_dimensions == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (gwt->event == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 
@@ -201,38 +201,38 @@ static nserror verify_window_register(struct gui_window_table *gwt)
 		gwt->console_log = gui_default_console_log;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-static nserror gui_default_corewindow_invalidate(struct core_window *cw, const struct rect *rect)
+static slateerror gui_default_corewindow_invalidate(struct core_window *cw, const struct rect *rect)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror gui_default_corewindow_set_extent(struct core_window *cw, int width, int height)
+static slateerror gui_default_corewindow_set_extent(struct core_window *cw, int width, int height)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror gui_default_corewindow_set_scroll(struct core_window *cw, int x, int y)
+static slateerror gui_default_corewindow_set_scroll(struct core_window *cw, int x, int y)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror gui_default_corewindow_get_scroll(const struct core_window *cw, int *x, int *y)
+static slateerror gui_default_corewindow_get_scroll(const struct core_window *cw, int *x, int *y)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror gui_default_corewindow_get_dimensions(const struct core_window *cw, int *width, int *height)
+static slateerror gui_default_corewindow_get_dimensions(const struct core_window *cw, int *width, int *height)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror gui_default_corewindow_dragstatus(struct core_window *cw, core_window_drag_status ds)
+static slateerror gui_default_corewindow_dragstatus(struct core_window *cw, core_window_drag_status ds)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static struct core_window_table default_corewindow_table = {
@@ -245,34 +245,34 @@ static struct core_window_table default_corewindow_table = {
 };
 
 /** verify corewindow window table is valid */
-static nserror verify_corewindow_register(struct core_window_table *cwt)
+static slateerror verify_corewindow_register(struct core_window_table *cwt)
 {
 	/* check table is present */
 	if (cwt == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* all enties are mandantory */
 	if (cwt->invalidate == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (cwt->set_extent == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (cwt->set_scroll == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (cwt->get_scroll == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (cwt->get_dimensions == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (cwt->drag_status == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static struct gui_download_window *
@@ -281,10 +281,10 @@ gui_default_download_create(download_context *ctx, struct gui_window *parent)
 	return NULL;
 }
 
-static nserror gui_default_download_data(struct gui_download_window *dw,
+static slateerror gui_default_download_data(struct gui_download_window *dw,
 				  const char *data, unsigned int size)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void gui_default_download_error(struct gui_download_window *dw,
@@ -304,28 +304,28 @@ static struct gui_download_table default_download_table = {
 };
 
 /** verify download window table is valid */
-static nserror verify_download_register(struct gui_download_table *gdt)
+static slateerror verify_download_register(struct gui_download_table *gdt)
 {
 	/* check table is present */
 	if (gdt == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* all enties are mandantory */
 	if (gdt->create == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (gdt->data == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (gdt->error == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (gdt->done == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void gui_default_get_clipboard(char **buffer, size_t *length)
@@ -335,7 +335,7 @@ static void gui_default_get_clipboard(char **buffer, size_t *length)
 }
 
 static void gui_default_set_clipboard(const char *buffer, size_t length,
-		nsclipboard_styles styles[], int n_styles)
+		slateclipboard_styles styles[], int n_styles)
 {
 }
 
@@ -345,11 +345,11 @@ static struct gui_clipboard_table default_clipboard_table = {
 };
 
 /** verify clipboard table is valid */
-static nserror verify_clipboard_register(struct gui_clipboard_table *gct)
+static slateerror verify_clipboard_register(struct gui_clipboard_table *gct)
 {
 	/* check table is present */
 	if (gct == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* optional operations */
@@ -359,7 +359,7 @@ static nserror verify_clipboard_register(struct gui_clipboard_table *gct)
 	if (gct->set == NULL) {
 		gct->set = gui_default_set_clipboard;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -371,9 +371,9 @@ static nserror verify_clipboard_register(struct gui_clipboard_table *gct)
  * @param [in] string The source string.
  * @param [in] len The \a string length or 0 to compute it.
  * @param [out] result A pointer to the converted string.
- * @result NSERROR_OK or NSERROR_NOMEM if memory could not be allocated.
+ * @result SLATEERROR_OK or SLATEERROR_NOMEM if memory could not be allocated.
  */
-static nserror gui_default_utf8(const char *string, size_t len, char **result)
+static slateerror gui_default_utf8(const char *string, size_t len, char **result)
 {
 	assert(string && result);
 
@@ -382,9 +382,9 @@ static nserror gui_default_utf8(const char *string, size_t len, char **result)
 
 	*result = strndup(string, len);
 	if (!(*result))
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static struct gui_utf8_table default_utf8_table = {
@@ -393,21 +393,21 @@ static struct gui_utf8_table default_utf8_table = {
 };
 
 /** verify clipboard table is valid */
-static nserror verify_utf8_register(struct gui_utf8_table *gut)
+static slateerror verify_utf8_register(struct gui_utf8_table *gut)
 {
 	/* check table is present */
 	if (gut == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* mandantory operations */
 	if (gut->utf8_to_local == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (gut->local_to_utf8 == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void gui_default_status(bool found, void *p)
@@ -439,11 +439,11 @@ static struct gui_search_table default_search_table = {
 };
 
 /** verify search table is valid */
-static nserror verify_search_register(struct gui_search_table *gst)
+static slateerror verify_search_register(struct gui_search_table *gst)
 {
 	/* check table is present */
 	if (gst == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* fill in the optional entries with defaults */
@@ -463,14 +463,14 @@ static nserror verify_search_register(struct gui_search_table *gst)
 		gst->back_state = default_search_table.back_state;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror
+static slateerror
 gui_default_provider_update(const char *provider_name,
 			    struct bitmap *provider_bitmap)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static struct gui_search_web_table default_search_web_table = {
@@ -478,65 +478,65 @@ static struct gui_search_web_table default_search_web_table = {
 };
 
 /** verify search table is valid */
-static nserror verify_search_web_register(struct gui_search_web_table *gswt)
+static slateerror verify_search_web_register(struct gui_search_web_table *gswt)
 {
 	/* check table is present */
 	if (gswt == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* mandantory operations */
 	if (gswt->provider_update == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /** verify low level cache persistant backing store table is valid */
-static nserror verify_llcache_register(struct gui_llcache_table *glt)
+static slateerror verify_llcache_register(struct gui_llcache_table *glt)
 {
 	/* check table is present */
 	if (glt == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* mandantory operations */
 	if (glt->store == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (glt->fetch == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (glt->invalidate == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (glt->release == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (glt->initialise == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (glt->finalise == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nsurl *gui_default_get_resource_url(const char *path)
+static slateurl *gui_default_get_resource_url(const char *path)
 {
 	return NULL;
 }
 
-static nserror gui_default_get_resource_data(const char *path, const uint8_t **data, size_t *data_len)
+static slateerror gui_default_get_resource_data(const char *path, const uint8_t **data, size_t *data_len)
 {
-	return NSERROR_NOT_FOUND;
+	return SLATEERROR_NOT_FOUND;
 }
 
-static nserror gui_default_release_resource_data(const uint8_t *data)
+static slateerror gui_default_release_resource_data(const uint8_t *data)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static char *gui_default_mimetype(const char *path)
@@ -555,16 +555,16 @@ static int gui_default_socket_close(int fd)
 }
 
 /** verify fetch table is valid */
-static nserror verify_fetch_register(struct gui_fetch_table *gft)
+static slateerror verify_fetch_register(struct gui_fetch_table *gft)
 {
 	/* check table is present */
 	if (gft == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* check the mandantory fields are set */
 	if (gft->filetype == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* fill in the optional entries with defaults */
@@ -587,121 +587,121 @@ static nserror verify_fetch_register(struct gui_fetch_table *gft)
 		gft->socket_close = gui_default_socket_close;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /** verify file table is valid */
-static nserror verify_file_register(struct gui_file_table *gft)
+static slateerror verify_file_register(struct gui_file_table *gft)
 {
 	/* check table is present */
 	if (gft == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* check the mandantory fields are set */
 	if (gft->mkpath == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (gft->basename == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
-	if (gft->nsurl_to_path == NULL) {
-		return NSERROR_BAD_PARAMETER;
+	if (gft->slateurl_to_path == NULL) {
+		return SLATEERROR_BAD_PARAMETER;
 	}
-	if (gft->path_to_nsurl == NULL) {
-		return NSERROR_BAD_PARAMETER;
+	if (gft->path_to_slateurl == NULL) {
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (gft->mkdir_all == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * verify bitmap table is valid
  *
  * \param gbt The bitmap table to verify.
- * \return NSERROR_OK if the table is valid else NSERROR_BAD_PARAMETER.
+ * \return SLATEERROR_OK if the table is valid else SLATEERROR_BAD_PARAMETER.
  */
-static nserror verify_bitmap_register(struct gui_bitmap_table *gbt)
+static slateerror verify_bitmap_register(struct gui_bitmap_table *gbt)
 {
 	/* check table is present */
 	if (gbt == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* check the mandantory fields are set */
 	if (gbt->create == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if (gbt->destroy == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if (gbt->set_opaque == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if (gbt->get_opaque == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if (gbt->get_buffer == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if (gbt->get_rowstride == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if (gbt->get_width == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if (gbt->get_height == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if (gbt->modified == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if (gbt->render == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * verify layout table is valid
  *
  * \param glt The layout table to verify.
- * \return NSERROR_OK if the table is valid else NSERROR_BAD_PARAMETER.
+ * \return SLATEERROR_OK if the table is valid else SLATEERROR_BAD_PARAMETER.
  */
-static nserror verify_layout_register(struct gui_layout_table *glt)
+static slateerror verify_layout_register(struct gui_layout_table *glt)
 {
 	/* check table is present */
 	if (glt == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* check the mandantory fields are set */
 	if (glt->width == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if (glt->position == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if (glt->split == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void gui_default_quit(void)
@@ -709,22 +709,22 @@ static void gui_default_quit(void)
 }
 
 
-static nserror gui_default_launch_url(struct nsurl *url)
+static slateerror gui_default_launch_url(struct slateurl *url)
 {
-	return NSERROR_NO_FETCH_HANDLER;
+	return SLATEERROR_NO_FETCH_HANDLER;
 }
 
 
-static nserror gui_default_401login_open(
-	nsurl *url, const char *realm,
+static slateerror gui_default_401login_open(
+	slateurl *url, const char *realm,
 	const char *username, const char *password,
-	nserror (*cb)(nsurl *url, const char * realm,
+	slateerror (*cb)(slateurl *url, const char * realm,
 		      const char *username,
 		      const char *password,
 		      void *pw),
 	void *cbpw)
 {
-	return NSERROR_NOT_IMPLEMENTED;
+	return SLATEERROR_NOT_IMPLEMENTED;
 }
 
 static void
@@ -734,23 +734,23 @@ gui_default_pdf_password(char **owner_pass, char **user_pass, char *path)
 	save_pdf(path);
 }
 
-static nserror
+static slateerror
 gui_default_present_cookies(const char *search_term)
 {
-	return NSERROR_NOT_IMPLEMENTED;
+	return SLATEERROR_NOT_IMPLEMENTED;
 }
 
 /** verify misc table is valid */
-static nserror verify_misc_register(struct gui_misc_table *gmt)
+static slateerror verify_misc_register(struct gui_misc_table *gmt)
 {
 	/* check table is present */
 	if (gmt == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* check the mandantory fields are set */
 	if (gmt->schedule == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* fill in the optional entries with defaults */
@@ -769,54 +769,54 @@ static nserror verify_misc_register(struct gui_misc_table *gmt)
 	if (gmt->present_cookies == NULL) {
 		gmt->present_cookies = gui_default_present_cookies;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in netsurf/netsurf.h */
-nserror netsurf_register(struct netsurf_table *gt)
+slateerror slate_register(struct slate_table *gt)
 {
-	nserror err;
+	slateerror err;
 
 	/* ensure not already initialised */
 	if (guit != NULL) {
-		return NSERROR_INIT_FAILED;
+		return SLATEERROR_INIT_FAILED;
 	}
 
 	/* check table is present */
 	if (gt == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* mandantory tables */
 
 	/* miscellaneous table */
 	err = verify_misc_register(gt->misc);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
 	/* window table */
 	err = verify_window_register(gt->window);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
 	/* fetch table */
 	err = verify_fetch_register(gt->fetch);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
 	/* bitmap table */
 	err = verify_bitmap_register(gt->bitmap);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
 	/* layout table */
 	err = verify_layout_register(gt->layout);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
@@ -828,7 +828,7 @@ nserror netsurf_register(struct netsurf_table *gt)
 		gt->corewindow = &default_corewindow_table;
 	}
 	err = verify_corewindow_register(gt->corewindow);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
@@ -838,7 +838,7 @@ nserror netsurf_register(struct netsurf_table *gt)
 		gt->file = default_file_table;
 	}
 	err = verify_file_register(gt->file);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
@@ -848,7 +848,7 @@ nserror netsurf_register(struct netsurf_table *gt)
 		gt->download = &default_download_table;
 	}
 	err = verify_download_register(gt->download);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
@@ -858,7 +858,7 @@ nserror netsurf_register(struct netsurf_table *gt)
 		gt->clipboard = &default_clipboard_table;
 	}
 	err = verify_clipboard_register(gt->clipboard);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
@@ -868,7 +868,7 @@ nserror netsurf_register(struct netsurf_table *gt)
 		gt->utf8 = &default_utf8_table;
 	}
 	err = verify_utf8_register(gt->utf8);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
@@ -878,7 +878,7 @@ nserror netsurf_register(struct netsurf_table *gt)
 		gt->search = &default_search_table;
 	}
 	err = verify_search_register(gt->search);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
@@ -888,7 +888,7 @@ nserror netsurf_register(struct netsurf_table *gt)
 		gt->search_web = &default_search_web_table;
 	}
 	err = verify_search_web_register(gt->search_web);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
@@ -898,11 +898,11 @@ nserror netsurf_register(struct netsurf_table *gt)
 		gt->llcache = null_llcache_table;
 	}
 	err = verify_llcache_register(gt->llcache);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
 	guit = gt;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }

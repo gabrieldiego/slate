@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,11 +21,11 @@
  * High-level resource cache interface
  */
 
-#ifndef NETSURF_CONTENT_HLCACHE_H_
-#define NETSURF_CONTENT_HLCACHE_H_
+#ifndef SLATE_CONTENT_HLCACHE_H_
+#define SLATE_CONTENT_HLCACHE_H_
 
 #include "utils/errors.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 
 #include "content/content.h"
 #include "content/llcache.h"
@@ -58,9 +58,9 @@ struct hlcache_parameters {
  * \param handle  Handle to object generating event
  * \param event   Event data
  * \param pw      Pointer to client-specific data
- * \return NSERROR_OK on success, appropriate error otherwise.
+ * \return SLATEERROR_OK on success, appropriate error otherwise.
  */
-typedef nserror (*hlcache_handle_callback)(hlcache_handle *handle,
+typedef slateerror (*hlcache_handle_callback)(hlcache_handle *handle,
 		const hlcache_event *event, void *pw);
 
 /** Flags for high-level cache object retrieval */
@@ -79,9 +79,9 @@ enum hlcache_retrieve_flag {
  * Initialise the high-level cache, preparing the llcache also.
  *
  * \param hlcache_parameters Settings to initialise cache with
- * \return NSERROR_OK on success, appropriate error otherwise.
+ * \return SLATEERROR_OK on success, appropriate error otherwise.
  */
-nserror hlcache_initialise(const struct hlcache_parameters *hlcache_parameters);
+slateerror hlcache_initialise(const struct hlcache_parameters *hlcache_parameters);
 
 /**
  * Stop the high-level cache periodic functionality so that the
@@ -106,7 +106,7 @@ void hlcache_finalise(void);
  * \param child           Child retrieval context, or NULL for top-level content
  * \param accepted_types  Bitmap of acceptable content types
  * \param result          Pointer to location to recieve cache handle
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  *
  * Child contents are keyed on the tuple < URL, quirks >.
  * The quirks field is ignored for child contents whose behaviour is not
@@ -116,8 +116,8 @@ void hlcache_finalise(void);
  *
  * \todo Is there any way to sensibly reduce the number of parameters here?
  */
-nserror hlcache_handle_retrieve(nsurl *url, uint32_t flags,
-		nsurl *referer, llcache_post_data *post,
+slateerror hlcache_handle_retrieve(slateurl *url, uint32_t flags,
+		slateurl *referer, llcache_post_data *post,
 		hlcache_handle_callback cb, void *pw,
 		hlcache_child_context *child,
 		content_type accepted_types, hlcache_handle **result);
@@ -126,17 +126,17 @@ nserror hlcache_handle_retrieve(nsurl *url, uint32_t flags,
  * Release a high-level cache handle
  *
  * \param handle  Handle to release
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror hlcache_handle_release(hlcache_handle *handle);
+slateerror hlcache_handle_release(hlcache_handle *handle);
 
 /**
  * Abort a high-level cache fetch
  *
  * \param handle  Handle to abort
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror hlcache_handle_abort(hlcache_handle *handle);
+slateerror hlcache_handle_abort(hlcache_handle *handle);
 
 /**
  * Replace a high-level cache handle's callback
@@ -144,9 +144,9 @@ nserror hlcache_handle_abort(hlcache_handle *handle);
  * \param handle  Handle to replace callback of
  * \param cb      New callback routine
  * \param pw      Private data for callback
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror hlcache_handle_replace_callback(hlcache_handle *handle,
+slateerror hlcache_handle_replace_callback(hlcache_handle *handle,
 		hlcache_handle_callback cb, void *pw);
 
 /**
@@ -171,10 +171,10 @@ struct content *hlcache_handle_get_content(const hlcache_handle *handle);
  *
  * \param handle The handle to clone.
  * \param result The cloned handle.
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  *
  */
-nserror hlcache_handle_clone(hlcache_handle *handle, hlcache_handle **result);
+slateerror hlcache_handle_clone(hlcache_handle *handle, hlcache_handle **result);
 
 
 #endif

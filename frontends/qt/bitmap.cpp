@@ -1,7 +1,7 @@
 /*
  * Copyright 2021 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,9 +31,9 @@ extern "C" {
 #include "utils/utils.h"
 #include "utils/errors.h"
 
-#include "netsurf/content.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/plotters.h"
+#include "slate/content.h"
+#include "slate/bitmap.h"
+#include "slate/plotters.h"
 
 }
 
@@ -49,7 +49,7 @@ extern "C" {
  * \param state The state to create the bitmap in.
  * \return A bitmap structure or NULL on error.
  */
-static void *nsqt_bitmap_create(int width, int height, enum gui_bitmap_flags flags)
+static void *slateqt_bitmap_create(int width, int height, enum gui_bitmap_flags flags)
 {
 	enum QImage::Format qfmt;
 	if (flags & BITMAP_OPAQUE) {
@@ -67,7 +67,7 @@ static void *nsqt_bitmap_create(int width, int height, enum gui_bitmap_flags fla
  *
  * \param bitmap The bitmap to destroy.
  */
-static void nsqt_bitmap_destroy(void *bitmap)
+static void slateqt_bitmap_destroy(void *bitmap)
 {
 	QImage *img = (QImage *)bitmap;
 	delete img;
@@ -80,7 +80,7 @@ static void nsqt_bitmap_destroy(void *bitmap)
  * \param bitmap The bitmap to set opacity on.
  * \param opaque The bitmap opacity to set.
  */
-static void nsqt_bitmap_set_opaque(void *bitmap, bool opaque)
+static void slateqt_bitmap_set_opaque(void *bitmap, bool opaque)
 {
 }
 
@@ -91,7 +91,7 @@ static void nsqt_bitmap_set_opaque(void *bitmap, bool opaque)
  * \param bitmap The bitmap to examine.
  * \return The bitmap opacity.
  */
-static bool nsqt_bitmap_get_opaque(void *bitmap)
+static bool slateqt_bitmap_get_opaque(void *bitmap)
 {
 	return false;
 }
@@ -103,7 +103,7 @@ static bool nsqt_bitmap_get_opaque(void *bitmap)
  * \param bitmap The bitmap to get the buffer from.
  * \return The image buffer or NULL if there is none.
  */
-static unsigned char *nsqt_bitmap_get_buffer(void *bitmap)
+static unsigned char *slateqt_bitmap_get_buffer(void *bitmap)
 {
 	QImage *img = (QImage *)bitmap;
 	return img->bits();
@@ -116,7 +116,7 @@ static unsigned char *nsqt_bitmap_get_buffer(void *bitmap)
  * \param bitmap The bitmap
  * \return The number of bytes for a row of the bitmap.
  */
-static size_t nsqt_bitmap_get_rowstride(void *bitmap)
+static size_t slateqt_bitmap_get_rowstride(void *bitmap)
 {
 	QImage *img = (QImage *)bitmap;
 	return img->bytesPerLine();
@@ -129,7 +129,7 @@ static size_t nsqt_bitmap_get_rowstride(void *bitmap)
  * \param bitmap The bitmap
  * \return The bitmap width in pixels.
  */
-static int nsqt_bitmap_get_width(void *bitmap)
+static int slateqt_bitmap_get_width(void *bitmap)
 {
 	QImage *img = (QImage *)bitmap;
 	return img->width();
@@ -142,7 +142,7 @@ static int nsqt_bitmap_get_width(void *bitmap)
  * \param bitmap The bitmap
  * \return The bitmap height in pixels.
  */
-static int nsqt_bitmap_get_height(void *bitmap)
+static int slateqt_bitmap_get_height(void *bitmap)
 {
 	QImage *img = (QImage *)bitmap;
 	return img->height();
@@ -154,7 +154,7 @@ static int nsqt_bitmap_get_height(void *bitmap)
  *
  * \param bitmap The bitmap set as modified.
  */
-static void nsqt_bitmap_modified(void *bitmap)
+static void slateqt_bitmap_modified(void *bitmap)
 {
 }
 
@@ -173,15 +173,15 @@ static void nsqt_bitmap_modified(void *bitmap)
  * \param bitmap The bitmap to render into.
  * \param content The content to render.
  */
-static nserror
-nsqt_bitmap_render(struct bitmap *bitmap, struct hlcache_handle *content)
+static slateerror
+slateqt_bitmap_render(struct bitmap *bitmap, struct hlcache_handle *content)
 {
 	QImage *dimg = (QImage *)bitmap;
 	QPainter *painter;
 	struct redraw_context ctx = {
 		.interactive = false,
 		.background_images = true,
-		.plot = &nsqt_plotters,
+		.plot = &slateqt_plotters,
 		.priv = NULL,
 	};
 	int dwidth, dheight; /* destination bitmap width and height */
@@ -219,21 +219,21 @@ nsqt_bitmap_render(struct bitmap *bitmap, struct hlcache_handle *content)
 	painter->drawImage(QPoint(0,0), siimg);
 	delete painter;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 static struct gui_bitmap_table bitmap_table = {
-	.create = nsqt_bitmap_create,
-	.destroy = nsqt_bitmap_destroy,
-	.set_opaque = nsqt_bitmap_set_opaque,
-	.get_opaque = nsqt_bitmap_get_opaque,
-	.get_buffer = nsqt_bitmap_get_buffer,
-	.get_rowstride = nsqt_bitmap_get_rowstride,
-	.get_width = nsqt_bitmap_get_width,
-	.get_height = nsqt_bitmap_get_height,
-	.modified = nsqt_bitmap_modified,
-	.render = nsqt_bitmap_render,
+	.create = slateqt_bitmap_create,
+	.destroy = slateqt_bitmap_destroy,
+	.set_opaque = slateqt_bitmap_set_opaque,
+	.get_opaque = slateqt_bitmap_get_opaque,
+	.get_buffer = slateqt_bitmap_get_buffer,
+	.get_rowstride = slateqt_bitmap_get_rowstride,
+	.get_width = slateqt_bitmap_get_width,
+	.get_height = slateqt_bitmap_get_height,
+	.modified = slateqt_bitmap_modified,
+	.render = slateqt_bitmap_render,
 };
 
-struct gui_bitmap_table *nsqt_bitmap_table = &bitmap_table;
+struct gui_bitmap_table *slateqt_bitmap_table = &bitmap_table;

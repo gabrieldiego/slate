@@ -2,7 +2,7 @@
  * Copyright 2006 Richard Wilson <info@tinct.net>
  * Copyright 2008 Sean Fox <dyntryx@gmail.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,9 +28,9 @@
 
 #include "utils/utils.h"
 #include "utils/messages.h"
-#include "netsurf/plotters.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/content.h"
+#include "slate/plotters.h"
+#include "slate/bitmap.h"
+#include "slate/content.h"
 #include "content/llcache.h"
 #include "content/content_protected.h"
 #include "content/content_factory.h"
@@ -69,7 +69,7 @@ static void *nsbmp_bitmap_create(int width, int height, unsigned int bmp_state)
 	return guit->bitmap->create(width, height, bitmap_state);
 }
 
-static nserror nsbmp_create_bmp_data(nsbmp_content *bmp)
+static slateerror nsbmp_create_bmp_data(nsbmp_content *bmp)
 {
 	bmp_bitmap_callback_vt bmp_bitmap_callbacks = {
 		.bitmap_create = nsbmp_bitmap_create,
@@ -79,16 +79,16 @@ static nserror nsbmp_create_bmp_data(nsbmp_content *bmp)
 
 	bmp->bmp = calloc(1, sizeof(struct bmp_image));
 	if (bmp->bmp == NULL) {
-		content_broadcast_error(&bmp->base, NSERROR_NOMEM, NULL);
-		return NSERROR_NOMEM;
+		content_broadcast_error(&bmp->base, SLATEERROR_NOMEM, NULL);
+		return SLATEERROR_NOMEM;
 	}
 
 	bmp_create(bmp->bmp, &bmp_bitmap_callbacks);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror
+static slateerror
 nsbmp_create(const struct content_handler *handler,
 	     lwc_string *imime_type,
 	     const struct http_parameter *params,
@@ -98,28 +98,28 @@ nsbmp_create(const struct content_handler *handler,
 	     struct content **c)
 {
 	nsbmp_content *bmp;
-	nserror error;
+	slateerror error;
 
 	bmp = calloc(1, sizeof(nsbmp_content));
 	if (bmp == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__init(&bmp->base, handler, imime_type, params,
 			llcache, fallback_charset, quirks);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(bmp);
 		return error;
 	}
 
 	error = nsbmp_create_bmp_data(bmp);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(bmp);
 		return error;
 	}
 
 	*c = (struct content *) bmp;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static bool nsbmp_convert(struct content *c)
@@ -140,11 +140,11 @@ static bool nsbmp_convert(struct content *c)
 		case BMP_OK:
 			break;
 		case BMP_INSUFFICIENT_MEMORY:
-			content_broadcast_error(c, NSERROR_NOMEM, NULL);
+			content_broadcast_error(c, SLATEERROR_NOMEM, NULL);
 			return false;
 		case BMP_INSUFFICIENT_DATA:
 		case BMP_DATA_ERROR:
-			content_broadcast_error(c, NSERROR_BMP_ERROR, NULL);
+			content_broadcast_error(c, SLATEERROR_BMP_ERROR, NULL);
 			return false;
 	}
 
@@ -156,7 +156,7 @@ static bool nsbmp_convert(struct content *c)
 
 	/* set title text */
 	title = messages_get_buff("BMPTitle",
-			nsurl_access_leaf(llcache_handle_get_url(c->llcache)),
+			slateurl_access_leaf(llcache_handle_get_url(c->llcache)),
 			c->width, c->height);
 	if (title != NULL) {
 		content__set_title(c, title);
@@ -206,7 +206,7 @@ static bool nsbmp_redraw(struct content *c, struct content_redraw_data *data,
 				  data->x, data->y,
 				  data->width, data->height,
 				  data->background_colour,
-				  flags) == NSERROR_OK);
+				  flags) == SLATEERROR_OK);
 }
 
 
@@ -219,24 +219,24 @@ static void nsbmp_destroy(struct content *c)
 }
 
 
-static nserror nsbmp_clone(const struct content *old, struct content **newc)
+static slateerror nsbmp_clone(const struct content *old, struct content **newc)
 {
 	nsbmp_content *new_bmp;
-	nserror error;
+	slateerror error;
 
 	new_bmp = calloc(1, sizeof(nsbmp_content));
 	if (new_bmp == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__clone(old, &new_bmp->base);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&new_bmp->base);
 		return error;
 	}
 
 	/* We "clone" the old content by replaying creation and conversion */
 	error = nsbmp_create_bmp_data(new_bmp);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&new_bmp->base);
 		return error;
 	}
@@ -245,13 +245,13 @@ static nserror nsbmp_clone(const struct content *old, struct content **newc)
 			old->status == CONTENT_STATUS_DONE) {
 		if (nsbmp_convert(&new_bmp->base) == false) {
 			content_destroy(&new_bmp->base);
-			return NSERROR_CLONE_FAILED;
+			return SLATEERROR_CLONE_FAILED;
 		}
 	}
 
 	*newc = (struct content *) new_bmp;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void *nsbmp_get_internal(const struct content *c, void *context)

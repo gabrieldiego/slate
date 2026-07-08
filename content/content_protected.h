@@ -2,7 +2,7 @@
  * Copyright 2005-2007 James Bursa <bursa@users.sourceforge.net>
  * Copyright 2003 Philip Pemberton <philpem@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,16 +24,16 @@
  * The content functions manipulate struct contents, which correspond to URLs.
  */
 
-#ifndef NETSURF_CONTENT_CONTENT_PROTECTED_H_
-#define NETSURF_CONTENT_CONTENT_PROTECTED_H_
+#ifndef SLATE_CONTENT_CONTENT_PROTECTED_H_
+#define SLATE_CONTENT_CONTENT_PROTECTED_H_
 
 #include <stdio.h>
 #include <libwapcaplet/libwapcaplet.h>
 
-#include "netsurf/content_type.h"
-#include "netsurf/mouse.h" /* mouse state enums */
+#include "slate/content_type.h"
+#include "slate/mouse.h" /* mouse state enums */
 
-struct nsurl;
+struct slateurl;
 struct content_redraw_data;
 union content_msg_data;
 struct http_parameter;
@@ -59,7 +59,7 @@ typedef struct content_handler content_handler;
 struct content_handler {
 	void (*fini)(void);
 
-	nserror (*create)(const struct content_handler *handler,
+	slateerror (*create)(const struct content_handler *handler,
                           lwc_string *imime_type,
                           const struct http_parameter *params,
                           struct llcache_handle *llcache,
@@ -72,28 +72,28 @@ struct content_handler {
 	void (*reformat)(struct content *c, int width, int height);
 	void (*destroy)(struct content *c);
 	void (*stop)(struct content *c);
-	nserror (*mouse_track)(struct content *c, struct browser_window *bw,
+	slateerror (*mouse_track)(struct content *c, struct browser_window *bw,
 			browser_mouse_state mouse, int x, int y);
-	nserror (*mouse_action)(struct content *c, struct browser_window *bw,
+	slateerror (*mouse_action)(struct content *c, struct browser_window *bw,
 			browser_mouse_state mouse, int x, int y);
 	bool (*keypress)(struct content *c, uint32_t key);
 	bool (*redraw)(struct content *c, struct content_redraw_data *data,
 			const struct rect *clip,
 			const struct redraw_context *ctx);
-	nserror (*open)(struct content *c, struct browser_window *bw,
+	slateerror (*open)(struct content *c, struct browser_window *bw,
 			struct content *page, struct object_params *params);
-	nserror (*close)(struct content *c);
+	slateerror (*close)(struct content *c);
 	void (*clear_selection)(struct content *c);
 	char * (*get_selection)(struct content *c);
-	nserror (*get_contextual_content)(struct content *c, int x, int y,
+	slateerror (*get_contextual_content)(struct content *c, int x, int y,
 			struct browser_window_features *data);
 	bool (*scroll_at_point)(struct content *c, int x, int y,
 			int scrx, int scry);
 	bool (*drop_file_at_point)(struct content *c, int x, int y,
 			char *file);
-	nserror (*debug_dump)(struct content *c, FILE *f, enum content_debug op);
-	nserror (*debug)(struct content *c, enum content_debug op);
-	nserror (*clone)(const struct content *old, struct content **newc);
+	slateerror (*debug_dump)(struct content *c, FILE *f, enum content_debug op);
+	slateerror (*debug)(struct content *c, enum content_debug op);
+	slateerror (*clone)(const struct content *old, struct content **newc);
 	bool (*matches_quirks)(const struct content *c, bool quirks);
 	const char *(*get_encoding)(const struct content *c, enum content_encoding_type op);
 	content_type (*type)(void);
@@ -105,12 +105,12 @@ struct content_handler {
 	/**
 	 * content specific free text search find
 	 */
-	nserror (*textsearch_find)(struct content *c, struct textsearch_context *context, const char *pattern, int p_len, bool case_sens);
+	slateerror (*textsearch_find)(struct content *c, struct textsearch_context *context, const char *pattern, int p_len, bool case_sens);
 
 	/**
 	 * get bounds of free text search match
 	 */
-	nserror (*textsearch_bounds)(struct content *c, unsigned start_idx, unsigned end_idx, struct box *start_ptr, struct box *end_ptr, struct rect *bounds_out);
+	slateerror (*textsearch_bounds)(struct content *c, unsigned start_idx, unsigned end_idx, struct box *start_ptr, struct box *end_ptr, struct rect *bounds_out);
 
 	/**
 	 * redraw an area of selected text
@@ -121,23 +121,23 @@ struct content_handler {
 	 * \param c The content being redrawn
 	 * \param start_idx The start index of the text region to be redrawn
 	 * \param end_idx The end index of teh text region to be redrawn
-	 * \return NSERROR_OK on success else error code
+	 * \return SLATEERROR_OK on success else error code
 	 */
-	nserror (*textselection_redraw)(struct content *c, unsigned start_idx, unsigned end_idx);
+	slateerror (*textselection_redraw)(struct content *c, unsigned start_idx, unsigned end_idx);
 
 	/**
 	 * copy selected text into selection string possibly with formatting
 	 */
-	nserror (*textselection_copy)(struct content *c, unsigned start_idx, unsigned end_idx, struct selection_string *selstr);
+	slateerror (*textselection_copy)(struct content *c, unsigned start_idx, unsigned end_idx, struct selection_string *selstr);
 
 	/**
 	 * get maximum index of text section.
 	 *
 	 * \param[in] c The content to measure
 	 * \param[out] end_idx pointer to value to recive result
-	 * \return NSERROR_OK and \a end_idx updated else error code
+	 * \return SLATEERROR_OK and \a end_idx updated else error code
 	 */
-	nserror (*textselection_get_end)(struct content *c, unsigned *end_idx);
+	slateerror (*textselection_get_end)(struct content *c, unsigned *end_idx);
 
         /**
 	 * handler dependant content sensitive internal data interface.
@@ -227,7 +227,7 @@ struct content {
 	/**
 	 * URL for refresh request
 	 */
-	struct nsurl *refresh;
+	struct slateurl *refresh;
 
 	/**
 	 * list of metadata links
@@ -308,9 +308,9 @@ extern const char * const content_status_name[];
  * \param llcache           Source data handle
  * \param fallback_charset  Fallback charset
  * \param quirks            Quirkiness of content
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror content__init(struct content *c, const struct content_handler *handler,
+slateerror content__init(struct content *c, const struct content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		struct llcache_handle *llcache, const char *fallback_charset,
 		bool quirks);
@@ -320,9 +320,9 @@ nserror content__init(struct content *c, const struct content_handler *handler,
  *
  * \param c   Content to clone
  * \param nc  Content to populate
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror content__clone(const struct content *c, struct content *nc);
+slateerror content__clone(const struct content *c, struct content *nc);
 
 /**
  * Put a content in status CONTENT_STATUS_READY and unlock the content.
@@ -360,10 +360,10 @@ void content_broadcast(struct content *c, content_msg msg, const union content_m
  * Send an error message to all users.
  *
  * \param c The content whose users should be informed of an error
- * \param errorcode The nserror code to send
+ * \param errorcode The slateerror code to send
  * \param msg The error message to send alongside
  */
-void content_broadcast_error(struct content *c, nserror errorcode, const char *msg);
+void content_broadcast_error(struct content *c, slateerror errorcode, const char *msg);
 
 /**
  * associate a metadata link with a content.
@@ -485,7 +485,7 @@ void content__invalidate_reuse_data(struct content *c);
  * \param c Content to retrieve refresh URL from
  * \return Pointer to URL or NULL if none
  */
-struct nsurl *content__get_refresh_url(struct content *c);
+struct slateurl *content__get_refresh_url(struct content *c);
 
 /**
  * Retrieve the bitmap contained in an image content
@@ -607,7 +607,7 @@ const struct llcache_handle *content_get_llcache_handle(struct content *c);
  * \param c  Content to retrieve URL from
  * \return Pointer to URL, or NULL if not found.
  */
-struct nsurl *content_get_url(struct content *c);
+struct slateurl *content_get_url(struct content *c);
 
 /**
  * Clone a content object in its current state.
@@ -621,8 +621,8 @@ struct content *content_clone(struct content *c);
  * Abort a content object
  *
  * \param c The content object to abort
- * \return NSERROR_OK on success, otherwise appropriate error
+ * \return SLATEERROR_OK on success, otherwise appropriate error
  */
-nserror content_abort(struct content *c);
+slateerror content_abort(struct content *c);
 
 #endif

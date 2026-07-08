@@ -1,7 +1,7 @@
 /*
  * Copyright 2022 Michael Drake <tlsa@nesturf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,13 +20,13 @@
  * Internal core bitmap interface.
  */
 
-#ifndef _NETSURF_DESKTOP_BITMAP_H_
-#define _NETSURF_DESKTOP_BITMAP_H_
+#ifndef _SLATE_DESKTOP_BITMAP_H_
+#define _SLATE_DESKTOP_BITMAP_H_
 
 #include <nsutils/endian.h>
 
-#include "netsurf/types.h"
-#include "netsurf/bitmap.h"
+#include "slate/types.h"
+#include "slate/bitmap.h"
 
 /** Pixel format: colour component order. */
 struct bitmap_colour_layout {

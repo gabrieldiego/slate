@@ -1,7 +1,7 @@
 /*
  * Copyright 2013 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,9 +32,9 @@
 #include "utils/corestrings.h"
 #include "utils/config.h"
 #include "utils/log.h"
-#include "utils/nsoption.h"
-#include "netsurf/content.h"
-#include "netsurf/misc.h"
+#include "utils/slateoption.h"
+#include "slate/content.h"
+#include "slate/misc.h"
 #include "content/hlcache.h"
 #include "css/utils.h"
 #include "desktop/scrollbar.h"
@@ -129,7 +129,7 @@ html_object_done(struct box *box,
 /**
  * Callback for hlcache_handle_retrieve() for objects with no box.
  */
-static nserror
+static slateerror
 html_object_nobox_callback(hlcache_handle *object,
 			   const hlcache_event *event,
 			   void *pw)
@@ -147,14 +147,14 @@ html_object_nobox_callback(hlcache_handle *object,
 		break;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * Callback for hlcache_handle_retrieve() for objects with a box.
  */
-static nserror
+static slateerror
 html_object_callback(hlcache_handle *object,
 		     const hlcache_event *event,
 		     void *pw)
@@ -487,7 +487,7 @@ html_object_callback(hlcache_handle *object,
 		content__reformat(&c->base, false, c->base.available_width,
 				c->base.available_height);
 		content_set_done(&c->base);
-	} else if (nsoption_bool(incremental_reflow) &&
+	} else if (slateoption_bool(incremental_reflow) &&
 		   event->type == CONTENT_MSG_DONE &&
 		   box != NULL &&
 		   !(box->flags & REPLACE_DIM) &&
@@ -514,7 +514,7 @@ html_object_callback(hlcache_handle *object,
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -525,12 +525,12 @@ html_object_callback(hlcache_handle *object,
  * \param  url             URL of object to fetch (copied)
  * \return  true on success, false on memory exhaustion
  */
-static bool html_replace_object(struct content_html_object *object, nsurl *url)
+static bool html_replace_object(struct content_html_object *object, slateurl *url)
 {
 	html_content *c;
 	hlcache_child_context child;
 	html_content *page;
-	nserror error;
+	slateerror error;
 
 	assert(object != NULL);
 	assert(object->box != NULL);
@@ -561,7 +561,7 @@ static bool html_replace_object(struct content_html_object *object, nsurl *url)
 			object->permitted_types,
 			&object->content);
 
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return false;
 
 	for (page = c; page != NULL; page = page->page) {
@@ -580,7 +580,7 @@ static bool html_replace_object(struct content_html_object *object, nsurl *url)
 static void html_object_refresh(void *p)
 {
 	struct content_html_object *object = p;
-	nsurl *refresh_url;
+	slateurl *refresh_url;
 
 	assert(content_get_type(object->content) == CONTENT_HTML);
 
@@ -600,7 +600,7 @@ static void html_object_refresh(void *p)
 
 
 /* exported interface documented in html/object.h */
-nserror html_object_open_objects(html_content *html, struct browser_window *bw)
+slateerror html_object_open_objects(html_content *html, struct browser_window *bw)
 {
 	struct content_html_object *object, *next;
 
@@ -618,12 +618,12 @@ nserror html_object_open_objects(html_content *html, struct browser_window *bw)
 			     &html->base,
 			     object->box->object_params);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in html/object.h */
-nserror html_object_abort_objects(html_content *htmlc)
+slateerror html_object_abort_objects(html_content *htmlc)
 {
 	struct content_html_object *object;
 
@@ -660,12 +660,12 @@ nserror html_object_abort_objects(html_content *htmlc)
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in html/object.h */
-nserror html_object_close_objects(html_content *html)
+slateerror html_object_close_objects(html_content *html)
 {
 	struct content_html_object *object, *next;
 
@@ -684,12 +684,12 @@ nserror html_object_close_objects(html_content *html)
 
 		content_close(object->content);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in html/object.h */
-nserror html_object_free_objects(html_content *html)
+slateerror html_object_free_objects(html_content *html)
 {
 	while (html->object_list != NULL) {
 		struct content_html_object *victim = html->object_list;
@@ -706,14 +706,14 @@ nserror html_object_free_objects(html_content *html)
 		html->object_list = victim->next;
 		free(victim);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in html/object.h */
 bool
 html_fetch_object(html_content *c,
-		  nsurl *url,
+		  slateurl *url,
 		  struct box *box,
 		  content_type permitted_types,
 		  bool background)
@@ -721,7 +721,7 @@ html_fetch_object(html_content *c,
 	struct content_html_object *object;
 	hlcache_handle_callback object_callback;
 	hlcache_child_context child;
-	nserror error;
+	slateerror error;
 
 	/* If we've already been aborted, don't bother attempting the fetch */
 	if (c->aborted)
@@ -757,9 +757,9 @@ html_fetch_object(html_content *c,
 					&child,
 					object->permitted_types,
 					&object->content);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(object);
-		return error != NSERROR_NOMEM;
+		return error != SLATEERROR_NOMEM;
 	}
 
 	/* add to content object list */

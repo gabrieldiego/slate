@@ -1,7 +1,7 @@
 /*
  * Copyright 2004, 2005 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,7 +38,7 @@
 #include "oslib/wimpextend.h"
 #include "oslib/wimpspriteop.h"
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 
 #include "riscos/cookies.h"
@@ -70,7 +70,7 @@ void ro_gui_theme_initialise(void)
 	struct theme_descriptor *descriptor;
 
 	theme_descriptors = ro_gui_theme_get_available();
-	descriptor = ro_gui_theme_find(nsoption_charp(theme));
+	descriptor = ro_gui_theme_find(slateoption_charp(theme));
 	if (!descriptor)
 		descriptor = ro_gui_theme_find("Aletheia");
 	ro_gui_theme_apply(descriptor);
@@ -134,7 +134,7 @@ struct theme_descriptor *ro_gui_theme_get_available(void)
 	ro_gui_theme_add_descriptor("NetSurf:Resources", "Aletheia");
 
 	/* scan our choices directory */
-	ro_gui_theme_get_available_in_dir(nsoption_charp(theme_path));
+	ro_gui_theme_get_available_in_dir(slateoption_charp(theme_path));
 
 	/* sort alphabetically in a very rubbish way */
 	if ((theme_descriptors) && (theme_descriptors->next)) {

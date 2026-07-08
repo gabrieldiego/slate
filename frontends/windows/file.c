@@ -1,7 +1,7 @@
 /*
  * Copyright 2014, 2015 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,14 +28,14 @@
 #include <windows.h>
 
 #include "utils/errors.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/log.h"
 #include "utils/utils.h"
 #include "utils/corestrings.h"
 #include "utils/url.h"
 #include "utils/file.h"
 #include "utils/string.h"
-#include "netsurf/browser_window.h"
+#include "slate/browser_window.h"
 
 #include "windows/file.h"
 
@@ -51,10 +51,10 @@
  *                     output length on output.
  * @param[in] nelm The number of elements.
  * @param[in] ap The elements of the path as string pointers.
- * @return NSERROR_OK and the complete path is written to str
+ * @return SLATEERROR_OK and the complete path is written to str
  *         or error code on faliure.
  */
-static nserror windows_mkpath(char **str, size_t *size, size_t nelm, va_list ap)
+static slateerror windows_mkpath(char **str, size_t *size, size_t nelm, va_list ap)
 {
 	return vsnstrjoin(str, size, '\\', nelm, ap);
 }
@@ -71,16 +71,16 @@ static nserror windows_mkpath(char **str, size_t *size, size_t nelm, va_list ap)
  * @param[in,out] size The size of the space available if \a
  *                     str not NULL on input and set to the total
  *                     output length on output.
- * @return NSERROR_OK and the complete path is written to str
+ * @return SLATEERROR_OK and the complete path is written to str
  *         or error code on faliure.
  */
-static nserror windows_basename(const char *path, char **str, size_t *size)
+static slateerror windows_basename(const char *path, char **str, size_t *size)
 {
 	const char *leafname;
 	char *fname;
 
 	if (path == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	leafname = strrchr(path, '\\');
@@ -92,53 +92,53 @@ static nserror windows_basename(const char *path, char **str, size_t *size)
 
 	fname = strdup(leafname);
 	if (fname == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	*str = fname;
 	if (size != NULL) {
 		*size = strlen(fname);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
- * Create a path from a nsurl using windows file handling.
+ * Create a path from a slateurl using windows file handling.
  *
  * @param[in] url The url to encode.
  * @param[out] path_out A string containing the result path which should
  *                      be freed by the caller.
- * @return NSERROR_OK and the path is written to \a path or error code
+ * @return SLATEERROR_OK and the path is written to \a path or error code
  *         on faliure.
  */
-static nserror windows_nsurl_to_path(struct nsurl *url, char **path_out)
+static slateerror windows_slateurl_to_path(struct slateurl *url, char **path_out)
 {
 	lwc_string *urlpath;
 	char *path;
 	bool match;
 	lwc_string *scheme;
-	nserror res;
+	slateerror res;
 
 	if ((url == NULL) || (path_out == NULL)) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
-	scheme = nsurl_get_component(url, NSURL_SCHEME);
+	scheme = slateurl_get_component(url, SLATEURL_SCHEME);
 
 	if (lwc_string_caseless_isequal(scheme, corestring_lwc_file,
 					&match) != lwc_error_ok)
 	{
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	lwc_string_unref(scheme);
 	if (match == false) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
-	urlpath = nsurl_get_component(url, NSURL_PATH);
+	urlpath = slateurl_get_component(url, SLATEURL_PATH);
 	if (urlpath == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	res = url_unescape(lwc_string_data(urlpath),
@@ -146,7 +146,7 @@ static nserror windows_nsurl_to_path(struct nsurl *url, char **path_out)
 			   NULL,
 			   &path);
 	lwc_string_unref(urlpath);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -176,37 +176,37 @@ static nserror windows_nsurl_to_path(struct nsurl *url, char **path_out)
 
 	*path_out = path;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
- * Create a nsurl from a path using windows file handling.
+ * Create a slateurl from a path using windows file handling.
  *
- * Perform the necessary operations on a path to generate a nsurl.
+ * Perform the necessary operations on a path to generate a slateurl.
  *
  * @param[in] path The path to convert.
- * @param[out] url_out pointer to recive the nsurl, The returned url
+ * @param[out] url_out pointer to recive the slateurl, The returned url
  *                     should be unreferenced by the caller.
- * @return NSERROR_OK and the url is placed in \a url or error code on
+ * @return SLATEERROR_OK and the url is placed in \a url or error code on
  *         faliure.
  */
-static nserror windows_path_to_nsurl(const char *path, struct nsurl **url_out)
+static slateerror windows_path_to_slateurl(const char *path, struct slateurl **url_out)
 {
-	nserror ret;
+	slateerror ret;
 	int urllen;
 	char *urlstr;
 	char *sidx; /* slash index */
 
 	if ((path == NULL) || (url_out == NULL) || (*path == 0)) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
-	/* build url as a string for nsurl constructor */
+	/* build url as a string for slateurl constructor */
 	urllen = strlen(path) + FILE_SCHEME_PREFIX_LEN + 5;
 	urlstr = malloc(urllen);
 	if (urlstr == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/** @todo check if this should be url escaping the path. */
@@ -223,7 +223,7 @@ static nserror windows_path_to_nsurl(const char *path, struct nsurl **url_out)
 		sidx = strrchr(urlstr, '\\');
 	}
 
-	ret = nsurl_create(urlstr, url_out);
+	ret = slateurl_create(urlstr, url_out);
 	free(urlstr);
 
 	return ret;
@@ -234,9 +234,9 @@ static nserror windows_path_to_nsurl(const char *path, struct nsurl **url_out)
  * Ensure that all directory elements needed to store a filename exist.
  *
  * @param fname The filename to ensure the path to exists.
- * @return NSERROR_OK on success or error code on failure.
+ * @return SLATEERROR_OK on success or error code on failure.
  */
-static nserror windows_mkdir_all(const char *fname)
+static slateerror windows_mkdir_all(const char *fname)
 {
 	char *dname;
 	char *sep;
@@ -248,7 +248,7 @@ static nserror windows_mkdir_all(const char *fname)
 	if (sep == NULL) {
 		/* no directory separator path is just filename so its ok */
 		free(dname);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	*sep = 0; /* null terminate directory path */
@@ -257,9 +257,9 @@ static nserror windows_mkdir_all(const char *fname)
 		free(dname);
 		if (S_ISDIR(sb.st_mode)) {
 			/* path to file exists and is a directory */
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
-		return NSERROR_NOT_DIRECTORY;
+		return SLATEERROR_NOT_DIRECTORY;
 	}
 	*sep = '\\'; /* restore separator */
 
@@ -270,16 +270,16 @@ static nserror windows_mkdir_all(const char *fname)
 	while ((sep = strchr(sep, '\\')) != NULL) {
 		*sep = 0;
 		if (stat(dname, &sb) != 0) {
-			if (nsmkdir(dname, S_IRWXU) != 0) {
+			if (slatemkdir(dname, S_IRWXU) != 0) {
 				/* could not create path element */
 				free(dname);
-				return NSERROR_NOT_FOUND;
+				return SLATEERROR_NOT_FOUND;
 			}
 		} else {
 			if (! S_ISDIR(sb.st_mode)) {
 				/* path element not a directory */
 				free(dname);
-				return NSERROR_NOT_DIRECTORY;
+				return SLATEERROR_NOT_DIRECTORY;
 			}
 		}
 		*sep = '\\'; /* restore separator */
@@ -290,15 +290,15 @@ static nserror windows_mkdir_all(const char *fname)
 	}
 
 	free(dname);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* windows file handling */
 static struct gui_file_table file_table = {
 	.mkpath = windows_mkpath,
 	.basename = windows_basename,
-	.nsurl_to_path = windows_nsurl_to_path,
-	.path_to_nsurl = windows_path_to_nsurl,
+	.slateurl_to_path = windows_slateurl_to_path,
+	.path_to_slateurl = windows_path_to_slateurl,
 	.mkdir_all = windows_mkdir_all,
 };
 

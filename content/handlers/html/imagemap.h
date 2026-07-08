@@ -1,7 +1,7 @@
 /*
  * Copyright 2004 John M Bell <jmb202@ecs.soton.ac.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,20 +21,20 @@
  * Interface to HTML imagemap
  */
 
-#ifndef NETSURF_HTML_IMAGEMAP_H
-#define NETSURF_HTML_IMAGEMAP_H
+#ifndef SLATE_HTML_IMAGEMAP_H
+#define SLATE_HTML_IMAGEMAP_H
 
 #include <dom/dom.h>
 
 struct html_content;
 struct hlcache_handle;
-struct nsurl;
+struct slateurl;
 
 void imagemap_destroy(struct html_content *c);
 void imagemap_dump(struct html_content *c);
-nserror imagemap_extract(struct html_content *c);
+slateerror imagemap_extract(struct html_content *c);
 
-struct nsurl *imagemap_get(struct html_content *c, const char *key,
+struct slateurl *imagemap_get(struct html_content *c, const char *key,
 		unsigned long x, unsigned long y,
 		unsigned long click_x, unsigned long click_y,
 		const char **target);

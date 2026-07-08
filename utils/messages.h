@@ -1,7 +1,7 @@
 /*
  * Copyright 2004 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,13 +31,13 @@
  * file table.  Use the _ctx versions of the functions to do this.
  */
 
-#ifndef NETSURF_UTILS_MESSAGES_H_
-#define NETSURF_UTILS_MESSAGES_H_
+#ifndef SLATE_UTILS_MESSAGES_H_
+#define SLATE_UTILS_MESSAGES_H_
 
 #include <stdint.h>
 
 #include "utils/errors.h"
-#include "netsurf/ssl_certs.h"
+#include "slate/ssl_certs.h"
 
 /**
  * Read keys and values from messages file into the standard Messages hash.
@@ -47,9 +47,9 @@
  * file may be gzip compressed.
  *
  * \param path pathname of messages file.
- * \return NSERROR_OK on success or error code on faliure.
+ * \return SLATEERROR_OK on success or error code on faliure.
  */
-nserror messages_add_from_file(const char *path);
+slateerror messages_add_from_file(const char *path);
 
 /**
  * Read keys and values from inline message data into the standard Messages hash.
@@ -60,19 +60,19 @@ nserror messages_add_from_file(const char *path);
  *
  * \param data The inline message data.
  * \param data_size The length of the message data.
- * \return NSERROR_OK on success or error code on faliure.
+ * \return SLATEERROR_OK on success or error code on faliure.
  */
-nserror messages_add_from_inline(const uint8_t *data, size_t data_size);
+slateerror messages_add_from_inline(const uint8_t *data, size_t data_size);
 
 /**
  * Add a single message.
  *
  * The message is merged with any previously loaded messages.
  *
- * \return NSERROR_OK on success or error code on faliure.
+ * \return SLATEERROR_OK on success or error code on faliure.
 
  */
-nserror messages_add_key_value(const char *key, const char *value);
+slateerror messages_add_key_value(const char *key, const char *value);
 
 /**
  * Fast lookup of a message by key from the standard Messages hash.
@@ -88,7 +88,7 @@ const char *messages_get(const char *key);
  * \param code errorcode of message
  * \return message text
  */
-const char *messages_get_errorcode(nserror code);
+const char *messages_get_errorcode(slateerror code);
 
 /**
  * lookup of a message by SSL error code from the standard Messages hash.

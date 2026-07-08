@@ -12,24 +12,24 @@ steps:
 - action: repeat
   tag: pages
   values:
-  - ${NETSURF_BENCH_ROOT}/stress-deep-dom.html
-  - ${NETSURF_BENCH_ROOT}/stress-wide-table.html
-  - ${NETSURF_BENCH_ROOT}/stress-complex-table.html
-  - ${NETSURF_BENCH_ROOT}/stress-flex.html
-  - ${NETSURF_BENCH_ROOT}/stress-css-cascade.html
-  - ${NETSURF_BENCH_ROOT}/stress-form-controls.html
-  - ${NETSURF_BENCH_ROOT}/stress-inline-flow.html
-  - ${NETSURF_BENCH_ROOT}/stress-object-media.html
-  - ${NETSURF_BENCH_ROOT}/stress-special-elements.html
-  - ${NETSURF_BENCH_ROOT}/stress-deep-dom.html
-  - ${NETSURF_BENCH_ROOT}/stress-wide-table.html
-  - ${NETSURF_BENCH_ROOT}/stress-complex-table.html
-  - ${NETSURF_BENCH_ROOT}/stress-flex.html
-  - ${NETSURF_BENCH_ROOT}/stress-css-cascade.html
-  - ${NETSURF_BENCH_ROOT}/stress-form-controls.html
-  - ${NETSURF_BENCH_ROOT}/stress-inline-flow.html
-  - ${NETSURF_BENCH_ROOT}/stress-object-media.html
-  - ${NETSURF_BENCH_ROOT}/stress-special-elements.html
+  - ${SLATE_BENCH_ROOT}/stress-deep-dom.html
+  - ${SLATE_BENCH_ROOT}/stress-wide-table.html
+  - ${SLATE_BENCH_ROOT}/stress-complex-table.html
+  - ${SLATE_BENCH_ROOT}/stress-flex.html
+  - ${SLATE_BENCH_ROOT}/stress-css-cascade.html
+  - ${SLATE_BENCH_ROOT}/stress-form-controls.html
+  - ${SLATE_BENCH_ROOT}/stress-inline-flow.html
+  - ${SLATE_BENCH_ROOT}/stress-object-media.html
+  - ${SLATE_BENCH_ROOT}/stress-special-elements.html
+  - ${SLATE_BENCH_ROOT}/stress-deep-dom.html
+  - ${SLATE_BENCH_ROOT}/stress-wide-table.html
+  - ${SLATE_BENCH_ROOT}/stress-complex-table.html
+  - ${SLATE_BENCH_ROOT}/stress-flex.html
+  - ${SLATE_BENCH_ROOT}/stress-css-cascade.html
+  - ${SLATE_BENCH_ROOT}/stress-form-controls.html
+  - ${SLATE_BENCH_ROOT}/stress-inline-flow.html
+  - ${SLATE_BENCH_ROOT}/stress-object-media.html
+  - ${SLATE_BENCH_ROOT}/stress-special-elements.html
   steps:
   - action: navigate
     window: win1

@@ -5,7 +5,7 @@
  * Copyright 2008 Michael Drake <tlsa@netsurf-browser.org>
  * Copyright 2020 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,9 +28,9 @@
 
 #include "utils/errors.h"
 #include "utils/talloc.h"
-#include "utils/nsurl.h"
-#include "netsurf/types.h"
-#include "netsurf/mouse.h"
+#include "utils/slateurl.h"
+#include "slate/types.h"
+#include "slate/mouse.h"
 #include "desktop/scrollbar.h"
 
 #include "html/private.h"
@@ -61,7 +61,7 @@ static int box_talloc_destructor(struct box *b)
 	}
 
 	if (b->href != NULL)
-		nsurl_unref(b->href);
+		slateurl_unref(b->href);
 
 	lwc_string_unref(b->id);
 
@@ -90,7 +90,7 @@ struct box *
 box_create(css_select_results *styles,
 	   css_computed_style *style,
 	   bool style_owned,
-	   nsurl *href,
+	   slateurl *href,
 	   const char *target,
 	   const char *title,
 	   lwc_string *id,
@@ -125,7 +125,7 @@ box_create(css_select_results *styles,
 	box->text = NULL;
 	box->length = 0;
 	box->space = 0;
-	box->href = (href == NULL) ? NULL : nsurl_ref(href);
+	box->href = (href == NULL) ? NULL : slateurl_ref(href);
 	box->target = target;
 	box->title = title;
 	box->columns = 1;
@@ -248,7 +248,7 @@ void box_free_box(struct box *box)
 
 
 /* exported interface documented in html/box.h */
-nserror
+slateerror
 box_handle_scrollbars(struct content *c,
 		      struct box *box,
 		      bool bottom,
@@ -257,7 +257,7 @@ box_handle_scrollbars(struct content *c,
 	struct html_scrollbar_data *data;
 	int visible_width, visible_height;
 	int full_width, full_height;
-	nserror res;
+	slateerror res;
 
 	if (!bottom && box->scroll_x != NULL) {
 		data = scrollbar_get_data(box->scroll_x);
@@ -274,7 +274,7 @@ box_handle_scrollbars(struct content *c,
 	}
 
 	if (!bottom && !right) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	visible_width = box->width + box->padding[RIGHT] + box->padding[LEFT];
@@ -293,7 +293,7 @@ box_handle_scrollbars(struct content *c,
 		if (box->scroll_y == NULL) {
 			data = malloc(sizeof(struct html_scrollbar_data));
 			if (data == NULL) {
-				return NSERROR_NOMEM;
+				return SLATEERROR_NOMEM;
 			}
 			data->c = c;
 			data->box = box;
@@ -304,7 +304,7 @@ box_handle_scrollbars(struct content *c,
 					       data,
 					       html_overflow_scroll_callback,
 					       &(box->scroll_y));
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return res;
 			}
 		} else  {
@@ -318,7 +318,7 @@ box_handle_scrollbars(struct content *c,
 		if (box->scroll_x == NULL) {
 			data = malloc(sizeof(struct html_scrollbar_data));
 			if (data == NULL) {
-				return NSERROR_OK;
+				return SLATEERROR_OK;
 			}
 			data->c = c;
 			data->box = box;
@@ -329,7 +329,7 @@ box_handle_scrollbars(struct content *c,
 					       data,
 					       html_overflow_scroll_callback,
 					       &box->scroll_x);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return res;
 			}
 		} else {
@@ -344,7 +344,7 @@ box_handle_scrollbars(struct content *c,
 		scrollbar_make_pair(box->scroll_x, box->scroll_y);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 

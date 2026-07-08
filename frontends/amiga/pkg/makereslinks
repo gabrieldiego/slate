@@ -15,7 +15,7 @@ makelink fr /resources/fr soft
 makelink internal.css /resources/internal.css soft
 makelink it /resources/it soft
 makelink LangNames /amiga/resources/LangNames soft
-makelink netsurf.png /resources/netsurf.png soft
+makelink slate.png /resources/slate.png soft
 makelink nl /resources/nl soft
 makelink Pointers /amiga/resources/Pointers soft
 makelink quirks.css /resources/quirks.css soft

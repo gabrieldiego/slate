@@ -2,7 +2,7 @@
  * Copyright 2005-2007 James Bursa <bursa@users.sourceforge.net>
  * Copyright 2003 Philip Pemberton <philpem@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,14 +24,14 @@
  * The content functions manipulate struct contents, which correspond to URLs.
  */
 
-#ifndef NETSURF_CONTENT_CONTENT_H_
-#define NETSURF_CONTENT_CONTENT_H_
+#ifndef SLATE_CONTENT_CONTENT_H_
+#define SLATE_CONTENT_CONTENT_H_
 
 #include <libwapcaplet/libwapcaplet.h>
 
-#include "netsurf/content_type.h"
-#include "netsurf/mouse.h" /* mouse state enums */
-#include "netsurf/console.h" /* console state and flags enums */
+#include "slate/content_type.h"
+#include "slate/mouse.h" /* mouse state enums */
+#include "slate/console.h" /* console state and flags enums */
 
 struct browser_window;
 struct browser_window_features;
@@ -49,7 +49,7 @@ struct content_rfc5988_link {
 	struct content_rfc5988_link *next; /**< next rfc5988_link in list */
 
 	lwc_string *rel; /**< the link relationship - must be present */
-	struct nsurl *href; /**< the link href - must be present */
+	struct slateurl *href; /**< the link href - must be present */
 	lwc_string *hreflang;
 	lwc_string *type;
 	lwc_string *media;
@@ -85,9 +85,9 @@ union content_msg_data {
 		/**
 		 * The error code to convey meaning
 		 */
-		nserror errorcode;
+		slateerror errorcode;
 		/**
-		 * The message.  if NSERROR_UNKNOWN then this is the direct
+		 * The message.  if SLATEERROR_UNKNOWN then this is the direct
 		 *   message, otherwise is some kind of metadata (e.g. a
 		 *   message name or somesuch) but always a null terminated
 		 *   string.
@@ -99,8 +99,8 @@ union content_msg_data {
 	 * CONTENT_MSG_REDIRECT - Redirect info
 	 */
 	struct {
-		struct nsurl *from;	/**< Redirect origin */
-		struct nsurl *to;	/**< Redirect target */
+		struct slateurl *from;	/**< Redirect origin */
+		struct slateurl *to;	/**< Redirect target */
 	} redirect;		/**< Fetch URL redirect occured */
 
 	/**
@@ -182,7 +182,7 @@ union content_msg_data {
 	 * CONTENT_MSG_SAVELINK - Save a URL
 	 */
 	struct {
-		struct nsurl *url;
+		struct slateurl *url;
 		const char *title;
 	} savelink;
 
@@ -367,7 +367,7 @@ bool content_keypress(struct hlcache_handle *h, uint32_t key);
  *
  * Calls the open function for the content.
  */
-nserror content_open(struct hlcache_handle *h, struct browser_window *bw,
+slateerror content_open(struct hlcache_handle *h, struct browser_window *bw,
 		struct content *page, struct object_params *params);
 
 /**
@@ -375,7 +375,7 @@ nserror content_open(struct hlcache_handle *h, struct browser_window *bw,
  *
  * Calls the close function for the content.
  */
-nserror content_close(struct hlcache_handle *h);
+slateerror content_close(struct hlcache_handle *h);
 
 /**
  * Tell a content that any selection it has, or one of its objects
@@ -397,7 +397,7 @@ char * content_get_selection(struct hlcache_handle *h);
  * \param[in] y The y coordinate to examine.
  * \param[out] data The context structure to fill in.
  */
-nserror content_get_contextual_content(struct hlcache_handle *h,
+slateerror content_get_contextual_content(struct hlcache_handle *h,
 		int x, int y, struct browser_window_features *data);
 
 /**
@@ -427,7 +427,7 @@ bool content_drop_file_at_point(struct hlcache_handle *h,
  * \param h content handle to debug.
  * \param op Debug operation type.
  */
-nserror content_debug(struct hlcache_handle *h, enum content_debug op);
+slateerror content_debug(struct hlcache_handle *h, enum content_debug op);
 
 
 /**
@@ -483,7 +483,7 @@ int content_get_available_width(struct hlcache_handle *h);
  * \param h Content to retrieve refresh URL from
  * \return Pointer to URL, or NULL if none
  */
-struct nsurl *content_get_refresh_url(struct hlcache_handle *h);
+struct slateurl *content_get_refresh_url(struct hlcache_handle *h);
 
 
 /**

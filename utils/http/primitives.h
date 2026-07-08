@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_UTILS_HTTP_PRIMITIVES_H_
-#define NETSURF_UTILS_HTTP_PRIMITIVES_H_
+#ifndef SLATE_UTILS_HTTP_PRIMITIVES_H_
+#define SLATE_UTILS_HTTP_PRIMITIVES_H_
 
 #include <libwapcaplet/libwapcaplet.h>
 
@@ -25,8 +25,8 @@
 
 void http__skip_LWS(const char **input);
 
-nserror http__parse_token(const char **input, lwc_string **value);
+slateerror http__parse_token(const char **input, lwc_string **value);
 
-nserror http__parse_quoted_string(const char **input, lwc_string **value);
+slateerror http__parse_quoted_string(const char **input, lwc_string **value);
 
 #endif

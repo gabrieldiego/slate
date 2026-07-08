@@ -2,7 +2,7 @@
  * Copyright 2008 Adam Blokus <adamblokus@gmail.com>
  * Copyright 2009 John Tytgat <joty@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
   * Font handling in Haru pdf documents (interface).
   */
 
-#ifndef _NETSURF_DESKTOP_FONT_HARU_H_
-#define _NETSURF_DESKTOP_FONT_HARU_H_
+#ifndef _SLATE_DESKTOP_FONT_HARU_H_
+#define _SLATE_DESKTOP_FONT_HARU_H_
 
 #include <hpdf.h>
 

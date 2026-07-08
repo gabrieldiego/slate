@@ -1,7 +1,7 @@
 /*
  * Copyright 2017 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,6 +20,6 @@
 #define AMIGA_HISTORY_GLOBAL_H
 
 /** Open the global history viewer */
-nserror ami_history_global_present(void);
+slateerror ami_history_global_present(void);
 #endif
 

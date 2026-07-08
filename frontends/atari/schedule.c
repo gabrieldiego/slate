@@ -2,7 +2,7 @@
  * Copyright 2008 Vincent Sanders <vince@simtec.co.uk>
  * Copyright 2011 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -55,7 +55,7 @@ static int cur_scheduled;
  * All scheduled callbacks matching both callback and p are removed.
  */
 
-static nserror schedule_remove(void (*callback)(void *p), void *p)
+static slateerror schedule_remove(void (*callback)(void *p), void *p)
 {
 	struct nscallback *cur_nscb;
 	struct nscallback *prev_nscb;
@@ -63,7 +63,7 @@ static nserror schedule_remove(void (*callback)(void *p), void *p)
 
 	/* check there is something on the list to remove */
         if (schedule_list == NULL) {
-                return NSERROR_OK;
+                return SLATEERROR_OK;
 	}
 
 	NSLOG(schedule, DEBUG, "removing %p, %p", callback, p);
@@ -96,18 +96,18 @@ static nserror schedule_remove(void (*callback)(void *p), void *p)
 			cur_nscb = prev_nscb->next;
 		}
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported function documented in atari/schedule.h */
-nserror atari_schedule(int ival, void (*callback)(void *p), void *p)
+slateerror atari_schedule(int ival, void (*callback)(void *p), void *p)
 {
 	struct nscallback *nscb;
-	nserror ret;
+	slateerror ret;
 
 	/* remove any existing callback of this kind */
 	ret = schedule_remove(callback, p);
-	if ((ival < 0) || (ret != NSERROR_OK)) {
+	if ((ival < 0) || (ret != SLATEERROR_OK)) {
 		return ret;
 	}
 
@@ -129,7 +129,7 @@ nserror atari_schedule(int ival, void (*callback)(void *p), void *p)
 		max_scheduled = cur_scheduled;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 

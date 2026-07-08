@@ -6,7 +6,7 @@
 
 S_JAVASCRIPT_BINDING:=
 
-ifeq ($(NETSURF_USE_DUKTAPE),YES)
+ifeq ($(SLATE_USE_DUKTAPE),YES)
 # Duktape
 include content/handlers/javascript/duktape/Makefile
 else

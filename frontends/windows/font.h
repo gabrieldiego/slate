@@ -2,7 +2,7 @@
  * Copyright 2008 Vincent Sanders <vince@simtec.co.uk>
  * Copyright 2009 Mark Benjamin <netsurf-browser.org.MarkBenjamin@dfgh.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,8 +22,8 @@
  * The interface to the win32 font and utf8 handling.
  */
 
-#ifndef NETSURF_WINDOWS_FONT_H
-#define NETSURF_WINDOWS_FONT_H
+#ifndef SLATE_WINDOWS_FONT_H
+#define SLATE_WINDOWS_FONT_H
 
 struct plot_font_style;
 
@@ -46,7 +46,7 @@ extern struct gui_utf8_table *win32_utf8_table;
  * \param[in] len The length of the utf-8 data
  * \param[out] result The reencoded string.
  */
-extern nserror utf8_to_font_encoding(const struct font_desc* font, const char *string, size_t len, char **result);
+extern slateerror utf8_to_font_encoding(const struct font_desc* font, const char *string, size_t len, char **result);
 
 /**
  * generate a win32 font handle from a generic font style
@@ -56,5 +56,5 @@ extern nserror utf8_to_font_encoding(const struct font_desc* font, const char *s
  */
 HFONT get_font(const struct plot_font_style *style);
 
-#endif /* NETSURF_WINDOWS_FONT_H */
+#endif /* SLATE_WINDOWS_FONT_H */
 

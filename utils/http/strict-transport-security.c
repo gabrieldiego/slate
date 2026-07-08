@@ -1,7 +1,7 @@
 /*
  * Copyright 2018 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -51,19 +51,19 @@ static void http_destroy_directive(http_directive *self)
 	free(self);
 }
 
-static nserror http__parse_directive(const char **input,
+static slateerror http__parse_directive(const char **input,
 		http_directive **result)
 {
 	const char *pos = *input;
 	lwc_string *name;
 	lwc_string *value = NULL;
 	http_directive *directive;
-	nserror error;
+	slateerror error;
 
 	/* token [ "=" ( token | quoted-string ) ] */
 
 	error = http__parse_token(&pos, &name);
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 
 	http__skip_LWS(&pos);
@@ -78,7 +78,7 @@ static nserror http__parse_directive(const char **input,
 		else
 			error = http__parse_token(&pos, &value);
 
-		if (error != NSERROR_OK) {
+		if (error != SLATEERROR_OK) {
 			lwc_string_unref(name);
 			return error;
 		}
@@ -88,7 +88,7 @@ static nserror http__parse_directive(const char **input,
 	if (directive == NULL) {
 		lwc_string_unref(value);
 		lwc_string_unref(name);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	HTTP__ITEM_INIT(directive, NULL, http_destroy_directive);
@@ -98,7 +98,7 @@ static nserror http__parse_directive(const char **input,
 	*result = directive;
 	*input = pos;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void http_directive_list_destroy(http_directive *list)
@@ -106,7 +106,7 @@ static void http_directive_list_destroy(http_directive *list)
 	http__item_list_destroy(list);
 }
 
-static nserror http_directive_list_find_item(const http_directive *list,
+static slateerror http_directive_list_find_item(const http_directive *list,
 		lwc_string *name, lwc_string **value)
 {
 	bool match;
@@ -120,7 +120,7 @@ static nserror http_directive_list_find_item(const http_directive *list,
 	}
 
 	if (list == NULL)
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 
 	if (list->value != NULL) {
 		*value = lwc_string_ref(list->value);
@@ -128,7 +128,7 @@ static nserror http_directive_list_find_item(const http_directive *list,
 		*value = NULL;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static const http_directive *http_directive_list_iterate(
@@ -189,7 +189,7 @@ static bool check_duplicates(const http_directive *directives)
 	return result;
 }
 
-static nserror parse_max_age(lwc_string *value, uint32_t *result)
+static slateerror parse_max_age(lwc_string *value, uint32_t *result)
 {
 	const char *pos = lwc_string_data(value);
 	const char *end = pos + lwc_string_length(value);
@@ -199,7 +199,7 @@ static nserror parse_max_age(lwc_string *value, uint32_t *result)
 
 	if (pos == end) {
 		/* Blank value */
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	while (pos < end) {
@@ -212,7 +212,7 @@ static nserror parse_max_age(lwc_string *value, uint32_t *result)
 			}
 		} else {
 			/* Non-digit */
-			return NSERROR_NOT_FOUND;
+			return SLATEERROR_NOT_FOUND;
 		}
 
 		pos++;
@@ -220,11 +220,11 @@ static nserror parse_max_age(lwc_string *value, uint32_t *result)
 
 	*result = val;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* See strict-transport-security.h for documentation */
-nserror http_parse_strict_transport_security(const char *header_value,
+slateerror http_parse_strict_transport_security(const char *header_value,
 		http_strict_transport_security **result)
 {
 	const char *pos = header_value;
@@ -234,14 +234,14 @@ nserror http_parse_strict_transport_security(const char *header_value,
 	lwc_string *max_age_str = NULL, *isd_str = NULL;
 	uint32_t max_age;
 	bool include_sub_domains = false;
-	nserror error;
+	slateerror error;
 
 	/* directive *( ";" directive ) */
 
 	http__skip_LWS(&pos);
 
 	error = http__parse_directive(&pos, &first);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		return error;
 	}
 
@@ -250,7 +250,7 @@ nserror http_parse_strict_transport_security(const char *header_value,
 	if (*pos == ';') {
 		error = http__item_list_parse(&pos,
 				http__parse_directive, first, &directives);
-		if (error != NSERROR_OK) {
+		if (error != SLATEERROR_OK) {
 			if (directives != NULL) {
 				http_directive_list_destroy(directives);
 			}
@@ -263,37 +263,37 @@ nserror http_parse_strict_transport_security(const char *header_value,
 	/* Each directive must only appear once */
 	if (check_duplicates(directives) == false) {
 		http_directive_list_destroy(directives);
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	/* max-age is required */
 	error = http_directive_list_find_item(directives,
 			corestring_lwc_max_age, &max_age_str);
-	if (error != NSERROR_OK || max_age_str == NULL) {
+	if (error != SLATEERROR_OK || max_age_str == NULL) {
 		http_directive_list_destroy(directives);
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	error = parse_max_age(max_age_str, &max_age);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		lwc_string_unref(max_age_str);
 		http_directive_list_destroy(directives);
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 	lwc_string_unref(max_age_str);
 
 	/* includeSubDomains is optional and valueless */
 	error = http_directive_list_find_item(directives,
 			corestring_lwc_includesubdomains, &isd_str);
-	if (error != NSERROR_OK && error != NSERROR_NOT_FOUND) {
+	if (error != SLATEERROR_OK && error != SLATEERROR_NOT_FOUND) {
 		http_directive_list_destroy(directives);
-		return NSERROR_NOT_FOUND;
-	} else if (error == NSERROR_OK) {
+		return SLATEERROR_NOT_FOUND;
+	} else if (error == SLATEERROR_OK) {
 		if (isd_str != NULL) {
 			/* Present, but not valueless: invalid */
 			lwc_string_unref(isd_str);
 			http_directive_list_destroy(directives);
-			return NSERROR_NOT_FOUND;
+			return SLATEERROR_NOT_FOUND;
 		}
 		include_sub_domains = true;
 	}
@@ -301,7 +301,7 @@ nserror http_parse_strict_transport_security(const char *header_value,
 
 	sts = malloc(sizeof(*sts));
 	if (sts == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	sts->max_age = max_age;
@@ -309,7 +309,7 @@ nserror http_parse_strict_transport_security(const char *header_value,
 
 	*result = sts;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* See strict-transport-security.h for documentation */

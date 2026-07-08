@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 François Revol <mmu_man@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,6 @@
 #ifndef __BEOS_ABOUT_H__
 #define __BEOS_ABOUT_H__
 
-void nsbeos_about(struct gui_window *gui);
+void slatebeos_about(struct gui_window *gui);
 
 #endif /* __BEOS_ABOUT_H__ */

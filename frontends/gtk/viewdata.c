@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,14 +34,14 @@
 #include <gtk/gtk.h>
 
 #include "utils/log.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/utf8.h"
 #include "utils/messages.h"
 #include "utils/utils.h"
 #include "utils/file.h"
 #include "utils/filepath.h"
-#include "utils/nsurl.h"
-#include "netsurf/browser_window.h"
+#include "utils/slateurl.h"
+#include "slate/browser_window.h"
 
 #include "gtk/warn.h"
 #include "gtk/about.h"
@@ -50,7 +50,7 @@
 #include "gtk/resources.h"
 #include "gtk/viewdata.h"
 
-struct nsgtk_viewdata_ctx {
+struct slategtk_viewdata_ctx {
 	char *data;
 	size_t data_len;
 	char *filename;
@@ -59,8 +59,8 @@ struct nsgtk_viewdata_ctx {
 	GtkWindow *window; /**< handle to gtk window (builder holds reference) */
 	GtkTextView *gv; /**< handle to gtk text view (builder holds reference) */
 
-	struct nsgtk_viewdata_ctx *next;
-	struct nsgtk_viewdata_ctx *prev;
+	struct slategtk_viewdata_ctx *next;
+	struct slategtk_viewdata_ctx *prev;
 };
 
 struct menu_events {
@@ -68,11 +68,11 @@ struct menu_events {
 	GCallback handler;
 };
 
-static struct nsgtk_viewdata_ctx *nsgtk_viewdata_list = NULL;
+static struct slategtk_viewdata_ctx *slategtk_viewdata_list = NULL;
 static char viewdata_zoomlevel = 10;
 
-#define MENUEVENT(x) { #x, G_CALLBACK(nsgtk_on_##x##_activate) }
-#define MENUPROTO(x) static gboolean nsgtk_on_##x##_activate(	\
+#define MENUEVENT(x) { #x, G_CALLBACK(slategtk_on_##x##_activate) }
+#define MENUPROTO(x) static gboolean slategtk_on_##x##_activate(	\
 		GtkMenuItem *widget, gpointer g)
 
 MENUPROTO(viewdata_save_as);
@@ -104,7 +104,7 @@ static struct menu_events viewdata_menu_events[] = {
 	{NULL, NULL}
 };
 
-static void nsgtk_attach_viewdata_menu_handlers(GtkBuilder *xml, gpointer g)
+static void slategtk_attach_viewdata_menu_handlers(GtkBuilder *xml, gpointer g)
 {
 	struct menu_events *event = viewdata_menu_events;
 
@@ -116,9 +116,9 @@ static void nsgtk_attach_viewdata_menu_handlers(GtkBuilder *xml, gpointer g)
 	}
 }
 
-static gboolean nsgtk_viewdata_destroy_event(GtkBuilder *window, gpointer g)
+static gboolean slategtk_viewdata_destroy_event(GtkBuilder *window, gpointer g)
 {
-	struct nsgtk_viewdata_ctx *vdctx = (struct nsgtk_viewdata_ctx *)g;
+	struct slategtk_viewdata_ctx *vdctx = (struct slategtk_viewdata_ctx *)g;
 
 	if (vdctx->next != NULL) {
 		vdctx->next->prev = vdctx->prev;
@@ -127,7 +127,7 @@ static gboolean nsgtk_viewdata_destroy_event(GtkBuilder *window, gpointer g)
 	if (vdctx->prev != NULL) {
 		vdctx->prev->next = vdctx->next;
 	} else {
-		nsgtk_viewdata_list = vdctx->next;
+		slategtk_viewdata_list = vdctx->next;
 	}
 
 	/* release the data */
@@ -142,14 +142,14 @@ static gboolean nsgtk_viewdata_destroy_event(GtkBuilder *window, gpointer g)
 	return FALSE;
 }
 
-static gboolean nsgtk_viewdata_delete_event(GtkWindow * window, gpointer g)
+static gboolean slategtk_viewdata_delete_event(GtkWindow * window, gpointer g)
 {
 	return FALSE;
 }
 
 
 
-static void nsgtk_viewdata_file_save(GtkWindow *parent, const char *filename,
+static void slategtk_viewdata_file_save(GtkWindow *parent, const char *filename,
 				     const char *data, size_t data_size)
 {
 	FILE *f;
@@ -167,7 +167,7 @@ static void nsgtk_viewdata_file_save(GtkWindow *parent, const char *filename,
 	notif = gtk_dialog_new_with_buttons(messages_get("gtkSaveFailedTitle"),
 					    parent,
 					    GTK_DIALOG_MODAL,
-					    NSGTK_STOCK_OK,
+					    SLATEGTK_STOCK_OK,
 					    GTK_RESPONSE_NONE,
 					    NULL);
 
@@ -175,23 +175,23 @@ static void nsgtk_viewdata_file_save(GtkWindow *parent, const char *filename,
 				 G_CALLBACK(gtk_widget_destroy), notif);
 
 	label = gtk_label_new(messages_get("gtkSaveFailed"));
-	gtk_container_add(GTK_CONTAINER(nsgtk_dialog_get_content_area(GTK_DIALOG(notif))), label);
+	gtk_container_add(GTK_CONTAINER(slategtk_dialog_get_content_area(GTK_DIALOG(notif))), label);
 	gtk_widget_show_all(notif);
 
 }
 
 
-gboolean nsgtk_on_viewdata_save_as_activate(GtkMenuItem *widget, gpointer g)
+gboolean slategtk_on_viewdata_save_as_activate(GtkMenuItem *widget, gpointer g)
 {
-	struct nsgtk_viewdata_ctx *nsg = (struct nsgtk_viewdata_ctx *) g;
+	struct slategtk_viewdata_ctx *nsg = (struct slategtk_viewdata_ctx *) g;
 	GtkWidget *fc;
 
 	fc = gtk_file_chooser_dialog_new(messages_get("gtkSaveFile"),
 					 nsg->window,
 					 GTK_FILE_CHOOSER_ACTION_SAVE,
-					 NSGTK_STOCK_CANCEL,
+					 SLATEGTK_STOCK_CANCEL,
 					 GTK_RESPONSE_CANCEL,
-					 NSGTK_STOCK_SAVE,
+					 SLATEGTK_STOCK_SAVE,
 					 GTK_RESPONSE_ACCEPT,
 					 NULL);
 
@@ -203,7 +203,7 @@ gboolean nsgtk_on_viewdata_save_as_activate(GtkMenuItem *widget, gpointer g)
 	if (gtk_dialog_run(GTK_DIALOG(fc)) == GTK_RESPONSE_ACCEPT) {
 		char *filename;
 		filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(fc));
-		nsgtk_viewdata_file_save(nsg->window, filename, nsg->data, nsg->data_len);
+		slategtk_viewdata_file_save(nsg->window, filename, nsg->data, nsg->data_len);
 		g_free(filename);
 	}
 
@@ -213,16 +213,16 @@ gboolean nsgtk_on_viewdata_save_as_activate(GtkMenuItem *widget, gpointer g)
 }
 
 
-gboolean nsgtk_on_viewdata_print_activate( GtkMenuItem *widget, gpointer g)
+gboolean slategtk_on_viewdata_print_activate( GtkMenuItem *widget, gpointer g)
 {
 	/* correct printing */
 
 	return TRUE;
 }
 
-gboolean nsgtk_on_viewdata_close_activate( GtkMenuItem *widget, gpointer g)
+gboolean slategtk_on_viewdata_close_activate( GtkMenuItem *widget, gpointer g)
 {
-	struct nsgtk_viewdata_ctx *nsg = (struct nsgtk_viewdata_ctx *) g;
+	struct slategtk_viewdata_ctx *nsg = (struct slategtk_viewdata_ctx *) g;
 
 	gtk_widget_destroy(GTK_WIDGET(nsg->window));
 
@@ -231,9 +231,9 @@ gboolean nsgtk_on_viewdata_close_activate( GtkMenuItem *widget, gpointer g)
 
 
 
-gboolean nsgtk_on_viewdata_select_all_activate (GtkMenuItem *widget, gpointer g)
+gboolean slategtk_on_viewdata_select_all_activate (GtkMenuItem *widget, gpointer g)
 {
-	struct nsgtk_viewdata_ctx *nsg = (struct nsgtk_viewdata_ctx *) g;
+	struct slategtk_viewdata_ctx *nsg = (struct slategtk_viewdata_ctx *) g;
 	GtkTextBuffer *buf = gtk_text_view_get_buffer(nsg->gv);
 	GtkTextIter start, end;
 
@@ -244,14 +244,14 @@ gboolean nsgtk_on_viewdata_select_all_activate (GtkMenuItem *widget, gpointer g)
 	return TRUE;
 }
 
-gboolean nsgtk_on_viewdata_cut_activate(GtkMenuItem *widget, gpointer g)
+gboolean slategtk_on_viewdata_cut_activate(GtkMenuItem *widget, gpointer g)
 {
 	return TRUE;
 }
 
-gboolean nsgtk_on_viewdata_copy_activate(GtkMenuItem *widget, gpointer g)
+gboolean slategtk_on_viewdata_copy_activate(GtkMenuItem *widget, gpointer g)
 {
-	struct nsgtk_viewdata_ctx *nsg = (struct nsgtk_viewdata_ctx *) g;
+	struct slategtk_viewdata_ctx *nsg = (struct slategtk_viewdata_ctx *) g;
 	GtkTextBuffer *buf = gtk_text_view_get_buffer(GTK_TEXT_VIEW(nsg->gv));
 
 	gtk_text_buffer_copy_clipboard(buf,
@@ -260,24 +260,24 @@ gboolean nsgtk_on_viewdata_copy_activate(GtkMenuItem *widget, gpointer g)
 	return TRUE;
 }
 
-gboolean nsgtk_on_viewdata_paste_activate(GtkMenuItem *widget, gpointer g)
+gboolean slategtk_on_viewdata_paste_activate(GtkMenuItem *widget, gpointer g)
 {
 	return TRUE;
 }
 
-gboolean nsgtk_on_viewdata_delete_activate(GtkMenuItem *widget, gpointer g)
+gboolean slategtk_on_viewdata_delete_activate(GtkMenuItem *widget, gpointer g)
 {
 	return TRUE;
 }
 
-static void nsgtk_viewdata_update_zoomlevel(gpointer g)
+static void slategtk_viewdata_update_zoomlevel(gpointer g)
 {
-	struct nsgtk_viewdata_ctx *nsg;
+	struct slategtk_viewdata_ctx *nsg;
 	GtkTextBuffer *buf;
 	GtkTextTagTable *tab;
 	GtkTextTag *tag;
 
-	nsg = nsgtk_viewdata_list;
+	nsg = slategtk_viewdata_list;
 	while (nsg) {
 		if (nsg->gv) {
 			buf = gtk_text_view_get_buffer(GTK_TEXT_VIEW(nsg->gv));
@@ -308,38 +308,38 @@ static void nsgtk_viewdata_update_zoomlevel(gpointer g)
 	}
 }
 
-gboolean nsgtk_on_viewdata_zoom_in_activate(GtkMenuItem *widget, gpointer g)
+gboolean slategtk_on_viewdata_zoom_in_activate(GtkMenuItem *widget, gpointer g)
 {
 	viewdata_zoomlevel++;
-	nsgtk_viewdata_update_zoomlevel(g);
+	slategtk_viewdata_update_zoomlevel(g);
 
 	return TRUE;
 }
 
-gboolean nsgtk_on_viewdata_zoom_out_activate(GtkMenuItem *widget, gpointer g)
+gboolean slategtk_on_viewdata_zoom_out_activate(GtkMenuItem *widget, gpointer g)
 {
 	if (viewdata_zoomlevel > 1) {
 		viewdata_zoomlevel--;
-		nsgtk_viewdata_update_zoomlevel(g);
+		slategtk_viewdata_update_zoomlevel(g);
 	}
 
 	return TRUE;
 }
 
 
-gboolean nsgtk_on_viewdata_zoom_normal_activate(GtkMenuItem *widget, gpointer g)
+gboolean slategtk_on_viewdata_zoom_normal_activate(GtkMenuItem *widget, gpointer g)
 {
 	viewdata_zoomlevel = 10;
-	nsgtk_viewdata_update_zoomlevel(g);
+	slategtk_viewdata_update_zoomlevel(g);
 
 	return TRUE;
 }
 
-gboolean nsgtk_on_viewdata_about_activate(GtkMenuItem *widget, gpointer g)
+gboolean slategtk_on_viewdata_about_activate(GtkMenuItem *widget, gpointer g)
 {
-	struct nsgtk_viewdata_ctx *nsg = (struct nsgtk_viewdata_ctx *) g;
+	struct slategtk_viewdata_ctx *nsg = (struct slategtk_viewdata_ctx *) g;
 
-	nsgtk_about_dialog_init(nsg->window);
+	slategtk_about_dialog_init(nsg->window);
 
 	return TRUE;
 }
@@ -347,7 +347,7 @@ gboolean nsgtk_on_viewdata_about_activate(GtkMenuItem *widget, gpointer g)
 /**
  * View the data in a gtk text window.
  */
-static nserror
+static slateerror
 window_init(const char *title,
 	    const char *filename,
 	    char *ndata,
@@ -361,16 +361,16 @@ window_init(const char *title,
 	GtkTextView *dataview;
 	PangoFontDescription *fontdesc;
 	GtkTextBuffer *tb;
-	struct nsgtk_viewdata_ctx *newctx;
-	nserror res;
+	struct slategtk_viewdata_ctx *newctx;
+	slateerror res;
 
-	newctx = malloc(sizeof(struct nsgtk_viewdata_ctx));
+	newctx = malloc(sizeof(struct slategtk_viewdata_ctx));
 	if (newctx == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
-	res = nsgtk_builder_new_from_resname("viewdata", &newctx->builder);
-	if (res != NSERROR_OK) {
+	res = slategtk_builder_new_from_resname("viewdata", &newctx->builder);
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Viewdata UI builder init failed");
 		free(newctx);
 		return res;
@@ -389,7 +389,7 @@ window_init(const char *title,
 		/* free the context structure */
 		free(newctx);
 
-		return NSERROR_INIT_FAILED;
+		return SLATEERROR_INIT_FAILED;
 	}
 
 	cutbutton = GTK_WIDGET(gtk_builder_get_object(newctx->builder, "viewdata_cut"));
@@ -410,22 +410,22 @@ window_init(const char *title,
 
 	newctx->window = window;
 
-	newctx->next = nsgtk_viewdata_list;
+	newctx->next = slategtk_viewdata_list;
 	newctx->prev = NULL;
-	if (nsgtk_viewdata_list != NULL) {
-		nsgtk_viewdata_list->prev = newctx;
+	if (slategtk_viewdata_list != NULL) {
+		slategtk_viewdata_list->prev = newctx;
 	}
-	nsgtk_viewdata_list = newctx;
+	slategtk_viewdata_list = newctx;
 
-	nsgtk_attach_viewdata_menu_handlers(newctx->builder, newctx);
+	slategtk_attach_viewdata_menu_handlers(newctx->builder, newctx);
 
 	gtk_window_set_title(window, title);
 
 	g_signal_connect(G_OBJECT(window), "destroy",
-			 G_CALLBACK(nsgtk_viewdata_destroy_event),
+			 G_CALLBACK(slategtk_viewdata_destroy_event),
 			 newctx);
 	g_signal_connect(G_OBJECT(window), "delete-event",
-			 G_CALLBACK(nsgtk_viewdata_delete_event),
+			 G_CALLBACK(slategtk_viewdata_delete_event),
 			 newctx);
 
 	dataview = GTK_TEXT_VIEW(gtk_builder_get_object(newctx->builder,
@@ -434,25 +434,25 @@ window_init(const char *title,
 	fontdesc = pango_font_description_from_string("Monospace 8");
 
 	newctx->gv = dataview;
-	nsgtk_widget_modify_font(GTK_WIDGET(dataview), fontdesc);
+	slategtk_widget_modify_font(GTK_WIDGET(dataview), fontdesc);
 
 	tb = gtk_text_view_get_buffer(dataview);
 	gtk_text_buffer_set_text(tb, newctx->data, -1);
 
 	gtk_widget_show(GTK_WIDGET(window));
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * open a window to dispaly an existing file.
  */
-static nserror
+static slateerror
 window_init_fname(const char *title,
 	       const char *leafname,
 	       const char *filename)
 {
-	nserror ret;
+	slateerror ret;
 	FILE *f;
 	char *ndata;
 	long tell_len;
@@ -460,22 +460,22 @@ window_init_fname(const char *title,
 
 	f = fopen(filename, "r");
 	if (f == NULL) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 	if (fseek(f, 0, SEEK_END) != 0) {
 		fclose(f);
-		return NSERROR_BAD_SIZE;
+		return SLATEERROR_BAD_SIZE;
 	}
 
 	tell_len = ftell(f);
 	if (tell_len == -1) {
 		fclose(f);
-		return NSERROR_BAD_SIZE;		
+		return SLATEERROR_BAD_SIZE;		
 	}
 
 	if (fseek(f, 0, SEEK_SET) != 0) {
 		fclose(f);
-		return NSERROR_BAD_SIZE;
+		return SLATEERROR_BAD_SIZE;
 	}
 
 	ndata = malloc(tell_len);
@@ -486,7 +486,7 @@ window_init_fname(const char *title,
 
 	/* window init takes ownership of the ndata if there is no error */
 	ret = window_init(title, leafname, ndata, ndata_len);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		free(ndata);
 	}
 
@@ -496,62 +496,62 @@ window_init_fname(const char *title,
 /**
  * open a new tab from an existing file.
  */
-static nserror
+static slateerror
 tab_init_fname(const char *title,
 	       const char *leafname,
 	       const char *fname)
 {
-	nsurl *url;
-	nserror ret;
+	slateurl *url;
+	slateerror ret;
 
 	/* Open tab on temporary file */
-	ret = netsurf_path_to_nsurl(fname, &url);
-	if (ret != NSERROR_OK) {
+	ret = slate_path_to_slateurl(fname, &url);
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
 	/* open tab on temportary file */
 	ret = browser_window_create(BW_CREATE_TAB | BW_CREATE_HISTORY, url, NULL, NULL, NULL);
-	nsurl_unref(url);
-	if (ret != NSERROR_OK) {
+	slateurl_unref(url);
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * create a new tab from data.
  */
-static nserror
+static slateerror
 tab_init(const char *title,
 	 const char *leafname,
 	 char *ndata,
 	 size_t ndata_len)
 {
-	nserror ret;
+	slateerror ret;
 	gchar *fname;
 	gint handle;
 	FILE *f;
 
-	handle = g_file_open_tmp("nsgtkdataXXXXXX", &fname, NULL);
+	handle = g_file_open_tmp("slategtkdataXXXXXX", &fname, NULL);
 	if ((handle == -1) || (fname == NULL)) {
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
 	}
 	close(handle); /* in case it was binary mode */
 
 	/* save data to temporary file */
 	f = fopen(fname, "w");
 	if (f == NULL) {
-		nsgtk_warning(messages_get("gtkSourceTabError"), 0);
+		slategtk_warning(messages_get("gtkSourceTabError"), 0);
 		g_free(fname);
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
 	}
 	fprintf(f, "%s", ndata);
 	fclose(f);
 
 	ret = tab_init_fname(title, leafname, fname);
-	if (ret == NSERROR_OK) {
+	if (ret == SLATEERROR_OK) {
 		free(ndata);
 	}
 
@@ -822,7 +822,7 @@ static char **build_exec_argv(const char *fname, const char *exec_cmd)
 /**
  * open an editor from an existing file.
  */
-static nserror
+static slateerror
 editor_init_fname(const char *title,
 	       const char *leafname,
 	       const char *fname)
@@ -851,7 +851,7 @@ editor_init_fname(const char *title,
 	if (def_app_desktop == NULL) {
 		/* no default app */
 		filepath_free_strvec(xdg_data_vec);
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	/* find app to execute */
@@ -868,7 +868,7 @@ editor_init_fname(const char *title,
 
 	if (exec_cmd == NULL) {
 		/* no exec entry */
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	/* build exec vector */
@@ -878,46 +878,46 @@ editor_init_fname(const char *title,
 	/* execute target app on saved data */
 	if (g_spawn_async(NULL, argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL,
 			  NULL, NULL) != TRUE) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 	filepath_free_strvec(argv);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * open an editor with data.
  */
-static nserror
+static slateerror
 editor_init(const char *title,
 	    const char *leafname,
 	    char *ndata,
 	    size_t ndata_len)
 {
 
-	nserror ret;
+	slateerror ret;
 	gchar *fname;
 	gint handle;
 	FILE *f;
 
-	handle = g_file_open_tmp("nsgtkdataXXXXXX", &fname, NULL);
+	handle = g_file_open_tmp("slategtkdataXXXXXX", &fname, NULL);
 	if ((handle == -1) || (fname == NULL)) {
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
 	}
 	close(handle); /* in case it was binary mode */
 
 	/* save data to temporary file */
 	f = fopen(fname, "w");
 	if (f == NULL) {
-		nsgtk_warning(messages_get("gtkSourceTabError"), 0);
+		slategtk_warning(messages_get("gtkSourceTabError"), 0);
 		g_free(fname);
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
 	}
 	fprintf(f, "%s", ndata);
 	fclose(f);
 
 	ret = editor_init_fname(title, leafname, fname);
-	if (ret == NSERROR_OK) {
+	if (ret == SLATEERROR_OK) {
 		free(ndata);
 	}
 
@@ -927,15 +927,15 @@ editor_init(const char *title,
 }
 
 /* exported interface documented in gtk/viewdata.h */
-nserror
-nsgtk_viewdata(const char *title,
+slateerror
+slategtk_viewdata(const char *title,
 	       const char *filename,
 	       char *ndata,
 	       size_t ndata_len)
 {
-	nserror ret;
+	slateerror ret;
 
-	switch (nsoption_int(developer_view)) {
+	switch (slateoption_int(developer_view)) {
 	case 0:
 		ret = window_init(title, filename, ndata, ndata_len);
 		break;
@@ -949,10 +949,10 @@ nsgtk_viewdata(const char *title,
 		break;
 
 	default:
-		ret = NSERROR_BAD_PARAMETER;
+		ret = SLATEERROR_BAD_PARAMETER;
 		break;
 	}
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		/* release the data */
 		free(ndata);
 	}
@@ -962,14 +962,14 @@ nsgtk_viewdata(const char *title,
 }
 
 /* exported interface documented in gtk/viewdata.h */
-nserror
-nsgtk_viewfile(const char *title,
+slateerror
+slategtk_viewfile(const char *title,
 	       const char *leafname,
 	       const char *filename)
 {
-	nserror ret;
+	slateerror ret;
 
-	switch (nsoption_int(developer_view)) {
+	switch (slateoption_int(developer_view)) {
 	case 0:
 		ret = window_init_fname(title, leafname, filename);
 		break;
@@ -983,7 +983,7 @@ nsgtk_viewfile(const char *title,
 		break;
 
 	default:
-		ret = NSERROR_BAD_PARAMETER;
+		ret = SLATEERROR_BAD_PARAMETER;
 		break;
 	}
 

@@ -9,10 +9,10 @@
 * format and many glyphs added for use in the NetSurf project.
 *
 * Plain text font data:
-*     http://git.netsurf-browser.org/art.git/plain/fonts/netsurf/glyph_data
+*     http://git.slate-browser.org/art.git/plain/fonts/netsurf/glyph_data
 *
 *     Zap: http://zap.tartarus.org/
-* NetSurf: http://www.netsurf-browser.org/
+* NetSurf: http://www.slate-browser.org/
 *
 * Thanks to Tim Tyler for the original font and his permission to use it.
 * Thanks to James Aylett for helping track down Tim.

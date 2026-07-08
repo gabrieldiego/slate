@@ -1,7 +1,7 @@
 /*
  * Copyright 2005 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@
 #include <stdbool.h>
 #include <oslib/hourglass.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/messages.h"
 
 #include "riscos/filename.h"
@@ -51,11 +51,11 @@ bool ro_gui_options_cache_initialise(wimp_w w)
 {
 	/* set the current values */
 	ro_gui_set_icon_decimal(w, CACHE_MEMORY_SIZE,
-			(nsoption_int(memory_cache_size) * 10) >> 20, 1);
+			(slateoption_int(memory_cache_size) * 10) >> 20, 1);
 	ro_gui_set_icon_decimal(w, CACHE_DISC_SIZE,
-			(int) ((nsoption_uint(disc_cache_size)) >> 20), 0);
+			(int) ((slateoption_uint(disc_cache_size)) >> 20), 0);
 	ro_gui_set_icon_decimal(w, CACHE_DISC_EXPIRE,
-			(nsoption_int(disc_cache_age)), 0);
+			(slateoption_int(disc_cache_age)), 0);
 
 	/* initialise all functions for a newly created window */
 	ro_gui_wimp_event_register_numeric_field(w, CACHE_MEMORY_SIZE,
@@ -93,13 +93,13 @@ bool ro_gui_options_cache_click(wimp_pointer *pointer)
 
 bool ro_gui_options_cache_ok(wimp_w w)
 {
-	nsoption_set_int(memory_cache_size,
+	slateoption_set_int(memory_cache_size,
 			(((ro_gui_get_icon_decimal(w,
 					CACHE_MEMORY_SIZE, 1) + 1) << 20) - 1) / 10);
-	nsoption_set_uint(disc_cache_size,
+	slateoption_set_uint(disc_cache_size,
 			(uint) (ro_gui_get_icon_decimal(w,
 					CACHE_DISC_SIZE, 0) << 20));
-	nsoption_set_int(disc_cache_age,
+	slateoption_set_int(disc_cache_age,
 			ro_gui_get_icon_decimal(w, CACHE_DISC_EXPIRE, 0));
 
 	ro_gui_save_options();

@@ -1,7 +1,7 @@
 /*
  * Copyright 2004 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,7 +28,7 @@
 #include "oslib/os.h"
 
 #include "utils/log.h"
-#include "netsurf/plotters.h"
+#include "slate/plotters.h"
 
 #include "riscos/bitmap.h"
 #include "riscos/image.h"
@@ -47,7 +47,7 @@ bool ro_plot_patterned_lines = true;
 /**
  * plot a path on RISC OS
  */
-static nserror
+static slateerror
 ro_plot_draw_path(const draw_path * const path,
 		  int width,
 		  colour c,
@@ -82,7 +82,7 @@ ro_plot_draw_path(const draw_path * const path,
 	if (error) {
 		NSLOG(netsurf, INFO, "xcolourtrans_set_gcol: 0x%x: %s",
 		      error->errnum, error->errmess);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	error = xdraw_stroke(path, 0, 0, 0, width * 2 * 256,
@@ -90,10 +90,10 @@ ro_plot_draw_path(const draw_path * const path,
 	if (error) {
 		NSLOG(netsurf, INFO, "xdraw_stroke: 0x%x: %s", error->errnum,
 		      error->errmess);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -103,9 +103,9 @@ ro_plot_draw_path(const draw_path * const path,
  * \param ctx The current redraw context.
  * \param clip The rectangle to limit all subsequent plot
  *              operations within.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ro_plot_clip(const struct redraw_context *ctx, const struct rect *clip)
 {
 	os_error *error;
@@ -132,7 +132,7 @@ ro_plot_clip(const struct redraw_context *ctx, const struct rect *clip)
 	if (clip_x1 < clip_x0 || clip_y1 < clip_y0) {
 		NSLOG(netsurf, INFO, "bad clip rectangle %i %i %i %i",
 		      clip_x0, clip_y0, clip_x1, clip_y1);
-		return NSERROR_BAD_SIZE;
+		return SLATEERROR_BAD_SIZE;
 	}
 
 	buf[0] = os_VDU_SET_GRAPHICS_WINDOW;
@@ -149,10 +149,10 @@ ro_plot_clip(const struct redraw_context *ctx, const struct rect *clip)
 	if (error) {
 		NSLOG(netsurf, INFO, "xos_writen: 0x%x: %s", error->errnum,
 		      error->errmess);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -170,9 +170,9 @@ ro_plot_clip(const struct redraw_context *ctx, const struct rect *clip)
  * \param radius The radius of the arc.
  * \param angle1 The start angle of the arc.
  * \param angle2 The finish angle of the arc.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ro_plot_arc(const struct redraw_context *ctx,
 	       const plot_style_t *style,
 	       int x, int y, int radius, int angle1, int angle2)
@@ -191,7 +191,7 @@ ro_plot_arc(const struct redraw_context *ctx,
 	if (error) {
 		NSLOG(netsurf, INFO, "xcolourtrans_set_gcol: 0x%x: %s",
 		      error->errnum, error->errmess);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	t = ((double)angle1 * M_PI) / 180.0;
@@ -206,24 +206,24 @@ ro_plot_arc(const struct redraw_context *ctx,
 	if (error) {
 		NSLOG(netsurf, INFO, "xos_plot: 0x%x: %s", error->errnum,
 		      error->errmess);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	error = xos_plot(os_MOVE_TO, sx, sy);	/* move to start */
 	if (error) {
 		NSLOG(netsurf, INFO, "xos_plot: 0x%x: %s", error->errnum,
 		      error->errmess);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	error = xos_plot(os_PLOT_ARC | os_PLOT_TO, ex, ey);	/* arc to end */
 	if (error) {
 		NSLOG(netsurf, INFO, "xos_plot: 0x%x: %s", error->errnum,
 		      error->errmess);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -237,9 +237,9 @@ ro_plot_arc(const struct redraw_context *ctx,
  * \param x The x coordinate of the circle.
  * \param y The y coordinate of the circle.
  * \param radius The radius of the circle.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ro_plot_disc(const struct redraw_context *ctx,
 		const plot_style_t *style,
 		int x, int y, int radius)
@@ -253,7 +253,7 @@ ro_plot_disc(const struct redraw_context *ctx,
 			      "xcolourtrans_set_gcol: 0x%x: %s",
 			      error->errnum,
 			      error->errmess);
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
 		error = xos_plot(os_MOVE_TO,
 				 ro_plot_origin_x + x * 2,
@@ -261,13 +261,13 @@ ro_plot_disc(const struct redraw_context *ctx,
 		if (error) {
 			NSLOG(netsurf, INFO, "xos_plot: 0x%x: %s",
 			      error->errnum, error->errmess);
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
 		error = xos_plot(os_PLOT_CIRCLE | os_PLOT_BY, radius * 2, 0);
 		if (error) {
 			NSLOG(netsurf, INFO, "xos_plot: 0x%x: %s",
 			      error->errnum, error->errmess);
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
 	}
 
@@ -280,7 +280,7 @@ ro_plot_disc(const struct redraw_context *ctx,
 			      "xcolourtrans_set_gcol: 0x%x: %s",
 			      error->errnum,
 			      error->errmess);
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
 		error = xos_plot(os_MOVE_TO,
 				 ro_plot_origin_x + x * 2,
@@ -288,7 +288,7 @@ ro_plot_disc(const struct redraw_context *ctx,
 		if (error) {
 			NSLOG(netsurf, INFO, "xos_plot: 0x%x: %s",
 			      error->errnum, error->errmess);
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
 		error = xos_plot(os_PLOT_CIRCLE_OUTLINE | os_PLOT_BY,
 				 radius * 2, 0);
@@ -296,10 +296,10 @@ ro_plot_disc(const struct redraw_context *ctx,
 		if (error) {
 			NSLOG(netsurf, INFO, "xos_plot: 0x%x: %s",
 			      error->errnum, error->errmess);
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -312,9 +312,9 @@ ro_plot_disc(const struct redraw_context *ctx,
  * \param ctx The current redraw context.
  * \param style Style controlling the line plot.
  * \param line A rectangle defining the line to be drawn
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ro_plot_line(const struct redraw_context *ctx,
 		const plot_style_t *style,
 		const struct rect *line)
@@ -342,7 +342,7 @@ ro_plot_line(const struct redraw_context *ctx,
 				style->stroke_colour,
 				dotted, dashed);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -357,9 +357,9 @@ ro_plot_line(const struct redraw_context *ctx,
  * \param ctx The current redraw context.
  * \param style Style controlling the rectangle plot.
  * \param rect A rectangle defining the line to be drawn
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ro_plot_rectangle(const struct redraw_context *ctx,
 		     const plot_style_t *style,
 		     const struct rect *rect)
@@ -374,7 +374,7 @@ ro_plot_rectangle(const struct redraw_context *ctx,
 			      "xcolourtrans_set_gcol: 0x%x: %s",
 			      error->errnum,
 			      error->errmess);
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
 
 		error = xos_plot(os_MOVE_TO,
@@ -383,7 +383,7 @@ ro_plot_rectangle(const struct redraw_context *ctx,
 		if (error) {
 			NSLOG(netsurf, INFO, "xos_plot: 0x%x: %s",
 			      error->errnum, error->errmess);
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
 
 		error = xos_plot(os_PLOT_RECTANGLE | os_PLOT_TO,
@@ -392,7 +392,7 @@ ro_plot_rectangle(const struct redraw_context *ctx,
 		if (error) {
 			NSLOG(netsurf, INFO, "xos_plot: 0x%x: %s",
 			      error->errnum, error->errmess);
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
 	}
 
@@ -432,7 +432,7 @@ ro_plot_rectangle(const struct redraw_context *ctx,
 				dashed);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -448,9 +448,9 @@ ro_plot_rectangle(const struct redraw_context *ctx,
  * \param style Style controlling the polygon plot.
  * \param p verticies of polygon
  * \param n number of verticies.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ro_plot_polygon(const struct redraw_context *ctx,
 		   const plot_style_t *style,
 		   const int *p,
@@ -474,16 +474,16 @@ ro_plot_polygon(const struct redraw_context *ctx,
 	if (error) {
 		NSLOG(netsurf, INFO, "xcolourtrans_set_gcol: 0x%x: %s",
 		      error->errnum, error->errmess);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 	error = xdraw_fill((draw_path *) path, 0, 0, 0);
 	if (error) {
 		NSLOG(netsurf, INFO, "xdraw_fill: 0x%x: %s", error->errnum,
 		      error->errmess);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -498,9 +498,9 @@ ro_plot_polygon(const struct redraw_context *ctx,
  * \param p elements of path
  * \param n nunber of elements on path
  * \param transform A transform to apply to the path.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ro_plot_path(const struct redraw_context *ctx,
 		const plot_style_t *pstyle,
 		const float *p,
@@ -520,7 +520,7 @@ ro_plot_path(const struct redraw_context *ctx,
 	os_error *error;
 
 	if (n == 0) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	if (p[0] != PLOTTER_PATH_MOVE) {
@@ -614,11 +614,11 @@ ro_plot_path(const struct redraw_context *ctx,
 	}
 
 	free(path);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 
 error:
 	free(path);
-	return NSERROR_INVALID;
+	return SLATEERROR_INVALID;
 }
 
 
@@ -644,9 +644,9 @@ error:
  * \param height The height of area to plot the bitmap into
  * \param bg the background colour to alpha blend into
  * \param flags the flags controlling the type of plot operation
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ro_plot_bitmap(const struct redraw_context *ctx,
 	       struct bitmap *bitmap,
 	       int x, int y,
@@ -660,7 +660,7 @@ ro_plot_bitmap(const struct redraw_context *ctx,
 	buffer = riscos_bitmap_get_buffer(bitmap);
 	if (!buffer) {
 		NSLOG(netsurf, INFO, "bitmap_get_buffer failed");
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	if (!image_redraw(bitmap->sprite_area,
@@ -674,9 +674,9 @@ ro_plot_bitmap(const struct redraw_context *ctx,
 			flags & BITMAPF_REPEAT_X || flags & BITMAPF_REPEAT_Y,
 			riscos_bitmap_get_opaque(bitmap) ? IMAGE_PLOT_TINCT_OPAQUE :
 			 IMAGE_PLOT_TINCT_ALPHA)) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -689,9 +689,9 @@ ro_plot_bitmap(const struct redraw_context *ctx,
  * \param y y coordinate
  * \param text UTF-8 string to plot
  * \param length length of string, in bytes
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ro_plot_text(const struct redraw_context *ctx,
 		const struct plot_font_style *fstyle,
 		int x,
@@ -709,15 +709,15 @@ ro_plot_text(const struct redraw_context *ctx,
 		      "xcolourtrans_set_font_colours: 0x%x: %s",
 		      error->errnum,
 		      error->errmess);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	if (!nsfont_paint(fstyle, text, length,
 			ro_plot_origin_x + x * 2,
 			  ro_plot_origin_y - y * 2)) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 

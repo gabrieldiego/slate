@@ -22,7 +22,7 @@ Native build
 Grab a temporary env.sh
 -----------------------
 
-     $ wget https://git.netsurf-browser.org/netsurf.git/plain/docs/env.sh
+     $ wget https://git.slate-browser.org/netsurf.git/plain/docs/env.sh
      $ unset HOST
      $ source env.sh
 
@@ -91,12 +91,12 @@ To build the native front end (the GTK front end on Linux, BSDs, etc)
   you could do:
 
       $ make
-      $ ./nsgtk3
+      $ ./slategtk3
 
 To build the framebuffer front end, you could do:
 
       $ make TARGET=framebuffer
-      $ ./nsfb
+      $ ./slatefb
 
 More detailed documentation on using the [framebuffer](docs/using-framebuffer.md)
   frontend are available.
@@ -131,11 +131,11 @@ Getting a cross compiler set up
 We maintain cross compilation environments and an SDK for a number of
   platforms.  These may be found in our toolchains repository.
 
-      $ git clone git://git.netsurf-browser.org/toolchains
+      $ git clone git://git.slate-browser.org/toolchains
 
 Pre-built versions of the toolchains for 64bit x86 Debian systems are
   available via our [automated build and test
-  infrastructure](https://ci.netsurf-browser.org/builds/toolchains/)
+  infrastructure](https://ci.slate-browser.org/builds/toolchains/)
 
 
 Not working?

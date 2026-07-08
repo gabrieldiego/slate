@@ -1,7 +1,7 @@
 /*
  * Copyright 2017 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -42,9 +42,9 @@
 #include "utils/utils.h"
 #include "utils/messages.h"
 #include "utils/utf8.h"
-#include "netsurf/keypress.h"
-#include "netsurf/mouse.h"
-#include "netsurf/plot_style.h"
+#include "slate/keypress.h"
+#include "slate/mouse.h"
+#include "slate/plot_style.h"
 
 #include <proto/exec.h>
 #include <proto/graphics.h>
@@ -92,7 +92,7 @@ ami_cw_window_size(struct ami_corewindow *ami_cw, int *width, int *height)
 {
 	struct IBox *bbox;
 
-	if(ami_gui_get_space_box((Object *)ami_cw->objects[GID_CW_DRAW], &bbox) != NSERROR_OK) {
+	if(ami_gui_get_space_box((Object *)ami_cw->objects[GID_CW_DRAW], &bbox) != SLATEERROR_OK) {
 		amiga_warn_user("NoMemory", "");
 		return;
 	}
@@ -163,7 +163,7 @@ ami_cw_mouse_pos(struct ami_corewindow *ami_cw, int *restrict x, int *restrict y
 	xm = ami_cw->win->MouseX;
 	ym = ami_cw->win->MouseY;
 
-	if(ami_gui_get_space_box((Object *)ami_cw->objects[GID_CW_DRAW], &bbox) != NSERROR_OK) {
+	if(ami_gui_get_space_box((Object *)ami_cw->objects[GID_CW_DRAW], &bbox) != SLATEERROR_OK) {
 		amiga_warn_user("NoMemory", "");
 		return false;
 	}
@@ -238,7 +238,7 @@ ami_cw_redraw_rect(struct ami_corewindow *ami_cw, struct rect *r)
 		.priv = ami_cw->gg
 	};
 
-	if(ami_gui_get_space_box((Object *)ami_cw->objects[GID_CW_DRAW], &bbox) != NSERROR_OK) {
+	if(ami_gui_get_space_box((Object *)ami_cw->objects[GID_CW_DRAW], &bbox) != SLATEERROR_OK) {
 		amiga_warn_user("NoMemory", "");
 		return;
 	}
@@ -357,7 +357,7 @@ ami_cw_redraw(struct ami_corewindow *ami_cw, const struct rect *restrict r)
 
 	if(r == NULL) {
 		struct IBox *bbox;
-		if(ami_gui_get_space_box((Object *)ami_cw->objects[GID_CW_DRAW], &bbox) != NSERROR_OK) {
+		if(ami_gui_get_space_box((Object *)ami_cw->objects[GID_CW_DRAW], &bbox) != SLATEERROR_OK) {
 			amiga_warn_user("NoMemory", "");
 			return;
 		}
@@ -812,31 +812,31 @@ static const struct ami_win_event_table ami_cw_table = {
  *
  * \param[in] cw The core window to invalidate.
  * \param[in] r area to redraw or NULL for the entire window area.
- * \return NSERROR_OK on success or appropriate error code.
+ * \return SLATEERROR_OK on success or appropriate error code.
  */
-static nserror
+static slateerror
 ami_cw_invalidate_area(struct core_window *cw, const struct rect *r)
 {
 	struct ami_corewindow *ami_cw = (struct ami_corewindow *)cw;
 
 	ami_cw_redraw(ami_cw, r);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-static nserror
+static slateerror
 ami_cw_get_window_dimensions(const struct core_window *cw,
 		int *width, int *height)
 {
 	struct ami_corewindow *ami_cw = (struct ami_corewindow *)cw;
 
 	ami_cw_window_size(ami_cw, width, height);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-static nserror
+static slateerror
 ami_cw_update_size(struct core_window *cw, int width, int height)
 {
 	struct ami_corewindow *ami_cw = (struct ami_corewindow *)cw;
@@ -863,11 +863,11 @@ ami_cw_update_size(struct core_window *cw, int width, int height)
 			SCROLLER_Visible, win_h,
 		TAG_DONE);		
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-static nserror
+static slateerror
 ami_cw_get_scroll(const struct core_window *cw, int *x, int *y)
 {
 	struct ami_corewindow *ami_cw = (struct ami_corewindow *)cw;
@@ -877,11 +877,11 @@ ami_cw_get_scroll(const struct core_window *cw, int *x, int *y)
 
 	*x = win_x0;
 	*y = win_y0;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-static nserror
+static slateerror
 ami_cw_set_scroll(struct core_window *cw, int x, int y)
 {
 	struct ami_corewindow *ami_cw = (struct ami_corewindow *)cw;
@@ -900,16 +900,16 @@ ami_cw_set_scroll(struct core_window *cw, int x, int y)
 
 	/* probably need to redraw here */
 	ami_cw_redraw(ami_cw, NULL);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-static nserror
+static slateerror
 ami_cw_drag_status(struct core_window *cw, core_window_drag_status ds)
 {
 	struct ami_corewindow *ami_cw = (struct ami_corewindow *)cw;
 	ami_cw->drag_status = ds;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -925,7 +925,7 @@ struct core_window_table ami_cw_cb_table = {
 struct core_window_table *amiga_core_window_table = &ami_cw_cb_table;
 
 /* exported function documented example/corewindow.h */
-nserror ami_corewindow_init(struct ami_corewindow *ami_cw)
+slateerror ami_corewindow_init(struct ami_corewindow *ami_cw)
 {
 	/* setup the core window callback table */
 	ami_cw->drag_status = CORE_WINDOW_DRAG_NONE;
@@ -980,11 +980,11 @@ nserror ami_corewindow_init(struct ami_corewindow *ami_cw)
 		ami_cw->in_border_scroll = true;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in example/corewindow.h */
-nserror ami_corewindow_fini(struct ami_corewindow *ami_cw)
+slateerror ami_corewindow_fini(struct ami_corewindow *ami_cw)
 {
 	/* remove any pending redraws */
 	ami_schedule(-1, ami_cw_redraw_cb, ami_cw);
@@ -1018,6 +1018,6 @@ nserror ami_corewindow_fini(struct ami_corewindow *ami_cw)
 	/* remove the core window from our window list */
 	ami_gui_win_list_remove(ami_cw);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 

@@ -2,7 +2,7 @@
  * Copyright 2004-2007 James Bursa <bursa@users.sourceforge.net>
  * Copyright 2004 John Tytgat <joty@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,8 +23,8 @@
  * \todo Many of these functions and macros should have their own headers.
  */
 
-#ifndef NETSURF_UTILS_UTILS_H
-#define NETSURF_UTILS_UTILS_H
+#ifndef SLATE_UTILS_UTILS_H
+#define SLATE_UTILS_UTILS_H
 
 #include <stdbool.h>
 
@@ -58,10 +58,10 @@
 /* Windows does not have POSIX mkdir so work around that */
 #if defined(_WIN32)
 /** windows mkdir function */
-#define nsmkdir(dir, mode) mkdir((dir))
+#define slatemkdir(dir, mode) mkdir((dir))
 #else
 /** POSIX mkdir function */
-#define nsmkdir(dir, mode) mkdir((dir), (mode))
+#define slatemkdir(dir, mode) mkdir((dir), (mode))
 #endif
 
 #if defined(__GNUC__) && (__GNUC__ < 3)

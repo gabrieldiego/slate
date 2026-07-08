@@ -1,7 +1,7 @@
 /*
  * Copyright 2006 Adrian Lees <adrianl@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
 
 #include <stdbool.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 
 #include "riscos/gui.h"
 #include "riscos/wimp.h"
@@ -47,23 +47,23 @@ bool ro_gui_options_interface_initialise(wimp_w w)
 {
 	/* set the current values */
 	ro_gui_set_icon_selected_state(w, INTERFACE_STRIP_EXTNS_OPTION,
-                                       nsoption_bool(strip_extensions));
+                                       slateoption_bool(strip_extensions));
 	ro_gui_set_icon_selected_state(w, INTERFACE_CONFIRM_OVWR_OPTION,
-                                       nsoption_bool(confirm_overwrite));
+                                       slateoption_bool(confirm_overwrite));
 	ro_gui_set_icon_selected_state(w, INTERFACE_URL_COMPLETE_OPTION,
-                                       nsoption_bool(url_suggestion));
+                                       slateoption_bool(url_suggestion));
 	ro_gui_set_icon_selected_state(w, INTERFACE_HISTORY_TOOLTIP_OPTION,
-                                       nsoption_bool(history_tooltip));
+                                       slateoption_bool(history_tooltip));
 	ro_gui_set_icon_selected_state(w, INTERFACE_THUMBNAIL_ICONISE_OPTION,
-                                       nsoption_bool(thumbnail_iconise));
+                                       slateoption_bool(thumbnail_iconise));
 	ro_gui_set_icon_selected_state(w, INTERFACE_USE_EXTERNAL_HOTLIST,
-                                       nsoption_bool(external_hotlists));
+                                       slateoption_bool(external_hotlists));
 	ro_gui_set_icon_string(w, INTERFACE_EXTERNAL_HOTLIST_APP,
-                               (nsoption_charp(external_hotlist_app)) ?
-                               nsoption_charp(external_hotlist_app) : "", false);
+                               (slateoption_charp(external_hotlist_app)) ?
+                               slateoption_charp(external_hotlist_app) : "", false);
 
 	ro_gui_set_icon_shaded_state(w, INTERFACE_EXTERNAL_HOTLIST_APP,
-                                     !nsoption_bool(external_hotlists));
+                                     !slateoption_bool(external_hotlists));
 
 	/* initialise all functions for a newly created window */
 	ro_gui_wimp_event_register_mouse_click(w,
@@ -118,25 +118,25 @@ void ro_gui_options_interface_default(wimp_pointer *pointer)
 
 bool ro_gui_options_interface_ok(wimp_w w)
 {
-	nsoption_set_bool(strip_extensions, 
+	slateoption_set_bool(strip_extensions, 
 			ro_gui_get_icon_selected_state(w, 
 					INTERFACE_STRIP_EXTNS_OPTION));
-	nsoption_set_bool(confirm_overwrite, 
+	slateoption_set_bool(confirm_overwrite, 
                           ro_gui_get_icon_selected_state(w,
                                         INTERFACE_CONFIRM_OVWR_OPTION));
-	nsoption_set_bool(url_suggestion, 
+	slateoption_set_bool(url_suggestion, 
                           ro_gui_get_icon_selected_state(w,
                                         INTERFACE_URL_COMPLETE_OPTION));
-	nsoption_set_bool(history_tooltip, 
+	slateoption_set_bool(history_tooltip, 
                           ro_gui_get_icon_selected_state(w,
                                         INTERFACE_HISTORY_TOOLTIP_OPTION));
-	nsoption_set_bool(thumbnail_iconise, 
+	slateoption_set_bool(thumbnail_iconise, 
                           ro_gui_get_icon_selected_state(w,
                                         INTERFACE_THUMBNAIL_ICONISE_OPTION));
-	nsoption_set_bool(external_hotlists, 
+	slateoption_set_bool(external_hotlists, 
                           ro_gui_get_icon_selected_state(w,
                                         INTERFACE_USE_EXTERNAL_HOTLIST));
-	nsoption_set_charp(external_hotlist_app,
+	slateoption_set_charp(external_hotlist_app,
                            strdup(ro_gui_get_icon_string(w,
                                         INTERFACE_EXTERNAL_HOTLIST_APP)));
 

@@ -2,7 +2,7 @@
  * Copyright 2006 John-Mark Bell <jmb@netsurf-browser.org>
  * Copyright 2009 Paul Blokus <paul_pl@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,14 +22,14 @@
  * Single/Multi-line UTF-8 text area interface
  */
 
-#ifndef NETSURF_DESKTOP_TEXTAREA_H
-#define NETSURF_DESKTOP_TEXTAREA_H
+#ifndef SLATE_DESKTOP_TEXTAREA_H
+#define SLATE_DESKTOP_TEXTAREA_H
 
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "netsurf/plot_style.h"
-#include "netsurf/mouse.h"
+#include "slate/plot_style.h"
+#include "slate/mouse.h"
 
 struct textarea;
 struct redraw_context;

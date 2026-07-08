@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@
  * Browser window creation and manipulation (implementation).
  */
 
-#include "netsurf/browser_window.h"
+#include "slate/browser_window.h"
 #include "utils/log.h"
 
 /**

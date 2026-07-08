@@ -1,7 +1,7 @@
 /*
  * Copyright 2008-2025 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,14 +25,14 @@
 #include <intuition/classusr.h>
 #include <libraries/Picasso96.h>
 
-#include "netsurf/bitmap.h"
+#include "slate/bitmap.h"
 
 #define AMI_BITMAP_FORMAT RGBFB_A8R8G8B8
 #define AMI_BITMAP_SCALE_ICON 0xFF
 
 extern struct gui_bitmap_table *amiga_bitmap_table;
 struct bitmap;
-struct nsurl;
+struct slateurl;
 struct gui_globals;
 
 struct BitMap *ami_bitmap_get_native(struct bitmap *bitmap, int width, int height,
@@ -52,7 +52,7 @@ struct bitmap *ami_bitmap_from_datatype(char *filename);
  * A reference will be kept by the bitmap object.
  * The URL can only ever be set once for a bitmap.
  */
-void ami_bitmap_set_url(struct bitmap *bm, struct nsurl *url);
+void ami_bitmap_set_url(struct bitmap *bm, struct slateurl *url);
 
 /**
  * Set bitmap title

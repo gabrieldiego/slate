@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,13 +20,13 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#include "netsurf/inttypes.h"
+#include "slate/inttypes.h"
 #include "utils/utf8.h"
 #include "utils/log.h"
-#include "utils/nsoption.h"
-#include "netsurf/layout.h"
-#include "netsurf/mouse.h"
-#include "netsurf/plotters.h"
+#include "utils/slateoption.h"
+#include "slate/layout.h"
+#include "slate/mouse.h"
+#include "slate/plotters.h"
 
 #include "atari/gui.h"
 #include "atari/plot/fontplot.h"
@@ -46,9 +46,9 @@ extern FONT_PLOTTER fplotter;
  * \param[in] x coordinate to search for
  * \param[out] char_offset updated to offset in string of actual_x, [0..length]
  * \param[out] actual_x updated to x coordinate of character closest to x
- * \return NSERROR_OK and char_offset and actual_x updated or appropriate error code on faliure
+ * \return SLATEERROR_OK and char_offset and actual_x updated or appropriate error code on faliure
  */
-static nserror
+static slateerror
 atari_font_position(const plot_font_style_t *fstyle,
 		    const char *string,
 		    size_t length,
@@ -68,7 +68,7 @@ atari_font_position(const plot_font_style_t *fstyle,
 				    char_offset, actual_x);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -81,7 +81,7 @@ atari_font_position(const plot_font_style_t *fstyle,
  * \param[in] x            width available
  * \param[out] char_offset updated to offset in string of actual_x, [1..length]
  * \param[out] actual_x updated to x coordinate of character closest to x
- * \return NSERROR_OK or appropriate error code on faliure
+ * \return SLATEERROR_OK or appropriate error code on faliure
  *
  * On exit, char_offset indicates first character after split point.
  *
@@ -94,7 +94,7 @@ atari_font_position(const plot_font_style_t *fstyle,
  *
  * Returning char_offset == length means no split possible
  */
-static nserror
+static slateerror
 atari_font_split(const plot_font_style_t *fstyle,
 		 const char *string,
 		 size_t length,
@@ -114,7 +114,7 @@ atari_font_split(const plot_font_style_t *fstyle,
 				    char_offset, actual_x);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -125,9 +125,9 @@ atari_font_split(const plot_font_style_t *fstyle,
  * \param[in] str UTF-8 string to measure
  * \param[in] length length of string, in bytes
  * \param[out] width updated to width of string[0..length)
- * \return NSERROR_OK and width updated or appropriate error code on faliure
+ * \return SLATEERROR_OK and width updated or appropriate error code on faliure
  */
-static nserror
+static slateerror
 atari_font_width(const plot_font_style_t *fstyle,
 		 const char *str,
 		 size_t length,
@@ -143,7 +143,7 @@ atari_font_width(const plot_font_style_t *fstyle,
 		fplotter->str_width(fplotter, fstyle, str, length, width);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 

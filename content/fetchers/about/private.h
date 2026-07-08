@@ -1,7 +1,7 @@
 /*
  * Copyright 2020 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * Private interfaces for the about scheme fetcher.
  */
 
-#ifndef NETSURF_CONTENT_FETCHERS_ABOUT_PRIVATE_H
-#define NETSURF_CONTENT_FETCHERS_ABOUT_PRIVATE_H
+#ifndef SLATE_CONTENT_FETCHERS_ABOUT_PRIVATE_H
+#define SLATE_CONTENT_FETCHERS_ABOUT_PRIVATE_H
 
 struct fetch_about_context;
 struct fetch_multipart_data;
@@ -44,12 +44,12 @@ bool fetch_about_send_header(struct fetch_about_context *ctx, const char *fmt, .
 /**
  * send data on the about response
  */
-nserror fetch_about_senddata(struct fetch_about_context *ctx, const uint8_t *data, size_t data_len);
+slateerror fetch_about_senddata(struct fetch_about_context *ctx, const uint8_t *data, size_t data_len);
 
 /**
  * send formatted data on the about response
  */
-nserror fetch_about_ssenddataf(struct fetch_about_context *ctx, const char *fmt, ...);
+slateerror fetch_about_ssenddataf(struct fetch_about_context *ctx, const char *fmt, ...);
 
 /**
  * complete the about fetch response
@@ -67,7 +67,7 @@ bool fetch_about_srverror(struct fetch_about_context *ctx);
 /**
  * get the fetch url
  */
-struct nsurl *fetch_about_get_url(struct fetch_about_context *ctx);
+struct slateurl *fetch_about_get_url(struct fetch_about_context *ctx);
 
 /**
  * get multipart fetch data

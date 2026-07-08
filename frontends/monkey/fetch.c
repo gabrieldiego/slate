@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,9 +24,9 @@
 
 #include "utils/errors.h"
 #include "utils/file.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/filepath.h"
-#include "netsurf/fetch.h"
+#include "slate/fetch.h"
 
 #include "monkey/filetype.h"
 #include "monkey/fetch.h"
@@ -34,12 +34,12 @@
 extern char **respaths;
 
 
-static nsurl *gui_get_resource_url(const char *path)
+static slateurl *gui_get_resource_url(const char *path)
 {
 	char buf[PATH_MAX];
-	nsurl *url = NULL;
+	slateurl *url = NULL;
 
-	netsurf_path_to_nsurl(filepath_sfind(respaths, buf, path), &url);
+	slate_path_to_slateurl(filepath_sfind(respaths, buf, path), &url);
 
 	return url;
 }

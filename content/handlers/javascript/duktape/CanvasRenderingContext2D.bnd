@@ -2,7 +2,7 @@
  *
  * Copyright 2020 Daniel Silverstone <dsilvers@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * Released under the terms of the MIT License,
  *         http://www.opensource.org/licenses/mit-license
@@ -19,7 +19,7 @@ class CanvasRenderingContext2D {
 /* prologue */
 #include "desktop/gui_internal.h"
 #include "desktop/gui_table.h"
-#include "netsurf/bitmap.h"
+#include "slate/bitmap.h"
 #include "utils/corestrings.h"
 /* It's a smidge naughty of us to read
  * this particular header, but we're needing
@@ -128,9 +128,9 @@ canvas2d_user_data_handler(dom_node_operation operation,
  *
  * \param node The DOM node being inserted
  * \param[out] bitmap_out The bitmap created
- * \return NSERROR_OK on success else appropriate error code
+ * \return SLATEERROR_OK on success else appropriate error code
  */
-static nserror canvas2d_create_bitmap(dom_node *node, struct bitmap **bitmap_out)
+static slateerror canvas2d_create_bitmap(dom_node *node, struct bitmap **bitmap_out)
 {
 	dom_exception exc;
 	dom_string *width_s = NULL, *height_s = NULL;
@@ -176,7 +176,7 @@ static nserror canvas2d_create_bitmap(dom_node *node, struct bitmap **bitmap_out
 		BITMAP_NONE);
 
 	if (bitmap == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	memset(guit->bitmap->get_buffer(bitmap),
@@ -192,7 +192,7 @@ static nserror canvas2d_create_bitmap(dom_node *node, struct bitmap **bitmap_out
 
 	if (exc != DOM_NO_ERR) {
 		guit->bitmap->destroy(bitmap);
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	assert(oldbitmap == NULL);
@@ -200,7 +200,7 @@ static nserror canvas2d_create_bitmap(dom_node *node, struct bitmap **bitmap_out
 	if (bitmap_out != NULL)
 		*bitmap_out = bitmap;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -370,7 +370,7 @@ init CanvasRenderingContext2D(struct dom_html_canvas_element *canvas)
 	
 	if (bitmap == NULL) {
 		if (canvas2d_create_bitmap((dom_node *)canvas,
-					   &bitmap) != NSERROR_OK) {
+					   &bitmap) != SLATEERROR_OK) {
 			priv->bitmap = NULL;
 			priv->width = -1;
 			priv->height = -1;

@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 Vincent Sanders <vince@simtec.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_FB_GUI_H
-#define NETSURF_FB_GUI_H
+#ifndef SLATE_FB_GUI_H
+#define SLATE_FB_GUI_H
 
 
 struct fbtk_widget_s;
@@ -57,7 +57,7 @@ extern struct gui_window *window_list;
 
 void gui_resize(struct fbtk_widget_s *root, int width, int height);
 
-#endif /* NETSURF_FB_GUI_H */
+#endif /* SLATE_FB_GUI_H */
 
 /*
  * Local Variables:

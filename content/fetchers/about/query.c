@@ -24,32 +24,32 @@
 #include <stdlib.h>
 
 #include "utils/errors.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/messages.h"
 
 #include "query.h"
 
 /* exported interface documented in about/query.h */
-nserror
-get_query_description(struct nsurl *url,
+slateerror
+get_query_description(struct slateurl *url,
 		      const char *key,
 		      char **out_str)
 {
-	nserror res;
+	slateerror res;
 	char *url_s;
 	size_t url_l;
 	char *str = NULL;
 
 	/* get the host in question */
-	res = nsurl_get(url, NSURL_HOST, &url_s, &url_l);
-	if (res != NSERROR_OK) {
+	res = slateurl_get(url, SLATEURL_HOST, &url_s, &url_l);
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
 	/* obtain the description with the url substituted */
 	str = messages_get_buff(key, url_s);
 	if (str == NULL) {
-		res = NSERROR_NOMEM;
+		res = SLATEERROR_NOMEM;
 	} else {
 		*out_str = str;
 	}

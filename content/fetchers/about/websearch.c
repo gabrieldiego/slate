@@ -28,7 +28,7 @@
 #include <string.h>
 
 #include "utils/errors.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/url.h"
 
 #include "content/fetch.h"
@@ -37,29 +37,29 @@
 #include "private.h"
 #include "websearch.h"
 
-static nserror
+static slateerror
 process_query_section(const char *str, size_t len, char **term)
 {
 	if (len < 3) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (str[0] != 'q' || str[1] != '=') {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	return url_unescape(str + 2, len - 2, NULL, term);
 }
 
-static nserror
-searchterm_from_query(struct nsurl *url, char **term)
+static slateerror
+searchterm_from_query(struct slateurl *url, char **term)
 {
-	nserror res;
+	slateerror res;
 	char *querystr;
 	size_t querylen;
 	size_t kvstart;/* key value start */
 	size_t kvlen; /* key value end */
 
-	res = nsurl_get(url, NSURL_QUERY, &querystr, &querylen);
-	if (res != NSERROR_OK) {
+	res = slateurl_get(url, SLATEURL_QUERY, &querystr, &querylen);
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -72,7 +72,7 @@ searchterm_from_query(struct nsurl *url, char **term)
 		}
 
 		res = process_query_section(querystr + kvstart, kvlen, term);
-		if (res == NSERROR_OK) {
+		if (res == SLATEERROR_OK) {
 			break;
 		}
 		kvlen++; /* account for & separator */
@@ -84,23 +84,23 @@ searchterm_from_query(struct nsurl *url, char **term)
 
 bool fetch_about_websearch_handler(struct fetch_about_context *ctx)
 {
-	nserror res;
-	nsurl *url;
+	slateerror res;
+	slateurl *url;
 	char *term;
 
 	res = searchterm_from_query(fetch_about_get_url(ctx), &term);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return false;
 	}
 
 	res = search_web_omni(term, SEARCH_WEB_OMNI_SEARCHONLY, &url);
 	free(term);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return false;
 	}
 
-	fetch_about_redirect(ctx, nsurl_access(url));
-	nsurl_unref(url);
+	fetch_about_redirect(ctx, slateurl_access(url));
+	slateurl_unref(url);
 
 	return true;
 }

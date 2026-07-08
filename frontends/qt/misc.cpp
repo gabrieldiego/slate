@@ -1,7 +1,7 @@
 /*
  * Copyright 2021 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,7 +30,7 @@ extern "C" {
 #include "utils/errors.h"
 #include "utils/sys_time.h"
 #include "utils/log.h"
-#include "netsurf/misc.h"
+#include "slate/misc.h"
 
 }
 
@@ -53,7 +53,7 @@ struct nscallback
 };
 
 /* exported function documented in qt/misc.h */
-int nsqt_schedule_run(void)
+int slateqt_schedule_run(void)
 {
 	struct timeval tv;
 	struct timeval nexttime;
@@ -125,11 +125,11 @@ int nsqt_schedule_run(void)
  *
  * \param  callback  callback function
  * \param  p         user parameter, passed to callback function
- * \return NSERROR_OK if callback found and removed else NSERROR_NOT_FOUND
+ * \return SLATEERROR_OK if callback found and removed else SLATEERROR_NOT_FOUND
  *
  * All scheduled callbacks matching both callback and p are removed.
  */
-static nserror schedule_remove(void (*callback)(void *p), void *p)
+static slateerror schedule_remove(void (*callback)(void *p), void *p)
 {
 	struct nscallback *cur_nscb;
 	struct nscallback *prev_nscb;
@@ -138,7 +138,7 @@ static nserror schedule_remove(void (*callback)(void *p), void *p)
 
 	/* check there is something on the list to remove */
 	if (schedule_list == NULL) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	NSLOG(schedule, DEBUG, "removing %p, %p", callback, p);
@@ -173,9 +173,9 @@ static nserror schedule_remove(void (*callback)(void *p), void *p)
 	}
 
 	if (removed == false) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -186,7 +186,7 @@ static nserror schedule_remove(void (*callback)(void *p), void *p)
  *          negative value to remove any existing callback.
  * \param callback callback function
  * \param p user parameter passed to callback function
- * \return NSERROR_OK on sucess or appropriate error on faliure
+ * \return SLATEERROR_OK on sucess or appropriate error on faliure
  *
  * The callback function will be called as soon as possible
  * after the timeout has elapsed.
@@ -195,11 +195,11 @@ static nserror schedule_remove(void (*callback)(void *p), void *p)
  * reset the callback time to the newly specified value.
  *
  */
-nserror nsqt_schedule(int tival, void (*callback)(void *p), void *p)
+slateerror slateqt_schedule(int tival, void (*callback)(void *p), void *p)
 {
 	struct nscallback *nscb;
 	struct timeval tv;
-	nserror ret;
+	slateerror ret;
 
 	/* ensure uniqueness of the callback and context */
 	ret = schedule_remove(callback, p);
@@ -227,27 +227,27 @@ nserror nsqt_schedule(int tival, void (*callback)(void *p), void *p)
 	// ensure timer will run the scheduler at appropriate time
 	NS_Application::instance()->next_schedule(tival);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * make the cookie window visible.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-static nserror nsqt_present_cookies(const char *search_term)
+static slateerror slateqt_present_cookies(const char *search_term)
 {
 	return NS_Application::instance()->cookies_show(search_term);
 }
 
 
 static struct gui_misc_table misc_table = {
-	.schedule = nsqt_schedule,
+	.schedule = slateqt_schedule,
 	.quit = NULL,
 	.launch_url = NULL,
 	.login = NULL,
 	.pdf_password = NULL,
-	.present_cookies = nsqt_present_cookies,
+	.present_cookies = slateqt_present_cookies,
 };
 
-struct gui_misc_table *nsqt_misc_table = &misc_table;
+struct gui_misc_table *slateqt_misc_table = &misc_table;

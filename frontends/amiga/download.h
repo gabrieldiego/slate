@@ -1,7 +1,7 @@
 /*
  * Copyright 2008-9 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,7 +26,7 @@ extern struct gui_download_table *amiga_download_table;
 struct download_context;
 struct gui_download_window;
 struct gui_window;
-struct nsurl;
+struct slateurl;
 
 struct dlnode
 {
@@ -38,5 +38,5 @@ void ami_free_download_list(struct List *dllist);
 BOOL ami_download_check_overwrite(const char *file, struct Window *win, ULONG size);
 void ami_download_parse_backmsg(const char *backmsg);
 
-nserror gui_window_save_link(struct gui_window *g, struct nsurl *url, const char *title);
+slateerror gui_window_save_link(struct gui_window *g, struct slateurl *url, const char *title);
 #endif

@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -43,15 +43,15 @@
 #include <stdlib.h>
 #include <nsutils/unistd.h>
 
-#include "netsurf/inttypes.h"
+#include "slate/inttypes.h"
 #include "utils/filepath.h"
 #include "utils/file.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/log.h"
 #include "utils/messages.h"
 #include "utils/hashmap.h"
 #include "desktop/gui_internal.h"
-#include "netsurf/misc.h"
+#include "slate/misc.h"
 
 #include "content/backing_store.h"
 
@@ -165,7 +165,7 @@ struct store_entry_element {
  * @note Order is important to avoid excessive structure packing overhead.
  */
 struct store_entry {
-	nsurl *url; /**< The URL for this entry */
+	slateurl *url; /**< The URL for this entry */
 	int64_t last_used; /**< UNIX time the entry was last used */
 	uint16_t use_count; /**< number of times this entry has been accessed */
 	uint8_t flags; /**< entry flags */
@@ -243,13 +243,13 @@ struct store_state *storestate;
 
 /* Entries hashmap parameters
  *
- * Our hashmap has nsurl keys and store_entry values
+ * Our hashmap has slateurl keys and store_entry values
  */
 
 static bool
 entries_hashmap_key_eq(void *key1, void *key2)
 {
-	return nsurl_compare((nsurl *)key1, (nsurl *)key2, NSURL_COMPLETE);
+	return slateurl_compare((slateurl *)key1, (slateurl *)key2, SLATEURL_COMPLETE);
 }
 
 static void *
@@ -257,7 +257,7 @@ entries_hashmap_value_alloc(void *key)
 {
 	struct store_entry *ent = calloc(1, sizeof(struct store_entry));
 	if (ent != NULL) {
-		ent->url = nsurl_ref(key);
+		ent->url = slateurl_ref(key);
 	}
 	return ent;
 }
@@ -267,14 +267,14 @@ entries_hashmap_value_destroy(void *value)
 {
 	struct store_entry *ent = value;
 	/** \todo Do we need to do any disk cleanup here?  if so, meep! */
-	nsurl_unref(ent->url);
+	slateurl_unref(ent->url);
 	free(ent);
 }
 
 static hashmap_parameters_t entries_hashmap_parameters = {
-	.key_clone = (hashmap_key_clone_t)nsurl_ref,
-	.key_destroy = (hashmap_key_destroy_t)nsurl_unref,
-	.key_hash = (hashmap_key_hash_t)nsurl_hash,
+	.key_clone = (hashmap_key_clone_t)slateurl_ref,
+	.key_destroy = (hashmap_key_destroy_t)slateurl_unref,
+	.key_hash = (hashmap_key_hash_t)slateurl_hash,
 	.key_eq = entries_hashmap_key_eq,
 	.value_alloc = entries_hashmap_value_alloc,
 	.value_destroy = entries_hashmap_value_destroy,
@@ -387,14 +387,14 @@ store_fname(struct store_state *state,
 	switch (elem_idx) {
 	case ENTRY_ELEM_DATA:
 	case ENTRY_ELEM_META:
-		netsurf_mkpath(&fname, NULL, 8,
+		slate_mkpath(&fname, NULL, 8,
 			       state->path, b32u_d[0], b32u_d[1], b32u_d[2],
 			       b32u_d[3], b32u_d[4], b32u_d[5], b32u_i);
 		break;
 
 	case (ENTRY_ELEM_COUNT + ENTRY_ELEM_META):
 	case (ENTRY_ELEM_COUNT + ENTRY_ELEM_DATA):
-		netsurf_mkpath(&fname, NULL, 3,
+		slate_mkpath(&fname, NULL, 3,
 			       state->path, b32u_d[0], b32u_d[1]);
 		break;
 
@@ -412,9 +412,9 @@ store_fname(struct store_state *state,
  * @param state The store state to use.
  * @param bse The entry to invalidate.
  * @param elem_idx The element index to invalidate.
- * @return NSERROR_OK on success or error code on failure.
+ * @return SLATEERROR_OK on success or error code on failure.
  */
-static nserror
+static slateerror
 invalidate_element(struct store_state *state,
 		   struct store_entry *bse,
 		   int elem_idx)
@@ -436,9 +436,9 @@ invalidate_element(struct store_state *state,
 		char *fname;
 
 		/* unlink the file from disc */
-		fname = store_fname(state, nsurl_hash(bse->url), elem_idx);
+		fname = store_fname(state, slateurl_hash(bse->url), elem_idx);
 		if (fname == NULL) {
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 		unlink(fname);
 		free(fname);
@@ -446,7 +446,7 @@ invalidate_element(struct store_state *state,
 
 	state->total_alloc -= bse->elem[elem_idx].size;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -454,12 +454,12 @@ invalidate_element(struct store_state *state,
  *
  * @param state The store state to use.
  * @param bse The entry to invalidate.
- * @return NSERROR_OK on success or error code on failure.
+ * @return SLATEERROR_OK on success or error code on failure.
  */
-static nserror
+static slateerror
 invalidate_entry(struct store_state *state, struct store_entry *bse)
 {
-	nserror ret;
+	slateerror ret;
 
 	/* mark entry as invalid */
 	bse->flags |= ENTRY_FLAGS_INVALID;
@@ -475,18 +475,18 @@ invalidate_entry(struct store_state *state, struct store_entry *bse)
 		 */
 		NSLOG(netsurf, DEBUG,
 		      "invalidating entry with referenced allocation");
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
-	NSLOG(netsurf, VERBOSE, "Removing entry for %s", nsurl_access(bse->url));
+	NSLOG(netsurf, VERBOSE, "Removing entry for %s", slateurl_access(bse->url));
 
 	ret = invalidate_element(state, bse, ENTRY_ELEM_META);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		NSLOG(netsurf, ERROR, "Error invalidating metadata element");
 	}
 
 	ret = invalidate_element(state, bse, ENTRY_ELEM_DATA);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		NSLOG(netsurf, ERROR, "Error invalidating data element");
 	}
 
@@ -494,7 +494,7 @@ invalidate_entry(struct store_state *state, struct store_entry *bse)
 	hashmap_remove(state->entries, bse->url);
 	/* From now, bse is invalid memory */
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -572,20 +572,20 @@ entry_eviction_iterator_cb(void *key, void *value, void *ctx)
  * get evicted first.
  *
  * @param state The store state to use.
- * @return NSERROR_OK on success or error code on failure.
+ * @return SLATEERROR_OK on success or error code on failure.
  */
-static nserror store_evict(struct store_state *state)
+static slateerror store_evict(struct store_state *state)
 {
 	size_t ent = 0;
 	size_t removed = 0; /* size of removed entries */
-	nserror ret = NSERROR_OK;
+	slateerror ret = SLATEERROR_OK;
 	size_t old_count;
 	eviction_state_t estate;
 
 	/* check if the cache has exceeded configured limit */
 	if (state->total_alloc < state->limit) {
 		/* cache within limits */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	NSLOG(netsurf, INFO,
@@ -598,19 +598,19 @@ static nserror store_evict(struct store_state *state)
 	estate.ent_count = 0;
 	estate.elist = malloc(sizeof(struct state_entry*) * old_count);
 	if (estate.elist == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	if (hashmap_iterate(state->entries, entry_eviction_iterator_cb, &estate)) {
 		NSLOG(netsurf, WARNING, "Unexpected termination of eviction iterator");
 		free(estate.elist);
-		return NSERROR_UNKNOWN;
+		return SLATEERROR_UNKNOWN;
 	}
 
 	if (old_count != estate.ent_count) {
 		NSLOG(netsurf, WARNING, "Incorrect entry count after eviction iterator");
 		free(estate.elist);
-		return NSERROR_UNKNOWN;
+		return SLATEERROR_UNKNOWN;
 	}
 
 	qsort(estate.elist, estate.ent_count, sizeof(struct state_entry*), compar);
@@ -624,7 +624,7 @@ static nserror store_evict(struct store_state *state)
 		removed += bse->elem[ENTRY_ELEM_META].size;
 
 		ret = invalidate_entry(state, bse);
-		if (ret != NSERROR_OK) {
+		if (ret != SLATEERROR_OK) {
 			break;
 		}
 
@@ -648,20 +648,20 @@ static nserror store_evict(struct store_state *state)
  * To serialise a single store entry for now we write out a 32bit int
  * which is the length of the url, then that many bytes of the url.
  * Then we write out the full store entry struct as-is, which includes
- * a useless nsurl pointer.
+ * a useless slateurl pointer.
  */
-static nserror
+static slateerror
 write_entry(struct store_entry *ent, int fd)
 {
-	uint32_t len = strlen(nsurl_access(ent->url));
+	uint32_t len = strlen(slateurl_access(ent->url));
 	if (write(fd, &len, sizeof(len)) != sizeof(len))
-		return NSERROR_SAVE_FAILED;
-	if (write(fd, nsurl_access(ent->url), len) != (ssize_t)len)
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
+	if (write(fd, slateurl_access(ent->url), len) != (ssize_t)len)
+		return SLATEERROR_SAVE_FAILED;
 	if (write(fd, ent, sizeof(*ent)) != sizeof(*ent))
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 typedef struct {
@@ -680,7 +680,7 @@ write_entry_iterator(void *key, void *value, void *ctx)
 	write_entry_iteration_state *state = ctx;
 	state->written++;
 	/* We stop early if we fail to write this entry */
-	return write_entry(ent, state->fd) != NSERROR_OK;
+	return write_entry(ent, state->fd) != SLATEERROR_OK;
 }
 
 /**
@@ -689,31 +689,31 @@ write_entry_iterator(void *key, void *value, void *ctx)
  * Serialise entry index out to storage.
  *
  * @param state The backing store state to serialise.
- * @return NSERROR_OK on success or error code on failure.
+ * @return SLATEERROR_OK on success or error code on failure.
  */
-static nserror write_entries(struct store_state *state)
+static slateerror write_entries(struct store_state *state)
 {
 	char *tname = NULL; /* temporary file name for atomic replace */
 	char *fname = NULL; /* target filename */
 	write_entry_iteration_state weistate;
-	nserror ret;
+	slateerror ret;
 
 	memset(&weistate, 0, sizeof(weistate));
 
 	if (state->entries_dirty == false) {
 		/* entries have not been updated since last write */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
-	ret = netsurf_mkpath(&tname, NULL, 2, state->path, "t"ENTRIES_FNAME);
-	if (ret != NSERROR_OK) {
+	ret = slate_mkpath(&tname, NULL, 2, state->path, "t"ENTRIES_FNAME);
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
 	weistate.fd = open(tname, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
 	if (weistate.fd == -1) {
 		free(tname);
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
 	}
 
 	if (hashmap_iterate(state->entries, write_entry_iterator, &weistate)) {
@@ -721,13 +721,13 @@ static nserror write_entries(struct store_state *state)
 		close(weistate.fd);
 		unlink(tname);
 		free(tname);
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
 	}
 
 	close(weistate.fd);
 
-	ret = netsurf_mkpath(&fname, NULL, 2, state->path, ENTRIES_FNAME);
-	if (ret != NSERROR_OK) {
+	ret = slate_mkpath(&fname, NULL, 2, state->path, ENTRIES_FNAME);
+	if (ret != SLATEERROR_OK) {
 		unlink(tname);
 		free(tname);
 		return ret;
@@ -739,12 +739,12 @@ static nserror write_entries(struct store_state *state)
 		unlink(tname);
 		free(tname);
 		free(fname);
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
 	}
 
 	NSLOG(netsurf, INFO, "Wrote out %"PRIsizet" entries", weistate.written);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -753,9 +753,9 @@ static nserror write_entries(struct store_state *state)
  * Serialise block file use map out to storage.
  *
  * \param state The backing store state to serialise.
- * \return NSERROR_OK on success or error code on failure.
+ * \return SLATEERROR_OK on success or error code on failure.
  */
-static nserror write_blocks(struct store_state *state)
+static slateerror write_blocks(struct store_state *state)
 {
 	int fd;
 	char *tname = NULL; /* temporary file name for atomic replace */
@@ -763,24 +763,24 @@ static nserror write_blocks(struct store_state *state)
 	size_t blocks_size;
 	size_t written = 0;
 	size_t wr;
-	nserror ret;
+	slateerror ret;
 	int bfidx; /* block file index */
 	int elem_idx;
 
 	if (state->blocks_dirty == false) {
 		/* blocks use maps have not been updated since last write */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
-	ret = netsurf_mkpath(&tname, NULL, 2, state->path, "t"BLOCKS_FNAME);
-	if (ret != NSERROR_OK) {
+	ret = slate_mkpath(&tname, NULL, 2, state->path, "t"BLOCKS_FNAME);
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
 	fd = open(tname, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
 	if (fd == -1) {
 		free(tname);
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
 	}
 
 	blocks_size = (BLOCK_FILE_COUNT * ENTRY_ELEM_COUNT) * BLOCK_USE_MAP_SIZE;
@@ -807,11 +807,11 @@ wr_err:
 	if (written != blocks_size) {
 		unlink(tname);
 		free(tname);
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
 	}
 
-	ret = netsurf_mkpath(&fname, NULL, 2, state->path, BLOCKS_FNAME);
-	if (ret != NSERROR_OK) {
+	ret = slate_mkpath(&fname, NULL, 2, state->path, BLOCKS_FNAME);
+	if (ret != SLATEERROR_OK) {
 		unlink(tname);
 		free(tname);
 		return ret;
@@ -823,10 +823,10 @@ wr_err:
 		unlink(tname);
 		free(tname);
 		free(fname);
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -837,9 +837,9 @@ wr_err:
  * therefore faster.
  *
  * \param state The backing store state to set block extent for.
- * \return NSERROR_OK on success or error code on failure.
+ * \return SLATEERROR_OK on success or error code on failure.
  */
-static nserror set_block_extents(struct store_state *state)
+static slateerror set_block_extents(struct store_state *state)
 {
 	int bfidx; /* block file index */
 	int elem_idx;
@@ -847,7 +847,7 @@ static nserror set_block_extents(struct store_state *state)
 
 	if (state->blocks_opened == false) {
 		/* no blocks have been opened since last write */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	NSLOG(netsurf, DEBUG, "Starting");
@@ -868,7 +868,7 @@ static nserror set_block_extents(struct store_state *state)
 
 	state->blocks_opened = false;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -900,18 +900,18 @@ static void control_maintenance(void *s)
  * @param state The store state to use.
  * @param url The value used as the unique key to search entries for.
  * @param bse Pointer used to return value.
- * @return NSERROR_OK and bse updated on success or NSERROR_NOT_FOUND
+ * @return SLATEERROR_OK and bse updated on success or SLATEERROR_NOT_FOUND
  *         if no entry corresponds to the url.
  */
-static nserror
-get_store_entry(struct store_state *state, nsurl *url, struct store_entry **bse)
+static slateerror
+get_store_entry(struct store_state *state, slateurl *url, struct store_entry **bse)
 {
 	struct store_entry *ent;
 
 	ent = hashmap_lookup(state->entries, url);
 
 	if (ent == NULL) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	*bse = ent;
@@ -923,7 +923,7 @@ get_store_entry(struct store_state *state, nsurl *url, struct store_entry **bse)
 
 	guit->misc->schedule(CONTROL_MAINT_TIME, control_maintenance, state);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -968,28 +968,28 @@ static block_index_t alloc_block(struct store_state *state, int elem_idx)
  * @param data The data to store
  * @param datalen The length of data in \a data
  * @param bse Pointer used to return value.
- * @return NSERROR_OK and \a bse updated on success or NSERROR_NOT_FOUND
+ * @return SLATEERROR_OK and \a bse updated on success or SLATEERROR_NOT_FOUND
  *         if no entry corresponds to the url.
  */
-static nserror
+static slateerror
 set_store_entry(struct store_state *state,
-		nsurl *url,
+		slateurl *url,
 		int elem_idx,
 		uint8_t *data,
 		const size_t datalen,
 		struct store_entry **bse)
 {
 	struct store_entry *se;
-	nserror ret;
+	slateerror ret;
 	struct store_entry_element *elem;
 
-	NSLOG(netsurf, DEBUG, "url:%s", nsurl_access(url));
+	NSLOG(netsurf, DEBUG, "url:%s", slateurl_access(url));
 
 	/* evict entries as required and ensure there is at least one
 	 * new entry available.
 	 */
 	ret = store_evict(state);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
@@ -998,7 +998,7 @@ set_store_entry(struct store_state *state,
 		se = hashmap_insert(state->entries, url);
 	}
 	if (se == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* the entry element */
@@ -1011,7 +1011,7 @@ set_store_entry(struct store_state *state,
 		 */
 		NSLOG(netsurf, ERROR,
 		      "attempt to overwrite entry with in use data");
-		return NSERROR_PERMISSION;
+		return SLATEERROR_PERMISSION;
 	}
 
 	/* set the common entry data */
@@ -1039,7 +1039,7 @@ set_store_entry(struct store_state *state,
 
 	*bse = se;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1063,7 +1063,7 @@ store_open(struct store_state *state,
 	   int openflags)
 {
 	char *fname;
-	nserror ret;
+	slateerror ret;
 	int fd;
 
 	fname = store_fname(state, ident, elem_idx);
@@ -1074,8 +1074,8 @@ store_open(struct store_state *state,
 
 	/* ensure all path elements to file exist if creating file */
 	if (openflags & O_CREAT) {
-		ret = netsurf_mkdir_all(fname);
-		if (ret != NSERROR_OK) {
+		ret = slate_mkdir_all(fname);
+		if (ret != SLATEERROR_OK) {
 			NSLOG(netsurf, WARNING,
 			      "file path \"%s\" could not be created", fname);
 			free(fname);
@@ -1096,51 +1096,51 @@ store_open(struct store_state *state,
  * Unlink entries file
  *
  * @param state The backing store state.
- * @return NSERROR_OK on success or error code on failure.
+ * @return SLATEERROR_OK on success or error code on failure.
  */
-static nserror
+static slateerror
 unlink_entries(struct store_state *state)
 {
 	char *fname = NULL;
-	nserror ret;
+	slateerror ret;
 
-	ret = netsurf_mkpath(&fname, NULL, 2, state->path, ENTRIES_FNAME);
-	if (ret != NSERROR_OK) {
+	ret = slate_mkpath(&fname, NULL, 2, state->path, ENTRIES_FNAME);
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
 	unlink(fname);
 
 	free(fname);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * Read description entries into memory.
  *
  * @param state The backing store state to put the loaded entries in.
- * @return NSERROR_OK on success or error code on faliure.
+ * @return SLATEERROR_OK on success or error code on faliure.
  */
-static nserror
+static slateerror
 read_entries(struct store_state *state)
 {
 	char *fname = NULL;
 	char *url;
-	nsurl *nsurl;
-	nserror ret;
+	slateurl *slateurl;
+	slateerror ret;
 	size_t read_entries = 0;
 	struct store_entry *ent;
 	int fd;
 
-	ret = netsurf_mkpath(&fname, NULL, 2, state->path, ENTRIES_FNAME);
-	if (ret != NSERROR_OK) {
+	ret = slate_mkpath(&fname, NULL, 2, state->path, ENTRIES_FNAME);
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
 	state->entries = hashmap_create(&entries_hashmap_parameters);
 	if (state->entries == NULL) {
 		free(fname);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	fd = open(fname, O_RDWR);
@@ -1151,42 +1151,42 @@ read_entries(struct store_state *state)
 			if (url == NULL) {
 				close(fd);
 				free(fname);
-				return NSERROR_NOMEM;
+				return SLATEERROR_NOMEM;
 			}
 			if (read(fd, url, urllen) != (ssize_t)urllen) {
 				free(url);
 				close(fd);
 				free(fname);
-				return NSERROR_INIT_FAILED;
+				return SLATEERROR_INIT_FAILED;
 			}
-			ret = nsurl_create(url, &nsurl);
-			if (ret != NSERROR_OK) {
+			ret = slateurl_create(url, &slateurl);
+			if (ret != SLATEERROR_OK) {
 				free(url);
 				close(fd);
 				free(fname);
 				return ret;
 			}
 			free(url);
-			/* We have to be careful here about nsurl refs */
-			ent = hashmap_insert(state->entries, nsurl);
+			/* We have to be careful here about slateurl refs */
+			ent = hashmap_insert(state->entries, slateurl);
 			if (ent == NULL) {
-				nsurl_unref(nsurl);
+				slateurl_unref(slateurl);
 				close(fd);
 				free(fname);
-				return NSERROR_NOMEM;
+				return SLATEERROR_NOMEM;
 			}
-			/* At this point, ent actually owns a ref of nsurl */
+			/* At this point, ent actually owns a ref of slateurl */
 			if (read(fd, ent, sizeof(*ent)) != sizeof(*ent)) {
 				/* The read failed, so reset the ptr */
-				ent->url = nsurl; /* It already had a ref */
-				nsurl_unref(nsurl);
+				ent->url = slateurl; /* It already had a ref */
+				slateurl_unref(slateurl);
 				close(fd);
 				free(fname);
-				return NSERROR_INIT_FAILED;
+				return SLATEERROR_INIT_FAILED;
 			}
-			ent->url = nsurl; /* It already owns a ref */
-			nsurl_unref(nsurl);
-			NSLOG(netsurf, DEBUG, "Successfully read entry for %s", nsurl_access(ent->url));
+			ent->url = slateurl; /* It already owns a ref */
+			slateurl_unref(slateurl);
+			NSLOG(netsurf, DEBUG, "Successfully read entry for %s", slateurl_access(ent->url));
 			read_entries++;
 			/* Note the size allocation */
 			state->total_alloc += ent->elem[ENTRY_ELEM_DATA].size;
@@ -1202,7 +1202,7 @@ read_entries(struct store_state *state)
 	NSLOG(netsurf, INFO, "Read %"PRIsizet" entries from cache", read_entries);
 
 	free(fname);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1210,9 +1210,9 @@ read_entries(struct store_state *state)
  * Read block file usage bitmaps.
  *
  * @param state The backing store state to put the loaded entries in.
- * @return NSERROR_OK on success or error code on failure.
+ * @return SLATEERROR_OK on success or error code on failure.
  */
-static nserror
+static slateerror
 read_blocks(struct store_state *state)
 {
 	int bfidx; /* block file index */
@@ -1220,10 +1220,10 @@ read_blocks(struct store_state *state)
 	int fd;
 	ssize_t rd;
 	char *fname = NULL;
-	nserror ret;
+	slateerror ret;
 
-	ret = netsurf_mkpath(&fname, NULL, 2, state->path, BLOCKS_FNAME);
-	if (ret != NSERROR_OK) {
+	ret = slate_mkpath(&fname, NULL, 2, state->path, BLOCKS_FNAME);
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
@@ -1263,24 +1263,24 @@ read_blocks(struct store_state *state)
 		state->blocks[ENTRY_ELEM_META][bfidx].fd = -1;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * Write the cache tag file.
  *
  * @param state The cache state.
- * @return NSERROR_OK on success or error code on failure.
+ * @return SLATEERROR_OK on success or error code on failure.
  */
-static nserror
+static slateerror
 write_cache_tag(struct store_state *state)
 {
 	FILE *fcachetag;
-	nserror ret;
+	slateerror ret;
 	char *fname = NULL;
 
-	ret = netsurf_mkpath(&fname, NULL, 2, state->path, "CACHEDIR.TAG");
-	if (ret != NSERROR_OK) {
+	ret = slate_mkpath(&fname, NULL, 2, state->path, "CACHEDIR.TAG");
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
@@ -1289,7 +1289,7 @@ write_cache_tag(struct store_state *state)
 	free(fname);
 
 	if (fcachetag == NULL) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	fprintf(fcachetag,
@@ -1300,31 +1300,31 @@ write_cache_tag(struct store_state *state)
 
 	fclose(fcachetag);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * Write the control file for the current state.
  *
  * @param state The state to write to the control file.
- * @return NSERROR_OK on success or error code on failure.
+ * @return SLATEERROR_OK on success or error code on failure.
  */
-static nserror
+static slateerror
 write_control(struct store_state *state)
 {
 	FILE *fcontrol;
-	nserror ret;
+	slateerror ret;
 	char *fname = NULL;
 
-	ret = netsurf_mkpath(&fname, NULL, 2, state->path, "control");
-	if (ret != NSERROR_OK) {
+	ret = slate_mkpath(&fname, NULL, 2, state->path, "control");
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
 	NSLOG(netsurf, INFO, "writing control file \"%s\"", fname);
 
-	ret = netsurf_mkdir_all(fname);
-	if (ret != NSERROR_OK) {
+	ret = slate_mkdir_all(fname);
+	if (ret != SLATEERROR_OK) {
 		free(fname);
 		return ret;
 	}
@@ -1334,14 +1334,14 @@ write_control(struct store_state *state)
 	free(fname);
 
 	if (fcontrol == NULL) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	fprintf(fcontrol, "%u%c", CONTROL_VERSION, 0);
 
 	fclose(fcontrol);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1349,18 +1349,18 @@ write_control(struct store_state *state)
  * Read and parse the control file.
  *
  * @param state The state to read from the control file.
- * @return NSERROR_OK on success or error code on failure.
+ * @return SLATEERROR_OK on success or error code on failure.
  */
-static nserror
+static slateerror
 read_control(struct store_state *state)
 {
-	nserror ret;
+	slateerror ret;
 	FILE *fcontrol;
 	unsigned int ctrlversion;
 	char *fname = NULL;
 
-	ret = netsurf_mkpath(&fname, NULL, 2, state->path, "control");
-	if (ret != NSERROR_OK) {
+	ret = slate_mkpath(&fname, NULL, 2, state->path, "control");
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
@@ -1373,9 +1373,9 @@ read_control(struct store_state *state)
 	if (fcontrol == NULL) {
 		/* unable to open control file */
 		if (errno == ENOENT) {
-			return NSERROR_NOT_FOUND;
+			return SLATEERROR_NOT_FOUND;
 		} else {
-			return NSERROR_INIT_FAILED;
+			return SLATEERROR_INIT_FAILED;
 		}
 	}
 
@@ -1396,13 +1396,13 @@ read_control(struct store_state *state)
 
 	fclose(fcontrol);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 
 control_error: /* problem with the control file */
 
 	fclose(fcontrol);
 
-	return NSERROR_INIT_FAILED;
+	return SLATEERROR_INIT_FAILED;
 }
 
 
@@ -1414,33 +1414,33 @@ control_error: /* problem with the control file */
  * Initialise the backing store.
  *
  * @param parameters to configure backing store.
- * @return NSERROR_OK on success or error code on failure.
+ * @return SLATEERROR_OK on success or error code on failure.
  */
-static nserror
+static slateerror
 initialise(const struct llcache_store_parameters *parameters)
 {
 	struct store_state *newstate;
-	nserror ret;
+	slateerror ret;
 
 	/* check backing store is not already initialised */
 	if (storestate != NULL) {
-		return NSERROR_INIT_FAILED;
+		return SLATEERROR_INIT_FAILED;
 	}
 
 	/* if we are not allowed any space simply give up on init */
 	if (parameters->limit == 0) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* if the path to the cache directory is not set do not init */
 	if (parameters->path == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* allocate new store state and set defaults */
 	newstate = calloc(1, sizeof(struct store_state));
 	if (newstate == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	newstate->path = strdup(parameters->path);
@@ -1449,14 +1449,14 @@ initialise(const struct llcache_store_parameters *parameters)
 
 	/* read store control and create new if required */
 	ret = read_control(newstate);
-	if (ret != NSERROR_OK) {
-		if (ret == NSERROR_NOT_FOUND) {
+	if (ret != SLATEERROR_OK) {
+		if (ret == SLATEERROR_NOT_FOUND) {
 			NSLOG(netsurf, INFO, "cache control file not found, making fresh");
 		} else {
 			NSLOG(netsurf, ERROR, "read control failed %s",
 			      messages_get_errorcode(ret));
-			ret = netsurf_recursive_rm(newstate->path);
-			if (ret != NSERROR_OK) {
+			ret = slate_recursive_rm(newstate->path);
+			if (ret != SLATEERROR_OK) {
 				NSLOG(netsurf, WARNING, "Error `%s` while removing `%s`",
 				      messages_get_errorcode(ret), newstate->path);
 				NSLOG(netsurf, WARNING, "Unable to clean up partial cache state.");
@@ -1467,12 +1467,12 @@ initialise(const struct llcache_store_parameters *parameters)
 			}
 		}
 		ret = write_control(newstate);
-		if (ret == NSERROR_OK) {
+		if (ret == SLATEERROR_OK) {
 			unlink_entries(newstate);
 			write_cache_tag(newstate);
 		}
 	}
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		/* that went well obviously */
 		free(newstate->path);
 		free(newstate);
@@ -1481,7 +1481,7 @@ initialise(const struct llcache_store_parameters *parameters)
 
 	/* read filesystem entries */
 	ret = read_entries(newstate);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		/* that went well obviously */
 		free(newstate->path);
 		free(newstate);
@@ -1490,7 +1490,7 @@ initialise(const struct llcache_store_parameters *parameters)
 
 	/* read blocks */
 	ret = read_blocks(newstate);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		/* oh dear */
 		hashmap_destroy(newstate->entries);
 		free(newstate->path);
@@ -1510,7 +1510,7 @@ initialise(const struct llcache_store_parameters *parameters)
 	NSLOG(netsurf, INFO, "Using %"PRIu64"/%"PRIsizet,
 	      newstate->total_alloc, newstate->limit);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1520,9 +1520,9 @@ initialise(const struct llcache_store_parameters *parameters)
  * \todo This will cause the backing store to leak any outstanding memory
  * allocations. This will probably best be done by a global use count.
  *
- * @return NSERROR_OK on success.
+ * @return SLATEERROR_OK on success.
  */
-static nserror
+static slateerror
 finalise(void)
 {
 	int bf; /* block file index */
@@ -1563,7 +1563,7 @@ finalise(void)
 		free(storestate);
 		storestate = NULL;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1573,9 +1573,9 @@ finalise(void)
  * \param state The backing store state to use.
  * \param bse The entry to store
  * \param elem_idx The element index within the entry.
- * \return NSERROR_OK on success or error code.
+ * \return SLATEERROR_OK on success or error code.
  */
-static nserror store_write_block(struct store_state *state,
+static slateerror store_write_block(struct store_state *state,
 			 struct store_entry *bse,
 			 int elem_idx)
 {
@@ -1591,7 +1591,7 @@ static nserror store_write_block(struct store_state *state,
 				elem_idx + ENTRY_ELEM_COUNT, O_CREAT | O_RDWR);
 		if (state->blocks[elem_idx][bf].fd == -1) {
 			NSLOG(netsurf, ERROR, "Open failed errno %d", errno);
-			return NSERROR_SAVE_FAILED;
+			return SLATEERROR_SAVE_FAILED;
 		}
 
 		/* flag that a block file has been opened */
@@ -1613,7 +1613,7 @@ static nserror store_write_block(struct store_state *state,
 		      (size_t)offst,
 		      bse->elem[elem_idx].block,
 		      errno);
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
 	}
 
 	NSLOG(netsurf, INFO,
@@ -1621,7 +1621,7 @@ static nserror store_write_block(struct store_state *state,
 	      bse->elem[elem_idx].data, (size_t)offst,
 	      bse->elem[elem_idx].block);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -1630,9 +1630,9 @@ static nserror store_write_block(struct store_state *state,
  * \param state The backing store state to use.
  * \param bse The entry to store
  * \param elem_idx The element index within the entry.
- * \return NSERROR_OK on success or error code.
+ * \return SLATEERROR_OK on success or error code.
  */
-static nserror store_write_file(struct store_state *state,
+static slateerror store_write_file(struct store_state *state,
 			 struct store_entry *bse,
 			 int elem_idx)
 {
@@ -1640,11 +1640,11 @@ static nserror store_write_file(struct store_state *state,
 	int fd;
 	int err;
 
-	fd = store_open(state, nsurl_hash(bse->url), elem_idx, O_CREAT | O_WRONLY);
+	fd = store_open(state, slateurl_hash(bse->url), elem_idx, O_CREAT | O_WRONLY);
 	if (fd < 0) {
 		perror("");
 		NSLOG(netsurf, ERROR, "Open failed %d errno %d", fd, errno);
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
 	}
 
 	wr = write(fd, bse->elem[elem_idx].data, bse->elem[elem_idx].size);
@@ -1660,13 +1660,13 @@ static nserror store_write_file(struct store_state *state,
 		      err);
 
 		/** @todo Delete the file? */
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
 	}
 
 	NSLOG(netsurf, VERBOSE, "Wrote %"PRIssizet" bytes from %p", wr,
 	      bse->elem[elem_idx].data);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -1678,21 +1678,21 @@ static nserror store_write_file(struct store_state *state,
  * @param bsflags The flags to control how the object is stored.
  * @param data The objects source data.
  * @param datalen The length of the \a data.
- * @return NSERROR_OK on success or error code on failure.
+ * @return SLATEERROR_OK on success or error code on failure.
  */
-static nserror
-store(nsurl *url,
+static slateerror
+store(slateurl *url,
       enum backing_store_flags bsflags,
       uint8_t *data,
       const size_t datalen)
 {
-	nserror ret;
+	slateerror ret;
 	struct store_entry *bse;
 	int elem_idx;
 
 	/* check backing store is initialised */
 	if (storestate == NULL) {
-		return NSERROR_INIT_FAILED;
+		return SLATEERROR_INIT_FAILED;
 	}
 
 	/* calculate the entry element index */
@@ -1704,7 +1704,7 @@ store(nsurl *url,
 
 	/* set the store entry up */
 	ret = set_store_entry(storestate, url, elem_idx, data, datalen, &bse);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		NSLOG(netsurf, ERROR, "store entry setting failed");
 		return ret;
 	}
@@ -1723,7 +1723,7 @@ store(nsurl *url,
 /**
  * release any allocation for an entry
  */
-static nserror entry_release_alloc(struct store_entry_element *elem)
+static slateerror entry_release_alloc(struct store_entry_element *elem)
 {
 	if ((elem->flags & ENTRY_ELEM_FLAG_HEAP) != 0) {
 		elem->ref--;
@@ -1733,7 +1733,7 @@ static nserror entry_release_alloc(struct store_entry_element *elem)
 			elem->flags &= ~ENTRY_ELEM_FLAG_HEAP;
 		}
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1743,9 +1743,9 @@ static nserror entry_release_alloc(struct store_entry_element *elem)
  * \param state The backing store state to use.
  * \param bse The entry to read.
  * \param elem_idx The element index within the entry.
- * \return NSERROR_OK on success or error code.
+ * \return SLATEERROR_OK on success or error code.
  */
-static nserror store_read_block(struct store_state *state,
+static slateerror store_read_block(struct store_state *state,
 			 struct store_entry *bse,
 			 int elem_idx)
 {
@@ -1761,7 +1761,7 @@ static nserror store_read_block(struct store_state *state,
 				elem_idx + ENTRY_ELEM_COUNT, O_CREAT | O_RDWR);
 		if (state->blocks[elem_idx][bf].fd == -1) {
 			NSLOG(netsurf, ERROR, "Open failed errno %d", errno);
-			return NSERROR_SAVE_FAILED;
+			return SLATEERROR_SAVE_FAILED;
 		}
 
 		/* flag that a block file has been opened */
@@ -1783,7 +1783,7 @@ static nserror store_read_block(struct store_state *state,
 		      (size_t)offst,
 		      bse->elem[elem_idx].block,
 		      errno);
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
 	}
 
 	NSLOG(netsurf, DEEPDEBUG,
@@ -1791,7 +1791,7 @@ static nserror store_read_block(struct store_state *state,
 	      bse->elem[elem_idx].data, (size_t)offst,
 	      bse->elem[elem_idx].block);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -1800,23 +1800,23 @@ static nserror store_read_block(struct store_state *state,
  * \param state The backing store state to use.
  * \param bse The entry to read.
  * \param elem_idx The element index within the entry.
- * \return NSERROR_OK on success or error code.
+ * \return SLATEERROR_OK on success or error code.
  */
-static nserror store_read_file(struct store_state *state,
+static slateerror store_read_file(struct store_state *state,
 			 struct store_entry *bse,
 			 int elem_idx)
 {
 	int fd;
 	ssize_t rd; /* return from read */
-	int ret = NSERROR_OK;
+	int ret = SLATEERROR_OK;
 	size_t tot = 0; /* total size */
 
 	/* separate file in backing store */
-	fd = store_open(storestate, nsurl_hash(bse->url), elem_idx, O_RDONLY);
+	fd = store_open(storestate, slateurl_hash(bse->url), elem_idx, O_RDONLY);
 	if (fd < 0) {
 		NSLOG(netsurf, ERROR, "Open failed %d errno %d", fd, errno);
 		/** @todo should this invalidate the entry? */
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	while (tot < bse->elem[elem_idx].size) {
@@ -1828,7 +1828,7 @@ static nserror store_read_file(struct store_state *state,
 			      "read error returned %"PRIssizet" errno %d",
 			      rd,
 			      errno);
-			ret = NSERROR_NOT_FOUND;
+			ret = SLATEERROR_NOT_FOUND;
 			break;
 		}
 		tot += rd;
@@ -1849,35 +1849,35 @@ static nserror store_read_file(struct store_state *state,
  * @param[in] bsflags The flags to control how the object is retrieved.
  * @param[out] data_out The objects data.
  * @param[out] datalen_out The length of the \a data retrieved.
- * @return NSERROR_OK on success or error code on failure.
+ * @return SLATEERROR_OK on success or error code on failure.
  */
-static nserror
-fetch(nsurl *url,
+static slateerror
+fetch(slateurl *url,
       enum backing_store_flags bsflags,
       uint8_t **data_out,
       size_t *datalen_out)
 {
-	nserror ret;
+	slateerror ret;
 	struct store_entry *bse;
 	struct store_entry_element *elem;
 	int elem_idx;
 
 	/* check backing store is initialised */
 	if (storestate == NULL) {
-		return NSERROR_INIT_FAILED;
+		return SLATEERROR_INIT_FAILED;
 	}
 
 	/* fetch store entry */
 	ret = get_store_entry(storestate, url, &bse);
-	if (ret != NSERROR_OK) {
-		NSLOG(netsurf, DEBUG, "Entry for %s not found", nsurl_access(url));
+	if (ret != SLATEERROR_OK) {
+		NSLOG(netsurf, DEBUG, "Entry for %s not found", slateurl_access(url));
 		storestate->miss_count++;
 		return ret;
 	}
 	storestate->hit_count++;
 
 	NSLOG(netsurf, DEBUG, "retrieving cache data for url:%s",
-	      nsurl_access(url));
+	      slateurl_access(url));
 
 	/* calculate the entry element index */
 	if ((bsflags & BACKING_STORE_META) != 0) {
@@ -1902,7 +1902,7 @@ fetch(nsurl *url,
 		if (elem->data == NULL) {
 			NSLOG(netsurf, ERROR,
 			      "Failed to create new heap allocation");
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 		NSLOG(netsurf, DEEPDEBUG, "Created new heap allocation %p",
 		      elem->data);
@@ -1920,7 +1920,7 @@ fetch(nsurl *url,
 	}
 
 	/* free the allocation if there is a read error */
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		entry_release_alloc(elem);
 	} else {
 		/* update stats and setup return pointers */
@@ -1939,21 +1939,21 @@ fetch(nsurl *url,
  *
  * @param[in] url The url is used as the unique primary key to invalidate.
  * @param[in] bsflags The flags to control how the object data is released.
- * @return NSERROR_OK on success or error code on failure.
+ * @return SLATEERROR_OK on success or error code on failure.
  */
-static nserror release(nsurl *url, enum backing_store_flags bsflags)
+static slateerror release(slateurl *url, enum backing_store_flags bsflags)
 {
-	nserror ret;
+	slateerror ret;
 	struct store_entry *bse;
 	struct store_entry_element *elem;
 
 	/* check backing store is initialised */
 	if (storestate == NULL) {
-		return NSERROR_INIT_FAILED;
+		return SLATEERROR_INIT_FAILED;
 	}
 
 	ret = get_store_entry(storestate, url, &bse);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		NSLOG(netsurf, WARNING, "entry not found");
 		return ret;
 	}
@@ -1971,7 +1971,7 @@ static nserror release(nsurl *url, enum backing_store_flags bsflags)
 	 * allocation it must be invalidated fully now the allocation
 	 * has been released.
 	 */
-	if ((ret == NSERROR_OK) &&
+	if ((ret == SLATEERROR_OK) &&
 	    ((bse->flags & ENTRY_FLAGS_INVALID) != 0)) {
 		ret = invalidate_entry(storestate, bse);
 	}
@@ -1987,21 +1987,21 @@ static nserror release(nsurl *url, enum backing_store_flags bsflags)
  * be returned as a result to the fetch or meta operations.
  *
  * @param url The url is used as the unique primary key to invalidate.
- * @return NSERROR_OK on success or error code on failure.
+ * @return SLATEERROR_OK on success or error code on failure.
  */
-static nserror
-invalidate(nsurl *url)
+static slateerror
+invalidate(slateurl *url)
 {
-	nserror ret;
+	slateerror ret;
 	struct store_entry *bse;
 
 	/* check backing store is initialised */
 	if (storestate == NULL) {
-		return NSERROR_INIT_FAILED;
+		return SLATEERROR_INIT_FAILED;
 	}
 
 	ret = get_store_entry(storestate, url, &bse);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 

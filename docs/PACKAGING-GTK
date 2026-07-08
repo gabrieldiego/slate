@@ -29,8 +29,8 @@
   checkouts smaller and making sure changes to one set of resources updates
   the other.
 
-  The binary that the build system produces is called "nsgtk3".
-  You should install nsgtk3 to `/usr/bin/netsurf` (or wherever your
+  The binary that the build system produces is called "slategtk3".
+  You should install slategtk3 to `/usr/bin/netsurf` (or wherever your
   distribution's packaging policy suggests) and copy the contents of
   gtk/res/ (dereferencing the symlinks, obviously) to /usr/share/netsurf (or
   wherever your packaging policy suggests).
@@ -39,25 +39,25 @@
   resources.  NetSurf searches three locations by default when trying
   to load them, in this order:
 
-    1. ~/.netsurf/
+    1. ~/.slate/
 
        This entry allows the user some flexibility in changing what
         resources NetSurf uses by placing resources in their home
         directory.
 
-    2. $NETSURFRES/
+    2. $SLATERES/
 
        This entry allows the user or packager to control resource
         aquisition through the environment. This entry is how the
         developer launcher script controls resource location.
 
-    3. NETSURF_GTK_RES_PATH option
+    3. SLATE_GTK_RES_PATH option
 
        This location is controlled by the option in Makefile.config
         (defaulting to ${PREFIX}/share/netsurf/ ). This configuration
         is the recommended way for packagers to change the location
         NetSurf finds external resources. The first path element of the
-        NETSURF_GTK_RES_PATH option is used in the install target as
+        SLATE_GTK_RES_PATH option is used in the install target as
         the destination for installed resources.
 
   User agent string
@@ -66,7 +66,7 @@
   You may also want to change NetSurf's user agent string to include the
   name of your distribution.  The user agent string is built by a function
   kept in utils/useragent.c - you'll want to change the macro called
-  NETSURF_UA_FORMAT_STRING.  It's processed via sprintf, so keep that in
+  SLATE_UA_FORMAT_STRING.  It's processed via sprintf, so keep that in
   mind when changing it.  The first format parameter is the OS name (uname -s)
   and the remainder are major and minor version numbers.  You might want
   to change this to something like:
@@ -83,7 +83,7 @@
 
   If the user hasn't specified a home page URL in their Preferences, NetSurf
   defaults to a "portal" welcome page at about:netsurf - if you wish to
-  change this, you can do so by overriding the NETSURF_HOMEPAGE URL in
+  change this, you can do so by overriding the SLATE_HOMEPAGE URL in
   Makefile.config.
 
 

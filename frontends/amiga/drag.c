@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,9 +32,9 @@
 #include "utils/log.h"
 #include "utils/messages.h"
 #include "utils/utils.h"
-#include "utils/nsoption.h"
-#include "netsurf/mouse.h"
-#include "netsurf/content.h"
+#include "utils/slateoption.h"
+#include "slate/mouse.h"
+#include "slate/content.h"
 
 #include "amiga/bitmap.h"
 #include "amiga/clipboard.h"
@@ -60,8 +60,8 @@ void gui_drag_save_object(struct gui_window *g, struct hlcache_handle *c,
 	const char *filetype = NULL;
 
 	/* Check we are running on Workbench */
-	if(nsoption_charp(pubscreen_name) == NULL) return;
-	if(strcmp(nsoption_charp(pubscreen_name), "Workbench")) return;
+	if(slateoption_charp(pubscreen_name) == NULL) return;
+	if(strcmp(slateoption_charp(pubscreen_name), "Workbench")) return;
 
 	switch(type) {
 		case GUI_SAVE_OBJECT_ORIG: // object
@@ -115,7 +115,7 @@ void ami_drag_save(struct Window *win)
 	ami_drag_icon_close(NULL);
 	ami_autoscroll = true;
 
-	if(nsoption_charp(pubscreen_name) && (strcmp(nsoption_charp(pubscreen_name),"Workbench") == 0))
+	if(slateoption_charp(pubscreen_name) && (strcmp(slateoption_charp(pubscreen_name),"Workbench") == 0))
 	{
 		which = WhichWorkbenchObject(NULL,scrn->MouseX,scrn->MouseY,
 									WBOBJA_Type,&type,
@@ -164,7 +164,7 @@ void ami_drag_save(struct Window *win)
 		break;
 
 		case GUI_SAVE_TEXT_SELECTION: // selection
-			AddPart(path,"netsurf_text_selection",1024);
+			AddPart(path,"slate_text_selection",1024);
 			struct gui_window *g = (struct gui_window *) drag_save_data;
 			ami_file_save(AMINS_SAVE_SELECTION, path, win, NULL, NULL, ami_gui_get_browser_window(g));
 		break;
@@ -207,7 +207,7 @@ void ami_drag_icon_show(struct Window *win, const char *type)
 	struct Screen *scrn = ami_gui_get_screen();
 	drag_in_progress = TRUE;
 
-	if(nsoption_bool(drag_save_icons) == false)
+	if(slateoption_bool(drag_save_icons) == false)
 	{
 		ami_update_pointer(win, AMI_GUI_POINTER_DRAG);
 		return;

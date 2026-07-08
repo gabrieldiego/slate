@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 - 2025 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -60,12 +60,12 @@
 #include <reaction/reaction.h>
 #include <reaction/reaction_macros.h>
 
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/messages.h"
-#include "utils/nsoption.h"
-#include "netsurf/browser_window.h"
+#include "utils/slateoption.h"
+#include "slate/browser_window.h"
 #include "desktop/searchweb.h"
-#include "netsurf/window.h"
+#include "slate/window.h"
 
 #include "amiga/os3support.h"
 #include "amiga/misc.h"
@@ -77,7 +77,7 @@
 #include "amiga/gui_options.h"
 #include "amiga/help.h"
 #include "amiga/libs.h"
-#include "amiga/nsoption.h"
+#include "amiga/slateoption.h"
 #include "amiga/object.h"
 #include "amiga/selectmenu.h"
 #include "amiga/theme.h"
@@ -598,11 +598,11 @@ void ami_gui_opts_open(void)
 	BOOL screenmodedisabled = FALSE, screennamedisabled = FALSE;
 	BOOL proxyhostdisabled = TRUE, proxyauthdisabled = TRUE, proxybypassdisabled = FALSE;
 	BOOL disableanims, acceptlangdisabled = FALSE;
-	BOOL scaleselected = nsoption_bool(scale_quality), scaledisabled = FALSE;
+	BOOL scaleselected = slateoption_bool(scale_quality), scaledisabled = FALSE;
 	BOOL ditherdisable = TRUE;
 	BOOL download_notify_disabled = FALSE, tab_always_show_disabled = FALSE;
 	BOOL ptr_disable = FALSE;
-	char *homepage_url_lc = ami_utf8_easy(nsoption_charp(homepage_url));
+	char *homepage_url_lc = ami_utf8_easy(slateoption_charp(homepage_url));
 
 	struct TextAttr fontsans, fontserif, fontmono, fontcursive, fontfantasy;
 
@@ -619,9 +619,9 @@ void ami_gui_opts_open(void)
 	ptr_disable = TRUE;
 #endif
 
-	if(nsoption_charp(pubscreen_name))
+	if(slateoption_charp(pubscreen_name))
 	{
-		if(strcmp(nsoption_charp(pubscreen_name),"Workbench") == 0)
+		if(strcmp(slateoption_charp(pubscreen_name),"Workbench") == 0)
 		{
 			screenoptsselected = 1;
 			screennamedisabled = TRUE;
@@ -639,20 +639,20 @@ void ami_gui_opts_open(void)
 		screennamedisabled = TRUE;
 	}
 
-	if((nsoption_charp(screen_modeid)) && 
-	   (strncmp(nsoption_charp(screen_modeid),"0x",2) == 0))
+	if((slateoption_charp(screen_modeid)) && 
+	   (strncmp(slateoption_charp(screen_modeid),"0x",2) == 0))
 	{
-		screenmodeid = strtoul(nsoption_charp(screen_modeid),NULL,0);
+		screenmodeid = strtoul(slateoption_charp(screen_modeid),NULL,0);
 	}
 
 	if(ami_plot_screen_is_palettemapped() == true) {
 		ditherdisable = FALSE;
 	}
 
-	if(nsoption_bool(http_proxy) == true)
+	if(slateoption_bool(http_proxy) == true)
 	{
-		proxytype = nsoption_int(http_proxy_auth) + 1;
-		switch(nsoption_int(http_proxy_auth))
+		proxytype = slateoption_int(http_proxy_auth) + 1;
+		switch(slateoption_int(http_proxy_auth))
 		{
 			case OPTION_HTTP_PROXY_AUTH_BASIC:
 			case OPTION_HTTP_PROXY_AUTH_NTLM:
@@ -665,7 +665,7 @@ void ami_gui_opts_open(void)
 		proxybypassdisabled = TRUE;
 	}
 
-	if(nsoption_bool(animate_images))
+	if(slateoption_bool(animate_images))
 	{
 		disableanims = FALSE;
 	}
@@ -674,7 +674,7 @@ void ami_gui_opts_open(void)
 		disableanims = TRUE;
 	}
 
-	if(nsoption_bool(accept_lang_locale))
+	if(slateoption_bool(accept_lang_locale))
 		acceptlangdisabled = TRUE;
 	else
 		acceptlangdisabled = FALSE;
@@ -689,20 +689,20 @@ void ami_gui_opts_open(void)
 #endif
 	{
 		download_notify_disabled = TRUE;
-		nsoption_set_bool(download_notify, FALSE);
+		slateoption_set_bool(download_notify, FALSE);
 	}
 
 	if(ClickTabBase->lib_Version < 53) {
 		tab_always_show_disabled = TRUE;
 	}
 
-	BOOL outline_fonts = !nsoption_bool(bitmap_fonts);
+	BOOL outline_fonts = !slateoption_bool(bitmap_fonts);
 
-	fontsans.ta_Name = ASPrintf("%s.font", nsoption_charp(font_sans));
-	fontserif.ta_Name = ASPrintf("%s.font", nsoption_charp(font_serif));
-	fontmono.ta_Name = ASPrintf("%s.font", nsoption_charp(font_mono));
-	fontcursive.ta_Name = ASPrintf("%s.font", nsoption_charp(font_cursive));
-	fontfantasy.ta_Name = ASPrintf("%s.font", nsoption_charp(font_fantasy));
+	fontsans.ta_Name = ASPrintf("%s.font", slateoption_charp(font_sans));
+	fontserif.ta_Name = ASPrintf("%s.font", slateoption_charp(font_serif));
+	fontmono.ta_Name = ASPrintf("%s.font", slateoption_charp(font_mono));
+	fontcursive.ta_Name = ASPrintf("%s.font", slateoption_charp(font_cursive));
+	fontfantasy.ta_Name = ASPrintf("%s.font", slateoption_charp(font_fantasy));
 
 	fontsans.ta_Style = 0;
 	fontserif.ta_Style = 0;
@@ -798,7 +798,7 @@ void ami_gui_opts_open(void)
       	              						GA_ID, GID_OPTS_HIDEADS,
          	           						GA_RelVerify, TRUE,
          	           						GA_Text, gadlab[GID_OPTS_HIDEADS],
-         	           						GA_Selected, nsoption_bool(block_advertisements),
+         	           						GA_Selected, slateoption_bool(block_advertisements),
             	    					CheckBoxEnd,
 									LayoutEnd, // content blocking
 									LAYOUT_AddChild, LayoutVObj,
@@ -809,14 +809,14 @@ void ami_gui_opts_open(void)
 											GA_ID, GID_OPTS_CONTENTLANG,
 											GA_RelVerify, TRUE,
 											GA_Disabled, acceptlangdisabled,
-											STRINGA_TextVal, nsoption_charp(accept_language),
+											STRINGA_TextVal, slateoption_charp(accept_language),
 											STRINGA_BufferPos,0,
 										StringEnd,
 										LAYOUT_AddChild, gow->objects[GID_OPTS_FROMLOCALE] = CheckBoxObj,
 											GA_ID, GID_OPTS_FROMLOCALE,
 											GA_Text, gadlab[GID_OPTS_FROMLOCALE],
 											GA_RelVerify, TRUE,
-											GA_Selected, nsoption_bool(accept_lang_locale),
+											GA_Selected, slateoption_bool(accept_lang_locale),
 										ButtonEnd,
 									//	CHILD_WeightedWidth, 0,
 									LayoutEnd, // content language
@@ -831,7 +831,7 @@ void ami_gui_opts_open(void)
 											LAYOUT_AddChild, gow->objects[GID_OPTS_HISTORY] = IntegerObj,
 												GA_ID, GID_OPTS_HISTORY,
 												GA_RelVerify, TRUE,
-												INTEGER_Number, nsoption_int(expire_url),
+												INTEGER_Number, slateoption_int(expire_url),
 												INTEGER_Minimum, 0,
 												INTEGER_Maximum, 366,
 												INTEGER_Arrows, TRUE,
@@ -854,7 +854,7 @@ void ami_gui_opts_open(void)
       	              						GA_ID, GID_OPTS_JAVASCRIPT,
          	           						GA_RelVerify, TRUE,
          	           						GA_Text, gadlab[GID_OPTS_JAVASCRIPT],
-         	           						GA_Selected, nsoption_bool(enable_javascript),
+         	           						GA_Selected, slateoption_bool(enable_javascript),
             	    					CheckBoxEnd,
 									LayoutEnd, // scripting
 								LayoutEnd,
@@ -867,13 +867,13 @@ void ami_gui_opts_open(void)
       	              					GA_ID, GID_OPTS_REFERRAL,
          	           					GA_RelVerify, TRUE,
          	           					GA_Text, gadlab[GID_OPTS_REFERRAL],
-         	           					GA_Selected, nsoption_bool(send_referer),
+         	           					GA_Selected, slateoption_bool(send_referer),
             	    				CheckBoxEnd,
 		                			LAYOUT_AddChild, gow->objects[GID_OPTS_DONOTTRACK] = CheckBoxObj,
       	              					GA_ID, GID_OPTS_DONOTTRACK,
          	           					GA_RelVerify, TRUE,
          	           					GA_Text, gadlab[GID_OPTS_DONOTTRACK],
-         	           					GA_Selected, nsoption_bool(do_not_track),
+         	           					GA_Selected, slateoption_bool(do_not_track),
             	    				CheckBoxEnd,
 								LayoutEnd, // misc
 								CHILD_WeightedHeight, 0,
@@ -914,7 +914,7 @@ void ami_gui_opts_open(void)
 												GA_ID, GID_OPTS_SCREENNAME,
 												GA_RelVerify, TRUE,
 												GA_Disabled,screennamedisabled,
-												STRINGA_TextVal, nsoption_charp(pubscreen_name),
+												STRINGA_TextVal, slateoption_charp(pubscreen_name),
 												STRINGA_BufferPos,0,
 											StringEnd,
 										LayoutEnd,
@@ -930,7 +930,7 @@ void ami_gui_opts_open(void)
       	              					GA_ID, GID_OPTS_WIN_SIMPLE,
          	           					GA_RelVerify, TRUE,
          	           					GA_Text, gadlab[GID_OPTS_WIN_SIMPLE],
-         	           					GA_Selected, nsoption_bool(window_simple_refresh),
+         	           					GA_Selected, slateoption_bool(window_simple_refresh),
             	    				CheckBoxEnd,
 								LayoutEnd, // window
 								CHILD_WeightedHeight,0,
@@ -941,7 +941,7 @@ void ami_gui_opts_open(void)
 									LAYOUT_AddChild, gow->objects[GID_OPTS_THEME] = GetFileObj,
 										GA_ID, GID_OPTS_THEME,
 										GA_RelVerify, TRUE,
-										GETFILE_Drawer, nsoption_charp(theme),
+										GETFILE_Drawer, slateoption_charp(theme),
 										GETFILE_DrawersOnly, TRUE,
 										GETFILE_ReadOnly, TRUE,
 										GETFILE_FullFileExpand, FALSE,
@@ -958,7 +958,7 @@ void ami_gui_opts_open(void)
 #else
 										CHOOSER_Labels, &gow->pagethemeoptslist,
 #endif
-										CHOOSER_Selected, nsoption_bool(prefer_dark_mode),
+										CHOOSER_Selected, slateoption_bool(prefer_dark_mode),
 									ChooserEnd,
 									CHILD_Label, LabelObj,
 										LABEL_Text, gadlab[GID_OPTS_THEMEPAGE],
@@ -973,14 +973,14 @@ void ami_gui_opts_open(void)
       	              					GA_ID, GID_OPTS_PTRTRUE,
          	           					GA_RelVerify, TRUE,
          	           					GA_Text, gadlab[GID_OPTS_PTRTRUE],
-         	           					GA_Selected, nsoption_bool(truecolour_mouse_pointers),
+         	           					GA_Selected, slateoption_bool(truecolour_mouse_pointers),
 										GA_Disabled, ptr_disable,
             	    				CheckBoxEnd,
 		                			LAYOUT_AddChild, gow->objects[GID_OPTS_PTROS] = CheckBoxObj,
       	              					GA_ID, GID_OPTS_PTROS,
          	           					GA_RelVerify, TRUE,
          	           					GA_Text, gadlab[GID_OPTS_PTROS],
-         	           					GA_Selected, nsoption_bool(os_mouse_pointers),
+         	           					GA_Selected, slateoption_bool(os_mouse_pointers),
 										GA_Disabled, ptr_disable,
             	    				CheckBoxEnd,
 								LayoutEnd, // mouse
@@ -1019,14 +1019,14 @@ void ami_gui_opts_open(void)
 											GA_ID, GID_OPTS_PROXY_HOST,
 											GA_RelVerify, TRUE,
 											GA_Disabled, proxyhostdisabled,
-											STRINGA_TextVal, nsoption_charp(http_proxy_host),
+											STRINGA_TextVal, slateoption_charp(http_proxy_host),
 											STRINGA_BufferPos,0,
 										StringEnd,
 										LAYOUT_AddChild, gow->objects[GID_OPTS_PROXY_PORT] = IntegerObj,
 											GA_ID, GID_OPTS_PROXY_PORT,
 											GA_RelVerify, TRUE,
 											GA_Disabled, proxyhostdisabled,
-											INTEGER_Number, nsoption_charp(http_proxy_port),
+											INTEGER_Number, slateoption_charp(http_proxy_port),
 											INTEGER_Minimum, 1,
 											INTEGER_Maximum, 65535,
 											INTEGER_Arrows, FALSE,
@@ -1044,7 +1044,7 @@ void ami_gui_opts_open(void)
 										GA_ID, GID_OPTS_PROXY_USER,
 										GA_RelVerify, TRUE,
 										GA_Disabled, proxyauthdisabled,
-										STRINGA_TextVal, nsoption_charp(http_proxy_auth_user),
+										STRINGA_TextVal, slateoption_charp(http_proxy_auth_user),
 										STRINGA_BufferPos,0,
 									StringEnd,
 									CHILD_Label, LabelObj,
@@ -1054,7 +1054,7 @@ void ami_gui_opts_open(void)
 										GA_ID, GID_OPTS_PROXY_PASS,
 										GA_RelVerify, TRUE,
 										GA_Disabled, proxyauthdisabled,
-										STRINGA_TextVal, nsoption_charp(http_proxy_auth_pass),
+										STRINGA_TextVal, slateoption_charp(http_proxy_auth_pass),
 										STRINGA_BufferPos,0,
 									StringEnd,
 									CHILD_Label, LabelObj,
@@ -1064,7 +1064,7 @@ void ami_gui_opts_open(void)
 										GA_ID, GID_OPTS_PROXY_BYPASS,
 										GA_RelVerify, TRUE,
 										GA_Disabled, proxybypassdisabled,
-										STRINGA_TextVal, nsoption_charp(http_proxy_noproxy),
+										STRINGA_TextVal, slateoption_charp(http_proxy_noproxy),
 										STRINGA_BufferPos, 0,
 									StringEnd,
 									CHILD_Label, LabelObj,
@@ -1079,7 +1079,7 @@ void ami_gui_opts_open(void)
 									LAYOUT_AddChild, gow->objects[GID_OPTS_FETCHMAX] = IntegerObj,
 										GA_ID, GID_OPTS_FETCHMAX,
 										GA_RelVerify, TRUE,
-										INTEGER_Number, nsoption_int(max_fetchers),
+										INTEGER_Number, slateoption_int(max_fetchers),
 										INTEGER_Minimum, 1,
 										INTEGER_Maximum, 99,
 										INTEGER_Arrows, TRUE,
@@ -1091,7 +1091,7 @@ void ami_gui_opts_open(void)
 									LAYOUT_AddChild, gow->objects[GID_OPTS_FETCHHOST] = IntegerObj,
 										GA_ID, GID_OPTS_FETCHHOST,
 										GA_RelVerify, TRUE,
-										INTEGER_Number, nsoption_int(max_fetchers_per_host),
+										INTEGER_Number, slateoption_int(max_fetchers_per_host),
 										INTEGER_Minimum, 1,
 										INTEGER_Maximum, 99,
 										INTEGER_Arrows, TRUE,
@@ -1103,7 +1103,7 @@ void ami_gui_opts_open(void)
 									LAYOUT_AddChild, gow->objects[GID_OPTS_FETCHCACHE] = IntegerObj,
 										GA_ID, GID_OPTS_FETCHCACHE,
 										GA_RelVerify, TRUE,
-										INTEGER_Number, nsoption_int(max_cached_fetch_handles),
+										INTEGER_Number, slateoption_int(max_cached_fetch_handles),
 										INTEGER_Minimum, 1,
 										INTEGER_Maximum, 99,
 										INTEGER_Arrows, TRUE,
@@ -1135,7 +1135,7 @@ void ami_gui_opts_open(void)
 #else
 										CHOOSER_Labels, &gow->nativebmoptslist,
 #endif
-										CHOOSER_Selected, nsoption_int(cache_bitmaps),
+										CHOOSER_Selected, slateoption_int(cache_bitmaps),
 									ChooserEnd,
 									CHILD_Label, LabelObj,
 										LABEL_Text, gadlab[GID_OPTS_NATIVEBM],
@@ -1150,7 +1150,7 @@ void ami_gui_opts_open(void)
 #else
 										CHOOSER_Labels, &gow->ditheroptslist,
 #endif
-										CHOOSER_Selected, nsoption_int(dither_quality),
+										CHOOSER_Selected, slateoption_int(dither_quality),
 									ChooserEnd,
 									CHILD_Label, LabelObj,
 										LABEL_Text, gadlab[GID_OPTS_DITHERQ],
@@ -1185,7 +1185,7 @@ void ami_gui_opts_open(void)
 										LAYOUT_AddChild, gow->objects[GID_OPTS_DPI_Y] = IntegerObj,
 											GA_ID, GID_OPTS_DPI_Y,
 											GA_RelVerify, TRUE,
-											INTEGER_Number, nsoption_int(screen_ydpi),
+											INTEGER_Number, slateoption_int(screen_ydpi),
 											INTEGER_Minimum, 20,
 											INTEGER_Maximum, 200,
 											INTEGER_Arrows, TRUE,
@@ -1272,7 +1272,7 @@ void ami_gui_opts_open(void)
 #else
 										CHOOSER_Labels, &gow->fontoptslist,
 #endif
-										CHOOSER_Selected, nsoption_int(font_default) - PLOT_FONT_FAMILY_SANS_SERIF,
+										CHOOSER_Selected, slateoption_int(font_default) - PLOT_FONT_FAMILY_SANS_SERIF,
 									ChooserEnd,
 									CHILD_Label, LabelObj,
 										LABEL_Text, gadlab[GID_OPTS_FONT_DEFAULT],
@@ -1289,7 +1289,7 @@ void ami_gui_opts_open(void)
 											LAYOUT_AddChild, gow->objects[GID_OPTS_FONT_SIZE] = IntegerObj,
 												GA_ID, GID_OPTS_FONT_SIZE,
 												GA_RelVerify, TRUE,
-												INTEGER_Number, nsoption_int(font_size) / 10,
+												INTEGER_Number, slateoption_int(font_size) / 10,
 												INTEGER_Minimum, 1,
 												INTEGER_Maximum, 99,
 												INTEGER_Arrows, TRUE,
@@ -1307,7 +1307,7 @@ void ami_gui_opts_open(void)
 											LAYOUT_AddChild, gow->objects[GID_OPTS_FONT_MINSIZE] = IntegerObj,
 												GA_ID, GID_OPTS_FONT_MINSIZE,
 												GA_RelVerify, TRUE,
-												INTEGER_Number, nsoption_int(font_min_size) / 10,
+												INTEGER_Number, slateoption_int(font_min_size) / 10,
 												INTEGER_Minimum, 1,
 												INTEGER_Maximum, 99,
 												INTEGER_Arrows, TRUE,
@@ -1329,7 +1329,7 @@ void ami_gui_opts_open(void)
       	              						GA_ID, GID_OPTS_FONT_ANTIALIASING,
          	           						GA_RelVerify, TRUE,
          	           						GA_Text, gadlab[GID_OPTS_FONT_ANTIALIASING],
-         	           						GA_Selected, nsoption_bool(font_antialiasing),
+         	           						GA_Selected, slateoption_bool(font_antialiasing),
 #ifndef __amigaos4__
 											GA_Disabled, TRUE,
 #endif
@@ -1344,7 +1344,7 @@ void ami_gui_opts_open(void)
 #else
 											CHOOSER_Labels, &gow->fontenginelist,
 #endif
-											CHOOSER_Selected, nsoption_bool(bitmap_fonts),
+											CHOOSER_Selected, slateoption_bool(bitmap_fonts),
 										ChooserEnd,
 										CHILD_Label, LabelObj,
 											LABEL_Text, gadlab[GID_OPTS_FONT_BITMAP],
@@ -1369,7 +1369,7 @@ void ami_gui_opts_open(void)
 										LAYOUT_AddChild, gow->objects[GID_OPTS_CACHE_MEM] = IntegerObj,
 											GA_ID, GID_OPTS_CACHE_MEM,
 											GA_RelVerify, TRUE,
-											INTEGER_Number, nsoption_int(memory_cache_size) / 1048576,
+											INTEGER_Number, slateoption_int(memory_cache_size) / 1048576,
 											INTEGER_Minimum, 0,
 											INTEGER_Maximum, 2048,
 											INTEGER_Arrows, TRUE,
@@ -1393,7 +1393,7 @@ void ami_gui_opts_open(void)
 										LAYOUT_AddChild, gow->objects[GID_OPTS_CACHE_DISC] = IntegerObj,
 											GA_ID, GID_OPTS_CACHE_DISC,
 											GA_RelVerify, TRUE,
-											INTEGER_Number, nsoption_uint(disc_cache_size) / 1048576,
+											INTEGER_Number, slateoption_uint(disc_cache_size) / 1048576,
 											INTEGER_Minimum, 0,
 											INTEGER_Maximum, 4096,
 											INTEGER_Arrows, TRUE,
@@ -1425,26 +1425,26 @@ void ami_gui_opts_open(void)
       	              						GA_ID, GID_OPTS_TAB_ACTIVE,
          	        	   					GA_RelVerify, TRUE,
          	     	      					GA_Text, gadlab[GID_OPTS_TAB_ACTIVE],
-         	     	      					GA_Selected, !nsoption_bool(foreground_new),
+         	     	      					GA_Selected, !slateoption_bool(foreground_new),
             	    					CheckBoxEnd,
 										LAYOUT_AddChild, gow->objects[GID_OPTS_TAB_2] = CheckBoxObj,
       	              						GA_ID, GID_OPTS_TAB_2,
          	           						GA_RelVerify, TRUE,
          	           						GA_Text, gadlab[GID_OPTS_TAB_2],
-         	           						GA_Selected, nsoption_bool(button_2_tab),
+         	           						GA_Selected, slateoption_bool(button_2_tab),
             	    					CheckBoxEnd,
 										LAYOUT_AddChild, gow->objects[GID_OPTS_TAB_ALWAYS] = CheckBoxObj,
       	              						GA_ID, GID_OPTS_TAB_ALWAYS,
          	           						GA_RelVerify, TRUE,
          	           						GA_Text, gadlab[GID_OPTS_TAB_ALWAYS],
-         	           						GA_Selected, nsoption_bool(tab_always_show),
+         	           						GA_Selected, slateoption_bool(tab_always_show),
 											GA_Disabled, tab_always_show_disabled,
             	    					CheckBoxEnd,
 										LAYOUT_AddChild, gow->objects[GID_OPTS_TAB_CLOSE] = CheckBoxObj,
       	              						GA_ID, GID_OPTS_TAB_CLOSE,
          	           						GA_RelVerify, TRUE,
          	           						GA_Text, gadlab[GID_OPTS_TAB_CLOSE],
-         	           						GA_Selected, nsoption_bool(tab_close_warn),
+         	           						GA_Selected, slateoption_bool(tab_close_warn),
             	    					CheckBoxEnd,
 									LayoutEnd, // tabbed browsing
 								LayoutEnd,
@@ -1466,14 +1466,14 @@ void ami_gui_opts_open(void)
          	           						GA_RelVerify, TRUE,
 											GA_Disabled, FALSE,
          	           						GA_Text, gadlab[GID_OPTS_OVERWRITE],
-         	           						GA_Selected, nsoption_bool(ask_overwrite),
+         	           						GA_Selected, slateoption_bool(ask_overwrite),
     	        	    				CheckBoxEnd,
 			                			LAYOUT_AddChild, gow->objects[GID_OPTS_NOTIFY] = CheckBoxObj,
       	    	          					GA_ID, GID_OPTS_NOTIFY,
          	    	       					GA_RelVerify, TRUE,
 											GA_Disabled, download_notify_disabled,
          	           						GA_Text, gadlab[GID_OPTS_NOTIFY],
-         	           						GA_Selected, nsoption_bool(download_notify),
+         	           						GA_Selected, slateoption_bool(download_notify),
 #ifndef __amigaos4__
 											GA_Disabled, TRUE,
 #endif
@@ -1482,7 +1482,7 @@ void ami_gui_opts_open(void)
 									LAYOUT_AddChild, gow->objects[GID_OPTS_DLDIR] = GetFileObj,
 										GA_ID, GID_OPTS_DLDIR,
 										GA_RelVerify, TRUE,
-										GETFILE_Drawer, nsoption_charp(download_dir),
+										GETFILE_Drawer, slateoption_charp(download_dir),
 										GETFILE_DrawersOnly, TRUE,
 										GETFILE_ReadOnly, TRUE,
 										GETFILE_FullFileExpand, FALSE,
@@ -1501,19 +1501,19 @@ void ami_gui_opts_open(void)
     	  	              					GA_ID, GID_OPTS_STARTUP_NO_WIN,
         	 	           					GA_RelVerify, TRUE,
 											GA_Text, gadlab[GID_OPTS_STARTUP_NO_WIN],
-        	 	           					GA_Selected, nsoption_bool(startup_no_window),
+        	 	           					GA_Selected, slateoption_bool(startup_no_window),
             		    				CheckBoxEnd,
 		        	        			LAYOUT_AddChild, gow->objects[GID_OPTS_CLOSE_NO_QUIT] = CheckBoxObj,
       		              					GA_ID, GID_OPTS_CLOSE_NO_QUIT,
 											GA_RelVerify, TRUE,
 											GA_Text, gadlab[GID_OPTS_CLOSE_NO_QUIT],
-											GA_Selected, nsoption_bool(close_no_quit),
+											GA_Selected, slateoption_bool(close_no_quit),
 	        	        				CheckBoxEnd,
 		                				LAYOUT_AddChild, gow->objects[GID_OPTS_DOCKY] = CheckBoxObj,
 											GA_ID, GID_OPTS_DOCKY,
         	 	           					GA_RelVerify, TRUE,
          		           					GA_Text, gadlab[GID_OPTS_DOCKY],
-         		           					GA_Selected, !nsoption_bool(hide_docky_icon),
+         		           					GA_Selected, !slateoption_bool(hide_docky_icon),
 #ifndef __amigaos4__
 											GA_Disabled, TRUE,
 #endif
@@ -1531,7 +1531,7 @@ void ami_gui_opts_open(void)
       		              					GA_ID, GID_OPTS_CLIPBOARD,
          		           					GA_RelVerify, TRUE,
          	    	       					GA_Text, gadlab[GID_OPTS_CLIPBOARD],
-         	    	       					GA_Selected, nsoption_bool(clipboard_write_utf8),
+         	    	       					GA_Selected, slateoption_bool(clipboard_write_utf8),
             	    					CheckBoxEnd,
 									LayoutEnd, // clipboard
 									CHILD_WeightedHeight, 0,
@@ -1562,20 +1562,20 @@ void ami_gui_opts_open(void)
       	              					GA_ID, GID_OPTS_FASTSCROLL,
          	           					GA_RelVerify, TRUE,
          	           					GA_Text, gadlab[GID_OPTS_FASTSCROLL],
-         	           					GA_Selected, nsoption_bool(faster_scroll),
+         	           					GA_Selected, slateoption_bool(faster_scroll),
             	    				CheckBoxEnd,
 	        	        			LAYOUT_AddChild, gow->objects[GID_OPTS_SELECTMENU] = CheckBoxObj,
 										GA_ID, GID_OPTS_SELECTMENU,
 										GA_RelVerify, TRUE,
 										GA_Text, gadlab[GID_OPTS_SELECTMENU],
-										GA_Selected, !nsoption_bool(core_select_menu),
+										GA_Selected, !slateoption_bool(core_select_menu),
 										GA_Disabled, !ami_selectmenu_is_safe(),
            	    					CheckBoxEnd,
 	        	        			LAYOUT_AddChild, gow->objects[GID_OPTS_ENABLECSS] = CheckBoxObj,
 										GA_ID, GID_OPTS_ENABLECSS,
 										GA_RelVerify, TRUE,
 										GA_Text, gadlab[GID_OPTS_ENABLECSS],
-										GA_Selected, nsoption_bool(author_level_css),
+										GA_Selected, slateoption_bool(author_level_css),
            	    					CheckBoxEnd,
 								LayoutEnd, // misc
 								CHILD_WeightedHeight, 0,
@@ -1598,7 +1598,7 @@ void ami_gui_opts_open(void)
 										LAYOUT_AddChild, gow->objects[GID_OPTS_MARGIN_TOP] = IntegerObj,
 											GA_ID, GID_OPTS_MARGIN_TOP,
 											GA_RelVerify, TRUE,
-											INTEGER_Number, nsoption_int(margin_top),
+											INTEGER_Number, slateoption_int(margin_top),
 											INTEGER_Minimum, 0,
 											INTEGER_Maximum, 99,
 											INTEGER_Arrows, TRUE,
@@ -1616,7 +1616,7 @@ void ami_gui_opts_open(void)
 										LAYOUT_AddChild, gow->objects[GID_OPTS_MARGIN_LEFT] = IntegerObj,
 											GA_ID, GID_OPTS_MARGIN_LEFT,
 											GA_RelVerify, TRUE,
-											INTEGER_Number, nsoption_int(margin_left),
+											INTEGER_Number, slateoption_int(margin_left),
 											INTEGER_Minimum, 0,
 											INTEGER_Maximum, 99,
 											INTEGER_Arrows, TRUE,
@@ -1634,7 +1634,7 @@ void ami_gui_opts_open(void)
 										LAYOUT_AddChild, gow->objects[GID_OPTS_MARGIN_BOTTOM] = IntegerObj,
 											GA_ID, GID_OPTS_MARGIN_BOTTOM,
 											GA_RelVerify, TRUE,
-											INTEGER_Number, nsoption_int(margin_bottom),
+											INTEGER_Number, slateoption_int(margin_bottom),
 											INTEGER_Minimum, 0,
 											INTEGER_Maximum, 99,
 											INTEGER_Arrows, TRUE,
@@ -1652,7 +1652,7 @@ void ami_gui_opts_open(void)
 										LAYOUT_AddChild, gow->objects[GID_OPTS_MARGIN_RIGHT] = IntegerObj,
 											GA_ID, GID_OPTS_MARGIN_RIGHT,
 											GA_RelVerify, TRUE,
-											INTEGER_Number, nsoption_int(margin_right),
+											INTEGER_Number, slateoption_int(margin_right),
 											INTEGER_Minimum, 0,
 											INTEGER_Maximum, 99,
 											INTEGER_Arrows, TRUE,
@@ -1676,7 +1676,7 @@ void ami_gui_opts_open(void)
 										LAYOUT_AddChild, gow->objects[GID_OPTS_EXPORT_SCALE] = IntegerObj,
 											GA_ID, GID_OPTS_EXPORT_SCALE,
 											GA_RelVerify, TRUE,
-											INTEGER_Number, nsoption_int(export_scale),
+											INTEGER_Number, slateoption_int(export_scale),
 											INTEGER_Minimum, 0,
 											INTEGER_Maximum, 100,
 											INTEGER_Arrows, TRUE,
@@ -1699,19 +1699,19 @@ void ami_gui_opts_open(void)
       	              					GA_ID, GID_OPTS_EXPORT_NOIMAGES,
          	           					GA_RelVerify, TRUE,
          	           					GA_Text, gadlab[GID_OPTS_EXPORT_NOIMAGES],
-         	           					GA_Selected, nsoption_bool(suppress_images),
+         	           					GA_Selected, slateoption_bool(suppress_images),
             	    				CheckBoxEnd,
 		                			LAYOUT_AddChild, gow->objects[GID_OPTS_EXPORT_NOBKG] = CheckBoxObj,
       	              					GA_ID, GID_OPTS_EXPORT_NOBKG,
          	           					GA_RelVerify, TRUE,
          	           					GA_Text, gadlab[GID_OPTS_EXPORT_NOBKG],
-         	           					GA_Selected, nsoption_bool(remove_backgrounds),
+         	           					GA_Selected, slateoption_bool(remove_backgrounds),
             	    				CheckBoxEnd,
 		                			LAYOUT_AddChild, gow->objects[GID_OPTS_EXPORT_LOOSEN] = CheckBoxObj,
       	              					GA_ID, GID_OPTS_EXPORT_LOOSEN,
          	           					GA_RelVerify, TRUE,
          	           					GA_Text, gadlab[GID_OPTS_EXPORT_LOOSEN],
-         	           					GA_Selected, nsoption_bool(enable_loosening),
+         	           					GA_Selected, slateoption_bool(enable_loosening),
             	    				CheckBoxEnd,
 								LayoutEnd, // appearance
 								CHILD_WeightedHeight, 0,
@@ -1723,14 +1723,14 @@ void ami_gui_opts_open(void)
       	              					GA_ID, GID_OPTS_EXPORT_COMPRESS,
          	           					GA_RelVerify, TRUE,
          	           					GA_Text, gadlab[GID_OPTS_EXPORT_COMPRESS],
-         	           					GA_Selected, nsoption_bool(enable_PDF_compression),
+         	           					GA_Selected, slateoption_bool(enable_PDF_compression),
             	    				CheckBoxEnd,
 		                			LAYOUT_AddChild, gow->objects[GID_OPTS_EXPORT_PASSWORD] = CheckBoxObj,
       	              					GA_ID, GID_OPTS_EXPORT_PASSWORD,
          	           					GA_RelVerify, TRUE,
 										GA_Disabled, TRUE,
          	           					GA_Text, gadlab[GID_OPTS_EXPORT_PASSWORD],
-         	           					GA_Selected, nsoption_bool(enable_PDF_password),
+         	           					GA_Selected, slateoption_bool(enable_PDF_password),
             	    				CheckBoxEnd,
 								LayoutEnd, // export
 								CHILD_WeightedHeight, 0,
@@ -1779,80 +1779,80 @@ static void ami_gui_opts_use(bool save)
 	ami_update_pointer(gow->win, GUI_POINTER_WAIT);
 
 	GetAttr(STRINGA_TextVal,gow->objects[GID_OPTS_HOMEPAGE],(ULONG *)&data);
-	nsoption_set_charp(homepage_url, (char *)ami_to_utf8_easy((char *)data));
+	slateoption_set_charp(homepage_url, (char *)ami_to_utf8_easy((char *)data));
 
 	GetAttr(STRINGA_TextVal,gow->objects[GID_OPTS_CONTENTLANG],(ULONG *)&data);
-	nsoption_set_charp(accept_language, (char *)strdup((char *)data));
+	slateoption_set_charp(accept_language, (char *)strdup((char *)data));
 
 	GetAttr(GA_Selected, gow->objects[GID_OPTS_FROMLOCALE],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(accept_lang_locale, true);
+		slateoption_set_bool(accept_lang_locale, true);
 	} else {
-		nsoption_set_bool(accept_lang_locale, false);
+		slateoption_set_bool(accept_lang_locale, false);
 	}
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_HIDEADS],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(block_advertisements, true);
+		slateoption_set_bool(block_advertisements, true);
 	} else {
-		nsoption_set_bool(block_advertisements, false);
+		slateoption_set_bool(block_advertisements, false);
 	}
 
-	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_HISTORY],(ULONG *)&nsoption_int(expire_url));
+	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_HISTORY],(ULONG *)&slateoption_int(expire_url));
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_REFERRAL],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(send_referer, true);
+		slateoption_set_bool(send_referer, true);
 	} else {
-		nsoption_set_bool(send_referer, false);
+		slateoption_set_bool(send_referer, false);
 	}
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_JAVASCRIPT],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(enable_javascript, true);
+		slateoption_set_bool(enable_javascript, true);
 	} else {
-		nsoption_set_bool(enable_javascript, false);
+		slateoption_set_bool(enable_javascript, false);
 	}
 
-	ami_gui_menu_set_checked(NULL, M_JS, nsoption_bool(enable_javascript));
+	ami_gui_menu_set_checked(NULL, M_JS, slateoption_bool(enable_javascript));
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_DONOTTRACK],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(do_not_track, true);
+		slateoption_set_bool(do_not_track, true);
 	} else {
-		nsoption_set_bool(do_not_track, false);
+		slateoption_set_bool(do_not_track, false);
 	}
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_ENABLECSS],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(author_level_css, true);
+		slateoption_set_bool(author_level_css, true);
 	} else {
-		nsoption_set_bool(author_level_css, false);
+		slateoption_set_bool(author_level_css, false);
 	}
 
-	ami_gui_menu_set_checked(NULL, M_CSS, nsoption_bool(author_level_css));
+	ami_gui_menu_set_checked(NULL, M_CSS, slateoption_bool(author_level_css));
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_FASTSCROLL],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(faster_scroll, true);
+		slateoption_set_bool(faster_scroll, true);
 	} else {
-		nsoption_set_bool(faster_scroll, false);
+		slateoption_set_bool(faster_scroll, false);
 	}
 
 	GetAttr(RADIOBUTTON_Selected,gow->objects[GID_OPTS_SCREEN],(ULONG *)&data);
 	switch(data)
 	{
 		case 0:
-			nsoption_set_charp(pubscreen_name, NULL);
+			slateoption_set_charp(pubscreen_name, NULL);
 			break;
 
 		case 1:
-			nsoption_set_charp(pubscreen_name, (char *)strdup("Workbench"));
+			slateoption_set_charp(pubscreen_name, (char *)strdup("Workbench"));
 			break;
 
 		case 2:
 			GetAttr(STRINGA_TextVal,gow->objects[GID_OPTS_SCREENNAME],(ULONG *)&data);
-			nsoption_set_charp(pubscreen_name, (char *)strdup((char *)data));
+			slateoption_set_charp(pubscreen_name, (char *)strdup((char *)data));
 			break;
 	}
 
@@ -1861,301 +1861,301 @@ static void ami_gui_opts_use(bool save)
 	{
 		char *modeid = malloc(20);
 		sprintf(modeid,"0x%lx", id);
-		nsoption_set_charp(screen_modeid, modeid);
+		slateoption_set_charp(screen_modeid, modeid);
 	}
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_WIN_SIMPLE],(ULONG *)&data);
-	if ((data == TRUE) && (nsoption_bool(window_simple_refresh) == false)) {
-		nsoption_set_bool(window_simple_refresh, true);
-		nsoption_set_int(screen_compositing, 0);
-	} else if ((data == FALSE) && (nsoption_bool(window_simple_refresh) == true)) {
-		nsoption_set_bool(window_simple_refresh, false);
-		nsoption_set_int(screen_compositing, -1);
+	if ((data == TRUE) && (slateoption_bool(window_simple_refresh) == false)) {
+		slateoption_set_bool(window_simple_refresh, true);
+		slateoption_set_int(screen_compositing, 0);
+	} else if ((data == FALSE) && (slateoption_bool(window_simple_refresh) == true)) {
+		slateoption_set_bool(window_simple_refresh, false);
+		slateoption_set_int(screen_compositing, -1);
 	}
 	
 	GetAttr(GETFILE_Drawer,gow->objects[GID_OPTS_THEME],(ULONG *)&data);
-	nsoption_set_charp(theme, (char *)strdup((char *)data));
+	slateoption_set_charp(theme, (char *)strdup((char *)data));
 
 	GetAttr(CHOOSER_Selected,gow->objects[GID_OPTS_THEMEPAGE],(ULONG *)&data);
 	if(data) {
-		nsoption_set_bool(prefer_dark_mode, true);
+		slateoption_set_bool(prefer_dark_mode, true);
 	} else {
-		nsoption_set_bool(prefer_dark_mode, false);
+		slateoption_set_bool(prefer_dark_mode, false);
 	}
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_PTRTRUE],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(truecolour_mouse_pointers, true);
+		slateoption_set_bool(truecolour_mouse_pointers, true);
 	} else {
-		nsoption_set_bool(truecolour_mouse_pointers, false);
+		slateoption_set_bool(truecolour_mouse_pointers, false);
 	}
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_PTROS],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(os_mouse_pointers, true);
+		slateoption_set_bool(os_mouse_pointers, true);
 	} else {
-		nsoption_set_bool(os_mouse_pointers, false);
+		slateoption_set_bool(os_mouse_pointers, false);
 	}
 
 	GetAttr(CHOOSER_Selected,gow->objects[GID_OPTS_PROXY],(ULONG *)&data);
 	if(data)
 	{
-		nsoption_set_bool(http_proxy, true);
-		nsoption_set_int(http_proxy_auth, data - 1);
+		slateoption_set_bool(http_proxy, true);
+		slateoption_set_int(http_proxy_auth, data - 1);
 	}
 	else
 	{
-		nsoption_set_bool(http_proxy, false);
+		slateoption_set_bool(http_proxy, false);
 	}
 
 	GetAttr(STRINGA_TextVal,gow->objects[GID_OPTS_PROXY_HOST],(ULONG *)&data);
-	nsoption_set_charp(http_proxy_host, (char *)strdup((char *)data));
+	slateoption_set_charp(http_proxy_host, (char *)strdup((char *)data));
 
-	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_PROXY_PORT],(ULONG *)&nsoption_int(http_proxy_port));
+	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_PROXY_PORT],(ULONG *)&slateoption_int(http_proxy_port));
 
 	GetAttr(STRINGA_TextVal,gow->objects[GID_OPTS_PROXY_USER],(ULONG *)&data);
-	nsoption_set_charp(http_proxy_auth_user, (char *)strdup((char *)data));
+	slateoption_set_charp(http_proxy_auth_user, (char *)strdup((char *)data));
 
 	GetAttr(STRINGA_TextVal,gow->objects[GID_OPTS_PROXY_PASS],(ULONG *)&data);
-	nsoption_set_charp(http_proxy_auth_pass, (char *)strdup((char *)data));
+	slateoption_set_charp(http_proxy_auth_pass, (char *)strdup((char *)data));
 
 	GetAttr(STRINGA_TextVal,gow->objects[GID_OPTS_PROXY_BYPASS],(ULONG *)&data);
-	nsoption_set_charp(http_proxy_noproxy, (char *)strdup((char *)data));
+	slateoption_set_charp(http_proxy_noproxy, (char *)strdup((char *)data));
 
-	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_FETCHMAX],(ULONG *)&nsoption_int(max_fetchers));
-	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_FETCHHOST],(ULONG *)&nsoption_int(max_fetchers_per_host));
-	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_FETCHCACHE],(ULONG *)&nsoption_int(max_cached_fetch_handles));
+	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_FETCHMAX],(ULONG *)&slateoption_int(max_fetchers));
+	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_FETCHHOST],(ULONG *)&slateoption_int(max_fetchers_per_host));
+	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_FETCHCACHE],(ULONG *)&slateoption_int(max_cached_fetch_handles));
 
-	GetAttr(CHOOSER_Selected,gow->objects[GID_OPTS_NATIVEBM],(ULONG *)&nsoption_int(cache_bitmaps));
+	GetAttr(CHOOSER_Selected,gow->objects[GID_OPTS_NATIVEBM],(ULONG *)&slateoption_int(cache_bitmaps));
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_SCALEQ],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(scale_quality, true);
+		slateoption_set_bool(scale_quality, true);
 	} else {
-		nsoption_set_bool(scale_quality, false);
+		slateoption_set_bool(scale_quality, false);
 	}
 
-	GetAttr(CHOOSER_Selected,gow->objects[GID_OPTS_DITHERQ],(ULONG *)&nsoption_int(dither_quality));
+	GetAttr(CHOOSER_Selected,gow->objects[GID_OPTS_DITHERQ],(ULONG *)&slateoption_int(dither_quality));
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_ANIMDISABLE],(ULONG *)&data);
 	if(data) { 
-		nsoption_set_bool(animate_images, false);
+		slateoption_set_bool(animate_images, false);
 	} else { 
-		nsoption_set_bool(animate_images, true);
+		slateoption_set_bool(animate_images, true);
 	}
 
-	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_DPI_Y],(ULONG *)&nsoption_int(screen_ydpi));
+	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_DPI_Y],(ULONG *)&slateoption_int(screen_ydpi));
 	ami_font_setdevicedpi(id); // id set above
 
 	GetAttr(GETFONT_TextAttr,gow->objects[GID_OPTS_FONT_SANS],(ULONG *)&data);
 	tattr = (struct TextAttr *)data;
 
 	if((dot = strrchr(tattr->ta_Name,'.'))) *dot = '\0';
-	nsoption_set_charp(font_sans, (char *)strdup((char *)tattr->ta_Name));
+	slateoption_set_charp(font_sans, (char *)strdup((char *)tattr->ta_Name));
 
 	GetAttr(GETFONT_TextAttr,gow->objects[GID_OPTS_FONT_SERIF],(ULONG *)&data);
 	tattr = (struct TextAttr *)data;
 
 	if((dot = strrchr(tattr->ta_Name,'.'))) *dot = '\0';
-	nsoption_set_charp(font_serif, (char *)strdup((char *)tattr->ta_Name));
+	slateoption_set_charp(font_serif, (char *)strdup((char *)tattr->ta_Name));
 
 	GetAttr(GETFONT_TextAttr,gow->objects[GID_OPTS_FONT_MONO],(ULONG *)&data);
 	tattr = (struct TextAttr *)data;
 
 	if((dot = strrchr(tattr->ta_Name,'.'))) *dot = '\0';
-	nsoption_set_charp(font_mono, (char *)strdup((char *)tattr->ta_Name));
+	slateoption_set_charp(font_mono, (char *)strdup((char *)tattr->ta_Name));
 
 	GetAttr(GETFONT_TextAttr,gow->objects[GID_OPTS_FONT_CURSIVE],(ULONG *)&data);
 	tattr = (struct TextAttr *)data;
 
 	if((dot = strrchr(tattr->ta_Name,'.'))) *dot = '\0';
-	nsoption_set_charp(font_cursive, (char *)strdup((char *)tattr->ta_Name));
+	slateoption_set_charp(font_cursive, (char *)strdup((char *)tattr->ta_Name));
 
 	GetAttr(GETFONT_TextAttr,gow->objects[GID_OPTS_FONT_FANTASY],(ULONG *)&data);
 	tattr = (struct TextAttr *)data;
 
 	if((dot = strrchr(tattr->ta_Name,'.'))) *dot = '\0';
-	nsoption_set_charp(font_fantasy, (char *)strdup((char *)tattr->ta_Name));
+	slateoption_set_charp(font_fantasy, (char *)strdup((char *)tattr->ta_Name));
 
-	GetAttr(CHOOSER_Selected,gow->objects[GID_OPTS_FONT_DEFAULT],(ULONG *)&nsoption_int(font_default));
-	nsoption_set_int(font_default, nsoption_int(font_default) + PLOT_FONT_FAMILY_SANS_SERIF);
+	GetAttr(CHOOSER_Selected,gow->objects[GID_OPTS_FONT_DEFAULT],(ULONG *)&slateoption_int(font_default));
+	slateoption_set_int(font_default, slateoption_int(font_default) + PLOT_FONT_FAMILY_SANS_SERIF);
 
-	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_FONT_SIZE],(ULONG *)&nsoption_int(font_size));
-	nsoption_set_int(font_size, nsoption_int(font_size) * 10);
+	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_FONT_SIZE],(ULONG *)&slateoption_int(font_size));
+	slateoption_set_int(font_size, slateoption_int(font_size) * 10);
 
-	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_FONT_MINSIZE],(ULONG *)&nsoption_int(font_min_size));
-	nsoption_set_int(font_min_size, nsoption_int(font_min_size) * 10);
+	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_FONT_MINSIZE],(ULONG *)&slateoption_int(font_min_size));
+	slateoption_set_int(font_min_size, slateoption_int(font_min_size) * 10);
 
 	GetAttr(GA_Selected, gow->objects[GID_OPTS_FONT_ANTIALIASING], (ULONG *)&data);
 	if(data) { 
-		nsoption_set_bool(font_antialiasing, true);
+		slateoption_set_bool(font_antialiasing, true);
 	} else { 
-		nsoption_set_bool(font_antialiasing, false);
+		slateoption_set_bool(font_antialiasing, false);
 	}
 
 	GetAttr(CHOOSER_Selected, gow->objects[GID_OPTS_FONT_BITMAP], (ULONG *)&data);
 	ami_font_fini();
 
 	if(data) {
-		nsoption_set_bool(bitmap_fonts, true);
+		slateoption_set_bool(bitmap_fonts, true);
 	} else { 
-		nsoption_set_bool(bitmap_fonts, false);
+		slateoption_set_bool(bitmap_fonts, false);
 	}
 	ami_font_init();
 
-	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_CACHE_MEM],(ULONG *)&nsoption_int(memory_cache_size));
-	nsoption_set_int(memory_cache_size, nsoption_int(memory_cache_size) * 1048576);
+	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_CACHE_MEM],(ULONG *)&slateoption_int(memory_cache_size));
+	slateoption_set_int(memory_cache_size, slateoption_int(memory_cache_size) * 1048576);
 
-	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_CACHE_DISC],(ULONG *)&nsoption_uint(disc_cache_size));
-	nsoption_set_uint(disc_cache_size, nsoption_uint(disc_cache_size) * 1048576);
+	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_CACHE_DISC],(ULONG *)&slateoption_uint(disc_cache_size));
+	slateoption_set_uint(disc_cache_size, slateoption_uint(disc_cache_size) * 1048576);
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_OVERWRITE],(ULONG *)&data);
 	if (data) { 
-		nsoption_set_bool(ask_overwrite, true);
+		slateoption_set_bool(ask_overwrite, true);
 	} else {
-		nsoption_set_bool(ask_overwrite, false);
+		slateoption_set_bool(ask_overwrite, false);
 	}
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_NOTIFY],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(download_notify, true);
+		slateoption_set_bool(download_notify, true);
 	} else {
-		nsoption_set_bool(download_notify, false);
+		slateoption_set_bool(download_notify, false);
 	}
 
 	GetAttr(GETFILE_Drawer,gow->objects[GID_OPTS_DLDIR],(ULONG *)&data);
-	if((nsoption_charp(download_dir) == NULL) ||
-		(strcmp((char *)data, nsoption_charp(download_dir)) != 0)) {
-		nsoption_set_charp(download_dir, (char *)strdup((char *)data));
+	if((slateoption_charp(download_dir) == NULL) ||
+		(strcmp((char *)data, slateoption_charp(download_dir)) != 0)) {
+		slateoption_set_charp(download_dir, (char *)strdup((char *)data));
 		ami_file_req_free();
 		ami_file_req_init();
 	}
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_TAB_ACTIVE],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(foreground_new, false);
+		slateoption_set_bool(foreground_new, false);
 	} else {
-		nsoption_set_bool(foreground_new, true);
+		slateoption_set_bool(foreground_new, true);
 	}
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_TAB_2],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(button_2_tab, true);
+		slateoption_set_bool(button_2_tab, true);
 	} else {
-		nsoption_set_bool(button_2_tab, false);
+		slateoption_set_bool(button_2_tab, false);
 	}
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_TAB_CLOSE],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(tab_close_warn, true);
+		slateoption_set_bool(tab_close_warn, true);
 	} else {
-		nsoption_set_bool(tab_close_warn, false);
+		slateoption_set_bool(tab_close_warn, false);
 	}
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_TAB_ALWAYS],(ULONG *)&data);
-	old_tab_always_show = nsoption_bool(tab_always_show);
+	old_tab_always_show = slateoption_bool(tab_always_show);
 	
 	if (data) {
-		nsoption_set_bool(tab_always_show, true);
+		slateoption_set_bool(tab_always_show, true);
 	} else {
-		nsoption_set_bool(tab_always_show, false);
+		slateoption_set_bool(tab_always_show, false);
 	}
 
-	if(old_tab_always_show != nsoption_bool(tab_always_show))
+	if(old_tab_always_show != slateoption_bool(tab_always_show))
 		ami_gui_tabs_toggle_all();
 	
 #ifdef __amigaos4__
 	GetAttr(CHOOSER_SelectedNode, gow->objects[GID_OPTS_SEARCH_PROV],(ULONG *)&tmp_node);
 	if(tmp_node != NULL) {
 		GetChooserNodeAttrs(tmp_node, CNA_Text, (ULONG *)&label, TAG_DONE);
-		nsoption_set_charp(search_web_provider, strdup((char *)label));
+		slateoption_set_charp(search_web_provider, strdup((char *)label));
 	}
 #else
 	GetAttr(CHOOSER_Selected, gow->objects[GID_OPTS_SEARCH_PROV],(ULONG *)&gow->websearch_idx);
 	/* TODO: convert back to string, only required OS<3.2 */
 #endif
 	
-	search_web_select_provider(nsoption_charp(search_web_provider));
+	search_web_select_provider(slateoption_charp(search_web_provider));
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_CLIPBOARD],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(clipboard_write_utf8, true);
+		slateoption_set_bool(clipboard_write_utf8, true);
 	} else {
-		nsoption_set_bool(clipboard_write_utf8, false);
+		slateoption_set_bool(clipboard_write_utf8, false);
 	}
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_SELECTMENU],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(core_select_menu, false);
+		slateoption_set_bool(core_select_menu, false);
 	} else {
-		nsoption_set_bool(core_select_menu, true);
+		slateoption_set_bool(core_select_menu, true);
 	}
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_STARTUP_NO_WIN],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(startup_no_window, true);
+		slateoption_set_bool(startup_no_window, true);
 	} else {
-		nsoption_set_bool(startup_no_window, false);
+		slateoption_set_bool(startup_no_window, false);
 	}
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_CLOSE_NO_QUIT],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(close_no_quit, true);
+		slateoption_set_bool(close_no_quit, true);
 	} else { 
-		nsoption_set_bool(close_no_quit, false);
+		slateoption_set_bool(close_no_quit, false);
 	}
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_DOCKY],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(hide_docky_icon, false);
+		slateoption_set_bool(hide_docky_icon, false);
 	} else {
-		nsoption_set_bool(hide_docky_icon, true);
+		slateoption_set_bool(hide_docky_icon, true);
 	}
 
 #ifdef WITH_PDF_EXPORT
-	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_MARGIN_TOP],(ULONG *)&nsoption_int(margin_top));
+	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_MARGIN_TOP],(ULONG *)&slateoption_int(margin_top));
 
-	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_MARGIN_LEFT],(ULONG *)&nsoption_int(margin_left));
+	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_MARGIN_LEFT],(ULONG *)&slateoption_int(margin_left));
 
-	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_MARGIN_BOTTOM],(ULONG *)&nsoption_int(margin_bottom));
+	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_MARGIN_BOTTOM],(ULONG *)&slateoption_int(margin_bottom));
 
-	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_MARGIN_RIGHT],(ULONG *)&nsoption_int(margin_right));
+	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_MARGIN_RIGHT],(ULONG *)&slateoption_int(margin_right));
 
-	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_EXPORT_SCALE],(ULONG *)&nsoption_int(export_scale));
+	GetAttr(INTEGER_Number,gow->objects[GID_OPTS_EXPORT_SCALE],(ULONG *)&slateoption_int(export_scale));
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_EXPORT_NOIMAGES],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(suppress_images, true);
+		slateoption_set_bool(suppress_images, true);
 	} else {
-		nsoption_set_bool(suppress_images, false);
+		slateoption_set_bool(suppress_images, false);
 	}
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_EXPORT_NOBKG],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(remove_backgrounds, true);
+		slateoption_set_bool(remove_backgrounds, true);
 	} else {
-		nsoption_set_bool(remove_backgrounds, false);
+		slateoption_set_bool(remove_backgrounds, false);
 	}
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_EXPORT_LOOSEN],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(enable_loosening, true);
+		slateoption_set_bool(enable_loosening, true);
 	} else {
-		nsoption_set_bool(enable_loosening, false);
+		slateoption_set_bool(enable_loosening, false);
 	}
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_EXPORT_COMPRESS],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(enable_PDF_compression, true);
+		slateoption_set_bool(enable_PDF_compression, true);
 	} else {
-		nsoption_set_bool(enable_PDF_compression, false);
+		slateoption_set_bool(enable_PDF_compression, false);
 	}
 
 	GetAttr(GA_Selected,gow->objects[GID_OPTS_EXPORT_PASSWORD],(ULONG *)&data);
 	if (data) {
-		nsoption_set_bool(enable_PDF_password, true);
+		slateoption_set_bool(enable_PDF_password, true);
 	} else {
-		nsoption_set_bool(enable_PDF_password, false);
+		slateoption_set_bool(enable_PDF_password, false);
 	}
 #endif
 
@@ -2165,7 +2165,7 @@ static void ami_gui_opts_use(bool save)
 	}
 
 	if(save == true) {
-		ami_nsoption_write();
+		ami_slateoption_write();
 		ami_font_savescanner(); /* just in case it has changed and been used only */
 	}
 
@@ -2230,14 +2230,14 @@ static BOOL ami_gui_opts_event(void *w)
 
 					case GID_OPTS_HOMEPAGE_DEFAULT:
 						RefreshSetGadgetAttrs((struct Gadget *)gow->objects[GID_OPTS_HOMEPAGE],
-							gow->win,NULL,STRINGA_TextVal,NETSURF_HOMEPAGE,
+							gow->win,NULL,STRINGA_TextVal,SLATE_HOMEPAGE,
 							TAG_DONE);
 					break;
 
 					case GID_OPTS_HOMEPAGE_CURRENT:
 						if(ami_gui_get_active_gw()) RefreshSetGadgetAttrs((struct Gadget *)gow->objects[GID_OPTS_HOMEPAGE],
 							gow->win, NULL, STRINGA_TextVal,
-							nsurl_access(browser_window_access_url(ami_gui_get_browser_window(ami_gui_get_active_gw()))), TAG_DONE);
+							slateurl_access(browser_window_access_url(ami_gui_get_browser_window(ami_gui_get_active_gw()))), TAG_DONE);
 					break;
 
 					case GID_OPTS_HOMEPAGE_BLANK:
@@ -2408,7 +2408,7 @@ struct List *ami_gui_opts_websearch(int *idx)
 			node = AllocChooserNode(CNA_Text, name, TAG_DONE);
 			AddTail(list, node);
 			if(idx != NULL) {
-				if((nsoption_charp(search_web_provider)) && (strcmp(name, nsoption_charp(search_web_provider)) == 0)) {
+				if((slateoption_charp(search_web_provider)) && (strcmp(name, slateoption_charp(search_web_provider)) == 0)) {
 					*idx = i;
 				}
 			}

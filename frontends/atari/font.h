@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,5 +21,5 @@
 
 extern struct gui_layout_table *atari_layout_table;
 
-#endif /* NETSURF_FB_FONT_H */
+#endif /* SLATE_FB_FONT_H */
 

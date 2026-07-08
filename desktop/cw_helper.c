@@ -2,7 +2,7 @@
  * Copyright 2019 Daniel Silverstone <dsilvers@netsurf-browser.org>
  * Copyright 2019 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,17 +24,17 @@
  */
 
 #include "utils/errors.h"
-#include "netsurf/browser.h"
-#include "netsurf/core_window.h"
-#include "netsurf/types.h"
+#include "slate/browser.h"
+#include "slate/core_window.h"
+#include "slate/types.h"
 #include "css/utils.h"
 #include "desktop/cw_helper.h"
 #include "desktop/gui_internal.h"
 
 /* exported interface documented in cw_helper.h */
-nserror cw_helper_scroll_visible(struct core_window *cw_h, const struct rect *r)
+slateerror cw_helper_scroll_visible(struct core_window *cw_h, const struct rect *r)
 {
-	nserror err;
+	slateerror err;
 	int height;
 	int width;
 	int x0;
@@ -45,12 +45,12 @@ nserror cw_helper_scroll_visible(struct core_window *cw_h, const struct rect *r)
 	assert(cw_h != NULL);
 
 	err = guit->corewindow->get_dimensions(cw_h, &width, &height);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
 	guit->corewindow->get_scroll(cw_h, &x0, &y0);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 

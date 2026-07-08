@@ -2,7 +2,7 @@
  * Copyright 2008 François Revol <mmu_man@users.sourceforge.net>
  * Copyright 2006 Rob Kendrick <rjek@rjek.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,8 +23,8 @@
 #include <string.h>
 extern "C" {
 #include "utils/log.h"
-#include "utils/nsoption.h"
-#include "utils/nsurl.h"
+#include "utils/slateoption.h"
+#include "utils/slateurl.h"
 }
 #include "beos/gui.h"
 #include "beos/scaffolding.h"
@@ -35,16 +35,16 @@ extern "C" {
 
 BWindow *wndPreferences;
 
-void nsbeos_options_init(void) {
+void slatebeos_options_init(void) {
 	/* set the widgets to reflect the current options */
-	nsbeos_options_load();
+	slatebeos_options_load();
 }
 
-void nsbeos_options_load(void) {
+void slatebeos_options_load(void) {
 #warning WRITEME
 }
 
 
-void nsbeos_options_save(void) {
+void slatebeos_options_save(void) {
 #warning WRITEME
 }

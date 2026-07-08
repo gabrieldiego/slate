@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 Daniel Silverstone <dsilvers@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_FB_FINDFILE_H
-#define NETSURF_FB_FINDFILE_H
+#ifndef SLATE_FB_FINDFILE_H
+#define SLATE_FB_FINDFILE_H
 
 extern char **respaths;
 
@@ -29,4 +29,4 @@ extern char **respaths;
  */
 char **fb_init_resource_path(const char *resource_path);
 
-#endif /* NETSURF_FB_FINDFILE_H */
+#endif /* SLATE_FB_FINDFILE_H */

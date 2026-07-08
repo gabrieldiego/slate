@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 François Revol <mmu_man@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,7 +31,7 @@ extern "C" {
 #include <Resources.h>
 #include <TranslationUtils.h>
 
-struct nsbeos_throbber *nsbeos_throbber = NULL;
+struct slatebeos_throbber *slatebeos_throbber = NULL;
 
 /**
  * Creates the throbber using a PNG for each frame.  The number of frames must
@@ -42,10 +42,10 @@ struct nsbeos_throbber *nsbeos_throbber = NULL;
  * \param  ...     Filenames of PNGs containing frames.
  * \return true on success.
  */
-bool nsbeos_throbber_initialise_from_png(const int frames, ...)
+bool slatebeos_throbber_initialise_from_png(const int frames, ...)
 {
 	va_list filenames;
-	struct nsbeos_throbber *throb;		/**< structure we generate */
+	struct slatebeos_throbber *throb;		/**< structure we generate */
 	bool errors_when_loading = false;	/**< true if a frame failed */
 	
 	if (frames < 2) {
@@ -64,7 +64,7 @@ bool nsbeos_throbber_initialise_from_png(const int frames, ...)
 		return false;
 	}
 
-	throb = (struct nsbeos_throbber *)malloc(sizeof(*throb));
+	throb = (struct slatebeos_throbber *)malloc(sizeof(*throb));
 	throb->nframes = frames;
 	throb->framedata = (BBitmap **)malloc(sizeof(BBitmap *) * throb->nframes);
 	
@@ -105,20 +105,20 @@ bool nsbeos_throbber_initialise_from_png(const int frames, ...)
 		return false;		
 	}
 	
-	nsbeos_throbber = throb;
+	slatebeos_throbber = throb;
 	
 	return true;
 }
 
-void nsbeos_throbber_finalise(void)
+void slatebeos_throbber_finalise(void)
 {
 	int i;
 
-	for (i = 0; i < nsbeos_throbber->nframes; i++)
-		delete nsbeos_throbber->framedata[i];
+	for (i = 0; i < slatebeos_throbber->nframes; i++)
+		delete slatebeos_throbber->framedata[i];
 
-	free(nsbeos_throbber->framedata);
-	free(nsbeos_throbber);
+	free(slatebeos_throbber->framedata);
+	free(slatebeos_throbber);
 
-	nsbeos_throbber = NULL;
+	slatebeos_throbber = NULL;
 }

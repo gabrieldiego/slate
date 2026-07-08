@@ -1,7 +1,7 @@
 /*
  * Copyright 2006 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * Interface to browser history private operations
  */
 
-#ifndef NETSURF_DESKTOP_BROWSER_HISTORY_PRIVATE_H
-#define NETSURF_DESKTOP_BROWSER_HISTORY_PRIVATE_H
+#ifndef SLATE_DESKTOP_BROWSER_HISTORY_PRIVATE_H
+#define SLATE_DESKTOP_BROWSER_HISTORY_PRIVATE_H
 
 #include "content/handlers/css/utils.h"
 

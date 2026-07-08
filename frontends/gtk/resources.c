@@ -1,7 +1,7 @@
 /*
  * Copyright 2015 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -46,34 +46,34 @@
 #ifdef __GNUC__
 extern const guint8 menu_cursor_pixdata[] __attribute__ ((__aligned__ (4)));
 extern const guint8 favicon_pixdata[] __attribute__ ((__aligned__ (4)));
-extern const guint8 netsurf_pixdata[] __attribute__ ((__aligned__ (4)));
+extern const guint8 slate_pixdata[] __attribute__ ((__aligned__ (4)));
 #else
 extern const guint8 menu_cursor_pixdata[];
 extern const guint8 favicon_pixdata[];
-extern const guint8 netsurf_pixdata[];
+extern const guint8 slate_pixdata[];
 #endif
 #endif
 
 /** type of resource entry */
-enum nsgtk_resource_type_e {
-	NSGTK_RESOURCE_FILE, /**< entry is a file on disc */
-	NSGTK_RESOURCE_GLIB, /**< entry is a gresource accessed by path */
-	NSGTK_RESOURCE_DIRECT, /**< entry is a gresource accesed by gbytes */
-	NSGTK_RESOURCE_INLINE, /**< entry is compiled in accessed by pointer */
+enum slategtk_resource_type_e {
+	SLATEGTK_RESOURCE_FILE, /**< entry is a file on disc */
+	SLATEGTK_RESOURCE_GLIB, /**< entry is a gresource accessed by path */
+	SLATEGTK_RESOURCE_DIRECT, /**< entry is a gresource accesed by gbytes */
+	SLATEGTK_RESOURCE_INLINE, /**< entry is compiled in accessed by pointer */
 };
 
 /** resource entry */
-struct nsgtk_resource_s {
+struct slategtk_resource_s {
 	const char *name;
 	unsigned int len;
-	enum nsgtk_resource_type_e type;
+	enum slategtk_resource_type_e type;
 	char *path;
 };
 
-#define RES_ENTRY(name) { name, sizeof((name)) - 1, NSGTK_RESOURCE_FILE, NULL }
+#define RES_ENTRY(name) { name, sizeof((name)) - 1, SLATEGTK_RESOURCE_FILE, NULL }
 
 /** resources that are used for gtk builder */
-static struct nsgtk_resource_s ui_resource[] = {
+static struct slategtk_resource_s ui_resource[] = {
 	RES_ENTRY("netsurf"),
 	RES_ENTRY("tabcontents"),
 	RES_ENTRY("password"),
@@ -87,13 +87,13 @@ static struct nsgtk_resource_s ui_resource[] = {
 	RES_ENTRY("viewdata"),
 	RES_ENTRY("warning"),
 	RES_ENTRY("pageinfo"),
-	{ NULL, 0, NSGTK_RESOURCE_FILE, NULL },
+	{ NULL, 0, SLATEGTK_RESOURCE_FILE, NULL },
 };
 
 /** resources that are used as pixbufs */
-static struct nsgtk_resource_s pixbuf_resource[] = {
+static struct slategtk_resource_s pixbuf_resource[] = {
 	RES_ENTRY("favicon.png"),
-	RES_ENTRY("netsurf.xpm"),
+	RES_ENTRY("slate.xpm"),
 	RES_ENTRY("menu_cursor.png"),
 	RES_ENTRY("icons/local-history.png"),
 	RES_ENTRY("icons/show-cookie.png"),
@@ -116,11 +116,11 @@ static struct nsgtk_resource_s pixbuf_resource[] = {
 	RES_ENTRY("throbber/throbber6.png"),
 	RES_ENTRY("throbber/throbber7.png"),
 	RES_ENTRY("throbber/throbber8.png"),
-	{ NULL, 0, NSGTK_RESOURCE_FILE, NULL },
+	{ NULL, 0, SLATEGTK_RESOURCE_FILE, NULL },
 };
 
 /** resources that are used for direct data access */
-static struct nsgtk_resource_s direct_resource[] = {
+static struct slategtk_resource_s direct_resource[] = {
 	RES_ENTRY("welcome.html"),
 	RES_ENTRY("credits.html"),
 	RES_ENTRY("licence.html"),
@@ -128,7 +128,7 @@ static struct nsgtk_resource_s direct_resource[] = {
 	RES_ENTRY("adblock.css"),
 	RES_ENTRY("internal.css"),
 	RES_ENTRY("quirks.css"),
-	RES_ENTRY("netsurf.png"),
+	RES_ENTRY("slate.png"),
 	RES_ENTRY("default.ico"),
 	RES_ENTRY("icons/arrow-l.png"),
 	RES_ENTRY("icons/content.png"),
@@ -140,19 +140,19 @@ static struct nsgtk_resource_s direct_resource[] = {
 	RES_ENTRY("languages"),
 	RES_ENTRY("accelerators"),
 	RES_ENTRY("Messages"),
-	{ NULL, 0, NSGTK_RESOURCE_FILE, NULL },
+	{ NULL, 0, SLATEGTK_RESOURCE_FILE, NULL },
 };
 
 
 /* exported interface documented in gtk/resources.h */
-GdkCursor *nsgtk_create_menu_cursor(void)
+GdkCursor *slategtk_create_menu_cursor(void)
 {
 	GdkCursor *cursor = NULL;
 	GdkPixbuf *pixbuf;
-	nserror res;
+	slateerror res;
 
 	res = nsgdk_pixbuf_new_from_resname("menu_cursor.png", &pixbuf);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		cursor = gdk_cursor_new_from_pixbuf(gdk_display_get_default(),
 						    pixbuf, 0, 3);
 		g_object_unref(pixbuf);
@@ -176,8 +176,8 @@ GdkCursor *nsgtk_create_menu_cursor(void)
  * \param respath A string vector containing the valid resource search paths
  * \param resource A resource entry to initialise
  */
-static nserror
-init_resource(char **respath, struct nsgtk_resource_s *resource)
+static slateerror
+init_resource(char **respath, struct slategtk_resource_s *resource)
 {
 	char *resname;
 #ifdef WITH_GRESOURCE
@@ -192,14 +192,14 @@ init_resource(char **respath, struct nsgtk_resource_s *resource)
 	while (langv[langc] != NULL) {
 		/* allocate and fill a full resource name path buffer */
 		resnamelen = snprintf(NULL, 0,
-				      "/org/netsurf/%s/%s",
+				      "/org/slate/%s/%s",
 				      langv[langc], resource->name);
 		resname = malloc(resnamelen + 1);
 		if (resname == NULL) {
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 		snprintf(resname, resnamelen + 1,
-			 "/org/netsurf/%s/%s",
+			 "/org/slate/%s/%s",
 			 langv[langc], resource->name);
 
 		/* check if resource is present */
@@ -209,10 +209,10 @@ init_resource(char **respath, struct nsgtk_resource_s *resource)
 		if (present == TRUE) {
 			/* found an entry in the resources */
 			resource->path = resname;
-			resource->type = NSGTK_RESOURCE_GLIB;
+			resource->type = SLATEGTK_RESOURCE_GLIB;
 			NSLOG(netsurf, INFO, "Found gresource path %s",
 			      resource->path);
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 		NSLOG(netsurf, DEEPDEBUG,
 		      "gresource \"%s\" not found", resname);
@@ -222,12 +222,12 @@ init_resource(char **respath, struct nsgtk_resource_s *resource)
 	}
 
 	/* allocate and fill a full resource name path buffer with no language*/
-	resnamelen = snprintf(NULL, 0, "/org/netsurf/%s", resource->name);
+	resnamelen = snprintf(NULL, 0, "/org/slate/%s", resource->name);
 	resname = malloc(resnamelen + 1);
 	if (resname == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
-	snprintf(resname, resnamelen + 1, "/org/netsurf/%s", resource->name);
+	snprintf(resname, resnamelen + 1, "/org/slate/%s", resource->name);
 
 	present = g_resources_get_info(resname,
 				       G_RESOURCE_LOOKUP_FLAGS_NONE,
@@ -235,10 +235,10 @@ init_resource(char **respath, struct nsgtk_resource_s *resource)
 	if (present == TRUE) {
 		/* found an entry in the resources */
 		resource->path = resname;
-		resource->type = NSGTK_RESOURCE_GLIB;
+		resource->type = SLATEGTK_RESOURCE_GLIB;
 		NSLOG(netsurf, INFO, "Found gresource path %s",
 		      resource->path);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 	NSLOG(netsurf, DEEPDEBUG, "gresource \"%s\" not found", resname);
 	free(resname);
@@ -250,39 +250,39 @@ init_resource(char **respath, struct nsgtk_resource_s *resource)
 	if (resname != NULL) {
 		/* found an entry on the path */
 		resource->path = resname;
-		resource->type = NSGTK_RESOURCE_FILE;
+		resource->type = SLATEGTK_RESOURCE_FILE;
 
 		NSLOG(netsurf, INFO,
 		      "Found file resource path %s", resource->path);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	NSLOG(netsurf, INFO, "Unable to find resource %s on resource path",
 	      resource->name);
 
-	return NSERROR_NOT_FOUND;
+	return SLATEERROR_NOT_FOUND;
 }
 
 /**
  * locate and setup a direct resource
  *
- * Direct resources have general type of NSGTK_RESOURCE_GLIB but have
+ * Direct resources have general type of SLATEGTK_RESOURCE_GLIB but have
  *  g_resources_lookup_data() applied and the result stored so the data
  *  can be directly accessed without additional processing.
  *
  * \param respath A string vector containing the valid resource search paths
  * \param resource A resource entry to initialise
  */
-static nserror
-init_direct_resource(char **respath, struct nsgtk_resource_s *resource)
+static slateerror
+init_direct_resource(char **respath, struct slategtk_resource_s *resource)
 {
-	nserror res;
+	slateerror res;
 
 	res = init_resource(respath, resource);
 
 #ifdef WITH_GRESOURCE
-	if ((res == NSERROR_OK) &&
-	    (resource->type == NSGTK_RESOURCE_GLIB)) {
+	if ((res == SLATEERROR_OK) &&
+	    (resource->type == SLATEGTK_RESOURCE_GLIB)) {
 		/* found gresource we can convert */
 		GBytes *data;
 
@@ -290,7 +290,7 @@ init_direct_resource(char **respath, struct nsgtk_resource_s *resource)
 					       G_RESOURCE_LOOKUP_FLAGS_NONE,
 					       NULL);
 		if (data != NULL) {
-			resource->type = NSGTK_RESOURCE_DIRECT;
+			resource->type = SLATEGTK_RESOURCE_DIRECT;
 			resource->path = (char *)data;
 		}
 	}
@@ -307,29 +307,29 @@ init_direct_resource(char **respath, struct nsgtk_resource_s *resource)
  * \param respath A string vector containing the valid resource search paths
  * \param resource A resource entry to initialise
  */
-static nserror
-init_pixbuf_resource(char **respath, struct nsgtk_resource_s *resource)
+static slateerror
+init_pixbuf_resource(char **respath, struct slategtk_resource_s *resource)
 {
 #ifdef WITH_BUILTIN_PIXBUF
 	if (strncmp(resource->name, "menu_cursor.png", resource->len) == 0) {
 		resource->path = (char *)&menu_cursor_pixdata[0];
-		resource->type = NSGTK_RESOURCE_INLINE;
+		resource->type = SLATEGTK_RESOURCE_INLINE;
 		NSLOG(netsurf, INFO, "Found builtin for %s", resource->name);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
-	if (strncmp(resource->name, "netsurf.xpm", resource->len) == 0) {
-		resource->path = (char *)&netsurf_pixdata[0];
-		resource->type = NSGTK_RESOURCE_INLINE;
+	if (strncmp(resource->name, "slate.xpm", resource->len) == 0) {
+		resource->path = (char *)&slate_pixdata[0];
+		resource->type = SLATEGTK_RESOURCE_INLINE;
 		NSLOG(netsurf, INFO, "Found builtin for %s", resource->name);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	if (strncmp(resource->name, "favicon.png", resource->len) == 0) {
 		resource->path = (char *)&favicon_pixdata[0];
-		resource->type = NSGTK_RESOURCE_INLINE;
+		resource->type = SLATEGTK_RESOURCE_INLINE;
 		NSLOG(netsurf, INFO, "Found builtin for %s", resource->name);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 #endif
 	return init_resource(respath, resource);
@@ -343,18 +343,18 @@ init_pixbuf_resource(char **respath, struct nsgtk_resource_s *resource)
  * \param respath A string vector containing the valid resource search paths
  * \param ui_res A resource entry to initialise
  */
-static nserror init_ui_resource(char **respath, struct nsgtk_resource_s *ui_res)
+static slateerror init_ui_resource(char **respath, struct slategtk_resource_s *ui_res)
 {
 	int resnamelen;
 	char *resname;
-	struct nsgtk_resource_s resource;
-	nserror res;
+	struct slategtk_resource_s resource;
+	slateerror res;
 
 	resnamelen = ui_res->len + 10; /* allow for the expanded ui name */
 
 	resname = malloc(resnamelen);
 	if (resname == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 	snprintf(resname, resnamelen, "%s.ui", ui_res->name);
 	resource.name = resname;
@@ -377,8 +377,8 @@ static nserror init_ui_resource(char **respath, struct nsgtk_resource_s *ui_res)
  * \param resname The resource name to match.
  * \param resource The list of resources entries to search.
  */
-static struct nsgtk_resource_s *
-find_resource_from_name(const char *resname, struct nsgtk_resource_s *resource)
+static struct slategtk_resource_s *
+find_resource_from_name(const char *resname, struct slategtk_resource_s *resource)
 {
 	/* find resource from name */
 	while ((resource->name != NULL) &&
@@ -395,7 +395,7 @@ find_resource_from_name(const char *resname, struct nsgtk_resource_s *resource)
  */
 static void list_gresource(void)
 {
-	const char *nspath = "/org/netsurf";
+	const char *nspath = "/org/slate";
 	char **reslist;
 	char **cur;
 	GError* gerror = NULL;
@@ -422,10 +422,10 @@ static void list_gresource(void)
  *
  */
 /* exported interface documented in gtk/resources.h */
-nserror nsgtk_init_resources(char **respath)
+slateerror slategtk_init_resources(char **respath)
 {
-	struct nsgtk_resource_s *resource;
-	nserror res;
+	struct slategtk_resource_s *resource;
+	slateerror res;
 
 #ifdef SHOW_GRESOURCE
 	list_gresource();
@@ -435,7 +435,7 @@ nserror nsgtk_init_resources(char **respath)
 	resource = &ui_resource[0];
 	while (resource->name != NULL) {
 		res = init_ui_resource(respath, resource);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 		resource++;
@@ -445,7 +445,7 @@ nserror nsgtk_init_resources(char **respath)
 	resource = &pixbuf_resource[0];
 	while (resource->name != NULL) {
 		res = init_pixbuf_resource(respath, resource);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 		resource++;
@@ -455,47 +455,47 @@ nserror nsgtk_init_resources(char **respath)
 	resource = &direct_resource[0];
 	while (resource->name != NULL) {
 		res = init_direct_resource(respath, resource);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 		resource++;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in gtk/resources.h */
-nserror
+slateerror
 nsgdk_pixbuf_new_from_resname(const char *resname, GdkPixbuf **pixbuf_out)
 {
-	struct nsgtk_resource_s *resource;
+	struct slategtk_resource_s *resource;
 	GdkPixbuf *new_pixbuf = NULL;
 	GError* error = NULL;
 
 	resource = find_resource_from_name(resname, &pixbuf_resource[0]);
 	if (resource->name == NULL) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	switch (resource->type) {
-	case NSGTK_RESOURCE_FILE:
+	case SLATEGTK_RESOURCE_FILE:
 		new_pixbuf = gdk_pixbuf_new_from_file(resource->path, &error);
 		break;
 
-	case NSGTK_RESOURCE_GLIB:
+	case SLATEGTK_RESOURCE_GLIB:
 #ifdef WITH_GRESOURCE
 		new_pixbuf = gdk_pixbuf_new_from_resource(resource->path, &error);
 #endif
 		break;
 
-	case NSGTK_RESOURCE_INLINE:
+	case SLATEGTK_RESOURCE_INLINE:
 #ifdef WITH_BUILTIN_PIXBUF
 		new_pixbuf = gdk_pixbuf_new_from_inline(-1, (const guint8 *)resource->path, FALSE, &error);
 #endif
 		break;
 
-	case NSGTK_RESOURCE_DIRECT:
+	case SLATEGTK_RESOURCE_DIRECT:
 		/* pixbuf resources are not currently direct */
 		break;
 	}
@@ -514,29 +514,29 @@ nsgdk_pixbuf_new_from_resname(const char *resname, GdkPixbuf **pixbuf_out)
 			      resource->name,
 			      resource->path);
 		}
-		return NSERROR_INIT_FAILED;
+		return SLATEERROR_INIT_FAILED;
 	}
 	*pixbuf_out = new_pixbuf;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in gtk/resources.h */
-nserror
-nsgtk_builder_new_from_resname(const char *resname, GtkBuilder **builder_out)
+slateerror
+slategtk_builder_new_from_resname(const char *resname, GtkBuilder **builder_out)
 {
 	GtkBuilder *new_builder;
-	struct nsgtk_resource_s *ui_res;
+	struct slategtk_resource_s *ui_res;
 	GError* error = NULL;
 
 	ui_res = find_resource_from_name(resname, &ui_resource[0]);
 	if (ui_res->name == NULL) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	new_builder = gtk_builder_new();
 
-	if (ui_res->type == NSGTK_RESOURCE_FILE) {
+	if (ui_res->type == SLATEGTK_RESOURCE_FILE) {
 		if (!gtk_builder_add_from_file(new_builder,
 					       ui_res->path,
 					       &error)) {
@@ -547,10 +547,10 @@ nsgtk_builder_new_from_resname(const char *resname, GtkBuilder **builder_out)
 			      error->message);
 			g_error_free(error);
 			g_object_unref(G_OBJECT(new_builder));
-			return NSERROR_INIT_FAILED;
+			return SLATEERROR_INIT_FAILED;
 		}
 	} else {
-		if (!nsgtk_builder_add_from_resource(new_builder,
+		if (!slategtk_builder_add_from_resource(new_builder,
 						     ui_res->path,
 						     &error)) {
 			NSLOG(netsurf, INFO,
@@ -560,31 +560,31 @@ nsgtk_builder_new_from_resname(const char *resname, GtkBuilder **builder_out)
 			      error->message);
 			g_error_free(error);
 			g_object_unref(G_OBJECT(new_builder));
-			return NSERROR_INIT_FAILED;
+			return SLATEERROR_INIT_FAILED;
 		}
 	}
 
 	*builder_out = new_builder;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in gtk/resources.h */
-nserror
-nsgtk_data_from_resname(const char *resname,
+slateerror
+slategtk_data_from_resname(const char *resname,
 			const uint8_t ** data_out,
 			size_t *data_size_out)
 {
 #ifdef WITH_GRESOURCE
-	struct nsgtk_resource_s *resource;
+	struct slategtk_resource_s *resource;
 	GBytes *data;
 	const gchar *buffer;
 	gsize buffer_length;
 
 	resource = find_resource_from_name(resname, &direct_resource[0]);
 	if ((resource->name == NULL) ||
-	    (resource->type != NSGTK_RESOURCE_DIRECT)) {
-		return NSERROR_NOT_FOUND;
+	    (resource->type != SLATEGTK_RESOURCE_DIRECT)) {
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	data = (GBytes *)resource->path;
@@ -593,34 +593,34 @@ nsgtk_data_from_resname(const char *resname,
 	buffer = g_bytes_get_data(data, &buffer_length);
 
 	if (buffer == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	*data_out = (const uint8_t *)buffer;
 	*data_size_out = (size_t)buffer_length;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 #else
 	/** \todo consider adding compiled inline resources for things
 	 * other than pixbufs.
 	 */
-	return NSERROR_NOT_FOUND;
+	return SLATEERROR_NOT_FOUND;
 #endif
 }
 
 /* exported interface documented in gtk/resources.h */
-nserror
-nsgtk_path_from_resname(const char *resname, const char **path_out)
+slateerror
+slategtk_path_from_resname(const char *resname, const char **path_out)
 {
-	struct nsgtk_resource_s *resource;
+	struct slategtk_resource_s *resource;
 
 	resource = find_resource_from_name(resname, &direct_resource[0]);
 	if ((resource->name == NULL) ||
-	    (resource->type != NSGTK_RESOURCE_FILE)) {
-		return NSERROR_NOT_FOUND;
+	    (resource->type != SLATEGTK_RESOURCE_FILE)) {
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	*path_out = (const char *)resource->path;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }

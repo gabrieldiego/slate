@@ -2,7 +2,7 @@
  * Copyright 2015 Vincent Sanders <vince@netsurf-browser.org>
  * Copyright 2011 John Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@
 
 /**
  * \file
- * Test nsurl operations.
+ * Test slateurl operations.
  */
 
 #include <assert.h>
@@ -34,11 +34,11 @@
 #include "utils/corestrings.h"
 #include "utils/log.h"
 #include "utils/corestrings.h"
-#include "utils/nsurl.h"
-#include "utils/nsoption.h"
-#include "netsurf/url_db.h"
-#include "netsurf/cookie_db.h"
-#include "netsurf/bitmap.h"
+#include "utils/slateurl.h"
+#include "utils/slateoption.h"
+#include "slate/url_db.h"
+#include "slate/cookie_db.h"
+#include "slate/bitmap.h"
 #include "content/urldb.h"
 #include "desktop/gui_internal.h"
 #include "desktop/cookie_manager.h"
@@ -63,7 +63,7 @@ const char *test_cookies_out_path = "test/data/cookies-out";
 
 const char *wikipedia_url = "http://www.wikipedia.org/";
 
-struct netsurf_table *guit = NULL;
+struct slate_table *guit = NULL;
 
 
 struct test_urls {
@@ -78,7 +78,7 @@ struct test_urls {
 
 
 /* Stubs */
-nserror nslog_set_filter_by_options() { return NSERROR_OK; }
+slateerror nslog_set_filter_by_options() { return SLATEERROR_OK; }
 
 /**
  * generate test output filenames
@@ -142,43 +142,43 @@ void cookie_manager_remove(const struct cookie_data *data)
 {
 }
 
-static nsurl *make_url(const char *url)
+static slateurl *make_url(const char *url)
 {
-	nsurl *nsurl;
-	if (nsurl_create(url, &nsurl) != NSERROR_OK) {
-		NSLOG(netsurf, INFO, "failed creating nsurl");
+	slateurl *slateurl;
+	if (slateurl_create(url, &slateurl) != SLATEERROR_OK) {
+		NSLOG(netsurf, INFO, "failed creating slateurl");
 		exit(1);
 	}
-	return nsurl;
+	return slateurl;
 }
 
 
 static bool test_urldb_set_cookie(const char *header, const char *url,
 		const char *referer)
 {
-	nsurl *r = NULL;
-	nsurl *nsurl = make_url(url);
+	slateurl *r = NULL;
+	slateurl *slateurl = make_url(url);
 	bool ret;
 
 	if (referer != NULL)
 		r = make_url(referer);
 
-	ret = urldb_set_cookie(header, nsurl, r);
+	ret = urldb_set_cookie(header, slateurl, r);
 
 	if (referer != NULL)
-		nsurl_unref(r);
-	nsurl_unref(nsurl);
+		slateurl_unref(r);
+	slateurl_unref(slateurl);
 
 	return ret;
 }
 
 static char *test_urldb_get_cookie(const char *url)
 {
-	nsurl *nsurl = make_url(url);
+	slateurl *slateurl = make_url(url);
 	char *ret;
 
-	ret = urldb_get_cookie(nsurl, true);
-	nsurl_unref(nsurl);
+	ret = urldb_get_cookie(slateurl, true);
+	slateurl_unref(slateurl);
 
 	return ret;
 }
@@ -195,35 +195,35 @@ struct gui_bitmap_table tst_bitmap_table = {
 	.destroy = destroy_bitmap,
 };
 
-struct netsurf_table tst_table = {
+struct slate_table tst_table = {
 	.bitmap = &tst_bitmap_table,
 };
 
 /** urldb create fixture */
 static void urldb_create(void)
 {
-	nserror res;
+	slateerror res;
 
 	/* mock bitmap interface */
 	guit = &tst_table;
 
 	res = corestrings_init();
-	ck_assert_int_eq(res, NSERROR_OK);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 }
 
 /** urldb create pre-loaded db fixture */
 static void urldb_create_loaded(void)
 {
-	nserror res;
+	slateerror res;
 
 	/* mock bitmap interface */
 	guit = &tst_table;
 
 	res = corestrings_init();
-	ck_assert_int_eq(res, NSERROR_OK);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 
 	res = urldb_load(test_urldb_path);
-	ck_assert_int_eq(res, NSERROR_OK);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 
 	urldb_load_cookies(test_cookies_path);
 }
@@ -258,60 +258,60 @@ static void urldb_teardown(void)
 
 START_TEST(urldb_original_test)
 {
-	nsurl *url;
-	nsurl *urlr;
+	slateurl *url;
+	slateurl *urlr;
 	char *cdata;
 
 	/* fragments */
 	url = make_url("http://netsurf.strcprstskrzkrk.co.uk/path/to/resource.htm?a=b");
 	ck_assert(urldb_add_url(url) == true);
-	nsurl_unref(url);
+	slateurl_unref(url);
 
 	url = make_url("http://netsurf.strcprstskrzkrk.co.uk/path/to/resource.htm#zz?a=b");
 	ck_assert(urldb_add_url(url) == true);
-	nsurl_unref(url);
+	slateurl_unref(url);
 
 	url = make_url("http://netsurf.strcprstskrzkrk.co.uk/path/to/resource.htm#aa?a=b");
 	ck_assert(urldb_add_url(url) == true);
-	nsurl_unref(url);
+	slateurl_unref(url);
 
 	url = make_url("http://netsurf.strcprstskrzkrk.co.uk/path/to/resource.htm#yy?a=b");
 	ck_assert(urldb_add_url(url) == true);
-	nsurl_unref(url);
+	slateurl_unref(url);
 
 
 	/* set cookies on urls */
 	url = make_url("http://www.minimarcos.org.uk/cgi-bin/forum/Blah.pl?,v=login,p=2");
 	urldb_set_cookie("mmblah=foo; path=/; expires=Thur, 31-Dec-2099 00:00:00 GMT\r\n", url, NULL);
-	nsurl_unref(url);
+	slateurl_unref(url);
 
 	url = make_url("http://www.minimarcos.org.uk/cgi-bin/forum/Blah.pl?,v=login,p=2");
 	urldb_set_cookie("BlahPW=bar; path=/; expires=Thur, 31-Dec-2099 00:00:00 GMT\r\n", url, NULL);
-	nsurl_unref(url);
+	slateurl_unref(url);
 
 	url = make_url("http://ccdb.cropcircleresearch.com/");
 	urldb_set_cookie("details=foo|bar|Sun, 03-Jun-2007;expires=Mon, 24-Jul-2006 09:53:45 GMT\r\n", url, NULL);
-	nsurl_unref(url);
+	slateurl_unref(url);
 
 	url = make_url("http://www.google.com/");
 	urldb_set_cookie("PREF=ID=a:TM=b:LM=c:S=d; path=/; domain=.google.com\r\n", url, NULL);
-	nsurl_unref(url);
+	slateurl_unref(url);
 
 	url = make_url("http://www.bbc.co.uk/");
 	urldb_set_cookie("test=foo, bar, baz; path=/, quux=blah; path=/", url, NULL);
-	nsurl_unref(url);
+	slateurl_unref(url);
 
 //	urldb_set_cookie("a=b; path=/; domain=.a.com", "http://a.com/", NULL);
 
 	url = make_url("https://www.foo.com/blah/moose");
 	urlr = make_url("https://www.foo.com/blah/moose");
 	urldb_set_cookie("foo=bar;Path=/blah;Secure\r\n", url, urlr);
-	nsurl_unref(url);
-	nsurl_unref(urlr);
+	slateurl_unref(url);
+	slateurl_unref(urlr);
 
 	url = make_url("https://www.foo.com/blah/wxyzabc");
 	cdata = urldb_get_cookie(url, true);
-	nsurl_unref(url);
+	slateurl_unref(url);
 	ck_assert(strcmp(cdata,"foo=bar") == 0);
 	free(cdata);
 
@@ -532,30 +532,30 @@ static const struct test_urls add_set_get_tests[] = {
  */
 START_TEST(urldb_add_set_get_test)
 {
-	nserror err;
-	nsurl *url;
-	nsurl *res_url;
+	slateerror err;
+	slateurl *url;
+	slateurl *res_url;
 	const struct url_data *data;
 	const struct test_urls *tst = &add_set_get_tests[_i];
 
 	/* not testing create, this should always succeed */
-	err = nsurl_create(tst->url, &url);
-	ck_assert(err == NSERROR_OK);
+	err = slateurl_create(tst->url, &url);
+	ck_assert(err == SLATEERROR_OK);
 
 	/* add the url to the database */
 	ck_assert(urldb_add_url(url) == true);
 
 	/* set title */
 	err = urldb_set_url_title(url, tst->title);
-	ck_assert(err == NSERROR_OK);
+	ck_assert(err == SLATEERROR_OK);
 
 	err = urldb_set_url_content_type(url, tst->type);
-	ck_assert(err == NSERROR_OK);
+	ck_assert(err == SLATEERROR_OK);
 
 	/* retrieve the url from the database and check it matches */
 	res_url = urldb_get_url(url);
 	ck_assert(res_url != NULL);
-	ck_assert(nsurl_compare(url, res_url, NSURL_COMPLETE) == true);
+	ck_assert(slateurl_compare(url, res_url, SLATEURL_COMPLETE) == true);
 
 	/* retrieve url data and check title matches */
 	data = urldb_get_url_data(url);
@@ -572,7 +572,7 @@ START_TEST(urldb_add_set_get_test)
 	ck_assert(data->type == tst->type);
 
 	/* release test url */
-	nsurl_unref(url);
+	slateurl_unref(url);
 }
 END_TEST
 
@@ -609,22 +609,22 @@ static TCase *urldb_add_get_case_create(void)
  */
 START_TEST(urldb_session_test)
 {
-	nserror res;
+	slateerror res;
 	char *outnam;
 
 	/* writing output requires options initialising */
-	res = nsoption_init(NULL, NULL, NULL);
-	ck_assert_int_eq(res, NSERROR_OK);
+	res = slateoption_init(NULL, NULL, NULL);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 
 	res = urldb_load(test_urldb_path);
-	ck_assert_int_eq(res, NSERROR_OK);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 
 	urldb_load_cookies(test_cookies_path);
 
 	/* write database out */
 	outnam = testnam(NULL);
 	res = urldb_save(outnam);
-	ck_assert_int_eq(res, NSERROR_OK);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 
 	/* check the url database file written and the test file match */
 	ck_assert_int_eq(cmp(outnam, test_urldb_out_path), 0);
@@ -643,8 +643,8 @@ START_TEST(urldb_session_test)
 	unlink(outnam);
 
 	/* finalise options */
-	res = nsoption_finalise(NULL, NULL);
-	ck_assert_int_eq(res, NSERROR_OK);
+	res = slateoption_finalise(NULL, NULL);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 
 }
 END_TEST
@@ -656,17 +656,17 @@ END_TEST
  */
 START_TEST(urldb_session_add_test)
 {
-	nserror res;
+	slateerror res;
 	char *outnam;
-	nsurl *url;
+	slateurl *url;
 	unsigned int t;
 
 	/* writing output requires options initialising */
-	res = nsoption_init(NULL, NULL, NULL);
-	ck_assert_int_eq(res, NSERROR_OK);
+	res = slateoption_init(NULL, NULL, NULL);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 
 	res = urldb_load(test_urldb_path);
-	ck_assert_int_eq(res, NSERROR_OK);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 
 	urldb_load_cookies(test_cookies_path);
 
@@ -675,15 +675,15 @@ START_TEST(urldb_session_add_test)
 		const struct test_urls *tst = &add_set_get_tests[t];
 
 		/* not testing url creation, this should always succeed */
-		res = nsurl_create(tst->url, &url);
-		ck_assert_int_eq(res, NSERROR_OK);
+		res = slateurl_create(tst->url, &url);
+		ck_assert_int_eq(res, SLATEERROR_OK);
 
 		/* add the url to the database */
 		ck_assert(urldb_add_url(url) == true);
 
 		/* set title */
 		res = urldb_set_url_title(url, tst->title);
-		ck_assert(res == NSERROR_OK);
+		ck_assert(res == SLATEERROR_OK);
 
 		/* update the visit time so it gets serialised */
 		if (tst->persistent) {
@@ -691,15 +691,15 @@ START_TEST(urldb_session_add_test)
 		} else {
 			res = urldb_update_url_visit_data(url);
 		}
-		ck_assert_int_eq(res, NSERROR_OK);
+		ck_assert_int_eq(res, SLATEERROR_OK);
 
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
 
 	/* write database out */
 	outnam = testnam(NULL);
 	res = urldb_save(outnam);
-	ck_assert_int_eq(res, NSERROR_OK);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 
 	/* remove urldb test output */
 	unlink(outnam);
@@ -712,8 +712,8 @@ START_TEST(urldb_session_add_test)
 	unlink(outnam);
 
 	/* finalise options */
-	res = nsoption_finalise(NULL, NULL);
-	ck_assert_int_eq(res, NSERROR_OK);
+	res = slateoption_finalise(NULL, NULL);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 
 }
 END_TEST
@@ -742,10 +742,10 @@ static TCase *urldb_session_case_create(void)
 
 static int cb_count;
 
-static bool urldb_iterate_entries_cb(nsurl *url, const struct url_data *data)
+static bool urldb_iterate_entries_cb(slateurl *url, const struct url_data *data)
 {
-	NSLOG(netsurf, INFO, "url: %s", nsurl_access(url));
-	/* fprintf(stderr, "url:%s\ntitle:%s\n\n",nsurl_access(url), data->title); */
+	NSLOG(netsurf, INFO, "url: %s", slateurl_access(url));
+	/* fprintf(stderr, "url:%s\ntitle:%s\n\n",slateurl_access(url), data->title); */
 	cb_count++;
 	return true;
 }
@@ -785,7 +785,7 @@ END_TEST
  */
 START_TEST(urldb_iterate_partial_add_test)
 {
-	nsurl *url;
+	slateurl *url;
 
 	cb_count = 0;
 	urldb_iterate_partial("wikipedia", urldb_iterate_entries_cb);
@@ -793,7 +793,7 @@ START_TEST(urldb_iterate_partial_add_test)
 
 	url = make_url(wikipedia_url);
 	urldb_add_url(url);
-	nsurl_unref(url);
+	slateurl_unref(url);
 
 	cb_count = 0;
 	urldb_iterate_partial("wikipedia", urldb_iterate_entries_cb);
@@ -818,7 +818,7 @@ END_TEST
  */
 START_TEST(urldb_iterate_partial_numeric_v4_test)
 {
-	nsurl *url;
+	slateurl *url;
 
 	cb_count = 0;
 	urldb_iterate_partial("192.168.7.1/", urldb_iterate_entries_cb);
@@ -826,7 +826,7 @@ START_TEST(urldb_iterate_partial_numeric_v4_test)
 
 	url = make_url("http://192.168.7.1/index.html");
 	urldb_add_url(url);
-	nsurl_unref(url);
+	slateurl_unref(url);
 
 	cb_count = 0;
 	urldb_iterate_partial("192.168.7.1/", urldb_iterate_entries_cb);
@@ -840,7 +840,7 @@ END_TEST
  */
 START_TEST(urldb_iterate_partial_numeric_v6_test)
 {
-	nsurl *url;
+	slateurl *url;
 
 	cb_count = 0;
 	urldb_iterate_partial("[2001:db8:1f70::999:de8:7648:6e8]",
@@ -849,7 +849,7 @@ START_TEST(urldb_iterate_partial_numeric_v6_test)
 
 	url = make_url("http://[2001:db8:1f70::999:de8:7648:6e8]/index.html");
 	urldb_add_url(url);
-	nsurl_unref(url);
+	slateurl_unref(url);
 
 	cb_count = 0;
 	urldb_iterate_partial("[2001:db8:1f70::999:de8:7648:6e8]/index.wrong",
@@ -884,7 +884,7 @@ END_TEST
 
 START_TEST(urldb_auth_details_test)
 {
-	nsurl *url;
+	slateurl *url;
 	const char *res;
 	const char *auth = "mooooo";
 
@@ -894,14 +894,14 @@ START_TEST(urldb_auth_details_test)
 	res = urldb_get_auth_details(url, "tree");
 	ck_assert_str_eq(res, auth);
 
-	nsurl_unref(url);
+	slateurl_unref(url);
 }
 END_TEST
 
 
 START_TEST(urldb_cert_permissions_test)
 {
-	nsurl *url;
+	slateurl *url;
 	bool permit;
 
 	url = make_url(wikipedia_url);
@@ -918,13 +918,13 @@ START_TEST(urldb_cert_permissions_test)
 
 	ck_assert(permit == false);
 
-	nsurl_unref(url);
+	slateurl_unref(url);
 }
 END_TEST
 
 START_TEST(urldb_update_visit_test)
 {
-	nsurl *url;
+	slateurl *url;
 
 	url = make_url(wikipedia_url);
 
@@ -935,13 +935,13 @@ START_TEST(urldb_update_visit_test)
 	urldb_update_url_visit_data(url);
 	/** \todo test needs to check results */
 
-	nsurl_unref(url);
+	slateurl_unref(url);
 }
 END_TEST
 
 START_TEST(urldb_reset_visit_test)
 {
-	nsurl *url;
+	slateurl *url;
 
 	url = make_url(wikipedia_url);
 
@@ -952,13 +952,13 @@ START_TEST(urldb_reset_visit_test)
 	urldb_reset_url_visit_data(url);
 	/** \todo test needs to check results */
 
-	nsurl_unref(url);
+	slateurl_unref(url);
 }
 END_TEST
 
 START_TEST(urldb_persistence_test)
 {
-	nsurl *url;
+	slateurl *url;
 
 	url = make_url(wikipedia_url);
 
@@ -971,7 +971,7 @@ START_TEST(urldb_persistence_test)
 	urldb_set_url_persistence(url, false);
 	/** \todo test needs to check results */
 
-	nsurl_unref(url);
+	slateurl_unref(url);
 }
 END_TEST
 
@@ -1088,39 +1088,39 @@ END_TEST
  */
 START_TEST(urldb_api_url_find_test)
 {
-	nsurl *url;
-	nserror res;
+	slateurl *url;
+	slateerror res;
 
 	urldb_create();
 
 	/* search for a url with mailto scheme */
-	res = nsurl_create("mailto:", &url);
-	ck_assert_int_eq(res, NSERROR_OK);
+	res = slateurl_create("mailto:", &url);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 
 	res = urldb_set_url_persistence(url, true);
-	ck_assert_int_eq(res, NSERROR_NOT_FOUND);
+	ck_assert_int_eq(res, SLATEERROR_NOT_FOUND);
 
-	nsurl_unref(url);
+	slateurl_unref(url);
 
 	/* search for a url with odd scheme and no host */
-	res = nsurl_create("fish:///", &url);
-	ck_assert_int_eq(res, NSERROR_OK);
-	ck_assert(nsurl_has_component(url, NSURL_HOST) == false);
+	res = slateurl_create("fish:///", &url);
+	ck_assert_int_eq(res, SLATEERROR_OK);
+	ck_assert(slateurl_has_component(url, SLATEURL_HOST) == false);
 
 	res = urldb_set_url_title(url, NULL);
-	ck_assert_int_eq(res, NSERROR_NOT_FOUND);
+	ck_assert_int_eq(res, SLATEERROR_NOT_FOUND);
 
-	nsurl_unref(url);
+	slateurl_unref(url);
 
 	/* search for a url with not found url  */
-	res = nsurl_create("http://no.example.com/", &url);
-	ck_assert_int_eq(res, NSERROR_OK);
-	ck_assert(nsurl_has_component(url, NSURL_HOST) == true);
+	res = slateurl_create("http://no.example.com/", &url);
+	ck_assert_int_eq(res, SLATEERROR_OK);
+	ck_assert(slateurl_has_component(url, SLATEURL_HOST) == true);
 
 	res = urldb_set_url_persistence(url, true);
-	ck_assert_int_eq(res, NSERROR_NOT_FOUND);
+	ck_assert_int_eq(res, SLATEERROR_NOT_FOUND);
 
-	nsurl_unref(url);
+	slateurl_unref(url);
 }
 END_TEST
 

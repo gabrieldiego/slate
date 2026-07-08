@@ -2,7 +2,7 @@
  * Copyright 2004 John M Bell <jmb202@ecs.soton.ac.uk>
  * Copyright 2008 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
   * Text export of HTML (interface).
   */
 
-#ifndef _NETSURF_DESKTOP_SAVE_TEXT_H_
-#define _NETSURF_DESKTOP_SAVE_TEXT_H_
+#ifndef _SLATE_DESKTOP_SAVE_TEXT_H_
+#define _SLATE_DESKTOP_SAVE_TEXT_H_
 
 struct box;
 struct hlcache_handle;

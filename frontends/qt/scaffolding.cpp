@@ -1,7 +1,7 @@
 /*
  * Copyright 2024 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,7 +28,7 @@ extern "C" {
 #include "utils/log.h"
 #include "utils/messages.h"
 
-#include "netsurf/content.h"
+#include "slate/content.h"
 }
 
 #include "qt/application.cls.h"

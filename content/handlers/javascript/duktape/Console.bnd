@@ -3,7 +3,7 @@
  * Copyright 2015 Vincent Sanders <vince@netsurf-browser.org>
  * Copyright 2015 Daniel Silverstone <dsilvers@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * Released under the terms of the MIT License,
  *         http://www.opensource.org/licenses/mit-license
@@ -13,7 +13,7 @@ class Console {
       private unsigned int group;
       prologue %{
 #include <nsutils/time.h>
-#include "netsurf/browser_window.h"
+#include "slate/browser_window.h"
 
 #define CONSOLE_TIMERS MAGIC(ConsoleTimers)
 
@@ -54,7 +54,7 @@ write_log_entry(duk_context *ctx, unsigned int group, browser_window_console_fla
 	if (priv_win == NULL || priv_win->win == NULL || priv_win->closed_down == true ||
 	    browser_window_console_log(priv_win->win, BW_CS_SCRIPT_CONSOLE,
 				       msg, msglen,
-				       flags) != NSERROR_OK) {
+				       flags) != SLATEERROR_OK) {
 		NSLOG(netsurf, DEBUG, "Unable to log: %s", duk_safe_to_string(ctx, 0));
 	}
 }

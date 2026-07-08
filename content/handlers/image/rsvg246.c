@@ -1,7 +1,7 @@
 /*
  * Copyright 2022 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -41,9 +41,9 @@
 #include "utils/log.h"
 #include "utils/utils.h"
 #include "utils/messages.h"
-#include "netsurf/plotters.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/content.h"
+#include "slate/plotters.h"
+#include "slate/bitmap.h"
+#include "slate/content.h"
 #include "content/llcache.h"
 #include "content/content_protected.h"
 #include "content/content_factory.h"
@@ -62,7 +62,7 @@ typedef struct rsvg_content {
 } rsvg_content;
 
 
-static nserror
+static slateerror
 rsvg_create(const content_handler *handler,
 	    lwc_string *imime_type,
 	    const struct http_parameter *params,
@@ -72,22 +72,22 @@ rsvg_create(const content_handler *handler,
 	    struct content **c)
 {
 	rsvg_content *svg;
-	nserror error;
+	slateerror error;
 
 	svg = calloc(1, sizeof(rsvg_content));
 	if (svg == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__init(&svg->base, handler, imime_type, params,
 			      llcache, fallback_charset, quirks);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(svg);
 		return error;
 	}
 
 	*c = (struct content *)svg;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -217,17 +217,17 @@ static bool rsvg_convert(struct content *c)
 }
 
 
-static nserror rsvg_clone(const struct content *old, struct content **newc)
+static slateerror rsvg_clone(const struct content *old, struct content **newc)
 {
 	rsvg_content *svg;
-	nserror error;
+	slateerror error;
 
 	svg = calloc(1, sizeof(rsvg_content));
 	if (svg == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__clone(old, &svg->base);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&svg->base);
 		return error;
 	}
@@ -237,13 +237,13 @@ static nserror rsvg_clone(const struct content *old, struct content **newc)
 	    (old->status == CONTENT_STATUS_DONE)) {
 		if (rsvg_convert(&svg->base) == false) {
 			content_destroy(&svg->base);
-			return NSERROR_CLONE_FAILED;
+			return SLATEERROR_CLONE_FAILED;
 		}
 	}
 
 	*newc = (struct content *)svg;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 

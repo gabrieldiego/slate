@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 Rob Kendrick <rjek@rjek.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,9 +16,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_GTK_ABOUT_H
-#define NETSURF_GTK_ABOUT_H
+#ifndef SLATE_GTK_ABOUT_H
+#define SLATE_GTK_ABOUT_H
 
-void nsgtk_about_dialog_init(GtkWindow *parent);
+void slategtk_about_dialog_init(GtkWindow *parent);
 
 #endif

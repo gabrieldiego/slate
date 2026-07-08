@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 Paul Blokus <paul_pl@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,22 +20,22 @@
  * Cookies (interface).
  */
 
-#ifndef __NSGTK_COOKIES_H__
-#define __NSGTK_COOKIES_H__
+#ifndef __SLATEGTK_COOKIES_H__
+#define __SLATEGTK_COOKIES_H__
 
 /**
  * make the cookie window visible.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-nserror nsgtk_cookies_present(const char *search_term);
+slateerror slategtk_cookies_present(const char *search_term);
 
 /**
  * Free any resources allocated for the cookie window.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-nserror nsgtk_cookies_destroy(void);
+slateerror slategtk_cookies_destroy(void);
 
 
-#endif /* __NSGTK_COOKIES_H__ */
+#endif /* __SLATEGTK_COOKIES_H__ */

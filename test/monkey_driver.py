@@ -2,7 +2,7 @@
 #
 # Copyright 2019 Daniel Silverstone <dsilvers@digital-scurf.org>
 #
-# This file is part of NetSurf, http://www.netsurf-browser.org/
+# This file is part of NetSurf, http://www.slate-browser.org/
 #
 # NetSurf is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -89,7 +89,7 @@ class DriverBrowser(Browser):
 
 def print_usage():
     print('Usage:')
-    print('  ' + sys.argv[0] + ' -m <path to monkey> -t <path to test> [-w <wrapper arguments>]')
+    print('  ' + sys.argv[0] + ' -m <path to jotter> -t <path to test> [-w <wrapper arguments>]')
 
 
 def parse_argv(argv):
@@ -100,7 +100,7 @@ def parse_argv(argv):
     path_test = ''
     wrapper = None
     try:
-        opts, args = getopt.getopt(argv, "hm:t:w:", ["monkey=", "test=", "wrapper="])
+        opts, args = getopt.getopt(argv, "hm:t:w:", ["jotter=", "test=", "wrapper="])
     except getopt.GetoptError:
         print_usage()
         sys.exit(2)
@@ -108,7 +108,7 @@ def parse_argv(argv):
         if opt == '-h':
             print_usage()
             sys.exit()
-        elif opt in ("-m", "--monkey"):
+        elif opt in ("-m", "--jotter"):
             path_monkey = arg
         elif opt in ("-t", "--test"):
             path_test = arg

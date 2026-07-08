@@ -1,7 +1,7 @@
 /*
  * Copyright 2006 Daniel Silverstone <dsilvers@digital-scurf.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,8 +26,8 @@
  *
  */
 
-#ifndef NETSURF_GTK_RESOURCES_H
-#define NETSURF_GTK_RESOURCES_H 1
+#ifndef SLATE_GTK_RESOURCES_H
+#define SLATE_GTK_RESOURCES_H 1
 
 /**
  * Initialise GTK resources handling.
@@ -36,17 +36,17 @@
  * after logging is initialised as it logs.
  *
  * \param respath A string vector of paths to search for resources.
- * \return NSERROR_OK if all resources were located else an
+ * \return SLATEERROR_OK if all resources were located else an
  *         appropriate error code.
  */
-nserror nsgtk_init_resources(char **respath);
+slateerror slategtk_init_resources(char **respath);
 
 /**
  * Creates a menu cursor from internal resources.
  *
  * \return Cursor object or NULL on error.
  */
-GdkCursor *nsgtk_create_menu_cursor(void);
+GdkCursor *slategtk_create_menu_cursor(void);
 
 /**
  * Create gtk builder object for the named ui resource.
@@ -56,13 +56,13 @@ GdkCursor *nsgtk_create_menu_cursor(void);
  *
  * This creates a gtk builder instance using an identifier name which
  * is mapped to the ui_resource table which must be initialised with
- * nsgtk_init_resources()
+ * slategtk_init_resources()
  *
  * \param resname The resource name to construct for
  * \param builder_out The builder result
- * \return NSERROR_OK and builder_out updated or appropriate error code
+ * \return SLATEERROR_OK and builder_out updated or appropriate error code
  */
-nserror nsgtk_builder_new_from_resname(const char *resname, GtkBuilder **builder_out);
+slateerror slategtk_builder_new_from_resname(const char *resname, GtkBuilder **builder_out);
 
 
 /**
@@ -70,13 +70,13 @@ nserror nsgtk_builder_new_from_resname(const char *resname, GtkBuilder **builder
  *
  * This creates a pixbuf using an identifier name which is mapped to
  * the ui_resource table which must be initialised with
- * nsgtk_init_resources()
+ * slategtk_init_resources()
  *
  * \param resname The resource name to construct for
  * \param pixbuf_out The pixbuf result
- * \return NSERROR_OK and pixbuf_out updated or appropriate error code
+ * \return SLATEERROR_OK and pixbuf_out updated or appropriate error code
  */
-nserror nsgdk_pixbuf_new_from_resname(const char *resname, GdkPixbuf **pixbuf_out);
+slateerror nsgdk_pixbuf_new_from_resname(const char *resname, GdkPixbuf **pixbuf_out);
 
 /**
  * Get direct pointer to resource data.
@@ -90,9 +90,9 @@ nserror nsgdk_pixbuf_new_from_resname(const char *resname, GdkPixbuf **pixbuf_ou
  * \param resname The resource name to obtain data for.
  * \param data_out The resulting data.
  * \param data_size_out The resulting data size.
- * \return NSERROR_OK and data_out updated or appropriate error code.
+ * \return SLATEERROR_OK and data_out updated or appropriate error code.
  */
-nserror nsgtk_data_from_resname(const char *resname, const uint8_t **data_out, size_t *data_size_out);
+slateerror slategtk_data_from_resname(const char *resname, const uint8_t **data_out, size_t *data_size_out);
 
 /**
  * Get path to resource data.
@@ -102,8 +102,8 @@ nserror nsgtk_data_from_resname(const char *resname, const uint8_t **data_out, s
  * The path is read only and remains valid untill program exit.
  * \param resname The resource name to obtain path for.
  * \param path_out The resulting data.
- * \return NSERROR_OK and path_out updated or appropriate error code.
+ * \return SLATEERROR_OK and path_out updated or appropriate error code.
  */
-nserror nsgtk_path_from_resname(const char *resname, const char **path_out);
+slateerror slategtk_path_from_resname(const char *resname, const char **path_out);
 
 #endif

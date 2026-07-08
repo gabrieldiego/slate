@@ -2,7 +2,7 @@
  * Copyright 2015 Vincent Sanders <vince@netsurf-browser.org>
  * Copyright 2006 Rob Kendrick <rjek@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -159,7 +159,7 @@ END_TEST
 START_TEST(hashtable_negative_test)
 {
 	struct hash_table *ht;
-	nserror ret;
+	slateerror ret;
 	const char *res;
 
 	/* create hash */
@@ -168,7 +168,7 @@ START_TEST(hashtable_negative_test)
 
 	/* add entry */
 	ret = hash_add(ht, "cow", "moo");
-	ck_assert(ret == NSERROR_OK);
+	ck_assert(ret == SLATEERROR_OK);
 
 	res = hash_get(ht, "sheep");
 	ck_assert(res == NULL);
@@ -187,7 +187,7 @@ END_TEST
 START_TEST(hashtable_positive_test)
 {
 	struct hash_table *ht;
-	nserror ret;
+	slateerror ret;
 	const char *res;
 
 	/* create hash */
@@ -196,7 +196,7 @@ START_TEST(hashtable_positive_test)
 
 	/* add entry */
 	ret = hash_add(ht, "cow", "moo");
-	ck_assert(ret == NSERROR_OK);
+	ck_assert(ret == SLATEERROR_OK);
 
 	res = hash_get(ht, "cow");
 	ck_assert(res != NULL);

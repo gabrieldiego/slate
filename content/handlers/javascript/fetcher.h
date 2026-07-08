@@ -20,9 +20,9 @@
  * javascript scheme handler
  */
 
-#ifndef NETSURF_JAVASCRIPT_FETCHER_H
-#define NETSURF_JAVASCRIPT_FETCHER_H
+#ifndef SLATE_JAVASCRIPT_FETCHER_H
+#define SLATE_JAVASCRIPT_FETCHER_H
 
-nserror fetch_javascript_register(void);
+slateerror fetch_javascript_register(void);
 
 #endif

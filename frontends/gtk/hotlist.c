@@ -2,7 +2,7 @@
  * Copyright 2010 John Mark Bell <jmb@netsurf-browser.org>
  * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,9 +27,9 @@
 #include <gtk/gtk.h>
 
 #include "utils/log.h"
-#include "utils/nsoption.h"
-#include "netsurf/keypress.h"
-#include "netsurf/plotters.h"
+#include "utils/slateoption.h"
+#include "slate/keypress.h"
+#include "slate/plotters.h"
 #include "desktop/hotlist.h"
 
 #include "gtk/compat.h"
@@ -41,18 +41,18 @@
 /**
  * hotlist window container for gtk.
  */
-struct nsgtk_hotlist_window {
-	struct nsgtk_corewindow core;
+struct slategtk_hotlist_window {
+	struct slategtk_corewindow core;
 	GtkBuilder *builder;
 	GtkWindow *wnd;
 };
 
-static struct nsgtk_hotlist_window *hotlist_window = NULL;
+static struct slategtk_hotlist_window *hotlist_window = NULL;
 
-#define MENUPROTO(x) static gboolean nsgtk_on_##x##_activate( \
+#define MENUPROTO(x) static gboolean slategtk_on_##x##_activate( \
 		GtkMenuItem *widget, gpointer g)
-#define MENUEVENT(x) { #x, G_CALLBACK(nsgtk_on_##x##_activate) }
-#define MENUHANDLER(x) gboolean nsgtk_on_##x##_activate(GtkMenuItem *widget, \
+#define MENUEVENT(x) { #x, G_CALLBACK(slategtk_on_##x##_activate) }
+#define MENUHANDLER(x) gboolean slategtk_on_##x##_activate(GtkMenuItem *widget, \
 		gpointer g)
 
 struct menu_events {
@@ -112,16 +112,16 @@ static struct menu_events menu_events[] = {
 /* file menu*/
 MENUHANDLER(export)
 {
-	struct nsgtk_hotlist_window *hlwin;
+	struct slategtk_hotlist_window *hlwin;
 	GtkWidget *save_dialog;
 
-	hlwin = (struct nsgtk_hotlist_window *)g;
+	hlwin = (struct slategtk_hotlist_window *)g;
 
 	save_dialog = gtk_file_chooser_dialog_new("Save File",
 			hlwin->wnd,
 			GTK_FILE_CHOOSER_ACTION_SAVE,
-			NSGTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
-			NSGTK_STOCK_SAVE, GTK_RESPONSE_ACCEPT,
+			SLATEGTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
+			SLATEGTK_STOCK_SAVE, GTK_RESPONSE_ACCEPT,
 			NULL);
 
 	gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(save_dialog),
@@ -229,7 +229,7 @@ MENUHANDLER(launch)
 /**
  * Connects menu events in the hotlist window.
  */
-static void nsgtk_hotlist_init_menu(struct nsgtk_hotlist_window *hlwin)
+static void slategtk_hotlist_init_menu(struct slategtk_hotlist_window *hlwin)
 {
 	struct menu_events *event = menu_events;
 	GtkWidget *w;
@@ -255,80 +255,80 @@ static void nsgtk_hotlist_init_menu(struct nsgtk_hotlist_window *hlwin)
 /**
  * callback for mouse action on hotlist window
  *
- * \param nsgtk_cw The nsgtk core window structure.
+ * \param slategtk_cw The slategtk core window structure.
  * \param mouse_state netsurf mouse state on event
  * \param x location of event
  * \param y location of event
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
-nsgtk_hotlist_mouse(struct nsgtk_corewindow *nsgtk_cw,
+static slateerror
+slategtk_hotlist_mouse(struct slategtk_corewindow *slategtk_cw,
 		    browser_mouse_state mouse_state,
 		    int x, int y)
 {
 	hotlist_mouse_action(mouse_state, x, y);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * callback for keypress on hotlist window
  *
- * \param nsgtk_cw The nsgtk core window structure.
+ * \param slategtk_cw The slategtk core window structure.
  * \param nskey The netsurf key code
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
-nsgtk_hotlist_key(struct nsgtk_corewindow *nsgtk_cw, uint32_t nskey)
+static slateerror
+slategtk_hotlist_key(struct slategtk_corewindow *slategtk_cw, uint32_t nskey)
 {
 	if (hotlist_keypress(nskey)) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
-	return NSERROR_NOT_IMPLEMENTED;
+	return SLATEERROR_NOT_IMPLEMENTED;
 }
 
 /**
  * callback on draw event for hotlist window
  *
- * \param nsgtk_cw The nsgtk core window structure.
+ * \param slategtk_cw The slategtk core window structure.
  * \param r The rectangle of the window that needs updating.
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
-nsgtk_hotlist_draw(struct nsgtk_corewindow *nsgtk_cw, struct rect *r)
+static slateerror
+slategtk_hotlist_draw(struct slategtk_corewindow *slategtk_cw, struct rect *r)
 {
 	struct redraw_context ctx = {
 		.interactive = true,
 		.background_images = true,
-		.plot = &nsgtk_plotters
+		.plot = &slategtk_plotters
 	};
 
 	hotlist_redraw(0, 0, r, &ctx);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * Creates the window for the hotlist tree.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-static nserror nsgtk_hotlist_init(void)
+static slateerror slategtk_hotlist_init(void)
 {
-	struct nsgtk_hotlist_window *ncwin;
-	nserror res;
+	struct slategtk_hotlist_window *ncwin;
+	slateerror res;
 
 	if (hotlist_window != NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	ncwin = calloc(1, sizeof(*ncwin));
 	if (ncwin == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
-	res = nsgtk_builder_new_from_resname("hotlist", &ncwin->builder);
-	if (res != NSERROR_OK) {
+	res = slategtk_builder_new_from_resname("hotlist", &ncwin->builder);
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Hotlist UI builder init failed");
 		free(ncwin);
 		return res;
@@ -351,20 +351,20 @@ static nserror nsgtk_hotlist_init(void)
 			 G_CALLBACK(gtk_widget_hide_on_delete),
 			 NULL);
 
-	nsgtk_hotlist_init_menu(ncwin);
+	slategtk_hotlist_init_menu(ncwin);
 
-	ncwin->core.draw = nsgtk_hotlist_draw;
-	ncwin->core.key = nsgtk_hotlist_key;
-	ncwin->core.mouse = nsgtk_hotlist_mouse;
+	ncwin->core.draw = slategtk_hotlist_draw;
+	ncwin->core.key = slategtk_hotlist_key;
+	ncwin->core.mouse = slategtk_hotlist_mouse;
 
-	res = nsgtk_corewindow_init(&ncwin->core);
-	if (res != NSERROR_OK) {
+	res = slategtk_corewindow_init(&ncwin->core);
+	if (res != SLATEERROR_OK) {
 		free(ncwin);
 		return res;
 	}
 
 	res = hotlist_manager_init((struct core_window *)ncwin);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		free(ncwin);
 		return res;
 	}
@@ -374,17 +374,17 @@ static nserror nsgtk_hotlist_init(void)
 	 */
 	hotlist_window = ncwin;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported function documented gtk/hotlist.h */
-nserror nsgtk_hotlist_present(void)
+slateerror slategtk_hotlist_present(void)
 {
-	nserror res;
+	slateerror res;
 
-	res = nsgtk_hotlist_init();
-	if (res == NSERROR_OK) {
+	res = slategtk_hotlist_init();
+	if (res == SLATEERROR_OK) {
 		gtk_window_present(hotlist_window->wnd);
 	}
 	return res;
@@ -392,17 +392,17 @@ nserror nsgtk_hotlist_present(void)
 
 
 /* exported function documented gtk/hotlist.h */
-nserror nsgtk_hotlist_destroy(void)
+slateerror slategtk_hotlist_destroy(void)
 {
-	nserror res;
+	slateerror res;
 
 	if (hotlist_window == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	res = hotlist_manager_fini();
-	if (res == NSERROR_OK) {
-		res = nsgtk_corewindow_fini(&hotlist_window->core);
+	if (res == SLATEERROR_OK) {
+		res = slategtk_corewindow_fini(&hotlist_window->core);
 		gtk_widget_destroy(GTK_WIDGET(hotlist_window->wnd));
 		g_object_unref(G_OBJECT(hotlist_window->builder));
 		free(hotlist_window);

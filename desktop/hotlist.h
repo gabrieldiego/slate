@@ -1,7 +1,7 @@
 /*
  * Copyright 2013 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,17 +16,17 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
  
-#ifndef _NETSURF_DESKTOP_HOTLIST_H_
-#define _NETSURF_DESKTOP_HOTLIST_H_
+#ifndef _SLATE_DESKTOP_HOTLIST_H_
+#define _SLATE_DESKTOP_HOTLIST_H_
 
 #include <stdbool.h>
 #include <stdint.h>
 
 #include "utils/errors.h"
-#include "netsurf/mouse.h"
+#include "slate/mouse.h"
 
 struct redraw_context;
-struct nsurl;
+struct slateurl;
 struct rect;
 
 /**
@@ -44,9 +44,9 @@ struct rect;
  *
  * \param load_path The path to load hotlist from.
  * \param save_path The path to save hotlist to, or NULL for read-only mode.
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror hotlist_init(const char *load_path, const char *save_path);
+slateerror hotlist_init(const char *load_path, const char *save_path);
 
 /**
  * Initialise the hotlist manager.
@@ -56,9 +56,9 @@ nserror hotlist_init(const char *load_path, const char *save_path);
  * The provided core window handle must be valid until hotlist_fini is called.
  *
  * \param core_window_handle The handle in which the hotlist is shown
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror hotlist_manager_init(void *core_window_handle);
+slateerror hotlist_manager_init(void *core_window_handle);
 
 
 /**
@@ -68,9 +68,9 @@ nserror hotlist_manager_init(void *core_window_handle);
  * allowing destruction of a GUI hotlist window, without finalising the
  * hotlist module.
  *
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror hotlist_manager_fini(void);
+slateerror hotlist_manager_fini(void);
 
 /**
  * Finalise the hotlist.
@@ -79,17 +79,17 @@ nserror hotlist_manager_fini(void);
  * internal data.  After calling this if hotlist is required again,
  * hotlist_init must be called.
  *
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror hotlist_fini(void);
+slateerror hotlist_fini(void);
 
 /**
  * Add an entry to the hotlist for given URL.
  *
  * \param url		URL for node being added
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror hotlist_add_url(struct nsurl *url);
+slateerror hotlist_add_url(struct slateurl *url);
 
 /**
  * Check whether given URL is present in hotlist
@@ -97,21 +97,21 @@ nserror hotlist_add_url(struct nsurl *url);
  * \param url		Address to look for in hotlist
  * \return true iff url is present in hotlist, false otherwise
  */
-bool hotlist_has_url(struct nsurl *url);
+bool hotlist_has_url(struct slateurl *url);
 
 /**
  * Remove any entries matching the given URL from the hotlist
  *
  * \param url		Address to look for in hotlist
  */
-void hotlist_remove_url(struct nsurl *url);
+void hotlist_remove_url(struct slateurl *url);
 
 /**
  * Update given URL, e.g. new visited data
  *
  * \param url		Address to update entries for
  */
-void hotlist_update_url(struct nsurl *url);
+void hotlist_update_url(struct slateurl *url);
 
 /**
  * Add an entry to the hotlist for given Title/URL.
@@ -120,9 +120,9 @@ void hotlist_update_url(struct nsurl *url);
  * \param title		Title for entry being added (copied), or NULL
  * \param at_y		Iff true, insert at y-offest
  * \param y		Y-offset in px from top of hotlist.  Ignored if (!at_y).
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror hotlist_add_entry(struct nsurl *url, const char *title, bool at_y, int y);
+slateerror hotlist_add_entry(struct slateurl *url, const char *title, bool at_y, int y);
 
 /**
  * Add a folder to the hotlist.
@@ -130,27 +130,27 @@ nserror hotlist_add_entry(struct nsurl *url, const char *title, bool at_y, int y
  * \param title Title for folder being added, or NULL
  * \param at_y Iff true, insert at y-offest
  * \param y Y-offset in px from top of hotlist.  Ignored if (!at_y).
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror hotlist_add_folder(const char *title, bool at_y, int y);
+slateerror hotlist_add_folder(const char *title, bool at_y, int y);
 
 /**
  * Save hotlist to file
  *
  * \param path		The path to save hotlist to
  * \param title		The title to give the hotlist, or NULL for default
- * \return NSERROR_OK on success, or appropriate error otherwise
+ * \return SLATEERROR_OK on success, or appropriate error otherwise
  */
-nserror hotlist_export(const char *path, const char *title);
+slateerror hotlist_export(const char *path, const char *title);
 
 /**
  * Client callback for hotlist_iterate, reporting entry into folder
  *
  * \param ctx		Client context
  * \param title		The entered folder's title
- * \return NSERROR_OK on success, or appropriate error otherwise
+ * \return SLATEERROR_OK on success, or appropriate error otherwise
  */
-typedef nserror (*hotlist_folder_enter_cb)(void *ctx, const char *title);
+typedef slateerror (*hotlist_folder_enter_cb)(void *ctx, const char *title);
 
 /**
  * Client callback for hotlist_iterate, reporting a hotlist address
@@ -158,18 +158,18 @@ typedef nserror (*hotlist_folder_enter_cb)(void *ctx, const char *title);
  * \param ctx		Client context
  * \param url		The entry's address
  * \param title		The entry's title
- * \return NSERROR_OK on success, or appropriate error otherwise
+ * \return SLATEERROR_OK on success, or appropriate error otherwise
  */
-typedef nserror (*hotlist_address_cb)(void *ctx, struct nsurl *url, const char *title);
+typedef slateerror (*hotlist_address_cb)(void *ctx, struct slateurl *url, const char *title);
 
 /**
  * Client callback for hotlist_iterate, reporting a hotlist folder departure
  *
  * \param ctx		Client context
  * \param title		The departed folder's title
- * \return NSERROR_OK on success, or appropriate error otherwise
+ * \return SLATEERROR_OK on success, or appropriate error otherwise
  */
-typedef nserror (*hotlist_folder_leave_cb)(void *ctx);
+typedef slateerror (*hotlist_folder_leave_cb)(void *ctx);
 
 
 /**
@@ -180,13 +180,13 @@ typedef nserror (*hotlist_folder_leave_cb)(void *ctx);
  * \param enter_cb	Function to call on entering nodes, or NULL
  * \param address_cb	Function to call on address nodes, or NULL
  * \param leave_cb	Function to call on leaving nodes, or NULL
- * \return NSERROR_OK on success, or appropriate error otherwise
+ * \return SLATEERROR_OK on success, or appropriate error otherwise
  *
  * Example usage: Generate a menu containing hotlist entries.  For flat list
  *                set enter_cb and leave_cb to NULL, or for hierarchical menu
  *                provide the folder callbacks.
  */
-nserror hotlist_iterate(void *ctx,
+slateerror hotlist_iterate(void *ctx,
 		hotlist_folder_enter_cb enter_cb,
 		hotlist_address_cb address_cb,
 		hotlist_folder_leave_cb leave_cb);
@@ -233,7 +233,7 @@ bool hotlist_has_selection(void);
  * \param title		Updated to the selected entry's title, or NULL
  * \return true iff hotlist has a selection
  */
-bool hotlist_get_selection(struct nsurl **url, const char **title);
+bool hotlist_get_selection(struct slateurl **url, const char **title);
 
 /**
  * Edit the first selected node
@@ -244,16 +244,16 @@ void hotlist_edit_selection(void);
  * Expand the treeview's nodes
  *
  * \param only_folders	Iff true, only folders are expanded.
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror hotlist_expand(bool only_folders);
+slateerror hotlist_expand(bool only_folders);
 
 /**
  * Contract the treeview's nodes
  *
  * \param all		Iff false, only entries are contracted.
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror hotlist_contract(bool all);
+slateerror hotlist_contract(bool all);
 
 #endif

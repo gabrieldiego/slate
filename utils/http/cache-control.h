@@ -1,7 +1,7 @@
 /*
  * Copyright 2019 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_UTILS_HTTP_CACHE_CONTROL_H_
-#define NETSURF_UTILS_HTTP_CACHE_CONTROL_H_
+#ifndef SLATE_UTILS_HTTP_CACHE_CONTROL_H_
+#define SLATE_UTILS_HTTP_CACHE_CONTROL_H_
 
 #include <libwapcaplet/libwapcaplet.h>
 
@@ -28,11 +28,11 @@ typedef struct http_cache_control http_cache_control;
  *
  * \param header_value  Header value to parse
  * \param result        Pointer to location to receive result
- * \return NSERROR_OK on success,
- *         NSERROR_NOMEM on memory exhaustion,
+ * \return SLATEERROR_OK on success,
+ *         SLATEERROR_NOMEM on memory exhaustion,
  *         appropriate error otherwise
  */
-nserror http_parse_cache_control(const char *header_value,
+slateerror http_parse_cache_control(const char *header_value,
 		http_cache_control **result);
 
 /**

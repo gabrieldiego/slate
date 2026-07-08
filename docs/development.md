@@ -11,7 +11,7 @@ planning to make a change to NetSurf intended to be merged.
 We are often about on the IRC channel but failing that the developer
 mailing list is a good place to try.
 
-All the project sources are held in [public git repositories](http://source.netsurf-browser.org/)
+All the project sources are held in [public git repositories](http://source.slate-browser.org/)
 
 # Compilation environment
 
@@ -24,10 +24,10 @@ BSD, Open BSD, Mac OS X and Haiku all known to work.
 Compilation for non POSIX toolkits/frontends (e.g. RISC OS) generally
 relies upon a cross compilation environment which is generated using
 the makefiles found in our
-[toolchains](http://source.netsurf-browser.org/toolchains.git/)
+[toolchains](http://source.slate-browser.org/toolchains.git/)
 repository. These toolchains are built by the Continuous Integration
 (CI) system and the
-[results of the system](http://ci.netsurf-browser.org/builds/toolchains/)
+[results of the system](http://ci.slate-browser.org/builds/toolchains/)
 are published as a convenience.
 
 ## Quick setup
@@ -39,7 +39,7 @@ development environment setup quickly and uses the
 ## Manual setup
 
 The Manual environment setup and compilation method is covered by the
-details in the [netsurf libraries](docs/netsurf-libraries.md) document
+details in the [slate libraries](docs/slate-libraries.md) document
 for the core libraries and then one of the building documents for the
 specific frontend.
 

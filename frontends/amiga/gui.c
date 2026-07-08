@@ -1,7 +1,7 @@
 /*
  * Copyright 2008-2025 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -104,21 +104,21 @@
 /* NetSurf core includes */
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/utf8.h"
 #include "utils/utils.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/file.h"
-#include "netsurf/window.h"
-#include "netsurf/fetch.h"
-#include "netsurf/misc.h"
-#include "netsurf/mouse.h"
-#include "netsurf/netsurf.h"
-#include "netsurf/content.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/cookie_db.h"
-#include "netsurf/url_db.h"
-#include "netsurf/keypress.h"
+#include "slate/window.h"
+#include "slate/fetch.h"
+#include "slate/misc.h"
+#include "slate/mouse.h"
+#include "slate/slate.h"
+#include "slate/content.h"
+#include "slate/browser_window.h"
+#include "slate/cookie_db.h"
+#include "slate/url_db.h"
+#include "slate/keypress.h"
 #include "content/backing_store.h"
 #include "content/fetch.h"
 #include "desktop/browser_history.h"
@@ -151,7 +151,7 @@
 #include "amiga/memory.h"
 #include "amiga/menu.h"
 #include "amiga/misc.h"
-#include "amiga/nsoption.h"
+#include "amiga/slateoption.h"
 #include "amiga/pageinfo.h"
 #include "amiga/plotters.h"
 #include "amiga/plugin_hack.h"
@@ -365,7 +365,7 @@ static void ami_switch_tab(struct gui_window_2 *gwin, bool redraw);
 static void ami_change_tab(struct gui_window_2 *gwin, int direction);
 static void ami_get_hscroll_pos(struct gui_window_2 *gwin, ULONG *xs);
 static void ami_get_vscroll_pos(struct gui_window_2 *gwin, ULONG *ys);
-static void ami_quit_netsurf_delayed(void);
+static void ami_quit_slate_delayed(void);
 static Object *ami_gui_splash_open(void);
 static void ami_gui_splash_close(Object *win_obj);
 static bool ami_gui_map_filename(char **remapped, const char *restrict path,
@@ -375,7 +375,7 @@ static void ami_do_redraw(struct gui_window_2 *g);
 static void ami_schedule_redraw_remove(struct gui_window_2 *gwin);
 
 static bool gui_window_get_scroll(struct gui_window *g, int *restrict sx, int *restrict sy);
-static nserror gui_window_set_scroll(struct gui_window *g, const struct rect *rect);
+static slateerror gui_window_set_scroll(struct gui_window *g, const struct rect *rect);
 static void gui_window_remove_caret(struct gui_window *g);
 static void gui_window_place_caret(struct gui_window *g, int x, int y, int height, const struct rect *clip);
 
@@ -384,10 +384,10 @@ HOOKF(uint32, ami_set_throbber_render_hook, APTR, space, struct gpRender *);
 HOOKF(uint32, ami_gui_browser_render_hook, APTR, space, struct gpRender *);
 
 /* accessors for default options - user option is updated if it is set as per default */
-#define nsoption_default_set_int(OPTION, VALUE)				\
-	if (nsoptions_default[NSOPTION_##OPTION].value.i == nsoptions[NSOPTION_##OPTION].value.i)	\
-		nsoptions[NSOPTION_##OPTION].value.i = VALUE;	\
-	nsoptions_default[NSOPTION_##OPTION].value.i = VALUE
+#define slateoption_default_set_int(OPTION, VALUE)				\
+	if (slateoptions_default[SLATEOPTION_##OPTION].value.i == slateoptions[SLATEOPTION_##OPTION].value.i)	\
+		slateoptions[SLATEOPTION_##OPTION].value.i = VALUE;	\
+	slateoptions_default[SLATEOPTION_##OPTION].value.i = VALUE
 
 /* Functions documented in gui.h */
 struct MsgPort *ami_gui_get_shared_msgport(void)
@@ -751,7 +751,7 @@ static bool ami_gui_map_filename(char **remapped, const char *restrict path,
 	char *restrict realfname;
 	bool found = false;
 
-	netsurf_mkpath(&mapfile, &mapfile_size, 2, path, map);
+	slate_mkpath(&mapfile, &mapfile_size, 2, path, map);
 
 	if(mapfile == NULL) return false;
 
@@ -798,7 +798,7 @@ static bool ami_gui_check_resource(char *fullpath, const char *file)
 	size_t fullpath_len = 1024;
 
 	ami_gui_map_filename(&remapped, fullpath, file, "Resource.map");
-	netsurf_mkpath(&fullpath, &fullpath_len, 2, fullpath, remapped);
+	slate_mkpath(&fullpath, &fullpath_len, 2, fullpath, remapped);
 
 	lock = Lock(fullpath, ACCESS_READ);
 	if(lock) {
@@ -829,8 +829,8 @@ bool ami_locate_resource(char *fullpath, const char *file)
 	}
 
 	/* Check current theme directory */
-	if(nsoption_charp(theme)) {
-		strcpy(fullpath, nsoption_charp(theme));
+	if(slateoption_charp(theme)) {
+		strcpy(fullpath, slateoption_charp(theme));
 		found = ami_gui_check_resource(fullpath, file);
 		if(found) return true;
 	}
@@ -845,7 +845,7 @@ bool ami_locate_resource(char *fullpath, const char *file)
 		if(locale->loc_PrefLanguages[i]) {
 			if(ami_gui_map_filename(&remapped, "PROGDIR:Resources",
 					locale->loc_PrefLanguages[i], "LangNames") == true) {
-				netsurf_mkpath(&fullpath, &fullpath_len, 2, fullpath, remapped);
+				slate_mkpath(&fullpath, &fullpath_len, 2, fullpath, remapped);
 				found = ami_gui_check_resource(fullpath, file);
 				free(remapped);
 			}
@@ -904,7 +904,7 @@ static bool ami_gui_resources_open(void)
 							ASO_NoTrack, FALSE,
 							TAG_DONE))) return false;
 
-	if(ami_schedule_create(schedulermsgport) != NSERROR_OK) {
+	if(ami_schedule_create(schedulermsgport) != SLATEERROR_OK) {
 		ami_misc_fatal_error("Failed to initialise scheduler");
 		return false;
 	}
@@ -934,7 +934,7 @@ static UWORD ami_system_colour_scrollbar_fgpen(struct DrawInfo *drinfo)
  * convert an amiga pen to a netsurf colour
  */
 static colour
-nscolour_from_pen(struct Screen *screen, UWORD pen, colour sel_colour)
+slatecolor_from_pen(struct Screen *screen, UWORD pen, colour sel_colour)
 {
 	ULONG colr[3];
 	struct DrawInfo *drinfo;
@@ -966,50 +966,50 @@ nscolour_from_pen(struct Screen *screen, UWORD pen, colour sel_colour)
 /**
  * set system colour options from amiga pen
  */
-static nserror system_colours_from_pen(struct Screen *screen)
+static slateerror system_colours_from_pen(struct Screen *screen)
 {
         #define MAP_SIZE (19)
 	int mapidx;
 	colour sel_colour;
 	struct pcm {
-		enum nsoption_e option;
+		enum slateoption_e option;
 		UWORD pen;
 		colour def_colour;
 	};
 	struct pcm pen_colour_map[MAP_SIZE] = {
-		{NSOPTION_sys_colour_AccentColor, FILLPEN, 0x00000000},
-		{NSOPTION_sys_colour_AccentColorText, TEXTPEN, 0x00000000},
-		{NSOPTION_sys_colour_ActiveText, TEXTPEN, 0x00000000},
-		{NSOPTION_sys_colour_ButtonBorder, FILLPEN, 0x00000000},
-		{NSOPTION_sys_colour_ButtonFace, FOREGROUNDPEN, 0x00aaaaaa},
-		{NSOPTION_sys_colour_ButtonText, TEXTPEN, 0x00000000},
-		{NSOPTION_sys_colour_Canvas, BACKGROUNDPEN, 0x00aaaaaa},
-		{NSOPTION_sys_colour_CanvasText, TEXTPEN, 0x00000000},
-		{NSOPTION_sys_colour_Field, BACKGROUNDPEN, 0x00aaaaaa},
-		{NSOPTION_sys_colour_FieldText, TEXTPEN, 0x00000000},
-		{NSOPTION_sys_colour_GrayText, DISABLEDTEXTPEN, 0x00777777},
-		{NSOPTION_sys_colour_Highlight, SELECTPEN, 0x00ee0000},
-		{NSOPTION_sys_colour_HighlightText, SELECTTEXTPEN, 0x00000000},
-		{NSOPTION_sys_colour_LinkText, TEXTPEN, 0x00000000},
-		{NSOPTION_sys_colour_Mark, FILLPEN, 0x00000000},
-		{NSOPTION_sys_colour_MarkText, TEXTPEN, 0x00000000},
-		{NSOPTION_sys_colour_SelectedItem, FILLPEN, 0x00000000},
-		{NSOPTION_sys_colour_SelectedItemText, TEXTPEN, 0x00000000},
-		{NSOPTION_sys_colour_VisitedText, TEXTPEN, 0x00000000},
+		{SLATEOPTION_sys_colour_AccentColor, FILLPEN, 0x00000000},
+		{SLATEOPTION_sys_colour_AccentColorText, TEXTPEN, 0x00000000},
+		{SLATEOPTION_sys_colour_ActiveText, TEXTPEN, 0x00000000},
+		{SLATEOPTION_sys_colour_ButtonBorder, FILLPEN, 0x00000000},
+		{SLATEOPTION_sys_colour_ButtonFace, FOREGROUNDPEN, 0x00aaaaaa},
+		{SLATEOPTION_sys_colour_ButtonText, TEXTPEN, 0x00000000},
+		{SLATEOPTION_sys_colour_Canvas, BACKGROUNDPEN, 0x00aaaaaa},
+		{SLATEOPTION_sys_colour_CanvasText, TEXTPEN, 0x00000000},
+		{SLATEOPTION_sys_colour_Field, BACKGROUNDPEN, 0x00aaaaaa},
+		{SLATEOPTION_sys_colour_FieldText, TEXTPEN, 0x00000000},
+		{SLATEOPTION_sys_colour_GrayText, DISABLEDTEXTPEN, 0x00777777},
+		{SLATEOPTION_sys_colour_Highlight, SELECTPEN, 0x00ee0000},
+		{SLATEOPTION_sys_colour_HighlightText, SELECTTEXTPEN, 0x00000000},
+		{SLATEOPTION_sys_colour_LinkText, TEXTPEN, 0x00000000},
+		{SLATEOPTION_sys_colour_Mark, FILLPEN, 0x00000000},
+		{SLATEOPTION_sys_colour_MarkText, TEXTPEN, 0x00000000},
+		{SLATEOPTION_sys_colour_SelectedItem, FILLPEN, 0x00000000},
+		{SLATEOPTION_sys_colour_SelectedItemText, TEXTPEN, 0x00000000},
+		{SLATEOPTION_sys_colour_VisitedText, TEXTPEN, 0x00000000},
 	};
 	struct pcm *entry;
 
 	for (mapidx=0; mapidx < MAP_SIZE; mapidx++) {
 		entry = &pen_colour_map[mapidx];
-		sel_colour = nscolour_from_pen(screen, entry->pen, entry->def_colour);
+		sel_colour = slatecolor_from_pen(screen, entry->pen, entry->def_colour);
 
-		if (nsoptions_default[entry->option].value.c == nsoptions[entry->option].value.c) {
-			nsoptions[entry->option].value.c = sel_colour;
+		if (slateoptions_default[entry->option].value.c == slateoptions[entry->option].value.c) {
+			slateoptions[entry->option].value.c = sel_colour;
 		}
-		nsoptions_default[entry->option].value.c = sel_colour;
+		slateoptions_default[entry->option].value.c = sel_colour;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 #endif /* __amigaos4__ */
@@ -1018,7 +1018,7 @@ static nserror system_colours_from_pen(struct Screen *screen)
 STRPTR ami_gui_get_screen_title(void)
 {
 	if(nsscreentitle == NULL) {
-		nsscreentitle = ASPrintf("NetSurf %s", netsurf_version);
+		nsscreentitle = ASPrintf("NetSurf %s", slate_version);
 		/* If this fails it will be NULL, which means we'll get the screen's
 		 * default titlebar text instead - so no need to check for error. */
 	}
@@ -1028,8 +1028,8 @@ STRPTR ami_gui_get_screen_title(void)
 
 static void ami_set_screen_defaults(struct Screen *screen)
 {
-	nsoption_default_set_int(redraw_tile_size_x, screen->Width);
-	nsoption_default_set_int(redraw_tile_size_y, screen->Height);
+	slateoption_default_set_int(redraw_tile_size_x, screen->Width);
+	slateoption_default_set_int(redraw_tile_size_y, screen->Height);
 
 #ifdef __amigaos4__
 	/* set system colours for amiga ui */
@@ -1044,7 +1044,7 @@ static void ami_set_screen_defaults(struct Screen *screen)
  * @param defaults The option table to update.
  * @return error status.
  */
-static nserror ami_set_options(struct nsoption_s *defaults)
+static slateerror ami_set_options(struct slateoption_s *defaults)
 {
 	STRPTR tempacceptlangs;
 	char temp[1024];
@@ -1053,19 +1053,19 @@ static nserror ami_set_options(struct nsoption_s *defaults)
 	/* The following line disables the popupmenu.class select menu.
 	** It's not recommended to use it!
 	*/
-	nsoption_set_bool(core_select_menu, true);
+	slateoption_set_bool(core_select_menu, true);
 
 	/* ClickTab < 53 doesn't work with the auto show/hide tab-bar (for reasons forgotten) */
 	if(ClickTabBase->lib_Version < 53)
-		nsoption_set_bool(tab_always_show, true);
+		slateoption_set_bool(tab_always_show, true);
 
-	if((!nsoption_charp(accept_language)) || 
-	   (nsoption_charp(accept_language)[0] == '\0') ||
-	   (nsoption_bool(accept_lang_locale) == true))
+	if((!slateoption_charp(accept_language)) || 
+	   (slateoption_charp(accept_language)[0] == '\0') ||
+	   (slateoption_bool(accept_lang_locale) == true))
 	{
 		if((tempacceptlangs = ami_locale_langs(&codeset)))
 		{
-			nsoption_set_charp(accept_language,
+			slateoption_set_charp(accept_language,
 					   (char *)strdup(tempacceptlangs));
 			FreeVec(tempacceptlangs);
 		}
@@ -1075,44 +1075,44 @@ static nserror ami_set_options(struct nsoption_s *defaults)
 #ifdef __amigaos4__
 	if(!LIB_IS_AT_LEAST((struct Library *)SysBase, 53, 89)) {
 		/* Disable ExtMem usage pre-OS4.1FEU1 */
-		nsoption_set_bool(use_extmem, false);
+		slateoption_set_bool(use_extmem, false);
 	}
 
 	if(codeset == 0) codeset = 4; /* ISO-8859-1 */
 	const char *encname = (const char *)ObtainCharsetInfo(DFCS_NUMBER, codeset,
 							DFCS_MIMENAME);
-	nsoption_set_charp(local_charset, strdup(encname));
-	nsoption_set_int(local_codeset, codeset);
+	slateoption_set_charp(local_charset, strdup(encname));
+	slateoption_set_int(local_codeset, codeset);
 #else
-	nsoption_set_bool(download_notify, false);
-	nsoption_set_bool(font_antialiasing, false);
-	nsoption_set_bool(truecolour_mouse_pointers, false);
-	nsoption_set_bool(use_openurl_lib, true);
-	nsoption_set_bool(bitmap_fonts, true);
+	slateoption_set_bool(download_notify, false);
+	slateoption_set_bool(font_antialiasing, false);
+	slateoption_set_bool(truecolour_mouse_pointers, false);
+	slateoption_set_bool(use_openurl_lib, true);
+	slateoption_set_bool(bitmap_fonts, true);
 #endif
 
 	sprintf(temp, "%s/Cookies", current_user_dir);
-	nsoption_setnull_charp(cookie_file, 
+	slateoption_setnull_charp(cookie_file, 
 			       (char *)strdup(temp));
 
 	sprintf(temp, "%s/Hotlist", current_user_dir);
-	nsoption_setnull_charp(hotlist_file, 
+	slateoption_setnull_charp(hotlist_file, 
 			       (char *)strdup(temp));
 
 	sprintf(temp, "%s/URLdb", current_user_dir);
-	nsoption_setnull_charp(url_file,
+	slateoption_setnull_charp(url_file,
 			       (char *)strdup(temp));
 
 	sprintf(temp, "%s/FontGlyphCache", current_user_dir);
-	nsoption_setnull_charp(font_unicode_file,
+	slateoption_setnull_charp(font_unicode_file,
 			       (char *)strdup(temp));
 
-	nsoption_setnull_charp(ca_bundle,
+	slateoption_setnull_charp(ca_bundle,
 			       (char *)strdup("PROGDIR:Resources/ca-bundle"));
 
 	/* Regular font defaults are set in font.c */
 
-	if (nsoption_charp(font_unicode) == NULL)
+	if (slateoption_charp(font_unicode) == NULL)
 	{
 		BPTR lock = 0;
 		/* Search for some likely candidates */
@@ -1120,18 +1120,18 @@ static nserror ami_set_options(struct nsoption_s *defaults)
 		if((lock = Lock("FONTS:Code2000.otag", ACCESS_READ)))
 		{
 			UnLock(lock);
-			nsoption_set_charp(font_unicode, 
+			slateoption_set_charp(font_unicode, 
 					   (char *)strdup("Code2000"));
 		}
 		else if((lock = Lock("FONTS:Bitstream Cyberbit.otag", ACCESS_READ)))
 		{
 			UnLock(lock);
-			nsoption_set_charp(font_unicode,
+			slateoption_set_charp(font_unicode,
 					   (char *)strdup("Bitstream Cyberbit"));
 		}
 	}
 
-	if (nsoption_charp(font_surrogate) == NULL) {
+	if (slateoption_charp(font_surrogate) == NULL) {
 		BPTR lock = 0;
 		/* Search for some likely candidates -
 		 * Ideally we should pick a font during the scan process which announces it
@@ -1139,12 +1139,12 @@ static nserror ami_set_options(struct nsoption_s *defaults)
 		 */
 		if((lock = Lock("FONTS:Symbola.otag", ACCESS_READ))) {
 			UnLock(lock);
-			nsoption_set_charp(font_surrogate, 
+			slateoption_set_charp(font_surrogate, 
 					   (char *)strdup("Symbola"));
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void ami_amiupdate(void)
@@ -1176,15 +1176,15 @@ static void ami_amiupdate(void)
 	}
 }
 
-static nsurl *gui_get_resource_url(const char *path)
+static slateurl *gui_get_resource_url(const char *path)
 {
 	char buf[1024];
-	nsurl *url = NULL;
+	slateurl *url = NULL;
 
 	if(ami_locate_resource(buf, path) == false)
 		return NULL;
 
-	netsurf_path_to_nsurl(buf, &url);
+	slate_path_to_slateurl(buf, &url);
 
 	return url;
 }
@@ -1199,16 +1199,16 @@ static void ami_openscreen(void)
 	ULONG id = 0;
 	ULONG compositing;
 
-	if (nsoption_int(screen_compositing) == -1)
+	if (slateoption_int(screen_compositing) == -1)
 		compositing = ~0UL;
-	else compositing = nsoption_int(screen_compositing);
+	else compositing = slateoption_int(screen_compositing);
 
-	if (nsoption_charp(pubscreen_name) == NULL)
+	if (slateoption_charp(pubscreen_name) == NULL)
 	{
-		if((nsoption_charp(screen_modeid)) && 
-		   (strncmp(nsoption_charp(screen_modeid), "0x", 2) == 0))
+		if((slateoption_charp(screen_modeid)) && 
+		   (strncmp(slateoption_charp(screen_modeid), "0x", 2) == 0))
 		{
-			id = strtoul(nsoption_charp(screen_modeid), NULL, 0);
+			id = strtoul(slateoption_charp(screen_modeid), NULL, 0);
 		}
 		else
 		{
@@ -1223,8 +1223,8 @@ static void ami_openscreen(void)
 					char *modeid = malloc(20);
 					id = screenmodereq->sm_DisplayID;
 					sprintf(modeid, "0x%lx", id);
-					nsoption_set_charp(screen_modeid, modeid);
-					ami_nsoption_write();
+					slateoption_set_charp(screen_modeid, modeid);
+					ami_slateoption_write();
 				}
 				FreeAslRequest(screenmodereq);
 			}
@@ -1259,15 +1259,15 @@ static void ami_openscreen(void)
 			}
 			else
 			{
-				nsoption_set_charp(pubscreen_name,
+				slateoption_set_charp(pubscreen_name,
 						   strdup("Workbench"));
 			}
 		}
 	}
 
-	if (nsoption_charp(pubscreen_name) != NULL)
+	if (slateoption_charp(pubscreen_name) != NULL)
 	{
-		scrn = LockPubScreen(nsoption_charp(pubscreen_name));
+		scrn = LockPubScreen(slateoption_charp(pubscreen_name));
 
 		if(scrn == NULL)
 		{
@@ -1331,10 +1331,10 @@ static char **ami_gui_commandline(int *restrict argc, char ** argv,
 		 * special. The /M means it collects all arguments that can't
 		 * be assigned to any other parameter, and stores them in an
 		 * array.  We collect these and pass them as a fake argc/argv
-		 * to nsoption_commandline().
+		 * to slateoption_commandline().
 		 * This trickery is necessary because if ReadArgs() is called
-		 * first, nsoption_commandline() can no longer parse (fetch?)
-		 * the arguments.  If nsoption_commandline() is called first,
+		 * first, slateoption_commandline() can no longer parse (fetch?)
+		 * the arguments.  If slateoption_commandline() is called first,
 		 * then ReadArgs cannot fetch the arguments.
 		 */
 			char **nsopts = (char **)rarray[A_NSOPTS];
@@ -1437,8 +1437,8 @@ static void gui_init2(int argc, char** argv)
 {
 	struct Screen *screen;
 	BOOL notalreadyrunning;
-	nsurl *url;
-	nserror error;
+	slateurl *url;
+	slateerror error;
 	struct browser_window *bw = NULL;
 
 	notalreadyrunning = ami_arexx_init(&rxsig);
@@ -1454,12 +1454,12 @@ static void gui_init2(int argc, char** argv)
 	}
 	/**/
 
-	hotlist_init(nsoption_charp(hotlist_file),
-			nsoption_charp(hotlist_file));
-	search_web_select_provider(nsoption_charp(search_web_provider));
+	hotlist_init(slateoption_charp(hotlist_file),
+			slateoption_charp(hotlist_file));
+	search_web_select_provider(slateoption_charp(search_web_provider));
 
 	if (notalreadyrunning && 
-	    (nsoption_bool(startup_no_window) == false))
+	    (slateoption_bool(startup_no_window) == false))
 		ami_openscreenfirst();
 
 	if(cli_force == true) {
@@ -1467,16 +1467,16 @@ static void gui_init2(int argc, char** argv)
 	}
 
 	if(temp_homepage_url && notalreadyrunning) {
-		error = nsurl_create(temp_homepage_url, &url);
-		if (error == NSERROR_OK) {
+		error = slateurl_create(temp_homepage_url, &url);
+		if (error == SLATEERROR_OK) {
 			error = browser_window_create(BW_CREATE_HISTORY,
 					url,
 					NULL,
 					NULL,
 					&bw);
-			nsurl_unref(url);
+			slateurl_unref(url);
 		}
-		if (error != NSERROR_OK) {
+		if (error != SLATEERROR_OK) {
 			amiga_warn_user(messages_get_errorcode(error), 0);
 		}
 		free(temp_homepage_url);
@@ -1498,18 +1498,18 @@ static void gui_init2(int argc, char** argv)
 				AddPart(fullpath,wbarg->wa_Name,1024);
 
 				if(!temp_homepage_url) {
-					nsurl *temp_url;
-					if (netsurf_path_to_nsurl(fullpath, &temp_url) == NSERROR_OK) {
-						temp_homepage_url = strdup(nsurl_access(temp_url));
-						nsurl_unref(temp_url);
+					slateurl *temp_url;
+					if (slate_path_to_slateurl(fullpath, &temp_url) == SLATEERROR_OK) {
+						temp_homepage_url = strdup(slateurl_access(temp_url));
+						slateurl_unref(temp_url);
 					}
 				}
 
 				if(notalreadyrunning)
 				{
-					error = nsurl_create(temp_homepage_url, &url);
+					error = slateurl_create(temp_homepage_url, &url);
 
-					if (error == NSERROR_OK) {
+					if (error == SLATEERROR_OK) {
 						if(!first)
 						{
 							error = browser_window_create(BW_CREATE_HISTORY,
@@ -1529,10 +1529,10 @@ static void gui_init2(int argc, char** argv)
 										      &bw);
 
 						}
-						nsurl_unref(url);
+						slateurl_unref(url);
 
 					}
-					if (error != NSERROR_OK) {
+					if (error != SLATEERROR_OK) {
 						amiga_warn_user(messages_get_errorcode(error), 0);
 					}
 					free(temp_homepage_url);
@@ -1543,14 +1543,14 @@ static void gui_init2(int argc, char** argv)
 		}
 	}
 
-	nsoption_setnull_charp(homepage_url, (char *)strdup(NETSURF_HOMEPAGE));
+	slateoption_setnull_charp(homepage_url, (char *)strdup(SLATE_HOMEPAGE));
 
 	if(!notalreadyrunning)
 	{
 		STRPTR sendcmd = NULL;
 		char newtab[11] = "\0";
 
-		if(nsoption_bool(tab_new_session) == true) {
+		if(slateoption_bool(tab_new_session) == true) {
 			strcpy(newtab, "TAB ACTIVE");
 		}
 
@@ -1559,7 +1559,7 @@ static void gui_init2(int argc, char** argv)
 			free(temp_homepage_url);
 			temp_homepage_url = NULL;
 		} else {
-			sendcmd = ASPrintf("OPEN \"%s\" NEW%s", nsoption_charp(homepage_url), newtab);
+			sendcmd = ASPrintf("OPEN \"%s\" NEW%s", slateoption_charp(homepage_url), newtab);
 		}
 		ami_arexx_self(sendcmd);
 		FreeVec(sendcmd);
@@ -1577,7 +1577,7 @@ static void gui_init2(int argc, char** argv)
 		{
 			ULONG noicon = TAG_IGNORE;
 
-			if (nsoption_bool(hide_docky_icon)) 
+			if (slateoption_bool(hide_docky_icon)) 
 				noicon = REGAPP_NoIcon;
 
 			ami_appid = RegisterApplication(messages_get("NetSurf"),
@@ -1608,17 +1608,17 @@ static void gui_init2(int argc, char** argv)
 		if(applibport) applibsig = (1L << applibport->mp_SigBit);
 	}
 #endif
-	if(!bw && (nsoption_bool(startup_no_window) == false)) {
-		error = nsurl_create(nsoption_charp(homepage_url), &url);
-		if (error == NSERROR_OK) {
+	if(!bw && (slateoption_bool(startup_no_window) == false)) {
+		error = slateurl_create(slateoption_charp(homepage_url), &url);
+		if (error == SLATEERROR_OK) {
 			error = browser_window_create(BW_CREATE_HISTORY,
 						      url,
 						      NULL,
 						      NULL,
 						      NULL);
-			nsurl_unref(url);
+			slateurl_unref(url);
 		}
-		if (error != NSERROR_OK) {
+		if (error != SLATEERROR_OK) {
 			amiga_warn_user(messages_get_errorcode(error), 0);
 		}
 	}
@@ -1641,7 +1641,7 @@ static void ami_update_buttons(struct gui_window_2 *gwin)
 	if(!browser_window_reload_available(gwin->gw->bw))
 		reload=TRUE;
 
-	if(nsoption_bool(kiosk_mode) == false) {
+	if(slateoption_bool(kiosk_mode) == false) {
 		if(gwin->tabs <= 1) {
 			tabclose=TRUE;
 			ami_gui_menu_set_disabled(gwin->win, gwin->imenu, M_CLOSETAB, true);
@@ -1791,7 +1791,7 @@ int ami_key_to_nskey(ULONG keycode, struct InputEvent *ie)
 		break;
 		default:
 			if((chars = MapRawKey(ie,buffer,20,NULL)) > 0) {
-				if(utf8_from_local_encoding(buffer, chars, &utf8) != NSERROR_OK) return 0;
+				if(utf8_from_local_encoding(buffer, chars, &utf8) != SLATEERROR_OK) return 0;
 				nskey = utf8_to_ucs4(utf8, utf8_char_byte_length(utf8));
 				free(utf8);
 
@@ -1855,10 +1855,10 @@ static void ami_update_quals(struct gui_window_2 *gwin)
 }
 
 /* exported interface documented in amiga/gui.h */
-nserror ami_gui_get_space_box(Object *obj, struct IBox **bbox)
+slateerror ami_gui_get_space_box(Object *obj, struct IBox **bbox)
 {
 	struct IBox *ib = AllocVec(sizeof(struct IBox), MEMF_PRIVATE);
-	if(ib == NULL) return NSERROR_NOMEM;
+	if(ib == NULL) return SLATEERROR_NOMEM;
 #ifdef __amigaos4__
 	if(LIB_IS_AT_LEAST((struct Library *)SpaceBase, 53, 6)) {
 		GetAttr(SPACE_RenderBox, obj, (ULONG *)ib);
@@ -1869,7 +1869,7 @@ nserror ami_gui_get_space_box(Object *obj, struct IBox **bbox)
 		GetAttr(SPACE_AreaBox, obj, (ULONG *)&t_ib);
 		if(t_ib == NULL) {
 			FreeVec(ib);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		} else {
 			/* Create a copy so this works the same as the newer SPACE_RenderBox */
 			CopyMem(t_ib, ib, sizeof(struct IBox));
@@ -1877,7 +1877,7 @@ nserror ami_gui_get_space_box(Object *obj, struct IBox **bbox)
 	}
 
 	*bbox = ib;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in amiga/gui.h */
@@ -1910,7 +1910,7 @@ bool ami_mouse_to_ns_coords(struct gui_window_2 *gwin, int *restrict x, int *res
 	if(mouse_x == -1) mouse_x = gwin->win->MouseX;
 	if(mouse_y == -1) mouse_y = gwin->win->MouseY;
 
-	if(ami_gui_get_space_box((Object *)gwin->objects[GID_BROWSER], &bbox) == NSERROR_OK) {
+	if(ami_gui_get_space_box((Object *)gwin->objects[GID_BROWSER], &bbox) == SLATEERROR_OK) {
 		ns_x = (ULONG)(mouse_x - bbox->Left);
 		ns_y = (ULONG)(mouse_y - bbox->Top);
 
@@ -1944,7 +1944,7 @@ static void ami_gui_scroll_internal(struct gui_window_2 *gwin, int xs, int ys)
 				&gwin->gw->scrollx,
 				&gwin->gw->scrolly);
 
-			if(ami_gui_get_space_box((Object *)gwin->objects[GID_BROWSER], &bbox) != NSERROR_OK) {
+			if(ami_gui_get_space_box((Object *)gwin->objects[GID_BROWSER], &bbox) != SLATEERROR_OK) {
 				amiga_warn_user("NoMemory", "");
 				return;
 			}
@@ -2012,7 +2012,7 @@ static struct IBox *ami_ns_rect_to_ibox(struct gui_window_2 *gwin, const struct 
 	ibox = malloc(sizeof(struct IBox));
 	if(ibox == NULL) return NULL;
 
-	if(ami_gui_get_space_box((Object *)gwin->objects[GID_BROWSER], &bbox) != NSERROR_OK) {
+	if(ami_gui_get_space_box((Object *)gwin->objects[GID_BROWSER], &bbox) != SLATEERROR_OK) {
 		free(ibox);
 		amiga_warn_user("NoMemory", "");
 		return NULL;
@@ -2088,20 +2088,20 @@ static void ami_gui_menu_update_all(void)
  * \param gw The gui window to measure content area of.
  * \param width receives width of window
  * \param height receives height of window
- * \return NSERROR_OK on sucess and width and height updated
+ * \return SLATEERROR_OK on sucess and width and height updated
  *          else error code.
  */
-static nserror
+static slateerror
 gui_window_get_dimensions(struct gui_window *gw,
 			  int *restrict width,
 			  int *restrict height)
 {
 	struct IBox *bbox;
-	nserror res;
+	slateerror res;
 
 	res = ami_gui_get_space_box((Object *)gw->shared->objects[GID_BROWSER],
 				    &bbox);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		amiga_warn_user("NoMemory", "");
 		return res;
 	}
@@ -2111,7 +2111,7 @@ gui_window_get_dimensions(struct gui_window *gw,
 
 	ami_gui_free_space_box(bbox);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* Add a horizontal scroller, if not already present
@@ -2232,7 +2232,7 @@ static void ami_gui_scroller_update(struct gui_window_2 *gwin)
 		rethinkv = ami_gui_vscroll_remove(gwin);
 		rethinkh = ami_gui_hscroll_remove(gwin);
 	} else {
-		if((browser_window_get_extents(gwin->gw->bw, false, &w, &h) == NSERROR_OK)) {
+		if((browser_window_get_extents(gwin->gw->bw, false, &w, &h) == SLATEERROR_OK)) {
 			gui_window_get_dimensions(gwin->gw, &ww, &wh);
 		}
 
@@ -2465,7 +2465,7 @@ gui_window_console_log(struct gui_window *g,
 	}
 
 #ifdef __amigaos4__
-	DebugPrintF("NETSURF: CONSOLE_LOG SOURCE %s %sFOLDABLE %s %.*s\n",
+	DebugPrintF("SLATE: CONSOLE_LOG SOURCE %s %sFOLDABLE %s %.*s\n",
 	      src_text, foldable ? "" : "NOT-", level_text,
 	      (int)msglen, msg);
 #endif
@@ -2481,13 +2481,13 @@ static void gui_window_set_icon(struct gui_window *g, struct hlcache_handle *ico
 	struct IBox *bbox;
 	struct bitmap *icon_bitmap = NULL;
 
-	if(nsoption_bool(kiosk_mode) == true) return;
+	if(slateoption_bool(kiosk_mode) == true) return;
 	if(!g) return;
 
 	if ((icon != NULL) && ((icon_bitmap = content_get_bitmap(icon)) != NULL))
 	{
 		bm = ami_bitmap_get_native(icon_bitmap, 16, 16, ami_plot_screen_is_palettemapped(),
-					g->shared->win->RPort->BitMap, nsoption_colour(sys_colour_ButtonFace));
+					g->shared->win->RPort->BitMap, slateoption_colour(sys_colour_ButtonFace));
 	}
 
 	if(g == g->shared->gw) {
@@ -2510,7 +2510,7 @@ static void gui_window_set_icon(struct gui_window *g, struct hlcache_handle *ico
 #ifdef __amigaos4__
 			}
 #endif
-			if(ami_gui_get_space_box((Object *)g->shared->objects[GID_ICON], &bbox) != NSERROR_OK) {
+			if(ami_gui_get_space_box((Object *)g->shared->objects[GID_ICON], &bbox) != SLATEERROR_OK) {
 				amiga_warn_user("NoMemory", "");
 				return;
 			}
@@ -2657,7 +2657,7 @@ static BOOL ami_gui_event(void *w)
 	struct timeval curtime;
 	static int drag_x_move = 0, drag_y_move = 0;
 	char *utf8 = NULL;
-	nsurl *url;
+	slateurl *url;
 	BOOL win_closed = FALSE;
 
 	while((result = RA_HandleInput(gwin->objects[OID_MAIN], &code)) != WMHI_LASTMSG) {
@@ -2669,7 +2669,7 @@ static BOOL ami_gui_event(void *w)
 				drag_x_move = 0;
 				drag_y_move = 0;
 
-				if(ami_gui_get_space_box((Object *)gwin->objects[GID_BROWSER], &bbox) != NSERROR_OK) {
+				if(ami_gui_get_space_box((Object *)gwin->objects[GID_BROWSER], &bbox) != SLATEERROR_OK) {
 					amiga_warn_user("NoMemory", "");
 					break;
 				}
@@ -2730,7 +2730,7 @@ static BOOL ami_gui_event(void *w)
 			break;
 
 			case WMHI_MOUSEBUTTONS:
-				if(ami_gui_get_space_box((Object *)gwin->objects[GID_BROWSER], &bbox) != NSERROR_OK) {
+				if(ami_gui_get_space_box((Object *)gwin->objects[GID_BROWSER], &bbox) != SLATEERROR_OK) {
 					amiga_warn_user("NoMemory", "");
 					return FALSE;
 				}
@@ -2908,8 +2908,8 @@ static BOOL ami_gui_event(void *w)
 
 					case GID_URL:
 					{
-						nserror ret;
-						nsurl *url;
+						slateerror ret;
+						slateurl *url;
 						GetAttr(STRINGA_TextVal,
 							(Object *)gwin->objects[GID_URL],
 							(ULONG *)&storage);
@@ -2917,7 +2917,7 @@ static BOOL ami_gui_event(void *w)
 
 						ret = search_web_omni(utf8, SEARCH_WEB_OMNI_NONE, &url);
 						ami_utf8_free(utf8);
-						if (ret == NSERROR_OK) {
+						if (ret == SLATEERROR_OK) {
 								browser_window_navigate(gwin->gw->bw,
 										url,
 										NULL,
@@ -2925,9 +2925,9 @@ static BOOL ami_gui_event(void *w)
 										NULL,
 										NULL,
 										NULL);
-								nsurl_unref(url);
+								slateurl_unref(url);
 						}
-						if (ret != NSERROR_OK) {
+						if (ret != SLATEERROR_OK) {
 							amiga_warn_user(messages_get_errorcode(ret), 0);
 						}
 					}
@@ -2947,19 +2947,19 @@ static BOOL ami_gui_event(void *w)
 
 						if(chooser_node != NULL) {
 							GetChooserNodeAttrs(chooser_node, CNA_Text, (ULONG *)&prov, TAG_DONE);
-							if(prov != NULL) nsoption_set_charp(search_web_provider, (char *)strdup(prov));
+							if(prov != NULL) slateoption_set_charp(search_web_provider, (char *)strdup(prov));
 						}
 					}
 #else
 					/* TODO: Fix for OS<3.2 */
 #endif
-						search_web_select_provider(nsoption_charp(search_web_provider));
+						search_web_select_provider(slateoption_charp(search_web_provider));
 					break;
 
 					case GID_SEARCHSTRING:
 					{
-						nserror ret;
-						nsurl *url;
+						slateerror ret;
+						slateurl *url;
 
 						GetAttr(STRINGA_TextVal,
 							(Object *)gwin->objects[GID_SEARCHSTRING],
@@ -2969,7 +2969,7 @@ static BOOL ami_gui_event(void *w)
 
 						ret = search_web_omni(utf8, SEARCH_WEB_OMNI_SEARCHONLY, &url);
 						ami_utf8_free(utf8);
-						if (ret == NSERROR_OK) {
+						if (ret == SLATEERROR_OK) {
 								browser_window_navigate(gwin->gw->bw,
 										url,
 										NULL,
@@ -2977,9 +2977,9 @@ static BOOL ami_gui_event(void *w)
 										NULL,
 										NULL,
 										NULL);
-							nsurl_unref(url);
+							slateurl_unref(url);
 						}
-						if (ret != NSERROR_OK) {
+						if (ret != SLATEERROR_OK) {
 							amiga_warn_user(messages_get_errorcode(ret), 0);
 						}
 
@@ -2988,7 +2988,7 @@ static BOOL ami_gui_event(void *w)
 
 					case GID_HOME:
 						{
-							if (nsurl_create(nsoption_charp(homepage_url), &url) != NSERROR_OK) {
+							if (slateurl_create(slateoption_charp(homepage_url), &url) != SLATEERROR_OK) {
 								amiga_warn_user("NoMemory", 0);
 							} else {
 								browser_window_navigate(gwin->gw->bw,
@@ -2998,7 +2998,7 @@ static BOOL ami_gui_event(void *w)
 										NULL,
 										NULL,
 										NULL);
-								nsurl_unref(url);
+								slateurl_unref(url);
 							}
 						}
 					break;
@@ -3045,7 +3045,7 @@ static BOOL ami_gui_event(void *w)
 														
 							if(ami_pageinfo_open(gwin->gw->bw,
 											w_left + g_left,
-											w_top + g_top + g_height) != NSERROR_OK) {
+											w_top + g_top + g_height) != SLATEERROR_OK) {
 								NSLOG(netsurf, INFO, "Unable to open page info window");
 							}
 						}
@@ -3055,13 +3055,13 @@ static BOOL ami_gui_event(void *w)
 						GetAttr(STRINGA_TextVal,
 							(Object *)gwin->objects[GID_URL],
 							(ULONG *)&storage);
-						if(nsurl_create((const char *)storage, &url) == NSERROR_OK) {
+						if(slateurl_create((const char *)storage, &url) == SLATEERROR_OK) {
 							if(hotlist_has_url(url)) {
 								hotlist_remove_url(url);
 							} else {
 								hotlist_add_url(url);
 							}
-							nsurl_unref(url);
+							slateurl_unref(url);
 						}
 						ami_gui_update_hotlist_button(gwin);
 					break;
@@ -3097,7 +3097,7 @@ static BOOL ami_gui_event(void *w)
 						break;
 
 						case 'u': // open url
-							if((nsoption_bool(kiosk_mode) == false))
+							if((slateoption_bool(kiosk_mode) == false))
 								ActivateLayoutGadget((struct Gadget *)gwin->objects[GID_MAIN],
 									gwin->win, NULL, (uint32)gwin->objects[GID_URL]);
 						break;
@@ -3295,7 +3295,7 @@ static void ami_gui_appicon_remove(struct gui_window_2 *gwin)
 	}
 }
 
-static nserror gui_page_info_change(struct gui_window *gw)
+static slateerror gui_page_info_change(struct gui_window *gw)
 {
 	int bm_idx;
 	browser_window_page_info_state pistate;
@@ -3303,7 +3303,7 @@ static nserror gui_page_info_change(struct gui_window *gw)
 	struct browser_window *bw = ami_gui_get_browser_window(gw);
 
 	/* if this isn't the visible tab, don't do anything */
-	if((gwin == NULL) || (gwin->gw != gw)) return NSERROR_OK;
+	if((gwin == NULL) || (gwin->gw != gw)) return SLATEERROR_OK;
 
 	pistate = browser_window_get_page_info_state(bw);
 
@@ -3342,7 +3342,7 @@ static nserror gui_page_info_change(struct gui_window *gw)
 				GA_HintInfo, gwin->helphints[bm_idx],
 				TAG_DONE);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void ami_handle_appmsg(void)
@@ -3382,9 +3382,9 @@ static void ami_handle_appmsg(void)
 						if(ami_mouse_to_ns_coords(gwin, &x, &y,
 							appmsg->am_MouseX, appmsg->am_MouseY) == false)
 						{
-							nsurl *url;
+							slateurl *url;
 
-							if (netsurf_path_to_nsurl(filename, &url) != NSERROR_OK) {
+							if (slate_path_to_slateurl(filename, &url) != SLATEERROR_OK) {
 								amiga_warn_user("NoMemory", 0);
 							}
 							else
@@ -3410,16 +3410,16 @@ static void ami_handle_appmsg(void)
 											      gwin->gw->bw,
 											      NULL);
 								}
-								nsurl_unref(url);
+								slateurl_unref(url);
 							}
 						}
 						else
 						{
 							if(browser_window_drop_file_at_point(gwin->gw->bw, x, y, filename) == false)
 							{
-								nsurl *url;
+								slateurl *url;
 
-								if (netsurf_path_to_nsurl(filename, &url) != NSERROR_OK) {
+								if (slate_path_to_slateurl(filename, &url) != SLATEERROR_OK) {
 									amiga_warn_user("NoMemory", 0);
 								}
 								else
@@ -3447,7 +3447,7 @@ static void ami_handle_appmsg(void)
 												      NULL);
 										
 									}
-									nsurl_unref(url);
+									slateurl_unref(url);
 								}
 							}
 						}
@@ -3465,8 +3465,8 @@ static void ami_handle_applib(void)
 #ifdef __amigaos4__
 	struct ApplicationMsg *applibmsg;
 	struct browser_window *bw;
-	nsurl *url;
-	nserror error;
+	slateurl *url;
+	slateerror error;
 
 	if(!applibport) return;
 
@@ -3477,16 +3477,16 @@ static void ami_handle_applib(void)
 			case APPLIBMT_NewBlankDoc:
 			{
 
-				error = nsurl_create(nsoption_charp(homepage_url), &url);
-				if (error == NSERROR_OK) {
+				error = slateurl_create(slateoption_charp(homepage_url), &url);
+				if (error == SLATEERROR_OK) {
 					error = browser_window_create(BW_CREATE_HISTORY,
 								      url,
 								      NULL,
 								      NULL,
 								      &bw);
-					nsurl_unref(url);
+					slateurl_unref(url);
 				}
-				if (error != NSERROR_OK) {
+				if (error != SLATEERROR_OK) {
 					amiga_warn_user(messages_get_errorcode(error), 0);
 				}
 			}
@@ -3497,16 +3497,16 @@ static void ami_handle_applib(void)
 				struct ApplicationOpenPrintDocMsg *applibopdmsg =
 					(struct ApplicationOpenPrintDocMsg *)applibmsg;
 
-				error = netsurf_path_to_nsurl(applibopdmsg->fileName, &url);
-				if (error == NSERROR_OK) {
+				error = slate_path_to_slateurl(applibopdmsg->fileName, &url);
+				if (error == SLATEERROR_OK) {
 					error = browser_window_create(BW_CREATE_HISTORY,
 								      url,
 								      NULL,
 								      NULL,
 								      &bw);
-					nsurl_unref(url);
+					slateurl_unref(url);
 				}
-				if (error != NSERROR_OK) {
+				if (error != SLATEERROR_OK) {
 					amiga_warn_user(messages_get_errorcode(error), 0);
 				}
 			}
@@ -3564,7 +3564,7 @@ void ami_get_msg(void)
 	uint32 signalmask = winsignal | appsig | schedulesig | rxsig |
 				printsig | applibsig | helpsignal;
 
-	if ((fetch_fdset(&read_fd_set, &write_fd_set, &except_fd_set, &max_fd) == NSERROR_OK) &&
+	if ((fetch_fdset(&read_fd_set, &write_fd_set, &except_fd_set, &max_fd) == SLATEERROR_OK) &&
 			(max_fd != -1)) {
 		/* max_fd is the highest fd in use, but waitselect() needs to know how many
 		 * are in use, so we add 1. */
@@ -3613,7 +3613,7 @@ void ami_get_msg(void)
 		ami_help_process();
 
 	if(signal & ctrlcsig)
-		ami_quit_netsurf_delayed();
+		ami_quit_slate_delayed();
 }
 
 static void ami_change_tab(struct gui_window_2 *gwin, int direction)
@@ -3698,7 +3698,7 @@ static void gui_window_update_extent(struct gui_window *g)
 
 	if(g == g->shared->gw) {
 		int width, height;
-		if(ami_gui_get_space_box((Object *)g->shared->objects[GID_BROWSER], &bbox) != NSERROR_OK) {
+		if(ami_gui_get_space_box((Object *)g->shared->objects[GID_BROWSER], &bbox) != SLATEERROR_OK) {
 			amiga_warn_user("NoMemory", "");
 			return;
 		}
@@ -3734,19 +3734,19 @@ static void gui_window_update_extent(struct gui_window *g)
  *
  * \param g gui_window
  * \param rect area to redraw or NULL for the entire window area
- * \return NSERROR_OK on success or appropriate error code
+ * \return SLATEERROR_OK on success or appropriate error code
  */
-static nserror amiga_window_invalidate_area(struct gui_window *g,
+static slateerror amiga_window_invalidate_area(struct gui_window *g,
 					    const struct rect *restrict rect)
 {
 	struct nsObject *nsobj;
 	struct rect *restrict deferred_rect;
 
-	if(!g) return NSERROR_BAD_PARAMETER;
+	if(!g) return SLATEERROR_BAD_PARAMETER;
 
 	if (rect == NULL) {
 		if (g != g->shared->gw) {
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 	} else {
 		if (ami_gui_window_update_box_deferred_check(g->deferred_rects, rect,
@@ -3763,7 +3763,7 @@ static nserror amiga_window_invalidate_area(struct gui_window *g,
 	}
 	ami_schedule_redraw(g->shared, false);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -3789,7 +3789,7 @@ static void ami_switch_tab(struct gui_window_2 *gwin, bool redraw)
 
 	ami_gui_console_log_switch(gwin->gw);
 
-	if(ami_gui_get_space_box((Object *)gwin->objects[GID_BROWSER], &bbox) != NSERROR_OK) {
+	if(ami_gui_get_space_box((Object *)gwin->objects[GID_BROWSER], &bbox) != SLATEERROR_OK) {
 		amiga_warn_user("NoMemory", "");
 		return;
 	}
@@ -3842,7 +3842,7 @@ void ami_quit_netsurf(void)
 	struct ami_generic_window *w;
 
 	/* Disable the multiple tabs open warning */
-	nsoption_set_bool(tab_close_warn, false);
+	slateoption_set_bool(tab_close_warn, false);
 
 	if(!IsMinListEmpty(window_list)) {
 		node = (struct nsObject *)GetHead((struct List *)window_list);
@@ -3869,7 +3869,7 @@ void ami_quit_netsurf(void)
 	}
 }
 
-static void ami_quit_netsurf_delayed(void)
+static void ami_quit_slate_delayed(void)
 {
 	int res = -1;
 #ifdef __amigaos4__
@@ -3936,7 +3936,7 @@ void ami_try_quit(void)
 {
 	if(!IsMinListEmpty(window_list)) return;
 
-	if(nsoption_bool(close_no_quit) == false)
+	if(slateoption_bool(close_no_quit) == false)
 	{
 		ami_quit = true;
 		return;
@@ -3951,8 +3951,8 @@ static void gui_quit(void)
 {
 	ami_theme_throbber_free();
 
-	urldb_save(nsoption_charp(url_file));
-	urldb_save_cookies(nsoption_charp(cookie_file));
+	urldb_save(slateoption_charp(url_file));
+	urldb_save_cookies(slateoption_charp(cookie_file));
 	hotlist_fini();
 #ifdef __amigaos4__
 	if(IApplication && ami_appid)
@@ -3988,11 +3988,11 @@ static void gui_quit(void)
 	if(nsscreentitle) FreeVec(nsscreentitle);
 }
 
-char *ami_gui_get_cache_favicon_name(nsurl *url, bool only_if_avail)
+char *ami_gui_get_cache_favicon_name(slateurl *url, bool only_if_avail)
 {
 	STRPTR filename = NULL;
 
-	if ((filename = ASPrintf("%s/%x", current_user_faviconcache, nsurl_hash(url)))) {
+	if ((filename = ASPrintf("%s/%x", current_user_faviconcache, slateurl_hash(url)))) {
 		NSLOG(netsurf, INFO, "favicon cache location: %s", filename);
 
 		if (only_if_avail == true) {
@@ -4008,7 +4008,7 @@ char *ami_gui_get_cache_favicon_name(nsurl *url, bool only_if_avail)
 	return NULL;
 }
 
-static void ami_gui_cache_favicon(nsurl *url, struct bitmap *favicon)
+static void ami_gui_cache_favicon(slateurl *url, struct bitmap *favicon)
 {
 	STRPTR filename = NULL;
 
@@ -4021,21 +4021,21 @@ static void ami_gui_cache_favicon(nsurl *url, struct bitmap *favicon)
 void ami_gui_update_hotlist_button(struct gui_window_2 *gwin)
 {
 	char *url;
-	nsurl *nsurl;
+	slateurl *slateurl;
 
 	GetAttr(STRINGA_TextVal,
 		(Object *)gwin->objects[GID_URL],
 		(ULONG *)&url);
 
-	if(nsurl_create(url, &nsurl) == NSERROR_OK) {
-		if(hotlist_has_url(nsurl)) {
+	if(slateurl_create(url, &slateurl) == SLATEERROR_OK) {
+		if(hotlist_has_url(slateurl)) {
 			RefreshSetGadgetAttrs((struct Gadget *)gwin->objects[GID_FAVE], gwin->win, NULL,
 				BUTTON_RenderImage, gwin->objects[GID_FAVE_RMV],
 				GA_HintInfo, gwin->helphints[GID_FAVE_RMV],
 				TAG_DONE);
 
 			if (gwin->gw->favicon)
-				ami_gui_cache_favicon(nsurl, content_get_bitmap(gwin->gw->favicon));
+				ami_gui_cache_favicon(slateurl, content_get_bitmap(gwin->gw->favicon));
 		} else {
 			RefreshSetGadgetAttrs((struct Gadget *)gwin->objects[GID_FAVE], gwin->win, NULL,
 				BUTTON_RenderImage, gwin->objects[GID_FAVE_ADD],
@@ -4043,12 +4043,12 @@ void ami_gui_update_hotlist_button(struct gui_window_2 *gwin)
 				TAG_DONE);
 		}
 		
-		nsurl_unref(nsurl);
+		slateurl_unref(slateurl);
 	}
 }
 
 static bool ami_gui_hotlist_add(void *userdata, int level, int item,
-		const char *title, nsurl *url, bool is_folder)
+		const char *title, slateurl *url, bool is_folder)
 {
 	struct ami_gui_tb_userdata *tb_userdata = (struct ami_gui_tb_userdata *)userdata;
 	struct Node *speed_button_node;
@@ -4061,7 +4061,7 @@ static bool ami_gui_hotlist_add(void *userdata, int level, int item,
 
 	if(utf8_to_local_encoding(title,
 		(strlen(title) < NSA_MAX_HOTLIST_BUTTON_LEN) ? strlen(title) : NSA_MAX_HOTLIST_BUTTON_LEN,
-		&utf8title) != NSERROR_OK)
+		&utf8title) != SLATEERROR_OK)
 		return false;
 
 	char *iconname = ami_gui_get_cache_favicon_name(url, true);
@@ -4093,7 +4093,7 @@ static bool ami_gui_hotlist_add(void *userdata, int level, int item,
 
 	speed_button_node = AllocSpeedButtonNode(item,
 					SBNA_Image, lab_item,
-					SBNA_HintInfo, nsurl_access(url),
+					SBNA_HintInfo, slateurl_access(url),
 					SBNA_UserData, (void *)url,
 					TAG_DONE);
 			
@@ -4170,7 +4170,7 @@ static void ami_gui_hotlist_toolbar_free(struct gui_window_2 *gwin, struct List 
 	struct Node *node;
 	struct Node *nnode;
 
-	if(nsoption_bool(kiosk_mode) == true) return;
+	if(slateoption_bool(kiosk_mode) == true) return;
 
 	if(IsListEmpty(speed_button_list)) return;
 	node = GetHead(speed_button_list);
@@ -4342,7 +4342,7 @@ void ami_gui_tabs_toggle_all(void)
 		if(node->Type == AMINS_WINDOW)
 		{
 			if(gwin->tabs == 1) {
-				if(nsoption_bool(tab_always_show) == true) {
+				if(slateoption_bool(tab_always_show) == true) {
 					ami_toggletabbar(gwin, true);
 				} else {
 					ami_toggletabbar(gwin, false);
@@ -4401,28 +4401,28 @@ void ami_gui_adjust_scale(struct gui_window *gw, float adjustment)
 	ami_schedule_redraw(gw->shared, true);
 }
 
-nserror ami_gui_new_blank_tab(struct gui_window_2 *gwin)
+slateerror ami_gui_new_blank_tab(struct gui_window_2 *gwin)
 {
-	nsurl *url;
-	nserror error;
+	slateurl *url;
+	slateerror error;
 	struct browser_window *bw = NULL;
 
-	error = nsurl_create(nsoption_charp(homepage_url), &url);
-	if (error == NSERROR_OK) {
+	error = slateurl_create(slateoption_charp(homepage_url), &url);
+	if (error == SLATEERROR_OK) {
 		error = browser_window_create(BW_CREATE_HISTORY |
 					      BW_CREATE_TAB | BW_CREATE_FOREGROUND,
 					      url,
 					      NULL,
 					      gwin->gw->bw,
 					      &bw);
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		amiga_warn_user(messages_get_errorcode(error), 0);
 		return error;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void ami_do_redraw_tiled(struct gui_window_2 *gwin, bool busy,
@@ -4547,7 +4547,7 @@ static void ami_do_redraw_limits(struct gui_window *g, struct browser_window *bw
 
 	if(g != g->shared->gw) return;
 
-	if(ami_gui_get_space_box((Object *)g->shared->objects[GID_BROWSER], &bbox) != NSERROR_OK) {
+	if(ami_gui_get_space_box((Object *)g->shared->objects[GID_BROWSER], &bbox) != SLATEERROR_OK) {
 		amiga_warn_user("NoMemory", "");
 		return;
 	}
@@ -4575,7 +4575,7 @@ static void ami_refresh_window(struct gui_window_2 *gwin)
 
 	ami_set_pointer(gwin, GUI_POINTER_WAIT, false);
 
-	if(ami_gui_get_space_box((Object *)gwin->objects[GID_BROWSER], &bbox) != NSERROR_OK) {
+	if(ami_gui_get_space_box((Object *)gwin->objects[GID_BROWSER], &bbox) != SLATEERROR_OK) {
 		amiga_warn_user("NoMemory", "");
 		return;
 	}
@@ -4615,7 +4615,7 @@ HOOKF(void, ami_scroller_hook, Object *, object, struct IntuiMessage *)
 	struct gui_window_2 *gwin = hook->h_Data;
 	struct IntuiWheelData *wheel;
 	struct Node *node = NULL;
-	nsurl *url;
+	slateurl *url;
 
 	switch(msg->Class)
 	{
@@ -4626,7 +4626,7 @@ HOOKF(void, ami_scroller_hook, Object *, object, struct IntuiMessage *)
 			{
 				case GID_HSCROLL:
  				case GID_VSCROLL:
-					if(nsoption_bool(faster_scroll) == true) gwin->redraw_scroll = true;
+					if(slateoption_bool(faster_scroll) == true) gwin->redraw_scroll = true;
 						else gwin->redraw_scroll = false;
 
 					ami_schedule_redraw(gwin, true);
@@ -4682,17 +4682,17 @@ HOOKF(void, ami_scroller_hook, Object *, object, struct IntuiMessage *)
 } 
 
 /* exported function documented in gui.h */
-nserror ami_gui_win_list_add(void *win, int type, const struct ami_win_event_table *table)
+slateerror ami_gui_win_list_add(void *win, int type, const struct ami_win_event_table *table)
 {
 	struct nsObject *node = AddObject(window_list, type);
-	if(node == NULL) return NSERROR_NOMEM;
+	if(node == NULL) return SLATEERROR_NOMEM;
 	node->objstruct = win;
 
 	struct ami_generic_window *w = (struct ami_generic_window *)win;
 	w->tbl = table;
 	w->node = node;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported function documented in gui.h */
@@ -4737,8 +4737,8 @@ gui_window_create(struct browser_window *bw,
 
 	if (!scrn) ami_openscreenfirst();
 
-	if (nsoption_bool(kiosk_mode)) flags &= ~GW_CREATE_TAB;
-	if (nsoption_bool(resize_with_contents)) idcmp_sizeverify = 0;
+	if (slateoption_bool(kiosk_mode)) flags &= ~GW_CREATE_TAB;
+	if (slateoption_bool(resize_with_contents)) idcmp_sizeverify = 0;
 
 	if(existing) {
 		ref = existing->shared->win;
@@ -4795,7 +4795,7 @@ gui_window_create(struct browser_window *bw,
 		g->tab = g->shared->next_tab;
 		g->shared->tabs++; /* do this early so functions know to update the tabs */
 
-		if((g->shared->tabs == 2) && (nsoption_bool(tab_always_show) == false)) {
+		if((g->shared->tabs == 2) && (slateoption_bool(tab_always_show) == false)) {
 			ami_toggletabbar(g->shared, true);
 		}
 
@@ -4875,7 +4875,7 @@ gui_window_create(struct browser_window *bw,
 	g->shared->history_ctxmenu[AMI_CTXMENU_HISTORY_FORWARD] = NULL;
 	g->shared->clicktab_ctxmenu = NULL;
 
-	if(nsoption_bool(window_simple_refresh) == true) {
+	if(slateoption_bool(window_simple_refresh) == true) {
 		refresh_mode = WA_SimpleRefresh;
 		defer_layout = FALSE; /* testing reveals this does work with SimpleRefresh,
 								but the docs say it doesn't so err on the side of caution. */
@@ -4884,16 +4884,16 @@ gui_window_create(struct browser_window *bw,
 		defer_layout = TRUE;
 	}
 
-	if(!nsoption_bool(kiosk_mode))
+	if(!slateoption_bool(kiosk_mode))
 	{
 		ULONG addtabclosegadget = TAG_IGNORE;
 		ULONG iconifygadget = FALSE;
 		int ws_idx = 0;
 
 #ifdef __amigaos4__
-		if (nsoption_charp(pubscreen_name) && 
+		if (slateoption_charp(pubscreen_name) && 
 		    (locked_screen == TRUE) &&
-		    (strcmp(nsoption_charp(pubscreen_name), "Workbench") == 0))
+		    (strcmp(slateoption_charp(pubscreen_name), "Workbench") == 0))
 				iconifygadget = TRUE;
 #endif
 
@@ -5251,7 +5251,7 @@ gui_window_create(struct browser_window *bw,
 							GA_HintInfo, g->shared->helphints[GID_SEARCHSTRING],
 						StringEnd,
 					LayoutEnd,
-					CHILD_WeightedWidth, nsoption_int(web_search_width),
+					CHILD_WeightedWidth, slateoption_int(web_search_width),
 					LAYOUT_AddChild, g->shared->objects[GID_THROBBER] = SpaceObj,
 						GA_ID,GID_THROBBER,
 						SPACE_MinWidth, ami_theme_throbber_get_width(),
@@ -5377,7 +5377,7 @@ gui_window_create(struct browser_window *bw,
 		return NULL;
 	}
 
-	if(nsoption_bool(kiosk_mode) == false)
+	if(slateoption_bool(kiosk_mode) == false)
 	{
 #ifdef __amigaos4__
 		ULONG width, height;
@@ -5427,7 +5427,7 @@ gui_window_create(struct browser_window *bw,
 		FreeScreenDrawInfo(scrn, dri);
 #endif //__amigaos4__				
 		ami_gui_hotlist_toolbar_add(g->shared); /* is this the right place for this? */
-		if(nsoption_bool(tab_always_show)) ami_toggletabbar(g->shared, true);
+		if(slateoption_bool(tab_always_show)) ami_toggletabbar(g->shared, true);
 	}
 
 	g->shared->gw = g;
@@ -5454,7 +5454,7 @@ static void ami_gui_close_tabs(struct gui_window_2 *gwin, bool other_tabs)
 	struct Node *ntab;
 	struct gui_window *gw;
 
-	if((gwin->tabs > 1) && (nsoption_bool(tab_close_warn) == true)) {
+	if((gwin->tabs > 1) && (slateoption_bool(tab_close_warn) == true)) {
 		int32 res = amiga_warn_user_multi(messages_get("MultiTabClose"), "Yes", "No", gwin->win);
 
 		if(res == 0) return;
@@ -5542,7 +5542,7 @@ static void gui_window_destroy(struct gui_window *g)
 		ami_switch_tab(g->shared,true);
 		ami_schedule(0, ami_gui_refresh_favicon, g->shared);
 
-		if((g->shared->tabs == 1) && (nsoption_bool(tab_always_show) == false))
+		if((g->shared->tabs == 1) && (slateoption_bool(tab_always_show) == false))
 			ami_toggletabbar(g->shared, false);
 
 		FreeListBrowserList(&g->loglist);
@@ -5737,7 +5737,7 @@ static void ami_do_redraw(struct gui_window_2 *gwin)
 	gwin->gw->scrollx = hcurrent;
 	gwin->gw->scrolly = vcurrent;
 
-	if(ami_gui_get_space_box((Object *)gwin->objects[GID_BROWSER], &bbox) != NSERROR_OK) {
+	if(ami_gui_get_space_box((Object *)gwin->objects[GID_BROWSER], &bbox) != SLATEERROR_OK) {
 		amiga_warn_user("NoMemory", "");
 		return;
 	}
@@ -5857,25 +5857,25 @@ static bool gui_window_get_scroll(struct gui_window *g, int *restrict sx, int *r
  *
  * \param g gui_window to scroll
  * \param rect The rectangle to ensure is shown.
- * \return NSERROR_OK on success or apropriate error code.
+ * \return SLATEERROR_OK on success or apropriate error code.
  */
-static nserror
+static slateerror
 gui_window_set_scroll(struct gui_window *g, const struct rect *rect)
 {
 	struct IBox *bbox;
 	int width, height;
-	nserror res;
+	slateerror res;
 	int sx = 0, sy = 0;
 
 	if(!g) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if(!g->bw || browser_window_has_content(g->bw) == false) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	res = ami_gui_get_space_box((Object *)g->shared->objects[GID_BROWSER], &bbox);
-	if(res != NSERROR_OK) {
+	if(res != SLATEERROR_OK) {
 		amiga_warn_user("NoMemory", "");
 		return res;
 	}
@@ -5917,13 +5917,13 @@ gui_window_set_scroll(struct gui_window *g, const struct rect *rect)
 
 		ami_schedule_redraw(g->shared, true);
 
-		if(nsoption_bool(faster_scroll) == true) g->shared->redraw_scroll = true;
+		if(slateoption_bool(faster_scroll) == true) g->shared->redraw_scroll = true;
 			else g->shared->redraw_scroll = false;
 
 		g->scrollx = sx;
 		g->scrolly = sy;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void gui_window_set_status(struct gui_window *g, const char *text)
@@ -5960,24 +5960,24 @@ static void gui_window_set_status(struct gui_window *g, const char *text)
 	}
 }
 
-static nserror gui_window_set_url(struct gui_window *g, nsurl *url)
+static slateerror gui_window_set_url(struct gui_window *g, slateurl *url)
 {
 	size_t idn_url_l;
 	char *idn_url_s = NULL;
 	char *url_lc = NULL;
 
-	if(!g) return NSERROR_OK;
+	if(!g) return SLATEERROR_OK;
 
 	if(g == g->shared->gw) {
-		if(nsoption_bool(display_decoded_idn) == true) {
-			if (nsurl_get_utf8(url, &idn_url_s, &idn_url_l) == NSERROR_OK) {
+		if(slateoption_bool(display_decoded_idn) == true) {
+			if (slateurl_get_utf8(url, &idn_url_s, &idn_url_l) == SLATEERROR_OK) {
 				url_lc = ami_utf8_easy(idn_url_s);
 			}
 		}
 
 		RefreshSetGadgetAttrs((struct Gadget *)g->shared->objects[GID_URL],
 								g->shared->win, NULL,
-								STRINGA_TextVal, url_lc ? url_lc : nsurl_access(url),
+								STRINGA_TextVal, url_lc ? url_lc : slateurl_access(url),
 								TAG_DONE);
 
 		if(url_lc) {
@@ -5988,7 +5988,7 @@ static nserror gui_window_set_url(struct gui_window *g, nsurl *url)
 
 	ami_update_buttons(g->shared);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 HOOKF(uint32, ami_set_favicon_render_hook, APTR, space, struct gpRender *)
@@ -6002,9 +6002,9 @@ HOOKF(uint32, ami_set_favicon_render_hook, APTR, space, struct gpRender *)
  *
  * \param provider_name The providers name.
  * \param ico_bitmap The icon bitmap representing the provider.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror gui_search_web_provider_update(const char *provider_name,
+static slateerror gui_search_web_provider_update(const char *provider_name,
 	struct bitmap *ico_bitmap)
 {
 	struct BitMap *bm = NULL;
@@ -6012,14 +6012,14 @@ static nserror gui_search_web_provider_update(const char *provider_name,
 	struct nsObject *nnode;
 	struct gui_window_2 *gwin;
 
-	if(IsMinListEmpty(window_list))	return NSERROR_BAD_PARAMETER;
-	if(nsoption_bool(kiosk_mode) == true) return NSERROR_BAD_PARAMETER;
+	if(IsMinListEmpty(window_list))	return SLATEERROR_BAD_PARAMETER;
+	if(slateoption_bool(kiosk_mode) == true) return SLATEERROR_BAD_PARAMETER;
 
 	if (ico_bitmap != NULL) {
-		bm = ami_bitmap_get_native(ico_bitmap, 16, 16, ami_plot_screen_is_palettemapped(), NULL, nsoption_colour(sys_colour_ButtonFace));
+		bm = ami_bitmap_get_native(ico_bitmap, 16, 16, ami_plot_screen_is_palettemapped(), NULL, slateoption_colour(sys_colour_ButtonFace));
 	}
 
-	if(bm == NULL) return NSERROR_BAD_PARAMETER;
+	if(bm == NULL) return SLATEERROR_BAD_PARAMETER;
 
 	node = (struct nsObject *)GetHead((struct List *)window_list);
 
@@ -6057,7 +6057,7 @@ static nserror gui_search_web_provider_update(const char *provider_name,
 		}
 	} while((node = nnode));
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 HOOKF(uint32, ami_set_throbber_render_hook, APTR, space, struct gpRender *)
@@ -6095,7 +6095,7 @@ static void gui_window_place_caret(struct gui_window *g, int x, int y, int heigh
 
 	SetAPen(g->shared->win->RPort,3);
 
-	if(ami_gui_get_space_box((Object *)g->shared->objects[GID_BROWSER], &bbox) != NSERROR_OK) {
+	if(ami_gui_get_space_box((Object *)g->shared->objects[GID_BROWSER], &bbox) != SLATEERROR_OK) {
 		amiga_warn_user("NoMemory", "");
 		return;
 	}
@@ -6120,7 +6120,7 @@ static void gui_window_place_caret(struct gui_window *g, int x, int y, int heigh
 	g->c_y = y;
 	g->c_h = height;
 
-	if((nsoption_bool(kiosk_mode) == false))
+	if((slateoption_bool(kiosk_mode) == false))
 		ami_gui_menu_set_disabled(g->shared->win, g->shared->imenu, M_PASTE, false);
 }
 
@@ -6129,7 +6129,7 @@ static void gui_window_remove_caret(struct gui_window *g)
 	if(!g) return;
 	if(g->c_h == 0) return;
 
-	if((nsoption_bool(kiosk_mode) == false))
+	if((slateoption_bool(kiosk_mode) == false))
 		ami_gui_menu_set_disabled(g->shared->win, g->shared->imenu, M_PASTE, true);
 
 	ami_do_redraw_limits(g, g->bw, false, g->c_x, g->c_y,
@@ -6190,7 +6190,7 @@ bool ami_text_box_at_point(struct gui_window_2 *gwin, ULONG *restrict x, ULONG *
 	ULONG xs, ys;
 	struct browser_window_features data;
 
-	if(ami_gui_get_space_box((Object *)gwin->objects[GID_BROWSER], &bbox) != NSERROR_OK) {
+	if(ami_gui_get_space_box((Object *)gwin->objects[GID_BROWSER], &bbox) != SLATEERROR_OK) {
 		amiga_warn_user("NoMemory", "");
 		return false;
 	}
@@ -6317,7 +6317,7 @@ static Object *ami_gui_splash_open(void)
 		SetFont(win->RPort, tfont);
 
 	Move(win->RPort, left + 185, top + 220);
-	Text(win->RPort, netsurf_version, strlen(netsurf_version));
+	Text(win->RPort, slate_version, strlen(slate_version));
 
 	if(tfont) ami_font_close_disk_font(tfont);
 
@@ -6429,7 +6429,7 @@ static char *ami_gui_get_user_dir(STRPTR current_user)
 	if((lock = CreateDirTree(current_user_dir)))
 		UnLock(lock);
 
-	ami_nsoption_set_location(current_user_dir);
+	ami_slateoption_set_location(current_user_dir);
 
 	current_user_faviconcache = ASPrintf("%s/IconCache", current_user_dir);
 	if((lock = CreateDirTree(current_user_faviconcache))) UnLock(lock);
@@ -6443,9 +6443,9 @@ static char *ami_gui_get_user_dir(STRPTR current_user)
  *
  * \param gw The window receiving the event.
  * \param event The event code.
- * \return NSERROR_OK when processed ok
+ * \return SLATEERROR_OK when processed ok
  */
-static nserror
+static slateerror
 gui_window_event(struct gui_window *gw, enum gui_window_event event)
 {
 	switch (event) {
@@ -6480,7 +6480,7 @@ gui_window_event(struct gui_window *gw, enum gui_window_event event)
 	default:
 		break;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -6542,11 +6542,11 @@ int main(int argc, char** argv)
 	STRPTR current_user_cache = NULL;
 	STRPTR current_user = NULL;
 	BPTR lock = 0;
-	nserror ret;
+	slateerror ret;
 	int nargc = 0;
 	char *nargv = NULL;
 
-	struct netsurf_table amiga_table = {
+	struct slate_table amiga_table = {
 		.misc = &amiga_misc_table,
 		.window = &amiga_window_table,
 		.corewindow = amiga_core_window_table,
@@ -6565,8 +6565,8 @@ int main(int argc, char** argv)
 #ifdef __amigaos4__
 	signal(SIGINT, SIG_IGN);
 #endif
-	ret = netsurf_register(&amiga_table);
-	if (ret != NSERROR_OK) {
+	ret = slate_register(&amiga_table);
+	if (ret != SLATEERROR_OK) {
 		ami_misc_fatal_error("NetSurf operation table failed registration");
 		return RETURN_FAIL;
 	}
@@ -6622,17 +6622,17 @@ int main(int argc, char** argv)
 #endif
 
 	/* user options setup */
-	ret = nsoption_init(ami_set_options, &nsoptions, &nsoptions_default);
-	if (ret != NSERROR_OK) {
+	ret = slateoption_init(ami_set_options, &slateoptions, &slateoptions_default);
+	if (ret != SLATEERROR_OK) {
 		ami_misc_fatal_error("Options failed to initialise");
 		ami_gui_resources_free();
 		ami_gui_splash_close(splash_window);
 		ami_libs_close();
 		return RETURN_FAIL;
 	}
-	ami_nsoption_read();
+	ami_slateoption_read();
 	if(args != NULL) {
-		nsoption_commandline(&nargc, nargv, NULL);
+		slateoption_commandline(&nargc, nargv, NULL);
 
 		for(int i = 0; i < nargc; i++) {
 			if(args[i]) {
@@ -6646,8 +6646,8 @@ int main(int argc, char** argv)
 
 	if (ami_locate_resource(messages, "Messages") == false) {
 		ami_misc_fatal_error("Cannot open Messages file");
-		ami_nsoption_free();
-		nsoption_finalise(nsoptions, nsoptions_default);
+		ami_slateoption_free();
+		slateoption_finalise(slateoptions, slateoptions_default);
 		ami_gui_resources_free();
 		ami_gui_splash_close(splash_window);
 		ami_libs_close();
@@ -6659,14 +6659,14 @@ int main(int argc, char** argv)
 	current_user_cache = ASPrintf("%s/Cache", current_user_dir);
 	if((lock = CreateDirTree(current_user_cache))) UnLock(lock);
 
-	ret = netsurf_init(current_user_cache);
+	ret = slate_init(current_user_cache);
 
 	if(current_user_cache != NULL) FreeVec(current_user_cache);
 
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		ami_misc_fatal_error("NetSurf failed to initialise");
-		ami_nsoption_free();
-		nsoption_finalise(nsoptions, nsoptions_default);
+		ami_slateoption_free();
+		slateoption_finalise(slateoptions, slateoptions_default);
 		ami_gui_resources_free();
 		ami_gui_splash_close(splash_window);
 		ami_libs_close();
@@ -6675,7 +6675,7 @@ int main(int argc, char** argv)
 
 	ret = amiga_icon_init();
 
-	search_web_init(nsoption_charp(search_engines_file));
+	search_web_init(slateoption_charp(search_engines_file));
 	ami_clipboard_init();
 	ami_openurl_open();
 	ami_amiupdate(); /* set env-vars for AmiUpdate */
@@ -6690,8 +6690,8 @@ int main(int argc, char** argv)
 
 	window_list = NewObjList();
 
-	urldb_load(nsoption_charp(url_file));
-	urldb_load_cookies(nsoption_charp(cookie_file));
+	urldb_load(slateoption_charp(url_file));
+	urldb_load_cookies(slateoption_charp(cookie_file));
 
 	gui_init2(argc, argv);
 
@@ -6699,8 +6699,8 @@ int main(int argc, char** argv)
 
 	ami_gui_splash_close(splash_window);
 
-	strlcpy(script, nsoption_charp(arexx_dir), 1024);
-	AddPart(script, nsoption_charp(arexx_startup), 1024);
+	strlcpy(script, slateoption_charp(arexx_dir), 1024);
+	AddPart(script, slateoption_charp(arexx_startup), 1024);
 	ami_arexx_execute(script);
 
 	NSLOG(netsurf, INFO, "Entering main loop");
@@ -6709,16 +6709,16 @@ int main(int argc, char** argv)
 		ami_get_msg();
 	}
 
-	strlcpy(script, nsoption_charp(arexx_dir), 1024);
-	AddPart(script, nsoption_charp(arexx_shutdown), 1024);
+	strlcpy(script, slateoption_charp(arexx_dir), 1024);
+	AddPart(script, slateoption_charp(arexx_shutdown), 1024);
 	ami_arexx_execute(script);
 
 	ami_mime_free();
 
-	netsurf_exit();
+	slate_exit();
 
-	nsoption_finalise(nsoptions, nsoptions_default);
-	ami_nsoption_free();
+	slateoption_finalise(slateoptions, slateoptions_default);
+	ami_slateoption_free();
 	free(current_user_dir);
 	FreeVec(current_user_faviconcache);
 

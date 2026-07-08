@@ -1,7 +1,7 @@
 /*
  * Copyright 2020 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,8 +36,8 @@
  *
  */
 
-#ifndef NETSURF_HTML_BOX_NORMALISE_H
-#define NETSURF_HTML_BOX_NORMALISE_H
+#ifndef SLATE_HTML_BOX_NORMALISE_H
+#define SLATE_HTML_BOX_NORMALISE_H
 
 /**
  * Ensure the box tree is correctly nested by adding and removing nodes.

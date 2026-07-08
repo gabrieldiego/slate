@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * Interface to content handling debug.
  */
 
-#ifndef _NETSURF_CONTENT_CONTENT_DEBUG_H_
-#define _NETSURF_CONTENT_CONTENT_DEBUG_H_
+#ifndef _SLATE_CONTENT_CONTENT_DEBUG_H_
+#define _SLATE_CONTENT_CONTENT_DEBUG_H_
 
 #include <stdio.h>
 
@@ -33,6 +33,6 @@
  * \param f File to write output to.
  * \param op Debug operation type.
  */
-nserror content_debug_dump(struct hlcache_handle *h, FILE *f, enum content_debug op);
+slateerror content_debug_dump(struct hlcache_handle *h, FILE *f, enum content_debug op);
 
 #endif

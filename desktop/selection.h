@@ -1,7 +1,7 @@
 /*
  * Copyright 2005 Adrian Lees <adrianl@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,11 +20,11 @@
   * Text selection within browser windows (interface).
   */
 
-#ifndef NETSURF_DESKTOP_SELECTION_H_
-#define NETSURF_DESKTOP_SELECTION_H_
+#ifndef SLATE_DESKTOP_SELECTION_H_
+#define SLATE_DESKTOP_SELECTION_H_
 
 #include <stdbool.h>
-#include "netsurf/mouse.h"
+#include "slate/mouse.h"
 
 struct box;
 struct browser_window;

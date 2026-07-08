@@ -3,7 +3,7 @@
  * Copyright 2005 Adrian Lees <adrianl@users.sourceforge.net>
  * Copyright 2009 Mark Benjamin <netsurf-browser.org.MarkBenjamin@dfgh.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,8 +27,8 @@
 
 #include "utils/errors.h"
 #include "content/textsearch.h"
-#include "netsurf/types.h"
-#include "netsurf/browser_window.h"
+#include "slate/types.h"
+#include "slate/browser_window.h"
 
 #include "desktop/browser_private.h"
 #include "desktop/search.h"

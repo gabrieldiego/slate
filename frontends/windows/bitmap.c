@@ -2,7 +2,7 @@
  * Copyright 2008 Vincent Sanders <vince@simtec.co.uk>
  * Copyright 2009 Mark Benjamin <netsurf-browser.org.MarkBenjamin@dfgh.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,9 +30,9 @@
 #include <windows.h>
 
 #include "utils/log.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/plotters.h"
-#include "netsurf/content.h"
+#include "slate/bitmap.h"
+#include "slate/plotters.h"
+#include "slate/content.h"
 
 #include "windows/plot.h"
 #include "windows/bitmap.h"
@@ -265,7 +265,7 @@ struct bitmap *bitmap_scale(struct bitmap *prescale, int width, int height)
 }
 
 
-static nserror
+static slateerror
 bitmap_render(struct bitmap *bitmap, struct hlcache_handle *content)
 {
 	int width;
@@ -288,13 +288,13 @@ bitmap_render(struct bitmap *bitmap, struct hlcache_handle *content)
 	/* create two memory device contexts to put the bitmaps in */
 	bufferdc = CreateCompatibleDC(NULL);
 	if ((bufferdc == NULL)) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	minidc = CreateCompatibleDC(NULL);
 	if ((minidc == NULL)) {
 		DeleteDC(bufferdc);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* create a full size bitmap and plot into it */
@@ -319,7 +319,7 @@ bitmap_render(struct bitmap *bitmap, struct hlcache_handle *content)
 	DeleteDC(minidc);
 	win32_bitmap_destroy(fsbitmap);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static struct gui_bitmap_table bitmap_table = {

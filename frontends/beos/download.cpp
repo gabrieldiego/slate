@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 Adrien Destugues <pulkomandy@pulkomandy.tk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@
 
 extern "C" {
 #include "desktop/download.h"
-#include "netsurf/download.h"
+#include "slate/download.h"
 #include "utils/utils.h"
 #include "utils/string.h"
 }
@@ -214,7 +214,7 @@ static struct gui_download_window *gui_download_window_create(download_context *
 }
 
 
-static nserror gui_download_window_data(struct gui_download_window *dw, 
+static slateerror gui_download_window_data(struct gui_download_window *dw, 
 		const char *data, unsigned int size)
 {
 	dw->window->Progress(size);
@@ -223,7 +223,7 @@ static nserror gui_download_window_data(struct gui_download_window *dw,
 	dw->storage->Write(data, size);
 	dw->storageLock->Unlock();
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 

@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,10 +20,10 @@
  * RISC OS filetpe interface.
  */
 
-#ifndef _NETSURF_RISCOS_FILETYPE_H_
-#define _NETSURF_RISCOS_FILETYPE_H_
+#ifndef _SLATE_RISCOS_FILETYPE_H_
+#define _SLATE_RISCOS_FILETYPE_H_
 
-#include "netsurf/content_type.h"
+#include "slate/content_type.h"
 
 #ifndef FILETYPE_ACORN_URI
 #define FILETYPE_ACORN_URI 0xf91

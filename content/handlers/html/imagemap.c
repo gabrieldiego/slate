@@ -1,7 +1,7 @@
 /*
  * Copyright 2004 John M Bell <jmb202@ecs.soton.ac.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -51,7 +51,7 @@ typedef enum {
 
 struct mapentry {
 	imagemap_entry_type type;	/**< type of shape */
-	nsurl *url;			/**< absolute url to go to */
+	slateurl *url;			/**< absolute url to go to */
 	char *target;			/**< target frame (if any) */
 	union {
 		struct {
@@ -177,7 +177,7 @@ static void imagemap_freelist(struct mapentry *list)
 	while (entry != NULL) {
 		prev = entry;
 
-		nsurl_unref(entry->url);
+		slateurl_unref(entry->url);
 
 		if (entry->target)
 			free(entry->target);
@@ -251,12 +251,12 @@ void imagemap_dump(html_content *c)
 				switch (entry->type) {
 				case IMAGEMAP_DEFAULT:
 					NSLOG(netsurf, INFO, "\tDefault: %s",
-					      nsurl_access(entry->url));
+					      slateurl_access(entry->url));
 					break;
 				case IMAGEMAP_RECT:
 					NSLOG(netsurf, INFO,
 					      "\tRectangle: %s: [(%d,%d),(%d,%d)]",
-					      nsurl_access(entry->url),
+					      slateurl_access(entry->url),
 					      entry->bounds.rect.x0,
 					      entry->bounds.rect.y0,
 					      entry->bounds.rect.x1,
@@ -265,7 +265,7 @@ void imagemap_dump(html_content *c)
 				case IMAGEMAP_CIRCLE:
 					NSLOG(netsurf, INFO,
 					      "\tCircle: %s: [(%d,%d),%d]",
-					      nsurl_access(entry->url),
+					      slateurl_access(entry->url),
 					      entry->bounds.circle.x,
 					      entry->bounds.circle.y,
 					      entry->bounds.circle.r);
@@ -273,7 +273,7 @@ void imagemap_dump(html_content *c)
 				case IMAGEMAP_POLY:
 					NSLOG(netsurf, INFO,
 					      "\tPolygon: %s:",
-					      nsurl_access(entry->url));
+					      slateurl_access(entry->url));
 					for (j = 0; j != entry->bounds.poly.num;
 							j++) {
 						fprintf(stderr, "(%d,%d) ",
@@ -302,7 +302,7 @@ void imagemap_dump(html_content *c)
 static bool
 imagemap_addtolist(const struct html_content *c,
 		   dom_node *n,
-		   nsurl *base_url,
+		   slateurl *base_url,
 		   struct mapentry **entry,
 		   dom_string *tagtype)
 {
@@ -499,7 +499,7 @@ bad_out:
 ok_free_map_out:
 	if (new_map != NULL) {
 		if (new_map->url != NULL)
-			nsurl_unref(new_map->url);
+			slateurl_unref(new_map->url);
 		if (new_map->type == IMAGEMAP_POLY &&
 				new_map->bounds.poly.ycoords != NULL)
 			free(new_map->bounds.poly.ycoords);
@@ -599,25 +599,25 @@ static bool imagemap_extract_map(dom_node *node, html_content *c,
  * \param c The content to extract imagemaps from.
  * \return false on memory exhaustion, true otherwise
  */
-nserror
+slateerror
 imagemap_extract(html_content *c)
 {
 	dom_nodelist *nlist;
 	dom_exception exc;
 	unsigned long mapnr;
 	uint32_t maybe_maps;
-	nserror ret = NSERROR_OK;
+	slateerror ret = SLATEERROR_OK;
 
 	exc = dom_document_get_elements_by_tag_name(c->document,
 						    corestring_dom_map,
 						    &nlist);
 	if (exc != DOM_NO_ERR) {
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	exc = dom_nodelist_get_length(nlist, &maybe_maps);
 	if (exc != DOM_NO_ERR) {
-		ret = NSERROR_DOM;
+		ret = SLATEERROR_DOM;
 		goto out_nlist;
 	}
 
@@ -626,7 +626,7 @@ imagemap_extract(html_content *c)
 		dom_string *name;
 		exc = dom_nodelist_item(nlist, mapnr, &node);
 		if (exc != DOM_NO_ERR) {
-			ret = NSERROR_DOM;
+			ret = SLATEERROR_DOM;
 			goto out_nlist;
 		}
 
@@ -634,7 +634,7 @@ imagemap_extract(html_content *c)
 						&name);
 		if (exc != DOM_NO_ERR) {
 			dom_node_unref(node);
-			ret = NSERROR_DOM;
+			ret = SLATEERROR_DOM;
 			goto out_nlist;
 		}
 
@@ -644,7 +644,7 @@ imagemap_extract(html_content *c)
 							&name);
 			if (exc != DOM_NO_ERR) {
 				dom_node_unref(node);
-				ret = NSERROR_DOM;
+				ret = SLATEERROR_DOM;
 				goto out_nlist;
 			}
 		}
@@ -658,7 +658,7 @@ imagemap_extract(html_content *c)
 
 				dom_string_unref(name);
 				dom_node_unref(node);
-				ret = NSERROR_NOMEM; /** @todo check this */
+				ret = SLATEERROR_NOMEM; /** @todo check this */
 				goto out_nlist;
 			}
 
@@ -673,7 +673,7 @@ imagemap_extract(html_content *c)
 
 				dom_string_unref(name);
 				dom_node_unref(node);
-				ret = NSERROR_NOMEM; /** @todo check this */
+				ret = SLATEERROR_NOMEM; /** @todo check this */
 				goto out_nlist;
 			}
 		}
@@ -734,7 +734,7 @@ imagemap_point_in_poly(int num, float *xpt, float *ypt, unsigned long x,
  * \param target   Pointer to location to receive target pointer (if any)
  * \return The url associated with this area, or NULL if not found
  */
-nsurl *imagemap_get(struct html_content *c, const char *key,
+slateurl *imagemap_get(struct html_content *c, const char *key,
 		unsigned long x, unsigned long y,
 		unsigned long click_x, unsigned long click_y,
 		const char **target)

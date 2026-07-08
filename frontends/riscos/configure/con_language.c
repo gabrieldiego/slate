@@ -2,7 +2,7 @@
  * Copyright 2004 John M Bell <jmb202@ecs.soton.ac.uk>
  * Copyright 2006 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@
 
 #include <stdbool.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/messages.h"
 
@@ -48,11 +48,11 @@ bool ro_gui_options_language_initialise(wimp_w w)
 {
 	/* set the current values */
 	ro_gui_set_icon_string(w, LANGUAGE_INTERFACE_FIELD,
-		ro_gui_options_language_name(nsoption_charp(language) ?
-			nsoption_charp(language) : "en"), true);
+		ro_gui_options_language_name(slateoption_charp(language) ?
+			slateoption_charp(language) : "en"), true);
 	ro_gui_set_icon_string(w, LANGUAGE_WEB_PAGES_FIELD,
-		ro_gui_options_language_name(nsoption_charp(accept_language) ?
-			nsoption_charp(accept_language) : "en"), true);
+		ro_gui_options_language_name(slateoption_charp(accept_language) ?
+			slateoption_charp(accept_language) : "en"), true);
 
 	/* initialise all functions for a newly created window */
 	ro_gui_wimp_event_register_menu_gright(w, LANGUAGE_INTERFACE_FIELD,
@@ -92,11 +92,11 @@ bool ro_gui_options_language_ok(wimp_w w)
 			ro_gui_get_icon_string(w, LANGUAGE_INTERFACE_FIELD));
 	if (code) {
 		code += 5;	/* skip 'lang_' */
-		if ((!nsoption_charp(language)) || 
-                    (strcmp(nsoption_charp(language), code))) {
+		if ((!slateoption_charp(language)) || 
+                    (strcmp(slateoption_charp(language), code))) {
 			temp = strdup(code);
 			if (temp) {
-				nsoption_set_charp(language, temp);
+				slateoption_set_charp(language, temp);
 			} else {
 				NSLOG(netsurf, INFO,
 				      "No memory to duplicate language code");
@@ -108,11 +108,11 @@ bool ro_gui_options_language_ok(wimp_w w)
 			ro_gui_get_icon_string(w, LANGUAGE_WEB_PAGES_FIELD));
 	if (code) {
 		code += 5;	/* skip 'lang_' */
-		if ((!nsoption_charp(accept_language)) ||
-                    (strcmp(nsoption_charp(accept_language), code))) {
+		if ((!slateoption_charp(accept_language)) ||
+                    (strcmp(slateoption_charp(accept_language), code))) {
 			temp = strdup(code);
 			if (temp) {
-				nsoption_set_charp(accept_language,temp);
+				slateoption_set_charp(accept_language,temp);
 			} else {
 				NSLOG(netsurf, INFO,
 				      "No memory to duplicate language code");

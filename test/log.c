@@ -1,7 +1,7 @@
 /*
  * Copyright 2015 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,9 +32,9 @@
 /** flag to enable verbose logging */
 bool verbose_log = false;
 
-nserror nslog_init(nslog_ensure_t *ensure, int *pargc, char **argv)
+slateerror nslog_init(nslog_ensure_t *ensure, int *pargc, char **argv)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 

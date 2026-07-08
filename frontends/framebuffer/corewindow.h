@@ -1,7 +1,7 @@
 /*
  * Copyright 2017 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@
 #ifndef FB_COREWINDOW_H
 #define FB_COREWINDOW_H
 
-#include "netsurf/core_window.h"
+#include "slate/core_window.h"
 
 extern struct core_window_table *framebuffer_core_window_table;
 
@@ -56,20 +56,20 @@ struct fb_corewindow {
          *
          * \param fb_cw The fb core window structure.
          * \param r The rectangle of the window that needs updating.
-         * \return NSERROR_OK on success otherwise apropriate error code
+         * \return SLATEERROR_OK on success otherwise apropriate error code
          */
-        nserror (*draw)(struct fb_corewindow *fb_cw, struct rect *r);
+        slateerror (*draw)(struct fb_corewindow *fb_cw, struct rect *r);
 
         /**
          * callback for keypress on fb core window
          *
          * \param fb_cw The fb core window structure.
          * \param nskey The netsurf key code.
-         * \return NSERROR_OK if key processed,
-         *         NSERROR_NOT_IMPLEMENTED if key not processed
+         * \return SLATEERROR_OK if key processed,
+         *         SLATEERROR_NOT_IMPLEMENTED if key not processed
          *         otherwise apropriate error code
          */
-        nserror (*key)(struct fb_corewindow *fb_cw, uint32_t nskey);
+        slateerror (*key)(struct fb_corewindow *fb_cw, uint32_t nskey);
 
         /**
          * callback for mouse event on fb core window
@@ -78,9 +78,9 @@ struct fb_corewindow {
          * \param mouse_state mouse state
          * \param x location of event
          * \param y location of event
-         * \return NSERROR_OK on sucess otherwise apropriate error code.
+         * \return SLATEERROR_OK on sucess otherwise apropriate error code.
          */
-        nserror (*mouse)(struct fb_corewindow *fb_cw, browser_mouse_state mouse_state, int x, int y);
+        slateerror (*mouse)(struct fb_corewindow *fb_cw, browser_mouse_state mouse_state, int x, int y);
 };
 
 
@@ -90,17 +90,17 @@ struct fb_corewindow {
  * As a pre-requisite the draw, key and mouse callbacks must be defined
  *
  * \param fb_cw A fb core window structure to initialise
- * \return NSERROR_OK on successful initialisation otherwise error code.
+ * \return SLATEERROR_OK on successful initialisation otherwise error code.
  */
-nserror fb_corewindow_init(fbtk_widget_t *parent, struct fb_corewindow *fb_cw);
+slateerror fb_corewindow_init(fbtk_widget_t *parent, struct fb_corewindow *fb_cw);
 
 
 /**
  * finalise elements of fb core window.
  *
  * \param fb_cw A fb core window structure to initialise
- * \return NSERROR_OK on successful finalisation otherwise error code.
+ * \return SLATEERROR_OK on successful finalisation otherwise error code.
  */
-nserror fb_corewindow_fini(struct fb_corewindow *fb_cw);
+slateerror fb_corewindow_fini(struct fb_corewindow *fb_cw);
 
 #endif

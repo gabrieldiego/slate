@@ -1,7 +1,7 @@
 /*
  * Copyright 2007 Rob Kendrick <rjek@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,9 +44,9 @@
 #include "utils/log.h"
 #include "utils/utils.h"
 #include "utils/messages.h"
-#include "netsurf/plotters.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/content.h"
+#include "slate/plotters.h"
+#include "slate/bitmap.h"
+#include "slate/content.h"
 #include "content/llcache.h"
 #include "content/content_protected.h"
 #include "content/content_factory.h"
@@ -64,7 +64,7 @@ typedef struct rsvg_content {
 	struct bitmap *bitmap;	/**< Created NetSurf bitmap */
 } rsvg_content;
 
-static nserror rsvg_create_svg_data(rsvg_content *c)
+static slateerror rsvg_create_svg_data(rsvg_content *c)
 {
 	c->rsvgh = NULL;
 	c->cs = NULL;
@@ -73,42 +73,42 @@ static nserror rsvg_create_svg_data(rsvg_content *c)
 
 	if ((c->rsvgh = rsvg_handle_new()) == NULL) {
 		NSLOG(netsurf, INFO, "rsvg_handle_new() returned NULL.");
-		content_broadcast_error(&c->base, NSERROR_NOMEM, NULL);
-		return NSERROR_NOMEM;
+		content_broadcast_error(&c->base, SLATEERROR_NOMEM, NULL);
+		return SLATEERROR_NOMEM;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-static nserror rsvg_create(const content_handler *handler,
+static slateerror rsvg_create(const content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		llcache_handle *llcache, const char *fallback_charset,
 		bool quirks, struct content **c)
 {
 	rsvg_content *svg;
-	nserror error;
+	slateerror error;
 
 	svg = calloc(1, sizeof(rsvg_content));
 	if (svg == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__init(&svg->base, handler, imime_type, params,
 			llcache, fallback_charset, quirks);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(svg);
 		return error;
 	}
 
 	error = rsvg_create_svg_data(svg);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(svg);
 		return error;
 	}
 
 	*c = (struct content *) svg;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -122,7 +122,7 @@ static bool rsvg_process_data(struct content *c, const char *data,
 				&err) == FALSE) {
 		NSLOG(netsurf, INFO,
 		      "rsvg_handle_write returned an error: %s", err->message);
-		content_broadcast_error(c, NSERROR_SVG_ERROR, NULL);
+		content_broadcast_error(c, SLATEERROR_SVG_ERROR, NULL);
 		return false;
 	}
 
@@ -138,7 +138,7 @@ static bool rsvg_convert(struct content *c)
 	if (rsvg_handle_close(d->rsvgh, &err) == FALSE) {
 		NSLOG(netsurf, INFO,
 		      "rsvg_handle_close returned an error: %s", err->message);
-		content_broadcast_error(c, NSERROR_SVG_ERROR, NULL);
+		content_broadcast_error(c, SLATEERROR_SVG_ERROR, NULL);
 		return false;
 	}
 
@@ -156,7 +156,7 @@ static bool rsvg_convert(struct content *c)
 			BITMAP_NONE)) == NULL) {
 		NSLOG(netsurf, INFO,
 		      "Failed to create bitmap for rsvg render.");
-		content_broadcast_error(c, NSERROR_NOMEM, NULL);
+		content_broadcast_error(c, SLATEERROR_NOMEM, NULL);
 		return false;
 	}
 
@@ -167,14 +167,14 @@ static bool rsvg_convert(struct content *c)
 			guit->bitmap->get_rowstride(d->bitmap))) == NULL) {
 		NSLOG(netsurf, INFO,
 		      "Failed to create Cairo image surface for rsvg render.");
-		content_broadcast_error(c, NSERROR_NOMEM, NULL);
+		content_broadcast_error(c, SLATEERROR_NOMEM, NULL);
 		return false;
 	}
 
 	if ((d->ct = cairo_create(d->cs)) == NULL) {
 		NSLOG(netsurf, INFO,
 		      "Failed to create Cairo drawing context for rsvg render.");
-		content_broadcast_error(c, NSERROR_NOMEM, NULL);
+		content_broadcast_error(c, SLATEERROR_NOMEM, NULL);
 		return false;
 	}
 
@@ -210,7 +210,7 @@ static bool rsvg_redraw(struct content *c, struct content_redraw_data *data,
 				  data->x, data->y,
 				  data->width, data->height,
 				  data->background_colour,
-				  flags) == NSERROR_OK);
+				  flags) == SLATEERROR_OK);
 }
 
 static void rsvg_destroy(struct content *c)
@@ -225,26 +225,26 @@ static void rsvg_destroy(struct content *c)
 	return;
 }
 
-static nserror rsvg_clone(const struct content *old, struct content **newc)
+static slateerror rsvg_clone(const struct content *old, struct content **newc)
 {
 	rsvg_content *svg;
-	nserror error;
+	slateerror error;
 	const uint8_t *data;
 	size_t size;
 
 	svg = calloc(1, sizeof(rsvg_content));
 	if (svg == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__clone(old, &svg->base);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&svg->base);
 		return error;
 	}
 
 	/* Simply replay create/process/convert */
 	error = rsvg_create_svg_data(svg);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&svg->base);
 		return error;
 	}
@@ -253,7 +253,7 @@ static nserror rsvg_clone(const struct content *old, struct content **newc)
 	if (size > 0) {
 		if (rsvg_process_data(&svg->base, (const char *)data, size) == false) {
 			content_destroy(&svg->base);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 	}
 
@@ -261,13 +261,13 @@ static nserror rsvg_clone(const struct content *old, struct content **newc)
 			old->status == CONTENT_STATUS_DONE) {
 		if (rsvg_convert(&svg->base) == false) {
 			content_destroy(&svg->base);
-			return NSERROR_CLONE_FAILED;
+			return SLATEERROR_CLONE_FAILED;
 		}
 	}
 
 	*newc = (struct content *) svg;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void *rsvg_get_internal(const struct content *c, void *context)

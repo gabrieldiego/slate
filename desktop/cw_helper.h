@@ -1,7 +1,7 @@
 /*
  * Copyright 2019 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,8 +22,8 @@
  * Helpers to simplify core use of corewindow.
  */
 
-#ifndef NETSURF_DESKTOP_CW_HELPER_H_
-#define NETSURF_DESKTOP_CW_HELPER_H_
+#ifndef SLATE_DESKTOP_CW_HELPER_H_
+#define SLATE_DESKTOP_CW_HELPER_H_
 
 struct rect;
 struct core_window;
@@ -34,8 +34,8 @@ struct core_window;
  * \param[in] cw_t  The core window callback table to use.
  * \param[in] cw_h  The core window's handle.
  * \param[in] r     The rectangle to make visisble by scrolling.
- * \return NSERROR_OK on success or appropriate error code
+ * \return SLATEERROR_OK on success or appropriate error code
  */
-nserror cw_helper_scroll_visible(struct core_window *cw_h, const struct rect *r);
+slateerror cw_helper_scroll_visible(struct core_window *cw_h, const struct rect *r);
 
 #endif

@@ -1,7 +1,7 @@
 /*
  * Copyright 2013 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,13 +21,13 @@
 
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/mouse.h"
+#include "slate/mouse.h"
 #include "desktop/global_history.h"
 
 #include "atari/treeview.h"
 #include "atari/history.h"
 #include "atari/gemtk/gemtk.h"
-#include "atari/res/netsurf.rsh"
+#include "atari/res/slate.rsh"
 
 extern GRECT desk_area;
 
@@ -35,7 +35,7 @@ struct atari_global_history_s atari_global_history;
 
 /* Setup Atari Treeview Callbacks: */
 
-static nserror
+static slateerror
 atari_global_history_init_phase2(struct core_window *cw)
 {
 	NSLOG(netsurf, INFO, "cw %p", cw);

@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 Daniel Silverstone <dsilvers@digital-scurf.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,7 @@
 #include <stdlib.h>
 
 #include "utils/errors.h"
-#include "netsurf/bitmap.h"
+#include "slate/bitmap.h"
 
 #include "monkey/output.h"
 #include "monkey/bitmap.h"
@@ -105,11 +105,11 @@ static int bitmap_get_height(void *bitmap)
 	return bmap->height;
 }
 
-static nserror bitmap_render(struct bitmap *bitmap,
+static slateerror bitmap_render(struct bitmap *bitmap,
 			     struct hlcache_handle *content)
 {
 	moutf(MOUT_GENERIC, "BITMAP RENDER");
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static struct gui_bitmap_table bitmap_table = {

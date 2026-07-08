@@ -3,7 +3,7 @@
  * Copyright 2005 James Bursa <bursa@users.sourceforge.net>
  * Copyright 2005 John M Bell <jmb202@ecs.soton.ac.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -64,7 +64,7 @@ static inline char xdigit_to_hex(char c)
 
 
 /* exported interface documented in utils/url.h */
-nserror url_unescape(const char *str, size_t length,
+slateerror url_unescape(const char *str, size_t length,
 		size_t *length_out, char **result_out)
 {
 	const char *str_end;
@@ -73,7 +73,7 @@ nserror url_unescape(const char *str, size_t length,
 	char *result;
 
 	if ((str == NULL) || (result_out == NULL)) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if (length == 0) {
@@ -82,7 +82,7 @@ nserror url_unescape(const char *str, size_t length,
 
 	result = malloc(length + 1);
 	if (result == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	res_pos = result;
@@ -123,12 +123,12 @@ nserror url_unescape(const char *str, size_t length,
 		*length_out = new_len;
 	}
 	*result_out = result;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in utils/url.h */
-nserror url_escape(const char *unescaped, bool sptoplus,
+slateerror url_escape(const char *unescaped, bool sptoplus,
 		const char *escexceptions, char **result)
 {
 	size_t len, new_len;
@@ -136,14 +136,14 @@ nserror url_escape(const char *unescaped, bool sptoplus,
 	const char *c;
 
 	if (unescaped == NULL || result == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	len = strlen(unescaped);
 
 	escaped = malloc(len * 3 + 1);
 	if (escaped == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 	pos = escaped;
 
@@ -183,5 +183,5 @@ nserror url_escape(const char *unescaped, bool sptoplus,
 	}
 
 	*result = escaped;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }

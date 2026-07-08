@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -66,29 +66,29 @@ static void nsvideo_source_event(GObject *object, GObject *orig,
 			G_CALLBACK(nsvideo_enough_data_event), video);
 }
 
-static nserror nsvideo_create(const content_handler *handler,
+static slateerror nsvideo_create(const content_handler *handler,
 		lwc_string *imime_type, const http_parameter *params,
 		llcache_handle *llcache,
 		const char *fallback_charset, bool quirks,
 		struct content **c)
 {
 	nsvideo_content *video;
-	nserror error;
+	slateerror error;
 	GstBus *bus;
 
 	video = calloc(1, sizeof(nsvideo_content));
 	if (video == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__init(&video->base, handler, imime_type, params,
 			llcache, fallback_charset, quirks);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(video);
 		return error;
 	}
 
 	error = llcache_handle_force_stream(llcache);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(video);
 		return error;
 	}
@@ -96,7 +96,7 @@ static nserror nsvideo_create(const content_handler *handler,
 	video->playbin = gst_element_factory_make("playbin2", NULL);
 	if (video->playbin == NULL) {
 		free(video);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	bus = gst_pipeline_get_bus(GST_PIPELINE(video->playbin));
@@ -113,7 +113,7 @@ static nserror nsvideo_create(const content_handler *handler,
 	
 	*c = (struct content *) video;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static bool nsvideo_process_data(struct content *c, const char *data, 
@@ -161,10 +161,10 @@ static bool nsvideo_redraw(struct content *c, struct content_redraw_data *data,
 	return true;
 }
 
-static nserror nsvideo_clone(const struct content *old, struct content **newc)
+static slateerror nsvideo_clone(const struct content *old, struct content **newc)
 {
 	/** \todo Implement */
-	return NSERROR_CLONE_FAILED;
+	return SLATEERROR_CLONE_FAILED;
 }
 
 static content_type nsvideo_type(void)

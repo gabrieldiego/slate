@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * libdom utilities (implementation).
  */
 
-#ifndef NETSURF_UTILS_LIBDOM_H_
-#define NETSURF_UTILS_LIBDOM_H_
+#ifndef SLATE_UTILS_LIBDOM_H_
+#define SLATE_UTILS_LIBDOM_H_
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -41,21 +41,21 @@
  */
 dom_node *libdom_find_first_element(dom_node *parent, lwc_string *element_name);
 
-typedef nserror (*libdom_iterate_cb)(dom_node *node, void *ctx);
+typedef slateerror (*libdom_iterate_cb)(dom_node *node, void *ctx);
 
-nserror libdom_iterate_child_elements(dom_node *parent,
+slateerror libdom_iterate_child_elements(dom_node *parent,
 		libdom_iterate_cb cb, void *ctx);
 
-nserror libdom_parse_file(const char *filename, const char *encoding,
+slateerror libdom_parse_file(const char *filename, const char *encoding,
 		dom_document **doc);
 
 /**
- * Convert libdom hubbub binding errors to nserrors.
+ * Convert libdom hubbub binding errors to slateerrors.
  *
  * \param error The hubbub binding error to convert
- * \return The appropriate nserror
+ * \return The appropriate slateerror
  */
-nserror libdom_hubbub_error_to_nserror(dom_hubbub_error error);
+slateerror libdom_hubbub_error_to_slateerror(dom_hubbub_error error);
 
 /**
  * Walk though a DOM (sub)tree, in depth first order, printing DOM structure.
@@ -64,6 +64,6 @@ nserror libdom_hubbub_error_to_nserror(dom_hubbub_error error);
  * \param f The file to write output into.
  * \param depth The depth of 'node' in the (sub)tree.
  */
-nserror libdom_dump_structure(dom_node *node, FILE *f, int depth);
+slateerror libdom_dump_structure(dom_node *node, FILE *f, int depth);
 
 #endif

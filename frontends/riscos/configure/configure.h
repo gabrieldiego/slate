@@ -1,7 +1,7 @@
 /*
  * Copyright 2005 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  */
 
 
-#ifndef _NETSURF_RISCOS_OPTIONS_CONFIGURE_H_
-#define _NETSURF_RISCOS_OPTIONS_CONFIGURE_H_
+#ifndef _SLATE_RISCOS_OPTIONS_CONFIGURE_H_
+#define _SLATE_RISCOS_OPTIONS_CONFIGURE_H_
 
 #include <stdbool.h>
 #include "oslib/wimp.h"

@@ -1,7 +1,7 @@
 /*
  * Copyright 2023 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,10 +29,10 @@ extern "C" {
 #include "utils/log.h"
 #include "utils/errors.h"
 #include "utils/utf8.h"
-#include "utils/nsoption.h"
-#include "netsurf/inttypes.h"
-#include "netsurf/layout.h"
-#include "netsurf/plot_style.h"
+#include "utils/slateoption.h"
+#include "slate/inttypes.h"
+#include "slate/layout.h"
+#include "slate/plot_style.h"
 
 }
 
@@ -57,24 +57,24 @@ static QFont *new_qfont_fstyle(const struct plot_font_style *fstyle)
 
 	switch (fstyle->family) {
 	case PLOT_FONT_FAMILY_SERIF:
-		family = nsoption_charp(font_serif);
+		family = slateoption_charp(font_serif);
 		break;
 
 	case PLOT_FONT_FAMILY_MONOSPACE:
-		family = nsoption_charp(font_mono);
+		family = slateoption_charp(font_mono);
 		break;
 
 	case PLOT_FONT_FAMILY_CURSIVE:
-		family = nsoption_charp(font_cursive);
+		family = slateoption_charp(font_cursive);
 		break;
 
 	case PLOT_FONT_FAMILY_FANTASY:
-		family = nsoption_charp(font_fantasy);
+		family = slateoption_charp(font_fantasy);
 		break;
 
 	case PLOT_FONT_FAMILY_SANS_SERIF:
 	default:
-		family = nsoption_charp(font_sans);
+		family = slateoption_charp(font_sans);
 		break;
 	}
 
@@ -169,9 +169,9 @@ static QFont *nsfont_style_to_font(const struct plot_font_style *fstyle)
  * \param[in] x coordinate to search for
  * \param[out] string_idx updated to offset in string of actual_x, [0..length]
  * \param[out] actual_x updated to x coordinate of character closest to x or full length if string_idx is 0
- * \return NSERROR_OK and string_idx and actual_x updated or appropriate error code on faliure
+ * \return SLATEERROR_OK and string_idx and actual_x updated or appropriate error code on faliure
  */
-static nserror
+static slateerror
 layout_position(QFontMetrics &metrics,
 		const char *string,
 		size_t length,
@@ -187,14 +187,14 @@ layout_position(QFontMetrics &metrics,
 	if (length == 0) {
 		*string_idx = 0;
 		*actual_x = 0;
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* deal with negative or zero available width  */
 	if (x <= 0) {
 		*string_idx = 0;
 		*actual_x = metrics.horizontalAdvance(string, length);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* if it is assumed each character of the string will occupy more than a
@@ -211,7 +211,7 @@ layout_position(QFontMetrics &metrics,
 		/* whole string fits */
 		*string_idx = length;
 		*actual_x = full_x;
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* initial string offset if every char was the same width */
@@ -220,7 +220,7 @@ layout_position(QFontMetrics &metrics,
 	if (measured_x == 0) {
 		*string_idx = 0;
 		*actual_x = full_x;
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	if (measured_x >= x) {
@@ -249,7 +249,7 @@ layout_position(QFontMetrics &metrics,
 	*string_idx = str_len;
 	*actual_x = measured_x;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 
 }
 
@@ -261,11 +261,11 @@ layout_position(QFontMetrics &metrics,
  * \param[in] string UTF-8 string to measure
  * \param[in] length length of string, in bytes
  * \param[out] width updated to width of string[0..length)
- * \return NSERROR_OK and width updated or appropriate error
+ * \return SLATEERROR_OK and width updated or appropriate error
  *          code on faliure
  */
-static nserror
-nsqt_layout_width(const struct plot_font_style *fstyle,
+static slateerror
+slateqt_layout_width(const struct plot_font_style *fstyle,
 		  const char *string,
 		  size_t length,
 		  int *width)
@@ -277,7 +277,7 @@ nsqt_layout_width(const struct plot_font_style *fstyle,
 	NSLOG(netsurf, DEEPDEBUG,
 	      "fstyle: %p string:\"%.*s\", length: %" PRIsizet ", width: %dpx",
 	      fstyle, (int)length, string, length, *width);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -290,10 +290,10 @@ nsqt_layout_width(const struct plot_font_style *fstyle,
  * \param[in] x coordinate to search for
  * \param[out] string_idx updated to offset in string of actual_x, [0..length]
  * \param[out] actual_x updated to x coordinate of character closest to x
- * \return NSERROR_OK and string_idx and actual_x updated or appropriate error code on faliure
+ * \return SLATEERROR_OK and string_idx and actual_x updated or appropriate error code on faliure
  */
-static nserror
-nsqt_layout_position(const struct plot_font_style *fstyle,
+static slateerror
+slateqt_layout_position(const struct plot_font_style *fstyle,
 		     const char *string,
 		     size_t length,
 		     int x,
@@ -302,7 +302,7 @@ nsqt_layout_position(const struct plot_font_style *fstyle,
 {
 	QFont *font = nsfont_style_to_font(fstyle);
 	QFontMetrics metrics(*font);
-	nserror res;
+	slateerror res;
 
 	res = layout_position(metrics, string, length, x, string_idx, actual_x);
 
@@ -325,7 +325,7 @@ nsqt_layout_position(const struct plot_font_style *fstyle,
  * \param[in] split width to split on
  * \param[out] string_idx updated to index in string of actual_x, [1..length]
  * \param[out] actual_x updated to x coordinate of character closest to x
- * \return NSERROR_OK or appropriate error code on faliure
+ * \return SLATEERROR_OK or appropriate error code on faliure
  *
  * On exit, string_idx indicates first character after split point.
  *
@@ -338,15 +338,15 @@ nsqt_layout_position(const struct plot_font_style *fstyle,
  *
  * Returning string_idx == length means no split possible
  */
-static nserror
-nsqt_layout_split(const struct plot_font_style *fstyle,
+static slateerror
+slateqt_layout_split(const struct plot_font_style *fstyle,
 		  const char *string,
 		  size_t length,
 		  int split,
 		  size_t *string_idx,
 		  int *actual_x)
 {
-	nserror res;
+	slateerror res;
 	QFont *font = nsfont_style_to_font(fstyle);
 	QFontMetrics metrics(*font);
 	size_t split_len;
@@ -354,7 +354,7 @@ nsqt_layout_split(const struct plot_font_style *fstyle,
 	size_t str_len;
 
 	res = layout_position(metrics, string, length, split, &split_len, &split_x);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		delete font;
 		return res;
 	}
@@ -362,14 +362,14 @@ nsqt_layout_split(const struct plot_font_style *fstyle,
 	if ((split_len < 1) || (split_len >= length)) {
 		*string_idx = length;
 		*actual_x = split_x;
-		goto nsqt_layout_split_done;
+		goto slateqt_layout_split_done;
 	}
 
 	if (string[split_len] == ' ') {
 		/* string broke on boundary do not attempt to adjust */
 		*string_idx = split_len;
 		*actual_x = split_x;
-		goto nsqt_layout_split_done;
+		goto slateqt_layout_split_done;
 	}
 
 	/* attempt to break string */
@@ -396,7 +396,7 @@ nsqt_layout_split(const struct plot_font_style *fstyle,
 	*string_idx = str_len;
 	*actual_x = metrics.horizontalAdvance(string, str_len);
 
-nsqt_layout_split_done:
+slateqt_layout_split_done:
 	delete font;
 	NSLOG(netsurf, DEEPDEBUG,
 	      "fstyle: %p string:\"%.*s\", length: %" PRIsizet ", "
@@ -408,8 +408,8 @@ nsqt_layout_split_done:
 
 
 /* exported interface documented in qt/layout.h */
-nserror
-nsqt_layout_plot(QPainter* painter,
+slateerror
+slateqt_layout_plot(QPainter* painter,
 		 const struct plot_font_style *fstyle,
 		 int x,
 		 int y,
@@ -433,14 +433,14 @@ nsqt_layout_plot(QPainter* painter,
 	painter->drawText(x,y, QString::fromUtf8(text,length));
 
 	delete font;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 static struct gui_layout_table layout_table = {
-	.width = nsqt_layout_width,
-	.position = nsqt_layout_position,
-	.split = nsqt_layout_split,
+	.width = slateqt_layout_width,
+	.position = slateqt_layout_position,
+	.split = slateqt_layout_split,
 };
 
-struct gui_layout_table *nsqt_layout_table = &layout_table;
+struct gui_layout_table *slateqt_layout_table = &layout_table;

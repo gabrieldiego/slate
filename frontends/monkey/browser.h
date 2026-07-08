@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 Daniel Silverstone <dsilvers@digital-scurf.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_MONKEY_BROWSER_H
-#define NETSURF_MONKEY_BROWSER_H
+#ifndef SLATE_JOTTER_BROWSER_H
+#define SLATE_JOTTER_BROWSER_H
 
 struct hlcache_handle;
 
@@ -45,6 +45,6 @@ void monkey_window_process_reformats(void);
 void monkey_window_handle_command(int argc, char **argv);
 void monkey_kill_browser_windows(void);
 
-nserror monkey_warn_user(const char *warning, const char *detail);
+slateerror monkey_warn_user(const char *warning, const char *detail);
 
-#endif /* NETSURF_MONKEY_BROWSER_H */
+#endif /* SLATE_JOTTER_BROWSER_H */

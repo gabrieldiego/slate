@@ -1,7 +1,7 @@
 /*
  * Copyright 2006 Rob Kendrick <rjek@rjek.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * Interface to Write-Once hash table for string to string mapping
  */
 
-#ifndef _NETSURF_UTILS_HASHTABLE_H_
-#define _NETSURF_UTILS_HASHTABLE_H_
+#ifndef _SLATE_UTILS_HASHTABLE_H_
+#define _SLATE_UTILS_HASHTABLE_H_
 
 #include <stdbool.h>
 
@@ -64,10 +64,10 @@ void hash_destroy(struct hash_table *ht);
  * \param  ht	  The hash table context to add the key/value pair to.
  * \param  key	  The key to associate the value with.  A copy is made.
  * \param  value  The value to associate the key with.  A copy is made.
- * \return NSERROR_OK if the add succeeded else error code. (Failure most likely
+ * \return SLATEERROR_OK if the add succeeded else error code. (Failure most likely
  *	   indicates insufficent memory to make copies of the key and value.
  */
-nserror hash_add(struct hash_table *ht, const char *key, const char *value);
+slateerror hash_add(struct hash_table *ht, const char *key, const char *value);
 
 /**
  * Looks up a the value associated with with a key from a specific hash table.
@@ -90,9 +90,9 @@ const char *hash_get(struct hash_table *ht, const char *key);
  *
  * \param ht The hash table context to add the key/value pairs to.
  * \param path Path to file with key/value pairs in.
- * \return NSERROR_OK on success else error code
+ * \return SLATEERROR_OK on success else error code
  */
-nserror hash_add_file(struct hash_table *ht, const char *path);
+slateerror hash_add_file(struct hash_table *ht, const char *path);
 
 /**
  * Add key/value pairs to a hash table with data from a memory buffer
@@ -104,8 +104,8 @@ nserror hash_add_file(struct hash_table *ht, const char *path);
  * \param ht The hash table context to add the key/value pairs to.
  * \param data Source of key/value pairs
  * \param size length of \a data
- * \return NSERROR_OK on success else error code
+ * \return SLATEERROR_OK on success else error code
  */
-nserror hash_add_inline(struct hash_table *ht, const uint8_t *data, size_t size);
+slateerror hash_add_inline(struct hash_table *ht, const uint8_t *data, size_t size);
 
 #endif

@@ -23,10 +23,10 @@ LDFLAGS += -L$(PREFIX)/lib
 COMMON_WARNFLAGS += -Wno-multichar
 
 # compiler flags
-CFLAGS += -std=c99 -Dnsbeos -D_BSD_SOURCE -D_POSIX_C_SOURCE -Drestrict="" -g
+CFLAGS += -std=c99 -Dslatebeos -D_BSD_SOURCE -D_POSIX_C_SOURCE -Drestrict="" -g
 CFLAGS += -I$(PREFIX)/include -I/boot/system/develop/headers/private/netservices
 
-CXXFLAGS += -Dnsbeos -D_BSD_SOURCE -D_POSIX_C_SOURCE -Drestrict="" -g
+CXXFLAGS += -Dslatebeos -D_BSD_SOURCE -D_POSIX_C_SOURCE -Drestrict="" -g
 CXXFLAGS += -I$(PREFIX)/include -I/boot/system/develop/headers/private/netservices
 
 VERSION_FULL := $(shell sed -n '/_version.*=.*"/{s/.*"\(.*\)".*/\1/;p;}' desktop/version.c))
@@ -41,7 +41,7 @@ PKGSARCH := _$(HARCH)
 endif
 
 PKGNAME := netsurf$(PKGSARCH)-$(VERSION_MAJ).$(VERSION_MIN)-1-$(HPARCH).hpkg
-HAIKU_TARGET_DIR := netsurf_pkg
+HAIKU_TARGET_DIR := slate_pkg
 
 # Identity of the packager
 PACKAGER := $(shell git config --get user.name) <$(shell git config --get user.email)>
@@ -58,8 +58,8 @@ vendor	"NetSurf"\n\
 packager	"$(PACKAGER)"\n\
 copyrights	{\n\t"2003-2025 The NetSurf Browser project"\n}\n\
 licenses	{\n\t"GNU GPL v2"\n}\n\
-urls	{\n\t"http://www.netsurf-browser.org/"\n}\n\
-source-urls	{\n\t"http://download.netsurf-browser.org/netsurf/releases/source/netsurf-$(VERSION_MAJ).$(VERSION_MIN)-src.tar.gz"\n}\n\
+urls	{\n\t"http://www.slate-browser.org/"\n}\n\
+source-urls	{\n\t"http://download.slate-browser.org/netsurf/releases/source/netsurf-$(VERSION_MAJ).$(VERSION_MIN)-src.tar.gz"\n}\n\
 provides	{\n\
 \tnetsurf$(PKGSARCH) = $(VERSION_MAJ).$(VERSION_MIN)\n\
 \tapp:netsurf = $(VERSION_MAJ).$(VERSION_MIN)\n\
@@ -109,7 +109,7 @@ RDEF_IMP_BEOS := $(addprefix $(OBJROOT)/,$(subst /,_,$(RDEF_IMP_BEOS)))
 
 RDEP_BEOS := \
 	adblock.css beosdefault.css default.css internal.css quirks.css	\
-	netsurf.png favicon.png ca-bundle.txt \
+	slate.png favicon.png ca-bundle.txt \
 	credits.html licence.html welcome.html SearchEngines
 
 RDEP_BEOS := $(addprefix $(FRONTEND_RESOURCES_DIR)/,$(RDEP_BEOS))	\
@@ -134,15 +134,15 @@ $(RSRC_BEOS): $(RDEF_BEOS) $(RDEF_IMP_BEOS)
 # ----------------------------------------------------------------------------
 
 install-beos:
-	$(Q)$(MKDIR) -p $(DESTDIR)$(NETSURF_BEOS_BIN)
-	$(Q)$(MKDIR) -p $(DESTDIR)$(NETSURF_BEOS_RESOURCES)
-	$(Q)copyattr -d $(EXETARGET) $(DESTDIR)$(NETSURF_BEOS_BIN)NetSurf
-	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/adblock.css $(DESTDIR)$(NETSURF_BEOS_RESOURCES)
-	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/ca-bundle.txt $(DESTDIR)$(NETSURF_BEOS_RESOURCES)
-	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/default.css $(DESTDIR)$(NETSURF_BEOS_RESOURCES)
-	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/beosdefault.css $(DESTDIR)$(NETSURF_BEOS_RESOURCES)
-	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/license $(DESTDIR)$(NETSURF_BEOS_RESOURCES)
-	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/SearchEngines $(DESTDIR)$(NETSURF_BEOS_RESOURCES)
+	$(Q)$(MKDIR) -p $(DESTDIR)$(SLATE_BEOS_BIN)
+	$(Q)$(MKDIR) -p $(DESTDIR)$(SLATE_BEOS_RESOURCES)
+	$(Q)copyattr -d $(EXETARGET) $(DESTDIR)$(SLATE_BEOS_BIN)NetSurf
+	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/adblock.css $(DESTDIR)$(SLATE_BEOS_RESOURCES)
+	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/ca-bundle.txt $(DESTDIR)$(SLATE_BEOS_RESOURCES)
+	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/default.css $(DESTDIR)$(SLATE_BEOS_RESOURCES)
+	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/beosdefault.css $(DESTDIR)$(SLATE_BEOS_RESOURCES)
+	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/license $(DESTDIR)$(SLATE_BEOS_RESOURCES)
+	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/SearchEngines $(DESTDIR)$(SLATE_BEOS_RESOURCES)
 
 # ----------------------------------------------------------------------------
 # Package target
@@ -156,14 +156,14 @@ $(PKGNAME): $(EXETARGET) $(POSTEXES)
 	$(Q)rm -rf $(PKGNAME)
 	$(Q)$(MKDIR) $(HAIKU_TARGET_DIR)
 	$(Q)echo -e '$(PKGINFO)' > $(HAIKU_TARGET_DIR)/.PackageInfo
-	$(Q)$(MKDIR) -p $(HAIKU_TARGET_DIR)/apps/netsurf/res
+	$(Q)$(MKDIR) -p $(HAIKU_TARGET_DIR)/apps/slate/res
 	$(Q)$(MKDIR) -p $(HAIKU_TARGET_DIR)/data/deskbar/menu/Applications
 	$(Q)copyattr -d $(EXETARGET) $(HAIKU_TARGET_DIR)/apps/NetSurf
-	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/adblock.css $(HAIKU_TARGET_DIR)/apps/netsurf/res
-	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/ca-bundle.txt $(HAIKU_TARGET_DIR)/apps/netsurf/res
-	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/default.css $(HAIKU_TARGET_DIR)/apps/netsurf/res
-	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/beosdefault.css $(HAIKU_TARGET_DIR)/apps/netsurf/res
-	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/license $(HAIKU_TARGET_DIR)/apps/netsurf/res
-	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/SearchEngines $(HAIKU_TARGET_DIR)/apps/netsurf/res
+	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/adblock.css $(HAIKU_TARGET_DIR)/apps/slate/res
+	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/ca-bundle.txt $(HAIKU_TARGET_DIR)/apps/slate/res
+	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/default.css $(HAIKU_TARGET_DIR)/apps/slate/res
+	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/beosdefault.css $(HAIKU_TARGET_DIR)/apps/slate/res
+	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/license $(HAIKU_TARGET_DIR)/apps/slate/res
+	$(Q)cp -vRL $(FRONTEND_RESOURCES_DIR)/SearchEngines $(HAIKU_TARGET_DIR)/apps/slate/res
 	$(Q)ln -s ../../../../apps/NetSurf $(HAIKU_TARGET_DIR)/data/deskbar/menu/Applications/
 	package create -v -C $(HAIKU_TARGET_DIR) $(PKGNAME)

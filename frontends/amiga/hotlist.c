@@ -1,7 +1,7 @@
 /*
  * Copyright 2008-2025 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,12 +37,12 @@
 #include <reaction/reaction_macros.h>
 
 #include "desktop/hotlist.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/keypress.h"
-#include "netsurf/plotters.h"
+#include "slate/browser_window.h"
+#include "slate/keypress.h"
+#include "slate/plotters.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 
 #include "amiga/corewindow.h"
 #include "amiga/drag.h"
@@ -101,11 +101,11 @@ struct ami_hotlist_ctx {
 	const char *folder; /* folder we're interested in */
 	bool in_menu; /* set if we are in that folder */
 	bool found; /* set if the folder is found */
-	bool (*cb)(void *userdata, int level, int item, const char *title, nsurl *url, bool folder);
+	bool (*cb)(void *userdata, int level, int item, const char *title, slateurl *url, bool folder);
 };
 
 /** hotlist scanner */
-static nserror ami_hotlist_folder_enter_cb(void *ctx, const char *title)
+static slateerror ami_hotlist_folder_enter_cb(void *ctx, const char *title)
 {
 	struct ami_hotlist_ctx *menu_ctx = (struct ami_hotlist_ctx *)ctx;
 
@@ -119,10 +119,10 @@ static nserror ami_hotlist_folder_enter_cb(void *ctx, const char *title)
 		}
 	}
 	menu_ctx->level++;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror ami_hotlist_address_cb(void *ctx, nsurl *url, const char *title)
+static slateerror ami_hotlist_address_cb(void *ctx, slateurl *url, const char *title)
 {
 	struct ami_hotlist_ctx *menu_ctx = (struct ami_hotlist_ctx *)ctx;
 
@@ -131,10 +131,10 @@ static nserror ami_hotlist_address_cb(void *ctx, nsurl *url, const char *title)
 			menu_ctx->item++;
 	}
 	
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror ami_hotlist_folder_leave_cb(void *ctx)
+static slateerror ami_hotlist_folder_leave_cb(void *ctx)
 {
 	struct ami_hotlist_ctx *menu_ctx = (struct ami_hotlist_ctx *)ctx;
 
@@ -143,13 +143,13 @@ static nserror ami_hotlist_folder_leave_cb(void *ctx)
 	if((menu_ctx->in_menu == true) && (menu_ctx->level == 0))
 		menu_ctx->in_menu = false;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-nserror ami_hotlist_scan(void *userdata, int first_item, const char *folder,
-	bool (*cb_add_item)(void *userdata, int level, int item, const char *title, nsurl *url, bool folder))
+slateerror ami_hotlist_scan(void *userdata, int first_item, const char *folder,
+	bool (*cb_add_item)(void *userdata, int level, int item, const char *title, slateurl *url, bool folder))
 {
-	nserror error;
+	slateerror error;
 	struct ami_hotlist_ctx ctx;
 
 	ctx.level = 0;
@@ -165,7 +165,7 @@ nserror ami_hotlist_scan(void *userdata, int first_item, const char *folder,
 		ami_hotlist_address_cb,
 		ami_hotlist_folder_leave_cb);
 
-	if((error == NSERROR_OK) && (ctx.found == false))
+	if((error == SLATEERROR_OK) && (ctx.found == false))
 		hotlist_add_folder(folder, false, 0);
 
 	return error;
@@ -179,16 +179,16 @@ nserror ami_hotlist_scan(void *userdata, int first_item, const char *folder,
  * \param mouse_state netsurf mouse state on event
  * \param x location of event
  * \param y location of event
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
+static slateerror
 ami_hotlist_mouse(struct ami_corewindow *ami_cw,
 					browser_mouse_state mouse_state,
 					int x, int y)
 {
 	hotlist_mouse_action(mouse_state, x, y);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -196,15 +196,15 @@ ami_hotlist_mouse(struct ami_corewindow *ami_cw,
  *
  * \param ami_cw The Amiga core window structure.
  * \param nskey The netsurf key code
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
+static slateerror
 ami_hotlist_key(struct ami_corewindow *ami_cw, uint32_t nskey)
 {
 	if (hotlist_keypress(nskey)) {
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 	}
-	return NSERROR_NOT_IMPLEMENTED;
+	return SLATEERROR_NOT_IMPLEMENTED;
 }
 
 /**
@@ -215,15 +215,15 @@ ami_hotlist_key(struct ami_corewindow *ami_cw, uint32_t nskey)
  * \param y The y coordinate of hotlist area to redraw
  * \param r The rectangle of the window that needs updating.
  * \param ctx The drawing context
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
+static slateerror
 ami_hotlist_draw(struct ami_corewindow *ami_cw,
 		 int x, int y, struct rect *r, struct redraw_context *ctx)
 {
 	hotlist_redraw(x, y, r, ctx);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -233,12 +233,12 @@ ami_hotlist_draw(struct ami_corewindow *ami_cw,
  * \param ami_cw The Amiga core window structure.
  * \param x mouse x co-ordinate
  * \param y mouse y co-ordinate
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
+static slateerror
 ami_hotlist_drag_end(struct ami_corewindow *ami_cw, int x, int y)
 {
-	nsurl *url = NULL;
+	slateurl *url = NULL;
 	const char *title = NULL;
 	bool ok = false;
 	struct gui_window_2 *gwin;
@@ -264,7 +264,7 @@ ami_hotlist_drag_end(struct ami_corewindow *ami_cw, int x, int y)
 			cw->icon_drop(cw, url, title, x, y);
 		}
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 		
 /**
@@ -277,13 +277,13 @@ ami_hotlist_drag_end(struct ami_corewindow *ami_cw, int x, int y)
  * \param title title of dropped icon
  * \param x mouse x co-ordinate
  * \param y mouse y co-ordinate
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
-ami_hotlist_icon_drop(struct ami_corewindow *ami_cw, struct nsurl *url, const char *title, int x, int y)
+static slateerror
+ami_hotlist_icon_drop(struct ami_corewindow *ami_cw, struct slateurl *url, const char *title, int x, int y)
 {
 	hotlist_add_entry(url, title, true, y);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -448,13 +448,13 @@ ami_hotlist_menu_create(struct ami_hotlist_window *hotlist_win)
 }
 
 
-static nserror
+static slateerror
 ami_hotlist_create_window(struct ami_hotlist_window *hotlist_win)
 {
 	struct ami_corewindow *ami_cw = (struct ami_corewindow *)&hotlist_win->core;
 	ULONG refresh_mode = WA_SmartRefresh;
 
-	if(nsoption_bool(window_simple_refresh) == true) {
+	if(slateoption_bool(window_simple_refresh) == true) {
 		refresh_mode = WA_SimpleRefresh;
 	}
 
@@ -503,10 +503,10 @@ ami_hotlist_create_window(struct ami_hotlist_window *hotlist_win)
 	EndWindow;
 
 	if(ami_cw->objects[GID_CW_WIN] == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -515,13 +515,13 @@ ami_hotlist_create_window(struct ami_hotlist_window *hotlist_win)
 static void
 ami_hotlist_destroy(struct ami_corewindow *ami_cw)
 {
-	nserror res;
+	slateerror res;
 
 	if(hotlist_window == NULL)
 		return;
 
 	res = hotlist_manager_fini();
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		ami_hotlist_menu_free(hotlist_window);
 		res = ami_corewindow_fini(&hotlist_window->core); /* closes the window for us, frees hotlist_win */
 		hotlist_window = NULL;
@@ -532,25 +532,25 @@ ami_hotlist_destroy(struct ami_corewindow *ami_cw)
 
 
 /* exported interface documented in amiga/hotlist.h */
-nserror ami_hotlist_present(void)
+slateerror ami_hotlist_present(void)
 {
 	struct ami_hotlist_window *ncwin;
-	nserror res;
+	slateerror res;
 
 	if(hotlist_window != NULL) {
 		//windowtofront()
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	ncwin = calloc(1, sizeof(struct ami_hotlist_window));
 	if (ncwin == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	ncwin->core.wintitle = ami_utf8_easy((char *)messages_get("Hotlist"));
 
 	res = ami_hotlist_create_window(ncwin);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "SSL UI builder init failed");
 		ami_utf8_free(ncwin->core.wintitle);
 		free(ncwin);
@@ -567,7 +567,7 @@ nserror ami_hotlist_present(void)
 	ncwin->core.icon_drop = ami_hotlist_icon_drop;
 
 	res = ami_corewindow_init(&ncwin->core);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		ami_utf8_free(ncwin->core.wintitle);
 		DisposeObject(ncwin->core.objects[GID_CW_WIN]);
 		free(ncwin);
@@ -575,7 +575,7 @@ nserror ami_hotlist_present(void)
 	}
 
 	res = hotlist_manager_init((struct core_window *)ncwin);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		ami_utf8_free(ncwin->core.wintitle);
 		DisposeObject(ncwin->core.objects[GID_CW_WIN]);
 		free(ncwin);
@@ -584,7 +584,7 @@ nserror ami_hotlist_present(void)
 
 	hotlist_window = ncwin;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in amiga/hotlist.h */

@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 François Revol <mmu_man@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_BEOS_WINDOW_H
-#define NETSURF_BEOS_WINDOW_H 1
+#ifndef SLATE_BEOS_WINDOW_H
+#define SLATE_BEOS_WINDOW_H 1
 
 #include <View.h>
 #include <Window.h>
@@ -55,12 +55,12 @@ private:
  *
  * \param message The beos message to process.
  */
-void nsbeos_dispatch_event(BMessage *message);
+void slatebeos_dispatch_event(BMessage *message);
 
 /**
  * Cause all windows to be reflowed.
  */
-void nsbeos_reflow_all_windows(void);
+void slatebeos_reflow_all_windows(void);
 
 /**
  * Get containing scaffold of a beos gui window
@@ -68,14 +68,14 @@ void nsbeos_reflow_all_windows(void);
  * \param g gui window to find scaffold of.
  * \return The containing scaffold.
  */
-struct beos_scaffolding *nsbeos_get_scaffold(struct gui_window *g);
+struct beos_scaffolding *slatebeos_get_scaffold(struct gui_window *g);
 
-struct browser_window *nsbeos_get_browser_for_gui(struct gui_window *g);
+struct browser_window *slatebeos_get_browser_for_gui(struct gui_window *g);
 
-int nsbeos_gui_window_update_targets(struct gui_window *g);
+int slatebeos_gui_window_update_targets(struct gui_window *g);
 
-void nsbeos_window_destroy_browser(struct gui_window *g);
+void slatebeos_window_destroy_browser(struct gui_window *g);
 
-struct browser_window *nsbeos_get_browser_window(struct gui_window *g);
+struct browser_window *slatebeos_get_browser_window(struct gui_window *g);
 
-#endif /* NETSURF_BEOS_WINDOW_H */
+#endif /* SLATE_BEOS_WINDOW_H */

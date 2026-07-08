@@ -1,7 +1,7 @@
 /*
  * Copyright 2004 John M Bell <jmb202@ecs.soton.ac.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,7 +22,7 @@
 #include <oslib/colourtrans.h>
 #include <oslib/osspriteop.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 
 #include "riscos/image.h"
@@ -229,8 +229,8 @@ bool image_redraw(osspriteop_area *area, int x, int y, int req_width,
 	height *= 2;
 	y -= req_height;
 
-	tinct_options = background ? nsoption_int(plot_bg_quality) :
-		nsoption_int(plot_fg_quality);
+	tinct_options = background ? slateoption_int(plot_bg_quality) :
+		slateoption_int(plot_fg_quality);
 
 	if (os_alpha_sprite_supported) {
 		/* Ideally Tinct would be updated to understand that modern OS

@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 Vincent Sanders <vince@simtec.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,13 +21,13 @@
  * framebuffer interface.
  */
 
-#ifndef NETSURF_FB_FRAMEBUFFER_H
-#define NETSURF_FB_FRAMEBUFFER_H
+#ifndef SLATE_FB_FRAMEBUFFER_H
+#define SLATE_FB_FRAMEBUFFER_H
 
 extern const struct plotter_table fb_plotters;
 
 nsfb_t *framebuffer_initialise(const char *fename, int width, int height, int bpp);
-bool framebuffer_resize(nsfb_t *nsfb, int width, int height, int bpp);
+bool framebuffer_resize(nsfb_t *slatefb, int width, int height, int bpp);
 void framebuffer_finalise(void);
 bool framebuffer_set_cursor(struct fbtk_bitmap *bm);
 

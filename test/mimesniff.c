@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -74,13 +74,13 @@ content_type content_factory_type_from_mime_type(lwc_string *mime_type)
 
 static void corestring_create(void)
 {
-	ck_assert(corestrings_init() == NSERROR_OK);
+	ck_assert(corestrings_init() == SLATEERROR_OK);
 }
 
 /**
  * iterator for any remaining strings in teardown fixture
  */
-static void netsurf_lwc_iterator(lwc_string *str, void *pw)
+static void slate_lwc_iterator(lwc_string *str, void *pw)
 {
 	fprintf(stderr,
 		"[%3u] %.*s",
@@ -93,14 +93,14 @@ static void corestring_teardown(void)
 {
 	corestrings_fini();
 
-	lwc_iterate_strings(netsurf_lwc_iterator, NULL);
+	lwc_iterate_strings(slate_lwc_iterator, NULL);
 }
 
 /* tests */
 
 START_TEST(mimesniff_api_test)
 {
-	nserror err;
+	slateerror err;
 	lwc_string *effective_type;
 
 	/* no header type, no data and sniffing not allowed */
@@ -110,7 +110,7 @@ START_TEST(mimesniff_api_test)
 					       false,
 					       false,
 					       &effective_type);
-	ck_assert(err == NSERROR_NOT_FOUND);
+	ck_assert(err == SLATEERROR_NOT_FOUND);
 
 	/* no header type, no data and sniffing allowed */
 	err = mimesniff_compute_effective_type(NULL,
@@ -119,7 +119,7 @@ START_TEST(mimesniff_api_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert(err == NSERROR_NEED_DATA);
+	ck_assert(err == SLATEERROR_NEED_DATA);
 
 }
 END_TEST
@@ -218,7 +218,7 @@ static struct test_mimetype match_unknown_txtbin_tests[] = {
  */
 START_TEST(mimesniff_match_unknown_exact_test)
 {
-	nserror err;
+	slateerror err;
 	const struct test_mimetype *tst = &match_unknown_exact_tests[_i];
 	lwc_string *effective_type;
 	bool match;
@@ -229,7 +229,7 @@ START_TEST(mimesniff_match_unknown_exact_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert(err == NSERROR_OK);
+	ck_assert(err == SLATEERROR_OK);
 
 	ck_assert(lwc_string_caseless_isequal(effective_type,
 					      *(tst->mime_type),
@@ -243,7 +243,7 @@ END_TEST
  */
 START_TEST(mimesniff_match_unknown_riff_test)
 {
-	nserror err;
+	slateerror err;
 	const struct test_mimetype *tst = &match_unknown_riff_tests[_i];
 	lwc_string *effective_type;
 	bool match;
@@ -254,7 +254,7 @@ START_TEST(mimesniff_match_unknown_riff_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert(err == NSERROR_OK);
+	ck_assert(err == SLATEERROR_OK);
 
 	ck_assert(lwc_string_caseless_isequal(effective_type,
 					      *(tst->mime_type),
@@ -268,7 +268,7 @@ END_TEST
  */
 START_TEST(mimesniff_match_unknown_bom_test)
 {
-	nserror err;
+	slateerror err;
 	const struct test_mimetype *tst = &match_unknown_bom_tests[_i];
 	lwc_string *effective_type;
 	bool match;
@@ -279,7 +279,7 @@ START_TEST(mimesniff_match_unknown_bom_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert(err == NSERROR_OK);
+	ck_assert(err == SLATEERROR_OK);
 
 	ck_assert(lwc_string_caseless_isequal(effective_type,
 					      *(tst->mime_type),
@@ -293,7 +293,7 @@ END_TEST
  */
 START_TEST(mimesniff_match_unknown_ws_test)
 {
-	nserror err;
+	slateerror err;
 	const struct test_mimetype *tst = &match_unknown_ws_tests[_i];
 	lwc_string *effective_type;
 	bool match;
@@ -304,7 +304,7 @@ START_TEST(mimesniff_match_unknown_ws_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert(err == NSERROR_OK);
+	ck_assert(err == SLATEERROR_OK);
 
 	ck_assert(lwc_string_caseless_isequal(effective_type,
 					      *(tst->mime_type),
@@ -318,7 +318,7 @@ END_TEST
  */
 START_TEST(mimesniff_match_unknown_mp4_test)
 {
-	nserror err;
+	slateerror err;
 	const struct test_mimetype *tst = &match_unknown_mp4_tests[_i];
 	lwc_string *effective_type;
 	bool match;
@@ -329,7 +329,7 @@ START_TEST(mimesniff_match_unknown_mp4_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert(err == NSERROR_OK);
+	ck_assert(err == SLATEERROR_OK);
 
 	ck_assert(lwc_string_caseless_isequal(effective_type,
 					      *(tst->mime_type),
@@ -343,7 +343,7 @@ END_TEST
  */
 START_TEST(mimesniff_match_unknown_bad_mp4_test)
 {
-	nserror err;
+	slateerror err;
 	const struct test_mimetype *tst = &match_unknown_bad_mp4_tests[_i];
 	lwc_string *effective_type;
 	bool match;
@@ -354,7 +354,7 @@ START_TEST(mimesniff_match_unknown_bad_mp4_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert(err == NSERROR_OK);
+	ck_assert(err == SLATEERROR_OK);
 
 	ck_assert(lwc_string_caseless_isequal(effective_type,
 					      *(tst->mime_type),
@@ -368,7 +368,7 @@ END_TEST
  */
 START_TEST(mimesniff_match_unknown_txtbin_test)
 {
-	nserror err;
+	slateerror err;
 	const struct test_mimetype *tst = &match_unknown_txtbin_tests[_i];
 	lwc_string *effective_type;
 	bool match;
@@ -379,7 +379,7 @@ START_TEST(mimesniff_match_unknown_txtbin_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert(err == NSERROR_OK);
+	ck_assert(err == SLATEERROR_OK);
 
 	ck_assert(lwc_string_caseless_isequal(effective_type,
 					      *(tst->mime_type),
@@ -432,7 +432,7 @@ static TCase *mimesniff_match_unknown_case_create(void)
 
 START_TEST(mimesniff_unparsable_header_test)
 {
-	nserror err;
+	slateerror err;
 	lwc_string *effective_type;
 
 	/* unparsable header type, no data and sniffing not allowed */
@@ -442,7 +442,7 @@ START_TEST(mimesniff_unparsable_header_test)
 					       false,
 					       false,
 					       &effective_type);
-	ck_assert_int_eq(err, NSERROR_NOT_FOUND);
+	ck_assert_int_eq(err, SLATEERROR_NOT_FOUND);
 
 	/* unparsable header type, no data and sniffing allowed */
 	err = mimesniff_compute_effective_type("badheader",
@@ -451,7 +451,7 @@ START_TEST(mimesniff_unparsable_header_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert_int_eq(err, NSERROR_NEED_DATA);
+	ck_assert_int_eq(err, SLATEERROR_NEED_DATA);
 
 }
 END_TEST
@@ -459,7 +459,7 @@ END_TEST
 
 START_TEST(mimesniff_parsable_header_nosniff_test)
 {
-	nserror err;
+	slateerror err;
 	lwc_string *effective_type;
 	bool match;
 
@@ -470,7 +470,7 @@ START_TEST(mimesniff_parsable_header_nosniff_test)
 					       false,
 					       false,
 					       &effective_type);
-	ck_assert(err == NSERROR_OK);
+	ck_assert(err == SLATEERROR_OK);
 
 	ck_assert(lwc_string_caseless_isequal(effective_type,
 					      corestring_lwc_text_plain,
@@ -481,7 +481,7 @@ END_TEST
 
 START_TEST(mimesniff_svg_header_sniff_imageonly_test)
 {
-	nserror err;
+	slateerror err;
 	lwc_string *effective_type;
 	bool match;
 
@@ -492,7 +492,7 @@ START_TEST(mimesniff_svg_header_sniff_imageonly_test)
 					       true,
 					       true,
 					       &effective_type);
-	ck_assert_int_eq(err, NSERROR_OK);
+	ck_assert_int_eq(err, SLATEERROR_OK);
 
 	ck_assert(lwc_string_caseless_isequal(effective_type,
 					      corestring_lwc_image_svg,
@@ -503,7 +503,7 @@ END_TEST
 
 START_TEST(mimesniff_image_header_sniff_imageonly_test)
 {
-	nserror err;
+	slateerror err;
 	lwc_string *effective_type;
 	bool match;
 
@@ -514,7 +514,7 @@ START_TEST(mimesniff_image_header_sniff_imageonly_test)
 					       true,
 					       true,
 					       &effective_type);
-	ck_assert_int_eq(err, NSERROR_NEED_DATA);
+	ck_assert_int_eq(err, SLATEERROR_NEED_DATA);
 
 	/* svg header type, unsniffable data and sniffing allowed images only */
 	err = mimesniff_compute_effective_type("image/jpeg",
@@ -523,7 +523,7 @@ START_TEST(mimesniff_image_header_sniff_imageonly_test)
 			true,
 			true,
 			&effective_type);
-	ck_assert_int_eq(err, NSERROR_OK);
+	ck_assert_int_eq(err, SLATEERROR_OK);
 
 	ck_assert(lwc_string_caseless_isequal(effective_type,
 					      corestring_lwc_image_jpeg,
@@ -537,7 +537,7 @@ START_TEST(mimesniff_image_header_sniff_imageonly_test)
 					       true,
 					       true,
 					       &effective_type);
-	ck_assert_int_eq(err, NSERROR_OK);
+	ck_assert_int_eq(err, SLATEERROR_OK);
 
 	ck_assert(lwc_string_caseless_isequal(effective_type,
 					      corestring_lwc_image_gif,
@@ -550,7 +550,7 @@ END_TEST
 
 START_TEST(mimesniff_text_header_nodata_sniff_test)
 {
-	nserror err;
+	slateerror err;
 	lwc_string *effective_type;
 	bool match;
 
@@ -561,7 +561,7 @@ START_TEST(mimesniff_text_header_nodata_sniff_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert_int_eq(err, NSERROR_NEED_DATA);
+	ck_assert_int_eq(err, SLATEERROR_NEED_DATA);
 
 	/* svg header type, unsniffable data and sniffing allowed images only */
 	err = mimesniff_compute_effective_type("text/plain",
@@ -570,7 +570,7 @@ START_TEST(mimesniff_text_header_nodata_sniff_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert_int_eq(err, NSERROR_OK);
+	ck_assert_int_eq(err, SLATEERROR_OK);
 
 	ck_assert(lwc_string_caseless_isequal(effective_type,
 					      corestring_lwc_application_octet_stream,
@@ -591,7 +591,7 @@ static struct test_mimetype text_header_tests[] = {
 
 START_TEST(mimesniff_text_header_sniff_test)
 {
-	nserror err;
+	slateerror err;
 	const struct test_mimetype *tst = &text_header_tests[_i];
 	lwc_string *effective_type;
 	bool match;
@@ -603,7 +603,7 @@ START_TEST(mimesniff_text_header_sniff_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert_int_eq(err, NSERROR_OK);
+	ck_assert_int_eq(err, SLATEERROR_OK);
 
 	ck_assert(lwc_string_caseless_isequal(effective_type,
 					      corestring_lwc_text_plain,
@@ -615,7 +615,7 @@ END_TEST
 
 START_TEST(mimesniff_unknown_header_sniff_test)
 {
-	nserror err;
+	slateerror err;
 	lwc_string *effective_type;
 	bool match;
 
@@ -626,7 +626,7 @@ START_TEST(mimesniff_unknown_header_sniff_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert_int_eq(err, NSERROR_OK);
+	ck_assert_int_eq(err, SLATEERROR_OK);
 
 	ck_assert(lwc_string_caseless_isequal(effective_type,
 					      *match_unknown_riff_tests[0].mime_type,
@@ -640,7 +640,7 @@ START_TEST(mimesniff_unknown_header_sniff_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert_int_eq(err, NSERROR_OK);
+	ck_assert_int_eq(err, SLATEERROR_OK);
 
 	ck_assert(lwc_string_caseless_isequal(effective_type,
 					      *match_unknown_riff_tests[1].mime_type,
@@ -654,7 +654,7 @@ START_TEST(mimesniff_unknown_header_sniff_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert_int_eq(err, NSERROR_OK);
+	ck_assert_int_eq(err, SLATEERROR_OK);
 
 	ck_assert(lwc_string_caseless_isequal(effective_type,
 					      *match_unknown_riff_tests[0].mime_type,
@@ -667,7 +667,7 @@ END_TEST
 
 START_TEST(mimesniff_plusxml_header_sniff_test)
 {
-	nserror err;
+	slateerror err;
 	lwc_string *effective_type;
 	bool match;
 
@@ -678,7 +678,7 @@ START_TEST(mimesniff_plusxml_header_sniff_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert_int_eq(err, NSERROR_OK);
+	ck_assert_int_eq(err, SLATEERROR_OK);
 
 	ck_assert(lwc_string_caseless_isequal(effective_type,
 					      corestring_lwc_image_svg,
@@ -689,7 +689,7 @@ END_TEST
 
 START_TEST(mimesniff_xml_header_sniff_test)
 {
-	nserror err;
+	slateerror err;
 	lwc_string *effective_type;
 	bool match;
 
@@ -699,7 +699,7 @@ START_TEST(mimesniff_xml_header_sniff_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert_int_eq(err, NSERROR_OK);
+	ck_assert_int_eq(err, SLATEERROR_OK);
 
 	ck_assert(lwc_string_caseless_isequal(effective_type,
 					      corestring_lwc_text_xml,
@@ -712,7 +712,7 @@ START_TEST(mimesniff_xml_header_sniff_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert_int_eq(err, NSERROR_OK);
+	ck_assert_int_eq(err, SLATEERROR_OK);
 
 	ck_assert(lwc_string_caseless_isequal(effective_type,
 					      corestring_lwc_application_xml,
@@ -725,7 +725,7 @@ END_TEST
 
 START_TEST(mimesniff_supported_image_header_sniff_test)
 {
-	nserror err;
+	slateerror err;
 	lwc_string *effective_type;
 	bool match;
 
@@ -735,7 +735,7 @@ START_TEST(mimesniff_supported_image_header_sniff_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert_int_eq(err, NSERROR_NEED_DATA);
+	ck_assert_int_eq(err, SLATEERROR_NEED_DATA);
 
 	err = mimesniff_compute_effective_type("image/gif",
 					       match_unknown_exact_tests[0].data,
@@ -743,7 +743,7 @@ START_TEST(mimesniff_supported_image_header_sniff_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert_int_eq(err, NSERROR_OK);
+	ck_assert_int_eq(err, SLATEERROR_OK);
 
 	ck_assert(lwc_string_caseless_isequal(effective_type,
 					      corestring_lwc_image_gif,
@@ -755,7 +755,7 @@ END_TEST
 
 START_TEST(mimesniff_html_header_sniff_test)
 {
-	nserror err;
+	slateerror err;
 	lwc_string *effective_type;
 
 	err = mimesniff_compute_effective_type("text/html",
@@ -764,7 +764,7 @@ START_TEST(mimesniff_html_header_sniff_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert_int_eq(err, NSERROR_NEED_DATA);
+	ck_assert_int_eq(err, SLATEERROR_NEED_DATA);
 }
 END_TEST
 
@@ -784,7 +784,7 @@ static struct test_mimetype text_html_header_tests[] = {
 
 START_TEST(mimesniff_text_html_header_sniff_test)
 {
-	nserror err;
+	slateerror err;
 	const struct test_mimetype *tst = &text_html_header_tests[_i];
 	lwc_string *effective_type;
 	bool match;
@@ -795,7 +795,7 @@ START_TEST(mimesniff_text_html_header_sniff_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert_int_eq(err, NSERROR_OK);
+	ck_assert_int_eq(err, SLATEERROR_OK);
 
 	ck_assert(lwc_string_caseless_isequal(effective_type,
 					      *(tst->mime_type),
@@ -808,7 +808,7 @@ END_TEST
 
 START_TEST(mimesniff_text_fancy_header_sniff_test)
 {
-	nserror err;
+	slateerror err;
 	lwc_string *effective_type;
 	lwc_string *text_fancy;
 	bool match;
@@ -821,7 +821,7 @@ START_TEST(mimesniff_text_fancy_header_sniff_test)
 					       true,
 					       false,
 					       &effective_type);
-	ck_assert_int_eq(err, NSERROR_OK);
+	ck_assert_int_eq(err, SLATEERROR_OK);
 
 	ck_assert(lwc_string_caseless_isequal(effective_type,
 					      text_fancy,

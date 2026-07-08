@@ -1,17 +1,17 @@
 #
-# Makefile for NetSurf monkey target
+# Makefile for the Slate Jotter target
 #
 # This file is part of NetSurf 
 
 # ----------------------------------------------------------------------------
-# Monkey flag setup (using pkg-config)
+# Jotter flag setup (using pkg-config)
 # ----------------------------------------------------------------------------
 
 CWARNFLAGS += -Werror
 
 CFLAGS += -std=c99 \
-	  -Dmonkey -Dnsmonkey -g \
-	  -DMONKEY_RESPATH=\"$(NETSURF_MONKEY_RESOURCES)\"
+	  -Dmonkey -Djotter -g \
+	  -DJOTTER_RESPATH=\"$(SLATE_JOTTER_RESOURCES)\"
 
 LDFLAGS += -lm
 
@@ -19,12 +19,12 @@ LDFLAGS += -lm
 # Target setup
 # ---------------------------------------------------------------------------
 
-# Path to monkey resources
-MONKEY_RESOURCES_DIR := $(FRONTEND_RESOURCES_DIR)
+# Path to jotter resources
+JOTTER_RESOURCES_DIR := $(FRONTEND_RESOURCES_DIR)
 
 # The filter and target for split messages
 MESSAGES_FILTER=monkey
-MESSAGES_TARGET=$(MONKEY_RESOURCES_DIR)
+MESSAGES_TARGET=$(JOTTER_RESOURCES_DIR)
 
 # ---------------------------------------------------------------------------
 # HOST specific feature flags
@@ -49,7 +49,7 @@ endif
 # Source file setup
 # ----------------------------------------------------------------------------
 
-# S_MONKEY are sources purely for the MONKEY build
+# S_FRONTEND are sources purely for the Jotter build
 S_FRONTEND := main.c output.c filetype.c schedule.c bitmap.c plot.c browser.c \
 	download.c 401login.c layout.c dispatch.c fetch.c
 
@@ -58,7 +58,7 @@ S_FRONTEND := main.c output.c filetype.c schedule.c bitmap.c plot.c browser.c \
 # Note this is deliberately *not* expanded here as common and image
 #   are not yet available
 SOURCES = $(S_COMMON) $(S_IMAGE) $(S_BROWSER) $(S_PDF) $(S_FRONTEND)
-EXETARGET := nsmonkey
+EXETARGET := jotter
 
 # ----------------------------------------------------------------------------
 # Install target

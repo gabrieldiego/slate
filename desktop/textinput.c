@@ -5,7 +5,7 @@
  * Copyright 2004 John Tytgat <joty@netsurf-browser.org>
  * Copyright 2005 Adrian Lees <adrianl@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,12 +33,12 @@
 #include "utils/talloc.h"
 #include "utils/utf8.h"
 #include "utils/utils.h"
-#include "netsurf/types.h"
-#include "netsurf/mouse.h"
-#include "netsurf/form.h"
-#include "netsurf/window.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/keypress.h"
+#include "slate/types.h"
+#include "slate/mouse.h"
+#include "slate/form.h"
+#include "slate/window.h"
+#include "slate/browser_window.h"
+#include "slate/keypress.h"
 #include "content/content.h"
 
 #include "desktop/browser_private.h"

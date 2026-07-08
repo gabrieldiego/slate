@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,10 +31,10 @@ struct Window;
  *
  * \param[in] warning A warning looked up in the message translation table
  * \param[in] detail Additional text to be displayed or NULL.
- * \return NSERROR_OK on success or error code if there was a
+ * \return SLATEERROR_OK on success or error code if there was a
  *           faliure displaying the message to the user.
  */
-nserror amiga_warn_user(const char *warning, const char *detail);
+slateerror amiga_warn_user(const char *warning, const char *detail);
 char *translate_escape_chars(const char *s);
 void ami_misc_fatal_error(const char *message);
 int32 amiga_warn_user_multi(const char *body,

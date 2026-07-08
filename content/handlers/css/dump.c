@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@
 #include <stdio.h>
 #include <libcss/libcss.h>
 
-#include "netsurf/inttypes.h"
+#include "slate/inttypes.h"
 
 #include "css/dump.h"
 #include "css/utils.h"

@@ -21,8 +21,8 @@
  * about scheme testament handler interface
  */
 
-#ifndef NETSURF_CONTENT_FETCHERS_ABOUT_TESTAMENT_H
-#define NETSURF_CONTENT_FETCHERS_ABOUT_TESTAMENT_H
+#ifndef SLATE_CONTENT_FETCHERS_ABOUT_TESTAMENT_H
+#define SLATE_CONTENT_FETCHERS_ABOUT_TESTAMENT_H
 
 /**
  * Handler to generate about scheme testament page.

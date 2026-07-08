@@ -1,7 +1,7 @@
 /*
  * Copyright 2023 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,12 +21,12 @@
  * Target independent plotting QT interface.
  */
 
-#ifndef NETSURF_QT_PLOTTERS_H
-#define NETSURF_QT_PLOTTERS_H 1
+#ifndef SLATE_QT_PLOTTERS_H
+#define SLATE_QT_PLOTTERS_H 1
 
 struct plotter_table;
 
-extern const struct plotter_table nsqt_plotters;
+extern const struct plotter_table slateqt_plotters;
 
-#endif /* NETSURF_QT_PLOTTERS_H */
+#endif /* SLATE_QT_PLOTTERS_H */
 

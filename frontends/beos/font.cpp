@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 François Revol <mmu_man@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,10 +34,10 @@
 extern "C" {
 #include "utils/utils.h"
 #include "utils/log.h"
-#include "utils/nsoption.h"
-#include "utils/nsurl.h"
-#include "netsurf/inttypes.h"
-#include "netsurf/layout.h"
+#include "utils/slateoption.h"
+#include "utils/slateurl.h"
+#include "slate/inttypes.h"
+#include "slate/layout.h"
 }
 
 #include "beos/gui.h"
@@ -51,7 +51,7 @@ extern "C" {
  * \param font Beos font object.
  * \param fstyle style for this text
  */
-void nsbeos_style_to_font(BFont &font, const struct plot_font_style *fstyle)
+void slatebeos_style_to_font(BFont &font, const struct plot_font_style *fstyle)
 {
 	float size;
 	uint16 face = 0;
@@ -59,20 +59,20 @@ void nsbeos_style_to_font(BFont &font, const struct plot_font_style *fstyle)
 
 	switch (fstyle->family) {
 	case PLOT_FONT_FAMILY_SERIF:
-		family = nsoption_charp(font_serif);
+		family = slateoption_charp(font_serif);
 		break;
 	case PLOT_FONT_FAMILY_MONOSPACE:
-		family = nsoption_charp(font_mono);
+		family = slateoption_charp(font_mono);
 		break;
 	case PLOT_FONT_FAMILY_CURSIVE:
-		family = nsoption_charp(font_cursive);
+		family = slateoption_charp(font_cursive);
 		break;
 	case PLOT_FONT_FAMILY_FANTASY:
-		family = nsoption_charp(font_fantasy);
+		family = slateoption_charp(font_fantasy);
 		break;
 	case PLOT_FONT_FAMILY_SANS_SERIF:
 	default:
-		family = nsoption_charp(font_sans);
+		family = slateoption_charp(font_sans);
 		break;
 	}
 
@@ -114,7 +114,7 @@ void nsbeos_style_to_font(BFont &font, const struct plot_font_style *fstyle)
 	if (!face)
 		face = B_REGULAR_FACE;
 
-//fprintf(stderr, "nsbeos_style_to_font: %d, %d, %d -> '%s' %04x\n", style->font_family, style->font_style, style->font_weight, family, face);
+//fprintf(stderr, "slatebeos_style_to_font: %d, %d, %d -> '%s' %04x\n", style->font_family, style->font_style, style->font_weight, family, face);
 
 	if (family) {
 		font_family beos_family;
@@ -130,10 +130,10 @@ void nsbeos_style_to_font(BFont &font, const struct plot_font_style *fstyle)
 		font.SetFace(face);
 	}
 
-//fprintf(stderr, "nsbeos_style_to_font: value %f unit %d\n", style->font_size.value.length.value, style->font_size.value.length.unit);
+//fprintf(stderr, "slatebeos_style_to_font: value %f unit %d\n", style->font_size.value.length.value, style->font_size.value.length.unit);
 	size = fstyle->size / PLOT_STYLE_SCALE;
 
-//fprintf(stderr, "nsbeos_style_to_font: %f %d\n", size, style->font_size.value.length.unit);
+//fprintf(stderr, "slatebeos_style_to_font: %f %d\n", size, style->font_size.value.length.unit);
 
 	font.SetSize(size);
 }
@@ -148,7 +148,7 @@ void nsbeos_style_to_font(BFont &font, const struct plot_font_style *fstyle)
  * \param  width   updated to width of string[0..length)
  * \return  true on success, false on error and error reported
  */
-static nserror beos_font_width(const plot_font_style_t *fstyle,
+static slateerror beos_font_width(const plot_font_style_t *fstyle,
 		const char *string, size_t length,
 		int *width)
 {
@@ -157,13 +157,13 @@ static nserror beos_font_width(const plot_font_style_t *fstyle,
 
 	if (length == 0) {
 		*width = 0;
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
-	nsbeos_style_to_font(font, fstyle);
+	slatebeos_style_to_font(font, fstyle);
 	*width = (int)font.StringWidth(string, length);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -201,7 +201,7 @@ static int utf8_char_len(const char *c)
  * \param  actual_x	updated to x coordinate of character closest to x
  * \return  true on success, false on error and error reported
  */
-static nserror beos_font_position(const plot_font_style_t *fstyle,
+static slateerror beos_font_position(const plot_font_style_t *fstyle,
 		const char *string, size_t length,
 		int x, size_t *char_offset, int *actual_x)
 {
@@ -211,7 +211,7 @@ static nserror beos_font_position(const plot_font_style_t *fstyle,
 	int index;
 	BFont font;
 
-	nsbeos_style_to_font(font, fstyle);
+	slatebeos_style_to_font(font, fstyle);
 	BString str(string);
 	int32 len = str.CountChars();
 	float escapements[len];
@@ -233,7 +233,7 @@ static nserror beos_font_position(const plot_font_style_t *fstyle,
 	*actual_x = (int)current;
 	*char_offset = i; //index;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -259,7 +259,7 @@ static nserror beos_font_position(const plot_font_style_t *fstyle,
  *
  * Returning char_offset == length means no split possible
  */
-static nserror beos_font_split(const plot_font_style_t *fstyle,
+static slateerror beos_font_split(const plot_font_style_t *fstyle,
 		const char *string, size_t length,
 		int x, size_t *char_offset, int *actual_x)
 {
@@ -268,7 +268,7 @@ static nserror beos_font_split(const plot_font_style_t *fstyle,
 	int index = 0;
 	BFont font;
 
-	nsbeos_style_to_font(font, fstyle);
+	slatebeos_style_to_font(font, fstyle);
 	BString str(string);
 	int32 len = str.CountChars();
 	float escapements[len];
@@ -288,7 +288,7 @@ static nserror beos_font_split(const plot_font_style_t *fstyle,
 		if (x < current && last_space != 0) {
 			*actual_x = (int)last_x;
 			*char_offset = last_space;
-			return NSERROR_OK;;
+			return SLATEERROR_OK;;
 		}
 		esc += escapements[i];
 		current = font.Size() * esc;
@@ -297,7 +297,7 @@ static nserror beos_font_split(const plot_font_style_t *fstyle,
 	*actual_x = MIN(*actual_x, (int)current);
 	*char_offset = index;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -328,11 +328,11 @@ bool nsfont_paint(const plot_font_style_t *fstyle,
 	if (length == 0)
 		return true;
 
-	nsbeos_style_to_font(font, fstyle);
-	background = nsbeos_rgb_colour(fstyle->background);
-	foreground = nsbeos_rgb_colour(fstyle->foreground);
+	slatebeos_style_to_font(font, fstyle);
+	background = slatebeos_rgb_colour(fstyle->background);
+	foreground = slatebeos_rgb_colour(fstyle->foreground);
 
-	view = nsbeos_current_gc/*_lock*/();
+	view = slatebeos_current_gc/*_lock*/();
 	if (view == NULL) {
 		beos_warn_user("No GC", 0);
 		return false;
@@ -361,7 +361,7 @@ bool nsfont_paint(const plot_font_style_t *fstyle,
 	if (memcmp(&oldbg, &background, sizeof(rgb_color)))
 		view->SetLowColor(oldbg);
 
-	//nsbeos_current_gc_unlock();
+	//slatebeos_current_gc_unlock();
 
 	return true;
 }

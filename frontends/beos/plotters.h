@@ -2,7 +2,7 @@
  * Copyright 2008 François Revol <mmu_man@users.sourceforge.net>
  * Copyright 2005 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,14 +21,14 @@
  * Target independent plotting (BeOS interface).
  */
 
-#ifndef NETSURF_BEOS_PLOTTERS_H
-#define NETSURF_BEOS_PLOTTERS_H 1
+#ifndef SLATE_BEOS_PLOTTERS_H
+#define SLATE_BEOS_PLOTTERS_H 1
 
 extern "C" {
 
 struct plotter_table;
 
-extern const struct plotter_table nsbeos_plotters;
+extern const struct plotter_table slatebeos_plotters;
 
 }
 
@@ -36,13 +36,13 @@ extern const struct plotter_table nsbeos_plotters;
 
 extern BView *current_view;
 
-extern BView *nsbeos_current_gc(void);
-extern BView *nsbeos_current_gc_lock(void);
-extern void nsbeos_current_gc_unlock(void);
-extern void nsbeos_current_gc_set(BView *view);
+extern BView *slatebeos_current_gc(void);
+extern BView *slatebeos_current_gc_lock(void);
+extern void slatebeos_current_gc_unlock(void);
+extern void slatebeos_current_gc_set(BView *view);
 
-rgb_color nsbeos_rgb_colour(colour c);
-void nsbeos_set_colour(colour c);
-void nsbeos_plot_caret(int x, int y, int h);
+rgb_color slatebeos_rgb_colour(colour c);
+void slatebeos_set_colour(colour c);
+void slatebeos_plot_caret(int x, int y, int h);
 
-#endif /* NETSURF_GTK_PLOTTERS_H */
+#endif /* SLATE_GTK_PLOTTERS_H */

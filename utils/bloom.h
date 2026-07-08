@@ -1,7 +1,7 @@
 /*
  * Copyright 2013 Rob Kendrick <rjek@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,8 +19,8 @@
 /** \file
  * Trivial bloom filter */
 
-#ifndef _NETSURF_UTILS_BLOOM_H_
-#define _NETSURF_UTILS_BLOOM_H_
+#ifndef _SLATE_UTILS_BLOOM_H_
+#define _SLATE_UTILS_BLOOM_H_
 
 #include <stdbool.h>
 #include <stddef.h>

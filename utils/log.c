@@ -1,7 +1,7 @@
 /*
  * Copyright 2017 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@
 #include <stdio.h>
 
 #include "utils/config.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/sys_time.h"
 #include "utils/utsname.h"
 #include "desktop/version.h"
@@ -104,7 +104,7 @@ NSLOG_DEFINE_CATEGORY(dukky, "Duktape JavaScript Binding");
 NSLOG_DEFINE_CATEGORY(jserrors, "JavaScript error messages");
 
 static void
-netsurf_render_log(void *_ctx,
+slate_render_log(void *_ctx,
 		   nslog_entry_context_t *ctx,
 		   const char *fmt,
 		   va_list args)
@@ -128,7 +128,7 @@ netsurf_render_log(void *_ctx,
 }
 
 /* exported interface documented in utils/log.h */
-nserror
+slateerror
 nslog_set_filter(const char *filter)
 {
 	nslog_error err;
@@ -137,18 +137,18 @@ nslog_set_filter(const char *filter)
 	err = nslog_filter_from_text(filter, &filt);
 	if (err != NSLOG_NO_ERROR) {
 		if (err == NSLOG_NO_MEMORY)
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		else
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 	}
 
 	err = nslog_filter_set_active(filt, NULL);
 	filt = nslog_filter_unref(filt);
 	if (err != NSLOG_NO_ERROR) {
-		return NSERROR_NOSPACE;
+		return SLATEERROR_NOSPACE;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 #else
@@ -177,20 +177,20 @@ nslog_log(const char *file, const char *func, int ln, const char *format, ...)
 }
 
 /* exported interface documented in utils/log.h */
-nserror
+slateerror
 nslog_set_filter(const char *filter)
 {
 	(void)(filter);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 #endif
 
-nserror nslog_init(nslog_ensure_t *ensure, int *pargc, char **argv)
+slateerror nslog_init(nslog_ensure_t *ensure, int *pargc, char **argv)
 {
 	struct utsname utsname;
-	nserror ret = NSERROR_OK;
+	slateerror ret = SLATEERROR_OK;
 
 	if (((*pargc) > 1) &&
 	    (argv[1][0] == '-') &&
@@ -226,7 +226,7 @@ nserror nslog_init(nslog_ensure_t *ensure, int *pargc, char **argv)
 
 		if (logfile == NULL) {
 			/* could not open log file for output */
-			ret = NSERROR_NOT_FOUND;
+			ret = SLATEERROR_NOT_FOUND;
 			verbose_log = false;
 		} else {
 
@@ -243,30 +243,30 @@ nserror nslog_init(nslog_ensure_t *ensure, int *pargc, char **argv)
 	    (ensure != NULL) &&
 	    (ensure(logfile) == false)) {
 		/* failed to ensure output configuration */
-		ret = NSERROR_INIT_FAILED;
+		ret = SLATEERROR_INIT_FAILED;
 		verbose_log = false;
 	}
 
 #ifdef WITH_NSLOG
 
 	if (nslog_set_filter(verbose_log ?
-			     NETSURF_BUILTIN_VERBOSE_FILTER :
-			     NETSURF_BUILTIN_LOG_FILTER) != NSERROR_OK) {
-		ret = NSERROR_INIT_FAILED;
+			     SLATE_BUILTIN_VERBOSE_FILTER :
+			     SLATE_BUILTIN_LOG_FILTER) != SLATEERROR_OK) {
+		ret = SLATEERROR_INIT_FAILED;
 		verbose_log = false;
-	} else if (nslog_set_render_callback(netsurf_render_log, NULL) != NSLOG_NO_ERROR) {
-		ret = NSERROR_INIT_FAILED;
+	} else if (nslog_set_render_callback(slate_render_log, NULL) != NSLOG_NO_ERROR) {
+		ret = SLATEERROR_INIT_FAILED;
 		verbose_log = false;
 	} else if (nslog_uncork() != NSLOG_NO_ERROR) {
-		ret = NSERROR_INIT_FAILED;
+		ret = SLATEERROR_INIT_FAILED;
 		verbose_log = false;
 	}
 
 #endif
 
 	/* sucessfull logging initialisation so log system info */
-	if (ret == NSERROR_OK) {
-		NSLOG(netsurf, INFO, "NetSurf version '%s'", netsurf_version);
+	if (ret == SLATEERROR_OK) {
+		NSLOG(netsurf, INFO, "NetSurf version '%s'", slate_version);
 		if (uname(&utsname) < 0) {
 			NSLOG(netsurf, INFO,
 			      "Failed to extract machine information");
@@ -285,13 +285,13 @@ nserror nslog_init(nslog_ensure_t *ensure, int *pargc, char **argv)
 }
 
 /* exported interface documented in utils/log.h */
-nserror
+slateerror
 nslog_set_filter_by_options(void)
 {
 	if (verbose_log)
-		return nslog_set_filter(nsoption_charp(verbose_filter));
+		return nslog_set_filter(slateoption_charp(verbose_filter));
 	else
-		return nslog_set_filter(nsoption_charp(log_filter));
+		return nslog_set_filter(slateoption_charp(log_filter));
 }
 
 /* exported interface documented in utils/log.h */

@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,14 +19,14 @@
 #ifndef GTK_COREWINDOW_H
 #define GTK_COREWINDOW_H
 
-#include "netsurf/core_window.h"
+#include "slate/core_window.h"
 
-extern struct core_window_table *nsgtk_core_window_table;
+extern struct core_window_table *slategtk_core_window_table;
 
 /**
- * nsgtk core window mouse state
+ * slategtk core window mouse state
  */
-struct nsgtk_corewindow_mouse {
+struct slategtk_corewindow_mouse {
 	browser_mouse_state state; /**< last event status */
 	bool pressed;
 	int pressed_x;
@@ -36,9 +36,9 @@ struct nsgtk_corewindow_mouse {
 };
 
 /**
- * nsgtk core window state
+ * slategtk core window state
  */
-struct nsgtk_corewindow {
+struct slategtk_corewindow {
 	/* public variables */
 	/** GTK drawable widget */
 	GtkDrawingArea *drawing_area;
@@ -50,57 +50,57 @@ struct nsgtk_corewindow {
 	GtkIMContext *input_method;
 
 	/** mouse state */
-	struct nsgtk_corewindow_mouse mouse_state;
+	struct slategtk_corewindow_mouse mouse_state;
 
 	/** drag status set by core */
 	core_window_drag_status drag_status;
 
 	/**
-	 * callback to draw on drawable area of nsgtk core window
+	 * callback to draw on drawable area of slategtk core window
 	 *
-	 * \param nsgtk_cw The nsgtk core window structure.
+	 * \param slategtk_cw The slategtk core window structure.
 	 * \param r The rectangle of the window that needs updating.
-	 * \return NSERROR_OK on success otherwise appropriate error code
+	 * \return SLATEERROR_OK on success otherwise appropriate error code
 	 */
-	nserror (*draw)(struct nsgtk_corewindow *nsgtk_cw, struct rect *r);
+	slateerror (*draw)(struct slategtk_corewindow *slategtk_cw, struct rect *r);
 
 	/**
-	 * callback for keypress on nsgtk core window
+	 * callback for keypress on slategtk core window
 	 *
-	 * \param nsgtk_cw The nsgtk core window structure.
+	 * \param slategtk_cw The slategtk core window structure.
 	 * \param nskey The netsurf key code.
-	 * \return NSERROR_OK if key processed,
-	 *         NSERROR_NOT_IMPLEMENTED if key not processed
+	 * \return SLATEERROR_OK if key processed,
+	 *         SLATEERROR_NOT_IMPLEMENTED if key not processed
 	 *         otherwise appropriate error code
 	 */
-	nserror (*key)(struct nsgtk_corewindow *nsgtk_cw, uint32_t nskey);
+	slateerror (*key)(struct slategtk_corewindow *slategtk_cw, uint32_t nskey);
 
 	/**
-	 * callback for mouse event on nsgtk core window
+	 * callback for mouse event on slategtk core window
 	 *
-	 * \param nsgtk_cw The nsgtk core window structure.
+	 * \param slategtk_cw The slategtk core window structure.
 	 * \param mouse_state mouse state
 	 * \param x location of event
 	 * \param y location of event
-	 * \return NSERROR_OK on success otherwise appropriate error code.
+	 * \return SLATEERROR_OK on success otherwise appropriate error code.
 	 */
-	nserror (*mouse)(struct nsgtk_corewindow *nsgtk_cw, browser_mouse_state mouse_state, int x, int y);
+	slateerror (*mouse)(struct slategtk_corewindow *slategtk_cw, browser_mouse_state mouse_state, int x, int y);
 };
 
 /**
  * initialise elements of gtk core window.
  *
- * \param nsgtk_cw A gtk core window structure to initialise
- * \return NSERROR_OK on successful initialisation otherwise error code.
+ * \param slategtk_cw A gtk core window structure to initialise
+ * \return SLATEERROR_OK on successful initialisation otherwise error code.
  */
-nserror nsgtk_corewindow_init(struct nsgtk_corewindow *nsgtk_cw);
+slateerror slategtk_corewindow_init(struct slategtk_corewindow *slategtk_cw);
 
 /**
  * finalise elements of gtk core window.
  *
- * \param nsgtk_cw A gtk core window structure to initialise
- * \return NSERROR_OK on successful finalisation otherwise error code.
+ * \param slategtk_cw A gtk core window structure to initialise
+ * \return SLATEERROR_OK on successful finalisation otherwise error code.
  */
-nserror nsgtk_corewindow_fini(struct nsgtk_corewindow *nsgtk_cw);
+slateerror slategtk_corewindow_fini(struct slategtk_corewindow *slategtk_cw);
 
 #endif

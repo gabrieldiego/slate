@@ -4,7 +4,7 @@
  * Copyright 2008 Michael Drake <tlsa@netsurf-browser.org>
  * Copyright 2003 Phil Mellor <monkeyson@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -46,13 +46,13 @@
 #include "utils/log.h"
 #include "utils/talloc.h"
 #include "utils/utils.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/corestrings.h"
-#include "utils/nsurl.h"
-#include "netsurf/inttypes.h"
-#include "netsurf/content.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/layout.h"
+#include "utils/slateurl.h"
+#include "slate/inttypes.h"
+#include "slate/content.h"
+#include "slate/browser_window.h"
+#include "slate/layout.h"
 #include "content/content.h"
 #include "content/content_protected.h"
 #include "css/utils.h"
@@ -608,7 +608,7 @@ layout_minmax_line(struct box *first,
 					}
 
 					b->width = opt_maxwidth;
-					if (nsoption_bool(core_select_menu))
+					if (slateoption_bool(core_select_menu))
 						b->width += SCROLLBAR_WIDTH;
 
 				} else {
@@ -2891,7 +2891,7 @@ layout_line(struct box *first,
 							opt_maxwidth =opt_width;
 					}
 					b->width = opt_maxwidth;
-					if (nsoption_bool(core_select_menu))
+					if (slateoption_bool(core_select_menu))
 						b->width += SCROLLBAR_WIDTH;
 				} else {
 					font_func->width(&fstyle, b->text,
@@ -5400,7 +5400,7 @@ bool layout_document(html_content *content, int width, int height)
 	const struct gui_layout_table *font_func = content->font_func;
 
 	NSLOG(layout, DEBUG, "Doing layout to %ix%i of %s",
-			width, height, nsurl_access(content_get_url(
+			width, height, slateurl_access(content_get_url(
 					&content->base)));
 
 	layout_minmax_block(doc, font_func, content);

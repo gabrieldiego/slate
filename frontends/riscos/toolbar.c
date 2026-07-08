@@ -2,7 +2,7 @@
  * Copyright 2004, 2005 Richard Wilson <info@tinct.net>
  * Copyright 2010, 2011 Stephen Fryatt <stevef@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,7 +39,7 @@
 #include "oslib/wimpspriteop.h"
 
 #include "utils/log.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 
 #include "riscos/cookies.h"
 #include "riscos/dialog.h"

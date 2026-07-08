@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 Mark Benjamin <netsurf-browser.org.MarkBenjamin@dfgh.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,15 +15,15 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef NETSURF_GTK_MENU_H_
-#define NETSURF_GTK_MENU_H_
+#ifndef SLATE_GTK_MENU_H_
+#define SLATE_GTK_MENU_H_
 
 #include <gtk/gtk.h>
 
 /**
  * File menu item on menubar
  */
-struct nsgtk_file_menu {
+struct slategtk_file_menu {
 	GtkMenuItem *file;
 	GtkMenu *file_menu;
 	GtkWidget *newwindow_menuitem;
@@ -31,13 +31,13 @@ struct nsgtk_file_menu {
 	GtkWidget *openfile_menuitem;
 	GtkWidget *closewindow_menuitem;
 	GtkWidget *export_menuitem;
-	struct nsgtk_export_submenu *export_submenu;
+	struct slategtk_export_submenu *export_submenu;
 	GtkWidget *printpreview_menuitem;
 	GtkWidget *print_menuitem;
 	GtkWidget *quit_menuitem;
 };
 
-struct nsgtk_edit_menu {
+struct slategtk_edit_menu {
 	GtkMenuItem *edit; /* Edit menu item on menubar */
 	GtkMenu *edit_menu;
 	GtkWidget *cut_menuitem;
@@ -49,21 +49,21 @@ struct nsgtk_edit_menu {
 	GtkWidget *preferences_menuitem;
 };
 
-struct nsgtk_view_menu {
+struct slategtk_view_menu {
 	GtkMenuItem *view; /* View menu item on menubar */
 	GtkMenu *view_menu; /* gtk menu attached to menu item */
 
 	GtkWidget *scaleview_menuitem;
-	struct nsgtk_scaleview_submenu	*scaleview_submenu;
+	struct slategtk_scaleview_submenu	*scaleview_submenu;
 	GtkWidget *fullscreen_menuitem;
 	GtkWidget *toolbars_menuitem;
-	struct nsgtk_toolbars_submenu *toolbars_submenu;
+	struct slategtk_toolbars_submenu *toolbars_submenu;
 	GtkWidget *tabs_menuitem;
-	struct nsgtk_tabs_submenu *tabs_submenu;
+	struct slategtk_tabs_submenu *tabs_submenu;
 	GtkWidget *savewindowsize_menuitem;
 };
 
-struct nsgtk_nav_menu {
+struct slategtk_nav_menu {
 	GtkMenuItem *nav; /* Nav menu item on menubar */
 	GtkMenu *nav_menu;
 
@@ -79,17 +79,17 @@ struct nsgtk_nav_menu {
 	GtkWidget *openlocation_menuitem;
 };
 
-struct nsgtk_tools_menu {
+struct slategtk_tools_menu {
 	GtkMenuItem  *tools; /* Tools menu item on menubar */
 	GtkMenu	*tools_menu;
 
 	GtkWidget *showcookies_menuitem;
 	GtkWidget *downloads_menuitem;
 	GtkWidget *developer_menuitem;
-	struct nsgtk_developer_submenu *developer_submenu;
+	struct slategtk_developer_submenu *developer_submenu;
 };
 
-struct nsgtk_help_menu {
+struct slategtk_help_menu {
 	GtkMenuItem *help; /* Help menu item on menubar */
 	GtkMenu *help_menu;
 	GtkWidget *contents_menuitem;
@@ -99,35 +99,35 @@ struct nsgtk_help_menu {
 };
 
 
-struct nsgtk_export_submenu {
+struct slategtk_export_submenu {
 	GtkMenu *export_menu;
 	GtkWidget *savepage_menuitem;
 	GtkWidget *plaintext_menuitem;
 	GtkWidget *pdf_menuitem;
 };
 
-struct nsgtk_scaleview_submenu {
+struct slategtk_scaleview_submenu {
 	GtkMenu *scaleview_menu;
 	GtkWidget *zoomplus_menuitem;
 	GtkWidget *zoomminus_menuitem;
 	GtkWidget *zoomnormal_menuitem;
 };
 
-struct nsgtk_tabs_submenu {
+struct slategtk_tabs_submenu {
 	GtkMenu *tabs_menu;
 	GtkWidget *nexttab_menuitem;
 	GtkWidget *prevtab_menuitem;
 	GtkWidget *closetab_menuitem;
 };
 
-struct nsgtk_toolbars_submenu {
+struct slategtk_toolbars_submenu {
 	GtkMenu *toolbars_menu;
 	GtkCheckMenuItem *menubar_menuitem;
 	GtkCheckMenuItem *toolbar_menuitem;
 	GtkWidget *customize_menuitem;
 };
 
-struct nsgtk_developer_submenu {
+struct slategtk_developer_submenu {
 	GtkMenu   *developer_menu;
 
 	GtkWidget *viewsource_menuitem;
@@ -139,39 +139,39 @@ struct nsgtk_developer_submenu {
 /**
  * main menubar
  */
-struct nsgtk_bar_submenu {
+struct slategtk_bar_submenu {
 	GtkMenuBar		*bar_menu;
-	struct nsgtk_file_menu	*file_submenu;
-	struct nsgtk_edit_menu	*edit_submenu;
-	struct nsgtk_view_menu	*view_submenu;
-	struct nsgtk_nav_menu	*nav_submenu;
-	struct nsgtk_tools_menu	*tools_submenu;
-	struct nsgtk_help_menu	*help_submenu;
+	struct slategtk_file_menu	*file_submenu;
+	struct slategtk_edit_menu	*edit_submenu;
+	struct slategtk_view_menu	*view_submenu;
+	struct slategtk_nav_menu	*nav_submenu;
+	struct slategtk_tools_menu	*tools_submenu;
+	struct slategtk_help_menu	*help_submenu;
 };
 
-struct nsgtk_burger_menu {
+struct slategtk_burger_menu {
 	GtkMenu	*burger_menu;
 
 	GtkWidget *file_menuitem;
-	struct nsgtk_file_menu *file_submenu;
+	struct slategtk_file_menu *file_submenu;
 
 	GtkWidget *edit_menuitem;
-	struct nsgtk_edit_menu *edit_submenu;
+	struct slategtk_edit_menu *edit_submenu;
 
 	GtkWidget *view_menuitem;
-	struct nsgtk_view_menu *view_submenu;
+	struct slategtk_view_menu *view_submenu;
 
 	GtkWidget *nav_menuitem;
-	struct nsgtk_nav_menu *nav_submenu;
+	struct slategtk_nav_menu *nav_submenu;
 
 	GtkWidget *tools_menuitem;
-	struct nsgtk_tools_menu *tools_submenu;
+	struct slategtk_tools_menu *tools_submenu;
 
 	GtkWidget *help_menuitem;
-	struct nsgtk_help_menu *help_submenu;
+	struct slategtk_help_menu *help_submenu;
 };
 
-struct nsgtk_popup_menu {
+struct slategtk_popup_menu {
 	GtkMenu	*popup_menu;
 
 	/* navigation entries */
@@ -190,12 +190,12 @@ struct nsgtk_popup_menu {
 	GtkWidget *second_separator;
 
 	GtkWidget *toolbars_menuitem;
-	struct nsgtk_toolbars_submenu *toolbars_submenu;
+	struct slategtk_toolbars_submenu *toolbars_submenu;
 	GtkWidget *tools_menuitem;
-	struct nsgtk_tools_menu *tools_submenu;
+	struct slategtk_tools_menu *tools_submenu;
 };
 
-struct nsgtk_link_menu {
+struct slategtk_link_menu {
 	GtkMenu	*link_menu;
 
 	GtkWidget *opentab_menuitem;
@@ -210,7 +210,7 @@ struct nsgtk_link_menu {
 /**
  * Create main menubar menu.
  */
-struct nsgtk_bar_submenu *nsgtk_menu_bar_create(GtkMenuShell *menubar, GtkAccelGroup *group);
+struct slategtk_bar_submenu *slategtk_menu_bar_create(GtkMenuShell *menubar, GtkAccelGroup *group);
 
 
 /**
@@ -219,7 +219,7 @@ struct nsgtk_bar_submenu *nsgtk_menu_bar_create(GtkMenuShell *menubar, GtkAccelG
  * \param accelerator group to use with menu
  * \return new menu structure or NULL on error
  */
-struct nsgtk_burger_menu *nsgtk_burger_menu_create(GtkAccelGroup *group);
+struct slategtk_burger_menu *slategtk_burger_menu_create(GtkAccelGroup *group);
 
 
 /**
@@ -228,7 +228,7 @@ struct nsgtk_burger_menu *nsgtk_burger_menu_create(GtkAccelGroup *group);
  * \param accelerator group to use with menu
  * \return new menu structure or NULL on error
  */
-struct nsgtk_popup_menu *nsgtk_popup_menu_create(GtkAccelGroup *group);
+struct slategtk_popup_menu *slategtk_popup_menu_create(GtkAccelGroup *group);
 
 
 /**
@@ -237,7 +237,7 @@ struct nsgtk_popup_menu *nsgtk_popup_menu_create(GtkAccelGroup *group);
  * \param accelerator group to use with menu
  * \return new menu structure or NULL on error
  */
-struct nsgtk_link_menu *nsgtk_link_menu_create(GtkAccelGroup *group);
+struct slategtk_link_menu *slategtk_link_menu_create(GtkAccelGroup *group);
 
 
 /**
@@ -246,9 +246,9 @@ struct nsgtk_link_menu *nsgtk_link_menu_create(GtkAccelGroup *group);
  * destroys the gtk widgets associated with menu and frees all storage.
  *
  * \param menu menu to destroy
- * \return NSERROR_OK and menu destroyed on success else error code
+ * \return SLATEERROR_OK and menu destroyed on success else error code
  */
-nserror nsgtk_menu_bar_destroy(struct nsgtk_bar_submenu *menu);
+slateerror slategtk_menu_bar_destroy(struct slategtk_bar_submenu *menu);
 
 
 /**
@@ -257,9 +257,9 @@ nserror nsgtk_menu_bar_destroy(struct nsgtk_bar_submenu *menu);
  * destroys the gtk widgets associated with menu and frees all storage.
  *
  * \param menu menu to destroy
- * \return NSERROR_OK and menu destroyed on success else error code
+ * \return SLATEERROR_OK and menu destroyed on success else error code
  */
-nserror nsgtk_burger_menu_destroy(struct nsgtk_burger_menu *menu);
+slateerror slategtk_burger_menu_destroy(struct slategtk_burger_menu *menu);
 
 
 /**
@@ -268,9 +268,9 @@ nserror nsgtk_burger_menu_destroy(struct nsgtk_burger_menu *menu);
  * destroys the gtk widgets associated with menu and frees all storage.
  *
  * \param menu menu to destroy
- * \return NSERROR_OK and menu destroyed on success else error code
+ * \return SLATEERROR_OK and menu destroyed on success else error code
  */
-nserror nsgtk_popup_menu_destroy(struct nsgtk_popup_menu *menu);
+slateerror slategtk_popup_menu_destroy(struct slategtk_popup_menu *menu);
 
 
 /**
@@ -279,9 +279,9 @@ nserror nsgtk_popup_menu_destroy(struct nsgtk_popup_menu *menu);
  * destroys the gtk widgets associated with menu and frees all storage.
  *
  * \param menu menu to destroy
- * \return NSERROR_OK and menu destroyed on success else error code
+ * \return SLATEERROR_OK and menu destroyed on success else error code
  */
-nserror nsgtk_link_menu_destroy(struct nsgtk_link_menu *menu);
+slateerror slategtk_link_menu_destroy(struct slategtk_link_menu *menu);
 
 
 #endif

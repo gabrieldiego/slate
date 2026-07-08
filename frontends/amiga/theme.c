@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,11 +38,11 @@
 #include <workbench/icon.h>
 
 #include "utils/messages.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/utils.h"
 #include "desktop/searchweb.h"
-#include "netsurf/mouse.h"
-#include "netsurf/window.h"
+#include "slate/mouse.h"
+#include "slate/window.h"
 
 #include "amiga/gui.h"
 #include "amiga/drag.h"
@@ -136,16 +136,16 @@ void ami_theme_init(void)
 	char themefile[1024];
 	BPTR lock = 0;
 
-	strcpy(themefile,nsoption_charp(theme));
+	strcpy(themefile,slateoption_charp(theme));
 	AddPart(themefile,"Theme",100);
 
 	lock = Lock(themefile,ACCESS_READ);
 
 	if(!lock)
 	{
-		amiga_warn_user("ThemeApplyErr",nsoption_charp(theme));
+		amiga_warn_user("ThemeApplyErr",slateoption_charp(theme));
 		strcpy(themefile,"PROGDIR:Resources/Themes/Default/Theme");
-		nsoption_set_charp(theme, (char *)strdup("PROGDIR:Resources/Themes/Default"));
+		slateoption_set_charp(theme, (char *)strdup("PROGDIR:Resources/Themes/Default"));
 	}
 	else
 	{
@@ -183,7 +183,7 @@ void ami_theme_throbber_setup(void)
 
 	bm = ami_bitmap_from_datatype(throbberfile);
 	throbber = ami_bitmap_get_native(bm, bitmap_get_width(bm), bitmap_get_height(bm),
-		ami_plot_screen_is_palettemapped(), NULL, nsoption_colour(sys_colour_ButtonFace));
+		ami_plot_screen_is_palettemapped(), NULL, slateoption_colour(sys_colour_ButtonFace));
 
 	throbber_nsbm = bm;
 }
@@ -208,7 +208,7 @@ void ami_get_theme_filename(char *filename, const char *themestring, bool protoc
 	}
 	else
 	{
-		strcat(filename, nsoption_charp(theme));
+		strcat(filename, slateoption_charp(theme));
 		AddPart(filename, messages_get(themestring), 100);
 	}
 }
@@ -233,7 +233,7 @@ void ami_update_pointer(struct Window *win, gui_pointer_shape shape)
 					TAG_DONE);
 #endif
 	} else {
-		if(nsoption_bool(os_mouse_pointers))
+		if(slateoption_bool(os_mouse_pointers))
 		{
 			switch(shape)
 			{
@@ -300,7 +300,7 @@ void ami_init_mouse_pointers(void)
 		char ptrfname[1024];
 
 #ifdef __amigaos4__
-		if(nsoption_bool(truecolour_mouse_pointers)) {
+		if(slateoption_bool(truecolour_mouse_pointers)) {
 			ami_get_theme_filename((char *)&ptrfname,ptrs32[i], false);
 			if((dobj = GetIconTags(ptrfname,ICONGETA_UseFriendBitMap,TRUE,TAG_DONE))) {
 				if(IconControl(dobj, ICONCTRLA_GetImageDataFormat, &format, TAG_DONE)) {
@@ -413,7 +413,7 @@ void ami_mouse_pointers_free(void)
 void gui_window_start_throbber(struct gui_window *g)
 {
 	if(!g) return;
-	if(nsoption_bool(kiosk_mode)) return;
+	if(slateoption_bool(kiosk_mode)) return;
 
 #ifdef __amigaos4__
 	if(ami_gui_get_tab_node(g) && (ami_gui2_get_tabs(ami_gui_get_gui_window_2(g)) > 1))
@@ -434,7 +434,7 @@ void gui_window_stop_throbber(struct gui_window *g)
 	struct IBox *bbox;
 
 	if(!g) return;
-	if(nsoption_bool(kiosk_mode)) return;
+	if(slateoption_bool(kiosk_mode)) return;
 
 #ifdef __amigaos4__
 	if(ami_gui_get_tab_node(g) && (ami_gui2_get_tabs(ami_gui_get_gui_window_2(g)) > 1))
@@ -446,7 +446,7 @@ void gui_window_stop_throbber(struct gui_window *g)
 #endif
 
 	if(IS_CURRENT_GW(ami_gui_get_gui_window_2(g), g)) {
-		if(ami_gui_get_space_box(ami_gui2_get_object(ami_gui_get_gui_window_2(g), AMI_GAD_THROBBER), &bbox) != NSERROR_OK) {
+		if(ami_gui_get_space_box(ami_gui2_get_object(ami_gui_get_gui_window_2(g), AMI_GAD_THROBBER), &bbox) != SLATEERROR_OK) {
 			amiga_warn_user("NoMemory", "");
 			return;
 		}
@@ -481,7 +481,7 @@ static void ami_throbber_update(void *p)
 	}
 
 	if(IS_CURRENT_GW(ami_gui_get_gui_window_2(g),g)) {
-		if(ami_gui_get_space_box(ami_gui2_get_object(ami_gui_get_gui_window_2(g), AMI_GAD_THROBBER), &bbox) != NSERROR_OK) {
+		if(ami_gui_get_space_box(ami_gui2_get_object(ami_gui_get_gui_window_2(g), AMI_GAD_THROBBER), &bbox) != SLATEERROR_OK) {
 			amiga_warn_user("NoMemory", "");
 			return;
 		}

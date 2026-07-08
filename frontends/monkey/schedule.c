@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 Vincent Sanders <vince@netsurf-browser.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -43,11 +43,11 @@ struct nscallback
  *
  * \param  callback  callback function
  * \param  p         user parameter, passed to callback function
- * \return NSERROR_OK if callback found and removed else NSERROR_NOT_FOUND
+ * \return SLATEERROR_OK if callback found and removed else SLATEERROR_NOT_FOUND
  *
  * All scheduled callbacks matching both callback and p are removed.
  */
-static nserror schedule_remove(void (*callback)(void *p), void *p)
+static slateerror schedule_remove(void (*callback)(void *p), void *p)
 {
 	struct nscallback *cur_nscb;
 	struct nscallback *prev_nscb;
@@ -56,7 +56,7 @@ static nserror schedule_remove(void (*callback)(void *p), void *p)
 
 	/* check there is something on the list to remove */
 	if (schedule_list == NULL) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	NSLOG(schedule, DEBUG, "removing %p, %p", callback, p);
@@ -91,17 +91,17 @@ static nserror schedule_remove(void (*callback)(void *p), void *p)
 	}
 
 	if (removed == false) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported function documented in monkey/schedule.h */
-nserror monkey_schedule(int tival, void (*callback)(void *p), void *p)
+slateerror monkey_schedule(int tival, void (*callback)(void *p), void *p)
 {
 	struct nscallback *nscb;
 	struct timeval tv;
-	nserror ret;
+	slateerror ret;
 
 	/* ensure uniqueness of the callback and context */
 	ret = schedule_remove(callback, p);
@@ -126,7 +126,7 @@ nserror monkey_schedule(int tival, void (*callback)(void *p), void *p)
 	nscb->next = schedule_list;
 	schedule_list = nscb;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported function documented in monkey/schedule.h */

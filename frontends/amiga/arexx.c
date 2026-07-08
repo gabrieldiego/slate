@@ -1,7 +1,7 @@
 /*
  * Copyright 2008-2025 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,10 +30,10 @@
 #include <reaction/reaction_macros.h>
 
 #include "utils/log.h"
-#include "utils/nsoption.h"
-#include "utils/nsurl.h"
-#include "netsurf/content.h"
-#include "netsurf/browser_window.h"
+#include "utils/slateoption.h"
+#include "utils/slateurl.h"
+#include "slate/content.h"
+#include "slate/browser_window.h"
 #include "desktop/version.h"
 
 #include "amiga/arexx.h"
@@ -127,7 +127,7 @@ STATIC struct ARexxCmd Commands[] =
 bool ami_arexx_init(ULONG *rxsig)
 {
 	if((arexx_obj = ARexxObj,
-			AREXX_HostName,"NETSURF",
+			AREXX_HostName,"SLATE",
 			AREXX_Commands,Commands,
 			AREXX_NoSlot,TRUE,
 			AREXX_ReplyHook,NULL,
@@ -142,7 +142,7 @@ bool ami_arexx_init(ULONG *rxsig)
 /* Create a temporary ARexx port so we can send commands to the NetSurf which
  * is already running */
 		arexx_obj = ARexxObj,
-			AREXX_HostName,"NETSURF",
+			AREXX_HostName,"SLATE",
 			AREXX_Commands,Commands,
 			AREXX_NoSlot,FALSE,
 			AREXX_ReplyHook,NULL,
@@ -166,7 +166,7 @@ static void ami_arexx_command(const char *cmd, const char *port)
 
 void ami_arexx_self(const char *cmd)
 {
-	ami_arexx_command(cmd, "NETSURF");
+	ami_arexx_command(cmd, "SLATE");
 }
 
 void ami_arexx_execute(char *script)
@@ -265,14 +265,14 @@ RXHOOKF(rx_open)
 {
 	struct dlnode *dln;
 	struct gui_window *gw = ami_gui_get_active_gw();
-	nsurl *url;
+	slateurl *url;
 
 	cmd->ac_RC = 0;
 
 	if((cmd->ac_ArgList[4]) && (cmd->ac_ArgList[5]))
 		gw = ami_find_tab(*(ULONG *)cmd->ac_ArgList[4], *(ULONG *)cmd->ac_ArgList[5]);
 
-	if (nsurl_create((char *)cmd->ac_ArgList[0], &url) != NSERROR_OK) {
+	if (slateurl_create((char *)cmd->ac_ArgList[0], &url) != SLATEERROR_OK) {
 		amiga_warn_user("NoMemory", 0);
 		return;
 	}
@@ -346,7 +346,7 @@ RXHOOKF(rx_open)
 					      NULL);
 		}
 	}
-	nsurl_unref(url);
+	slateurl_unref(url);
 }
 
 RXHOOKF(rx_save)
@@ -374,7 +374,7 @@ RXHOOKF(rx_save)
 		}
 
 		FClose(fh);
-		SetComment((char *)cmd->ac_ArgList[0], nsurl_access(browser_window_access_url(ami_gui_get_browser_window(gw))));
+		SetComment((char *)cmd->ac_ArgList[0], slateurl_access(browser_window_access_url(ami_gui_get_browser_window(gw))));
 	}
 
 	ami_reset_pointer(ami_gui_get_gui_window_2(gw));
@@ -403,7 +403,7 @@ RXHOOKF(rx_geturl)
 
 	if(gw && ami_gui_get_browser_window(gw))
 	{
-		strcpy(result, nsurl_access(browser_window_access_url(ami_gui_get_browser_window(gw))));
+		strcpy(result, slateurl_access(browser_window_access_url(ami_gui_get_browser_window(gw))));
 	}
 	else
 	{
@@ -445,7 +445,7 @@ RXHOOKF(rx_version)
 	{
 		if(cmd->ac_ArgList[1])
 		{
-			if((netsurf_version_major > *(int *)cmd->ac_ArgList[0]) || ((netsurf_version_minor >= *(int *)cmd->ac_ArgList[1]) && (netsurf_version_major == *(int *)cmd->ac_ArgList[0])))
+			if((slate_version_major > *(int *)cmd->ac_ArgList[0]) || ((slate_version_minor >= *(int *)cmd->ac_ArgList[1]) && (slate_version_major == *(int *)cmd->ac_ArgList[0])))
 			{
 				strcpy(result,"1");
 			}
@@ -456,7 +456,7 @@ RXHOOKF(rx_version)
 		}
 		else if(cmd->ac_ArgList[0])
 		{
-			if((netsurf_version_major >= *(int *)cmd->ac_ArgList[0]))
+			if((slate_version_major >= *(int *)cmd->ac_ArgList[0]))
 			{
 				strcpy(result,"1");
 			}
@@ -467,14 +467,14 @@ RXHOOKF(rx_version)
 		}
 		else
 		{
-			strcpy(result,netsurf_version);
+			strcpy(result,slate_version);
 		}
 	}
 	else
 	{
 		if(cmd->ac_ArgList[1])
 		{
-			if((netsurf_version_major > *(int *)cmd->ac_ArgList[0]) || ((atoi(wt_revid) >= *(int *)cmd->ac_ArgList[1]) && (netsurf_version_major == *(int *)cmd->ac_ArgList[0])))
+			if((slate_version_major > *(int *)cmd->ac_ArgList[0]) || ((atoi(wt_revid) >= *(int *)cmd->ac_ArgList[1]) && (slate_version_major == *(int *)cmd->ac_ArgList[0])))
 			{
 				strcpy(result,"1");
 			}
@@ -485,7 +485,7 @@ RXHOOKF(rx_version)
 		}
 		else if(cmd->ac_ArgList[0])
 		{
-			if((netsurf_version_major >= *(int *)cmd->ac_ArgList[0]))
+			if((slate_version_major >= *(int *)cmd->ac_ArgList[0]))
 			{
 				strcpy(result,"1");
 			}
@@ -507,13 +507,13 @@ RXHOOKF(rx_pubscreen)
 {
 	cmd->ac_RC = 0;
 
-	if(nsoption_charp(pubscreen_name) == NULL)
+	if(slateoption_charp(pubscreen_name) == NULL)
 	{
 		strcpy(result,"NetSurf");
 	}
 	else
 	{
-		strcpy(result, nsoption_charp(pubscreen_name));
+		strcpy(result, slateoption_charp(pubscreen_name));
 	}
 
 	cmd->ac_Result = result;
@@ -547,7 +547,7 @@ RXHOOKF(rx_forward)
 RXHOOKF(rx_home)
 {
 	struct gui_window *gw = ami_gui_get_active_gw();
-	nsurl *url;
+	slateurl *url;
 
 	cmd->ac_RC = 0;
 
@@ -556,7 +556,7 @@ RXHOOKF(rx_home)
 
 	if(gw == NULL) return;
 
-	if (nsurl_create(nsoption_charp(homepage_url), &url) != NSERROR_OK) {
+	if (slateurl_create(slateoption_charp(homepage_url), &url) != SLATEERROR_OK) {
 		amiga_warn_user("NoMemory", 0);
 	} else {
 		browser_window_navigate(ami_gui_get_browser_window(gw),
@@ -566,7 +566,7 @@ RXHOOKF(rx_home)
 					NULL,
 					NULL,
 					NULL);
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
 }
 
@@ -684,7 +684,7 @@ RXHOOKF(rx_exec)
 	struct gui_window *gw = ami_gui_get_active_gw();
 	bool res = false;
 
-	if(nsoption_bool(arexx_allow_exec) == false) {
+	if(slateoption_bool(arexx_allow_exec) == false) {
 		cmd->ac_RC = RETURN_FAIL;
 		return;
 	}

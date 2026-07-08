@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,8 +24,8 @@
  * ASCII text (as used by most web specs), regardless of system locale.
  */
 
-#ifndef _NETSURF_UTILS_ASCII_H_
-#define _NETSURF_UTILS_ASCII_H_
+#ifndef _SLATE_UTILS_ASCII_H_
+#define _SLATE_UTILS_ASCII_H_
 
 #include <errno.h>
 #include <stdlib.h>

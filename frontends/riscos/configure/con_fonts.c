@@ -1,7 +1,7 @@
 /*
  * Copyright 2005 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/messages.h"
-#include "netsurf/plot_style.h"
+#include "slate/plot_style.h"
 
 #include "riscos/gui.h"
 #include "riscos/font.h"
@@ -75,15 +75,15 @@ static bool ro_gui_options_fonts_init_menu(void);
 bool ro_gui_options_fonts_initialise(wimp_w w)
 {
 	/* set the current values */
-	ro_gui_set_icon_decimal(w, FONT_DEFAULT_SIZE, nsoption_int(font_size), 1);
-	ro_gui_set_icon_decimal(w, FONT_MINIMUM_SIZE, nsoption_int(font_min_size), 1);
-	ro_gui_set_icon_string(w, FONT_SANS_FIELD, nsoption_charp(font_sans), true);
-	ro_gui_set_icon_string(w, FONT_SERIF_FIELD, nsoption_charp(font_serif), true);
-	ro_gui_set_icon_string(w, FONT_MONOSPACE_FIELD, nsoption_charp(font_mono), true);
-	ro_gui_set_icon_string(w, FONT_CURSIVE_FIELD, nsoption_charp(font_cursive), true);
-	ro_gui_set_icon_string(w, FONT_FANTASY_FIELD, nsoption_charp(font_fantasy), true);
+	ro_gui_set_icon_decimal(w, FONT_DEFAULT_SIZE, slateoption_int(font_size), 1);
+	ro_gui_set_icon_decimal(w, FONT_MINIMUM_SIZE, slateoption_int(font_min_size), 1);
+	ro_gui_set_icon_string(w, FONT_SANS_FIELD, slateoption_charp(font_sans), true);
+	ro_gui_set_icon_string(w, FONT_SERIF_FIELD, slateoption_charp(font_serif), true);
+	ro_gui_set_icon_string(w, FONT_MONOSPACE_FIELD, slateoption_charp(font_mono), true);
+	ro_gui_set_icon_string(w, FONT_CURSIVE_FIELD, slateoption_charp(font_cursive), true);
+	ro_gui_set_icon_string(w, FONT_FANTASY_FIELD, slateoption_charp(font_fantasy), true);
 	ro_gui_set_icon_string(w, FONT_DEFAULT_FIELD,
-			       font_names[nsoption_int(font_default)], true);
+			       font_names[slateoption_int(font_default)], true);
 
 	if (!ro_gui_options_fonts_init_menu())
 		return false;
@@ -141,31 +141,31 @@ bool ro_gui_options_fonts_ok(wimp_w w)
 {
 	unsigned int i;
 
-	nsoption_set_int(font_size,
+	slateoption_set_int(font_size,
 			 ro_gui_get_icon_decimal(w, FONT_DEFAULT_SIZE, 1));
 
-	nsoption_set_int(font_min_size,
+	slateoption_set_int(font_min_size,
 			 ro_gui_get_icon_decimal(w, FONT_MINIMUM_SIZE, 1));
 
-	if (nsoption_int(font_size) < nsoption_int(font_min_size)) {
-		nsoption_set_int(font_size, nsoption_int(font_min_size));
-		ro_gui_set_icon_decimal(w, FONT_DEFAULT_SIZE, nsoption_int(font_size), 1);
+	if (slateoption_int(font_size) < slateoption_int(font_min_size)) {
+		slateoption_set_int(font_size, slateoption_int(font_min_size));
+		ro_gui_set_icon_decimal(w, FONT_DEFAULT_SIZE, slateoption_int(font_size), 1);
 	
 }
 
-	nsoption_set_charp(font_sans,
+	slateoption_set_charp(font_sans,
 			   strdup(ro_gui_get_icon_string(w, FONT_SANS_FIELD)));
 
-	nsoption_set_charp(font_serif,
+	slateoption_set_charp(font_serif,
 			   strdup(ro_gui_get_icon_string(w, FONT_SERIF_FIELD)));
 
-	nsoption_set_charp(font_mono,
+	slateoption_set_charp(font_mono,
 			   strdup(ro_gui_get_icon_string(w, FONT_MONOSPACE_FIELD)));
 
-	nsoption_set_charp(font_cursive,
+	slateoption_set_charp(font_cursive,
 			   strdup(ro_gui_get_icon_string(w, FONT_CURSIVE_FIELD)));
 
-	nsoption_set_charp(font_fantasy,
+	slateoption_set_charp(font_fantasy,
 			   strdup(ro_gui_get_icon_string(w, FONT_FANTASY_FIELD)));
 
 	for (i = 0; i != 5; i++) {
@@ -177,7 +177,7 @@ bool ro_gui_options_fonts_ok(wimp_w w)
 		/* this should never happen, but still */
 		i = 0;
 
-	nsoption_set_int(font_default, i);
+	slateoption_set_int(font_default, i);
 
 	ro_gui_save_options();
 	return true;

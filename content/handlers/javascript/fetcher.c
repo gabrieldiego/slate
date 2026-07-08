@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 Vincent Sanders <vince@kyllikki.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,7 +26,7 @@
 #include <stdlib.h>
 #include <libwapcaplet/libwapcaplet.h>
 
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/corestrings.h"
 #include "utils/ring.h"
 #include "content/fetch.h"
@@ -43,7 +43,7 @@ struct fetch_javascript_context {
 	bool aborted; /**< Flag indicating fetch has been aborted */
 	bool locked; /**< Flag indicating entry is already entered */
 
-	nsurl *url; /**< The URL being fetched */
+	slateurl *url; /**< The URL being fetched */
 };
 
 static struct fetch_javascript_context *ring = NULL;
@@ -93,7 +93,7 @@ static void fetch_javascript_finalise(lwc_string *scheme)
 {
 }
 
-static bool fetch_javascript_can_fetch(const nsurl *url)
+static bool fetch_javascript_can_fetch(const slateurl *url)
 {
 	return true;
 }
@@ -101,7 +101,7 @@ static bool fetch_javascript_can_fetch(const nsurl *url)
 /** callback to set up a resource fetch context. */
 static void *
 fetch_javascript_setup(struct fetch *fetchh,
-		 nsurl *url,
+		 slateurl *url,
 		 bool only_2xx,
 		 bool downgrade_tls,
 		 const char *post_urlenc,
@@ -114,7 +114,7 @@ fetch_javascript_setup(struct fetch *fetchh,
 	if (ctx == NULL)
 		return NULL;
 
-	ctx->url = nsurl_ref(url);
+	ctx->url = slateurl_ref(url);
 
 	ctx->fetchh = fetchh;
 
@@ -128,7 +128,7 @@ static void fetch_javascript_free(void *ctx)
 {
 	struct fetch_javascript_context *c = ctx;
 	if (c->url != NULL) {
-		nsurl_unref(c->url);
+		slateurl_unref(c->url);
 	}
 	RING_REMOVE(ring, c);
 	free(ctx);
@@ -197,9 +197,9 @@ static void fetch_javascript_poll(lwc_string *scheme)
 /**
  * Register javascript scheme fetcher with fetcher factory.
  *
- * \return NSERROR_OK on success or appropriate error code on faliure.
+ * \return SLATEERROR_OK on success or appropriate error code on faliure.
 */
-nserror fetch_javascript_register(void)
+slateerror fetch_javascript_register(void)
 {
 	lwc_string *scheme = lwc_string_ref(corestring_lwc_javascript);
 	const struct fetcher_operation_table fetcher_ops = {

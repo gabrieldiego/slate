@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,8 +28,8 @@
  *   with different macro definitions so there is no guard
  */
 
-#ifndef NETSURF_RISCOS_OPTIONS_H_
-#define NETSURF_RISCOS_OPTIONS_H_
+#ifndef SLATE_RISCOS_OPTIONS_H_
+#define SLATE_RISCOS_OPTIONS_H_
 
 #include "riscos/tinct.h"
 
@@ -40,46 +40,46 @@
 
 #endif
 
-NSOPTION_STRING(theme, "Aletheia")
-NSOPTION_STRING(language, NULL)
-NSOPTION_INTEGER(plot_fg_quality, tinct_ERROR_DIFFUSE)
-NSOPTION_INTEGER(plot_bg_quality, tinct_DITHER)
-NSOPTION_BOOL(history_tooltip, true)
-NSOPTION_BOOL(toolbar_show_buttons, true)
-NSOPTION_BOOL(toolbar_show_address, true)
-NSOPTION_BOOL(toolbar_show_throbber, true)
-NSOPTION_STRING(toolbar_browser, "0123|58|9")
-NSOPTION_STRING(toolbar_hotlist, "40|12|3")
-NSOPTION_STRING(toolbar_history, "0|12|3")
-NSOPTION_STRING(toolbar_cookies, "0|12")
-NSOPTION_BOOL(window_stagger, true)
-NSOPTION_BOOL(window_size_clone, true)
-NSOPTION_BOOL(buffer_animations, true)
-NSOPTION_BOOL(buffer_everything, true)
-NSOPTION_BOOL(open_browser_at_startup, false)
-NSOPTION_BOOL(no_plugins, false)
-NSOPTION_BOOL(strip_extensions, false)
-NSOPTION_BOOL(confirm_overwrite, true)
-NSOPTION_BOOL(confirm_hotlist_remove, true)
-NSOPTION_STRING(url_path, "NetSurf:URL")
-NSOPTION_STRING(url_save, CHOICES_PREFIX "URL")
-NSOPTION_STRING(hotlist_path, "NetSurf:Hotlist")
-NSOPTION_STRING(hotlist_save, CHOICES_PREFIX "Hotlist")
-NSOPTION_STRING(recent_path, "NetSurf:Recent")
-NSOPTION_STRING(recent_save, CHOICES_PREFIX "Recent")
-NSOPTION_STRING(theme_path, "NetSurf:Themes")
-NSOPTION_STRING(theme_save, CHOICES_PREFIX "Themes")
-NSOPTION_BOOL(thumbnail_iconise, true)
-NSOPTION_BOOL(interactive_help, true)
-NSOPTION_BOOL(external_hotlists, false)
-NSOPTION_STRING(external_hotlist_app, NULL)
+SLATEOPTION_STRING(theme, "Aletheia")
+SLATEOPTION_STRING(language, NULL)
+SLATEOPTION_INTEGER(plot_fg_quality, tinct_ERROR_DIFFUSE)
+SLATEOPTION_INTEGER(plot_bg_quality, tinct_DITHER)
+SLATEOPTION_BOOL(history_tooltip, true)
+SLATEOPTION_BOOL(toolbar_show_buttons, true)
+SLATEOPTION_BOOL(toolbar_show_address, true)
+SLATEOPTION_BOOL(toolbar_show_throbber, true)
+SLATEOPTION_STRING(toolbar_browser, "0123|58|9")
+SLATEOPTION_STRING(toolbar_hotlist, "40|12|3")
+SLATEOPTION_STRING(toolbar_history, "0|12|3")
+SLATEOPTION_STRING(toolbar_cookies, "0|12")
+SLATEOPTION_BOOL(window_stagger, true)
+SLATEOPTION_BOOL(window_size_clone, true)
+SLATEOPTION_BOOL(buffer_animations, true)
+SLATEOPTION_BOOL(buffer_everything, true)
+SLATEOPTION_BOOL(open_browser_at_startup, false)
+SLATEOPTION_BOOL(no_plugins, false)
+SLATEOPTION_BOOL(strip_extensions, false)
+SLATEOPTION_BOOL(confirm_overwrite, true)
+SLATEOPTION_BOOL(confirm_hotlist_remove, true)
+SLATEOPTION_STRING(url_path, "NetSurf:URL")
+SLATEOPTION_STRING(url_save, CHOICES_PREFIX "URL")
+SLATEOPTION_STRING(hotlist_path, "NetSurf:Hotlist")
+SLATEOPTION_STRING(hotlist_save, CHOICES_PREFIX "Hotlist")
+SLATEOPTION_STRING(recent_path, "NetSurf:Recent")
+SLATEOPTION_STRING(recent_save, CHOICES_PREFIX "Recent")
+SLATEOPTION_STRING(theme_path, "NetSurf:Themes")
+SLATEOPTION_STRING(theme_save, CHOICES_PREFIX "Themes")
+SLATEOPTION_BOOL(thumbnail_iconise, true)
+SLATEOPTION_BOOL(interactive_help, true)
+SLATEOPTION_BOOL(external_hotlists, false)
+SLATEOPTION_STRING(external_hotlist_app, NULL)
 
 /**
  * width of screen when window_width option was saved
  */
-NSOPTION_INTEGER(window_screen_width, 0)
+SLATEOPTION_INTEGER(window_screen_width, 0)
 
 /**
  * height of screen when window_heigh option was saved
  */
-NSOPTION_INTEGER(window_screen_height, 0)
+SLATEOPTION_INTEGER(window_screen_height, 0)

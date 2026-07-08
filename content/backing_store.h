@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * Low-level source data cache backing store interface.
  */
 
-#ifndef NETSURF_CONTENT_LLCACHE_PRIVATE_H_
-#define NETSURF_CONTENT_LLCACHE_PRIVATE_H_
+#ifndef SLATE_CONTENT_LLCACHE_PRIVATE_H_
+#define SLATE_CONTENT_LLCACHE_PRIVATE_H_
 
 #include "content/llcache.h"
 
@@ -46,16 +46,16 @@ struct gui_llcache_table {
 	 * Initialise the backing store.
 	 *
 	 * @param parameters to configure backing store.
-	 * @return NSERROR_OK on success or error code on failure.
+	 * @return SLATEERROR_OK on success or error code on failure.
 	 */
-	nserror (*initialise)(const struct llcache_store_parameters *parameters);
+	slateerror (*initialise)(const struct llcache_store_parameters *parameters);
 
 	/**
 	 * Finalise the backing store.
 	 *
-	 * @return NSERROR_OK on success or error code on failure.
+	 * @return SLATEERROR_OK on success or error code on failure.
 	 */
-	nserror (*finalise)(void);
+	slateerror (*finalise)(void);
 
 	/**
 	 * Place an object in the backing store.
@@ -75,9 +75,9 @@ struct gui_llcache_table {
 	 * @param[in] flags The flags to control how the object is stored.
 	 * @param[in] data The objects data.
 	 * @param[in] datalen The length of the \a data.
-	 * @return NSERROR_OK on success or error code on failure.
+	 * @return SLATEERROR_OK on success or error code on failure.
 	 */
-	nserror (*store)(struct nsurl *url, enum backing_store_flags flags,
+	slateerror (*store)(struct slateurl *url, enum backing_store_flags flags,
 			 uint8_t *data, const size_t datalen);
 
 	/**
@@ -94,9 +94,9 @@ struct gui_llcache_table {
 	 * @param[in] flags The flags to control how the object is retrieved.
 	 * @param[out] data The retrieved objects data.
 	 * @param[out] datalen The length of the \a data retrieved.
-	 * @return NSERROR_OK on success or error code on failure.
+	 * @return SLATEERROR_OK on success or error code on failure.
 	 */
-	nserror (*fetch)(struct nsurl *url, enum backing_store_flags flags,
+	slateerror (*fetch)(struct slateurl *url, enum backing_store_flags flags,
 			 uint8_t **data, size_t *datalen);
 
 	/**
@@ -104,9 +104,9 @@ struct gui_llcache_table {
 	 *
 	 * @param url The url is used as the unique primary key to invalidate.
 	 * @param[in] flags The flags to control how the object data is released.
-	 * @return NSERROR_OK on success or error code on failure.
+	 * @return SLATEERROR_OK on success or error code on failure.
 	 */
-	nserror (*release)(struct nsurl *url, enum backing_store_flags flags);
+	slateerror (*release)(struct slateurl *url, enum backing_store_flags flags);
 
 	/**
 	 * Invalidate a source object from the backing store.
@@ -117,9 +117,9 @@ struct gui_llcache_table {
 	 * If the entry had data allocated it will be released.
 	 *
 	 * @param url The url is used as the unique primary key to invalidate.
-	 * @return NSERROR_OK on success or error code on failure.
+	 * @return SLATEERROR_OK on success or error code on failure.
 	 */
-	nserror (*invalidate)(struct nsurl *url);
+	slateerror (*invalidate)(struct slateurl *url);
 
 };
 

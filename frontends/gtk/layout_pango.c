@@ -1,7 +1,7 @@
 /*
  * Copyright 2005 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,10 +29,10 @@
 #include <gtk/gtk.h>
 
 #include "utils/log.h"
-#include "utils/nsoption.h"
-#include "netsurf/inttypes.h"
-#include "netsurf/layout.h"
-#include "netsurf/plot_style.h"
+#include "utils/slateoption.h"
+#include "slate/inttypes.h"
+#include "slate/layout.h"
+#include "slate/plot_style.h"
 
 #include "gtk/layout_pango.h"
 #include "gtk/plotters.h"
@@ -60,9 +60,9 @@ static inline void nsfont_pango_check(void)
  * \param[in] string UTF-8 string to measure
  * \param[in] length length of string, in bytes
  * \param[out] width updated to width of string[0..length)
- * \return NSERROR_OK and width updated or appropriate error code on faliure
+ * \return SLATEERROR_OK and width updated or appropriate error code on faliure
  */
-static nserror
+static slateerror
 nsfont_width(const plot_font_style_t *fstyle,
 	     const char *string,
 	     size_t length,
@@ -73,7 +73,7 @@ nsfont_width(const plot_font_style_t *fstyle,
 
 	if (length == 0) {
 		*width = 0;
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	nsfont_pango_check();
@@ -92,7 +92,7 @@ nsfont_width(const plot_font_style_t *fstyle,
 	      fstyle, (int)length, string, length, *width);
 
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -104,9 +104,9 @@ nsfont_width(const plot_font_style_t *fstyle,
  * \param[in] x coordinate to search for
  * \param[out] string_idx updated to offset in string of actual_x, [0..length]
  * \param[out] actual_x updated to x coordinate of character closest to x or full length if string_idx is 0
- * \return NSERROR_OK and string_idx and actual_x updated or appropriate error code on faliure
+ * \return SLATEERROR_OK and string_idx and actual_x updated or appropriate error code on faliure
  */
-static nserror
+static slateerror
 layout_position(PangoLayout *layout,
 		const char *string,
 		size_t length,
@@ -121,7 +121,7 @@ layout_position(PangoLayout *layout,
 	if (length == 0) {
 		*string_idx = 0;
 		*actual_x = 0;
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	x--; /* split x coordinate is exclusive */
@@ -149,7 +149,7 @@ layout_position(PangoLayout *layout,
 	pango_layout_index_to_pos(layout, index, &pos);
 	*actual_x = PANGO_PIXELS(pos.x);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -161,10 +161,10 @@ layout_position(PangoLayout *layout,
  * \param[in] x coordinate to search for
  * \param[out] char_offset updated to offset in string of actual_x, [0..length]
  * \param[out] actual_x updated to x coordinate of character closest to x
- * \return NSERROR_OK and char_offset and actual_x updated or appropriate
+ * \return SLATEERROR_OK and char_offset and actual_x updated or appropriate
  *          error code on faliure
  */
-static nserror
+static slateerror
 nsfont_position_in_string(const plot_font_style_t *fstyle,
 			  const char *string,
 			  size_t length,
@@ -173,7 +173,7 @@ nsfont_position_in_string(const plot_font_style_t *fstyle,
 			  int *actual_x)
 {
 	PangoFontDescription *desc;
-	nserror res;
+	slateerror res;
 
 	nsfont_pango_check();
 
@@ -205,7 +205,7 @@ nsfont_position_in_string(const plot_font_style_t *fstyle,
  * \param[in] x            width available
  * \param[out] char_offset updated to offset in string of actual_x, [1..length]
  * \param[out] actual_x updated to x coordinate of character closest to x
- * \return NSERROR_OK or appropriate error code on faliure
+ * \return SLATEERROR_OK or appropriate error code on faliure
  *
  * On exit, char_offset indicates first character after split point.
  *
@@ -218,7 +218,7 @@ nsfont_position_in_string(const plot_font_style_t *fstyle,
  *
  * Returning char_offset == length means no split possible
  */
-static nserror
+static slateerror
 nsfont_split(const plot_font_style_t *fstyle,
 	     const char *string,
 	     size_t length,
@@ -226,7 +226,7 @@ nsfont_split(const plot_font_style_t *fstyle,
 	     size_t *string_idx,
 	     int *actual_x)
 {
-	nserror res;
+	slateerror res;
 	PangoContext *context;
 	PangoLayout *layout;
 	PangoFontDescription *desc;
@@ -248,7 +248,7 @@ nsfont_split(const plot_font_style_t *fstyle,
 			      x,
 			      &split_len,
 			      &split_x);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto split_done;
 	}
 
@@ -316,14 +316,14 @@ split_done:
  * \param  fstyle  plot style for this text
  * \return  true on success, false on error and error reported
  */
-nserror nsfont_paint(int x, int y, const char *string, size_t length,
+slateerror nsfont_paint(int x, int y, const char *string, size_t length,
 		const plot_font_style_t *fstyle)
 {
 	PangoFontDescription *desc;
 	PangoLayoutLine *line;
 
 	if (length == 0)
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 
 	nsfont_pango_check();
 
@@ -335,10 +335,10 @@ nserror nsfont_paint(int x, int y, const char *string, size_t length,
 
 	line = pango_layout_get_line_readonly(nsfont_pango_layout, 0);
 	cairo_move_to(current_cr, x, y);
-	nsgtk_set_colour(fstyle->foreground);
+	slategtk_set_colour(fstyle->foreground);
 	pango_cairo_show_layout_line(current_cr, line);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -352,20 +352,20 @@ nsfont_style_to_description(const plot_font_style_t *fstyle)
 
 	switch (fstyle->family) {
 	case PLOT_FONT_FAMILY_SERIF:
-		desc = pango_font_description_from_string(nsoption_charp(font_serif));
+		desc = pango_font_description_from_string(slateoption_charp(font_serif));
 		break;
 	case PLOT_FONT_FAMILY_MONOSPACE:
-		desc = pango_font_description_from_string(nsoption_charp(font_mono));
+		desc = pango_font_description_from_string(slateoption_charp(font_mono));
 		break;
 	case PLOT_FONT_FAMILY_CURSIVE:
-		desc = pango_font_description_from_string(nsoption_charp(font_cursive));
+		desc = pango_font_description_from_string(slateoption_charp(font_cursive));
 		break;
 	case PLOT_FONT_FAMILY_FANTASY:
-		desc = pango_font_description_from_string(nsoption_charp(font_fantasy));
+		desc = pango_font_description_from_string(slateoption_charp(font_fantasy));
 		break;
 	case PLOT_FONT_FAMILY_SANS_SERIF:
 	default:
-		desc = pango_font_description_from_string(nsoption_charp(font_sans));
+		desc = pango_font_description_from_string(slateoption_charp(font_sans));
 		break;
 	}
 
@@ -398,4 +398,4 @@ static struct gui_layout_table layout_table = {
 	.split = nsfont_split,
 };
 
-struct gui_layout_table *nsgtk_layout_table = &layout_table;
+struct gui_layout_table *slategtk_layout_table = &layout_table;

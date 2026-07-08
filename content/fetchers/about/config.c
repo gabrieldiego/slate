@@ -25,9 +25,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "netsurf/types.h"
+#include "slate/types.h"
 #include "utils/errors.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 
 #include "private.h"
 #include "config.h"
@@ -44,7 +44,7 @@ bool fetch_about_config_handler(struct fetch_about_context *ctx)
 	int slen = 0;
 	unsigned int opt_loop = 0;
 	int elen = 0; /* entry length */
-	nserror res;
+	slateerror res;
 	bool even = false;
 
 	/* content is going to return ok */
@@ -71,14 +71,14 @@ bool fetch_about_config_handler(struct fetch_about_context *ctx)
 			"<th>Type</th>"
 			"<th>Provenance</th>"
 			"<th>Setting</th></tr>\n");
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_config_handler_aborted;
 	}
 
 
 	do {
 		if (even) {
-			elen = nsoption_snoptionf(buffer + slen,
+			elen = slateoption_snoptionf(buffer + slen,
 					sizeof buffer - slen,
 					opt_loop,
 					"<tr class=\"ns-even-bg\">"
@@ -88,7 +88,7 @@ bool fetch_about_config_handler(struct fetch_about_context *ctx)
 						"<td class=\"ns-border\">%V</td>"
 					"</tr>\n");
 		} else {
-			elen = nsoption_snoptionf(buffer + slen,
+			elen = slateoption_snoptionf(buffer + slen,
 					sizeof buffer - slen,
 					opt_loop,
 					"<tr class=\"ns-odd-bg\">"
@@ -104,7 +104,7 @@ bool fetch_about_config_handler(struct fetch_about_context *ctx)
 		if (elen >= (int) (sizeof buffer - slen)) {
 			/* last entry would not fit in buffer, submit buffer */
 			res = fetch_about_senddata(ctx, (const uint8_t *)buffer, slen);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				goto fetch_about_config_handler_aborted;
 			}
 			slen = 0;
@@ -120,7 +120,7 @@ bool fetch_about_config_handler(struct fetch_about_context *ctx)
 			 "</table>\n</body>\n</html>\n");
 
 	res = fetch_about_senddata(ctx, (const uint8_t *)buffer, slen);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_config_handler_aborted;
 	}
 

@@ -7,7 +7,7 @@
  * Copyright 2005 Adrian Lees <adrianl@users.sourceforge.net>
  * Copyright 2010-2014 Stephen Fryatt <stevef@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,8 +44,8 @@
 #include <oslib/wimpspriteop.h>
 #include <nsutils/time.h>
 
-#include "netsurf/inttypes.h"
-#include "utils/nsoption.h"
+#include "slate/inttypes.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/talloc.h"
 #include "utils/file.h"
@@ -53,15 +53,15 @@
 #include "utils/utils.h"
 #include "utils/messages.h"
 #include "utils/string.h"
-#include "utils/nsurl.h"
-#include "netsurf/content.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/plotters.h"
-#include "netsurf/window.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/url_db.h"
-#include "netsurf/form.h"
-#include "netsurf/keypress.h"
+#include "utils/slateurl.h"
+#include "slate/content.h"
+#include "slate/browser_window.h"
+#include "slate/plotters.h"
+#include "slate/window.h"
+#include "slate/bitmap.h"
+#include "slate/url_db.h"
+#include "slate/form.h"
+#include "slate/keypress.h"
 #include "desktop/browser_history.h"
 #include "desktop/cookie_manager.h"
 #include "desktop/searchweb.h"
@@ -133,7 +133,7 @@ static struct hlcache_handle		*current_menu_main = 0;
 /** Object under menu, or 0 if no object. */
 static struct hlcache_handle		*current_menu_object = 0;
 /** URL of link under menu, or 0 if no link. */
-static nsurl			*current_menu_url = 0;
+static slateurl			*current_menu_url = 0;
 
 static float scale_snap_to[] = {0.10, 0.125, 0.25, 0.333, 0.5, 0.75,
 				1.0,
@@ -582,7 +582,7 @@ static void ro_gui_window_update_toolbar_buttons(struct gui_window *g)
  */
 static void ro_gui_window_action_add_bookmark(struct gui_window *g)
 {
-	nsurl *url;
+	slateurl *url;
 
 	if (g == NULL || g->bw == NULL || g->toolbar == NULL ||
 			browser_window_has_content(g->bw) == false)
@@ -602,7 +602,7 @@ static void ro_gui_window_action_add_bookmark(struct gui_window *g)
  */
 static void ro_gui_window_action_remove_bookmark(struct gui_window *g)
 {
-	nsurl *url;
+	slateurl *url;
 
 	if (g == NULL || g->bw == NULL || g->toolbar == NULL ||
 			browser_window_has_content(g->bw) == false)
@@ -621,7 +621,7 @@ static void ro_gui_window_action_remove_bookmark(struct gui_window *g)
  */
 static void ro_gui_window_action_local_history(struct gui_window *gw)
 {
-	nserror res;
+	slateerror res;
 
 	if ((gw == NULL) || (gw->bw == NULL)) {
 		return;
@@ -629,7 +629,7 @@ static void ro_gui_window_action_local_history(struct gui_window *gw)
 
 	res = ro_gui_local_history_present(gw->window, gw->bw);
 
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		ro_warn_user(messages_get_errorcode(res), 0);
 	}
 }
@@ -642,19 +642,19 @@ static void ro_gui_window_action_local_history(struct gui_window *gw)
  */
 static void ro_gui_window_action_home(struct gui_window *g)
 {
-	static const char *addr = NETSURF_HOMEPAGE;
-	nsurl *url;
-	nserror error;
+	static const char *addr = SLATE_HOMEPAGE;
+	slateurl *url;
+	slateerror error;
 
 	if (g == NULL || g->bw == NULL)
 		return;
 
-	if (nsoption_charp(homepage_url) != NULL) {
-		addr = nsoption_charp(homepage_url);
+	if (slateoption_charp(homepage_url) != NULL) {
+		addr = slateoption_charp(homepage_url);
 	}
 
-	error = nsurl_create(addr, &url);
-	if (error == NSERROR_OK) {
+	error = slateurl_create(addr, &url);
+	if (error == SLATEERROR_OK) {
 		error = browser_window_navigate(g->bw,
 					url,
 					NULL,
@@ -662,9 +662,9 @@ static void ro_gui_window_action_home(struct gui_window *g)
 					NULL,
 					NULL,
 					NULL);
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		ro_warn_user(messages_get_errorcode(error), 0);
 	}
 }
@@ -757,7 +757,7 @@ static void ro_gui_window_prepare_pageinfo(struct gui_window *g)
 	title = content_get_title(h);
 	if (title == NULL)
 		title = "-";
-	url = nsurl_access(hlcache_handle_get_url(h));
+	url = slateurl_access(hlcache_handle_get_url(h));
 	if (url == NULL)
 		url = "-";
 	mime = content_get_mime_type(h);
@@ -824,7 +824,7 @@ ro_gui_window_toolbar_click(void *data,
 			    union toolbar_action action)
 {
 	struct gui_window *g = data;
-	nserror err;
+	slateerror err;
 
 	if (g == NULL)
 		return;
@@ -836,8 +836,8 @@ ro_gui_window_toolbar_click(void *data,
 		case TOOLBAR_URL_DRAG_FAVICON:
 		{
 			gui_save_type save_type;
-			nserror err;
-			nsurl *url;
+			slateerror err;
+			slateurl *url;
 
 			if (!browser_window_has_content(g->bw))
 				break;
@@ -848,16 +848,16 @@ ro_gui_window_toolbar_click(void *data,
 				save_type = GUI_SAVE_LINK_TEXT;
 
 			err = browser_window_get_url(g->bw, true, &url);
-			if (err != NSERROR_OK) {
+			if (err != SLATEERROR_OK) {
 				/* Fall back to access (won't get fragment). */
-				url = nsurl_ref(
+				url = slateurl_ref(
 					browser_window_access_url(g->bw));
 			}
 
 			ro_gui_drag_save_link(save_type, url,
 					browser_window_get_title(g->bw), g);
 
-			nsurl_unref(url);
+			slateurl_unref(url);
 		}
 			break;
 
@@ -966,14 +966,14 @@ ro_gui_window_toolbar_click(void *data,
 
 	case TOOLBAR_BUTTON_UP:
 		err = browser_window_navigate_up(g->bw, false);
-		if (err != NSERROR_OK) {
+		if (err != SLATEERROR_OK) {
 			ro_warn_user(messages_get_errorcode(err), NULL);
 		}
 		break;
 
 	case TOOLBAR_BUTTON_UP_NEW:
 		err = browser_window_navigate_up(g->bw, true);
-		if (err != NSERROR_OK) {
+		if (err != SLATEERROR_OK) {
 			ro_warn_user(messages_get_errorcode(err), NULL);
 		}
 		break;
@@ -994,8 +994,8 @@ ro_gui_window_toolbar_click(void *data,
  */
 static void ro_gui_window_launch_url(struct gui_window *g, const char *url_s)
 {
-	nserror error;
-	nsurl *url;
+	slateerror error;
+	slateurl *url;
 
 	if (url_s == NULL) {
 		return;
@@ -1004,7 +1004,7 @@ static void ro_gui_window_launch_url(struct gui_window *g, const char *url_s)
 	ro_gui_url_complete_close();
 
 	error = search_web_omni(url_s, SEARCH_WEB_OMNI_NONE, &url);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		ro_warn_user(messages_get_errorcode(error), 0);
 	} else {
 		ro_gui_window_set_url(g, url);
@@ -1012,7 +1012,7 @@ static void ro_gui_window_launch_url(struct gui_window *g, const char *url_s)
 		browser_window_navigate(g->bw, url,
 				NULL, BW_NAVIGATE_HISTORY,
 				NULL, NULL, NULL);
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
 }
 
@@ -1024,7 +1024,7 @@ static void ro_gui_window_launch_url(struct gui_window *g, const char *url_s)
  */
 static void ro_gui_window_action_new_window(struct gui_window *g)
 {
-	nserror error;
+	slateerror error;
 
 	if (g == NULL || g->bw == NULL)
 		return;
@@ -1033,7 +1033,7 @@ static void ro_gui_window_action_new_window(struct gui_window *g)
 			browser_window_access_url(g->bw),
 			NULL, g->bw, NULL);
 
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		ro_warn_user(messages_get_errorcode(error), 0);
 	}
 }
@@ -1291,7 +1291,7 @@ ro_gui_window_handle_local_keypress(struct gui_window *g,
 	uint32_t			c = (uint32_t) key->c;
 	wimp_scroll_direction		xscroll = wimp_SCROLL_NONE;
 	wimp_scroll_direction		yscroll = wimp_SCROLL_NONE;
-	nsurl				*url;
+	slateurl				*url;
 
 	if (g == NULL)
 		return false;
@@ -1312,18 +1312,18 @@ ro_gui_window_handle_local_keypress(struct gui_window *g,
 	switch (c) {
 	case IS_WIMP_KEY + wimp_KEY_F1:	/* Help. */
 	{
-		nserror error = nsurl_create(
-				"https://www.netsurf-browser.org/documentation/",
+		slateerror error = slateurl_create(
+				"https://www.slate-browser.org/documentation/",
 				&url);
-		if (error == NSERROR_OK) {
+		if (error == SLATEERROR_OK) {
 			error = browser_window_create(BW_CREATE_HISTORY,
 					url,
 					NULL,
 					NULL,
 					NULL);
-			nsurl_unref(url);
+			slateurl_unref(url);
 		}
-		if (error != NSERROR_OK) {
+		if (error != SLATEERROR_OK) {
 			ro_warn_user(messages_get_errorcode(error), 0);
 		}
 		return true;
@@ -1549,7 +1549,7 @@ static bool ro_gui_window_toolbar_keypress(void *data, wimp_key *key)
  */
 static void ro_gui_window_save_toolbar_buttons(void *data, char *config)
 {
-	nsoption_set_charp(toolbar_browser, config);
+	slateoption_set_charp(toolbar_browser, config);
 	ro_gui_save_options();
 }
 
@@ -1579,7 +1579,7 @@ static void ro_gui_window_close(wimp_w w)
 	os_error *error;
 	char *temp_name;
 	char *filename = NULL;
-	struct nsurl *url;
+	struct slateurl *url;
 	bool destroy;
 
 	error = xwimp_get_pointer_info(&pointer);
@@ -1597,7 +1597,7 @@ static void ro_gui_window_close(wimp_w w)
 
 		url = browser_window_access_url(g->bw);
 		if (url != NULL) {
-			netsurf_nsurl_to_path(url, &filename);
+			slate_slateurl_to_path(url, &filename);
 		}
 		if (filename != NULL) {
 			temp_name = malloc(strlen(filename) + 32);
@@ -2020,7 +2020,7 @@ ro_gui_window_prepare_form_select_menu(struct gui_window *g,
 	char *text_convert, *temp;
 	struct form_option *option;
 	bool reopen = true;
-	nserror err;
+	slateerror err;
 
 	assert(control);
 
@@ -2063,9 +2063,9 @@ ro_gui_window_prepare_form_select_menu(struct gui_window *g,
 		}
 		err = utf8_to_local_encoding(messages_get("SelectMenu"), 0,
 				&text_convert);
-		if (err != NSERROR_OK) {
+		if (err != SLATEERROR_OK) {
 			/* badenc should never happen */
-			assert(err != NSERROR_BAD_ENCODING);
+			assert(err != SLATEERROR_BAD_ENCODING);
 			NSLOG(netsurf, INFO, "utf8_to_local_encoding failed");
 			ro_warn_user("NoMemory", 0);
 			ro_gui_menu_destroy();
@@ -2100,10 +2100,10 @@ ro_gui_window_prepare_form_select_menu(struct gui_window *g,
 
 			err = utf8_to_local_encoding(temp,
 				0, &text_convert);
-			if (err != NSERROR_OK) {
+			if (err != SLATEERROR_OK) {
 				/* A bad encoding should never happen,
 				 * so assert this */
-				assert(err != NSERROR_BAD_ENCODING);
+				assert(err != SLATEERROR_BAD_ENCODING);
 				NSLOG(netsurf, INFO, "utf8_to_enc failed");
 				ro_warn_user("NoMemory", 0);
 				ro_gui_menu_destroy();
@@ -2402,10 +2402,10 @@ ro_gui_window_menu_prepare(wimp_w w,
 	/* View Submenu */
 
 	ro_gui_menu_set_entry_ticked(menu, BROWSER_IMAGES_FOREGROUND,
-			g != NULL && nsoption_bool(foreground_images));
+			g != NULL && slateoption_bool(foreground_images));
 
 	ro_gui_menu_set_entry_ticked(menu, BROWSER_IMAGES_BACKGROUND,
-			g != NULL && nsoption_bool(background_images));
+			g != NULL && slateoption_bool(background_images));
 
 	ro_gui_menu_set_entry_shaded(menu, BROWSER_BUFFER_ANIMS,
 			g == NULL || g->option.buffer_everything);
@@ -2421,16 +2421,16 @@ ro_gui_window_menu_prepare(wimp_w w,
 	ro_gui_menu_set_entry_shaded(menu, BROWSER_SCALE_VIEW, !have_content);
 
 	ro_gui_menu_set_entry_shaded(menu, BROWSER_WINDOW_STAGGER,
-			nsoption_int(window_screen_width) == 0);
+			slateoption_int(window_screen_width) == 0);
 	ro_gui_menu_set_entry_ticked(menu, BROWSER_WINDOW_STAGGER,
-			((nsoption_int(window_screen_width) == 0) ||
-			 nsoption_bool(window_stagger)));
+			((slateoption_int(window_screen_width) == 0) ||
+			 slateoption_bool(window_stagger)));
 
 	ro_gui_menu_set_entry_ticked(menu, BROWSER_WINDOW_COPY,
-			nsoption_bool(window_size_clone));
+			slateoption_bool(window_size_clone));
 
 	ro_gui_menu_set_entry_shaded(menu, BROWSER_WINDOW_RESET,
-			nsoption_int(window_screen_width) == 0);
+			slateoption_int(window_screen_width) == 0);
 
 
 	/* Utilities Submenu */
@@ -2447,7 +2447,7 @@ ro_gui_window_menu_prepare(wimp_w w,
 
 	ro_gui_menu_set_entry_ticked(menu, HELP_LAUNCH_INTERACTIVE,
 			ro_gui_interactive_help_available() &&
-				     nsoption_bool(interactive_help));
+				     slateoption_bool(interactive_help));
 
 	return true;
 }
@@ -2480,7 +2480,7 @@ ro_gui_window_process_form_select_menu(struct gui_window *g,
  */
 static void
 ro_gui_window_prepare_objectinfo(struct hlcache_handle *object,
-				 nsurl *target_url)
+				 slateurl *target_url)
 {
 	char icon_buf[20] = "file_xxx";
 	const char *url;
@@ -2492,14 +2492,14 @@ ro_gui_window_prepare_objectinfo(struct hlcache_handle *object,
 		sprintf(icon_buf, "file_xxx");
 	}
 
-	url = nsurl_access(hlcache_handle_get_url(object));
+	url = slateurl_access(hlcache_handle_get_url(object));
 	if (url == NULL) {
 		url = "-";
 	}
 	mime = content_get_mime_type(object);
 
 	if (target_url != NULL) {
-		target = nsurl_access(target_url);
+		target = slateurl_access(target_url);
 	}
 
 	ro_gui_set_icon_string(dialog_objinfo, ICON_OBJINFO_ICON,
@@ -2550,8 +2550,8 @@ ro_gui_window_menu_select(wimp_w w,
 	struct hlcache_handle *h;
 	struct toolbar *toolbar;
 	wimp_window_state state;
-	nsurl *url;
-	nserror error = NSERROR_OK;
+	slateurl *url;
+	slateerror error = SLATEERROR_OK;
 
 	g = (struct gui_window *) ro_gui_wimp_event_get_user_data(w);
 	toolbar = g->toolbar;
@@ -2575,72 +2575,72 @@ ro_gui_window_menu_select(wimp_w w,
 
 		/* help actions */
 	case HELP_OPEN_CONTENTS:
-		error = nsurl_create("https://www.netsurf-browser.org/documentation/", &url);
-		if (error == NSERROR_OK) {
+		error = slateurl_create("https://www.slate-browser.org/documentation/", &url);
+		if (error == SLATEERROR_OK) {
 			error = browser_window_create(BW_CREATE_HISTORY,
 						      url,
 						      NULL,
 						      NULL,
 						      NULL);
-			nsurl_unref(url);
+			slateurl_unref(url);
 		}
 		break;
 
 	case HELP_OPEN_GUIDE:
-		error = nsurl_create("https://www.netsurf-browser.org/documentation/guide", &url);
-		if (error == NSERROR_OK) {
+		error = slateurl_create("https://www.slate-browser.org/documentation/guide", &url);
+		if (error == SLATEERROR_OK) {
 			error = browser_window_create(BW_CREATE_HISTORY,
 						      url,
 						      NULL,
 						      NULL,
 						      NULL);
-			nsurl_unref(url);
+			slateurl_unref(url);
 		}
 		break;
 
 	case HELP_OPEN_INFORMATION:
-		error = nsurl_create("https://www.netsurf-browser.org/documentation/info", &url);
-		if (error == NSERROR_OK) {
+		error = slateurl_create("https://www.slate-browser.org/documentation/info", &url);
+		if (error == SLATEERROR_OK) {
 			error = browser_window_create(BW_CREATE_HISTORY,
 						      url,
 						      NULL,
 						      NULL,
 						      NULL);
-			nsurl_unref(url);
+			slateurl_unref(url);
 		}
 		break;
 
 	case HELP_OPEN_CREDITS:
-		error = nsurl_create("about:credits", &url);
-		if (error == NSERROR_OK) {
+		error = slateurl_create("about:credits", &url);
+		if (error == SLATEERROR_OK) {
 			error = browser_window_create(BW_CREATE_HISTORY,
 						      url,
 						      NULL,
 						      NULL,
 						      NULL);
-			nsurl_unref(url);
+			slateurl_unref(url);
 		}
 		break;
 
 	case HELP_OPEN_LICENCE:
-		error = nsurl_create("about:licence", &url);
-		if (error == NSERROR_OK) {
+		error = slateurl_create("about:licence", &url);
+		if (error == SLATEERROR_OK) {
 			error = browser_window_create(BW_CREATE_HISTORY,
 						      url,
 						      NULL,
 						      NULL,
 						      NULL);
-			nsurl_unref(url);
+			slateurl_unref(url);
 		}
 		break;
 
 	case HELP_LAUNCH_INTERACTIVE:
 		if (!ro_gui_interactive_help_available()) {
 			ro_gui_interactive_help_start();
-			nsoption_set_bool(interactive_help, true);
+			slateoption_set_bool(interactive_help, true);
 		} else {
-			nsoption_set_bool(interactive_help,
-					  !nsoption_bool(interactive_help));
+			slateoption_set_bool(interactive_help,
+					  !slateoption_bool(interactive_help));
 		}
 		break;
 
@@ -2893,13 +2893,13 @@ ro_gui_window_menu_select(wimp_w w,
 		break;
 	case BROWSER_IMAGES_FOREGROUND:
 		if (g != NULL)
-			nsoption_set_bool(foreground_images,
-					  !nsoption_bool(foreground_images));
+			slateoption_set_bool(foreground_images,
+					  !slateoption_bool(foreground_images));
 		break;
 	case BROWSER_IMAGES_BACKGROUND:
 		if (g != NULL)
-			nsoption_set_bool(background_images,
-					  !nsoption_bool(background_images));
+			slateoption_set_bool(background_images,
+					  !slateoption_bool(background_images));
 		break;
 	case BROWSER_BUFFER_ANIMS:
 		if (g != NULL)
@@ -2921,8 +2921,8 @@ ro_gui_window_menu_select(wimp_w w,
 		if (g != NULL) {
 			os_error *oserror;
 
-			ro_gui_screen_size(&nsoption_int(window_screen_width),
-					   &nsoption_int(window_screen_height));
+			ro_gui_screen_size(&slateoption_int(window_screen_width),
+					   &slateoption_int(window_screen_height));
 			state.w = w;
 			oserror = xwimp_get_window_state(&state);
 			if (oserror) {
@@ -2932,28 +2932,28 @@ ro_gui_window_menu_select(wimp_w w,
 				      oserror->errmess);
 				ro_warn_user("WimpError", oserror->errmess);
 			}
-			nsoption_set_int(window_x, state.visible.x0);
-			nsoption_set_int(window_y, state.visible.y0);
-			nsoption_set_int(window_width,
+			slateoption_set_int(window_x, state.visible.x0);
+			slateoption_set_int(window_y, state.visible.y0);
+			slateoption_set_int(window_width,
 					 state.visible.x1 - state.visible.x0);
-			nsoption_set_int(window_height,
+			slateoption_set_int(window_height,
 					 state.visible.y1 - state.visible.y0);
 			ro_gui_save_options();
 		}
 		break;
 	case BROWSER_WINDOW_STAGGER:
-		nsoption_set_bool(window_stagger,
-				  !nsoption_bool(window_stagger));
+		slateoption_set_bool(window_stagger,
+				  !slateoption_bool(window_stagger));
 		ro_gui_save_options();
 		break;
 	case BROWSER_WINDOW_COPY:
-		nsoption_set_bool(window_size_clone,
-				  !nsoption_bool(window_size_clone));
+		slateoption_set_bool(window_size_clone,
+				  !slateoption_bool(window_size_clone));
 		ro_gui_save_options();
 		break;
 	case BROWSER_WINDOW_RESET:
-		nsoption_set_int(window_screen_width, 0);
-		nsoption_set_int(window_screen_height, 0);
+		slateoption_set_int(window_screen_width, 0);
+		slateoption_set_int(window_screen_height, 0);
 		ro_gui_save_options();
 		break;
 
@@ -2984,7 +2984,7 @@ ro_gui_window_menu_select(wimp_w w,
 		return false;
 	}
 
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		ro_warn_user(messages_get_errorcode(error), 0);
 	}
 
@@ -3233,8 +3233,8 @@ ro_gui_window_clone_options(struct gui_window *new_gui,
 	/*	Clone the basic options
 	*/
 	if (!old_gui) {
-		new_gui->option.buffer_animations = nsoption_bool(buffer_animations);
-		new_gui->option.buffer_everything = nsoption_bool(buffer_everything);
+		new_gui->option.buffer_animations = slateoption_bool(buffer_animations);
+		new_gui->option.buffer_everything = slateoption_bool(buffer_everything);
 	} else {
 		new_gui->option = old_gui->option;
 	}
@@ -3243,11 +3243,11 @@ ro_gui_window_clone_options(struct gui_window *new_gui,
 	*/
 	if (new_gui->toolbar) {
 		ro_toolbar_set_display_buttons(new_gui->toolbar,
-					       nsoption_bool(toolbar_show_buttons));
+					       slateoption_bool(toolbar_show_buttons));
 		ro_toolbar_set_display_url(new_gui->toolbar,
-					   nsoption_bool(toolbar_show_address));
+					   slateoption_bool(toolbar_show_address));
 		ro_toolbar_set_display_throbber(new_gui->toolbar,
-						nsoption_bool(toolbar_show_throbber));
+						slateoption_bool(toolbar_show_throbber));
 		if ((old_gui) && (old_gui->toolbar)) {
 			ro_toolbar_set_display_buttons(new_gui->toolbar,
 					ro_toolbar_get_display_buttons(
@@ -3302,7 +3302,7 @@ static struct gui_window *gui_window_create(struct browser_window *bw,
 	/* Set the window position */
 	if (existing != NULL &&
 			flags & GW_CREATE_CLONE &&
-			nsoption_bool(window_size_clone)) {
+			slateoption_bool(window_size_clone)) {
 		state.w = existing->window;
 		error = xwimp_get_window_state(&state);
 		if (error) {
@@ -3322,21 +3322,21 @@ static struct gui_window *gui_window_create(struct browser_window *bw,
 		ro_gui_screen_size(&screen_width, &screen_height);
 
 		/* Check if we have a preferred position */
-		if ((nsoption_int(window_screen_width) != 0) &&
-		    (nsoption_int(window_screen_height) != 0)) {
-			win_width = (nsoption_int(window_width) *
+		if ((slateoption_int(window_screen_width) != 0) &&
+		    (slateoption_int(window_screen_height) != 0)) {
+			win_width = (slateoption_int(window_width) *
 					screen_width) /
-					nsoption_int(window_screen_width);
-			win_height = (nsoption_int(window_height) *
+					slateoption_int(window_screen_width);
+			win_height = (slateoption_int(window_height) *
 					screen_height) /
-					nsoption_int(window_screen_height);
-			window.visible.x0 = (nsoption_int(window_x) *
+					slateoption_int(window_screen_height);
+			window.visible.x0 = (slateoption_int(window_x) *
 					screen_width) /
-					nsoption_int(window_screen_width);
-			window.visible.y0 = (nsoption_int(window_y) *
+					slateoption_int(window_screen_width);
+			window.visible.y0 = (slateoption_int(window_y) *
 					screen_height) /
-					nsoption_int(window_screen_height);
-			if (nsoption_bool(window_stagger)) {
+					slateoption_int(window_screen_height);
+			if (slateoption_bool(window_stagger)) {
 				window.visible.y0 += 96 -
 						(48 * (window_count % 5));
 			}
@@ -3430,7 +3430,7 @@ static struct gui_window *gui_window_create(struct browser_window *bw,
 
 	/* Add in a toolbar and status bar */
 	g->status_bar = ro_gui_status_bar_create(g->window,
-						 nsoption_int(toolbar_status_size));
+						 slateoption_int(toolbar_status_size));
 	g->toolbar = ro_toolbar_create(NULL, g->window,
 			THEME_STYLE_BROWSER_TOOLBAR, TOOLBAR_FLAGS_NONE,
 			&ro_gui_window_toolbar_callbacks, g,
@@ -3438,7 +3438,7 @@ static struct gui_window *gui_window_create(struct browser_window *bw,
 	if (g->toolbar != NULL) {
 		ro_toolbar_add_buttons(g->toolbar,
 				brower_toolbar_buttons,
-				       nsoption_charp(toolbar_browser));
+				       slateoption_charp(toolbar_browser));
 		ro_toolbar_add_url(g->toolbar);
 		ro_toolbar_add_throbber(g->toolbar);
 		ro_toolbar_rebuild(g->toolbar);
@@ -3645,9 +3645,9 @@ static bool gui_window_get_scroll(struct gui_window *g, int *sx, int *sy)
  *
  * \param g gui window to scroll
  * \param rect The rectangle to ensure is shown.
- * \return NSERROR_OK on success or apropriate error code.
+ * \return SLATEERROR_OK on success or apropriate error code.
  */
-static nserror
+static slateerror
 gui_window_set_scroll(struct gui_window *g, const struct rect *rect)
 {
 	wimp_window_state state;
@@ -3662,7 +3662,7 @@ gui_window_set_scroll(struct gui_window *g, const struct rect *rect)
 		NSLOG(netsurf, INFO, "xwimp_get_window_state: 0x%x: %s",
 		      error->errnum, error->errmess);
 		ro_warn_user("WimpError", error->errmess);
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if (g->toolbar) {
@@ -3741,7 +3741,7 @@ gui_window_set_scroll(struct gui_window *g, const struct rect *rect)
 	}
 	ro_gui_window_open(PTR_WIMP_OPEN(&state));
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -3751,16 +3751,16 @@ gui_window_set_scroll(struct gui_window *g, const struct rect *rect)
  * \param gw gui window to measure
  * \param width receives width of window
  * \param height receives height of window
- * \return NSERROR_OK and width and height updated
+ * \return SLATEERROR_OK and width and height updated
  */
-static nserror
+static slateerror
 gui_window_get_dimensions(struct gui_window *gw, int *width, int *height)
 {
 	/* use the cached window sizes */
 	*width = gw->old_width / 2;
 	*height = gw->old_height / 2;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -4052,12 +4052,12 @@ gui_window_drag_start(struct gui_window *g,
  * \param url The url of the link
  * \param title The title of the link
  */
-static nserror
-gui_window_save_link(struct gui_window *g, nsurl *url, const char *title)
+static slateerror
+gui_window_save_link(struct gui_window *g, slateurl *url, const char *title)
 {
 	ro_gui_save_prepare(GUI_SAVE_LINK_URL, NULL, NULL, url, title);
 	ro_gui_dialog_open_persistent(g->window, dialog_saveas, true);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -4112,7 +4112,7 @@ ro_gui_window_import_text(struct gui_window *g, const char *filename)
 	os_error *error;
 	char *buf, *utf8_buf, *sp;
 	int size;
-	nserror ret;
+	slateerror ret;
 	const char *ep;
 	char *p;
 
@@ -4147,9 +4147,9 @@ ro_gui_window_import_text(struct gui_window *g, const char *filename)
 	}
 
 	ret = utf8_from_local_encoding(buf, size, &utf8_buf);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		/* bad encoding shouldn't happen */
-		assert(ret != NSERROR_BAD_ENCODING);
+		assert(ret != SLATEERROR_BAD_ENCODING);
 		NSLOG(netsurf, INFO, "utf8_from_local_encoding failed");
 		free(buf);
 		ro_warn_user("NoMemory", NULL);
@@ -4182,9 +4182,9 @@ ro_gui_window_import_text(struct gui_window *g, const char *filename)
  *
  * \param gw The window receiving the event.
  * \param event The event code.
- * \return NSERROR_OK when processed ok
+ * \return SLATEERROR_OK when processed ok
  */
-static nserror
+static slateerror
 ro_gui_window_event(struct gui_window *gw, enum gui_window_event event)
 {
 	switch (event) {
@@ -4224,7 +4224,7 @@ ro_gui_window_event(struct gui_window *gw, enum gui_window_event event)
 	default:
 		break;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -4367,7 +4367,7 @@ void ro_gui_window_initialise(void)
 
 
 /* exported interface documented in riscos/window.h */
-nserror
+slateerror
 ro_gui_window_invalidate_area(struct gui_window *g, const struct rect *rect)
 {
 	bool use_buffer;
@@ -4387,7 +4387,7 @@ ro_gui_window_invalidate_area(struct gui_window *g, const struct rect *rect)
 			      error->errnum,
 			      error->errmess);
 			ro_warn_user("WimpError", error->errmess);
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
 
 		error = xwimp_force_redraw(g->window,
@@ -4397,9 +4397,9 @@ ro_gui_window_invalidate_area(struct gui_window *g, const struct rect *rect)
 			NSLOG(netsurf, INFO, "xwimp_force_redraw: 0x%x: %s",
 			      error->errnum, error->errmess);
 			ro_warn_user("WimpError", error->errmess);
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	x0 = floorf(rect->x0 * 2 );
@@ -4423,14 +4423,14 @@ ro_gui_window_invalidate_area(struct gui_window *g, const struct rect *rect)
 				cur->y0 = min(cur->y0, y0);
 				cur->x1 = max(cur->x1, x1);
 				cur->y1 = max(cur->y1, y1);
-				return NSERROR_OK;
+				return SLATEERROR_OK;
 			}
 		}
 	}
 	cur = malloc(sizeof(struct update_box));
 	if (!cur) {
 		NSLOG(netsurf, INFO, "No memory for malloc.");
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	cur->x0 = x0;
@@ -4442,23 +4442,23 @@ ro_gui_window_invalidate_area(struct gui_window *g, const struct rect *rect)
 	cur->g = g;
 	cur->use_buffer = use_buffer;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported function documented in riscos/window.h */
-nserror ro_gui_window_set_url(struct gui_window *g, nsurl *url)
+slateerror ro_gui_window_set_url(struct gui_window *g, slateurl *url)
 {
 	size_t idn_url_l;
 	char *idn_url_s = NULL;
 
 	if (g->toolbar) {
-		if (nsoption_bool(display_decoded_idn) == true) {
-			if (nsurl_get_utf8(url, &idn_url_s, &idn_url_l) != NSERROR_OK)
+		if (slateoption_bool(display_decoded_idn) == true) {
+			if (slateurl_get_utf8(url, &idn_url_s, &idn_url_l) != SLATEERROR_OK)
 				idn_url_s = NULL;
 		}
 
-		ro_toolbar_set_url(g->toolbar, idn_url_s ? idn_url_s : nsurl_access(url), true, false);
+		ro_toolbar_set_url(g->toolbar, idn_url_s ? idn_url_s : slateurl_access(url), true, false);
 
 		if (idn_url_s)
 			free(idn_url_s);
@@ -4466,7 +4466,7 @@ nserror ro_gui_window_set_url(struct gui_window *g, nsurl *url)
 		ro_gui_url_complete_start(g->toolbar);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -4799,21 +4799,21 @@ void ro_gui_window_default_options(struct gui_window *gui)
 	cscale = browser_window_get_scale(gui->bw);
 
 	/*	Save the basic options	*/
-	nsoption_set_int(scale, cscale * 100);
-	nsoption_set_bool(buffer_animations, gui->option.buffer_animations);
-	nsoption_set_bool(buffer_everything, gui->option.buffer_everything);
+	slateoption_set_int(scale, cscale * 100);
+	slateoption_set_bool(buffer_animations, gui->option.buffer_animations);
+	slateoption_set_bool(buffer_everything, gui->option.buffer_everything);
 
 	/*	Set up the toolbar	*/
 	if (gui->toolbar != NULL) {
-		nsoption_set_bool(toolbar_show_buttons,
+		slateoption_set_bool(toolbar_show_buttons,
 				  ro_toolbar_get_display_buttons(gui->toolbar));
-		nsoption_set_bool(toolbar_show_address,
+		slateoption_set_bool(toolbar_show_address,
 				  ro_toolbar_get_display_url(gui->toolbar));
-		nsoption_set_bool(toolbar_show_throbber,
+		slateoption_set_bool(toolbar_show_throbber,
 				  ro_toolbar_get_display_throbber(gui->toolbar));
 	}
 	if (gui->status_bar != NULL) {
-		nsoption_set_int(toolbar_status_size,
+		slateoption_set_int(toolbar_status_size,
 				 ro_gui_status_bar_get_width(gui->status_bar));
 	}
 }

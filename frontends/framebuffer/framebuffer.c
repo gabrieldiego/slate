@@ -3,7 +3,7 @@
  *
  * Framebuffer interface
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,9 +31,9 @@
 #include "utils/utils.h"
 #include "utils/log.h"
 #include "utils/utf8.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/plotters.h"
-#include "netsurf/bitmap.h"
+#include "slate/browser_window.h"
+#include "slate/plotters.h"
+#include "slate/bitmap.h"
 
 #include "framebuffer/gui.h"
 #include "framebuffer/fbtk.h"
@@ -42,7 +42,7 @@
 #include "framebuffer/bitmap.h"
 
 /* netsurf framebuffer library handle */
-static nsfb_t *nsfb;
+static nsfb_t *slatefb;
 
 
 /**
@@ -51,9 +51,9 @@ static nsfb_t *nsfb;
  * \param ctx The current redraw context.
  * \param clip The rectangle to limit all subsequent plot
  *              operations within.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 framebuffer_plot_clip(const struct redraw_context *ctx, const struct rect *clip)
 {
 	nsfb_bbox_t nsfb_clip;
@@ -62,10 +62,10 @@ framebuffer_plot_clip(const struct redraw_context *ctx, const struct rect *clip)
 	nsfb_clip.x1 = clip->x1;
 	nsfb_clip.y1 = clip->y1;
 
-	if (!nsfb_plot_set_clip(nsfb, &nsfb_clip)) {
-		return NSERROR_INVALID;
+	if (!nsfb_plot_set_clip(slatefb, &nsfb_clip)) {
+		return SLATEERROR_INVALID;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -83,17 +83,17 @@ framebuffer_plot_clip(const struct redraw_context *ctx, const struct rect *clip)
  * \param radius The radius of the arc.
  * \param angle1 The start angle of the arc.
  * \param angle2 The finish angle of the arc.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 framebuffer_plot_arc(const struct redraw_context *ctx,
 	       const plot_style_t *style,
 	       int x, int y, int radius, int angle1, int angle2)
 {
-	if (!nsfb_plot_arc(nsfb, x, y, radius, angle1, angle2, style->fill_colour)) {
-		return NSERROR_INVALID;
+	if (!nsfb_plot_arc(slatefb, x, y, radius, angle1, angle2, style->fill_colour)) {
+		return SLATEERROR_INVALID;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -107,9 +107,9 @@ framebuffer_plot_arc(const struct redraw_context *ctx,
  * \param x x coordinate of circle centre.
  * \param y y coordinate of circle centre.
  * \param radius circle radius.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 framebuffer_plot_disc(const struct redraw_context *ctx,
 		const plot_style_t *style,
 		int x, int y, int radius)
@@ -121,13 +121,13 @@ framebuffer_plot_disc(const struct redraw_context *ctx,
 	ellipse.y1 = y + radius;
 
 	if (style->fill_type != PLOT_OP_TYPE_NONE) {
-		nsfb_plot_ellipse_fill(nsfb, &ellipse, style->fill_colour);
+		nsfb_plot_ellipse_fill(slatefb, &ellipse, style->fill_colour);
 	}
 
 	if (style->stroke_type != PLOT_OP_TYPE_NONE) {
-		nsfb_plot_ellipse(nsfb, &ellipse, style->stroke_colour);
+		nsfb_plot_ellipse(slatefb, &ellipse, style->stroke_colour);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -140,9 +140,9 @@ framebuffer_plot_disc(const struct redraw_context *ctx,
  * \param ctx The current redraw context.
  * \param style Style controlling the line plot.
  * \param line A rectangle defining the line to be drawn
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 framebuffer_plot_line(const struct redraw_context *ctx,
 		const plot_style_t *style,
 		const struct rect *line)
@@ -169,10 +169,10 @@ framebuffer_plot_line(const struct redraw_context *ctx,
 
 		pen.stroke_colour = style->stroke_colour;
 		pen.stroke_width = plot_style_fixed_to_int(style->stroke_width);
-		nsfb_plot_line(nsfb, &rect, &pen);
+		nsfb_plot_line(slatefb, &rect, &pen);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -187,9 +187,9 @@ framebuffer_plot_line(const struct redraw_context *ctx,
  * \param ctx The current redraw context.
  * \param style Style controlling the rectangle plot.
  * \param nsrect A rectangle defining the line to be drawn
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 framebuffer_plot_rectangle(const struct redraw_context *ctx,
 		     const plot_style_t *style,
 		     const struct rect *nsrect)
@@ -204,7 +204,7 @@ framebuffer_plot_rectangle(const struct redraw_context *ctx,
 	rect.y1 = nsrect->y1;
 
 	if (style->fill_type != PLOT_OP_TYPE_NONE) {
-		nsfb_plot_rectangle_fill(nsfb, &rect, style->fill_colour);
+		nsfb_plot_rectangle_fill(slatefb, &rect, style->fill_colour);
 	}
 
 	if (style->stroke_type != PLOT_OP_TYPE_NONE) {
@@ -216,11 +216,11 @@ framebuffer_plot_rectangle(const struct redraw_context *ctx,
 			dashed = true;
 		}
 
-		nsfb_plot_rectangle(nsfb, &rect,
+		nsfb_plot_rectangle(slatefb, &rect,
 				plot_style_fixed_to_int(style->stroke_width),
 				style->stroke_colour, dotted, dashed);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -236,18 +236,18 @@ framebuffer_plot_rectangle(const struct redraw_context *ctx,
  * \param style Style controlling the polygon plot.
  * \param p verticies of polygon
  * \param n number of verticies.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 framebuffer_plot_polygon(const struct redraw_context *ctx,
 		   const plot_style_t *style,
 		   const int *p,
 		   unsigned int n)
 {
-	if (!nsfb_plot_polygon(nsfb, p, n, style->fill_colour)) {
-		return NSERROR_INVALID;
+	if (!nsfb_plot_polygon(slatefb, p, n, style->fill_colour)) {
+		return SLATEERROR_INVALID;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -262,9 +262,9 @@ framebuffer_plot_polygon(const struct redraw_context *ctx,
  * \param p elements of path
  * \param n nunber of elements on path
  * \param transform A transform to apply to the path.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 framebuffer_plot_path(const struct redraw_context *ctx,
 		const plot_style_t *pstyle,
 		const float *p,
@@ -272,7 +272,7 @@ framebuffer_plot_path(const struct redraw_context *ctx,
 		const float transform[6])
 {
 	NSLOG(netsurf, INFO, "path unimplemented");
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -298,9 +298,9 @@ framebuffer_plot_path(const struct redraw_context *ctx,
  * \param height The height of area to plot the bitmap into
  * \param bg the background colour to alpha blend into
  * \param flags the flags controlling the type of plot operation
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 framebuffer_plot_bitmap(const struct redraw_context *ctx,
 		  struct bitmap *bitmap,
 		  int x, int y,
@@ -333,13 +333,13 @@ framebuffer_plot_bitmap(const struct redraw_context *ctx,
 		loc.x1 = loc.x0 + width;
 		loc.y1 = loc.y0 + height;
 
-		if (!nsfb_plot_copy(bm, NULL, nsfb, &loc)) {
-			return NSERROR_INVALID;
+		if (!nsfb_plot_copy(bm, NULL, slatefb, &loc)) {
+			return SLATEERROR_INVALID;
 		}
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
-	nsfb_plot_get_clip(nsfb, &clipbox);
+	nsfb_plot_get_clip(slatefb, &clipbox);
 	nsfb_get_geometry(bm, &bmwidth, &bmheight, &bmformat);
 	nsfb_get_buffer(bm, &bmptr, &bmstride);
 
@@ -347,11 +347,11 @@ framebuffer_plot_bitmap(const struct redraw_context *ctx,
 	 * of the area.  Can only be done when image is fully opaque. */
 	if ((bmwidth == 1) && (bmheight == 1)) {
 		if ((*(nsfb_colour_t *)bmptr & 0xff000000) != 0) {
-			if (!nsfb_plot_rectangle_fill(nsfb, &clipbox,
+			if (!nsfb_plot_rectangle_fill(slatefb, &clipbox,
 						      *(nsfb_colour_t *)bmptr)) {
-				return NSERROR_INVALID;
+				return SLATEERROR_INVALID;
 			}
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 	}
 
@@ -362,11 +362,11 @@ framebuffer_plot_bitmap(const struct redraw_context *ctx,
 		if (framebuffer_bitmap_get_opaque(bm)) {
 			/** TODO: Currently using top left pixel. Maybe centre
 			 *        pixel or average value would be better. */
-			if (!nsfb_plot_rectangle_fill(nsfb, &clipbox,
+			if (!nsfb_plot_rectangle_fill(slatefb, &clipbox,
 						      *(nsfb_colour_t *)bmptr)) {
-				return NSERROR_INVALID;
+				return SLATEERROR_INVALID;
 			}
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 	}
 
@@ -387,13 +387,13 @@ framebuffer_plot_bitmap(const struct redraw_context *ctx,
 	loc.y1 = loc.y0 + height;
 
 	/* plot tiling across and down to extents */
-	nsfb_plot_bitmap_tiles(nsfb, &loc,
+	nsfb_plot_bitmap_tiles(slatefb, &loc,
 			repeat_x ? ((clipbox.x1 - x) + width  - 1) / width  : 1,
 			repeat_y ? ((clipbox.y1 - y) + height - 1) / height : 1,
 			(nsfb_colour_t *)bmptr, bmwidth, bmheight,
 			bmstride * 8 / 32, bmformat == NSFB_FMT_ABGR8888);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -407,9 +407,9 @@ framebuffer_plot_bitmap(const struct redraw_context *ctx,
  * \param y y coordinate
  * \param text UTF-8 string to plot
  * \param length length of string, in bytes
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 framebuffer_plot_text(const struct redraw_context *ctx,
 		const struct plot_font_style *fstyle,
 		int x,
@@ -441,13 +441,13 @@ framebuffer_plot_text(const struct redraw_context *ctx,
 
 			/* now, draw to our target surface */
 			if (bglyph->bitmap.pixel_mode == FT_PIXEL_MODE_MONO) {
-			    nsfb_plot_glyph1(nsfb,
+			    nsfb_plot_glyph1(slatefb,
 					     &loc,
 					     bglyph->bitmap.buffer,
 					     bglyph->bitmap.pitch,
 					     fstyle->foreground);
 			} else {
-			    nsfb_plot_glyph8(nsfb,
+			    nsfb_plot_glyph8(slatefb,
 					     &loc,
 					     bglyph->bitmap.buffer,
 					     bglyph->bitmap.pitch,
@@ -457,7 +457,7 @@ framebuffer_plot_text(const struct redraw_context *ctx,
 		x += glyph->advance.x >> 16;
 
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 
 }
 
@@ -472,9 +472,9 @@ framebuffer_plot_text(const struct redraw_context *ctx,
  * \param y y coordinate
  * \param text UTF-8 string to plot
  * \param length length of string, in bytes
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 framebuffer_plot_text(const struct redraw_context *ctx,
 		const struct plot_font_style *fstyle,
 		int x,
@@ -510,13 +510,13 @@ framebuffer_plot_text(const struct redraw_context *ctx,
 	loc.y1 = loc.y0 + h;
 
 	chrp = fb_get_glyph(ucs4, style, size);
-	nsfb_plot_glyph1(nsfb, &loc, chrp, p, fstyle->foreground);
+	nsfb_plot_glyph1(slatefb, &loc, chrp, p, fstyle->foreground);
 
 	x += w;
 
     }
 
-    return NSERROR_OK;
+    return SLATEERROR_OK;
 }
 #endif
 
@@ -591,32 +591,32 @@ framebuffer_initialise(const char *fename, int width, int height, int bpp)
 	return NULL;
     }
 
-    nsfb = nsfb_new(fbtype);
-    if (nsfb == NULL) {
+    slatefb = nsfb_new(fbtype);
+    if (slatefb == NULL) {
 	NSLOG(netsurf, INFO, "Unable to create %s fb surface\n", fename);
 	return NULL;
     }
 
-    if (nsfb_set_geometry(nsfb, width, height, fbfmt) == -1) {
+    if (nsfb_set_geometry(slatefb, width, height, fbfmt) == -1) {
 	NSLOG(netsurf, INFO, "Unable to set surface geometry\n");
-	nsfb_free(nsfb);
+	nsfb_free(slatefb);
 	return NULL;
     }
 
-    nsfb_cursor_init(nsfb);
+    nsfb_cursor_init(slatefb);
 
-    if (nsfb_init(nsfb) == -1) {
-	NSLOG(netsurf, INFO, "Unable to initialise nsfb surface\n");
-	nsfb_free(nsfb);
+    if (nsfb_init(slatefb) == -1) {
+	NSLOG(netsurf, INFO, "Unable to initialise slatefb surface\n");
+	nsfb_free(slatefb);
 	return NULL;
     }
 
-    return nsfb;
+    return slatefb;
 
 }
 
 bool
-framebuffer_resize(nsfb_t *nsfb, int width, int height, int bpp)
+framebuffer_resize(nsfb_t *slatefb, int width, int height, int bpp)
 {
     enum nsfb_format_e fbfmt;
 
@@ -625,7 +625,7 @@ framebuffer_resize(nsfb_t *nsfb, int width, int height, int bpp)
 	return false;
     }
 
-    if (nsfb_set_geometry(nsfb, width, height, fbfmt) == -1) {
+    if (nsfb_set_geometry(slatefb, width, height, fbfmt) == -1) {
 	NSLOG(netsurf, INFO, "Unable to change surface geometry\n");
 	return false;
     }
@@ -637,19 +637,19 @@ framebuffer_resize(nsfb_t *nsfb, int width, int height, int bpp)
 void
 framebuffer_finalise(void)
 {
-    nsfb_free(nsfb);
+    nsfb_free(slatefb);
 }
 
 bool
 framebuffer_set_cursor(struct fbtk_bitmap *bm)
 {
-    return nsfb_cursor_set(nsfb, (nsfb_colour_t *)bm->pixdata, bm->width, bm->height, bm->width, bm->hot_x, bm->hot_y);
+    return nsfb_cursor_set(slatefb, (nsfb_colour_t *)bm->pixdata, bm->width, bm->height, bm->width, bm->hot_x, bm->hot_y);
 }
 
 nsfb_t *framebuffer_set_surface(nsfb_t *new_nsfb)
 {
 	nsfb_t *old_nsfb;
-	old_nsfb = nsfb;
-	nsfb = new_nsfb;
+	old_nsfb = slatefb;
+	slatefb = new_nsfb;
 	return old_nsfb;
 }

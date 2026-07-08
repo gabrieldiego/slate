@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -52,31 +52,31 @@ static void http_destroy_parameter(http_parameter *self)
  *
  * \param input      Pointer to current input byte. Updated on exit.
  * \param parameter  Pointer to location to receive on-heap parameter.
- * \return NSERROR_OK on success,
- * 	   NSERROR_NOMEM on memory exhaustion,
- * 	   NSERROR_NOT_FOUND if no parameter could be parsed
+ * \return SLATEERROR_OK on success,
+ * 	   SLATEERROR_NOMEM on memory exhaustion,
+ * 	   SLATEERROR_NOT_FOUND if no parameter could be parsed
  *
  * The returned parameter is owned by the caller.
  */
-nserror http__parse_parameter(const char **input, http_parameter **parameter)
+slateerror http__parse_parameter(const char **input, http_parameter **parameter)
 {
 	const char *pos = *input;
 	lwc_string *name;
 	lwc_string *value;
 	http_parameter *param;
-	nserror error;
+	slateerror error;
 
 	/* token "=" ( token | quoted-string ) */
 
 	error = http__parse_token(&pos, &name);
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 
 	http__skip_LWS(&pos);
 
 	if (*pos != '=') {
 		lwc_string_unref(name);
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	pos++;
@@ -88,7 +88,7 @@ nserror http__parse_parameter(const char **input, http_parameter **parameter)
 	else
 		error = http__parse_token(&pos, &value);
 
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		lwc_string_unref(name);
 		return error;
 	}
@@ -97,7 +97,7 @@ nserror http__parse_parameter(const char **input, http_parameter **parameter)
 	if (param == NULL) {
 		lwc_string_unref(value);
 		lwc_string_unref(name);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	HTTP__ITEM_INIT(param, NULL, http_destroy_parameter);
@@ -107,11 +107,11 @@ nserror http__parse_parameter(const char **input, http_parameter **parameter)
 	*parameter = param;
 	*input = pos;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* See parameter.h for documentation */
-nserror http_parameter_list_find_item(const http_parameter *list,
+slateerror http_parameter_list_find_item(const http_parameter *list,
 		lwc_string *name, lwc_string **value)
 {
 	bool match;
@@ -125,11 +125,11 @@ nserror http_parameter_list_find_item(const http_parameter *list,
 	}
 
 	if (list == NULL)
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 
 	*value = lwc_string_ref(list->value);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* See parameter.h for documentation */

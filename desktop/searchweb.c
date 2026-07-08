@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,8 +27,8 @@
 #include "utils/utils.h"
 #include "utils/log.h"
 #include "utils/url.h"
-#include "utils/nsoption.h"
-#include "netsurf/content.h"
+#include "utils/slateoption.h"
+#include "slate/content.h"
 #include "content/hlcache.h"
 
 #include "desktop/searchweb.h"
@@ -67,9 +67,9 @@ static const char *default_search_icon_url = "resource:icons/search.png";
  * \param fname The filename to read.
  * \param providers_out A pointer to place the result buffer in.
  * \param providers_size_out Size of buffer.
- * \return NSERROR_OK and providers_out updated or appropriate error code.
+ * \return SLATEERROR_OK and providers_out updated or appropriate error code.
  */
-static nserror
+static slateerror
 read_providers(const char *fname,
 	       char **providers_out,
 	       size_t *providers_size_out)
@@ -80,41 +80,41 @@ read_providers(const char *fname,
 	char *providersd;
 
 	if (fname == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	providersf = fopen(fname, "r");
 	if (providersf == NULL) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	if (fseek(providersf, 0, SEEK_END) != 0) {
 		fclose(providersf);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	ftellsize = ftell(providersf);
 	if (ftellsize < 0) {
 		fclose(providersf);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 	fsize = ftellsize;
 
 	if (fseek(providersf, 0, SEEK_SET) != 0) {
 		fclose(providersf);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	providersd = malloc(fsize + 1);
 	if (providersd == NULL) {
 		fclose(providersf);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	if (fread(providersd, 1, fsize, providersf) != fsize) {
 		fclose(providersf);
 		free(providersd);
-		return NSERROR_BAD_SIZE;
+		return SLATEERROR_BAD_SIZE;
 	}
 	providersd[fsize] = 0; /* ensure null terminated */
 
@@ -123,7 +123,7 @@ read_providers(const char *fname,
 	*providers_out = providersd;
 	*providers_size_out = fsize;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -133,9 +133,9 @@ read_providers(const char *fname,
  * \param providers_size The size of the provider data.
  * \param providers_out The resulting provider array.
  * \param providers_count The number of providers in the output array.
- * \return NSERROR_OK on success or error code on failure.
+ * \return SLATEERROR_OK on success or error code on failure.
  */
-static nserror
+static slateerror
 parse_providers(char *providersd,
 		size_t providers_size,
 		struct search_provider **providers_out,
@@ -156,12 +156,12 @@ parse_providers(char *providersd,
 	}
 
 	if (pcount == 0) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	providers = malloc(pcount * sizeof(*providers));
 	if (providers == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	nl = providersd;
@@ -170,7 +170,7 @@ parse_providers(char *providersd,
 		nl = strchr(nl, '|');
 		if (nl == NULL) {
 			free(providers);
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
 		*nl = 0;
 		nl++;
@@ -179,7 +179,7 @@ parse_providers(char *providersd,
 		nl = strchr(nl, '|');
 		if (nl == NULL) {
 			free(providers);
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
 		*nl = 0;
 		nl++;
@@ -188,7 +188,7 @@ parse_providers(char *providersd,
 		nl = strchr(nl, '|');
 		if (nl == NULL) {
 			free(providers);
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
 		*nl = 0;
 		nl++;
@@ -197,7 +197,7 @@ parse_providers(char *providersd,
 		nl = strchr(nl, '|');
 		if (nl == NULL) {
 			free(providers);
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
 		*nl = 0;
 		nl++;
@@ -206,7 +206,7 @@ parse_providers(char *providersd,
 		nl = strchr(nl, '\n');
 		if (nl == NULL) {
 			free(providers);
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
 		nl++;
 
@@ -216,7 +216,7 @@ parse_providers(char *providersd,
 	*providers_out = providers;
 	*providers_count = pcount;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -225,15 +225,15 @@ parse_providers(char *providersd,
  * \param provider The provider to use.
  * \param term The term being searched for.
  * \param url_out The resulting url.
- * \return NSERROR_OK on success or appropriate error code.
+ * \return SLATEERROR_OK on success or appropriate error code.
  */
-static nserror
-make_search_nsurl(struct search_provider *provider,
+static slateerror
+make_search_slateurl(struct search_provider *provider,
 		const char *term,
-		nsurl **url_out)
+		slateurl **url_out)
 {
-	nserror ret;
-	nsurl *url;
+	slateerror ret;
+	slateurl *url;
 	char *eterm; /* escaped term */
 	char *searchstr; /* the providers search string */
 	char *urlstr; /* the escaped term substituted into the provider */
@@ -242,7 +242,7 @@ make_search_nsurl(struct search_provider *provider,
 
 	/* escape the search term and join it to the search url */
 	ret = url_escape(term, true, NULL, &eterm);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
@@ -252,7 +252,7 @@ make_search_nsurl(struct search_provider *provider,
 	urlstro = urlstr = malloc(urlstr_len);
 	if (urlstr == NULL) {
 		free(eterm);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* composite search url */
@@ -267,20 +267,20 @@ make_search_nsurl(struct search_provider *provider,
 	free(eterm);
 	*urlstro = '\0'; /* ensure string is NULL-terminated */
 
-	ret = nsurl_create(urlstr, &url);
+	ret = slateurl_create(urlstr, &url);
 	free(urlstr);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
 	*url_out = url;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * callback for hlcache icon fetch events.
  */
-static nserror
+static slateerror
 search_web_ico_callback(hlcache_handle *ico,
 			const hlcache_event *event,
 			void *pw)
@@ -291,14 +291,14 @@ search_web_ico_callback(hlcache_handle *ico,
 
 	case CONTENT_MSG_DONE:
 		NSLOG(netsurf, INFO, "icon '%s' retrieved",
-		      nsurl_access(hlcache_handle_get_url(ico)));
+		      slateurl_access(hlcache_handle_get_url(ico)));
 		guit->search_web->provider_update(provider->name,
 						  content_get_bitmap(ico));
 		break;
 
 	case CONTENT_MSG_ERROR:
 		NSLOG(netsurf, INFO, "icon %s error: %s",
-		      nsurl_access(hlcache_handle_get_url(ico)),
+		      slateurl_access(hlcache_handle_get_url(ico)),
 		      event->data.errordata.errormsg);
 
 		hlcache_handle_release(ico);
@@ -310,79 +310,79 @@ search_web_ico_callback(hlcache_handle *ico,
 		break;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in desktop/searchweb.h */
-nserror
+slateerror
 search_web_omni(const char *term,
 		enum search_web_omni_flags flags,
-		struct nsurl **url_out)
+		struct slateurl **url_out)
 {
-	nserror ret;
-	nsurl *url;
+	slateerror ret;
+	slateurl *url;
 	size_t etermsize;
 	char *eterm; /* encoded/altered search term */
 
 	if ((flags & SEARCH_WEB_OMNI_SEARCHONLY) == 0) {
 
 		/* first check to see if the term is a url */
-		ret = nsurl_create(term, &url);
-		if (ret == NSERROR_OK) {
+		ret = slateurl_create(term, &url);
+		if (ret == SLATEERROR_OK) {
 			*url_out = url;
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 
 		/* try with adding default scheme */
 		etermsize = strlen(term) + SLEN("https://") + 1;
 		eterm = malloc(etermsize);
 		if (eterm == NULL) {
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 		snprintf(eterm, etermsize, "https://%s", term);
-		ret = nsurl_create(eterm, &url);
+		ret = slateurl_create(eterm, &url);
 		free(eterm);
-		if (ret == NSERROR_OK) {
+		if (ret == SLATEERROR_OK) {
 			*url_out = url;
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 
 		/* do not pass to search if user has disabled the option */
-		if (nsoption_bool(search_url_bar) == false) {
-			return NSERROR_BAD_URL;
+		if (slateoption_bool(search_url_bar) == false) {
+			return SLATEERROR_BAD_URL;
 		}
 	}
 
 	/* ensure providers are initialised */
 	if (search_web_ctx.providers == NULL) {
 		ret = search_web_init(NULL);
-		if (ret != NSERROR_OK) {
+		if (ret != SLATEERROR_OK) {
 			return ret;
 		}
 	}
 	if (search_web_ctx.providers == NULL) {
-		return NSERROR_INIT_FAILED;
+		return SLATEERROR_INIT_FAILED;
 	}
 
-	/* turn search into a nsurl */
-	ret = make_search_nsurl(&search_web_ctx.providers[search_web_ctx.current], term, &url);
-	if (ret != NSERROR_OK) {
+	/* turn search into a slateurl */
+	ret = make_search_slateurl(&search_web_ctx.providers[search_web_ctx.current], term, &url);
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
 	*url_out = url;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in desktop/searchweb.h */
-nserror search_web_get_provider_bitmap(struct bitmap **bitmap_out)
+slateerror search_web_get_provider_bitmap(struct bitmap **bitmap_out)
 {
 	struct search_provider *provider;
 	struct bitmap *ico_bitmap = NULL;
 
 	/* must be initialised */
 	if (search_web_ctx.providers == NULL) {
-		return NSERROR_INIT_FAILED;
+		return SLATEERROR_INIT_FAILED;
 	}
 
 	provider = &search_web_ctx.providers[search_web_ctx.current];
@@ -397,12 +397,12 @@ nserror search_web_get_provider_bitmap(struct bitmap **bitmap_out)
 	}
 
 	*bitmap_out = ico_bitmap;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in desktop/searchweb.h */
-nserror search_web_select_provider(const char *selection)
+slateerror search_web_select_provider(const char *selection)
 {
 	struct search_provider *provider;
 	struct bitmap *ico_bitmap = NULL;
@@ -410,7 +410,7 @@ nserror search_web_select_provider(const char *selection)
 
 	/* must be initialised */
 	if (search_web_ctx.providers == NULL) {
-		return NSERROR_INIT_FAILED;
+		return SLATEERROR_INIT_FAILED;
 	}
 
 	/* negative value just selects whatevers current */
@@ -445,34 +445,34 @@ nserror search_web_select_provider(const char *selection)
 
 	/* if the providers icon has not been retrieved get it now */
 	if (provider->ico_handle == NULL) {
-		nsurl *icon_nsurl;
-		nserror ret;
+		slateurl *icon_slateurl;
+		slateerror ret;
 
 		/* create search icon url */
-		ret = nsurl_create(provider->ico, &icon_nsurl);
-		if (ret != NSERROR_OK) {
+		ret = slateurl_create(provider->ico, &icon_slateurl);
+		if (ret != SLATEERROR_OK) {
 			return ret;
 		}
 
-		ret = hlcache_handle_retrieve(icon_nsurl, 0, NULL, NULL,
+		ret = hlcache_handle_retrieve(icon_slateurl, 0, NULL, NULL,
 					      search_web_ico_callback,
 					      provider,
 					      NULL, CONTENT_IMAGE,
 					      &provider->ico_handle);
-		nsurl_unref(icon_nsurl);
-		if (ret != NSERROR_OK) {
+		slateurl_unref(icon_slateurl);
+		if (ret != SLATEERROR_OK) {
 			provider->ico_handle = NULL;
 			return ret;
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * callback for hlcache icon fetch events.
  */
-static nserror
+static slateerror
 default_ico_callback(hlcache_handle *ico,
 		     const hlcache_event *event,
 		     void *pw)
@@ -483,7 +483,7 @@ default_ico_callback(hlcache_handle *ico,
 
 	case CONTENT_MSG_DONE:
 		NSLOG(netsurf, INFO, "default icon '%s' retrieved",
-		      nsurl_access(hlcache_handle_get_url(ico)));
+		      slateurl_access(hlcache_handle_get_url(ico)));
 
 		/* only set to default icon if providers icon has no handle */
 		if (ctx->providers[search_web_ctx.current].ico_handle == NULL) {
@@ -495,7 +495,7 @@ default_ico_callback(hlcache_handle *ico,
 
 	case CONTENT_MSG_ERROR:
 		NSLOG(netsurf, INFO, "icon %s error: %s",
-		      nsurl_access(hlcache_handle_get_url(ico)),
+		      slateurl_access(hlcache_handle_get_url(ico)),
 		      event->data.errordata.errormsg);
 
 		hlcache_handle_release(ico);
@@ -507,7 +507,7 @@ default_ico_callback(hlcache_handle *ico,
 		break;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in desktop/searchweb.h */
@@ -530,25 +530,25 @@ ssize_t search_web_iterate_providers(ssize_t iter, const char **name)
 
 
 /* exported interface documented in desktop/searchweb.h */
-nserror search_web_init(const char *provider_fname)
+slateerror search_web_init(const char *provider_fname)
 {
-	nserror ret;
+	slateerror ret;
 	char *providers;
 	size_t providers_size;
-	nsurl *icon_nsurl;
+	slateurl *icon_slateurl;
 
 	/* create search icon url */
-	ret = nsurl_create(default_search_icon_url, &icon_nsurl);
-	if (ret != NSERROR_OK) {
+	ret = slateurl_create(default_search_icon_url, &icon_slateurl);
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
 	/* get a list of providers */
 	ret = read_providers(provider_fname, &providers, &providers_size);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		providers = strdup(default_providers);
 		if (providers == NULL) {
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 		providers_size = strlen(providers);
 	}
@@ -558,13 +558,13 @@ nserror search_web_init(const char *provider_fname)
 			      providers_size,
 			      &search_web_ctx.providers,
 			      &search_web_ctx.providers_count);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		free(providers);
 		return ret;
 	}
 
 	/* get default search icon */
-	ret = hlcache_handle_retrieve(icon_nsurl,
+	ret = hlcache_handle_retrieve(icon_slateurl,
 				      0,
 				      NULL,
 				      NULL,
@@ -573,8 +573,8 @@ nserror search_web_init(const char *provider_fname)
 				      NULL,
 				      CONTENT_IMAGE,
 				      &search_web_ctx.default_ico_handle);
-	nsurl_unref(icon_nsurl);
-	if (ret != NSERROR_OK) {
+	slateurl_unref(icon_slateurl);
+	if (ret != SLATEERROR_OK) {
 		search_web_ctx.default_ico_handle = NULL;
 		free(search_web_ctx.providers);
 		search_web_ctx.providers = NULL;
@@ -583,17 +583,17 @@ nserror search_web_init(const char *provider_fname)
 	}
 
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in desktop/searchweb.h */
-nserror search_web_finalise(void)
+slateerror search_web_finalise(void)
 {
 	size_t pidx;
 
 	/* must be initialised */
 	if (search_web_ctx.providers == NULL) {
-		return NSERROR_INIT_FAILED;
+		return SLATEERROR_INIT_FAILED;
 	}
 
 	if (search_web_ctx.default_ico_handle != NULL) {
@@ -613,5 +613,5 @@ nserror search_web_finalise(void)
 	free(search_web_ctx.providers);
 	search_web_ctx.providers = NULL;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }

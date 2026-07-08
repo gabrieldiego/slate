@@ -1,7 +1,7 @@
 /*
  * Copyright 2003 John M Bell <jmb202@ecs.soton.ac.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,21 +20,21 @@
  * Content for image/x-drawfile (RISC OS interface).
  */
 
-#ifndef _NETSURF_RISCOS_DRAW_H_
-#define _NETSURF_RISCOS_DRAW_H_
+#ifndef _SLATE_RISCOS_DRAW_H_
+#define _SLATE_RISCOS_DRAW_H_
 
 #include "utils/config.h"
 #include "utils/errors.h"
 
 #ifdef WITH_DRAW
 
-nserror draw_init(void);
+slateerror draw_init(void);
 
 #else
 
-static inline nserror draw_init(void)
+static inline slateerror draw_init(void)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 #endif /* WITH_DRAW */

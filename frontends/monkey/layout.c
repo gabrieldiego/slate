@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 Daniel Silverstone <dsilvers@digital-scurf.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,17 +24,17 @@
 #include <stddef.h>
 
 #include "utils/utf8.h"
-#include "netsurf/plot_style.h"
-#include "netsurf/layout.h"
+#include "slate/plot_style.h"
+#include "slate/layout.h"
 
 #include "monkey/layout.h"
 
-static nserror nsfont_width(const plot_font_style_t *fstyle,
+static slateerror nsfont_width(const plot_font_style_t *fstyle,
 			    const char *string, size_t length,
 			    int *width)
 {
 	*width = (fstyle->size * utf8_bounded_length(string, length)) / PLOT_STYLE_SCALE;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -49,7 +49,7 @@ static nserror nsfont_width(const plot_font_style_t *fstyle,
  * \return  true on success, false on error and error reported
  */
 
-static nserror nsfont_position_in_string(const plot_font_style_t *fstyle,
+static slateerror nsfont_position_in_string(const plot_font_style_t *fstyle,
 					 const char *string, size_t length,
 					 int x, size_t *char_offset, int *actual_x)
 {
@@ -57,7 +57,7 @@ static nserror nsfont_position_in_string(const plot_font_style_t *fstyle,
 	if (*char_offset > length)
 		*char_offset = length;
 	*actual_x = *char_offset * (fstyle->size / PLOT_STYLE_SCALE);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -84,7 +84,7 @@ static nserror nsfont_position_in_string(const plot_font_style_t *fstyle,
  * Returning char_offset == length means no split possible
  */
 
-static nserror nsfont_split(const plot_font_style_t *fstyle,
+static slateerror nsfont_split(const plot_font_style_t *fstyle,
 			    const char *string, size_t length,
 			    int x, size_t *char_offset, int *actual_x)
 {
@@ -105,7 +105,7 @@ static nserror nsfont_split(const plot_font_style_t *fstyle,
 		}
 	}
 	*actual_x = *char_offset * (fstyle->size / PLOT_STYLE_SCALE);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static struct gui_layout_table layout_table = {

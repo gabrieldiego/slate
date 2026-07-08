@@ -1,7 +1,7 @@
 /*
  * Copyright 2015 Daniel Silverstone <dsilvers@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,4 +37,4 @@
 extern duk_bool_t dukky_check_timeout(void *udata);
 #define DUK_USE_EXEC_TIMEOUT_CHECK dukky_check_timeout
 
-#include "netsurf/inttypes.h"
+#include "slate/inttypes.h"

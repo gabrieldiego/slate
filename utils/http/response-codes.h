@@ -1,7 +1,7 @@
 /*
  * Copyright 2026 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * HTTP response codes from RFC9110 section 15
  */
 
-#ifndef NETSURF_UTILS_HTTP_RESPONSE_CODES_H_
-#define NETSURF_UTILS_HTTP_RESPONSE_CODES_H_
+#ifndef SLATE_UTILS_HTTP_RESPONSE_CODES_H_
+#define SLATE_UTILS_HTTP_RESPONSE_CODES_H_
 
 typedef enum {
 	HTTP_RESPONSE_CONTINUE = 100,

@@ -2,7 +2,7 @@
  * Copyright 2006 Rob Kendrick <rjek@rjek.com>
  * Copyright 2006 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -88,15 +88,15 @@ static inline unsigned int hash_string_fnv(const char *datum, unsigned int *len)
  * \param hash The hash table to add the line to
  * \param ln The line to process
  * \param lnlen The length of \ln
- * \return NSERROR_OK on success else NSERROR_INVALID
+ * \return SLATEERROR_OK on success else SLATEERROR_INVALID
  */
-static nserror
+static slateerror
 process_line(struct hash_table *hash, uint8_t *ln, int lnlen)
 {
 	uint8_t *key;
 	uint8_t *value;
 	uint8_t *colon;
-	nserror res;
+	slateerror res;
 
 	key = ln; /* set key to start of line */
 	value = ln + lnlen; /* set value to end of line */
@@ -109,7 +109,7 @@ process_line(struct hash_table *hash, uint8_t *ln, int lnlen)
 
 	/* empty or comment lines */
 	if ((*key == 0) || (*key == '#')) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* find first colon as key/value separator */
@@ -120,14 +120,14 @@ process_line(struct hash_table *hash, uint8_t *ln, int lnlen)
 	}
 	if (colon == value) {
 		/* no colon found */
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	*colon = 0;  /* terminate key */
 	value = colon + 1;
 
 	res = hash_add(hash, (char *)key, (char *)value);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO,
 		      "Unable to add %s:%s to hash table", ln, value);
 	}
@@ -138,12 +138,12 @@ process_line(struct hash_table *hash, uint8_t *ln, int lnlen)
 /**
  * adds key/value pairs to a hash from a memory area
  */
-static nserror
+static slateerror
 hash_add_inline_plain(struct hash_table *ht, const uint8_t *data, size_t size)
 {
 	uint8_t s[LINE_BUFFER_SIZE]; /* line buffer */
 	unsigned int slen = 0;
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 
 	while (size > 0) {
 		s[slen] = *data;
@@ -152,7 +152,7 @@ hash_add_inline_plain(struct hash_table *ht, const uint8_t *data, size_t size)
 			s[slen] = 0; /* replace newline with null termination */
 			res = process_line(ht, s, slen);
 			slen = 0;
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				break;
 			}
 		} else {
@@ -177,10 +177,10 @@ hash_add_inline_plain(struct hash_table *ht, const uint8_t *data, size_t size)
 /**
  * adds key/value pairs to a hash from a compressed memory area
  */
-static nserror
+static slateerror
 hash_add_inline_gzip(struct hash_table *ht, const uint8_t *data, size_t size)
 {
-	nserror res;
+	slateerror res;
 	int ret; /* zlib return value */
 	z_stream strm;
 	uint8_t s[LINE_BUFFER_SIZE]; /* line buffer */
@@ -197,7 +197,7 @@ hash_add_inline_gzip(struct hash_table *ht, const uint8_t *data, size_t size)
 	ret = inflateInit2(&strm, 32 + MAX_WBITS);
 	if (ret != Z_OK) {
 		NSLOG(netsurf, INFO, "inflateInit returned %d", ret);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	do {
@@ -224,7 +224,7 @@ hash_add_inline_gzip(struct hash_table *ht, const uint8_t *data, size_t size)
 			/* found newline */
 			*nl = 0; /* null terminate line */
 			res = process_line(ht, &s[0], nl - &s[0]);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				inflateEnd(&strm);
 				return res;
 			}
@@ -244,9 +244,9 @@ hash_add_inline_gzip(struct hash_table *ht, const uint8_t *data, size_t size)
 
 	if (ret != Z_STREAM_END) {
 		NSLOG(netsurf, INFO, "inflate returned %d", ret);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 
 }
 
@@ -301,18 +301,18 @@ void hash_destroy(struct hash_table *ht)
 
 
 /* exported interface documented in utils/hashtable.h */
-nserror hash_add(struct hash_table *ht, const char *key, const char *value)
+slateerror hash_add(struct hash_table *ht, const char *key, const char *value)
 {
 	unsigned int h, c, v;
 	struct hash_entry *e;
 
 	if (ht == NULL || key == NULL || value == NULL)
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 
 	e = malloc(sizeof(struct hash_entry));
 	if (e == NULL) {
 		NSLOG(netsurf, INFO, "Not enough memory for hash entry.");
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	h = hash_string_fnv(key, &(e->key_length));
@@ -324,7 +324,7 @@ nserror hash_add(struct hash_table *ht, const char *key, const char *value)
 		NSLOG(netsurf, INFO,
 		      "Not enough memory for string duplication.");
 		free(e);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 	memcpy(e->pairing, key, e->key_length + 1);
 	memcpy(e->pairing + e->key_length + 1, value, v + 1);
@@ -332,7 +332,7 @@ nserror hash_add(struct hash_table *ht, const char *key, const char *value)
 	e->next = ht->chain[c];
 	ht->chain[c] = e;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -361,14 +361,14 @@ const char *hash_get(struct hash_table *ht, const char *key)
 
 
 /* exported interface documented in utils/hashtable.h */
-nserror hash_add_file(struct hash_table *ht, const char *path)
+slateerror hash_add_file(struct hash_table *ht, const char *path)
 {
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 	char s[LINE_BUFFER_SIZE]; /* line buffer */
 	gzFile fp; /* compressed file handle */
 
 	if (path == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	fp = gzopen(path, "r");
@@ -377,7 +377,7 @@ nserror hash_add_file(struct hash_table *ht, const char *path)
 		      "Unable to open file \"%.100s\": %s", path,
 		      strerror(errno));
 
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	while (gzgets(fp, s, sizeof s)) {
@@ -385,7 +385,7 @@ nserror hash_add_file(struct hash_table *ht, const char *path)
 		s[--slen] = 0;  /* remove \n at end */
 
 		res = process_line(ht, (uint8_t *)s, slen);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			break;
 		}
 	}
@@ -397,7 +397,7 @@ nserror hash_add_file(struct hash_table *ht, const char *path)
 
 
 /* exported interface documented in utils/hashtable.h */
-nserror hash_add_inline(struct hash_table *ht, const uint8_t *data, size_t size)
+slateerror hash_add_inline(struct hash_table *ht, const uint8_t *data, size_t size)
 {
 	if ((data[0]==0x1f) && (data[1] == 0x8b)) {
 		/* gzip header detected */

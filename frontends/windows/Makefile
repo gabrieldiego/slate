@@ -26,9 +26,9 @@ CFLAGS += '-D_WIN32_WINDOWS=0x0501'
 CFLAGS += '-D_WIN32_IE=0x0501'
 
 #installed resource path
-CFLAGS += '-DNETSURF_WINDOWS_RESPATH="$(NETSURF_WINDOWS_RESPATH)"'
+CFLAGS += '-DSLATE_WINDOWS_RESPATH="$(SLATE_WINDOWS_RESPATH)"'
 
-WSCFLAGS := -std=c99 -Dnswin32 -DCURL_STATICLIB -DCARES_STATICLIB -g
+WSCFLAGS := -std=c99 -Dslatewin32 -DCURL_STATICLIB -DCARES_STATICLIB -g
 
 CFLAGS += $(WSCFLAGS)
 LDFLAGS += $(WSCFLAGS)
@@ -61,7 +61,7 @@ S_FRONTEND := main.c window.c gui.c clipboard.c drawable.c plot.c findfile.c \
 # Note this is deliberately *not* expanded here as common and image
 #   are not yet available
 SOURCES = $(S_COMMON) $(S_IMAGE) $(S_BROWSER) $(S_FRONTEND) $(S_RESOURCES)
-EXETARGET := NetSurf.exe
+EXETARGET := Slate.exe
 
 # ----------------------------------------------------------------------------
 # Install target
@@ -75,7 +75,7 @@ install-windows:
 
 package-windows: netsurf-installer.exe
 
-WIN_RES_OBJ := installer.nsi NetSurf.ico netsurf.png welcome.html default.css
+WIN_RES_OBJ := installer.nsi Slate.ico slate.png welcome.html default.css
 WIN_RES_INS_OBJ := $(addprefix $(FRONTEND_RESOURCES_DIR)/,$(WIN_RES_OBJ)) $(OBJROOT)/messages-en
 
 # deal with making installer generation verbose

@@ -5,7 +5,7 @@
  * Copyright 2003 John M Bell <jmb202@ecs.soton.ac.uk>
  * Copyright 2004 John Tytgat <joty@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -144,7 +144,7 @@ int nsc_sntimet(char *str, size_t size, time_t *timep)
 
 
 /* exported function documented in utils/time.h */
-nserror nsc_snptimet(const char *str, size_t size, time_t *timep)
+slateerror nsc_snptimet(const char *str, size_t size, time_t *timep)
 {
 	time_t time_out;
 
@@ -152,7 +152,7 @@ nserror nsc_snptimet(const char *str, size_t size, time_t *timep)
 	char *rstr;
 
 	if (size < 1) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	errno = 0;
@@ -160,18 +160,18 @@ nserror nsc_snptimet(const char *str, size_t size, time_t *timep)
 
 	/* The conversion may have a range faliure or no digits were found */
 	if ((errno != 0) || (rstr == str)) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 #else
 	struct tm ltm;
 
 	if (size < 1) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if (strptime(str, "%s", &ltm) == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	time_out = mktime(&ltm);
@@ -179,7 +179,7 @@ nserror nsc_snptimet(const char *str, size_t size, time_t *timep)
 #endif
 	*timep = time_out;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -839,9 +839,9 @@ static inline int time__get_leap_days(int year)
  * \param[in]  ctx    Current date parsing context.
  * \param[in]  flags  Flags indicating which date components have been set.
  * \param[out] time   Returns the number of seconds since 1 Jan 1970 00:00 UTC.
- * \return NSERROR_OK on success, appropriate error otherwise.
+ * \return SLATEERROR_OK on success, appropriate error otherwise.
  */
-static nserror time__ctx_to_time_t(
+static slateerror time__ctx_to_time_t(
 		const struct nsc_date_parse_ctx *ctx,
 		enum nsc_date_component_flags flags,
 		time_t *time)
@@ -901,7 +901,7 @@ static nserror time__ctx_to_time_t(
 			ctx->hours) * 60 +
 			mins) * 60 +
 			ctx->secs;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -910,11 +910,11 @@ static nserror time__ctx_to_time_t(
  *
  * \param[in]  str   String to parse.
  * \param[out] time  Returns the number of seconds since 1 Jan 1970 00:00 UTC.
- * \return `NSERROR_OK` on success, else
- *         `NSERROR_INVALID` if the string parsing failed,
+ * \return `SLATEERROR_OK` on success, else
+ *         `SLATEERROR_INVALID` if the string parsing failed,
  *         appropriate error otherwise.
  */
-static nserror time__get_date(const char *str, time_t *time)
+static slateerror time__get_date(const char *str, time_t *time)
 {
 	enum nsc_date_component_flags flags = NSC_COMPONENT_FLAGS_NONE;
 	struct nsc_date_parse_ctx ctx = {
@@ -929,7 +929,7 @@ static nserror time__get_date(const char *str, time_t *time)
 	};
 
 	if (str == NULL || time == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* Parse */
@@ -943,7 +943,7 @@ static nserror time__get_date(const char *str, time_t *time)
 			if (!time__parse_weekday(str, len, &flags) &&
 			    !time__parse_month(str, len, &flags, &ctx) &&
 			    !time__parse_timezone(str, len, &flags, &ctx)) {
-				return NSERROR_INVALID;
+				return SLATEERROR_INVALID;
 			}
 
 		} else if (ascii_is_digit(*str)) {
@@ -951,7 +951,7 @@ static nserror time__get_date(const char *str, time_t *time)
 
 			if (!time__parse_hh_mm_ss(str, &len, &flags, &ctx) &&
 			    !time__parse_number(str, len, &flags, &ctx)) {
-				return NSERROR_INVALID;
+				return SLATEERROR_INVALID;
 			}
 		}
 		ctx.prev = *str;
@@ -965,11 +965,11 @@ static nserror time__get_date(const char *str, time_t *time)
 
 	/* Validate */
 	if (!flags_chk_all(flags, NSC_COMPONENT_FLAGS__HAVE_ALL)) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 	if (ctx.secs > 60 || ctx.mins > 59 || ctx.hours > 23 ||
 			ctx.day > 31 || ctx.month > 11) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	/* Convert */
@@ -977,7 +977,7 @@ static nserror time__get_date(const char *str, time_t *time)
 }
 
 /* exported function documented in utils/time.h */
-nserror nsc_strntimet(const char *str, size_t size, time_t *timep)
+slateerror nsc_strntimet(const char *str, size_t size, time_t *timep)
 {
 	return time__get_date(str, timep);
 }
@@ -985,23 +985,23 @@ nserror nsc_strntimet(const char *str, size_t size, time_t *timep)
 # else
 
 /* exported function documented in utils/time.h */
-nserror nsc_strntimet(const char *str, size_t size, time_t *timep)
+slateerror nsc_strntimet(const char *str, size_t size, time_t *timep)
 {
 	time_t result;
 
 	if (str == NULL || timep == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	result = curl_getdate(str, NULL);
 
 	if (result == -1) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	*timep = result;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 #endif

@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_UTILS_HTTP_GENERICS_H_
-#define NETSURF_UTILS_HTTP_GENERICS_H_
+#ifndef SLATE_UTILS_HTTP_GENERICS_H_
+#define SLATE_UTILS_HTTP_GENERICS_H_
 
 #include <stdbool.h>
 
@@ -39,14 +39,14 @@ typedef struct http__item {
 /**
  * Type of an item parser
  */
-typedef nserror (*http__itemparser)(const char **input, http__item **item);
+typedef slateerror (*http__itemparser)(const char **input, http__item **item);
 
 
 void http___item_list_destroy(http__item *list);
 #define http__item_list_destroy(l) \
 		http___item_list_destroy((http__item *) (l))
 
-nserror http___item_list_parse(const char **input, 
+slateerror http___item_list_parse(const char **input, 
 		http__itemparser itemparser, http__item *first, 
 		http__item **items);
 #define http__item_list_parse(i, p, f, r) \

@@ -1,7 +1,7 @@
 /*
  * Copyright 2024 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,7 +35,7 @@
 #include <QComboBox>
 
 extern "C" {
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/messages.h"
 
 #include "desktop/searchweb.h"
@@ -135,7 +135,7 @@ GeneralSettings::GeneralSettings(QWidget *parent)
 void GeneralSettings::categoryRealize()
 {
 	enum Qt::CheckState state = Qt::Unchecked;
-	if (nsoption_bool(enable_javascript)) {
+	if (slateoption_bool(enable_javascript)) {
 		state = Qt::Checked;
 	}
 	m_enablejavascript->setCheckState(state);
@@ -149,7 +149,7 @@ void GeneralSettings::categoryApply()
 	if (m_enablejavascript->checkState() == Qt::Checked) {
 		checked = true;
 	}
-	nsoption_set_bool(enable_javascript, checked);
+	slateoption_set_bool(enable_javascript, checked);
 }
 
 
@@ -167,13 +167,13 @@ private:
 
 void HomeSettings::categoryRealize()
 {
-	m_homeurl->setText(nsoption_charp(homepage_url));
+	m_homeurl->setText(slateoption_charp(homepage_url));
 }
 
 void HomeSettings::categoryApply()
 {
 	if (m_homeurl->isModified()) {
-		nsoption_set_charp(homepage_url,
+		slateoption_set_charp(homepage_url,
 				   strdup(m_homeurl->text().toStdString().c_str()));
 	}
 }
@@ -265,25 +265,25 @@ void AppearanceSettings::categoryRealize()
 {
 	// tabs settings
 	enum Qt::CheckState state = Qt::Unchecked;
-	if (nsoption_bool(button_2_tab)) {
+	if (slateoption_bool(button_2_tab)) {
 		state = Qt::Checked;
 	}
 	m_opentab->setCheckState(state);
 
 	state = Qt::Unchecked;
-	if (nsoption_bool(foreground_new)) {
+	if (slateoption_bool(foreground_new)) {
 		state = Qt::Checked;
 	}
 	m_switchnew->setCheckState(state);
 
 	// colour selection
-	m_colour_selection->setCurrentIndex(nsoption_uint(colour_selection));
+	m_colour_selection->setCurrentIndex(slateoption_uint(colour_selection));
 
 	/* select the page scale value in combobox closest to user config */
 	int sel_idx=0;
 	int max_difference=INT_MAX;
 	for (int idx = 0; idx < m_zoom->count() ; idx++) {
-		int delta = abs(m_zoom->itemData(idx).toInt() - nsoption_int(scale));
+		int delta = abs(m_zoom->itemData(idx).toInt() - slateoption_int(scale));
 		if (delta < max_difference) {
 			max_difference = delta;
 			sel_idx = idx;
@@ -299,18 +299,18 @@ void AppearanceSettings::categoryApply()
 	if (m_opentab->checkState() == Qt::Checked) {
 		checked = true;
 	}
-	nsoption_set_bool(button_2_tab, checked);
+	slateoption_set_bool(button_2_tab, checked);
 
 	checked = false;
 	if (m_switchnew->checkState() == Qt::Checked) {
 		checked = true;
 	}
-	nsoption_set_bool(foreground_new, checked);
+	slateoption_set_bool(foreground_new, checked);
 
-	nsoption_set_uint(colour_selection, m_colour_selection->currentIndex());
+	slateoption_set_uint(colour_selection, m_colour_selection->currentIndex());
 	NS_Application::instance()->nsOptionUpdate();
 
-	nsoption_set_int(scale, m_zoom->currentData().toInt());
+	slateoption_set_int(scale, m_zoom->currentData().toInt());
 }
 
 
@@ -384,7 +384,7 @@ void LanguageSettings::categoryRealize()
 {
 	m_pagelang->deselectAll();
 
-	QByteArray alang(nsoption_charp(accept_language));
+	QByteArray alang(slateoption_charp(accept_language));
 	if (alang.size() == 0) {
 		return;
 	}
@@ -421,7 +421,7 @@ void LanguageSettings::categoryApply()
 	alang = accept_language_from_selection(m_pagelang->selection());
 
 	if (alang != NULL) {
-		nsoption_set_charp(accept_language, alang);
+		slateoption_set_charp(accept_language, alang);
 	}
 }
 
@@ -466,7 +466,7 @@ SearchSettings::SearchSettings(QWidget *parent)
 void SearchSettings::categoryRealize()
 {
 	for (int idx = 0; idx < m_provider->count() ; idx++) {
-		if (m_provider->itemText(idx) == nsoption_charp(search_web_provider)) {
+		if (m_provider->itemText(idx) == slateoption_charp(search_web_provider)) {
 			m_provider->setCurrentIndex(idx);
 			break;
 		}
@@ -478,7 +478,7 @@ void SearchSettings::categoryApply()
 {
 	char *provider = strdup(m_provider->currentText().toUtf8().data());
 	search_web_select_provider(provider);
-	nsoption_set_charp(search_web_provider, provider);
+	slateoption_set_charp(search_web_provider, provider);
 }
 
 
@@ -536,28 +536,28 @@ void PrivacySettings::categoryRealize()
 {
 	enum Qt::CheckState state;
 
-	if (nsoption_bool(disable_popups)) {
+	if (slateoption_bool(disable_popups)) {
 		state = Qt::Checked;
 	} else {
 		state = Qt::Unchecked;
 	}
 	m_preventpopups->setCheckState(state);
 
-	if (nsoption_bool(block_advertisements)) {
+	if (slateoption_bool(block_advertisements)) {
 		state = Qt::Checked;
 	} else {
 		state = Qt::Unchecked;
 	}
 	m_hideadverts->setCheckState(state);
 
-	if (nsoption_bool(do_not_track)) {
+	if (slateoption_bool(do_not_track)) {
 		state = Qt::Checked;
 	} else {
 		state = Qt::Unchecked;
 	}
 	m_enablednt->setCheckState(state);
 
-	if (nsoption_bool(send_referer)) {
+	if (slateoption_bool(send_referer)) {
 		state = Qt::Checked;
 	} else {
 		state = Qt::Unchecked;
@@ -568,16 +568,16 @@ void PrivacySettings::categoryRealize()
 
 void PrivacySettings::categoryApply()
 {
-	nsoption_set_bool(disable_popups,
+	slateoption_set_bool(disable_popups,
 			  (m_preventpopups->checkState() == Qt::Checked));
 
-	nsoption_set_bool(block_advertisements,
+	slateoption_set_bool(block_advertisements,
 			  (m_hideadverts->checkState() == Qt::Checked));
 
-	nsoption_set_bool(do_not_track,
+	slateoption_set_bool(do_not_track,
 			  (m_enablednt->checkState() == Qt::Checked));
 
-	nsoption_set_bool(send_referer,
+	slateoption_set_bool(send_referer,
 			  (m_enablereferral->checkState() == Qt::Checked));
 }
 
@@ -637,15 +637,15 @@ void NetworkSettings::proxy_access_changed(int index)
 void NetworkSettings::categoryRealize()
 {
 	//proxy
-	m_proxy_host->setText(nsoption_charp(http_proxy_host));
-	m_proxy_port->setValue(nsoption_int(http_proxy_port));
-	m_proxy_auth_user->setText(nsoption_charp(http_proxy_auth_user));
-	m_proxy_auth_pass->setText(nsoption_charp(http_proxy_auth_pass));
-	m_proxy_noproxy->setText(nsoption_charp(http_proxy_noproxy));
+	m_proxy_host->setText(slateoption_charp(http_proxy_host));
+	m_proxy_port->setValue(slateoption_int(http_proxy_port));
+	m_proxy_auth_user->setText(slateoption_charp(http_proxy_auth_user));
+	m_proxy_auth_pass->setText(slateoption_charp(http_proxy_auth_pass));
+	m_proxy_noproxy->setText(slateoption_charp(http_proxy_noproxy));
 
-	if (nsoption_bool(http_proxy)) {
+	if (slateoption_bool(http_proxy)) {
 		// Manual configuration
-		switch (nsoption_int(http_proxy_auth)) {
+		switch (slateoption_int(http_proxy_auth)) {
 		case OPTION_HTTP_PROXY_AUTH_NONE:
 		default:
 			m_proxy_access->setCurrentIndex(1);
@@ -668,9 +668,9 @@ void NetworkSettings::categoryRealize()
 	}
 
 	//fetchers
-	m_fetchers_max->setValue(nsoption_int(max_fetchers));
-	m_fetchers_perhost->setValue(nsoption_int(max_fetchers_per_host));
-	m_fetchers_cached->setValue(nsoption_int(max_cached_fetch_handles));
+	m_fetchers_max->setValue(slateoption_int(max_fetchers));
+	m_fetchers_perhost->setValue(slateoption_int(max_fetchers_per_host));
+	m_fetchers_cached->setValue(slateoption_int(max_cached_fetch_handles));
 }
 
 void NetworkSettings::categoryApply()
@@ -678,44 +678,44 @@ void NetworkSettings::categoryApply()
 	//proxy
 	int access = m_proxy_access->currentIndex();
 	if (access == 0) {
-		nsoption_set_bool(http_proxy, false);
+		slateoption_set_bool(http_proxy, false);
 	} else {
-		nsoption_set_bool(http_proxy, true);
+		slateoption_set_bool(http_proxy, true);
 		if (m_proxy_host->isModified()) {
-			nsoption_set_charp(http_proxy_host,
+			slateoption_set_charp(http_proxy_host,
 					   strdup(m_proxy_host->text().toStdString().c_str()));
 		}
-		nsoption_set_int(http_proxy_port, m_proxy_port->value());
+		slateoption_set_int(http_proxy_port, m_proxy_port->value());
 		if (m_proxy_auth_user->isModified()) {
-			nsoption_set_charp(http_proxy_auth_user,
+			slateoption_set_charp(http_proxy_auth_user,
 					   strdup(m_proxy_auth_user->text().toStdString().c_str()));
 		}
 		if (access == 1) {
-			nsoption_set_int(http_proxy_auth,
+			slateoption_set_int(http_proxy_auth,
 					 OPTION_HTTP_PROXY_AUTH_NONE);
 		} else {
 			if (access == 3) {
-				nsoption_set_int(http_proxy_auth,
+				slateoption_set_int(http_proxy_auth,
 						 OPTION_HTTP_PROXY_AUTH_NTLM);
 			} else {
-				nsoption_set_int(http_proxy_auth,
+				slateoption_set_int(http_proxy_auth,
 						 OPTION_HTTP_PROXY_AUTH_BASIC);
 			}
 			if (m_proxy_auth_pass->isModified()) {
-				nsoption_set_charp(http_proxy_auth_pass,
+				slateoption_set_charp(http_proxy_auth_pass,
 						   strdup(m_proxy_auth_pass->text().toStdString().c_str()));
 			}
 			if (m_proxy_noproxy->isModified()) {
-				nsoption_set_charp(http_proxy_noproxy,
+				slateoption_set_charp(http_proxy_noproxy,
 						   strdup(m_proxy_noproxy->text().toStdString().c_str()));
 			}
 		}
 	}
 
 	// fetchers
-	nsoption_set_int(max_fetchers, m_fetchers_max->value());
-	nsoption_set_int(max_fetchers_per_host, m_fetchers_perhost->value());
-	nsoption_set_int(max_cached_fetch_handles, m_fetchers_cached->value());
+	slateoption_set_int(max_fetchers, m_fetchers_max->value());
+	slateoption_set_int(max_fetchers_per_host, m_fetchers_perhost->value());
+	slateoption_set_int(max_cached_fetch_handles, m_fetchers_cached->value());
 }
 
 NetworkSettings::NetworkSettings(QWidget *parent)
@@ -837,7 +837,7 @@ NS_Settings::NS_Settings(QWidget *parent)
 }
 
 /**
- * reset form values to current nsoption values
+ * reset form values to current slateoption values
  */
 void NS_Settings::showEvent(QShowEvent *event)
 {

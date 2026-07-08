@@ -44,8 +44,8 @@
 #endif
 #include <libwapcaplet/libwapcaplet.h>
 
-#include "netsurf/inttypes.h"
-#include "utils/nsurl.h"
+#include "slate/inttypes.h"
+#include "utils/slateurl.h"
 #include "utils/dirent.h"
 #include "utils/corestrings.h"
 #include "utils/messages.h"
@@ -54,7 +54,7 @@
 #include "utils/time.h"
 #include "utils/ring.h"
 #include "utils/file.h"
-#include "netsurf/fetch.h"
+#include "slate/fetch.h"
 #include "desktop/gui_internal.h"
 
 #include "content/fetch.h"
@@ -74,7 +74,7 @@ struct fetch_file_context {
 	bool aborted; /**< Flag indicating fetch has been aborted */
 	bool locked; /**< Flag indicating entry is already entered */
 
-	nsurl *url; /**< The full url the fetch refers to */
+	slateurl *url; /**< The full url the fetch refers to */
 	char *path; /**< The actual path to be used with open() */
 
 	time_t file_etag; /**< Request etag for file (previous st.m_time) */
@@ -127,7 +127,7 @@ static void fetch_file_finalise(lwc_string *scheme)
 {
 }
 
-static bool fetch_file_can_fetch(const nsurl *url)
+static bool fetch_file_can_fetch(const slateurl *url)
 {
 	return true;
 }
@@ -135,7 +135,7 @@ static bool fetch_file_can_fetch(const nsurl *url)
 /** callback to set up a file fetch context. */
 static void *
 fetch_file_setup(struct fetch *fetchh,
-		 nsurl *url,
+		 slateurl *url,
 		 bool only_2xx,
 		 bool downgrade_tls,
 		 const char *post_urlenc,
@@ -144,19 +144,19 @@ fetch_file_setup(struct fetch *fetchh,
 {
 	struct fetch_file_context *ctx;
 	int i;
-	nserror ret;
+	slateerror ret;
 
 	ctx = calloc(1, sizeof(*ctx));
 	if (ctx == NULL)
 		return NULL;
 
-	ret = guit->file->nsurl_to_path(url, &ctx->path);
-	if (ret != NSERROR_OK) {
+	ret = guit->file->slateurl_to_path(url, &ctx->path);
+	if (ret != SLATEERROR_OK) {
 		free(ctx);
 		return NULL;
 	}
 
-	ctx->url = nsurl_ref(url);
+	ctx->url = slateurl_ref(url);
 
 	/* Scan request headers looking for If-None-Match */
 	for (i = 0; headers[i] != NULL; i++) {
@@ -175,7 +175,7 @@ fetch_file_setup(struct fetch *fetchh,
 		/* Convert to time_t */
 		if (*d != '\0') {
 			ret = nsc_snptimet(d, strlen(d), &ctx->file_etag);
-			if (ret != NSERROR_OK) {
+			if (ret != SLATEERROR_OK) {
 				NSLOG(fetch, WARNING,
 						"Bad If-None-Match value");
 			}
@@ -193,7 +193,7 @@ fetch_file_setup(struct fetch *fetchh,
 static void fetch_file_free(void *ctx)
 {
 	struct fetch_file_context *c = ctx;
-	nsurl_unref(c->url);
+	slateurl_unref(c->url);
 	free(c->path);
 	free(ctx);
 }
@@ -262,7 +262,7 @@ static void fetch_file_process_error(struct fetch_file_context *ctx, int code)
 		 "</body>\n</html>\n",
 		 title, title,
 		 messages_get("FetchErrorCode"), code,
-		 messages_get("FetchFile"), nsurl_access(ctx->url));
+		 messages_get("FetchFile"), slateurl_access(ctx->url));
 
 	msg.type = FETCH_DATA;
 	msg.data.header_or_data.buf = (const uint8_t *) buffer;
@@ -528,29 +528,29 @@ static char *gen_nice_title(char *path)
  * \param even is the row an even row.
  * \param buffer The output buffer.
  * \param buffer_len The space available in the output buffer.
- * \return NSERROR_OK or error code on faliure.
+ * \return SLATEERROR_OK or error code on faliure.
  */
-static nserror
+static slateerror
 process_dir_ent(struct fetch_file_context *ctx,
 		 struct dirent *ent,
 		 bool even,
 		 char *buffer,
 		 size_t buffer_len)
 {
-	nserror ret;
+	slateerror ret;
 	char *urlpath = NULL; /* buffer for leaf entry path */
 	struct stat ent_stat; /* stat result of leaf entry */
 	char datebuf[64]; /* buffer for date text */
 	char timebuf[64]; /* buffer for time text */
-	nsurl *url;
+	slateurl *url;
 
 	/* skip hidden files */
 	if (ent->d_name[0] == '.') {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
-	ret = netsurf_mkpath(&urlpath, NULL, 2, ctx->path, ent->d_name);
-	if (ret != NSERROR_OK) {
+	ret = slate_mkpath(&urlpath, NULL, 2, ctx->path, ent->d_name);
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
@@ -576,8 +576,8 @@ process_dir_ent(struct fetch_file_context *ctx,
 		}
 	}
 
-	ret = guit->file->path_to_nsurl(urlpath, &url);
-	if (ret != NSERROR_OK) {
+	ret = guit->file->path_to_slateurl(urlpath, &url);
+	if (ret != SLATEERROR_OK) {
 		free(urlpath);
 		return ret;
 	}
@@ -614,10 +614,10 @@ process_dir_ent(struct fetch_file_context *ctx,
 				     buffer, buffer_len);
 	}
 
-	nsurl_unref(url);
+	slateurl_unref(url);
 	free(urlpath);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -669,8 +669,8 @@ static void fetch_file_process_dir(struct fetch_file_context *ctx,
 	char buffer[1024]; /* Output buffer */
 	bool even = false; /* formatting flag */
 	char *title; /* pretty printed title */
-	nserror err; /* result from url routines */
-	nsurl *up; /* url of parent */
+	slateerror err; /* result from url routines */
+	slateurl *up; /* url of parent */
 
 	struct dirent **listing = NULL; /* directory entry listing */
 	int i; /* directory entry index */
@@ -712,17 +712,17 @@ static void fetch_file_process_dir(struct fetch_file_context *ctx,
 		goto fetch_file_process_dir_aborted;
 
 	/* Print parent directory link */
-	err = nsurl_parent(ctx->url, &up);
-	if (err == NSERROR_OK) {
-		if (nsurl_compare(ctx->url, up, NSURL_COMPLETE) == false) {
+	err = slateurl_parent(ctx->url, &up);
+	if (err == SLATEERROR_OK) {
+		if (slateurl_compare(ctx->url, up, SLATEURL_COMPLETE) == false) {
 			/* different URL; have parent */
-			dirlist_generate_parent_link(nsurl_access(up),
+			dirlist_generate_parent_link(slateurl_access(up),
 					buffer, sizeof buffer);
 
 			msg.data.header_or_data.len = strlen(buffer);
 			fetch_file_send_callback(&msg, ctx);
 		}
-		nsurl_unref(up);
+		slateurl_unref(up);
 
 		if (ctx->aborted)
 			goto fetch_file_process_dir_aborted;
@@ -740,7 +740,7 @@ static void fetch_file_process_dir(struct fetch_file_context *ctx,
 		err = process_dir_ent(ctx, listing[i], even, buffer,
 				       sizeof(buffer));
 
-		if (err == NSERROR_OK) {
+		if (err == SLATEERROR_OK) {
 			msg.data.header_or_data.len = strlen(buffer);
 			if (fetch_file_send_callback(&msg, ctx))
 				goto fetch_file_process_dir_aborted;
@@ -836,7 +836,7 @@ static void fetch_file_poll(lwc_string *scheme)
 	ring = save_ring;
 }
 
-nserror fetch_file_register(void)
+slateerror fetch_file_register(void)
 {
 	lwc_string *scheme = lwc_string_ref(corestring_lwc_file);
 	const struct fetcher_operation_table fetcher_ops = {

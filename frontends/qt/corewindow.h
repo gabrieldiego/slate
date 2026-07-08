@@ -1,7 +1,7 @@
 /*
  * Copyright 2024 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,12 +16,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_QT_COREWINDOW_H
-#define NETSURF_QT_COREWINDOW_H 1
+#ifndef SLATE_QT_COREWINDOW_H
+#define SLATE_QT_COREWINDOW_H 1
 
 /**
  * qt core window operation table
  */
-extern struct core_window_table *nsqt_core_window_table;
+extern struct core_window_table *slateqt_core_window_table;
 
 #endif

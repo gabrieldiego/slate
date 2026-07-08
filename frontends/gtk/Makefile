@@ -8,8 +8,8 @@
 # ----------------------------------------------------------------------------
 
 # define additional CFLAGS and LDFLAGS requirements for pkg-configed libs here
-NETSURF_FEATURE_RSVG_CFLAGS := -DWITH_RSVG
-NETSURF_FEATURE_VIDEO_CFLAGS := -DWITH_VIDEO
+SLATE_FEATURE_RSVG_CFLAGS := -DWITH_RSVG
+SLATE_FEATURE_VIDEO_CFLAGS := -DWITH_VIDEO
 
 # determine if the rsvg library API version
 RSVG_API := $(shell $(PKG_CONFIG) --atleast-version=2.46 librsvg-2.0 && echo 246)
@@ -30,7 +30,7 @@ GTKDEPFLAGS := -DG_DISABLE_SINGLE_INCLUDES \
 #		-DGDK_DISABLE_DEPRECATED 
 
 # gtk3 is depricating interfaces we use a lot
-ifeq ($(NETSURF_GTK_MAJOR),2)
+ifeq ($(SLATE_GTK_MAJOR),2)
 GTKDEPFLAGS += -DGTK_DISABLE_DEPRECATED
 endif
 
@@ -42,16 +42,16 @@ CAPIFLAGS := -D_XOPEN_SOURCE=700 \
                -D_POSIX_C_SOURCE=200809L
 endif
 
-GTKCFLAGS := -std=c99 -Dgtk -Dnsgtk -g \
+GTKCFLAGS := -std=c99 -Dgtk -Dslategtk -g \
 		$(GTKDEPFLAGS) \
 		$(CAPIFLAGS) \
 		-D_BSD_SOURCE \
 		-D_DEFAULT_SOURCE \
 		-D_NETBSD_SOURCE \
-		-DGTK_RESPATH=\"$(NETSURF_GTK_RES_PATH)\"
+		-DGTK_RESPATH=\"$(SLATE_GTK_RES_PATH)\"
 
 # non optional pkg-configed libs
-$(eval $(call pkg_config_find_and_add,gtk+-$(NETSURF_GTK_MAJOR).0,GTK-$(NETSURF_GTK_MAJOR)))
+$(eval $(call pkg_config_find_and_add,gtk+-$(SLATE_GTK_MAJOR).0,GTK-$(SLATE_GTK_MAJOR)))
 $(eval $(call pkg_config_find_and_add,gthread-2.0,GThread2))
 $(eval $(call pkg_config_find_and_add,gmodule-2.0,GModule2))
 
@@ -64,14 +64,14 @@ LDFLAGS += -lm
 # ---------------------------------------------------------------------------
 
 # Path to GTK resources
-NSGTK_RESOURCES_DIR := $(FRONTEND_RESOURCES_DIR)
+SLATEGTK_RESOURCES_DIR := $(FRONTEND_RESOURCES_DIR)
 
 # The gtk binary target.
-EXETARGET := nsgtk$(NETSURF_GTK_MAJOR)
+EXETARGET := slategtk$(SLATE_GTK_MAJOR)
 
 # The filter and target for split messages
 MESSAGES_FILTER=gtk
-MESSAGES_TARGET=$(NSGTK_RESOURCES_DIR)
+MESSAGES_TARGET=$(SLATEGTK_RESOURCES_DIR)
 
 # ---------------------------------------------------------------------------
 # Windows flag setup
@@ -99,39 +99,39 @@ S_RESOURCE :=
 #  than "knowing" the version but there does not appear to be a simple
 #  way to implement that.
 #
-NETSURF_FEATURE_GRESOURCE_AVAILABLE := $(shell $(PKG_CONFIG) --atleast-version=2.32 gmodule-2.0 && echo yes)
-ifneq (,$(filter $(NETSURF_USE_GRESOURCE),AUTO YES))
-ifeq ($(NETSURF_FEATURE_GRESOURCE_AVAILABLE),yes)
+SLATE_FEATURE_GRESOURCE_AVAILABLE := $(shell $(PKG_CONFIG) --atleast-version=2.32 gmodule-2.0 && echo yes)
+ifneq (,$(filter $(SLATE_USE_GRESOURCE),AUTO YES))
+ifeq ($(SLATE_FEATURE_GRESOURCE_AVAILABLE),yes)
 
 # Gresource use has been enabled
-NETSURF_FEATURE_GRESOURCE_ENABLED := yes
+SLATE_FEATURE_GRESOURCE_ENABLED := yes
 
 #resource compiler tool
 GLIB_COMPILE_RESOURCES := glib-compile-resources
 CFLAGS += -DWITH_GRESOURCE
 
-NETSURF_GRESOURCE_XML := $(NSGTK_RESOURCES_DIR)/netsurf.gresource.xml
-UI_GRESOURCE_XML := $(NSGTK_RESOURCES_DIR)/ui.gresource.xml
-MESSAGES_GRESOURCE_XML := $(NSGTK_RESOURCES_DIR)/messages.gresource.xml
+SLATE_GRESOURCE_XML := $(SLATEGTK_RESOURCES_DIR)/slate.gresource.xml
+UI_GRESOURCE_XML := $(SLATEGTK_RESOURCES_DIR)/ui.gresource.xml
+MESSAGES_GRESOURCE_XML := $(SLATEGTK_RESOURCES_DIR)/messages.gresource.xml
 
 # generate the netsurf gresource source files
-$(OBJROOT)/netsurf_gresource.c: $(NETSURF_GRESOURCE_XML) $(shell $(GLIB_COMPILE_RESOURCES) --sourcedir $(NSGTK_RESOURCES_DIR) --generate-dependencies $(NETSURF_GRESOURCE_XML))
+$(OBJROOT)/slate_gresource.c: $(SLATE_GRESOURCE_XML) $(shell $(GLIB_COMPILE_RESOURCES) --sourcedir $(SLATEGTK_RESOURCES_DIR) --generate-dependencies $(SLATE_GRESOURCE_XML))
 	$(VQ)echo "GRESORCE: $<"
-	$(Q)$(GLIB_COMPILE_RESOURCES) --generate-source --sourcedir $(NSGTK_RESOURCES_DIR) --target=$@ $<
+	$(Q)$(GLIB_COMPILE_RESOURCES) --generate-source --sourcedir $(SLATEGTK_RESOURCES_DIR) --target=$@ $<
 
-S_RESOURCE += $(OBJROOT)/netsurf_gresource.c
+S_RESOURCE += $(OBJROOT)/slate_gresource.c
 
 # generate the ui gresource source files
-$(OBJROOT)/ui_gresource.c: $(UI_GRESOURCE_XML) $(shell $(GLIB_COMPILE_RESOURCES) --sourcedir $(NSGTK_RESOURCES_DIR)/gtk$(NETSURF_GTK_MAJOR) --generate-dependencies $(UI_GRESOURCE_XML))
+$(OBJROOT)/ui_gresource.c: $(UI_GRESOURCE_XML) $(shell $(GLIB_COMPILE_RESOURCES) --sourcedir $(SLATEGTK_RESOURCES_DIR)/gtk$(SLATE_GTK_MAJOR) --generate-dependencies $(UI_GRESOURCE_XML))
 	$(VQ)echo "GRESORCE: $<"
-	$(Q)$(GLIB_COMPILE_RESOURCES) --generate-source --sourcedir $(NSGTK_RESOURCES_DIR)/gtk$(NETSURF_GTK_MAJOR) --target=$@ $<
+	$(Q)$(GLIB_COMPILE_RESOURCES) --generate-source --sourcedir $(SLATEGTK_RESOURCES_DIR)/gtk$(SLATE_GTK_MAJOR) --target=$@ $<
 
 S_RESOURCE += $(OBJROOT)/ui_gresource.c
 
 # generate the messages gresource source file
 $(OBJROOT)/messages_gresource.c: $(MESSAGES_GRESOURCE_XML) $(addsuffix /Messages,$(addprefix $(MESSAGES_TARGET)/,$(MESSAGES_LANGUAGES)))
 	$(VQ)echo "GRESORCE: $<"
-	$(Q)$(GLIB_COMPILE_RESOURCES) --generate-source --sourcedir $(NSGTK_RESOURCES_DIR) --target=$@ $<
+	$(Q)$(GLIB_COMPILE_RESOURCES) --generate-source --sourcedir $(SLATEGTK_RESOURCES_DIR) --target=$@ $<
 
 S_RESOURCE += $(OBJROOT)/messages_gresource.c
 
@@ -140,13 +140,13 @@ endif
 endif
 
 # Build pixbufs as inlines if enabled
-ifneq (,$(filter $(NETSURF_USE_INLINE_PIXBUF),AUTO YES))
-ifneq ($(NETSURF_FEATURE_GRESOURCE_ENABLED),yes)
+ifneq (,$(filter $(SLATE_USE_INLINE_PIXBUF),AUTO YES))
+ifneq ($(SLATE_FEATURE_GRESOURCE_ENABLED),yes)
 
 CFLAGS += -DWITH_BUILTIN_PIXBUF
 
 GTK_IMAGE_favicon := favicon.png
-GTK_IMAGE_netsurf := netsurf.xpm
+GTK_IMAGE_netsurf := slate.xpm
 GTK_IMAGE_menu_cursor := menu_cursor.png
 
 # 1: input file
@@ -165,7 +165,7 @@ $(2): $(1)
 
 endef
 
-$(eval $(foreach V,$(filter GTK_IMAGE_%,$(.VARIABLES)),$(call convert_image,$(addprefix $(NSGTK_RESOURCES_DIR)/,$($(V))),$(OBJROOT)/$(patsubst GTK_IMAGE_%,%,$(V)).c,$(patsubst GTK_IMAGE_%,%,$(V))_pixdata)))
+$(eval $(foreach V,$(filter GTK_IMAGE_%,$(.VARIABLES)),$(call convert_image,$(addprefix $(SLATEGTK_RESOURCES_DIR)/,$($(V))),$(OBJROOT)/$(patsubst GTK_IMAGE_%,%,$(V)).c,$(patsubst GTK_IMAGE_%,%,$(V))_pixdata)))
 endif
 endif
 
@@ -194,27 +194,27 @@ GTK_RESOURCES_LIST := \
 	languages SearchEngines ca-bundle.txt \
 	default.css adblock.css quirks.css internal.css \
 	credits.html licence.html welcome.html Messages \
-	default.ico favicon.png netsurf.png netsurf.xpm netsurf-16x16.xpm
+	default.ico favicon.png slate.png slate.xpm slate-16x16.xpm
 
 GTK_RESOURCES_LIST := \
-	$(addprefix $(NSGTK_RESOURCES_DIR)/, $(GTK_RESOURCES_LIST)) \
-	$(wildcard $(NSGTK_RESOURCES_DIR)/gtk$(NETSURF_GTK_MAJOR)/*.ui)
+	$(addprefix $(SLATEGTK_RESOURCES_DIR)/, $(GTK_RESOURCES_LIST)) \
+	$(wildcard $(SLATEGTK_RESOURCES_DIR)/gtk$(SLATE_GTK_MAJOR)/*.ui)
 
 # translations with more than just Messages files
 GTK_TRANSLATIONS_HTML := de en fr it ja nl zh_CN
 
 # destination for installed resources is the first entry in the gtk resource path
-NSGTK_RESOURCES_DESTDIR := $(DESTDIR)$(word 1,$(subst :, ,$(NETSURF_GTK_RES_PATH)))
+SLATEGTK_RESOURCES_DESTDIR := $(DESTDIR)$(word 1,$(subst :, ,$(SLATE_GTK_RES_PATH)))
 
 install-gtk:
-	$(Q)$(MKDIR) -p $(DESTDIR)$(NETSURF_GTK_BIN)
-	$(Q)install $(EXETARGET) $(DESTDIR)$(NETSURF_GTK_BIN)netsurf-gtk$(SUBTARGET)
-	$(Q)$(MKDIR) -p $(NSGTK_RESOURCES_DESTDIR)/icons
-	$(Q)install -m 0644 $(NSGTK_RESOURCES_DIR)/icons/*.png $(NSGTK_RESOURCES_DESTDIR)/icons
-	$(Q)$(MKDIR) -p $(NSGTK_RESOURCES_DESTDIR)/throbber
-	$(Q)install -m 0644 $(NSGTK_RESOURCES_DIR)/throbber/*.png $(NSGTK_RESOURCES_DESTDIR)/throbber
-	$(Q)tar -c -h -C $(NSGTK_RESOURCES_DIR) -f - $(GTK_TRANSLATIONS_HTML) | tar -xv -C $(NSGTK_RESOURCES_DESTDIR) -f -
-	$(Q)install -m 0644 $(GTK_RESOURCES_LIST) $(NSGTK_RESOURCES_DESTDIR)
+	$(Q)$(MKDIR) -p $(DESTDIR)$(SLATE_GTK_BIN)
+	$(Q)install $(EXETARGET) $(DESTDIR)$(SLATE_GTK_BIN)slate-gtk$(SUBTARGET)
+	$(Q)$(MKDIR) -p $(SLATEGTK_RESOURCES_DESTDIR)/icons
+	$(Q)install -m 0644 $(SLATEGTK_RESOURCES_DIR)/icons/*.png $(SLATEGTK_RESOURCES_DESTDIR)/icons
+	$(Q)$(MKDIR) -p $(SLATEGTK_RESOURCES_DESTDIR)/throbber
+	$(Q)install -m 0644 $(SLATEGTK_RESOURCES_DIR)/throbber/*.png $(SLATEGTK_RESOURCES_DESTDIR)/throbber
+	$(Q)tar -c -h -C $(SLATEGTK_RESOURCES_DIR) -f - $(GTK_TRANSLATIONS_HTML) | tar -xv -C $(SLATEGTK_RESOURCES_DESTDIR) -f -
+	$(Q)install -m 0644 $(GTK_RESOURCES_LIST) $(SLATEGTK_RESOURCES_DESTDIR)
 
 # ----------------------------------------------------------------------------
 # Package target

@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,8 +20,8 @@
  * Interface to javascript engine functions.
  */
 
-#ifndef NETSURF_JAVASCRIPT_JS_H_
-#define NETSURF_JAVASCRIPT_JS_H_
+#ifndef SLATE_JAVASCRIPT_JS_H_
+#define SLATE_JAVASCRIPT_JS_H_
 
 #include "utils/errors.h"
 
@@ -69,9 +69,9 @@ void js_finalise(void);
  *
  * \param timeout elapsed wallclock time (in seconds) before \a callback is called
  * \param heap Updated to the created JS heap
- * \return NSERROR_OK on success, appropriate error otherwise.
+ * \return SLATEERROR_OK on success, appropriate error otherwise.
  */
-nserror js_newheap(int timeout, jsheap **heap);
+slateerror js_newheap(int timeout, jsheap **heap);
 
 /**
  * Destroy a previously created heap.
@@ -92,9 +92,9 @@ void js_destroyheap(jsheap *heap);
  * \param win_priv The value to give to the Window constructor as the window
  * \param doc_priv The value to give to the Document constructor as the document
  * \param thread Updated to the created thread
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror js_newthread(jsheap *heap, void *win_priv, void *doc_priv, jsthread **thread);
+slateerror js_newthread(jsheap *heap, void *win_priv, void *doc_priv, jsthread **thread);
 
 /**
  * Close a javascript thread
@@ -106,9 +106,9 @@ nserror js_newthread(jsheap *heap, void *win_priv, void *doc_priv, jsthread **th
  * register callbacks after closedown, they will fail.
  *
  * \param thread The thread to close down
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror js_closethread(jsthread *thread);
+slateerror js_closethread(jsthread *thread);
 
 /**
  * Destroy a javascript thread
@@ -161,4 +161,4 @@ void js_handle_new_element(jsthread *thread, struct dom_element *node);
  */
 void js_event_cleanup(jsthread *thread, struct dom_event *evt);
 
-#endif /* NETSURF_JAVASCRIPT_JS_H_ */
+#endif /* SLATE_JAVASCRIPT_JS_H_ */

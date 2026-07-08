@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,39 +22,39 @@
 
 #include "utils/errors.h"
 #include "content/content.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 
 #include "javascript/js.h"
 #include "utils/log.h"
 
 void js_initialise(void)
 {
-	nsoption_set_bool(enable_javascript, false);
+	slateoption_set_bool(enable_javascript, false);
 }
 
 void js_finalise(void)
 {
 }
 
-nserror js_newheap(int timeout, jsheap **heap)
+slateerror js_newheap(int timeout, jsheap **heap)
 {
 	*heap = NULL;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 void js_destroyheap(jsheap *heap)
 {
 }
 
-nserror js_newthread(jsheap *heap, void *win_priv, void *doc_priv, jsthread **thread)
+slateerror js_newthread(jsheap *heap, void *win_priv, void *doc_priv, jsthread **thread)
 {
 	*thread = NULL;
-	return NSERROR_NOT_IMPLEMENTED;
+	return SLATEERROR_NOT_IMPLEMENTED;
 }
 
-nserror js_closethread(jsthread *thread)
+slateerror js_closethread(jsthread *thread)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 void js_destroythread(jsthread *thread)

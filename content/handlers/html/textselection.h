@@ -1,7 +1,7 @@
 /*
  * Copyright 2020 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,23 +21,23 @@
  * HTML text selection handling
  */
 
-#ifndef NETSURF_HTML_TEXTSELECTION_H
-#define NETSURF_HTML_TEXTSELECTION_H
+#ifndef SLATE_HTML_TEXTSELECTION_H
+#define SLATE_HTML_TEXTSELECTION_H
 
 struct content;
 struct selection;
 
-nserror html_textselection_redraw(struct content *c, unsigned start_idx, unsigned end_idx);
+slateerror html_textselection_redraw(struct content *c, unsigned start_idx, unsigned end_idx);
 
-nserror html_textselection_copy(struct content *c, unsigned start_idx, unsigned end_idx, struct selection_string *selstr);
+slateerror html_textselection_copy(struct content *c, unsigned start_idx, unsigned end_idx, struct selection_string *selstr);
 
 /**
  * get maximum index of text section.
  *
  * \param[in] c The content to measure
  * \param[out] end_idx pointer to value to recive result
- * \return NSERROR_OK and \a end_idx updated else error code
+ * \return SLATEERROR_OK and \a end_idx updated else error code
  */
-nserror html_textselection_get_end(struct content *c, unsigned *end_idx);
+slateerror html_textselection_get_end(struct content *c, unsigned *end_idx);
 
 #endif

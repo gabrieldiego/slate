@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,9 +16,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NS_MONKEY_FETCH_H
-#define NS_MONKEY_FETCH_H
+#ifndef SLATE_JOTTER_FETCH_H
+#define SLATE_JOTTER_FETCH_H
 
 extern struct gui_fetch_table *monkey_fetch_table;
 
-#endif /* NS_MONKEY_FETCH_H */
+#endif /* SLATE_JOTTER_FETCH_H */

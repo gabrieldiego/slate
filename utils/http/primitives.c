@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "netsurf/inttypes.h"
+#include "slate/inttypes.h"
 #include "utils/http/primitives.h"
 
 /**
@@ -59,13 +59,13 @@ static bool http_is_token_char(uint8_t c)
  *
  * \param input  Pointer to current input byte. Updated on exit.
  * \param value  Pointer to location to receive on-heap token value.
- * \return NSERROR_OK on success,
- * 	   NSERROR_NOMEM on memory exhaustion,
- * 	   NSERROR_NOT_FOUND if no token could be parsed
+ * \return SLATEERROR_OK on success,
+ * 	   SLATEERROR_NOMEM on memory exhaustion,
+ * 	   SLATEERROR_NOT_FOUND if no token could be parsed
  *
  * The returned value is owned by the caller
  */
-nserror http__parse_token(const char **input, lwc_string **value)
+slateerror http__parse_token(const char **input, lwc_string **value)
 {
 	const uint8_t *start = (const uint8_t *) *input;
 	const uint8_t *end;
@@ -76,16 +76,16 @@ nserror http__parse_token(const char **input, lwc_string **value)
 		end++;
 
 	if (end == start)
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 
 	if (lwc_intern_string((const char *) start, 
 			end - start, &token) != lwc_error_ok)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	*value = token;
 	*input = (const char *) end;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -93,13 +93,13 @@ nserror http__parse_token(const char **input, lwc_string **value)
  *
  * \param input  Pointer to current input byte. Updated on exit.
  * \param value  Pointer to location to receive on-heap string value.
- * \return NSERROR_OK on success,
- * 	   NSERROR_NOMEM on memory exhaustion,
- * 	   NSERROR_NOT_FOUND if no string could be parsed
+ * \return SLATEERROR_OK on success,
+ * 	   SLATEERROR_NOMEM on memory exhaustion,
+ * 	   SLATEERROR_NOT_FOUND if no string could be parsed
  *
  * The returned value is owned by the caller
  */
-nserror http__parse_quoted_string(const char **input, lwc_string **value)
+slateerror http__parse_quoted_string(const char **input, lwc_string **value)
 {
 	const uint8_t *start = (const uint8_t *) *input;
 	const uint8_t *end;
@@ -117,7 +117,7 @@ nserror http__parse_quoted_string(const char **input, lwc_string **value)
 	 */
 
 	if (*start != '"')
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 
 	end = start = start + 1;
 
@@ -130,17 +130,17 @@ nserror http__parse_quoted_string(const char **input, lwc_string **value)
 	}
 
 	if (*end != '"')
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 
 	if (lwc_intern_string((const char *) start, end - start, 
 			&string_value) != lwc_error_ok)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	*value = string_value;
 
 	*input = (const char *) end + 1;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 

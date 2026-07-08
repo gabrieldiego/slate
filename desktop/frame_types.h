@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * Interface to browser frames.
  */
 
-#ifndef _NETSURF_DESKTOP_FRAME_TYPES_H_
-#define _NETSURF_DESKTOP_FRAME_TYPES_H_
+#ifndef _SLATE_DESKTOP_FRAME_TYPES_H_
+#define _SLATE_DESKTOP_FRAME_TYPES_H_
 
 struct frame_dimension {
   	float value;

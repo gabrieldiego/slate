@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,7 +28,7 @@
 #include <string.h>
 #include <sys/types.h>
 
-#include "netsurf/inttypes.h"
+#include "slate/inttypes.h"
 
 #include "utils/errors.h"
 #include "utils/idna.h"
@@ -40,33 +40,33 @@
 
 
 /**
- * Convert punycode status into nserror.
+ * Convert punycode status into slateerror.
  *
  * \param status The punycode status to convert.
- * \return The corresponding nserror code for the status.
+ * \return The corresponding slateerror code for the status.
  */
-static nserror punycode_status_to_nserror(enum punycode_status status)
+static slateerror punycode_status_to_slateerror(enum punycode_status status)
 {
-	nserror ret = NSERROR_NOMEM;
+	slateerror ret = SLATEERROR_NOMEM;
 
 	switch (status) {
 	case punycode_success:
-		ret = NSERROR_OK;
+		ret = SLATEERROR_OK;
 		break;
 
 	case punycode_bad_input:
 		NSLOG(netsurf, INFO, "Bad input");
-		ret = NSERROR_BAD_ENCODING;
+		ret = SLATEERROR_BAD_ENCODING;
 		break;
 
 	case punycode_big_output:
 		NSLOG(netsurf, INFO, "Output too big");
-		ret = NSERROR_BAD_SIZE;
+		ret = SLATEERROR_BAD_SIZE;
 		break;
 
 	case punycode_overflow:
 		NSLOG(netsurf, INFO, "Overflow");
-		ret = NSERROR_NOSPACE;
+		ret = SLATEERROR_NOSPACE;
 		break;
 
 	default:
@@ -83,11 +83,11 @@ static nserror punycode_status_to_nserror(enum punycode_status status)
  * \param len Length of host label (in characters/codepoints)
  * \param ace_label ASCII-compatible encoded version
  * \param out_len Length of ace_label
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  *
- * If return value != NSERROR_OK, output will be left untouched.
+ * If return value != SLATEERROR_OK, output will be left untouched.
  */
-static nserror
+static slateerror
 idna__ucs4_to_ace(int32_t *ucs4_label,
 		  size_t len,
 		  char **ace_label,
@@ -95,17 +95,17 @@ idna__ucs4_to_ace(int32_t *ucs4_label,
 {
 	char punycode[65]; /* max length of host label + NULL */
 	size_t output_length = 60; /* punycode length - 4 - 1 */
-	nserror ret;
+	slateerror ret;
 
 	punycode[0] = 'x';
 	punycode[1] = 'n';
 	punycode[2] = '-';
 	punycode[3] = '-';
 
-	ret = punycode_status_to_nserror(punycode_encode(len,
+	ret = punycode_status_to_slateerror(punycode_encode(len,
 			(const punycode_uint *)ucs4_label, NULL,
 			&output_length, punycode + 4));
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
@@ -115,7 +115,7 @@ idna__ucs4_to_ace(int32_t *ucs4_label,
 	*ace_label = strdup(punycode);
 	*out_len = output_length;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -126,18 +126,18 @@ idna__ucs4_to_ace(int32_t *ucs4_label,
  * \param ace_len Length of host label
  * \param ucs4_label Pointer to hold UCS4 decoded version
  * \param ucs4_len Pointer to hold length of ucs4_label
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  *
- * If return value != NSERROR_OK, output will be left untouched.
+ * If return value != SLATEERROR_OK, output will be left untouched.
  */
-static nserror
+static slateerror
 idna__ace_to_ucs4(const char *ace_label,
 		  size_t ace_len,
 		  int32_t **ucs4_label,
 		  size_t *ucs4_len)
 {
 	int32_t *ucs4;
-	nserror ret;
+	slateerror ret;
 	size_t output_length = ace_len; /* never exceeds input length */
 
 	/* The header should always have been checked before calling */
@@ -146,12 +146,12 @@ idna__ace_to_ucs4(const char *ace_label,
 
 	ucs4 = malloc(output_length * 4);
 	if (ucs4 == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
-	ret = punycode_status_to_nserror(punycode_decode(ace_len - 4,
+	ret = punycode_status_to_slateerror(punycode_decode(ace_len - 4,
 		ace_label + 4, &output_length, (punycode_uint *)ucs4, NULL));
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		free(ucs4);
 		return ret;
 	}
@@ -161,7 +161,7 @@ idna__ace_to_ucs4(const char *ace_label,
 	*ucs4_label = ucs4;
 	*ucs4_len = output_length;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -322,11 +322,11 @@ static bool idna__contextj_rule(int32_t *label, int index, size_t len)
  * \param len	Length of host label (in bytes)
  * \param ucs4_label	Pointer to update with the output
  * \param ucs4_len	Pointer to update with the length
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  *
- * If return value != NSERROR_OK, output will be left untouched.
+ * If return value != SLATEERROR_OK, output will be left untouched.
  */
-static nserror
+static slateerror
 idna__utf8_to_ucs4(const char *utf8_label,
 		   size_t len,
 		   int32_t **ucs4_label,
@@ -337,25 +337,25 @@ idna__utf8_to_ucs4(const char *utf8_label,
 
 	nfc_label = malloc(len * 4);
 	if (nfc_label == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	nfc_size = utf8proc_decompose((const uint8_t *)utf8_label, len,
 		nfc_label, len * 4, UTF8PROC_STABLE | UTF8PROC_COMPOSE);
 	if (nfc_size < 0) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	nfc_size = utf8proc_normalize_utf32(nfc_label, nfc_size,
 		UTF8PROC_STABLE | UTF8PROC_COMPOSE);
 	if (nfc_size < 0) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	*ucs4_label = nfc_label;
 	*ucs4_len = nfc_size;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -366,11 +366,11 @@ idna__utf8_to_ucs4(const char *utf8_label,
  * \param ucs4_len	Length of host label (in bytes)
  * \param utf8_label	Pointer to update with the output
  * \param utf8_len	Pointer to update with the length
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  *
- * If return value != NSERROR_OK, output will be left untouched.
+ * If return value != SLATEERROR_OK, output will be left untouched.
  */
-static nserror
+static slateerror
 idna__ucs4_to_utf8(const int32_t *ucs4_label,
 		   size_t ucs4_len,
 		   char **utf8_label,
@@ -381,20 +381,20 @@ idna__ucs4_to_utf8(const int32_t *ucs4_label,
 
 	nfc_label = malloc(1 + ucs4_len * 4);
 	if (nfc_label == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 	memcpy(nfc_label, ucs4_label, ucs4_len * 4);
 
 	nfc_size = utf8proc_reencode(nfc_label, ucs4_len,
 		UTF8PROC_STABLE | UTF8PROC_COMPOSE);
 	if (nfc_size < 0) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	*utf8_label = (char *)nfc_label;
 	*utf8_len = nfc_size;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -494,7 +494,7 @@ static bool idna__is_valid(int32_t *label, size_t len)
  */
 static bool idna__verify(const char *label, size_t len)
 {
-	nserror error;
+	slateerror error;
 	int32_t *ucs4;
 	char *ace;
 	ssize_t ucs4_len;
@@ -502,7 +502,7 @@ static bool idna__verify(const char *label, size_t len)
 
 	/* Convert our ACE label back to UCS-4 */
 	error = idna__ace_to_ucs4(label, len, &ucs4, &u_ucs4_len);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		return false;
 	}
 
@@ -518,7 +518,7 @@ static bool idna__verify(const char *label, size_t len)
 	error = idna__ucs4_to_ace(ucs4, (size_t)ucs4_len,
 				&ace, &ace_len);
 	free(ucs4);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		return false;
 	}
 
@@ -546,17 +546,17 @@ static bool idna__verify(const char *label, size_t len)
  * \param len	Length of host label (in bytes)
  * \param ucs4_label	Pointer to update with the output
  * \param ucs4_len	Pointer to update with the length
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  *
- * If return value != NSERROR_OK, output will be left untouched.
+ * If return value != SLATEERROR_OK, output will be left untouched.
  */
-static nserror
+static slateerror
 idna__utf8_to_ucs4(const char *utf8_label,
 		   size_t len,
 		   int32_t **ucs4_label,
 		   size_t *ucs4_len)
 {
-	return NSERROR_NOT_IMPLEMENTED;
+	return SLATEERROR_NOT_IMPLEMENTED;
 }
 
 
@@ -567,17 +567,17 @@ idna__utf8_to_ucs4(const char *utf8_label,
  * \param ucs4_len	Length of host label (in bytes)
  * \param utf8_label	Pointer to update with the output
  * \param utf8_len	Pointer to update with the length
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  *
- * If return value != NSERROR_OK, output will be left untouched.
+ * If return value != SLATEERROR_OK, output will be left untouched.
  */
-static nserror
+static slateerror
 idna__ucs4_to_utf8(const int32_t *ucs4_label,
 		   size_t ucs4_len,
 		   char **utf8_label,
 		   size_t *utf8_len)
 {
-	return NSERROR_NOT_IMPLEMENTED;
+	return SLATEERROR_NOT_IMPLEMENTED;
 }
 
 
@@ -699,7 +699,7 @@ static bool idna__is_ace(const char *label, size_t len)
 		if ((FQDN_MAX - fqdn_len) <= len) {                            \
 			/* Not enough room to append this element */           \
 			action;                                                \
-			return NSERROR_BAD_URL;                                \
+			return SLATEERROR_BAD_URL;                                \
 		} else {                                                       \
 			memcpy(fqdn_p, s, len);                                \
 			fqdn_p += len;                                         \
@@ -709,10 +709,10 @@ static bool idna__is_ace(const char *label, size_t len)
 	} while (0)
 
 /* exported interface documented in idna.h */
-nserror
+slateerror
 idna_encode(const char *host, size_t len, char **ace_host, size_t *ace_len)
 {
-	nserror error;
+	slateerror error;
 	int32_t *ucs4_host;
 	size_t label_len, output_len, ucs4_len, fqdn_len = 0;
 	char fqdn[FQDN_MAX];
@@ -720,7 +720,7 @@ idna_encode(const char *host, size_t len, char **ace_host, size_t *ace_len)
 
 	label_len = idna__host_label_length(host, len);
 	if (label_len == 0) {
-		return NSERROR_BAD_URL;
+		return SLATEERROR_BAD_URL;
 	}
 
 	while (label_len != 0) {
@@ -730,21 +730,21 @@ idna_encode(const char *host, size_t len, char **ace_host, size_t *ace_len)
 			/* Convert to Unicode */
 			error = idna__utf8_to_ucs4(host, label_len,
 						   &ucs4_host, &ucs4_len);
-			if (error != NSERROR_OK) {
+			if (error != SLATEERROR_OK) {
 				return error;
 			}
 
 			/* Check this is valid for conversion */
 			if (idna__is_valid(ucs4_host, ucs4_len) == false) {
 				free(ucs4_host);
-				return NSERROR_BAD_URL;
+				return SLATEERROR_BAD_URL;
 			}
 
 			/* Convert to ACE */
 			error = idna__ucs4_to_ace(ucs4_host, ucs4_len,
 						&output, &output_len);
 			free(ucs4_host);
-			if (error != NSERROR_OK) {
+			if (error != SLATEERROR_OK) {
 				return error;
 			}
 			FQDN_APPEND(output, output_len, free(output));
@@ -754,7 +754,7 @@ idna_encode(const char *host, size_t len, char **ace_host, size_t *ace_len)
 			    (idna__verify(host, label_len) == false)) {
 				NSLOG(netsurf, INFO,
 				      "Cannot verify ACE label %s", host);
-				return NSERROR_BAD_URL;
+				return SLATEERROR_BAD_URL;
 			}
 			FQDN_APPEND(host, label_len, NO_ACTION);
 		}
@@ -776,15 +776,15 @@ idna_encode(const char *host, size_t len, char **ace_host, size_t *ace_len)
 	*ace_host = strdup(fqdn);
 	*ace_len = fqdn_len - 1; /* last character is NULL */
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in idna.h */
-nserror
+slateerror
 idna_decode(const char *ace_host, size_t ace_len, char **host, size_t *host_len)
 {
-	nserror error;
+	slateerror error;
 	int32_t *ucs4_host;
 	size_t label_len, output_len, ucs4_len, fqdn_len = 0;
 	char fqdn[FQDN_MAX];
@@ -792,7 +792,7 @@ idna_decode(const char *ace_host, size_t ace_len, char **host, size_t *host_len)
 
 	label_len = idna__host_label_length(ace_host, ace_len);
 	if (label_len == 0) {
-		return NSERROR_BAD_URL;
+		return SLATEERROR_BAD_URL;
 	}
 
 	while (label_len != 0) {
@@ -802,7 +802,7 @@ idna_decode(const char *ace_host, size_t ace_len, char **host, size_t *host_len)
 			/* Decode to Unicode */
 			error = idna__ace_to_ucs4(ace_host, label_len,
 						  &ucs4_host, &ucs4_len);
-			if (error != NSERROR_OK) {
+			if (error != SLATEERROR_OK) {
 				return error;
 			}
 
@@ -810,7 +810,7 @@ idna_decode(const char *ace_host, size_t ace_len, char **host, size_t *host_len)
 			error = idna__ucs4_to_utf8(ucs4_host, ucs4_len,
 						   &output, &output_len);
 			free(ucs4_host);
-			if (error != NSERROR_OK) {
+			if (error != SLATEERROR_OK) {
 				return error;
 			}
 			FQDN_APPEND(output, output_len, free(output));
@@ -836,5 +836,5 @@ idna_decode(const char *ace_host, size_t ace_len, char **host, size_t *host_len)
 	*host = strdup(fqdn);
 	*host_len = fqdn_len - 1; /* last character is NULL */
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }

@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,9 +37,9 @@
 
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/plotters.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/content.h"
+#include "slate/plotters.h"
+#include "slate/bitmap.h"
+#include "slate/content.h"
 #include "content/content.h"
 #include "content/content_protected.h"
 #include "content/content_factory.h"
@@ -64,7 +64,7 @@ typedef struct amiga_dt_anim_content {
 
 static APTR ami_colormap_to_clut(struct ColorMap *cmap);
 
-static nserror amiga_dt_anim_create(const content_handler *handler,
+static slateerror amiga_dt_anim_create(const content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		llcache_handle *llcache, const char *fallback_charset,
 		bool quirks, struct content **c);
@@ -74,10 +74,10 @@ static void amiga_dt_anim_destroy(struct content *c);
 static bool amiga_dt_anim_redraw(struct content *c,
 		struct content_redraw_data *data, const struct rect *clip,
 		const struct redraw_context *ctx);
-static nserror amiga_dt_anim_open(struct content *c, struct browser_window *bw,
+static slateerror amiga_dt_anim_open(struct content *c, struct browser_window *bw,
 		struct content *page, struct object_params *params);
-static nserror amiga_dt_anim_close(struct content *c);
-static nserror amiga_dt_anim_clone(const struct content *old, struct content **newc);
+static slateerror amiga_dt_anim_close(struct content *c);
+static slateerror amiga_dt_anim_clone(const struct content *old, struct content **newc);
 static content_type amiga_dt_anim_content_type(void);
 
 static void *amiga_dt_anim_get_internal(const struct content *c, void *context)
@@ -101,11 +101,11 @@ static const content_handler amiga_dt_anim_content_handler = {
 	.no_share = false,
 };
 
-nserror amiga_dt_anim_init(void)
+slateerror amiga_dt_anim_init(void)
 {
 	struct DataType *dt, *prevdt = NULL;
 	lwc_string *type;
-	nserror error;
+	slateerror error;
 	struct Node *node = NULL;
 
 	while((dt = ObtainDataType(DTST_RAM, NULL,
@@ -125,7 +125,7 @@ nserror amiga_dt_anim_init(void)
 					lwc_string_data(type), 
 					&amiga_dt_anim_content_handler);
 
-				if (error != NSERROR_OK)
+				if (error != SLATEERROR_OK)
 					return error;
 			}
 
@@ -135,31 +135,31 @@ nserror amiga_dt_anim_init(void)
 
 	ReleaseDataType(prevdt);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-nserror amiga_dt_anim_create(const content_handler *handler,
+slateerror amiga_dt_anim_create(const content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		llcache_handle *llcache, const char *fallback_charset,
 		bool quirks, struct content **c)
 {
 	amiga_dt_anim_content *plugin;
-	nserror error;
+	slateerror error;
 
 	plugin = calloc(1, sizeof(amiga_dt_anim_content));
 	if (plugin == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__init(&plugin->base, handler, imime_type, params,
 			llcache, fallback_charset, quirks);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(plugin);
 		return error;
 	}
 
 	*c = (struct content *) plugin;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 bool amiga_dt_anim_convert(struct content *c)
@@ -191,7 +191,7 @@ bool amiga_dt_anim_convert(struct content *c)
 
 			plugin->bitmap = amiga_bitmap_create(width, height, bm_flags);
 			if (!plugin->bitmap) {
-				msg_data.errordata.errorcode = NSERROR_NOMEM;
+				msg_data.errordata.errorcode = SLATEERROR_NOMEM;
 				msg_data.errordata.errormsg = messages_get("NoMemory");
 				content_broadcast(c, CONTENT_MSG_ERROR, &msg_data);
 				return false;
@@ -277,7 +277,7 @@ bool amiga_dt_anim_redraw(struct content *c,
 				  data->x, data->y,
 				  data->width, data->height,
 				  data->background_colour,
-				  flags) == NSERROR_OK);
+				  flags) == SLATEERROR_OK);
 }
 
 /**
@@ -290,18 +290,18 @@ bool amiga_dt_anim_redraw(struct content *c,
  * \param  box     box containing c, or 0 if not an object
  * \param  params  object parameters, or 0 if not an object
  */
-nserror amiga_dt_anim_open(struct content *c, struct browser_window *bw,
+slateerror amiga_dt_anim_open(struct content *c, struct browser_window *bw,
 	struct content *page, struct object_params *params)
 {
 	NSLOG(netsurf, INFO, "amiga_dt_anim_open");
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-nserror amiga_dt_anim_close(struct content *c)
+slateerror amiga_dt_anim_close(struct content *c)
 {
 	NSLOG(netsurf, INFO, "amiga_dt_anim_close");
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 void amiga_dt_anim_reformat(struct content *c, int width, int height)
@@ -310,19 +310,19 @@ void amiga_dt_anim_reformat(struct content *c, int width, int height)
 	return;
 }
 
-nserror amiga_dt_anim_clone(const struct content *old, struct content **newc)
+slateerror amiga_dt_anim_clone(const struct content *old, struct content **newc)
 {
 	amiga_dt_anim_content *plugin;
-	nserror error;
+	slateerror error;
 
 	NSLOG(netsurf, INFO, "amiga_dt_anim_clone");
 
 	plugin = calloc(1, sizeof(amiga_dt_anim_content));
 	if (plugin == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__clone(old, &plugin->base);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&plugin->base);
 		return error;
 	}
@@ -332,13 +332,13 @@ nserror amiga_dt_anim_clone(const struct content *old, struct content **newc)
 			old->status == CONTENT_STATUS_DONE) {
 		if (amiga_dt_anim_convert(&plugin->base) == false) {
 			content_destroy(&plugin->base);
-			return NSERROR_CLONE_FAILED;
+			return SLATEERROR_CLONE_FAILED;
 		}
 	}
 
 	*newc = (struct content *) plugin;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 content_type amiga_dt_anim_content_type(void)

@@ -1,7 +1,7 @@
 /*
  * Copyright 2005 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,10 +25,10 @@
 #include <oslib/osfile.h>
 #include <oslib/wimp.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/content.h"
+#include "slate/content.h"
 #include "content/hlcache.h"
 #include "desktop/theme.h"
 
@@ -45,7 +45,7 @@ wimp_w dialog_theme_install;
 
 
 static void theme_install_close(wimp_w w);
-static nserror theme_install_callback(struct hlcache_handle *handle,
+static slateerror theme_install_callback(struct hlcache_handle *handle,
 		const hlcache_event *event, void *pw);
 
 
@@ -108,7 +108,7 @@ theme_install_read(const uint8_t *source_data, size_t source_size)
  * Callback for fetchcache() for theme install fetches.
  */
 
-nserror theme_install_callback(struct hlcache_handle *handle,
+slateerror theme_install_callback(struct hlcache_handle *handle,
 		const hlcache_event *event, void *pw)
 {
 	switch (event->type) {
@@ -156,7 +156,7 @@ nserror theme_install_callback(struct hlcache_handle *handle,
 		break;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -193,7 +193,7 @@ bool ro_gui_theme_install_apply(wimp_w w)
 
 	/* simply overwrite previous theme versions */
 	snprintf(theme_save, sizeof theme_save, "%s.%s",
-                 nsoption_charp(theme_save), theme_file);
+                 slateoption_charp(theme_save), theme_file);
 
 	theme_save[sizeof theme_save - 1] = '\0';
 
@@ -217,7 +217,7 @@ bool ro_gui_theme_install_apply(wimp_w w)
 	if (!theme_install || !ro_gui_theme_apply(theme_install)) {
 		ro_warn_user("ThemeApplyErr", 0);
 	} else {
-            nsoption_set_charp(theme, strdup(theme_install->leafname));
+            slateoption_set_charp(theme, strdup(theme_install->leafname));
 	}
 	free(theme_file);
 	ro_gui_save_options();

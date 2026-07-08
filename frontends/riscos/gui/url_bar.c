@@ -2,7 +2,7 @@
  * Copyright 2004, 2005 Richard Wilson <info@tinct.net>
  * Copyright 2011-2014 Stephen Fryatt <stevef@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,9 +30,9 @@
 
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/plotters.h"
-#include "netsurf/content.h"
+#include "slate/browser_window.h"
+#include "slate/plotters.h"
+#include "slate/content.h"
 #include "content/hlcache.h"
 
 #include "riscos/gui.h"
@@ -491,7 +491,7 @@ static void ro_gui_url_bar_set_hotlist(struct url_bar *url_bar, bool set)
 /**
  * Callback for hlcache.
  */
-static nserror
+static slateerror
 ro_gui_url_bar_res_cb(hlcache_handle *handle,
 		      const hlcache_event *event, void *pw)
 {
@@ -508,7 +508,7 @@ ro_gui_url_bar_res_cb(hlcache_handle *handle,
 		break;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1052,11 +1052,11 @@ ro_gui_url_bar_menu_select(struct url_bar *url_bar,
 	if (urltxt != NULL &&
 	    g != NULL &&
 	    g->bw != NULL) {
-		nsurl *url;
-		nserror error;
+		slateurl *url;
+		slateerror error;
 
-		error = nsurl_create(urltxt, &url);
-		if (error != NSERROR_OK) {
+		error = slateurl_create(urltxt, &url);
+		if (error != SLATEERROR_OK) {
 			ro_warn_user(messages_get_errorcode(error), 0);
 		} else {
 			ro_gui_window_set_url(g, url);
@@ -1068,7 +1068,7 @@ ro_gui_url_bar_menu_select(struct url_bar *url_bar,
 						NULL,
 						NULL,
 						NULL);
-			nsurl_unref(url);
+			slateurl_unref(url);
 		}
 	}
 
@@ -1166,7 +1166,7 @@ ro_gui_url_bar_set_url(struct url_bar *url_bar,
 	os_error *error;
 	char *local_text = NULL;
 	const char *local_url;
-	nsurl *n;
+	slateurl *n;
 
 	if (url_bar == NULL ||
 	    url_bar->text.buffer == NULL ||
@@ -1181,12 +1181,12 @@ ro_gui_url_bar_set_url(struct url_bar *url_bar,
 	 */
 
 	if (is_utf8) {
-		nserror err;
+		slateerror err;
 
 		err = utf8_to_local_encoding(url, 0, &local_text);
-		if (err != NSERROR_OK) {
+		if (err != SLATEERROR_OK) {
 			/* A bad encoding should never happen, so assert this */
-			assert(err != NSERROR_BAD_ENCODING);
+			assert(err != SLATEERROR_BAD_ENCODING);
 			NSLOG(netsurf, INFO, "utf8_to_enc failed");
 			/* Paranoia */
 			local_text = NULL;
@@ -1213,9 +1213,9 @@ ro_gui_url_bar_set_url(struct url_bar *url_bar,
 	}
 
 	/* Set the hotlist flag. */
-	if (nsurl_create(url, &n) == NSERROR_OK) {
+	if (slateurl_create(url, &n) == SLATEERROR_OK) {
 		ro_gui_url_bar_set_hotlist(url_bar, ro_gui_hotlist_has_page(n));
-		nsurl_unref(n);
+		slateurl_unref(n);
 	}
 
 	/* If there's no icon, then there's nothing else to do... */
@@ -1261,7 +1261,7 @@ ro_gui_url_bar_set_url(struct url_bar *url_bar,
 void ro_gui_url_bar_update_hotlist(struct url_bar *url_bar)
 {
 	const char *url;
-	nsurl *n;
+	slateurl *n;
 
 	if (url_bar == NULL) {
 		return;
@@ -1269,9 +1269,9 @@ void ro_gui_url_bar_update_hotlist(struct url_bar *url_bar)
 
 	url = (const char *) url_bar->text.buffer;
 	if (url != NULL &&
-	    nsurl_create(url, &n) == NSERROR_OK) {
+	    slateurl_create(url, &n) == SLATEERROR_OK) {
 		ro_gui_url_bar_set_hotlist(url_bar, ro_gui_hotlist_has_page(n));
-		nsurl_unref(n);
+		slateurl_unref(n);
 	}
 }
 
@@ -1279,7 +1279,7 @@ void ro_gui_url_bar_update_hotlist(struct url_bar *url_bar)
 /* This is an exported interface documented in url_bar.h */
 const char *ro_gui_url_bar_get_url(struct url_bar *url_bar)
 {
-	nserror res;
+	slateerror res;
 
 	if ((url_bar == NULL) ||
 	    (url_bar->text.buffer == NULL)) {
@@ -1297,7 +1297,7 @@ const char *ro_gui_url_bar_get_url(struct url_bar *url_bar)
 
 	res = utf8_from_local_encoding(url_bar->text.buffer, 0,
 				       &url_bar->text.buffer_utf8);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		return (const char *)url_bar->text.buffer_utf8;
 	}
 
@@ -1361,7 +1361,7 @@ ro_gui_url_bar_test_for_text_field_keypress(struct url_bar *url_bar,
 					    wimp_key *key)
 {
 	const char *url;
-	nsurl *n;
+	slateurl *n;
 
 	if (url_bar == NULL ||
 	    url_bar->hidden ||
@@ -1378,9 +1378,9 @@ ro_gui_url_bar_test_for_text_field_keypress(struct url_bar *url_bar,
 
 	url = (const char *) url_bar->text.buffer;
 	if (url != NULL &&
-	    nsurl_create(url, &n) == NSERROR_OK) {
+	    slateurl_create(url, &n) == SLATEERROR_OK) {
 		ro_gui_url_bar_set_hotlist(url_bar, ro_gui_hotlist_has_page(n));
-		nsurl_unref(n);
+		slateurl_unref(n);
 	} else if (url_bar->hotlist.set) {
 		ro_gui_url_bar_set_hotlist(url_bar, false);
 	}
@@ -1580,8 +1580,8 @@ bool ro_gui_url_bar_init(void)
 	int i;
 
 	for (i = 0; i < URLBAR_RES_LAST; i++) {
-		nsurl *url;
-		if (nsurl_create(url_bar_res[i].url, &url) == NSERROR_OK) {
+		slateurl *url;
+		if (slateurl_create(url_bar_res[i].url, &url) == SLATEERROR_OK) {
 			hlcache_handle_retrieve(url,
 						0,
 						NULL,
@@ -1591,7 +1591,7 @@ bool ro_gui_url_bar_init(void)
 						NULL,
 						CONTENT_IMAGE,
 						&(url_bar_res[i].c));
-			nsurl_unref(url);
+			slateurl_unref(url);
 		}
 	}
 

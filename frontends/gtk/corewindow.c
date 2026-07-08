@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,11 +24,11 @@
  * \todo should the interface really be called coredrawable?
  *
  * This module is an object that must be encapsulated. Client users
- * should embed a struct nsgtk_corewindow at the beginning of their
+ * should embed a struct slategtk_corewindow at the beginning of their
  * context for this display surface, fill in relevant data and then
- * call nsgtk_corewindow_init()
+ * call slategtk_corewindow_init()
  *
- * The nsgtk core window structure requires the drawing area and
+ * The slategtk core window structure requires the drawing area and
  * scrollable widgets are present and the callback for draw, key and
  * mouse operations.
  */
@@ -41,9 +41,9 @@
 #include "utils/log.h"
 #include "utils/messages.h"
 #include "utils/utf8.h"
-#include "netsurf/types.h"
-#include "netsurf/keypress.h"
-#include "netsurf/mouse.h"
+#include "slate/types.h"
+#include "slate/keypress.h"
+#include "slate/mouse.h"
 
 #include "gtk/compat.h"
 #include "gtk/gui.h" /* just for gtk_gui_gdkkey_to_nskey */
@@ -56,7 +56,7 @@
  * \param event The GDK mouse event to convert.
  * \return The netsurf mouse state.
  */
-static browser_mouse_state nsgtk_cw_gdkbutton_to_nsstate(GdkEventButton *event)
+static browser_mouse_state slategtk_cw_gdkbutton_to_nsstate(GdkEventButton *event)
 {
 	browser_mouse_state ms;
 
@@ -106,24 +106,24 @@ static browser_mouse_state nsgtk_cw_gdkbutton_to_nsstate(GdkEventButton *event)
  * \param g The context pointer passed when the event was registered.
  */
 static gboolean
-nsgtk_cw_button_press_event(GtkWidget *widget,
+slategtk_cw_button_press_event(GtkWidget *widget,
 			    GdkEventButton *event,
 			    gpointer g)
 {
-	struct nsgtk_corewindow *nsgtk_cw = (struct nsgtk_corewindow *)g;
-	struct nsgtk_corewindow_mouse *mouse = &nsgtk_cw->mouse_state;
+	struct slategtk_corewindow *slategtk_cw = (struct slategtk_corewindow *)g;
+	struct slategtk_corewindow_mouse *mouse = &slategtk_cw->mouse_state;
 
-	gtk_im_context_reset(nsgtk_cw->input_method);
-	gtk_widget_grab_focus(GTK_WIDGET(nsgtk_cw->drawing_area));
+	gtk_im_context_reset(slategtk_cw->input_method);
+	gtk_widget_grab_focus(GTK_WIDGET(slategtk_cw->drawing_area));
 
 	/* record event information for potentially starting a drag. */
 	mouse->pressed_x = mouse->last_x = event->x;
 	mouse->pressed_y = mouse->last_y = event->y;
 	mouse->pressed = true;
 
-	mouse->state = nsgtk_cw_gdkbutton_to_nsstate(event);
+	mouse->state = slategtk_cw_gdkbutton_to_nsstate(event);
 
-	nsgtk_cw->mouse(nsgtk_cw, mouse->state, event->x, event->y);
+	slategtk_cw->mouse(slategtk_cw, mouse->state, event->x, event->y);
 
 	return TRUE;
 }
@@ -140,12 +140,12 @@ nsgtk_cw_button_press_event(GtkWidget *widget,
  * \param g The context pointer passed when the event was registered.
  */
 static gboolean
-nsgtk_cw_button_release_event(GtkWidget *widget,
+slategtk_cw_button_release_event(GtkWidget *widget,
 			      GdkEventButton *event,
 			      gpointer g)
 {
-	struct nsgtk_corewindow *nsgtk_cw = (struct nsgtk_corewindow *)g;
-	struct nsgtk_corewindow_mouse *mouse = &nsgtk_cw->mouse_state;
+	struct slategtk_corewindow *slategtk_cw = (struct slategtk_corewindow *)g;
+	struct slategtk_corewindow_mouse *mouse = &slategtk_cw->mouse_state;
 	bool was_drag = false;
 
 	/* only button 1 clicks are considered double clicks. If the
@@ -199,7 +199,7 @@ nsgtk_cw_button_release_event(GtkWidget *widget,
 		mouse->state = BROWSER_MOUSE_HOVER;
 	}
 
-	nsgtk_cw->mouse(nsgtk_cw, mouse->state, event->x, event->y);
+	slategtk_cw->mouse(slategtk_cw, mouse->state, event->x, event->y);
 
 	mouse->pressed = false;
 
@@ -217,15 +217,15 @@ nsgtk_cw_button_release_event(GtkWidget *widget,
  * \param g The context pointer passed when the event was registered.
  */
 static gboolean
-nsgtk_cw_motion_notify_event(GtkWidget *widget,
+slategtk_cw_motion_notify_event(GtkWidget *widget,
 			     GdkEventMotion *event,
 			     gpointer g)
 {
-	struct nsgtk_corewindow *nsgtk_cw = (struct nsgtk_corewindow *)g;
-	struct nsgtk_corewindow_mouse *mouse = &nsgtk_cw->mouse_state;
+	struct slategtk_corewindow *slategtk_cw = (struct slategtk_corewindow *)g;
+	struct slategtk_corewindow_mouse *mouse = &slategtk_cw->mouse_state;
 
 	if (mouse->pressed == false) {
-		nsgtk_cw->mouse(nsgtk_cw,
+		slategtk_cw->mouse(slategtk_cw,
 				BROWSER_MOUSE_HOVER,
 				event->x,
 				event->y);
@@ -249,7 +249,7 @@ nsgtk_cw_motion_notify_event(GtkWidget *widget,
 
 	if (mouse->state & BROWSER_MOUSE_PRESS_1) {
 		/* Start button 1 drag */
-		nsgtk_cw->mouse(nsgtk_cw,
+		slategtk_cw->mouse(slategtk_cw,
 				BROWSER_MOUSE_DRAG_1,
 				mouse->pressed_x,
 				mouse->pressed_y);
@@ -261,7 +261,7 @@ nsgtk_cw_motion_notify_event(GtkWidget *widget,
 
 	} else if (mouse->state & BROWSER_MOUSE_PRESS_2) {
 		/* Start button 2s drag */
-		nsgtk_cw->mouse(nsgtk_cw,
+		slategtk_cw->mouse(slategtk_cw,
 				BROWSER_MOUSE_DRAG_2,
 				mouse->pressed_x,
 				mouse->pressed_y);
@@ -290,7 +290,7 @@ nsgtk_cw_motion_notify_event(GtkWidget *widget,
 
 		if (mouse->state &
 		    (BROWSER_MOUSE_HOLDING_1 | BROWSER_MOUSE_HOLDING_2)) {
-			nsgtk_cw->mouse(nsgtk_cw,
+			slategtk_cw->mouse(slategtk_cw,
 					mouse->state,
 					event->x, event->y);
 		}
@@ -303,11 +303,11 @@ nsgtk_cw_motion_notify_event(GtkWidget *widget,
 /**
  * Deal with keypress events not handled buy input method or callback
  *
- * \param nsgtk_cw nsgtk core window key event happened in.
+ * \param slategtk_cw slategtk core window key event happened in.
  * \param nskey The netsurf keycode of the event.
- * \return NSERROR_OK on success otherwise an error code.
+ * \return SLATEERROR_OK on success otherwise an error code.
  */
-static nserror nsgtk_cw_key(struct nsgtk_corewindow *nsgtk_cw, uint32_t nskey)
+static slateerror slategtk_cw_key(struct slategtk_corewindow *slategtk_cw, uint32_t nskey)
 {
 	double value = 0;
 	GtkAdjustment *vscroll;
@@ -315,72 +315,72 @@ static nserror nsgtk_cw_key(struct nsgtk_corewindow *nsgtk_cw, uint32_t nskey)
 	GtkAdjustment *scroll = NULL;
 	gdouble hpage, vpage;
 
-	vscroll = gtk_scrolled_window_get_vadjustment(nsgtk_cw->scrolled);
-	hscroll = gtk_scrolled_window_get_hadjustment(nsgtk_cw->scrolled);
+	vscroll = gtk_scrolled_window_get_vadjustment(slategtk_cw->scrolled);
+	hscroll = gtk_scrolled_window_get_hadjustment(slategtk_cw->scrolled);
 	g_object_get(vscroll, "page-size", &vpage, NULL);
 	g_object_get(hscroll, "page-size", &hpage, NULL);
 
 	switch(nskey) {
 	case NS_KEY_TEXT_START:
 		scroll = vscroll;
-		value = nsgtk_adjustment_get_lower(scroll);
+		value = slategtk_adjustment_get_lower(scroll);
 		break;
 
 	case NS_KEY_TEXT_END:
 		scroll = vscroll;
-		value = nsgtk_adjustment_get_upper(scroll) - vpage;
-		if (value < nsgtk_adjustment_get_lower(scroll))
-			value = nsgtk_adjustment_get_lower(scroll);
+		value = slategtk_adjustment_get_upper(scroll) - vpage;
+		if (value < slategtk_adjustment_get_lower(scroll))
+			value = slategtk_adjustment_get_lower(scroll);
 		break;
 
 	case NS_KEY_LEFT:
 		scroll = hscroll;
 		value = gtk_adjustment_get_value(scroll) -
-			nsgtk_adjustment_get_step_increment(scroll);
-		if (value < nsgtk_adjustment_get_lower(scroll))
-			value = nsgtk_adjustment_get_lower(scroll);
+			slategtk_adjustment_get_step_increment(scroll);
+		if (value < slategtk_adjustment_get_lower(scroll))
+			value = slategtk_adjustment_get_lower(scroll);
 		break;
 
 	case NS_KEY_RIGHT:
 		scroll = hscroll;
 		value = gtk_adjustment_get_value(scroll) +
-			nsgtk_adjustment_get_step_increment(scroll);
-		if (value > nsgtk_adjustment_get_upper(scroll) - hpage)
-			value = nsgtk_adjustment_get_upper(scroll) - hpage;
+			slategtk_adjustment_get_step_increment(scroll);
+		if (value > slategtk_adjustment_get_upper(scroll) - hpage)
+			value = slategtk_adjustment_get_upper(scroll) - hpage;
 		break;
 	case NS_KEY_UP:
 		scroll = vscroll;
 		value = gtk_adjustment_get_value(scroll) -
-			nsgtk_adjustment_get_step_increment(scroll);
-		if (value < nsgtk_adjustment_get_lower(scroll))
-			value = nsgtk_adjustment_get_lower(scroll);
+			slategtk_adjustment_get_step_increment(scroll);
+		if (value < slategtk_adjustment_get_lower(scroll))
+			value = slategtk_adjustment_get_lower(scroll);
 		break;
 
 	case NS_KEY_DOWN:
 		scroll = vscroll;
 		value = gtk_adjustment_get_value(scroll) +
-			nsgtk_adjustment_get_step_increment(scroll);
-		if (value > nsgtk_adjustment_get_upper(scroll) - vpage)
-			value = nsgtk_adjustment_get_upper(scroll) - vpage;
+			slategtk_adjustment_get_step_increment(scroll);
+		if (value > slategtk_adjustment_get_upper(scroll) - vpage)
+			value = slategtk_adjustment_get_upper(scroll) - vpage;
 		break;
 
 	case NS_KEY_PAGE_UP:
 		scroll = vscroll;
 		value = gtk_adjustment_get_value(scroll) -
-			nsgtk_adjustment_get_page_increment(scroll);
+			slategtk_adjustment_get_page_increment(scroll);
 
-		if (value < nsgtk_adjustment_get_lower(scroll))
-			value = nsgtk_adjustment_get_lower(scroll);
+		if (value < slategtk_adjustment_get_lower(scroll))
+			value = slategtk_adjustment_get_lower(scroll);
 
 		break;
 
 	case NS_KEY_PAGE_DOWN:
 		scroll = vscroll;
 		value = gtk_adjustment_get_value(scroll) +
-			nsgtk_adjustment_get_page_increment(scroll);
+			slategtk_adjustment_get_page_increment(scroll);
 
-		if (value > nsgtk_adjustment_get_upper(scroll) - vpage)
-			value = nsgtk_adjustment_get_upper(scroll) - vpage;
+		if (value > slategtk_adjustment_get_upper(scroll) - vpage)
+			value = slategtk_adjustment_get_upper(scroll) - vpage;
 		break;
 
 	}
@@ -389,7 +389,7 @@ static nserror nsgtk_cw_key(struct nsgtk_corewindow *nsgtk_cw, uint32_t nskey)
 		gtk_adjustment_set_value(scroll, value);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -403,14 +403,14 @@ static nserror nsgtk_cw_key(struct nsgtk_corewindow *nsgtk_cw, uint32_t nskey)
  * \param g The context pointer passed when the event was registered.
  */
 static gboolean
-nsgtk_cw_keypress_event(GtkWidget *widget, GdkEventKey *event, gpointer g)
+slategtk_cw_keypress_event(GtkWidget *widget, GdkEventKey *event, gpointer g)
 {
-	struct nsgtk_corewindow *nsgtk_cw = (struct nsgtk_corewindow *)g;
-	nserror res;
+	struct slategtk_corewindow *slategtk_cw = (struct slategtk_corewindow *)g;
+	slateerror res;
 	uint32_t nskey;
 
 	/* check to see if gtk input method swallowed the keypress */
-	if (gtk_im_context_filter_keypress(nsgtk_cw->input_method, event)) {
+	if (gtk_im_context_filter_keypress(slategtk_cw->input_method, event)) {
 		return TRUE;
 	}
 
@@ -418,17 +418,17 @@ nsgtk_cw_keypress_event(GtkWidget *widget, GdkEventKey *event, gpointer g)
 	nskey = gtk_gui_gdkkey_to_nskey(event);
 
 	/* attempt to handle keypress in caller */
-	res = nsgtk_cw->key(nsgtk_cw, nskey);
-	if (res == NSERROR_OK) {
+	res = slategtk_cw->key(slategtk_cw, nskey);
+	if (res == SLATEERROR_OK) {
 		return TRUE;
-	} else if (res != NSERROR_NOT_IMPLEMENTED) {
+	} else if (res != SLATEERROR_NOT_IMPLEMENTED) {
 		NSLOG(netsurf, INFO, "%s", messages_get_errorcode(res));
 		return FALSE;
 	}
 
 	/* deal with unprocessed keypress */
-	res = nsgtk_cw_key(nsgtk_cw, nskey);
-	if (res != NSERROR_OK) {
+	res = slategtk_cw_key(slategtk_cw, nskey);
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "%s", messages_get_errorcode(res));
 		return FALSE;
 	}
@@ -447,11 +447,11 @@ nsgtk_cw_keypress_event(GtkWidget *widget, GdkEventKey *event, gpointer g)
  * \param g The context pointer passed when the event was registered.
  */
 static gboolean
-nsgtk_cw_keyrelease_event(GtkWidget *widget, GdkEventKey *event, gpointer g)
+slategtk_cw_keyrelease_event(GtkWidget *widget, GdkEventKey *event, gpointer g)
 {
-	struct nsgtk_corewindow *nsgtk_cw = (struct nsgtk_corewindow *)g;
+	struct slategtk_corewindow *slategtk_cw = (struct slategtk_corewindow *)g;
 
-	return gtk_im_context_filter_keypress(nsgtk_cw->input_method, event);
+	return gtk_im_context_filter_keypress(slategtk_cw->input_method, event);
 }
 
 
@@ -465,9 +465,9 @@ nsgtk_cw_keyrelease_event(GtkWidget *widget, GdkEventKey *event, gpointer g)
  * \param g The context pointer passed when the event was registered.
  */
 static void
-nsgtk_cw_input_method_commit(GtkIMContext *ctx, const gchar *str, gpointer g)
+slategtk_cw_input_method_commit(GtkIMContext *ctx, const gchar *str, gpointer g)
 {
-	struct nsgtk_corewindow *nsgtk_cw = (struct nsgtk_corewindow *)g;
+	struct slategtk_corewindow *slategtk_cw = (struct slategtk_corewindow *)g;
 	size_t len;
 	size_t offset = 0;
 	uint32_t nskey;
@@ -477,7 +477,7 @@ nsgtk_cw_input_method_commit(GtkIMContext *ctx, const gchar *str, gpointer g)
 	while (offset < len) {
 		nskey = utf8_to_ucs4(str + offset, len - offset);
 
-		nsgtk_cw->key(nsgtk_cw, nskey);
+		slategtk_cw->key(slategtk_cw, nskey);
 
 		offset = utf8_next(str, len, offset);
 	}
@@ -488,7 +488,7 @@ nsgtk_cw_input_method_commit(GtkIMContext *ctx, const gchar *str, gpointer g)
 
 
 /**
- * handler for gtk draw event on a nsgtk core window for GTK 3
+ * handler for gtk draw event on a slategtk core window for GTK 3
  *
  * \param widget The GTK widget to redraw.
  * \param cr The cairo drawing context of the widget
@@ -496,9 +496,9 @@ nsgtk_cw_input_method_commit(GtkIMContext *ctx, const gchar *str, gpointer g)
  * \return FALSE indicating no error.
  */
 static gboolean
-nsgtk_cw_draw_event(GtkWidget *widget, cairo_t *cr, gpointer data)
+slategtk_cw_draw_event(GtkWidget *widget, cairo_t *cr, gpointer data)
 {
-	struct nsgtk_corewindow *nsgtk_cw = (struct nsgtk_corewindow *)data;
+	struct slategtk_corewindow *slategtk_cw = (struct slategtk_corewindow *)data;
 	double x1;
 	double y1;
 	double x2;
@@ -514,7 +514,7 @@ nsgtk_cw_draw_event(GtkWidget *widget, cairo_t *cr, gpointer data)
 	clip.x1 = x2;
 	clip.y1 = y2;
 
-	nsgtk_cw->draw(nsgtk_cw, &clip);
+	slategtk_cw->draw(slategtk_cw, &clip);
 
 	return FALSE;
 }
@@ -523,7 +523,7 @@ nsgtk_cw_draw_event(GtkWidget *widget, cairo_t *cr, gpointer data)
 
 
 /**
- * handler for gtk draw event on a nsgtk core window for GTK 2
+ * handler for gtk draw event on a slategtk core window for GTK 2
  *
  * \param widget The GTK widget to redraw.
  * \param event The GDK expose event
@@ -531,11 +531,11 @@ nsgtk_cw_draw_event(GtkWidget *widget, cairo_t *cr, gpointer data)
  * \return FALSE indicating no error.
  */
 static gboolean
-nsgtk_cw_draw_event(GtkWidget *widget,
+slategtk_cw_draw_event(GtkWidget *widget,
 		    GdkEventExpose *event,
 		    gpointer g)
 {
-	struct nsgtk_corewindow *nsgtk_cw = (struct nsgtk_corewindow *)g;
+	struct slategtk_corewindow *slategtk_cw = (struct slategtk_corewindow *)g;
 	struct rect clip;
 
 	clip.x0 = event->area.x;
@@ -543,9 +543,9 @@ nsgtk_cw_draw_event(GtkWidget *widget,
 	clip.x1 = event->area.x + event->area.width;
 	clip.y1 = event->area.y + event->area.height;
 
-	current_cr = gdk_cairo_create(nsgtk_widget_get_window(widget));
+	current_cr = gdk_cairo_create(slategtk_widget_get_window(widget));
 
-	nsgtk_cw->draw(nsgtk_cw, &clip);
+	slategtk_cw->draw(slategtk_cw, &clip);
 
 	cairo_destroy(current_cr);
 
@@ -564,25 +564,25 @@ nsgtk_cw_draw_event(GtkWidget *widget,
  *
  * \param[in] cw The core window to invalidate.
  * \param[in] rect area to redraw or NULL for the entire window area.
- * \return NSERROR_OK on success or appropriate error code.
+ * \return SLATEERROR_OK on success or appropriate error code.
  */
-static nserror
-nsgtk_cw_invalidate_area(struct core_window *cw, const struct rect *rect)
+static slateerror
+slategtk_cw_invalidate_area(struct core_window *cw, const struct rect *rect)
 {
-	struct nsgtk_corewindow *nsgtk_cw = (struct nsgtk_corewindow *)cw;
+	struct slategtk_corewindow *slategtk_cw = (struct slategtk_corewindow *)cw;
 
 	if (rect == NULL) {
-		gtk_widget_queue_draw(GTK_WIDGET(nsgtk_cw->drawing_area));
-		return NSERROR_OK;
+		gtk_widget_queue_draw(GTK_WIDGET(slategtk_cw->drawing_area));
+		return SLATEERROR_OK;
 	}
 
-	gtk_widget_queue_draw_area(GTK_WIDGET(nsgtk_cw->drawing_area),
+	gtk_widget_queue_draw_area(GTK_WIDGET(slategtk_cw->drawing_area),
 				   rect->x0,
 				   rect->y0,
 				   rect->x1 - rect->x0,
 				   rect->y1 - rect->y0);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -593,15 +593,15 @@ nsgtk_cw_invalidate_area(struct core_window *cw, const struct rect *rect)
  * \param width New widget width.
  * \param height New widget height.
  */
-static nserror
-nsgtk_cw_update_size(struct core_window *cw, int width, int height)
+static slateerror
+slategtk_cw_update_size(struct core_window *cw, int width, int height)
 {
-	struct nsgtk_corewindow *nsgtk_cw = (struct nsgtk_corewindow *)cw;
+	struct slategtk_corewindow *slategtk_cw = (struct slategtk_corewindow *)cw;
 
-	gtk_widget_set_size_request(GTK_WIDGET(nsgtk_cw->drawing_area),
+	gtk_widget_set_size_request(GTK_WIDGET(slategtk_cw->drawing_area),
 				    width, height);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -611,17 +611,17 @@ nsgtk_cw_update_size(struct core_window *cw, int width, int height)
  * \param cw core window handle.
  * \param r rectangle that needs scrolling.
  */
-static nserror
-nsgtk_cw_set_scroll(struct core_window *cw, int x, int y)
+static slateerror
+slategtk_cw_set_scroll(struct core_window *cw, int x, int y)
 {
-	struct nsgtk_corewindow *nsgtk_cw = (struct nsgtk_corewindow *)cw;
+	struct slategtk_corewindow *slategtk_cw = (struct slategtk_corewindow *)cw;
 
-	if (nsgtk_cw->scrolled != NULL) {
+	if (slategtk_cw->scrolled != NULL) {
 		GtkAdjustment *vadj;
 		GtkAdjustment *hadj;
 
-		vadj = gtk_scrolled_window_get_vadjustment(nsgtk_cw->scrolled);
-		hadj = gtk_scrolled_window_get_hadjustment(nsgtk_cw->scrolled);
+		vadj = gtk_scrolled_window_get_vadjustment(slategtk_cw->scrolled);
+		hadj = gtk_scrolled_window_get_hadjustment(slategtk_cw->scrolled);
 
 		assert(vadj != NULL);
 		assert(hadj != NULL);
@@ -629,7 +629,7 @@ nsgtk_cw_set_scroll(struct core_window *cw, int x, int y)
 		gtk_adjustment_set_value(vadj, y);
 		gtk_adjustment_set_value(hadj, x);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -639,17 +639,17 @@ nsgtk_cw_set_scroll(struct core_window *cw, int x, int y)
  * \param cw core window handle.
  * \param r rectangle that needs scrolling.
  */
-static nserror
-nsgtk_cw_get_scroll(const struct core_window *cw, int *x, int *y)
+static slateerror
+slategtk_cw_get_scroll(const struct core_window *cw, int *x, int *y)
 {
-	struct nsgtk_corewindow *nsgtk_cw = (struct nsgtk_corewindow *)cw;
+	struct slategtk_corewindow *slategtk_cw = (struct slategtk_corewindow *)cw;
 
-	if (nsgtk_cw->scrolled != NULL) {
+	if (slategtk_cw->scrolled != NULL) {
 		GtkAdjustment *vadj;
 		GtkAdjustment *hadj;
 
-		vadj = gtk_scrolled_window_get_vadjustment(nsgtk_cw->scrolled);
-		hadj = gtk_scrolled_window_get_hadjustment(nsgtk_cw->scrolled);
+		vadj = gtk_scrolled_window_get_vadjustment(slategtk_cw->scrolled);
+		hadj = gtk_scrolled_window_get_hadjustment(slategtk_cw->scrolled);
 
 		assert(vadj != NULL);
 		assert(hadj != NULL);
@@ -660,7 +660,7 @@ nsgtk_cw_get_scroll(const struct core_window *cw, int *x, int *y)
 		*x = 0;
 		*y = 0;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -671,31 +671,31 @@ nsgtk_cw_get_scroll(const struct core_window *cw, int *x, int *y)
  * \param[out] width to be set to viewport width in px
  * \param[out] height to be set to viewport height in px
  */
-static nserror
-nsgtk_cw_get_window_dimensions(const struct core_window *cw,
+static slateerror
+slategtk_cw_get_window_dimensions(const struct core_window *cw,
 		int *width, int *height)
 {
-	struct nsgtk_corewindow *nsgtk_cw = (struct nsgtk_corewindow *)cw;
-	if (nsgtk_cw->scrolled != NULL) {
+	struct slategtk_corewindow *slategtk_cw = (struct slategtk_corewindow *)cw;
+	if (slategtk_cw->scrolled != NULL) {
 		GtkAdjustment *vadj;
 		GtkAdjustment *hadj;
 		gdouble page;
 
-		hadj = gtk_scrolled_window_get_hadjustment(nsgtk_cw->scrolled);
+		hadj = gtk_scrolled_window_get_hadjustment(slategtk_cw->scrolled);
 		g_object_get(hadj, "page-size", &page, NULL);
 		*width = page;
 
-		vadj = gtk_scrolled_window_get_vadjustment(nsgtk_cw->scrolled);
+		vadj = gtk_scrolled_window_get_vadjustment(slategtk_cw->scrolled);
 		g_object_get(vadj, "page-size", &page, NULL);
 		*height = page;
 	} else {
 		GtkAllocation allocation;
-		gtk_widget_get_allocation(GTK_WIDGET(nsgtk_cw->drawing_area),
+		gtk_widget_get_allocation(GTK_WIDGET(slategtk_cw->drawing_area),
 					  &allocation);
 		*width = allocation.width;
 		*height = allocation.height;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -705,87 +705,87 @@ nsgtk_cw_get_window_dimensions(const struct core_window *cw,
  * \param cw core window handle.
  * \param ds The new drag status.
  */
-static nserror
-nsgtk_cw_drag_status(struct core_window *cw, core_window_drag_status ds)
+static slateerror
+slategtk_cw_drag_status(struct core_window *cw, core_window_drag_status ds)
 {
-	struct nsgtk_corewindow *nsgtk_cw = (struct nsgtk_corewindow *)cw;
-	nsgtk_cw->drag_status = ds;
+	struct slategtk_corewindow *slategtk_cw = (struct slategtk_corewindow *)cw;
+	slategtk_cw->drag_status = ds;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
- * core window callback table for nsgtk
+ * core window callback table for slategtk
  */
-static struct core_window_table nsgtk_cw_cb_table = {
-	.invalidate = nsgtk_cw_invalidate_area,
-	.set_extent = nsgtk_cw_update_size,
-	.set_scroll = nsgtk_cw_set_scroll,
-	.get_scroll = nsgtk_cw_get_scroll,
-	.get_dimensions = nsgtk_cw_get_window_dimensions,
-	.drag_status = nsgtk_cw_drag_status
+static struct core_window_table slategtk_cw_cb_table = {
+	.invalidate = slategtk_cw_invalidate_area,
+	.set_extent = slategtk_cw_update_size,
+	.set_scroll = slategtk_cw_set_scroll,
+	.get_scroll = slategtk_cw_get_scroll,
+	.get_dimensions = slategtk_cw_get_window_dimensions,
+	.drag_status = slategtk_cw_drag_status
 };
 
-struct core_window_table *nsgtk_core_window_table = &nsgtk_cw_cb_table;
+struct core_window_table *slategtk_core_window_table = &slategtk_cw_cb_table;
 
 /* exported function documented gtk/corewindow.h */
-nserror nsgtk_corewindow_init(struct nsgtk_corewindow *nsgtk_cw)
+slateerror slategtk_corewindow_init(struct slategtk_corewindow *slategtk_cw)
 {
-	nsgtk_cw->drag_status = CORE_WINDOW_DRAG_NONE;
+	slategtk_cw->drag_status = CORE_WINDOW_DRAG_NONE;
 
 	/* input method setup */
-	nsgtk_cw->input_method = gtk_im_multicontext_new();
-	gtk_im_context_set_client_window(nsgtk_cw->input_method,
-		gtk_widget_get_parent_window(GTK_WIDGET(nsgtk_cw->drawing_area)));
-	gtk_im_context_set_use_preedit(nsgtk_cw->input_method, FALSE);
+	slategtk_cw->input_method = gtk_im_multicontext_new();
+	gtk_im_context_set_client_window(slategtk_cw->input_method,
+		gtk_widget_get_parent_window(GTK_WIDGET(slategtk_cw->drawing_area)));
+	gtk_im_context_set_use_preedit(slategtk_cw->input_method, FALSE);
 
-	g_signal_connect(G_OBJECT(nsgtk_cw->input_method),
+	g_signal_connect(G_OBJECT(slategtk_cw->input_method),
 			 "commit",
-			 G_CALLBACK(nsgtk_cw_input_method_commit),
-			 nsgtk_cw);
+			 G_CALLBACK(slategtk_cw_input_method_commit),
+			 slategtk_cw);
 
-	nsgtk_connect_draw_event(GTK_WIDGET(nsgtk_cw->drawing_area),
-				 G_CALLBACK(nsgtk_cw_draw_event),
-				 nsgtk_cw);
+	slategtk_connect_draw_event(GTK_WIDGET(slategtk_cw->drawing_area),
+				 G_CALLBACK(slategtk_cw_draw_event),
+				 slategtk_cw);
 
-	g_signal_connect(G_OBJECT(nsgtk_cw->drawing_area),
+	g_signal_connect(G_OBJECT(slategtk_cw->drawing_area),
 			 "button-press-event",
-			 G_CALLBACK(nsgtk_cw_button_press_event),
-			 nsgtk_cw);
+			 G_CALLBACK(slategtk_cw_button_press_event),
+			 slategtk_cw);
 
-	g_signal_connect(G_OBJECT(nsgtk_cw->drawing_area),
+	g_signal_connect(G_OBJECT(slategtk_cw->drawing_area),
 			 "button-release-event",
-			 G_CALLBACK(nsgtk_cw_button_release_event),
-			 nsgtk_cw);
+			 G_CALLBACK(slategtk_cw_button_release_event),
+			 slategtk_cw);
 
-	g_signal_connect(G_OBJECT(nsgtk_cw->drawing_area),
+	g_signal_connect(G_OBJECT(slategtk_cw->drawing_area),
 			 "motion-notify-event",
-			 G_CALLBACK(nsgtk_cw_motion_notify_event),
-			 nsgtk_cw);
+			 G_CALLBACK(slategtk_cw_motion_notify_event),
+			 slategtk_cw);
 
-	g_signal_connect(G_OBJECT(nsgtk_cw->drawing_area),
+	g_signal_connect(G_OBJECT(slategtk_cw->drawing_area),
 			 "key-press-event",
-			 G_CALLBACK(nsgtk_cw_keypress_event),
-			 nsgtk_cw);
+			 G_CALLBACK(slategtk_cw_keypress_event),
+			 slategtk_cw);
 
-	g_signal_connect(G_OBJECT(nsgtk_cw->drawing_area),
+	g_signal_connect(G_OBJECT(slategtk_cw->drawing_area),
 			 "key-release-event",
-			 G_CALLBACK(nsgtk_cw_keyrelease_event),
-			 nsgtk_cw);
+			 G_CALLBACK(slategtk_cw_keyrelease_event),
+			 slategtk_cw);
 
-	nsgtk_widget_override_background_color(
-		GTK_WIDGET(nsgtk_cw->drawing_area),
+	slategtk_widget_override_background_color(
+		GTK_WIDGET(slategtk_cw->drawing_area),
 		GTK_STATE_FLAG_NORMAL,
 		0, 0xffff, 0xffff, 0xffff);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in gtk/corewindow.h */
-nserror nsgtk_corewindow_fini(struct nsgtk_corewindow *nsgtk_cw)
+slateerror slategtk_corewindow_fini(struct slategtk_corewindow *slategtk_cw)
 {
-	g_object_unref(nsgtk_cw->input_method);
+	g_object_unref(slategtk_cw->input_method);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }

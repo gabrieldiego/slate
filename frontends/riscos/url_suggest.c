@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Stephen Fryatt <stevef@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,8 +26,8 @@
 #include <oslib/wimp.h>
 
 #include "utils/messages.h"
-#include "utils/nsurl.h"
-#include "netsurf/url_db.h"
+#include "utils/slateurl.h"
+#include "slate/url_db.h"
 
 #include "riscos/menus.h"
 #include "riscos/url_suggest.h"
@@ -38,7 +38,7 @@ struct url_suggest_item {
 	struct url_suggest_item	*next;  /*< The next URL in the list.     */
 };
 
-static bool ro_gui_url_suggest_callback(nsurl *url,
+static bool ro_gui_url_suggest_callback(slateurl *url,
 		const struct url_data *data);
 
 static int suggest_entries;
@@ -155,7 +155,7 @@ bool ro_gui_url_suggest_prepare_menu(void)
  * \return 		true to continue iteration, false otherwise
  */
 
-bool ro_gui_url_suggest_callback(nsurl *url, const struct url_data *data)
+bool ro_gui_url_suggest_callback(slateurl *url, const struct url_data *data)
 {
 	int			count;
 	unsigned int		weight;
@@ -194,9 +194,9 @@ bool ro_gui_url_suggest_callback(nsurl *url, const struct url_data *data)
 		if (new != NULL) {
 			suggest_entries++;
 			/* TODO: keeping pointers to URLdb data is bad.
-			 *       should be nsurl_ref(url) or
+			 *       should be slateurl_ref(url) or
 			 *       take a copy of the string. */
-			new->url = nsurl_access(url);
+			new->url = slateurl_access(url);
 			new->weight = weight;
 			new->next = *list;
 

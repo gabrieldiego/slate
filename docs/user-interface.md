@@ -37,11 +37,11 @@ There is a basic user guide for the [framebuffer](docs/using-framebuffer.md)
 
 Frontend that uses the GTK+2 or GTK+3 toolkit
 
-## monkey
+## Jotter
 
 This is the internal unit test frontend.
 
-There is a basic user guide [monkey](docs/using-monkey.md)
+There is a basic user guide [Jotter](docs/using-jotter.md)
 
 ## riscos
 
@@ -54,8 +54,7 @@ Frontend which uses the Microsodt win32 GDI toolkit.
 # User configuration
 
 The behaviour of the browser can be changed from the defaults with a
-configuration file. The [core user options](docs/netsurf-options.md)
+configuration file. The [core user options](docs/slate-options.md)
 of the browser are common to all versions and are augmented by each
 frontend in a specific manner.
-
 

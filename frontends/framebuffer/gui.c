@@ -1,7 +1,7 @@
 /*
  * Copyright 2008, 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,18 +30,18 @@
 #include <libnsfb_event.h>
 
 #include "utils/utils.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/filepath.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/keypress.h"
+#include "slate/browser_window.h"
+#include "slate/keypress.h"
 #include "desktop/browser_history.h"
-#include "netsurf/plotters.h"
-#include "netsurf/window.h"
-#include "netsurf/misc.h"
-#include "netsurf/netsurf.h"
-#include "netsurf/cookie_db.h"
+#include "slate/plotters.h"
+#include "slate/window.h"
+#include "slate/misc.h"
+#include "slate/slate.h"
+#include "slate/cookie_db.h"
 #include "content/fetch.h"
 
 #include "framebuffer/gui.h"
@@ -116,13 +116,13 @@ static void die(const char *error)
  *
  * \param[in] warning A warning looked up in the message translation table
  * \param[in] detail Additional text to be displayed or NULL.
- * \return NSERROR_OK on success or error code if there was a
+ * \return SLATEERROR_OK on success or error code if there was a
  *           faliure displaying the message to the user.
  */
-static nserror fb_warn_user(const char *warning, const char *detail)
+static slateerror fb_warn_user(const char *warning, const char *detail)
 {
 	NSLOG(netsurf, INFO, "%s %s", warning, detail);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* queue a redraw operation, co-ordinates are relative to the window */
@@ -233,7 +233,7 @@ fb_pan(fbtk_widget_t *widget,
 	nsfb_bbox_t srcbox;
 	nsfb_bbox_t dstbox;
 
-	nsfb_t *nsfb = fbtk_get_nsfb(widget);
+	nsfb_t *slatefb = fbtk_get_nsfb(widget);
 
 	height = fbtk_get_height(widget);
 	width = fbtk_get_width(widget);
@@ -272,7 +272,7 @@ fb_pan(fbtk_widget_t *widget,
 		dstbox.y1 = dstbox.y0 + height + bwidget->pany;
 
 		/* move part that remains visible up */
-		nsfb_plot_copy(nsfb, &srcbox, nsfb, &dstbox);
+		nsfb_plot_copy(slatefb, &srcbox, slatefb, &dstbox);
 
 		/* redraw newly exposed area */
 		bwidget->scrolly += bwidget->pany;
@@ -291,7 +291,7 @@ fb_pan(fbtk_widget_t *widget,
 		dstbox.y1 = dstbox.y0 + height - bwidget->pany;
 
 		/* move part that remains visible down */
-		nsfb_plot_copy(nsfb, &srcbox, nsfb, &dstbox);
+		nsfb_plot_copy(slatefb, &srcbox, slatefb, &dstbox);
 
 		/* redraw newly exposed area */
 		bwidget->scrolly += bwidget->pany;
@@ -312,7 +312,7 @@ fb_pan(fbtk_widget_t *widget,
 		dstbox.y1 = dstbox.y0 + height;
 
 		/* move part that remains visible left */
-		nsfb_plot_copy(nsfb, &srcbox, nsfb, &dstbox);
+		nsfb_plot_copy(slatefb, &srcbox, slatefb, &dstbox);
 
 		/* redraw newly exposed area */
 		bwidget->scrollx += bwidget->panx;
@@ -331,7 +331,7 @@ fb_pan(fbtk_widget_t *widget,
 		dstbox.y1 = dstbox.y0 + height;
 
 		/* move part that remains visible right */
-		nsfb_plot_copy(nsfb, &srcbox, nsfb, &dstbox);
+		nsfb_plot_copy(slatefb, &srcbox, slatefb, &dstbox);
 
 		/* redraw newly exposed area */
 		bwidget->scrollx += bwidget->panx;
@@ -358,7 +358,7 @@ fb_redraw(fbtk_widget_t *widget,
 		.background_images = true,
 		.plot = &fb_plotters
 	};
-	nsfb_t *nsfb = fbtk_get_nsfb(widget);
+	nsfb_t *slatefb = fbtk_get_nsfb(widget);
 
 	x = fbtk_get_absx(widget);
 	y = fbtk_get_absy(widget);
@@ -369,7 +369,7 @@ fb_redraw(fbtk_widget_t *widget,
 	bwidget->redraw_box.x0 += x;
 	bwidget->redraw_box.x1 += x;
 
-	nsfb_claim(nsfb, &bwidget->redraw_box);
+	nsfb_claim(slatefb, &bwidget->redraw_box);
 
 	/* redraw bounding box is relative to window */
 	clip.x0 = bwidget->redraw_box.x0;
@@ -396,7 +396,7 @@ fb_redraw(fbtk_widget_t *widget,
 		pen.stroke_width = 1;
 		pen.stroke_colour = 0xFF0000FF;
 
-		nsfb_plot_line(nsfb, &line, &pen);
+		nsfb_plot_line(slatefb, &line, &pen);
 	}
 
 	nsfb_update(fbtk_get_nsfb(widget), &bwidget->redraw_box);
@@ -489,20 +489,20 @@ process_cmdline(int argc, char** argv)
 
 	febpp = 32;
 
-	fewidth = nsoption_int(window_width);
+	fewidth = slateoption_int(window_width);
 	if (fewidth <= 0) {
 		fewidth = 800;
 	}
-	feheight = nsoption_int(window_height);
+	feheight = slateoption_int(window_height);
 	if (feheight <= 0) {
 		feheight = 600;
 	}
 
-	if ((nsoption_charp(homepage_url) != NULL) && 
-	    (nsoption_charp(homepage_url)[0] != '\0')) {
-		feurl = nsoption_charp(homepage_url);
+	if ((slateoption_charp(homepage_url) != NULL) && 
+	    (slateoption_charp(homepage_url)[0] != '\0')) {
+		feurl = slateoption_charp(homepage_url);
 	} else {
-		feurl = NETSURF_HOMEPAGE;
+		feurl = SLATE_HOMEPAGE;
 	}
 
 	while((opt = getopt_long(argc, argv, "f:b:w:h:",
@@ -555,50 +555,50 @@ process_cmdline(int argc, char** argv)
  * @param defaults The option table to update.
  * @return error status.
  */
-static nserror set_defaults(struct nsoption_s *defaults)
+static slateerror set_defaults(struct slateoption_s *defaults)
 {
 	int idx;
 	static const struct {
-		enum nsoption_e nsc;
+		enum slateoption_e nsc;
 		colour c;
 	} sys_colour_defaults[]= {
-		{ NSOPTION_sys_colour_AccentColor, 0x00666666},
-		{ NSOPTION_sys_colour_AccentColorText, 0x00ffffff},
-		{ NSOPTION_sys_colour_ActiveText, 0x000000ee},
-		{ NSOPTION_sys_colour_ButtonBorder, 0x00aaaaaa},
-		{ NSOPTION_sys_colour_ButtonFace, 0x00dddddd},
-		{ NSOPTION_sys_colour_ButtonText, 0x00000000},
-		{ NSOPTION_sys_colour_Canvas, 0x00aaaaaa},
-		{ NSOPTION_sys_colour_CanvasText, 0x00000000},
-		{ NSOPTION_sys_colour_Field, 0x00f1f1f1},
-		{ NSOPTION_sys_colour_FieldText, 0x00000000},
-		{ NSOPTION_sys_colour_GrayText, 0x00777777},
-		{ NSOPTION_sys_colour_Highlight, 0x00ee0000},
-		{ NSOPTION_sys_colour_HighlightText, 0x00000000},
-		{ NSOPTION_sys_colour_LinkText, 0x00ee0000},
-		{ NSOPTION_sys_colour_Mark, 0x0000ffff},
-		{ NSOPTION_sys_colour_MarkText, 0x00000000},
-		{ NSOPTION_sys_colour_SelectedItem, 0x00e48435},
-		{ NSOPTION_sys_colour_SelectedItemText, 0x00ffffff},
-		{ NSOPTION_sys_colour_VisitedText, 0x008b1a55},
-		{ NSOPTION_LISTEND, 0},
+		{ SLATEOPTION_sys_colour_AccentColor, 0x00666666},
+		{ SLATEOPTION_sys_colour_AccentColorText, 0x00ffffff},
+		{ SLATEOPTION_sys_colour_ActiveText, 0x000000ee},
+		{ SLATEOPTION_sys_colour_ButtonBorder, 0x00aaaaaa},
+		{ SLATEOPTION_sys_colour_ButtonFace, 0x00dddddd},
+		{ SLATEOPTION_sys_colour_ButtonText, 0x00000000},
+		{ SLATEOPTION_sys_colour_Canvas, 0x00aaaaaa},
+		{ SLATEOPTION_sys_colour_CanvasText, 0x00000000},
+		{ SLATEOPTION_sys_colour_Field, 0x00f1f1f1},
+		{ SLATEOPTION_sys_colour_FieldText, 0x00000000},
+		{ SLATEOPTION_sys_colour_GrayText, 0x00777777},
+		{ SLATEOPTION_sys_colour_Highlight, 0x00ee0000},
+		{ SLATEOPTION_sys_colour_HighlightText, 0x00000000},
+		{ SLATEOPTION_sys_colour_LinkText, 0x00ee0000},
+		{ SLATEOPTION_sys_colour_Mark, 0x0000ffff},
+		{ SLATEOPTION_sys_colour_MarkText, 0x00000000},
+		{ SLATEOPTION_sys_colour_SelectedItem, 0x00e48435},
+		{ SLATEOPTION_sys_colour_SelectedItemText, 0x00ffffff},
+		{ SLATEOPTION_sys_colour_VisitedText, 0x008b1a55},
+		{ SLATEOPTION_LISTEND, 0},
 	};
 
 	/* Set defaults for absent option strings */
-	nsoption_setnull_charp(cookie_file, strdup("~/.netsurf/Cookies"));
-	nsoption_setnull_charp(cookie_jar, strdup("~/.netsurf/Cookies"));
+	slateoption_setnull_charp(cookie_file, strdup("~/.slate/Cookies"));
+	slateoption_setnull_charp(cookie_jar, strdup("~/.slate/Cookies"));
 
-	if (nsoption_charp(cookie_file) == NULL ||
-	    nsoption_charp(cookie_jar) == NULL) {
+	if (slateoption_charp(cookie_file) == NULL ||
+	    slateoption_charp(cookie_jar) == NULL) {
 		NSLOG(netsurf, INFO, "Failed initialising cookie options");
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* set system colours for framebuffer ui */
-	for (idx=0; sys_colour_defaults[idx].nsc != NSOPTION_LISTEND; idx++) {
+	for (idx=0; sys_colour_defaults[idx].nsc != SLATEOPTION_LISTEND; idx++) {
 		defaults[sys_colour_defaults[idx].nsc].value.c = sys_colour_defaults[idx].c;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -644,7 +644,7 @@ static void gui_quit(void)
 {
 	NSLOG(netsurf, INFO, "gui_quit");
 
-	urldb_save_cookies(nsoption_charp(cookie_jar));
+	urldb_save_cookies(slateoption_charp(cookie_jar));
 
 	framebuffer_finalise();
 }
@@ -1166,16 +1166,16 @@ static int
 fb_url_enter(void *pw, char *text)
 {
 	struct browser_window *bw = pw;
-	nsurl *url;
-	nserror error;
+	slateurl *url;
+	slateerror error;
 
-	error = nsurl_create(text, &url);
-	if (error != NSERROR_OK) {
+	error = slateurl_create(text, &url);
+	if (error != SLATEERROR_OK) {
 		fb_warn_user("Errorcode:", messages_get_errorcode(error));
 	} else {
 		browser_window_navigate(bw, url, NULL, BW_NAVIGATE_HISTORY,
 				NULL, NULL, NULL);
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
 
 	return 0;
@@ -1647,13 +1647,13 @@ create_normal_browser_window(struct gui_window *gw, int furniture_width)
 	fbtk_widget_t *widget;
 	fbtk_widget_t *toolbar;
 	int statusbar_width = 0;
-	int toolbar_height = nsoption_int(fb_toolbar_size);
+	int toolbar_height = slateoption_int(fb_toolbar_size);
 
 	NSLOG(netsurf, INFO, "Normal window");
 
 	gw->window = fbtk_create_window(fbtk, 0, 0, 0, 0, 0);
 
-	statusbar_width = nsoption_int(toolbar_status_size) *
+	statusbar_width = slateoption_int(toolbar_status_size) *
 		fbtk_get_width(gw->window) / 10000;
 
 	/* toolbar */
@@ -1661,7 +1661,7 @@ create_normal_browser_window(struct gui_window *gw, int furniture_width)
 				 toolbar_height, 
 				 2, 
 				 FB_FRAME_COLOUR, 
-				 nsoption_charp(fb_toolbar_layout));
+				 slateoption_charp(fb_toolbar_layout));
 	gw->toolbar = toolbar;
 
 	/* set the actually created toolbar height */
@@ -1696,7 +1696,7 @@ create_normal_browser_window(struct gui_window *gw, int furniture_width)
 
 	/* fill bottom right area */
 
-	if (nsoption_bool(fb_osk) == true) {
+	if (slateoption_bool(fb_osk) == true) {
 		widget = fbtk_create_text_button(gw->window,
 						 fbtk_get_width(gw->window) - furniture_width,
 						 fbtk_get_height(gw->window) - furniture_width,
@@ -1739,7 +1739,7 @@ create_normal_browser_window(struct gui_window *gw, int furniture_width)
 					  gw);
 
 	/* browser widget */
-	create_browser_widget(gw, toolbar_height, nsoption_int(fb_furniture_size));
+	create_browser_widget(gw, toolbar_height, slateoption_int(fb_furniture_size));
 
 	/* Give browser_window's user widget input focus */
 	fbtk_set_focus(gw->browser);
@@ -1760,10 +1760,10 @@ resize_normal_browser_window(struct gui_window *gw, int furniture_width)
 
 	width = fbtk_get_width(gw->window);
 	height = fbtk_get_height(gw->window);
-	statusbar_width = nsoption_int(toolbar_status_size) * width / 10000;
+	statusbar_width = slateoption_int(toolbar_status_size) * width / 10000;
 
 	resize_toolbar(gw, toolbar_height, 2,
-			nsoption_charp(fb_toolbar_layout));
+			slateoption_charp(fb_toolbar_layout));
 	fbtk_set_pos_and_size(gw->status,
 			0, height - furniture_width,
 			statusbar_width, furniture_width);
@@ -1837,7 +1837,7 @@ gui_window_create(struct browser_window *bw,
 	 */
 	gw->bw = bw;
 
-	create_normal_browser_window(gw, nsoption_int(fb_furniture_size));
+	create_normal_browser_window(gw, slateoption_int(fb_furniture_size));
 
 	/* map and request redraw of gui window */
 	fbtk_set_mapping(gw->window, true);
@@ -1864,9 +1864,9 @@ gui_window_destroy(struct gui_window *gw)
  *
  * \param g The netsurf window being invalidated.
  * \param rect area to redraw or NULL for the entire window area
- * \return NSERROR_OK on success or appropriate error code
+ * \return SLATEERROR_OK on success or appropriate error code
  */
-static nserror
+static slateerror
 fb_window_invalidate_area(struct gui_window *g, const struct rect *rect)
 {
 	struct browser_widget_s *bwidget = fbtk_get_userpw(g->browser);
@@ -1884,7 +1884,7 @@ fb_window_invalidate_area(struct gui_window *g, const struct rect *rect)
 				fbtk_get_width(g->browser),
 				fbtk_get_height(g->browser));
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static bool
@@ -1907,9 +1907,9 @@ gui_window_get_scroll(struct gui_window *g, int *sx, int *sy)
  *
  * \param gw gui_window to scroll
  * \param rect The rectangle to ensure is shown.
- * \return NSERROR_OK on success or apropriate error code.
+ * \return SLATEERROR_OK on success or apropriate error code.
  */
-static nserror
+static slateerror
 gui_window_set_scroll(struct gui_window *gw, const struct rect *rect)
 {
 	struct browser_widget_s *bwidget = fbtk_get_userpw(gw->browser);
@@ -1919,7 +1919,7 @@ gui_window_set_scroll(struct gui_window *gw, const struct rect *rect)
 	widget_scroll_x(gw, rect->x0, true);
 	widget_scroll_y(gw, rect->y0, true);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1929,15 +1929,15 @@ gui_window_set_scroll(struct gui_window *gw, const struct rect *rect)
  * \param gw The gui window to measure content area of.
  * \param width receives width of window
  * \param height receives height of window
- * \return NSERROR_OK on sucess and width and height updated.
+ * \return SLATEERROR_OK on sucess and width and height updated.
  */
-static nserror
+static slateerror
 gui_window_get_dimensions(struct gui_window *gw, int *width, int *height)
 {
 	*width = fbtk_get_width(gw->browser);
 	*height = fbtk_get_height(gw->browser);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void
@@ -1989,11 +1989,11 @@ gui_window_set_pointer(struct gui_window *g, gui_pointer_shape shape)
 	}
 }
 
-static nserror
-gui_window_set_url(struct gui_window *g, nsurl *url)
+static slateerror
+gui_window_set_url(struct gui_window *g, slateurl *url)
 {
-	fbtk_set_text(g->url, nsurl_access(url));
-	return NSERROR_OK;
+	fbtk_set_text(g->url, slateurl_access(url));
+	return SLATEERROR_OK;
 }
 
 static void
@@ -2121,9 +2121,9 @@ gui_window_remove_caret(struct gui_window *g)
  *
  * \param gw The window receiving the event.
  * \param event The event code.
- * \return NSERROR_OK when processed ok
+ * \return SLATEERROR_OK when processed ok
  */
-static nserror
+static slateerror
 gui_window_event(struct gui_window *gw, enum gui_window_event event)
 {
 	switch (event) {
@@ -2146,7 +2146,7 @@ gui_window_event(struct gui_window *gw, enum gui_window_event event)
 	default:
 		break;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static struct gui_window_table framebuffer_window_table = {
@@ -2184,10 +2184,10 @@ main(int argc, char** argv)
 	struct browser_window *bw;
 	char *options;
 	char *messages;
-	nsurl *url;
-	nserror ret;
-	nsfb_t *nsfb;
-	struct netsurf_table framebuffer_table = {
+	slateurl *url;
+	slateerror ret;
+	nsfb_t *slatefb;
+	struct slate_table framebuffer_table = {
 		.misc = &framebuffer_misc_table,
 		.window = &framebuffer_window_table,
 		.corewindow = framebuffer_core_window_table,
@@ -2198,12 +2198,12 @@ main(int argc, char** argv)
 		.layout = framebuffer_layout_table,
 	};
 
-        ret = netsurf_register(&framebuffer_table);
-        if (ret != NSERROR_OK) {
+        ret = slate_register(&framebuffer_table);
+        if (ret != SLATEERROR_OK) {
 		die("NetSurf operation table failed registration");
         }
 
-	respaths = fb_init_resource_path(NETSURF_FB_RESPATH":"NETSURF_FB_FONTPATH);
+	respaths = fb_init_resource_path(SLATE_FB_RESPATH":"SLATE_FB_FONTPATH);
 
 	/* initialise logging. Not fatal if it fails but not much we
 	 * can do about it either.
@@ -2211,37 +2211,37 @@ main(int argc, char** argv)
 	nslog_init(nslog_stream_configure, &argc, argv);
 
 	/* user options setup */
-	ret = nsoption_init(set_defaults, &nsoptions, &nsoptions_default);
-	if (ret != NSERROR_OK) {
+	ret = slateoption_init(set_defaults, &slateoptions, &slateoptions_default);
+	if (ret != SLATEERROR_OK) {
 		die("Options failed to initialise");
 	}
 	options = filepath_find(respaths, "Choices");
-	nsoption_read(options, nsoptions);
+	slateoption_read(options, slateoptions);
 	free(options);
-	nsoption_commandline(&argc, argv, nsoptions);
+	slateoption_commandline(&argc, argv, slateoptions);
 
 	/* message init */
 	messages = filepath_find(respaths, "Messages");
         ret = messages_add_from_file(messages);
 	free(messages);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		fprintf(stderr, "Message translations failed to load\n");
 	}
 
 	/* common initialisation */
-	ret = netsurf_init(NULL);
-	if (ret != NSERROR_OK) {
+	ret = slate_init(NULL);
+	if (ret != SLATEERROR_OK) {
 		die("NetSurf failed to initialise");
 	}
 
 	/* Override, since we have no support for non-core SELECT menu */
-	nsoption_set_bool(core_select_menu, true);
+	slateoption_set_bool(core_select_menu, true);
 
 	if (process_cmdline(argc,argv) != true)
 		die("unable to process command line.\n");
 
-	nsfb = framebuffer_initialise(fename, fewidth, feheight, febpp);
-	if (nsfb == NULL)
+	slatefb = framebuffer_initialise(fename, fewidth, feheight, febpp);
+	if (slatefb == NULL)
 		die("Unable to initialise framebuffer");
 
 	framebuffer_set_cursor(&pointer_image);
@@ -2249,26 +2249,26 @@ main(int argc, char** argv)
 	if (fb_font_init() == false)
 		die("Unable to initialise the font system");
 
-	fbtk = fbtk_init(nsfb);
+	fbtk = fbtk_init(slatefb);
 
 	fbtk_enable_oskb(fbtk);
 
-	urldb_load_cookies(nsoption_charp(cookie_file));
+	urldb_load_cookies(slateoption_charp(cookie_file));
 
 	/* create an initial browser window */
 
 	NSLOG(netsurf, INFO, "calling browser_window_create");
 
-	ret = nsurl_create(feurl, &url);
-	if (ret == NSERROR_OK) {
+	ret = slateurl_create(feurl, &url);
+	if (ret == SLATEERROR_OK) {
 		ret = browser_window_create(BW_CREATE_HISTORY,
 					      url,
 					      NULL,
 					      NULL,
 					      &bw);
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		fb_warn_user("Errorcode:", messages_get_errorcode(ret));
 	} else {
 		framebuffer_run();
@@ -2276,13 +2276,13 @@ main(int argc, char** argv)
 		browser_window_destroy(bw);
 	}
 
-	netsurf_exit();
+	slate_exit();
 
 	if (fb_font_finalise() == false)
 		NSLOG(netsurf, INFO, "Font finalisation failed.");
 
 	/* finalise options */
-	nsoption_finalise(nsoptions, nsoptions_default);
+	slateoption_finalise(slateoptions, slateoptions_default);
 
 	/* finalise logging */
 	nslog_finalise();
@@ -2293,7 +2293,7 @@ main(int argc, char** argv)
 void gui_resize(fbtk_widget_t *root, int width, int height)
 {
 	struct gui_window *gw;
-	nsfb_t *nsfb = fbtk_get_nsfb(root);
+	nsfb_t *slatefb = fbtk_get_nsfb(root);
 
 	/* Enforce a minimum */
 	if (width < 300)
@@ -2301,7 +2301,7 @@ void gui_resize(fbtk_widget_t *root, int width, int height)
 	if (height < 200)
 		height = 200;
 
-	if (framebuffer_resize(nsfb, width, height, febpp) == false) {
+	if (framebuffer_resize(slatefb, width, height, febpp) == false) {
 		return;
 	}
 
@@ -2312,7 +2312,7 @@ void gui_resize(fbtk_widget_t *root, int width, int height)
 
 	for (gw = window_list; gw != NULL; gw = gw->next) {
 		resize_normal_browser_window(gw,
-				nsoption_int(fb_furniture_size));
+				slateoption_int(fb_furniture_size));
 	}
 
 	fbtk_request_redraw(root);

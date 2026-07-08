@@ -2,7 +2,7 @@
  * Copyright 2005 James Bursa <bursa@users.sourceforge.net>
  * Copyright 2003 Phil Mellor <monkeyson@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,8 +22,8 @@
  * Box tree manipulation interface.
  */
 
-#ifndef NETSURF_HTML_BOX_MANIPULATE_H
-#define NETSURF_HTML_BOX_MANIPULATE_H
+#ifndef SLATE_HTML_BOX_MANIPULATE_H
+#define SLATE_HTML_BOX_MANIPULATE_H
 
 
 /**
@@ -42,7 +42,7 @@
  * styles is always owned by the box, if it is set.
  * style is only owned by the box in the case of implied boxes.
  */
-struct box * box_create(css_select_results *styles, css_computed_style *style, bool style_owned, struct nsurl *href, const char *target, const char *title, lwc_string *id, void *context);
+struct box * box_create(css_select_results *styles, css_computed_style *style, bool style_owned, struct slateurl *href, const char *target, const char *title, lwc_string *id, void *context);
 
 
 /**
@@ -99,7 +99,7 @@ void box_free_box(struct box *box);
  * \param right		whether the vertical scrollbar should be present
  * \return		true on success false otherwise
  */
-nserror box_handle_scrollbars(struct content *c, struct box *box,
+slateerror box_handle_scrollbars(struct content *c, struct box *box,
 		bool bottom, bool right);
 
 

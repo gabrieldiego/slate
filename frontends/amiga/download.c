@@ -1,7 +1,7 @@
 /*
  * Copyright 2008-2010 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -42,16 +42,16 @@
 #include <reaction/reaction_macros.h>
 
 #include "utils/errors.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/log.h"
 #include "utils/messages.h"
 #include "utils/utils.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/string.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/mouse.h"
-#include "netsurf/window.h"
-#include "netsurf/download.h"
+#include "slate/browser_window.h"
+#include "slate/mouse.h"
+#include "slate/window.h"
+#include "slate/download.h"
 #include "content/handlers/image/ico.h"
 #include "desktop/download.h"
 #include "desktop/save_complete.h"
@@ -124,7 +124,7 @@ static int downloads_in_progress = 0;
 static struct gui_download_window *gui_download_window_create(download_context *ctx,
 		struct gui_window *gui)
 {
-	const char *url = nsurl_access(download_context_get_url(ctx));
+	const char *url = slateurl_access(download_context_get_url(ctx));
 	unsigned long total_size = download_context_get_total_length(ctx);
 	struct gui_download_window *dw;
 	char *dl_filename = ami_utf8_easy(download_context_get_filename(ctx));
@@ -179,7 +179,7 @@ static struct gui_download_window *gui_download_window_create(download_context *
 		return NULL;
 	}
 
-	if((nsoption_bool(download_notify_progress) == true)) {
+	if((slateoption_bool(download_notify_progress) == true)) {
 		char bkm[1030];
 		snprintf(bkm, 1030, "STOP %p", dw);
 
@@ -242,11 +242,11 @@ static struct gui_download_window *gui_download_window_create(download_context *
 	return dw;
 }
 
-static nserror gui_download_window_data(struct gui_download_window *dw, 
+static slateerror gui_download_window_data(struct gui_download_window *dw, 
 		const char *data, unsigned int size)
 {
 	APTR va[3];
-	if(!dw) return NSERROR_SAVE_FAILED;
+	if(!dw) return SLATEERROR_SAVE_FAILED;
 
 	FWrite(dw->fh,data,1,size);
 
@@ -257,7 +257,7 @@ static nserror gui_download_window_data(struct gui_download_window *dw,
 	va[2] = 0;
 
 	if(dw->size) {
-		if((nsoption_bool(download_notify_progress) == true) &&
+		if((slateoption_bool(download_notify_progress) == true) &&
 			(((dw->downloaded * 100) / dw->size) > dw->progress)) {
 			dw->progress = (uint32)((dw->downloaded * 100) / dw->size);
 			Notify(ami_gui_get_app_id(),
@@ -273,7 +273,7 @@ static nserror gui_download_window_data(struct gui_download_window *dw,
 	}
 	else
 	{
-		if((nsoption_bool(download_notify_progress) == true)) {
+		if((slateoption_bool(download_notify_progress) == true)) {
 			/* unknown size, not entirely sure how to deal with this atm... */
 			Notify(ami_gui_get_app_id(),
 					APPNOTIFY_Percentage, 100,
@@ -287,7 +287,7 @@ static nserror gui_download_window_data(struct gui_download_window *dw,
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void gui_download_window_done(struct gui_download_window *dw)
@@ -302,13 +302,13 @@ static void gui_download_window_done(struct gui_download_window *dw)
 	if(dw->result == AMINS_DLOAD_PROGRESS)
 		dw->result = AMINS_DLOAD_OK;
 
-	if((nsoption_bool(download_notify_progress) == true)) {
+	if((slateoption_bool(download_notify_progress) == true)) {
 		Notify(ami_gui_get_app_id(),
 				APPNOTIFY_Update, TRUE,
 				TAG_DONE);
 	}
 
-	if((nsoption_bool(download_notify)) && (dw->result == AMINS_DLOAD_OK))
+	if((slateoption_bool(download_notify)) && (dw->result == AMINS_DLOAD_OK))
 	{
 		char bkm[1030];
 		snprintf(bkm, 1030, "OPEN %s", dw->fname);
@@ -344,8 +344,8 @@ static void gui_download_window_done(struct gui_download_window *dw)
 
 	ami_gui_win_list_remove(dw);
 	if(queuedl) {
-		nsurl *url;
-		if (nsurl_create(dln2->node.ln_Name, &url) != NSERROR_OK) {
+		slateurl *url;
+		if (slateurl_create(dln2->node.ln_Name, &url) != SLATEERROR_OK) {
 			amiga_warn_user("NoMemory", 0);
 		} else {
 			browser_window_navigate(bw,
@@ -355,7 +355,7 @@ static void gui_download_window_done(struct gui_download_window *dw)
 				NULL,
 				NULL,
 				NULL);
-			nsurl_unref(url);
+			slateurl_unref(url);
 		}
 	}
 	ami_try_quit(); /* In case the only window open was this download */
@@ -424,14 +424,14 @@ void ami_free_download_list(struct List *dllist)
 	}while((node=nnode));
 }
 
-nserror
-gui_window_save_link(struct gui_window *g, nsurl *url, const char *title)
+slateerror
+gui_window_save_link(struct gui_window *g, slateurl *url, const char *title)
 {
 	char fname[1024];
 	STRPTR openurlstring,linkname;
 	struct DiskObject *dobj = NULL;
 
-	linkname = ASPrintf("Link_to_%s",FilePart(nsurl_access(url)));
+	linkname = ASPrintf("Link_to_%s",FilePart(slateurl_access(url)));
 
 	if(AslRequestTags(savereq,
 		ASLFR_Window, ami_gui_get_window(g),
@@ -453,11 +453,11 @@ gui_window_save_link(struct gui_window *g, nsurl *url, const char *title)
 			if((fh = FOpen(fname,MODE_NEWFILE,0)))
 			{
 				/* \todo Should be URLOpen on OS4.1 */
-				openurlstring = ASPrintf("openurl \"%s\"\n",nsurl_access(url));
+				openurlstring = ASPrintf("openurl \"%s\"\n",slateurl_access(url));
 				FWrite(fh,openurlstring,1,strlen(openurlstring));
 				FClose(fh);
 				FreeVec(openurlstring);
-				SetComment(fname, nsurl_access(url));
+				SetComment(fname, slateurl_access(url));
 
 				dobj = GetIconTags(NULL,ICONGETA_GetDefaultName,"url",
 									ICONGETA_GetDefaultType,WBPROJECT,
@@ -475,7 +475,7 @@ gui_window_save_link(struct gui_window *g, nsurl *url, const char *title)
 		}
 		ami_reset_pointer(ami_gui_get_gui_window_2(g));
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 BOOL ami_download_check_overwrite(const char *file, struct Window *win, ULONG size)
@@ -485,7 +485,7 @@ BOOL ami_download_check_overwrite(const char *file, struct Window *win, ULONG si
 	BPTR lock = 0;
 	char *overwritetext;
 
-	if(nsoption_bool(ask_overwrite) == false) return TRUE;
+	if(slateoption_bool(ask_overwrite) == false) return TRUE;
 
 	lock = Lock(file, ACCESS_READ);
 

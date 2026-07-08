@@ -1,7 +1,7 @@
 /*
  * Copyright 2024 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * Local history corewindow.
  */
 extern "C" {
-#include "netsurf/content.h"
-#include "netsurf/browser_window.h"
+#include "slate/content.h"
+#include "slate/browser_window.h"
 
 #include "desktop/local_history.h"
 #include "desktop/browser_private.h"
@@ -48,12 +48,12 @@ void NS_Local_history::setMaximumSize(struct browser_window *bw)
 	QSize size(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
 	int w, h;
 
-	if (browser_window_get_dimensions(bw, &w, &h) == NSERROR_OK) {
+	if (browser_window_get_dimensions(bw, &w, &h) == SLATEERROR_OK) {
 		NS_Corewindow::setMaximumSize(w, h);
 	}
 }
 
-nserror NS_Local_history::setbw(struct browser_window *bw)
+slateerror NS_Local_history::setbw(struct browser_window *bw)
 {
 	setMaximumSize(bw);
 	return local_history_set(m_session, bw);
@@ -72,7 +72,7 @@ bool NS_Local_history::key_press(uint32_t nskey)
 void NS_Local_history::mouse_action(browser_mouse_state mouse_state, int x, int y)
 {
 	if (((mouse_state) && (!geometry().contains(mapToGlobal(QPoint(x,y))))) ||
-	    (local_history_mouse_action(m_session, mouse_state, x, y) == NSERROR_OK)) {
+	    (local_history_mouse_action(m_session, mouse_state, x, y) == SLATEERROR_OK)) {
 		close();
 	}
 }

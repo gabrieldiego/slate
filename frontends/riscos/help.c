@@ -1,7 +1,7 @@
 /*
  * Copyright 2004, 2005 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,12 +24,12 @@
 #include <oslib/help.h>
 #include <oslib/taskmanager.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/messages.h"
 #include "utils/utf8.h"
-#include "netsurf/mouse.h"
-#include "netsurf/window.h"
+#include "slate/mouse.h"
+#include "slate/window.h"
 
 #include "riscos/help.h"
 #include "riscos/wimp_event.h"
@@ -102,7 +102,7 @@ void ro_gui_interactive_help_request(wimp_message *message)
 	int				i;
 
 	/* check we aren't turned off */
-	if (!nsoption_bool(interactive_help))
+	if (!slateoption_bool(interactive_help))
 		return;
 
 	/* only accept help requests */
@@ -248,11 +248,11 @@ static void ro_gui_interactive_help_broadcast(wimp_message *message,
 	/* copy our message string */
 	if (translated_token != token) {
 		/* convert to local encoding */
-		nserror err = utf8_to_local_encoding(translated_token, 0,
+		slateerror err = utf8_to_local_encoding(translated_token, 0,
 				&local_token);
-		if (err != NSERROR_OK) {
+		if (err != SLATEERROR_OK) {
 			/* badenc should never happen */
-			assert(err != NSERROR_BAD_ENCODING);
+			assert(err != SLATEERROR_BAD_ENCODING);
 			/* simply use UTF-8 string */
 			strncpy(reply->reply, translated_token, 235);
 		}

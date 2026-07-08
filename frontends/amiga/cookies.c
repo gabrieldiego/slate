@@ -1,7 +1,7 @@
 /*
  * Copyright 2017-2025 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,11 +34,11 @@
 #include <reaction/reaction_macros.h>
 
 #include "desktop/cookie_manager.h"
-#include "netsurf/keypress.h"
-#include "netsurf/plotters.h"
+#include "slate/keypress.h"
+#include "slate/plotters.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 
 #include "amiga/cookies.h"
 #include "amiga/corewindow.h"
@@ -98,13 +98,13 @@ ami_cookies_menu_free(struct ami_cookie_window *cookie_win)
 static void
 ami_cookies_destroy(struct ami_corewindow *ami_cw)
 {
-	nserror res;
+	slateerror res;
 
 	if(cookie_window == NULL)
 		return;
 
 	res = cookie_manager_fini();
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		ami_cookies_menu_free(cookie_window);
 		res = ami_corewindow_fini(&cookie_window->core); /* closes the window for us, frees cookie_win */
 		cookie_window = NULL;
@@ -119,16 +119,16 @@ ami_cookies_destroy(struct ami_corewindow *ami_cw)
  * \param mouse_state netsurf mouse state on event
  * \param x location of event
  * \param y location of event
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
+static slateerror
 ami_cookies_mouse(struct ami_corewindow *ami_cw,
 					browser_mouse_state mouse_state,
 					int x, int y)
 {
 	cookie_manager_mouse_action(mouse_state, x, y);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -136,15 +136,15 @@ ami_cookies_mouse(struct ami_corewindow *ami_cw,
  *
  * \param ami_cw The Amiga core window structure.
  * \param nskey The netsurf key code
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
+static slateerror
 ami_cookies_key(struct ami_corewindow *ami_cw, uint32_t nskey)
 {
 	if (cookie_manager_keypress(nskey)) {
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 	}
-	return NSERROR_NOT_IMPLEMENTED;
+	return SLATEERROR_NOT_IMPLEMENTED;
 }
 
 /**
@@ -155,14 +155,14 @@ ami_cookies_key(struct ami_corewindow *ami_cw, uint32_t nskey)
  * \param y The y cordinate to plot at
  * \param r The rectangle of the window that needs updating.
  * \param ctx The drawing context
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
+static slateerror
 ami_cookies_draw(struct ami_corewindow *ami_cw, int x, int y, struct rect *r, struct redraw_context *ctx)
 {
 	cookie_manager_redraw(x, y, r, ctx);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -271,13 +271,13 @@ ami_cookies_menu_create(struct ami_cookie_window *cookie_win)
 }
 
 
-static nserror
+static slateerror
 ami_cookies_create_window(struct ami_cookie_window *cookie_win)
 {
 	struct ami_corewindow *ami_cw = (struct ami_corewindow *)&cookie_win->core;
 	ULONG refresh_mode = WA_SmartRefresh;
 
-	if(nsoption_bool(window_simple_refresh) == true) {
+	if(slateoption_bool(window_simple_refresh) == true) {
 		refresh_mode = WA_SimpleRefresh;
 	}
 
@@ -326,32 +326,32 @@ ami_cookies_create_window(struct ami_cookie_window *cookie_win)
 	EndWindow;
 
 	if(ami_cw->objects[GID_CW_WIN] == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in amiga/cookies.h */
-nserror ami_cookies_present(const char *search_term)
+slateerror ami_cookies_present(const char *search_term)
 {
 	struct ami_cookie_window *ncwin;
-	nserror res;
+	slateerror res;
 
 	if(cookie_window != NULL) {
 		//windowtofront()
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	ncwin = calloc(1, sizeof(struct ami_cookie_window));
 	if (ncwin == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	ncwin->core.wintitle = ami_utf8_easy((char *)messages_get("Cookies"));
 
 	res = ami_cookies_create_window(ncwin);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "SSL UI builder init failed");
 		ami_utf8_free(ncwin->core.wintitle);
 		free(ncwin);
@@ -366,7 +366,7 @@ nserror ami_cookies_present(const char *search_term)
 	ncwin->core.event = NULL;
 
 	res = ami_corewindow_init(&ncwin->core);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		ami_utf8_free(ncwin->core.wintitle);
 		DisposeObject(ncwin->core.objects[GID_CW_WIN]);
 		free(ncwin);
@@ -374,7 +374,7 @@ nserror ami_cookies_present(const char *search_term)
 	}
 
 	res = cookie_manager_init((struct core_window *)ncwin);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		ami_utf8_free(ncwin->core.wintitle);
 		DisposeObject(ncwin->core.objects[GID_CW_WIN]);
 		free(ncwin);

@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,7 +31,7 @@
 #include "utils/utils.h"
 #include "utils/log.h"
 #include "desktop/download.h"
-#include "netsurf/download.h"
+#include "slate/download.h"
 #include "desktop/gui_internal.h"
 
 /**
@@ -72,11 +72,11 @@ static char *download_parse_filename(const char *filename)
  * \param url  URL of item being fetched
  * \return Default filename, or NULL on memory exhaustion
  */
-static char *download_default_filename(nsurl *url)
+static char *download_default_filename(slateurl *url)
 {
 	char *nice;
 
-	if (nsurl_nice(url, &nice, false) == NSERROR_OK) {
+	if (slateurl_nice(url, &nice, false) == SLATEERROR_OK) {
 		return nice;
 	}
 
@@ -88,14 +88,14 @@ static char *download_default_filename(nsurl *url)
  * Extracts MIME type, total length, and creates gui_download_window
  *
  * \param ctx  Context to process
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror download_context_process_headers(download_context *ctx)
+static slateerror download_context_process_headers(download_context *ctx)
 {
 	const char *http_header;
 	http_content_type *content_type;
 	unsigned long long int length;
-	nserror error;
+	slateerror error;
 
 	/* Retrieve and parse Content-Type */
 	http_header = llcache_handle_get_header(ctx->llcache, "Content-Type");
@@ -103,7 +103,7 @@ static nserror download_context_process_headers(download_context *ctx)
 		http_header = "text/plain";
 
 	error = http_parse_content_type(http_header, &content_type);
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 
 	/* Retrieve and parse Content-Length */
@@ -123,14 +123,14 @@ static nserror download_context_process_headers(download_context *ctx)
 
 		error = http_parse_content_disposition(http_header, 
 				&disposition);
-		if (error != NSERROR_OK) {
+		if (error != SLATEERROR_OK) {
 			http_content_type_destroy(content_type);
 			return error;
 		}
 
 		error = http_parameter_list_find_item(disposition->parameters, 
 				corestring_lwc_filename, &filename_value);
-		if (error == NSERROR_OK) {
+		if (error == SLATEERROR_OK) {
 			ctx->filename = download_parse_filename(
 					lwc_string_data(filename_value));
 			lwc_string_unref(filename_value);
@@ -151,7 +151,7 @@ static nserror download_context_process_headers(download_context *ctx)
 	if (ctx->filename == NULL) {
 		lwc_string_unref(ctx->mime_type);
 		ctx->mime_type = NULL;
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* Create the frontend window */
@@ -161,10 +161,10 @@ static nserror download_context_process_headers(download_context *ctx)
 		ctx->filename = NULL;
 		lwc_string_unref(ctx->mime_type);
 		ctx->mime_type = NULL;
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -173,13 +173,13 @@ static nserror download_context_process_headers(download_context *ctx)
  * \param handle  Low-level cache handle
  * \param event   Event object
  * \param pw      Our context
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror download_callback(llcache_handle *handle,
+static slateerror download_callback(llcache_handle *handle,
 		const llcache_event *event, void *pw)
 {
 	download_context *ctx = pw;
-	nserror error = NSERROR_OK;
+	slateerror error = SLATEERROR_OK;
 
 	switch (event->type) {
 	case LLCACHE_EVENT_GOT_CERTS:
@@ -187,7 +187,7 @@ static nserror download_callback(llcache_handle *handle,
 		break;
 	case LLCACHE_EVENT_HAD_HEADERS:
 		error = download_context_process_headers(ctx);
-		if (error != NSERROR_OK) {
+		if (error != SLATEERROR_OK) {
 			llcache_handle_abort(handle);
 			download_context_destroy(ctx);
 		}
@@ -200,18 +200,18 @@ static nserror download_callback(llcache_handle *handle,
 		 */
 		if (ctx->window == NULL) {
 			error = download_context_process_headers(ctx);
-			if (error != NSERROR_OK) {
+			if (error != SLATEERROR_OK) {
 				llcache_handle_abort(handle);
 				download_context_destroy(ctx);
 			}
 		}
 
-		if (error == NSERROR_OK) {
+		if (error == SLATEERROR_OK) {
 			/** \todo Lose ugly cast */
 			error = guit->download->data(ctx->window,
 					(char *) event->data.data.buf,
 					event->data.data.len);
-			if (error != NSERROR_OK)
+			if (error != SLATEERROR_OK)
 				llcache_handle_abort(handle);
 		}
 
@@ -245,14 +245,14 @@ static nserror download_callback(llcache_handle *handle,
 }
 
 /* See download.h for documentation */
-nserror download_context_create(llcache_handle *llcache, 
+slateerror download_context_create(llcache_handle *llcache, 
 		struct gui_window *parent)
 {
 	download_context *ctx;
 
 	ctx = malloc(sizeof(*ctx));
 	if (ctx == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	ctx->llcache = llcache;
 	ctx->parent = parent;
@@ -263,7 +263,7 @@ nserror download_context_create(llcache_handle *llcache,
 
 	llcache_handle_change_callback(llcache, download_callback, ctx);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* See download.h for documentation */
@@ -287,7 +287,7 @@ void download_context_abort(download_context *ctx)
 }
 
 /* See download.h for documentation */
-nsurl *download_context_get_url(const download_context *ctx)
+slateurl *download_context_get_url(const download_context *ctx)
 {
 	return llcache_handle_get_url(ctx->llcache);
 }

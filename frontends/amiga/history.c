@@ -1,7 +1,7 @@
 /*
  * Copyright 2017-2025 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,12 +37,12 @@
 #include <reaction/reaction_macros.h>
 
 #include "desktop/global_history.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/keypress.h"
-#include "netsurf/plotters.h"
+#include "slate/browser_window.h"
+#include "slate/keypress.h"
+#include "slate/plotters.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 
 #include "amiga/corewindow.h"
 #include "amiga/drag.h"
@@ -107,13 +107,13 @@ ami_history_global_menu_free(struct ami_history_global_window *history_win)
 static void
 ami_history_global_destroy(struct ami_corewindow *ami_cw)
 {
-	nserror res;
+	slateerror res;
 
 	if(history_window == NULL)
 		return;
 
 	res = global_history_fini();
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		ami_history_global_menu_free(history_window);
 		res = ami_corewindow_fini(&history_window->core); /* closes the window for us, frees history_win */
 		history_window = NULL;
@@ -128,16 +128,16 @@ ami_history_global_destroy(struct ami_corewindow *ami_cw)
  * \param mouse_state netsurf mouse state on event
  * \param x location of event
  * \param y location of event
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
+static slateerror
 ami_history_global_mouse(struct ami_corewindow *ami_cw,
 					browser_mouse_state mouse_state,
 					int x, int y)
 {
 	global_history_mouse_action(mouse_state, x, y);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -145,15 +145,15 @@ ami_history_global_mouse(struct ami_corewindow *ami_cw,
  *
  * \param ami_cw The Amiga core window structure.
  * \param nskey The netsurf key code
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
+static slateerror
 ami_history_global_key(struct ami_corewindow *ami_cw, uint32_t nskey)
 {
 	if (global_history_keypress(nskey)) {
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 	}
-	return NSERROR_NOT_IMPLEMENTED;
+	return SLATEERROR_NOT_IMPLEMENTED;
 }
 
 /**
@@ -164,16 +164,16 @@ ami_history_global_key(struct ami_corewindow *ami_cw, uint32_t nskey)
  * \param y The y coordinate of global history area to redraw
  * \param r The rectangle of the window that needs updating.
  * \param ctx The drawing context
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
+static slateerror
 ami_history_global_draw(struct ami_corewindow *ami_cw,
 			int x, int y, struct rect *r,
 			struct redraw_context *ctx)
 {
 	global_history_redraw(x, y, r, ctx);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -182,12 +182,12 @@ ami_history_global_draw(struct ami_corewindow *ami_cw,
  * \param ami_cw The Amiga core window structure.
  * \param x mouse x co-ordinate
  * \param y mouse y co-ordinate
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
+static slateerror
 ami_history_global_drag_end(struct ami_corewindow *ami_cw, int x, int y)
 {
-	struct nsurl *url = NULL;
+	struct slateurl *url = NULL;
 	const char *title = NULL;
 	bool ok = false;
 	struct gui_window_2 *gwin;
@@ -213,7 +213,7 @@ ami_history_global_drag_end(struct ami_corewindow *ami_cw, int x, int y)
 			cw->icon_drop(cw, url, title, x, y);
 		}
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -345,13 +345,13 @@ ami_history_global_menu_create(struct ami_history_global_window *history_win)
 }
 
 
-static nserror
+static slateerror
 ami_history_global_create_window(struct ami_history_global_window *history_win)
 {
 	struct ami_corewindow *ami_cw = (struct ami_corewindow *)&history_win->core;
 	ULONG refresh_mode = WA_SmartRefresh;
 
-	if(nsoption_bool(window_simple_refresh) == true) {
+	if(slateoption_bool(window_simple_refresh) == true) {
 		refresh_mode = WA_SimpleRefresh;
 	}
 
@@ -400,32 +400,32 @@ ami_history_global_create_window(struct ami_history_global_window *history_win)
 	EndWindow;
 
 	if(ami_cw->objects[GID_CW_WIN] == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in amiga/cookies.h */
-nserror ami_history_global_present(void)
+slateerror ami_history_global_present(void)
 {
 	struct ami_history_global_window *ncwin;
-	nserror res;
+	slateerror res;
 
 	if(history_window != NULL) {
 		//windowtofront()
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	ncwin = calloc(1, sizeof(struct ami_history_global_window));
 	if (ncwin == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	ncwin->core.wintitle = ami_utf8_easy((char *)messages_get("GlobalHistory"));
 
 	res = ami_history_global_create_window(ncwin);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "SSL UI builder init failed");
 		ami_utf8_free(ncwin->core.wintitle);
 		free(ncwin);
@@ -442,7 +442,7 @@ nserror ami_history_global_present(void)
 	ncwin->core.icon_drop = NULL;
 
 	res = ami_corewindow_init(&ncwin->core);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		ami_utf8_free(ncwin->core.wintitle);
 		DisposeObject(ncwin->core.objects[GID_CW_WIN]);
 		free(ncwin);
@@ -450,7 +450,7 @@ nserror ami_history_global_present(void)
 	}
 
 	res = global_history_init((struct core_window *)ncwin);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		ami_utf8_free(ncwin->core.wintitle);
 		DisposeObject(ncwin->core.objects[GID_CW_WIN]);
 		free(ncwin);
@@ -459,6 +459,6 @@ nserror ami_history_global_present(void)
 
 	history_window = ncwin;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 

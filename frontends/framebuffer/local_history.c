@@ -1,7 +1,7 @@
 /*
  * Copyright 2017 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,8 +31,8 @@
 #include <libnsfb_event.h>
 
 #include "utils/log.h"
-#include "netsurf/keypress.h"
-#include "netsurf/plotters.h"
+#include "slate/keypress.h"
+#include "slate/plotters.h"
 #include "desktop/local_history.h"
 
 #include "framebuffer/gui.h"
@@ -57,9 +57,9 @@ static struct fb_local_history_window *local_history_window = NULL;
  * \param mouse_state netsurf mouse state on event
  * \param x location of event
  * \param y location of event
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
+static slateerror
 fb_local_history_mouse(struct fb_corewindow *fb_cw,
 		    browser_mouse_state mouse_state,
 		    int x, int y)
@@ -74,7 +74,7 @@ fb_local_history_mouse(struct fb_corewindow *fb_cw,
 		fbtk_set_mapping(lhw->core.wnd, false);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -83,9 +83,9 @@ fb_local_history_mouse(struct fb_corewindow *fb_cw,
  *
  * \param fb_cw The fb core window structure.
  * \param nskey The netsurf key code
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
+static slateerror
 fb_local_history_key(struct fb_corewindow *fb_cw, uint32_t nskey)
 {
 	struct fb_local_history_window *lhw;
@@ -93,9 +93,9 @@ fb_local_history_key(struct fb_corewindow *fb_cw, uint32_t nskey)
 	lhw = (struct fb_local_history_window *)fb_cw;
 
 	if (local_history_keypress(lhw->session, nskey)) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
-	return NSERROR_NOT_IMPLEMENTED;
+	return SLATEERROR_NOT_IMPLEMENTED;
 }
 
 
@@ -104,9 +104,9 @@ fb_local_history_key(struct fb_corewindow *fb_cw, uint32_t nskey)
  *
  * \param fb_cw The fb core window structure.
  * \param r The rectangle of the window that needs updating.
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
+static slateerror
 fb_local_history_draw(struct fb_corewindow *fb_cw, struct rect *r)
 {
 	struct redraw_context ctx = {
@@ -121,21 +121,21 @@ fb_local_history_draw(struct fb_corewindow *fb_cw, struct rect *r)
 
 	local_history_redraw(lhw->session, 0, 0, r, &ctx);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * Creates the window for the local history view.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-static nserror
+static slateerror
 fb_local_history_init(fbtk_widget_t *parent,
 		      struct browser_window *bw,
 		      struct fb_local_history_window **win_out)
 {
 	struct fb_local_history_window *ncwin;
-	nserror res;
+	slateerror res;
 
 	/* memoise window so it can be represented when necessary
 	 * instead of recreating every time.
@@ -147,7 +147,7 @@ fb_local_history_init(fbtk_widget_t *parent,
 
 	ncwin = calloc(1, sizeof(*ncwin));
 	if (ncwin == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	ncwin->core.draw = fb_local_history_draw;
@@ -155,7 +155,7 @@ fb_local_history_init(fbtk_widget_t *parent,
 	ncwin->core.mouse = fb_local_history_mouse;
 
 	res = fb_corewindow_init(parent, &ncwin->core);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		free(ncwin);
 		return res;
 	}
@@ -163,27 +163,27 @@ fb_local_history_init(fbtk_widget_t *parent,
 	res = local_history_init((struct core_window *)ncwin,
 				 bw,
 				 &ncwin->session);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		free(ncwin);
 		return res;
 	}
 
 	*win_out = ncwin;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported function documented gtk/history.h */
-nserror fb_local_history_present(fbtk_widget_t *parent,
+slateerror fb_local_history_present(fbtk_widget_t *parent,
 				 struct browser_window *bw)
 {
-	nserror res;
+	slateerror res;
 	int prnt_width, prnt_height;
 	int width, height;
 
 	res = fb_local_history_init(parent, bw, &local_history_window);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 
 		 prnt_width = fbtk_get_width(parent);
 		 prnt_height = fbtk_get_height(parent);
@@ -212,9 +212,9 @@ nserror fb_local_history_present(fbtk_widget_t *parent,
 
 
 /* exported function documented gtk/history.h */
-nserror fb_local_history_hide(void)
+slateerror fb_local_history_hide(void)
 {
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 
 	if (local_history_window != NULL) {
 		fbtk_set_mapping(local_history_window->core.wnd, false);
@@ -227,16 +227,16 @@ nserror fb_local_history_hide(void)
 
 
 /* exported function documented gtk/history.h */
-nserror fb_local_history_destroy(void)
+slateerror fb_local_history_destroy(void)
 {
-	nserror res;
+	slateerror res;
 
 	if (local_history_window == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	res = local_history_fini(local_history_window->session);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		res = fb_corewindow_fini(&local_history_window->core);
 		//gtk_widget_destroy(GTK_WIDGET(local_history_window->wnd));
 		free(local_history_window);

@@ -3,7 +3,7 @@
  * Copyright 2006 Daniel Silverstone <dsilvers@digital-scurf.org>
  * Copyright 2006 Rob Kendrick <rjek@rjek.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,20 +35,20 @@
 #include <Window.h>
 
 extern "C" {
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/utf8.h"
 #include "utils/utils.h"
-#include "utils/nsurl.h"
-#include "netsurf/inttypes.h"
-#include "netsurf/content_type.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/mouse.h"
-#include "netsurf/plotters.h"
-#include "netsurf/window.h"
-#include "netsurf/clipboard.h"
-#include "netsurf/url_db.h"
-#include "netsurf/keypress.h"
+#include "utils/slateurl.h"
+#include "slate/inttypes.h"
+#include "slate/content_type.h"
+#include "slate/browser_window.h"
+#include "slate/mouse.h"
+#include "slate/plotters.h"
+#include "slate/window.h"
+#include "slate/clipboard.h"
+#include "slate/url_db.h"
+#include "slate/keypress.h"
 }
 
 #include "beos/about.h"
@@ -63,7 +63,7 @@ class NSBrowserFrameView;
 
 struct gui_window {
 	/* All gui_window objects have an ultimate scaffold */
-	nsbeos_scaffolding	*scaffold;
+	slatebeos_scaffolding	*scaffold;
 	bool	toplevel;
 	/* A gui_window is the rendering of a browser_window */
 	struct browser_window	*bw;
@@ -105,12 +105,12 @@ static BString current_selection;
 static BList current_selection_textruns;
 
 /* Methods which apply only to a gui_window */
-static void nsbeos_window_expose_event(BView *view, gui_window *g, BMessage *message);
-static void nsbeos_window_keypress_event(BView *view, gui_window *g, BMessage *event);
-static void nsbeos_window_resize_event(BView *view, gui_window *g, BMessage *event);
-static void nsbeos_window_moved_event(BView *view, gui_window *g, BMessage *event);
+static void slatebeos_window_expose_event(BView *view, gui_window *g, BMessage *message);
+static void slatebeos_window_keypress_event(BView *view, gui_window *g, BMessage *event);
+static void slatebeos_window_resize_event(BView *view, gui_window *g, BMessage *event);
+static void slatebeos_window_moved_event(BView *view, gui_window *g, BMessage *event);
 /* Other useful bits */
-static void nsbeos_redraw_caret(struct gui_window *g);
+static void slatebeos_redraw_caret(struct gui_window *g);
 
 
 // #pragma mark - class NSBrowserFrameView
@@ -235,7 +235,7 @@ NSBrowserFrameView::MessageReceived(BMessage *message)
 		case CHOICES_SHOW:
 		case APPLICATION_QUIT:
 			Window()->DetachCurrentMessage();
-			nsbeos_pipe_message_top(message, NULL, fGuiWindow->scaffold);
+			slatebeos_pipe_message_top(message, NULL, fGuiWindow->scaffold);
 			break;
 		default:
 			//message->PrintToStream();
@@ -253,7 +253,7 @@ NSBrowserFrameView::Draw(BRect updateRect)
 	if (message == NULL)
 		message = new BMessage(_UPDATE_);
 	message->AddRect("rect", updateRect);
-	nsbeos_pipe_message(message, this, fGuiWindow);
+	slatebeos_pipe_message(message, this, fGuiWindow);
 }
 
 
@@ -265,7 +265,7 @@ NSBrowserFrameView::FrameResized(float new_width, float new_height)
 	// discard any other pending resize, 
 	// so we don't end up processing them all, the last one matters.
 	atomic_add(&fGuiWindow->pending_resizes, 1);
-	nsbeos_pipe_message(message, this, fGuiWindow);
+	slatebeos_pipe_message(message, this, fGuiWindow);
 	BView::FrameResized(new_width, new_height);
 }
 
@@ -274,7 +274,7 @@ void
 NSBrowserFrameView::KeyDown(const char *bytes, int32 numBytes)
 {
 	BMessage *message = Window()->DetachCurrentMessage();
-	nsbeos_pipe_message(message, this, fGuiWindow);
+	slatebeos_pipe_message(message, this, fGuiWindow);
 }
 
 
@@ -287,7 +287,7 @@ NSBrowserFrameView::MouseDown(BPoint where)
 		screenWhere = ConvertToScreen(where);
 		message->AddPoint("screen_where", screenWhere);
 	}
-	nsbeos_pipe_message(message, this, fGuiWindow);
+	slatebeos_pipe_message(message, this, fGuiWindow);
 }
 
 
@@ -295,14 +295,14 @@ void
 NSBrowserFrameView::MouseUp(BPoint where)
 {
 	//BMessage *message = Window()->DetachCurrentMessage();
-	//nsbeos_pipe_message(message, this, fGuiWindow);
+	//slatebeos_pipe_message(message, this, fGuiWindow);
 	BMessage *message = Window()->DetachCurrentMessage();
 	BPoint screenWhere;
 	if (message->FindPoint("screen_where", &screenWhere) < B_OK) {
 		screenWhere = ConvertToScreen(where);
 		message->AddPoint("screen_where", screenWhere);
 	}
-	nsbeos_pipe_message(message, this, fGuiWindow);
+	slatebeos_pipe_message(message, this, fGuiWindow);
 }
 
 
@@ -314,23 +314,23 @@ NSBrowserFrameView::MouseMoved(BPoint where, uint32 transit, const BMessage *msg
 		return;
 	}
 	BMessage *message = Window()->DetachCurrentMessage();
-	nsbeos_pipe_message(message, this, fGuiWindow);
+	slatebeos_pipe_message(message, this, fGuiWindow);
 }
 
 
 // #pragma mark - gui_window
 
-struct browser_window *nsbeos_get_browser_window(struct gui_window *g)
+struct browser_window *slatebeos_get_browser_window(struct gui_window *g)
 {
 	return g->bw;
 }
 
-nsbeos_scaffolding *nsbeos_get_scaffold(struct gui_window *g)
+slatebeos_scaffolding *slatebeos_get_scaffold(struct gui_window *g)
 {
 	return g->scaffold;
 }
 
-struct browser_window *nsbeos_get_browser_for_gui(struct gui_window *g)
+struct browser_window *slatebeos_get_browser_for_gui(struct gui_window *g)
 {
 	return g->bw;
 }
@@ -366,7 +366,7 @@ static struct gui_window *gui_window_create(struct browser_window *bw,
 	window_list = g;
 
 	/* Now construct and attach a scaffold */
-	g->scaffold = nsbeos_new_scaffolding(g);
+	g->scaffold = slatebeos_new_scaffolding(g);
 	if (!g->scaffold)
 		return NULL;
 
@@ -397,14 +397,14 @@ static struct gui_window *gui_window_create(struct browser_window *bw,
 	g->toplevel = true;
 
 	/* Attach our viewport into the scaffold */
-	nsbeos_attach_toplevel_view(g->scaffold, g->view);
+	slatebeos_attach_toplevel_view(g->scaffold, g->view);
 
 
 	return g;
 }
 
 /* exported interface documented in beos/window.h */
-void nsbeos_dispatch_event(BMessage *message)
+void slatebeos_dispatch_event(BMessage *message)
 {
 	struct gui_window *gui = NULL;
 	NSBrowserFrameView *view = NULL;
@@ -445,7 +445,7 @@ void nsbeos_dispatch_event(BMessage *message)
 	// messages for top-level
 	if (scaffold) {
 		NSLOG(netsurf, INFO, "dispatching to top-level");
-		nsbeos_scaffolding_dispatch_event(scaffold, message);
+		slatebeos_scaffolding_dispatch_event(scaffold, message);
 		delete message;
 		return;
 	}
@@ -454,18 +454,18 @@ void nsbeos_dispatch_event(BMessage *message)
 	switch (message->what) {
 		case B_QUIT_REQUESTED:
 			// from the BApplication
-			nsbeos_done = true;
+			slatebeos_done = true;
 			break;
 		case B_ABOUT_REQUESTED:
 		{
 			if (gui == NULL)
 				gui = window_list;
-			nsbeos_about(gui);
+			slatebeos_about(gui);
 			break;
 		}
 		case _UPDATE_:
 			if (gui && view)
-				nsbeos_window_expose_event(view, gui, message);
+				slatebeos_window_expose_event(view, gui, message);
 			break;
 		case B_MOUSE_MOVED:
 		{
@@ -542,7 +542,7 @@ void nsbeos_dispatch_event(BMessage *message)
 
 			if (buttons & B_SECONDARY_MOUSE_BUTTON) {
 				/* 2 == right button on BeOS */
-				nsbeos_scaffolding_popup_menu(gui->scaffold, gui->bw, where, screenWhere);
+				slatebeos_scaffolding_popup_menu(gui->scaffold, gui->bw, where, screenWhere);
 				break;
 			}
 
@@ -630,29 +630,29 @@ void nsbeos_dispatch_event(BMessage *message)
 		}
 		case B_KEY_DOWN:
 			if (gui && view)
-				nsbeos_window_keypress_event(view, gui, message);
+				slatebeos_window_keypress_event(view, gui, message);
 			break;
 		case B_VIEW_RESIZED:
 			if (gui && view)
-				nsbeos_window_resize_event(view, gui, message);
+				slatebeos_window_resize_event(view, gui, message);
 			break;
 		case B_VIEW_MOVED:
 			if (gui && view)
-				nsbeos_window_moved_event(view, gui, message);
+				slatebeos_window_moved_event(view, gui, message);
 			break;
 		case B_MOUSE_WHEEL_CHANGED:
 			break;
 		case B_UI_SETTINGS_CHANGED:
-			nsbeos_update_system_ui_colors();
+			slatebeos_update_system_ui_colors();
 			break;
 		case 'nsLO': // login
 		{
-			nsurl* url;
+			slateurl* url;
 			BString realm;
 			BString username;
 			BString password;
 			void* cbpw;
-			nserror (*cb)(const char *username,
+			slateerror (*cb)(const char *username,
 					const char *password,
 					void *pw);
 
@@ -677,12 +677,12 @@ void nsbeos_dispatch_event(BMessage *message)
 	delete message;
 }
 
-void nsbeos_window_expose_event(BView *view, gui_window *g, BMessage *message)
+void slatebeos_window_expose_event(BView *view, gui_window *g, BMessage *message)
 {
 	BRect updateRect;
 	struct rect clip;
 
-	struct redraw_context ctx = { true, true, &nsbeos_plotters, NULL};
+	struct redraw_context ctx = { true, true, &slatebeos_plotters, NULL};
 
 	assert(g);
 	assert(g->bw);
@@ -705,7 +705,7 @@ void nsbeos_window_expose_event(BView *view, gui_window *g, BMessage *message)
 
 	if (!view->LockLooper())
 		return;
-	nsbeos_current_gc_set(view);
+	slatebeos_current_gc_set(view);
 
 	if (view->Window())
 		view->Window()->BeginViewTransaction();
@@ -718,18 +718,18 @@ void nsbeos_window_expose_event(BView *view, gui_window *g, BMessage *message)
 	browser_window_redraw(g->bw, 0, 0, &clip, &ctx);
 
 	if (g->careth != 0)
-		nsbeos_plot_caret(g->caretx, g->carety, g->careth);
+		slatebeos_plot_caret(g->caretx, g->carety, g->careth);
 
 	if (view->Window())
 		view->Window()->EndViewTransaction();
 
 	// reset clipping just in case
 	view->ConstrainClippingRegion(NULL);
-	nsbeos_current_gc_set(NULL);
+	slatebeos_current_gc_set(NULL);
 	view->UnlockLooper();
 }
 
-void nsbeos_window_keypress_event(BView *view, gui_window *g, BMessage *event)
+void slatebeos_window_keypress_event(BView *view, gui_window *g, BMessage *event)
 {
 	const char *bytes;
 	char buff[6];
@@ -868,7 +868,7 @@ void nsbeos_window_keypress_event(BView *view, gui_window *g, BMessage *event)
 }
 
 
-void nsbeos_window_resize_event(BView *view, gui_window *g, BMessage *event)
+void slatebeos_window_resize_event(BView *view, gui_window *g, BMessage *event)
 {
 	//CALLED();
 	int32 width;
@@ -891,7 +891,7 @@ void nsbeos_window_resize_event(BView *view, gui_window *g, BMessage *event)
 }
 
 
-void nsbeos_window_moved_event(BView *view, gui_window *g, BMessage *event)
+void slatebeos_window_moved_event(BView *view, gui_window *g, BMessage *event)
 {
 	//CALLED();
 
@@ -905,7 +905,7 @@ void nsbeos_window_moved_event(BView *view, gui_window *g, BMessage *event)
 }
 
 
-void nsbeos_reflow_all_windows(void)
+void slatebeos_reflow_all_windows(void)
 {
 	for (struct gui_window *g = window_list; g; g = g->next) {
                 browser_window_schedule_reformat(g->bw);
@@ -913,7 +913,7 @@ void nsbeos_reflow_all_windows(void)
 }
 
 
-void nsbeos_window_destroy_browser(struct gui_window *g)
+void slatebeos_window_destroy_browser(struct gui_window *g)
 {
 	browser_window_destroy(g->bw);
 }
@@ -947,7 +947,7 @@ static void gui_window_destroy(struct gui_window *g)
 	if (g->toplevel) {
 		g->view->RemoveSelf();
 		delete g->view;
-		nsbeos_scaffolding_destroy(g->scaffold);
+		slatebeos_scaffolding_destroy(g->scaffold);
 	} else {
 		g->view->RemoveSelf();
 		delete g->view;
@@ -961,7 +961,7 @@ static void gui_window_destroy(struct gui_window *g)
 
 }
 
-void nsbeos_redraw_caret(struct gui_window *g)
+void slatebeos_redraw_caret(struct gui_window *g)
 {
 	if (g->careth == 0)
 		return;
@@ -971,12 +971,12 @@ void nsbeos_redraw_caret(struct gui_window *g)
 	if (!g->view->LockLooper())
 		return;
 
-	nsbeos_current_gc_set(g->view);
+	slatebeos_current_gc_set(g->view);
 
 	g->view->Invalidate(BRect(g->caretx, g->carety,
 				g->caretx, g->carety + g->careth));
 
-	nsbeos_current_gc_set(NULL);
+	slatebeos_current_gc_set(NULL);
 	g->view->UnlockLooper();
 }
 
@@ -985,21 +985,21 @@ void nsbeos_redraw_caret(struct gui_window *g)
  *
  * \param g The netsurf window being invalidated.
  * \param rect area to redraw or NULL for entrire window area.
- * \return NSERROR_OK or appropriate error code.
+ * \return SLATEERROR_OK or appropriate error code.
  */
-static nserror
+static slateerror
 beos_window_invalidate_area(struct gui_window *g, const struct rect *rect)
 {
 	if (browser_window_has_content(g->bw) == false) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	if (g->view == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	if (!g->view->LockLooper()) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	if (rect != NULL) {
@@ -1012,7 +1012,7 @@ beos_window_invalidate_area(struct gui_window *g, const struct rect *rect)
 
 	g->view->UnlockLooper();
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static bool gui_window_get_scroll(struct gui_window *g, int *sx, int *sy)
@@ -1042,17 +1042,17 @@ static bool gui_window_get_scroll(struct gui_window *g, int *sx, int *sy)
  *
  * \param g gui window to scroll
  * \param rect The rectangle to ensure is shown.
- * \return NSERROR_OK on success or apropriate error code.
+ * \return SLATEERROR_OK on success or apropriate error code.
  */
-static nserror
+static slateerror
 gui_window_set_scroll(struct gui_window *g, const struct rect *rect)
 {
 	//CALLED();
 	if (g->view == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 	if (!g->view->LockLooper()) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
         }
 
 #warning XXX: report to view frame ?
@@ -1065,13 +1065,13 @@ gui_window_set_scroll(struct gui_window *g, const struct rect *rect)
 		
 	g->view->UnlockLooper();
 
-        return NSERROR_OK;
+        return SLATEERROR_OK;
 }
 
 
 static void gui_window_update_extent(struct gui_window *g)
 {
-	nserror err;
+	slateerror err;
 	//CALLED();
 	if (browser_window_has_content(g->bw) == false)
 		return;
@@ -1084,7 +1084,7 @@ static void gui_window_update_extent(struct gui_window *g)
 	int x_max, y_max;
 
 	err = browser_window_get_extents(g->bw, true, &x_max, &y_max);
-	if (err != NSERROR_OK)
+	if (err != SLATEERROR_OK)
 		return;
 
 	float x_prop = g->view->Bounds().Width() / x_max;
@@ -1195,13 +1195,13 @@ static void gui_window_place_caret(struct gui_window *g, int x, int y, int heigh
 	if (!g->view->LockLooper())
 		return;
 
-	nsbeos_redraw_caret(g);
+	slatebeos_redraw_caret(g);
 
 	g->caretx = x;
 	g->carety = y + 1;
 	g->careth = height - 2;
 
-	nsbeos_redraw_caret(g);
+	slatebeos_redraw_caret(g);
 	g->view->MakeFocus();
 
 	g->view->UnlockLooper();
@@ -1221,11 +1221,11 @@ static void gui_window_remove_caret(struct gui_window *g)
 	if (!g->view->LockLooper())
 		return;
 
-	nsbeos_current_gc_set(g->view);
+	slatebeos_current_gc_set(g->view);
 
 	g->view->Invalidate(BRect(g->caretx, g->carety, g->caretx, g->carety + oh));
 
-	nsbeos_current_gc_set(NULL);
+	slatebeos_current_gc_set(NULL);
 	g->view->UnlockLooper();
 }
 
@@ -1278,7 +1278,7 @@ static void gui_get_clipboard(char **buffer, size_t *length)
 }
 
 static void gui_set_clipboard(const char *buffer, size_t length,
-	nsclipboard_styles styles[], int n_styles)
+	slateclipboard_styles styles[], int n_styles)
 {
 	BMessage *clip;
 
@@ -1294,11 +1294,11 @@ static void gui_set_clipboard(const char *buffer, size_t length,
 			array->count = n_styles;
 			for (int i = 0; i < n_styles; i++) {
 				BFont font;
-				nsbeos_style_to_font(font, &styles[i].style);
+				slatebeos_style_to_font(font, &styles[i].style);
 				array->runs[i].offset = styles[i].start;
 				array->runs[i].font = font;
 				array->runs[i].color =
-					nsbeos_rgb_colour(styles[i].style.foreground);
+					slatebeos_rgb_colour(styles[i].style.foreground);
 			}
 			clip->AddData("application/x-vnd.Be-text_run_array", B_MIME_TYPE, 
 				array, arraySize);
@@ -1322,10 +1322,10 @@ struct gui_clipboard_table *beos_clipboard_table = &clipboard_table;
  * \param g The gui window to measure content area of.
  * \param width receives width of window
  * \param height receives height of window
- * \return NSERROR_OK on sucess and width and height updated
+ * \return SLATEERROR_OK on sucess and width and height updated
  *          else error code.
  */
-static nserror
+static slateerror
 gui_window_get_dimensions(struct gui_window *g, int *width, int *height)
 {
         if (g->view &&
@@ -1334,7 +1334,7 @@ gui_window_get_dimensions(struct gui_window *g, int *width, int *height)
                 *height = g->view->Bounds().Height() + 1;
                 g->view->UnlockLooper();
         }
-        return NSERROR_OK;
+        return SLATEERROR_OK;
 }
 
 
@@ -1343,9 +1343,9 @@ gui_window_get_dimensions(struct gui_window *g, int *width, int *height)
  *
  * \param gw The window receiving the event.
  * \param event The event code.
- * \return NSERROR_OK when processed ok
+ * \return SLATEERROR_OK when processed ok
  */
-static nserror
+static slateerror
 gui_window_event(struct gui_window *gw, enum gui_window_event event)
 {
 	switch (event) {
@@ -1376,7 +1376,7 @@ gui_window_event(struct gui_window *gw, enum gui_window_event event)
 	default:
 		break;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 

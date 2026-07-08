@@ -8,7 +8,7 @@
  * Copyright 2008 John Tytgat <joty@netsurf-browser.org>
  * Copyright 2008 Adam Blokus <adamblokus@gmail.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,14 +37,14 @@
 #include "utils/messages.h"
 #include "utils/utils.h"
 #include "utils/file.h"
-#include "utils/nsoption.h"
-#include "netsurf/keypress.h"
-#include "netsurf/url_db.h"
-#include "netsurf/cookie_db.h"
-#include "netsurf/browser.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/netsurf.h"
-#include "netsurf/bitmap.h"
+#include "utils/slateoption.h"
+#include "slate/keypress.h"
+#include "slate/url_db.h"
+#include "slate/cookie_db.h"
+#include "slate/browser.h"
+#include "slate/browser_window.h"
+#include "slate/slate.h"
+#include "slate/bitmap.h"
 #include "content/fetch.h"
 #include "content/backing_store.h"
 #include "desktop/save_complete.h"
@@ -75,10 +75,10 @@
 #include "gtk/layout_pango.h"
 #include "gtk/accelerator.h"
 
-bool nsgtk_complete = false;
+bool slategtk_complete = false;
 
 /* exported global defined in gtk/gui.h */
-char *nsgtk_config_home;
+char *slategtk_config_home;
 
 /** favicon default pixbuf */
 GdkPixbuf *favicon_pixbuf;
@@ -93,16 +93,16 @@ char **respaths;
 
 
 /* exported function documented in gtk/warn.h */
-nserror nsgtk_warning(const char *warning, const char *detail)
+slateerror slategtk_warning(const char *warning, const char *detail)
 {
 	char buf[300];	/* 300 is the size the RISC OS GUI uses */
-	static GtkWindow *nsgtk_warning_window;
+	static GtkWindow *slategtk_warning_window;
 	GtkLabel *WarningLabel;
 
 	NSLOG(netsurf, INFO, "%s %s", warning, detail ? detail : "");
 	fflush(stdout);
 
-	nsgtk_warning_window = GTK_WINDOW(gtk_builder_get_object(warning_builder, "wndWarning"));
+	slategtk_warning_window = GTK_WINDOW(gtk_builder_get_object(warning_builder, "wndWarning"));
 	WarningLabel = GTK_LABEL(gtk_builder_get_object(warning_builder,
 							"labelWarning"));
 
@@ -112,9 +112,9 @@ nserror nsgtk_warning(const char *warning, const char *detail)
 
 	gtk_label_set_text(WarningLabel, buf);
 
-	gtk_widget_show_all(GTK_WIDGET(nsgtk_warning_window));
+	gtk_widget_show_all(GTK_WIDGET(slategtk_warning_window));
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -263,7 +263,7 @@ uint32_t gtk_gui_gdkkey_to_nskey(GdkEventKey *key)
  * searched for.
  */
 static char **
-nsgtk_init_resource_path(const char *config_home)
+slategtk_init_resource_path(const char *config_home)
 {
 	char *resource_path;
 	int resource_path_len;
@@ -273,7 +273,7 @@ nsgtk_init_resource_path(const char *config_home)
 
 	if (config_home != NULL) {
 		resource_path_len = snprintf(NULL, 0,
-					     "%s:${NETSURFRES}:%s",
+					     "%s:${SLATERES}:%s",
 					     config_home,
 					     GTK_RESPATH);
 		resource_path = malloc(resource_path_len + 1);
@@ -281,12 +281,12 @@ nsgtk_init_resource_path(const char *config_home)
 			return NULL;
 		}
 		snprintf(resource_path, resource_path_len + 1,
-			 "%s:${NETSURFRES}:%s",
+			 "%s:${SLATERES}:%s",
 			 config_home,
 			 GTK_RESPATH);
 	} else {
 		resource_path_len = snprintf(NULL, 0,
-					     "${NETSURFRES}:%s",
+					     "${SLATERES}:%s",
 					     GTK_RESPATH);
 		resource_path = malloc(resource_path_len + 1);
 		if (resource_path == NULL) {
@@ -294,7 +294,7 @@ nsgtk_init_resource_path(const char *config_home)
 		}
 		snprintf(resource_path,
 			 resource_path_len + 1,
-			 "${NETSURFRES}:%s",
+			 "${SLATERES}:%s",
 			 GTK_RESPATH);
 	}
 
@@ -315,15 +315,15 @@ nsgtk_init_resource_path(const char *config_home)
 /**
  * create directory name and check it is acessible and a directory.
  */
-static nserror
+static slateerror
 check_dirname(const char *path, const char *leaf, char **dirname_out)
 {
-	nserror ret;
+	slateerror ret;
 	char *dirname = NULL;
 	struct stat dirname_stat;
 
-	ret = netsurf_mkpath(&dirname, NULL, 2, path, leaf);
-	if (ret != NSERROR_OK) {
+	ret = slate_mkpath(&dirname, NULL, 2, path, leaf);
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
@@ -334,15 +334,15 @@ check_dirname(const char *path, const char *leaf, char **dirname_out)
 		if (S_ISDIR(dirname_stat.st_mode)) {
 			if (access(dirname, R_OK | W_OK) == 0) {
 				*dirname_out = dirname;
-				return NSERROR_OK;
+				return SLATEERROR_OK;
 			} else {
-				ret = NSERROR_PERMISSION;
+				ret = SLATEERROR_PERMISSION;
 			}
 		} else {
-			ret = NSERROR_NOT_DIRECTORY;
+			ret = SLATEERROR_NOT_DIRECTORY;
 		}
 	} else {
-		ret = NSERROR_NOT_FOUND;
+		ret = SLATEERROR_NOT_FOUND;
 	}
 
 	free(dirname);
@@ -355,23 +355,23 @@ check_dirname(const char *path, const char *leaf, char **dirname_out)
  * Get the path to the config directory.
  *
  * @param config_home_out Path to configuration directory.
- * @return NSERROR_OK on sucess and \a config_home_out updated else error code.
+ * @return SLATEERROR_OK on sucess and \a config_home_out updated else error code.
  */
-static nserror get_config_home(char **config_home_out)
+static slateerror get_config_home(char **config_home_out)
 {
-	nserror ret;
+	slateerror ret;
 	char *home_dir;
 	char *xdg_config_dir;
 	char *config_home;
 
 	home_dir = getenv("HOME");
 
-	/* The old $HOME/.netsurf/ directory should be used if it
+	/* The old $HOME/.slate/ directory should be used if it
 	 * exists and is accessible.
 	 */
 	if (home_dir != NULL) {
-		ret = check_dirname(home_dir, ".netsurf", &config_home);
-		if (ret == NSERROR_OK) {
+		ret = check_dirname(home_dir, ".slate", &config_home);
+		if (ret == SLATEERROR_OK) {
 			NSLOG(netsurf, INFO, "\"%s\"", config_home);
 			*config_home_out = config_home;
 			return ret;
@@ -398,16 +398,16 @@ static nserror get_config_home(char **config_home_out)
 
 		/* the HOME envvar is required */
 		if (home_dir == NULL) {
-			return NSERROR_NOT_DIRECTORY;
+			return SLATEERROR_NOT_DIRECTORY;
 		}
 
 		ret = check_dirname(home_dir, ".config/netsurf", &config_home);
-		if (ret != NSERROR_OK) {
+		if (ret != SLATEERROR_OK) {
 			return ret;
 		}
 	} else {
 		ret = check_dirname(xdg_config_dir, "netsurf", &config_home);
-		if (ret != NSERROR_OK) {
+		if (ret != SLATEERROR_OK) {
 			return ret;
 		}
 	}
@@ -415,16 +415,16 @@ static nserror get_config_home(char **config_home_out)
 	NSLOG(netsurf, INFO, "\"%s\"", config_home);
 
 	*config_home_out = config_home;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-static nserror create_config_home(char **config_home_out)
+static slateerror create_config_home(char **config_home_out)
 {
 	char *config_home = NULL;
 	char *home_dir;
 	char *xdg_config_dir;
-	nserror ret;
+	slateerror ret;
 
 	NSLOG(netsurf, INFO, "Attempting to create configuration directory");
 
@@ -438,23 +438,23 @@ static nserror create_config_home(char **config_home_out)
 		home_dir = getenv("HOME");
 
 		if ((home_dir == NULL) || (*home_dir == 0)) {
-			return NSERROR_NOT_DIRECTORY;
+			return SLATEERROR_NOT_DIRECTORY;
 		}
 
-		ret = netsurf_mkpath(&config_home, NULL, 4, home_dir, ".config","netsurf", "/");
-		if (ret != NSERROR_OK) {
+		ret = slate_mkpath(&config_home, NULL, 4, home_dir, ".config","netsurf", "/");
+		if (ret != SLATEERROR_OK) {
 			return ret;
 		}
 	} else {
-		ret = netsurf_mkpath(&config_home, NULL, 3, xdg_config_dir, "netsurf", "/");
-		if (ret != NSERROR_OK) {
+		ret = slate_mkpath(&config_home, NULL, 3, xdg_config_dir, "netsurf", "/");
+		if (ret != SLATEERROR_OK) {
 			return ret;
 		}
 	}
 
 	/* ensure all elements of path exist (the trailing / is required) */
-	ret = netsurf_mkdir_all(config_home);
-	if (ret != NSERROR_OK) {
+	ret = slate_mkdir_all(config_home);
+	if (ret != SLATEERROR_OK) {
 		free(config_home);
 		return ret;
 	}
@@ -466,7 +466,7 @@ static nserror create_config_home(char **config_home_out)
 
 	*config_home_out = config_home;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -488,7 +488,7 @@ static bool nslog_stream_configure(FILE *fptr)
  * \param defaults The option table to update.
  * \return error status.
  */
-static nserror set_defaults(struct nsoption_s *defaults)
+static slateerror set_defaults(struct slateoption_s *defaults)
 {
 	char *fname;
 	GtkSettings *settings;
@@ -497,54 +497,54 @@ static nserror set_defaults(struct nsoption_s *defaults)
 
 	/* cookie file default */
 	fname = NULL;
-	netsurf_mkpath(&fname, NULL, 2, nsgtk_config_home, "Cookies");
+	slate_mkpath(&fname, NULL, 2, slategtk_config_home, "Cookies");
 	if (fname != NULL) {
-		nsoption_setnull_charp(cookie_file, fname);
+		slateoption_setnull_charp(cookie_file, fname);
 	}
 
 	/* cookie jar default */
 	fname = NULL;
-	netsurf_mkpath(&fname, NULL, 2, nsgtk_config_home, "Cookies");
+	slate_mkpath(&fname, NULL, 2, slategtk_config_home, "Cookies");
 	if (fname != NULL) {
-		nsoption_setnull_charp(cookie_jar, fname);
+		slateoption_setnull_charp(cookie_jar, fname);
 	}
 
 	/* url database default */
 	fname = NULL;
-	netsurf_mkpath(&fname, NULL, 2, nsgtk_config_home, "URLs");
+	slate_mkpath(&fname, NULL, 2, slategtk_config_home, "URLs");
 	if (fname != NULL) {
-		nsoption_setnull_charp(url_file, fname);
+		slateoption_setnull_charp(url_file, fname);
 	}
 
 	/* bookmark database default */
 	fname = NULL;
-	netsurf_mkpath(&fname, NULL, 2, nsgtk_config_home, "Hotlist");
+	slate_mkpath(&fname, NULL, 2, slategtk_config_home, "Hotlist");
 	if (fname != NULL) {
-		nsoption_setnull_charp(hotlist_path, fname);
+		slateoption_setnull_charp(hotlist_path, fname);
 	}
 
 	/* download directory default */
 	fname = getenv("HOME");
 	if (fname != NULL) {
-		nsoption_setnull_charp(downloads_directory, strdup(fname));
+		slateoption_setnull_charp(downloads_directory, strdup(fname));
 	}
 
-	if ((nsoption_charp(cookie_file) == NULL) ||
-	    (nsoption_charp(cookie_jar) == NULL) ||
-	    (nsoption_charp(url_file) == NULL) ||
-	    (nsoption_charp(hotlist_path) == NULL) ||
-	    (nsoption_charp(downloads_directory) == NULL)) {
+	if ((slateoption_charp(cookie_file) == NULL) ||
+	    (slateoption_charp(cookie_jar) == NULL) ||
+	    (slateoption_charp(url_file) == NULL) ||
+	    (slateoption_charp(hotlist_path) == NULL) ||
+	    (slateoption_charp(downloads_directory) == NULL)) {
 		NSLOG(netsurf, INFO,
 		      "Failed initialising default resource paths");
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* set default font names */
-	nsoption_set_charp(font_sans, strdup("Sans"));
-	nsoption_set_charp(font_serif, strdup("Serif"));
-	nsoption_set_charp(font_mono, strdup("Monospace"));
-	nsoption_set_charp(font_cursive, strdup("Serif"));
-	nsoption_set_charp(font_fantasy, strdup("Serif"));
+	slateoption_set_charp(font_sans, strdup("Sans"));
+	slateoption_set_charp(font_serif, strdup("Serif"));
+	slateoption_set_charp(font_mono, strdup("Monospace"));
+	slateoption_set_charp(font_cursive, strdup("Serif"));
+	slateoption_set_charp(font_fantasy, strdup("Serif"));
 
 	/* Default toolbar button type to system defaults */
 
@@ -556,14 +556,14 @@ static nserror set_defaults(struct nsoption_s *defaults)
 	switch (toolbarstyle) {
 	case GTK_TOOLBAR_ICONS:
 		if (tooliconsize == GTK_ICON_SIZE_SMALL_TOOLBAR) {
-			nsoption_set_int(button_type, 1);
+			slateoption_set_int(button_type, 1);
 		} else {
-			nsoption_set_int(button_type, 2);
+			slateoption_set_int(button_type, 2);
 		}
 		break;
 
 	case GTK_TOOLBAR_TEXT:
-		nsoption_set_int(button_type, 4);
+		slateoption_set_int(button_type, 4);
 		break;
 
 	case GTK_TOOLBAR_BOTH:
@@ -571,18 +571,18 @@ static nserror set_defaults(struct nsoption_s *defaults)
 		/* no labels in default configuration */
 	default:
 		/* No system default, so use large icons */
-		nsoption_set_int(button_type, 2);
+		slateoption_set_int(button_type, 2);
 		break;
 	}
 
 	/* set default items in toolbar */
-	nsoption_set_charp(toolbar_items,
+	slateoption_set_charp(toolbar_items,
 			   strdup("back/history/forward/reloadstop/url_bar/websearch/openmenu"));
 
 	/* set default for menu and tool bar visibility */
-	nsoption_set_charp(bar_show, strdup("tool"));
+	slateoption_set_charp(bar_show, strdup("tool"));
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -594,26 +594,26 @@ static nserror set_defaults(struct nsoption_s *defaults)
  *  - user choices loaded from Choices file
  *  - command line parameters
  */
-static nserror nsgtk_option_init(int *pargc, char** argv)
+static slateerror slategtk_option_init(int *pargc, char** argv)
 {
-	nserror ret;
+	slateerror ret;
 	char *choices = NULL;
 
 	/* user options setup */
-	ret = nsoption_init(set_defaults, &nsoptions, &nsoptions_default);
-	if (ret != NSERROR_OK) {
+	ret = slateoption_init(set_defaults, &slateoptions, &slateoptions_default);
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
 	/* Attempt to load the user choices */
-	ret = netsurf_mkpath(&choices, NULL, 2, nsgtk_config_home, "Choices");
-	if (ret == NSERROR_OK) {
-		nsoption_read(choices, nsoptions);
+	ret = slate_mkpath(&choices, NULL, 2, slategtk_config_home, "Choices");
+	if (ret == SLATEERROR_OK) {
+		slateoption_read(choices, slateoptions);
 		free(choices);
 	}
 
 	/* overide loaded options with those from commandline */
-	nsoption_commandline(pargc, argv, nsoptions);
+	slateoption_commandline(pargc, argv, slateoptions);
 
 	/* ensure all options fall within sensible bounds */
 
@@ -623,31 +623,31 @@ static nserror nsgtk_option_init(int *pargc, char** argv)
 	 * The GTK front end now correctly uses it as a proportion of window
 	 * width.  Here we assume that a value of less than 15% is wrong
 	 * and set to the default two thirds. */
-	if (nsoption_int(toolbar_status_size) < 1500) {
-		nsoption_set_int(toolbar_status_size, 6667);
+	if (slateoption_int(toolbar_status_size) < 1500) {
+		slateoption_set_int(toolbar_status_size, 6667);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * initialise message translation
  */
-static nserror nsgtk_messages_init(char **respaths)
+static slateerror slategtk_messages_init(char **respaths)
 {
 	const char *messages;
-	nserror ret;
+	slateerror ret;
 	const uint8_t *data;
 	size_t data_size;
 
-	ret = nsgtk_data_from_resname("Messages", &data, &data_size);
-	if (ret == NSERROR_OK) {
+	ret = slategtk_data_from_resname("Messages", &data, &data_size);
+	if (ret == SLATEERROR_OK) {
 		ret = messages_add_from_inline(data, data_size);
 	} else {
 		/* Obtain path to messages */
-		ret = nsgtk_path_from_resname("Messages", &messages);
-		if (ret == NSERROR_OK) {
+		ret = slategtk_path_from_resname("Messages", &messages);
+		if (ret == SLATEERROR_OK) {
 			ret = messages_add_from_file(messages);
 		}
 	}
@@ -659,11 +659,11 @@ static nserror nsgtk_messages_init(char **respaths)
  * Get the path to the cache directory.
  *
  * @param cache_home_out Path to cache directory.
- * @return NSERROR_OK on sucess and \a cache_home_out updated else error code.
+ * @return SLATEERROR_OK on sucess and \a cache_home_out updated else error code.
  */
-static nserror get_cache_home(char **cache_home_out)
+static slateerror get_cache_home(char **cache_home_out)
 {
-	nserror ret;
+	slateerror ret;
 	char *xdg_cache_dir;
 	char *cache_home;
 	char *home_dir;
@@ -683,16 +683,16 @@ static nserror get_cache_home(char **cache_home_out)
 
 		/* the HOME envvar is required */
 		if (home_dir == NULL) {
-			return NSERROR_NOT_DIRECTORY;
+			return SLATEERROR_NOT_DIRECTORY;
 		}
 
 		ret = check_dirname(home_dir, ".cache/netsurf", &cache_home);
-		if (ret != NSERROR_OK) {
+		if (ret != SLATEERROR_OK) {
 			return ret;
 		}
 	} else {
 		ret = check_dirname(xdg_cache_dir, "netsurf", &cache_home);
-		if (ret != NSERROR_OK) {
+		if (ret != SLATEERROR_OK) {
 			return ret;
 		}
 	}
@@ -700,19 +700,19 @@ static nserror get_cache_home(char **cache_home_out)
 	NSLOG(netsurf, INFO, "\"%s\"", cache_home);
 
 	*cache_home_out = cache_home;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * create a cache directory
  */
-static nserror create_cache_home(char **cache_home_out)
+static slateerror create_cache_home(char **cache_home_out)
 {
 	char *cache_home = NULL;
 	char *home_dir;
 	char *xdg_cache_dir;
-	nserror ret;
+	slateerror ret;
 
 	NSLOG(netsurf, INFO, "Attempting to create cache directory");
 
@@ -726,23 +726,23 @@ static nserror create_cache_home(char **cache_home_out)
 		home_dir = getenv("HOME");
 
 		if ((home_dir == NULL) || (*home_dir == 0)) {
-			return NSERROR_NOT_DIRECTORY;
+			return SLATEERROR_NOT_DIRECTORY;
 		}
 
-		ret = netsurf_mkpath(&cache_home, NULL, 4, home_dir, ".cache", "netsurf", "/");
-		if (ret != NSERROR_OK) {
+		ret = slate_mkpath(&cache_home, NULL, 4, home_dir, ".cache", "netsurf", "/");
+		if (ret != SLATEERROR_OK) {
 			return ret;
 		}
 	} else {
-		ret = netsurf_mkpath(&cache_home, NULL, 3, xdg_cache_dir, "netsurf", "/");
-		if (ret != NSERROR_OK) {
+		ret = slate_mkpath(&cache_home, NULL, 3, xdg_cache_dir, "netsurf", "/");
+		if (ret != SLATEERROR_OK) {
 			return ret;
 		}
 	}
 
 	/* ensure all elements of path exist (the trailing / is required) */
-	ret = netsurf_mkdir_all(cache_home);
-	if (ret != NSERROR_OK) {
+	ret = slate_mkdir_all(cache_home);
+	if (ret != SLATEERROR_OK) {
 		free(cache_home);
 		return ret;
 	}
@@ -754,27 +754,27 @@ static nserror create_cache_home(char **cache_home_out)
 
 	*cache_home_out = cache_home;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * GTK specific initialisation
  */
-static nserror nsgtk_init(int *pargc, char ***pargv, char **cache_home)
+static slateerror slategtk_init(int *pargc, char ***pargv, char **cache_home)
 {
-	nserror ret;
+	slateerror ret;
 
 	/* Locate the correct user configuration directory path */
-	ret = get_config_home(&nsgtk_config_home);
-	if (ret == NSERROR_NOT_FOUND) {
+	ret = get_config_home(&slategtk_config_home);
+	if (ret == SLATEERROR_NOT_FOUND) {
 		/* no config directory exists yet so try to create one */
-		ret = create_config_home(&nsgtk_config_home);
+		ret = create_config_home(&slategtk_config_home);
 	}
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO,
 		      "Unable to locate a configuration directory.");
-		nsgtk_config_home = NULL;
+		slategtk_config_home = NULL;
 	}
 
 	/* Initialise gtk */
@@ -786,31 +786,31 @@ static nserror nsgtk_init(int *pargc, char ***pargv, char **cache_home)
 	nslog_init(nslog_stream_configure, pargc, *pargv);
 
 	/* build the common resource path list */
-	respaths = nsgtk_init_resource_path(nsgtk_config_home);
+	respaths = slategtk_init_resource_path(slategtk_config_home);
 	if (respaths == NULL) {
 		fprintf(stderr, "Unable to locate resources\n");
 		return 1;
 	}
 
 	/* initialise the gtk resource handling */
-	ret = nsgtk_init_resources(respaths);
-	if (ret != NSERROR_OK) {
+	ret = slategtk_init_resources(respaths);
+	if (ret != SLATEERROR_OK) {
 		fprintf(stderr, "GTK resources failed to initialise (%s)\n",
 			messages_get_errorcode(ret));
 		return ret;
 	}
 
 	/* Initialise user options */
-	ret = nsgtk_option_init(pargc, *pargv);
-	if (ret != NSERROR_OK) {
+	ret = slategtk_option_init(pargc, *pargv);
+	if (ret != SLATEERROR_OK) {
 		fprintf(stderr, "Options failed to initialise (%s)\n",
 			messages_get_errorcode(ret));
 		return ret;
 	}
 
 	/* Initialise translated messages */
-	ret = nsgtk_messages_init(respaths);
-	if (ret != NSERROR_OK) {
+	ret = slategtk_messages_init(respaths);
+	if (ret != SLATEERROR_OK) {
 		fprintf(stderr, "Unable to load translated messages (%s)\n",
 			messages_get_errorcode(ret));
 		NSLOG(netsurf, INFO, "Unable to load translated messages");
@@ -819,16 +819,16 @@ static nserror nsgtk_init(int *pargc, char ***pargv, char **cache_home)
 
 	/* Locate the correct user cache directory path */
 	ret = get_cache_home(cache_home);
-	if (ret == NSERROR_NOT_FOUND) {
+	if (ret == SLATEERROR_NOT_FOUND) {
 		/* no cache directory exists yet so try to create one */
 		ret = create_cache_home(cache_home);
 	}
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Unable to locate a cache directory.");
 	}
 
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -837,20 +837,20 @@ static nserror nsgtk_init(int *pargc, char ***pargv, char **cache_home)
 /**
  * adds named icons into gtk theme
  */
-static nserror nsgtk_add_named_icons_to_theme(void)
+static slateerror slategtk_add_named_icons_to_theme(void)
 {
 	gtk_icon_theme_add_resource_path(gtk_icon_theme_get_default(),
-					 "/org/netsurf/icons");
-	return NSERROR_OK;
+					 "/org/slate/icons");
+	return SLATEERROR_OK;
 }
 
 #else
 
-static nserror
+static slateerror
 add_builtin_icon(const char *prefix, const char *name, int x, int y)
 {
 	GdkPixbuf *pixbuf;
-	nserror res;
+	slateerror res;
 	char *resname;
 	int resnamelen;
 
@@ -858,29 +858,29 @@ add_builtin_icon(const char *prefix, const char *name, int x, int y)
 	resnamelen = strlen(prefix) + strlen(name) + 5 + 1 + 4 + 1;
 	resname = malloc(resnamelen);
 	if (resname == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 	snprintf(resname, resnamelen, "icons%s/%s.png", prefix, name);
 
 	res = nsgdk_pixbuf_new_from_resname(resname, &pixbuf);
 	NSLOG(netsurf, DEEPDEBUG, "%d %s", res, resname);
 	free(resname);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB, false, 8, x, y);
 	}
 	gtk_icon_theme_add_builtin_icon(name, y, pixbuf);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * adds named icons into gtk theme
  */
-static nserror nsgtk_add_named_icons_to_theme(void)
+static slateerror slategtk_add_named_icons_to_theme(void)
 {
 	/* these must also be in gtk/resources.c pixbuf_resource *and*
-	 * gtk/res/netsurf.gresource.xml
+	 * gtk/res/slate.gresource.xml
 	 */
 	add_builtin_icon("", "local-history", 8, 32);
 	add_builtin_icon("", "show-cookie", 24, 24);
@@ -895,7 +895,7 @@ static nserror nsgtk_add_named_icons_to_theme(void)
 	add_builtin_icon("/48x48/actions", "page-info-secure", 48, 48);
 	add_builtin_icon("/48x48/actions", "page-info-warning", 48, 48);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 #endif
@@ -908,25 +908,25 @@ static nserror nsgtk_add_named_icons_to_theme(void)
  * \param argv A string vector of command line arguments.
  * \respath A string vector of the path elements of resources
  */
-static nserror nsgtk_setup(int argc, char** argv, char **respath)
+static slateerror slategtk_setup(int argc, char** argv, char **respath)
 {
 	char buf[PATH_MAX];
 	char *resource_filename;
 	char *addr = NULL;
-	nsurl *url;
-	nserror res;
+	slateurl *url;
+	slateerror res;
 
 	/* Initialise gtk accelerator table */
-	res = nsgtk_accelerator_init(respaths);
-	if (res != NSERROR_OK) {
+	res = slategtk_accelerator_init(respaths);
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO,
 		      "Unable to load gtk accelerator configuration");
 		/* not fatal if this does not load */
 	}
 
 	/* initialise warning dialog */
-	res = nsgtk_builder_new_from_resname("warning", &warning_builder);
-	if (res != NSERROR_OK) {
+	res = slategtk_builder_new_from_resname("warning", &warning_builder);
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Unable to initialise warning dialog");
 		return res;
 	}
@@ -934,9 +934,9 @@ static nserror nsgtk_setup(int argc, char** argv, char **respath)
 	gtk_builder_connect_signals(warning_builder, NULL);
 
 	/* set default icon if its available */
-	res = nsgdk_pixbuf_new_from_resname("netsurf.xpm",
+	res = nsgdk_pixbuf_new_from_resname("slate.xpm",
 					    &win_default_icon_pixbuf);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Seting default window icon");
 		gtk_window_set_default_icon(win_default_icon_pixbuf);
 	}
@@ -949,31 +949,31 @@ static nserror nsgtk_setup(int argc, char** argv, char **respath)
 		      resource_filename);
 		free(resource_filename);
 	}
-	search_web_select_provider(nsoption_charp(search_web_provider));
+	search_web_select_provider(slateoption_charp(search_web_provider));
 
 	/* Default favicon */
 	res = nsgdk_pixbuf_new_from_resname("favicon.png", &favicon_pixbuf);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		favicon_pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB,
 						false, 8, 16, 16);
 	}
 
 	/* add named icons to gtk theme */
-	res = nsgtk_add_named_icons_to_theme();
-	if (res != NSERROR_OK) {
+	res = slategtk_add_named_icons_to_theme();
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Unable to add named icons to GTK theme.");
 		return res;
 	}
 
 	/* initialise throbber */
-	res = nsgtk_throbber_init();
-	if (res != NSERROR_OK) {
+	res = slategtk_throbber_init();
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Unable to initialise throbber.");
 		return res;
 	}
 
 	/* Initialise completions - cannot fail */
-	nsgtk_completion_init();
+	slategtk_completion_init();
 
 	/* The tree view system needs to know the screen's DPI, so we
 	 * find that out here, rather than when we create a first browser
@@ -992,14 +992,14 @@ static nserror nsgtk_setup(int argc, char** argv, char **respath)
 
 	save_complete_init();
 
-	urldb_load(nsoption_charp(url_file));
-	urldb_load_cookies(nsoption_charp(cookie_file));
-	hotlist_init(nsoption_charp(hotlist_path),
-		     nsoption_charp(hotlist_path));
+	urldb_load(slateoption_charp(url_file));
+	urldb_load_cookies(slateoption_charp(cookie_file));
+	hotlist_init(slateoption_charp(hotlist_path),
+		     slateoption_charp(hotlist_path));
 
 	/* Initialise top level UI elements */
-	res = nsgtk_download_init();
-	if (res != NSERROR_OK) {
+	res = slategtk_download_init();
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Unable to initialise download window.");
 		return res;
 	}
@@ -1024,21 +1024,21 @@ static nserror nsgtk_setup(int argc, char** argv, char **respath)
 	}
 	if (addr != NULL) {
 		/* managed to set up based on local launch */
-	} else if (nsoption_charp(homepage_url) != NULL) {
-		addr = strdup(nsoption_charp(homepage_url));
+	} else if (slateoption_charp(homepage_url) != NULL) {
+		addr = strdup(slateoption_charp(homepage_url));
 	} else {
-		addr = strdup(NETSURF_HOMEPAGE);
+		addr = strdup(SLATE_HOMEPAGE);
 	}
 
 	/* create an initial browser window */
-	res = nsurl_create(addr, &url);
-	if (res == NSERROR_OK) {
+	res = slateurl_create(addr, &url);
+	if (res == SLATEERROR_OK) {
 		res = browser_window_create(BW_CREATE_HISTORY,
 					    url,
 					    NULL,
 					    NULL,
 					    NULL);
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
 
 	free(addr);
@@ -1053,14 +1053,14 @@ static nserror nsgtk_setup(int argc, char** argv, char **respath)
  * The same as the standard gtk_main loop except this ensures active
  * FD are added to the gtk poll event set.
  */
-static void nsgtk_main(void)
+static void slategtk_main(void)
 {
 	fd_set read_fd_set, write_fd_set, exc_fd_set;
 	int max_fd;
 	GPollFD *fd_list[1000];
 	unsigned int fd_count;
 
-	while (!nsgtk_complete) {
+	while (!slategtk_complete) {
 		max_fd = -1;
 		fd_count = 0;
 		FD_ZERO(&read_fd_set);
@@ -1110,64 +1110,64 @@ static void nsgtk_main(void)
 /**
  * finalise the browser
  */
-static void nsgtk_finalise(void)
+static void slategtk_finalise(void)
 {
-	nserror res;
+	slateerror res;
 
 	NSLOG(netsurf, INFO, "Quitting GUI");
 
 	/* Ensure all scaffoldings are destroyed before we go into exit */
-	nsgtk_download_destroy();
-	urldb_save_cookies(nsoption_charp(cookie_jar));
-	urldb_save(nsoption_charp(url_file));
+	slategtk_download_destroy();
+	urldb_save_cookies(slateoption_charp(cookie_jar));
+	urldb_save(slateoption_charp(url_file));
 
-	res = nsgtk_cookies_destroy();
-	if (res != NSERROR_OK) {
+	res = slategtk_cookies_destroy();
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Error finalising cookie viewer: %s",
 		      messages_get_errorcode(res));
 	}
 
-	res = nsgtk_local_history_destroy();
-	if (res != NSERROR_OK) {
+	res = slategtk_local_history_destroy();
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO,
 		      "Error finalising local history viewer: %s",
 		      messages_get_errorcode(res));
 	}
 
-	res = nsgtk_global_history_destroy();
-	if (res != NSERROR_OK) {
+	res = slategtk_global_history_destroy();
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO,
 		      "Error finalising global history viewer: %s",
 		      messages_get_errorcode(res));
 	}
 
-	res = nsgtk_hotlist_destroy();
-	if (res != NSERROR_OK) {
+	res = slategtk_hotlist_destroy();
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Error finalising hotlist viewer: %s",
 		      messages_get_errorcode(res));
 	}
 
 	res = hotlist_fini();
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Error finalising hotlist: %s",
 		      messages_get_errorcode(res));
 	}
 
 	res = save_complete_finalise();
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Error finalising save complete: %s",
 		      messages_get_errorcode(res));
 	}
 
-	free(nsgtk_config_home);
+	free(slategtk_config_home);
 
 	gtk_fetch_filetype_fin();
 
 	/* common finalisation */
-	netsurf_exit();
+	slate_exit();
 
 	/* finalise options */
-	nsoption_finalise(nsoptions, nsoptions_default);
+	slateoption_finalise(slateoptions, slateoptions_default);
 
 	/* finalise logging */
 	nslog_finalise();
@@ -1180,24 +1180,24 @@ static void nsgtk_finalise(void)
  */
 int main(int argc, char** argv)
 {
-	nserror res;
+	slateerror res;
 	char *cache_home = NULL;
-	struct netsurf_table nsgtk_table = {
-		.misc = nsgtk_misc_table,
-		.window = nsgtk_window_table,
-		.corewindow = nsgtk_core_window_table,
-		.clipboard = nsgtk_clipboard_table,
-		.download = nsgtk_download_table,
-		.fetch = nsgtk_fetch_table,
+	struct slate_table slategtk_table = {
+		.misc = slategtk_misc_table,
+		.window = slategtk_window_table,
+		.corewindow = slategtk_core_window_table,
+		.clipboard = slategtk_clipboard_table,
+		.download = slategtk_download_table,
+		.fetch = slategtk_fetch_table,
 		.llcache = filesystem_llcache_table,
-		.search = nsgtk_search_table,
-		.search_web = nsgtk_search_web_table,
-		.bitmap = nsgtk_bitmap_table,
-		.layout = nsgtk_layout_table,
+		.search = slategtk_search_table,
+		.search_web = slategtk_search_web_table,
+		.bitmap = slategtk_bitmap_table,
+		.layout = slategtk_layout_table,
 	};
 
-	res = netsurf_register(&nsgtk_table);
-	if (res != NSERROR_OK) {
+	res = slate_register(&slategtk_table);
+	if (res != SLATEERROR_OK) {
 		fprintf(stderr,
 			"NetSurf operation table failed registration (%s)\n",
 			messages_get_errorcode(res));
@@ -1205,34 +1205,34 @@ int main(int argc, char** argv)
 	}
 
 	/* gtk specific initialisation */
-	res = nsgtk_init(&argc, &argv, &cache_home);
-	if (res != NSERROR_OK) {
+	res = slategtk_init(&argc, &argv, &cache_home);
+	if (res != SLATEERROR_OK) {
 		fprintf(stderr, "NetSurf gtk failed to initialise (%s)\n",
 			messages_get_errorcode(res));
 		return 2;
 	}
 
 	/* core initialisation */
-	res = netsurf_init(cache_home);
+	res = slate_init(cache_home);
 	free(cache_home);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		fprintf(stderr, "NetSurf core failed to initialise (%s)\n",
 			messages_get_errorcode(res));
 		return 3;
 	}
 
 	/* gtk specific initalisation and main run loop */
-	res = nsgtk_setup(argc, argv, respaths);
-	if (res != NSERROR_OK) {
-		nsgtk_finalise();
+	res = slategtk_setup(argc, argv, respaths);
+	if (res != SLATEERROR_OK) {
+		slategtk_finalise();
 		fprintf(stderr, "NetSurf gtk setup failed (%s)\n",
 			messages_get_errorcode(res));
 		return 4;
 	}
 
-	nsgtk_main();
+	slategtk_main();
 
-	nsgtk_finalise();
+	slategtk_finalise();
 
 	return 0;
 }

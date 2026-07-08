@@ -4,7 +4,7 @@
 
 @node Main "NetSurf"
 @{b}NetSurf@{ub} Amiga-specific documentation
-http://www.netsurf-browser.org
+http://www.slate-browser.org
 
 @{" GUI                  " link GUI}
 @{" Preferences GUI      " link Prefs}
@@ -196,7 +196,7 @@ AmigaOS NetSurf themes are not compatible with NetSurf for other platforms.
 @endnode
 
 @node arexx "ARexx port"
-NetSurf's ARexx port is called NETSURF.
+NetSurf's ARexx port is called SLATE.
 
 Commands are:
 
@@ -263,7 +263,7 @@ Special scripts @{"arexx_startup" link options 13} and @{"arexx_shutdown" link o
 Click Add on the Browsers page and fill in the details as follows:
 Name: NetSurf
 Path: NetSurf URL="%u"
-ARexx port: NETSURF
+ARexx port: SLATE
 Show:
 To front: TOFRONT
 Open URL: OPEN "%u"
@@ -417,7 +417,7 @@ http://www.masonicons.de
 The default theme icon was adapted from the NetSurf logo by Marko K. Seppänen.
 
 All other code and files are the same for all platforms and credited in the files and/or on the NetSurf website.
-http://www.netsurf-browser.org
+http://www.slate-browser.org
 
-The source code can be obtained from http://source.netsurf-browser.org or (in the event the service is unavailable) chris\@unsatisfactorysoftware.co.uk or any other of the NetSurf developers.
+The source code can be obtained from http://source.slate-browser.org or (in the event the service is unavailable) chris\@unsatisfactorysoftware.co.uk or any other of the NetSurf developers.
 @endnode

@@ -11,8 +11,8 @@ S_UTILS := \
 	libdom.c \
 	log.c \
 	messages.c \
-	nscolour.c \
-	nsoption.c \
+	slatecolor.c \
+	slateoption.c \
 	punycode.c \
 	ssl_certs.c \
 	talloc.c \

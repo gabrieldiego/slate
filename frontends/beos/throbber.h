@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 François Revol <mmu_man@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,16 +21,16 @@
 
 #include <Bitmap.h>
 
-struct nsbeos_throbber
+struct slatebeos_throbber
 {
 	int		nframes;	/**< Number of frames in the throbber */
 	BBitmap	**framedata;
 };
 
-extern struct nsbeos_throbber *nsbeos_throbber;
+extern struct slatebeos_throbber *slatebeos_throbber;
 
-bool nsbeos_throbber_initialise_from_gif(const char *fn);
-bool nsbeos_throbber_initialise_from_png(const int frames, ...);
-void nsbeos_throbber_finalise(void);
+bool slatebeos_throbber_initialise_from_gif(const char *fn);
+bool slatebeos_throbber_initialise_from_png(const int frames, ...);
+void slatebeos_throbber_finalise(void);
 
 #endif /* __BEOS_THROBBER_H__ */

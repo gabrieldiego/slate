@@ -1,7 +1,7 @@
 /*
  * Copyright 2024 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,7 +36,7 @@ NS_Cookies::~NS_Cookies()
 	cookie_manager_fini();
 }
 
-nserror NS_Cookies::setSearch(const char *search_term)
+slateerror NS_Cookies::setSearch(const char *search_term)
 {
 	return cookie_manager_set_search_string(search_term);
 }

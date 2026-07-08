@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org> 
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,23 +18,23 @@
 
 /**
  * \file
- * Interface to win32 global history manager using nsw32 core window
+ * Interface to win32 global history manager using slatew32 core window
  */
 
-#ifndef NETSURF_WINDOWS_GLOBAL_HISTORY_H
-#define NETSURF_WINDOWS_GLOBAL_HISTORY_H
+#ifndef SLATE_WINDOWS_GLOBAL_HISTORY_H
+#define SLATE_WINDOWS_GLOBAL_HISTORY_H
 
 /**
  * make the global history window visible.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-nserror nsw32_global_history_present(HINSTANCE hinstance);
+slateerror slatew32_global_history_present(HINSTANCE hinstance);
 
 /**
  * Destroys the global history window and performs any other necessary cleanup
  * actions.
  */
-nserror nsw32_global_history_finalise(void);
+slateerror slatew32_global_history_finalise(void);
 
 #endif

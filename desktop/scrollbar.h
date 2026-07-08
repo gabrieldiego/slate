@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 Paul Blokus <paul_pl@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,8 +23,8 @@
  * Scrollbar widgets used in frames code, not for frontend use
  */
 
-#ifndef NETSURF_DESKTOP_SCROLLBAR_H
-#define NETSURF_DESKTOP_SCROLLBAR_H
+#ifndef SLATE_DESKTOP_SCROLLBAR_H
+#define SLATE_DESKTOP_SCROLLBAR_H
 
 #include <stdbool.h>
 #include <limits.h>
@@ -104,10 +104,10 @@ typedef void(*scrollbar_client_callback)(void *client_data,
  * \param client_data		data for the client callback
  * \param client_callback	client callback for scrollbar events
  * \param s			updated to point at the newly created scrollbar
- * \return NSERROR_OK and s updated if scrollbar has been created
+ * \return SLATEERROR_OK and s updated if scrollbar has been created
  *           succesfully or eror code and s set to NULL on faliure;
  */
-nserror scrollbar_create(bool horizontal, int length, int full_size,
+slateerror scrollbar_create(bool horizontal, int length, int full_size,
 		int visible_size, void *client_data,
 		scrollbar_client_callback client_callback,
 		struct scrollbar **s);
@@ -128,9 +128,9 @@ void scrollbar_destroy(struct scrollbar *s);
  * \param clip	the clipping rectangle
  * \param scale	scale for the redraw
  * \param ctx	current redraw context
- * \return	NSERROR_OK on success otherwise error code
+ * \return	SLATEERROR_OK on success otherwise error code
  */
-nserror scrollbar_redraw(struct scrollbar *s, int x, int y,
+slateerror scrollbar_redraw(struct scrollbar *s, int x, int y,
 		const struct rect *clip, float scale,
 		const struct redraw_context *ctx);
 

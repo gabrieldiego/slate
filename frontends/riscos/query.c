@@ -1,7 +1,7 @@
 /*
  * Copyright 2005 Adrian Lees <adrianl@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -152,7 +152,7 @@ query_id query_user_xy(const char *query, const char *detail,
 	int len;
 	int tx;
 	char *local_text = NULL;
-	nserror err;
+	slateerror err;
 
 	qw = malloc(sizeof(struct gui_query_window));
 	if (!qw) {
@@ -173,8 +173,8 @@ query_id query_user_xy(const char *query, const char *detail,
 
 	/* set the text of the 'Yes' button and size accordingly */
 	err = utf8_to_local_encoding(yes, 0, &local_text);
-	if (err != NSERROR_OK) {
-		assert(err != NSERROR_BAD_ENCODING);
+	if (err != SLATEERROR_OK) {
+		assert(err != SLATEERROR_BAD_ENCODING);
 		NSLOG(netsurf, INFO, "utf8_to_local_encoding_failed");
 		local_text = NULL;
 	}
@@ -203,8 +203,8 @@ query_id query_user_xy(const char *query, const char *detail,
 
 	/* set the text of the 'No' button and size accordingly */
 	err = utf8_to_local_encoding(no, 0, &local_text);
-	if (err != NSERROR_OK) {
-		assert(err != NSERROR_BAD_ENCODING);
+	if (err != SLATEERROR_OK) {
+		assert(err != SLATEERROR_BAD_ENCODING);
 		NSLOG(netsurf, INFO, "utf8_to_local_encoding_failed");
 		local_text = NULL;
 	}

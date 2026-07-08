@@ -1,7 +1,7 @@
 /*
  * Copyright 2020 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,15 +26,15 @@
 
 #include "css/utils.h"
 
-#include "utils/nsurl.h"
-#include "utils/nscolour.h"
+#include "utils/slateurl.h"
+#include "utils/slatecolor.h"
 
-#include "netsurf/mouse.h"
-#include "netsurf/layout.h"
-#include "netsurf/keypress.h"
-#include "netsurf/plotters.h"
-#include "netsurf/core_window.h"
-#include "netsurf/browser_window.h"
+#include "slate/mouse.h"
+#include "slate/layout.h"
+#include "slate/keypress.h"
+#include "slate/plotters.h"
+#include "slate/core_window.h"
+#include "slate/browser_window.h"
 
 #include "desktop/knockout.h"
 #include "desktop/page-info.h"
@@ -240,7 +240,7 @@ struct page_info {
 
 	struct browser_window *bw;
 	lwc_string *domain;
-	enum nsurl_scheme_type scheme;
+	enum slateurl_scheme_type scheme;
 
 	browser_window_page_info_state state;
 	unsigned cookies;
@@ -255,60 +255,60 @@ struct page_info {
 };
 
 /* Exported interface documented in desktop/page_info.h */
-nserror page_info_init(void)
+slateerror page_info_init(void)
 {
-	pi__bg.fill_colour = nscolours[NSCOLOUR_WIN_EVEN_BG];
-	pi__hover.fill_colour = nscolours[NSCOLOUR_WIN_EVEN_BG_HOVER];
+	pi__bg.fill_colour = slatecolors[SLATECOLOR_WIN_EVEN_BG];
+	pi__hover.fill_colour = slatecolors[SLATECOLOR_WIN_EVEN_BG_HOVER];
 
-	pi__domain.background = nscolours[NSCOLOUR_WIN_EVEN_BG];
-	pi__domain.foreground = nscolours[NSCOLOUR_WIN_EVEN_FG];
+	pi__domain.background = slatecolors[SLATECOLOR_WIN_EVEN_BG];
+	pi__domain.foreground = slatecolors[SLATECOLOR_WIN_EVEN_FG];
 
-	pi__item.background = nscolours[NSCOLOUR_WIN_EVEN_BG];
-	pi__item.foreground = nscolours[NSCOLOUR_WIN_EVEN_FG];
+	pi__item.background = slatecolors[SLATECOLOR_WIN_EVEN_BG];
+	pi__item.foreground = slatecolors[SLATECOLOR_WIN_EVEN_FG];
 
-	pi__item_detail.background = nscolours[NSCOLOUR_WIN_EVEN_BG];
-	pi__item_detail.foreground = nscolours[NSCOLOUR_WIN_EVEN_FG_FADED];
+	pi__item_detail.background = slatecolors[SLATECOLOR_WIN_EVEN_BG];
+	pi__item_detail.foreground = slatecolors[SLATECOLOR_WIN_EVEN_FG_FADED];
 
-	pi__heading[PAGE_STATE_UNKNOWN].background = nscolours[NSCOLOUR_WIN_EVEN_BG];
-	pi__heading[PAGE_STATE_UNKNOWN].foreground = nscolours[NSCOLOUR_WIN_EVEN_FG_BAD];
-	pi__heading[PAGE_STATE_INTERNAL].background = nscolours[NSCOLOUR_WIN_EVEN_BG];
-	pi__heading[PAGE_STATE_INTERNAL].foreground = nscolours[NSCOLOUR_WIN_EVEN_FG];
-	pi__heading[PAGE_STATE_LOCAL].background = nscolours[NSCOLOUR_WIN_EVEN_BG];
-	pi__heading[PAGE_STATE_LOCAL].foreground = nscolours[NSCOLOUR_WIN_EVEN_FG];
-	pi__heading[PAGE_STATE_INSECURE].background = nscolours[NSCOLOUR_WIN_EVEN_BG];
-	pi__heading[PAGE_STATE_INSECURE].foreground = nscolours[NSCOLOUR_WIN_EVEN_FG_BAD];
-	pi__heading[PAGE_STATE_SECURE_OVERRIDE].background = nscolours[NSCOLOUR_WIN_EVEN_BG];
-	pi__heading[PAGE_STATE_SECURE_OVERRIDE].foreground = nscolours[NSCOLOUR_WIN_EVEN_FG_BAD];
-	pi__heading[PAGE_STATE_SECURE_ISSUES].background = nscolours[NSCOLOUR_WIN_EVEN_BG];
-	pi__heading[PAGE_STATE_SECURE_ISSUES].foreground = nscolours[NSCOLOUR_WIN_EVEN_FG_BAD];
-	pi__heading[PAGE_STATE_SECURE].background = nscolours[NSCOLOUR_WIN_EVEN_BG];
-	pi__heading[PAGE_STATE_SECURE].foreground = nscolours[NSCOLOUR_WIN_EVEN_FG_GOOD];
+	pi__heading[PAGE_STATE_UNKNOWN].background = slatecolors[SLATECOLOR_WIN_EVEN_BG];
+	pi__heading[PAGE_STATE_UNKNOWN].foreground = slatecolors[SLATECOLOR_WIN_EVEN_FG_BAD];
+	pi__heading[PAGE_STATE_INTERNAL].background = slatecolors[SLATECOLOR_WIN_EVEN_BG];
+	pi__heading[PAGE_STATE_INTERNAL].foreground = slatecolors[SLATECOLOR_WIN_EVEN_FG];
+	pi__heading[PAGE_STATE_LOCAL].background = slatecolors[SLATECOLOR_WIN_EVEN_BG];
+	pi__heading[PAGE_STATE_LOCAL].foreground = slatecolors[SLATECOLOR_WIN_EVEN_FG];
+	pi__heading[PAGE_STATE_INSECURE].background = slatecolors[SLATECOLOR_WIN_EVEN_BG];
+	pi__heading[PAGE_STATE_INSECURE].foreground = slatecolors[SLATECOLOR_WIN_EVEN_FG_BAD];
+	pi__heading[PAGE_STATE_SECURE_OVERRIDE].background = slatecolors[SLATECOLOR_WIN_EVEN_BG];
+	pi__heading[PAGE_STATE_SECURE_OVERRIDE].foreground = slatecolors[SLATECOLOR_WIN_EVEN_FG_BAD];
+	pi__heading[PAGE_STATE_SECURE_ISSUES].background = slatecolors[SLATECOLOR_WIN_EVEN_BG];
+	pi__heading[PAGE_STATE_SECURE_ISSUES].foreground = slatecolors[SLATECOLOR_WIN_EVEN_FG_BAD];
+	pi__heading[PAGE_STATE_SECURE].background = slatecolors[SLATECOLOR_WIN_EVEN_BG];
+	pi__heading[PAGE_STATE_SECURE].foreground = slatecolors[SLATECOLOR_WIN_EVEN_FG_GOOD];
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* Exported interface documented in desktop/page_info.h */
-nserror page_info_fini(void)
+slateerror page_info_fini(void)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * Measure the text in the page_info window.
  *
  * \param[in] pi  The page info window handle.
- * \return NSERROR_OK on success, appropriate error code otherwise.
+ * \return SLATEERROR_OK on success, appropriate error code otherwise.
  */
-static nserror page_info__measure_text_entry(
+static slateerror page_info__measure_text_entry(
 		struct page_info_text *pit)
 {
-	nserror err;
+	slateerror err;
 	int height_px;
 
 	err = guit->layout->width(pit->style,
 			pit->text, strlen(pit->text),
 			&pit->width);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
@@ -318,19 +318,19 @@ static nserror page_info__measure_text_entry(
 
 	pit->height = (height_px * 8 + 3) / 6;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * Measure the text in the page_info window.
  *
  * \param[in] pi  The page info window handle.
- * \return NSERROR_OK on success, appropriate error code otherwise.
+ * \return SLATEERROR_OK on success, appropriate error code otherwise.
  */
-static nserror page_info__measure_text(
+static slateerror page_info__measure_text(
 		struct page_info *pi)
 {
-	nserror err;
+	slateerror err;
 
 	for (unsigned i = 0; i < PI_ENTRY__COUNT; i++) {
 		struct page_info_entry *entry = pi->entries + i;
@@ -340,7 +340,7 @@ static nserror page_info__measure_text(
 		case PAGE_INFO_ENTRY_TYPE_TEXT:
 			err = page_info__measure_text_entry(
 					&entry->u.text);
-			if (err != NSERROR_OK) {
+			if (err != SLATEERROR_OK) {
 				return err;
 			}
 			if (i == PI_ENTRY_DOMAIN) {
@@ -352,12 +352,12 @@ static nserror page_info__measure_text(
 		case PAGE_INFO_ENTRY_TYPE_ITEM:
 			err = page_info__measure_text_entry(
 					&entry->u.item.item);
-			if (err != NSERROR_OK) {
+			if (err != SLATEERROR_OK) {
 				return err;
 			}
 			err = page_info__measure_text_entry(
 					&entry->u.item.detail);
-			if (err != NSERROR_OK) {
+			if (err != SLATEERROR_OK) {
 				return err;
 			}
 			padding = entry->u.item.item.height / 4;
@@ -371,7 +371,7 @@ static nserror page_info__measure_text(
 	pi->window_padding = pi->entries[PI_ENTRY_DOMAIN]
 			.u.item.item.height / 2;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -380,9 +380,9 @@ static nserror page_info__measure_text(
  * \todo Use messages for internationalisation.
  *
  * \param[in] pi  The page info window handle.
- * \return NSERROR_OK on success, appropriate error code otherwise.
+ * \return SLATEERROR_OK on success, appropriate error code otherwise.
  */
-static nserror page_info__set_text(
+static slateerror page_info__set_text(
 		struct page_info *pi)
 {
 	int printed;
@@ -419,10 +419,10 @@ static nserror page_info__set_text(
 	printed = snprintf(pi->cookie_text, sizeof(pi->cookie_text),
 			"(%u in use)", pi->cookies);
 	if (printed < 0) {
-		return NSERROR_UNKNOWN;
+		return SLATEERROR_UNKNOWN;
 
 	} else if ((unsigned) printed >= sizeof(pi->cookie_text)) {
-		return NSERROR_NOSPACE;
+		return SLATEERROR_NOSPACE;
 	}
 	pi->entries[PI_ENTRY_COOKIES].u.item.item.text = "Cookies: ";
 	pi->entries[PI_ENTRY_COOKIES].u.item.detail.text = pi->cookie_text;
@@ -435,19 +435,19 @@ static nserror page_info__set_text(
  *
  * \param[in] pi  The page info window handle.
  * \param[in] bw  Browser window to show page info for.
- * \return NSERROR_OK on success, appropriate error code otherwise.
+ * \return SLATEERROR_OK on success, appropriate error code otherwise.
  */
-static nserror page_info__create_from_bw(
+static slateerror page_info__create_from_bw(
 		struct page_info *pi,
 		struct browser_window *bw)
 {
-	nsurl *url = browser_window_access_url(bw);
+	slateurl *url = browser_window_access_url(bw);
 
 	pi->bw = bw;
 	pi->state = browser_window_get_page_info_state(bw);
 	pi->cookies = browser_window_get_cookie_count(bw);
-	pi->domain = nsurl_get_component(url, NSURL_HOST);
-	pi->scheme = nsurl_get_scheme_type(url);
+	pi->domain = slateurl_get_component(url, SLATEURL_HOST);
+	pi->scheme = slateurl_get_scheme_type(url);
 
 	return page_info__set_text(pi);
 }
@@ -461,17 +461,17 @@ static nserror page_info__create_from_bw(
  */
 static inline bool page_info__hide_entry(
 		enum pi_entry entry,
-		enum nsurl_scheme_type scheme)
+		enum slateurl_scheme_type scheme)
 {
 	switch (entry) {
 	case PI_ENTRY_CERT:
-		if (scheme != NSURL_SCHEME_HTTPS) {
+		if (scheme != SLATEURL_SCHEME_HTTPS) {
 			return true;
 		}
 		break;
 	case PI_ENTRY_COOKIES:
-		if (scheme != NSURL_SCHEME_HTTP &&
-		    scheme != NSURL_SCHEME_HTTPS) {
+		if (scheme != SLATEURL_SCHEME_HTTP &&
+		    scheme != SLATEURL_SCHEME_HTTPS) {
 			return true;
 		}
 		break;
@@ -486,9 +486,9 @@ static inline bool page_info__hide_entry(
  * Lay out the page info window.
  *
  * \param[in] pi  The page info window handle.
- * \return NSERROR_OK on success, appropriate error code otherwise.
+ * \return SLATEERROR_OK on success, appropriate error code otherwise.
  */
-static nserror page_info__layout(
+static slateerror page_info__layout(
 		struct page_info *pi)
 {
 	int cur_y = 0;
@@ -534,16 +534,16 @@ static nserror page_info__layout(
 }
 
 /* Exported interface documented in desktop/page_info.h */
-nserror page_info_create(struct core_window *cw_h,
+slateerror page_info_create(struct core_window *cw_h,
 			 struct browser_window *bw,
 			 struct page_info **pi_out)
 {
 	struct page_info *pi;
-	nserror err;
+	slateerror err;
 
 	pi = calloc(1, sizeof(*pi));
 	if (pi == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	pi->cw_h = cw_h;
@@ -551,38 +551,38 @@ nserror page_info_create(struct core_window *cw_h,
 	memcpy(pi->entries, pi__entries, sizeof(pi__entries));
 
 	err = page_info__create_from_bw(pi, bw);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		page_info_destroy(pi);
 		return err;
 	}
 
 	err = page_info__layout(pi);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		page_info_destroy(pi);
 		return err;
 	}
 
 	*pi_out = pi;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* Exported interface documented in desktop/page_info.h */
-nserror page_info_destroy(struct page_info *pi)
+slateerror page_info_destroy(struct page_info *pi)
 {
 	lwc_string_unref(pi->domain);
 	free(pi);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* Exported interface documented in desktop/page_info.h */
-nserror page_info_set(struct page_info *pgi, struct browser_window *bw)
+slateerror page_info_set(struct page_info *pgi, struct browser_window *bw)
 {
-	nserror res;
+	slateerror res;
 
 	lwc_string_unref(pgi->domain);
 
 	res = page_info__create_from_bw(pgi, bw);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		res = page_info__layout(pgi);
 	}
 
@@ -596,9 +596,9 @@ nserror page_info_set(struct page_info *pgi, struct browser_window *bw)
  * \param[in] x    X-coordinate to plot at.
  * \param[in] y    Y-coordinate to plot at.
  * \param[in] ctx  Current redraw context.
- * \return NSERROR_OK on success, appropriate error code otherwise.
+ * \return SLATEERROR_OK on success, appropriate error code otherwise.
  */
-static nserror page_info__redraw_text_entry(
+static slateerror page_info__redraw_text_entry(
 		const struct page_info_text *pit,
 		int x,
 		int y,
@@ -609,11 +609,11 @@ static nserror page_info__redraw_text_entry(
 	ctx->plot->text(ctx, pit->style, x, y + baseline,
 			pit->text, strlen(pit->text));
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* Exported interface documented in desktop/page_info.h */
-nserror page_info_redraw(
+slateerror page_info_redraw(
 		const struct page_info *pi,
 		int x,
 		int y,
@@ -628,13 +628,13 @@ nserror page_info_redraw(
 		.y1 = clip->y1 + y,
 	};
 	int cur_y = y;
-	nserror err;
+	slateerror err;
 
 	/* Start knockout rendering if it's available for this plotter. */
 	if (ctx->plot->option_knockout) {
 		bool res = knockout_plot_start(ctx, &new_ctx);
 		if (res == false) {
-			return NSERROR_UNKNOWN;
+			return SLATEERROR_UNKNOWN;
 		}
 	}
 
@@ -657,7 +657,7 @@ nserror page_info_redraw(
 					&entry->u.text,
 					cur_x, cur_y,
 					&new_ctx);
-			if (err != NSERROR_OK) {
+			if (err != SLATEERROR_OK) {
 				goto cleanup;
 			}
 			cur_y += entry->u.text.height;
@@ -678,7 +678,7 @@ nserror page_info_redraw(
 					&entry->u.item.item,
 					cur_x, cur_y,
 					&new_ctx);
-			if (err != NSERROR_OK) {
+			if (err != SLATEERROR_OK) {
 				goto cleanup;
 			}
 			cur_x += entry->u.item.item.width;
@@ -686,7 +686,7 @@ nserror page_info_redraw(
 					&entry->u.item.detail,
 					cur_x, cur_y,
 					&new_ctx);
-			if (err != NSERROR_OK) {
+			if (err != SLATEERROR_OK) {
 				goto cleanup;
 			}
 			cur_y += entry->u.item.item.height;
@@ -700,11 +700,11 @@ cleanup:
 	if (ctx->plot->option_knockout) {
 		bool res = knockout_plot_end(ctx);
 		if (res == false) {
-			return NSERROR_UNKNOWN;
+			return SLATEERROR_UNKNOWN;
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -714,18 +714,18 @@ cleanup:
  * \param[in] mouse    The current mouse state.
  * \param[in] clicked  The page info window entry to consider clicks on.
  * \param[out] did_something Set to true if this click did something
- * \return NSERROR_OK on success, appropriate error code otherwise.
+ * \return SLATEERROR_OK on success, appropriate error code otherwise.
  */
-static nserror page_info__handle_item_click(
+static slateerror page_info__handle_item_click(
 		struct page_info *pi,
 		enum browser_mouse_state mouse,
 		enum pi_entry clicked,
 		bool *did_something)
 {
-	nserror err;
+	slateerror err;
 
 	if (!(mouse & BROWSER_MOUSE_CLICK_1)) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	switch (clicked) {
@@ -738,7 +738,7 @@ static nserror page_info__handle_item_click(
 		*did_something = true;
 		break;
 	default:
-		err = NSERROR_OK;
+		err = SLATEERROR_OK;
 		break;
 	}
 
@@ -746,7 +746,7 @@ static nserror page_info__handle_item_click(
 }
 
 /* Exported interface documented in desktop/page_info.h */
-nserror page_info_mouse_action(
+slateerror page_info_mouse_action(
 		struct page_info *pi,
 		enum browser_mouse_state mouse,
 		int x,
@@ -754,7 +754,7 @@ nserror page_info_mouse_action(
 		bool *did_something)
 {
 	int cur_y = 0;
-	nserror err;
+	slateerror err;
 
 	cur_y += pi->window_padding;
 	for (unsigned i = 0; i < PI_ENTRY__COUNT; i++) {
@@ -781,7 +781,7 @@ nserror page_info_mouse_action(
 				hovering = true;
 				err = page_info__handle_item_click(
 						pi, mouse, i, did_something);
-				if (err != NSERROR_OK) {
+				if (err != SLATEERROR_OK) {
 					return err;
 				}
 			}
@@ -803,7 +803,7 @@ nserror page_info_mouse_action(
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* Exported interface documented in desktop/page_info.h */
@@ -811,11 +811,11 @@ bool page_info_keypress(
 		struct page_info *pi,
 		int32_t key)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* Exported interface documented in desktop/page_info.h */
-nserror page_info_get_size(
+slateerror page_info_get_size(
 		struct page_info *pi,
 		int *width,
 		int *height)
@@ -823,5 +823,5 @@ nserror page_info_get_size(
 	*width = pi->width;
 	*height = pi->height;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }

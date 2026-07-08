@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 Daniel Silverstone <dsilvers@digital-scurf.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,7 +22,7 @@
 
 #include "utils/errors.h"
 #include "utils/ring.h"
-#include "netsurf/download.h"
+#include "slate/download.h"
 #include "desktop/download.h"
 
 #include "monkey/output.h"
@@ -60,13 +60,13 @@ gui_download_window_create(download_context *ctx,
 	return ret;
 }
 
-static nserror 
+static slateerror 
 gui_download_window_data(struct gui_download_window *dw, 
                          const char *data, unsigned int size)
 {
 	moutf(MOUT_DOWNLOAD, "DATA DWIN %u SIZE %u DATA %s",
 		dw->dwin_num, size, data);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void

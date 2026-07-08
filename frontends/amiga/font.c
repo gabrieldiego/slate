@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 - 2016 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,9 +26,9 @@
 #include <proto/graphics.h>
 
 #include "utils/log.h"
-#include "utils/nsoption.h"
-#include "netsurf/browser.h"
-#include "netsurf/layout.h"
+#include "utils/slateoption.h"
+#include "slate/browser.h"
+#include "slate/layout.h"
 
 #include "amiga/font.h"
 #include "amiga/font_bullet.h"
@@ -55,11 +55,11 @@ void ami_font_setdevicedpi(int id)
 	DisplayInfoHandle dih;
 	struct DisplayInfo dinfo;
 
-	ULONG ydpi = nsoption_int(screen_ydpi);
-	ULONG xdpi = nsoption_int(screen_ydpi);
-	browser_set_dpi(nsoption_int(screen_ydpi));
+	ULONG ydpi = slateoption_int(screen_ydpi);
+	ULONG xdpi = slateoption_int(screen_ydpi);
+	browser_set_dpi(slateoption_int(screen_ydpi));
 
-	if(id && (nsoption_int(monitor_aspect_x) != 0) && (nsoption_int(monitor_aspect_y) != 0))
+	if(id && (slateoption_int(monitor_aspect_x) != 0) && (slateoption_int(monitor_aspect_y) != 0))
 	{
 		if((dih = FindDisplayInfo(id)))
 		{
@@ -69,12 +69,12 @@ void ami_font_setdevicedpi(int id)
 				int xres = dinfo.Resolution.x;
 				int yres = dinfo.Resolution.y;
 
-				if((nsoption_int(monitor_aspect_x) != 4) || (nsoption_int(monitor_aspect_y) != 3))
+				if((slateoption_int(monitor_aspect_x) != 4) || (slateoption_int(monitor_aspect_y) != 3))
 				{
 					/* AmigaOS sees 4:3 modes as square in the DisplayInfo database,
 					 * so we correct other modes to "4:3 equiv" here. */
-					xres = (xres * nsoption_int(monitor_aspect_x)) / 4;
-					yres = (yres * nsoption_int(monitor_aspect_y)) / 3;
+					xres = (xres * slateoption_int(monitor_aspect_x)) / 4;
+					yres = (yres * slateoption_int(monitor_aspect_y)) / 3;
 				}
 
 				xdpi = (yres * ydpi) / xres;
@@ -111,30 +111,30 @@ void ami_font_close_disk_font(struct TextFont *tfont)
 /* Font initialisation */
 void ami_font_init(void)
 {
-	if(nsoption_bool(bitmap_fonts) == false) {
+	if(slateoption_bool(bitmap_fonts) == false) {
 #ifdef __amigaos4__
-		nsoption_setnull_charp(font_sans, (char *)strdup("DejaVu Sans"));
-		nsoption_setnull_charp(font_serif, (char *)strdup("DejaVu Serif"));
-		nsoption_setnull_charp(font_mono, (char *)strdup("DejaVu Sans Mono"));
-		nsoption_setnull_charp(font_cursive, (char *)strdup("DejaVu Sans"));
-		nsoption_setnull_charp(font_fantasy, (char *)strdup("DejaVu Serif"));
+		slateoption_setnull_charp(font_sans, (char *)strdup("DejaVu Sans"));
+		slateoption_setnull_charp(font_serif, (char *)strdup("DejaVu Serif"));
+		slateoption_setnull_charp(font_mono, (char *)strdup("DejaVu Sans Mono"));
+		slateoption_setnull_charp(font_cursive, (char *)strdup("DejaVu Sans"));
+		slateoption_setnull_charp(font_fantasy, (char *)strdup("DejaVu Serif"));
 #else
 		/* Default CG fonts for OS3 - these work with use_diskfont both on and off,
 		however they are slow in both cases. The bitmap fonts don't work when
 		use_diskfont is off. */
-		nsoption_setnull_charp(font_sans, (char *)strdup("CGTriumvirate"));
-		nsoption_setnull_charp(font_serif, (char *)strdup("CGTimes"));
-		nsoption_setnull_charp(font_mono, (char *)strdup("LetterGothic"));
-		nsoption_setnull_charp(font_cursive, (char *)strdup("CGTriumvirate"));
-		nsoption_setnull_charp(font_fantasy, (char *)strdup("CGTimes"));
+		slateoption_setnull_charp(font_sans, (char *)strdup("CGTriumvirate"));
+		slateoption_setnull_charp(font_serif, (char *)strdup("CGTimes"));
+		slateoption_setnull_charp(font_mono, (char *)strdup("LetterGothic"));
+		slateoption_setnull_charp(font_cursive, (char *)strdup("CGTriumvirate"));
+		slateoption_setnull_charp(font_fantasy, (char *)strdup("CGTimes"));
 #endif
 		ami_font_bullet_init();
 	} else {
-		nsoption_setnull_charp(font_sans, (char *)strdup("helvetica"));
-		nsoption_setnull_charp(font_serif, (char *)strdup("times"));
-		nsoption_setnull_charp(font_mono, (char *)strdup("topaz"));
-		nsoption_setnull_charp(font_cursive, (char *)strdup("garnet"));
-		nsoption_setnull_charp(font_fantasy, (char *)strdup("emerald"));
+		slateoption_setnull_charp(font_sans, (char *)strdup("helvetica"));
+		slateoption_setnull_charp(font_serif, (char *)strdup("times"));
+		slateoption_setnull_charp(font_mono, (char *)strdup("topaz"));
+		slateoption_setnull_charp(font_cursive, (char *)strdup("garnet"));
+		slateoption_setnull_charp(font_fantasy, (char *)strdup("emerald"));
 
 		ami_font_diskfont_init();
 	}
@@ -142,7 +142,7 @@ void ami_font_init(void)
 
 void ami_font_fini(void)
 {
-	if(nsoption_bool(bitmap_fonts) == false) {
+	if(slateoption_bool(bitmap_fonts) == false) {
 		ami_font_bullet_fini();
 	} else {
 		ami_font_diskfont_fini();
@@ -150,7 +150,7 @@ void ami_font_fini(void)
 }
 
 /* Stub entry points */
-static nserror ami_font_width(const plot_font_style_t *fstyle,
+static slateerror ami_font_width(const plot_font_style_t *fstyle,
 		const char *string, size_t length,
 		int *width)
 {
@@ -158,7 +158,7 @@ static nserror ami_font_width(const plot_font_style_t *fstyle,
 	return ami_nsfont->width(fstyle, string, length, width);
 }
 
-static nserror ami_font_position(const plot_font_style_t *fstyle,
+static slateerror ami_font_position(const plot_font_style_t *fstyle,
 		const char *string, size_t length,
 		int x, size_t *char_offset, int *actual_x)
 {
@@ -166,7 +166,7 @@ static nserror ami_font_position(const plot_font_style_t *fstyle,
 	return ami_nsfont->posn(fstyle, string, length, x, char_offset, actual_x);
 }
 
-static nserror ami_font_split(const plot_font_style_t *fstyle,
+static slateerror ami_font_split(const plot_font_style_t *fstyle,
 		const char *string, size_t length,
 		int x, size_t *char_offset, int *actual_x)
 {

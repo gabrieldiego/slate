@@ -3,7 +3,7 @@
  *
  * Framebuffer windowing toolkit scrollbar widgets
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,7 +28,7 @@
 #include <libnsfb_cursor.h>
 
 #include "utils/log.h"
-#include "netsurf/browser_window.h"
+#include "slate/browser_window.h"
 
 #include "framebuffer/gui.h"
 #include "framebuffer/fbtk.h"

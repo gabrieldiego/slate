@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 Daniel Silverstone <dsilvers@digital-scurf.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,12 +31,12 @@
 #include "utils/log.h"
 #include "utils/messages.h"
 #include "utils/filepath.h"
-#include "utils/nsoption.h"
-#include "utils/nsurl.h"
-#include "netsurf/misc.h"
-#include "netsurf/netsurf.h"
-#include "netsurf/url_db.h"
-#include "netsurf/cookie_db.h"
+#include "utils/slateoption.h"
+#include "utils/slateurl.h"
+#include "slate/misc.h"
+#include "slate/slate.h"
+#include "slate/url_db.h"
+#include "slate/cookie_db.h"
 #include "content/fetch.h"
 #include "content/backing_store.h"
 
@@ -187,7 +187,7 @@ static const char * const *get_languagev(void)
  * \return A string vector of valid paths where resources can be found
  */
 static char **
-nsmonkey_init_resource(const char *resource_path)
+jotter_init_resource(const char *resource_path)
 {
 	const char * const *langv;
 	char **pathv; /* resource path string vector */
@@ -206,25 +206,25 @@ nsmonkey_init_resource(const char *resource_path)
 
 static void monkey_quit(void)
 {
-	urldb_save_cookies(nsoption_charp(cookie_jar));
-	urldb_save(nsoption_charp(url_file));
+	urldb_save_cookies(slateoption_charp(cookie_jar));
+	urldb_save(slateoption_charp(url_file));
 	monkey_fetch_filetype_fin();
 }
 
-static nserror gui_launch_url(struct nsurl *url)
+static slateerror gui_launch_url(struct slateurl *url)
 {
-	moutf(MOUT_GENERIC, "LAUNCH URL %s", nsurl_access(url));
-	return NSERROR_OK;
+	moutf(MOUT_GENERIC, "LAUNCH URL %s", slateurl_access(url));
+	return SLATEERROR_OK;
 }
 
-static nserror gui_present_cookies(const char *search_term)
+static slateerror gui_present_cookies(const char *search_term)
 {
 	if (search_term != NULL) {
 		moutf(MOUT_GENERIC, "PRESENT_COOKIES %s", search_term);
 	} else {
 		moutf(MOUT_GENERIC, "PRESENT_COOKIES");
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void quit_handler(int argc, char **argv)
@@ -234,23 +234,23 @@ static void quit_handler(int argc, char **argv)
 
 static void monkey_options_handle_command(int argc, char **argv)
 {
-	nsoption_commandline(&argc, argv, nsoptions);
+	slateoption_commandline(&argc, argv, slateoptions);
 }
 
 /**
- * Set option defaults for monkey frontend
+ * Set option defaults for the jotter frontend.
  *
  * @param defaults The option table to update.
  * @return error status.
  */
-static nserror set_defaults(struct nsoption_s *defaults)
+static slateerror set_defaults(struct slateoption_s *defaults)
 {
 	/* Set defaults for absent option strings */
-	nsoption_setnull_charp(cookie_file, strdup("~/.netsurf/Cookies"));
-	nsoption_setnull_charp(cookie_jar, strdup("~/.netsurf/Cookies"));
-	nsoption_setnull_charp(url_file, strdup("~/.netsurf/URLs"));
+	slateoption_setnull_charp(cookie_file, strdup("~/.slate/Cookies"));
+	slateoption_setnull_charp(cookie_jar, strdup("~/.slate/Cookies"));
+	slateoption_setnull_charp(url_file, strdup("~/.slate/URLs"));
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -348,7 +348,7 @@ __assert_fail(const char *__assertion, const char *__file,
 {
 	int frames;
 	fprintf(stderr,
-		"MONKEY: Assertion failure!\n"
+		"JOTTER: Assertion failure!\n"
 		"%s:%d: %s: Assertion `%s` failed.\n",
 		__file, __line, __function, __assertion);
 
@@ -391,8 +391,8 @@ main(int argc, char **argv)
 	char *messages;
 	char *options;
 	char buf[PATH_MAX];
-	nserror ret;
-	struct netsurf_table monkey_table = {
+	slateerror ret;
+	struct slate_table monkey_table = {
 		.misc = &monkey_misc_table,
 		.window = monkey_window_table,
 		.download = monkey_download_table,
@@ -411,8 +411,8 @@ main(int argc, char **argv)
 	signal(SIGBUS, signal_handler);
 #endif
 
-	ret = netsurf_register(&monkey_table);
-	if (ret != NSERROR_OK) {
+	ret = slate_register(&monkey_table);
+	if (ret != SLATEERROR_OK) {
 		die("NetSurf operation table failed registration");
 	}
 
@@ -422,7 +422,7 @@ main(int argc, char **argv)
 	setbuf(stderr, NULL);
 
 	/* Prep the search paths */
-	respaths = nsmonkey_init_resource("${HOME}/.netsurf/:${NETSURFRES}:"MONKEY_RESPATH":./frontends/monkey/res");
+	respaths = jotter_init_resource("${HOME}/.slate/:${SLATERES}:"JOTTER_RESPATH":./frontends/monkey/res");
 
 	/* initialise logging. Not fatal if it fails but not much we can do
 	 * about it either.
@@ -430,33 +430,33 @@ main(int argc, char **argv)
 	nslog_init(nslog_stream_configure, &argc, argv);
 
 	/* user options setup */
-	ret = nsoption_init(set_defaults, &nsoptions, &nsoptions_default);
-	if (ret != NSERROR_OK) {
+	ret = slateoption_init(set_defaults, &slateoptions, &slateoptions_default);
+	if (ret != SLATEERROR_OK) {
 		die("Options failed to initialise");
 	}
 	options = filepath_find(respaths, "Choices");
-	nsoption_read(options, nsoptions);
+	slateoption_read(options, slateoptions);
 	free(options);
-	nsoption_commandline(&argc, argv, nsoptions);
+	slateoption_commandline(&argc, argv, slateoptions);
 
 	messages = filepath_find(respaths, "Messages");
 	ret = messages_add_from_file(messages);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Messages failed to load");
 	}
 
 	/* common initialisation */
-	ret = netsurf_init(NULL);
+	ret = slate_init(NULL);
 	free(messages);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		die("NetSurf failed to initialise");
 	}
 
 	filepath_sfinddef(respaths, buf, "mime.types", "/etc/");
 	monkey_fetch_filetype_init(buf);
 
-	urldb_load(nsoption_charp(url_file));
-	urldb_load_cookies(nsoption_charp(cookie_file));
+	urldb_load(slateoption_charp(url_file));
+	urldb_load_cookies(slateoption_charp(cookie_file));
 
 	/* Free resource paths now we're done finding resources */
 	for (char **s = respaths; *s != NULL; s++) {
@@ -465,22 +465,22 @@ main(int argc, char **argv)
 	free(respaths);
 
 	ret = monkey_register_handler("QUIT", quit_handler);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		die("quit handler failed to register");
 	}
 
 	ret = monkey_register_handler("WINDOW", monkey_window_handle_command);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		die("window handler failed to register");
 	}
 
 	ret = monkey_register_handler("OPTIONS", monkey_options_handle_command);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		die("options handler failed to register");
 	}
 
 	ret = monkey_register_handler("LOGIN", monkey_login_handle_command);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		die("login handler failed to register");
 	}
 
@@ -491,11 +491,11 @@ main(int argc, char **argv)
 	moutf(MOUT_GENERIC, "CLOSING_DOWN");
 	monkey_kill_browser_windows();
 
-	netsurf_exit();
+	slate_exit();
 	moutf(MOUT_GENERIC, "FINISHED");
 
 	/* finalise options */
-	nsoption_finalise(nsoptions, nsoptions_default);
+	slateoption_finalise(slateoptions, slateoptions_default);
 
 	/* finalise logging */
 	nslog_finalise();

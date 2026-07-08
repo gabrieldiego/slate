@@ -44,7 +44,7 @@
 
 #include "utils/corestrings.h"
 #include "utils/hashmap.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/messages.h"
 #include "utils/utils.h"
@@ -52,8 +52,8 @@
 #include "utils/useragent.h"
 #include "utils/file.h"
 #include "utils/string.h"
-#include "netsurf/fetch.h"
-#include "netsurf/misc.h"
+#include "slate/fetch.h"
+#include "slate/misc.h"
 #include "desktop/gui_internal.h"
 
 #include "content/fetch.h"
@@ -123,9 +123,9 @@ static void X509_free(X509 *cert)
 static uint32_t
 curl_fetch_ssl_key_hash(void *key)
 {
-	nsurl *url = key;
-	lwc_string *hostname = nsurl_get_component(url, NSURL_HOST);
-	lwc_string *port = nsurl_get_component(url, NSURL_PORT);
+	slateurl *url = key;
+	lwc_string *hostname = slateurl_get_component(url, SLATEURL_HOST);
+	lwc_string *port = slateurl_get_component(url, SLATEURL_PORT);
 	uint32_t hash;
 
 	if (port == NULL)
@@ -143,12 +143,12 @@ curl_fetch_ssl_key_hash(void *key)
 static bool
 curl_fetch_ssl_key_eq(void *key1, void *key2)
 {
-	nsurl *url1 = key1;
-	nsurl *url2 = key2;
-	lwc_string *hostname1 = nsurl_get_component(url1, NSURL_HOST);
-	lwc_string *hostname2 = nsurl_get_component(url2, NSURL_HOST);
-	lwc_string *port1 = nsurl_get_component(url1, NSURL_PORT);
-	lwc_string *port2 = nsurl_get_component(url2, NSURL_PORT);
+	slateurl *url1 = key1;
+	slateurl *url2 = key2;
+	lwc_string *hostname1 = slateurl_get_component(url1, SLATEURL_HOST);
+	lwc_string *hostname2 = slateurl_get_component(url2, SLATEURL_HOST);
+	lwc_string *port1 = slateurl_get_component(url1, SLATEURL_PORT);
+	lwc_string *port2 = slateurl_get_component(url2, SLATEURL_PORT);
 	bool iseq = false;
 
 	if (port1 == NULL)
@@ -178,7 +178,7 @@ curl_fetch_ssl_value_alloc(void *key)
 {
 	struct cert_chain *out;
 
-	if (cert_chain_alloc(0, &out) != NSERROR_OK) {
+	if (cert_chain_alloc(0, &out) != SLATEERROR_OK) {
 		return NULL;
 	}
 
@@ -189,14 +189,14 @@ static void
 curl_fetch_ssl_value_destroy(void *value)
 {
 	struct cert_chain *chain = value;
-	if (cert_chain_free(chain) != NSERROR_OK) {
+	if (cert_chain_free(chain) != SLATEERROR_OK) {
 		NSLOG(netsurf, WARNING, "Problem freeing SSL certificate chain");
 	}
 }
 
 static hashmap_parameters_t curl_fetch_ssl_hashmap_parameters = {
-	.key_clone = (hashmap_key_clone_t)nsurl_ref,
-	.key_destroy = (hashmap_key_destroy_t)nsurl_unref,
+	.key_clone = (hashmap_key_clone_t)slateurl_ref,
+	.key_destroy = (hashmap_key_destroy_t)slateurl_unref,
 	.key_eq = curl_fetch_ssl_key_eq,
 	.key_hash = curl_fetch_ssl_key_hash,
 	.value_alloc = curl_fetch_ssl_value_alloc,
@@ -241,7 +241,7 @@ struct curl_fetch_info {
 	bool stopped;		/**< Download stopped on purpose. */
 	bool only_2xx;		/**< Only HTTP 2xx responses acceptable. */
 	bool downgrade_tls;	/**< Downgrade to TLS 1.2 */
-	nsurl *url;		/**< URL of this fetch. */
+	slateurl *url;		/**< URL of this fetch. */
 	lwc_string *host;	/**< The hostname of this fetch. */
 	struct curl_slist *headers;	/**< List of request headers. */
 	char *location;		/**< Response Location header, or 0. */
@@ -353,9 +353,9 @@ static void fetch_curl_finalise(lwc_string *scheme)
  * \param url The url to check.
  * \return true if the fetcher supports the url else false.
  */
-static bool fetch_curl_can_fetch(const nsurl *url)
+static bool fetch_curl_can_fetch(const slateurl *url)
 {
-	return nsurl_has_component(url, NSURL_HOST);
+	return slateurl_has_component(url, SLATEURL_HOST);
 }
 
 
@@ -472,7 +472,7 @@ static struct curl_fetch_info *fetch_alloc(void)
  */
 static void *
 fetch_curl_setup(struct fetch *parent_fetch,
-		 nsurl *url,
+		 slateurl *url,
 		 bool only_2xx,
 		 bool downgrade_tls,
 		 const char *post_urlenc,
@@ -487,13 +487,13 @@ fetch_curl_setup(struct fetch *parent_fetch,
 	if (fetch == NULL)
 		return NULL;
 
-	NSLOG(netsurf, INFO, "fetch %p, url '%s'", fetch, nsurl_access(url));
+	NSLOG(netsurf, INFO, "fetch %p, url '%s'", fetch, slateurl_access(url));
 
 	fetch->only_2xx = only_2xx;
 	fetch->downgrade_tls = downgrade_tls;
 	fetch->fetch_handle = parent_fetch;
-	fetch->url = nsurl_ref(url);
-	fetch->host = nsurl_get_component(url, NSURL_HOST);
+	fetch->url = slateurl_ref(url);
+	fetch->host = slateurl_get_component(url, SLATEURL_HOST);
 	if (fetch->host == NULL) {
 		goto failed;
 	}
@@ -515,25 +515,25 @@ fetch_curl_setup(struct fetch *parent_fetch,
 	 * which fails with lighttpd, so disable it (see bug 1429054) */
 	APPEND(fetch->headers, "Expect:");
 
-	if ((nsoption_charp(accept_language) != NULL) &&
-	    (nsoption_charp(accept_language)[0] != '\0')) {
+	if ((slateoption_charp(accept_language) != NULL) &&
+	    (slateoption_charp(accept_language)[0] != '\0')) {
 		char s[80];
 		snprintf(s, sizeof s, "Accept-Language: %s, *;q=0.1",
-			 nsoption_charp(accept_language));
+			 slateoption_charp(accept_language));
 		s[sizeof s - 1] = 0;
 		APPEND(fetch->headers, s);
 	}
 
-	if (nsoption_charp(accept_charset) != NULL &&
-	    nsoption_charp(accept_charset)[0] != '\0') {
+	if (slateoption_charp(accept_charset) != NULL &&
+	    slateoption_charp(accept_charset)[0] != '\0') {
 		char s[80];
 		snprintf(s, sizeof s, "Accept-Charset: %s, *;q=0.1",
-			 nsoption_charp(accept_charset));
+			 slateoption_charp(accept_charset));
 		s[sizeof s - 1] = 0;
 		APPEND(fetch->headers, s);
 	}
 
-	if (nsoption_bool(do_not_track) == true) {
+	if (slateoption_bool(do_not_track) == true) {
 		APPEND(fetch->headers, "DNT: 1");
 	}
 
@@ -548,7 +548,7 @@ fetch_curl_setup(struct fetch *parent_fetch,
 
 failed:
 	lwc_string_unref(fetch->host);
-	nsurl_unref(fetch->url);
+	slateurl_unref(fetch->url);
 	fetch_curl_free_postdata(fetch->postdata);
 	curl_slist_free_all(fetch->headers);
 	free(fetch);
@@ -668,7 +668,7 @@ fetch_curl_store_certs_in_cache(struct curl_fetch_info *f)
 
 	/* Now dup that chain into the cache */
 	cached_chain = fetch_curl_get_cached_chain(f);
-	if (cert_chain_dup_into(&chain, cached_chain) != NSERROR_OK) {
+	if (cert_chain_dup_into(&chain, cached_chain) != SLATEERROR_OK) {
 		/* Something went wrong storing the chain, give up */
 		hashmap_remove(curl_fetch_ssl_hashmap, f->url);
 	}
@@ -967,7 +967,7 @@ fetch_curl_postdata_convert(CURL *chandle,
 
 		} else if(multipart->file) {
 			/* file entry */
-			nserror ret;
+			slateerror ret;
 			char *leafname = NULL;
 			char *mimetype = NULL;
 
@@ -977,7 +977,7 @@ fetch_curl_postdata_convert(CURL *chandle,
 			}
 
 			ret = guit->file->basename(multipart->value, &leafname, NULL);
-			if (ret != NSERROR_OK) {
+			if (ret != SLATEERROR_OK) {
 				goto convert_failed;
 			}
 			code = curl_mime_filename(part, leafname);
@@ -1044,13 +1044,13 @@ fetch_curl_postdata_convert(CURL *chandle,
 {
 	struct curl_httppost *post = NULL, *last = NULL;
 	CURLFORMcode code;
-	nserror ret;
+	slateerror ret;
 
 	for (; control; control = control->next) {
 		if (control->file) {
 			char *leafname = NULL;
 			ret = guit->file->basename(control->value, &leafname, NULL);
-			if (ret != NSERROR_OK) {
+			if (ret != SLATEERROR_OK) {
 				continue;
 			}
 
@@ -1174,7 +1174,7 @@ static CURLcode fetch_curl_set_options(struct curl_fetch_info *f)
 		return code;					\
 	}
 
-	SETOPT(CURLOPT_URL, nsurl_access(f->url));
+	SETOPT(CURLOPT_URL, slateurl_access(f->url));
 	SETOPT(CURLOPT_PRIVATE, f);
 	SETOPT(CURLOPT_WRITEDATA, f);
 	SETOPT(CURLOPT_WRITEHEADER, f);
@@ -1200,29 +1200,29 @@ static CURLcode fetch_curl_set_options(struct curl_fetch_info *f)
 	}
 
 	/* set up proxy options */
-	if (nsoption_bool(http_proxy) &&
-	    (nsoption_charp(http_proxy_host) != NULL) &&
-	    (strncmp(nsurl_access(f->url), "file:", 5) != 0)) {
-		SETOPT(CURLOPT_PROXY, nsoption_charp(http_proxy_host));
-		SETOPT(CURLOPT_PROXYPORT, (long) nsoption_int(http_proxy_port));
+	if (slateoption_bool(http_proxy) &&
+	    (slateoption_charp(http_proxy_host) != NULL) &&
+	    (strncmp(slateurl_access(f->url), "file:", 5) != 0)) {
+		SETOPT(CURLOPT_PROXY, slateoption_charp(http_proxy_host));
+		SETOPT(CURLOPT_PROXYPORT, (long) slateoption_int(http_proxy_port));
 
 #if LIBCURL_VERSION_NUM >= 0x071304
 		/* Added in 7.19.4 */
 		/* setup the omission list */
-		SETOPT(CURLOPT_NOPROXY, nsoption_charp(http_proxy_noproxy));
+		SETOPT(CURLOPT_NOPROXY, slateoption_charp(http_proxy_noproxy));
 #endif
 
-		if (nsoption_int(http_proxy_auth) != OPTION_HTTP_PROXY_AUTH_NONE) {
+		if (slateoption_int(http_proxy_auth) != OPTION_HTTP_PROXY_AUTH_NONE) {
 			SETOPT(CURLOPT_PROXYAUTH,
-			       nsoption_int(http_proxy_auth) ==
+			       slateoption_int(http_proxy_auth) ==
 					OPTION_HTTP_PROXY_AUTH_BASIC ?
 					(long) CURLAUTH_BASIC :
 					(long) CURLAUTH_NTLM);
 			snprintf(fetch_proxy_userpwd,
 					sizeof fetch_proxy_userpwd,
 					"%s:%s",
-				 nsoption_charp(http_proxy_auth_user),
-				 nsoption_charp(http_proxy_auth_pass));
+				 slateoption_charp(http_proxy_auth_user),
+				 slateoption_charp(http_proxy_auth_pass));
 			SETOPT(CURLOPT_PROXYUSERPWD, fetch_proxy_userpwd);
 		}
 	} else {
@@ -1348,7 +1348,7 @@ static void fetch_curl_cache_handle(CURL *handle, lwc_string *host)
 	}
 	/* We do not have a handle cached, first up determine if the cache is full */
 	RING_GETSIZE(struct cache_handle, curl_handle_ring, c);
-	if (c >= nsoption_int(max_cached_fetch_handles)) {
+	if (c >= slateoption_int(max_cached_fetch_handles)) {
 		/* Cache is full, so, we rotate the ring by one and
 		 * replace the oldest handle with this one. We do this
 		 * without freeing/allocating memory (except the
@@ -1389,7 +1389,7 @@ static void fetch_curl_stop(struct curl_fetch_info *f)
 	CURLMcode codem;
 
 	assert(f);
-	NSLOG(netsurf, INFO, "fetch %p, url '%s'", f, nsurl_access(f->url));
+	NSLOG(netsurf, INFO, "fetch %p, url '%s'", f, slateurl_access(f->url));
 
 	if (f->curl_handle) {
 		/* remove from curl multi handle */
@@ -1412,7 +1412,7 @@ static void fetch_curl_abort(void *vf)
 {
 	struct curl_fetch_info *f = (struct curl_fetch_info *)vf;
 	assert(f);
-	NSLOG(netsurf, INFO, "fetch %p, url '%s'", f, nsurl_access(f->url));
+	NSLOG(netsurf, INFO, "fetch %p, url '%s'", f, slateurl_access(f->url));
 	if (f->curl_handle) {
 		if (inside_curl) {
 			NSLOG(netsurf, DEBUG, "Deferring cleanup");
@@ -1440,7 +1440,7 @@ static void fetch_curl_free(void *vf)
 	if (f->curl_handle) {
 		curl_easy_cleanup(f->curl_handle);
 	}
-	nsurl_unref(f->url);
+	slateurl_unref(f->url);
 	lwc_string_unref(f->host);
 	free(f->location);
 	free(f->cookie_string);
@@ -1511,7 +1511,7 @@ static bool fetch_curl_process_headers(struct curl_fetch_info *f)
 
 	/* handle HTTP errors (non 2xx response codes) */
 	if (f->only_2xx &&
-	    strncmp(nsurl_access(f->url), "http", 4) == 0 &&
+	    strncmp(slateurl_access(f->url), "http", 4) == 0 &&
 	    (HTTP_RESPONSE_IS_2XX(http_code) == false)) {
 		msg.type = FETCH_ERROR;
 		msg.data.error = messages_get("Not2xx");
@@ -1548,7 +1548,7 @@ static void fetch_curl_done(CURL *curl_handle, CURLcode result)
 	assert(code == CURLE_OK);
 
 	abort_fetch = f->abort;
-	NSLOG(netsurf, INFO, "done %s", nsurl_access(f->url));
+	NSLOG(netsurf, INFO, "done %s", slateurl_access(f->url));
 
 	if ((abort_fetch == false) &&
 	    (result == CURLE_OK ||
@@ -1647,7 +1647,7 @@ static void fetch_curl_poll(lwc_string *scheme_ignored)
 	CURLMcode codem;
 	CURLMsg *curl_msg;
 
-	if (nsoption_bool(suppress_curl_debug) == false) {
+	if (slateoption_bool(suppress_curl_debug) == false) {
 		fd_set read_fd_set, write_fd_set, exc_fd_set;
 		int max_fd = -1;
 		int i;
@@ -1962,7 +1962,7 @@ static int fetch_curl_fdset(lwc_string *scheme, fd_set *read_set,
 
 
 /* exported function documented in content/fetchers/curl.h */
-nserror fetch_curl_register(void)
+slateerror fetch_curl_register(void)
 {
 	CURLcode code;
 	curl_version_info_data *data;
@@ -1997,21 +1997,21 @@ nserror fetch_curl_register(void)
 	code = curl_global_init(CURL_GLOBAL_ALL);
 	if (code != CURLE_OK) {
 		NSLOG(netsurf, INFO, "curl_global_init failed.");
-		return NSERROR_INIT_FAILED;
+		return SLATEERROR_INIT_FAILED;
 	}
 
 	fetch_curl_multi = curl_multi_init();
 	if (!fetch_curl_multi) {
 		NSLOG(netsurf, INFO, "curl_multi_init failed.");
-		return NSERROR_INIT_FAILED;
+		return SLATEERROR_INIT_FAILED;
 	}
 
 #if LIBCURL_VERSION_NUM >= 0x071e00
 	/* built against 7.30.0 or later: configure caching */
 	{
 		CURLMcode mcode;
-		int maxconnects = nsoption_int(max_fetchers) +
-				nsoption_int(max_cached_fetch_handles);
+		int maxconnects = slateoption_int(max_fetchers) +
+				slateoption_int(max_cached_fetch_handles);
 
 #undef SETOPT
 #define SETOPT(option, value) \
@@ -2023,7 +2023,7 @@ nserror fetch_curl_register(void)
 
 		SETOPT(CURLMOPT_MAXCONNECTS, (long)maxconnects);
 		SETOPT(CURLMOPT_MAX_TOTAL_CONNECTIONS, (long)maxconnects);
-		SETOPT(CURLMOPT_MAX_HOST_CONNECTIONS, (long)nsoption_int(max_fetchers_per_host));
+		SETOPT(CURLMOPT_MAX_HOST_CONNECTIONS, (long)slateoption_int(max_fetchers_per_host));
 	}
 #endif
 
@@ -2033,7 +2033,7 @@ nserror fetch_curl_register(void)
 	fetch_blank_curl = curl_easy_init();
 	if (!fetch_blank_curl) {
 		NSLOG(netsurf, INFO, "curl_easy_init failed");
-		return NSERROR_INIT_FAILED;
+		return SLATEERROR_INIT_FAILED;
 	}
 
 #undef SETOPT
@@ -2046,7 +2046,7 @@ nserror fetch_curl_register(void)
 
 	SETOPT(CURLOPT_ERRORBUFFER, fetch_error_buffer);
 	SETOPT(CURLOPT_DEBUGFUNCTION, fetch_curl_debug);
-	if (nsoption_bool(suppress_curl_debug)) {
+	if (slateoption_bool(suppress_curl_debug)) {
 		SETOPT(CURLOPT_VERBOSE, 0);
 	} else {
 		SETOPT(CURLOPT_VERBOSE, 1);
@@ -2064,19 +2064,19 @@ nserror fetch_curl_register(void)
 	SETOPT(CURLOPT_LOW_SPEED_LIMIT, 1L);
 	SETOPT(CURLOPT_LOW_SPEED_TIME, 180L);
 	SETOPT(CURLOPT_NOSIGNAL, 1L);
-	SETOPT(CURLOPT_CONNECTTIMEOUT, (long)nsoption_uint(curl_fetch_timeout));
+	SETOPT(CURLOPT_CONNECTTIMEOUT, (long)slateoption_uint(curl_fetch_timeout));
 	SETOPT(CURLOPT_OPENSOCKETFUNCTION, fetch_curl_socket_open);
 	SETOPT(CURLOPT_CLOSESOCKETFUNCTION, fetch_curl_socket_close);
 
-	if (nsoption_charp(ca_bundle) &&
-	    strcmp(nsoption_charp(ca_bundle), "")) {
+	if (slateoption_charp(ca_bundle) &&
+	    strcmp(slateoption_charp(ca_bundle), "")) {
 		NSLOG(netsurf, INFO, "ca_bundle: '%s'",
-		      nsoption_charp(ca_bundle));
-		SETOPT(CURLOPT_CAINFO, nsoption_charp(ca_bundle));
+		      slateoption_charp(ca_bundle));
+		SETOPT(CURLOPT_CAINFO, slateoption_charp(ca_bundle));
 	}
-	if (nsoption_charp(ca_path) && strcmp(nsoption_charp(ca_path), "")) {
-		NSLOG(netsurf, INFO, "ca_path: '%s'", nsoption_charp(ca_path));
-		SETOPT(CURLOPT_CAPATH, nsoption_charp(ca_path));
+	if (slateoption_charp(ca_path) && strcmp(slateoption_charp(ca_path), "")) {
+		NSLOG(netsurf, INFO, "ca_path: '%s'", slateoption_charp(ca_path));
+		SETOPT(CURLOPT_CAPATH, slateoption_charp(ca_path));
 	}
 
 #if LIBCURL_VERSION_NUM < 0x073800
@@ -2117,7 +2117,7 @@ nserror fetch_curl_register(void)
 	curl_fetch_ssl_hashmap = hashmap_create(&curl_fetch_ssl_hashmap_parameters);
 	if (curl_fetch_ssl_hashmap == NULL) {
 		NSLOG(netsurf, CRITICAL, "Unable to initialise SSL certificate hashmap");
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	for (i = 0; data->protocols[i]; i++) {
@@ -2132,22 +2132,22 @@ nserror fetch_curl_register(void)
 			continue;
 		}
 
-		if (fetcher_add(scheme, &fetcher_ops) != NSERROR_OK) {
+		if (fetcher_add(scheme, &fetcher_ops) != SLATEERROR_OK) {
 			NSLOG(netsurf, INFO,
 			      "Unable to register cURL fetcher for %s",
 			      data->protocols[i]);
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 
 curl_easy_setopt_failed:
 	NSLOG(netsurf, INFO, "curl_easy_setopt failed.");
-	return NSERROR_INIT_FAILED;
+	return SLATEERROR_INIT_FAILED;
 
 #if LIBCURL_VERSION_NUM >= 0x071e00
 curl_multi_setopt_failed:
 	NSLOG(netsurf, INFO, "curl_multi_setopt failed.");
-	return NSERROR_INIT_FAILED;
+	return SLATEERROR_INIT_FAILED;
 #endif
 }

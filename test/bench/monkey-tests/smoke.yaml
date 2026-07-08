@@ -12,11 +12,11 @@ steps:
 - action: repeat
   tag: pages
   values:
-  - ${NETSURF_BENCH_ROOT}/smoke-basic.html
-  - ${NETSURF_BENCH_ROOT}/smoke-css.html
-  - ${NETSURF_BENCH_ROOT}/smoke-inline.html
-  - ${NETSURF_BENCH_ROOT}/smoke-noscript-canvas.html
-  - ${NETSURF_BENCH_ROOT}/smoke-interactions.html
+  - ${SLATE_BENCH_ROOT}/smoke-basic.html
+  - ${SLATE_BENCH_ROOT}/smoke-css.html
+  - ${SLATE_BENCH_ROOT}/smoke-inline.html
+  - ${SLATE_BENCH_ROOT}/smoke-noscript-canvas.html
+  - ${SLATE_BENCH_ROOT}/smoke-interactions.html
   steps:
   - action: navigate
     window: win1
@@ -31,7 +31,7 @@ steps:
     - text-contains: Smoke Bench
 - action: navigate
   window: win1
-  url: ${NETSURF_BENCH_ROOT}/smoke-interactions.html
+  url: ${SLATE_BENCH_ROOT}/smoke-interactions.html
 - action: block
   conditions:
   - window: win1

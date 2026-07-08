@@ -1,7 +1,7 @@
 /*
  * Copyright 2008-2025 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -46,11 +46,11 @@
 #include "assert.h"
 
 #include "utils/log.h"
-#include "utils/nsoption.h"
-#include "utils/nsurl.h"
+#include "utils/slateoption.h"
+#include "utils/slateurl.h"
 #include "utils/messages.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/content.h"
+#include "slate/bitmap.h"
+#include "slate/content.h"
 
 #include "amiga/gui.h"
 #include "amiga/bitmap.h"
@@ -78,7 +78,7 @@ struct bitmap {
 	int nativebmheight;
 	PLANEPTR native_mask;
 	Object *dto;
-	struct nsurl *url;   /* temporary storage space */
+	struct slateurl *url;   /* temporary storage space */
 	char *title; /* temporary storage space */
 	ULONG *icondata; /* for appicons */
 	colour bg; /* alpha blended */
@@ -121,7 +121,7 @@ void *amiga_bitmap_create(int width, int height, enum gui_bitmap_flags flags)
 	bitmap->size = width * height * 4;
 
 #ifdef __amigaos4__
-	if(nsoption_bool(use_extmem) == true) {
+	if(slateoption_bool(use_extmem) == true) {
 		uint64 size64 = bitmap->size;
 		bitmap->iextmem = AllocSysObjectTags(ASOT_EXTMEM,
 								ASOEXTMEM_Size, &size64,
@@ -160,7 +160,7 @@ static void amiga_bitmap_unmap_buffer(void *p)
 #ifdef __amigaos4__
 	struct bitmap *bm = p;
 
-	if((nsoption_bool(use_extmem) == true) && (bm->pixdata != NULL)) {
+	if((slateoption_bool(use_extmem) == true) && (bm->pixdata != NULL)) {
 		NSLOG(netsurf, INFO,
 		      "Unmapping ExtMem object %p for bitmap %p",
 		      bm->iextmem,
@@ -177,7 +177,7 @@ unsigned char *amiga_bitmap_get_buffer(void *bitmap)
 	struct bitmap *bm = bitmap;
 
 #ifdef __amigaos4__
-	if(nsoption_bool(use_extmem) == true) {
+	if(slateoption_bool(use_extmem) == true) {
 		if(bm->pixdata == NULL) {
 			NSLOG(netsurf, INFO,
 			      "Mapping ExtMem object %p for bitmap %p",
@@ -227,7 +227,7 @@ void amiga_bitmap_destroy(void *bitmap)
 		bm->drawhandle = NULL;
 
 #ifdef __amigaos4__
-		if(nsoption_bool(use_extmem) == true) {
+		if(slateoption_bool(use_extmem) == true) {
 			ami_schedule(-1, amiga_bitmap_unmap_buffer, bm);
 			amiga_bitmap_unmap_buffer(bm);
 			FreeSysObject(ASOT_EXTMEM, bm->iextmem);
@@ -238,7 +238,7 @@ void amiga_bitmap_destroy(void *bitmap)
 			ami_memory_clear_free(bm->pixdata);
 		}
 
-		if(bm->url) nsurl_unref(bm->url);
+		if(bm->url) slateurl_unref(bm->url);
 		if(bm->title) free(bm->title);
 
 		bm->pixdata = NULL;
@@ -387,7 +387,7 @@ Object *ami_datatype_object_from_bitmap(struct bitmap *bitmap)
 		}
 
 		SetDTAttrs(dto,NULL,NULL,
-					DTA_ObjName, bitmap->url ? nsurl_access(bitmap->url) : "",
+					DTA_ObjName, bitmap->url ? slateurl_access(bitmap->url) : "",
 					DTA_ObjAnnotation,bitmap->title,
 					DTA_ObjAuthor,messages_get("NetSurf"),
 					DTA_NominalHoriz,bitmap_get_width(bitmap),
@@ -454,13 +454,13 @@ static inline struct BitMap *ami_bitmap_get_guigfx(struct bitmap *bitmap,
 		rp.BitMap = tbm;
 		ULONG dithermode = DITHERMODE_NONE;
 
-		if(nsoption_int(dither_quality) == 1) {
+		if(slateoption_int(dither_quality) == 1) {
 			dithermode = DITHERMODE_EDD;
-		} else if(nsoption_int(dither_quality) == 2) {
+		} else if(slateoption_int(dither_quality) == 2) {
 			dithermode = DITHERMODE_FS;
 		}
 
-		if((!bitmap->opaque) && nsoption_bool(invert_alpha)) {
+		if((!bitmap->opaque) && slateoption_bool(invert_alpha)) {
 			/* invert alpha */
 			unsigned char *bmbuffer = amiga_bitmap_get_buffer(bitmap);
 			for(int i = 0; i < (bitmap->width * bitmap->height * 4); i+=4) {
@@ -476,7 +476,7 @@ static inline struct BitMap *ami_bitmap_get_guigfx(struct bitmap *bitmap,
 										GGFX_DestHeight, height,
 										TAG_DONE);
 
-		if((!bitmap->opaque) && nsoption_bool(invert_alpha)) {
+		if((!bitmap->opaque) && slateoption_bool(invert_alpha)) {
 			/* invert alpha */
 			unsigned char *bmbuffer = amiga_bitmap_get_buffer(bitmap);
 			for(int i = 0; i < (bitmap->width * bitmap->height * 4); i+=4) {
@@ -517,10 +517,10 @@ static inline struct BitMap *ami_bitmap_get_guigfx(struct bitmap *bitmap,
 		}
 	}
 
-	if(((type == AMI_NSBM_TRUECOLOUR) && (nsoption_int(cache_bitmaps) == 2)) ||
+	if(((type == AMI_NSBM_TRUECOLOUR) && (slateoption_int(cache_bitmaps) == 2)) ||
 			((type == AMI_NSBM_PALETTEMAPPED) && (((bitmap->width == width) &&
-			(bitmap->height == height) && (nsoption_int(cache_bitmaps) == 2)) ||
-			(nsoption_int(cache_bitmaps) >= 1)))) {
+			(bitmap->height == height) && (slateoption_int(cache_bitmaps) == 2)) ||
+			(slateoption_int(cache_bitmaps) >= 1)))) {
 		bitmap->nativebm = tbm;
 		bitmap->nativebmwidth = width;
 		bitmap->nativebmheight = height;
@@ -575,10 +575,10 @@ static inline struct BitMap *ami_bitmap_get_generic(struct bitmap *bitmap,
 										bitmap->width * 4, AMI_BITMAP_FORMAT);
 		}
 
-		if(((type == AMI_NSBM_TRUECOLOUR) && (nsoption_int(cache_bitmaps) == 2)) ||
+		if(((type == AMI_NSBM_TRUECOLOUR) && (slateoption_int(cache_bitmaps) == 2)) ||
 				((type == AMI_NSBM_PALETTEMAPPED) && (((bitmap->width == width) &&
-				(bitmap->height == height) && (nsoption_int(cache_bitmaps) == 2)) ||
-				(nsoption_int(cache_bitmaps) >= 1)))) {
+				(bitmap->height == height) && (slateoption_int(cache_bitmaps) == 2)) ||
+				(slateoption_int(cache_bitmaps) >= 1)))) {
 			bitmap->nativebm = tbm;
 			bitmap->nativebmwidth = bitmap->width;
 			bitmap->nativebmheight = bitmap->height;
@@ -610,7 +610,7 @@ static inline struct BitMap *ami_bitmap_get_generic(struct bitmap *bitmap,
 			VTX_RECT(0, 0, bitmap->width, bitmap->height, 0, 0, width, height);
 
 			flags = COMPFLAG_HardwareOnly;
-			if(nsoption_bool(scale_quality) == true) flags |= COMPFLAG_SrcFilter;
+			if(slateoption_bool(scale_quality) == true) flags |= COMPFLAG_SrcFilter;
 			
 			err = CompositeTags(COMPOSITE_Src, tbm, scaledbm,
 						COMPTAG_VertexArray, vtx,
@@ -631,7 +631,7 @@ static inline struct BitMap *ami_bitmap_get_generic(struct bitmap *bitmap,
 			{
 #endif
 				flags = 0;
-				if(nsoption_bool(scale_quality) == true) flags |= COMPFLAG_SrcFilter;
+				if(slateoption_bool(scale_quality) == true) flags |= COMPFLAG_SrcFilter;
 
 				err = CompositeTags(COMPOSITE_Src, tbm, scaledbm,
 						COMPTAG_ScaleX, COMP_FLOAT_TO_FIX((float)width/bitmap->width),
@@ -669,7 +669,7 @@ static inline struct BitMap *ami_bitmap_get_generic(struct bitmap *bitmap,
 		bitmap->nativebm = NULL;
 		bitmap->native = AMI_NSBM_NONE;
 
-		if(nsoption_int(cache_bitmaps) >= 1)
+		if(slateoption_int(cache_bitmaps) >= 1)
 		{
 			bitmap->nativebm = tbm;
 			bitmap->nativebmwidth = width;
@@ -712,7 +712,7 @@ PLANEPTR ami_bitmap_get_mask(struct bitmap *bitmap, int width,
 
 	for(y=0; y<height; y++) {
 		for(x=0; x<width; x++) {
-			if ((*bmi & 0xff000000U) <= (ULONG)nsoption_int(mask_alpha)) maskbit = 0;
+			if ((*bmi & 0xff000000U) <= (ULONG)slateoption_int(mask_alpha)) maskbit = 0;
 				else maskbit = 1;
 			bmi++;
 			bitmap->native_mask[(y*bpr) + (x/8)] |=
@@ -751,7 +751,7 @@ void ami_bitmap_fini(void)
 	pool_bitmap = NULL;
 }
 
-static nserror bitmap_render(struct bitmap *bitmap, struct hlcache_handle *content)
+static slateerror bitmap_render(struct bitmap *bitmap, struct hlcache_handle *content)
 {
 	NSLOG(netsurf, INFO, "Entering bitmap_render");
 
@@ -784,13 +784,13 @@ static nserror bitmap_render(struct bitmap *bitmap, struct hlcache_handle *conte
 	ami_plot_ra_free(bm_globals);
 	amiga_bitmap_set_opaque(bitmap, true);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-void ami_bitmap_set_url(struct bitmap *bm, struct nsurl *url)
+void ami_bitmap_set_url(struct bitmap *bm, struct slateurl *url)
 {
 	if(bm->url != NULL) return;
-	bm->url = nsurl_ref(url);
+	bm->url = slateurl_ref(url);
 }
 
 void ami_bitmap_set_title(struct bitmap *bm, const char *title)

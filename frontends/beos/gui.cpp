@@ -3,7 +3,7 @@
  * Copyright 2008 François Revol <mmu_man@users.sourceforge.net>
  * Copyright 2005 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -48,23 +48,23 @@
 
 extern "C" {
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/messages.h"
 #include "utils/url.h"
 #include "utils/corestrings.h"
 #include "utils/utf8.h"
 #include "utils/utils.h"
-#include "utils/nsurl.h"
-#include "netsurf/misc.h"
-#include "netsurf/clipboard.h"
-#include "netsurf/search.h"
-#include "netsurf/fetch.h"
-#include "netsurf/netsurf.h"
-#include "netsurf/content.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/cookie_db.h"
-#include "netsurf/url_db.h"
+#include "utils/slateurl.h"
+#include "slate/misc.h"
+#include "slate/clipboard.h"
+#include "slate/search.h"
+#include "slate/fetch.h"
+#include "slate/slate.h"
+#include "slate/content.h"
+#include "slate/browser_window.h"
+#include "slate/cookie_db.h"
+#include "slate/url_db.h"
 #include "content/fetch.h"
 
 }
@@ -86,7 +86,7 @@ extern "C" {
 // enable using resources instead of files
 #define USE_RESOURCES 1
 
-bool nsbeos_done = false;
+bool slatebeos_done = false;
 
 bool replicated = false; /**< if we are running as a replicant */
 
@@ -112,7 +112,7 @@ static int sEventPipe[2];
 
 
 /* exported function defined in beos/gui.h */
-nserror beos_warn_user(const char *warning, const char *detail)
+slateerror beos_warn_user(const char *warning, const char *detail)
 {
 	NSLOG(netsurf, INFO, "warn_user: %s (%s)", warning, detail);
 	BAlert *alert;
@@ -126,7 +126,7 @@ nserror beos_warn_user(const char *warning, const char *detail)
 		debugger("warn_user");
         }
         
-        return NSERROR_OK;
+        return SLATEERROR_OK;
 }
 
 NSBrowserApplication::NSBrowserApplication()
@@ -167,7 +167,7 @@ NSBrowserApplication::MessageReceived(BMessage *message)
 		case B_NETPOSITIVE_DOWN:
 		case B_NETPOSITIVE_UP:
 			//DetachCurrentMessage();
-			//nsbeos_pipe_message(message, this, fGuiWindow);
+			//slatebeos_pipe_message(message, this, fGuiWindow);
 			break;
 		default:
 			BApplication::MessageReceived(message);
@@ -178,13 +178,13 @@ NSBrowserApplication::MessageReceived(BMessage *message)
 void
 NSBrowserApplication::ArgvReceived(int32 argc, char **argv)
 {
-	NSBrowserWindow *win = nsbeos_find_last_window();
+	NSBrowserWindow *win = slatebeos_find_last_window();
 	if (!win) {
 		return;
 	}
 	win->Unlock();
 	BMessage *message = DetachCurrentMessage();
-	nsbeos_pipe_message_top(message, win, win->Scaffolding());
+	slatebeos_pipe_message_top(message, win, win->Scaffolding());
 }
 
 
@@ -192,20 +192,20 @@ void
 NSBrowserApplication::RefsReceived(BMessage *message)
 {
 	DetachCurrentMessage();
-	NSBrowserWindow *win = nsbeos_find_last_window();
+	NSBrowserWindow *win = slatebeos_find_last_window();
 	if (!win) {
 		gFirstRefsReceived = message;
 		return;
 	}
 	win->Unlock();
-	nsbeos_pipe_message_top(message, win, win->Scaffolding());
+	slatebeos_pipe_message_top(message, win, win->Scaffolding());
 }
 
 
 void
 NSBrowserApplication::AboutRequested()
 {
-	nsbeos_pipe_message(new BMessage(B_ABOUT_REQUESTED), NULL, NULL);
+	slatebeos_pipe_message(new BMessage(B_ABOUT_REQUESTED), NULL, NULL);
 }
 
 
@@ -213,7 +213,7 @@ bool
 NSBrowserApplication::QuitRequested()
 {
 	// let it notice it
-	nsbeos_pipe_message(new BMessage(B_QUIT_REQUESTED), NULL, NULL);
+	slatebeos_pipe_message(new BMessage(B_QUIT_REQUESTED), NULL, NULL);
 	// we'll let the main thread Quit() ourselves when it's done.
 	return false;
 }
@@ -242,14 +242,14 @@ char *realpath(const char *f, char *buf)
 /* finds the NetSurf binary image ID and path
  * 
  */
-image_id nsbeos_find_app_path(char *path)
+image_id slatebeos_find_app_path(char *path)
 {
 	image_info info;
 	int32 cookie = 0;
 	while (get_next_image_info(0, &cookie, &info) == B_OK) {
 //fprintf(stderr, "%p <> %p, %p\n", (char *)&find_app_resources, (char *)info.text, (char *)info.text + info.text_size);
-		if (((char *)&nsbeos_find_app_path >= (char *)info.text)
-		 && ((char *)&nsbeos_find_app_path < (char *)info.text + info.text_size)) {
+		if (((char *)&slatebeos_find_app_path >= (char *)info.text)
+		 && ((char *)&slatebeos_find_app_path < (char *)info.text + info.text_size)) {
 //fprintf(stderr, "match\n");
 			if (path) {
 				memset(path, 0, B_PATH_NAME_LENGTH);
@@ -264,8 +264,8 @@ image_id nsbeos_find_app_path(char *path)
 /**
  * Locate a shared resource file by searching known places in order.
  *
- * Search order is: ~/config/settings/NetSurf/, ~/.netsurf/, $NETSURFRES/
- * (where NETSURFRES is an environment variable), and finally the path
+ * Search order is: ~/config/settings/NetSurf/, ~/.slate/, $SLATERES/
+ * (where SLATERES is an environment variable), and finally the path
  * specified by the macro at the top of this file.
  *
  * \param  buf      buffer to write to.  must be at least PATH_MAX chars
@@ -296,14 +296,14 @@ char *find_resource(char *buf, const char *filename, const char *def)
 	cdir = getenv("HOME");
 	if (cdir != NULL) {
 		strcpy(t, cdir);
-		strcat(t, "/.netsurf/");
+		strcat(t, "/.slate/");
 		strcat(t, filename);
 		realpath(t, buf);
 		if (access(buf, R_OK) == 0)
 			return buf;
 	}
 
-	cdir = getenv("NETSURFRES");
+	cdir = getenv("SLATERES");
 
 	if (cdir != NULL) {
 		realpath(cdir, buf);
@@ -317,7 +317,7 @@ char *find_resource(char *buf, const char *filename, const char *def)
 	BPathFinder f((void*)find_resource);
 
 	BPath p;
-	if (f.FindPath(B_FIND_PATH_APPS_DIRECTORY, "netsurf/res", p) == B_OK) {
+	if (f.FindPath(B_FIND_PATH_APPS_DIRECTORY, "slate/res", p) == B_OK) {
 		strcpy(t, p.Path());
 		strcat(t, filename);
 		realpath(t, buf);
@@ -345,7 +345,7 @@ char *find_resource(char *buf, const char *filename, const char *def)
 }
 
 /**
- * Check that ~/.netsurf/ exists, and if it doesn't, create it.
+ * Check that ~/.slate/ exists, and if it doesn't, create it.
  */
 static void check_homedir(void)
 {
@@ -376,9 +376,9 @@ static int32 bapp_thread(void *arg)
 	return 0;
 }
 
-static nsurl *gui_get_resource_url(const char *path)
+static slateurl *gui_get_resource_url(const char *path)
 {
-	nsurl *url = NULL;
+	slateurl *url = NULL;
 	BString u("rsrc:///");
 
 	/* default.css -> beosdefault.css */
@@ -391,7 +391,7 @@ static nsurl *gui_get_resource_url(const char *path)
 
 	u << path;
 	NSLOG(netsurf, INFO, "(%s) -> '%s'\n", path, u.String());
-	nsurl_create(u.String(), &url);
+	slateurl_create(u.String(), &url);
 	return url;
 }
 
@@ -433,10 +433,10 @@ static nsurl *gui_get_resource_url(const char *path)
 /**
  * set option from pen
  */
-static nserror
-set_colour_from_ui(struct nsoption_s *opts,
+static slateerror
+set_colour_from_ui(struct slateoption_s *opts,
                    color_which ui,
-                   enum nsoption_e option,
+                   enum slateoption_e option,
                    colour def_colour)
 {
 	if (ui != NOCOL) {
@@ -455,7 +455,7 @@ set_colour_from_ui(struct nsoption_s *opts,
 
 	opts[option].value.c = def_colour;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -464,112 +464,112 @@ set_colour_from_ui(struct nsoption_s *opts,
  * @param defaults The option table to update.
  * @return error status.
  */
-static nserror set_option_defaults(struct nsoption_s *defaults)
+static slateerror set_option_defaults(struct slateoption_s *defaults)
 {
 	/* set system colours for beos ui */
 	struct {
 		color_which ui;
 		colour dflt;
-		enum nsoption_e option;
+		enum slateoption_e option;
 	} entries[] = {
 		{
 			B_DOCUMENT_TEXT_COLOR,
 			0x00000000,
-			NSOPTION_sys_colour_AccentColor
+			SLATEOPTION_sys_colour_AccentColor
 		}, {
 			B_CONTROL_HIGHLIGHT_COLOR,
 			0x00000000,
-			NSOPTION_sys_colour_AccentColorText
+			SLATEOPTION_sys_colour_AccentColorText
 		}, {
 			B_SHINE_COLOR,
 			0x00000000,
-			NSOPTION_sys_colour_ActiveText
+			SLATEOPTION_sys_colour_ActiveText
 		}, {
 			B_CONTROL_BORDER_COLOR,
 			0x00000000,
-			NSOPTION_sys_colour_ButtonBorder
+			SLATEOPTION_sys_colour_ButtonBorder
 		}, {
 			B_CONTROL_BACKGROUND_COLOR,
 			0x00aaaaaa,
-			NSOPTION_sys_colour_ButtonFace
+			SLATEOPTION_sys_colour_ButtonFace
 		}, {
 			B_CONTROL_TEXT_COLOR,
 			0x00000000,
-			NSOPTION_sys_colour_ButtonText
+			SLATEOPTION_sys_colour_ButtonText
 		}, {
 			B_DOCUMENT_BACKGROUND_COLOR,
 			0x00aaaaaa,
-			NSOPTION_sys_colour_Canvas
+			SLATEOPTION_sys_colour_Canvas
 		}, {
 			B_DOCUMENT_TEXT_COLOR,
 			0x00000000,
-			NSOPTION_sys_colour_CanvasText
+			SLATEOPTION_sys_colour_CanvasText
 		}, {
 			B_CONTROL_BACKGROUND_COLOR,
 			0x00000000,
-			NSOPTION_sys_colour_Field
+			SLATEOPTION_sys_colour_Field
 		}, {
 			B_CONTROL_TEXT_COLOR,
 			0x00000000,
-			NSOPTION_sys_colour_FieldText
+			SLATEOPTION_sys_colour_FieldText
 		}, {
 			NOCOL,
 			0x00777777,
-			NSOPTION_sys_colour_GrayText
+			SLATEOPTION_sys_colour_GrayText
 		}, {
 			NOCOL,
 			0x00ee0000,
-			NSOPTION_sys_colour_Highlight
+			SLATEOPTION_sys_colour_Highlight
 		}, {
 			NOCOL,
 			0x00000000,
-			NSOPTION_sys_colour_HighlightText
+			SLATEOPTION_sys_colour_HighlightText
 		}, {
 			B_LINK_TEXT_COLOR,
 			0x00000000,
-			NSOPTION_sys_colour_LinkText
+			SLATEOPTION_sys_colour_LinkText
 		}, {
 			B_CONTROL_MARK_COLOR,
 			0x00000000,
-			NSOPTION_sys_colour_Mark
+			SLATEOPTION_sys_colour_Mark
 		}, {
 			B_CONTROL_TEXT_COLOR,
 			0x00000000,
-			NSOPTION_sys_colour_MarkText
+			SLATEOPTION_sys_colour_MarkText
 		}, {
 			B_TOOL_TIP_BACKGROUND_COLOR,
 			0x00000000,
-			NSOPTION_sys_colour_SelectedItem
+			SLATEOPTION_sys_colour_SelectedItem
 		}, {
 			B_TOOL_TIP_TEXT_COLOR,
 			0x00000000,
-			NSOPTION_sys_colour_SelectedItemText
+			SLATEOPTION_sys_colour_SelectedItemText
 		}, {
 			B_LINK_VISITED_COLOR,
 			0x00000000,
-			NSOPTION_sys_colour_VisitedText
+			SLATEOPTION_sys_colour_VisitedText
 		}, {
 			NOCOL,
 			0x00000000,
-			NSOPTION_LISTEND
+			SLATEOPTION_LISTEND
 		},
 	};
 
 	int idx;
 
-	for (idx=0; entries[idx].option != NSOPTION_LISTEND; idx++) {
+	for (idx=0; entries[idx].option != SLATEOPTION_LISTEND; idx++) {
 		set_colour_from_ui(defaults,
 				   entries[idx].ui,
 				   entries[idx].option,
 				   entries[idx].dflt);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-void nsbeos_update_system_ui_colors(void)
+void slatebeos_update_system_ui_colors(void)
 {
-	set_option_defaults(nsoptions);
+	set_option_defaults(slateoptions);
 }
 
 /**
@@ -588,7 +588,7 @@ static BPath get_messages_path()
 	BPathFinder f((void*)get_messages_path);
 
 	BPath p;
-	f.FindPath(B_FIND_PATH_APPS_DIRECTORY, "netsurf/res", p);
+	f.FindPath(B_FIND_PATH_APPS_DIRECTORY, "slate/res", p);
 	BString lang;
 #ifdef __HAIKU__
 	BMessage preferredLangs;
@@ -613,8 +613,8 @@ static BPath get_messages_path()
 static void gui_init(int argc, char** argv)
 {
 	const char *addr;
-	nsurl *url;
-	nserror error;
+	slateurl *url;
+	slateerror error;
 	char buf[PATH_MAX];
 
 	if (pipe(sEventPipe) < 0)
@@ -627,13 +627,13 @@ static void gui_init(int argc, char** argv)
 			return;
 	}
 
-	nsbeos_update_system_ui_colors();
+	slatebeos_update_system_ui_colors();
 
 	fetch_rsrc_register();
 
 	check_homedir();
 
-	//nsbeos_completion_init();
+	//slatebeos_completion_init();
 
 
 	/* This is an ugly hack to just get the new-style throbber going.
@@ -653,7 +653,7 @@ static void gui_init(int argc, char** argv)
 		FIND_THROB(6);
 		FIND_THROB(7);
 		FIND_THROB(8);
-		nsbeos_throbber_initialise_from_png(9,
+		slatebeos_throbber_initialise_from_png(9,
 			filenames[0], filenames[1], filenames[2], filenames[3],
 			filenames[4], filenames[5], filenames[6], filenames[7], 
 			filenames[8]);
@@ -661,19 +661,19 @@ static void gui_init(int argc, char** argv)
 #undef STROF
 	}
 
-	if (nsbeos_throbber == NULL)
+	if (slatebeos_throbber == NULL)
 		die("Unable to load throbber image.\n");
 
 	find_resource(buf, "Choices", "%/Choices");
 	NSLOG(netsurf, INFO, "Using '%s' as Preferences file", buf);
 	options_file_location = strdup(buf);
-	nsoption_read(buf, NULL);
+	slateoption_read(buf, NULL);
 
 
 	/* check what the font settings are, setting them to a default font
 	 * if they're not set - stops Pango whinging
 	 */
-#define SETFONTDEFAULT(OPTION,y) if (nsoption_charp(OPTION) == NULL) nsoption_set_charp(OPTION, strdup((y)))
+#define SETFONTDEFAULT(OPTION,y) if (slateoption_charp(OPTION) == NULL) slateoption_set_charp(OPTION, strdup((y)))
 
 	//XXX: use be_plain_font & friends, when we can check if font is serif or not.
 /*
@@ -700,69 +700,69 @@ static void gui_init(int argc, char** argv)
 	SETFONTDEFAULT(font_fantasy, "Bitstream Vera Serif");
 #endif
 
-	nsbeos_options_init();
+	slatebeos_options_init();
 
 	/* We don't yet have an implementation of "select" form elements (they should use a popup menu)
 	 * So we use the cross-platform code instead. */
-	nsoption_set_bool(core_select_menu, true);
+	slateoption_set_bool(core_select_menu, true);
 
-	if (nsoption_charp(cookie_file) == NULL) {
+	if (slateoption_charp(cookie_file) == NULL) {
 		find_resource(buf, "Cookies", "%/Cookies");
 		NSLOG(netsurf, INFO, "Using '%s' as Cookies file", buf);
-		nsoption_set_charp(cookie_file, strdup(buf));
+		slateoption_set_charp(cookie_file, strdup(buf));
 	}
-	if (nsoption_charp(cookie_jar) == NULL) {
+	if (slateoption_charp(cookie_jar) == NULL) {
 		find_resource(buf, "Cookies", "%/Cookies");
 		NSLOG(netsurf, INFO, "Using '%s' as Cookie Jar file", buf);
-		nsoption_set_charp(cookie_jar, strdup(buf));
+		slateoption_set_charp(cookie_jar, strdup(buf));
 	}
-	if ((nsoption_charp(cookie_file) == NULL) || 
-	    (nsoption_charp(cookie_jar) == NULL))
+	if ((slateoption_charp(cookie_file) == NULL) || 
+	    (slateoption_charp(cookie_jar) == NULL))
 		die("Failed initialising cookie options");
 
-	if (nsoption_charp(url_file) == NULL) {
+	if (slateoption_charp(url_file) == NULL) {
 		find_resource(buf, "URLs", "%/URLs");
 		NSLOG(netsurf, INFO, "Using '%s' as URL file", buf);
-		nsoption_set_charp(url_file, strdup(buf));
+		slateoption_set_charp(url_file, strdup(buf));
 	}
 
-        if (nsoption_charp(ca_path) == NULL) {
+        if (slateoption_charp(ca_path) == NULL) {
                 find_resource(buf, "certs", "/etc/ssl/certs");
                 NSLOG(netsurf, INFO, "Using '%s' as certificate path", buf);
-                nsoption_set_charp(ca_path, strdup(buf));
+                slateoption_set_charp(ca_path, strdup(buf));
         }
 
 	//find_resource(buf, "mime.types", "/etc/mime.types");
 	beos_fetch_filetype_init();
 
-	urldb_load(nsoption_charp(url_file));
-	urldb_load_cookies(nsoption_charp(cookie_file));
+	urldb_load(slateoption_charp(url_file));
+	urldb_load_cookies(slateoption_charp(cookie_file));
 
-	//nsbeos_download_initialise();
+	//slatebeos_download_initialise();
 
 	if (!replicated)
 		be_app->Unlock();
 
 	if (argc > 1) {
 		addr = argv[1];
-	} else if (nsoption_charp(homepage_url) != NULL) {
-		addr = nsoption_charp(homepage_url);
+	} else if (slateoption_charp(homepage_url) != NULL) {
+		addr = slateoption_charp(homepage_url);
 	} else {
-		addr = NETSURF_HOMEPAGE;
+		addr = SLATE_HOMEPAGE;
 	}
 
 	/* create an initial browser window */
-	error = nsurl_create(addr, &url);
-	if (error == NSERROR_OK) {
+	error = slateurl_create(addr, &url);
+	if (error == SLATEERROR_OK) {
 		error = browser_window_create(
 			BW_CREATE_HISTORY,
 			url,
 			NULL,
 			NULL,
 			NULL);
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		beos_warn_user(messages_get_errorcode(error), 0);
 	}
 
@@ -778,7 +778,7 @@ static void gui_init(int argc, char** argv)
 
 
 
-void nsbeos_pipe_message(BMessage *message, BView *_this, struct gui_window *gui)
+void slatebeos_pipe_message(BMessage *message, BView *_this, struct gui_window *gui)
 {
 	if (message == NULL) {
 		fprintf(stderr, "%s(NULL)!\n", __FUNCTION__);
@@ -792,7 +792,7 @@ void nsbeos_pipe_message(BMessage *message, BView *_this, struct gui_window *gui
 }
 
 
-void nsbeos_pipe_message_top(BMessage *message, BWindow *_this, struct beos_scaffolding *scaffold)
+void slatebeos_pipe_message_top(BMessage *message, BWindow *_this, struct beos_scaffolding *scaffold)
 {
 	if (message == NULL) {
 		fprintf(stderr, "%s(NULL)!\n", __FUNCTION__);
@@ -806,7 +806,7 @@ void nsbeos_pipe_message_top(BMessage *message, BWindow *_this, struct beos_scaf
 }
 
 
-void nsbeos_gui_poll(void)
+void slatebeos_gui_poll(void)
 {
 	fd_set read_fd_set, write_fd_set, exc_fd_set;
 	int max_fd;
@@ -855,7 +855,7 @@ void nsbeos_gui_poll(void)
 			NSLOG(netsurf, DEEPDEBUG,
 			      "gui_poll: BMessage.what %-4.4s\n",
 			      (char *)&(message->what));
-			nsbeos_dispatch_event(message);
+			slatebeos_dispatch_event(message);
 		}
 	}
 }
@@ -863,12 +863,12 @@ void nsbeos_gui_poll(void)
 
 static void gui_quit(void)
 {
-	urldb_save_cookies(nsoption_charp(cookie_jar));
-	urldb_save(nsoption_charp(url_file));
-	//options_save_tree(hotlist,nsoption_charp(hotlist_file),messages_get("TreeHotlist"));
+	urldb_save_cookies(slateoption_charp(cookie_jar));
+	urldb_save(slateoption_charp(url_file));
+	//options_save_tree(hotlist,slateoption_charp(hotlist_file),messages_get("TreeHotlist"));
 
-	free(nsoption_charp(cookie_file));
-	free(nsoption_charp(cookie_jar));
+	free(slateoption_charp(cookie_file));
+	free(slateoption_charp(cookie_jar));
 	beos_fetch_filetype_fin();
 	fetch_rsrc_unregister();
 }
@@ -878,7 +878,7 @@ static char *url_to_path(const char *url)
 	char *url_path;
 	char *path = NULL;
 
-	if (url_unescape(url, 0, NULL, &url_path) == NSERROR_OK) {
+	if (url_unescape(url, 0, NULL, &url_path) == SLATEERROR_OK) {
 		/* return the absolute path including leading / */
 		path = strdup(url_path + (FILE_SCHEME_PREFIX_LEN - 1));
 		free(url_path);
@@ -891,7 +891,7 @@ static char *url_to_path(const char *url)
  * Send the source of a content to a text editor.
  */
 
-void nsbeos_gui_view_source(struct hlcache_handle *content)
+void slatebeos_gui_view_source(struct hlcache_handle *content)
 {
 	char *temp_name;
 	bool done = false;
@@ -908,7 +908,7 @@ void nsbeos_gui_view_source(struct hlcache_handle *content)
 	}
 
 	/* try to load local files directly. */
-	temp_name = url_to_path(nsurl_access(hlcache_handle_get_url(content)));
+	temp_name = url_to_path(slateurl_access(hlcache_handle_get_url(content)));
 	if (temp_name) {
 		path.SetTo(temp_name);
 		BEntry entry;
@@ -996,12 +996,12 @@ void nsbeos_gui_view_source(struct hlcache_handle *content)
  * Broadcast an URL that we can't handle.
  */
 
-static nserror gui_launch_url(struct nsurl *url)
+static slateerror gui_launch_url(struct slateurl *url)
 {
 	status_t status;
 	// try to open it as an URI
 	BString mimeType = "application/x-vnd.Be.URL.";
-	BString arg(nsurl_access(url));
+	BString arg(slateurl_access(url));
 
 	mimeType.Append(arg, arg.FindFirst(":"));
 
@@ -1014,12 +1014,12 @@ static nserror gui_launch_url(struct nsurl *url)
 	// we just check if it's registered
 	// if not there is likely no supporting app anyway
 	if (!BMimeType::IsValid(mimeType.String()))
-		return NSERROR_NO_FETCH_HANDLER;
-	char *args[2] = { (char *)nsurl_access(url), NULL };
+		return SLATEERROR_NO_FETCH_HANDLER;
+	char *args[2] = { (char *)slateurl_access(url), NULL };
 	status = be_roster->Launch(mimeType.String(), 1, args);
 	if (status < B_OK)
 		beos_warn_user("Cannot launch url", strerror(status));
-        return NSERROR_OK;
+        return SLATEERROR_OK;
 }
 
 
@@ -1063,9 +1063,9 @@ static struct gui_misc_table beos_misc_table = {
 /** Normal entry point from OS */
 int main(int argc, char** argv)
 {
-	nserror ret;
+	slateerror ret;
 	BPath options;
-	struct netsurf_table beos_table = {
+	struct slate_table beos_table = {
 		&beos_misc_table,
 		beos_window_table,
 		NULL, /* corewindow */
@@ -1081,8 +1081,8 @@ int main(int argc, char** argv)
                 beos_layout_table
 	};
 
-        ret = netsurf_register(&beos_table);
-        if (ret != NSERROR_OK) {
+        ret = slate_register(&beos_table);
+        if (ret != SLATEERROR_OK) {
 		die("NetSurf operation table failed registration");
         }
 
@@ -1102,12 +1102,12 @@ int main(int argc, char** argv)
 	nslog_init(nslog_stream_configure, &argc, argv);
 
 	/* user options setup */
-	ret = nsoption_init(set_option_defaults, &nsoptions, &nsoptions_default);
-	if (ret != NSERROR_OK) {
+	ret = slateoption_init(set_option_defaults, &slateoptions, &slateoptions_default);
+	if (ret != SLATEERROR_OK) {
 		die("Options failed to initialise");
 	}
-	nsoption_read(options.Path(), NULL);
-	nsoption_commandline(&argc, argv, NULL);
+	slateoption_read(options.Path(), NULL);
+	slateoption_commandline(&argc, argv, NULL);
 
 	/* common initialisation */
 	BResources resources;
@@ -1136,21 +1136,21 @@ int main(int argc, char** argv)
         ret = messages_add_from_file(messages.Path());
 	}
 
-        ret = netsurf_init(NULL);
-	if (ret != NSERROR_OK) {
+        ret = slate_init(NULL);
+	if (ret != SLATEERROR_OK) {
 		die("NetSurf failed to initialise");
 	}
 
 	gui_init(argc, argv);
 
-	while (!nsbeos_done) {
-		nsbeos_gui_poll();
+	while (!slatebeos_done) {
+		slatebeos_gui_poll();
 	}
 
-	netsurf_exit();
+	slate_exit();
 
 	/* finalise options */
-	nsoption_finalise(nsoptions, nsoptions_default);
+	slateoption_finalise(slateoptions, slateoptions_default);
 
 	/* finalise logging */
 	nslog_finalise();
@@ -1161,9 +1161,9 @@ int main(int argc, char** argv)
 /** called when replicated from NSBaseView::Instantiate() */
 int gui_init_replicant(int argc, char** argv)
 {
-	nserror ret;
+	slateerror ret;
 	BPath options;
-	struct netsurf_table beos_table = {
+	struct slate_table beos_table = {
 		&beos_misc_table,
 		beos_window_table,
 		NULL, /* corewindow */
@@ -1179,8 +1179,8 @@ int gui_init_replicant(int argc, char** argv)
                 beos_layout_table
 	};
 
-        ret = netsurf_register(&beos_table);
-        if (ret != NSERROR_OK) {
+        ret = slate_register(&beos_table);
+        if (ret != SLATEERROR_OK) {
 		die("NetSurf operation table failed registration");
         }
 
@@ -1195,20 +1195,20 @@ int gui_init_replicant(int argc, char** argv)
 
 	// FIXME: use options as readonly for replicants
 	/* user options setup */
-	ret = nsoption_init(set_option_defaults, &nsoptions, &nsoptions_default);
-	if (ret != NSERROR_OK) {
+	ret = slateoption_init(set_option_defaults, &slateoptions, &slateoptions_default);
+	if (ret != SLATEERROR_OK) {
 		// FIXME: must not die when in replicant!
 		die("Options failed to initialise");
 	}
-	nsoption_read(options.Path(), NULL);
-	nsoption_commandline(&argc, argv, NULL);
+	slateoption_read(options.Path(), NULL);
+	slateoption_commandline(&argc, argv, NULL);
 
 	/* common initialisation */
 	BPath messages = get_messages_path();
         ret = messages_add_from_file(messages.Path());
 
-        ret = netsurf_init(NULL);
-	if (ret != NSERROR_OK) {
+        ret = slate_init(NULL);
+	if (ret != SLATEERROR_OK) {
 		// FIXME: must not die when in replicant!
 		die("NetSurf failed to initialise");
 	}

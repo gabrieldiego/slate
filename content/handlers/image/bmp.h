@@ -2,7 +2,7 @@
  * Copyright 2006 Richard Wilson <info@tinct.net>
  * Copyright 2008 Sean Fox <dyntryx@gmail.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,9 +22,9 @@
  * interface to image/bmp content handler initialisation.
  */
 
-#ifndef NETSURF_IMAGE_BMP_H_
-#define NETSURF_IMAGE_BMP_H_
+#ifndef SLATE_IMAGE_BMP_H_
+#define SLATE_IMAGE_BMP_H_
 
-nserror nsbmp_init(void);
+slateerror nsbmp_init(void);
 
 #endif

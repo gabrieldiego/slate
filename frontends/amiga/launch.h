@@ -1,7 +1,7 @@
 /*
  * Copyright 2008-9 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,11 +23,11 @@
 #ifndef AMIGA_LAUNCH_H
 #define AMIGA_LAUNCH_H
 #include "utils/errors.h"
-struct nsurl;
+struct slateurl;
 
 void ami_openurl_open(void);
 void ami_openurl_close(void);
 
-nserror gui_launch_url(struct nsurl *url);
+slateerror gui_launch_url(struct slateurl *url);
 
 #endif

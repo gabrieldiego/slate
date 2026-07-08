@@ -1,7 +1,7 @@
 /*
  * Copyright 2013 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,8 +27,8 @@
 #include "utils/config.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/keypress.h"
-#include "netsurf/misc.h"
+#include "slate/keypress.h"
+#include "slate/misc.h"
 #include "desktop/textarea.h"
 
 #include "html/private.h"
@@ -40,21 +40,21 @@
 #include "html/form_internal.h"
 
 
-nserror box_textarea_keypress(html_content *html, struct box *box, uint32_t key)
+slateerror box_textarea_keypress(html_content *html, struct box *box, uint32_t key)
 {
 	struct form_control *gadget = box->gadget;
 	struct textarea *ta = gadget->data.text.ta;
 	struct form* form = box->gadget->form;
 	struct content *c = (struct content *)html;
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 
 	assert(ta != NULL);
 
 	if (gadget->type == GADGET_TEXTAREA) {
 		if (textarea_keypress(ta, key)) {
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		} else {
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
 	}
 
@@ -115,7 +115,7 @@ nserror box_textarea_keypress(html_content *html, struct box *box, uint32_t key)
 	default:
 		/* Pass to textarea widget */
 		if (!textarea_keypress(ta, key)) {
-			res = NSERROR_INVALID;
+			res = SLATEERROR_INVALID;
 		}
 		break;
 	}

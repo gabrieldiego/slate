@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_GTK_TOOLBAR_ITEMS_H
-#define NETSURF_GTK_TOOLBAR_ITEMS_H
+#ifndef SLATE_GTK_TOOLBAR_ITEMS_H
+#define SLATE_GTK_TOOLBAR_ITEMS_H
 
 typedef enum {
 	BACK_BUTTON = 0,
@@ -75,7 +75,7 @@ typedef enum {
 	ABOUT_BUTTON,
 	CUSTOMIZE_BUTTON,
 	PLACEHOLDER_BUTTON /* size indicator; array maximum indices */
-} nsgtk_toolbar_button;    /* PLACEHOLDER_BUTTON - 1 */
+} slategtk_toolbar_button;    /* PLACEHOLDER_BUTTON - 1 */
 
 #endif
 
@@ -101,14 +101,14 @@ typedef enum {
 TOOLBAR_ITEM(BACK_BUTTON, back, false, b, p, gtkBack, "go-previous")
 TOOLBAR_ITEM(HISTORY_BUTTON, history, true, y, n, , "local-history")
 TOOLBAR_ITEM(FORWARD_BUTTON, forward, false, b, p, gtkForward, "go-next")
-TOOLBAR_ITEM(STOP_BUTTON, stop, false, t, p, gtkStop, NSGTK_STOCK_STOP)
-TOOLBAR_ITEM(RELOAD_BUTTON, reload, true, t, p, Reload, NSGTK_STOCK_REFRESH)
-TOOLBAR_ITEM(HOME_BUTTON, home, true, b, p, gtkHome, NSGTK_STOCK_HOME)
+TOOLBAR_ITEM(STOP_BUTTON, stop, false, t, p, gtkStop, SLATEGTK_STOCK_STOP)
+TOOLBAR_ITEM(RELOAD_BUTTON, reload, true, t, p, Reload, SLATEGTK_STOCK_REFRESH)
+TOOLBAR_ITEM(HOME_BUTTON, home, true, b, p, gtkHome, SLATEGTK_STOCK_HOME)
 TOOLBAR_ITEM(URL_BAR_ITEM, url_bar, true, n, n, , NULL)
 TOOLBAR_ITEM(WEBSEARCH_ITEM, websearch, true, n, n, , NULL)
 TOOLBAR_ITEM(THROBBER_ITEM, throbber, true, n, n, , NULL)
 TOOLBAR_ITEM(NEWWINDOW_BUTTON, newwindow, true, b, p, gtkNewWindow, "document-new")
-TOOLBAR_ITEM(NEWTAB_BUTTON, newtab, true, b, p, gtkNewTab, NSGTK_STOCK_ADD)
+TOOLBAR_ITEM(NEWTAB_BUTTON, newtab, true, b, p, gtkNewTab, SLATEGTK_STOCK_ADD)
 TOOLBAR_ITEM(OPENFILE_BUTTON, openfile, true, b, p, gtkOpenFile, "document-open")
 TOOLBAR_ITEM(CLOSETAB_BUTTON, closetab, false, n, y, , "window-close")
 TOOLBAR_ITEM(CLOSEWINDOW_BUTTON, closewindow, true, y, p, , "window-close")
@@ -132,7 +132,7 @@ TOOLBAR_ITEM(ZOOMMINUS_BUTTON, zoomminus, true, b, p, gtkZoomMinus, "gtk-zoom-ou
 TOOLBAR_ITEM(ZOOMNORMAL_BUTTON, zoomnormal, true, b, p, gtkZoomNormal, "gtk-zoom-100")
 TOOLBAR_ITEM(FULLSCREEN_BUTTON, fullscreen, true, b, p, gtkFullScreen, "gtk-fullscreen")
 TOOLBAR_ITEM(VIEWSOURCE_BUTTON, viewsource, true, b, p, gtkPageSource, "gtk-index")
-TOOLBAR_ITEM(DOWNLOADS_BUTTON, downloads, true, b, p, gtkDownloads, NSGTK_STOCK_SAVE_AS)
+TOOLBAR_ITEM(DOWNLOADS_BUTTON, downloads, true, b, p, gtkDownloads, SLATEGTK_STOCK_SAVE_AS)
 TOOLBAR_ITEM(SAVEWINDOWSIZE_BUTTON, savewindowsize, true, y, p, gtkSaveWindowSize, NULL)
 TOOLBAR_ITEM(TOGGLEDEBUGGING_BUTTON, toggledebugging, true, y, p, gtkToggleDebugging, NULL)
 TOOLBAR_ITEM(SAVEBOXTREE_BUTTON, debugboxtree, true, y, p, gtkDebugBoxTree, NULL)
@@ -149,9 +149,9 @@ TOOLBAR_ITEM(CONTENTS_BUTTON, contents, true, y, p, gtkContents, "gtk-help")
 TOOLBAR_ITEM(GUIDE_BUTTON, guide, true, y, p, gtkGuide, "gtk-help")
 TOOLBAR_ITEM(INFO_BUTTON, info, true, y, p, gtkUserInformation, "dialog-information")
 TOOLBAR_ITEM(ABOUT_BUTTON, about, true, b, p, gtkAbout, "help-about")
-TOOLBAR_ITEM(OPENMENU_BUTTON, openmenu, true, b, n, gtkOpenMenu, NSGTK_STOCK_OPEN_MENU)
+TOOLBAR_ITEM(OPENMENU_BUTTON, openmenu, true, b, n, gtkOpenMenu, SLATEGTK_STOCK_OPEN_MENU)
 TOOLBAR_ITEM(CUSTOMIZE_BUTTON, cutomize, true, y, p, , NULL)
-TOOLBAR_ITEM(RELOADSTOP_BUTTON, reloadstop, true, b, n, Reload, NSGTK_STOCK_REFRESH)
+TOOLBAR_ITEM(RELOADSTOP_BUTTON, reloadstop, true, b, n, Reload, SLATEGTK_STOCK_REFRESH)
 
 #ifdef TOOLBAR_ITEM_SET
 #undef TOOLBAR_ITEM

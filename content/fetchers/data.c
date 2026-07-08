@@ -28,9 +28,9 @@
 #include <libwapcaplet/libwapcaplet.h>
 #include <nsutils/base64.h>
 
-#include "netsurf/inttypes.h"
+#include "slate/inttypes.h"
 #include "utils/url.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/corestrings.h"
 #include "utils/log.h"
 #include "utils/utils.h"
@@ -42,7 +42,7 @@
 
 struct fetch_data_context {
 	struct fetch *parent_fetch;
-	nsurl *url;
+	slateurl *url;
 	char *mimetype;
 	char *data;
 	size_t datalen;
@@ -70,7 +70,7 @@ static void fetch_data_finalise(lwc_string *scheme)
 	      lwc_string_data(scheme));
 }
 
-static bool fetch_data_can_fetch(const nsurl *url)
+static bool fetch_data_can_fetch(const slateurl *url)
 {
 	return true;
 }
@@ -105,7 +105,7 @@ static void fetch_data_send_header(struct fetch_data_context *ctx,
 	fetch_data_send_callback(&msg, ctx);
 }
 
-static void *fetch_data_setup(struct fetch *parent_fetch, nsurl *url,
+static void *fetch_data_setup(struct fetch *parent_fetch, slateurl *url,
 		 bool only_2xx, bool downgrade_tls, const char *post_urlenc,
 		 const struct fetch_multipart_data *post_multipart,
 		 const char **headers)
@@ -116,7 +116,7 @@ static void *fetch_data_setup(struct fetch *parent_fetch, nsurl *url,
 		return NULL;
 		
 	ctx->parent_fetch = parent_fetch;
-	ctx->url = nsurl_ref(url);
+	ctx->url = slateurl_ref(url);
 
 	RING_INSERT(ring, ctx);
 	
@@ -132,7 +132,7 @@ static void fetch_data_free(void *ctx)
 {
 	struct fetch_data_context *c = ctx;
 
-	nsurl_unref(c->url);
+	slateurl_unref(c->url);
 	free(c->data);
 	free(c->mimetype);
 	free(ctx);
@@ -151,7 +151,7 @@ static void fetch_data_abort(void *ctx)
 
 static bool fetch_data_process(struct fetch_data_context *c)
 {
-	nserror res;
+	slateerror res;
 	fetch_msg msg;
 	const char *params;
 	const char *comma;
@@ -164,9 +164,9 @@ static bool fetch_data_process(struct fetch_data_context *c)
 	 * data must still be there.
 	 */
 	
-	NSLOG(netsurf, DEEPDEBUG, "url: %.140s", nsurl_access(c->url));
+	NSLOG(netsurf, DEEPDEBUG, "url: %.140s", slateurl_access(c->url));
 	
-	if (nsurl_length(c->url) < 6) {
+	if (slateurl_length(c->url) < 6) {
 		/* 6 is the minimum possible length (data:,) */
 		msg.type = FETCH_ERROR;
 		msg.data.error = "Malformed data: URL";
@@ -175,7 +175,7 @@ static bool fetch_data_process(struct fetch_data_context *c)
 	}
 	
 	/* skip the data: part */
-	params = nsurl_access(c->url) + SLEN("data:");
+	params = slateurl_access(c->url) + SLEN("data:");
 	
 	/* find the comma */
 	if ( (comma = strchr(params, ',')) == NULL) {
@@ -212,7 +212,7 @@ static bool fetch_data_process(struct fetch_data_context *c)
 	 * decides to nest URL and base64 encoding.  Like, say, Acid2.
 	 */
 	res = url_unescape(comma + 1, 0, &unescaped_len, &unescaped);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		msg.type = FETCH_ERROR;
 		msg.data.error = "Unable to URL decode data: URL";
 		fetch_data_send_callback(&msg, c);
@@ -302,7 +302,7 @@ static void fetch_data_poll(lwc_string *scheme)
 			}
 		} else {
 			NSLOG(netsurf, INFO, "Processing of %.140s failed!",
-			      nsurl_access(c->url));
+			      slateurl_access(c->url));
 
 			/* Ensure that we're unlocked here. If we aren't, 
 			 * then fetch_data_process() is broken.
@@ -321,7 +321,7 @@ static void fetch_data_poll(lwc_string *scheme)
 	ring = save_ring;
 }
 
-nserror fetch_data_register(void)
+slateerror fetch_data_register(void)
 {
 	lwc_string *scheme = lwc_string_ref(corestring_lwc_data);
 	const struct fetcher_operation_table fetcher_ops = {

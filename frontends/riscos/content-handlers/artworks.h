@@ -1,7 +1,7 @@
 /*
  * Copyright 2005 Adrian Lees <adrianl@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,21 +20,21 @@
  * Content for image/x-artworks (RISC OS interface).
  */
 
-#ifndef _NETSURF_RISCOS_ARTWORKS_H_
-#define _NETSURF_RISCOS_ARTWORKS_H_
+#ifndef _SLATE_RISCOS_ARTWORKS_H_
+#define _SLATE_RISCOS_ARTWORKS_H_
 
 #include "utils/config.h"
 #include "utils/errors.h"
 
 #ifdef WITH_ARTWORKS
 
-nserror artworks_init(void);
+slateerror artworks_init(void);
 
 #else
 
-static inline nserror artworks_init(void)
+static inline slateerror artworks_init(void)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 #endif

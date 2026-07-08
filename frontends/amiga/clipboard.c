@@ -1,7 +1,7 @@
 /*
  * Copyright 2008-2012 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,15 +28,15 @@
 #include <datatypes/textclass.h>
 #include <datatypes/pictureclass.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/utf8.h"
-#include "utils/nsurl.h"
-#include "netsurf/content.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/plotters.h"
-#include "netsurf/keypress.h"
-#include "netsurf/window.h"
-#include "netsurf/clipboard.h"
+#include "utils/slateurl.h"
+#include "slate/content.h"
+#include "slate/browser_window.h"
+#include "slate/plotters.h"
+#include "slate/keypress.h"
+#include "slate/window.h"
+#include "slate/clipboard.h"
 
 #include "amiga/bitmap.h"
 #include "amiga/clipboard.h"
@@ -88,7 +88,7 @@ void gui_start_selection(struct gui_window *g)
 {
 	if(!g) return;
 	if(!ami_gui_get_window(g)) return;
-	if(nsoption_bool(kiosk_mode) == true) return;
+	if(slateoption_bool(kiosk_mode) == true) return;
 
 	ami_gui_menu_set_disabled(ami_gui_get_window(g), ami_gui_get_menu(g), M_COPY, false);
 	ami_gui_menu_set_disabled(ami_gui_get_window(g), ami_gui_get_menu(g), M_CLEAR, false);
@@ -204,7 +204,7 @@ static void gui_get_clipboard(char **buffer, size_t *length)
 }
 
 static void gui_set_clipboard(const char *buffer, size_t length,
-	nsclipboard_styles styles[], int n_styles)
+	slateclipboard_styles styles[], int n_styles)
 {
 	char *text;
 	struct CSet cset = {0, {0}};
@@ -215,7 +215,7 @@ static void gui_set_clipboard(const char *buffer, size_t length,
 	{
 		if(!(PushChunk(iffh, ID_FTXT, ID_FORM, IFFSIZE_UNKNOWN)))
 		{
-			if(nsoption_bool(clipboard_write_utf8))
+			if(slateoption_bool(clipboard_write_utf8))
 			{
 				if(!(PushChunk(iffh, 0, ID_CSET, 32)))
 				{
@@ -231,10 +231,10 @@ static void gui_set_clipboard(const char *buffer, size_t length,
 		}
 
 		if(!(PushChunk(iffh, 0, ID_CHRS, IFFSIZE_UNKNOWN))) {
-			if(nsoption_bool(clipboard_write_utf8)) {
+			if(slateoption_bool(clipboard_write_utf8)) {
 				WriteChunkBytes(iffh, buffer, length);
 			} else {
-				if(utf8_to_local_encoding(buffer, length, &text) == NSERROR_OK) {
+				if(utf8_to_local_encoding(buffer, length, &text) == SLATEERROR_OK) {
 					char *p;
 
 					p = text;
@@ -365,7 +365,7 @@ bool ami_easy_clipboard_svg(struct hlcache_handle *c)
 		ami_svg_to_dr2d(iffh,
 				(const char *)source_data,
 				source_size,
-				nsurl_access(hlcache_handle_get_url(c)));
+				slateurl_access(hlcache_handle_get_url(c)));
 		CloseIFF(iffh);
 	}
 

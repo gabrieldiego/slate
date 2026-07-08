@@ -1,7 +1,7 @@
 /*
  * Copyright 2019 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -53,19 +53,19 @@ static void http_destroy_directive(http_directive *self)
 	free(self);
 }
 
-static nserror http__parse_directive(const char **input,
+static slateerror http__parse_directive(const char **input,
 		http_directive **result)
 {
 	const char *pos = *input;
 	lwc_string *name;
 	lwc_string *value = NULL;
 	http_directive *directive;
-	nserror error;
+	slateerror error;
 
 	/* token [ "=" ( token | quoted-string ) ] */
 
 	error = http__parse_token(&pos, &name);
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 
 	http__skip_LWS(&pos);
@@ -80,7 +80,7 @@ static nserror http__parse_directive(const char **input,
 		else
 			error = http__parse_token(&pos, &value);
 
-		if (error != NSERROR_OK) {
+		if (error != SLATEERROR_OK) {
 			lwc_string_unref(name);
 			return error;
 		}
@@ -90,7 +90,7 @@ static nserror http__parse_directive(const char **input,
 	if (directive == NULL) {
 		lwc_string_unref(value);
 		lwc_string_unref(name);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	HTTP__ITEM_INIT(directive, NULL, http_destroy_directive);
@@ -100,7 +100,7 @@ static nserror http__parse_directive(const char **input,
 	*result = directive;
 	*input = pos;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void http_directive_list_destroy(http_directive *list)
@@ -108,7 +108,7 @@ static void http_directive_list_destroy(http_directive *list)
 	http__item_list_destroy(list);
 }
 
-static nserror http_directive_list_find_item(const http_directive *list,
+static slateerror http_directive_list_find_item(const http_directive *list,
 		lwc_string *name, lwc_string **value)
 {
 	bool match;
@@ -122,7 +122,7 @@ static nserror http_directive_list_find_item(const http_directive *list,
 	}
 
 	if (list == NULL)
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 
 	if (list->value != NULL) {
 		*value = lwc_string_ref(list->value);
@@ -130,7 +130,7 @@ static nserror http_directive_list_find_item(const http_directive *list,
 		*value = NULL;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static const http_directive *http_directive_list_iterate(
@@ -191,7 +191,7 @@ static bool check_duplicates(const http_directive *directives)
 	return result;
 }
 
-static nserror parse_max_age(lwc_string *value, uint32_t *result)
+static slateerror parse_max_age(lwc_string *value, uint32_t *result)
 {
 	const char *pos = lwc_string_data(value);
 	const char *end = pos + lwc_string_length(value);
@@ -201,7 +201,7 @@ static nserror parse_max_age(lwc_string *value, uint32_t *result)
 
 	if (pos == end) {
 		/* Blank value */
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	while (pos < end) {
@@ -214,7 +214,7 @@ static nserror parse_max_age(lwc_string *value, uint32_t *result)
 			}
 		} else {
 			/* Non-digit */
-			return NSERROR_NOT_FOUND;
+			return SLATEERROR_NOT_FOUND;
 		}
 
 		pos++;
@@ -222,11 +222,11 @@ static nserror parse_max_age(lwc_string *value, uint32_t *result)
 
 	*result = val;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* See cache-control.h for documentation */
-nserror http_parse_cache_control(const char *header_value,
+slateerror http_parse_cache_control(const char *header_value,
 		http_cache_control **result)
 {
 	const char *pos = header_value;
@@ -238,14 +238,14 @@ nserror http_parse_cache_control(const char *header_value,
 	bool max_age_valid = false;
 	bool no_cache = false;
 	bool no_store = false;
-	nserror error;
+	slateerror error;
 
 	/* 1#cache-directive */
 
 	http__skip_LWS(&pos);
 
 	error = http__parse_directive(&pos, &first);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		return error;
 	}
 
@@ -254,7 +254,7 @@ nserror http_parse_cache_control(const char *header_value,
 	if (*pos == ',') {
 		error = http__item_list_parse(&pos,
 				http__parse_directive, first, &directives);
-		if (error != NSERROR_OK) {
+		if (error != SLATEERROR_OK) {
 			if (directives != NULL) {
 				http_directive_list_destroy(directives);
 			}
@@ -267,22 +267,22 @@ nserror http_parse_cache_control(const char *header_value,
 	/* Each directive must only appear once */
 	if (check_duplicates(directives) == false) {
 		http_directive_list_destroy(directives);
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	/* Find max-age */
 	error = http_directive_list_find_item(directives,
 			corestring_lwc_max_age, &value_str);
-	if (error == NSERROR_OK && value_str != NULL) {
+	if (error == SLATEERROR_OK && value_str != NULL) {
 		error = parse_max_age(value_str, &max_age);
-		max_age_valid = (error == NSERROR_OK);
+		max_age_valid = (error == SLATEERROR_OK);
 		lwc_string_unref(value_str);
 	}
 
 	/* Find no-cache */
 	error = http_directive_list_find_item(directives,
 			corestring_lwc_no_cache, &value_str);
-	if (error == NSERROR_OK) {
+	if (error == SLATEERROR_OK) {
 		no_cache = true;
 		lwc_string_unref(value_str);
 	}
@@ -290,7 +290,7 @@ nserror http_parse_cache_control(const char *header_value,
 	/* Find no-store */
 	error = http_directive_list_find_item(directives,
 			corestring_lwc_no_store, &value_str);
-	if (error == NSERROR_OK) {
+	if (error == SLATEERROR_OK) {
 		no_store = true;
 		lwc_string_unref(value_str);
 	}
@@ -299,7 +299,7 @@ nserror http_parse_cache_control(const char *header_value,
 
 	cc = malloc(sizeof(*cc));
 	if (cc == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	cc->max_age = max_age;
@@ -309,7 +309,7 @@ nserror http_parse_cache_control(const char *header_value,
 
 	*result = cc;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* See cache-control.h for documentation */

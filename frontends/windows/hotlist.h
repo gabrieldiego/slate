@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org> 
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,21 +21,21 @@
  * Interface to win32 bookmark manager (hotlist).
  */
 
-#ifndef NETSURF_WINDOWS_HOTLIST_H
-#define NETSURF_WINDOWS_HOTLIST_H
+#ifndef SLATE_WINDOWS_HOTLIST_H
+#define SLATE_WINDOWS_HOTLIST_H
 
 /**
  * make the hotlist window visible.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-nserror nsw32_hotlist_present(HINSTANCE hinstance);
+slateerror slatew32_hotlist_present(HINSTANCE hinstance);
 
 /**
  * Free any resources allocated for the hotlist window.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-nserror nsw32_hotlist_finalise(void);
+slateerror slatew32_hotlist_finalise(void);
 
-#endif /* NETSURF_WINDOWS_HOTLIST_H */
+#endif /* SLATE_WINDOWS_HOTLIST_H */

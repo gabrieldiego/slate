@@ -1,7 +1,7 @@
 /*
  * Copyright 2008-2014 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,12 +27,12 @@
  * \param  t         interval before the callback should be made / ms
  * \param  callback  callback function
  * \param  p         user parameter, passed to callback function
- * \return NSERROR_OK on sucess or appropriate error on faliure
+ * \return SLATEERROR_OK on sucess or appropriate error on faliure
  *
  * The callback function will be called as soon as possible after t ms have
  * passed.
  */
-nserror ami_schedule(int t, void (*callback)(void *p), void *p);
+slateerror ami_schedule(int t, void (*callback)(void *p), void *p);
 
 /**
  * Handle a message received from the scheduler process.
@@ -48,7 +48,7 @@ void ami_schedule_handle(struct MsgPort *nsmsgport);
  *
  * \return error.
  */
-nserror ami_schedule_create(struct MsgPort *msgport);
+slateerror ami_schedule_create(struct MsgPort *msgport);
 
 /**
  * Finalise amiga scheduler

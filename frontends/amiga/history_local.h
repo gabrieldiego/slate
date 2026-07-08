@@ -1,7 +1,7 @@
 /*
  * Copyright 2017 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@ struct gui_window;
 struct ami_history_local_window;
 
 /** Open the global history viewer */
-nserror ami_history_local_present(struct gui_window *gw);
-nserror ami_history_local_destroy(struct ami_history_local_window *history_local_win);
+slateerror ami_history_local_present(struct gui_window *gw);
+slateerror ami_history_local_destroy(struct ami_history_local_window *history_local_win);
 #endif
 

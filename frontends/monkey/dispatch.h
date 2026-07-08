@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 Daniel Silverstone <dsilvers@digital-scurf.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,15 +16,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_MONKEY_DISPATCH_H
-#define NETSURF_MONKEY_DISPATCH_H 1
+#ifndef SLATE_JOTTER_DISPATCH_H
+#define SLATE_JOTTER_DISPATCH_H 1
 
 typedef void (*handle_command_fn)(int argc, char **argv);
   
-nserror monkey_register_handler(const char *cmd, handle_command_fn fn);
+slateerror monkey_register_handler(const char *cmd, handle_command_fn fn);
 
 void monkey_process_command(void);
 
 void monkey_free_handlers(void);
 
-#endif /* NETSURF_MONKEY_DISPATCH_H */
+#endif /* SLATE_JOTTER_DISPATCH_H */

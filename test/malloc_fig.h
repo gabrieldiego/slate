@@ -1,7 +1,7 @@
 /*
  * Copyright 2017 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,8 +24,8 @@
  * This library is used to inject allocation faults into NetSurf tests
  */
 
-#ifndef NETSURF_TEST_MALLOC_FIG_H
-#define NETSURF_TEST_MALLOC_FIG_H
+#ifndef SLATE_TEST_MALLOC_FIG_H
+#define SLATE_TEST_MALLOC_FIG_H
 
 void malloc_limit(unsigned int count);
 

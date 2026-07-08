@@ -3,7 +3,7 @@
  * Copyright 2003 Rob Jackson <jacko@xms.ms>
  * Copyright 2005 Adrian Lees <adrianl@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,16 +45,16 @@
 #include "oslib/wimpspriteop.h"
 
 #include "utils/sys_time.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/utf8.h"
 #include "utils/utils.h"
 #include "utils/string.h"
 #include "utils/url.h"
 #include "utils/corestrings.h"
-#include "netsurf/download.h"
+#include "slate/download.h"
 #include "desktop/download.h"
 
 #include "riscos/gui.h"
@@ -219,14 +219,14 @@ const char *ro_gui_download_temp_name(struct gui_download_window *dw)
 /**
  * Try and find the correct RISC OS filetype from a download context.
  */
-static nserror download_ro_filetype(download_context *ctx, bits *ftype_out)
+static slateerror download_ro_filetype(download_context *ctx, bits *ftype_out)
 {
-	nsurl *url = download_context_get_url(ctx);
+	slateurl *url = download_context_get_url(ctx);
 	bits ftype = 0;
 	lwc_string *scheme;
 
 	/* If the file is local try and read its filetype */
-	scheme = nsurl_get_component(url, NSURL_SCHEME);
+	scheme = slateurl_get_component(url, SLATEURL_SCHEME);
 	if (scheme != NULL) {
 		bool filescheme;
 		if (lwc_string_isequal(scheme,
@@ -236,13 +236,13 @@ static nserror download_ro_filetype(download_context *ctx, bits *ftype_out)
 		}
 
 		if (filescheme) {
-			lwc_string *path = nsurl_get_component(url, NSURL_PATH);
+			lwc_string *path = slateurl_get_component(url, SLATEURL_PATH);
 			if (path != NULL && lwc_string_length(path) != 0) {
 				char *raw_path;
 				if (url_unescape(lwc_string_data(path),
 						 lwc_string_length(path),
 						 NULL,
-						 &raw_path) == NSERROR_OK) {
+						 &raw_path) == SLATEERROR_OK) {
 					ftype =	ro_filetype_from_unix_path(raw_path);
 					free(raw_path);
 				}
@@ -271,7 +271,7 @@ static nserror download_ro_filetype(download_context *ctx, bits *ftype_out)
 	}
 
 	*ftype_out = ftype;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -286,14 +286,14 @@ static nserror download_ro_filetype(download_context *ctx, bits *ftype_out)
 static struct gui_download_window *
 gui_download_window_create(download_context *ctx, struct gui_window *gui)
 {
-	nsurl *url = download_context_get_url(ctx);
+	slateurl *url = download_context_get_url(ctx);
 	const char *temp_name;
 	char *filename = NULL;
 	struct gui_download_window *dw;
 	bool space_warning = false;
 	os_error *error;
 	char *local_path;
-	nserror err;
+	slateerror err;
 	size_t i, last_dot;
 
 	dw = malloc(sizeof *dw);
@@ -310,10 +310,10 @@ gui_download_window_create(download_context *ctx, struct gui_window *gui)
 	dw->received = 0;
 	dw->total_size = download_context_get_total_length(ctx);
 
-	/** @todo change this to take a reference to the nsurl and use
+	/** @todo change this to take a reference to the slateurl and use
 	 * that value directly rather than using a fixed buffer.
 	 */
-	strncpy(dw->url, nsurl_access(url), sizeof(dw->url) - 1);
+	strncpy(dw->url, slateurl_access(url), sizeof(dw->url) - 1);
 	dw->url[sizeof(dw->url) - 1] = 0;
 
 	dw->status[0] = 0;
@@ -326,7 +326,7 @@ gui_download_window_create(download_context *ctx, struct gui_window *gui)
 
 	/* get filetype */
 	err = download_ro_filetype(ctx, &dw->file_type);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		ro_warn_user(messages_get_errorcode(err), 0);
 		free(dw);
 		return 0;
@@ -392,7 +392,7 @@ gui_download_window_create(download_context *ctx, struct gui_window *gui)
 			filename[i] = '_';
 	}
 
-	if (nsoption_bool(strip_extensions) && last_dot != (size_t) -1)
+	if (slateoption_bool(strip_extensions) && last_dot != (size_t) -1)
 		filename[last_dot] = '\0';
 
 	if (download_dir != NULL && strlen(download_dir) > 0)
@@ -405,9 +405,9 @@ gui_download_window_create(download_context *ctx, struct gui_window *gui)
 	free(filename);
 
 	err = utf8_to_local_encoding(dw->path, 0, &local_path);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		/* badenc should never happen */
-		assert(err !=NSERROR_BAD_ENCODING);
+		assert(err !=SLATEERROR_BAD_ENCODING);
 		NSLOG(netsurf, INFO, "utf8_to_local_encoding failed");
 		ro_warn_user("NoMemory", 0);
 		free(dw);
@@ -524,10 +524,10 @@ static void gui_download_window_error(struct gui_download_window *dw,
  * \param  dw    download window
  * \param  data  pointer to block of data received
  * \param  size  size of data
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
 
-static nserror gui_download_window_data(struct gui_download_window *dw,
+static slateerror gui_download_window_data(struct gui_download_window *dw,
 		const char *data, unsigned int size)
 {
 	while (true) {
@@ -549,7 +549,7 @@ static nserror gui_download_window_data(struct gui_download_window *dw,
 		}
 		else {
 			dw->received += size;
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 
 		ro_warn_user("SaveError", msg);
@@ -602,7 +602,7 @@ static nserror gui_download_window_data(struct gui_download_window *dw,
 		download_context_abort(dw->ctx);
 		gui_download_window_error(dw, msg);
 
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
 	}
 }
 
@@ -625,7 +625,7 @@ void ro_gui_download_update_status(struct gui_download_window *dw)
 	os_error *error;
 	int width;
 	char *local_status;
-	nserror err;
+	slateerror err;
 
 	gettimeofday(&t, 0);
 	dt = (t.tv_sec + 0.000001 * t.tv_usec) - (dw->last_time.tv_sec +
@@ -660,9 +660,9 @@ void ro_gui_download_update_status(struct gui_download_window *dw)
 			/* convert to local encoding */
 			err = utf8_to_local_encoding(
 				messages_get("Download"), 0, &local_status);
-			if (err != NSERROR_OK) {
+			if (err != SLATEERROR_OK) {
 				/* badenc should never happen */
-				assert(err != NSERROR_BAD_ENCODING);
+				assert(err != SLATEERROR_BAD_ENCODING);
 				/* hide nomem error */
 				snprintf(dw->status, sizeof dw->status,
 					messages_get("Download"),
@@ -683,9 +683,9 @@ void ro_gui_download_update_status(struct gui_download_window *dw)
 
 			err = utf8_to_local_encoding(
 				messages_get("DownloadU"), 0, &local_status);
-			if (err != NSERROR_OK) {
+			if (err != SLATEERROR_OK) {
 				/* badenc should never happen */
-				assert(err != NSERROR_BAD_ENCODING);
+				assert(err != SLATEERROR_BAD_ENCODING);
 				/* hide nomem error */
 				snprintf(dw->status, sizeof dw->status,
 					messages_get("DownloadU"),
@@ -711,9 +711,9 @@ void ro_gui_download_update_status(struct gui_download_window *dw)
 
 		err = utf8_to_local_encoding(messages_get("Downloaded"), 0,
 				&local_status);
-		if (err != NSERROR_OK) {
+		if (err != SLATEERROR_OK) {
 			/* badenc should never happen */
-			assert(err != NSERROR_BAD_ENCODING);
+			assert(err != SLATEERROR_BAD_ENCODING);
 			/* hide nomem error */
 			snprintf(dw->status, sizeof dw->status,
 				messages_get("Downloaded"),
@@ -924,7 +924,7 @@ bool ro_gui_download_keypress(wimp_key *key)
 
 			dw->send_dataload = false;
 			if (ro_gui_download_save(dw, dw->path,
-					!nsoption_bool(confirm_overwrite)) && !dw->ctx)
+					!slateoption_bool(confirm_overwrite)) && !dw->ctx)
 			{
 				/* finished already */
 				riscos_schedule(2000, ro_gui_download_window_destroy_wrapper, dw);
@@ -1015,7 +1015,7 @@ void ro_gui_download_datasave_ack(wimp_message *message)
 	memcpy(&dw->save_message, message, sizeof(wimp_message));
 
 	if (!ro_gui_download_save(dw, message->data.data_xfer.file_name,
-			!nsoption_bool(confirm_overwrite)))
+			!slateoption_bool(confirm_overwrite)))
 		return;
 
 	if (!dw->ctx) {

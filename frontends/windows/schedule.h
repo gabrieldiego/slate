@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 Vincent Sanders <vince@simtec.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,7 +29,7 @@
  * The callback function will be called as soon as possible after t ms have
  * passed.
  */
-nserror win32_schedule(int ival, void (*callback)(void *p), void *p);
+slateerror win32_schedule(int ival, void (*callback)(void *p), void *p);
 
 /**
  * Process scheduled callbacks up to current time.

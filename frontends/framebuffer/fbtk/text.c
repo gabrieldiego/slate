@@ -3,7 +3,7 @@
  *
  * Framebuffer windowing toolkit scrollbar widgets.
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,8 +28,8 @@
 #include <libnsfb_event.h>
 
 #include "utils/log.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/plotters.h"
+#include "slate/browser_window.h"
+#include "slate/plotters.h"
 
 #include "framebuffer/gui.h"
 #include "framebuffer/fbtk.h"
@@ -156,7 +156,7 @@ fb_redraw_text(fbtk_widget_t *widget, fbtk_callback_info *cbi )
 
 	if (caret) {
 		/* This widget has caret, so render it */
-		nsfb_t *nsfb = fbtk_get_nsfb(widget);
+		nsfb_t *slatefb = fbtk_get_nsfb(widget);
 		nsfb_bbox_t line;
 		nsfb_plot_pen_t pen;
 
@@ -169,7 +169,7 @@ fb_redraw_text(fbtk_widget_t *widget, fbtk_callback_info *cbi )
 		pen.stroke_width = 1;
 		pen.stroke_colour = 0xFF0000FF;
 
-		nsfb_plot_line(nsfb, &line, &pen);
+		nsfb_plot_line(slatefb, &line, &pen);
 	}
 
 	nsfb_update(root->u.root.fb, &bbox);

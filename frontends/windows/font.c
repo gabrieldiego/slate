@@ -2,7 +2,7 @@
  * Copyright 2009 - 2014 Vincent Sanders <vince@netsurf-browser.org>
  * Copyright 2009 - 2013 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,20 +26,20 @@
 #include <assert.h>
 #include <windows.h>
 
-#include "netsurf/inttypes.h"
+#include "slate/inttypes.h"
 #include "utils/log.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/utf8.h"
-#include "netsurf/layout.h"
-#include "netsurf/utf8.h"
-#include "netsurf/plot_style.h"
+#include "slate/layout.h"
+#include "slate/utf8.h"
+#include "slate/plot_style.h"
 
 #include "windows/font.h"
 
 HWND font_hwnd;
 
 /* exported interface documented in windows/font.h */
-nserror
+slateerror
 utf8_to_font_encoding(const struct font_desc* font,
 		      const char *string,
 		      size_t len,
@@ -56,7 +56,7 @@ utf8_to_font_encoding(const struct font_desc* font,
  * \param[in] len source string length
  * \param[out] result The UCS2 string
  */
-static nserror
+static slateerror
 utf8_to_local_encoding(const char *string, size_t len, char **result)
 {
 	return utf8_to_enc(string, "UCS-2", len, result);
@@ -70,7 +70,7 @@ utf8_to_local_encoding(const char *string, size_t len, char **result)
  * \param[in] len source string length
  * \param[out] result The UTF8 string
  */
-static nserror
+static slateerror
 utf8_from_local_encoding(const char *string, size_t len, char **result)
 {
 	assert(string && result);
@@ -81,10 +81,10 @@ utf8_from_local_encoding(const char *string, size_t len, char **result)
 
 	*result = strndup(string, len);
 	if (!(*result)) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -99,28 +99,28 @@ HFONT get_font(const plot_font_style_t *style)
 
 	switch(style->family) {
 	case PLOT_FONT_FAMILY_SERIF:
-		face = strdup(nsoption_charp(font_serif));
+		face = strdup(slateoption_charp(font_serif));
 		family = FF_ROMAN | DEFAULT_PITCH;
 		break;
 
 	case PLOT_FONT_FAMILY_MONOSPACE:
-		face = strdup(nsoption_charp(font_mono));
+		face = strdup(slateoption_charp(font_mono));
 		family = FF_MODERN | DEFAULT_PITCH;
 		break;
 
 	case PLOT_FONT_FAMILY_CURSIVE:
-		face = strdup(nsoption_charp(font_cursive));
+		face = strdup(slateoption_charp(font_cursive));
 		family = FF_SCRIPT | DEFAULT_PITCH;
 		break;
 
 	case PLOT_FONT_FAMILY_FANTASY:
-		face = strdup(nsoption_charp(font_fantasy));
+		face = strdup(slateoption_charp(font_fantasy));
 		family = FF_DECORATIVE | DEFAULT_PITCH;
 		break;
 
 	case PLOT_FONT_FAMILY_SANS_SERIF:
 	default:
-		face = strdup(nsoption_charp(font_sans));
+		face = strdup(slateoption_charp(font_sans));
 		family = FF_SWISS | DEFAULT_PITCH;
 		break;
 	}
@@ -176,15 +176,15 @@ HFONT get_font(const plot_font_style_t *style)
  * \param[in] utf8str string encoded in UTF-8 to measure
  * \param[in] utf8len length of string, in bytes
  * \param[out] width updated to width of string[0..length)
- * \return NSERROR_OK on success otherwise appropriate error code
+ * \return SLATEERROR_OK on success otherwise appropriate error code
  */
-static nserror
+static slateerror
 win32_font_width(const plot_font_style_t *style,
 		 const char *utf8str,
 		 size_t utf8len,
 		 int *width)
 {
-	nserror ret = NSERROR_OK;
+	slateerror ret = SLATEERROR_OK;
 	HDC hdc;
 	HFONT font;
 	HFONT fontbak;
@@ -206,12 +206,12 @@ win32_font_width(const plot_font_style_t *style,
 	if (wclen != 0) {
 		wres = GetTextExtentPoint32W(hdc, wstr, wclen, &sizl);
 		if (wres == FALSE) {
-			ret = NSERROR_INVALID;
+			ret = SLATEERROR_INVALID;
 		} else {
 			*width = sizl.cx;
 		}
 	} else {
-		ret = NSERROR_NOSPACE;
+		ret = SLATEERROR_NOSPACE;
 	}
 
 	font = SelectObject(hdc, fontbak);
@@ -232,9 +232,9 @@ win32_font_width(const plot_font_style_t *style,
  * \param  x coordinate to search for
  * \param  char_offset updated to offset in string of actual_x, [0..length]
  * \param  actual_x updated to x coordinate of character closest to x
- * \return NSERROR_OK on success otherwise appropriate error code
+ * \return SLATEERROR_OK on success otherwise appropriate error code
  */
-static nserror
+static slateerror
 win32_font_position(const plot_font_style_t *style,
 		    const char *utf8str,
 		    size_t utf8len,
@@ -247,7 +247,7 @@ win32_font_position(const plot_font_style_t *style,
 	HFONT fontbak;
 	SIZE s;
 	int offset;
-	nserror ret = NSERROR_OK;
+	slateerror ret = SLATEERROR_OK;
 
 	/* deal with zero length input or invalid search co-ordiate */
 	if ((utf8len == 0) || (x < 1)) {
@@ -265,7 +265,7 @@ win32_font_position(const plot_font_style_t *style,
 		*char_offset = (size_t)offset;
 		*actual_x = s.cx;
 	} else {
-		ret = NSERROR_UNKNOWN;
+		ret = SLATEERROR_UNKNOWN;
 	}
 
 	font = SelectObject(hdc, fontbak);
@@ -286,13 +286,13 @@ win32_font_position(const plot_font_style_t *style,
  * \param  x		width available
  * \param[out] offset updated to offset in string of actual_x, [0..length]
  * \param  actual_x	updated to x coordinate of character closest to x
- * \return NSERROR_OK on success otherwise appropriate error code
+ * \return SLATEERROR_OK on success otherwise appropriate error code
  *
  * On exit, [char_offset == 0 ||
  *	   string[char_offset] == ' ' ||
  *	   char_offset == length]
  */
-static nserror
+static slateerror
 win32_font_split(const plot_font_style_t *style,
 		 const char *string,
 		 size_t length,
@@ -300,18 +300,18 @@ win32_font_split(const plot_font_style_t *style,
 		 size_t *offset,
 		 int *actual_x)
 {
-	nserror res;
+	slateerror res;
 	int c_off;
 
 	/* get the offset into teh string on the proposed position */
 	res = win32_font_position(style, string, length, x, offset, actual_x);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
 	/* return the whole string fits in the proposed length */
 	if (*offset == length) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	c_off = *offset;

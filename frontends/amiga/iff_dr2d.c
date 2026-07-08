@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,10 +25,10 @@
 #include <string.h>
 #include <proto/dos.h>
 
-#include "netsurf/inttypes.h"
+#include "slate/inttypes.h"
 #ifndef AMIGA_DR2D_STANDALONE
-#include "utils/nsurl.h"
-#include "netsurf/content.h"
+#include "utils/slateurl.h"
+#include "slate/content.h"
 #include "amiga/os3support.h"
 #include "amiga/iff_dr2d.h"
 #else
@@ -331,7 +331,7 @@ bool ami_save_svg(struct hlcache_handle *c,char *filename)
 		ami_svg_to_dr2d(iffh,
 				(const char *)source_data,
 				source_size,
-				nsurl_access(hlcache_handle_get_url(c)));
+				slateurl_access(hlcache_handle_get_url(c)));
 	}
 
 	if(iffh) CloseIFF(iffh);

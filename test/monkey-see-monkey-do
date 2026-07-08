@@ -19,8 +19,8 @@ import monkey_driver as driver
 
 # Otherwise let's begin...
 
-BASE_PATH = "https://test.netsurf-browser.org/cgi-bin/monkey-index.cgi"
-MONKEY_PATH = "./nsmonkey"
+BASE_PATH = "https://test.slate-browser.org/cgi-bin/monkey-index.cgi"
+MONKEY_PATH = "./jotter"
 
 mp.set_start_method('fork')
 
@@ -28,7 +28,7 @@ def decode_trace_line(l):
     from re import findall, match
     from subprocess import getstatusoutput
 
-    caps = findall(r'./nsmonkey\(\+(0x[0-9a-f]+)\)', l);
+    caps = findall(r'./jotter\(\+(0x[0-9a-f]+)\)', l);
     if not caps:
         return l
 
@@ -36,7 +36,7 @@ def decode_trace_line(l):
         "addr2line -e {} -a -p -f -C {} 2>/dev/null".format(
             MONKEY_PATH, caps[0]))
     if exitcode != 0:
-        return './nsmonkey(+{})'.format(caps[0])
+        return './jotter(+{})'.format(caps[0])
 
     m = match(r'0x(.+): (.+) at (.+):(.+)', output)
 

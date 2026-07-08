@@ -2,7 +2,7 @@
  * Copyright 2008 Adam Blokus <adamblokus@gmail.com>
  * Copyright 2009 John Tytgat <joty@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,7 +36,7 @@
 
 #include <hpdf.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "desktop/save_pdf/font_haru.h"
 #include "desktop/font.h"
 #include "utils/log.h"

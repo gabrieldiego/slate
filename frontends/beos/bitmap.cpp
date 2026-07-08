@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 François Revol <mmu_man@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,11 +38,11 @@
 
 extern "C" {
 #include "utils/log.h"
-#include "netsurf/plotters.h"
-#include "netsurf/content_type.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/content.h"
+#include "slate/plotters.h"
+#include "slate/content_type.h"
+#include "slate/browser_window.h"
+#include "slate/bitmap.h"
+#include "slate/content.h"
 }
 
 #include "beos/bitmap.h"
@@ -79,7 +79,7 @@ struct bitmap {
  * \param rowstride Number of bytes to skip after each row (this implementation
  *                  requires this to be a multiple of 4.)
  */
-static inline void nsbeos_rgba_to_bgra(void *src,
+static inline void slatebeos_rgba_to_bgra(void *src,
                                        void *dst,
                                        int width,
                                        int height,
@@ -205,7 +205,7 @@ static size_t bitmap_get_rowstride(void *vbitmap)
  *
  * \param bitmap The bitmap to free the pretiles of.
  */
-static void nsbeos_bitmap_free_pretiles(struct bitmap *bitmap)
+static void slatebeos_bitmap_free_pretiles(struct bitmap *bitmap)
 {
 #define FREE_TILE(XY) if (bitmap->pretile_##XY) delete (bitmap->pretile_##XY); bitmap->pretile_##XY = NULL
         FREE_TILE(x);
@@ -224,7 +224,7 @@ static void bitmap_destroy(void *vbitmap)
 {
         struct bitmap *bitmap = (struct bitmap *)vbitmap;
         assert(bitmap);
-        nsbeos_bitmap_free_pretiles(bitmap);
+        slatebeos_bitmap_free_pretiles(bitmap);
         delete bitmap->primary;
         delete bitmap->shadow;
         free(bitmap);
@@ -240,11 +240,11 @@ void bitmap_modified(void *vbitmap)
 {
         struct bitmap *bitmap = (struct bitmap *)vbitmap;
         // convert the shadow (ABGR) to into the primary bitmap
-        nsbeos_rgba_to_bgra(bitmap->shadow->Bits(), bitmap->primary->Bits(),
+        slatebeos_rgba_to_bgra(bitmap->shadow->Bits(), bitmap->primary->Bits(),
                             bitmap->primary->Bounds().Width() + 1,
                             bitmap->primary->Bounds().Height() + 1,
                             bitmap->primary->BytesPerRow());
-        nsbeos_bitmap_free_pretiles(bitmap);
+        slatebeos_bitmap_free_pretiles(bitmap);
 }
 
 
@@ -263,7 +263,7 @@ static int bitmap_get_height(void *vbitmap)
 
 
 static BBitmap *
-nsbeos_bitmap_generate_pretile(BBitmap *primary, int repeat_x, int repeat_y)
+slatebeos_bitmap_generate_pretile(BBitmap *primary, int repeat_x, int repeat_y)
 {
         int width = primary->Bounds().Width() + 1;
         int height = primary->Bounds().Height() + 1;
@@ -305,7 +305,7 @@ nsbeos_bitmap_generate_pretile(BBitmap *primary, int repeat_x, int repeat_y)
  * \param  bitmap  a bitmap, as returned by bitmap_create()
  */
 BBitmap *
-nsbeos_bitmap_get_primary(struct bitmap* bitmap)
+slatebeos_bitmap_get_primary(struct bitmap* bitmap)
 {
         return bitmap->primary;
 }
@@ -317,13 +317,13 @@ nsbeos_bitmap_get_primary(struct bitmap* bitmap)
  * \param  bitmap  a bitmap, as returned by bitmap_create()
  */
 BBitmap *
-nsbeos_bitmap_get_pretile_x(struct bitmap* bitmap)
+slatebeos_bitmap_get_pretile_x(struct bitmap* bitmap)
 {
         if (!bitmap->pretile_x) {
                 int width = bitmap->primary->Bounds().Width() + 1;
                 int xmult = (MIN_PRETILE_WIDTH + width - 1)/width;
                 NSLOG(netsurf, INFO, "Pretiling %p for X*%d", bitmap, xmult);
-                bitmap->pretile_x = nsbeos_bitmap_generate_pretile(bitmap->primary, xmult, 1);
+                bitmap->pretile_x = slatebeos_bitmap_generate_pretile(bitmap->primary, xmult, 1);
         }
         return bitmap->pretile_x;
 
@@ -336,13 +336,13 @@ nsbeos_bitmap_get_pretile_x(struct bitmap* bitmap)
  * \param  bitmap  a bitmap, as returned by bitmap_create()
  */
 BBitmap *
-nsbeos_bitmap_get_pretile_y(struct bitmap* bitmap)
+slatebeos_bitmap_get_pretile_y(struct bitmap* bitmap)
 {
         if (!bitmap->pretile_y) {
                 int height = bitmap->primary->Bounds().Height() + 1;
                 int ymult = (MIN_PRETILE_HEIGHT + height - 1)/height;
                 NSLOG(netsurf, INFO, "Pretiling %p for Y*%d", bitmap, ymult);
-                bitmap->pretile_y = nsbeos_bitmap_generate_pretile(bitmap->primary, 1, ymult);
+                bitmap->pretile_y = slatebeos_bitmap_generate_pretile(bitmap->primary, 1, ymult);
         }
         return bitmap->pretile_y;
 }
@@ -354,7 +354,7 @@ nsbeos_bitmap_get_pretile_y(struct bitmap* bitmap)
  * \param  bitmap  a bitmap, as returned by bitmap_create()
  */
 BBitmap *
-nsbeos_bitmap_get_pretile_xy(struct bitmap* bitmap)
+slatebeos_bitmap_get_pretile_xy(struct bitmap* bitmap)
 {
         if (!bitmap->pretile_xy) {
                 int width = bitmap->primary->Bounds().Width() + 1;
@@ -363,7 +363,7 @@ nsbeos_bitmap_get_pretile_xy(struct bitmap* bitmap)
                 int ymult = (MIN_PRETILE_HEIGHT + height - 1)/height;
                 NSLOG(netsurf, INFO, "Pretiling %p for X*%d Y*%d", bitmap,
                       xmult, ymult);
-                bitmap->pretile_xy = nsbeos_bitmap_generate_pretile(bitmap->primary, xmult, ymult);
+                bitmap->pretile_xy = slatebeos_bitmap_generate_pretile(bitmap->primary, xmult, ymult);
         }
         return bitmap->pretile_xy;
 }
@@ -376,7 +376,7 @@ nsbeos_bitmap_get_pretile_xy(struct bitmap* bitmap)
  * \param  content  content structure to thumbnail
  * \return true on success and bitmap updated else false
  */
-static nserror bitmap_render(struct bitmap *bitmap, hlcache_handle *content)
+static slateerror bitmap_render(struct bitmap *bitmap, hlcache_handle *content)
 {
         BBitmap *thumbnail;
         BBitmap *small;
@@ -393,12 +393,12 @@ static nserror bitmap_render(struct bitmap *bitmap, hlcache_handle *content)
         struct redraw_context ctx;
         ctx.interactive = false;
         ctx.background_images = true;
-        ctx.plot = &nsbeos_plotters;
+        ctx.plot = &slatebeos_plotters;
 
         assert(content);
         assert(bitmap);
 
-        thumbnail = nsbeos_bitmap_get_primary(bitmap);
+        thumbnail = slatebeos_bitmap_get_primary(bitmap);
         width = thumbnail->Bounds().Width();
         height = thumbnail->Bounds().Height();
         depth = 32;
@@ -411,7 +411,7 @@ static nserror bitmap_render(struct bitmap *bitmap, hlcache_handle *content)
 
         if (big->InitCheck() < B_OK) {
                 delete big;
-                return NSERROR_NOMEM;
+                return SLATEERROR_NOMEM;
         }
 
         small = new BBitmap(thumbnail->Bounds(),
@@ -420,12 +420,12 @@ static nserror bitmap_render(struct bitmap *bitmap, hlcache_handle *content)
         if (small->InitCheck() < B_OK) {
                 delete small;
                 delete big;
-                return NSERROR_NOMEM;
+                return SLATEERROR_NOMEM;
         }
 
         //XXX: _lock ?
         // backup the current gc
-        oldView = nsbeos_current_gc();
+        oldView = slatebeos_current_gc();
 
         view = new BView(contentRect, "thumbnailer",
                          B_FOLLOW_NONE, B_WILL_DRAW);
@@ -438,7 +438,7 @@ static nserror bitmap_render(struct bitmap *bitmap, hlcache_handle *content)
         view->LockLooper();
 
         /* impose our view on the content... */
-        nsbeos_current_gc_set(view);
+        slatebeos_current_gc_set(view);
 
         /* render the content */
         content_scaled_redraw(content, big_width, big_height, &ctx);
@@ -447,7 +447,7 @@ static nserror bitmap_render(struct bitmap *bitmap, hlcache_handle *content)
         view->UnlockLooper();
 
         // restore the current gc
-        nsbeos_current_gc_set(oldView);
+        slatebeos_current_gc_set(oldView);
 
 
         // now scale it down
@@ -479,7 +479,7 @@ static nserror bitmap_render(struct bitmap *bitmap, hlcache_handle *content)
         delete view;
         delete big;
 
-        return NSERROR_OK;
+        return SLATEERROR_OK;
 }
 
 

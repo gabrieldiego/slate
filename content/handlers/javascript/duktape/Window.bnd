@@ -2,7 +2,7 @@
  *
  * Copyright 2015 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * Released under the terms of the MIT License,
  *         http://www.opensource.org/licenses/mit-license
@@ -16,15 +16,15 @@ class Window {
 	prologue %{
 #include <string.h>
 #include "utils/corestrings.h"
-#include "utils/nsurl.h"
-#include "netsurf/browser_window.h"
+#include "utils/slateurl.h"
+#include "slate/browser_window.h"
 #include "content/hlcache.h"
 #include "html/html.h"
 #include "html/private.h"
 #include "desktop/gui_internal.h"
-#include "netsurf/misc.h"
+#include "slate/misc.h"
 #include "utils/ring.h"
-#include "netsurf/inttypes.h"
+#include "slate/inttypes.h"
 
 #define WINDOW_CALLBACKS MAGIC(WindowCallbacks)
 #define HANDLER_MAGIC MAGIC(HANDLER_MAP)
@@ -208,7 +208,7 @@ window_remove_callback_by_handle(duk_context *ctx,
 				res = guit->misc->schedule(-1,
 							   window_schedule_callback,
 							   sched);
-				assert(res == NSERROR_OK);
+				assert(res == SLATEERROR_OK);
 				RING_REMOVE(window->schedule_ring, sched);
 				window_remove_callback_bits(ctx, sched->handle);
 				free(sched);
@@ -289,7 +289,7 @@ init Window(struct browser_window *win, struct html_content *htmlc)
 	NSLOG(netsurf, DEEPDEBUG, "win=%p htmlc=%p", priv->win, priv->htmlc);
 
 	NSLOG(netsurf, DEEPDEBUG,
-	      "URL is %s", nsurl_access(browser_window_access_url(priv->win)));
+	      "URL is %s", slateurl_access(browser_window_access_url(priv->win)));
 	duk_push_object(ctx);
 	duk_put_prop_string(ctx, 0, WINDOW_CALLBACKS);
 %}

@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
 #include <stdlib.h>
 #include <mt_gem.h>
 
-#include "netsurf/mouse.h"
-#include "netsurf/plot_style.h"
+#include "slate/mouse.h"
+#include "slate/plot_style.h"
 
 #include "atari/bitmap.h"
 #include "atari/plot/fontplot.h"

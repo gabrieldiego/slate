@@ -1,7 +1,7 @@
 /*
  * Copyright 2006 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,10 +20,10 @@
  * Knockout rendering (interface).
  */
 
-#ifndef _NETSURF_DESKTOP_KNOCKOUT_H_
-#define _NETSURF_DESKTOP_KNOCKOUT_H_
+#ifndef _SLATE_DESKTOP_KNOCKOUT_H_
+#define _SLATE_DESKTOP_KNOCKOUT_H_
 
-#include "netsurf/plotters.h"
+#include "slate/plotters.h"
 
 
 /**

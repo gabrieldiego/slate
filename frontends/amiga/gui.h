@@ -1,7 +1,7 @@
 /*
  * Copyright 2008-2025 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,8 +25,8 @@
 #include <dos/dos.h>
 #include <devices/inputevent.h>
 
-#include "netsurf/window.h"
-#include "netsurf/mouse.h"
+#include "slate/window.h"
+#include "slate/mouse.h"
 
 #include "amiga/gui_menu.h"
 #include "amiga/object.h"
@@ -79,7 +79,7 @@ struct ami_generic_window {
 
 /* The return value for these functions must be deallocated using FreeVec() */
 STRPTR ami_locale_langs(int *codeset);
-char *ami_gui_get_cache_favicon_name(struct nsurl *url, bool only_if_avail);
+char *ami_gui_get_cache_favicon_name(struct slateurl *url, bool only_if_avail);
 
 /* Functions lacking documentation */
 void ami_get_msg(void);
@@ -96,7 +96,7 @@ void ami_gui_hotlist_update_all(void);
 void ami_gui_tabs_toggle_all(void);
 bool ami_locate_resource(char *fullpath, const char *file);
 void ami_gui_update_hotlist_button(struct gui_window_2 *gwin);
-nserror ami_gui_new_blank_tab(struct gui_window_2 *gwin);
+slateerror ami_gui_new_blank_tab(struct gui_window_2 *gwin);
 int ami_gui_count_windows(int window, int *tabs);
 void ami_gui_set_scale(struct gui_window *gw, float scale);
 void ami_set_pointer(struct gui_window_2 *gwin, gui_pointer_shape shape, bool update);
@@ -129,7 +129,7 @@ void ami_gui_close_inactive_tabs(struct gui_window_2 *gwin);
  * @param bbox A pointer to a struct IBox *.
  * @return error status.
  */
-nserror ami_gui_get_space_box(Object *obj, struct IBox **bbox);
+slateerror ami_gui_get_space_box(Object *obj, struct IBox **bbox);
 
 /**
  * Free any data obtained via ami_gui_get_space_box().
@@ -169,7 +169,7 @@ STRPTR ami_gui_get_screen_title(void);
 /**
  * Add a window to the NetSurf window list (to enable event processing)
  */
-nserror ami_gui_win_list_add(void *win, int type, const struct ami_win_event_table *table);
+slateerror ami_gui_win_list_add(void *win, int type, const struct ami_win_event_table *table);
 
 /**
  * Remove a window from the NetSurf window list

@@ -2,7 +2,7 @@
  * Copyright 2007, 2014 Vincent Sanders <vince@netsurf-browser.org>
  * Copyright 2007 Rob Kendrick <rjek@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,9 +44,9 @@
 #include "utils/hashtable.h"
 #include "utils/filepath.h"
 #include "utils/file.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/ascii.h"
-#include "netsurf/fetch.h"
+#include "slate/fetch.h"
 
 #include "gtk/gui.h"
 #include "gtk/resources.h"
@@ -248,16 +248,16 @@ const char *fetch_filetype(const char *unix_path)
 }
 
 
-static nsurl *nsgtk_get_resource_url(const char *path)
+static slateurl *slategtk_get_resource_url(const char *path)
 {
 	char buf[PATH_MAX];
-	nsurl *url = NULL;
+	slateurl *url = NULL;
 
 	/* favicon.ico -> favicon.png */
 	if (strcmp(path, "favicon.ico") == 0) {
-		nsurl_create("resource:favicon.png", &url);
+		slateurl_create("resource:favicon.png", &url);
 	} else {
-		netsurf_path_to_nsurl(filepath_sfind(respaths, buf, path), &url);
+		slate_path_to_slateurl(filepath_sfind(respaths, buf, path), &url);
 	}
 
 	return url;
@@ -266,8 +266,8 @@ static nsurl *nsgtk_get_resource_url(const char *path)
 static struct gui_fetch_table fetch_table = {
 	.filetype = fetch_filetype,
 
-	.get_resource_url = nsgtk_get_resource_url,
-	.get_resource_data = nsgtk_data_from_resname,
+	.get_resource_url = slategtk_get_resource_url,
+	.get_resource_data = slategtk_data_from_resname,
 };
 
-struct gui_fetch_table *nsgtk_fetch_table = &fetch_table;
+struct gui_fetch_table *slategtk_fetch_table = &fetch_table;

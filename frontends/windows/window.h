@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 Vincent Sanders <vince@simtec.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,13 +16,13 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_WINDOWS_WINDOW_H_
-#define NETSURF_WINDOWS_WINDOW_H_
+#ifndef SLATE_WINDOWS_WINDOW_H_
+#define SLATE_WINDOWS_WINDOW_H_
 
 /** The window operation function table for win32 */
 extern struct gui_window_table *win32_window_table;
 
-#include "netsurf/mouse.h"
+#include "slate/mouse.h"
 
 struct browser_mouse {
        struct gui_window *gui;
@@ -99,18 +99,18 @@ bool nsws_window_go(HWND hwnd, const char *urltxt);
  *
  * \param gw The win32 gui window to scroll.
  * \param rect The rectangle to ensure is shown.
- * \return NSERROR_OK on success or apropriate error code.
+ * \return SLATEERROR_OK on success or apropriate error code.
  */
-nserror win32_window_set_scroll(struct gui_window *gw, const struct rect *rect);
+slateerror win32_window_set_scroll(struct gui_window *gw, const struct rect *rect);
 
 /**
  * Create the main browser window class.
  *
  * \param hinstance The application instance
- * \return NSERROR_OK on success or NSERROR_INIT_FAILED if the class
+ * \return SLATEERROR_OK on success or SLATEERROR_INIT_FAILED if the class
  *         creation failed.
  */
-nserror nsws_create_main_class(HINSTANCE hinstance);
+slateerror nsws_create_main_class(HINSTANCE hinstance);
 
 /**
  * Get the main win32 window handle from a gui window
@@ -123,4 +123,4 @@ HWND gui_window_main_window(struct gui_window *gw);
 struct nsws_localhistory *gui_window_localhistory(struct gui_window *);
 
 
-#endif /* _NETSURF_WINDOWS_WINDOW_H_ */
+#endif /* _SLATE_WINDOWS_WINDOW_H_ */

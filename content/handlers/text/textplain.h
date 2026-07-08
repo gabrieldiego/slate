@@ -2,7 +2,7 @@
  * Copyright 2006 James Bursa <bursa@users.sourceforge.net>
  * Copyright 2006 Adrian Lees <adrianl@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,15 +23,15 @@
  * Interface to content handler for plain text.
  */
 
-#ifndef NETSURF_HTML_TEXTPLAIN_H
-#define NETSURF_HTML_TEXTPLAIN_H
+#ifndef SLATE_HTML_TEXTPLAIN_H
+#define SLATE_HTML_TEXTPLAIN_H
 
 /**
  * Initialise the text content handler
  *
- * \return NSERROR_OK on success else appropriate error code.
+ * \return SLATEERROR_OK on success else appropriate error code.
  */
-nserror textplain_init(void);
+slateerror textplain_init(void);
 
 
 #endif

@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,36 +45,36 @@ struct message_test_vec_s {
 };
 
 struct message_test_vec_s message_errorcode_test_vec[] = {
-	{ NSERROR_OK, "OK" },
-	{ NSERROR_NOMEM, "NetSurf is running out of memory. Please free some memory and try again." },
-	{ NSERROR_NO_FETCH_HANDLER, "NoHandler" },
-	{ NSERROR_NOT_FOUND, "Not found" },
-	{ NSERROR_SAVE_FAILED, "SaveFailed" },
-	{ NSERROR_CLONE_FAILED, "CloneFailed" },
-	{ NSERROR_INIT_FAILED, "InitFailed" },
-	{ NSERROR_BAD_ENCODING, "BadEncoding" },
-	{ NSERROR_NEED_DATA, "NeedData" },
-	{ NSERROR_ENCODING_CHANGE, "EncodingChanged" },
-	{ NSERROR_BAD_PARAMETER, "BadParameter" },
-	{ NSERROR_INVALID, "Invalid" },
-	{ NSERROR_BOX_CONVERT, "BoxConvert" },
-	{ NSERROR_STOPPED, "Stopped" },
-	{ NSERROR_DOM, "Parsing the document failed." },
-	{ NSERROR_CSS, "Error processing CSS" },
-	{ NSERROR_CSS_BASE, "Base stylesheet failed to load" },
-	{ NSERROR_BAD_URL, "BadURL" },
-	{ NSERROR_UNKNOWN, "Unknown" },
+	{ SLATEERROR_OK, "OK" },
+	{ SLATEERROR_NOMEM, "NetSurf is running out of memory. Please free some memory and try again." },
+	{ SLATEERROR_NO_FETCH_HANDLER, "NoHandler" },
+	{ SLATEERROR_NOT_FOUND, "Not found" },
+	{ SLATEERROR_SAVE_FAILED, "SaveFailed" },
+	{ SLATEERROR_CLONE_FAILED, "CloneFailed" },
+	{ SLATEERROR_INIT_FAILED, "InitFailed" },
+	{ SLATEERROR_BAD_ENCODING, "BadEncoding" },
+	{ SLATEERROR_NEED_DATA, "NeedData" },
+	{ SLATEERROR_ENCODING_CHANGE, "EncodingChanged" },
+	{ SLATEERROR_BAD_PARAMETER, "BadParameter" },
+	{ SLATEERROR_INVALID, "Invalid" },
+	{ SLATEERROR_BOX_CONVERT, "BoxConvert" },
+	{ SLATEERROR_STOPPED, "Stopped" },
+	{ SLATEERROR_DOM, "Parsing the document failed." },
+	{ SLATEERROR_CSS, "Error processing CSS" },
+	{ SLATEERROR_CSS_BASE, "Base stylesheet failed to load" },
+	{ SLATEERROR_BAD_URL, "BadURL" },
+	{ SLATEERROR_UNKNOWN, "Unknown" },
 };
 
 START_TEST(messages_errorcode_test)
 {
 	const char *res_str;
 	const struct message_test_vec_s *tst = &message_errorcode_test_vec[_i];
-	nserror res;
+	slateerror res;
 
 	res = messages_add_from_inline(test_data_Messages,
 				       test_data_Messages_len);
-	ck_assert_int_eq(res, NSERROR_OK);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 
 	res_str = messages_get_errorcode(tst->test);
 
@@ -88,10 +88,10 @@ END_TEST
 
 START_TEST(message_inline_load_test)
 {
-	nserror res;
+	slateerror res;
 	res = messages_add_from_inline(test_data_Messages,
 				       test_data_Messages_len);
-	ck_assert_int_eq(res, NSERROR_OK);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 
 	/* cleanup */
 	messages_destroy();
@@ -100,9 +100,9 @@ END_TEST
 
 START_TEST(message_file_load_test)
 {
-	nserror res;
+	slateerror res;
 	res = messages_add_from_file(test_messages_path);
-	ck_assert_int_eq(res, NSERROR_OK);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 
 	/* cleanup */
 	messages_destroy();
@@ -111,11 +111,11 @@ END_TEST
 
 START_TEST(message_get_buff_test)
 {
-	nserror res;
+	slateerror res;
 	char *buf;
 	res = messages_add_from_inline(test_data_Messages,
 				       test_data_Messages_len);
-	ck_assert_int_eq(res, NSERROR_OK);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 
 	buf = messages_get_buff("DefinitelyNotAKey");
 	ck_assert(buf == NULL);

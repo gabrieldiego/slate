@@ -1,7 +1,7 @@
 /*
  * Copyright 2013 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,12 +30,12 @@
 #include <strings.h>
 #include <stdlib.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/corestrings.h"
 #include "utils/log.h"
-#include "netsurf/inttypes.h"
-#include "netsurf/misc.h"
-#include "netsurf/content.h"
+#include "slate/inttypes.h"
+#include "slate/misc.h"
+#include "slate/content.h"
 #include "content/hlcache.h"
 #include "css/css.h"
 #include "desktop/gui_internal.h"
@@ -44,37 +44,37 @@
 #include "html/private.h"
 #include "html/css.h"
 
-static nsurl *html_default_stylesheet_url;
-static nsurl *html_adblock_stylesheet_url;
-static nsurl *html_quirks_stylesheet_url;
-static nsurl *html_user_stylesheet_url;
+static slateurl *html_default_stylesheet_url;
+static slateurl *html_adblock_stylesheet_url;
+static slateurl *html_quirks_stylesheet_url;
+static slateurl *html_user_stylesheet_url;
 
 /**
  * Convert css error to netsurf error.
  */
-static nserror css_error_to_nserror(css_error error)
+static slateerror css_error_to_slateerror(css_error error)
 {
 	switch (error) {
 	case CSS_OK:
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 
 	case CSS_NOMEM:
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	case CSS_BADPARM:
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 
 	case CSS_INVALID:
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 
 	case CSS_FILENOTFOUND:
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 
 	case CSS_NEEDDATA:
-		return NSERROR_NEED_DATA;
+		return SLATEERROR_NEED_DATA;
 
 	case CSS_BADCHARSET:
-		return NSERROR_BAD_ENCODING;
+		return SLATEERROR_BAD_ENCODING;
 
 	case CSS_EOF:
 	case CSS_IMPORTS_PENDING:
@@ -82,14 +82,14 @@ static nserror css_error_to_nserror(css_error error)
 	default:
 		break;
 	}
-	return NSERROR_CSS;
+	return SLATEERROR_CSS;
 }
 
 
 /**
  * Callback for fetchcache() for stylesheets.
  */
-static nserror
+static slateerror
 html_convert_css_callback(hlcache_handle *css,
 			  const hlcache_event *event,
 			  void *pw)
@@ -112,14 +112,14 @@ html_convert_css_callback(hlcache_handle *css,
 
 	case CONTENT_MSG_DONE:
 		NSLOG(netsurf, INFO, "done stylesheet slot %d '%s'", i,
-		      nsurl_access(hlcache_handle_get_url(css)));
+		      slateurl_access(hlcache_handle_get_url(css)));
 		parent->base.active--;
 		NSLOG(netsurf, INFO, "%d fetches active", parent->base.active);
 		break;
 
 	case CONTENT_MSG_ERROR:
 		NSLOG(netsurf, INFO, "stylesheet %s failed: %s",
-		      nsurl_access(hlcache_handle_get_url(css)),
+		      slateurl_access(hlcache_handle_get_url(css)),
 		      event->data.errordata.errormsg);
 
 		hlcache_handle_release(css);
@@ -130,7 +130,7 @@ html_convert_css_callback(hlcache_handle *css,
 
 	case CONTENT_MSG_POINTER:
 		/* Really don't want this to continue after the switch */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 
 	default:
 		break;
@@ -140,20 +140,20 @@ html_convert_css_callback(hlcache_handle *css,
 		html_begin_conversion(parent);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-static nserror
+static slateerror
 html_stylesheet_from_domnode(html_content *c,
 			     dom_node *node,
 			     hlcache_handle **sheet)
 {
 	hlcache_child_context child;
 	dom_string *style;
-	nsurl *url;
+	slateurl *url;
 	dom_exception exc;
-	nserror error;
+	slateerror error;
 	uint32_t key;
 	char urlbuf[64];
 
@@ -163,11 +163,11 @@ html_stylesheet_from_domnode(html_content *c,
 	exc = dom_node_get_text_content(node, &style);
 	if ((exc != DOM_NO_ERR) || (style == NULL)) {
 		NSLOG(netsurf, INFO, "No text content");
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	error = html_css_fetcher_add_item(style, c->base_url, &key);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		dom_string_unref(style);
 		return error;
 	}
@@ -176,8 +176,8 @@ html_stylesheet_from_domnode(html_content *c,
 
 	snprintf(urlbuf, sizeof(urlbuf), "x-ns-css:%"PRIu32"", key);
 
-	error = nsurl_create(urlbuf, &url);
-	if (error != NSERROR_OK) {
+	error = slateurl_create(urlbuf, &url);
+	if (error != SLATEERROR_OK) {
 		return error;
 	}
 
@@ -185,17 +185,17 @@ html_stylesheet_from_domnode(html_content *c,
 			content_get_url(&c->base), NULL,
 			html_convert_css_callback, c, &child, CONTENT_CSS,
 			sheet);
-	if (error != NSERROR_OK) {
-		nsurl_unref(url);
+	if (error != SLATEERROR_OK) {
+		slateurl_unref(url);
 		return error;
 	}
 
-	nsurl_unref(url);
+	slateurl_unref(url);
 
 	c->base.active++;
 	NSLOG(netsurf, INFO, "%d fetches active", c->base.active);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -242,7 +242,7 @@ html_create_style_element(html_content *c, dom_node *style)
 			      (c->stylesheet_count + 1));
 	if (stylesheets == NULL) {
 
-		content_broadcast_error(&c->base, NSERROR_NOMEM, NULL);
+		content_broadcast_error(&c->base, SLATEERROR_NOMEM, NULL);
 		return false;
 
 	}
@@ -262,10 +262,10 @@ static bool
 html_css_process_modified_style(html_content *c, struct html_stylesheet *s)
 {
 	hlcache_handle *sheet = NULL;
-	nserror error;
+	slateerror error;
 
 	error = html_stylesheet_from_domnode(c, s->node, &sheet);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Failed to update sheet");
 		content_broadcast_error(&c->base, error, NULL);
 		return false;
@@ -386,9 +386,9 @@ bool html_css_process_link(html_content *htmlc, dom_node *node)
 {
 	dom_string *rel, *type_attr, *media, *href;
 	struct html_stylesheet *stylesheets;
-	nsurl *joined;
+	slateurl *joined;
 	dom_exception exc;
-	nserror ns_error;
+	slateerror ns_error;
 	hlcache_child_context child;
 
 	/* rel=<space separated list, including 'stylesheet'> */
@@ -406,7 +406,7 @@ bool html_css_process_link(html_content *htmlc, dom_node *node)
 	}
 	dom_string_unref(rel);
 
-	if (nsoption_bool(author_level_css) == false) {
+	if (slateoption_bool(author_level_css) == false) {
 		return true;
 	}
 
@@ -441,23 +441,23 @@ bool html_css_process_link(html_content *htmlc, dom_node *node)
 	 * those with a title attribute) should be loaded
 	 * (see HTML4 14.3) */
 
-	ns_error = nsurl_join(htmlc->base_url, dom_string_data(href), &joined);
-	if (ns_error != NSERROR_OK) {
+	ns_error = slateurl_join(htmlc->base_url, dom_string_data(href), &joined);
+	if (ns_error != SLATEERROR_OK) {
 		dom_string_unref(href);
 		goto no_memory;
 	}
 	dom_string_unref(href);
 
 	NSLOG(netsurf, INFO, "linked stylesheet %i '%s'",
-	      htmlc->stylesheet_count, nsurl_access(joined));
+	      htmlc->stylesheet_count, slateurl_access(joined));
 
 	/* extend stylesheets array to allow for new sheet */
 	stylesheets = realloc(htmlc->stylesheets,
 			      sizeof(struct html_stylesheet) *
 			      (htmlc->stylesheet_count + 1));
 	if (stylesheets == NULL) {
-		nsurl_unref(joined);
-		ns_error = NSERROR_NOMEM;
+		slateurl_unref(joined);
+		ns_error = SLATEERROR_NOMEM;
 		goto no_memory;
 	}
 
@@ -476,9 +476,9 @@ bool html_css_process_link(html_content *htmlc, dom_node *node)
 			htmlc, &child, CONTENT_CSS,
 			&htmlc->stylesheets[htmlc->stylesheet_count].sheet);
 
-	nsurl_unref(joined);
+	slateurl_unref(joined);
 
-	if (ns_error != NSERROR_OK)
+	if (ns_error != SLATEERROR_OK)
 		goto no_memory;
 
 	htmlc->stylesheet_count++;
@@ -528,7 +528,7 @@ bool html_css_saw_insecure_stylesheets(html_content *html)
 
 
 /* exported function documented in html/css.h */
-nserror html_css_free_stylesheets(html_content *html)
+slateerror html_css_free_stylesheets(html_content *html)
 {
 	unsigned int i;
 
@@ -544,14 +544,14 @@ nserror html_css_free_stylesheets(html_content *html)
 	}
 	free(html->stylesheets);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported function documented in html/css.h */
-nserror html_css_quirks_stylesheets(html_content *c)
+slateerror html_css_quirks_stylesheets(html_content *c)
 {
-	nserror ns_error = NSERROR_OK;
+	slateerror ns_error = SLATEERROR_OK;
 	hlcache_child_context child;
 
 	assert(c->stylesheets != NULL);
@@ -565,7 +565,7 @@ nserror html_css_quirks_stylesheets(html_content *c)
 				html_convert_css_callback, c, &child,
 				CONTENT_CSS,
 				&c->stylesheets[STYLESHEET_QUIRKS].sheet);
-		if (ns_error != NSERROR_OK) {
+		if (ns_error != SLATEERROR_OK) {
 			return ns_error;
 		}
 
@@ -578,13 +578,13 @@ nserror html_css_quirks_stylesheets(html_content *c)
 
 
 /* exported function documented in html/css.h */
-nserror html_css_new_stylesheets(html_content *c)
+slateerror html_css_new_stylesheets(html_content *c)
 {
-	nserror ns_error;
+	slateerror ns_error;
 	hlcache_child_context child;
 
 	if (c->stylesheets != NULL) {
-		return NSERROR_OK; /* already initialised */
+		return SLATEERROR_OK; /* already initialised */
 	}
 
 	/* stylesheet 0 is the base style sheet,
@@ -594,7 +594,7 @@ nserror html_css_new_stylesheets(html_content *c)
 	c->stylesheets = calloc(STYLESHEET_START,
 			sizeof(struct html_stylesheet));
 	if (c->stylesheets == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	c->stylesheets[STYLESHEET_BASE].sheet = NULL;
@@ -610,7 +610,7 @@ nserror html_css_new_stylesheets(html_content *c)
 			content_get_url(&c->base), NULL,
 			html_convert_css_callback, c, &child, CONTENT_CSS,
 			&c->stylesheets[STYLESHEET_BASE].sheet);
-	if (ns_error != NSERROR_OK) {
+	if (ns_error != SLATEERROR_OK) {
 		return ns_error;
 	}
 
@@ -618,13 +618,13 @@ nserror html_css_new_stylesheets(html_content *c)
 	NSLOG(netsurf, INFO, "%d fetches active", c->base.active);
 
 
-	if (nsoption_bool(block_advertisements)) {
+	if (slateoption_bool(block_advertisements)) {
 		ns_error = hlcache_handle_retrieve(html_adblock_stylesheet_url,
 				0, content_get_url(&c->base), NULL,
 				html_convert_css_callback,
 				c, &child, CONTENT_CSS,
 				&c->stylesheets[STYLESHEET_ADBLOCK].sheet);
-		if (ns_error != NSERROR_OK) {
+		if (ns_error != SLATEERROR_OK) {
 			return ns_error;
 		}
 
@@ -637,7 +637,7 @@ nserror html_css_new_stylesheets(html_content *c)
 			content_get_url(&c->base), NULL,
 			html_convert_css_callback, c, &child, CONTENT_CSS,
 			&c->stylesheets[STYLESHEET_USER].sheet);
-	if (ns_error != NSERROR_OK) {
+	if (ns_error != SLATEERROR_OK) {
 		return ns_error;
 	}
 
@@ -649,7 +649,7 @@ nserror html_css_new_stylesheets(html_content *c)
 
 
 /* exported function documented in html/css.h */
-nserror
+slateerror
 html_css_new_selection_context(html_content *c, css_select_ctx **ret_select_ctx)
 {
 	uint32_t i;
@@ -658,13 +658,13 @@ html_css_new_selection_context(html_content *c, css_select_ctx **ret_select_ctx)
 
 	/* check that the base stylesheet loaded; layout fails without it */
 	if (c->stylesheets[STYLESHEET_BASE].sheet == NULL) {
-		return NSERROR_CSS_BASE;
+		return SLATEERROR_CSS_BASE;
 	}
 
 	/* Create selection context */
 	css_ret = css_select_ctx_create(&select_ctx);
 	if (css_ret != CSS_OK) {
-		return css_error_to_nserror(css_ret);
+		return css_error_to_slateerror(css_ret);
 	}
 
 	/* Add sheets to it */
@@ -701,42 +701,42 @@ html_css_new_selection_context(html_content *c, css_select_ctx **ret_select_ctx)
 							      "screen");
 			if (css_ret != CSS_OK) {
 				css_select_ctx_destroy(select_ctx);
-				return css_error_to_nserror(css_ret);
+				return css_error_to_slateerror(css_ret);
 			}
 		}
 	}
 
 	/* return new selection context to caller */
 	*ret_select_ctx = select_ctx;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported function documented in html/css.h */
-nserror html_css_init(void)
+slateerror html_css_init(void)
 {
-	nserror error;
+	slateerror error;
 
 	error = html_css_fetcher_register();
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 
-	error = nsurl_create("resource:default.css",
+	error = slateurl_create("resource:default.css",
 			&html_default_stylesheet_url);
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 
-	error = nsurl_create("resource:adblock.css",
+	error = slateurl_create("resource:adblock.css",
 			&html_adblock_stylesheet_url);
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 
-	error = nsurl_create("resource:quirks.css",
+	error = slateurl_create("resource:quirks.css",
 			&html_quirks_stylesheet_url);
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 
-	error = nsurl_create("resource:user.css",
+	error = slateurl_create("resource:user.css",
 			&html_user_stylesheet_url);
 
 	return error;
@@ -747,22 +747,22 @@ nserror html_css_init(void)
 void html_css_fini(void)
 {
 	if (html_user_stylesheet_url != NULL) {
-		nsurl_unref(html_user_stylesheet_url);
+		slateurl_unref(html_user_stylesheet_url);
 		html_user_stylesheet_url = NULL;
 	}
 
 	if (html_quirks_stylesheet_url != NULL) {
-		nsurl_unref(html_quirks_stylesheet_url);
+		slateurl_unref(html_quirks_stylesheet_url);
 		html_quirks_stylesheet_url = NULL;
 	}
 
 	if (html_adblock_stylesheet_url != NULL) {
-		nsurl_unref(html_adblock_stylesheet_url);
+		slateurl_unref(html_adblock_stylesheet_url);
 		html_adblock_stylesheet_url = NULL;
 	}
 
 	if (html_default_stylesheet_url != NULL) {
-		nsurl_unref(html_default_stylesheet_url);
+		slateurl_unref(html_default_stylesheet_url);
 		html_default_stylesheet_url = NULL;
 	}
 }

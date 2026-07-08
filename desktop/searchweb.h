@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,11 +21,11 @@
  * \brief core web search facilities interface.
  */
 
-#ifndef _NETSURF_DESKTOP_SEARCH_WEB_H_
-#define _NETSURF_DESKTOP_SEARCH_WEB_H_
+#ifndef _SLATE_DESKTOP_SEARCH_WEB_H_
+#define _SLATE_DESKTOP_SEARCH_WEB_H_
 
 struct bitmap;
-struct nsurl;
+struct slateurl;
 
 /**
  * Graphical user interface browser web search function table.
@@ -39,7 +39,7 @@ struct gui_search_web_table {
 	 * \param ico_bitmap The bitmap of the search icon may be NULL
 	 * if no icon is yet available.
 	 */
-	nserror (*provider_update)(const char *provider_name, struct bitmap *ico_bitmap);
+	slateerror (*provider_update)(const char *provider_name, struct bitmap *ico_bitmap);
 };
 
 /**
@@ -56,7 +56,7 @@ enum search_web_omni_flags {
 };
 
 /**
- * Generate a nsurl from a search term.
+ * Generate a slateurl from a search term.
  *
  * This interface obtains a url appropriate for the given search
  * term. The flags allow control over the operation. By default the
@@ -68,9 +68,9 @@ enum search_web_omni_flags {
  * \param term The search term.
  * \param flags Flags to control operation.
  * \param url_out The ourput url on success.
- * \return NSERROR_OK on success or appropriate error code.
+ * \return SLATEERROR_OK on success or appropriate error code.
  */
-nserror search_web_omni(const char *term, enum search_web_omni_flags flags, struct nsurl **url_out);
+slateerror search_web_omni(const char *term, enum search_web_omni_flags flags, struct slateurl **url_out);
 
 
 /**
@@ -79,18 +79,18 @@ nserror search_web_omni(const char *term, enum search_web_omni_flags flags, stru
  * obtain the icon representing the current web search provider
  *
  * \param bitmap_out recives the resulting bitmap which may be NULL
- * \return NSERROR_OK on success or NSERROR_INIT_FAILED if not initialised
+ * \return SLATEERROR_OK on success or SLATEERROR_INIT_FAILED if not initialised
  */
-nserror search_web_get_provider_bitmap(struct bitmap **bitmap_out);
+slateerror search_web_get_provider_bitmap(struct bitmap **bitmap_out);
 
 /**
  * Change the currently selected web search provider.
  *
  * \param selection Name of the search provider to select or NULL to
  *                  reselect the current provider
- * \return NSERROR_OK on success or appropriate error code.
+ * \return SLATEERROR_OK on success or appropriate error code.
  */
-nserror search_web_select_provider(const char *selection);
+slateerror search_web_select_provider(const char *selection);
 
 
 /**
@@ -120,15 +120,15 @@ ssize_t search_web_iterate_providers(ssize_t iter, const char **name);
  * Initialise the web search operations.
  *
  * \param provider_fname Path to web search providers file.
- * \return NSERROR_OK on successful initialisation or appropriate error code.
+ * \return SLATEERROR_OK on successful initialisation or appropriate error code.
  */
-nserror search_web_init(const char *provider_fname);
+slateerror search_web_init(const char *provider_fname);
 
 /**
  * Finalise the web search operations freeing all resources.
  *
- * \return NSERROR_OK on success or appropriate error code.
+ * \return SLATEERROR_OK on success or appropriate error code.
  */
-nserror search_web_finalise(void);
+slateerror search_web_finalise(void);
 
 #endif

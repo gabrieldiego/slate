@@ -2,7 +2,7 @@
  * Copyright 2004 John M Bell <jmb202@ecs.soton.ac.uk>
  * Copyright 2020 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,7 +30,7 @@
 #include "utils/errors.h"
 #include "utils/utils.h"
 #include "utils/ascii.h"
-#include "netsurf/types.h"
+#include "slate/types.h"
 #include "desktop/selection.h"
 
 #include "content/content.h"
@@ -200,7 +200,7 @@ static void search_show_all(bool all, struct textsearch_context *context)
  * \param string_len length of search string
  * \param flags flags to control the search.
  */
-static nserror
+static slateerror
 search_text(struct textsearch_context *context,
 	    const char *string,
 	    int string_len,
@@ -209,7 +209,7 @@ search_text(struct textsearch_context *context,
 	struct rect bounds;
 	union content_msg_data msg_data;
 	bool case_sensitive, forwards, showall;
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 
 	case_sensitive = ((flags & SEARCH_FLAG_CASE_SENSITIVE) != 0) ?
 			true : false;
@@ -251,7 +251,7 @@ search_text(struct textsearch_context *context,
 		/* indicate find operation finished */
 		textsearch_broadcast(context, CONTENT_TEXTSEARCH_FIND, false, NULL);
 
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			free_matches(context);
 			return res;
 		}
@@ -308,7 +308,7 @@ search_text(struct textsearch_context *context,
 					context->current->start_box,
 					context->current->end_box,
 					&bounds);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		msg_data.scroll.area = true;
 		msg_data.scroll.x0 = bounds.x0;
 		msg_data.scroll.y0 = bounds.y0;
@@ -330,14 +330,14 @@ search_text(struct textsearch_context *context,
  * \param flags   The flags forward/back etc
  * \param string  The string to match
  */
-static nserror
+static slateerror
 content_textsearch_step(struct textsearch_context *textsearch,
 			search_flags_t flags,
 			const char *string)
 {
 	int string_len;
 	int i = 0;
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 
 	assert(textsearch != NULL);
 
@@ -396,7 +396,7 @@ content_textsearch_step(struct textsearch_context *textsearch,
  *
  * \param c content to clear
  */
-static nserror content_textsearch__clear(struct content *c)
+static slateerror content_textsearch__clear(struct content *c)
 {
 	free(c->textsearch.string);
 	c->textsearch.string = NULL;
@@ -405,7 +405,7 @@ static nserror content_textsearch__clear(struct content *c)
 		content_textsearch_destroy(c->textsearch.context);
 		c->textsearch.context = NULL;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -415,9 +415,9 @@ static nserror content_textsearch__clear(struct content *c)
  * \param c The content the search_context is connected to
  * \param context A context pointer passed to the provider routines.
  * \param search_out A pointer to recive the new text search context
- * \return NSERROR_OK on success and \a search_out updated else error code
+ * \return SLATEERROR_OK on success and \a search_out updated else error code
  */
-static nserror
+static slateerror
 content_textsearch_create(struct content *c,
 			  void *gui_data,
 			  struct textsearch_context **textsearch_out)
@@ -432,20 +432,20 @@ content_textsearch_create(struct content *c,
 		 * content has no free text find handler so searching
 		 *   is unsupported.
 		 */
-		return NSERROR_NOT_IMPLEMENTED;
+		return SLATEERROR_NOT_IMPLEMENTED;
 	}
 
 	type = c->handler->type();
 
 	context = malloc(sizeof(struct textsearch_context));
 	if (context == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	search_head = malloc(sizeof(struct list_entry));
 	if (search_head == NULL) {
 		free(context);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	search_head->start_idx = 0;
@@ -466,7 +466,7 @@ content_textsearch_create(struct content *c,
 
 	*textsearch_out = context;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -582,7 +582,7 @@ content_textsearch_find_pattern(const char *string,
 
 
 /* exported interface, documented in content/textsearch.h */
-nserror
+slateerror
 content_textsearch_add_match(struct textsearch_context *context,
 			     unsigned start_idx,
 			     unsigned end_idx,
@@ -594,7 +594,7 @@ content_textsearch_add_match(struct textsearch_context *context,
 	/* found string in box => add to list */
 	entry = calloc(1, sizeof(*entry));
 	if (entry == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	entry->start_idx = start_idx;
@@ -614,7 +614,7 @@ content_textsearch_add_match(struct textsearch_context *context,
 
 	context->found->prev = entry;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -644,7 +644,7 @@ content_textsearch_ishighlighted(struct textsearch_context *textsearch,
 
 
 /* exported interface, documented in content/textsearch.h */
-nserror content_textsearch_destroy(struct textsearch_context *textsearch)
+slateerror content_textsearch_destroy(struct textsearch_context *textsearch)
 {
 	assert(textsearch != NULL);
 
@@ -673,19 +673,19 @@ nserror content_textsearch_destroy(struct textsearch_context *textsearch)
 	free_matches(textsearch);
 	free(textsearch);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface, documented in content/content.h */
-nserror
+slateerror
 content_textsearch(struct hlcache_handle *h,
 		   void *context,
 		   search_flags_t flags,
 		   const char *string)
 {
 	struct content *c = hlcache_handle_get_content(h);
-	nserror res;
+	slateerror res;
 
 	assert(c != NULL);
 
@@ -701,7 +701,7 @@ content_textsearch(struct hlcache_handle *h,
 		free(c->textsearch.string);
 		c->textsearch.string = strdup(string);
 		if (c->textsearch.string == NULL) {
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 
 		if (c->textsearch.context != NULL) {
@@ -712,7 +712,7 @@ content_textsearch(struct hlcache_handle *h,
 		res = content_textsearch_create(c,
 						context,
 						&c->textsearch.context);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 
@@ -726,12 +726,12 @@ content_textsearch(struct hlcache_handle *h,
 		c->textsearch.string = NULL;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface, documented in content/content.h */
-nserror content_textsearch_clear(struct hlcache_handle *h)
+slateerror content_textsearch_clear(struct hlcache_handle *h)
 {
 	struct content *c = hlcache_handle_get_content(h);
 	assert(c != 0);

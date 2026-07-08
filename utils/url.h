@@ -2,7 +2,7 @@
  * Copyright 2005 James Bursa <bursa@users.sourceforge.net>
  * Copyright 2005 John M Bell <jmb202@ecs.soton.ac.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,8 +22,8 @@
  * \brief Interface to URL parsing and joining operations.
  */
 
-#ifndef _NETSURF_UTILS_URL_H_
-#define _NETSURF_UTILS_URL_H_
+#ifndef _SLATE_UTILS_URL_H_
+#define _SLATE_UTILS_URL_H_
 
 #include "utils/errors.h"
 
@@ -37,9 +37,9 @@
  *                            from escaping.
  * \param[out] result         Returns pointer to buffer to escaped string.
  *                            Returned string is '\0' terminated.
- * \return  NSERROR_OK on success
+ * \return  SLATEERROR_OK on success
  */
-nserror url_escape(const char *unescaped, bool sptoplus,
+slateerror url_escape(const char *unescaped, bool sptoplus,
 		const char *escexceptions, char **result);
 
 
@@ -53,9 +53,9 @@ nserror url_escape(const char *unescaped, bool sptoplus,
  * \param[out] result_out  Returns unescaped string, owned by caller.
  *                         Must be freed with free().
  *                         Returned string has trailing '\0'.
- * \return NSERROR_OK on success
+ * \return SLATEERROR_OK on success
  */
-nserror url_unescape(const char *str, size_t length,
+slateerror url_unescape(const char *str, size_t length,
 		size_t *length_out, char **result_out);
 
 #endif

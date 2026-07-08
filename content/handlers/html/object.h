@@ -1,7 +1,7 @@
 /*
  * Copyright 2020 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,13 +21,13 @@
  * HTML content object interface
  */
 
-#ifndef NETSURF_HTML_OBJECT_H
-#define NETSURF_HTML_OBJECT_H
+#ifndef SLATE_HTML_OBJECT_H
+#define SLATE_HTML_OBJECT_H
 
 struct html_content;
 struct browser_window;
 struct box;
-struct nsurl;
+struct slateurl;
 
 /**
  * Start a fetch for an object required by a page.
@@ -43,7 +43,7 @@ struct nsurl;
  * \param background this is a background image
  * \return true on success, false on memory exhaustion
  */
-bool html_fetch_object(struct html_content *c, struct nsurl *url, struct box *box, content_type permitted_types, bool background);
+bool html_fetch_object(struct html_content *c, struct slateurl *url, struct box *box, content_type permitted_types, bool background);
 
 /**
  * release memory of content objects associated with a HTML content
@@ -52,17 +52,17 @@ bool html_fetch_object(struct html_content *c, struct nsurl *url, struct box *bo
  *  with html_object_close_objects().
  *
  * \param html The html content to release the objects from.
- * \return NSERROR_OK on success else appropriate error code.
+ * \return SLATEERROR_OK on success else appropriate error code.
  */
-nserror html_object_free_objects(struct html_content *html);
+slateerror html_object_free_objects(struct html_content *html);
 
 /**
  * close content of content objects associated with a HTML content
  *
  * \param html The html content to close the objects from.
- * \return NSERROR_OK on success else appropriate error code.
+ * \return SLATEERROR_OK on success else appropriate error code.
  */
-nserror html_object_close_objects(struct html_content *html);
+slateerror html_object_close_objects(struct html_content *html);
 
 
 /**
@@ -70,17 +70,17 @@ nserror html_object_close_objects(struct html_content *html);
  *
  * \param html The html content to open the objects from.
  * \param bw Browser window handle to open contents with.
- * \return NSERROR_OK on success else appropriate error code.
+ * \return SLATEERROR_OK on success else appropriate error code.
  */
-nserror html_object_open_objects(struct html_content *html, struct browser_window *bw);
+slateerror html_object_open_objects(struct html_content *html, struct browser_window *bw);
 
 
 /**
  * abort any content objects that have not completed fetching.
  *
  * \param html The html content to abort the objects from.
- * \return NSERROR_OK on success else appropriate error code.
+ * \return SLATEERROR_OK on success else appropriate error code.
  */
-nserror html_object_abort_objects(struct html_content *html);
+slateerror html_object_abort_objects(struct html_content *html);
 
 #endif

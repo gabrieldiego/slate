@@ -1,7 +1,7 @@
 /*
  * Copyright 2006 Daniel Silverstone <dsilvers@digital-scurf.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,7 @@
 
 #include <cairo.h>
 
-extern struct gui_bitmap_table *nsgtk_bitmap_table;
+extern struct gui_bitmap_table *slategtk_bitmap_table;
 
 struct bitmap {
 	cairo_surface_t *surface; /* original cairo surface */
@@ -29,7 +29,7 @@ struct bitmap {
 	bool opaque;
 };
 
-int nsgtk_bitmap_get_width(void *vbitmap);
-int nsgtk_bitmap_get_height(void *vbitmap);
+int slategtk_bitmap_get_width(void *vbitmap);
+int slategtk_bitmap_get_height(void *vbitmap);
 
 #endif /* NS_GTK_BITMAP_H */

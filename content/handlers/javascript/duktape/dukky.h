@@ -3,7 +3,7 @@
  * Copyright 2015 Daniel Dilverstone <dsilvers@netsurf-browser.org>
  * Copyright 2016 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

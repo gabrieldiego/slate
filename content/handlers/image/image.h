@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,8 +20,8 @@
  * Initialisation/finalisation of image handlers.
  */
 
-#ifndef NETSURF_IMAGE_IMAGE_H_
-#define NETSURF_IMAGE_IMAGE_H_
+#ifndef SLATE_IMAGE_IMAGE_H_
+#define SLATE_IMAGE_IMAGE_H_
 
 #include "utils/errors.h"
 
@@ -29,7 +29,7 @@ struct content_redraw_data;
 
 /** Initialise the content handlers for image types.
  */
-nserror image_init(void);
+slateerror image_init(void);
 
 /** Common image content handler bitmap plot call.
  *

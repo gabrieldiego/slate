@@ -3,7 +3,7 @@
  * Copyright 2007 James Bursa <bursa@users.sourceforge.net>
  * Copyright 2003 Phil Mellor <monkeyson@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,8 +26,8 @@
  * around the fetcher specific methods.
  *
  * Active fetches are held in the circular linked list ::fetch_ring. There may
- * be at most nsoption max_fetchers_per_host active requests per Host: header.
- * There may be at most nsoption max_fetchers active requests overall. Inactive
+ * be at most slateoption max_fetchers_per_host active requests per Host: header.
+ * There may be at most slateoption max_fetchers active requests overall. Inactive
  * fetches are stored in the ::queue_ring waiting for use.
  */
 
@@ -42,12 +42,12 @@
 
 #include "utils/config.h"
 #include "utils/corestrings.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/ring.h"
-#include "netsurf/misc.h"
+#include "slate/misc.h"
 #include "desktop/gui_internal.h"
 
 #include "content/fetch.h"
@@ -88,8 +88,8 @@ static scheme_fetcher fetchers[MAX_FETCHERS];
 /** Information for a single fetch. */
 struct fetch {
 	fetch_callback callback;/**< Callback function. */
-	nsurl *url;		/**< URL. */
-	nsurl *referer;		/**< Referer URL. */
+	slateurl *url;		/**< URL. */
+	slateurl *referer;		/**< Referer URL. */
 	bool verifiable;	/**< Transaction is verifiable */
 	void *p;		/**< Private data for callback. */
 	lwc_string *host;	/**< Host part of URL, interned */
@@ -151,7 +151,7 @@ static bool fetch_dispatch_job(struct fetch *fetch)
 	NSLOG(fetch, DEBUG,
 	      "Attempting to start fetch %p, fetcher %p, url %s", fetch,
 	      fetch->fetcher_handle,
-	      nsurl_access(fetch->url));
+	      slateurl_access(fetch->url));
 
 	if (!fetchers[fetch->fetcherd].ops.start(fetch->fetcher_handle)) {
 		RING_INSERT(queue_ring, fetch); /* Put it back on the end of the queue */
@@ -182,7 +182,7 @@ static bool fetch_choose_and_dispatch(void)
 		int countbyhost;
 		RING_COUNTBYLWCHOST(struct fetch, fetch_ring, countbyhost,
 				    queueitem->host);
-		if (countbyhost < nsoption_int(max_fetchers_per_host)) {
+		if (countbyhost < slateoption_int(max_fetchers_per_host)) {
 			/* We can dispatch this item in theory */
 			return fetch_dispatch_job(queueitem);
 		}
@@ -209,7 +209,7 @@ static void dump_rings(void)
 	if (q) {
 		do {
 			NSLOG(fetch, DEBUG, "queue_ring: %s",
-			      nsurl_access(q->url));
+			      slateurl_access(q->url));
 			q = q->r_next;
 		} while (q != queue_ring);
 	}
@@ -217,7 +217,7 @@ static void dump_rings(void)
 	if (f) {
 		do {
 			NSLOG(fetch, DEBUG, "fetch_ring: %s",
-			      nsurl_access(f->url));
+			      slateurl_access(f->url));
 			f = f->r_next;
 		} while (f != fetch_ring);
 	}
@@ -243,7 +243,7 @@ static bool fetch_dispatch_jobs(void)
 	dump_rings();
 
 	while ((all_queued != 0) &&
-	       (all_active < nsoption_int(max_fetchers)) &&
+	       (all_active < slateoption_int(max_fetchers)) &&
 	       fetch_choose_and_dispatch()) {
 			all_queued--;
 			all_active++;
@@ -282,34 +282,34 @@ static void fetcher_poll(void *unused)
  ******************************************************************************/
 
 /* exported interface documented in content/fetch.h */
-nserror fetcher_init(void)
+slateerror fetcher_init(void)
 {
-	nserror ret;
+	slateerror ret;
 
 #ifdef WITH_CURL
 	ret = fetch_curl_register();
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 #endif
 
 	ret = fetch_data_register();
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
 	ret = fetch_file_register();
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
 	ret = fetch_resource_register();
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
 	ret = fetch_about_register();
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
@@ -353,7 +353,7 @@ void fetcher_quit(void)
 }
 
 /* exported interface documented in content/fetchers.h */
-nserror
+slateerror
 fetcher_add(lwc_string *scheme, const struct fetcher_operation_table *ops)
 {
 	int fetcherd;
@@ -365,11 +365,11 @@ fetcher_add(lwc_string *scheme, const struct fetcher_operation_table *ops)
 		}
 	}
 	if (fetcherd == MAX_FETCHERS) {
-		return NSERROR_INIT_FAILED;
+		return SLATEERROR_INIT_FAILED;
 	}
 
 	if (!ops->initialise(scheme)) {
-		return NSERROR_INIT_FAILED;
+		return SLATEERROR_INIT_FAILED;
 	}
 
 	fetchers[fetcherd].scheme = scheme;
@@ -377,11 +377,11 @@ fetcher_add(lwc_string *scheme, const struct fetcher_operation_table *ops)
 
 	fetch_ref_fetcher(fetcherd);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in content/fetch.h */
-nserror
+slateerror
 fetch_fdset(fd_set *read_fd_set,
 		      fd_set *write_fd_set,
 		      fd_set *except_fd_set,
@@ -393,7 +393,7 @@ fetch_fdset(fd_set *read_fd_set,
 	if (!fetch_dispatch_jobs()) {
 		NSLOG(fetch, DEBUG, "No jobs");
 		*maxfd_out = -1;
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	NSLOG(fetch, DEBUG, "Polling fetchers");
@@ -441,13 +441,13 @@ fetch_fdset(fd_set *read_fd_set,
 
 	*maxfd_out = maxfd;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in content/fetch.h */
-nserror
-fetch_start(nsurl *url,
-	    nsurl *referer,
+slateerror
+fetch_start(slateurl *url,
+	    slateurl *referer,
 	    fetch_callback callback,
 	    void *p,
 	    bool only_2xx,
@@ -463,11 +463,11 @@ fetch_start(nsurl *url,
 
 	fetch = calloc(1, sizeof (*fetch));
 	if (fetch == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* The URL we're fetching must have a scheme */
-	scheme = nsurl_get_component(url, NSURL_SCHEME);
+	scheme = slateurl_get_component(url, SLATEURL_SCHEME);
 	assert(scheme != NULL);
 
 	/* try and obtain a fetcher for this scheme */
@@ -475,20 +475,20 @@ fetch_start(nsurl *url,
 	lwc_string_unref(scheme);
 	if (fetch->fetcherd == -1) {
 		free(fetch);
-		return NSERROR_NO_FETCH_HANDLER;
+		return SLATEERROR_NO_FETCH_HANDLER;
 	}
 
-	NSLOG(fetch, DEBUG, "fetch %p, url '%s'", fetch, nsurl_access(url));
+	NSLOG(fetch, DEBUG, "fetch %p, url '%s'", fetch, slateurl_access(url));
 
 	/* construct a new fetch structure */
 	fetch->callback = callback;
-	fetch->url = nsurl_ref(url);
+	fetch->url = slateurl_ref(url);
 	fetch->verifiable = verifiable;
 	fetch->p = p;
-	fetch->host = nsurl_get_component(url, NSURL_HOST);
+	fetch->host = slateurl_get_component(url, SLATEURL_HOST);
 
 	if (referer != NULL) {
-		fetch->referer = nsurl_ref(referer);
+		fetch->referer = slateurl_ref(referer);
 	}
 
 	/* try and set up the fetch */
@@ -500,18 +500,18 @@ fetch_start(nsurl *url,
 		lwc_string_unref(fetch->host);
 
 		if (fetch->url != NULL)
-			nsurl_unref(fetch->url);
+			slateurl_unref(fetch->url);
 
 		if (fetch->referer != NULL)
-			nsurl_unref(fetch->referer);
+			slateurl_unref(fetch->referer);
 
 		free(fetch);
 
 
-	/** \todo The fetchers setup should return nserror and that be
+	/** \todo The fetchers setup should return slateerror and that be
 	 * passed back rather than assuming a bad url
 	 */
-		return NSERROR_BAD_URL;
+		return SLATEERROR_BAD_URL;
 	}
 
 	/* Rah, got it, so ref the fetcher. */
@@ -528,7 +528,7 @@ fetch_start(nsurl *url,
 	}
 
 	*fetch_out = fetch;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in content/fetch.h */
@@ -538,7 +538,7 @@ void fetch_abort(struct fetch *f)
 	f->last_msg = FETCH__INTERNAL_ABORTED;
 	NSLOG(fetch, DEBUG,
 	      "fetch %p, fetcher %p, url '%s'", f, f->fetcher_handle,
-	     nsurl_access(f->url));
+	     slateurl_access(f->url));
 	fetchers[f->fetcherd].ops.abort(f->fetcher_handle);
 }
 
@@ -554,7 +554,7 @@ void fetch_free(struct fetch *f)
 
 		NSLOG(fetch, CRITICAL,
 		      "During the fetch of %s, the fetcher did not finish.",
-		      nsurl_access(f->url));
+		      slateurl_access(f->url));
 
 		fetch_send_callback(&msg, f);
 	}
@@ -568,9 +568,9 @@ void fetch_free(struct fetch *f)
 
 	fetch_unref_fetcher(f->fetcherd);
 
-	nsurl_unref(f->url);
+	slateurl_unref(f->url);
 	if (f->referer != NULL) {
-		nsurl_unref(f->referer);
+		slateurl_unref(f->referer);
 	}
 	lwc_string_unref(f->host);
 	free(f);
@@ -579,9 +579,9 @@ void fetch_free(struct fetch *f)
 
 
 /* exported interface documented in content/fetch.h */
-bool fetch_can_fetch(const nsurl *url)
+bool fetch_can_fetch(const slateurl *url)
 {
-	lwc_string *scheme = nsurl_get_component(url, NSURL_SCHEME);
+	lwc_string *scheme = slateurl_get_component(url, SLATEURL_SCHEME);
 	int fetcherd;
 
 	fetcherd = get_fetcher_for_scheme(scheme);
@@ -713,7 +713,7 @@ void fetch_multipart_data_destroy(struct fetch_multipart_data *list)
 
 
 /* exported interface documented in content/fetch.h */
-nserror
+slateerror
 fetch_multipart_data_new_kv(struct fetch_multipart_data **list,
 			    const char *name,
 			    const char *value)
@@ -725,26 +725,26 @@ fetch_multipart_data_new_kv(struct fetch_multipart_data **list,
 	newdata = calloc(1, sizeof(*newdata));
 
 	if (newdata == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	newdata->name = strdup(name);
 	if (newdata->name == NULL) {
 		free(newdata);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	newdata->value = strdup(value);
 	if (newdata->value == NULL) {
 		free(newdata->name);
 		free(newdata);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	newdata->next = *list;
 	*list = newdata;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -787,13 +787,13 @@ void fetch_remove_from_queues(struct fetch *fetch)
 
 
 /* exported interface documented in content/fetch.h */
-nserror fetch_set_http_code(struct fetch *fetch, http_response_code http_code)
+slateerror fetch_set_http_code(struct fetch *fetch, http_response_code http_code)
 {
 	NSLOG(fetch, DEBUG, "Setting HTTP code to %d", http_code);
 
 	fetch->http_code = http_code;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 

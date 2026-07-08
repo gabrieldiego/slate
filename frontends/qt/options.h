@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,19 +16,19 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_QT_OPTIONS_H_
-#define NETSURF_QT_OPTIONS_H_
+#ifndef SLATE_QT_OPTIONS_H_
+#define SLATE_QT_OPTIONS_H_
 
 /* currently nothing here */
 
 #endif
 
 /* path to save hotlist file */
-NSOPTION_STRING(hotlist_path, NULL)
+SLATEOPTION_STRING(hotlist_path, NULL)
 
-NSOPTION_STRING(url_file, NULL)
+SLATEOPTION_STRING(url_file, NULL)
 
-NSOPTION_BOOL(new_blank, false)
+SLATEOPTION_BOOL(new_blank, false)
 
 /* page colour selection */
-NSOPTION_UINT(colour_selection, 0)
+SLATEOPTION_UINT(colour_selection, 0)

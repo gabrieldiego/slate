@@ -1,7 +1,7 @@
 /*
  * Copyright 2019 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,7 +24,7 @@
 #include <windows.h>
 
 #include "utils/log.h"
-#include "netsurf/clipboard.h"
+#include "slate/clipboard.h"
 
 #include "windows/clipboard.h"
 
@@ -90,7 +90,7 @@ static void gui_get_clipboard(char **buffer, size_t *length)
 static void
 gui_set_clipboard(const char *buffer,
 		  size_t length,
-		  nsclipboard_styles styles[],
+		  slateclipboard_styles styles[],
 		  int n_styles)
 {
 	HGLOBAL hglbCopy;

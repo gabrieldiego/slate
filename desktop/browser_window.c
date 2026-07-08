@@ -3,7 +3,7 @@
  * Copyright 2010 Daniel Silverstone <dsilvers@digital-scurf.org>
  * Copyright 2010-2020 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,14 +35,14 @@
 #include "utils/log.h"
 #include "utils/corestrings.h"
 #include "utils/messages.h"
-#include "utils/nsoption.h"
-#include "netsurf/types.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/window.h"
-#include "netsurf/misc.h"
-#include "netsurf/content.h"
-#include "netsurf/search.h"
-#include "netsurf/plotters.h"
+#include "utils/slateoption.h"
+#include "slate/types.h"
+#include "slate/browser_window.h"
+#include "slate/window.h"
+#include "slate/misc.h"
+#include "slate/content.h"
+#include "slate/search.h"
+#include "slate/plotters.h"
 #include "content/content.h"
 #include "content/hlcache.h"
 #include "content/urldb.h"
@@ -84,7 +84,7 @@
 #define FRAME_DEPTH 8
 
 /* Forward declare internal navigation function */
-static nserror browser_window__navigate_internal(
+static slateerror browser_window__navigate_internal(
 	struct browser_window *bw, struct browser_fetch_parameters *params);
 
 
@@ -118,11 +118,11 @@ static void
 browser_window__free_fetch_parameters(struct browser_fetch_parameters *params)
 {
 	if (params->url != NULL) {
-		nsurl_unref(params->url);
+		slateurl_unref(params->url);
 		params->url = NULL;
 	}
 	if (params->referrer != NULL) {
-		nsurl_unref(params->referrer);
+		slateurl_unref(params->referrer);
 		params->referrer = NULL;
 	}
 	if (params->post_urlenc != NULL) {
@@ -235,9 +235,9 @@ browser_window_set_selection(struct browser_window *bw,
  *
  * \param bw window to scroll
  * \param rect The rectangle to ensure is shown.
- * \return NSERROR_OK on success or apropriate error code.
+ * \return SLATEERROR_OK on success or apropriate error code.
  */
-static nserror
+static slateerror
 browser_window_set_scroll(struct browser_window *bw, const struct rect *rect)
 {
 	if (bw->window != NULL) {
@@ -251,7 +251,7 @@ browser_window_set_scroll(struct browser_window *bw, const struct rect *rect)
 		scrollbar_set(bw->scroll_y, rect->y0, false);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -262,14 +262,14 @@ browser_window_set_scroll(struct browser_window *bw, const struct rect *rect)
  * \param[in] x x-coordinate of point of interest
  * \param[in] y y-coordinate of point of interest
  * \param[out] data Feature structure to update.
- * \return NSERROR_OK or appropriate error code on faliure.
+ * \return SLATEERROR_OK or appropriate error code on faliure.
  */
-static nserror
+static slateerror
 browser_window__get_contextual_content(struct browser_window *bw,
 				       int x, int y,
 				       struct browser_window_features *data)
 {
-	nserror ret = NSERROR_OK;
+	slateerror ret = SLATEERROR_OK;
 
 	/* Handle (i)frame scroll offset (core-managed browser windows only) */
 	x += scrollbar_get_offset(bw->scroll_x);
@@ -317,17 +317,17 @@ browser_window__get_contextual_content(struct browser_window *bw,
 /**
  * implements the download operation of a window navigate
  */
-static nserror
+static slateerror
 browser_window_download(struct browser_window *bw,
-			nsurl *url,
-			nsurl *nsref,
+			slateurl *url,
+			slateurl *nsref,
 			uint32_t fetch_flags,
 			bool fetch_is_post,
 			llcache_post_data *post)
 {
 	llcache_handle *l;
 	struct browser_window *root;
-	nserror error;
+	slateerror error;
 
 	root = browser_window_get_root(bw);
 	assert(root != NULL);
@@ -338,14 +338,14 @@ browser_window_download(struct browser_window *bw,
 	error = llcache_handle_retrieve(url, fetch_flags, nsref,
 					fetch_is_post ? post : NULL,
 					NULL, NULL, &l);
-	if (error == NSERROR_NO_FETCH_HANDLER) {
+	if (error == SLATEERROR_NO_FETCH_HANDLER) {
 		/* no internal handler for this type, call out to frontend */
 		error = guit->misc->launch_url(url);
-	} else if (error != NSERROR_OK) {
+	} else if (error != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Failed to fetch download: %d", error);
 	} else {
 		error = download_context_create(l, root->window);
-		if (error != NSERROR_OK) {
+		if (error != SLATEERROR_OK) {
 			NSLOG(netsurf, INFO,
 			      "Failed creating download context: %d", error);
 			llcache_handle_abort(l);
@@ -393,7 +393,7 @@ static bool browser_window_check_throbber(struct browser_window *bw)
  *
  * \param bw browser window
  */
-static nserror browser_window_start_throbber(struct browser_window *bw)
+static slateerror browser_window_start_throbber(struct browser_window *bw)
 {
 	bw->throbbing = true;
 
@@ -409,9 +409,9 @@ static nserror browser_window_start_throbber(struct browser_window *bw)
  *
  * \param bw browser window
  */
-static nserror browser_window_stop_throbber(struct browser_window *bw)
+static slateerror browser_window_stop_throbber(struct browser_window *bw)
 {
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 
 	bw->throbbing = false;
 
@@ -432,9 +432,9 @@ static nserror browser_window_stop_throbber(struct browser_window *bw)
  * \param c content handle of favicon
  * \param event The event to process
  * \param pw a context containing the browser window
- * \return NSERROR_OK on success else appropriate error code.
+ * \return SLATEERROR_OK on success else appropriate error code.
  */
-static nserror
+static slateerror
 browser_window_favicon_callback(hlcache_handle *c,
 				const hlcache_event *event,
 				void *pw)
@@ -469,25 +469,25 @@ browser_window_favicon_callback(hlcache_handle *c,
 		hlcache_handle_release(c);
 
 		if (bw->favicon.failed == false) {
-			nsurl *nsref = NULL;
-			nsurl *nsurl;
-			nserror error;
+			slateurl *nsref = NULL;
+			slateurl *slateurl;
+			slateerror error;
 
 			bw->favicon.failed = true;
 
-			error = nsurl_create("resource:favicon.ico", &nsurl);
-			if (error != NSERROR_OK) {
+			error = slateurl_create("resource:favicon.ico", &slateurl);
+			if (error != SLATEERROR_OK) {
 				NSLOG(netsurf, INFO,
 				      "Unable to create default location url");
 			} else {
-				hlcache_handle_retrieve(nsurl,
+				hlcache_handle_retrieve(slateurl,
 							HLCACHE_RETRIEVE_SNIFF_TYPE,
 							nsref, NULL,
 							browser_window_favicon_callback,
 							bw, NULL, CONTENT_IMAGE,
 							&bw->favicon.loading);
 
-				nsurl_unref(nsurl);
+				slateurl_unref(slateurl);
 			}
 
 		}
@@ -497,7 +497,7 @@ browser_window_favicon_callback(hlcache_handle *c,
 		break;
 
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -508,26 +508,26 @@ browser_window_favicon_callback(hlcache_handle *c,
  * \param bw A top level browser window.
  * \param link A link context or NULL to attempt fallback scanning.
  */
-static nserror
+static slateerror
 browser_window_update_favicon(hlcache_handle *c,
 			      struct browser_window *bw,
 			      struct content_rfc5988_link *link)
 {
-	nsurl *nsref = NULL;
-	nsurl *nsurl;
-	nserror res;
+	slateurl *nsref = NULL;
+	slateurl *slateurl;
+	slateerror res;
 
 	assert(c != NULL);
 	assert(bw !=NULL);
 
 	if (bw->window == NULL) {
 		/* Not top-level browser window; not interested */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* already fetching the favicon - use that */
 	if (bw->favicon.loading != NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	bw->favicon.failed = false;
@@ -547,9 +547,9 @@ browser_window_update_favicon(hlcache_handle *c,
 		bool speculative_default = false;
 		bool match;
 
-		nsurl = hlcache_handle_get_url(c);
+		slateurl = hlcache_handle_get_url(c);
 
-		scheme = nsurl_get_component(nsurl, NSURL_SCHEME);
+		scheme = slateurl_get_component(slateurl, SLATEURL_SCHEME);
 
 		/* If the document was fetched over http(s), then speculate
 		 * that there's a favicon living at /favicon.ico */
@@ -568,32 +568,32 @@ browser_window_update_favicon(hlcache_handle *c,
 
 		if (speculative_default) {
 			/* no favicon via link, try for the default location */
-			res = nsurl_join(nsurl, "/favicon.ico", &nsurl);
+			res = slateurl_join(slateurl, "/favicon.ico", &slateurl);
 		} else {
 			bw->favicon.failed = true;
-			res = nsurl_create("resource:favicon.ico", &nsurl);
+			res = slateurl_create("resource:favicon.ico", &slateurl);
 		}
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			NSLOG(netsurf, INFO,
 			      "Unable to create default location url");
 			return res;
 		}
 	} else {
-		nsurl = nsurl_ref(link->href);
+		slateurl = slateurl_ref(link->href);
 	}
 
 	if (link == NULL) {
 		NSLOG(netsurf, INFO,
 		      "fetching general favicon from '%s'",
-		      nsurl_access(nsurl));
+		      slateurl_access(slateurl));
 	} else {
 		NSLOG(netsurf, INFO,
 		      "fetching favicon rel:%s '%s'",
 		      lwc_string_data(link->rel),
-		      nsurl_access(nsurl));
+		      slateurl_access(slateurl));
 	}
 
-	res = hlcache_handle_retrieve(nsurl,
+	res = hlcache_handle_retrieve(slateurl,
 				      HLCACHE_RETRIEVE_SNIFF_TYPE,
 				      nsref,
 				      NULL,
@@ -603,7 +603,7 @@ browser_window_update_favicon(hlcache_handle *c,
 				      CONTENT_IMAGE,
 				      &bw->favicon.loading);
 
-	nsurl_unref(nsurl);
+	slateurl_unref(slateurl);
 
 	return res;
 }
@@ -617,8 +617,8 @@ browser_window_update_favicon(hlcache_handle *c,
 static void browser_window_refresh(void *p)
 {
 	struct browser_window *bw = p;
-	nsurl *url;
-	nsurl *refresh;
+	slateurl *url;
+	slateurl *refresh;
 	hlcache_handle *parent = NULL;
 	enum browser_window_nav_flags flags = BW_NAVIGATE_UNVERIFIABLE;
 
@@ -638,7 +638,7 @@ static void browser_window_refresh(void *p)
 	content_invalidate_reuse_data(bw->current_content);
 
 	url = hlcache_handle_get_url(bw->current_content);
-	if ((url == NULL) || (nsurl_compare(url, refresh, NSURL_COMPLETE))) {
+	if ((url == NULL) || (slateurl_compare(url, refresh, SLATEURL_COMPLETE))) {
 		flags |= BW_NAVIGATE_HISTORY;
 	}
 
@@ -674,12 +674,12 @@ browser_window_convert_to_download(struct browser_window *bw,
 				   llcache_handle *stream)
 {
 	struct browser_window *root = browser_window_get_root(bw);
-	nserror error;
+	slateerror error;
 
 	assert(root != NULL);
 
 	error = download_context_create(stream, root->window);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		llcache_handle_abort(stream);
 		llcache_handle_release(stream);
 	}
@@ -715,7 +715,7 @@ static bool frag_scroll(struct browser_window *bw)
 
 	rect.x1 = rect.x0;
 	rect.y1 = rect.y0;
-	if (browser_window_set_scroll(bw, &rect) == NSERROR_OK) {
+	if (browser_window_set_scroll(bw, &rect) == SLATEERROR_OK) {
 		if (bw->current_content != NULL &&
 		    bw->history != NULL &&
 		    bw->history->current != NULL) {
@@ -819,10 +819,10 @@ static void browser_window_update(struct browser_window *bw, bool scroll_to_top)
 /**
  * handle message for content ready on browser window
  */
-static nserror browser_window_content_ready(struct browser_window *bw)
+static slateerror browser_window_content_ready(struct browser_window *bw)
 {
 	int width, height;
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 
 	/* close and release the current window content */
 	if (bw->current_content != NULL) {
@@ -852,7 +852,7 @@ static nserror browser_window_content_ready(struct browser_window *bw)
 
 	/* history */
 	if (bw->history_add && bw->history && !bw->internal_nav) {
-		nsurl *url = hlcache_handle_get_url(bw->current_content);
+		slateurl *url = hlcache_handle_get_url(bw->current_content);
 
 		if (urldb_add_url(url)) {
 			urldb_set_url_title(url, content_get_title(bw->current_content));
@@ -910,7 +910,7 @@ static nserror browser_window_content_ready(struct browser_window *bw)
 	res = browser_window_create_iframes(bw);
 
 	/* Indicate page status may have changed */
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		struct browser_window *root = browser_window_get_root(bw);
 		res = guit->window->event(root->window, GW_EVENT_PAGE_INFO_CHANGE);
 	}
@@ -922,7 +922,7 @@ static nserror browser_window_content_ready(struct browser_window *bw)
 /**
  * handle message for content done on browser window
  */
-static nserror
+static slateerror
 browser_window_content_done(struct browser_window *bw)
 {
 	float sx, sy;
@@ -944,12 +944,12 @@ browser_window_content_done(struct browser_window *bw)
 	browser_window_stop_throbber(bw);
 	browser_window_update_favicon(bw->current_content, bw, NULL);
 
-	if (browser_window_history_get_scroll(bw, &sx, &sy) == NSERROR_OK) {
+	if (browser_window_history_get_scroll(bw, &sx, &sy) == SLATEERROR_OK) {
 		scrollx = (int)((float)content_get_width(bw->current_content) * sx);
 		scrolly = (int)((float)content_get_height(bw->current_content) * sy);
 		rect.x0 = rect.x1 = scrollx;
 		rect.y0 = rect.y1 = scrolly;
-		if (browser_window_set_scroll(bw, &rect) != NSERROR_OK) {
+		if (browser_window_set_scroll(bw, &rect) != SLATEERROR_OK) {
 			NSLOG(netsurf, WARNING,
 			      "Unable to set browser scroll offsets to %d by %d",
 			      scrollx, scrolly);
@@ -966,14 +966,14 @@ browser_window_content_done(struct browser_window *bw)
 				     browser_window_refresh, bw);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * Handle query responses from SSL requests
  */
-static nserror
+static slateerror
 browser_window__handle_ssl_query_response(bool proceed, void *pw)
 {
 	struct browser_window *bw = (struct browser_window *)pw;
@@ -1012,9 +1012,9 @@ browser_window__handle_ssl_query_response(bool proceed, void *pw)
  * \param[in]  userpass      The input string to split.
  * \param[in]  username_out  Returns username on success.  Owned by caller.
  * \param[out] password_out  Returns password on success.  Owned by caller.
- * \return NSERROR_OK, or appropriate error code.
+ * \return SLATEERROR_OK, or appropriate error code.
  */
-static nserror
+static slateerror
 browser_window__unpack_userpass(const char *userpass,
 				char **username_out,
 				char **password_out)
@@ -1030,19 +1030,19 @@ browser_window__unpack_userpass(const char *userpass,
 		if (username == NULL || password == NULL) {
 			free(username);
 			free(password);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 		username[0] = '\0';
 		password[0] = '\0';
 
 		*username_out = username;
 		*password_out = password;
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	tmp = strchr(userpass, ':');
 	if (tmp == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	} else {
 		size_t len2;
 		len = tmp - userpass;
@@ -1053,7 +1053,7 @@ browser_window__unpack_userpass(const char *userpass,
 		if (username == NULL || password == NULL) {
 			free(username);
 			free(password);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 		memcpy(username, userpass, len);
 		username[len] = '\0';
@@ -1062,7 +1062,7 @@ browser_window__unpack_userpass(const char *userpass,
 
 	*username_out = username;
 	*password_out = password;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1073,9 +1073,9 @@ browser_window__unpack_userpass(const char *userpass,
  * \param[in]  password      The password component.
  * \param[out] userpass_out  Returns combined string on success.
  *                           Owned by caller.
- * \return NSERROR_OK, or appropriate error code.
+ * \return SLATEERROR_OK, or appropriate error code.
  */
-static nserror
+static slateerror
 browser_window__build_userpass(const char *username,
 			       const char *password,
 			       char **userpass_out)
@@ -1087,21 +1087,21 @@ browser_window__build_userpass(const char *username,
 
 	userpass = malloc(len);
 	if (userpass == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	snprintf(userpass, len, "%s:%s", username, password);
 
 	*userpass_out = userpass;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * Handle a response from the UI when prompted for credentials
  */
-static nserror
-browser_window__handle_userpass_response(nsurl *url,
+static slateerror
+browser_window__handle_userpass_response(slateurl *url,
 					 const char *realm,
 					 const char *username,
 					 const char *password,
@@ -1109,10 +1109,10 @@ browser_window__handle_userpass_response(nsurl *url,
 {
 	struct browser_window *bw = (struct browser_window *)pw;
 	char *userpass;
-	nserror err;
+	slateerror err;
 
 	err = browser_window__build_userpass(username, password, &userpass);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
@@ -1141,12 +1141,12 @@ browser_window__handle_userpass_response(nsurl *url,
  * Handle login request (BAD_AUTH) during fetch
  *
  */
-static nserror
+static slateerror
 browser_window__handle_login(struct browser_window *bw,
 			     const char *realm,
-			     nsurl *url) {
+			     slateurl *url) {
 	char *username = NULL, *password = NULL;
-	nserror err = NSERROR_OK;
+	slateerror err = SLATEERROR_OK;
 	struct browser_fetch_parameters params;
 
 	memset(&params, 0, sizeof(params));
@@ -1155,40 +1155,40 @@ browser_window__handle_login(struct browser_window *bw,
 	err = browser_window__unpack_userpass(
 				      urldb_get_auth_details(url, realm),
 				      &username, &password);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		goto out;
 	}
 
 	/* Step two, construct our fetch parameters */
-	params.url = nsurl_ref(corestring_nsurl_about_query_auth);
-	params.referrer = nsurl_ref(url);
+	params.url = slateurl_ref(corestring_slateurl_about_query_auth);
+	params.referrer = slateurl_ref(url);
 	params.flags = BW_NAVIGATE_HISTORY | BW_NAVIGATE_NO_TERMINAL_HISTORY_UPDATE | BW_NAVIGATE_INTERNAL;
 
 	err = fetch_multipart_data_new_kv(&params.post_multipart,
 					  "siteurl",
-					  nsurl_access(url));
-	if (err != NSERROR_OK) {
+					  slateurl_access(url));
+	if (err != SLATEERROR_OK) {
 		goto out;
 	}
 
 	err = fetch_multipart_data_new_kv(&params.post_multipart,
 					  "realm",
 					  realm);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		goto out;
 	}
 
 	err = fetch_multipart_data_new_kv(&params.post_multipart,
 					  "username",
 					  username);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		goto out;
 	}
 
 	err = fetch_multipart_data_new_kv(&params.post_multipart,
 					  "password",
 					  password);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		goto out;
 	}
 
@@ -1196,15 +1196,15 @@ browser_window__handle_login(struct browser_window *bw,
 	bw->internal_nav = true;
 	err = browser_window__navigate_internal(bw, &params);
 
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		goto out;
 	}
 
 	err = guit->misc->login(url, realm, username, password,
 				browser_window__handle_userpass_response, bw);
 
-	if (err == NSERROR_NOT_IMPLEMENTED) {
-		err = NSERROR_OK;
+	if (err == SLATEERROR_NOT_IMPLEMENTED) {
+		err = SLATEERROR_OK;
 	}
  out:
 	if (username != NULL) {
@@ -1221,27 +1221,27 @@ browser_window__handle_login(struct browser_window *bw,
 /**
  * Handle a certificate verification request (BAD_CERTS) during a fetch
  */
-static nserror
+static slateerror
 browser_window__handle_bad_certs(struct browser_window *bw,
-				 nsurl *url)
+				 slateurl *url)
 {
 	struct browser_fetch_parameters params;
-	nserror err;
+	slateerror err;
 	/* Initially we don't know WHY the SSL cert was bad */
 	const char *reason = messages_get_sslcode(SSL_CERT_ERR_UNKNOWN);
 	size_t depth;
-	nsurl *chainurl = NULL;
+	slateurl *chainurl = NULL;
 
 	memset(&params, 0, sizeof(params));
 
-	params.url = nsurl_ref(corestring_nsurl_about_query_ssl);
-	params.referrer = nsurl_ref(url);
+	params.url = slateurl_ref(corestring_slateurl_about_query_ssl);
+	params.referrer = slateurl_ref(url);
 	params.flags = BW_NAVIGATE_HISTORY | BW_NAVIGATE_NO_TERMINAL_HISTORY_UPDATE | BW_NAVIGATE_INTERNAL;
 
 	err = fetch_multipart_data_new_kv(&params.post_multipart,
 					  "siteurl",
-					  nsurl_access(url));
-	if (err != NSERROR_OK) {
+					  slateurl_access(url));
+	if (err != SLATEERROR_OK) {
 		goto out;
 	}
 
@@ -1256,14 +1256,14 @@ browser_window__handle_bad_certs(struct browser_window *bw,
 		}
 
 		err = cert_chain_to_query(bw->loading_cert_chain, &chainurl);
-		if (err != NSERROR_OK) {
+		if (err != SLATEERROR_OK) {
 			goto out;
 		}
 
 		err = fetch_multipart_data_new_kv(&params.post_multipart,
 						  "chainurl",
-						  nsurl_access(chainurl));
-		if (err != NSERROR_OK) {
+						  slateurl_access(chainurl));
+		if (err != SLATEERROR_OK) {
 			goto out;
 		}
 	}
@@ -1271,21 +1271,21 @@ browser_window__handle_bad_certs(struct browser_window *bw,
 	err = fetch_multipart_data_new_kv(&params.post_multipart,
 					  "reason",
 					  reason);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		goto out;
 	}
 
 	/* Now we issue the fetch */
 	bw->internal_nav = true;
 	err = browser_window__navigate_internal(bw, &params);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		goto out;
 	}
 
  out:
 	browser_window__free_fetch_parameters(&params);
 	if (chainurl != NULL)
-		nsurl_unref(chainurl);
+		slateurl_unref(chainurl);
 	return err;
 }
 
@@ -1293,29 +1293,29 @@ browser_window__handle_bad_certs(struct browser_window *bw,
 /**
  * Handle a timeout during a fetch
  */
-static nserror
-browser_window__handle_timeout(struct browser_window *bw, nsurl *url)
+static slateerror
+browser_window__handle_timeout(struct browser_window *bw, slateurl *url)
 {
 	struct browser_fetch_parameters params;
-	nserror err;
+	slateerror err;
 
 	memset(&params, 0, sizeof(params));
 
-	params.url = nsurl_ref(corestring_nsurl_about_query_timeout);
-	params.referrer = nsurl_ref(url);
+	params.url = slateurl_ref(corestring_slateurl_about_query_timeout);
+	params.referrer = slateurl_ref(url);
 	params.flags = BW_NAVIGATE_HISTORY | BW_NAVIGATE_NO_TERMINAL_HISTORY_UPDATE | BW_NAVIGATE_INTERNAL;
 
 	err = fetch_multipart_data_new_kv(&params.post_multipart,
 					  "siteurl",
-					  nsurl_access(url));
-	if (err != NSERROR_OK) {
+					  slateurl_access(url));
+	if (err != SLATEERROR_OK) {
 		goto out;
 	}
 
 	/* Now we issue the fetch */
 	bw->internal_nav = true;
 	err = browser_window__navigate_internal(bw, &params);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		goto out;
 	}
 
@@ -1328,38 +1328,38 @@ browser_window__handle_timeout(struct browser_window *bw, nsurl *url)
 /**
  * Handle non specific errors during a fetch
  */
-static nserror
+static slateerror
 browser_window__handle_fetcherror(struct browser_window *bw,
 				  const char *reason,
-				  nsurl *url)
+				  slateurl *url)
 {
 	struct browser_fetch_parameters params;
-	nserror err;
+	slateerror err;
 
 	memset(&params, 0, sizeof(params));
 
-	params.url = nsurl_ref(corestring_nsurl_about_query_fetcherror);
-	params.referrer = nsurl_ref(url);
+	params.url = slateurl_ref(corestring_slateurl_about_query_fetcherror);
+	params.referrer = slateurl_ref(url);
 	params.flags = BW_NAVIGATE_HISTORY | BW_NAVIGATE_NO_TERMINAL_HISTORY_UPDATE | BW_NAVIGATE_INTERNAL;
 
 	err = fetch_multipart_data_new_kv(&params.post_multipart,
 					  "siteurl",
-					  nsurl_access(url));
-	if (err != NSERROR_OK) {
+					  slateurl_access(url));
+	if (err != SLATEERROR_OK) {
 		goto out;
 	}
 
 	err = fetch_multipart_data_new_kv(&params.post_multipart,
 					  "reason",
 					  reason);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		goto out;
 	}
 
 	/* Now we issue the fetch */
 	bw->internal_nav = true;
 	err = browser_window__navigate_internal(bw, &params);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		goto out;
 	}
 
@@ -1372,18 +1372,18 @@ browser_window__handle_fetcherror(struct browser_window *bw,
 /**
  * Handle errors during content fetch
  */
-static nserror
+static slateerror
 browser_window__handle_error(struct browser_window *bw,
 			     hlcache_handle *c,
 			     const hlcache_event *event)
 {
 	const char *message = event->data.errordata.errormsg;
-	nserror code = event->data.errordata.errorcode;
-	nserror res;
-	nsurl *url = hlcache_handle_get_url(c);
+	slateerror code = event->data.errordata.errorcode;
+	slateerror res;
+	slateurl *url = hlcache_handle_get_url(c);
 
 	/* Unexpected OK? */
-	assert(code != NSERROR_OK);
+	assert(code != SLATEERROR_OK);
 
 	if (message == NULL) {
 		message = messages_get_errorcode(code);
@@ -1401,15 +1401,15 @@ browser_window__handle_error(struct browser_window *bw,
 	hlcache_handle_release(c);
 
 	switch (code) {
-	case NSERROR_BAD_AUTH:
+	case SLATEERROR_BAD_AUTH:
 		res = browser_window__handle_login(bw, message, url);
 		break;
 
-	case NSERROR_BAD_CERTS:
+	case SLATEERROR_BAD_CERTS:
 		res = browser_window__handle_bad_certs(bw, url);
 		break;
 
-	case NSERROR_TIMEOUT:
+	case SLATEERROR_TIMEOUT:
 		res = browser_window__handle_timeout(bw, url);
 		break;
 
@@ -1428,15 +1428,15 @@ browser_window__handle_error(struct browser_window *bw,
  * \param bw	Browser window to update URL bar for.
  * \param url	URL for content displayed by bw including any fragment.
  */
-static inline nserror
-browser_window_refresh_url_bar_internal(struct browser_window *bw, nsurl *url)
+static inline slateerror
+browser_window_refresh_url_bar_internal(struct browser_window *bw, slateurl *url)
 {
 	assert(bw);
 	assert(url);
 
 	if ((bw->parent != NULL) || (bw->window == NULL)) {
 		/* Not root window or no gui window so do not set a URL */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	return guit->window->set_url(bw->window, url);
@@ -1446,11 +1446,11 @@ browser_window_refresh_url_bar_internal(struct browser_window *bw, nsurl *url)
 /**
  * Browser window content event callback handler.
  */
-static nserror
+static slateerror
 browser_window_callback(hlcache_handle *c, const hlcache_event *event, void *pw)
 {
 	struct browser_window *bw = pw;
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 
 	switch (event->type) {
 	case CONTENT_MSG_SSL_CERTS:
@@ -1607,7 +1607,7 @@ browser_window_callback(hlcache_handle *c, const hlcache_event *event, void *pw)
 			if (js_newthread(bw->jsheap,
 					 bw,
 					 hlcache_handle_get_content(c),
-					 &thread) == NSERROR_OK) {
+					 &thread) == SLATEERROR_OK) {
 				/* The content which is requesting the thread
 				 * is required to keep hold of it and
 				 * to destroy it when it is finished with it.
@@ -1820,16 +1820,16 @@ static void scheduled_reformat(void *vbw)
 	struct browser_window *bw = vbw;
 	int width;
 	int height;
-	nserror res;
+	slateerror res;
 
 	res = guit->window->get_dimensions(bw->window, &width, &height);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		browser_window_reformat(bw, false, width, height);
 	}
 }
 
 /* exported interface documented in desktop/browser_private.h */
-nserror browser_window_destroy_internal(struct browser_window *bw)
+slateerror browser_window_destroy_internal(struct browser_window *bw)
 {
 	assert(bw);
 
@@ -1922,7 +1922,7 @@ nserror browser_window_destroy_internal(struct browser_window *bw)
 	NSLOG(netsurf, INFO, "Status text cache match:miss %d:%d",
 	      bw->status.match, bw->status.miss);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1931,13 +1931,13 @@ nserror browser_window_destroy_internal(struct browser_window *bw)
  *
  * \param bw Browser window.
  * \param absolute scale value.
- * \return NSERROR_OK on success else error code
+ * \return SLATEERROR_OK on success else error code
  */
-static nserror
+static slateerror
 browser_window_set_scale_internal(struct browser_window *bw, float scale)
 {
 	int i;
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 
 	/* do not apply tiny changes in scale */
 	if (fabs(bw->scale - scale) < 0.0001)
@@ -2511,14 +2511,14 @@ browser_window_drop_file_at_point_internal(struct browser_window *bw,
  * \return true if an internal navigation url else false
  */
 static bool
-is_internal_navigate_url(nsurl *url)
+is_internal_navigate_url(slateurl *url)
 {
 	bool is_internal = false;
 	lwc_string *scheme, *path;
 
-	scheme = nsurl_get_component(url, NSURL_SCHEME);
+	scheme = slateurl_get_component(url, SLATEURL_SCHEME);
 	if (scheme != NULL) {
-		path = nsurl_get_component(url, NSURL_PATH);
+		path = slateurl_get_component(url, SLATEURL_PATH);
 		if (path != NULL) {
 			if (scheme == corestring_lwc_about) {
 				if (path == corestring_lwc_query_auth) {
@@ -2540,19 +2540,19 @@ is_internal_navigate_url(nsurl *url)
 
 
 /* exported interface, documented in netsurf/browser_window.h */
-nserror
+slateerror
 browser_window_get_name(struct browser_window *bw, const char **out_name)
 {
 	assert(bw != NULL);
 
 	*out_name = bw->name;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface, documented in netsurf/browser_window.h */
-nserror
+slateerror
 browser_window_set_name(struct browser_window *bw, const char *name)
 {
 	char *nname = NULL;
@@ -2562,7 +2562,7 @@ browser_window_set_name(struct browser_window *bw, const char *name)
 	if (name != NULL) {
 		nname = strdup(name);
 		if (nname == NULL) {
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 	}
 
@@ -2572,7 +2572,7 @@ browser_window_set_name(struct browser_window *bw, const char *name)
 
 	bw->name = nname;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -2590,7 +2590,7 @@ browser_window_redraw(struct browser_window *bw,
 	content_type content_type;
 	struct content_redraw_data data;
 	struct rect content_clip;
-	nserror res;
+	slateerror res;
 
 	if (bw == NULL) {
 		NSLOG(netsurf, INFO, "NULL browser window");
@@ -2604,7 +2604,7 @@ browser_window_redraw(struct browser_window *bw,
 	    (bw->children == NULL)) {
 		/* Browser window has no content, render blank fill */
 		ctx->plot->clip(ctx, clip);
-		return (ctx->plot->rectangle(ctx, plot_style_fill_white, clip) == NSERROR_OK);
+		return (ctx->plot->rectangle(ctx, plot_style_fill_white, clip) == SLATEERROR_OK);
 	}
 
 	/* Browser window has content OR children (frames) */
@@ -2626,7 +2626,7 @@ browser_window_redraw(struct browser_window *bw,
 			/* Root browser window; start with blank fill */
 			plot_ok &= (new_ctx.plot->rectangle(ctx,
 							    plot_style_fill_white,
-							    clip) == NSERROR_OK);
+							    clip) == SLATEERROR_OK);
 		}
 
 		/* Loop through all children of bw */
@@ -2688,7 +2688,7 @@ browser_window_redraw(struct browser_window *bw,
 		 * background fill */
 		plot_ok &= (new_ctx.plot->rectangle(&new_ctx,
 						    plot_style_fill_white,
-						    clip) == NSERROR_OK);
+						    clip) == SLATEERROR_OK);
 	}
 
 	/* Set up content redraw data */
@@ -2734,7 +2734,7 @@ browser_window_redraw(struct browser_window *bw,
 			res = scrollbar_redraw(bw->scroll_x,
 					       x + off_x, y + off_y, clip,
 					       bw->scale, &new_ctx);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				plot_ok = false;
 			}
 		}
@@ -2744,7 +2744,7 @@ browser_window_redraw(struct browser_window *bw,
 			res = scrollbar_redraw(bw->scroll_y,
 					       x + off_x, y + off_y, clip,
 					       bw->scale, &new_ctx);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				plot_ok = false;
 			}
 		}
@@ -2980,7 +2980,7 @@ bool browser_window_is_frameset(struct browser_window *bw)
 
 
 /* exported interface, documented in netsurf/browser_window.h */
-nserror
+slateerror
 browser_window_get_scrollbar_type(struct browser_window *bw,
 				  browser_scrolling *h,
 				  browser_scrolling *v)
@@ -2988,12 +2988,12 @@ browser_window_get_scrollbar_type(struct browser_window *bw,
 	*h = bw->scrolling;
 	*v = bw->scrolling;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface, documented in netsurf/browser_window.h */
-nserror
+slateerror
 browser_window_get_features(struct browser_window *bw,
 			    int x, int y,
 			    struct browser_window_features *data)
@@ -3051,7 +3051,7 @@ browser_window_set_gadget_filename(struct browser_window *bw,
 
 
 /* exported interface, documented in netsurf/browser_window.h */
-nserror
+slateerror
 browser_window_debug_dump(struct browser_window *bw,
 			  FILE *f,
 			  enum content_debug op)
@@ -3059,55 +3059,55 @@ browser_window_debug_dump(struct browser_window *bw,
 	if (bw->current_content != NULL) {
 		return content_debug_dump(bw->current_content, f, op);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface, documented in netsurf/browser_window.h */
-nserror browser_window_debug(struct browser_window *bw, enum content_debug op)
+slateerror browser_window_debug(struct browser_window *bw, enum content_debug op)
 {
 	if (bw->current_content != NULL) {
 		return content_debug(bw->current_content, op);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface, documented in netsurf/browser_window.h */
-nserror
+slateerror
 browser_window_create(enum browser_window_create_flags flags,
-		      nsurl *url,
-		      nsurl *referrer,
+		      slateurl *url,
+		      slateurl *referrer,
 		      struct browser_window *existing,
 		      struct browser_window **bw)
 {
 	gui_window_create_flags gw_flags = GW_CREATE_NONE;
 	struct browser_window *ret;
-	nserror err;
+	slateerror err;
 
 	/* Check parameters */
 	if (flags & BW_CREATE_CLONE) {
 		if (existing == NULL) {
 			assert(0 && "Failed: No existing window provided.");
-			return NSERROR_BAD_PARAMETER;
+			return SLATEERROR_BAD_PARAMETER;
 		}
 	}
 
 	if (!(flags & BW_CREATE_HISTORY)) {
 		if (!(flags & BW_CREATE_CLONE) || existing == NULL) {
 			assert(0 && "Failed: Must have existing for history.");
-			return NSERROR_BAD_PARAMETER;
+			return SLATEERROR_BAD_PARAMETER;
 		}
 	}
 
 	ret = calloc(1, sizeof(struct browser_window));
 	if (ret == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* Initialise common parts */
 	err = browser_window_initialise_common(flags, ret, existing);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		browser_window_destroy(ret);
 		return err;
 	}
@@ -3142,7 +3142,7 @@ browser_window_create(enum browser_window_create_flags flags,
 
 	if (ret->window == NULL) {
 		browser_window_destroy(ret);
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if (url != NULL) {
@@ -3167,22 +3167,22 @@ browser_window_create(enum browser_window_create_flags flags,
 		*bw = ret;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported internal interface, documented in desktop/browser_private.h */
-nserror
+slateerror
 browser_window_initialise_common(enum browser_window_create_flags flags,
 				 struct browser_window *bw,
 				 const struct browser_window *existing)
 {
-	nserror err;
+	slateerror err;
 	assert(bw);
 
 	/* new javascript context for each window/(i)frame */
-	err = js_newheap(nsoption_int(script_timeout), &bw->jsheap);
-	if (err != NSERROR_OK)
+	err = js_newheap(slateoption_int(script_timeout), &bw->jsheap);
+	if (err != SLATEERROR_OK)
 		return err;
 
 	if (flags & BW_CREATE_CLONE) {
@@ -3198,10 +3198,10 @@ browser_window_initialise_common(enum browser_window_create_flags flags,
 		err = browser_window_history_create(bw);
 
 		/* default scale */
-		bw->scale = (float) nsoption_int(scale) / 100.0;
+		bw->scale = (float) slateoption_int(scale) / 100.0;
 	}
 
-	if (err != NSERROR_OK)
+	if (err != SLATEERROR_OK)
 		return err;
 
 	/* window characteristics */
@@ -3220,7 +3220,7 @@ browser_window_initialise_common(enum browser_window_create_flags flags,
 	bw->status.match = 0;
 	bw->status.miss = 0;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -3237,22 +3237,22 @@ void browser_window_destroy(struct browser_window *bw)
 
 
 /* exported interface, documented in netsurf/browser_window.h */
-nserror browser_window_refresh_url_bar(struct browser_window *bw)
+slateerror browser_window_refresh_url_bar(struct browser_window *bw)
 {
-	nserror ret;
-	nsurl *display_url, *url;
+	slateerror ret;
+	slateurl *display_url, *url;
 
 	assert(bw);
 
 	if (bw->parent != NULL) {
 		/* Not root window; don't set a URL in GUI URL bar */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	if (bw->current_content == NULL) {
 		/* no content so return about:blank */
 		ret = browser_window_refresh_url_bar_internal(bw,
-						corestring_nsurl_about_blank);
+						corestring_slateurl_about_blank);
 	} else if (bw->throbbing && bw->loading_parameters.url != NULL) {
 		/* Throbbing and we have loading parameters, use those */
 		url = bw->loading_parameters.url;
@@ -3271,13 +3271,13 @@ nserror browser_window_refresh_url_bar(struct browser_window *bw)
 		} else {
 			url = hlcache_handle_get_url(bw->current_content);
 		}
-		ret = nsurl_refragment(
+		ret = slateurl_refragment(
 				       url,
 				       bw->frag_id, &display_url);
-		if (ret == NSERROR_OK) {
+		if (ret == SLATEERROR_OK) {
 			ret = browser_window_refresh_url_bar_internal(bw,
 								display_url);
-			nsurl_unref(display_url);
+			slateurl_unref(display_url);
 		}
 	}
 
@@ -3286,10 +3286,10 @@ nserror browser_window_refresh_url_bar(struct browser_window *bw)
 
 
 /* exported interface documented in netsurf/browser_window.h */
-nserror
+slateerror
 browser_window_navigate(struct browser_window *bw,
-			nsurl *url,
-			nsurl *referrer,
+			slateurl *url,
+			slateurl *referrer,
 			enum browser_window_nav_flags flags,
 			char *post_urlenc,
 			struct fetch_multipart_data *post_multipart,
@@ -3301,14 +3301,14 @@ browser_window_navigate(struct browser_window *bw,
 	bool fetch_is_post = (post_urlenc != NULL || post_multipart != NULL);
 	llcache_post_data post;
 	hlcache_child_context child;
-	nserror error;
+	slateerror error;
 	bool is_internal = false;
 	struct browser_fetch_parameters params, *pass_params = NULL;
 
 	assert(bw);
 	assert(url);
 
-	NSLOG(netsurf, INFO, "bw %p, url %s", bw, nsurl_access(url));
+	NSLOG(netsurf, INFO, "bw %p, url %s", bw, slateurl_access(url));
 
 	/*
 	 * determine if navigation is internal url, if so, we do not
@@ -3322,7 +3322,7 @@ browser_window_navigate(struct browser_window *bw,
 		 * this is there's a fetch multipart
 		 */
 		if (post_multipart == NULL) {
-			return NSERROR_NEED_DATA;
+			return SLATEERROR_NEED_DATA;
 		}
 		/* It *is* internal, set it as such */
 		flags |= BW_NAVIGATE_INTERNAL | BW_NAVIGATE_HISTORY;
@@ -3353,7 +3353,7 @@ browser_window_navigate(struct browser_window *bw,
 	}
 	if (depth > FRAME_DEPTH) {
 		NSLOG(netsurf, INFO, "frame depth too high.");
-		return NSERROR_FRAME_DEPTH;
+		return SLATEERROR_FRAME_DEPTH;
 	}
 
 	/* Set up retrieval parameters */
@@ -3376,10 +3376,10 @@ browser_window_navigate(struct browser_window *bw,
 		child.quirks = false;
 	}
 
-	url = nsurl_ref(url);
+	url = slateurl_ref(url);
 
 	if (referrer != NULL) {
-		referrer = nsurl_ref(referrer);
+		referrer = slateurl_ref(referrer);
 	}
 
 	/* Get download out of the way */
@@ -3390,9 +3390,9 @@ browser_window_navigate(struct browser_window *bw,
 						fetch_flags,
 						fetch_is_post,
 						&post);
-		nsurl_unref(url);
+		slateurl_unref(url);
 		if (referrer != NULL) {
-			nsurl_unref(referrer);
+			slateurl_unref(referrer);
 		}
 		return error;
 	}
@@ -3400,18 +3400,18 @@ browser_window_navigate(struct browser_window *bw,
 	lwc_string_unref(bw->frag_id);
 	bw->frag_id = NULL;
 
-	if (nsurl_has_component(url, NSURL_FRAGMENT)) {
+	if (slateurl_has_component(url, SLATEURL_FRAGMENT)) {
 		bool same_url = false;
 
-		bw->frag_id = nsurl_get_component(url, NSURL_FRAGMENT);
+		bw->frag_id = slateurl_get_component(url, SLATEURL_FRAGMENT);
 
 		/* Compare new URL with existing one (ignoring fragments) */
 		if ((bw->current_content != NULL) &&
 		    (hlcache_handle_get_url(bw->current_content) != NULL)) {
-			same_url = nsurl_compare(
+			same_url = slateurl_compare(
 				url,
 				hlcache_handle_get_url(bw->current_content),
-				NSURL_COMPLETE);
+				SLATEURL_COMPLETE);
 		}
 
 		/* if we're simply moving to another ID on the same page,
@@ -3419,11 +3419,11 @@ browser_window_navigate(struct browser_window *bw,
 		 */
 		if ((same_url) &&
 		    (fetch_is_post == false) &&
-		    (nsurl_has_component(url, NSURL_QUERY) == false)) {
-			nsurl_unref(url);
+		    (slateurl_has_component(url, SLATEURL_QUERY) == false)) {
+			slateurl_unref(url);
 
 			if (referrer != NULL) {
-				nsurl_unref(referrer);
+				slateurl_unref(referrer);
 			}
 
 			if ((flags & BW_NAVIGATE_HISTORY) != 0) {
@@ -3437,7 +3437,7 @@ browser_window_navigate(struct browser_window *bw,
 			if (bw->current_content != NULL) {
 				browser_window_refresh_url_bar(bw);
 			}
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 	}
 
@@ -3449,10 +3449,10 @@ browser_window_navigate(struct browser_window *bw,
 	/* Set up the fetch parameters */
 	memset(&params, 0, sizeof(params));
 
-	params.url = nsurl_ref(url);
+	params.url = slateurl_ref(url);
 
 	if (referrer != NULL) {
-		params.referrer = nsurl_ref(referrer);
+		params.referrer = slateurl_ref(referrer);
 	}
 
 	params.flags = flags;
@@ -3484,10 +3484,10 @@ browser_window_navigate(struct browser_window *bw,
 
 	error = browser_window__navigate_internal(bw, pass_params);
 
-	nsurl_unref(url);
+	slateurl_unref(url);
 
 	if (referrer != NULL) {
-		nsurl_unref(referrer);
+		slateurl_unref(referrer);
 	}
 
 	if (is_internal) {
@@ -3501,7 +3501,7 @@ browser_window_navigate(struct browser_window *bw,
 /**
  * Internal navigation handler for normal fetches
  */
-static nserror
+static slateerror
 navigate_internal_real(struct browser_window *bw,
 		       struct browser_fetch_parameters *params)
 {
@@ -3509,10 +3509,10 @@ navigate_internal_real(struct browser_window *bw,
 	bool fetch_is_post;
 	llcache_post_data post;
 	hlcache_child_context child;
-	nserror res;
+	slateerror res;
 	hlcache_handle *c;
 
-	NSLOG(netsurf, INFO, "Loading '%s'", nsurl_access(params->url));
+	NSLOG(netsurf, INFO, "Loading '%s'", slateurl_access(params->url));
 
 	fetch_is_post = (params->post_urlenc != NULL || params->post_multipart != NULL);
 
@@ -3557,7 +3557,7 @@ navigate_internal_real(struct browser_window *bw,
 				      &c);
 
 	switch (res) {
-	case NSERROR_OK:
+	case SLATEERROR_OK:
 		bw->loading_content = c;
 		browser_window_start_throbber(bw);
 		if (bw->window != NULL) {
@@ -3569,7 +3569,7 @@ navigate_internal_real(struct browser_window *bw,
 		}
 		break;
 
-	case NSERROR_NO_FETCH_HANDLER: /* no handler for this type */
+	case SLATEERROR_NO_FETCH_HANDLER: /* no handler for this type */
 		/** \todo does this always try and download even
 		 * unverifiable content?
 		 */
@@ -3595,14 +3595,14 @@ navigate_internal_real(struct browser_window *bw,
  * If the parameters indicate we're processing a *response* from the handler
  * then we deal with that, otherwise we pass it on to the about: handler
  */
-static nserror
+static slateerror
 navigate_internal_query_auth(struct browser_window *bw,
 			     struct browser_fetch_parameters *params)
 {
 	char *userpass = NULL;
 	const char *username, *password, *realm, *siteurl;
-	nsurl *sitensurl;
-	nserror res;
+	slateurl *siteslateurl;
+	slateerror res;
 	bool is_login = false, is_cancel = false;
 
 	assert(params->post_multipart != NULL);
@@ -3620,7 +3620,7 @@ navigate_internal_query_auth(struct browser_window *bw,
 		 * about:blank
 		 */
 		browser_window__free_fetch_parameters(&bw->loading_parameters);
-		bw->loading_parameters.url = nsurl_ref(corestring_nsurl_about_blank);
+		bw->loading_parameters.url = slateurl_ref(corestring_slateurl_about_blank);
 		bw->loading_parameters.flags = BW_NAVIGATE_NO_TERMINAL_HISTORY_UPDATE | BW_NAVIGATE_INTERNAL;
 		bw->internal_nav = true;
 		return browser_window__navigate_internal(bw, &bw->loading_parameters);
@@ -3637,28 +3637,28 @@ navigate_internal_query_auth(struct browser_window *bw,
 	if (username == NULL || password == NULL ||
 	    realm == NULL || siteurl == NULL) {
 		/* Bad inputs, simply fail */
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	/* Parse the URL */
-	res = nsurl_create(siteurl, &sitensurl);
-	if (res != NSERROR_OK) {
+	res = slateurl_create(siteurl, &siteslateurl);
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
 	/* Construct the username/password */
 	res = browser_window__build_userpass(username, password, &userpass);
-	if (res != NSERROR_OK) {
-		nsurl_unref(sitensurl);
+	if (res != SLATEERROR_OK) {
+		slateurl_unref(siteslateurl);
 		return res;
 	}
 
 	/* And let urldb know */
-	urldb_set_auth_details(sitensurl, realm, userpass);
+	urldb_set_auth_details(siteslateurl, realm, userpass);
 
 	/* Clean up */
 	free(userpass);
-	nsurl_unref(sitensurl);
+	slateurl_unref(siteslateurl);
 
 	/* Finally navigate to the original loading parameters */
 	bw->internal_nav = false;
@@ -3672,13 +3672,13 @@ navigate_internal_query_auth(struct browser_window *bw,
  * If the parameters indicate we're processing a *response* from the handler
  * then we deal with that, otherwise we pass it on to the about: handler
  */
-static nserror
+static slateerror
 navigate_internal_query_ssl(struct browser_window *bw,
 			    struct browser_fetch_parameters *params)
 {
 	bool is_proceed = false, is_back = false;
 	const char *siteurl = NULL;
-	nsurl *siteurl_ns;
+	slateurl *siteurl_ns;
 
 	assert(params->post_multipart != NULL);
 
@@ -3691,11 +3691,11 @@ navigate_internal_query_ssl(struct browser_window *bw,
 		return navigate_internal_real(bw, params);
 	}
 
-	if (nsurl_create(siteurl, &siteurl_ns) != NSERROR_OK) {
+	if (slateurl_create(siteurl, &siteurl_ns) != SLATEERROR_OK) {
 		NSLOG(netsurf, ERROR, "Unable to reset ssl loading parameters");
 	} else {
 		/* In order that we may proceed, replace the loading parameters */
-		nsurl_unref(bw->loading_parameters.url);
+		slateurl_unref(bw->loading_parameters.url);
 		bw->loading_parameters.url = siteurl_ns;
 	}
 
@@ -3709,7 +3709,7 @@ navigate_internal_query_ssl(struct browser_window *bw,
  * If the parameters indicate we're processing a *response* from the handler
  * then we deal with that, otherwise we pass it on to the about: handler
  */
-static nserror
+static slateerror
 navigate_internal_query_timeout(struct browser_window *bw,
 				struct browser_fetch_parameters *params)
 {
@@ -3745,7 +3745,7 @@ navigate_internal_query_timeout(struct browser_window *bw,
  * If the parameters indicate we're processing a *response* from the handler
  * then we deal with that, otherwise we pass it on to the about: handler
  */
-static nserror
+static slateerror
 navigate_internal_query_fetcherror(struct browser_window *bw,
 				   struct browser_fetch_parameters *params)
 {
@@ -3785,14 +3785,14 @@ navigate_internal_query_fetcherror(struct browser_window *bw,
  *
  * If we're not, then we just move on to the real navigate.
  */
-nserror
+slateerror
 browser_window__navigate_internal(struct browser_window *bw,
 				  struct browser_fetch_parameters *params)
 {
 	lwc_string *scheme, *path;
 
 	/* All our special URIs are in the about: scheme */
-	scheme = nsurl_get_component(params->url, NSURL_SCHEME);
+	scheme = slateurl_get_component(params->url, SLATEURL_SCHEME);
 	if (scheme != corestring_lwc_about) {
 		lwc_string_unref(scheme);
 		goto normal_fetch;
@@ -3800,7 +3800,7 @@ browser_window__navigate_internal(struct browser_window *bw,
 	lwc_string_unref(scheme);
 
 	/* Is it the auth query handler? */
-	path = nsurl_get_component(params->url, NSURL_PATH);
+	path = slateurl_get_component(params->url, SLATEURL_PATH);
 	if (path == corestring_lwc_query_auth) {
 		lwc_string_unref(path);
 		return navigate_internal_query_auth(bw, params);
@@ -3832,16 +3832,16 @@ bool browser_window_up_available(struct browser_window *bw)
 	bool result = false;
 
 	if (bw != NULL && bw->current_content != NULL) {
-		nsurl *parent;
-		nserror	err;
-		err = nsurl_parent(hlcache_handle_get_url(bw->current_content),
+		slateurl *parent;
+		slateerror	err;
+		err = slateurl_parent(hlcache_handle_get_url(bw->current_content),
 				   &parent);
-		if (err == NSERROR_OK) {
-			result = nsurl_compare(hlcache_handle_get_url(
+		if (err == SLATEERROR_OK) {
+			result = slateurl_compare(hlcache_handle_get_url(
 						      bw->current_content),
 					       parent,
-					       NSURL_COMPLETE) == false;
-			nsurl_unref(parent);
+					       SLATEURL_COMPLETE) == false;
+			slateurl_unref(parent);
 		}
 	}
 
@@ -3850,25 +3850,25 @@ bool browser_window_up_available(struct browser_window *bw)
 
 
 /* Exported interface, documented in netsurf/browser_window.h */
-nserror browser_window_navigate_up(struct browser_window *bw, bool new_window)
+slateerror browser_window_navigate_up(struct browser_window *bw, bool new_window)
 {
-	nsurl *current, *parent;
-	nserror err;
+	slateurl *current, *parent;
+	slateerror err;
 
 	if (bw == NULL)
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 
 	current = browser_window_access_url(bw);
 
-	err = nsurl_parent(current, &parent);
-	if (err != NSERROR_OK) {
+	err = slateurl_parent(current, &parent);
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
-	if (nsurl_compare(current, parent, NSURL_COMPLETE) == true) {
+	if (slateurl_compare(current, parent, SLATEURL_COMPLETE) == true) {
 		/* Can't go up to parent from here */
-		nsurl_unref(parent);
-		return NSERROR_OK;
+		slateurl_unref(parent);
+		return SLATEERROR_OK;
 	}
 
 	if (new_window) {
@@ -3880,13 +3880,13 @@ nserror browser_window_navigate_up(struct browser_window *bw, bool new_window)
 					      NULL, NULL, NULL);
 	}
 
-	nsurl_unref(parent);
+	slateurl_unref(parent);
 	return err;
 }
 
 
-/* Exported interface, documented in include/netsurf/browser_window.h */
-nsurl* browser_window_access_url(const struct browser_window *bw)
+/* Exported interface, documented in include/slate/browser_window.h */
+slateurl* browser_window_access_url(const struct browser_window *bw)
 {
 	assert(bw != NULL);
 
@@ -3898,16 +3898,16 @@ nsurl* browser_window_access_url(const struct browser_window *bw)
 		return hlcache_handle_get_url(bw->loading_content);
 	}
 
-	return corestring_nsurl_about_blank;
+	return corestring_slateurl_about_blank;
 }
 
 
-/* Exported interface, documented in include/netsurf/browser_window.h */
-nserror
-browser_window_get_url(struct browser_window *bw, bool fragment,nsurl** url_out)
+/* Exported interface, documented in include/slate/browser_window.h */
+slateerror
+browser_window_get_url(struct browser_window *bw, bool fragment,slateurl** url_out)
 {
-	nserror err;
-	nsurl *url;
+	slateerror err;
+	slateurl *url;
 
 	assert(bw != NULL);
 
@@ -3916,18 +3916,18 @@ browser_window_get_url(struct browser_window *bw, bool fragment,nsurl** url_out)
 		 * been trampled, possibly with a new frag_id, but we will
 		 * still be returning the current URL, so in this edge case
 		 * we just drop any fragment. */
-		url = nsurl_ref(browser_window_access_url(bw));
+		url = slateurl_ref(browser_window_access_url(bw));
 
 	} else {
-		err = nsurl_refragment(browser_window_access_url(bw),
+		err = slateurl_refragment(browser_window_access_url(bw),
 				       bw->frag_id, &url);
-		if (err != NSERROR_OK) {
+		if (err != SLATEERROR_OK) {
 			return err;
 		}
 	}
 
 	*url_out = url;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -3941,7 +3941,7 @@ const char* browser_window_get_title(struct browser_window *bw)
 	}
 
 	/* no content so return about:blank */
-	return nsurl_access(corestring_nsurl_about_blank);
+	return slateurl_access(corestring_slateurl_about_blank);
 }
 
 
@@ -3975,7 +3975,7 @@ struct hlcache_handle *browser_window_get_content(struct browser_window *bw)
 
 
 /* Exported interface, documented in netsurf/browser_window.h */
-nserror browser_window_get_extents(struct browser_window *bw, bool scaled,
+slateerror browser_window_get_extents(struct browser_window *bw, bool scaled,
 				   int *width, int *height)
 {
 	assert(bw != NULL);
@@ -3983,7 +3983,7 @@ nserror browser_window_get_extents(struct browser_window *bw, bool scaled,
 	if (bw->current_content == NULL) {
 		*width = 0;
 		*height = 0;
-		return NSERROR_BAD_CONTENT;
+		return SLATEERROR_BAD_CONTENT;
 	}
 
 	*width = content_get_width(bw->current_content);
@@ -3994,24 +3994,24 @@ nserror browser_window_get_extents(struct browser_window *bw, bool scaled,
 		*height *= bw->scale;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported internal interface, documented in desktop/browser_private.h */
-nserror
+slateerror
 browser_window_get_dimensions(struct browser_window *bw,
 			      int *width,
 			      int *height)
 {
-	nserror res;
+	slateerror res;
 	assert(bw);
 
 	if (bw->window == NULL) {
 		/* Core managed browser window */
 		*width = bw->width;
 		*height = bw->height;
-		res = NSERROR_OK;
+		res = SLATEERROR_OK;
 	} else {
 		/* Front end window */
 		res = guit->window->get_dimensions(bw->window, width, height);
@@ -4039,7 +4039,7 @@ browser_window_set_dimensions(struct browser_window *bw, int width, int height)
 
 
 /* Exported interface, documented in browser/browser_private.h */
-nserror
+slateerror
 browser_window_invalidate_rect(struct browser_window *bw, struct rect *rect)
 {
 	int pos_x;
@@ -4082,11 +4082,11 @@ void browser_window_stop(struct browser_window *bw)
 
 	if (bw->current_content != NULL &&
 	    content_get_status(bw->current_content) != CONTENT_STATUS_DONE) {
-		nserror error;
+		slateerror error;
 		assert(content_get_status(bw->current_content) ==
 		       CONTENT_STATUS_READY);
 		error = hlcache_handle_abort(bw->current_content);
-		assert(error == NSERROR_OK);
+		assert(error == SLATEERROR_OK);
 	}
 
 	guit->misc->schedule(-1, browser_window_refresh, bw);
@@ -4111,15 +4111,15 @@ void browser_window_stop(struct browser_window *bw)
 
 
 /* Exported interface, documented in netsurf/browser_window.h */
-nserror browser_window_reload(struct browser_window *bw, bool all)
+slateerror browser_window_reload(struct browser_window *bw, bool all)
 {
 	hlcache_handle *c;
 	unsigned int i;
-	struct nsurl *reload_url;
+	struct slateurl *reload_url;
 
 	if ((bw->current_content) == NULL ||
 	    (bw->loading_content) != NULL) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	if (all && content_get_type(bw->current_content) == CONTENT_HTML) {
@@ -4236,10 +4236,10 @@ void browser_window_set_pointer(struct browser_window *bw,
 
 
 /* exported function documented in netsurf/browser_window.h */
-nserror browser_window_schedule_reformat(struct browser_window *bw)
+slateerror browser_window_schedule_reformat(struct browser_window *bw)
 {
 	if (bw->window == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	return guit->misc->schedule(0, scheduled_reformat, bw);
@@ -4278,10 +4278,10 @@ browser_window_reformat(struct browser_window *bw,
 
 
 /* exported interface documented in netsurf/browser_window.h */
-nserror
+slateerror
 browser_window_set_scale(struct browser_window *bw, float scale, bool absolute)
 {
-	nserror res;
+	slateerror res;
 
 	/* get top browser window */
 	while (bw->parent) {
@@ -4306,7 +4306,7 @@ browser_window_set_scale(struct browser_window *bw, float scale, bool absolute)
 	}
 
 	res = browser_window_set_scale_internal(bw, scale);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		browser_window_recalculate_frameset(bw);
 	}
 
@@ -4335,10 +4335,10 @@ browser_window_find_target(struct browser_window *bw,
 	struct browser_window *top;
 	hlcache_handle *c;
 	int rdepth;
-	nserror error;
+	slateerror error;
 	int flags = BW_CREATE_HISTORY | BW_CREATE_CLONE;
 
-	if (nsoption_bool(foreground_new))
+	if (slateoption_bool(foreground_new))
 		flags |= BW_CREATE_FOREGROUND;
 
 	/* use the base target if we don't have one */
@@ -4357,7 +4357,7 @@ browser_window_find_target(struct browser_window *bw,
 	if ((!(mouse & BROWSER_MOUSE_CLICK_2)) &&
 	    (!((mouse & BROWSER_MOUSE_CLICK_2) &&
 	       (mouse & BROWSER_MOUSE_MOD_2))) &&
-	    (!nsoption_bool(target_blank))) {
+	    (!slateoption_bool(target_blank))) {
 		/* not a mouse button 2 click
 		 * not a mouse button 1 click with ctrl pressed
 		 * configured to ignore target="_blank" */
@@ -4366,12 +4366,12 @@ browser_window_find_target(struct browser_window *bw,
 	}
 
 	/* handle reserved keywords */
-	if (((nsoption_bool(button_2_tab)) &&
+	if (((slateoption_bool(button_2_tab)) &&
 	     (mouse & BROWSER_MOUSE_CLICK_2))||
-	    ((!nsoption_bool(button_2_tab)) &&
+	    ((!slateoption_bool(button_2_tab)) &&
 	     ((mouse & BROWSER_MOUSE_CLICK_1) &&
 	      (mouse & BROWSER_MOUSE_MOD_2))) ||
-	    ((nsoption_bool(button_2_tab)) &&
+	    ((slateoption_bool(button_2_tab)) &&
 	     (!strcasecmp(target, "_blank")))) {
 		/* open in new tab if:
 		 * - button_2 opens in new tab and button_2 was pressed
@@ -4383,16 +4383,16 @@ browser_window_find_target(struct browser_window *bw,
 		 */
 		flags |= BW_CREATE_TAB;
 		error = browser_window_create(flags, NULL, NULL, bw, &bw_target);
-		if (error != NSERROR_OK) {
+		if (error != SLATEERROR_OK) {
 			return bw;
 		}
 		return bw_target;
-	} else if (((!nsoption_bool(button_2_tab)) &&
+	} else if (((!slateoption_bool(button_2_tab)) &&
 		    (mouse & BROWSER_MOUSE_CLICK_2)) ||
-		   ((nsoption_bool(button_2_tab)) &&
+		   ((slateoption_bool(button_2_tab)) &&
 		    ((mouse & BROWSER_MOUSE_CLICK_1) &&
 		     (mouse & BROWSER_MOUSE_MOD_2))) ||
-		   ((!nsoption_bool(button_2_tab)) &&
+		   ((!slateoption_bool(button_2_tab)) &&
 		    (!strcasecmp(target, "_blank")))) {
 		/* open in new window if:
 		 * - button_2 doesn't open in new tabs and button_2 was pressed
@@ -4404,7 +4404,7 @@ browser_window_find_target(struct browser_window *bw,
 		 *   "_blank"
 		 */
 		error = browser_window_create(flags, NULL, NULL, bw, &bw_target);
-		if (error != NSERROR_OK) {
+		if (error != SLATEERROR_OK) {
 			return bw;
 		}
 		return bw_target;
@@ -4434,11 +4434,11 @@ browser_window_find_target(struct browser_window *bw,
 		return bw_target;
 
 	/* we require a new window using the target name */
-	if (!nsoption_bool(target_blank))
+	if (!slateoption_bool(target_blank))
 		return bw;
 
 	error = browser_window_create(flags, NULL, NULL, bw, &bw_target);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		return bw;
 	}
 
@@ -4563,7 +4563,7 @@ browser_window_exec(struct browser_window *bw, const char *src, size_t srclen)
 
 
 /* exported interface documented in browser_window.h */
-nserror
+slateerror
 browser_window_console_log(struct browser_window *bw,
 			   browser_window_console_source src,
 			   const char *msg,
@@ -4611,12 +4611,12 @@ browser_window_console_log(struct browser_window *bw,
 
 	guit->window->console_log(root->window, src, msg, msglen, flags);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* Exported interface, documented in browser_private.h */
-nserror
+slateerror
 browser_window__reload_current_parameters(struct browser_window *bw)
 {
 	assert(bw != NULL);
@@ -4633,7 +4633,7 @@ browser_window__reload_current_parameters(struct browser_window *bw)
 
 	if (bw->current_parameters.url == NULL) {
 		/* We have never navigated so go to about:blank */
-		bw->current_parameters.url = nsurl_ref(corestring_nsurl_about_blank);
+		bw->current_parameters.url = slateurl_ref(corestring_slateurl_about_blank);
 	}
 
 	bw->current_parameters.flags &= ~BW_NAVIGATE_HISTORY;
@@ -4659,8 +4659,8 @@ browser_window_page_info_state browser_window_get_page_info_state(
 		return PAGE_STATE_UNKNOWN;
 	}
 
-	scheme = nsurl_get_component(
-		hlcache_handle_get_url(bw->current_content), NSURL_SCHEME);
+	scheme = slateurl_get_component(
+		hlcache_handle_get_url(bw->current_content), SLATEURL_SCHEME);
 
 	/* Is this an internal scheme? */
 	if ((lwc_string_isequal(scheme, corestring_lwc_about,
@@ -4710,19 +4710,19 @@ browser_window_page_info_state browser_window_get_page_info_state(
 }
 
 /* Exported interface, documented in browser_window.h */
-nserror
+slateerror
 browser_window_get_ssl_chain(struct browser_window *bw,
 			     struct cert_chain **chain)
 {
 	assert(bw != NULL);
 
 	if (bw->current_cert_chain == NULL) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	*chain = bw->current_cert_chain;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* Exported interface, documented in browser_window.h */
@@ -4746,12 +4746,12 @@ int browser_window_get_cookie_count(
 }
 
 /* Exported interface, documented in browser_window.h */
-nserror browser_window_show_cookies(
+slateerror browser_window_show_cookies(
 		const struct browser_window *bw)
 {
-	nserror err;
-	nsurl *url = browser_window_access_url(bw);
-	lwc_string *host = nsurl_get_component(url, NSURL_HOST);
+	slateerror err;
+	slateurl *url = browser_window_access_url(bw);
+	lwc_string *host = slateurl_get_component(url, SLATEURL_HOST);
 	const char *string = (host != NULL) ? lwc_string_data(host) : NULL;
 
 	err = guit->misc->present_cookies(string);
@@ -4761,17 +4761,17 @@ nserror browser_window_show_cookies(
 }
 
 /* Exported interface, documented in browser_window.h */
-nserror browser_window_show_certificates(struct browser_window *bw)
+slateerror browser_window_show_certificates(struct browser_window *bw)
 {
-	nserror res;
-	nsurl *url;
+	slateerror res;
+	slateurl *url;
 
 	if (bw->current_cert_chain == NULL) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	res = cert_chain_to_query(bw->current_cert_chain, &url);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		res = browser_window_create(BW_CREATE_HISTORY |
 					    BW_CREATE_FOREGROUND |
 					    BW_CREATE_TAB,
@@ -4780,7 +4780,7 @@ nserror browser_window_show_certificates(struct browser_window *bw)
 					    bw,
 					    NULL);
 
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
 
 	return res;

@@ -1,7 +1,7 @@
 /*
  * Copyright 2020 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,8 +25,8 @@
 
 #include "utils/errors.h"
 #include "utils/utils.h"
-#include "netsurf/types.h"
-#include "netsurf/plot_style.h"
+#include "slate/types.h"
+#include "slate/plot_style.h"
 #include "desktop/selection.h"
 #include "desktop/save_text.h"
 
@@ -108,9 +108,9 @@ selected_part(struct box *box,
  * \param end_idx end of range
  * \param rdwi redraw range to fill in
  * \param do_marker whether deal enter any marker box
- * \return NSERROR_OK on success else error code
+ * \return SLATEERROR_OK on success else error code
  */
-static nserror
+static slateerror
 coords_from_range(struct box *box,
 		  unsigned start_idx,
 		  unsigned end_idx,
@@ -118,7 +118,7 @@ coords_from_range(struct box *box,
 		  bool do_marker)
 {
 	struct box *child;
-	nserror res;
+	slateerror res;
 
 	assert(box);
 
@@ -139,14 +139,14 @@ coords_from_range(struct box *box,
 					end_idx,
 					rdwi,
 					true);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 	}
 
 	/* we can prune this subtree, it's after the selection */
 	if (box->byte_offset >= end_idx) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* read before calling the handler in case it modifies the tree */
@@ -222,7 +222,7 @@ coords_from_range(struct box *box,
 						end_idx,
 						rdwi,
 						false);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return res;
 			}
 
@@ -230,7 +230,7 @@ coords_from_range(struct box *box,
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -245,9 +245,9 @@ coords_from_range(struct box *box,
  * \param whitespace_text    whitespace to place before text for formatting
  *                            may be NULL
  * \param whitespace_length  length of whitespace_text
- * \return NSERROR_OK iff successful and traversal should continue else error code
+ * \return SLATEERROR_OK iff successful and traversal should continue else error code
  */
-static nserror
+static slateerror
 selection_copy_box(const char *text,
 		   size_t length,
 		   struct box *box,
@@ -268,7 +268,7 @@ selection_copy_box(const char *text,
 					     false,
 					     pstyle,
 					     handle)) {
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 	}
 
@@ -288,10 +288,10 @@ selection_copy_box(const char *text,
 
 	/* add the text from this box */
 	if (!selection_string_append(text, length, add_space, pstyle, handle)) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -308,9 +308,9 @@ selection_copy_box(const char *text,
  * \param before     type of whitespace to place before next encountered text
  * \param first      whether this is the first box with text
  * \param do_marker  whether deal enter any marker box
- * \return NSERROR_OK on sucess else error code
+ * \return SLATEERROR_OK on sucess else error code
  */
-static nserror
+static slateerror
 selection_copy(struct box *box,
 	       const css_unit_ctx *unit_len_ctx,
 	       unsigned start_idx,
@@ -320,7 +320,7 @@ selection_copy(struct box *box,
 	       bool *first,
 	       bool do_marker)
 {
-	nserror res;
+	slateerror res;
 	struct box *child;
 	const char *whitespace_text = "";
 	size_t whitespace_length = 0;
@@ -347,14 +347,14 @@ selection_copy(struct box *box,
 				     before,
 				     first,
 				     true);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 	}
 
 	/* we can prune this subtree, it's after the selection */
 	if (box->byte_offset >= end_idx) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* read before calling the handler in case it modifies the tree */
@@ -387,7 +387,7 @@ selection_copy(struct box *box,
 						 selstr,
 						 whitespace_text,
 						 whitespace_length);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return res;
 			}
 			if (before) {
@@ -422,7 +422,7 @@ selection_copy(struct box *box,
 					     before,
 					     first,
 					     false);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return res;
 			}
 
@@ -430,7 +430,7 @@ selection_copy(struct box *box,
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -470,23 +470,23 @@ static unsigned selection_label_subtree(struct box *box, unsigned idx)
 
 
 /* exported interface documented in html/textselection.h */
-nserror
+slateerror
 html_textselection_redraw(struct content *c,
 			  unsigned start_idx,
 			  unsigned end_idx)
 {
-	nserror res;
+	slateerror res;
 	html_content *html = (html_content *)c;
 	struct rdw_info rdw;
 
 	if (html->layout == NULL) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	rdw.inited = false;
 
 	res = coords_from_range(html->layout, start_idx, end_idx, &rdw, false);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -498,12 +498,12 @@ html_textselection_redraw(struct content *c,
 					rdw.r.y1 - rdw.r.y0);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in html/textselection.h */
-nserror
+slateerror
 html_textselection_copy(struct content *c,
 			unsigned start_idx,
 			unsigned end_idx,
@@ -514,7 +514,7 @@ html_textselection_copy(struct content *c,
 	bool first = true;
 
 	if (html->layout == NULL) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	return selection_copy(html->layout,
@@ -529,19 +529,19 @@ html_textselection_copy(struct content *c,
 
 
 /* exported interface documented in html/textselection.h */
-nserror
+slateerror
 html_textselection_get_end(struct content *c, unsigned *end_idx)
 {
 	html_content *html = (html_content *)c;
 	unsigned root_idx;
 
 	if (html->layout == NULL) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	root_idx = 0;
 
 	*end_idx = selection_label_subtree(html->layout, root_idx);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }

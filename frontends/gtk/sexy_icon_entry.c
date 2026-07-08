@@ -4,7 +4,7 @@
  * modified for NetSurf
  * Copyright 2009 Mark Benjamin <netsurf-browser.org.MarkBenjamin@dfgh.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  * This file before modifications was originally part of LibSexy,
  * http://www.chipx86.com/; it is redistributed under GPLv2
  *
@@ -211,7 +211,7 @@ sexy_icon_entry_destroy(GtkObject *obj)
 static void
 sexy_icon_entry_map(GtkWidget *widget)
 {
-	if (nsgtk_widget_get_realized(widget) && !nsgtk_widget_get_mapped(widget))
+	if (slategtk_widget_get_realized(widget) && !slategtk_widget_get_mapped(widget))
 	{
 		SexyIconEntry *entry = SEXY_ICON_ENTRY(widget);
 		int i;
@@ -229,7 +229,7 @@ sexy_icon_entry_map(GtkWidget *widget)
 static void
 sexy_icon_entry_unmap(GtkWidget *widget)
 {
-	if (nsgtk_widget_get_mapped(widget))
+	if (slategtk_widget_get_mapped(widget))
 	{
 		SexyIconEntry *entry = SEXY_ICON_ENTRY(widget);
 		int i;
@@ -376,7 +376,7 @@ sexy_icon_entry_realize(GtkWidget *widget)
 		gdk_window_set_user_data(icon_info->window, widget);
 
 		gdk_window_set_background(icon_info->window,
-			&widget->style->base[nsgtk_widget_get_state(widget)]);
+			&widget->style->base[slategtk_widget_get_state(widget)]);
 	}
 
 	gtk_widget_queue_resize(widget);
@@ -473,7 +473,7 @@ sexy_icon_entry_size_allocate(GtkWidget *widget, GtkAllocation *allocation)
 
 	GTK_WIDGET_CLASS(parent_class)->size_allocate(widget, allocation);
 
-	if (nsgtk_widget_get_realized(widget))
+	if (slategtk_widget_get_realized(widget))
 		place_windows(SEXY_ICON_ENTRY(widget), allocation);
 }
 
@@ -560,7 +560,7 @@ draw_icon(GtkWidget *widget, SexyIconEntryPosition icon_pos)
 	GdkPixbuf *pixbuf;
 	gint x, y, width, height;
 
-	if (icon_info->icon == NULL || !nsgtk_widget_get_realized(widget))
+	if (icon_info->icon == NULL || !slategtk_widget_get_realized(widget))
 		return;
 
 	if ((pixbuf = get_pixbuf_from_icon(entry, icon_pos)) == NULL)
@@ -624,7 +624,7 @@ sexy_icon_entry_expose(GtkWidget *widget, GdkEventExpose *event)
 
 	entry = SEXY_ICON_ENTRY(widget);
 
-	if (nsgtk_widget_is_drawable(widget))
+	if (slategtk_widget_is_drawable(widget))
 	{
 		gboolean found = FALSE;
 		int i;
@@ -642,7 +642,7 @@ sexy_icon_entry_expose(GtkWidget *widget, GdkEventExpose *event)
 				gdk_drawable_get_size(icon_info->window, &width, NULL);
 
 				gtk_paint_flat_box(widget->style, icon_info->window,
-								   nsgtk_widget_get_state(widget), GTK_SHADOW_NONE,
+								   slategtk_widget_get_state(widget), GTK_SHADOW_NONE,
 								   NULL, widget, "entry_bg",
 								   0, 0, width, text_area_alloc.height);
 
@@ -961,7 +961,7 @@ sexy_icon_entry_add_clear_button(SexyIconEntry *icon_entry)
 	g_return_if_fail(icon_entry != NULL);
 	g_return_if_fail(SEXY_IS_ICON_ENTRY(icon_entry));
 
-	icon = nsgtk_image_new_from_stock(NSGTK_STOCK_CLEAR,
+	icon = slategtk_image_new_from_stock(SLATEGTK_STOCK_CLEAR,
 					  GTK_ICON_SIZE_MENU);
 	gtk_widget_show(icon);
 	sexy_icon_entry_set_icon(SEXY_ICON_ENTRY(icon_entry),

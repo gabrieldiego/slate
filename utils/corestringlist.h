@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@
  * three macros must be defined to use this header
  * CORESTRING_LWC_VALUE - wapcaplet strings with a value not derived from name
  * CORESTRING_DOM_VALUE - dom strings with a value not derived from name
- * CORESTRING_NSURL - nsurl from given url
+ * CORESTRING_SLATEURL - slateurl from given url
  *
  * two helper macros are defined that allow simple mapping strings
  * CORESTRING_LWC_STRING - libwapcaplet strings with a simple name value mapping
@@ -33,7 +33,7 @@
  *   times with different macro definitions so there is no guard.
  */
 
-#if !defined(CORESTRING_LWC_VALUE) | !defined(CORESTRING_DOM_VALUE) | !defined(CORESTRING_NSURL)
+#if !defined(CORESTRING_LWC_VALUE) | !defined(CORESTRING_DOM_VALUE) | !defined(CORESTRING_SLATEURL)
 #error "missing macro definition. This header must not be directly included"
 #endif
 
@@ -376,11 +376,11 @@ CORESTRING_DOM_VALUE(text_javascript, "text/javascript");
 CORESTRING_DOM_VALUE(http_equiv, "http-equiv");
 CORESTRING_DOM_VALUE(html_namespace, "http://www.w3.org/1999/xhtml");
 
-CORESTRING_NSURL(about_blank, "about:blank");
-CORESTRING_NSURL(about_query_ssl, "about:query/ssl");
-CORESTRING_NSURL(about_query_auth, "about:query/auth");
-CORESTRING_NSURL(about_query_timeout, "about:query/timeout");
-CORESTRING_NSURL(about_query_fetcherror, "about:query/fetcherror");
+CORESTRING_SLATEURL(about_blank, "about:blank");
+CORESTRING_SLATEURL(about_query_ssl, "about:query/ssl");
+CORESTRING_SLATEURL(about_query_auth, "about:query/auth");
+CORESTRING_SLATEURL(about_query_timeout, "about:query/timeout");
+CORESTRING_SLATEURL(about_query_fetcherror, "about:query/fetcherror");
 
 #undef CORESTRING_LWC_STRING
 #undef CORESTRING_DOM_STRING

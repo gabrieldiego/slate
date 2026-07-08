@@ -2,7 +2,7 @@
  * Copyright 2008 Daniel Silverstone <dsilvers@netsurf-browser.org>
  * Copyright 2011 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,4 +23,4 @@
 extern char *atari_find_resource(char *buf, const char *filename, const char *def);
 char *local_file_to_url(const char *filename);
 
-#endif /* NETSURF_ATARI_FINDFILE_H */
+#endif /* SLATE_ATARI_FINDFILE_H */

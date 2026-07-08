@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,12 +16,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_CSS_UTILS_H_
-#define NETSURF_CSS_UTILS_H_
+#ifndef SLATE_CSS_UTILS_H_
+#define SLATE_CSS_UTILS_H_
 
 #include <libcss/libcss.h>
 
-#include "netsurf/css.h"
+#include "slate/css.h"
 
 /** DPI of the screen, in fixed point units */
 extern css_fixed nscss_screen_dpi;

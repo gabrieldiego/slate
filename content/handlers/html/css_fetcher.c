@@ -29,12 +29,12 @@
 #include <dom/dom.h>
 #include <libwapcaplet/libwapcaplet.h>
 
-#include "netsurf/inttypes.h"
+#include "slate/inttypes.h"
 #include "utils/config.h"
 #include "utils/corestrings.h"
 #include "utils/log.h"
 #include "utils/ring.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/utils.h"
 #include "content/fetch.h"
 #include "content/fetchers.h"
@@ -44,7 +44,7 @@
 typedef struct html_css_fetcher_item {
 	uint32_t key;
 	dom_string *data;
-	nsurl *base_url;
+	slateurl *base_url;
 
 	struct html_css_fetcher_item *r_next, *r_prev;
 } html_css_fetcher_item;
@@ -52,7 +52,7 @@ typedef struct html_css_fetcher_item {
 typedef struct html_css_fetcher_context {
 	struct fetch *parent_fetch;
 
-	nsurl *url;
+	slateurl *url;
 	html_css_fetcher_item *item;
 
 	bool aborted;
@@ -78,12 +78,12 @@ static void html_css_fetcher_finalise(lwc_string *scheme)
 	      lwc_string_data(scheme));
 }
 
-static bool html_css_fetcher_can_fetch(const nsurl *url)
+static bool html_css_fetcher_can_fetch(const slateurl *url)
 {
 	return true;
 }
 
-static void *html_css_fetcher_setup(struct fetch *parent_fetch, nsurl *url,
+static void *html_css_fetcher_setup(struct fetch *parent_fetch, slateurl *url,
 		 bool only_2xx, bool downgrade_tls, const char *post_urlenc,
 		 const struct fetch_multipart_data *post_multipart,
 		 const char **headers)
@@ -98,7 +98,7 @@ static void *html_css_fetcher_setup(struct fetch *parent_fetch, nsurl *url,
 	 * Where key is an unsigned 32bit integer
 	 */
 
-	path = nsurl_get_component(url, NSURL_PATH);
+	path = slateurl_get_component(url, SLATEURL_PATH);
 	/* The path must exist */
 	if (path == NULL) {
 		return NULL;
@@ -133,7 +133,7 @@ static void *html_css_fetcher_setup(struct fetch *parent_fetch, nsurl *url,
 		return NULL;
 
 	ctx->parent_fetch = parent_fetch;
-	ctx->url = nsurl_ref(url);
+	ctx->url = slateurl_ref(url);
 	ctx->item = found;
 
 	RING_INSERT(ring, ctx);
@@ -150,9 +150,9 @@ static void html_css_fetcher_free(void *ctx)
 {
 	html_css_fetcher_context *c = ctx;
 
-	nsurl_unref(c->url);
+	slateurl_unref(c->url);
 	if (c->item != NULL) {
-		nsurl_unref(c->item->base_url);
+		slateurl_unref(c->item->base_url);
 		dom_string_unref(c->item->data);
 		RING_REMOVE(items, c->item);
 		free(c->item);
@@ -235,8 +235,8 @@ static void html_css_fetcher_poll(lwc_string *scheme)
 			if (c->aborted == false) {
 				snprintf(header, sizeof header,
 					"X-NS-Base: %.*s",
-					(int) nsurl_length(c->item->base_url),
-					nsurl_access(c->item->base_url));
+					(int) slateurl_length(c->item->base_url),
+					slateurl_access(c->item->base_url));
 				msg.type = FETCH_HEADER;
 				msg.data.header_or_data.buf =
 						(const uint8_t *) header;
@@ -260,7 +260,7 @@ static void html_css_fetcher_poll(lwc_string *scheme)
 			}
 		} else {
 			NSLOG(netsurf, INFO, "Processing of %s failed!",
-			      nsurl_access(c->url));
+			      slateurl_access(c->url));
 
 			/* Ensure that we're unlocked here. If we aren't,
 			 * then html_css_fetcher_process() is broken.
@@ -283,7 +283,7 @@ static void html_css_fetcher_poll(lwc_string *scheme)
 }
 
 /* exported interface documented in html_internal.h */
-nserror html_css_fetcher_register(void)
+slateerror html_css_fetcher_register(void)
 {
 	const struct fetcher_operation_table html_css_fetcher_ops = {
 		.initialise = html_css_fetcher_initialise,
@@ -301,20 +301,20 @@ nserror html_css_fetcher_register(void)
 }
 
 /* exported interface documented in html_internal.h */
-nserror
-html_css_fetcher_add_item(dom_string *data, nsurl *base_url, uint32_t *key)
+slateerror
+html_css_fetcher_add_item(dom_string *data, slateurl *base_url, uint32_t *key)
 {
 	html_css_fetcher_item *item = malloc(sizeof(*item));
 
 	if (item == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	*key = item->key = current_key++;
 	item->data = dom_string_ref(data);
-	item->base_url = nsurl_ref(base_url);
+	item->base_url = slateurl_ref(base_url);
 
 	RING_INSERT(items, item);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }

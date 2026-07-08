@@ -8,13 +8,13 @@ accept_language:en
 disc_cache_size:42
 enable_javascript:1
 ca_path:/etc/ssl/certs
-cookie_file:/home/vince/.netsurf/Cookies
-cookie_jar:/home/vince/.netsurf/Cookies
+cookie_file:/home/vince/.slate/Cookies
+cookie_jar:/home/vince/.slate/Cookies
 homepage_url:about:welcome
 core_select_menu:1
 sys_colour_Canvas:0d00d0
 downloads_directory:/home/vince
-url_file:/home/vince/.netsurf/URLs
+url_file:/home/vince/.slate/URLs
 show_single_tab:1
 button_type:1
-hotlist_path:/home/vince/.netsurf/Hotlist
+hotlist_path:/home/vince/.slate/Hotlist

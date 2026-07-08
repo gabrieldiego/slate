@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,13 +26,13 @@
  * (e.g. cookies treeview or local file directory views.
  */
 
-#ifndef NETSURF_DESKTOP_SYSTEM_COLOUR_H
-#define NETSURF_DESKTOP_SYSTEM_COLOUR_H
+#ifndef SLATE_DESKTOP_SYSTEM_COLOUR_H
+#define SLATE_DESKTOP_SYSTEM_COLOUR_H
 
 #include <libcss/libcss.h>
 
 #include "utils/errors.h"
-#include "netsurf/types.h"
+#include "slate/types.h"
 
 /**
  * css callback to obtain named system colour.
@@ -43,7 +43,7 @@
  * \return CSS_OK and \a color updated on success else CSS_INVALID if
  *          the \a name is unrecognised
  */
-css_error ns_system_colour(void *pw, lwc_string *name, css_color *color);
+css_error slate_system_colour(void *pw, lwc_string *name, css_color *color);
 
 
 /**
@@ -52,23 +52,23 @@ css_error ns_system_colour(void *pw, lwc_string *name, css_color *color);
  * \param[in] name The name of the colour being looked up
  * \param[out] color The system colour associated with the name in the
  *                     netsurf colour representation.
- * \return NSERROR_OK and \a color updated on success else appropriate
+ * \return SLATEERROR_OK and \a color updated on success else appropriate
  *           error code.
  */
-nserror ns_system_colour_char(const char *name, colour *color);
+slateerror slate_system_colour_char(const char *name, colour *color);
 
 
 /**
  * Initialise the system colours
  *
- * \return NSERROR_OK on success else appropriate error code.
+ * \return SLATEERROR_OK on success else appropriate error code.
  */
-nserror ns_system_colour_init(void);
+slateerror slate_system_colour_init(void);
 
 
 /**
  * release any resources associated with the system colours.
  */
-void ns_system_colour_finalize(void);
+void slate_system_colour_finalize(void);
 
 #endif

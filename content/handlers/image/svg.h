@@ -1,7 +1,7 @@
 /*
  * Copyright 2007-2008 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,9 +20,9 @@
  * Content for image/svg (interface).
  */
 
-#ifndef _NETSURF_IMAGE_SVG_H_
-#define _NETSURF_IMAGE_SVG_H_
+#ifndef _SLATE_IMAGE_SVG_H_
+#define _SLATE_IMAGE_SVG_H_
 
-nserror svg_init(void);
+slateerror svg_init(void);
 
 #endif

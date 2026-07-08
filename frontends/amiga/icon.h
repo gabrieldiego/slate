@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,12 +28,12 @@
 
 #ifdef WITH_AMIGA_ICON
 
-nserror amiga_icon_init(void);
+slateerror amiga_icon_init(void);
 void amiga_icon_fini(void);
 
 #else
 
-#define amiga_icon_init() NSERROR_OK
+#define amiga_icon_init() SLATEERROR_OK
 #define amiga_icon_fini() ((void) 0)
 
 #endif /* WITH_AMIGA_ICON */

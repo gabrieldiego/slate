@@ -21,8 +21,8 @@
  * rsrc: URL method handler
  */
 
-#ifndef NETSURF_BEOS_FETCH_DATA_H
-#define NETSURF_BEOS_FETCH_DATA_H
+#ifndef SLATE_BEOS_FETCH_DATA_H
+#define SLATE_BEOS_FETCH_DATA_H
 
 void fetch_rsrc_register(void);
 void fetch_rsrc_unregister(void);

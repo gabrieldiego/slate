@@ -1,7 +1,7 @@
 /*
  * Copyright 2013 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,16 +20,16 @@
 
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/inttypes.h"
-#include "netsurf/core_window.h"
-#include "netsurf/plotters.h"
+#include "slate/inttypes.h"
+#include "slate/core_window.h"
+#include "slate/plotters.h"
 
 #include "atari/gui.h"
 #include "atari/plot/plot.h"
 #include "atari/misc.h"
 #include "atari/gemtk/gemtk.h"
 #include "atari/treeview.h"
-#include "atari/res/netsurf.rsh"
+#include "atari/res/slate.rsh"
 
 
 struct atari_treeview_window {
@@ -385,9 +385,9 @@ static short handle_event(GUIWIN *win, EVMULT_OUT *ev_out, short msg[8])
  *
  * \param[in] cw The core window to invalidate.
  * \param[in] r area to redraw or NULL for the entire window area.
- * \return NSERROR_OK on success or appropriate error code.
+ * \return SLATEERROR_OK on success or appropriate error code.
  */
-static nserror
+static slateerror
 atari_treeview_invalidate_area(struct core_window *cw,
 			       const struct rect *r)
 {
@@ -415,7 +415,7 @@ atari_treeview_invalidate_area(struct core_window *cw,
 	}
 	atari_treeview_redraw_grect_request(cw, &area);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -426,7 +426,7 @@ atari_treeview_invalidate_area(struct core_window *cw,
  * \param width		the width in px, or negative if don't care
  * \param height	the height in px, or negative if don't care
  */
-static nserror
+static slateerror
 atari_treeview_update_size(struct core_window *cw, int width, int height)
 {
 	GRECT area;
@@ -436,7 +436,7 @@ atari_treeview_update_size(struct core_window *cw, int width, int height)
 	if (tv != NULL) {
 
 		if (tv->disposing)
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 
 		/* Get acces to the gemtk window slider settings: */
 		slid = gemtk_wm_get_scroll_info(tv->window);
@@ -466,7 +466,7 @@ atari_treeview_update_size(struct core_window *cw, int width, int height)
 		gemtk_wm_update_slider(tv->window, GEMTK_WM_VH_SLIDER);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -476,18 +476,18 @@ atari_treeview_update_size(struct core_window *cw, int width, int height)
  * \param cw		the core window object
  * \param r		rectangle to make visible
  */
-static nserror
+static slateerror
 atari_treeview_set_scroll(struct core_window *cw, int x, int y)
 {
 	/* TODO */
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror
+static slateerror
 atari_treeview_get_scroll(const struct core_window *cw, int *x, int *y)
 {
 	/* TODO */
-	return NSERROR_NOT_IMPLEMENTED;
+	return SLATEERROR_NOT_IMPLEMENTED;
 }
 
 
@@ -498,7 +498,7 @@ atari_treeview_get_scroll(const struct core_window *cw, int *x, int *y)
  * \param width		to be set to viewport width in px, if non NULL
  * \param height	to be set to viewport height in px, if non NULL
  */
-static nserror
+static slateerror
 atari_treeview_get_window_dimensions(const struct core_window *cw,
 				     int *width,
 				     int *height)
@@ -511,7 +511,7 @@ atari_treeview_get_window_dimensions(const struct core_window *cw,
 		*height = work.g_h;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -521,10 +521,10 @@ atari_treeview_get_window_dimensions(const struct core_window *cw,
  * \param cw		the core window object
  * \param ds		the current drag status
  */
-static nserror
+static slateerror
 atari_treeview_drag_status(struct core_window *cw, core_window_drag_status ds)
 {
-	return NSERROR_NOT_IMPLEMENTED;
+	return SLATEERROR_NOT_IMPLEMENTED;
 }
 
 
@@ -555,7 +555,7 @@ atari_treeview_create(GUIWIN *win, struct atari_treeview_callbacks * callbacks,
 	tv = calloc(1, sizeof(struct atari_treeview_window));
 	if (tv == NULL) {
 		NSLOG(netsurf, INFO, "calloc failed");
-		atari_warn_user(messages_get_errorcode(NSERROR_NOMEM), 0);
+		atari_warn_user(messages_get_errorcode(SLATEERROR_NOMEM), 0);
 		return NULL;
 	}
 
@@ -587,8 +587,8 @@ atari_treeview_create(GUIWIN *win, struct atari_treeview_callbacks * callbacks,
 	/* event handlers of the treeview: */
 	/* It would be more simple to not pass around the callbacks */
 	/* but the treeview constructor requires them for initialization...  */
-	nserror err = tv->io->init_phase2((struct core_window *)tv);
-	if (err != NSERROR_OK) {
+	slateerror err = tv->io->init_phase2((struct core_window *)tv);
+	if (err != SLATEERROR_OK) {
 		free(tv);
 		tv = NULL;
 	}

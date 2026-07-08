@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,20 +24,20 @@
 #include <dom/dom.h>
 
 #include "utils/corestrings.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/utils.h"
 
 /* define corestrings */
 #define CORESTRING_LWC_VALUE(NAME,VALUE) lwc_string *corestring_lwc_##NAME
 #define CORESTRING_DOM_VALUE(NAME,VALUE) dom_string *corestring_dom_##NAME
-#define CORESTRING_NSURL(NAME,VALUE) nsurl *corestring_nsurl_##NAME
+#define CORESTRING_SLATEURL(NAME,VALUE) slateurl *corestring_slateurl_##NAME
 #include "utils/corestringlist.h"
 #undef CORESTRING_LWC_VALUE
 #undef CORESTRING_DOM_VALUE
-#undef CORESTRING_NSURL
+#undef CORESTRING_SLATEURL
 
 /* exported interface documented in utils/corestrings.h */
-nserror corestrings_fini(void)
+slateerror corestrings_fini(void)
 {
 #define CORESTRING_LWC_VALUE(NAME,VALUE)				\
 	do {								\
@@ -53,11 +53,11 @@ nserror corestrings_fini(void)
 		}							\
 	} while (0)
 
-#define CORESTRING_NSURL(NAME,VALUE)					\
+#define CORESTRING_SLATEURL(NAME,VALUE)					\
 	do {								\
-		if (corestring_nsurl_##NAME != NULL) {			\
-			nsurl_unref(corestring_nsurl_##NAME);		\
-			corestring_nsurl_##NAME = NULL;			\
+		if (corestring_slateurl_##NAME != NULL) {			\
+			slateurl_unref(corestring_slateurl_##NAME);		\
+			corestring_slateurl_##NAME = NULL;			\
 		}							\
 	} while (0)
 
@@ -66,17 +66,17 @@ nserror corestrings_fini(void)
 
 #undef CORESTRING_LWC_VALUE
 #undef CORESTRING_DOM_VALUE
-#undef CORESTRING_NSURL
+#undef CORESTRING_SLATEURL
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in utils/corestrings.h */
-nserror corestrings_init(void)
+slateerror corestrings_init(void)
 {
 	lwc_error lerror;
-	nserror error;
+	slateerror error;
 	dom_exception exc;
 
 #define CORESTRING_LWC_VALUE(NAME,VALUE)				\
@@ -87,7 +87,7 @@ nserror corestrings_init(void)
 			&corestring_lwc_##NAME );			\
 		if ((lerror != lwc_error_ok) ||				\
 		    (corestring_lwc_##NAME == NULL)) {			\
-			error = NSERROR_NOMEM;				\
+			error = SLATEERROR_NOMEM;				\
 			goto error;					\
 		}							\
 	} while(0)
@@ -100,16 +100,16 @@ nserror corestrings_init(void)
 				&corestring_dom_##NAME );		\
 		if ((exc != DOM_NO_ERR) ||				\
 				(corestring_dom_##NAME == NULL)) {	\
-			error = NSERROR_NOMEM;				\
+			error = SLATEERROR_NOMEM;				\
 			goto error;					\
 		}							\
 	} while(0)
 
-#define CORESTRING_NSURL(NAME,VALUE)					\
+#define CORESTRING_SLATEURL(NAME,VALUE)					\
 	do {								\
-		error = nsurl_create(VALUE,				\
-				     &corestring_nsurl_##NAME);		\
-		if (error != NSERROR_OK) {				\
+		error = slateurl_create(VALUE,				\
+				     &corestring_slateurl_##NAME);		\
+		if (error != SLATEERROR_OK) {				\
 			goto error;					\
 		}							\
 	} while(0)
@@ -118,9 +118,9 @@ nserror corestrings_init(void)
 
 #undef CORESTRING_LWC_VALUE
 #undef CORESTRING_DOM_VALUE
-#undef CORESTRING_NSURL
+#undef CORESTRING_SLATEURL
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 
 error:
 	corestrings_fini();

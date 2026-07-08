@@ -3,7 +3,7 @@
  * Copyright 2008 Michael Drake <tlsa@netsurf-browser.org>
  * Copyright 2009 Paul Blokus <paul_pl@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,11 +29,11 @@
 #include "utils/log.h"
 #include "utils/messages.h"
 #include "utils/utils.h"
-#include "utils/nscolour.h"
-#include "utils/nsoption.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/mouse.h"
-#include "netsurf/plotters.h"
+#include "utils/slatecolor.h"
+#include "utils/slateoption.h"
+#include "slate/browser_window.h"
+#include "slate/mouse.h"
+#include "slate/plotters.h"
 
 #include "desktop/system_colour.h"
 #include "desktop/scrollbar.h"
@@ -89,7 +89,7 @@ struct scrollbar {
 /*
  * Exported interface.  Documented in desktop/scrollbar.h
  */
-nserror
+slateerror
 scrollbar_create(bool horizontal,
 		 int length,
 		 int full_size,
@@ -104,7 +104,7 @@ scrollbar_create(bool horizontal,
 	scrollbar = malloc(sizeof(struct scrollbar));
 	if (scrollbar == NULL) {
 		*s = NULL;
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	scrollbar->horizontal = horizontal;
@@ -128,7 +128,7 @@ scrollbar_create(bool horizontal,
 
 	*s = scrollbar;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -152,16 +152,16 @@ void scrollbar_destroy(struct scrollbar *s)
  * \param c base colour of the outline, the other colours are created by
  *		lightening or darkening this one
  * \param inset true for inset outline, false for an outset one
- * \return NSERROR_OK on success else error code
+ * \return SLATEERROR_OK on success else error code
  */
-static inline nserror
+static inline slateerror
 scrollbar_rectangle(const struct redraw_context *ctx,
 		    struct rect *area,
 		    colour c,
 		    bool inset)
 {
 	struct rect line;
-	nserror res;
+	slateerror res;
 
 	static plot_style_t c0 = {
 		.stroke_type = PLOT_OP_TYPE_SOLID,
@@ -192,35 +192,35 @@ scrollbar_rectangle(const struct redraw_context *ctx,
 	line.x0 = area->x0; line.y0 = area->y0;
 	line.x1 = area->x1; line.y1 = area->y0;
 	res = ctx->plot->line(ctx, &c0, &line);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
 	line.x0 = area->x1; line.y0 = area->y0;
 	line.x1 = area->x1; line.y1 = area->y1 + 1;
 	res = ctx->plot->line(ctx, &c1, &line);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
 	line.x0 = area->x1; line.y0 = area->y0;
 	line.x1 = area->x1; line.y1 = area->y0 + 1;
 	res = ctx->plot->line(ctx, &c2, &line);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
 	line.x0 = area->x1; line.y0 = area->y1;
 	line.x1 = area->x0; line.y1 = area->y1;
 	res = ctx->plot->line(ctx, &c1, &line);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
 	line.x0 = area->x0; line.y0 = area->y1;
 	line.x1 = area->x0; line.y1 = area->y0;
 	res = ctx->plot->line(ctx, &c0, &line);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -235,7 +235,7 @@ scrollbar_rectangle(const struct redraw_context *ctx,
 /*
  * Exported interface.  Documented in scrollbar.h
  */
-nserror
+slateerror
 scrollbar_redraw(struct scrollbar *s,
 		 int x, int y,
 		 const struct rect *clip,
@@ -247,19 +247,19 @@ scrollbar_redraw(struct scrollbar *s,
 	int v[6]; /* array of triangle vertices */
 	struct rect area;
 	struct rect rect;
-	nserror res;
+	slateerror res;
 
 	plot_style_t bg_fill_style = {
 		.fill_type = PLOT_OP_TYPE_SOLID,
-		.fill_colour = nscolours[NSCOLOUR_SCROLL_WELL],
+		.fill_colour = slatecolors[SLATECOLOR_SCROLL_WELL],
 	};
 	plot_style_t fg_fill_style = {
 		.fill_type = PLOT_OP_TYPE_SOLID,
-		.fill_colour = nscolours[NSCOLOUR_BUTTON_BG],
+		.fill_colour = slatecolors[SLATECOLOR_BUTTON_BG],
 	};
 	plot_style_t arrow_fill_style = {
 		.fill_type = PLOT_OP_TYPE_SOLID,
-		.fill_colour = nscolours[NSCOLOUR_BUTTON_FG],
+		.fill_colour = slatecolors[SLATECOLOR_BUTTON_FG],
 	};
 
 	area.x0 = x;
@@ -287,7 +287,7 @@ scrollbar_redraw(struct scrollbar *s,
 	    (area.y1 < clip->y0) ||
 	    (clip->x1 < area.x0) ||
 	    (clip->y1 < area.y0)) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	if (s->horizontal) {
@@ -296,7 +296,7 @@ scrollbar_redraw(struct scrollbar *s,
 		/* scrollbar outline */
 		res = scrollbar_rectangle(ctx, &area,
 					  bg_fill_style.fill_colour, true);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 
@@ -307,7 +307,7 @@ scrollbar_redraw(struct scrollbar *s,
 		rect.y1 = area.y1 - 1;
 		res = scrollbar_rectangle(ctx, &rect,
 					  fg_fill_style.fill_colour, false);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 
@@ -317,7 +317,7 @@ scrollbar_redraw(struct scrollbar *s,
 		rect.x1 = area.x0 + w - 2;
 		rect.y1 = area.y1 - 1;
 		res = ctx->plot->rectangle(ctx, &fg_fill_style, &rect);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 
@@ -329,7 +329,7 @@ scrollbar_redraw(struct scrollbar *s,
 		v[4] = area.x0 + w * 3 / 4;
 		v[5] = area.y0 + w * 3 / 4;
 		res = ctx->plot->polygon(ctx, &arrow_fill_style, v, 3);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 
@@ -339,7 +339,7 @@ scrollbar_redraw(struct scrollbar *s,
 		rect.x1 = area.x1 - w + 2;
 		rect.y1 = area.y1;
 		res = ctx->plot->rectangle(ctx, &bg_fill_style, &rect);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 
@@ -350,7 +350,7 @@ scrollbar_redraw(struct scrollbar *s,
 		rect.y1 = area.y1 - 1;
 		res = scrollbar_rectangle(ctx, &rect,
 					  fg_fill_style.fill_colour, false);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 
@@ -359,7 +359,7 @@ scrollbar_redraw(struct scrollbar *s,
 		rect.x1 = bar_c1;
 		rect.y1 = area.y1 - 1;
 		res = ctx->plot->rectangle(ctx, &fg_fill_style, &rect);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 
@@ -370,7 +370,7 @@ scrollbar_redraw(struct scrollbar *s,
 		rect.y1 = area.y1 - 1;
 		res = scrollbar_rectangle(ctx, &rect,
 					  fg_fill_style.fill_colour, false);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 
@@ -380,7 +380,7 @@ scrollbar_redraw(struct scrollbar *s,
 		rect.x1 = area.x1 - 1;
 		rect.y1 = area.y1 - 1;
 		res = ctx->plot->rectangle(ctx, &fg_fill_style, &rect);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 
@@ -392,7 +392,7 @@ scrollbar_redraw(struct scrollbar *s,
 		v[4] = rect.x1 - w * 3 / 4 + 1;
 		v[5] = rect.y0 + w * 3 / 4;
 		res = ctx->plot->polygon(ctx, &arrow_fill_style, v, 3);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 	} else {
@@ -401,7 +401,7 @@ scrollbar_redraw(struct scrollbar *s,
 		/* outline */
 		res = scrollbar_rectangle(ctx, &area,
 					  bg_fill_style.fill_colour, true);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 
@@ -412,7 +412,7 @@ scrollbar_redraw(struct scrollbar *s,
 		rect.y1 = area.y0 + w - 2;
 		res = scrollbar_rectangle(ctx, &rect,
 					  fg_fill_style.fill_colour, false);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 
@@ -422,7 +422,7 @@ scrollbar_redraw(struct scrollbar *s,
 		rect.x1 = area.x1 - 1;
 		rect.y1 = area.y0 + w - 2;
 		res = ctx->plot->rectangle(ctx, &fg_fill_style, &rect);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 
@@ -434,7 +434,7 @@ scrollbar_redraw(struct scrollbar *s,
 		v[4] = area.x0 + w * 3 / 4;
 		v[5] = area.y0 + w * 3 / 4;
 		res = ctx->plot->polygon(ctx, &arrow_fill_style, v, 3);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 
@@ -444,7 +444,7 @@ scrollbar_redraw(struct scrollbar *s,
 		rect.x1 = area.x1;
 		rect.y1 = area.y1 - w + 2;
 		res = ctx->plot->rectangle(ctx, &bg_fill_style, &rect);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 
@@ -455,7 +455,7 @@ scrollbar_redraw(struct scrollbar *s,
 		rect.y1 = bar_c1;
 		res = scrollbar_rectangle(ctx, &rect,
 					  fg_fill_style.fill_colour, false);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 
@@ -464,7 +464,7 @@ scrollbar_redraw(struct scrollbar *s,
 		rect.x1 = area.x1 - 1;
 		rect.y1 = bar_c1;
 		res = ctx->plot->rectangle(ctx, &fg_fill_style, &rect);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 
@@ -475,7 +475,7 @@ scrollbar_redraw(struct scrollbar *s,
 		rect.y1 = area.y1 - 1;
 		res = scrollbar_rectangle(ctx, &rect,
 					  fg_fill_style.fill_colour, false);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 
@@ -485,7 +485,7 @@ scrollbar_redraw(struct scrollbar *s,
 		rect.x1 = area.x1 - 1;
 		rect.y1 = area.y1 - 1;
 		res = ctx->plot->rectangle(ctx, &fg_fill_style, &rect);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 
@@ -497,12 +497,12 @@ scrollbar_redraw(struct scrollbar *s,
 		v[4] = area.x0 + w * 3 / 4;
 		v[5] = area.y1 - w * 3 / 4 + 1;
 		res = ctx->plot->polygon(ctx, &arrow_fill_style, v, 3);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 

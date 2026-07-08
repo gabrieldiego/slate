@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,8 +20,8 @@
  * Useful interned string pointers (interface).
  */
 
-#ifndef NETSURF_UTILS_CORESTRINGS_H_
-#define NETSURF_UTILS_CORESTRINGS_H_
+#ifndef SLATE_UTILS_CORESTRINGS_H_
+#define SLATE_UTILS_CORESTRINGS_H_
 
 #include <libwapcaplet/libwapcaplet.h>
 #include "utils/errors.h"
@@ -35,16 +35,16 @@
 /**
  * Initialise the core string tables
  *
- * \return NSERROR_OK on success else appropriate error code
+ * \return SLATEERROR_OK on success else appropriate error code
  */
-nserror corestrings_init(void);
+slateerror corestrings_init(void);
 
 /**
  * free resources of core string tables.
  *
- * \return NSERROR_OK on success else appropriate error code
+ * \return SLATEERROR_OK on success else appropriate error code
  */
-nserror corestrings_fini(void);
+slateerror corestrings_fini(void);
 
 struct dom_string;
 
@@ -53,11 +53,11 @@ struct dom_string;
 	extern lwc_string *corestring_lwc_##NAME
 #define CORESTRING_DOM_VALUE(NAME,VALUE)		\
 	extern struct dom_string *corestring_dom_##NAME
-#define CORESTRING_NSURL(NAME,VALUE) \
-	extern struct nsurl *corestring_nsurl_##NAME
+#define CORESTRING_SLATEURL(NAME,VALUE) \
+	extern struct slateurl *corestring_slateurl_##NAME
 #include "utils/corestringlist.h"
 #undef CORESTRING_LWC_VALUE
 #undef CORESTRING_DOM_VALUE
-#undef CORESTRING_NSURL
+#undef CORESTRING_SLATEURL
 
 #endif

@@ -1,7 +1,7 @@
 /*
  * Copyright 2006 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,12 +30,12 @@
 #include <oslib/wimp.h>
 #include <oslib/wimpreadsysinfo.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/messages.h"
 #include "utils/utils.h"
-#include "netsurf/layout.h"
-#include "netsurf/plot_style.h"
+#include "slate/layout.h"
+#include "slate/plot_style.h"
 
 #include "riscos/gui.h"
 #include "riscos/font.h"
@@ -141,18 +141,18 @@ void nsfont_init(void)
 
 	fallback = nsfont_fallback_font();
 
-	nsfont_check_option(&nsoption_charp(font_sans), "Homerton", fallback);
-	nsfont_check_option(&nsoption_charp(font_serif), "Trinity", fallback);
-	nsfont_check_option(&nsoption_charp(font_mono), "Corpus", fallback);
-	nsfont_check_option(&nsoption_charp(font_cursive), "Churchill", fallback);
-	nsfont_check_option(&nsoption_charp(font_fantasy), "Sassoon", fallback);
+	nsfont_check_option(&slateoption_charp(font_sans), "Homerton", fallback);
+	nsfont_check_option(&slateoption_charp(font_serif), "Trinity", fallback);
+	nsfont_check_option(&slateoption_charp(font_mono), "Corpus", fallback);
+	nsfont_check_option(&slateoption_charp(font_cursive), "Churchill", fallback);
+	nsfont_check_option(&slateoption_charp(font_fantasy), "Sassoon", fallback);
 
-	if (nsoption_int(font_default) != PLOT_FONT_FAMILY_SANS_SERIF &&
-            nsoption_int(font_default) != PLOT_FONT_FAMILY_SERIF &&
-            nsoption_int(font_default) != PLOT_FONT_FAMILY_MONOSPACE &&
-            nsoption_int(font_default) != PLOT_FONT_FAMILY_CURSIVE &&
-            nsoption_int(font_default) != PLOT_FONT_FAMILY_FANTASY) {
-            nsoption_set_int(font_default, PLOT_FONT_FAMILY_SANS_SERIF);
+	if (slateoption_int(font_default) != PLOT_FONT_FAMILY_SANS_SERIF &&
+            slateoption_int(font_default) != PLOT_FONT_FAMILY_SERIF &&
+            slateoption_int(font_default) != PLOT_FONT_FAMILY_MONOSPACE &&
+            slateoption_int(font_default) != PLOT_FONT_FAMILY_CURSIVE &&
+            slateoption_int(font_default) != PLOT_FONT_FAMILY_FANTASY) {
+            slateoption_set_int(font_default, PLOT_FONT_FAMILY_SANS_SERIF);
         }
 }
 
@@ -215,7 +215,7 @@ bool nsfont_exists(const char *font_family)
  * \param  width   updated to width of string[0..length)
  * \return  true on success, false on error and error reported
  */
-static nserror
+static slateerror
 ro_font_width(const plot_font_style_t *fstyle,
 		const char *string, size_t length,
 		int *width)
@@ -228,7 +228,7 @@ ro_font_width(const plot_font_style_t *fstyle,
 	nsfont_read_style(fstyle, &font_family, &font_size, &font_style);
 	if (font_size == 0) {
 		*width = 0;
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	code = rufl_width(font_family, font_style, font_size,
@@ -244,11 +244,11 @@ ro_font_width(const plot_font_style_t *fstyle,
 			NSLOG(netsurf, INFO, "rufl_width: 0x%x", code);
 /* 		ro_warn_user("MiscError", "font error"); */
 		*width = 0;
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	*width /= 2;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -263,7 +263,7 @@ ro_font_width(const plot_font_style_t *fstyle,
  * \param  actual_x     updated to x coordinate of character closest to x
  * \return  true on success, false on error and error reported
  */
-static nserror
+static slateerror
 ro_font_position(const plot_font_style_t *fstyle,
 		const char *string, size_t length,
 		int x, size_t *char_offset, int *actual_x)
@@ -277,7 +277,7 @@ ro_font_position(const plot_font_style_t *fstyle,
 	if (font_size == 0) {
 		*char_offset = 0;
 		*actual_x = 0;
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	code = rufl_x_to_offset(font_family, font_style, font_size,
@@ -294,12 +294,12 @@ ro_font_position(const plot_font_style_t *fstyle,
 /* 		ro_warn_user("MiscError", "font error"); */
 		*char_offset = 0;
 		*actual_x = 0;
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	*actual_x /= 2;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -325,7 +325,7 @@ ro_font_position(const plot_font_style_t *fstyle,
  *
  * Returning char_offset == length means no split possible
  */
-static nserror
+static slateerror
 ro_font_split(const plot_font_style_t *fstyle,
 		const char *string, size_t length,
 		int x, size_t *char_offset, int *actual_x)
@@ -339,7 +339,7 @@ ro_font_split(const plot_font_style_t *fstyle,
 	if (font_size == 0) {
 		*char_offset = 0;
 		*actual_x = 0;
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	code = rufl_split(font_family, font_style, font_size,
@@ -357,7 +357,7 @@ ro_font_split(const plot_font_style_t *fstyle,
 /* 		ro_warn_user("MiscError", "font error"); */
 		*char_offset = 0;
 		*actual_x = 0;
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	if (*char_offset != length) {
@@ -394,11 +394,11 @@ ro_font_split(const plot_font_style_t *fstyle,
 /* 		ro_warn_user("MiscError", "font error"); */
 		*char_offset = 0;
 		*actual_x = 0;
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	*actual_x /= 2;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -475,22 +475,22 @@ void nsfont_read_style(const plot_font_style_t *fstyle,
 
 	switch (fstyle->family) {
 	case PLOT_FONT_FAMILY_SANS_SERIF:
-            *font_family = nsoption_charp(font_sans);
+            *font_family = slateoption_charp(font_sans);
 		break;
 	case PLOT_FONT_FAMILY_SERIF:
-            *font_family = nsoption_charp(font_serif);
+            *font_family = slateoption_charp(font_serif);
 		break;
 	case PLOT_FONT_FAMILY_MONOSPACE:
-            *font_family = nsoption_charp(font_mono);
+            *font_family = slateoption_charp(font_mono);
 		break;
 	case PLOT_FONT_FAMILY_CURSIVE:
-            *font_family = nsoption_charp(font_cursive);
+            *font_family = slateoption_charp(font_cursive);
 		break;
 	case PLOT_FONT_FAMILY_FANTASY:
-            *font_family = nsoption_charp(font_fantasy);
+            *font_family = slateoption_charp(font_fantasy);
 		break;
 	default:
-            *font_family = nsoption_charp(font_sans);
+            *font_family = slateoption_charp(font_sans);
 		break;
 	}
 

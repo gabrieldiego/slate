@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,28 +19,28 @@
 #include <stdlib.h>
 
 #include "utils/errors.h"
-#include "netsurf/utf8.h"
+#include "slate/utf8.h"
 
 #include "atari/encoding.h"
 
 
 /* TODO: this need a rework..., encoding to atari st doesn|t always work.
 ( gui_add_to_clipboard...) */
-nserror utf8_to_local_encoding(const char *string,
+slateerror utf8_to_local_encoding(const char *string,
 				       size_t len,
 				       char **result)
 {
-	nserror r;
+	slateerror r;
 	r = utf8_to_enc(string, "ATARIST", len, result);
-	if (r != NSERROR_OK) {
+	if (r != SLATEERROR_OK) {
 		r = utf8_to_enc(string, "UTF-8", len, result);
-		assert( r == NSERROR_OK );
+		assert( r == SLATEERROR_OK );
 	}
 	return r;
 }
 
 
-nserror utf8_from_local_encoding(const char *string, size_t len, char **result)
+slateerror utf8_from_local_encoding(const char *string, size_t len, char **result)
 {
 	return utf8_from_enc(string, "ATARIST", len, result, NULL);
 }

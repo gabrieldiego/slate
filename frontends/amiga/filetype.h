@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 - 2011 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@
 #include <libwapcaplet/libwapcaplet.h>
 #include <datatypes/datatypes.h>
 
-#include "netsurf/content_type.h"
+#include "slate/content_type.h"
 #include "utils/errors.h"
 
 struct hlcache_handle;
@@ -31,7 +31,7 @@ struct ami_mime_entry;
 
 const char *fetch_filetype(const char *unix_path);
 
-nserror ami_mime_init(const char *mimefile);
+slateerror ami_mime_init(const char *mimefile);
 void ami_mime_free(void);
 void ami_mime_dump(void);
 

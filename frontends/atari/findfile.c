@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -64,8 +64,8 @@ char * local_file_to_url( const char * filename )
 
 /**
  * Locate a shared resource file by searching known places in order.
- * Search order is: ./, NETSURF_GEM_RESPATH, ./$HOME/.netsurf/, $NETSURFRES/
- * (where NETSURFRES is an environment variable)
+ * Search order is: ./, SLATE_GEM_RESPATH, ./$HOME/.slate/, $SLATERES/
+ * (where SLATERES is an environment variable)
  *
  * \param  buf      buffer to write to.  must be at least PATH_MAX chars
  * \param  filename file to look for
@@ -73,8 +73,8 @@ char * local_file_to_url( const char * filename )
  * \return buf
  *
  */
-#ifndef NETSURF_GEM_RESPATH
-	#define NETSURF_GEM_RESPATH "./res/"
+#ifndef SLATE_GEM_RESPATH
+	#define SLATE_GEM_RESPATH "./res/"
 #endif
 
 char * atari_find_resource(char *buf, const char *filename, const char *def)
@@ -82,7 +82,7 @@ char * atari_find_resource(char *buf, const char *filename, const char *def)
 	char *cdir = NULL;
 	char t[PATH_MAX];
 	NSLOG(netsurf, INFO, "%s (def: %s)", filename, def);
-	strcpy(t, NETSURF_GEM_RESPATH);
+	strcpy(t, SLATE_GEM_RESPATH);
 	strcat(t, filename);
 	NSLOG(netsurf, INFO, "checking %s", (char *)&t);
 	if (gemdos_realpath(t, buf) != NULL) {
@@ -102,7 +102,7 @@ char * atari_find_resource(char *buf, const char *filename, const char *def)
 	cdir = getenv("HOME");
 	if (cdir != NULL) {
 		strcpy(t, cdir);
-		strcat(t, "/.netsurf/");
+		strcat(t, "/.slate/");
 		strcat(t, filename);
 		NSLOG(netsurf, INFO, "checking %s", (char *)&t);
 		if (gemdos_realpath(t, buf) != NULL) {
@@ -111,7 +111,7 @@ char * atari_find_resource(char *buf, const char *filename, const char *def)
 		}
 	}
 
-	cdir = getenv("NETSURFRES");
+	cdir = getenv("SLATERES");
 	if (cdir != NULL) {
 		if (gemdos_realpath(cdir, buf) != NULL) {
 			strcat(buf, "/");

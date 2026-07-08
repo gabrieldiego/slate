@@ -1,7 +1,7 @@
 /*
  * Copyright 2013 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,17 +18,17 @@
 
 #include <assert.h>
 
-#include "netsurf/inttypes.h"
+#include "slate/inttypes.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/mouse.h"
-#include "netsurf/plotters.h"
+#include "slate/mouse.h"
+#include "slate/plotters.h"
 #include "desktop/cookie_manager.h"
 
 #include "atari/treeview.h"
 #include "atari/cookies.h"
 #include "atari/gemtk/gemtk.h"
-#include "atari/res/netsurf.rsh"
+#include "atari/res/slate.rsh"
 
 extern GRECT desk_area;
 
@@ -36,7 +36,7 @@ struct atari_cookie_manager_s atari_cookie_manager;
 
 
 /* Setup Atari Treeview Callbacks: */
-static nserror atari_cookie_manager_init_phase2(struct core_window *cw);
+static slateerror atari_cookie_manager_init_phase2(struct core_window *cw);
 static void atari_cookie_manager_finish(struct core_window *cw);
 static void atari_cookie_manager_keypress(struct core_window *cw,
 												uint32_t ucs4);
@@ -58,7 +58,7 @@ static struct atari_treeview_callbacks atari_cookie_manager_treeview_callbacks =
 };
 
 
-static nserror
+static slateerror
 atari_cookie_manager_init_phase2(struct core_window *cw)
 {
 	NSLOG(netsurf, INFO, "cw %p", cw);

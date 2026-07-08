@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,7 +36,7 @@ struct test_string_pair {
 
 struct test_bad_string {
 	const char* test;
-	nserror res;
+	slateerror res;
 };
 
 static const struct test_string_pair date_string_tests[] = {
@@ -322,35 +322,35 @@ static const struct test_string_pair date_string_tests[] = {
 static const struct test_bad_string date_bad_string_tests[] = {
 	{
 		.test = NULL,
-		.res  = NSERROR_BAD_PARAMETER
+		.res  = SLATEERROR_BAD_PARAMETER
 	},
 	{
 		.test = "",
-		.res  = NSERROR_INVALID
+		.res  = SLATEERROR_INVALID
 	},
 	{
 		.test = "Th",
-		.res  = NSERROR_INVALID
+		.res  = SLATEERROR_INVALID
 	},
 	{
 		.test = "5",
-		.res  = NSERROR_INVALID
+		.res  = SLATEERROR_INVALID
 	},
 	{
 		.test = "5",
-		.res  = NSERROR_INVALID
+		.res  = SLATEERROR_INVALID
 	},
 	{
 		.test = "dsflihs9l84toswuhfsif74f",
-		.res  = NSERROR_INVALID
+		.res  = SLATEERROR_INVALID
 	},
 	{
 		.test = "Foosday, 16 Dec 1977 23:45:12 GMT",
-		.res  = NSERROR_INVALID
+		.res  = SLATEERROR_INVALID
 	},
 	{
 		.test = "20051212 garbage",
-		.res  = NSERROR_INVALID
+		.res  = SLATEERROR_INVALID
 	},
 };
 
@@ -359,12 +359,12 @@ static const struct test_bad_string date_bad_string_tests[] = {
  */
 START_TEST(date_string_compare)
 {
-	nserror res;
+	slateerror res;
 	time_t time_out;
 	const struct test_string_pair *t = &date_string_tests[_i];
 
 	res = nsc_strntimet(t->test, strlen(t->test), &time_out);
-	ck_assert(res == NSERROR_OK);
+	ck_assert(res == SLATEERROR_OK);
 	ck_assert_str_eq(rfc1123_date(time_out), t->expected);
 }
 END_TEST
@@ -374,14 +374,14 @@ END_TEST
  */
 START_TEST(date_bad_string)
 {
-	nserror res;
+	slateerror res;
 	time_t time_out;
 	const struct test_bad_string *t = &date_bad_string_tests[_i];
 
 	res = nsc_strntimet(t->test,
 			t->test != NULL ? strlen(t->test) : 0,
 			&time_out);
-	ck_assert(res != NSERROR_OK);
+	ck_assert(res != SLATEERROR_OK);
 	ck_assert(res == t->res);
 }
 END_TEST

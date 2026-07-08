@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 - 2016 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -78,7 +78,7 @@ static void ami_schedule_remove_timer_event(struct nscallback *nscb)
  * NetSurf will be signalled in t ms for this event.
  */
 
-static nserror ami_schedule_add_timer_event(struct nscallback *nscb, int t)
+static slateerror ami_schedule_add_timer_event(struct nscallback *nscb, int t)
 {
 	struct TimeVal tv;
 	ULONG time_us = t * 1000; /* t converted to µs */
@@ -94,7 +94,7 @@ static nserror ami_schedule_add_timer_event(struct nscallback *nscb, int t)
 	nscb->timereq.Time.Microseconds = tv.Microseconds; // micro
 	SendIO((struct IORequest *)nscb);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -143,14 +143,14 @@ ami_schedule_locate(void (*callback)(void *p), void *p, bool remove)
  * The nscallback will be rescheduled for t ms.
  */
 
-static nserror ami_schedule_reschedule(struct nscallback *nscb, int t)
+static slateerror ami_schedule_reschedule(struct nscallback *nscb, int t)
 {
 	ami_schedule_remove_timer_event(nscb);
-	if (ami_schedule_add_timer_event(nscb, t) != NSERROR_OK)
-		return NSERROR_NOMEM;
+	if (ami_schedule_add_timer_event(nscb, t) != SLATEERROR_OK)
+		return SLATEERROR_NOMEM;
 
 	pblHeapConstruct(schedule_list);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -163,7 +163,7 @@ static nserror ami_schedule_reschedule(struct nscallback *nscb, int t)
  * All scheduled callbacks matching both callback and p are removed.
  */
 
-static nserror schedule_remove(void (*callback)(void *p), void *p, bool abort)
+static slateerror schedule_remove(void (*callback)(void *p), void *p, bool abort)
 {
 	struct nscallback *nscb;
 
@@ -179,7 +179,7 @@ static nserror schedule_remove(void (*callback)(void *p), void *p, bool abort)
 		pblHeapConstruct(schedule_list);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void schedule_remove_all(void)
@@ -299,7 +299,7 @@ static void ami_schedule_close_timer(void)
 }
 
 /* exported interface documented in amiga/schedule.h */
-nserror ami_schedule_create(struct MsgPort *msgport)
+slateerror ami_schedule_create(struct MsgPort *msgport)
 {
 	ami_schedule_open_timer(msgport);
 #ifndef __amigaos4__
@@ -308,12 +308,12 @@ nserror ami_schedule_create(struct MsgPort *msgport)
 	schedule_list = pblHeapNew();
 
 	if (schedule_list == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	pblHeapSetCompareFunction(schedule_list, ami_schedule_compare);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in amiga/schedule.h */
@@ -328,13 +328,13 @@ void ami_schedule_free(void)
 }
 
 /* exported function documented in amiga/schedule.h */
-nserror ami_schedule(int t, void (*callback)(void *p), void *p)
+slateerror ami_schedule(int t, void (*callback)(void *p), void *p)
 {
 	struct nscallback *nscb;
 
 	if(t == 0) t = 1;
 
-	if(schedule_list == NULL) return NSERROR_INIT_FAILED;
+	if(schedule_list == NULL) return SLATEERROR_INIT_FAILED;
 	if(t < 0) return schedule_remove(callback, p, true);
 
 	if ((nscb = ami_schedule_locate(callback, p, false))) {
@@ -345,23 +345,23 @@ nserror ami_schedule(int t, void (*callback)(void *p), void *p)
 	nscb = AllocSysObjectTags(ASOT_IOREQUEST,
 							ASOIOR_Duplicate, tioreq,
 							TAG_DONE);
-	if(nscb == NULL) return NSERROR_NOMEM;
+	if(nscb == NULL) return SLATEERROR_NOMEM;
 #else
-	if(schedule_msgport == NULL) return NSERROR_NOMEM;
+	if(schedule_msgport == NULL) return SLATEERROR_NOMEM;
 	nscb = AllocVec(sizeof(struct nscallback), MEMF_PUBLIC | MEMF_CLEAR);
-	if(nscb == NULL) return NSERROR_NOMEM;
+	if(nscb == NULL) return SLATEERROR_NOMEM;
 	*nscb = *tioreq;
 #endif
 
-	if (ami_schedule_add_timer_event(nscb, t) != NSERROR_OK)
-		return NSERROR_NOMEM;
+	if (ami_schedule_add_timer_event(nscb, t) != SLATEERROR_OK)
+		return SLATEERROR_NOMEM;
 
 	nscb->callback = callback;
 	nscb->p = p;
 
 	pblHeapInsert(schedule_list, nscb);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 
 }
 

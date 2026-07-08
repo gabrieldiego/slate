@@ -13,5 +13,5 @@ NetSurf browser is open source and is licensed under the GPLv2 (with
 OpenSSL exception). Many of the supporting libraries are under a MIT
 licence.
 
-The [main website](http://www.netsurf-browser.org/) contains links to
+The [main website](http://www.slate-browser.org/) contains links to
 other resources and additional information.

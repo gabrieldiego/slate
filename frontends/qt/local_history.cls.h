@@ -13,7 +13,7 @@ public:
 	NS_Local_history(QWidget *parent, struct browser_window *bw);
 	~NS_Local_history();
 
-	nserror setbw(struct browser_window *bw);
+	slateerror setbw(struct browser_window *bw);
 
 private:
 	void setMaximumSize(struct browser_window *bw);

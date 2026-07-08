@@ -29,15 +29,15 @@
 #include <stdarg.h>
 #include <libwapcaplet/libwapcaplet.h>
 
-#include "netsurf/inttypes.h"
-#include "utils/nsurl.h"
+#include "slate/inttypes.h"
+#include "utils/slateurl.h"
 #include "utils/corestrings.h"
 #include "utils/log.h"
 #include "utils/time.h"
 #include "utils/messages.h"
 #include "utils/utils.h"
 #include "utils/ring.h"
-#include "netsurf/fetch.h"
+#include "slate/fetch.h"
 #include "desktop/gui_internal.h"
 
 #include "content/fetch.h"
@@ -58,7 +58,7 @@ static const char *fetch_resource_paths[] = {
 	"welcome.html",
 	"favicon.ico",
 	"default.ico",
-	"netsurf.png",
+	"slate.png",
 	"icons/arrow-l.png",
 	"icons/content.png",
 	"icons/directory.png",
@@ -73,7 +73,7 @@ static const char *fetch_resource_paths[] = {
  */
 static struct fetch_resource_map_entry {
 	lwc_string *path; /**< resource scheme path */
-	nsurl *redirect_url; /**< url to redirect to */
+	slateurl *redirect_url; /**< url to redirect to */
 	const uint8_t *data; /**< direct pointer to data */
 	size_t data_len; /**< length of direct data */
 } fetch_resource_map[NOF_ELEMENTS(fetch_resource_paths)];
@@ -91,7 +91,7 @@ struct fetch_resource_context {
 	bool aborted; /**< Flag indicating fetch has been aborted */
 	bool locked; /**< Flag indicating entry is already entered */
 
-	nsurl *url; /**< requested url */
+	slateurl *url; /**< requested url */
 
 	struct fetch_resource_map_entry *entry; /**< resource map entry */
 
@@ -151,7 +151,7 @@ static bool fetch_resource_redirect_handler(struct fetch_resource_context *ctx)
 	fetch_set_http_code(ctx->fetchh, 302);
 
 	msg.type = FETCH_REDIRECT;
-	msg.data.redirect = nsurl_access(ctx->entry->redirect_url);
+	msg.data.redirect = slateurl_access(ctx->entry->redirect_url);
 	fetch_resource_send_callback(&msg, ctx);
 
 	return true;
@@ -248,7 +248,7 @@ static bool fetch_resource_notfound_handler(struct fetch_resource_context *ctx)
 		 "</body>\n</html>\n",
 		 title, title,
 		 messages_get("FetchErrorCode"), code,
-		 messages_get("FetchFile"), nsurl_access(ctx->url));
+		 messages_get("FetchFile"), slateurl_access(ctx->url));
 
 	msg.type = FETCH_DATA;
 	msg.data.header_or_data.buf = (const uint8_t *) buffer;
@@ -270,7 +270,7 @@ static bool fetch_resource_initialise(lwc_string *scheme)
 {
 	struct fetch_resource_map_entry *e;
 	uint32_t i;
-	nserror res;
+	slateerror res;
 
 	fetch_resource_path_count = 0;
 
@@ -283,7 +283,7 @@ static bool fetch_resource_initialise(lwc_string *scheme)
 			while (i > 0) {
 				i--;
 				lwc_string_unref(fetch_resource_map[i].path);
-				nsurl_unref(fetch_resource_map[i].redirect_url);
+				slateurl_unref(fetch_resource_map[i].redirect_url);
 			}
 			/** \todo should this exit with an error condition? */
 		}
@@ -292,7 +292,7 @@ static bool fetch_resource_initialise(lwc_string *scheme)
 		res = guit->fetch->get_resource_data(lwc_string_data(e->path),
 						     &e->data,
 						     &e->data_len);
-		if (res == NSERROR_OK) {
+		if (res == SLATEERROR_OK) {
 			NSLOG(netsurf, INFO, "direct data for %s",
 			      fetch_resource_paths[i]);
 			fetch_resource_path_count++;
@@ -321,12 +321,12 @@ static void fetch_resource_finalise(lwc_string *scheme)
 		if (fetch_resource_map[i].data != NULL) {
 			guit->fetch->release_resource_data(fetch_resource_map[i].data);
 		} else {
-			nsurl_unref(fetch_resource_map[i].redirect_url);
+			slateurl_unref(fetch_resource_map[i].redirect_url);
 		}
 	}
 }
 
-static bool fetch_resource_can_fetch(const nsurl *url)
+static bool fetch_resource_can_fetch(const slateurl *url)
 {
 	return true;
 }
@@ -336,7 +336,7 @@ static bool fetch_resource_can_fetch(const nsurl *url)
  */
 static void *
 fetch_resource_setup(struct fetch *fetchh,
-		     nsurl *url,
+		     slateurl *url,
 		     bool only_2xx,
 		     bool downgrade_tls,
 		     const char *post_urlenc,
@@ -345,7 +345,7 @@ fetch_resource_setup(struct fetch *fetchh,
 {
 	struct fetch_resource_context *ctx;
 	lwc_string *path;
-	nserror ret;
+	slateerror ret;
 	uint32_t i;
 
 	ctx = calloc(1, sizeof(*ctx));
@@ -355,7 +355,7 @@ fetch_resource_setup(struct fetch *fetchh,
 
 	ctx->handler = fetch_resource_notfound_handler;
 
-	if ((path = nsurl_get_component(url, NSURL_PATH)) != NULL) {
+	if ((path = slateurl_get_component(url, SLATEURL_PATH)) != NULL) {
 		bool match;
 
 		/* Ensure requested path is valid */
@@ -377,7 +377,7 @@ fetch_resource_setup(struct fetch *fetchh,
 		lwc_string_unref(path);
 	}
 
-	ctx->url = nsurl_ref(url);
+	ctx->url = slateurl_ref(url);
 
 	/* Scan request headers looking for If-None-Match */
 	for (i = 0; headers[i] != NULL; i++) {
@@ -396,7 +396,7 @@ fetch_resource_setup(struct fetch *fetchh,
 		/* Convert to time_t */
 		if (*d != '\0') {
 			ret = nsc_snptimet(d, strlen(d), &ctx->etag);
-			if (ret != NSERROR_OK) {
+			if (ret != SLATEERROR_OK) {
 				NSLOG(fetch, WARNING,
 						"Bad If-None-Match value");
 			}
@@ -415,7 +415,7 @@ static void fetch_resource_free(void *ctx)
 {
 	struct fetch_resource_context *c = ctx;
 	if (c->url != NULL)
-		nsurl_unref(c->url);
+		slateurl_unref(c->url);
 	free(ctx);
 }
 
@@ -476,7 +476,7 @@ static void fetch_resource_poll(lwc_string *scheme)
 	ring = save_ring;
 }
 
-nserror fetch_resource_register(void)
+slateerror fetch_resource_register(void)
 {
 	lwc_string *scheme = lwc_string_ref(corestring_lwc_resource);
 	const struct fetcher_operation_table fetcher_ops = {

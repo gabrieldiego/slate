@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -42,14 +42,14 @@
 #include "utils/messages.h"
 #include "utils/utils.h"
 #include "utils/file.h"
-#include "netsurf/plotters.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/content.h"
+#include "slate/plotters.h"
+#include "slate/bitmap.h"
+#include "slate/content.h"
 #include "content/content.h"
 #include "content/content_protected.h"
 #include "content/content_factory.h"
 #include "desktop/gui_internal.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 
 #include "amiga/os3support.h"
 #include "amiga/bitmap.h"
@@ -69,7 +69,7 @@ typedef struct amiga_icon_content {
 	struct bitmap *bitmap;	/**< Created NetSurf bitmap */
 } amiga_icon_content;
 
-static nserror amiga_icon_create(const content_handler *handler,
+static slateerror amiga_icon_create(const content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		struct llcache_handle *llcache, const char *fallback_charset,
 		bool quirks, struct content **c);
@@ -78,7 +78,7 @@ static void amiga_icon_destroy(struct content *c);
 static bool amiga_icon_redraw(struct content *c,
 		struct content_redraw_data *data, const struct rect *clip,
 		const struct redraw_context *ctx);
-static nserror amiga_icon_clone(const struct content *old, 
+static slateerror amiga_icon_clone(const struct content *old, 
 		struct content **newc);
 static content_type amiga_icon_content_type(void);
 
@@ -119,28 +119,28 @@ static const char *amiga_icon_types[] = {
 CONTENT_FACTORY_REGISTER_TYPES(amiga_icon, amiga_icon_types, 
 		amiga_icon_content_handler)
 
-nserror amiga_icon_create(const content_handler *handler,
+slateerror amiga_icon_create(const content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		struct llcache_handle *llcache, const char *fallback_charset,
 		bool quirks, struct content **c)
 {
 	amiga_icon_content *ai_content;
-	nserror error;
+	slateerror error;
 
 	ai_content = calloc(1, sizeof(amiga_icon_content));
 	if (ai_content == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__init(&ai_content->base, handler, imime_type, params,
 			llcache, fallback_charset, quirks);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(ai_content);
 		return error;
 	}
 
 	*c = (struct content *)ai_content;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -166,11 +166,11 @@ bool amiga_icon_convert(struct content *c)
 	ULONG trans, pals1;
 	struct ColorRegister *pal1;
 
-	netsurf_nsurl_to_path(content_get_url(c), &filename);
+	slate_slateurl_to_path(content_get_url(c), &filename);
 	/* This loader will only work on local files, so fail if not a local path */
 	if(filename == NULL)
 	{
-		msg_data.errordata.errorcode = NSERROR_NOMEM;
+		msg_data.errordata.errorcode = SLATEERROR_NOMEM;
 		msg_data.errordata.errormsg = messages_get("NoMemory");
 		content_broadcast(c, CONTENT_MSG_ERROR, &msg_data);
 		return false;
@@ -183,7 +183,7 @@ bool amiga_icon_convert(struct content *c)
 
 	if(dobj == NULL)
 	{
-		msg_data.errordata.errorcode = NSERROR_NOMEM;
+		msg_data.errordata.errorcode = SLATEERROR_NOMEM;
 		msg_data.errordata.errormsg = messages_get("NoMemory");
 		content_broadcast(c, CONTENT_MSG_ERROR, &msg_data);
 		return false;
@@ -204,7 +204,7 @@ bool amiga_icon_convert(struct content *c)
 
 	icon_c->bitmap = amiga_bitmap_create(width, height, BITMAP_NONE);
 	if (!icon_c->bitmap) {
-		msg_data.errordata.errorcode = NSERROR_NOMEM;
+		msg_data.errordata.errorcode = SLATEERROR_NOMEM;
 		msg_data.errordata.errormsg = messages_get("NoMemory");
 		content_broadcast(c, CONTENT_MSG_ERROR, &msg_data);
 		if(dobj) FreeDiskObject(dobj);
@@ -212,7 +212,7 @@ bool amiga_icon_convert(struct content *c)
 	}
 	imagebuf = (ULONG *) amiga_bitmap_get_buffer(icon_c->bitmap);
 	if (!imagebuf) {
-		msg_data.errordata.errorcode = NSERROR_NOMEM;
+		msg_data.errordata.errorcode = SLATEERROR_NOMEM;
 		msg_data.errordata.errormsg = messages_get("NoMemory");
 		content_broadcast(c, CONTENT_MSG_ERROR, &msg_data);
 		if(dobj) FreeDiskObject(dobj);
@@ -301,21 +301,21 @@ bool amiga_icon_redraw(struct content *c,
 				  data->width,
 				  data->height,
 				  data->background_colour,
-				  flags) == NSERROR_OK);
+				  flags) == SLATEERROR_OK);
 }
 
 
-nserror amiga_icon_clone(const struct content *old, struct content **newc)
+slateerror amiga_icon_clone(const struct content *old, struct content **newc)
 {
 	amiga_icon_content *ai;
-	nserror error;
+	slateerror error;
 
 	ai = calloc(1, sizeof(amiga_icon_content));
 	if (ai == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__clone(old, &ai->base);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&ai->base);
 		return error;
 	}
@@ -325,13 +325,13 @@ nserror amiga_icon_clone(const struct content *old, struct content **newc)
 			old->status == CONTENT_STATUS_DONE) {
 		if (amiga_icon_convert(&ai->base) == false) {
 			content_destroy(&ai->base);
-			return NSERROR_CLONE_FAILED;
+			return SLATEERROR_CLONE_FAILED;
 		}
 	}
 
 	*newc = (struct content *) ai;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 content_type amiga_icon_content_type(void)
@@ -408,7 +408,7 @@ void amiga_icon_superimpose_favicon_internal(struct hlcache_handle *icon, struct
 	if(format != IDFMT_DIRECTMAPPED) return;
 #ifdef __amigaos4__
 	if ((icon != NULL) && (content_get_bitmap(icon) != NULL)) {
-		bm = ami_bitmap_get_native(content_get_bitmap(icon), 16, 16, false, NULL, nsoption_colour(sys_colour_ButtonFace));
+		bm = ami_bitmap_get_native(content_get_bitmap(icon), 16, 16, false, NULL, slateoption_colour(sys_colour_ButtonFace));
 	}
 
 	if(bm) {
@@ -530,7 +530,7 @@ struct DiskObject *amiga_icon_from_bitmap(struct bitmap *bm)
 	{
 		bitmap = ami_bitmap_get_native(bm, THUMBNAIL_WIDTH,
 									THUMBNAIL_HEIGHT, false, NULL,
-									nsoption_colour(sys_colour_ButtonFace));
+									slateoption_colour(sys_colour_ButtonFace));
 		icondata = malloc(THUMBNAIL_WIDTH * 4 * THUMBNAIL_HEIGHT);
 		ami_bitmap_set_icondata(bm, icondata);
 

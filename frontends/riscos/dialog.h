@@ -1,7 +1,7 @@
 /*
  * Copyright 2005 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _NETSURF_RISCOS_DIALOG_H_
-#define _NETSURF_RISCOS_DIALOG_H_
+#ifndef _SLATE_RISCOS_DIALOG_H_
+#define _SLATE_RISCOS_DIALOG_H_
 
 struct toolbar;
 struct gui_window;

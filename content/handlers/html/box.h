@@ -3,7 +3,7 @@
  * Copyright 2003 Phil Mellor <monkeyson@users.sourceforge.net>
  * Copyright 2020 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,8 +24,8 @@
  *
  */
 
-#ifndef NETSURF_HTML_BOX_H
-#define NETSURF_HTML_BOX_H
+#ifndef SLATE_HTML_BOX_H
+#define SLATE_HTML_BOX_H
 
 #include <limits.h>
 #include <stdbool.h>
@@ -37,7 +37,7 @@ struct content;
 struct box;
 struct browser_window;
 struct html_content;
-struct nsurl;
+struct slateurl;
 struct dom_node;
 struct dom_string;
 struct rect;
@@ -162,11 +162,11 @@ struct object_param {
  * Parameters for object element and similar elements.
  */
 struct object_params {
-	struct nsurl *data;
+	struct slateurl *data;
 	char *type;
 	char *codetype;
-	struct nsurl *codebase;
-	struct nsurl *classid;
+	struct slateurl *codebase;
+	struct slateurl *classid;
 	struct object_param *params;
 };
 
@@ -373,7 +373,7 @@ struct box {
 	/**
 	 * Link, or NULL.
 	 */
-	struct nsurl *href;
+	struct slateurl *href;
 
 	/**
 	 * Link target, or NULL.

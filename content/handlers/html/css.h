@@ -1,7 +1,7 @@
 /*
  * Copyright 2020 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,15 +21,15 @@
  * HTML content handler CSS interface.
  */
 
-#ifndef NETSURF_HTML_CSS_H
-#define NETSURF_HTML_CSS_H
+#ifndef SLATE_HTML_CSS_H
+#define SLATE_HTML_CSS_H
 
 /**
  * Initialise html content css handling.
  *
- * \return NSERROR_OK on success else error code
+ * \return SLATEERROR_OK on success else error code
  */
-nserror html_css_init(void);
+slateerror html_css_init(void);
 
 /**
  * Finalise html content css handling.
@@ -41,33 +41,33 @@ void html_css_fini(void);
  *
  * \param c The html content to create css selction on.
  * \param select_ctx A pointer to receive the new context.
- * \return NSERROR_OK on success and \a select_ctx updated else error code
+ * \return SLATEERROR_OK on success and \a select_ctx updated else error code
  */
-nserror html_css_new_selection_context(struct html_content *c, css_select_ctx **select_ctx);
+slateerror html_css_new_selection_context(struct html_content *c, css_select_ctx **select_ctx);
 
 /**
  * Initialise core stylesheets for a content
  *
  * \param c content structure to update
- * \return NSERROR_OK on success or error code
+ * \return SLATEERROR_OK on success or error code
  */
-nserror html_css_new_stylesheets(struct html_content *c);
+slateerror html_css_new_stylesheets(struct html_content *c);
 
 /**
  * Initialise quirk stylesheets for a content
  *
  * \param c content structure to update
- * \return NSERROR_OK on success or error code
+ * \return SLATEERROR_OK on success or error code
  */
-nserror html_css_quirks_stylesheets(struct html_content *c);
+slateerror html_css_quirks_stylesheets(struct html_content *c);
 
 /**
  * Free all css stylesheets associated with an HTML content. 
  *
  * \param html The HTML content to free stylesheets from.
- * \return NSERROR_OK on success or error code.
+ * \return SLATEERROR_OK on success or error code.
  */
-nserror html_css_free_stylesheets(struct html_content *html);
+slateerror html_css_free_stylesheets(struct html_content *html);
 
 /**
  * determine if any of the stylesheets were loaded insecurely

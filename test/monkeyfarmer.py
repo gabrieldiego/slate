@@ -1,6 +1,6 @@
 # Copyright 2017-2019 Daniel Silverstone <dsilvers@digital-scurf.org>
 #
-# This file is part of NetSurf, http://www.netsurf-browser.org/
+# This file is part of NetSurf, http://www.slate-browser.org/
 #
 # NetSurf is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@
 """
 Monkey Farmer
 
-The monkey farmer is a wrapper around `nsmonkey` which can be used to simplify
+The monkey farmer is a wrapper around `jotter` which can be used to simplify
 access to the monkey behaviours and ultimately to write useful tests in an
 expressive but not overcomplicated DSLish way.  Tests are, ultimately, still
 Python code.
@@ -263,7 +263,7 @@ class Browser:
 
     # pylint: disable=locally-disabled, too-many-instance-attributes, dangerous-default-value, invalid-name
 
-    def __init__(self, monkey_cmd=["./nsmonkey"], monkey_env=None, quiet=False, *, wrapper=None):
+    def __init__(self, monkey_cmd=["./jotter"], monkey_env=None, quiet=False, *, wrapper=None):
         self.farmer = MonkeyFarmer(
             monkey_cmd=monkey_cmd,
             monkey_env=monkey_env,

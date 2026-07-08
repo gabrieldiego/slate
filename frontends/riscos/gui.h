@@ -3,7 +3,7 @@
  * Copyright 2004 James Bursa <bursa@users.sourceforge.net>
  * Copyright 2004 Andrew Timmins <atimmins@blueyonder.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,8 +18,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _NETSURF_RISCOS_GUI_H_
-#define _NETSURF_RISCOS_GUI_H_
+#ifndef _SLATE_RISCOS_GUI_H_
+#define _SLATE_RISCOS_GUI_H_
 
 #include <oslib/wimp.h>
 
@@ -36,7 +36,7 @@ extern int os_version;
 
 extern bool os_alpha_sprite_supported;
 
-extern const char * NETSURF_DIR;
+extern const char * SLATE_DIR;
 
 struct toolbar;
 struct status_bar;
@@ -46,7 +46,7 @@ struct tree;
 struct node;
 struct history;
 struct css_style;
-struct nsurl;
+struct slateurl;
 struct hlcache_handle;
 
 enum gui_pointer_shape;
@@ -116,7 +116,7 @@ void ro_gui_dump_browser_window(struct browser_window *bw);
 void ro_gui_drag_box_start(wimp_pointer *pointer);
 bool ro_gui_prequit(void);
 const char *ro_gui_default_language(void);
-nserror ro_warn_user(const char *warning, const char *detail);
+slateerror ro_warn_user(const char *warning, const char *detail);
 
 /**
  * Cause an abnormal program termination.
@@ -152,7 +152,7 @@ bool schedule_run(void);
  * The callback function will be called as soon as possible after t ms have
  * passed.
  */
-nserror riscos_schedule(int t, void (*callback)(void *p), void *p);
+slateerror riscos_schedule(int t, void (*callback)(void *p), void *p);
 
 /* in search.c */
 void ro_gui_search_init(void);

@@ -3,28 +3,28 @@
 # ----------------------------------------------------------------------------
 
 # Where to install the netsurf binary
-NETSURF_BEOS_BIN := /boot/apps/netsurf/
+SLATE_BEOS_BIN := /boot/apps/slate/
 
-# TODO:HAIKU -- not sure if ~/.netsurf applies in beos
-# Where to search for NetSurf's resources after looking in ~/.netsurf and
-# $NETSURFRES.  It must have a trailing /
-NETSURF_BEOS_RESOURCES := /boot/apps/netsurf/res/
+# TODO:HAIKU -- not sure if ~/.slate applies in beos
+# Where to search for NetSurf's resources after looking in ~/.slate and
+# $SLATERES.  It must have a trailing /
+SLATE_BEOS_RESOURCES := /boot/apps/slate/res/
 
 # Enable NetSurf's use of libsvgtiny for displaying SVGs
 # Valid options: YES, NO, AUTO
-NETSURF_USE_NSSVG := YES
+SLATE_USE_NSSVG := YES
 
 # Enable NetSurf's use of librosprite for displaying RISC OS Sprites
 # Valid options: YES, NO, AUTO
-NETSURF_USE_ROSPRITE := AUTO
+SLATE_USE_ROSPRITE := AUTO
 
 # Enable NetSurf's use of libharu for PDF export.
 # Valid options: YES, NO
-NETSURF_USE_HARU_PDF := NO
+SLATE_USE_HARU_PDF := NO
 
 # Force using glibc internal iconv implementation instead of external libiconv
 # Valid options: YES, NO
-NETSURF_USE_LIBICONV_PLUG := NO
+SLATE_USE_LIBICONV_PLUG := NO
 
 # Optimisation levels
 CFLAGS += -pipe -O2

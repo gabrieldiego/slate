@@ -1,7 +1,7 @@
 /*
  * Copyright 2018 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_UTILS_HTTP_STRICT_TRANSPORT_SECURITY_H_
-#define NETSURF_UTILS_HTTP_STRICT_TRANSPORT_SECURITY_H_
+#ifndef SLATE_UTILS_HTTP_STRICT_TRANSPORT_SECURITY_H_
+#define SLATE_UTILS_HTTP_STRICT_TRANSPORT_SECURITY_H_
 
 #include <libwapcaplet/libwapcaplet.h>
 
@@ -28,11 +28,11 @@ typedef struct http_strict_transport_security http_strict_transport_security;
  *
  * \param header_value  Header value to parse
  * \param result        Pointer to location to receive result
- * \return NSERROR_OK on success,
- *         NSERROR_NOMEM on memory exhaustion,
+ * \return SLATEERROR_OK on success,
+ *         SLATEERROR_NOMEM on memory exhaustion,
  *         appropriate error otherwise
  */
-nserror http_parse_strict_transport_security(const char *header_value,
+slateerror http_parse_strict_transport_security(const char *header_value,
 		http_strict_transport_security **result);
 
 /**

@@ -6,7 +6,7 @@
  * Copyright 2009 Paul Blokus <paul_pl@users.sourceforge.net>
  * Copyright 2010 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,11 +40,11 @@
 #include "utils/url.h"
 #include "utils/utf8.h"
 #include "utils/ascii.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/inttypes.h"
-#include "netsurf/mouse.h"
-#include "netsurf/plotters.h"
-#include "netsurf/misc.h"
+#include "slate/browser_window.h"
+#include "slate/inttypes.h"
+#include "slate/mouse.h"
+#include "slate/plotters.h"
+#include "slate/misc.h"
 #include "content/fetch.h"
 #include "content/hlcache.h"
 #include "css/utils.h"
@@ -109,7 +109,7 @@ form_encode_item(const char *item,
 		 const char *charset,
 		 const char *fallback)
 {
-	nserror err;
+	slateerror err;
 	char *ret = NULL;
 	char cset[256];
 
@@ -119,19 +119,19 @@ form_encode_item(const char *item,
 	snprintf(cset, sizeof cset, "%s//TRANSLIT", charset);
 
 	err = utf8_to_enc(item, cset, 0, &ret);
-	if (err == NSERROR_BAD_ENCODING) {
+	if (err == SLATEERROR_BAD_ENCODING) {
 		/* charset not understood, try without transliteration */
 		snprintf(cset, sizeof cset, "%s", charset);
 		err = utf8_to_enc(item, cset, len, &ret);
 
-		if (err == NSERROR_BAD_ENCODING) {
+		if (err == SLATEERROR_BAD_ENCODING) {
 			/* nope, try fallback charset (if any) */
 			if (fallback) {
 				snprintf(cset, sizeof cset,
 						"%s//TRANSLIT", fallback);
 				err = utf8_to_enc(item, cset, 0, &ret);
 
-				if (err == NSERROR_BAD_ENCODING) {
+				if (err == SLATEERROR_BAD_ENCODING) {
 					/* and without transliteration */
 					snprintf(cset, sizeof cset,
 							"%s", fallback);
@@ -139,11 +139,11 @@ form_encode_item(const char *item,
 				}
 			}
 
-			if (err == NSERROR_BAD_ENCODING) {
+			if (err == SLATEERROR_BAD_ENCODING) {
 				/* that also failed, use 8859-1 */
 				err = utf8_to_enc(item, "ISO-8859-1//TRANSLIT",
 						0, &ret);
-				if (err == NSERROR_BAD_ENCODING) {
+				if (err == SLATEERROR_BAD_ENCODING) {
 					/* and without transliteration */
 					err = utf8_to_enc(item, "ISO-8859-1",
 							0, &ret);
@@ -151,7 +151,7 @@ form_encode_item(const char *item,
 			}
 		}
 	}
-	if (err == NSERROR_NOMEM) {
+	if (err == SLATEERROR_NOMEM) {
 		return NULL;
 	}
 
@@ -173,7 +173,7 @@ form_encode_item(const char *item,
  * \param value The value to encode
  * \param fetch_data_next_ptr The multipart data list to append to.
  */
-static nserror
+static slateerror
 fetch_data_list_add_sname(const char *name,
 			  const char *ksfx,
 			  int value,
@@ -185,7 +185,7 @@ fetch_data_list_add_sname(const char *name,
 	fetch_data = calloc(1, sizeof(*fetch_data));
 	if (fetch_data == NULL) {
 		NSLOG(netsurf, INFO, "failed allocation for fetch data");
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* key name */
@@ -195,7 +195,7 @@ fetch_data_list_add_sname(const char *name,
 		free(fetch_data);
 		NSLOG(netsurf, INFO,
 		      "keyname allocation failure for %s%s", name, ksfx);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 	snprintf(fetch_data->name, keysize + 1, "%s%s", name, ksfx);
 
@@ -205,7 +205,7 @@ fetch_data_list_add_sname(const char *name,
 		free(fetch_data->name);
 		free(fetch_data);
 		NSLOG(netsurf, INFO, "value allocation failure");
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 	snprintf(fetch_data->value, FETCH_DATA_INT_VALUE_SIZE, "%d", value);
 
@@ -213,7 +213,7 @@ fetch_data_list_add_sname(const char *name,
 	**fetch_data_next_ptr = fetch_data;
 	*fetch_data_next_ptr = &fetch_data->next;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -226,9 +226,9 @@ fetch_data_list_add_sname(const char *name,
  * \param form_charset The form character set
  * \param docu_charset The document character set for fallback
  * \param fetch_data_next_ptr The multipart data list being constructed.
- * \return NSERROR_OK on success or appropriate error code.
+ * \return SLATEERROR_OK on success or appropriate error code.
  */
-static nserror
+static slateerror
 fetch_data_list_add(dom_string *name,
 		    dom_string *value,
 		    const char *rawfile,
@@ -243,7 +243,7 @@ fetch_data_list_add(dom_string *name,
 	fetch_data = calloc(1, sizeof(*fetch_data));
 	if (fetch_data == NULL) {
 		NSLOG(netsurf, INFO, "failed allocation for fetch data");
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	fetch_data->name = form_encode_item(dom_string_data(name),
@@ -253,7 +253,7 @@ fetch_data_list_add(dom_string *name,
 	if (fetch_data->name == NULL) {
 		NSLOG(netsurf, INFO, "Could not encode name for fetch data");
 		free(fetch_data);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	if (value == NULL) {
@@ -268,7 +268,7 @@ fetch_data_list_add(dom_string *name,
 		NSLOG(netsurf, INFO, "Could not encode value for fetch data");
 		free(fetch_data->name);
 		free(fetch_data);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* deal with raw file name */
@@ -281,7 +281,7 @@ fetch_data_list_add(dom_string *name,
 			free(fetch_data->value);
 			free(fetch_data->name);
 			free(fetch_data);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 	}
 
@@ -289,7 +289,7 @@ fetch_data_list_add(dom_string *name,
 	**fetch_data_next_ptr = fetch_data;
 	*fetch_data_next_ptr = &fetch_data->next;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -300,9 +300,9 @@ fetch_data_list_add(dom_string *name,
  * \param form_charset The form character set
  * \param doc_charset The document character set for fallback
  * \param fetch_data_next_ptr The multipart data list being constructed.
- * \return NSERROR_OK on success or appropriate error code.
+ * \return SLATEERROR_OK on success or appropriate error code.
  */
-static nserror
+static slateerror
 form_dom_to_data_textarea(dom_html_text_area_element *text_area_element,
 			  const char *form_charset,
 			  const char *doc_charset,
@@ -312,7 +312,7 @@ form_dom_to_data_textarea(dom_html_text_area_element *text_area_element,
 	bool element_disabled;
 	dom_string *inputname;
 	dom_string *inputvalue;
-	nserror res;
+	slateerror res;
 
 	/* check if element is disabled */
 	exp = dom_html_text_area_element_get_disabled(text_area_element,
@@ -320,12 +320,12 @@ form_dom_to_data_textarea(dom_html_text_area_element *text_area_element,
 	if (exp != DOM_NO_ERR) {
 		NSLOG(netsurf, INFO,
 		      "Could not get text area disabled property. exp %d", exp);
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	if (element_disabled) {
 		/* allow enumeration to continue after disabled element */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* obtain name property */
@@ -334,12 +334,12 @@ form_dom_to_data_textarea(dom_html_text_area_element *text_area_element,
 	if (exp != DOM_NO_ERR) {
 		NSLOG(netsurf, INFO,
 		      "Could not get text area name property. exp %d", exp);
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	if (inputname == NULL) {
 		/* allow enumeration to continue after element with no name */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* obtain text area value */
@@ -349,7 +349,7 @@ form_dom_to_data_textarea(dom_html_text_area_element *text_area_element,
 		NSLOG(netsurf, INFO,
 		      "Could not get text area content. exp %d", exp);
 		dom_string_unref(inputname);
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	/* add key/value pair to fetch data list */
@@ -367,14 +367,14 @@ form_dom_to_data_textarea(dom_html_text_area_element *text_area_element,
 }
 
 
-static nserror
+static slateerror
 form_dom_to_data_select_option(dom_html_option_element *option_element,
 			      dom_string *keyname,
 			      const char *form_charset,
 			      const char *docu_charset,
 			      struct fetch_multipart_data ***fetch_data_next_ptr)
 {
-	nserror res;
+	slateerror res;
 	dom_exception exp; /* the result from DOM operations */
 	dom_string *value;
 	bool selected;
@@ -382,18 +382,18 @@ form_dom_to_data_select_option(dom_html_option_element *option_element,
 	exp = dom_html_option_element_get_selected(option_element, &selected);
 	if (exp != DOM_NO_ERR) {
 		NSLOG(netsurf, INFO, "Could not get option selected property");
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	if (!selected) {
 		/* unselected options do not add fetch data entries */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	exp = dom_html_option_element_get_value(option_element, &value);
 	if (exp != DOM_NO_ERR) {
 		NSLOG(netsurf, INFO, "Could not get option value");
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	/* add key/value pair to fetch data list */
@@ -417,15 +417,15 @@ form_dom_to_data_select_option(dom_html_option_element *option_element,
  * \param form_charset The form character set
  * \param doc_charset The document character set for fallback
  * \param fetch_data_next_ptr The multipart data list being constructed.
- * \return NSERROR_OK on success or appropriate error code.
+ * \return SLATEERROR_OK on success or appropriate error code.
  */
-static nserror
+static slateerror
 form_dom_to_data_select(dom_html_select_element *select_element,
 			const char *form_charset,
 			const char *doc_charset,
 			struct fetch_multipart_data ***fetch_data_next_ptr)
 {
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 	dom_exception exp; /* the result from DOM operations */
 	bool element_disabled;
 	dom_string *inputname;
@@ -440,12 +440,12 @@ form_dom_to_data_select(dom_html_select_element *select_element,
 	if (exp != DOM_NO_ERR) {
 		NSLOG(netsurf, INFO,
 		      "Could not get select disabled property. exp %d", exp);
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	if (element_disabled) {
 		/* allow enumeration to continue after disabled element */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* obtain name property */
@@ -453,12 +453,12 @@ form_dom_to_data_select(dom_html_select_element *select_element,
 	if (exp != DOM_NO_ERR) {
 		NSLOG(netsurf, INFO,
 		      "Could not get select name property. exp %d", exp);
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	if (inputname == NULL) {
 		/* allow enumeration to continue after element with no name */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* get options collection */
@@ -467,7 +467,7 @@ form_dom_to_data_select(dom_html_select_element *select_element,
 		NSLOG(netsurf, INFO,
 		      "Could not get select options collection");
 		dom_string_unref(inputname);
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	/* get options collection length */
@@ -477,7 +477,7 @@ form_dom_to_data_select(dom_html_select_element *select_element,
 		      "Could not get select options collection length");
 		dom_html_options_collection_unref(options);
 		dom_string_unref(inputname);
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	/* iterate over options collection */
@@ -488,7 +488,7 @@ form_dom_to_data_select(dom_html_select_element *select_element,
 		if (exp != DOM_NO_ERR) {
 			NSLOG(netsurf, INFO,
 			      "Could not get options item %"PRId32, option_index);
-			res = NSERROR_DOM;
+			res = SLATEERROR_DOM;
 		} else {
 			res = form_dom_to_data_select_option(
 				(dom_html_option_element *)option_element,
@@ -500,7 +500,7 @@ form_dom_to_data_select(dom_html_select_element *select_element,
 			dom_node_unref(option_element);
 		}
 
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			break;
 		}
 	}
@@ -512,7 +512,7 @@ form_dom_to_data_select(dom_html_select_element *select_element,
 }
 
 
-static nserror
+static slateerror
 form_dom_to_data_input_submit(dom_html_input_element *input_element,
 			      dom_string *inputname,
 			      const char *charset,
@@ -522,20 +522,20 @@ form_dom_to_data_input_submit(dom_html_input_element *input_element,
 {
 	dom_exception exp; /* the result from DOM operations */
 	dom_string *inputvalue;
-	nserror res;
+	slateerror res;
 
 	if (*submit_button == NULL) {
 		/* caller specified no button so use this one */
 		*submit_button = (dom_html_element *)input_element;
 	} else if (*submit_button != (dom_html_element *)input_element) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* matched button used to submit form */
 	exp = dom_html_input_element_get_value(input_element, &inputvalue);
 	if (exp != DOM_NO_ERR) {
 		NSLOG(netsurf, INFO, "Could not get submit button value");
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	/* add key/value pair to fetch data list */
@@ -552,7 +552,7 @@ form_dom_to_data_input_submit(dom_html_input_element *input_element,
 }
 
 
-static nserror
+static slateerror
 form_dom_to_data_input_image(dom_html_input_element *input_element,
 			     dom_string *inputname,
 			     const char *charset,
@@ -560,14 +560,14 @@ form_dom_to_data_input_image(dom_html_input_element *input_element,
 			     dom_html_element **submit_button,
 			     struct fetch_multipart_data ***fetch_data_next_ptr)
 {
-	nserror res;
+	slateerror res;
 	dom_exception exp; /* the result from DOM operations */
 	struct image_input_coords *coords;
 	char *basename;
 
 	/* Only use an image input if it was the thing which activated us */
 	if (*submit_button != (dom_html_element *)input_element) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	exp = dom_node_get_user_data((dom_node *)input_element,
@@ -575,12 +575,12 @@ form_dom_to_data_input_image(dom_html_input_element *input_element,
 				     &coords);
 	if (exp != DOM_NO_ERR) {
 		NSLOG(netsurf, INFO, "Could not get image XY data");
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	if (coords == NULL) {
 		NSLOG(netsurf, INFO, "No XY data on the image input");
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	/* encode input name once */
@@ -590,14 +590,14 @@ form_dom_to_data_input_image(dom_html_input_element *input_element,
 				    document_charset);
 	if (basename == NULL) {
 		NSLOG(netsurf, INFO, "Could not encode basename");
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	res = fetch_data_list_add_sname(basename, ".x",
 					coords->x,
 					fetch_data_next_ptr);
 
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		res = fetch_data_list_add_sname(basename, ".y",
 						coords->y,
 						fetch_data_next_ptr);
@@ -609,14 +609,14 @@ form_dom_to_data_input_image(dom_html_input_element *input_element,
 }
 
 
-static nserror
+static slateerror
 form_dom_to_data_input_checkbox(dom_html_input_element *input_element,
 				dom_string *inputname,
 				const char *charset,
 				const char *document_charset,
 				struct fetch_multipart_data ***fetch_data_next_ptr)
 {
-	nserror res;
+	slateerror res;
 	dom_exception exp; /* the result from DOM operations */
 	bool checked;
 	dom_string *inputvalue;
@@ -625,19 +625,19 @@ form_dom_to_data_input_checkbox(dom_html_input_element *input_element,
 	if (exp != DOM_NO_ERR) {
 		NSLOG(netsurf, INFO,
 		      "Could not get input element checked");
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	if (!checked) {
 		/* unchecked items do not generate a data entry */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	exp = dom_html_input_element_get_value(input_element, &inputvalue);
 	if (exp != DOM_NO_ERR) {
 		NSLOG(netsurf, INFO,
 		      "Could not get input element value");
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	/* ensure a default value */
@@ -659,14 +659,14 @@ form_dom_to_data_input_checkbox(dom_html_input_element *input_element,
 }
 
 
-static nserror
+static slateerror
 form_dom_to_data_input_file(dom_html_input_element *input_element,
 			    dom_string *inputname,
 			    const char *charset,
 			    const char *document_charset,
 			    struct fetch_multipart_data ***fetch_data_next_ptr)
 {
-	nserror res;
+	slateerror res;
 	dom_exception exp; /* the result from DOM operations */
 	dom_string *inputvalue;
 	const char *rawfile = NULL;
@@ -674,7 +674,7 @@ form_dom_to_data_input_file(dom_html_input_element *input_element,
 	exp = dom_html_input_element_get_value(input_element, &inputvalue);
 	if (exp != DOM_NO_ERR) {
 		NSLOG(netsurf, INFO, "Could not get file value");
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	exp = dom_node_get_user_data((dom_node *)input_element,
@@ -682,7 +682,7 @@ form_dom_to_data_input_file(dom_html_input_element *input_element,
 				     &rawfile);
 	if (exp != DOM_NO_ERR) {
 		NSLOG(netsurf, INFO, "Could not get file rawname");
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	if (rawfile == NULL) {
@@ -703,21 +703,21 @@ form_dom_to_data_input_file(dom_html_input_element *input_element,
 }
 
 
-static nserror
+static slateerror
 form_dom_to_data_input_text(dom_html_input_element *input_element,
 			    dom_string *inputname,
 			    const char *charset,
 			    const char *document_charset,
 			    struct fetch_multipart_data ***fetch_data_next_ptr)
 {
-	nserror res;
+	slateerror res;
 	dom_exception exp; /* the result from DOM operations */
 	dom_string *inputvalue;
 
 	exp = dom_html_input_element_get_value(input_element, &inputvalue);
 	if (exp != DOM_NO_ERR) {
 		NSLOG(netsurf, INFO, "Could not get input value");
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	/* add key/value pair to fetch data list */
@@ -744,9 +744,9 @@ form_dom_to_data_input_text(dom_html_input_element *input_element,
  * \param had_submit A boolean value indicating if the submit button
  *                   has already been processed in the form element enumeration.
  * \param fetch_data_next_ptr The multipart data list being constructed.
- * \return NSERROR_OK on success or appropriate error code.
+ * \return SLATEERROR_OK on success or appropriate error code.
  */
-static nserror
+static slateerror
 form_dom_to_data_input(dom_html_input_element *input_element,
 		       const char *charset,
 		       const char *document_charset,
@@ -757,7 +757,7 @@ form_dom_to_data_input(dom_html_input_element *input_element,
 	bool element_disabled;
 	dom_string *inputname;
 	dom_string *inputtype;
-	nserror res;
+	slateerror res;
 
 	/* check if element is disabled */
 	exp = dom_html_input_element_get_disabled(input_element,
@@ -765,12 +765,12 @@ form_dom_to_data_input(dom_html_input_element *input_element,
 	if (exp != DOM_NO_ERR) {
 		NSLOG(netsurf, INFO,
 		      "Could not get input disabled property. exp %d", exp);
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	if (element_disabled) {
 		/* disabled element requires no more processing */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* obtain name property */
@@ -778,12 +778,12 @@ form_dom_to_data_input(dom_html_input_element *input_element,
 	if (exp != DOM_NO_ERR) {
 		NSLOG(netsurf, INFO,
 		      "Could not get input name property. exp %d", exp);
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	if (inputname == NULL) {
 		/* element with no name is not converted */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* get input type */
@@ -791,7 +791,7 @@ form_dom_to_data_input(dom_html_input_element *input_element,
 	if (exp != DOM_NO_ERR) {
 		NSLOG(netsurf, INFO, "Could not get input element type");
 		dom_string_unref(inputname);
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	/* process according to input element type */
@@ -840,7 +840,7 @@ form_dom_to_data_input(dom_html_input_element *input_element,
 					       corestring_dom_button)) {
 		/* Skip these */
 		NSLOG(netsurf, INFO, "Skipping RESET and BUTTON");
-		res = NSERROR_OK;
+		res = SLATEERROR_OK;
 
 	} else {
 		/* Everything else is treated as text values */
@@ -869,9 +869,9 @@ form_dom_to_data_input(dom_html_input_element *input_element,
  * \param doc_charset The document character set for fallback
  * \param submit_button The DOM element of the button submitting the form
  * \param fetch_data_next_ptr The multipart data list being constructed.
- * \return NSERROR_OK on success or appropriate error code.
+ * \return SLATEERROR_OK on success or appropriate error code.
  */
-static nserror
+static slateerror
 form_dom_to_data_button(dom_html_button_element *button_element,
 			const char *form_charset,
 			const char *doc_charset,
@@ -883,7 +883,7 @@ form_dom_to_data_button(dom_html_button_element *button_element,
 	dom_string *inputname;
 	dom_string *inputvalue;
 	dom_string *inputtype;
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 
 	/* check if element is disabled */
 	exp = dom_html_button_element_get_disabled(button_element,
@@ -891,19 +891,19 @@ form_dom_to_data_button(dom_html_button_element *button_element,
 	if (exp != DOM_NO_ERR) {
 		NSLOG(netsurf, INFO,
 		      "Unable to get disabled property. exp %d", exp);
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	if (element_disabled) {
 		/* allow enumeration to continue after disabled element */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* get the type attribute */
 	exp = dom_html_button_element_get_type(button_element, &inputtype);
 	if (exp != DOM_NO_ERR) {
 		NSLOG(netsurf, INFO, "Could not get button element type");
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	/* If the type attribute is "reset" or "button" the element is
@@ -914,12 +914,12 @@ form_dom_to_data_button(dom_html_button_element *button_element,
 	if (dom_string_caseless_isequal(inputtype, corestring_dom_reset)) {
 		/* multipart data entry not required for reset type */
 		dom_string_unref(inputtype);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 	if (dom_string_caseless_isequal(inputtype, corestring_dom_button)) {
 		/* multipart data entry not required for button type */
 		dom_string_unref(inputtype);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 	dom_string_unref(inputtype);
 
@@ -929,7 +929,7 @@ form_dom_to_data_button(dom_html_button_element *button_element,
 		*submit_button = (dom_html_element *)button_element;
 	}
 	if (*submit_button != (dom_html_element *)button_element) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* obtain name property */
@@ -937,19 +937,19 @@ form_dom_to_data_button(dom_html_button_element *button_element,
 	if (exp != DOM_NO_ERR) {
 		NSLOG(netsurf, INFO,
 		      "Could not get button name property. exp %d", exp);
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	if (inputname == NULL) {
 		/* allow enumeration to continue after element with no name */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* get button value and add to fetch data list */
 	exp = dom_html_button_element_get_value(button_element, &inputvalue);
 	if (exp != DOM_NO_ERR) {
 		NSLOG(netsurf, INFO, "Could not get submit button value");
-		res = NSERROR_DOM;
+		res = SLATEERROR_DOM;
 	} else {
 		res = fetch_data_list_add(inputname,
 					  inputvalue,
@@ -1048,14 +1048,14 @@ static char *form_acceptable_charset(struct form *form)
  * \param[in] submit_button control used to submit the form, if any
  * \param[out] fetch_data_out updated to point to linked list of
  *                             fetch_multipart_data, NULL if no controls
- * \return NSERROR_OK on success or appropriate error code
+ * \return SLATEERROR_OK on success or appropriate error code
  */
-static nserror
+static slateerror
 form_dom_to_data(struct form *form,
 		 struct form_control *submit_control,
 		 struct fetch_multipart_data **fetch_data_out)
 {
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 	char *charset; /* form characterset */
 	dom_exception exp; /* the result from DOM operations */
 	dom_html_collection *elements = NULL; /* the dom form elements */
@@ -1078,7 +1078,7 @@ form_dom_to_data(struct form *form,
 	charset = form_acceptable_charset(form);
 	if (charset == NULL) {
 		NSLOG(netsurf, INFO, "failed to find charset");
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* obtain the form elements and count */
@@ -1086,13 +1086,13 @@ form_dom_to_data(struct form *form,
 	if (exp != DOM_NO_ERR) {
 		NSLOG(netsurf, INFO, "Could not get form elements");
 		free(charset);
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	exp = dom_html_collection_get_length(elements, &element_count);
 	if (exp != DOM_NO_ERR) {
 		NSLOG(netsurf, INFO, "Could not get form element count");
-		res = NSERROR_DOM;
+		res = SLATEERROR_DOM;
 		goto form_dom_to_data_error;
 	}
 
@@ -1103,7 +1103,7 @@ form_dom_to_data(struct form *form,
 			NSLOG(netsurf, INFO,
 			      "retrieving form element %"PRIu32" failed with %d",
 			      element_idx, exp);
-			res = NSERROR_DOM;
+			res = SLATEERROR_DOM;
 			goto form_dom_to_data_error;
 		}
 
@@ -1114,7 +1114,7 @@ form_dom_to_data(struct form *form,
 			      "getting element node name %"PRIu32" failed with %d",
 			      element_idx, exp);
 			dom_node_unref(element);
-			res = NSERROR_DOM;
+			res = SLATEERROR_DOM;
 			goto form_dom_to_data_error;
 		}
 
@@ -1158,7 +1158,7 @@ form_dom_to_data(struct form *form,
 			      "Unhandled element type: %*s",
 			      (int)dom_string_byte_length(nodename),
 			      dom_string_data(nodename));
-			res = NSERROR_DOM;
+			res = SLATEERROR_DOM;
 
 		}
 
@@ -1166,7 +1166,7 @@ form_dom_to_data(struct form *form,
 		dom_node_unref(element);
 
 		/* abort form element enumeration on error */
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			goto form_dom_to_data_error;
 		}
 	}
@@ -1175,7 +1175,7 @@ form_dom_to_data(struct form *form,
 	dom_html_collection_unref(elements);
 	free(charset);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 
 form_dom_to_data_error:
 	fetch_multipart_data_destroy(fetch_data);
@@ -1191,9 +1191,9 @@ form_dom_to_data_error:
  * \param[in] form form to which successful controls relate
  * \param[in] control linked list of fetch_multipart_data
  * \param[out] encoded_out URL-encoded form data
- * \return NSERROR_OK on success and \a encoded_out updated else appropriate error code
+ * \return SLATEERROR_OK on success and \a encoded_out updated else appropriate error code
  */
-static nserror
+static slateerror
 form_url_encode(struct form *form,
 		struct fetch_multipart_data *control,
 		char **encoded_out)
@@ -1201,12 +1201,12 @@ form_url_encode(struct form *form,
 	char *name, *value;
 	char *s, *s2;
 	unsigned int len, len1, len_init;
-	nserror res;
+	slateerror res;
 
 	s = malloc(1);
 
 	if (s == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	s[0] = '\0';
@@ -1214,13 +1214,13 @@ form_url_encode(struct form *form,
 
 	for (; control; control = control->next) {
 		res = url_escape(control->name, true, NULL, &name);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			free(s);
 			return res;
 		}
 
 		res = url_escape(control->value, true, NULL, &value);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			free(name);
 			free(s);
 			return res;
@@ -1235,7 +1235,7 @@ form_url_encode(struct form *form,
 			free(value);
 			free(name);
 			free(s);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 		s = s2;
 
@@ -1252,7 +1252,7 @@ form_url_encode(struct form *form,
 
 	*encoded_out = s;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1307,9 +1307,9 @@ form_select_menu_scroll_callback(void *client_data,
  * \param  html The html content handle for the form
  * \param  control  form control with menu
  * \param  item	    index of item selected from the menu
- * \return NSERROR_OK or appropriate error code.
+ * \return SLATEERROR_OK or appropriate error code.
  */
-static nserror
+static slateerror
 form__select_process_selection(html_content *html,
 			       struct form_control *control,
 			       int item)
@@ -1317,7 +1317,7 @@ form__select_process_selection(html_content *html,
 	struct box *inline_box;
 	struct form_option *o;
 	int count;
-	nserror ret = NSERROR_OK;
+	slateerror ret = SLATEERROR_OK;
 
 	assert(control != NULL);
 	assert(html != NULL);
@@ -1377,7 +1377,7 @@ form__select_process_selection(html_content *html,
 	}
 
 	if (!inline_box->text) {
-		ret = NSERROR_NOMEM;
+		ret = SLATEERROR_NOMEM;
 		inline_box->length = 0;
 	} else {
 		inline_box->length = strlen(inline_box->text);
@@ -1565,7 +1565,7 @@ bool form_add_option(struct form_control *control, char *value, char *text,
 
 
 /* exported interface documented in html/form_internal.h */
-nserror
+slateerror
 form_open_select_menu(void *client_data,
 		      struct form_control *control,
 		      select_menu_redraw_callback callback,
@@ -1577,14 +1577,14 @@ form_open_select_menu(void *client_data,
 	int total_height;
 	struct form_select_menu *menu;
 	html_content *html = (html_content *)c;
-	nserror res;
+	slateerror res;
 
 	/* if the menu is opened for the first time */
 	if (control->data.select.menu == NULL) {
 
 		menu = calloc(1, sizeof (struct form_select_menu));
 		if (menu == NULL) {
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 
 		control->data.select.menu = menu;
@@ -1625,7 +1625,7 @@ form_open_select_menu(void *client_data,
 				       control,
 				       form_select_menu_scroll_callback,
 				       &(menu->scrollbar));
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			control->data.select.menu = NULL;
 			free(menu);
 			return res;
@@ -1637,7 +1637,7 @@ form_open_select_menu(void *client_data,
 
 	menu->callback(client_data, 0, 0, menu->width, menu->height);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1673,7 +1673,7 @@ form_redraw_select_menu(struct form_control *control,
 	int x_cp, y_cp;
 	struct rect r;
 	struct rect rect;
-	nserror res;
+	slateerror res;
 
 	box = control->box;
 
@@ -1714,7 +1714,7 @@ form_redraw_select_menu(struct form_control *control,
 	r.x1 = x1 + 1;
 	r.y1 = y1 + 1;
 	res = ctx->plot->clip(ctx, &r);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return false;
 	}
 
@@ -1723,7 +1723,7 @@ form_redraw_select_menu(struct form_control *control,
 	rect.x1 = x1;
 	rect.y1 = y1;
 	res = ctx->plot->rectangle(ctx, plot_style_stroke_darkwbasec, &rect);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return false;
 	}
 
@@ -1738,12 +1738,12 @@ form_redraw_select_menu(struct form_control *control,
 	r.x1 = x1 + 1;
 	r.y1 = y1 + 1;
 	res = ctx->plot->clip(ctx, &r);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return false;
 	}
 
 	res = ctx->plot->rectangle(ctx, plot_style_fill_lightwbasec, &r);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return false;
 	}
 
@@ -1772,7 +1772,7 @@ form_redraw_select_menu(struct form_control *control,
 			rect.x1 = scrollbar_x + 1;
 			rect.y1 = y3 < y1 + 1 ? y3 : y1 + 1;
 			res = ctx->plot->rectangle(ctx, &plot_style_fill_selected, &rect);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return false;
 			}
 		}
@@ -1782,7 +1782,7 @@ form_redraw_select_menu(struct form_control *control,
 				      &plot_fstyle_entry,
 				      text_x, y2,
 				      option->text, strlen(option->text));
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return false;
 		}
 
@@ -1794,7 +1794,7 @@ form_redraw_select_menu(struct form_control *control,
 			       x_cp + menu->width - SCROLLBAR_WIDTH,
 			       y_cp,
 			       clip, scale, ctx);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return false;
 	}
 
@@ -1831,7 +1831,7 @@ form_clip_inside_select_menu(struct form_control *control,
 
 
 /* exported interface documented in netsurf/form.h */
-nserror form_select_process_selection(struct form_control *control, int item)
+slateerror form_select_process_selection(struct form_control *control, int item)
 {
 	assert(control != NULL);
 
@@ -1862,10 +1862,10 @@ char *form_control_get_name(struct form_control *control)
 
 
 /* exported interface documented in netsurf/form.h */
-nserror form_control_bounding_rect(struct form_control *control, struct rect *r)
+slateerror form_control_bounding_rect(struct form_control *control, struct rect *r)
 {
 	box_bounds( control->box, r );
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -2043,29 +2043,29 @@ void form_radio_set(struct form_control *radio)
 
 
 /* private interface described in html/form_internal.h */
-nserror
-form_submit(nsurl *page_url,
+slateerror
+form_submit(slateurl *page_url,
 	    struct browser_window *target,
 	    struct form *form,
 	    struct form_control *submit_button)
 {
-	nserror res;
+	slateerror res;
 	char *data = NULL; /* encoded form data */
 	struct fetch_multipart_data *success = NULL; /* gcc is incapable of correctly reasoning about use and generates "maybe used uninitialised" warnings */
-	nsurl *action_url;
-	nsurl *query_url;
+	slateurl *action_url;
+	slateurl *query_url;
 
 	assert(form != NULL);
 
 	/* obtain list of controls from DOM */
 	res = form_dom_to_data(form, submit_button, &success);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
 	/* Decompose action */
-	res = nsurl_create(form->action, &action_url);
-	if (res != NSERROR_OK) {
+	res = slateurl_create(form->action, &action_url);
+	if (res != SLATEERROR_OK) {
 		fetch_multipart_data_destroy(success);
 		return res;
 	}
@@ -2073,10 +2073,10 @@ form_submit(nsurl *page_url,
 	switch (form->method) {
 	case method_GET:
 		res = form_url_encode(form, success, &data);
-		if (res == NSERROR_OK) {
+		if (res == SLATEERROR_OK) {
 			/* Replace query segment */
-			res = nsurl_replace_query(action_url, data, &query_url);
-			if (res == NSERROR_OK) {
+			res = slateurl_replace_query(action_url, data, &query_url);
+			if (res == SLATEERROR_OK) {
 				res = browser_window_navigate(target,
 							      query_url,
 							      page_url,
@@ -2085,7 +2085,7 @@ form_submit(nsurl *page_url,
 							      NULL,
 							      NULL);
 
-				nsurl_unref(query_url);
+				slateurl_unref(query_url);
 			}
 			free(data);
 		}
@@ -2093,7 +2093,7 @@ form_submit(nsurl *page_url,
 
 	case method_POST_URLENC:
 		res = form_url_encode(form, success, &data);
-		if (res == NSERROR_OK) {
+		if (res == SLATEERROR_OK) {
 			res = browser_window_navigate(target,
 						      action_url,
 						      page_url,
@@ -2117,7 +2117,7 @@ form_submit(nsurl *page_url,
 		break;
 	}
 
-	nsurl_unref(action_url);
+	slateurl_unref(action_url);
 	fetch_multipart_data_destroy(success);
 
 	return res;

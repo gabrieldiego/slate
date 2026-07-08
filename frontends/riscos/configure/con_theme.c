@@ -1,7 +1,7 @@
 /*
  * Copyright 2006 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,7 +24,7 @@
 #include <oslib/wimpspriteop.h>
 
 #include "utils/config.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/messages.h"
 
@@ -154,7 +154,7 @@ bool ro_gui_options_theme_initialise(wimp_w w)
 	ro_gui_options_theme_load();
 
 	/* set the current selection */
-	theme_choice = ro_gui_theme_find(nsoption_charp(theme));
+	theme_choice = ro_gui_theme_find(slateoption_charp(theme));
 	if (!theme_choice)
 		theme_choice = ro_gui_theme_find("Aletheia");
 	for (toolbar = toolbars; toolbar; toolbar = toolbar->next)
@@ -205,10 +205,10 @@ bool ro_gui_options_theme_ok(wimp_w w)
 
 	/* set the options */
 	if (theme_new) {
-		nsoption_set_charp(theme, strdup(theme_new->leafname));
+		slateoption_set_charp(theme, strdup(theme_new->leafname));
 		ro_gui_theme_apply(theme_new);
 	} else {
-		nsoption_set_charp(theme, NULL);
+		slateoption_set_charp(theme, NULL);
         }
 	ro_gui_save_options();
 
@@ -269,7 +269,7 @@ void ro_gui_options_theme_load(void)
 				TOOLBAR_FLAGS_DISPLAY, NULL, NULL, NULL);
 		if (toolbar != NULL) {
 			ro_toolbar_add_buttons(toolbar, brower_toolbar_buttons,
-					       nsoption_charp(toolbar_browser));
+					       slateoption_charp(toolbar_browser));
 			ro_toolbar_add_url(toolbar);
 			ro_toolbar_add_throbber(toolbar);
 			ro_toolbar_rebuild(toolbar);

@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,12 +32,12 @@
  * drive letter and a \\ as a separator.
  */
 
-#ifndef NETSURF_UTILS_FILE_H
-#define NETSURF_UTILS_FILE_H
+#ifndef SLATE_UTILS_FILE_H
+#define SLATE_UTILS_FILE_H
 
 #include <stdarg.h>
 
-struct nsurl;
+struct slateurl;
 
 /**
  * /brief function table for file and filename operations.
@@ -62,10 +62,10 @@ struct gui_file_table {
 	 *                     output length on output.
 	 * @param[in] nemb The number of elements.
 	 * @param[in] ap The elements of the path as string pointers.
-	 * @return NSERROR_OK and the complete path is written to str
+	 * @return SLATEERROR_OK and the complete path is written to str
 	 *         or error code on faliure.
 	 */
-	nserror (*mkpath)(char **str, size_t *size, size_t nemb, va_list ap);
+	slateerror (*mkpath)(char **str, size_t *size, size_t nemb, va_list ap);
 
 	/**
 	 * Get the basename of a file.
@@ -78,42 +78,42 @@ struct gui_file_table {
 	 * @param[in,out] size The size of the space available if \a
 	 *                     str not NULL on input and set to the total
 	 *                     output length on output.
-	 * @return NSERROR_OK and the complete path is written to \a str
+	 * @return SLATEERROR_OK and the complete path is written to \a str
 	 *         or error code on faliure.
 	 */
-	nserror (*basename)(const char *path, char **str, size_t *size);
+	slateerror (*basename)(const char *path, char **str, size_t *size);
 
 	/**
-	 * Create a path from a nsurl.
+	 * Create a path from a slateurl.
 	 *
 	 * @param[in] url The url to encode.
 	 * @param[out] path A string containing the result path which
 	 *                  must be freed by the caller.
-	 * @return NSERROR_OK and the path is written to \a path
+	 * @return SLATEERROR_OK and the path is written to \a path
 	 *         or error code on faliure.
 	 */
-	nserror (*nsurl_to_path)(struct nsurl *url, char **path);
+	slateerror (*slateurl_to_path)(struct slateurl *url, char **path);
 
 	/**
-	 * Create a nsurl from a path.
+	 * Create a slateurl from a path.
 	 *
-	 * Perform the necessary operations on a path to generate a nsurl.
+	 * Perform the necessary operations on a path to generate a slateurl.
 	 *
 	 * @param[in] path The path to convert.
-	 * @param[out] url pointer to recive the nsurl, The returned
+	 * @param[out] url pointer to recive the slateurl, The returned
 	 *                 url should be unreferenced by the caller.
-	 * @return NSERROR_OK and the url is placed in \a url or error
+	 * @return SLATEERROR_OK and the url is placed in \a url or error
 	 *         code on faliure.
 	 */
-	nserror (*path_to_nsurl)(const char *path, struct nsurl **url);
+	slateerror (*path_to_slateurl)(const char *path, struct slateurl **url);
 
 	/**
 	 * Ensure that all directory elements needed to store a filename exist.
 	 *
 	 * @param[in] fname The filename to ensure the path to exists.
-	 * @return NSERROR_OK on success or error code on failure.
+	 * @return SLATEERROR_OK on success or error code on failure.
 	 */
-	nserror (*mkdir_all)(const char *fname);
+	slateerror (*mkdir_all)(const char *fname);
 };
 
 /** Default (posix) file operation table. */
@@ -135,42 +135,42 @@ extern struct gui_file_table *default_file_table;
  *                     output length on output.
  * @param[in] nelm The number of elements.
  * @param[in] ... The elements of the path as string pointers.
- * @return NSERROR_OK and the complete path is written to str
+ * @return SLATEERROR_OK and the complete path is written to str
  *         or error code on faliure.
  */
-nserror netsurf_mkpath(char **str, size_t *size, size_t nelm, ...);
+slateerror slate_mkpath(char **str, size_t *size, size_t nelm, ...);
 
 /**
- * Create a path from a nsurl.
+ * Create a path from a slateurl.
  *
  * @param[in] url The url to encode.
  * @param[out] path_out A string containing the result path which  must be
  *                      freed by the caller.
- * @return NSERROR_OK and the path is written to \a path_out or error code on
+ * @return SLATEERROR_OK and the path is written to \a path_out or error code on
  *         faliure.
  */
-nserror netsurf_nsurl_to_path(struct nsurl *url, char **path_out);
+slateerror slate_slateurl_to_path(struct slateurl *url, char **path_out);
 
 /**
- * Create a nsurl from a path.
+ * Create a slateurl from a path.
  *
- * Perform the necessary operations on a path to generate a nsurl.
+ * Perform the necessary operations on a path to generate a slateurl.
  *
  * @param[in] path The path to convert.
- * @param[out] url pointer to recive the nsurl, The returned
+ * @param[out] url pointer to recive the slateurl, The returned
  *                 url should be unreferenced by the caller.
- * @return NSERROR_OK and the url is placed in \a url or error
+ * @return SLATEERROR_OK and the url is placed in \a url or error
  *         code on faliure.
  */
-nserror netsurf_path_to_nsurl(const char *path, struct nsurl **url);
+slateerror slate_path_to_slateurl(const char *path, struct slateurl **url);
 
 /**
  * Ensure that all directory elements needed to store a filename exist.
  *
  * @param fname The filename to ensure the path to exists.
- * @return NSERROR_OK on success or error code on failure.
+ * @return SLATEERROR_OK on success or error code on failure.
  */
-nserror netsurf_mkdir_all(const char *fname);
+slateerror slate_mkdir_all(const char *fname);
 
 /**
  * Recursively remove a directory
@@ -179,8 +179,8 @@ nserror netsurf_mkdir_all(const char *fname);
  * unremoved.
  *
  * @param path The path to recursively remove
- * @return NSERROR_OK on success, or an error code on failure.
+ * @return SLATEERROR_OK on success, or an error code on failure.
  */
-nserror netsurf_recursive_rm(const char *path);
+slateerror slate_recursive_rm(const char *path);
 
 #endif

@@ -1,7 +1,7 @@
 /*
  * Copyright 2020 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,17 +21,17 @@
  * Pave info viewer window interface
  */
 
-#ifndef NETSURF_DESKTOP_PAGE_INFO_H
-#define NETSURF_DESKTOP_PAGE_INFO_H
+#ifndef SLATE_DESKTOP_PAGE_INFO_H
+#define SLATE_DESKTOP_PAGE_INFO_H
 
 #include <stdint.h>
 #include <stdbool.h>
 
 #include "utils/errors.h"
-#include "netsurf/mouse.h"
+#include "slate/mouse.h"
 
 struct rect;
-struct nsurl;
+struct slateurl;
 struct page_info;
 struct core_window;
 struct browser_window;
@@ -40,16 +40,16 @@ struct redraw_context;
 /**
  * Initialise the page_info module.
  *
- * \return NSERROR_OK on success, appropriate error code otherwise.
+ * \return SLATEERROR_OK on success, appropriate error code otherwise.
  */
-nserror page_info_init(void);
+slateerror page_info_init(void);
 
 /**
  * Finalise the page_info module.
  *
- * \return NSERROR_OK on success, appropriate error code otherwise.
+ * \return SLATEERROR_OK on success, appropriate error code otherwise.
  */
-nserror page_info_fini(void);
+slateerror page_info_fini(void);
 
 /**
  * Create a page info corewindow.
@@ -61,9 +61,9 @@ nserror page_info_fini(void);
  * \param[in]  cw_h    Handle for the containing core_window.
  * \param[in]  bw      Browser window to show page info for.
  * \param[out] pi_out  The created page info window handle.
- * \return NSERROR_OK on success, appropriate error code otherwise.
+ * \return SLATEERROR_OK on success, appropriate error code otherwise.
  */
-nserror page_info_create(struct core_window *cw_h,
+slateerror page_info_create(struct core_window *cw_h,
 			 struct browser_window *bw,
 			 struct page_info **pi_out);
 
@@ -72,16 +72,16 @@ nserror page_info_create(struct core_window *cw_h,
  *
  * \param[in] pi  The page info window handle.
  */
-nserror page_info_destroy(struct page_info *pi);
+slateerror page_info_destroy(struct page_info *pi);
 
 /**
  * change the browser window the page information refers to
  *
  * \param[in] pgi The page info window context
  * \param[in] bw The new browser window
- * \return NSERROR_OK on sucess else error code.
+ * \return SLATEERROR_OK on sucess else error code.
  */
-nserror page_info_set(struct page_info *pgi, struct browser_window *bw);
+slateerror page_info_set(struct page_info *pgi, struct browser_window *bw);
 
 /**
  * Redraw the page info window.
@@ -94,9 +94,9 @@ nserror page_info_set(struct page_info *pgi, struct browser_window *bw);
  * \param[in] y     Y coordinate to render page_info at.
  * \param[in] clip  Current clip rectangle.
  * \param[in] ctx   Current redraw context.
- * \return NSERROR_OK on success, appropriate error code otherwise.
+ * \return SLATEERROR_OK on success, appropriate error code otherwise.
  */
-nserror page_info_redraw(
+slateerror page_info_redraw(
 		const struct page_info *pi,
 		int x,
 		int y,
@@ -111,9 +111,9 @@ nserror page_info_redraw(
  * \param[in] x      The current mouse X coordinate
  * \param[in] y      The current mouse Y coordinate
  * \param[out] did_something Set to true if this resulted in some action
- * \return NSERROR_OK on success, appropriate error code otherwise.
+ * \return SLATEERROR_OK on success, appropriate error code otherwise.
  */
-nserror page_info_mouse_action(
+slateerror page_info_mouse_action(
 		struct page_info *pi,
 		enum browser_mouse_state mouse,
 		int x,
@@ -137,9 +137,9 @@ bool page_info_keypress(
  * \param[in]  pi      The page info window handle.
  * \param[out] width   On success, return the page info content width.
  * \param[out] height  On success, return the page info content height.
- * \return NSERROR_OK on success, appropriate error code otherwise.
+ * \return SLATEERROR_OK on success, appropriate error code otherwise.
  */
-nserror page_info_get_size(
+slateerror page_info_get_size(
 		struct page_info *pi,
 		int *width,
 		int *height);

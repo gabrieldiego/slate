@@ -1,7 +1,7 @@
 /*
  * Copyright 2017 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -49,7 +49,7 @@ void ami_menu_free_lab_item(struct ami_menu_data **md, int i);
 
 /* refresh a menu's children */
 void ami_menu_refresh(struct Menu *menu, struct ami_menu_data **md, int menu_item, int max,
-	nserror (*cb)(struct ami_menu_data **md));
+	slateerror (*cb)(struct ami_menu_data **md));
 
 /**
  * Get the selected state of a menu item

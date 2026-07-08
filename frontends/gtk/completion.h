@@ -1,7 +1,7 @@
 /*
  * Copyright 2006 Rob Kendrick <rjek@rjek.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,26 +21,26 @@
  * Interface to url entry completion.
  */
 
-#ifndef _NETSURF_GTK_COMPLETION_H_
-#define _NETSURF_GTK_COMPLETION_H_
+#ifndef _SLATE_GTK_COMPLETION_H_
+#define _SLATE_GTK_COMPLETION_H_
 
-struct nsgtk_scaffolding;
+struct slategtk_scaffolding;
 
 /**
  * initialise completion list store
  */
-void nsgtk_completion_init(void);
+void slategtk_completion_init(void);
 
 /**
  * update completion list store.
  */
-gboolean nsgtk_completion_update(GtkEntry *entry);
+gboolean slategtk_completion_update(GtkEntry *entry);
 
 /**
  * connect signals on entry completion
  */
-nserror
-nsgtk_completion_connect_signals(GtkEntry *entry,
+slateerror
+slategtk_completion_connect_signals(GtkEntry *entry,
 				 struct browser_window *(*get_bw)(void *ctx),
 				 void *get_bw_ctx);
 

@@ -1,7 +1,7 @@
 /*
  * Copyright 2006 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,7 +31,7 @@
 
 #include "utils/log.h"
 #include "utils/utils.h"
-#include "netsurf/content.h"
+#include "slate/content.h"
 #include "content/hlcache.h"
 #include "html/html.h"
 #include "html/box.h"
@@ -149,7 +149,7 @@ void browser_window_handle_scrollbars(struct browser_window *bw)
 			/* create vertical scrollbar */
 			if (scrollbar_create(false, length, c_height, visible,
 					     bw, browser_window_scroll_callback,
-					     &(bw->scroll_y)) != NSERROR_OK) {
+					     &(bw->scroll_y)) != SLATEERROR_OK) {
 				return;
 			}
 		} else {
@@ -167,7 +167,7 @@ void browser_window_handle_scrollbars(struct browser_window *bw)
 			/* create horizontal scrollbar */
 			if (scrollbar_create(true, length, c_width, visible,
 					     bw, browser_window_scroll_callback,
-					     &(bw->scroll_x)) != NSERROR_OK) {
+					     &(bw->scroll_x)) != SLATEERROR_OK) {
 				return;
 			}
 		} else {
@@ -182,16 +182,16 @@ void browser_window_handle_scrollbars(struct browser_window *bw)
 }
 
 /* exported function documented in desktop/frames.h */
-nserror browser_window_invalidate_iframe(struct browser_window *bw)
+slateerror browser_window_invalidate_iframe(struct browser_window *bw)
 {
 	html_redraw_a_box(bw->parent->current_content, bw->box);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported function documented in desktop/frames.h */
-nserror browser_window_create_iframes(struct browser_window *bw)
+slateerror browser_window_create_iframes(struct browser_window *bw)
 {
-	nserror ret = NSERROR_OK;
+	slateerror ret = SLATEERROR_OK;
 	struct browser_window *window;
 	struct content_html_iframe *cur;
 	struct rect rect;
@@ -203,13 +203,13 @@ nserror browser_window_create_iframes(struct browser_window *bw)
 
 	/* only html contents can have iframes */
 	if (content_get_type(bw->current_content) != CONTENT_HTML) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* obtain the iframes for this content */
 	iframe = html_get_iframe(bw->current_content);
 	if (iframe == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* Count iframe list and allocate enough space within the
@@ -220,7 +220,7 @@ nserror browser_window_create_iframes(struct browser_window *bw)
 	}
 	bw->iframes = calloc(iframes, sizeof(*bw));
 	if (!bw->iframes) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 	bw->iframe_count = iframes;
 
@@ -247,7 +247,7 @@ nserror browser_window_create_iframes(struct browser_window *bw)
 				free(bw->iframes) ;
 				bw->iframes = 0;
 				bw->iframe_count = 0;
-				return NSERROR_NOMEM;
+				return SLATEERROR_NOMEM;
 			}
 		}
 
@@ -304,7 +304,7 @@ void browser_window_recalculate_iframes(struct browser_window *bw)
 
 
 /* exported function documented in desktop/frames.h */
-nserror browser_window_destroy_iframes(struct browser_window *bw)
+slateerror browser_window_destroy_iframes(struct browser_window *bw)
 {
 	int i;
 
@@ -320,7 +320,7 @@ nserror browser_window_destroy_iframes(struct browser_window *bw)
 		bw->iframes = NULL;
 		bw->iframe_count = 0;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -566,9 +566,9 @@ static void browser_window_recalculate_frameset_internal(struct browser_window *
  *
  * \param[in,out] bw The browser window to create the frameset for
  * \param[in] frameset The frameset to create
- * \return NSERROR_OK or error code on faliure
+ * \return SLATEERROR_OK or error code on faliure
  */
-static nserror
+static slateerror
 browser_window_create_frameset_internal(struct browser_window *bw,
 					struct content_html_frames *frameset)
 {
@@ -585,7 +585,7 @@ browser_window_create_frameset_internal(struct browser_window *bw,
 
 	bw->children = calloc((frameset->cols * frameset->rows), sizeof(*bw));
 	if (!bw->children) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	bw->cols = frameset->cols;
@@ -620,7 +620,7 @@ browser_window_create_frameset_internal(struct browser_window *bw,
 				if (!window->name) {
 					free(bw->children);
 					bw->children = NULL;
-					return NSERROR_NOMEM;
+					return SLATEERROR_NOMEM;
 				}
 			}
 
@@ -685,22 +685,22 @@ browser_window_create_frameset_internal(struct browser_window *bw,
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in desktop/frames.h */
-nserror browser_window_create_frameset(struct browser_window *bw)
+slateerror browser_window_create_frameset(struct browser_window *bw)
 {
 	struct content_html_frames *frameset;
 
 	if (content_get_type(bw->current_content) != CONTENT_HTML) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	frameset = html_get_frameset(bw->current_content);
 	if (frameset == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	return browser_window_create_frameset_internal(bw, frameset);

@@ -1,7 +1,7 @@
 /*
  * Copyright 2008-2025 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,12 +37,12 @@
 #include <assert.h>
 #include <stdlib.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/utils.h"
 #include "utils/log.h"
-#include "netsurf/css.h"
-#include "netsurf/mouse.h"
-#include "netsurf/window.h"
+#include "slate/css.h"
+#include "slate/mouse.h"
+#include "slate/window.h"
 
 #include "amiga/plotters.h"
 #include "amiga/bitmap.h"
@@ -155,7 +155,7 @@ struct gui_globals *ami_plot_ra_alloc(ULONG width, ULONG height, bool force32bit
 	 * For OS3 AGA, we get no display blitted if we use a friend BitMap,
 	 * however on RTG it seems to be a benefit.
 	 */
-	if(nsoption_bool(friend_bitmap) == true) {
+	if(slateoption_bool(friend_bitmap) == true) {
 		friend = scrn->RastPort.BitMap;
 	} else {
 		/* Force friend BitMaps on for obvious RTG screens under OS3.
@@ -172,10 +172,10 @@ struct gui_globals *ami_plot_ra_alloc(ULONG width, ULONG height, bool force32bit
 #endif
 
 	/* Probably need to fix this next line */
-	if(gg->palette_mapped == true) nsoption_set_bool(font_antialiasing, false);
+	if(gg->palette_mapped == true) slateoption_set_bool(font_antialiasing, false);
 
-	if(!width) width = nsoption_int(redraw_tile_size_x);
-	if(!height) height = nsoption_int(redraw_tile_size_y);
+	if(!width) width = slateoption_int(redraw_tile_size_x);
+	if(!height) height = slateoption_int(redraw_tile_size_y);
 	gg->width = width;
 	gg->height = height;
 
@@ -378,7 +378,7 @@ static void ami_plot_setapen(struct gui_globals *glob, struct RastPort *rp, ULON
 #ifdef __amigaos4__
 	if(glob->palette_mapped == false) {
 		SetRPAttrs(rp, RPTAG_APenColor,
-			ns_color_to_nscss(colr),
+			slate_color_to_slatecss(colr),
 			TAG_DONE);
 	} else
 #endif
@@ -393,7 +393,7 @@ static void ami_plot_setopen(struct gui_globals *glob, struct RastPort *rp, ULON
 #ifdef __amigaos4__
 	if(glob->palette_mapped == false) {
 		SetRPAttrs(rp, RPTAG_OPenColor,
-			ns_color_to_nscss(colr),
+			slate_color_to_slatecss(colr),
 			TAG_DONE);
 	} else
 #endif
@@ -439,7 +439,7 @@ static void ami_arc_gfxlib(struct RastPort *rp, int x, int y, int radius, int an
 
 /**
  */
-static nserror
+static slateerror
 ami_bitmap(struct gui_globals *glob, int x, int y, int width, int height, struct bitmap *bitmap, colour bg)
 {
 	NSLOG(plot, DEEPDEBUG, "[ami_plotter] Entered ami_bitmap()");
@@ -447,19 +447,19 @@ ami_bitmap(struct gui_globals *glob, int x, int y, int width, int height, struct
 	struct BitMap *tbm;
 
 	if (!width || !height) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	if (((x + width) < glob->rect.MinX) ||
 	    ((y + height) < glob->rect.MinY) ||
 	    (x > glob->rect.MaxX) ||
 	    (y > glob->rect.MaxY)) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	tbm = ami_bitmap_get_native(bitmap, width, height, glob->palette_mapped, glob->rp->BitMap, bg);
 	if (!tbm) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	NSLOG(plot, DEEPDEBUG, "[ami_plotter] ami_bitmap() got native bitmap");
@@ -530,7 +530,7 @@ ami_bitmap(struct gui_globals *glob, int x, int y, int width, int height, struct
 		ami_rtg_freebitmap(tbm);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void ami_bezier(struct bez_point *restrict a, struct bez_point *restrict b,
@@ -554,9 +554,9 @@ bool ami_plot_screen_is_palettemapped(void)
  * \param ctx The current redraw context.
  * \param clip The rectangle to limit all subsequent plot
  *              operations within.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ami_clip(const struct redraw_context *ctx, const struct rect *clip)
 {
 	struct gui_globals *glob = (struct gui_globals *)ctx->priv;
@@ -581,7 +581,7 @@ ami_clip(const struct redraw_context *ctx, const struct rect *clip)
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -599,9 +599,9 @@ ami_clip(const struct redraw_context *ctx, const struct rect *clip)
  * \param radius The radius of the arc.
  * \param angle1 The start angle of the arc.
  * \param angle2 The finish angle of the arc.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ami_arc(const struct redraw_context *ctx,
 	const plot_style_t *style,
 	int x, int y, int radius, int angle1, int angle2)
@@ -617,7 +617,7 @@ ami_arc(const struct redraw_context *ctx,
 	ami_plot_setapen(glob, glob->rp, style->fill_colour);
 	ami_arc_gfxlib(glob->rp, x, y, radius, angle1, angle2);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -631,9 +631,9 @@ ami_arc(const struct redraw_context *ctx,
  * \param x x coordinate of circle centre.
  * \param y y coordinate of circle centre.
  * \param radius circle radius.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ami_disc(const struct redraw_context *ctx,
 		const plot_style_t *style,
 		int x, int y, int radius)
@@ -653,7 +653,7 @@ ami_disc(const struct redraw_context *ctx,
 		DrawEllipse(glob->rp,x,y,radius,radius);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -666,9 +666,9 @@ ami_disc(const struct redraw_context *ctx,
  * \param ctx The current redraw context.
  * \param style Style controlling the line plot.
  * \param line A rectangle defining the line to be drawn
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ami_line(const struct redraw_context *ctx,
 		const plot_style_t *style,
 		const struct rect *line)
@@ -703,7 +703,7 @@ ami_line(const struct redraw_context *ctx,
 	glob->rp->PenHeight = 1;
 	glob->rp->LinePtrn = PATT_LINE;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -718,9 +718,9 @@ ami_line(const struct redraw_context *ctx,
  * \param ctx The current redraw context.
  * \param style Style controlling the rectangle plot.
  * \param rect A rectangle defining the line to be drawn
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ami_rectangle(const struct redraw_context *ctx,
 		     const plot_style_t *style,
 		     const struct rect *rect)
@@ -765,7 +765,7 @@ ami_rectangle(const struct redraw_context *ctx,
 		glob->rp->LinePtrn = PATT_LINE;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -781,9 +781,9 @@ ami_rectangle(const struct redraw_context *ctx,
  * \param style Style controlling the polygon plot.
  * \param p verticies of polygon
  * \param n number of verticies.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ami_polygon(const struct redraw_context *ctx,
 		   const plot_style_t *style,
 		   const int *p,
@@ -809,7 +809,7 @@ ami_polygon(const struct redraw_context *ctx,
 		NSLOG(netsurf, INFO, "AreaEnd: error");
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -824,9 +824,9 @@ ami_polygon(const struct redraw_context *ctx,
  * \param p elements of path
  * \param n nunber of elements on path
  * \param transform A transform to apply to the path.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ami_path(const struct redraw_context *ctx,
 		const plot_style_t *pstyle,
 		const float *p,
@@ -841,12 +841,12 @@ ami_path(const struct redraw_context *ctx,
 	struct gui_globals *glob = (struct gui_globals *)ctx->priv;
 
 	if (n == 0) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	if (p[0] != PLOTTER_PATH_MOVE) {
 		NSLOG(netsurf, INFO, "Path does not start with move");
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	if (pstyle->fill_colour != NS_TRANSPARENT) {
@@ -858,7 +858,7 @@ ami_path(const struct redraw_context *ctx,
 		if (pstyle->stroke_colour != NS_TRANSPARENT) {
 			ami_plot_setapen(glob, glob->rp, pstyle->stroke_colour);
 		} else {
-			return NSERROR_OK; /* wholly transparent */
+			return SLATEERROR_OK; /* wholly transparent */
 		}
 	}
 
@@ -929,14 +929,14 @@ ami_path(const struct redraw_context *ctx,
 				AreaEnd(glob->rp);
 				BNDRYOFF(glob->rp);
 			}
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
 	}
 	if (pstyle->fill_colour != NS_TRANSPARENT) {
 		BNDRYOFF(glob->rp);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -962,9 +962,9 @@ ami_path(const struct redraw_context *ctx,
  * \param height The height of area to plot the bitmap into
  * \param bg the background colour to alpha blend into
  * \param flags the flags controlling the type of plot operation
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ami_bitmap_tile(const struct redraw_context *ctx,
 		struct bitmap *bitmap,
 		int x, int y,
@@ -983,7 +983,7 @@ ami_bitmap_tile(const struct redraw_context *ctx,
 	struct gui_globals *glob = (struct gui_globals *)ctx->priv;
 
 	if ((width == 0) || (height == 0)) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	if (!(repeat_x || repeat_y)) {
@@ -994,12 +994,12 @@ ami_bitmap_tile(const struct redraw_context *ctx,
 	if ((amiga_bitmap_get_opaque(bitmap) == false) &&
 	    (bitmap_get_width(bitmap) == 1) &&
 	    (bitmap_get_height(bitmap) == 1)) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	tbm = ami_bitmap_get_native(bitmap, width, height, glob->palette_mapped, glob->rp->BitMap, bg);
 	if (!tbm) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 	
 	struct Screen *scrn = ami_gui_get_screen();
@@ -1106,7 +1106,7 @@ ami_bitmap_tile(const struct redraw_context *ctx,
 		ami_rtg_freebitmap(tbm);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1119,9 +1119,9 @@ ami_bitmap_tile(const struct redraw_context *ctx,
  * \param y y coordinate
  * \param text UTF-8 string to plot
  * \param length length of string, in bytes
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 ami_text(const struct redraw_context *ctx,
 		const struct plot_font_style *fstyle,
 		int x,
@@ -1134,12 +1134,12 @@ ami_text(const struct redraw_context *ctx,
 	struct gui_globals *glob = (struct gui_globals *)ctx->priv;
 
 	if (__builtin_expect(ami_nsfont == NULL, 0)) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 	ami_plot_setapen(glob, glob->rp, fstyle->foreground);
-	ami_nsfont->text(glob->rp, text, length, fstyle, x, y, nsoption_bool(font_antialiasing));
+	ami_nsfont->text(glob->rp, text, length, fstyle, x, y, slateoption_bool(font_antialiasing));
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 

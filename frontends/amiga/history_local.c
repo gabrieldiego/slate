@@ -1,7 +1,7 @@
 /*
  * Copyright 2017-2025 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,12 +37,12 @@
 #include <reaction/reaction_macros.h>
 
 #include "utils/log.h"
-#include "netsurf/keypress.h"
-#include "netsurf/plotters.h"
+#include "slate/keypress.h"
+#include "slate/plotters.h"
 #include "desktop/local_history.h"
 #include "utils/messages.h"
-#include "utils/nsoption.h"
-#include "utils/nsurl.h"
+#include "utils/slateoption.h"
+#include "utils/slateurl.h"
 
 #include "amiga/corewindow.h"
 #include "amiga/gui.h"
@@ -70,17 +70,17 @@ static struct ami_history_local_window *history_local_window = NULL;
 /**
  * destroy a previously created local history view
  */
-nserror
+slateerror
 ami_history_local_destroy(struct ami_history_local_window *history_local_win)
 {
-	nserror res;
+	slateerror res;
 
 	if (history_local_win == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	res = local_history_fini(history_local_win->session);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		ami_gui_set_history_window(history_local_win->gw, NULL);
 		res = ami_corewindow_fini(&history_local_win->core); /* closes the window for us */
 		history_local_window = NULL;
@@ -104,9 +104,9 @@ static void ami_history_local_destroy_cw(struct ami_corewindow *ami_cw)
  * \param mouse_state netsurf mouse state on event
  * \param x location of event
  * \param y location of event
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
+static slateerror
 ami_history_local_mouse(struct ami_corewindow *ami_cw,
 					browser_mouse_state mouse_state,
 					int x, int y)
@@ -115,9 +115,9 @@ ami_history_local_mouse(struct ami_corewindow *ami_cw,
 	/* technically degenerate container of */
 	history_local_win = (struct ami_history_local_window *)ami_cw;
 
-	nsurl *url;
+	slateurl *url;
 
-	if(local_history_get_url(history_local_win->session, x, y, &url) == NSERROR_OK) {
+	if(local_history_get_url(history_local_win->session, x, y, &url) == SLATEERROR_OK) {
 		if (url == NULL) {
 			SetGadgetAttrs(
 				(struct Gadget *)ami_cw->objects[GID_CW_DRAW],
@@ -132,15 +132,15 @@ ami_history_local_mouse(struct ami_corewindow *ami_cw,
 				ami_cw->win,
 				NULL,
 				GA_HintInfo,
-				nsurl_access(url),
+				slateurl_access(url),
 				TAG_DONE);
-			nsurl_unref(url);
+			slateurl_unref(url);
 		}
 	}
 
 	local_history_mouse_action(history_local_win->session, mouse_state, x, y);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -148,9 +148,9 @@ ami_history_local_mouse(struct ami_corewindow *ami_cw,
  *
  * \param ami_cw The Amiga core window structure.
  * \param nskey The netsurf key code
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
+static slateerror
 ami_history_local_key(struct ami_corewindow *ami_cw, uint32_t nskey)
 {
 	struct ami_history_local_window *history_local_win;
@@ -159,9 +159,9 @@ ami_history_local_key(struct ami_corewindow *ami_cw, uint32_t nskey)
 	history_local_win = (struct ami_history_local_window *)ami_cw;
 
 	if (local_history_keypress(history_local_win->session, nskey)) {
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 	}
-	return NSERROR_NOT_IMPLEMENTED;
+	return SLATEERROR_NOT_IMPLEMENTED;
 }
 
 /**
@@ -172,9 +172,9 @@ ami_history_local_key(struct ami_corewindow *ami_cw, uint32_t nskey)
  * \param y the y coordinate to draw
  * \param r The rectangle of the window that needs updating.
  * \param ctx The drawing context
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
+static slateerror
 ami_history_local_draw(struct ami_corewindow *ami_cw, int x, int y, struct rect *r, struct redraw_context *ctx)
 {
 	struct ami_history_local_window *history_local_win;
@@ -185,16 +185,16 @@ ami_history_local_draw(struct ami_corewindow *ami_cw, int x, int y, struct rect 
 	//ctx->plot->clip(ctx, r); //??
 	local_history_redraw(history_local_win->session, x, y, r, ctx);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror
+static slateerror
 ami_history_local_create_window(struct ami_history_local_window *history_local_win)
 {
 	struct ami_corewindow *ami_cw = (struct ami_corewindow *)&history_local_win->core;
 	ULONG refresh_mode = WA_SmartRefresh;
 
-	if(nsoption_bool(window_simple_refresh) == true) {
+	if(slateoption_bool(window_simple_refresh) == true) {
 		refresh_mode = WA_SimpleRefresh;
 	}
 
@@ -243,17 +243,17 @@ ami_history_local_create_window(struct ami_history_local_window *history_local_w
 	EndWindow;
 
 	if(ami_cw->objects[GID_CW_WIN] == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in amiga/history_local.h */
-nserror ami_history_local_present(struct gui_window *gw)
+slateerror ami_history_local_present(struct gui_window *gw)
 {
 	struct ami_history_local_window *ncwin;
-	nserror res;
+	slateerror res;
 	int width, height;
 
 	if(history_local_window != NULL) {
@@ -264,18 +264,18 @@ nserror ami_history_local_present(struct gui_window *gw)
 			return res;
 		}
 
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	ncwin = calloc(1, sizeof(struct ami_history_local_window));
 	if (ncwin == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	ncwin->core.wintitle = ami_utf8_easy((char *)messages_get("History"));
 
 	res = ami_history_local_create_window(ncwin);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "SSL UI builder init failed");
 		ami_utf8_free(ncwin->core.wintitle);
 		free(ncwin);
@@ -292,7 +292,7 @@ nserror ami_history_local_present(struct gui_window *gw)
 	ncwin->core.icon_drop = NULL;
 
 	res = ami_corewindow_init(&ncwin->core);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		ami_utf8_free(ncwin->core.wintitle);
 		DisposeObject(ncwin->core.objects[GID_CW_WIN]);
 		free(ncwin);
@@ -302,7 +302,7 @@ nserror ami_history_local_present(struct gui_window *gw)
 	res = local_history_init((struct core_window *)ncwin,
 				 ami_gui_get_browser_window(gw),
 				 &ncwin->session);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		ami_utf8_free(ncwin->core.wintitle);
 		DisposeObject(ncwin->core.objects[GID_CW_WIN]);
 		free(ncwin);
@@ -324,6 +324,6 @@ nserror ami_history_local_present(struct gui_window *gw)
 
 	local_history_scroll_to_cursor(ncwin->session);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 

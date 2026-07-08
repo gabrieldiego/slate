@@ -2,7 +2,7 @@
  * Copyright 2008 Vincent Sanders <vince@simtec.co.uk>
  *           2012 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,12 +33,12 @@ int schedule_run(void);
  * \param ival interval before the callback should be made in miliseconds.
  * \param callback callback function.
  * \param p user parameter, passed to callback function.
- * \return NSERROR_OK on success or appropriate error code.
+ * \return SLATEERROR_OK on success or appropriate error code.
  *
  * The callback function will be called as soon as possible after \a ival
  * ms have passed.
  */
-nserror atari_schedule(int ival, void (*callback)(void *p), void *p);
+slateerror atari_schedule(int ival, void (*callback)(void *p), void *p);
 
 /**
  * LOG all current scheduled events.

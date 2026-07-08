@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,13 +38,13 @@
 #include <mt_gem.h>
 
 #include "utils/log.h"
-#include "utils/nsurl.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/mouse.h"
-#include "netsurf/plotters.h"
-#include "netsurf/keypress.h"
+#include "utils/slateurl.h"
+#include "slate/browser_window.h"
+#include "slate/mouse.h"
+#include "slate/plotters.h"
+#include "slate/keypress.h"
 
-#include "atari/res/netsurf.rsh"
+#include "atari/res/slate.rsh"
 #include "atari/gemtk/gemtk.h"
 #include "atari/ctxmenu.h"
 #include "atari/gui.h"
@@ -660,7 +660,7 @@ void window_open_search(ROOTWIN *rootwin, bool reformat)
 	obj = toolbar_get_form(rootwin->toolbar);
 
 	if (gw->search == NULL) {
-		gw->search = nsatari_search_session_create(obj, gw);
+		gw->search = slateatari_search_session_create(obj, gw);
 	}
 
 	toolbar_set_visible(rootwin->toolbar, TOOLBAR_AREA_SEARCH, true);
@@ -690,7 +690,7 @@ void window_close_search(ROOTWIN *rootwin)
 	//obj = gemtk_obj_get_tree(TOOLBAR);
 
 	if (gw->search != NULL) {
-		nsatari_search_session_destroy(gw->search);
+		slateatari_search_session_destroy(gw->search);
 		gw->search = NULL;
 	}
 
@@ -1501,16 +1501,16 @@ static void on_file_dropped(ROOTWIN *rootwin, short msg[8])
                                                               mx+sx, my+sy,
                                                               NULL);
                 if(processed == true) {
-                    nserror ret;
+                    slateerror ret;
                     char *utf8_fn;
 
                     ret = utf8_from_local_encoding(buff, 0, &utf8_fn);
-                    if (ret != NSERROR_OK) {
+                    if (ret != SLATEERROR_OK) {
                         free(buff);
                         /* A bad encoding should never happen */
                         NSLOG(netsurf, INFO,
                               "utf8_from_local_encoding failed");
-                        assert(ret != NSERROR_BAD_ENCODING);
+                        assert(ret != SLATEERROR_BAD_ENCODING);
                         /* no memory */
                         goto error;
                     }
@@ -1523,14 +1523,14 @@ static void on_file_dropped(ROOTWIN *rootwin, short msg[8])
                 if(processed == false) {
                     // TODO: use localized string:
                     if(gemtk_msg_box_show(GEMTK_MSG_BOX_CONFIRM, "Open File?") > 0) {
-                        nsurl * ns_url = NULL;
+                        slateurl * ns_url = NULL;
                         char * tmp_url = local_file_to_url(buff);
                         if ((tmp_url  != NULL)
-                            && nsurl_create(tmp_url, &ns_url) == NSERROR_OK) {
+                            && slateurl_create(tmp_url, &ns_url) == SLATEERROR_OK) {
                             browser_window_navigate(gw->browser->bw, ns_url, NULL,
                                 BW_NAVIGATE_HISTORY,
                                 NULL, NULL, NULL);
-                            nsurl_unref(ns_url);
+                            slateurl_unref(ns_url);
                         }
                     }
                 }

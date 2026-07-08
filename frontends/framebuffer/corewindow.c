@@ -1,7 +1,7 @@
 /*
  * Copyright 2017 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,10 +45,10 @@
 #include "utils/utils.h"
 #include "utils/messages.h"
 #include "utils/utf8.h"
-#include "utils/nsoption.h"
-#include "netsurf/keypress.h"
-#include "netsurf/mouse.h"
-#include "netsurf/plot_style.h"
+#include "utils/slateoption.h"
+#include "slate/keypress.h"
+#include "slate/mouse.h"
+#include "slate/plot_style.h"
 
 #include "framebuffer/gui.h"
 #include "framebuffer/fbtk.h"
@@ -123,7 +123,7 @@ static int fb_cw_draw_event(fbtk_widget_t *widget, fbtk_callback_info *cbi)
 /**
  * callback from core to request a redraw
  */
-static nserror
+static slateerror
 fb_cw_invalidate(struct core_window *cw, const struct rect *r)
 {
 /*	struct fb_corewindow *fb_cw = (struct fb_corewindow *)cw;
@@ -132,11 +132,11 @@ fb_cw_invalidate(struct core_window *cw, const struct rect *r)
 				       r->x0, r->y0,
 				       r->x1 - r->x0, r->y1 - r->y0);
 */
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-static nserror
+static slateerror
 fb_cw_update_size(struct core_window *cw, int width, int height)
 {
 /*	struct fb_corewindow *fb_cw = (struct fb_corewindow *)cw;
@@ -144,33 +144,33 @@ fb_cw_update_size(struct core_window *cw, int width, int height)
 	toolkit_widget_set_size_request(FB_WIDGET(fb_cw->drawing_area),
 				    width, height);
 */
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-static nserror
+static slateerror
 fb_cw_set_scroll(struct core_window *cw, int x, int y)
 {
 /*	struct fb_corewindow *fb_cw = (struct fb_corewindow *)cw;
 
 	toolkit_scroll_widget(fb_cw->widget, r);
 */
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-static nserror
+static slateerror
 fb_cw_get_scroll(const struct core_window *cw, int *x, int *y)
 {
 /*	struct fb_corewindow *fb_cw = (struct fb_corewindow *)cw;
 
 	toolkit_scroll_widget(fb_cw->widget, r);
 */
-	return NSERROR_NOT_IMPLEMENTED;
+	return SLATEERROR_NOT_IMPLEMENTED;
 }
 
 
-static nserror
+static slateerror
 fb_cw_get_window_dimensions(const struct core_window *cw,
 		int *width, int *height)
 {
@@ -178,17 +178,17 @@ fb_cw_get_window_dimensions(const struct core_window *cw,
 
 	*width = fbtk_get_width(fb_cw->drawable);
 	*height = fbtk_get_height(fb_cw->drawable);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-static nserror
+static slateerror
 fb_cw_drag_status(struct core_window *cw, core_window_drag_status ds)
 {
 	struct fb_corewindow *fb_cw = (struct fb_corewindow *)cw;
 	fb_cw->drag_status = ds;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -204,11 +204,11 @@ struct core_window_table fb_cw_cb_table = {
 struct core_window_table *framebuffer_core_window_table = &fb_cw_cb_table;
 
 /* exported function documented fb/corewindow.h */
-nserror fb_corewindow_init(fbtk_widget_t *parent, struct fb_corewindow *fb_cw)
+slateerror fb_corewindow_init(fbtk_widget_t *parent, struct fb_corewindow *fb_cw)
 {
 	int furniture_width;
 
-	furniture_width = nsoption_int(fb_furniture_size);
+	furniture_width = slateoption_int(fb_furniture_size);
 
 	/* setup the core window callback table */
 	fb_cw->drag_status = CORE_WINDOW_DRAG_NONE;
@@ -271,11 +271,11 @@ nserror fb_corewindow_init(fbtk_widget_t *parent, struct fb_corewindow *fb_cw)
 			 FB_FRAME_COLOUR);
 
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in fb/corewindow.h */
-nserror fb_corewindow_fini(struct fb_corewindow *fb_cw)
+slateerror fb_corewindow_fini(struct fb_corewindow *fb_cw)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }

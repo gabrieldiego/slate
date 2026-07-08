@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_UTILS_HTTP_PARAMETER_H_
-#define NETSURF_UTILS_HTTP_PARAMETER_H_
+#ifndef SLATE_UTILS_HTTP_PARAMETER_H_
+#define SLATE_UTILS_HTTP_PARAMETER_H_
 
 #include <libwapcaplet/libwapcaplet.h>
 
@@ -31,10 +31,10 @@ typedef struct http_parameter http_parameter;
  * \param list   List to search
  * \param name   Name of item to search for
  * \param value  Pointer to location to receive value
- * \return NSERROR_OK on success,
- *         NSERROR_NOT_FOUND if requested item does not exist
+ * \return SLATEERROR_OK on success,
+ *         SLATEERROR_NOT_FOUND if requested item does not exist
  */
-nserror http_parameter_list_find_item(const http_parameter *list,
+slateerror http_parameter_list_find_item(const http_parameter *list,
 		lwc_string *name, lwc_string **value);
 
 /**

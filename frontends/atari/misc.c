@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,14 +25,14 @@
 #include <sys/types.h>
 #include <mint/osbind.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/messages.h"
 #include "utils/utils.h"
 #include "utils/log.h"
 #include "utils/file.h"
 #include "utils/dirent.h"
-#include "netsurf/mouse.h"
-#include "netsurf/keypress.h"
+#include "slate/mouse.h"
+#include "slate/keypress.h"
 #include "content/content.h"
 #include "content/hlcache.h"
 #include "desktop/cookie_manager.h"
@@ -53,7 +53,7 @@ struct is_process_running_callback_data {
 };
 
 /* exported function documented in atari/misc/h */
-nserror atari_warn_user(const char *warning, const char *detail)
+slateerror atari_warn_user(const char *warning, const char *detail)
 {
 	size_t len = 1 + ((warning != NULL) ? strlen(messages_get(warning)) :
 			0) + ((detail != 0) ? strlen(detail) : 0);
@@ -63,7 +63,7 @@ nserror atari_warn_user(const char *warning, const char *detail)
 	printf("%s\n", message);
 	gemtk_msg_box_show(GEMTK_MSG_BOX_ALERT, message);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 void die(const char *error)

@@ -1,1 +1,1 @@
-nserror javascript_init(void);
+slateerror javascript_init(void);

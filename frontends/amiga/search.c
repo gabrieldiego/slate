@@ -3,7 +3,7 @@
  * Copyright 2005 Adrian Lees <adrianl@users.sourceforge.net>
  * Copyright 2008 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -49,11 +49,11 @@
 #include "utils/messages.h"
 #include "utils/utils.h"
 #include "content/content.h"
-#include "netsurf/browser_window.h"
+#include "slate/browser_window.h"
 #include "desktop/search.h"
-#include "netsurf/mouse.h"
-#include "netsurf/window.h"
-#include "netsurf/search.h"
+#include "slate/mouse.h"
+#include "slate/window.h"
+#include "slate/search.h"
 
 #include "amiga/libs.h"
 #include "amiga/gui.h"

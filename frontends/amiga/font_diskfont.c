@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 - 2025 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,7 +29,7 @@
 
 #include "utils/log.h"
 #include "utils/utf8.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 
 #include "amiga/font.h"
 #include "amiga/font_diskfont.h"
@@ -59,19 +59,19 @@ static struct TextFont *ami_font_bm_open(struct RastPort *rp, const plot_font_st
 	switch(fstyle->family)
 	{
 		case PLOT_FONT_FAMILY_SANS_SERIF:
-			fontname = nsoption_charp(font_sans);
+			fontname = slateoption_charp(font_sans);
 		break;
 		case PLOT_FONT_FAMILY_SERIF:
-			fontname = nsoption_charp(font_serif);
+			fontname = slateoption_charp(font_serif);
 		break;
 		case PLOT_FONT_FAMILY_MONOSPACE:
-			fontname = nsoption_charp(font_mono);
+			fontname = slateoption_charp(font_mono);
 		break;
 		case PLOT_FONT_FAMILY_CURSIVE:
-			fontname = nsoption_charp(font_cursive);
+			fontname = slateoption_charp(font_cursive);
 		break;
 		case PLOT_FONT_FAMILY_FANTASY:
-			fontname = nsoption_charp(font_fantasy);
+			fontname = slateoption_charp(font_fantasy);
 		break;
 		default:
 			return NULL;
@@ -105,7 +105,7 @@ static struct TextFont *ami_font_bm_open(struct RastPort *rp, const plot_font_st
 
 	snprintf(font, MAX_FONT_NAME_SIZE, "%s.font", fontname);
 	tattr.ta_Name = font;
-	ULONG fsize = fstyle->size * nsoption_int(screen_ydpi) / 72;
+	ULONG fsize = fstyle->size * slateoption_int(screen_ydpi) / 72;
 	tattr.ta_YSize = fsize / PLOT_STYLE_SCALE;
 	NSLOG(netsurf, INFO, "font: %s/%d", tattr.ta_Name, tattr.ta_YSize);
 
@@ -141,7 +141,7 @@ static size_t ami_font_bm_convert_local_to_utf8_offset(const char *utf8string, s
 }
 
 
-static nserror amiga_bm_nsfont_width(const plot_font_style_t *fstyle,
+static slateerror amiga_bm_nsfont_width(const plot_font_style_t *fstyle,
 		const char *string, size_t length,
 		int *width)
 {
@@ -150,16 +150,16 @@ static nserror amiga_bm_nsfont_width(const plot_font_style_t *fstyle,
 	*width = length;
 
 	struct TextFont *bmfont = ami_font_bm_open(&temp_rp, fstyle);
-	if(bmfont == NULL) return NSERROR_INVALID;
+	if(bmfont == NULL) return SLATEERROR_INVALID;
 
-	if(utf8_to_local_encoding(string, length, &localtext) != NSERROR_OK) {
-		return NSERROR_INVALID;
+	if(utf8_to_local_encoding(string, length, &localtext) != SLATEERROR_OK) {
+		return SLATEERROR_INVALID;
 	}
 
 	*width = TextLength(&temp_rp, localtext, (UWORD)strlen(localtext));
 	free(localtext);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -174,7 +174,7 @@ static nserror amiga_bm_nsfont_width(const plot_font_style_t *fstyle,
  * \return  true on success, false on error and error reported
  */
 
-static nserror amiga_bm_nsfont_position_in_string(const plot_font_style_t *fstyle,
+static slateerror amiga_bm_nsfont_position_in_string(const plot_font_style_t *fstyle,
 		const char *string, size_t length,
 		int x, size_t *char_offset, int *actual_x)
 {
@@ -184,10 +184,10 @@ static nserror amiga_bm_nsfont_position_in_string(const plot_font_style_t *fstyl
 	UWORD co = 0;
 
 	bmfont = ami_font_bm_open(&temp_rp, fstyle);
-	if(bmfont == NULL) return NSERROR_INVALID;
+	if(bmfont == NULL) return SLATEERROR_INVALID;
 
-	if(utf8_to_local_encoding(string, length, &localtext) != NSERROR_OK) {
-		return NSERROR_INVALID;
+	if(utf8_to_local_encoding(string, length, &localtext) != SLATEERROR_OK) {
+		return SLATEERROR_INVALID;
 	}
 
 	co = TextFit(&temp_rp, localtext, (UWORD)strlen(localtext),
@@ -197,7 +197,7 @@ static nserror amiga_bm_nsfont_position_in_string(const plot_font_style_t *fstyl
 
 	free(localtext);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -224,7 +224,7 @@ static nserror amiga_bm_nsfont_position_in_string(const plot_font_style_t *fstyl
  * Returning char_offset == length means no split possible
  */
 
-static nserror amiga_bm_nsfont_split(const plot_font_style_t *fstyle,
+static slateerror amiga_bm_nsfont_split(const plot_font_style_t *fstyle,
 		const char *string, size_t length,
 		int x, size_t *char_offset, int *actual_x)
 {
@@ -234,10 +234,10 @@ static nserror amiga_bm_nsfont_split(const plot_font_style_t *fstyle,
 	char *localtext;
 
 	struct TextFont *bmfont = ami_font_bm_open(&temp_rp, fstyle);
-	if(bmfont == NULL) return NSERROR_INVALID;
+	if(bmfont == NULL) return SLATEERROR_INVALID;
 
-	if(utf8_to_local_encoding(string, length, &localtext) != NSERROR_OK) {
-		return NSERROR_INVALID;
+	if(utf8_to_local_encoding(string, length, &localtext) != SLATEERROR_OK) {
+		return SLATEERROR_INVALID;
 	}
 
 	offset = TextFit(&temp_rp, localtext, (UWORD)strlen(localtext),
@@ -271,7 +271,7 @@ static nserror amiga_bm_nsfont_split(const plot_font_style_t *fstyle,
 
 	free(localtext);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static ULONG amiga_bm_nsfont_text(struct RastPort *rp, const char *string, ULONG length,
@@ -284,7 +284,7 @@ static ULONG amiga_bm_nsfont_text(struct RastPort *rp, const char *string, ULONG
 	struct TextFont *bmfont = ami_font_bm_open(rp, fstyle);
 	char *localtext = NULL;
 	if(bmfont == NULL) return 0;
-	if(utf8_to_local_encoding(string, length, &localtext) == NSERROR_OK) {
+	if(utf8_to_local_encoding(string, length, &localtext) == SLATEERROR_OK) {
 		Move(rp, dx, dy);
 		Text(rp, localtext, (UWORD)strlen(localtext));
 		free(localtext);

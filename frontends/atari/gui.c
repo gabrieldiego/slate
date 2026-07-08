@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,18 +29,18 @@
 #include "utils/log.h"
 #include "utils/messages.h"
 #include "utils/corestrings.h"
-#include "utils/nsoption.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/layout.h"
-#include "netsurf/window.h"
-#include "netsurf/clipboard.h"
-#include "netsurf/fetch.h"
-#include "netsurf/misc.h"
-#include "netsurf/netsurf.h"
-#include "netsurf/content.h"
-#include "netsurf/cookie_db.h"
-#include "netsurf/url_db.h"
-#include "netsurf/plotters.h"
+#include "utils/slateoption.h"
+#include "slate/browser_window.h"
+#include "slate/layout.h"
+#include "slate/window.h"
+#include "slate/clipboard.h"
+#include "slate/fetch.h"
+#include "slate/misc.h"
+#include "slate/slate.h"
+#include "slate/content.h"
+#include "slate/cookie_db.h"
+#include "slate/url_db.h"
+#include "slate/plotters.h"
 #include "content/backing_store.h"
 
 #include "atari/gemtk/gemtk.h"
@@ -55,7 +55,7 @@
 #include "atari/cookies.h"
 #include "atari/history.h"
 #include "atari/encoding.h"
-#include "atari/res/netsurf.rsh"
+#include "atari/res/slate.rsh"
 #include "atari/plot/plot.h"
 #include "atari/clipboard.h"
 #include "atari/osspec.h"
@@ -106,7 +106,7 @@ EVMULT_OUT aes_event_out;
 short aes_msg_out[8];
 
 bool gui_window_get_scroll(struct gui_window *w, int *sx, int *sy);
-static nserror gui_window_set_url(struct gui_window *w, nsurl *url);
+static slateerror gui_window_set_url(struct gui_window *w, slateurl *url);
 
 /**
  * Core atari event processing.
@@ -120,7 +120,7 @@ static void atari_poll(void)
     aes_event_in.emi_tlow = schedule_run();
 
     if(rendering){
-	aes_event_in.emi_tlow = nsoption_int(atari_gui_poll_timeout);
+	aes_event_in.emi_tlow = slateoption_int(atari_gui_poll_timeout);
     }
 
     if(aes_event_in.emi_tlow < 0) {
@@ -210,7 +210,7 @@ gui_window_create(struct browser_window *bw,
 	    option_window_x, option_window_y,
 	    option_window_width, option_window_height
 	};
-	gui_window_set_url(gw, corestring_nsurl_about_blank);
+	gui_window_set_url(gw, corestring_slateurl_about_blank);
 	gui_window_set_pointer(gw, BROWSER_POINTER_DEFAULT);
 	gui_set_input_gui_window(gw);
 	window_open(gw->root, gw, pos);
@@ -260,7 +260,7 @@ void gui_window_destroy(struct gui_window *gw)
 	gui_set_input_gui_window(NULL);
     }
 
-    nsatari_search_session_destroy(gw->search);
+    slateatari_search_session_destroy(gw->search);
     free(gw->browser);
     free(gw->status);
     free(gw->title);
@@ -299,10 +299,10 @@ void gui_window_destroy(struct gui_window *gw)
  * \param gw The gui window to measure content area of.
  * \param width receives width of window
  * \param height receives height of window
- * \return NSERROR_OK on sucess and width and height updated
+ * \return SLATEERROR_OK on sucess and width and height updated
  *          else error code.
  */
-static nserror
+static slateerror
 gui_window_get_dimensions(struct gui_window *gw, int *width, int *height)
 {
     GRECT rect;
@@ -310,7 +310,7 @@ gui_window_get_dimensions(struct gui_window *gw, int *width, int *height)
     *width = rect.g_w;
     *height = rect.g_h;
 
-    return NSERROR_OK;
+    return SLATEERROR_OK;
 }
 
 /**
@@ -329,7 +329,7 @@ static void gui_window_set_title(struct gui_window *gw, const char *title)
 	int l;
 	char * conv;
 	l = strlen(title)+1;
-	if (utf8_to_local_encoding(title, l-1, &conv) == NSERROR_OK ) {
+	if (utf8_to_local_encoding(title, l-1, &conv) == SLATEERROR_OK ) {
 	    l = MIN((uint32_t)atari_sysinfo.aes_max_win_title_len, strlen(conv));
 	    if(gw->title == NULL)
 		gw->title = malloc(l);
@@ -380,16 +380,16 @@ void atari_window_set_status(struct gui_window *w, const char *text)
  *
  * \param gw gui_window
  * \param rect area to redraw or NULL for the entire window area
- * \return NSERROR_OK on success or appropriate error code
+ * \return SLATEERROR_OK on success or appropriate error code
  */
-static nserror
+static slateerror
 atari_window_invalidate_area(struct gui_window *gw,
 			     const struct rect *rect)
 {
     GRECT area;
 
     if (gw == NULL) {
-	return NSERROR_BAD_PARAMETER;
+	return SLATEERROR_BAD_PARAMETER;
     }
 
     window_get_grect(gw->root, BROWSER_AREA_CONTENT, &area);
@@ -408,7 +408,7 @@ atari_window_invalidate_area(struct gui_window *gw,
     //dbg_grect("update box", &area);
     window_schedule_redraw_grect(gw->root, &area);
 
-    return NSERROR_OK;
+    return SLATEERROR_OK;
 }
 
 bool gui_window_get_scroll(struct gui_window *w, int *sx, int *sy)
@@ -430,22 +430,22 @@ bool gui_window_get_scroll(struct gui_window *w, int *sx, int *sy)
  *
  * \param gw gui window to scroll
  * \param rect The rectangle to ensure is shown.
- * \return NSERROR_OK on success or apropriate error code.
+ * \return SLATEERROR_OK on success or apropriate error code.
  */
-static nserror
+static slateerror
 gui_window_set_scroll(struct gui_window *gw, const struct rect *rect)
 {
     if ((gw == NULL) ||
 	(gw->browser->bw == NULL) ||
 	(!browser_window_has_content(gw->browser->bw))) {
-	return NSERROR_BAD_PARAMETER;
+	return SLATEERROR_BAD_PARAMETER;
     }
 
     NSLOG(netsurf, INFO, "scroll (gui_window: %p) %d, %d\n", gw, rect->x0,
           rect->y0);
     window_scroll_by(gw->root, rect->x0, rect->y0);
 
-    return NSERROR_OK;
+    return SLATEERROR_OK;
 }
 
 /**
@@ -556,27 +556,27 @@ void gui_window_set_pointer(struct gui_window *gw, gui_pointer_shape shape)
 }
 
 
-static nserror gui_window_set_url(struct gui_window *w, nsurl *url)
+static slateerror gui_window_set_url(struct gui_window *w, slateurl *url)
 {
     int l;
 
     if (w == NULL)
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 
-    l = strlen(nsurl_access(url))+1;
+    l = strlen(slateurl_access(url))+1;
 
     if (w->url == NULL) {
 	w->url = malloc(l);
     } else {
 	w->url = realloc(w->url, l);
     }
-    strncpy(w->url, nsurl_access(url), l);
+    strncpy(w->url, slateurl_access(url), l);
     w->url[l] = 0;
     if(input_window == w->root->active_gui_window) {
-        toolbar_set_url(w->root->toolbar, nsurl_access(url));
+        toolbar_set_url(w->root->toolbar, slateurl_access(url));
     }
 
-    return NSERROR_OK;
+    return SLATEERROR_OK;
 }
 
 char * gui_window_get_url(struct gui_window *gw)
@@ -720,13 +720,13 @@ static void gui_get_clipboard(char **buffer, size_t *length)
 
 	clip_len = strlen(clip);
 	if (clip_len > 0) {
-	    nserror ret;
+	    slateerror ret;
 	    ret = utf8_to_local_encoding(clip, clip_len, &utf8);
-	    if (ret == NSERROR_OK && utf8 != NULL) {
+	    if (ret == SLATEERROR_OK && utf8 != NULL) {
 		*buffer = utf8;
 		*length = strlen(utf8);
 	    } else {
-		assert(ret == NSERROR_OK && utf8 != NULL);
+		assert(ret == SLATEERROR_OK && utf8 != NULL);
 	    }
 	}
 
@@ -743,20 +743,20 @@ static void gui_get_clipboard(char **buffer, size_t *length)
  * \param  n_styles  Number of text run styles in array
  */
 static void gui_set_clipboard(const char *buffer, size_t length,
-			      nsclipboard_styles styles[], int n_styles)
+			      slateclipboard_styles styles[], int n_styles)
 {
     if (length > 0 && buffer != NULL) {
 
 	// convert utf8 input to atari encoding:
 
-	nserror ret;
+	slateerror ret;
 	char *clip = NULL;
 
 	ret = utf8_to_local_encoding(buffer,length, &clip);
-	if (ret == NSERROR_OK) {
+	if (ret == SLATEERROR_OK) {
 	    scrap_txt_write(clip);
 	} else {
-	    assert(ret == NSERROR_OK);
+	    assert(ret == SLATEERROR_OK);
 	}
 	free(clip);
     }
@@ -797,8 +797,8 @@ static void gui_quit(void)
     toolbar_exit();
 
     /* save persistent informations: */
-    urldb_save_cookies(nsoption_charp(cookie_file));
-    urldb_save(nsoption_charp(url_file));
+    urldb_save_cookies(slateoption_charp(cookie_file));
+    urldb_save(slateoption_charp(url_file));
 
     deskmenu_destroy();
     gemtk_wm_exit();
@@ -821,12 +821,12 @@ process_cmdline(int argc, char** argv)
 
     NSLOG(netsurf, INFO, "argc %d, argv %p", argc, argv);
 
-    if ((nsoption_int(window_width) != 0) && (nsoption_int(window_height) != 0)) {
+    if ((slateoption_int(window_width) != 0) && (slateoption_int(window_height) != 0)) {
 
-	option_window_width = nsoption_int(window_width);
-	option_window_height = nsoption_int(window_height);
-	option_window_x = nsoption_int(window_x);
-	option_window_y = nsoption_int(window_y);
+	option_window_width = slateoption_int(window_width);
+	option_window_height = slateoption_int(window_height);
+	option_window_x = slateoption_int(window_x);
+	option_window_y = slateoption_int(window_y);
 
 	if (option_window_width <= desk_area.g_w
 	    && option_window_height < desk_area.g_h) {
@@ -849,10 +849,10 @@ process_cmdline(int argc, char** argv)
 	}
     }
 
-    if (nsoption_charp(homepage_url) != NULL)
-	option_homepage_url = nsoption_charp(homepage_url);
+    if (slateoption_charp(homepage_url) != NULL)
+	option_homepage_url = slateoption_charp(homepage_url);
     else
-	option_homepage_url = NETSURF_HOMEPAGE;
+	option_homepage_url = SLATE_HOMEPAGE;
 
     while((opt = getopt(argc, argv, "w:h:")) != -1) {
 	switch (opt) {
@@ -889,14 +889,14 @@ static inline void create_cursor(int flags, short mode, void * form,
     }
 }
 
-static nsurl *gui_get_resource_url(const char *path)
+static slateurl *gui_get_resource_url(const char *path)
 {
     char buf[PATH_MAX];
-    nsurl *url = NULL;
+    slateurl *url = NULL;
 
     atari_find_resource((char*)&buf, path, path);
 
-    netsurf_path_to_nsurl(buf, &url);
+    slate_path_to_slateurl(buf, &url);
 
     return url;
 }
@@ -907,15 +907,15 @@ static nsurl *gui_get_resource_url(const char *path)
  * @param defaults The option table to update.
  * @return error status.
  */
-static nserror set_defaults(struct nsoption_s *defaults)
+static slateerror set_defaults(struct slateoption_s *defaults)
 {
     /* Set defaults for absent option strings */
-    nsoption_setnull_charp(cookie_file, strdup("cookies"));
-    if (nsoption_charp(cookie_file) == NULL) {
+    slateoption_setnull_charp(cookie_file, strdup("cookies"));
+    if (slateoption_charp(cookie_file) == NULL) {
 	NSLOG(netsurf, INFO, "Failed initialising string options");
-	return NSERROR_BAD_PARAMETER;
+	return SLATEERROR_BAD_PARAMETER;
     }
-    return NSERROR_OK;
+    return SLATEERROR_OK;
 }
 
 static char *theapp = (char*)"NetSurf";
@@ -928,7 +928,7 @@ static void gui_init(int argc, char** argv)
     char buf[PATH_MAX];
     OBJECT * cursors;
 
-    atari_find_resource(buf, "netsurf.rsc", "./res/netsurf.rsc");
+    atari_find_resource(buf, "slate.rsc", "./res/slate.rsc");
     NSLOG(netsurf, INFO, "Using RSC file: %s ", (char *)&buf);
     if (rsrc_load(buf)==0) {
 
@@ -966,17 +966,17 @@ static void gui_init(int argc, char** argv)
 		  cursors, &gem_cursors.help);
 
     NSLOG(netsurf, INFO, "Enabling core select menu");
-    nsoption_set_bool(core_select_menu, true);
+    slateoption_set_bool(core_select_menu, true);
 
-    NSLOG(netsurf, INFO, "Loading url.db from: %s", nsoption_charp(url_file));
-    if( strlen(nsoption_charp(url_file)) ) {
-	urldb_load(nsoption_charp(url_file));
+    NSLOG(netsurf, INFO, "Loading url.db from: %s", slateoption_charp(url_file));
+    if( strlen(slateoption_charp(url_file)) ) {
+	urldb_load(slateoption_charp(url_file));
     }
 
     NSLOG(netsurf, INFO, "Loading cookies from: %s",
-          nsoption_charp(cookie_file));
-    if( strlen(nsoption_charp(cookie_file)) ) {
-	urldb_load_cookies(nsoption_charp(cookie_file));
+          slateoption_charp(cookie_file));
+    if( strlen(slateoption_charp(cookie_file)) ) {
+	urldb_load_cookies(slateoption_charp(cookie_file));
     }
 
     if (process_cmdline(argc,argv) != true)
@@ -991,7 +991,7 @@ static void gui_init(int argc, char** argv)
 	    .background_images = true,
 	    .plot = &atari_plotters
     };
-    plot_init(&ctx, nsoption_charp(atari_font_driver));
+    plot_init(&ctx, slateoption_charp(atari_font_driver));
 
     aes_event_in.emi_m1leave = MO_LEAVE;
     aes_event_in.emi_m1.g_w = 1;
@@ -1020,9 +1020,9 @@ static void gui_init(int argc, char** argv)
  *
  * \param gw The window receiving the event.
  * \param event The event code.
- * \return NSERROR_OK when processed ok
+ * \return SLATEERROR_OK when processed ok
  */
-static nserror
+static slateerror
 gui_window_event(struct gui_window *gw, enum gui_window_event event)
 {
 	switch (event) {
@@ -1049,7 +1049,7 @@ gui_window_event(struct gui_window *gw, enum gui_window_event event)
 	default:
 		break;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1102,10 +1102,10 @@ int main(int argc, char** argv)
     const char *addr;
     char * file_url = NULL;
     struct stat stat_buf;
-    nsurl *url;
-    nserror ret;
+    slateurl *url;
+    slateerror ret;
 
-    struct netsurf_table atari_table = {
+    struct slate_table atari_table = {
 	.misc = &atari_misc_table,
 	.window = &atari_window_table,
 	.corewindow = atari_core_window_table,
@@ -1120,8 +1120,8 @@ int main(int argc, char** argv)
 	.layout = atari_layout_table
     };
 
-    ret = netsurf_register(&atari_table);
-    if (ret != NSERROR_OK) {
+    ret = slate_register(&atari_table);
+    if (ret != SLATEERROR_OK) {
 	die("NetSurf operation table failed registration");
     }
 
@@ -1149,19 +1149,19 @@ int main(int argc, char** argv)
     nslog_init(NULL, &argc, argv);
 
     /* user options setup */
-    ret = nsoption_init(set_defaults, &nsoptions, &nsoptions_default);
-    if (ret != NSERROR_OK) {
+    ret = slateoption_init(set_defaults, &slateoptions, &slateoptions_default);
+    if (ret != SLATEERROR_OK) {
 	die("Options failed to initialise");
     }
-    nsoption_read(options, NULL);
-    nsoption_commandline(&argc, argv, NULL);
+    slateoption_read(options, NULL);
+    slateoption_commandline(&argc, argv, NULL);
 
     ret = messages_add_from_file(messages);
 
     /* common initialisation */
     NSLOG(netsurf, INFO, "Initialising core...");
-    ret = netsurf_init(store);
-    if (ret != NSERROR_OK) {
+    ret = slate_init(store);
+    if (ret != SLATEERROR_OK) {
 	die("NetSurf failed to initialise");
     }
 
@@ -1180,16 +1180,16 @@ int main(int argc, char** argv)
     }
 
     /* create an initial browser window */
-    ret = nsurl_create(addr, &url);
-    if (ret == NSERROR_OK) {
+    ret = slateurl_create(addr, &url);
+    if (ret == SLATEERROR_OK) {
 	ret = browser_window_create(BW_CREATE_HISTORY,
 				    url,
 				    NULL,
 				    NULL,
 				    NULL);
-	nsurl_unref(url);
+	slateurl_unref(url);
     }
-    if (ret != NSERROR_OK) {
+    if (ret != SLATEERROR_OK) {
 	atari_warn_user(messages_get_errorcode(ret), 0);
     } else {
 	NSLOG(netsurf, INFO, "Entering Atari event mainloop...");
@@ -1198,7 +1198,7 @@ int main(int argc, char** argv)
 	}
     }
 
-    netsurf_exit();
+    slate_exit();
 
     free(file_url);
 

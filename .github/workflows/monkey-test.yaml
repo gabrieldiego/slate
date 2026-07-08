@@ -62,12 +62,12 @@ jobs:
       run: |
           find . -type f -name Makefile | xargs sed -i 's/-Werror//'
 
-    - name: Build NetSurf Monkey
+    - name: Build Slate Jotter
       run: |
           export TARGET_WORKSPACE="$(pwd)/projects"
           source docs/env.sh
-          make -j"$(nproc)" TARGET=monkey
+          make -j"$(nproc)" TARGET=jotter
 
-    - name: Run Monkey Test
+    - name: Run Jotter Test
       run: |
           LC_ALL=C.UTF-8 test/monkey-see-monkey-do -v -d ${{ matrix.test }}

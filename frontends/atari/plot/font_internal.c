@@ -2,7 +2,7 @@
  * Copyright 2008 Vincent Sanders <vince@simtec.co.uk>
  * Copyright 2011 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,9 +24,9 @@
 
 #include "utils/utf8.h"
 #include "utils/log.h"
-#include "netsurf/mouse.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/plot_style.h"
+#include "slate/mouse.h"
+#include "slate/bitmap.h"
+#include "slate/plot_style.h"
 
 #include "atari/gui.h"
 #include "atari/bitmap.h"
@@ -81,7 +81,7 @@ fb_get_font(const plot_font_style_t *fstyle)
 	}
 }
 
-static nserror utf8_to_font_encoding(const struct fb_font_desc* font,
+static slateerror utf8_to_font_encoding(const struct fb_font_desc* font,
 				       const char *string,
 				       size_t len,
 				       char **result)

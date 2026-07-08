@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,7 +27,7 @@
 #include "utils/http/primitives.h"
 
 /* See content-type.h for documentation */
-nserror http_parse_content_type(const char *header_value,
+slateerror http_parse_content_type(const char *header_value,
 		http_content_type **result)
 {
 	const char *pos = header_value;
@@ -38,21 +38,21 @@ nserror http_parse_content_type(const char *header_value,
 	size_t mime_len;
 	lwc_string *imime;
 	http_content_type *ct;
-	nserror error;
+	slateerror error;
 
 	/* type "/" subtype *( ";" parameter ) */
 
 	http__skip_LWS(&pos);
 
 	error = http__parse_token(&pos, &type);
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 
 	http__skip_LWS(&pos);
 
 	if (*pos != '/') {
 		lwc_string_unref(type);
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	pos++;
@@ -60,7 +60,7 @@ nserror http_parse_content_type(const char *header_value,
 	http__skip_LWS(&pos);
 
 	error = http__parse_token(&pos, &subtype);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		lwc_string_unref(type);
 		return error;
 	}
@@ -70,7 +70,7 @@ nserror http_parse_content_type(const char *header_value,
 	if (*pos == ';') {
 		error = http__item_list_parse(&pos,
 				http__parse_parameter, NULL, &params);
-		if (error != NSERROR_OK && error != NSERROR_NOT_FOUND) {
+		if (error != SLATEERROR_OK && error != SLATEERROR_NOT_FOUND) {
 			lwc_string_unref(subtype);
 			lwc_string_unref(type);
 			return error;
@@ -85,7 +85,7 @@ nserror http_parse_content_type(const char *header_value,
 		http_parameter_list_destroy(params);
 		lwc_string_unref(subtype);
 		lwc_string_unref(type);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	snprintf(mime, mime_len + 1, "%.*s/%.*s",
@@ -98,7 +98,7 @@ nserror http_parse_content_type(const char *header_value,
 	if (lwc_intern_string(mime, mime_len, &imime) != lwc_error_ok) {
 		http_parameter_list_destroy(params);
 		free(mime);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	free(mime);
@@ -107,7 +107,7 @@ nserror http_parse_content_type(const char *header_value,
 	if (ct == NULL) {
 		lwc_string_unref(imime);
 		http_parameter_list_destroy(params);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	ct->media_type = imime;
@@ -115,7 +115,7 @@ nserror http_parse_content_type(const char *header_value,
 
 	*result = ct;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* See content-type.h for documentation */

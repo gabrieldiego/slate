@@ -90,19 +90,19 @@ case ${TARGET} in
 	;;
 
     "haiku")
-	# NetSurf version number haiku needs it for package name
-	NETSURF_VERSION="3.12"
+	# Slate version number haiku needs it for package name
+	SLATE_VERSION="3.12"
 	USE_RSYNC=1
 
 	case ${HOST} in
 	    "i586-pc-haiku")
 	    # 32bit x86 (gcc) abi
-		PKG_SRC="netsurf_x86-${NETSURF_VERSION}-1-x86_gcc2"
+		PKG_SRC="slate_x86-${SLATE_VERSION}-1-x86_gcc2"
 		;;
 
 	    "x86_64-unknown-haiku")
 		# 64bit x86 (gcc) abi
-		PKG_SRC="netsurf-${NETSURF_VERSION}-1-x86_64"
+		PKG_SRC="slate-${SLATE_VERSION}-1-x86_64"
 		;;
 
 	    *)
@@ -250,7 +250,7 @@ case ${TARGET} in
 
 	IDENTIFIER="${HOST}-${IDENTIFIER}"
 	OLD_IDENTIFIER="${HOST}-${OLD_IDENTIFIER}"
-	PKG_SRC=nsgtk2
+	PKG_SRC=slategtk2
 	PKG_SFX=
 	;;
 
@@ -283,7 +283,7 @@ case ${TARGET} in
 
 	IDENTIFIER="${HOST}-${IDENTIFIER}"
 	OLD_IDENTIFIER="${HOST}-${OLD_IDENTIFIER}"
-	PKG_SRC=nsgtk3
+	PKG_SRC=slategtk3
 	PKG_SFX=
 	;;
 
@@ -449,7 +449,7 @@ case ${TARGET} in
 
 	IDENTIFIER="${HOST}-${IDENTIFIER}"
 	OLD_IDENTIFIER="${HOST}-${OLD_IDENTIFIER}"
-	PKG_SRC=nsmonkey
+	PKG_SRC=jotter
 	PKG_SFX=
 	;;
 
@@ -489,7 +489,7 @@ fi
 
 rm -f Makefile.config
 cat > Makefile.config <<EOF
-override NETSURF_LOG_LEVEL := DEBUG
+override SLATE_LOG_LEVEL := DEBUG
 EOF
 
 ########### Additional environment info ########

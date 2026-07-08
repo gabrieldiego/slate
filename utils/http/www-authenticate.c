@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,21 +25,21 @@
 #include "utils/http/www-authenticate.h"
 
 /* See www-authenticate.h for documentation */
-nserror http_parse_www_authenticate(const char *header_value,
+slateerror http_parse_www_authenticate(const char *header_value,
 		http_www_authenticate **result)
 {
 	const char *pos = header_value;
 	http_challenge *first = NULL;
 	http_challenge *list = NULL;
 	http_www_authenticate *wa;
-	nserror error;
+	slateerror error;
 
 	/* 1#challenge */
 
 	http__skip_LWS(&pos);
 
 	error = http__parse_challenge(&pos, &first);
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 
 	http__skip_LWS(&pos);
@@ -47,7 +47,7 @@ nserror http_parse_www_authenticate(const char *header_value,
 	if (*pos == ',') {
 		error = http__item_list_parse(&pos,
 				http__parse_challenge, first, &list);
-		if (error != NSERROR_OK && error != NSERROR_NOT_FOUND)
+		if (error != SLATEERROR_OK && error != SLATEERROR_NOT_FOUND)
 			return error;
 	} else {
 		list = first;
@@ -56,14 +56,14 @@ nserror http_parse_www_authenticate(const char *header_value,
 	wa = malloc(sizeof(*wa));
 	if (wa == NULL) {
 		http_challenge_list_destroy(list);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	wa->challenges = list;
 
 	*result = wa;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* See www-authenticate.h for documentation */

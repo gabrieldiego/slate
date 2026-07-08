@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,9 +30,9 @@
 #include "utils/messages.h"
 #include "utils/ring.h"
 #include "utils/utils.h"
-#include "netsurf/inttypes.h"
-#include "netsurf/misc.h"
-#include "netsurf/content.h"
+#include "slate/inttypes.h"
+#include "slate/misc.h"
+#include "slate/content.h"
 #include "desktop/gui_internal.h"
 
 #include "content/mimesniff.h"
@@ -192,7 +192,7 @@ static void hlcache_content_callback(struct content *c, content_msg msg,
 		const union content_msg_data *data, void *pw)
 {
 	hlcache_handle *handle = pw;
-	nserror error = NSERROR_OK;
+	slateerror error = SLATEERROR_OK;
 	hlcache_event event = {
 		.type = msg,
 	};
@@ -204,7 +204,7 @@ static void hlcache_content_callback(struct content *c, content_msg msg,
 	if (handle->cb != NULL)
 		error = handle->cb(handle, &event, handle->pw);
 
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		NSLOG(netsurf, INFO, "Error in callback: %d", error);
 }
 
@@ -213,8 +213,8 @@ static void hlcache_content_callback(struct content *c, content_msg msg,
  *
  * \param ctx             High-level cache retrieval context
  * \param effective_type  Effective MIME type of content
- * \return NSERROR_OK on success,
- *         NSERROR_NEED_DATA on success where data is needed,
+ * \return SLATEERROR_OK on success,
+ *         SLATEERROR_NEED_DATA on success where data is needed,
  *         appropriate error otherwise
  *
  * \pre handle::state == HLCACHE_HANDLE_NEW
@@ -222,12 +222,12 @@ static void hlcache_content_callback(struct content *c, content_msg msg,
  * \post Low-level handle is either released, or associated with new content
  * \post High-level handle is registered with content
  */
-static nserror hlcache_find_content(hlcache_retrieval_ctx *ctx,
+static slateerror hlcache_find_content(hlcache_retrieval_ctx *ctx,
 		lwc_string *effective_type)
 {
 	hlcache_entry *entry;
 	hlcache_event event;
-	nserror error = NSERROR_OK;
+	slateerror error = SLATEERROR_OK;
 
 	/* Search list of cached contents for a suitable one */
 	for (entry = hlcache->content_list; entry != NULL; entry = entry->next) {
@@ -263,7 +263,7 @@ static nserror hlcache_find_content(hlcache_retrieval_ctx *ctx,
 		/* No existing entry, so need to create one */
 		entry = malloc(sizeof(hlcache_entry));
 		if (entry == NULL)
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 
 		/* Create content using llhandle */
 		entry->content = content_factory_create_content(ctx->llcache,
@@ -271,7 +271,7 @@ static nserror hlcache_find_content(hlcache_retrieval_ctx *ctx,
 				effective_type);
 		if (entry->content == NULL) {
 			free(entry);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 
 		/* Insert into cache */
@@ -282,7 +282,7 @@ static nserror hlcache_find_content(hlcache_retrieval_ctx *ctx,
 		hlcache->content_list = entry;
 
 		/* Signal to caller that we created a content */
-		error = NSERROR_NEED_DATA;
+		error = SLATEERROR_NEED_DATA;
 
 		hlcache->miss_count++;
 	} else {
@@ -294,7 +294,7 @@ static nserror hlcache_find_content(hlcache_retrieval_ctx *ctx,
 	/* Associate handle with content */
 	if (content_add_user(entry->content,
 			hlcache_content_callback, ctx->handle) == false)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	/* Associate cache entry with handle */
 	ctx->handle->entry = entry;
@@ -341,15 +341,15 @@ static nserror hlcache_find_content(hlcache_retrieval_ctx *ctx,
  *
  * \param ctx             Context to migrate
  * \param effective_type  The effective MIME type of the content, or NULL
- * \return NSERROR_OK on success,
- *         NSERROR_NEED_DATA on success where data is needed,
+ * \return SLATEERROR_OK on success,
+ *         SLATEERROR_NEED_DATA on success where data is needed,
  *         appropriate error otherwise
  */
-static nserror hlcache_migrate_ctx(hlcache_retrieval_ctx *ctx,
+static slateerror hlcache_migrate_ctx(hlcache_retrieval_ctx *ctx,
 		lwc_string *effective_type)
 {
 	content_type type = CONTENT_NONE;
-	nserror error = NSERROR_OK;
+	slateerror error = SLATEERROR_OK;
 
 	ctx->migrate_target = true;
 
@@ -358,12 +358,12 @@ static nserror hlcache_migrate_ctx(hlcache_retrieval_ctx *ctx,
 				       ctx->accepted_types,
 				       &type)) {
 		error = hlcache_find_content(ctx, effective_type);
-		if (error != NSERROR_OK && error != NSERROR_NEED_DATA) {
+		if (error != SLATEERROR_OK && error != SLATEERROR_NEED_DATA) {
 			if (ctx->handle->cb != NULL) {
 				hlcache_event hlevent;
 
 				hlevent.type = CONTENT_MSG_ERROR;
-				hlevent.data.errordata.errorcode = NSERROR_UNKNOWN;
+				hlevent.data.errordata.errorcode = SLATEERROR_UNKNOWN;
 				hlevent.data.errordata.errormsg = messages_get("MiscError");
 
 				ctx->handle->cb(ctx->handle, &hlevent,
@@ -389,14 +389,14 @@ static nserror hlcache_migrate_ctx(hlcache_retrieval_ctx *ctx,
 		}
 
 		/* Ensure caller knows we need data */
-		error = NSERROR_NEED_DATA;
+		error = SLATEERROR_NEED_DATA;
 	} else {
 		/* Unacceptable type: report error */
 		if (ctx->handle->cb != NULL) {
 			hlcache_event hlevent;
 
 			hlevent.type = CONTENT_MSG_ERROR;
-			hlevent.data.errordata.errorcode = NSERROR_UNKNOWN;
+			hlevent.data.errordata.errorcode = SLATEERROR_UNKNOWN;
 			hlevent.data.errordata.errormsg = messages_get("UnacceptableType");
 
 			ctx->handle->cb(ctx->handle, &hlevent,
@@ -423,16 +423,16 @@ static nserror hlcache_migrate_ctx(hlcache_retrieval_ctx *ctx,
  * \param handle  Handle for which event is issued
  * \param event	  Event data
  * \param pw	  Pointer to client-specific data
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror
+static slateerror
 hlcache_llcache_callback(llcache_handle *handle,
 			 const llcache_event *event,
 			 void *pw)
 {
 	hlcache_retrieval_ctx *ctx = pw;
 	lwc_string *effective_type = NULL;
-	nserror error;
+	slateerror error;
 
 	assert(ctx->llcache == handle);
 
@@ -453,7 +453,7 @@ hlcache_llcache_callback(llcache_handle *handle,
 				ctx->flags & HLCACHE_RETRIEVE_SNIFF_TYPE,
 				ctx->accepted_types == CONTENT_IMAGE,
 				&effective_type);
-		if (error == NSERROR_OK || error == NSERROR_NOT_FOUND) {
+		if (error == SLATEERROR_OK || error == SLATEERROR_NOT_FOUND) {
 			/* If the sniffer was successful or failed to find
 			 * a Content-Type header when sniffing was
 			 * prohibited, we must migrate the retrieval context. */
@@ -464,8 +464,8 @@ hlcache_llcache_callback(llcache_handle *handle,
 
 		/* No need to report that we need data:
 		 * we'll get some anyway if there is any */
-		if (error == NSERROR_NEED_DATA)
-			error = NSERROR_OK;
+		if (error == SLATEERROR_NEED_DATA)
+			error = SLATEERROR_OK;
 
 		return error;
 
@@ -476,7 +476,7 @@ hlcache_llcache_callback(llcache_handle *handle,
 				ctx->flags & HLCACHE_RETRIEVE_SNIFF_TYPE,
 				ctx->accepted_types == CONTENT_IMAGE,
 				&effective_type);
-		if (error != NSERROR_OK) {
+		if (error != SLATEERROR_OK) {
 			assert(0 && "MIME sniff failed with data");
 		}
 
@@ -492,7 +492,7 @@ hlcache_llcache_callback(llcache_handle *handle,
 		 */
 		error = mimesniff_compute_effective_type(llcache_handle_get_header(handle, "Content-Type"),
 				NULL, 0, false, false, &effective_type);
-		if (error == NSERROR_OK || error == NSERROR_NOT_FOUND) {
+		if (error == SLATEERROR_OK || error == SLATEERROR_NOT_FOUND) {
 			error = hlcache_migrate_ctx(ctx, effective_type);
 
 			lwc_string_unref(effective_type);
@@ -535,7 +535,7 @@ hlcache_llcache_callback(llcache_handle *handle,
 		break;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -544,18 +544,18 @@ hlcache_llcache_callback(llcache_handle *handle,
  ******************************************************************************/
 
 
-nserror
+slateerror
 hlcache_initialise(const struct hlcache_parameters *hlcache_parameters)
 {
-	nserror ret;
+	slateerror ret;
 
 	hlcache = calloc(1, sizeof(struct hlcache_s));
 	if (hlcache == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	ret = llcache_initialise(&hlcache_parameters->llcache);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		free(hlcache);
 		hlcache = NULL;
 		return ret;
@@ -566,7 +566,7 @@ hlcache_initialise(const struct hlcache_parameters *hlcache_parameters)
 	/* Schedule the cache cleanup */
 	guit->misc->schedule(hlcache->params.bg_clean_time, hlcache_clean, NULL);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* See hlcache.h for documentation */
@@ -626,7 +626,7 @@ void hlcache_finalise(void)
 		if (entry->content != NULL) {
 			NSLOG(netsurf, INFO, "	%p : %s (%"PRIu32" users)",
 			      entry,
-			      nsurl_access(hlcache_handle_get_url(&entry_handle)),
+			      slateurl_access(hlcache_handle_get_url(&entry_handle)),
 			      content_count_users(entry->content));
 		} else {
 			NSLOG(netsurf, INFO, "	%p", entry);
@@ -671,10 +671,10 @@ void hlcache_finalise(void)
 }
 
 /* See hlcache.h for documentation */
-nserror
-hlcache_handle_retrieve(nsurl *url,
+slateerror
+hlcache_handle_retrieve(slateurl *url,
 			uint32_t flags,
-			nsurl *referer,
+			slateurl *referer,
 			llcache_post_data *post,
 			hlcache_handle_callback cb, void *pw,
 			hlcache_child_context *child,
@@ -682,19 +682,19 @@ hlcache_handle_retrieve(nsurl *url,
 			hlcache_handle **result)
 {
 	hlcache_retrieval_ctx *ctx;
-	nserror error;
+	slateerror error;
 
 	assert(cb != NULL);
 
 	ctx = calloc(1, sizeof(hlcache_retrieval_ctx));
 	if (ctx == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	ctx->handle = calloc(1, sizeof(hlcache_handle));
 	if (ctx->handle == NULL) {
 		free(ctx);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	if (child != NULL) {
@@ -703,7 +703,7 @@ hlcache_handle_retrieve(nsurl *url,
 			if (ctx->child.charset == NULL) {
 				free(ctx->handle);
 				free(ctx);
-				return NSERROR_NOMEM;
+				return SLATEERROR_NOMEM;
 			}
 		}
 		ctx->child.quirks = child->quirks;
@@ -718,7 +718,7 @@ hlcache_handle_retrieve(nsurl *url,
 	error = llcache_handle_retrieve(url, flags, referer, post,
 			hlcache_llcache_callback, ctx,
 			&ctx->llcache);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		/* error retrieving handle so free context and return error */
 		free((char *) ctx->child.charset);
 		free(ctx->handle);
@@ -733,7 +733,7 @@ hlcache_handle_retrieve(nsurl *url,
 }
 
 /* See hlcache.h for documentation */
-nserror hlcache_handle_release(hlcache_handle *handle)
+slateerror hlcache_handle_release(hlcache_handle *handle)
 {
 	if (handle->entry != NULL) {
 		content_remove_user(handle->entry->content,
@@ -765,7 +765,7 @@ nserror hlcache_handle_release(hlcache_handle *handle)
 
 	free(handle);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* See hlcache.h for documentation */
@@ -779,7 +779,7 @@ struct content *hlcache_handle_get_content(const hlcache_handle *handle)
 }
 
 /* See hlcache.h for documentation */
-nserror hlcache_handle_abort(hlcache_handle *handle)
+slateerror hlcache_handle_abort(hlcache_handle *handle)
 {
 	struct hlcache_entry *entry = handle->entry;
 	struct content *c;
@@ -810,7 +810,7 @@ nserror hlcache_handle_abort(hlcache_handle *handle)
 			}
 		} RING_ITERATE_END(hlcache->retrieval_ctx_ring, ictx);
 
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	c = entry->content;
@@ -820,20 +820,20 @@ nserror hlcache_handle_abort(hlcache_handle *handle)
 		struct content *clone = content_clone(c);
 
 		if (clone == NULL)
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 
 		entry = calloc(1, sizeof(struct hlcache_entry));
 
 		if (entry == NULL) {
 			content_destroy(clone);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 
 		if (content_add_user(clone,
 				hlcache_content_callback, handle) == false) {
 			content_destroy(clone);
 			free(entry);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 
 		content_remove_user(c, hlcache_content_callback, handle);
@@ -853,25 +853,25 @@ nserror hlcache_handle_abort(hlcache_handle *handle)
 }
 
 /* See hlcache.h for documentation */
-nserror hlcache_handle_replace_callback(hlcache_handle *handle,
+slateerror hlcache_handle_replace_callback(hlcache_handle *handle,
 		hlcache_handle_callback cb, void *pw)
 {
 	handle->cb = cb;
 	handle->pw = pw;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-nserror hlcache_handle_clone(hlcache_handle *handle, hlcache_handle **result)
+slateerror hlcache_handle_clone(hlcache_handle *handle, hlcache_handle **result)
 {
 	*result = NULL;
-	return NSERROR_CLONE_FAILED;
+	return SLATEERROR_CLONE_FAILED;
 }
 
 /* See hlcache.h for documentation */
-nsurl *hlcache_handle_get_url(const hlcache_handle *handle)
+slateurl *hlcache_handle_get_url(const hlcache_handle *handle)
 {
-	nsurl *result = NULL;
+	slateurl *result = NULL;
 
 	assert(handle != NULL);
 

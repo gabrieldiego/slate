@@ -33,10 +33,10 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "netsurf/inttypes.h"
+#include "slate/inttypes.h"
 
 #include "utils/errors.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/corestrings.h"
 #include "utils/utils.h"
 #include "utils/ring.h"
@@ -53,7 +53,7 @@
 #include "chart.h"
 #include "choices.h"
 #include "imagecache.h"
-#include "nscolours.h"
+#include "slatecolors.h"
 #include "query.h"
 #include "query_auth.h"
 #include "query_fetcherror.h"
@@ -75,7 +75,7 @@ struct fetch_about_context {
 	bool aborted; /**< Flag indicating fetch has been aborted */
 	bool locked; /**< Flag indicating entry is already entered */
 
-	nsurl *url; /**< The full url the fetch refers to */
+	slateurl *url; /**< The full url the fetch refers to */
 
 	const struct fetch_multipart_data *multipart; /**< post data */
 
@@ -149,7 +149,7 @@ fetch_about_send_header(struct fetch_about_context *ctx, const char *fmt, ...)
 }
 
 /* exported interface documented in about/private.h */
-nserror
+slateerror
 fetch_about_senddata(struct fetch_about_context *ctx, const uint8_t *data, size_t data_len)
 {
 	fetch_msg msg;
@@ -159,14 +159,14 @@ fetch_about_senddata(struct fetch_about_context *ctx, const uint8_t *data, size_
 	msg.data.header_or_data.len = data_len;
 
 	if (fetch_about_send_callback(&msg, ctx)) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in about/private.h */
-nserror
+slateerror
 fetch_about_ssenddataf(struct fetch_about_context *ctx, const char *fmt, ...)
 {
 	char buffer[1024];
@@ -187,15 +187,15 @@ fetch_about_ssenddataf(struct fetch_about_context *ctx, const char *fmt, ...)
 		msg.data.header_or_data.len = slen;
 
 		if (fetch_about_send_callback(&msg, ctx)) {
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
 
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	dbuff = malloc(slen + 1);
 	if (dbuff == NULL) {
-		return NSERROR_NOSPACE;
+		return SLATEERROR_NOSPACE;
 	}
 
 	va_start(ap, fmt);
@@ -210,16 +210,16 @@ fetch_about_ssenddataf(struct fetch_about_context *ctx, const char *fmt, ...)
 
 	if (fetch_about_send_callback(&msg, ctx)) {
 		free(dbuff);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	free(dbuff);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in about/private.h */
-nsurl *fetch_about_get_url(struct fetch_about_context *ctx)
+slateurl *fetch_about_get_url(struct fetch_about_context *ctx)
 {
 	return ctx->url;
 }
@@ -236,7 +236,7 @@ fetch_about_get_multipart(struct fetch_about_context *ctx)
 /* exported interface documented in about/private.h */
 bool fetch_about_srverror(struct fetch_about_context *ctx)
 {
-	nserror res;
+	slateerror res;
 
 	fetch_set_http_code(ctx->fetchh, HTTP_RESPONSE_INTERNAL_SERVER_ERROR);
 
@@ -247,7 +247,7 @@ bool fetch_about_srverror(struct fetch_about_context *ctx)
 	res = fetch_about_ssenddataf(ctx, "%s 500 %s",
 				     messages_get("FetchErrorCode"),
 				     messages_get("HTTP500"));
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return false;
 	}
 
@@ -303,7 +303,7 @@ static bool fetch_about_licence_handler(struct fetch_about_context *ctx)
  */
 static bool fetch_about_logo_handler(struct fetch_about_context *ctx)
 {
-	return fetch_about_redirect(ctx, "resource:netsurf.png");
+	return fetch_about_redirect(ctx, "resource:slate.png");
 }
 
 
@@ -383,10 +383,10 @@ struct about_handlers about_handler_list[] = {
 		true
 	},
 	{
-		"nscolours.css",
-		SLEN("nscolours.css"),
+		"slatecolors.css",
+		SLEN("slatecolors.css"),
 		NULL,
-		fetch_about_nscolours_handler,
+		fetch_about_slatecolors_handler,
 		true
 	},
 	{
@@ -477,7 +477,7 @@ struct about_handlers about_handler_list[] = {
  */
 static bool fetch_about_about_handler(struct fetch_about_context *ctx)
 {
-	nserror res;
+	slateerror res;
 	unsigned int abt_loop = 0;
 
 	/* content is going to return ok */
@@ -496,7 +496,7 @@ static bool fetch_about_about_handler(struct fetch_about_context *ctx)
 			"<body class=\"ns-even-bg ns-even-fg ns-border\">\n"
 			"<h1 class =\"ns-border\">List of NetSurf pages</h1>\n"
 			"<ul>\n");
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_config_handler_aborted;
 	}
 
@@ -510,13 +510,13 @@ static bool fetch_about_about_handler(struct fetch_about_context *ctx)
 			       "<li><a href=\"about:%s\">about:%s</a></li>\n",
 			       about_handler_list[abt_loop].name,
 			       about_handler_list[abt_loop].name);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			goto fetch_about_config_handler_aborted;
 		}
 	}
 
 	res = fetch_about_ssenddataf(ctx, "</ul>\n</body>\n</html>\n");
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_config_handler_aborted;
 	}
 
@@ -531,7 +531,7 @@ fetch_about_config_handler_aborted:
 static bool
 fetch_about_404_handler(struct fetch_about_context *ctx)
 {
-	nserror res;
+	slateerror res;
 	const char *title;
 
 	/* content is going to return 404 */
@@ -555,8 +555,8 @@ fetch_about_404_handler(struct fetch_about_context *ctx)
 		"<p>%s %d %s %s</p>\n"
 		"</body>\n</html>\n",
 		title, title, messages_get("FetchErrorCode"), 404,
-		messages_get("FetchFile"),nsurl_access(ctx->url));
-	if (res != NSERROR_OK) {
+		messages_get("FetchFile"),slateurl_access(ctx->url));
+	if (res != SLATEERROR_OK) {
 		return false;
 	}
 
@@ -601,7 +601,7 @@ static void fetch_about_finalise(lwc_string *scheme)
 }
 
 
-static bool fetch_about_can_fetch(const nsurl *url)
+static bool fetch_about_can_fetch(const slateurl *url)
 {
 	return true;
 }
@@ -617,7 +617,7 @@ static bool fetch_about_can_fetch(const nsurl *url)
  */
 static void *
 fetch_about_setup(struct fetch *fetchh,
-		  nsurl *url,
+		  slateurl *url,
 		  bool only_2xx,
 		  bool downgrade_tls,
 		  const char *post_urlenc,
@@ -633,7 +633,7 @@ fetch_about_setup(struct fetch *fetchh,
 	if (ctx == NULL)
 		return NULL;
 
-	path = nsurl_get_component(url, NSURL_PATH);
+	path = slateurl_get_component(url, SLATEURL_PATH);
 
 	for (handler_loop = 0;
 	     handler_loop < about_handler_list_len;
@@ -649,7 +649,7 @@ fetch_about_setup(struct fetch *fetchh,
 	lwc_string_unref(path);
 
 	ctx->fetchh = fetchh;
-	ctx->url = nsurl_ref(url);
+	ctx->url = slateurl_ref(url);
 	ctx->multipart = post_multipart;
 
 	RING_INSERT(ring, ctx);
@@ -664,7 +664,7 @@ fetch_about_setup(struct fetch *fetchh,
 static void fetch_about_free(void *ctx)
 {
 	struct fetch_about_context *c = ctx;
-	nsurl_unref(c->url);
+	slateurl_unref(c->url);
 	free(ctx);
 }
 
@@ -739,7 +739,7 @@ static void fetch_about_poll(lwc_string *scheme)
 }
 
 
-nserror fetch_about_register(void)
+slateerror fetch_about_register(void)
 {
 	lwc_string *scheme = lwc_string_ref(corestring_lwc_about);
 	const struct fetcher_operation_table fetcher_ops = {

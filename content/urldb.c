@@ -2,7 +2,7 @@
  * Copyright 2006 John M Bell <jmb202@ecs.soton.ac.uk>
  * Copyright 2009 John Tytgat <joty@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -99,17 +99,17 @@
 #endif
 
 #include "utils/inet.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/corestrings.h"
 #include "utils/url.h"
 #include "utils/utils.h"
 #include "utils/bloom.h"
 #include "utils/time.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/ascii.h"
 #include "utils/http.h"
-#include "netsurf/bitmap.h"
+#include "slate/bitmap.h"
 #include "desktop/cookie_manager.h"
 
 #include "content/content.h"
@@ -192,7 +192,7 @@ struct url_internal_data {
  * data entry for url
  */
 struct path_data {
-	nsurl *url;		/**< Full URL */
+	slateurl *url;		/**< Full URL */
 	lwc_string *scheme;	/**< URL scheme for data */
 	unsigned int port;	/**< Port number for data. When 0, it means
 				 * the default port for given scheme, i.e.
@@ -322,9 +322,9 @@ static struct bloom_filter *url_bloom;
  *
  * \param fp File to write to
  * \param val the unix time value to output
- * \return NSERROR_OK on success
+ * \return SLATEERROR_OK on success
  */
-static nserror urldb_write_timet(FILE *fp, time_t val)
+static slateerror urldb_write_timet(FILE *fp, time_t val)
 {
 	int use;
 	char op[32];
@@ -335,7 +335,7 @@ static nserror urldb_write_timet(FILE *fp, time_t val)
 	} else {
 		fprintf(fp, "%.*s\n", use, op);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -521,7 +521,7 @@ static void urldb_save_search_tree(struct search_node *parent, FILE *fp)
 	time_t expiry, hsts_expiry = 0;
 	int hsts_include_subdomains = 0;
 
-	expiry = time(NULL) - ((60 * 60 * 24) * nsoption_int(expire_url));
+	expiry = time(NULL) - ((60 * 60 * 24) * slateoption_int(expire_url));
 
 	if (parent == &empty)
 		return;
@@ -582,7 +582,7 @@ static void urldb_save_search_tree(struct search_node *parent, FILE *fp)
  */
 static bool
 urldb_iterate_entries_path(const struct path_data *parent,
-		bool (*url_callback)(nsurl *url, const struct url_data *data),
+		bool (*url_callback)(slateurl *url, const struct url_data *data),
 		bool (*cookie_callback)(const struct cookie_data *data))
 {
 	const struct path_data *p = parent;
@@ -815,7 +815,7 @@ static int urldb_search_match_prefix(const struct host_part *a, const char *b)
 static bool
 urldb_iterate_partial_host(struct search_node *root,
 		const char *prefix,
-		bool (*callback)(nsurl *url, const struct url_data *data))
+		bool (*callback)(slateurl *url, const struct url_data *data))
 {
 	int c;
 
@@ -905,7 +905,7 @@ urldb_iterate_partial_host(struct search_node *root,
 static bool
 urldb_iterate_partial_path(const struct path_data *parent,
 		const char *prefix,
-		bool (*callback)(nsurl *url, const struct url_data *data))
+		bool (*callback)(slateurl *url, const struct url_data *data))
 {
 	const struct path_data *p = parent->children;
 	const char *slash, *end = prefix + strlen(prefix);
@@ -961,7 +961,7 @@ urldb_iterate_partial_path(const struct path_data *parent,
  */
 static bool
 urldb_iterate_entries_host(struct search_node *parent,
-		bool (*url_callback)(nsurl *url, const struct url_data *data),
+		bool (*url_callback)(slateurl *url, const struct url_data *data),
 		bool (*cookie_callback)(const struct cookie_data *data))
 {
 	if (parent == &empty) {
@@ -1355,7 +1355,7 @@ urldb_match_path(const struct path_data *parent,
  * \param url Absolute URL to find
  * \return Pointer to path data, or NULL if not found
  */
-static struct path_data *urldb_find_url(nsurl *url)
+static struct path_data *urldb_find_url(slateurl *url)
 {
 	const struct host_part *h;
 	struct path_data *p;
@@ -1370,12 +1370,12 @@ static struct path_data *urldb_find_url(nsurl *url)
 	assert(url);
 
 	if (url_bloom != NULL) {
-		if (bloom_search_hash(url_bloom, nsurl_hash(url)) == false) {
+		if (bloom_search_hash(url_bloom, slateurl_hash(url)) == false) {
 			return NULL;
 		}
 	}
 
-	scheme = nsurl_get_component(url, NSURL_SCHEME);
+	scheme = slateurl_get_component(url, SLATEURL_SCHEME);
 	if (scheme == NULL)
 		return NULL;
 
@@ -1385,7 +1385,7 @@ static struct path_data *urldb_find_url(nsurl *url)
 		return NULL;
 	}
 
-	host = nsurl_get_component(url, NSURL_HOST);
+	host = slateurl_get_component(url, SLATEURL_HOST);
 	if (host != NULL) {
 		host_str = lwc_string_data(host);
 		lwc_string_unref(host);
@@ -1407,13 +1407,13 @@ static struct path_data *urldb_find_url(nsurl *url)
 	}
 
 	/* generate plq (path, leaf, query) */
-	if (nsurl_get(url, NSURL_PATH | NSURL_QUERY, &plq, &len) != NSERROR_OK) {
+	if (slateurl_get(url, SLATEURL_PATH | SLATEURL_QUERY, &plq, &len) != SLATEERROR_OK) {
 		lwc_string_unref(scheme);
 		return NULL;
 	}
 
 	/* Get port */
-	port = nsurl_get_component(url, NSURL_PORT);
+	port = slateurl_get_component(url, SLATEURL_PORT);
 	if (port != NULL) {
 		port_int = atoi(lwc_string_data(port));
 		lwc_string_unref(port);
@@ -1772,7 +1772,7 @@ urldb_parse_avpair(struct cookie_internal_data *c,
 	} else if (strcasecmp(n, "Expires") == 0) {
 		char *datenoday;
 		time_t expires;
-		nserror res;
+		slateerror res;
 
 		/* Strip dayname from date (these are hugely variable
 		 * and liable to break the parser.  They also serve no
@@ -1784,7 +1784,7 @@ urldb_parse_avpair(struct cookie_internal_data *c,
 		}
 
 		res = nsc_strntimet(datenoday, strlen(datenoday), &expires);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			/* assume we have an unrepresentable date =>
 			 * force it to the maximum possible value of a
 			 * 32bit time_t (this may break in 2038. We'll
@@ -1835,7 +1835,7 @@ static void urldb_free_cookie(struct cookie_internal_data *c)
  * \return Pointer to cookie structure (on heap, caller frees) or NULL
  */
 static struct cookie_internal_data *
-urldb_parse_cookie(nsurl *url, const char **cookie)
+urldb_parse_cookie(slateurl *url, const char **cookie)
 {
 	struct cookie_internal_data *c;
 	const char *cur;
@@ -2015,7 +2015,7 @@ urldb_parse_cookie(nsurl *url, const char **cookie)
 
 	/* Now fix-up default values */
 	if (c->domain == NULL) {
-		lwc_string *host = nsurl_get_component(url, NSURL_HOST);
+		lwc_string *host = slateurl_get_component(url, SLATEURL_HOST);
 		if (host == NULL) {
 			urldb_free_cookie(c);
 			return NULL;
@@ -2029,7 +2029,7 @@ urldb_parse_cookie(nsurl *url, const char **cookie)
 		char *path, *slash;
 		lwc_string *path_lwc;
 
-		path_lwc = nsurl_get_component(url, NSURL_PATH);
+		path_lwc = slateurl_get_component(url, SLATEURL_PATH);
 		if (path_lwc == NULL) {
 			urldb_free_cookie(c);
 			return NULL;
@@ -2088,7 +2088,7 @@ urldb_add_path(lwc_string *scheme,
 	       const struct host_part *host,
 	       char *path_query,
 	       lwc_string *fragment,
-	       nsurl *url)
+	       slateurl *url)
 {
 	struct path_data *d, *e;
 	char *buf = path_query;
@@ -2147,7 +2147,7 @@ urldb_add_path(lwc_string *scheme,
 
 	if (d && !d->url) {
 		/* Insert defragmented URL */
-		if (nsurl_defragment(url, &d->url) != NSERROR_OK)
+		if (slateurl_defragment(url, &d->url) != SLATEERROR_OK)
 			return NULL;
 	}
 
@@ -2256,7 +2256,7 @@ static struct host_part *urldb_add_host(const char *host)
 static bool
 urldb_insert_cookie(struct cookie_internal_data *c,
 		    lwc_string *scheme,
-		    nsurl *url)
+		    slateurl *url)
 {
 	struct cookie_internal_data *d;
 	const struct host_part *h;
@@ -2824,7 +2824,7 @@ static void urldb_save_cookie_paths(FILE *fp, struct path_data *parent)
 					c->value_was_quoted,
 					p->scheme ? lwc_string_data(p->scheme) :
 					"unused",
-					p->url ? nsurl_access(p->url) :
+					p->url ? slateurl_access(p->url) :
 					"unused",
 					c->comment ? c->comment : "");
 			}
@@ -2892,7 +2892,7 @@ static void urldb_destroy_path_node_content(struct path_data *node)
 	unsigned int i;
 
 	if (node->url != NULL) {
-		nsurl_unref(node->url);
+		slateurl_unref(node->url);
 	}
 
 	lwc_string_unref(node->scheme);
@@ -3051,7 +3051,7 @@ void urldb_destroy(void)
 
 
 /* exported interface documented in netsurf/url_db.h */
-nserror urldb_load(const char *filename)
+slateerror urldb_load(const char *filename)
 {
 #define MAXIMUM_URL_LENGTH 4096
 	char s[MAXIMUM_URL_LENGTH];
@@ -3074,24 +3074,24 @@ nserror urldb_load(const char *filename)
 	if (!fp) {
 		NSLOG(netsurf, INFO, "Failed to open file '%s' for reading",
 		      filename);
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	if (!fgets(s, MAXIMUM_URL_LENGTH, fp)) {
 		fclose(fp);
-		return NSERROR_NEED_DATA;
+		return SLATEERROR_NEED_DATA;
 	}
 
 	version = atoi(s);
 	if (version < MIN_URL_FILE_VERSION) {
 		NSLOG(netsurf, INFO, "Unsupported URL file version.");
 		fclose(fp);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 	if (version > URL_FILE_VERSION) {
 		NSLOG(netsurf, INFO, "Unknown URL file version.");
 		fclose(fp);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	while (fgets(host, sizeof host, fp)) {
@@ -3129,7 +3129,7 @@ nserror urldb_load(const char *filename)
 		if (!h) {
 			NSLOG(netsurf, INFO, "Failed adding host: '%s'", host);
 			fclose(fp);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 		h->hsts.expires = hsts_expiry;
 		h->hsts.include_sub_domains = hsts_include_sub_domains;
@@ -3152,7 +3152,7 @@ nserror urldb_load(const char *filename)
 			char url[64 + 3 + 256 + 6 + 4096 + 1 + 1];
 			unsigned int port;
 			bool is_file = false;
-			nsurl *nsurl;
+			slateurl *slateurl;
 			lwc_string *scheme_lwc, *fragment_lwc;
 			char *path_query;
 			size_t len;
@@ -3186,43 +3186,43 @@ nserror urldb_load(const char *filename)
 				 s);
 
 			/* TODO: store URLs in pre-parsed state, and make
-			 *       a nsurl_load to generate the nsurl more
+			 *       a slateurl_load to generate the slateurl more
 			 *       swiftly.
-			 *       Need a nsurl_save too.
+			 *       Need a slateurl_save too.
 			 */
-			if (nsurl_create(url, &nsurl) != NSERROR_OK) {
+			if (slateurl_create(url, &slateurl) != SLATEERROR_OK) {
 				NSLOG(netsurf, INFO, "Failed inserting '%s'",
 				      url);
 				fclose(fp);
-				return NSERROR_NOMEM;
+				return SLATEERROR_NOMEM;
 			}
 
 			if (url_bloom != NULL) {
-				uint32_t hash = nsurl_hash(nsurl);
+				uint32_t hash = slateurl_hash(slateurl);
 				bloom_insert_hash(url_bloom, hash);
 			}
 
 			/* Copy and merge path/query strings */
-			if (nsurl_get(nsurl, NSURL_PATH | NSURL_QUERY,
-				      &path_query, &len) != NSERROR_OK) {
+			if (slateurl_get(slateurl, SLATEURL_PATH | SLATEURL_QUERY,
+				      &path_query, &len) != SLATEERROR_OK) {
 				NSLOG(netsurf, INFO, "Failed inserting '%s'",
 				      url);
 				fclose(fp);
-				return NSERROR_NOMEM;
+				return SLATEERROR_NOMEM;
 			}
 
-			scheme_lwc = nsurl_get_component(nsurl, NSURL_SCHEME);
-			fragment_lwc = nsurl_get_component(nsurl,
-							   NSURL_FRAGMENT);
+			scheme_lwc = slateurl_get_component(slateurl, SLATEURL_SCHEME);
+			fragment_lwc = slateurl_get_component(slateurl,
+							   SLATEURL_FRAGMENT);
 			p = urldb_add_path(scheme_lwc, port, h, path_query,
-					   fragment_lwc, nsurl);
+					   fragment_lwc, slateurl);
 			if (!p) {
 				NSLOG(netsurf, INFO, "Failed inserting '%s'",
 				      url);
 				fclose(fp);
-				return NSERROR_NOMEM;
+				return SLATEERROR_NOMEM;
 			}
-			nsurl_unref(nsurl);
+			slateurl_unref(slateurl);
 			lwc_string_unref(scheme_lwc);
 			lwc_string_unref(fragment_lwc);
 
@@ -3264,11 +3264,11 @@ nserror urldb_load(const char *filename)
 	NSLOG(netsurf, INFO, "Successfully loaded URL file");
 #undef MAXIMUM_URL_LENGTH
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in netsurf/url_db.h */
-nserror urldb_save(const char *filename)
+slateerror urldb_save(const char *filename)
 {
 	FILE *fp;
 	int i;
@@ -3279,7 +3279,7 @@ nserror urldb_save(const char *filename)
 	if (!fp) {
 		NSLOG(netsurf, INFO, "Failed to open file '%s' for writing",
 		      filename);
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
 	}
 
 	/* file format version number */
@@ -3291,12 +3291,12 @@ nserror urldb_save(const char *filename)
 
 	fclose(fp);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in content/urldb.h */
-nserror urldb_set_url_persistence(nsurl *url, bool persist)
+slateerror urldb_set_url_persistence(slateurl *url, bool persist)
 {
 	struct path_data *p;
 
@@ -3304,17 +3304,17 @@ nserror urldb_set_url_persistence(nsurl *url, bool persist)
 
 	p = urldb_find_url(url);
 	if (!p) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	p->persistent = persist;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in content/urldb.h */
-bool urldb_add_url(nsurl *url)
+bool urldb_add_url(slateurl *url)
 {
 	struct host_part *h;
 	struct path_data *p;
@@ -3334,24 +3334,24 @@ bool urldb_add_url(nsurl *url)
 		url_bloom = bloom_create(BLOOM_SIZE);
 
 	if (url_bloom != NULL) {
-		uint32_t hash = nsurl_hash(url);
+		uint32_t hash = slateurl_hash(url);
 		bloom_insert_hash(url_bloom, hash);
 	}
 
 	/* Copy and merge path/query strings */
-	if (nsurl_get(url, NSURL_PATH | NSURL_QUERY, &path_query, &len) !=
-	    NSERROR_OK) {
+	if (slateurl_get(url, SLATEURL_PATH | SLATEURL_QUERY, &path_query, &len) !=
+	    SLATEERROR_OK) {
 		return false;
 	}
 	assert(path_query != NULL);
 
-	scheme = nsurl_get_component(url, NSURL_SCHEME);
+	scheme = slateurl_get_component(url, SLATEURL_SCHEME);
 	if (scheme == NULL) {
 		free(path_query);
 		return false;
 	}
 
-	host = nsurl_get_component(url, NSURL_HOST);
+	host = slateurl_get_component(url, SLATEURL_HOST);
 	if (host != NULL) {
 		host_str = lwc_string_data(host);
 		lwc_string_unref(host);
@@ -3366,9 +3366,9 @@ bool urldb_add_url(nsurl *url)
 		return false;
 	}
 
-	fragment = nsurl_get_component(url, NSURL_FRAGMENT);
+	fragment = slateurl_get_component(url, SLATEURL_FRAGMENT);
 
-	port = nsurl_get_component(url, NSURL_PORT);
+	port = slateurl_get_component(url, SLATEURL_PORT);
 	if (port != NULL) {
 		port_int = atoi(lwc_string_data(port));
 		lwc_string_unref(port);
@@ -3399,7 +3399,7 @@ bool urldb_add_url(nsurl *url)
 
 
 /* exported interface documented in content/urldb.h */
-nserror urldb_set_url_title(nsurl *url, const char *title)
+slateerror urldb_set_url_title(slateurl *url, const char *title)
 {
 	struct path_data *p;
 	char *temp;
@@ -3408,14 +3408,14 @@ nserror urldb_set_url_title(nsurl *url, const char *title)
 
 	p = urldb_find_url(url);
 	if (p == NULL) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	/* copy the parameter if necessary */
 	if (title != NULL) {
 		temp = strdup(title);
 		if (temp == NULL) {
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 	} else {
 		temp = NULL;
@@ -3424,12 +3424,12 @@ nserror urldb_set_url_title(nsurl *url, const char *title)
 	free(p->urld.title);
 	p->urld.title = temp;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in content/urldb.h */
-nserror urldb_set_url_content_type(nsurl *url, content_type type)
+slateerror urldb_set_url_content_type(slateurl *url, content_type type)
 {
 	struct path_data *p;
 
@@ -3437,17 +3437,17 @@ nserror urldb_set_url_content_type(nsurl *url, content_type type)
 
 	p = urldb_find_url(url);
 	if (!p) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	p->urld.type = type;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in content/urldb.h */
-nserror urldb_update_url_visit_data(nsurl *url)
+slateerror urldb_update_url_visit_data(slateurl *url)
 {
 	struct path_data *p;
 
@@ -3455,18 +3455,18 @@ nserror urldb_update_url_visit_data(nsurl *url)
 
 	p = urldb_find_url(url);
 	if (!p) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	p->urld.last_visit = time(NULL);
 	p->urld.visits++;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in content/urldb.h */
-void urldb_reset_url_visit_data(nsurl *url)
+void urldb_reset_url_visit_data(slateurl *url)
 {
 	struct path_data *p;
 
@@ -3482,7 +3482,7 @@ void urldb_reset_url_visit_data(nsurl *url)
 
 
 /* exported interface documented in netsurf/url_db.h */
-const struct url_data *urldb_get_url_data(nsurl *url)
+const struct url_data *urldb_get_url_data(slateurl *url)
 {
 	struct path_data *p;
 	struct url_internal_data *u;
@@ -3500,7 +3500,7 @@ const struct url_data *urldb_get_url_data(nsurl *url)
 
 
 /* exported interface documented in content/urldb.h */
-nsurl *urldb_get_url(nsurl *url)
+slateurl *urldb_get_url(slateurl *url)
 {
 	struct path_data *p;
 
@@ -3515,7 +3515,7 @@ nsurl *urldb_get_url(nsurl *url)
 
 
 /* exported interface documented in netsurf/url_db.h */
-void urldb_set_auth_details(nsurl *url, const char *realm, const char *auth)
+void urldb_set_auth_details(slateurl *url, const char *realm, const char *auth)
 {
 	struct path_data *p, *pi;
 	struct host_part *h;
@@ -3578,7 +3578,7 @@ void urldb_set_auth_details(nsurl *url, const char *realm, const char *auth)
 
 
 /* exported interface documented in netsurf/url_db.h */
-const char *urldb_get_auth_details(nsurl *url, const char *realm)
+const char *urldb_get_auth_details(slateurl *url, const char *realm)
 {
 	struct path_data *p, *p_cur, *p_top;
 
@@ -3628,7 +3628,7 @@ const char *urldb_get_auth_details(nsurl *url, const char *realm)
 
 
 /* exported interface documented in netsurf/url_db.h */
-void urldb_set_cert_permissions(nsurl *url, bool permit)
+void urldb_set_cert_permissions(slateurl *url, bool permit)
 {
 	struct path_data *p;
 	struct host_part *h;
@@ -3653,7 +3653,7 @@ void urldb_set_cert_permissions(nsurl *url, bool permit)
 
 
 /* exported interface documented in content/urldb.h */
-bool urldb_get_cert_permissions(nsurl *url)
+bool urldb_get_cert_permissions(slateurl *url)
 {
 	struct path_data *p;
 	const struct host_part *h;
@@ -3675,7 +3675,7 @@ bool urldb_get_cert_permissions(nsurl *url)
 
 
 /* exported interface documented in content/urldb.h */
-bool urldb_set_hsts_policy(struct nsurl *url, const char *header)
+bool urldb_set_hsts_policy(struct slateurl *url, const char *header)
 {
 	struct path_data *p;
 	struct host_part *h;
@@ -3683,11 +3683,11 @@ bool urldb_set_hsts_policy(struct nsurl *url, const char *header)
 	time_t now = time(NULL);
 	http_strict_transport_security *sts;
 	uint32_t max_age = 0;
-	nserror error;
+	slateerror error;
 
 	assert(url);
 
-	host = nsurl_get_component(url, NSURL_HOST);
+	host = slateurl_get_component(url, SLATEURL_HOST);
 	if (host != NULL) {
 		if (urldb__host_is_ip_address(lwc_string_data(host))) {
 			/* Host is IP: ignore */
@@ -3723,7 +3723,7 @@ bool urldb_set_hsts_policy(struct nsurl *url, const char *header)
 	}
 
 	error = http_parse_strict_transport_security(header, &sts);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		/* Parse failed: ignore */
 		return true;
 	}
@@ -3746,7 +3746,7 @@ bool urldb_set_hsts_policy(struct nsurl *url, const char *header)
 
 
 /* exported interface documented in content/urldb.h */
-bool urldb_get_hsts_enabled(struct nsurl *url)
+bool urldb_get_hsts_enabled(struct slateurl *url)
 {
 	struct path_data *p;
 	const struct host_part *h;
@@ -3755,7 +3755,7 @@ bool urldb_get_hsts_enabled(struct nsurl *url)
 
 	assert(url);
 
-	host = nsurl_get_component(url, NSURL_HOST);
+	host = slateurl_get_component(url, SLATEURL_HOST);
 	if (host != NULL) {
 		if (urldb__host_is_ip_address(lwc_string_data(host))) {
 			/* Host is IP: not enabled */
@@ -3809,7 +3809,7 @@ bool urldb_get_hsts_enabled(struct nsurl *url)
 /* exported interface documented in netsurf/url_db.h */
 void
 urldb_iterate_partial(const char *prefix,
-		      bool (*callback)(nsurl *url, const struct url_data *data))
+		      bool (*callback)(slateurl *url, const struct url_data *data))
 {
 	char host[256];
 	char buf[260]; /* max domain + "www." */
@@ -3875,7 +3875,7 @@ urldb_iterate_partial(const char *prefix,
 
 /* exported interface documented in netsurf/url_db.h */
 void
-urldb_iterate_entries(bool (*callback)(nsurl *url, const struct url_data *data))
+urldb_iterate_entries(bool (*callback)(slateurl *url, const struct url_data *data))
 {
 	int i;
 
@@ -3907,37 +3907,37 @@ void urldb_iterate_cookies(bool (*callback)(const struct cookie_data *data))
 
 
 /* exported interface documented in content/urldb.h */
-bool urldb_set_cookie(const char *header, nsurl *url, nsurl *referer)
+bool urldb_set_cookie(const char *header, slateurl *url, slateurl *referer)
 {
 	const char *cur = header, *end;
 	lwc_string *path, *host, *scheme;
-	nsurl *urlt;
+	slateurl *urlt;
 	bool match;
 
 	assert(url && header);
 
 	/* Get defragmented URL, as 'urlt' */
-	if (nsurl_defragment(url, &urlt) != NSERROR_OK)
+	if (slateurl_defragment(url, &urlt) != SLATEERROR_OK)
 		return NULL;
 
-	scheme = nsurl_get_component(url, NSURL_SCHEME);
+	scheme = slateurl_get_component(url, SLATEURL_SCHEME);
 	if (scheme == NULL) {
-		nsurl_unref(urlt);
+		slateurl_unref(urlt);
 		return false;
 	}
 
-	path = nsurl_get_component(url, NSURL_PATH);
+	path = slateurl_get_component(url, SLATEURL_PATH);
 	if (path == NULL) {
 		lwc_string_unref(scheme);
-		nsurl_unref(urlt);
+		slateurl_unref(urlt);
 		return false;
 	}
 
-	host = nsurl_get_component(url, NSURL_HOST);
+	host = slateurl_get_component(url, SLATEURL_HOST);
 	if (host == NULL) {
 		lwc_string_unref(path);
 		lwc_string_unref(scheme);
-		nsurl_unref(urlt);
+		slateurl_unref(urlt);
 		return false;
 	}
 
@@ -3946,7 +3946,7 @@ bool urldb_set_cookie(const char *header, nsurl *url, nsurl *referer)
 
 		/* Ensure that url's host name domain matches
 		 * referer's (4.3.5) */
-		rhost = nsurl_get_component(referer, NSURL_HOST);
+		rhost = slateurl_get_component(referer, SLATEURL_HOST);
 		if (rhost == NULL) {
 			goto error;
 		}
@@ -4155,7 +4155,7 @@ bool urldb_set_cookie(const char *header, nsurl *url, nsurl *referer)
 	lwc_string_unref(host);
 	lwc_string_unref(path);
 	lwc_string_unref(scheme);
-	nsurl_unref(urlt);
+	slateurl_unref(urlt);
 
 	return true;
 
@@ -4163,14 +4163,14 @@ error:
 	lwc_string_unref(host);
 	lwc_string_unref(path);
 	lwc_string_unref(scheme);
-	nsurl_unref(urlt);
+	slateurl_unref(urlt);
 
 	return false;
 }
 
 
 /* exported interface documented in content/urldb.h */
-char *urldb_get_cookie(nsurl *url, bool include_http_only)
+char *urldb_get_cookie(slateurl *url, bool include_http_only)
 {
 	const struct path_data *p, *q;
 	const struct host_part *h;
@@ -4221,7 +4221,7 @@ char *urldb_get_cookie(nsurl *url, bool include_http_only)
 		}							\
 	} while(0)
 
-	path_lwc = nsurl_get_component(url, NSURL_PATH);
+	path_lwc = slateurl_get_component(url, SLATEURL_PATH);
 	if (path_lwc == NULL) {
 		free(matched_cookies);
 		return NULL;
@@ -4412,7 +4412,7 @@ void urldb_delete_cookie(const char *domain, const char *path,
 
 
 /* exported interface documented in netsurf/cookie_db.h */
-nserror urldb_load_cookies(const char *filename)
+slateerror urldb_load_cookies(const char *filename)
 {
 	FILE *fp;
 	char s[16*1024];
@@ -4421,7 +4421,7 @@ nserror urldb_load_cookies(const char *filename)
 
 	fp = fopen(filename, "r");
 	if (!fp)
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 
 #define FIND_T {				\
 		for (; *p && *p != '\t'; p++)	\
@@ -4542,25 +4542,25 @@ nserror urldb_load_cookies(const char *filename)
 
 		if (c->domain[0] != '.') {
 			lwc_string *scheme_lwc = NULL;
-			nsurl *url_nsurl = NULL;
+			slateurl *url_slateurl = NULL;
 
 			assert(scheme[0] != 'u');
 
-			if (nsurl_create(url, &url_nsurl) != NSERROR_OK) {
+			if (slateurl_create(url, &url_slateurl) != SLATEERROR_OK) {
 				urldb_free_cookie(c);
 				break;
 			}
-			scheme_lwc = nsurl_get_component(url_nsurl,
-							 NSURL_SCHEME);
+			scheme_lwc = slateurl_get_component(url_slateurl,
+							 SLATEURL_SCHEME);
 
 			/* And insert it into database */
-			if (!urldb_insert_cookie(c, scheme_lwc, url_nsurl)) {
+			if (!urldb_insert_cookie(c, scheme_lwc, url_slateurl)) {
 				/* Cookie freed for us */
-				nsurl_unref(url_nsurl);
+				slateurl_unref(url_slateurl);
 				lwc_string_unref(scheme_lwc);
 				break;
 			}
-			nsurl_unref(url_nsurl);
+			slateurl_unref(url_slateurl);
 			lwc_string_unref(scheme_lwc);
 
 		} else {
@@ -4576,12 +4576,12 @@ nserror urldb_load_cookies(const char *filename)
 
 	fclose(fp);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in netsurf/cookie_db.h */
-nserror urldb_save_cookies(const char *filename)
+slateerror urldb_save_cookies(const char *filename)
 {
 	FILE *fp;
 	int cookie_file_version = max(loaded_cookie_file_version,
@@ -4591,7 +4591,7 @@ nserror urldb_save_cookies(const char *filename)
 
 	fp = fopen(filename, "w");
 	if (!fp)
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 
 	fprintf(fp, "# NetSurf cookies file.\n"
 		"#\n"
@@ -4611,7 +4611,7 @@ nserror urldb_save_cookies(const char *filename)
 
 	fclose(fp);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 

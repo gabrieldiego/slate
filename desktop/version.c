@@ -1,7 +1,7 @@
 /*
  * Copyright 2019 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,11 +20,11 @@
 
 #include "desktop/version.h"
 
-const char * const netsurf_version = "3.12 (Dev"
+const char * const slate_version = "3.12 (Dev"
 #if defined(CI_BUILD)
 	" CI #" CI_BUILD
 #endif
 	")"
 	;
-const int netsurf_version_major = 3;
-const int netsurf_version_minor = 12;
+const int slate_version_major = 3;
+const int slate_version_minor = 12;

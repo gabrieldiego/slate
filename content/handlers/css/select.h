@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_CSS_SELECT_H_
-#define NETSURF_CSS_SELECT_H_
+#ifndef SLATE_CSS_SELECT_H_
+#define SLATE_CSS_SELECT_H_
 
 #include <stdint.h>
 
@@ -26,7 +26,7 @@
 #include <libcss/libcss.h>
 
 struct content;
-struct nsurl;
+struct slateurl;
 
 /**
  * Selection context
@@ -35,7 +35,7 @@ typedef struct nscss_select_ctx
 {
 	css_select_ctx *ctx;
 	bool quirks;
-	struct nsurl *base_url;
+	struct slateurl *base_url;
 	lwc_string *universal;
 	const css_computed_style *root_style;
 	const css_computed_style *parent_style;

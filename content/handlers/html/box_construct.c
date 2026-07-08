@@ -5,7 +5,7 @@
  * Copyright 2006 Richard Wilson <info@tinct.net>
  * Copyright 2008 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,14 +29,14 @@
 #include <dom/dom.h>
 
 #include "utils/errors.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/corestrings.h"
 #include "utils/talloc.h"
 #include "utils/string.h"
 #include "utils/ascii.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/utils.h"
-#include "netsurf/misc.h"
+#include "slate/misc.h"
 #include "css/select.h"
 #include "desktop/gui_internal.h"
 
@@ -71,7 +71,7 @@ struct box_construct_props {
 	/** Style from which to inherit, or NULL if none */
 	const css_computed_style *parent_style;
 	/** Current link target, or NULL if none */
-	struct nsurl *href;
+	struct slateurl *href;
 	/** Current frame target, or NULL if none */
 	const char *target;
 	/** Current title attribute, or NULL if none */
@@ -256,7 +256,7 @@ box_get_style(html_content *c,
 	nscss_select_ctx ctx;
 
 	/* Firstly, construct inline stylesheet, if any */
-	if (nsoption_bool(author_level_css)) {
+	if (slateoption_bool(author_level_css)) {
 		dom_exception err;
 		err = dom_element_get_attribute(n, corestring_dom_style, &s);
 		if (err != DOM_NO_ERR) {
@@ -269,7 +269,7 @@ box_get_style(html_content *c,
 				(const uint8_t *) dom_string_data(s),
 				dom_string_byte_length(s),
 				c->encoding,
-				nsurl_access(c->base_url),
+				slateurl_access(c->base_url),
 				c->quirks != DOM_DOCUMENT_QUIRKS_MODE_NONE);
 
 		dom_string_unref(s);
@@ -414,16 +414,16 @@ box_construct_marker(struct box *box,
 
 	if (css_computed_list_style_image(box->style, &image_uri) == CSS_LIST_STYLE_IMAGE_URI &&
 	    (image_uri != NULL) &&
-	    (nsoption_bool(foreground_images) == true)) {
-		nsurl *url;
-		nserror error;
+	    (slateoption_bool(foreground_images) == true)) {
+		slateurl *url;
+		slateerror error;
 
 		/* TODO: we get a url out of libcss as a lwc string, but
-		 *       earlier we already had it as a nsurl after we
-		 *       nsurl_joined it.  Can this be improved?
-		 *       For now, just making another nsurl. */
-		error = nsurl_create(lwc_string_data(image_uri), &url);
-		if (error != NSERROR_OK)
+		 *       earlier we already had it as a slateurl after we
+		 *       slateurl_joined it.  Can this be improved?
+		 *       For now, just making another slateurl. */
+		error = slateurl_create(lwc_string_data(image_uri), &url);
+		if (error != SLATEERROR_OK)
 			return false;
 
 		if (html_fetch_object(ctx->content,
@@ -431,10 +431,10 @@ box_construct_marker(struct box *box,
 				      marker,
 				      image_types,
 				      false) ==	false) {
-			nsurl_unref(url);
+			slateurl_unref(url);
 			return false;
 		}
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
 
 	box->list_marker = marker;
@@ -686,26 +686,26 @@ box_construct_element(struct box_construct_ctx *ctx, bool *convert_children)
 	/* Kick off fetch for any background image */
 	if (css_computed_background_image(box->style, &bgimage_uri) ==
 			CSS_BACKGROUND_IMAGE_IMAGE && bgimage_uri != NULL &&
-			nsoption_bool(background_images) == true) {
-		nsurl *url;
-		nserror error;
+			slateoption_bool(background_images) == true) {
+		slateurl *url;
+		slateerror error;
 
 		/* TODO: we get a url out of libcss as a lwc string, but
-		 *       earlier we already had it as a nsurl after we
-		 *       nsurl_joined it.  Can this be improved?
-		 *       For now, just making another nsurl. */
-		error = nsurl_create(lwc_string_data(bgimage_uri), &url);
-		if (error == NSERROR_OK) {
+		 *       earlier we already had it as a slateurl after we
+		 *       slateurl_joined it.  Can this be improved?
+		 *       For now, just making another slateurl. */
+		error = slateurl_create(lwc_string_data(bgimage_uri), &url);
+		if (error == SLATEERROR_OK) {
 			/* Fetch image if we got a valid URL */
 			if (html_fetch_object(ctx->content,
 					      url,
 					      box,
 					      image_types,
 					      true) == false) {
-				nsurl_unref(url);
+				slateurl_unref(url);
 				return false;
 			}
-			nsurl_unref(url);
+			slateurl_unref(url);
 		}
 	}
 
@@ -1316,7 +1316,7 @@ static void convert_xml_to_box(struct box_construct_ctx *ctx)
 
 
 /* exported function documented in html/box_construct.h */
-nserror
+slateerror
 dom_to_box(dom_node *n,
 	   html_content *c,
 	   box_construct_complete_cb cb,
@@ -1330,13 +1330,13 @@ dom_to_box(dom_node *n,
 		/* create a context allocation for this box tree */
 		c->bctx = talloc_zero(0, int);
 		if (c->bctx == NULL) {
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 	}
 
 	ctx = malloc(sizeof(*ctx));
 	if (ctx == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	ctx->content = c;
@@ -1352,20 +1352,20 @@ dom_to_box(dom_node *n,
 
 
 /* exported function documented in html/box_construct.h */
-nserror cancel_dom_to_box(void *box_conversion_context)
+slateerror cancel_dom_to_box(void *box_conversion_context)
 {
 	struct box_construct_ctx *ctx = box_conversion_context;
-	nserror err;
+	slateerror err;
 
 	err = guit->misc->schedule(-1, (void *)convert_xml_to_box, ctx);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
 	dom_node_unref(ctx->n);
 	free(ctx);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1387,12 +1387,12 @@ struct box *box_for_node(dom_node *n)
 bool
 box_extract_link(const html_content *content,
 		 const dom_string *dsrel,
-		 nsurl *base,
-		 nsurl **result)
+		 slateurl *base,
+		 slateurl **result)
 {
 	char *s, *s1, *apos0 = 0, *apos1 = 0, *quot0 = 0, *quot1 = 0;
 	unsigned int i, j, end;
-	nserror error;
+	slateerror error;
 	const char *rel;
 
 	rel = dom_string_data(dsrel);
@@ -1442,9 +1442,9 @@ box_extract_link(const html_content *content,
 	}
 
 	/* construct absolute URL */
-	error = nsurl_join(base, s1, result);
+	error = slateurl_join(base, s1, result);
 	free(s);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		*result = NULL;
 		return false;
 	}

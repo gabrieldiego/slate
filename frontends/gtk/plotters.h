@@ -1,7 +1,7 @@
 /*
  * Copyright 2005 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,20 +21,20 @@
  * Target independent plotting GTK+ interface.
  */
 
-#ifndef NETSURF_GTK_PLOTTERS_H
-#define NETSURF_GTK_PLOTTERS_H 1
+#ifndef SLATE_GTK_PLOTTERS_H
+#define SLATE_GTK_PLOTTERS_H 1
 
 #include <gtk/gtk.h>
 
 struct plotter_table;
 
-extern const struct plotter_table nsgtk_plotters;
+extern const struct plotter_table slategtk_plotters;
 
 /* make sure this is NULL if no redraw is in progress */
 extern cairo_t *current_cr;
 
-void nsgtk_set_colour(colour c);
-void nsgtk_plot_caret(int x, int y, int h);
+void slategtk_set_colour(colour c);
+void slategtk_plot_caret(int x, int y, int h);
 
-#endif /* NETSURF_GTK_PLOTTERS_H */
+#endif /* SLATE_GTK_PLOTTERS_H */
 

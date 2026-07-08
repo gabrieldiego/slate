@@ -2,7 +2,7 @@
  * Copyright 2008 François Revol <mmu_man@users.sourceforge.net>
  * Copyright 2005 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,8 +17,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_BEOS_SCAFFOLDING_H
-#define NETSURF_BEOS_SCAFFOLDING_H 1
+#ifndef SLATE_BEOS_SCAFFOLDING_H
+#define SLATE_BEOS_SCAFFOLDING_H 1
 
 #include <View.h>
 #include <Window.h>
@@ -26,10 +26,10 @@
 
 extern "C" {
 struct hlcache_handle;
-struct nsurl;
+struct slateurl;
 }
 
-typedef struct beos_scaffolding nsbeos_scaffolding;
+typedef struct beos_scaffolding slatebeos_scaffolding;
 
 class NSBaseView : public BView {
 public:
@@ -178,33 +178,33 @@ typedef enum {
 } menu_action;
 
 
-NSBrowserWindow *nsbeos_find_last_window(void);
+NSBrowserWindow *slatebeos_find_last_window(void);
 
-NSBrowserWindow *nsbeos_get_bwindow_for_scaffolding(nsbeos_scaffolding *scaffold);
+NSBrowserWindow *slatebeos_get_bwindow_for_scaffolding(slatebeos_scaffolding *scaffold);
 
-NSBaseView *nsbeos_get_baseview_for_scaffolding(nsbeos_scaffolding *scaffold);
+NSBaseView *slatebeos_get_baseview_for_scaffolding(slatebeos_scaffolding *scaffold);
 
-nsbeos_scaffolding *nsbeos_new_scaffolding(struct gui_window *toplevel);
+slatebeos_scaffolding *slatebeos_new_scaffolding(struct gui_window *toplevel);
 
-bool nsbeos_scaffolding_is_busy(nsbeos_scaffolding *scaffold);
+bool slatebeos_scaffolding_is_busy(slatebeos_scaffolding *scaffold);
 
-void nsbeos_attach_toplevel_view(nsbeos_scaffolding *g, BView *view);
-
-
-void nsbeos_scaffolding_dispatch_event(nsbeos_scaffolding *scaffold, BMessage *message);
-
-void nsbeos_scaffolding_destroy(nsbeos_scaffolding *scaffold);
-
-//void nsbeos_window_destroy_event(NSBrowserWindow *window, nsbeos_scaffolding *g, BMessage *event);
+void slatebeos_attach_toplevel_view(slatebeos_scaffolding *g, BView *view);
 
 
-void nsbeos_scaffolding_popup_menu(nsbeos_scaffolding *scaffold, struct browser_window *bw, BPoint where, BPoint screenWhere);
+void slatebeos_scaffolding_dispatch_event(slatebeos_scaffolding *scaffold, BMessage *message);
+
+void slatebeos_scaffolding_destroy(slatebeos_scaffolding *scaffold);
+
+//void slatebeos_window_destroy_event(NSBrowserWindow *window, slatebeos_scaffolding *g, BMessage *event);
+
+
+void slatebeos_scaffolding_popup_menu(slatebeos_scaffolding *scaffold, struct browser_window *bw, BPoint where, BPoint screenWhere);
 
 void gui_window_set_title(struct gui_window *_g, const char *title);
-nserror gui_window_set_url(struct gui_window *_g, struct nsurl *url);
+slateerror gui_window_set_url(struct gui_window *_g, struct slateurl *url);
 void gui_window_set_icon(struct gui_window *_g, struct hlcache_handle *icon);
 void gui_window_set_status(struct gui_window *_g, const char *text);
 void gui_window_start_throbber(struct gui_window* _g);
 void gui_window_stop_throbber(struct gui_window* _g);
 
-#endif /* NETSURF_BEOS_SCAFFOLDING_H */
+#endif /* SLATE_BEOS_SCAFFOLDING_H */

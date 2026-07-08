@@ -44,12 +44,12 @@
  */
 bool fetch_about_query_privacy_handler(struct fetch_about_context *ctx)
 {
-	nserror res;
+	slateerror res;
 	char *url_s;
 	size_t url_l;
 	const char *reason = "";
 	const char *title;
-	struct nsurl *siteurl = NULL;
+	struct slateurl *siteurl = NULL;
 	char *description = NULL;
 	const char *chainurl = NULL;
 	const struct fetch_multipart_data *curmd; /* mutipart data iterator */
@@ -58,8 +58,8 @@ bool fetch_about_query_privacy_handler(struct fetch_about_context *ctx)
 	curmd = fetch_about_get_multipart(ctx);
 	while (curmd != NULL) {
 		if (strcmp(curmd->name, "siteurl") == 0) {
-			res = nsurl_create(curmd->value, &siteurl);
-			if (res != NSERROR_OK) {
+			res = slateurl_create(curmd->value, &siteurl);
+			if (res != SLATEERROR_OK) {
 				return fetch_about_srverror(ctx);
 			}
 		} else if (strcmp(curmd->name, "reason") == 0) {
@@ -92,24 +92,24 @@ bool fetch_about_query_privacy_handler(struct fetch_about_context *ctx)
 			"<body class=\"ns-even-bg ns-even-fg ns-border\" id =\"privacy\">\n"
 			"<h1 class=\"ns-border ns-odd-fg-bad\">%s</h1>\n",
 			title, title);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_query_ssl_handler_aborted;
 	}
 
 	res = fetch_about_ssenddataf(ctx,
 			 "<form method=\"post\""
 			 " enctype=\"multipart/form-data\">");
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_query_ssl_handler_aborted;
 	}
 
 	res = get_query_description(siteurl,
 				    "PrivacyDescription",
 				    &description);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		res = fetch_about_ssenddataf(ctx, "<div><p>%s</p></div>", description);
 		free(description);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			goto fetch_about_query_ssl_handler_aborted;
 		}
 	}
@@ -128,7 +128,7 @@ bool fetch_about_query_privacy_handler(struct fetch_about_context *ctx)
 				 chainurl,
 				 messages_get("ViewCertificates"));
 	}
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_query_ssl_handler_aborted;
 	}
 	res = fetch_about_ssenddataf(ctx,
@@ -140,35 +140,35 @@ bool fetch_about_query_privacy_handler(struct fetch_about_context *ctx)
 			 "</div>",
 			 messages_get("Backtosafety"),
 			 messages_get("Proceed"));
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_query_ssl_handler_aborted;
 	}
 
-	res = nsurl_get(siteurl, NSURL_COMPLETE, &url_s, &url_l);
-	if (res != NSERROR_OK) {
+	res = slateurl_get(siteurl, SLATEURL_COMPLETE, &url_s, &url_l);
+	if (res != SLATEERROR_OK) {
 		url_s = strdup("");
 	}
 	res = fetch_about_ssenddataf(ctx,
 			 "<input type=\"hidden\" name=\"siteurl\" value=\"%s\">",
 			 url_s);
 	free(url_s);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_query_ssl_handler_aborted;
 	}
 
 	res = fetch_about_ssenddataf(ctx, "</form></body>\n</html>\n");
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_query_ssl_handler_aborted;
 	}
 
 	fetch_about_send_finished(ctx);
 
-	nsurl_unref(siteurl);
+	slateurl_unref(siteurl);
 
 	return true;
 
 fetch_about_query_ssl_handler_aborted:
-	nsurl_unref(siteurl);
+	slateurl_unref(siteurl);
 
 	return false;
 }

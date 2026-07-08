@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,18 +16,18 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _NETSURF_WIN32_OPTIONS_H_
-#define _NETSURF_WIN32_OPTIONS_H_
+#ifndef _SLATE_WIN32_OPTIONS_H_
+#define _SLATE_WIN32_OPTIONS_H_
 
 /* currently nothing here */
 
 #endif
 
 /* location to download files to */
-NSOPTION_STRING(downloads_directory, NULL)
+SLATEOPTION_STRING(downloads_directory, NULL)
 
 /* where to store URL database */
-NSOPTION_STRING(url_file, NULL)
+SLATEOPTION_STRING(url_file, NULL)
 
 /* path to save hotlist file */
-NSOPTION_STRING(hotlist_path, NULL)
+SLATEOPTION_STRING(hotlist_path, NULL)

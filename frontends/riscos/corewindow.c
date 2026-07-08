@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,9 +35,9 @@
 #include <oslib/wimp.h>
 
 #include "utils/log.h"
-#include "netsurf/types.h"
-#include "netsurf/mouse.h"
-#include "netsurf/keypress.h"
+#include "slate/types.h"
+#include "slate/mouse.h"
+#include "slate/keypress.h"
 
 #include "riscos/wimp_event.h"
 #include "riscos/dialog.h"
@@ -545,7 +545,7 @@ static bool ro_cw_keypress(wimp_key *key)
 {
 	uint32_t c;
 	struct ro_corewindow *ro_cw;
-	nserror res;
+	slateerror res;
 
 	ro_cw = (struct ro_corewindow *)ro_gui_wimp_event_get_user_data(key->w);
 	NSLOG(netsurf, INFO, "RO corewindow context %p", ro_cw);
@@ -643,7 +643,7 @@ static bool ro_cw_keypress(wimp_key *key)
 
 	if (!(c & IS_WIMP_KEY)) {
 		res = ro_cw->key(ro_cw, c);
-		if (res == NSERROR_OK) {
+		if (res == SLATEERROR_OK) {
 			ro_cw->toolbar_update(ro_cw);
 			return true;
 		}
@@ -777,9 +777,9 @@ static const struct toolbar_callbacks corewindow_toolbar_callbacks = {
  *
  * \param[in] cw The core window to invalidate.
  * \param[in] r area to redraw or NULL for the entire window area.
- * \return NSERROR_OK on success or appropriate error code.
+ * \return SLATEERROR_OK on success or appropriate error code.
  */
-static nserror
+static slateerror
 ro_cw_invalidate(struct core_window *cw, const struct rect *r)
 {
 	struct ro_corewindow *ro_cw = (struct ro_corewindow *)cw;
@@ -794,7 +794,7 @@ ro_cw_invalidate(struct core_window *cw, const struct rect *r)
 			      "xwimp_get_window_info_header_only: 0x%x: %s",
 			      error->errnum,
 			      error->errmess);
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
 	} else {
 		/* convert the passed rectangle into RO window dimensions */
@@ -810,16 +810,16 @@ ro_cw_invalidate(struct core_window *cw, const struct rect *r)
 	if (error) {
 		NSLOG(netsurf, INFO, "xwimp_force_redraw: 0x%x: %s",
 		      error->errnum, error->errmess);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * Callback from the core to update the content area size.
  */
-static nserror
+static slateerror
 ro_cw_update_size(struct core_window *cw, int width, int height)
 {
 	struct ro_corewindow *ro_cw = (struct ro_corewindow *)cw;
@@ -838,7 +838,7 @@ ro_cw_update_size(struct core_window *cw, int width, int height)
 	if (error) {
 		NSLOG(netsurf, INFO, "xwimp_get_window_state: 0x%x: %s",
 		      error->errnum, error->errmess);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	/* only update the window if it is open */
@@ -851,14 +851,14 @@ ro_cw_update_size(struct core_window *cw, int width, int height)
 
 		update_scrollbars(ro_cw, &open);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * Callback from the core to scroll the visible content.
  */
-static nserror
+static slateerror
 ro_cw_get_scroll(const struct core_window *cw, int *x, int *y)
 {
 	struct ro_corewindow *ro_cw = (struct ro_corewindow *)cw;
@@ -871,19 +871,19 @@ ro_cw_get_scroll(const struct core_window *cw, int *x, int *y)
 	if (error) {
 		NSLOG(netsurf, ERROR, "xwimp_get_window_state: 0x%x: %s",
 				error->errnum, error->errmess);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	*x =  state.xscroll / 2;
 	*y = -state.yscroll / 2;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * Callback from the core to scroll the visible content.
  */
-static nserror
+static slateerror
 ro_cw_set_scroll(struct core_window *cw, int x, int y)
 {
 	struct ro_corewindow *ro_cw = (struct ro_corewindow *)cw;
@@ -896,7 +896,7 @@ ro_cw_set_scroll(struct core_window *cw, int x, int y)
 	if (error) {
 		NSLOG(netsurf, ERROR, "xwimp_get_window_state: 0x%x: %s",
 				error->errnum, error->errmess);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	state.xscroll =  x * 2;
@@ -907,7 +907,7 @@ ro_cw_set_scroll(struct core_window *cw, int x, int y)
 		update_scrollbars(ro_cw, PTR_WIMP_OPEN(&state));
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -918,7 +918,7 @@ ro_cw_set_scroll(struct core_window *cw, int x, int y)
  * \param[out] width to be set to viewport width in px
  * \param[out] height to be set to viewport height in px
  */
-static nserror
+static slateerror
 ro_cw_get_window_dimensions(const struct core_window *cw,
 		int *width, int *height)
 {
@@ -931,7 +931,7 @@ ro_cw_get_window_dimensions(const struct core_window *cw,
 	if (error) {
 		NSLOG(netsurf, INFO, "xwimp_get_window_state: 0x%x: %s",
 		      error->errnum, error->errmess);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	*width = (state.visible.x1 - state.visible.x0) / 2;
@@ -945,20 +945,20 @@ ro_cw_get_window_dimensions(const struct core_window *cw,
 		*height = 0;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * Callback from the core to update the drag status.
  */
-static nserror
+static slateerror
 ro_cw_drag_status(struct core_window *cw, core_window_drag_status ds)
 {
 	struct ro_corewindow *ro_cw = (struct ro_corewindow *)cw;
 	ro_cw->drag_status = ds;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -977,29 +977,29 @@ struct core_window_table *riscos_core_window_table = &ro_cw_cb_table;
  * dummy toolbar click callback
  *
  */
-static nserror dummy_toolbar_click(struct ro_corewindow *ro_cw, button_bar_action action)
+static slateerror dummy_toolbar_click(struct ro_corewindow *ro_cw, button_bar_action action)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * dummy toolbar update callback
  */
-static nserror dummy_toolbar_update(struct ro_corewindow *ro_cw)
+static slateerror dummy_toolbar_update(struct ro_corewindow *ro_cw)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * dummy toolbar save callback
  */
-static nserror dummy_toolbar_save(struct ro_corewindow *ro_cw, char *config)
+static slateerror dummy_toolbar_save(struct ro_corewindow *ro_cw, char *config)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported function documented ro/corewindow.h */
-nserror
+slateerror
 ro_corewindow_init(struct ro_corewindow *ro_cw,
 		   const struct button_bar_buttons *tb_buttons,
 		   char *tb_order,
@@ -1035,7 +1035,7 @@ ro_corewindow_init(struct ro_corewindow *ro_cw,
 						   ro_cw,
 						   tb_help);
 		if (ro_cw->toolbar == NULL) {
-			return NSERROR_INIT_FAILED;
+			return SLATEERROR_INIT_FAILED;
 		}
 
 		ro_toolbar_add_buttons(ro_cw->toolbar, tb_buttons, tb_order);
@@ -1071,15 +1071,15 @@ ro_corewindow_init(struct ro_corewindow *ro_cw,
 	ro_gui_wimp_event_register_keypress(ro_cw->wh,
 			ro_cw_keypress);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in ro/corewindow.h */
-nserror ro_corewindow_fini(struct ro_corewindow *ro_cw)
+slateerror ro_corewindow_fini(struct ro_corewindow *ro_cw)
 {
 	ro_gui_wimp_event_finalise(ro_cw->wh);
 
 	/** \todo need to consider freeing of toolbar */
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }

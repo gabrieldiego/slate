@@ -3,7 +3,7 @@
  * Copyright 2003 Rob Jackson <jacko@xms.ms>
  * Copyright 2004 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,10 +36,10 @@
 
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/config.h"
 #include "content/fetch.h"
-#include "netsurf/browser_window.h"
+#include "slate/browser_window.h"
 
 #include "riscos/gui.h"
 #include "riscos/uri.h"
@@ -56,8 +56,8 @@ void ro_url_message_received(wimp_message *message)
 	inetsuite_message_open_url *url_message =
 			(inetsuite_message_open_url*) &message->data;
 	os_error *error;
-	nsurl *nsurl;
-	nserror errorns;
+	slateurl *slateurl;
+	slateerror errorns;
 
 	/* If the url_message->indirect.tag is non-zero,
 	 * then the message data is contained within the message block.
@@ -106,13 +106,13 @@ void ro_url_message_received(wimp_message *message)
 		url[i] = 0;
 	}
 
-	if (nsurl_create(url, &nsurl) != NSERROR_OK) {
+	if (slateurl_create(url, &slateurl) != SLATEERROR_OK) {
 		free(url);
 		return;
 	}
 
-	if (!fetch_can_fetch(nsurl)) {
-		nsurl_unref(nsurl);
+	if (!fetch_can_fetch(slateurl)) {
+		slateurl_unref(slateurl);
 		free(url);
 		return;
 	}
@@ -131,14 +131,14 @@ void ro_url_message_received(wimp_message *message)
 
 	/* create new browser window */
 	errorns = browser_window_create(BW_CREATE_HISTORY,
-				      nsurl,
+				      slateurl,
 				      NULL,
 				      NULL,
 				      NULL);
 
 
-	nsurl_unref(nsurl);
-	if (errorns != NSERROR_OK) {
+	slateurl_unref(slateurl);
+	if (errorns != SLATEERROR_OK) {
 		ro_warn_user(messages_get_errorcode(errorns), 0);
 	}
 }

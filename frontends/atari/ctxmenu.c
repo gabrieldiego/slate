@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,18 +18,18 @@
 
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "utils/nsoption.h"
-#include "utils/nsurl.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/content.h"
-#include "netsurf/keypress.h"
+#include "utils/slateoption.h"
+#include "utils/slateurl.h"
+#include "slate/browser_window.h"
+#include "slate/content.h"
+#include "slate/keypress.h"
 
 #include "atari/gui.h"
 #include "atari/misc.h"
 #include "atari/rootwin.h"
 #include "atari/clipboard.h"
 #include "atari/gemtk/gemtk.h"
-#include "atari/res/netsurf.rsh"
+#include "atari/res/slate.rsh"
 #include "atari/ctxmenu.h"
 
 
@@ -227,7 +227,7 @@ void context_popup(struct gui_window * gw, short x, short y)
 
 		case POP_CTX_SAVE_LINK_AS:
 			if (ctx->ccdata.link != NULL) {
-				nserror error;
+				slateerror error;
 
 				error = browser_window_navigate(
 					gw->browser->bw,
@@ -238,7 +238,7 @@ void context_popup(struct gui_window * gw, short x, short y)
 					NULL,
 					NULL);
 
-				if (error != NSERROR_OK) {
+				if (error != SLATEERROR_OK) {
 					atari_warn_user(messages_get_errorcode(error), 0);
 				}
 			}
@@ -248,7 +248,7 @@ void context_popup(struct gui_window * gw, short x, short y)
 		case POP_CTX_COPY_URL:
 			if ((ctx->flags & CNT_IMG) && (ctx->ccdata.object != NULL)) {
 				if( hlcache_handle_get_url(ctx->ccdata.object) != NULL ){
-					scrap_txt_write((char*)nsurl_access(
+					scrap_txt_write((char*)slateurl_access(
 							hlcache_handle_get_url(ctx->ccdata.object)));
 				}
 			}
@@ -257,14 +257,14 @@ void context_popup(struct gui_window * gw, short x, short y)
 		case POP_CTX_COPY_LINK:
 			if ((ctx->flags & CNT_HREF) &&
 			    (ctx->ccdata.link != NULL)) {
-				scrap_txt_write((char*)nsurl_access(ctx->ccdata.link));
+				scrap_txt_write((char*)slateurl_access(ctx->ccdata.link));
 			}
 		break;
 
 		case POP_CTX_OPEN_NEW:
 			if ((ctx->flags & CNT_HREF) &&
 			    (ctx->ccdata.link != NULL)) {
-				nserror error;
+				slateerror error;
 
 				error = browser_window_create(
 					BW_CREATE_HISTORY | BW_CREATE_CLONE,
@@ -272,14 +272,14 @@ void context_popup(struct gui_window * gw, short x, short y)
 					browser_window_access_url(gw->browser->bw),
 					gw->browser->bw,
 					NULL);
-				if (error != NSERROR_OK) {
+				if (error != SLATEERROR_OK) {
 					atari_warn_user(messages_get_errorcode(error), 0);
 				}
 			}
 		break;
 
 		case POP_CTX_VIEW_SOURCE:
-			editor = nsoption_charp(atari_editor);
+			editor = slateoption_charp(atari_editor);
 			if (editor != NULL && strlen(editor)>0) {
 				data = content_get_source_data(browser_window_get_content(gw->browser->bw),
 												&size);

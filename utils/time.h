@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * \brief Interface to time operations.
  */
 
-#ifndef _NETSURF_UTILS_TIME_H_
-#define _NETSURF_UTILS_TIME_H_
+#ifndef _SLATE_UTILS_TIME_H_
+#define _SLATE_UTILS_TIME_H_
 
 #include <time.h>
 
@@ -46,9 +46,9 @@ int nsc_sntimet(char *str, size_t size, time_t *timep);
  * @param str The source buffer.
  * @param size The length of the source buffer.
  * @param timep Pointer to result.
- * @return NSERROR_OK on success or error code on faliure.
+ * @return SLATEERROR_OK on success or error code on faliure.
  */
-nserror nsc_snptimet(const char *str, size_t size, time_t *timep);
+slateerror nsc_snptimet(const char *str, size_t size, time_t *timep);
 
 
 /**
@@ -66,11 +66,11 @@ nserror nsc_snptimet(const char *str, size_t size, time_t *timep);
  * @param[in] str The datetime string to parse
  * @param[in] size The length of the source string
  * @param[out] timep Pointer to result on success unmodified on error.
- * @return NSERROR_OK on success and timep updated else
- *          NSERROR_INVALID if the string parsing failed otherwise a suitable
+ * @return SLATEERROR_OK on success and timep updated else
+ *          SLATEERROR_INVALID if the string parsing failed otherwise a suitable
  *          error code
  */
-nserror nsc_strntimet(const char *str, size_t size, time_t *timep);
+slateerror nsc_strntimet(const char *str, size_t size, time_t *timep);
 
 /**
  * Create an RFC 1123 compliant date string from a Unix timestamp

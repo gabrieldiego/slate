@@ -1,7 +1,7 @@
 /*
  * Copyright 2004, 2005 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,7 +26,7 @@
 #include <oslib/wimp.h>
 #include <oslib/wimpreadsysinfo.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 
 #include "riscos/buffer.h"
@@ -387,7 +387,7 @@ void ro_gui_buffer_close(void)
 		_swix(Tinct_Plot, _IN(2) | _IN(3) | _IN(4) | _IN(7),
 				(char *)(buffer + 1),
 				clipping.x0, clipping.y0,
-				nsoption_int(plot_fg_quality));
+				slateoption_int(plot_fg_quality));
 	else
 		xosspriteop_put_sprite_user_coords(osspriteop_PTR,
 			buffer, (osspriteop_id)(buffer + 1),

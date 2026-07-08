@@ -1,7 +1,7 @@
 /*
  * Copyright 2003-7 John M Bell <jmb202@ecs.soton.ac.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_UTILS_CONFIG_H_
-#define NETSURF_UTILS_CONFIG_H_
+#ifndef SLATE_UTILS_CONFIG_H_
+#define SLATE_UTILS_CONFIG_H_
 
 #include <stddef.h>
 
@@ -203,7 +203,7 @@ char *realpath(const char *path, char *resolved_path);
 /* IPv6 */
 #if (defined(__amigaos4__) ||			\
      defined(__AMIGA__) ||			\
-     defined(nsatari) ||			\
+     defined(slateatari) ||			\
      defined(__serenity__))
 	#define NO_IPV6
 #endif

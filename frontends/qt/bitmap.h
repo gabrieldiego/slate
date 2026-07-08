@@ -1,7 +1,7 @@
 /*
  * Copyright 2023 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,12 +16,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_QT_BITMAP_H
-#define NETSURF_QT_BITMAP_H 1
+#ifndef SLATE_QT_BITMAP_H
+#define SLATE_QT_BITMAP_H 1
 
 /**
  * qt bitmap operations table
  */
-extern struct gui_bitmap_table *nsqt_bitmap_table;
+extern struct gui_bitmap_table *slateqt_bitmap_table;
 
 #endif

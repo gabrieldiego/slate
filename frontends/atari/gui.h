@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,7 +22,7 @@
 #include <stdbool.h>
 #include <mt_gem.h>
 
-#include "netsurf/mouse.h"
+#include "slate/mouse.h"
 
 #include "atari/redrawslots.h"
 #include "atari/gemtk/gemtk.h"

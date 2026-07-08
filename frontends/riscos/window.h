@@ -1,7 +1,7 @@
 /*
  * Copyright 2010, 2011 Stephen Fryatt <stevef@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,11 +22,11 @@
 
 #include <stdbool.h>
 
-#ifndef _NETSURF_RISCOS_WINDOW_H_
-#define _NETSURF_RISCOS_WINDOW_H_
+#ifndef _SLATE_RISCOS_WINDOW_H_
+#define _SLATE_RISCOS_WINDOW_H_
 
 struct gui_window;
-struct nsurl;
+struct slateurl;
 
 extern struct gui_window_table *riscos_window_table;
 
@@ -51,7 +51,7 @@ bool ro_gui_window_check_menu(wimp_menu *menu);
  * \param g gui_window to update
  * \param url new url for address bar
  */
-nserror ro_gui_window_set_url(struct gui_window *g, struct nsurl *url);
+slateerror ro_gui_window_set_url(struct gui_window *g, struct slateurl *url);
 
 
 /**
@@ -66,7 +66,7 @@ nserror ro_gui_window_set_url(struct gui_window *g, struct nsurl *url);
  * \param g The window to update
  * \param rect The area of the window to update or NULL to redraw entire contents.
  */
-nserror ro_gui_window_invalidate_area(struct gui_window *g, const struct rect *rect);
+slateerror ro_gui_window_invalidate_area(struct gui_window *g, const struct rect *rect);
 
 
 /**

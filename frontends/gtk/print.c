@@ -3,7 +3,7 @@
  * Copyright 2005 James Bursa <bursa@users.sourceforge.net>
  * Copyright 2008 Adam Blokus <adamblokus@gmail.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,8 +35,8 @@
 
 #include "utils/log.h"
 #include "utils/utils.h"
-#include "utils/nsoption.h"
-#include "netsurf/plotters.h"
+#include "utils/slateoption.h"
+#include "slate/plotters.h"
 #include "desktop/print.h"
 #include "desktop/printer.h"
 
@@ -51,7 +51,7 @@ static struct print_settings* settings;
 struct hlcache_handle *content_to_print;
 static GdkRectangle cliprect;
 
-static inline void nsgtk_print_set_colour(colour c)
+static inline void slategtk_print_set_colour(colour c)
 {
 	int r, g, b;
 
@@ -73,7 +73,7 @@ static inline void nsgtk_print_set_colour(colour c)
 
 
 
-static nserror gtk_print_font_paint(int x, int y, 
+static slateerror gtk_print_font_paint(int x, int y, 
 		const char *string, size_t length,
 		const plot_font_style_t *fstyle)
 {
@@ -83,7 +83,7 @@ static nserror gtk_print_font_paint(int x, int y,
 	PangoLayoutLine *line;
 
 	if (length == 0)
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 
 	desc = nsfont_style_to_description(fstyle);
 	size = (gint) ((double) pango_font_description_get_size(desc) * 
@@ -102,39 +102,39 @@ static nserror gtk_print_font_paint(int x, int y,
 	line = pango_layout_get_line(layout, 0);
 
 	cairo_move_to(gtk_print_current_cr, x, y);
-	nsgtk_print_set_colour(fstyle->foreground);
+	slategtk_print_set_colour(fstyle->foreground);
 	pango_cairo_show_layout_line(gtk_print_current_cr, line);
 
 	g_object_unref(layout);
 	pango_font_description_free(desc);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /** Set cairo context to solid plot operation. */
-static inline void nsgtk_print_set_solid(void)
+static inline void slategtk_print_set_solid(void)
 {
 	double dashes = 0;
 	cairo_set_dash(gtk_print_current_cr, &dashes, 0, 0);
 }
 
 /** Set cairo context to dotted plot operation. */
-static inline void nsgtk_print_set_dotted(void)
+static inline void slategtk_print_set_dotted(void)
 {
 	double cdashes[] = { 1.0, 2.0 };
 	cairo_set_dash(gtk_print_current_cr, cdashes, 1, 0);
 }
 
 /** Set cairo context to dashed plot operation. */
-static inline void nsgtk_print_set_dashed(void)
+static inline void slategtk_print_set_dashed(void)
 {
 	double cdashes[] = { 8.0, 2.0 };
 	cairo_set_dash(gtk_print_current_cr, cdashes, 1, 0);
 }
 
 /** Set cairo context line width. */
-static inline void nsgtk_set_line_width(plot_style_fixed width)
+static inline void slategtk_set_line_width(plot_style_fixed width)
 {
 	if (width == 0) {
 		cairo_set_line_width(gtk_print_current_cr, 1);
@@ -151,10 +151,10 @@ static inline void nsgtk_set_line_width(plot_style_fixed width)
  * \param ctx The current redraw context.
  * \param clip The rectangle to limit all subsequent plot
  *              operations within.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsgtk_print_plot_clip(const struct redraw_context *ctx, const struct rect *clip)
+static slateerror
+slategtk_print_plot_clip(const struct redraw_context *ctx, const struct rect *clip)
 {
 	NSLOG(netsurf, INFO,
 	      "Clipping. x0: %i ;\t y0: %i ;\t x1: %i ;\t y1: %i", clip->x0,
@@ -177,7 +177,7 @@ nsgtk_print_plot_clip(const struct redraw_context *ctx, const struct rect *clip)
 	cliprect.width = clip_x1 - clip_x0;
 	cliprect.height = clip_y1 - clip_y0;
 	
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -195,15 +195,15 @@ nsgtk_print_plot_clip(const struct redraw_context *ctx, const struct rect *clip)
  * \param radius The radius of the arc.
  * \param angle1 The start angle of the arc.
  * \param angle2 The finish angle of the arc.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsgtk_print_plot_arc(const struct redraw_context *ctx,
+static slateerror
+slategtk_print_plot_arc(const struct redraw_context *ctx,
 	       const plot_style_t *style,
 	       int x, int y, int radius, int angle1, int angle2)
 {
-	nsgtk_print_set_colour(style->fill_colour);
-	nsgtk_print_set_solid();
+	slategtk_print_set_colour(style->fill_colour);
+	slategtk_print_set_solid();
 
 	cairo_set_line_width(gtk_print_current_cr, 1);
 	cairo_arc(gtk_print_current_cr, x, y, radius,
@@ -211,7 +211,7 @@ nsgtk_print_plot_arc(const struct redraw_context *ctx,
 			(angle2 + 90) * (M_PI / 180));
 	cairo_stroke(gtk_print_current_cr);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -225,16 +225,16 @@ nsgtk_print_plot_arc(const struct redraw_context *ctx,
  * \param x x coordinate of circle centre.
  * \param y y coordinate of circle centre.
  * \param radius circle radius.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsgtk_print_plot_disc(const struct redraw_context *ctx,
+static slateerror
+slategtk_print_plot_disc(const struct redraw_context *ctx,
 		const plot_style_t *style,
 		int x, int y, int radius)
 {
 	if (style->fill_type != PLOT_OP_TYPE_NONE) {
-		nsgtk_print_set_colour(style->fill_colour);
-		nsgtk_print_set_solid();
+		slategtk_print_set_colour(style->fill_colour);
+		slategtk_print_set_solid();
 		cairo_set_line_width(gtk_print_current_cr, 0);
 		cairo_arc(gtk_print_current_cr, x, y, radius, 0, M_PI * 2);
 		cairo_fill(gtk_print_current_cr);
@@ -242,30 +242,30 @@ nsgtk_print_plot_disc(const struct redraw_context *ctx,
 	}
 
 	if (style->stroke_type != PLOT_OP_TYPE_NONE) {
-		nsgtk_print_set_colour(style->stroke_colour);
+		slategtk_print_set_colour(style->stroke_colour);
 
 		switch (style->stroke_type) {
 		case PLOT_OP_TYPE_SOLID: /**< Solid colour */
 		default:
-			nsgtk_print_set_solid();
+			slategtk_print_set_solid();
 			break;
 
 		case PLOT_OP_TYPE_DOT: /**< Doted plot */
-			nsgtk_print_set_dotted();
+			slategtk_print_set_dotted();
 			break;
 
 		case PLOT_OP_TYPE_DASH: /**< dashed plot */
-			nsgtk_print_set_dashed();
+			slategtk_print_set_dashed();
 			break;
 		}
 
-		nsgtk_set_line_width(style->stroke_width);
+		slategtk_set_line_width(style->stroke_width);
 
 		cairo_arc(gtk_print_current_cr, x, y, radius, 0, M_PI * 2);
 
 		cairo_stroke(gtk_print_current_cr);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -278,37 +278,37 @@ nsgtk_print_plot_disc(const struct redraw_context *ctx,
  * \param ctx The current redraw context.
  * \param style Style controlling the line plot.
  * \param line A rectangle defining the line to be drawn
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsgtk_print_plot_line(const struct redraw_context *ctx,
+static slateerror
+slategtk_print_plot_line(const struct redraw_context *ctx,
 		const plot_style_t *style,
 		const struct rect *line)
 {
-	nsgtk_print_set_colour(style->stroke_colour);
+	slategtk_print_set_colour(style->stroke_colour);
 
 	switch (style->stroke_type) {
 	case PLOT_OP_TYPE_SOLID: /**< Solid colour */
 	default:
-		nsgtk_print_set_solid();
+		slategtk_print_set_solid();
 		break;
 
 	case PLOT_OP_TYPE_DOT: /**< Doted plot */
-		nsgtk_print_set_dotted();
+		slategtk_print_set_dotted();
 		break;
 
 	case PLOT_OP_TYPE_DASH: /**< dashed plot */
-		nsgtk_print_set_dashed();
+		slategtk_print_set_dashed();
 		break;
 	}
 
-	nsgtk_set_line_width(style->stroke_width);
+	slategtk_set_line_width(style->stroke_width);
 
 	cairo_move_to(gtk_print_current_cr, line->x0 + 0.5, line->y0 + 0.5);
 	cairo_line_to(gtk_print_current_cr, line->x1 + 0.5, line->y1 + 0.5);
 	cairo_stroke(gtk_print_current_cr);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -323,10 +323,10 @@ nsgtk_print_plot_line(const struct redraw_context *ctx,
  * \param ctx The current redraw context.
  * \param style Style controlling the rectangle plot.
  * \param rect A rectangle defining the line to be drawn
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsgtk_print_plot_rectangle(const struct redraw_context *ctx,
+static slateerror
+slategtk_print_plot_rectangle(const struct redraw_context *ctx,
 		     const plot_style_t *style,
 		     const struct rect *rect)
 {
@@ -336,8 +336,8 @@ nsgtk_print_plot_rectangle(const struct redraw_context *ctx,
         if (style->fill_type != PLOT_OP_TYPE_NONE) { 
 		int x0,y0,x1,y1;
 
-		nsgtk_print_set_colour(style->fill_colour);
-		nsgtk_print_set_solid();
+		slategtk_print_set_colour(style->fill_colour);
+		slategtk_print_set_solid();
 	
 		/* Normalize boundaries of the area - to prevent overflows.
 		 * See comment in pdf_plot_fill. */
@@ -356,24 +356,24 @@ nsgtk_print_plot_rectangle(const struct redraw_context *ctx,
 
         if (style->stroke_type != PLOT_OP_TYPE_NONE) { 
 
-		nsgtk_print_set_colour(style->stroke_colour);
+		slategtk_print_set_colour(style->stroke_colour);
 
                 switch (style->stroke_type) {
                 case PLOT_OP_TYPE_SOLID: /**< Solid colour */
                 default:
-                        nsgtk_print_set_solid();
+                        slategtk_print_set_solid();
                         break;
 
                 case PLOT_OP_TYPE_DOT: /**< Doted plot */
-                        nsgtk_print_set_dotted();
+                        slategtk_print_set_dotted();
                         break;
 
                 case PLOT_OP_TYPE_DASH: /**< dashed plot */
-                        nsgtk_print_set_dashed();
+                        slategtk_print_set_dashed();
                         break;
                 }
 
-		nsgtk_set_line_width(style->stroke_width);
+		slategtk_set_line_width(style->stroke_width);
 
 		cairo_rectangle(gtk_print_current_cr,
 				rect->x0, rect->y0,
@@ -382,12 +382,12 @@ nsgtk_print_plot_rectangle(const struct redraw_context *ctx,
 		cairo_stroke(gtk_print_current_cr);
 	}
 	
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-static nserror
-nsgtk_print_plot_polygon(const struct redraw_context *ctx,
+static slateerror
+slategtk_print_plot_polygon(const struct redraw_context *ctx,
 		   const plot_style_t *style,
 		   const int *p,
 		   unsigned int n)
@@ -396,8 +396,8 @@ nsgtk_print_plot_polygon(const struct redraw_context *ctx,
 
 	NSLOG(netsurf, INFO, "Plotting polygon.");	
 
-	nsgtk_print_set_colour(style->fill_colour);
-	nsgtk_print_set_solid();
+	slategtk_print_set_colour(style->fill_colour);
+	slategtk_print_set_solid();
 	
 	cairo_set_line_width(gtk_print_current_cr, 0);
 	cairo_move_to(gtk_print_current_cr, p[0], p[1]);
@@ -413,7 +413,7 @@ nsgtk_print_plot_polygon(const struct redraw_context *ctx,
 	cairo_fill(gtk_print_current_cr);
 	cairo_stroke(gtk_print_current_cr);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -428,10 +428,10 @@ nsgtk_print_plot_polygon(const struct redraw_context *ctx,
  * \param p elements of path
  * \param n nunber of elements on path
  * \param transform A transform to apply to the path.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsgtk_print_plot_path(const struct redraw_context *ctx,
+static slateerror
+slategtk_print_plot_path(const struct redraw_context *ctx,
 		const plot_style_t *pstyle,
 		const float *p,
 		unsigned int n,
@@ -441,11 +441,11 @@ nsgtk_print_plot_path(const struct redraw_context *ctx,
 	 * and the GTK version uses librsvg.  Thus, we ignore this complexity,
 	 * and just return true obliviously. */
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-static bool nsgtk_print_plot_pixbuf(int x, int y, int width, int height,
+static bool slategtk_print_plot_pixbuf(int x, int y, int width, int height,
 			      struct bitmap *bitmap, colour bg)
 {
 	int x0, y0, x1, y1;
@@ -581,10 +581,10 @@ static bool nsgtk_print_plot_pixbuf(int x, int y, int width, int height,
  * \param height The height of area to plot the bitmap into
  * \param bg the background colour to alpha blend into
  * \param flags the flags controlling the type of plot operation
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsgtk_print_plot_bitmap(const struct redraw_context *ctx,
+static slateerror
+slategtk_print_plot_bitmap(const struct redraw_context *ctx,
 		  struct bitmap *bitmap,
 		  int x, int y,
 		  int width, int height,
@@ -597,11 +597,11 @@ nsgtk_print_plot_bitmap(const struct redraw_context *ctx,
 
 	if (!(repeat_x || repeat_y)) {
 		/* Not repeating at all, so just pass it on */
-		return nsgtk_print_plot_pixbuf(x, y, width, height, bitmap, bg);
+		return slategtk_print_plot_pixbuf(x, y, width, height, bitmap, bg);
 	}
 
-	width = nsgtk_bitmap_get_width(bitmap);
-	height = nsgtk_bitmap_get_height(bitmap);
+	width = slategtk_bitmap_get_width(bitmap);
+	height = slategtk_bitmap_get_height(bitmap);
 
 	/* Bail early if we can */
 	if (width == 0 || height == 0)
@@ -622,7 +622,7 @@ nsgtk_print_plot_bitmap(const struct redraw_context *ctx,
 		}
 
 		while (donewidth < (cliprect.x + cliprect.width)) {
-			nsgtk_print_plot_pixbuf(donewidth, doneheight,
+			slategtk_print_plot_pixbuf(donewidth, doneheight,
 					  width, height, bitmap, bg);
 			donewidth += width;
 			if (!repeat_x) 
@@ -638,8 +638,8 @@ nsgtk_print_plot_bitmap(const struct redraw_context *ctx,
 }
 
 
-static nserror
-nsgtk_print_plot_text(const struct redraw_context *ctx,
+static slateerror
+slategtk_print_plot_text(const struct redraw_context *ctx,
 		const struct plot_font_style *fstyle,
 		int x,
 		int y,
@@ -651,16 +651,16 @@ nsgtk_print_plot_text(const struct redraw_context *ctx,
 
 
 /** GTK print plotter table */
-static const struct plotter_table nsgtk_print_plotters = {
-	.clip = nsgtk_print_plot_clip,
-	.arc = nsgtk_print_plot_arc,
-	.disc = nsgtk_print_plot_disc,
-	.line = nsgtk_print_plot_line,
-	.rectangle = nsgtk_print_plot_rectangle,
-	.polygon = nsgtk_print_plot_polygon,
-	.path = nsgtk_print_plot_path,
-	.bitmap = nsgtk_print_plot_bitmap,
-	.text = nsgtk_print_plot_text,
+static const struct plotter_table slategtk_print_plotters = {
+	.clip = slategtk_print_plot_clip,
+	.arc = slategtk_print_plot_arc,
+	.disc = slategtk_print_plot_disc,
+	.line = slategtk_print_plot_line,
+	.rectangle = slategtk_print_plot_rectangle,
+	.polygon = slategtk_print_plot_polygon,
+	.path = slategtk_print_plot_path,
+	.bitmap = slategtk_print_plot_bitmap,
+	.text = slategtk_print_plot_text,
 	.option_knockout = false,
 };
 
@@ -679,7 +679,7 @@ static void gtk_print_end(void)
 }
 
 static const struct printer gtk_printer = {
-	&nsgtk_print_plotters,
+	&slategtk_print_plotters,
 	gtk_print_begin,
 	gtk_print_next_page,
 	gtk_print_end
@@ -709,7 +709,7 @@ void gtk_print_signal_begin_print (GtkPrintOperation *operation,
 	settings->page_width = gtk_print_context_get_width(context);
 	settings->page_height = gtk_print_context_get_height(context);
 	settings->scale = 0.7; /* at 0.7 the pages look the best */
-	settings->font_func = nsgtk_layout_table;
+	settings->font_func = slategtk_layout_table;
 	
 	if (print_set_up(content_to_print, &gtk_printer, 
 			 settings, &height_to_print) == false) {

@@ -2,7 +2,7 @@
  * Copyright 2020 Daniel Silverstone <dsilvers@netsurf-browser.org>
  * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,7 +36,7 @@
 
 #include <libwapcaplet/libwapcaplet.h>
 
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/corestrings.h"
 #include "utils/hashmap.h"
 
@@ -47,14 +47,14 @@
 static void
 corestring_create(void)
 {
-	ck_assert(corestrings_init() == NSERROR_OK);
+	ck_assert(corestrings_init() == SLATEERROR_OK);
 }
 
 /**
  * iterator for any remaining strings in teardown fixture
  */
 static void
-netsurf_lwc_iterator(lwc_string *str, void *pw)
+slate_lwc_iterator(lwc_string *str, void *pw)
 {
 	fprintf(stderr,
 		"[%3u] %.*s",
@@ -68,7 +68,7 @@ corestring_teardown(void)
 {
 	corestrings_fini();
 
-	lwc_iterate_strings(netsurf_lwc_iterator, NULL);
+	lwc_iterate_strings(slate_lwc_iterator, NULL);
 }
 
 /* Infra */
@@ -77,7 +77,7 @@ static ssize_t keys;
 static ssize_t values;
 
 typedef struct {
-	nsurl *key;
+	slateurl *key;
 } hashmap_test_value_t;
 
 static void *
@@ -89,16 +89,16 @@ key_clone(void *key)
 	void *temp = malloc(1);
 	if (temp == NULL) return NULL;
 	free(temp);
-	/* In reality we just ref the nsurl */
+	/* In reality we just ref the slateurl */
 	keys++;
-	return nsurl_ref((nsurl *)key);
+	return slateurl_ref((slateurl *)key);
 }
 
 static void
 key_destroy(void *key)
 {
 	keys--;
-	nsurl_unref((nsurl *)key);
+	slateurl_unref((slateurl *)key);
 }
 
 static uint32_t
@@ -107,13 +107,13 @@ key_hash(void *key)
 	/* Deliberately bad hash.
 	 * returns 0, 1, 2, or 3 to force bucket chaining
 	 */
-	return nsurl_hash((nsurl *)key) & 3;
+	return slateurl_hash((slateurl *)key) & 3;
 }
 
 static bool
 key_eq(void *key1, void *key2)
 {
-	return nsurl_compare((nsurl *)key1, (nsurl*)key2, NSURL_COMPLETE);
+	return slateurl_compare((slateurl *)key1, (slateurl*)key2, SLATEURL_COMPLETE);
 }
 
 static void *
@@ -124,7 +124,7 @@ value_alloc(void *key)
 	if (ret == NULL)
 		return NULL;
 
-	ret->key = (nsurl *)key;
+	ret->key = (slateurl *)key;
 	
 	values++;
 
@@ -204,34 +204,34 @@ END_TEST
 START_TEST(check_not_present)
 {
 	/* We're checking for a key which should not be present */
-	ck_assert(hashmap_lookup(test_hashmap, corestring_nsurl_about_blank) == NULL);
+	ck_assert(hashmap_lookup(test_hashmap, corestring_slateurl_about_blank) == NULL);
 }
 END_TEST
 
 START_TEST(insert_works)
 {
-        hashmap_test_value_t *value = hashmap_insert(test_hashmap, corestring_nsurl_about_blank);
+        hashmap_test_value_t *value = hashmap_insert(test_hashmap, corestring_slateurl_about_blank);
 	ck_assert(value != NULL);
-	ck_assert(value->key == corestring_nsurl_about_blank);
+	ck_assert(value->key == corestring_slateurl_about_blank);
 	ck_assert_int_eq(hashmap_count(test_hashmap), 1);
 }
 END_TEST
 
 START_TEST(remove_not_present)
 {
-	ck_assert(hashmap_remove(test_hashmap, corestring_nsurl_about_blank) == false);
+	ck_assert(hashmap_remove(test_hashmap, corestring_slateurl_about_blank) == false);
 }
 END_TEST
 
 START_TEST(insert_then_remove)
 {
-        hashmap_test_value_t *value = hashmap_insert(test_hashmap, corestring_nsurl_about_blank);
+        hashmap_test_value_t *value = hashmap_insert(test_hashmap, corestring_slateurl_about_blank);
 	ck_assert(value != NULL);
-	ck_assert(value->key == corestring_nsurl_about_blank);
+	ck_assert(value->key == corestring_slateurl_about_blank);
 	ck_assert_int_eq(keys, 1);
 	ck_assert_int_eq(values, 1);
 	ck_assert_int_eq(hashmap_count(test_hashmap), 1);
-	ck_assert(hashmap_remove(test_hashmap, corestring_nsurl_about_blank) == true);
+	ck_assert(hashmap_remove(test_hashmap, corestring_slateurl_about_blank) == true);
 	ck_assert_int_eq(keys, 0);
 	ck_assert_int_eq(values, 0);
 	ck_assert_int_eq(hashmap_count(test_hashmap), 0);
@@ -240,10 +240,10 @@ END_TEST
 
 START_TEST(insert_then_lookup)
 {
-        hashmap_test_value_t *value = hashmap_insert(test_hashmap, corestring_nsurl_about_blank);
+        hashmap_test_value_t *value = hashmap_insert(test_hashmap, corestring_slateurl_about_blank);
 	ck_assert(value != NULL);
-	ck_assert(value->key == corestring_nsurl_about_blank);
-	ck_assert(hashmap_lookup(test_hashmap, corestring_nsurl_about_blank) == value);
+	ck_assert(value->key == corestring_slateurl_about_blank);
+	ck_assert(hashmap_lookup(test_hashmap, corestring_slateurl_about_blank) == value);
 }
 END_TEST
 
@@ -258,7 +258,7 @@ END_TEST
 START_TEST(iterate_one)
 {
 	iteration_stop = iteration_counter = 0;
-        hashmap_test_value_t *value = hashmap_insert(test_hashmap, corestring_nsurl_about_blank);
+        hashmap_test_value_t *value = hashmap_insert(test_hashmap, corestring_slateurl_about_blank);
 	ck_assert(value != NULL);
 	ck_assert(hashmap_iterate(test_hashmap, hashmap_test_iterator_cb, &iteration_ctx) == false);
 	ck_assert_int_eq(iteration_counter, 1);
@@ -269,7 +269,7 @@ START_TEST(iterate_one_and_stop)
 {
 	iteration_stop = 1;
 	iteration_counter = 0;
-        hashmap_test_value_t *value = hashmap_insert(test_hashmap, corestring_nsurl_about_blank);
+        hashmap_test_value_t *value = hashmap_insert(test_hashmap, corestring_slateurl_about_blank);
 	ck_assert(value != NULL);
 	ck_assert(hashmap_iterate(test_hashmap, hashmap_test_iterator_cb, &iteration_ctx) == true);
 	ck_assert_int_eq(iteration_counter, 1);
@@ -303,7 +303,7 @@ static TCase *basic_api_case_create(void)
 
 typedef struct {
 	const char *url;
-	nsurl *nsurl;
+	slateurl *slateurl;
 } case_pair;
 
 /* The hobbled hash has only 4 values
@@ -315,10 +315,10 @@ typedef struct {
 static case_pair chain_pairs[] = {
 	{ "https://www.google.com/", NULL },
 	{ "https://www.google.co.uk/", NULL },
-	{ "https://www.netsurf-browser.org/", NULL },
+	{ "https://www.slate-browser.org/", NULL },
 	{ "http://www.google.com/", NULL },
 	{ "http://www.google.co.uk/", NULL },
-	{ "http://www.netsurf-browser.org/", NULL },
+	{ "http://www.slate-browser.org/", NULL },
 	{ "file:///tmp/test.html", NULL },
 	{ "file:///tmp/inner.html", NULL },
 	{ "about:blank", NULL },
@@ -335,7 +335,7 @@ chain_fixture_create(void)
 	basic_fixture_create();
 	
 	while (chain_case->url != NULL) {
-		ck_assert(nsurl_create(chain_case->url, &chain_case->nsurl) == NSERROR_OK);
+		ck_assert(slateurl_create(chain_case->url, &chain_case->slateurl) == SLATEERROR_OK);
 		chain_case++;
 	}
 	
@@ -347,8 +347,8 @@ chain_fixture_teardown(void)
 	case_pair *chain_case = chain_pairs;
 	
 	while (chain_case->url != NULL) {
-		nsurl_unref(chain_case->nsurl);
-		chain_case->nsurl = NULL;
+		slateurl_unref(chain_case->slateurl);
+		chain_case->slateurl = NULL;
 		chain_case++;
 	}
 	
@@ -362,10 +362,10 @@ START_TEST(chain_add_remove_all)
 	for (chain_case = chain_pairs;
 	     chain_case->url != NULL;
 	     chain_case++) {
-		ck_assert(hashmap_lookup(test_hashmap, chain_case->nsurl) == NULL);
-		ck_assert(hashmap_insert(test_hashmap, chain_case->nsurl) != NULL);
-		ck_assert(hashmap_lookup(test_hashmap, chain_case->nsurl) != NULL);
-		ck_assert(hashmap_remove(test_hashmap, chain_case->nsurl) == true);
+		ck_assert(hashmap_lookup(test_hashmap, chain_case->slateurl) == NULL);
+		ck_assert(hashmap_insert(test_hashmap, chain_case->slateurl) != NULL);
+		ck_assert(hashmap_lookup(test_hashmap, chain_case->slateurl) != NULL);
+		ck_assert(hashmap_remove(test_hashmap, chain_case->slateurl) == true);
 	}
 
 	ck_assert_int_eq(keys, 0);
@@ -380,14 +380,14 @@ START_TEST(chain_add_all_remove_all)
 	for (chain_case = chain_pairs;
 	     chain_case->url != NULL;
 	     chain_case++) {
-		ck_assert(hashmap_lookup(test_hashmap, chain_case->nsurl) == NULL);
-		ck_assert(hashmap_insert(test_hashmap, chain_case->nsurl) != NULL);
+		ck_assert(hashmap_lookup(test_hashmap, chain_case->slateurl) == NULL);
+		ck_assert(hashmap_insert(test_hashmap, chain_case->slateurl) != NULL);
 	}
 
 	for (chain_case = chain_pairs;
 	     chain_case->url != NULL;
 	     chain_case++) {
-		ck_assert(hashmap_remove(test_hashmap, chain_case->nsurl) == true);
+		ck_assert(hashmap_remove(test_hashmap, chain_case->slateurl) == true);
 	}
 
 	ck_assert_int_eq(keys, 0);
@@ -402,21 +402,21 @@ START_TEST(chain_add_all_twice_remove_all)
 	for (chain_case = chain_pairs;
 	     chain_case->url != NULL;
 	     chain_case++) {
-		ck_assert(hashmap_lookup(test_hashmap, chain_case->nsurl) == NULL);
-		ck_assert(hashmap_insert(test_hashmap, chain_case->nsurl) != NULL);
+		ck_assert(hashmap_lookup(test_hashmap, chain_case->slateurl) == NULL);
+		ck_assert(hashmap_insert(test_hashmap, chain_case->slateurl) != NULL);
 	}
 
 	for (chain_case = chain_pairs;
 	     chain_case->url != NULL;
 	     chain_case++) {
-		ck_assert(hashmap_lookup(test_hashmap, chain_case->nsurl) != NULL);
-		ck_assert(hashmap_insert(test_hashmap, chain_case->nsurl) != NULL);
+		ck_assert(hashmap_lookup(test_hashmap, chain_case->slateurl) != NULL);
+		ck_assert(hashmap_insert(test_hashmap, chain_case->slateurl) != NULL);
 	}
 
 	for (chain_case = chain_pairs;
 	     chain_case->url != NULL;
 	     chain_case++) {
-		ck_assert(hashmap_remove(test_hashmap, chain_case->nsurl) == true);
+		ck_assert(hashmap_remove(test_hashmap, chain_case->slateurl) == true);
 	}
 
 	ck_assert_int_eq(keys, 0);
@@ -432,8 +432,8 @@ START_TEST(chain_add_all_twice_remove_all_iterate)
 	for (chain_case = chain_pairs;
 	     chain_case->url != NULL;
 	     chain_case++) {
-		ck_assert(hashmap_lookup(test_hashmap, chain_case->nsurl) == NULL);
-		ck_assert(hashmap_insert(test_hashmap, chain_case->nsurl) != NULL);
+		ck_assert(hashmap_lookup(test_hashmap, chain_case->slateurl) == NULL);
+		ck_assert(hashmap_insert(test_hashmap, chain_case->slateurl) != NULL);
 		chain_count++;
 	}
 	
@@ -445,8 +445,8 @@ START_TEST(chain_add_all_twice_remove_all_iterate)
 	for (chain_case = chain_pairs;
 	     chain_case->url != NULL;
 	     chain_case++) {
-		ck_assert(hashmap_lookup(test_hashmap, chain_case->nsurl) != NULL);
-		ck_assert(hashmap_insert(test_hashmap, chain_case->nsurl) != NULL);
+		ck_assert(hashmap_lookup(test_hashmap, chain_case->slateurl) != NULL);
+		ck_assert(hashmap_insert(test_hashmap, chain_case->slateurl) != NULL);
 	}
 
 	iteration_counter = 0;
@@ -463,7 +463,7 @@ START_TEST(chain_add_all_twice_remove_all_iterate)
 	for (chain_case = chain_pairs;
 	     chain_case->url != NULL;
 	     chain_case++) {
-		ck_assert(hashmap_remove(test_hashmap, chain_case->nsurl) == true);
+		ck_assert(hashmap_remove(test_hashmap, chain_case->slateurl) == true);
 	}
 
 	iteration_counter = 0;
@@ -489,7 +489,7 @@ START_TEST(chain_add_all_remove_all_alloc)
 	for (chain_case = chain_pairs;
 	     chain_case->url != NULL;
 	     chain_case++) {
-		if (hashmap_insert(test_hashmap, chain_case->nsurl) == NULL) {
+		if (hashmap_insert(test_hashmap, chain_case->slateurl) == NULL) {
 			failed = true;
 		}
 	}
@@ -497,7 +497,7 @@ START_TEST(chain_add_all_remove_all_alloc)
 	for (chain_case = chain_pairs;
 	     chain_case->url != NULL;
 	     chain_case++) {
-		if (hashmap_insert(test_hashmap, chain_case->nsurl) == NULL) {
+		if (hashmap_insert(test_hashmap, chain_case->slateurl) == NULL) {
 			failed = true;
 		}
 	}
@@ -505,7 +505,7 @@ START_TEST(chain_add_all_remove_all_alloc)
 	for (chain_case = chain_pairs;
 	     chain_case->url != NULL;
 	     chain_case++) {
-		hashmap_remove(test_hashmap, chain_case->nsurl);
+		hashmap_remove(test_hashmap, chain_case->slateurl);
 	}
 
 	malloc_limit(UINT_MAX);

@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,22 +19,22 @@
 #ifdef WITH_AMIGA_DATATYPES
 #include "amiga/datatypes.h"
 
-nserror amiga_datatypes_init(void)
+slateerror amiga_datatypes_init(void)
 {
-	nserror err = NSERROR_OK;
+	slateerror err = SLATEERROR_OK;
 
 	err = amiga_dt_picture_init();
-	if(err != NSERROR_OK) return err;
+	if(err != SLATEERROR_OK) return err;
 
 #ifdef WITH_DTANIM
 	err = amiga_dt_anim_init();
-	if(err != NSERROR_OK) return err;
+	if(err != SLATEERROR_OK) return err;
 #endif
 
 	err = amiga_dt_sound_init();
-	if(err != NSERROR_OK) return err;
+	if(err != SLATEERROR_OK) return err;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 #endif

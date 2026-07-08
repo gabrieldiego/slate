@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -88,11 +88,11 @@ typedef struct {
 
 static bool nscss_convert(struct content *c);
 static void nscss_destroy(struct content *c);
-static nserror nscss_clone(const struct content *old, struct content **newc);
+static slateerror nscss_clone(const struct content *old, struct content **newc);
 static bool nscss_matches_quirks(const struct content *c, bool quirks);
 static content_type nscss_content_type(void);
 
-static nserror nscss_create_css_data(struct content_css_data *c,
+static slateerror nscss_create_css_data(struct content_css_data *c,
 		const char *url, const char *charset, bool quirks,
 		nscss_done_callback done, void *pw);
 static css_error nscss_process_css_data(struct content_css_data *c, const char *data,
@@ -103,7 +103,7 @@ static void nscss_destroy_css_data(struct content_css_data *c);
 static void nscss_content_done(struct content_css_data *css, void *pw);
 static css_error nscss_handle_import(void *pw, css_stylesheet *parent,
 		lwc_string *url);
-static nserror nscss_import(hlcache_handle *handle,
+static slateerror nscss_import(hlcache_handle *handle,
 		const hlcache_event *event, void *pw);
 static css_error nscss_import_complete(nscss_import_ctx *ctx);
 
@@ -125,9 +125,9 @@ static css_stylesheet *blank_import;
  * \param fallback_charset The character set to fallback to.
  * \param quirks allow quirks
  * \param c Content to initialise
- * \return NSERROR_OK or error cod eon faliure
+ * \return SLATEERROR_OK or error cod eon faliure
  */
-static nserror
+static slateerror
 nscss_create(const content_handler *handler,
 	     lwc_string *imime_type,
 	     const http_parameter *params,
@@ -140,15 +140,15 @@ nscss_create(const content_handler *handler,
 	const char *charset = NULL;
 	const char *xnsbase = NULL;
 	lwc_string *charset_value = NULL;
-	nserror error;
+	slateerror error;
 
 	result = calloc(1, sizeof(nscss_content));
 	if (result == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__init(&result->base, handler, imime_type,
 			params, llcache, fallback_charset, quirks);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(result);
 		return error;
 	}
@@ -156,7 +156,7 @@ nscss_create(const content_handler *handler,
 	/* Find charset specified on HTTP layer, if any */
 	error = http_parameter_list_find_item(params, corestring_lwc_charset,
 			&charset_value);
-	if (error != NSERROR_OK || lwc_string_length(charset_value) == 0) {
+	if (error != SLATEERROR_OK || lwc_string_length(charset_value) == 0) {
 		/* No charset specified, use fallback, if any */
 		/** \todo libcss will take this as gospel, which is wrong */
 		charset = fallback_charset;
@@ -167,14 +167,14 @@ nscss_create(const content_handler *handler,
 	/* Compute base URL for stylesheet */
 	xnsbase = llcache_handle_get_header(llcache, "X-NS-Base");
 	if (xnsbase == NULL) {
-		xnsbase = nsurl_access(content_get_url(&result->base));
+		xnsbase = slateurl_access(content_get_url(&result->base));
 	}
 
 	error = nscss_create_css_data(&result->data,
 			xnsbase, charset, result->base.quirks,
 			nscss_content_done, result);
-	if (error != NSERROR_OK) {
-		content_broadcast_error(&result->base, NSERROR_NOMEM, NULL);
+	if (error != SLATEERROR_OK) {
+		content_broadcast_error(&result->base, SLATEERROR_NOMEM, NULL);
 		lwc_string_unref(charset_value);
 		free(result);
 		return error;
@@ -184,7 +184,7 @@ nscss_create(const content_handler *handler,
 
 	*c = (struct content *) result;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -196,9 +196,9 @@ nscss_create(const content_handler *handler,
  * \param quirks   Stylesheet quirks mode
  * \param done     Callback to call when content has completed
  * \param pw       Client data for \a done
- * \return NSERROR_OK on success, NSERROR_NOMEM on memory exhaustion
+ * \return SLATEERROR_OK on success, SLATEERROR_NOMEM on memory exhaustion
  */
-static nserror nscss_create_css_data(struct content_css_data *c,
+static slateerror nscss_create_css_data(struct content_css_data *c,
 		const char *url, const char *charset, bool quirks,
 		nscss_done_callback done, void *pw)
 {
@@ -226,17 +226,17 @@ static nserror nscss_create_css_data(struct content_css_data *c,
 	params.resolve_pw = NULL;
 	params.import = nscss_handle_import;
 	params.import_pw = c;
-	params.color = ns_system_colour;
+	params.color = slate_system_colour;
 	params.color_pw = NULL;
 	params.font = NULL;
 	params.font_pw = NULL;
 
 	error = css_stylesheet_create(&params, &c->sheet);
 	if (error != CSS_OK) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -255,7 +255,7 @@ nscss_process_data(struct content *c, const char *data, unsigned int size)
 
 	error = nscss_process_css_data(&css->data, data, size);
 	if (error != CSS_OK && error != CSS_NEEDDATA) {
-		content_broadcast_error(c, NSERROR_CSS, NULL);
+		content_broadcast_error(c, SLATEERROR_CSS, NULL);
 	}
 
 	return (error == CSS_OK || error == CSS_NEEDDATA);
@@ -289,7 +289,7 @@ bool nscss_convert(struct content *c)
 
 	error = nscss_convert_css_data(&css->data);
 	if (error != CSS_OK) {
-		content_broadcast_error(c, NSERROR_CSS, NULL);
+		content_broadcast_error(c, SLATEERROR_CSS, NULL);
 		return false;
 	}
 
@@ -373,32 +373,32 @@ static void nscss_destroy_css_data(struct content_css_data *c)
 	free(c->charset);
 }
 
-nserror nscss_clone(const struct content *old, struct content **newc)
+slateerror nscss_clone(const struct content *old, struct content **newc)
 {
 	const nscss_content *old_css = (const nscss_content *) old;
 	nscss_content *new_css;
 	const uint8_t *data;
 	size_t size;
-	nserror error;
+	slateerror error;
 
 	new_css = calloc(1, sizeof(nscss_content));
 	if (new_css == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	/* Clone content */
 	error = content__clone(old, &new_css->base);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&new_css->base);
 		return error;
 	}
 
 	/* Simply replay create/process/convert */
 	error = nscss_create_css_data(&new_css->data,
-			nsurl_access(content_get_url(&new_css->base)),
+			slateurl_access(content_get_url(&new_css->base)),
 			old_css->data.charset,
 			new_css->base.quirks,
 			nscss_content_done, new_css);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&new_css->base);
 		return error;
 	}
@@ -409,7 +409,7 @@ nserror nscss_clone(const struct content *old, struct content **newc)
 				       (char *)data,
 				       (unsigned int)size) == false) {
 			content_destroy(&new_css->base);
-			return NSERROR_CLONE_FAILED;
+			return SLATEERROR_CLONE_FAILED;
 		}
 	}
 
@@ -417,13 +417,13 @@ nserror nscss_clone(const struct content *old, struct content **newc)
 			old->status == CONTENT_STATUS_DONE) {
 		if (nscss_convert(&new_css->base) == false) {
 			content_destroy(&new_css->base);
-			return NSERROR_CLONE_FAILED;
+			return SLATEERROR_CLONE_FAILED;
 		}
 	}
 
 	*newc = (struct content *) new_css;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 bool nscss_matches_quirks(const struct content *c, bool quirks)
@@ -484,7 +484,7 @@ void nscss_content_done(struct content_css_data *css, void *pw)
 	/* Retrieve the size of this sheet */
 	error = css_stylesheet_size(css->sheet, &size);
 	if (error != CSS_OK) {
-		content_broadcast_error(c, NSERROR_CSS, NULL);
+		content_broadcast_error(c, SLATEERROR_CSS, NULL);
 		content_set_error(c);
 		return;
 	}
@@ -529,10 +529,10 @@ css_error nscss_handle_import(void *pw, css_stylesheet *parent,
 	struct nscss_import *imports;
 	const char *referer;
 	css_error error;
-	nserror nerror;
+	slateerror nerror;
 
-	nsurl *ns_url;
-	nsurl *ns_ref;
+	slateurl *ns_url;
+	slateurl *ns_ref;
 
 	assert(parent == c->sheet);
 
@@ -568,22 +568,22 @@ css_error nscss_handle_import(void *pw, css_stylesheet *parent,
 	/* Create content */
 
 	/** \todo Why aren't we getting a relative url part, to join? */
-	nerror = nsurl_create(lwc_string_data(url), &ns_url);
-	if (nerror != NSERROR_OK) {
+	nerror = slateurl_create(lwc_string_data(url), &ns_url);
+	if (nerror != SLATEERROR_OK) {
 		free(ctx);
 		return CSS_NOMEM;
 	}
 
-	/** \todo Constructing nsurl for referer here is silly, avoid */
-	nerror = nsurl_create(referer, &ns_ref);
-	if (nerror != NSERROR_OK) {
-		nsurl_unref(ns_url);
+	/** \todo Constructing slateurl for referer here is silly, avoid */
+	nerror = slateurl_create(referer, &ns_ref);
+	if (nerror != SLATEERROR_OK) {
+		slateurl_unref(ns_url);
 		free(ctx);
 		return CSS_NOMEM;
 	}
 
 	/* Avoid importing ourself */
-	if (nsurl_compare(ns_url, ns_ref, NSURL_COMPLETE)) {
+	if (slateurl_compare(ns_url, ns_ref, SLATEURL_COMPLETE)) {
 		c->imports[c->import_count].c = NULL;
 		/* No longer require context as we're not fetching anything */
 		free(ctx);
@@ -593,14 +593,14 @@ css_error nscss_handle_import(void *pw, css_stylesheet *parent,
 				0, ns_ref, NULL, nscss_import, ctx,
 				&child, accept,
 				&c->imports[c->import_count].c);
-		if (nerror != NSERROR_OK) {
+		if (nerror != SLATEERROR_OK) {
 			free(ctx);
 			return CSS_NOMEM;
 		}
 	}
 
-	nsurl_unref(ns_url);
-	nsurl_unref(ns_ref);
+	slateurl_unref(ns_url);
+	slateurl_unref(ns_ref);
 
 #ifdef NSCSS_IMPORT_TRACE
 	NSLOG(netsurf, INFO, "Import %d '%s' -> (handle: %p ctx: %p)",
@@ -619,9 +619,9 @@ css_error nscss_handle_import(void *pw, css_stylesheet *parent,
  * \param handle  Handle for stylesheet
  * \param event   Event object
  * \param pw      Callback context
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror nscss_import(hlcache_handle *handle,
+slateerror nscss_import(hlcache_handle *handle,
 		const hlcache_event *event, void *pw)
 {
 	nscss_import_ctx *ctx = pw;
@@ -650,7 +650,7 @@ nserror nscss_import(hlcache_handle *handle,
 	}
 
 	/* Preserve out-of-memory. Anything else is OK */
-	return error == CSS_NOMEM ? NSERROR_NOMEM : NSERROR_OK;
+	return error == CSS_NOMEM ? SLATEERROR_NOMEM : SLATEERROR_OK;
 }
 
 /**
@@ -758,7 +758,7 @@ css_error nscss_register_import(struct content_css_data *c,
 			params.resolve_pw = NULL;
 			params.import = NULL;
 			params.import_pw = NULL;
-			params.color = ns_system_colour;
+			params.color = slate_system_colour;
 			params.color_pw = NULL;
 			params.font = NULL;
 			params.font_pw = NULL;
@@ -811,20 +811,20 @@ static const content_handler css_content_handler = {
 };
 
 /* exported interface documented in netsurf/css.h */
-nserror nscss_init(void)
+slateerror nscss_init(void)
 {
-	nserror error;
+	slateerror error;
 
 	error = content_factory_register_handler("text/css",
 			&css_content_handler);
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		goto error;
 
 	error = css_hint_init();
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		goto error;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 
 error:
 	nscss_fini();

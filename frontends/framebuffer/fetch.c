@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,11 +25,11 @@
 #include <string.h>
 #include <limits.h>
 
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/log.h"
 #include "utils/filepath.h"
 #include "utils/file.h"
-#include "netsurf/fetch.h"
+#include "slate/fetch.h"
 
 #include "framebuffer/findfile.h"
 #include "framebuffer/fetch.h"
@@ -40,21 +40,21 @@
  *
  * Transforms a resource: path into a full URL. The returned URL
  * is used as the target for a redirect. The caller takes ownership of
- * the returned nsurl including unrefing it when finished with it.
+ * the returned slateurl including unrefing it when finished with it.
  *
  * \param path The path of the resource to locate.
  * \return A string containing the full URL of the target object or
  *         NULL if no suitable resource can be found.
  */
-static nsurl *get_resource_url(const char *path)
+static slateurl *get_resource_url(const char *path)
 {
 	char buf[PATH_MAX];
-	nsurl *url = NULL;
+	slateurl *url = NULL;
 
 	if (strcmp(path, "favicon.ico") == 0)
 		path = "favicon.png";
 
-	netsurf_path_to_nsurl(filepath_sfind(respaths, buf, path), &url);
+	slate_path_to_slateurl(filepath_sfind(respaths, buf, path), &url);
 
 	return url;
 }

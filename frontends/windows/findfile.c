@@ -2,7 +2,7 @@
  * Copyright 2008 Daniel Silverstone <dsilvers@netsurf-browser.org>
  * Copyright 2009 Mark Benjamin <netsurf-browser.org.MarkBenjamin@dfgh.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -83,9 +83,9 @@ static char *realpath(const char *path, char *resolved_path)
 /**
  * Locate a shared resource file by searching known places in order.
  *
- * Search order is: ~/.netsurf/, $NETSURFRES/ (where NETSURFRES is an
+ * Search order is: ~/.slate/, $SLATERES/ (where SLATERES is an
  * environment variable), then the path specified in
- * NETSURF_WINDOWS_RESPATH in the Makefile then .\\res\\ [windows paths]
+ * SLATE_WINDOWS_RESPATH in the Makefile then .\\res\\ [windows paths]
  *
  * \param  buf      buffer to write to.  must be at least PATH_MAX chars
  * \param  filename file to look for
@@ -101,13 +101,13 @@ char *nsws_find_resource(char *buf, const char *filename, const char *def)
 	if (cdir != NULL) {
 		NSLOG(netsurf, INFO, "Found Home %s", cdir);
 		strcpy(t, cdir);
-		strcat(t, "/.netsurf/");
+		strcat(t, "/.slate/");
 		strcat(t, filename);
 		if ((realpath(t, buf) != NULL)  && (access(buf, R_OK) == 0))
 			return buf;
 	}
 
-	cdir = getenv("NETSURFRES");
+	cdir = getenv("SLATERES");
 
 	if (cdir != NULL) {
 		if (realpath(cdir , buf) != NULL) {
@@ -118,7 +118,7 @@ char *nsws_find_resource(char *buf, const char *filename, const char *def)
 		}
 	}
 
-	strcpy(t, NETSURF_WINDOWS_RESPATH);
+	strcpy(t, SLATE_WINDOWS_RESPATH);
 	strcat(t, filename);
 	if ((realpath(t, buf) != NULL) && (access(buf, R_OK) == 0))
 		return buf;

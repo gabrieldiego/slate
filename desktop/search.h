@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 Mark Benjamin <netsurf-browser.org.MarkBenjamin@dfgh.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * Browseing window text search interface
  */
 
-#ifndef NETSURF_DESKTOP_SEARCH_H_
-#define NETSURF_DESKTOP_SEARCH_H_
+#ifndef SLATE_DESKTOP_SEARCH_H_
+#define SLATE_DESKTOP_SEARCH_H_
 
 struct browser_window;
 

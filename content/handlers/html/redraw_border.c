@@ -1,7 +1,7 @@
 /*
  * Copyright 2017 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,8 +27,8 @@
 
 #include "utils/utils.h"
 #include "utils/log.h"
-#include "netsurf/plotters.h"
-#include "netsurf/css.h"
+#include "slate/plotters.h"
+#include "slate/css.h"
 
 #include "html/box.h"
 #include "html/private.h"
@@ -54,13 +54,13 @@ static plot_style_t plot_style_fillbdr_dlight = {
 };
 
 
-static inline nserror
+static inline slateerror
 plot_clipped_rectangle(const struct redraw_context *ctx,
 		       const plot_style_t *style,
 		       const struct rect *clip,
 		       struct rect *rect)
 {
-	nserror res;
+	slateerror res;
 
 	rect->x0 = (clip->x0 > rect->x0) ? clip->x0 : rect->x0;
 	rect->y0 = (clip->y0 > rect->y0) ? clip->y0 : rect->y0;
@@ -70,7 +70,7 @@ plot_clipped_rectangle(const struct redraw_context *ctx,
 		/* valid clip rectangles only */
 		res = ctx->plot->rectangle(ctx, style, rect);
 	} else {
-		res = NSERROR_OK;
+		res = SLATEERROR_OK;
 	}
 	return res;
 }
@@ -87,9 +87,9 @@ plot_clipped_rectangle(const struct redraw_context *ctx,
  * \param rectangular whether border is rectangular
  * \param clip cliping area for redrawing border.
  * \param ctx current redraw context
- * \return NSERROR_OK if successful otherwise appropriate error code
+ * \return SLATEERROR_OK if successful otherwise appropriate error code
  */
-static nserror
+static slateerror
 html_redraw_border_plot(const int side,
 			const int *p,
 			colour c,
@@ -103,7 +103,7 @@ html_redraw_border_plot(const int side,
 	unsigned int light = side;
 	plot_style_t *plot_style_bdr_in;
 	plot_style_t *plot_style_bdr_out;
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 	struct rect rect;
 
 	if (c == NS_TRANSPARENT) {
@@ -176,7 +176,7 @@ html_redraw_border_plot(const int side,
 		z[6] = p[6];
 		z[7] = p[7];
 		res = ctx->plot->polygon(ctx, &plot_style_fillbdr, z, 4);
-		if (res == NSERROR_OK) {
+		if (res == SLATEERROR_OK) {
 			z[0] = p[2];
 			z[1] = p[3];
 			z[2] = (p[2] * 2 + p[0]) / 3;
@@ -224,7 +224,7 @@ html_redraw_border_plot(const int side,
 						     plot_style_bdr_in,
 						     clip,
 						     &rect);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return res;
 			}
 
@@ -286,7 +286,7 @@ html_redraw_border_plot(const int side,
 			z[6] = p[6];
 			z[7] = p[7];
 			res = ctx->plot->polygon(ctx, plot_style_bdr_in, z, 4);
-			if (res == NSERROR_OK) {
+			if (res == SLATEERROR_OK) {
 				z[0] = p[2];
 				z[1] = p[3];
 				z[6] = p[4];
@@ -349,7 +349,7 @@ html_redraw_border_plot(const int side,
 						     plot_style_bdr_in,
 						     clip,
 						     &rect);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return res;
 			}
 
@@ -411,7 +411,7 @@ html_redraw_border_plot(const int side,
 			z[6] = p[6];
 			z[7] = p[7];
 			res = ctx->plot->polygon(ctx, plot_style_bdr_in, z, 4);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return res;
 			}
 			z[0] = p[2];
@@ -461,7 +461,7 @@ html_redraw_borders(struct box *box,
 	int z[8]; /* Border vertices */
 	bool square_end_1 = false;
 	bool square_end_2 = false;
-	nserror res;
+	slateerror res;
 
 	x = x_parent + box->x;
 	y = y_parent + box->y;
@@ -497,7 +497,7 @@ html_redraw_borders(struct box *box,
 		side = sides[i]; /* plot order */
 
 		if (box->border[side].width == 0 ||
-		    nscss_color_is_transparent(box->border[side].c)) {
+		    slatecss_color_is_transparent(box->border[side].c)) {
 			continue;
 		}
 
@@ -511,7 +511,7 @@ html_redraw_borders(struct box *box,
 			z[4] = p[2];	z[5] = p[3];
 			z[6] = p[0];	z[7] = p[1];
 
-			if (nscss_color_is_transparent(box->border[TOP].c) == false &&
+			if (slatecss_color_is_transparent(box->border[TOP].c) == false &&
 			    box->border[TOP].style != CSS_BORDER_STYLE_DOUBLE) {
 				/* make border overhang top corner fully,
 				 * if top border is opaque
@@ -519,7 +519,7 @@ html_redraw_borders(struct box *box,
 				z[5] -= top;
 				square_end_1 = true;
 			}
-			if (nscss_color_is_transparent(box->border[BOTTOM].c) == false &&
+			if (slatecss_color_is_transparent(box->border[BOTTOM].c) == false &&
 			    box->border[BOTTOM].style != CSS_BORDER_STYLE_DOUBLE) {
 				/* make border overhang bottom corner fully,
 				 * if bottom border is opaque
@@ -528,7 +528,7 @@ html_redraw_borders(struct box *box,
 				square_end_2 = true;
 			}
 
-			col = nscss_color_to_ns(box->border[side].c);
+			col = slatecss_color_to_slate(box->border[side].c);
 
 			res = html_redraw_border_plot(side,
 						      z,
@@ -538,7 +538,7 @@ html_redraw_borders(struct box *box,
 						      square_end_1 && square_end_2,
 						      clip,
 						      ctx);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return false;
 			}
 			break;
@@ -552,7 +552,7 @@ html_redraw_borders(struct box *box,
 			z[4] = p[4];	z[5] = p[5];
 			z[6] = p[6];	z[7] = p[7];
 
-			if (nscss_color_is_transparent(box->border[TOP].c) == false &&
+			if (slatecss_color_is_transparent(box->border[TOP].c) == false &&
 			    box->border[TOP].style != CSS_BORDER_STYLE_DOUBLE) {
 				/* make border overhang top corner fully,
 				 * if top border is opaque
@@ -560,7 +560,7 @@ html_redraw_borders(struct box *box,
 				z[3] -= top;
 				square_end_1 = true;
 			}
-			if (nscss_color_is_transparent(box->border[BOTTOM].c) == false &&
+			if (slatecss_color_is_transparent(box->border[BOTTOM].c) == false &&
 			    box->border[BOTTOM].style != CSS_BORDER_STYLE_DOUBLE) {
 				/* make border overhang bottom corner fully,
 				 * if bottom border is opaque
@@ -569,7 +569,7 @@ html_redraw_borders(struct box *box,
 				square_end_2 = true;
 			}
 
-			col = nscss_color_to_ns(box->border[side].c);
+			col = slatecss_color_to_slate(box->border[side].c);
 
 			res = html_redraw_border_plot(side,
 						      z,
@@ -579,7 +579,7 @@ html_redraw_borders(struct box *box,
 						      square_end_1 && square_end_2,
 						      clip,
 						      ctx);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return false;
 			}
 			break;
@@ -617,7 +617,7 @@ html_redraw_borders(struct box *box,
 				square_end_2 = true;
 			}
 
-			col = nscss_color_to_ns(box->border[side].c);
+			col = slatecss_color_to_slate(box->border[side].c);
 
 			res = html_redraw_border_plot(side,
 						      z,
@@ -627,7 +627,7 @@ html_redraw_borders(struct box *box,
 						      square_end_1 && square_end_2,
 						      clip,
 						      ctx);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return false;
 			}
 			break;
@@ -665,7 +665,7 @@ html_redraw_borders(struct box *box,
 				square_end_2 = true;
 			}
 
-			col = nscss_color_to_ns(box->border[side].c);
+			col = slatecss_color_to_slate(box->border[side].c);
 
 			res = html_redraw_border_plot(side,
 						      z,
@@ -675,7 +675,7 @@ html_redraw_borders(struct box *box,
 						      square_end_1 && square_end_2,
 						      clip,
 						      ctx);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return false;
 			}
 			break;
@@ -721,7 +721,7 @@ html_redraw_inline_borders(struct box *box,
 	int z[8]; /* Border vertices */
 	bool square_end_1;
 	bool square_end_2;
-	nserror res;
+	slateerror res;
 
 	if (scale != 1.0) {
 		top *= scale;
@@ -752,15 +752,15 @@ html_redraw_inline_borders(struct box *box,
 	square_end_2 = (bottom == 0);
 	if (left != 0 &&
 	    first &&
-	    nscss_color_is_transparent(box->border[LEFT].c) == false) {
-		col = nscss_color_to_ns(box->border[LEFT].c);
+	    slatecss_color_is_transparent(box->border[LEFT].c) == false) {
+		col = slatecss_color_to_slate(box->border[LEFT].c);
 
 		z[0] = p[0];	z[1] = p[7];
 		z[2] = p[2];	z[3] = p[5];
 		z[4] = p[2];	z[5] = p[3];
 		z[6] = p[0];	z[7] = p[1];
 
-		if (nscss_color_is_transparent(box->border[TOP].c) == false &&
+		if (slatecss_color_is_transparent(box->border[TOP].c) == false &&
 		    box->border[TOP].style != CSS_BORDER_STYLE_DOUBLE) {
 			/* make border overhang top corner fully,
 			 * if top border is opaque
@@ -769,7 +769,7 @@ html_redraw_inline_borders(struct box *box,
 			square_end_1 = true;
 		}
 
-		if (nscss_color_is_transparent(box->border[BOTTOM].c) == false &&
+		if (slatecss_color_is_transparent(box->border[BOTTOM].c) == false &&
 		    box->border[BOTTOM].style != CSS_BORDER_STYLE_DOUBLE) {
 			/* make border overhang bottom corner fully,
 			 * if bottom border is opaque
@@ -786,7 +786,7 @@ html_redraw_inline_borders(struct box *box,
 					      square_end_1 && square_end_2,
 					      clip,
 					      ctx);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return false;
 		}
 	}
@@ -796,15 +796,15 @@ html_redraw_inline_borders(struct box *box,
 	square_end_2 = (bottom == 0);
 	if (right != 0 &&
 	    last &&
-	    nscss_color_is_transparent(box->border[RIGHT].c) == false) {
-		col = nscss_color_to_ns(box->border[RIGHT].c);
+	    slatecss_color_is_transparent(box->border[RIGHT].c) == false) {
+		col = slatecss_color_to_slate(box->border[RIGHT].c);
 
 		z[0] = p[6];	z[1] = p[1];
 		z[2] = p[4];	z[3] = p[3];
 		z[4] = p[4];	z[5] = p[5];
 		z[6] = p[6];	z[7] = p[7];
 
-		if (nscss_color_is_transparent(box->border[TOP].c) == false &&
+		if (slatecss_color_is_transparent(box->border[TOP].c) == false &&
 		    box->border[TOP].style != CSS_BORDER_STYLE_DOUBLE) {
 			/* make border overhang top corner fully,
 			 * if top border is opaque
@@ -813,7 +813,7 @@ html_redraw_inline_borders(struct box *box,
 			square_end_1 = true;
 		}
 
-		if (nscss_color_is_transparent(box->border[BOTTOM].c) == false &&
+		if (slatecss_color_is_transparent(box->border[BOTTOM].c) == false &&
 		    box->border[BOTTOM].style != CSS_BORDER_STYLE_DOUBLE) {
 			/* make border overhang bottom corner fully,
 			 * if bottom border is opaque
@@ -830,7 +830,7 @@ html_redraw_inline_borders(struct box *box,
 					      square_end_1 && square_end_2,
 					      clip,
 					      ctx);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return false;
 		}
 	}
@@ -839,8 +839,8 @@ html_redraw_inline_borders(struct box *box,
 	square_end_1 = (left == 0);
 	square_end_2 = (right == 0);
 	if (top != 0 &&
-	    nscss_color_is_transparent(box->border[TOP].c) == false) {
-		col = nscss_color_to_ns(box->border[TOP].c);
+	    slatecss_color_is_transparent(box->border[TOP].c) == false) {
+		col = slatecss_color_to_slate(box->border[TOP].c);
 
 		z[0] = p[2];	z[1] = p[3];
 		z[2] = p[0];	z[3] = p[1];
@@ -875,7 +875,7 @@ html_redraw_inline_borders(struct box *box,
 					      square_end_1 && square_end_2,
 					      clip,
 					      ctx);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return false;
 		}
 	}
@@ -884,8 +884,8 @@ html_redraw_inline_borders(struct box *box,
 	square_end_1 = (left == 0);
 	square_end_2 = (right == 0);
 	if (bottom != 0 &&
-	    nscss_color_is_transparent(box->border[BOTTOM].c) == false) {
-		col = nscss_color_to_ns(box->border[BOTTOM].c);
+	    slatecss_color_is_transparent(box->border[BOTTOM].c) == false) {
+		col = slatecss_color_to_slate(box->border[BOTTOM].c);
 
 		z[0] = p[4];	z[1] = p[5];
 		z[2] = p[6];	z[3] = p[7];
@@ -920,7 +920,7 @@ html_redraw_inline_borders(struct box *box,
 					      square_end_1 && square_end_2,
 					      clip,
 					      ctx);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return false;
 		}
 	}

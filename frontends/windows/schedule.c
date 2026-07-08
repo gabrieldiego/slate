@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 Vincent Sanders <vince@simtec.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -49,7 +49,7 @@ struct nscallback
  * All scheduled callbacks matching both callback and p are removed.
  */
 
-static nserror schedule_remove(void (*callback)(void *p), void *p)
+static slateerror schedule_remove(void (*callback)(void *p), void *p)
 {
         struct nscallback *cur_nscb;
         struct nscallback *prev_nscb;
@@ -57,7 +57,7 @@ static nserror schedule_remove(void (*callback)(void *p), void *p)
 
 	/* check there is something on the list to remove */
         if (schedule_list == NULL) {
-                return NSERROR_OK;
+                return SLATEERROR_OK;
 	}
 
 	NSLOG(schedule, DEBUG, "removing %p, %p", callback, p);
@@ -92,18 +92,18 @@ static nserror schedule_remove(void (*callback)(void *p), void *p)
                         cur_nscb = prev_nscb->next;
                 }
         }
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in windows/schedule.h */
-nserror win32_schedule(int ival, void (*callback)(void *p), void *p)
+slateerror win32_schedule(int ival, void (*callback)(void *p), void *p)
 {
 	struct nscallback *nscb;
 	struct timeval tv;
-	nserror ret;
+	slateerror ret;
 
 	ret = schedule_remove(callback, p);
-	if ((ival < 0) || (ret != NSERROR_OK)) {
+	if ((ival < 0) || (ret != SLATEERROR_OK)) {
 		return ret;
 	}
 
@@ -112,7 +112,7 @@ nserror win32_schedule(int ival, void (*callback)(void *p), void *p)
 
 	nscb = calloc(1, sizeof(struct nscallback));
 	if (nscb == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	NSLOG(schedule, DEBUG,
@@ -129,7 +129,7 @@ nserror win32_schedule(int ival, void (*callback)(void *p), void *p)
         nscb->next = schedule_list;
         schedule_list = nscb;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in schedule.h */

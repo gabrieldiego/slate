@@ -2,7 +2,7 @@
  * Copyright 2006 John-Mark Bell <jmb@netsurf-browser.org>
  * Copyright 2009 Paul Blokus <paul_pl@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,12 +29,12 @@
 #include "utils/log.h"
 #include "utils/utf8.h"
 #include "utils/utils.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/plotters.h"
-#include "netsurf/mouse.h"
-#include "netsurf/keypress.h"
-#include "netsurf/clipboard.h"
-#include "netsurf/layout.h"
+#include "slate/browser_window.h"
+#include "slate/plotters.h"
+#include "slate/mouse.h"
+#include "slate/keypress.h"
+#include "slate/clipboard.h"
+#include "slate/layout.h"
 #include "css/utils.h"
 
 #include "desktop/textarea.h"
@@ -1032,7 +1032,7 @@ static bool textarea_reflow_multiline(struct textarea *ta,
 				int w = ta->vis_width - 2 * ta->border_width;
 				if (scrollbar_create(true, w, w, w,
 						ta, textarea_scrollbar_callback,
-						     &(ta->bar_x)) != NSERROR_OK) {
+						     &(ta->bar_x)) != SLATEERROR_OK) {
 					return false;
 				}
 				if (ta->bar_y != NULL)
@@ -1124,7 +1124,7 @@ static bool textarea_reflow_multiline(struct textarea *ta,
 			int h = ta->vis_height - 2 * ta->border_width;
 			if (scrollbar_create(false, h, h, h,
 					     ta, textarea_scrollbar_callback,
-					     &(ta->bar_y)) != NSERROR_OK) {
+					     &(ta->bar_y)) != SLATEERROR_OK) {
 				return false;
 			}
 			if (ta->bar_x != NULL)

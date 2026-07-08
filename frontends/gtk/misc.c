@@ -1,7 +1,7 @@
 /*
  * Copyright 2021 Vincemt Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,8 +29,8 @@
 #include "utils/errors.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "utils/nsurl.h"
-#include "netsurf/misc.h"
+#include "utils/slateurl.h"
+#include "slate/misc.h"
 #include "desktop/save_pdf.h"
 
 #include "gtk/compat.h"
@@ -41,24 +41,24 @@
 #include "gtk/misc.h"
 
 
-static nserror gui_launch_url(struct nsurl *url)
+static slateerror gui_launch_url(struct slateurl *url)
 {
 	gboolean ok;
 	GError *error = NULL;
 
-	ok = nsgtk_show_uri(NULL, nsurl_access(url), GDK_CURRENT_TIME, &error);
+	ok = slategtk_show_uri(NULL, slateurl_access(url), GDK_CURRENT_TIME, &error);
 	if (ok == TRUE) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	if (error) {
-		nsgtk_warning(messages_get("URIOpenError"), error->message);
+		slategtk_warning(messages_get("URIOpenError"), error->message);
 		g_error_free(error);
 	}
-	return NSERROR_NO_FETCH_HANDLER;
+	return SLATEERROR_NO_FETCH_HANDLER;
 }
 
-static void nsgtk_PDF_set_pass(GtkButton *w, gpointer data)
+static void slategtk_PDF_set_pass(GtkButton *w, gpointer data)
 {
 	char **owner_pass = ((void **)data)[0];
 	char **user_pass = ((void **)data)[1];
@@ -121,7 +121,7 @@ static void nsgtk_PDF_set_pass(GtkButton *w, gpointer data)
 	free(up1);
 }
 
-static void nsgtk_PDF_no_pass(GtkButton *w, gpointer data)
+static void slategtk_PDF_no_pass(GtkButton *w, gpointer data)
 {
 	GtkWindow *wnd = ((void **)data)[2];
 	GtkBuilder *password_builder = ((void **)data)[3];
@@ -137,16 +137,16 @@ static void nsgtk_PDF_no_pass(GtkButton *w, gpointer data)
 	free(path);
 }
 
-static void nsgtk_pdf_password(char **owner_pass, char **user_pass, char *path)
+static void slategtk_pdf_password(char **owner_pass, char **user_pass, char *path)
 {
 	GtkButton *ok, *no;
 	GtkWindow *wnd;
 	void **data;
 	GtkBuilder *password_builder;
-	nserror res;
+	slateerror res;
 
-	res = nsgtk_builder_new_from_resname("password", &password_builder);
-	if (res != NSERROR_OK) {
+	res = slategtk_builder_new_from_resname("password", &password_builder);
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Password UI builder init failed");
 		return;
 	}
@@ -173,20 +173,20 @@ static void nsgtk_pdf_password(char **owner_pass, char **user_pass, char *path)
 					       "buttonPDFNoPassword"));
 
 	g_signal_connect(G_OBJECT(ok), "clicked",
-			 G_CALLBACK(nsgtk_PDF_set_pass), (gpointer)data);
+			 G_CALLBACK(slategtk_PDF_set_pass), (gpointer)data);
 	g_signal_connect(G_OBJECT(no), "clicked",
-			 G_CALLBACK(nsgtk_PDF_no_pass), (gpointer)data);
+			 G_CALLBACK(slategtk_PDF_no_pass), (gpointer)data);
 
 	gtk_widget_show(GTK_WIDGET(wnd));
 }
 
 
 static struct gui_misc_table misc_table = {
-	.schedule = nsgtk_schedule,
+	.schedule = slategtk_schedule,
 
 	.launch_url = gui_launch_url,
-	.pdf_password = nsgtk_pdf_password,
-	.present_cookies = nsgtk_cookies_present,
+	.pdf_password = slategtk_pdf_password,
+	.present_cookies = slategtk_cookies_present,
 };
 
-struct gui_misc_table *nsgtk_misc_table = &misc_table;
+struct gui_misc_table *slategtk_misc_table = &misc_table;

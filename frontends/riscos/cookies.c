@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,10 +26,10 @@
 #include <oslib/wimp.h>
 
 #include "utils/log.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/messages.h"
-#include "netsurf/plotters.h"
-#include "netsurf/keypress.h"
+#include "slate/plotters.h"
+#include "slate/keypress.h"
 #include "desktop/cookie_manager.h"
 
 #include "riscos/gui.h"
@@ -59,9 +59,9 @@ static wimp_window *dialog_cookie_template;
  * \param r The rectangle of the window that needs updating.
  * \param originx The risc os plotter x origin.
  * \param originy The risc os plotter y origin.
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
+static slateerror
 cookie_draw(struct ro_corewindow *ro_cw,
 	       int originx,
 	       int originy,
@@ -79,7 +79,7 @@ cookie_draw(struct ro_corewindow *ro_cw,
 	cookie_manager_redraw(0, 0, r, &ctx);
 	no_font_blending = false;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -88,16 +88,16 @@ cookie_draw(struct ro_corewindow *ro_cw,
  *
  * \param ro_cw The ro core window structure.
  * \param nskey The netsurf key code.
- * \return NSERROR_OK if key processed,
- *         NSERROR_NOT_IMPLEMENTED if key not processed
+ * \return SLATEERROR_OK if key processed,
+ *         SLATEERROR_NOT_IMPLEMENTED if key not processed
  *         otherwise apropriate error code
  */
-static nserror cookie_key(struct ro_corewindow *ro_cw, uint32_t nskey)
+static slateerror cookie_key(struct ro_corewindow *ro_cw, uint32_t nskey)
 {
 	if (cookie_manager_keypress(nskey)) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
-	return NSERROR_NOT_IMPLEMENTED;
+	return SLATEERROR_NOT_IMPLEMENTED;
 }
 
 
@@ -108,16 +108,16 @@ static nserror cookie_key(struct ro_corewindow *ro_cw, uint32_t nskey)
  * \param mouse_state mouse state
  * \param x location of event
  * \param y location of event
- * \return NSERROR_OK on sucess otherwise apropriate error code.
+ * \return SLATEERROR_OK on sucess otherwise apropriate error code.
  */
-static nserror
+static slateerror
 cookie_mouse(struct ro_corewindow *ro_cw,
 	     browser_mouse_state mouse_state,
 	     int x, int y)
 {
 	cookie_manager_mouse_action(mouse_state, x, y);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -126,9 +126,9 @@ cookie_mouse(struct ro_corewindow *ro_cw,
  *
  * \param ro_cw The ro core window structure.
  * \param action The button bar action.
- * \return NSERROR_OK if config saved, otherwise apropriate error code
+ * \return SLATEERROR_OK if config saved, otherwise apropriate error code
  */
-static nserror
+static slateerror
 cookie_toolbar_click(struct ro_corewindow *ro_cw, button_bar_action action)
 {
 	switch (action) {
@@ -156,7 +156,7 @@ cookie_toolbar_click(struct ro_corewindow *ro_cw, button_bar_action action)
 		break;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -164,14 +164,14 @@ cookie_toolbar_click(struct ro_corewindow *ro_cw, button_bar_action action)
  * Handle updating state of buttons in ro core window toolbar.
  *
  * \param ro_cw The ro core window structure.
- * \return NSERROR_OK if config saved, otherwise apropriate error code
+ * \return SLATEERROR_OK if config saved, otherwise apropriate error code
  */
-static nserror cookie_toolbar_update(struct ro_corewindow *ro_cw)
+static slateerror cookie_toolbar_update(struct ro_corewindow *ro_cw)
 {
 	ro_toolbar_set_button_shaded_state(ro_cw->toolbar,
 			TOOLBAR_BUTTON_DELETE,
 			!cookie_manager_has_selection());
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -180,14 +180,14 @@ static nserror cookie_toolbar_update(struct ro_corewindow *ro_cw)
  *
  * \param ro_cw The ro core window structure.
  * \param config The new toolbar configuration.
- * \return NSERROR_OK if config saved, otherwise apropriate error code
+ * \return SLATEERROR_OK if config saved, otherwise apropriate error code
  */
-static nserror cookie_toolbar_save(struct ro_corewindow *ro_cw, char *config)
+static slateerror cookie_toolbar_save(struct ro_corewindow *ro_cw, char *config)
 {
-	nsoption_set_charp(toolbar_cookies, config);
+	slateoption_set_charp(toolbar_cookies, config);
 	ro_gui_save_options();
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -338,13 +338,13 @@ cookie_menu_select(wimp_w w,
 /**
  * Creates the window for the cookie tree.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-static nserror ro_cookie_init(void)
+static slateerror ro_cookie_init(void)
 {
 	os_error *error;
 	struct ro_cookie_window *ncwin;
-	nserror res;
+	slateerror res;
 	static const struct ns_menu cookie_menu_def = {
 		"Cookies", {
 			{ "Cookies", NO_ACTION, 0 },
@@ -375,12 +375,12 @@ static nserror ro_cookie_init(void)
 	};
 
 	if (cookie_window != NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	ncwin = calloc(1, sizeof(*ncwin));
 	if (ncwin == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* create window from template */
@@ -390,7 +390,7 @@ static nserror ro_cookie_init(void)
 		      error->errnum, error->errmess);
 		ro_warn_user("WimpError", error->errmess);
 		free(ncwin);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	ro_gui_set_window_title(ncwin->core.wh, messages_get("Cookies"));
@@ -406,16 +406,16 @@ static nserror ro_cookie_init(void)
 	/* initialise core window */
 	res = ro_corewindow_init(&ncwin->core,
 				 cookies_toolbar_buttons,
-				 nsoption_charp(toolbar_cookies),
+				 slateoption_charp(toolbar_cookies),
 				 THEME_STYLE_COOKIES_TOOLBAR,
 				 "HelpCookiesToolbar");
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		free(ncwin);
 		return res;
 	}
 
 	res = cookie_manager_init((struct core_window *)ncwin);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		free(ncwin);
 		return res;
 	}
@@ -441,17 +441,17 @@ static nserror ro_cookie_init(void)
 	 */
 	cookie_window = ncwin;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in riscos/cookies.h */
-nserror ro_gui_cookies_present(const char *search_term)
+slateerror ro_gui_cookies_present(const char *search_term)
 {
-	nserror res;
+	slateerror res;
 
 	res = ro_cookie_init();
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Presenting");
 		ro_gui_dialog_open_top(cookie_window->core.wh,
 				       cookie_window->core.toolbar,
@@ -475,16 +475,16 @@ void ro_gui_cookies_initialise(void)
 
 
 /* exported interface documented in riscos/cookies.h */
-nserror ro_gui_cookies_finalise(void)
+slateerror ro_gui_cookies_finalise(void)
 {
-	nserror res;
+	slateerror res;
 
 	if (cookie_window == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	res = cookie_manager_fini();
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		res = ro_corewindow_fini(&cookie_window->core);
 
 		free(cookie_window);

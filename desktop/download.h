@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,14 +21,14 @@
  * \brief Core download context (interface)
  */
 
-#ifndef NETSURF_DESKTOP_DOWNLOAD_H_
-#define NETSURF_DESKTOP_DOWNLOAD_H_
+#ifndef SLATE_DESKTOP_DOWNLOAD_H_
+#define SLATE_DESKTOP_DOWNLOAD_H_
 
 #include "utils/errors.h"
 
 struct gui_window;
 struct llcache_handle;
-struct nsurl;
+struct slateurl;
 
 /** Type of a download context */
 typedef struct download_context download_context;
@@ -38,12 +38,12 @@ typedef struct download_context download_context;
  *
  * \param llcache  Low-level cache handle for download
  * \param parent   Parent window, for UI
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  *
  * This must only be called by the core browser window fetch infrastructure.
  * Ownership of the download context object created is passed to the frontend.
  */
-nserror download_context_create(struct llcache_handle *llcache,
+slateerror download_context_create(struct llcache_handle *llcache,
 		struct gui_window *parent);
 
 /**
@@ -75,7 +75,7 @@ void download_context_abort(download_context *ctx);
  * \param ctx Context to retrieve URL from
  * \return URL object
  */
-struct nsurl *download_context_get_url(const download_context *ctx);
+struct slateurl *download_context_get_url(const download_context *ctx);
 
 /**
  * Retrieve the MIME type for a download

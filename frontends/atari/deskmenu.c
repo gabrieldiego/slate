@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,15 +20,15 @@
 #include <cflib.h>
 
 #include "utils/log.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/messages.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/utils.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/keypress.h"
+#include "slate/browser_window.h"
+#include "slate/keypress.h"
 #include "desktop/save_complete.h"
 
-#include "atari/res/netsurf.rsh"
+#include "atari/res/slate.rsh"
 #include "atari/gemtk/gemtk.h"
 #include "atari/deskmenu.h"
 #include "atari/hotlist.h"
@@ -177,8 +177,8 @@ struct s_menu_item_evnt menu_evnt_tbl[] =
 static void __CDECL menu_about(short item, short title, void *data)
 {
 	/*
-	  nsurl *url;
-	  nserror error;
+	  slateurl *url;
+	  slateerror error;
 	  char buf[PATH_MAX];
 
 	  NSLOG(netsurf, INFO, "abort menu");
@@ -186,16 +186,16 @@ static void __CDECL menu_about(short item, short title, void *data)
 	  strncat((char*)&buf, (char*)"./doc/README.TXT",
 	  PATH_MAX - (strlen("file://")+1) );
 
-	  error = nsurl_create(buf, &url);
-	  if (error == NSERROR_OK) {
+	  error = slateurl_create(buf, &url);
+	  if (error == SLATEERROR_OK) {
 	  error = browser_window_create(BW_CREATE_HISTORY,
 	  url,
 	  NULL,
 	  NULL,
 	  NULL);
-	  nsurl_unref(url);
+	  slateurl_unref(url);
 	  }
-	  if (error != NSERROR_OK) {
+	  if (error != SLATEERROR_OK) {
 	  atari_warn_user(messages_get_errorcode(error), 0);
 	  }
 	*/
@@ -204,30 +204,30 @@ static void __CDECL menu_about(short item, short title, void *data)
 
 static void __CDECL menu_new_win(short item, short title, void *data)
 {
-	nsurl *url;
-	nserror error;
+	slateurl *url;
+	slateerror error;
 	const char *addr;
 
 	NSLOG(netsurf, INFO, "%s", __FUNCTION__);
 
-	if (nsoption_charp(homepage_url) != NULL) {
-		addr = nsoption_charp(homepage_url);
+	if (slateoption_charp(homepage_url) != NULL) {
+		addr = slateoption_charp(homepage_url);
 	} else {
-		addr = NETSURF_HOMEPAGE;
+		addr = SLATE_HOMEPAGE;
 	}
 
 	/* create an initial browser window */
-	error = nsurl_create(addr, &url);
-	if (error == NSERROR_OK) {
+	error = slateurl_create(addr, &url);
+	if (error == SLATEERROR_OK) {
 		error = browser_window_create(BW_CREATE_HISTORY,
 					      url,
 					      NULL,
 					      NULL,
 					      NULL);
-		nsurl_unref(url);
+		slateurl_unref(url);
 
 	}
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		atari_warn_user(messages_get_errorcode(error), 0);
 	}
 }
@@ -257,20 +257,20 @@ static void __CDECL menu_open_file(short item, short title, void *data)
 	if( filename != NULL ){
 		char * urltxt = local_file_to_url( filename );
 		if( urltxt ){
-			nsurl *url;
-			nserror error;
+			slateurl *url;
+			slateerror error;
 
-			error = nsurl_create(urltxt, &url);
-			if (error == NSERROR_OK) {
+			error = slateurl_create(urltxt, &url);
+			if (error == SLATEERROR_OK) {
 				error = browser_window_create(BW_CREATE_HISTORY,
 							      url,
 							      NULL,
 							      NULL,
 							      NULL);
-				nsurl_unref(url);
+				slateurl_unref(url);
 
 			}
-			if (error != NSERROR_OK) {
+			if (error != SLATEERROR_OK) {
 				atari_warn_user(messages_get_errorcode(error), 0);
 			}
 			free( urltxt );
@@ -423,11 +423,11 @@ static void __CDECL menu_savewin(short item, short title, void *data)
 		option_window_height = rect.g_h;
 		option_window_x = rect.g_x;
 		option_window_y = rect.g_y;
-		nsoption_set_int(window_width, rect.g_w);
-		nsoption_set_int(window_height, rect.g_h);
-		nsoption_set_int(window_x, rect.g_x);
-		nsoption_set_int(window_y, rect.g_y);
-		nsoption_write((const char*)&options, NULL, NULL);
+		slateoption_set_int(window_width, rect.g_w);
+		slateoption_set_int(window_height, rect.g_h);
+		slateoption_set_int(window_x, rect.g_x);
+		slateoption_set_int(window_y, rect.g_y);
+		slateoption_write((const char*)&options, NULL, NULL);
 	}
 
 }
@@ -451,16 +451,16 @@ static void __CDECL menu_debug_render(short item, short title, void *data)
 
 static void __CDECL menu_fg_images(short item, short title, void *data)
 {
-	nsoption_set_bool(foreground_images, !nsoption_bool(foreground_images));
+	slateoption_set_bool(foreground_images, !slateoption_bool(foreground_images));
 	menu_icheck(h_gem_menu, MAINMENU_M_FG_IMAGES,
-		    (nsoption_bool(foreground_images)) ? 1 : 0);
+		    (slateoption_bool(foreground_images)) ? 1 : 0);
 }
 
 static void __CDECL menu_bg_images(short item, short title, void *data)
 {
-	nsoption_set_bool(background_images, !nsoption_bool(background_images));
+	slateoption_set_bool(background_images, !slateoption_bool(background_images));
 	menu_icheck(h_gem_menu, MAINMENU_M_BG_IMAGES,
-		    (nsoption_bool(background_images)) ? 1 : 0);
+		    (slateoption_bool(background_images)) ? 1 : 0);
 }
 
 static void __CDECL menu_back(short item, short title, void *data)
@@ -506,7 +506,7 @@ static void __CDECL menu_add_bookmark(short item, short title, void *data)
 	if (input_window) {
 		if( browser_window_has_content(input_window->browser->bw) ){
 			atari_hotlist_add_page(
-				nsurl_access(browser_window_access_url(input_window->browser->bw)),
+				slateurl_access(browser_window_access_url(input_window->browser->bw)),
 				NULL
 				);
 		}
@@ -824,8 +824,8 @@ void deskmenu_update(void)
 {
 	menu_icheck(h_gem_menu, MAINMENU_M_DEBUG_RENDER, (html_redraw_debug) ? 1 : 0);
 	menu_icheck(h_gem_menu, MAINMENU_M_FG_IMAGES,
-		    (nsoption_bool(foreground_images)) ? 1 : 0);
+		    (slateoption_bool(foreground_images)) ? 1 : 0);
 	menu_icheck(h_gem_menu, MAINMENU_M_BG_IMAGES,
-		    (nsoption_bool(background_images)) ? 1 : 0);
+		    (slateoption_bool(background_images)) ? 1 : 0);
 	menu_icheck(h_gem_menu, MAINMENU_M_VLOG, ((verbose_log == true) ? 1 : 0));
 }

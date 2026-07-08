@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,8 +25,8 @@
  *  necessary to provide fallbacks.
  */
 
-#ifndef NETSURF_UTILS_SYS_TIME_H_
-#define NETSURF_UTILS_SYS_TIME_H_
+#ifndef SLATE_UTILS_SYS_TIME_H_
+#define SLATE_UTILS_SYS_TIME_H_
 
 #include <sys/time.h>
 

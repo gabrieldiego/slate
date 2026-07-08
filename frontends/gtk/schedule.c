@@ -1,7 +1,7 @@
 /*
  * Copyright 2006-2007 Daniel Silverstone <dsilvers@digital-scurf.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,7 +31,7 @@ typedef struct {
         void (*callback)(void *);       /**< The callback function. */
         void *context;                  /**< The context for the callback. */
         bool callback_killed;           /**< Whether or not this was killed. */
-} _nsgtk_callback_t;
+} _slategtk_callback_t;
 
 /** List of callbacks which have occurred and are pending running. */
 static GList *pending_callbacks = NULL;
@@ -41,9 +41,9 @@ static GList *queued_callbacks = NULL;
 static GList *this_run = NULL;
 
 static gboolean
-nsgtk_schedule_generic_callback(gpointer data)
+slategtk_schedule_generic_callback(gpointer data)
 {
-        _nsgtk_callback_t *cb = (_nsgtk_callback_t *)(data);
+        _slategtk_callback_t *cb = (_slategtk_callback_t *)(data);
         if (cb->callback_killed) {
                 /* This callback instance has been killed. */
                 NSLOG(schedule, DEBUG, "CB at %p already dead.", cb);
@@ -54,10 +54,10 @@ nsgtk_schedule_generic_callback(gpointer data)
 }
 
 static void
-nsgtk_schedule_kill_callback(void *_target, void *_match)
+slategtk_schedule_kill_callback(void *_target, void *_match)
 {
-        _nsgtk_callback_t *target = (_nsgtk_callback_t *)_target;
-        _nsgtk_callback_t *match = (_nsgtk_callback_t *)_match;
+        _slategtk_callback_t *target = (_slategtk_callback_t *)_target;
+        _slategtk_callback_t *match = (_slategtk_callback_t *)_match;
         if ((target->callback == match->callback) &&
             (target->context == match->context)) {
                 NSLOG(schedule, DEBUG,
@@ -75,35 +75,35 @@ nsgtk_schedule_kill_callback(void *_target, void *_match)
  *
  * \param callback The callback to match
  * \param cbctx The callback context to match
- * \return NSERROR_OK if the tuple was removed from at least one list else NSERROR_NOT_FOUND
+ * \return SLATEERROR_OK if the tuple was removed from at least one list else SLATEERROR_NOT_FOUND
  */
-static nserror
+static slateerror
 schedule_remove(void (*callback)(void *p), void *cbctx)
 {
-        _nsgtk_callback_t cb_match = {
+        _slategtk_callback_t cb_match = {
                 .callback = callback,
                 .context = cbctx,
                 .callback_killed = false,
         };
 
         g_list_foreach(queued_callbacks,
-                       nsgtk_schedule_kill_callback, &cb_match);
+                       slategtk_schedule_kill_callback, &cb_match);
         g_list_foreach(pending_callbacks,
-                       nsgtk_schedule_kill_callback, &cb_match);
+                       slategtk_schedule_kill_callback, &cb_match);
         g_list_foreach(this_run,
-                       nsgtk_schedule_kill_callback, &cb_match);
+                       slategtk_schedule_kill_callback, &cb_match);
 
         if (cb_match.callback_killed == false) {
-                return NSERROR_NOT_FOUND;
+                return SLATEERROR_NOT_FOUND;
         }
-        return NSERROR_OK;
+        return SLATEERROR_OK;
 }
 
 /* exported interface documented in gtk/schedule.h */
-nserror nsgtk_schedule(int t, void (*callback)(void *p), void *cbctx)
+slateerror slategtk_schedule(int t, void (*callback)(void *p), void *cbctx)
 {
-        _nsgtk_callback_t *cb;
-        nserror res;
+        _slategtk_callback_t *cb;
+        slateerror res;
 
         /* Kill any pending schedule of this kind. */
         res = schedule_remove(callback, cbctx);
@@ -113,15 +113,15 @@ nserror nsgtk_schedule(int t, void (*callback)(void *p), void *cbctx)
                 return res;
         }
 
-        cb = malloc(sizeof(_nsgtk_callback_t));
+        cb = malloc(sizeof(_slategtk_callback_t));
         cb->callback = callback;
         cb->context = cbctx;
         cb->callback_killed = false;
         /* Prepend is faster right now. */
         queued_callbacks = g_list_prepend(queued_callbacks, cb);
-        g_timeout_add(t, nsgtk_schedule_generic_callback, cb);
+        g_timeout_add(t, slategtk_schedule_generic_callback, cb);
 
-        return NSERROR_OK;
+        return SLATEERROR_OK;
 }
 
 bool
@@ -142,7 +142,7 @@ schedule_run(void)
 
         /* Run all the callbacks which made it this far. */
         while (this_run != NULL) {
-                _nsgtk_callback_t *cb = (_nsgtk_callback_t *)(this_run->data);
+                _slategtk_callback_t *cb = (_slategtk_callback_t *)(this_run->data);
                 this_run = g_list_remove(this_run, this_run->data);
                 if (!cb->callback_killed)
                         cb->callback(cb->context);

@@ -1,7 +1,7 @@
 /*
  * Copyright 2020 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -69,8 +69,8 @@
  * Here implied boxes have been added and a float is present.
  */
 
-#ifndef NETSURF_HTML_BOX_CONSTRUCT_H
-#define NETSURF_HTML_BOX_CONSTRUCT_H
+#ifndef SLATE_HTML_BOX_CONSTRUCT_H
+#define SLATE_HTML_BOX_CONSTRUCT_H
 
 /**
  * Construct a box tree from a dom and html content
@@ -81,13 +81,13 @@
  * \param box_conversion_context pointer that recives the conversion context
  * \return netsurf error code indicating status of call
  */
-nserror dom_to_box(struct dom_node *n, struct html_content *c, box_construct_complete_cb cb, void **box_conversion_context);
+slateerror dom_to_box(struct dom_node *n, struct html_content *c, box_construct_complete_cb cb, void **box_conversion_context);
 
 
 /**
  * aborts any ongoing box construction
  */
-nserror cancel_dom_to_box(void *box_conversion_context);
+slateerror cancel_dom_to_box(void *box_conversion_context);
 
 
 /**
@@ -108,6 +108,6 @@ struct box *box_for_node(struct dom_node *node);
  * \param result updated to target URL on heap, unchanged if extract failed
  * \return true on success, false on memory exhaustion
  */
-bool box_extract_link(const struct html_content *content, const struct dom_string *dsrel, struct nsurl *base, struct nsurl **result);
+bool box_extract_link(const struct html_content *content, const struct dom_string *dsrel, struct slateurl *base, struct slateurl **result);
 
 #endif

@@ -2,7 +2,7 @@
  * Copyright 2005 Richard Wilson <info@tinct.net>
  * Copyright 2010, 2011 Stephen Fryatt <stevef@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,8 +27,8 @@
 #include "riscos/gui/throbber.h"
 #include "riscos/gui/url_bar.h"
 
-#ifndef _NETSURF_RISCOS_TOOLBAR_H_
-#define _NETSURF_RISCOS_TOOLBAR_H_
+#ifndef _SLATE_RISCOS_TOOLBAR_H_
+#define _SLATE_RISCOS_TOOLBAR_H_
 
 typedef enum {
 	TOOLBAR_FLAGS_NONE = 0x00,

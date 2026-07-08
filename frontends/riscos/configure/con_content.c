@@ -1,7 +1,7 @@
 /*
  * Copyright 2006 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
 
 #include <stdbool.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/messages.h"
 
 #include "riscos/gui.h"
@@ -44,15 +44,15 @@ bool ro_gui_options_content_initialise(wimp_w w)
 {
 	/* set the current values */
 	ro_gui_set_icon_selected_state(w, CONTENT_BLOCK_ADVERTISEMENTS,
-                                       nsoption_bool(block_advertisements));
+                                       slateoption_bool(block_advertisements));
 	ro_gui_set_icon_selected_state(w, CONTENT_BLOCK_POPUPS,
-                                       nsoption_bool(disable_popups));
+                                       slateoption_bool(disable_popups));
 	ro_gui_set_icon_selected_state(w, CONTENT_BLOCK_CSS,
-                                       !nsoption_bool(author_level_css));
+                                       !slateoption_bool(author_level_css));
 	ro_gui_set_icon_selected_state(w, CONTENT_TARGET_BLANK,
-                                       nsoption_bool(target_blank));
+                                       slateoption_bool(target_blank));
 	ro_gui_set_icon_selected_state(w, CONTENT_NO_JAVASCRIPT,
-                                       !nsoption_bool(enable_javascript));
+                                       !slateoption_bool(enable_javascript));
 
 	/* initialise all functions for a newly created window */
 	ro_gui_wimp_event_register_checkbox(w, CONTENT_BLOCK_ADVERTISEMENTS);
@@ -88,18 +88,18 @@ void ro_gui_options_content_default(wimp_pointer *pointer)
 
 bool ro_gui_options_content_ok(wimp_w w)
 {
-	nsoption_set_bool(block_advertisements,
+	slateoption_set_bool(block_advertisements,
 			  ro_gui_get_icon_selected_state(w, CONTENT_BLOCK_ADVERTISEMENTS));
 
-	nsoption_set_bool(disable_popups,
+	slateoption_set_bool(disable_popups,
 			  ro_gui_get_icon_selected_state(w, CONTENT_BLOCK_POPUPS));
-	nsoption_set_bool(author_level_css,
+	slateoption_set_bool(author_level_css,
 			  !ro_gui_get_icon_selected_state(w, CONTENT_BLOCK_CSS));
 
-	nsoption_set_bool(target_blank,
+	slateoption_set_bool(target_blank,
 			  ro_gui_get_icon_selected_state(w, CONTENT_TARGET_BLANK));
 
-	nsoption_set_bool(enable_javascript,
+	slateoption_set_bool(enable_javascript,
 			!ro_gui_get_icon_selected_state(w, CONTENT_NO_JAVASCRIPT));
 
 	ro_gui_save_options();

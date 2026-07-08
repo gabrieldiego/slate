@@ -1,7 +1,7 @@
 /*
  * Copyright 2008-10 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,8 +32,8 @@
 
 #include "amiga/launch.h"
 #include "amiga/object.h" /* for list abstraction */
-#include "utils/nsoption.h"
-#include "utils/nsurl.h"
+#include "utils/slateoption.h"
+#include "utils/slateurl.h"
 
 struct Library *OpenURLBase = NULL;
 struct OpenURLIFace *IOpenURL = NULL;
@@ -48,17 +48,17 @@ struct ami_protocol
 
 static struct ami_protocol *ami_openurl_add_protocol(const char *url)
 {
-	nsurl *ns_url;
+	slateurl *ns_url;
 	struct ami_protocol *ami_p =
 		(struct ami_protocol *)malloc(sizeof(struct ami_protocol));
 
-	if (nsurl_create(url, &ns_url) != NSERROR_OK) {
+	if (slateurl_create(url, &ns_url) != SLATEERROR_OK) {
 		free(ami_p);
 		return NULL;
 	}
 
-	ami_p->protocol = nsurl_get_component(ns_url, NSURL_SCHEME);
-	nsurl_unref(ns_url);
+	ami_p->protocol = slateurl_get_component(ns_url, SLATEURL_SCHEME);
+	slateurl_unref(ns_url);
 	if (ami_p->protocol == NULL)
 	{
 		free(ami_p);
@@ -90,7 +90,7 @@ static void ami_openurl_free_list(struct MinList *list)
 	free(list);
 }
 
-static BOOL ami_openurl_check_list(struct MinList *list, nsurl *url)
+static BOOL ami_openurl_check_list(struct MinList *list, slateurl *url)
 {
 	struct ami_protocol *node;
 	struct ami_protocol *nnode;
@@ -99,7 +99,7 @@ static BOOL ami_openurl_check_list(struct MinList *list, nsurl *url)
 
 	if(IsMinListEmpty(list)) return FALSE;
 
-	url_scheme = nsurl_get_component(url, NSURL_SCHEME);
+	url_scheme = slateurl_get_component(url, SLATEURL_SCHEME);
 
 	node = (struct ami_protocol *)GetHead((struct List *)list);
 
@@ -126,7 +126,7 @@ static BOOL ami_openurl_check_list(struct MinList *list, nsurl *url)
 
 void ami_openurl_open(void)
 {
-	if(nsoption_bool(use_openurl_lib)) {
+	if(slateoption_bool(use_openurl_lib)) {
 		if((OpenURLBase = OpenLibrary("openurl.library",0))) {
 #ifdef __amigaos4__
 			IOpenURL = (struct OpenURLIFace *)GetInterface(OpenURLBase,"main",1,NULL);
@@ -147,7 +147,7 @@ void ami_openurl_close(void)
 	ami_openurl_free_list(ami_unsupportedprotocols);
 }
 
-nserror gui_launch_url(struct nsurl *url)
+slateerror gui_launch_url(struct slateurl *url)
 {
 #ifdef __amigaos4__
 	APTR procwin = SetProcWindow((APTR)-1L);
@@ -160,13 +160,13 @@ nserror gui_launch_url(struct nsurl *url)
 		{
 			URL_OpenA((STRPTR)url,NULL);
 		} else {
-			if((launchurl = ASPrintf("URL:%s", nsurl_access(url)))) {
+			if((launchurl = ASPrintf("URL:%s", slateurl_access(url)))) {
 				BPTR fptr = Open(launchurl,MODE_OLDFILE);
 				if(fptr)
 				{
 					Close(fptr);
 				} else {
-					ami_openurl_add_protocol(nsurl_access(url));
+					ami_openurl_add_protocol(slateurl_access(url));
 				}
 				FreeVec(launchurl);
 			}
@@ -175,5 +175,5 @@ nserror gui_launch_url(struct nsurl *url)
 #ifdef __amigaos4__
 	SetProcWindow(procwin);
 #endif
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }

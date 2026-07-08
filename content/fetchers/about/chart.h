@@ -21,8 +21,8 @@
  * about scheme chart handler interface
  */
 
-#ifndef NETSURF_CONTENT_FETCHERS_ABOUT_CHART_H
-#define NETSURF_CONTENT_FETCHERS_ABOUT_CHART_H
+#ifndef SLATE_CONTENT_FETCHERS_ABOUT_CHART_H
+#define SLATE_CONTENT_FETCHERS_ABOUT_CHART_H
 
 /**
  * Handler to generate about scheme chart page.

@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,12 +21,12 @@
  * Interface to form handling functions internal to HTML content handler.
  */
 
-#ifndef NETSURF_HTML_FORM_INTERNAL_H
-#define NETSURF_HTML_FORM_INTERNAL_H
+#ifndef SLATE_HTML_FORM_INTERNAL_H
+#define SLATE_HTML_FORM_INTERNAL_H
 
 #include <stdbool.h>
 
-#include "netsurf/form.h"
+#include "slate/form.h"
 
 struct box;
 struct form_control;
@@ -36,7 +36,7 @@ struct form;
 struct html_content;
 struct dom_string;
 struct content;
-struct nsurl;
+struct slateurl;
 struct fetch_multipart_data;
 struct redraw_context;
 struct browser_window;
@@ -229,9 +229,9 @@ bool form_add_option(struct form_control *control, char *value, char *text,
  * \param control The select form control for which the menu is being opened
  * \param redraw_callback The callback to redraw the select menu.
  * \param c The content the select menu is opening for.
- * \return NSERROR_OK on sucess else error code.
+ * \return SLATEERROR_OK on sucess else error code.
  */
-nserror form_open_select_menu(void *client_data,
+slateerror form_open_select_menu(void *client_data,
 		struct form_control *control,
 		select_menu_redraw_callback redraw_callback,
 		struct content *c);
@@ -333,7 +333,7 @@ void form_radio_set(struct form_control *radio);
  * \param form The form to submit.
  * \param submit_button The control used to submit the form.
  */
-nserror form_submit(struct nsurl *page_url, struct browser_window *target,
+slateerror form_submit(struct slateurl *page_url, struct browser_window *target,
 		struct form *form, struct form_control *submit_button);
 
 

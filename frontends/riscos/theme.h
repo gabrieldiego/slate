@@ -1,7 +1,7 @@
 /*
  * Copyright 2005 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,8 +23,8 @@
 #include <stdbool.h>
 #include "oslib/osspriteop.h"
 
-#ifndef _NETSURF_RISCOS_THEME_H_
-#define _NETSURF_RISCOS_THEME_H_
+#ifndef _SLATE_RISCOS_THEME_H_
+#define _SLATE_RISCOS_THEME_H_
 
 /** Theme styles, collecting groups of attributes for different locations. */
 

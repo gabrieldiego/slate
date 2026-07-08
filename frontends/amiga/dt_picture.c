@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 - 2012 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,8 +34,8 @@
 
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/plotters.h"
-#include "netsurf/bitmap.h"
+#include "slate/plotters.h"
+#include "slate/bitmap.h"
 #include "content/llcache.h"
 #include "content/content.h"
 #include "content/content_protected.h"
@@ -47,12 +47,12 @@
 #include "amiga/datatypes.h"
 
 
-static nserror amiga_dt_picture_create(const content_handler *handler,
+static slateerror amiga_dt_picture_create(const content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		llcache_handle *llcache, const char *fallback_charset,
 		bool quirks, struct content **c);
 static bool amiga_dt_picture_convert(struct content *c);
-static nserror amiga_dt_picture_clone(const struct content *old, struct content **newc);
+static slateerror amiga_dt_picture_clone(const struct content *old, struct content **newc);
 static void amiga_dt_picture_destroy(struct content *c);
 
 static const content_handler amiga_dt_picture_content_handler = {
@@ -71,11 +71,11 @@ struct amiga_dt_picture_content {
 	Object *dto;
 };
 
-nserror amiga_dt_picture_init(void)
+slateerror amiga_dt_picture_init(void)
 {
 	struct DataType *dt, *prevdt = NULL;
 	lwc_string *type;
-	nserror error;
+	slateerror error;
 	struct Node *node = NULL;
 
 	while((dt = ObtainDataType(DTST_RAM, NULL,
@@ -95,7 +95,7 @@ nserror amiga_dt_picture_init(void)
 					lwc_string_data(type), 
 					&amiga_dt_picture_content_handler);
 
-				if (error != NSERROR_OK)
+				if (error != SLATEERROR_OK)
 					return error;
 			}
 
@@ -105,31 +105,31 @@ nserror amiga_dt_picture_init(void)
 
 	ReleaseDataType(prevdt);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-nserror amiga_dt_picture_create(const content_handler *handler,
+slateerror amiga_dt_picture_create(const content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		llcache_handle *llcache, const char *fallback_charset,
 		bool quirks, struct content **c)
 {
 	struct amiga_dt_picture_content *adt;
-	nserror error;
+	slateerror error;
 
 	adt = calloc(1, sizeof(struct amiga_dt_picture_content));
 	if (adt == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__init((struct content *)adt, handler, imime_type, params,
 			llcache, fallback_charset, quirks);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(adt);
 		return error;
 	}
 
 	*c = (struct content *)adt;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static Object *amiga_dt_picture_newdtobject(struct amiga_dt_picture_content *adt)
@@ -189,7 +189,7 @@ static struct bitmap *amiga_dt_picture_cache_convert(struct content *c)
 	{
 		bitmap = amiga_bitmap_create(c->width, c->height, BITMAP_NONE);
 		if (!bitmap) {
-			msg_data.errordata.errorcode = NSERROR_NOMEM;
+			msg_data.errordata.errorcode = SLATEERROR_NOMEM;
 			msg_data.errordata.errormsg = messages_get("NoMemory");
 			content_broadcast(c, CONTENT_MSG_ERROR, &msg_data);
 			return NULL;
@@ -238,7 +238,7 @@ bool amiga_dt_picture_convert(struct content *c)
 	/* set title text */
 	if((filetype = amiga_dt_picture_datatype(c))) {
 		title = messages_get_buff("DataTypesTitle",
-			nsurl_access_leaf(llcache_handle_get_url(c->llcache)),
+			slateurl_access_leaf(llcache_handle_get_url(c->llcache)),
 			filetype, c->width, c->height);
 		if (title != NULL) {
 			content__set_title(c, title);
@@ -255,19 +255,19 @@ bool amiga_dt_picture_convert(struct content *c)
 	return true;
 }
 
-nserror amiga_dt_picture_clone(const struct content *old, struct content **newc)
+slateerror amiga_dt_picture_clone(const struct content *old, struct content **newc)
 {
 	struct content *adt;
-	nserror error;
+	slateerror error;
 
 	NSLOG(netsurf, INFO, "amiga_dt_picture_clone");
 
 	adt = calloc(1, sizeof(struct content));
 	if (adt == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__clone(old, adt);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(adt);
 		return error;
 	}
@@ -277,13 +277,13 @@ nserror amiga_dt_picture_clone(const struct content *old, struct content **newc)
 	    (old->status == CONTENT_STATUS_DONE)) {
 		if (amiga_dt_picture_convert(adt) == false) {
 			content_destroy(adt);
-			return NSERROR_CLONE_FAILED;
+			return SLATEERROR_CLONE_FAILED;
 		}
 	}
 
 	*newc = adt;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void amiga_dt_picture_destroy(struct content *c)

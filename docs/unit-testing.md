@@ -145,19 +145,19 @@ test to use the START_TEST and END_TEST macros when definig them.
     /**
      * url access leaf test
      */
-    START_TEST(nsurl_access_leaf_test)
+    START_TEST(slateurl_access_leaf_test)
     {
-    	nserror err;
-    	nsurl *res_url;
+    	slateerror err;
+    	slateurl *res_url;
     	const struct test_triplets *tst = &access_tests[_i];
     
     	/* not testing create, this should always succeed */
-    	err = nsurl_create(tst->test1, &res_url);
-    	ck_assert(err == NSERROR_OK);
+    	err = slateurl_create(tst->test1, &res_url);
+    	ck_assert(err == SLATEERROR_OK);
     
-    	ck_assert_str_eq(nsurl_access_leaf(res_url), tst->res);
+    	ck_assert_str_eq(slateurl_access_leaf(res_url), tst->res);
     
-    	nsurl_unref(res_url);
+    	slateurl_unref(res_url);
     }
     END_TEST
 

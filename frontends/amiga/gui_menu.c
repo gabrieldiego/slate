@@ -1,7 +1,7 @@
 /*
  * Copyright 2017-2025 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,16 +45,16 @@
 
 #include <reaction/reaction_macros.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/messages.h"
 #include "utils/log.h"
 #include "utils/utils.h"
-#include "utils/nsurl.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/mouse.h"
-#include "netsurf/window.h"
-#include "netsurf/content.h"
-#include "netsurf/keypress.h"
+#include "utils/slateurl.h"
+#include "slate/browser_window.h"
+#include "slate/mouse.h"
+#include "slate/window.h"
+#include "slate/content.h"
+#include "slate/keypress.h"
 #include "desktop/hotlist.h"
 #include "desktop/version.h"
 
@@ -73,7 +73,7 @@
 #include "amiga/libs.h"
 #include "amiga/menu.h"
 #include "amiga/misc.h"
-#include "amiga/nsoption.h"
+#include "amiga/slateoption.h"
 #include "amiga/print.h"
 #include "amiga/search.h"
 #include "amiga/theme.h"
@@ -90,7 +90,7 @@ struct ami_menu_data *gui_menu_data[AMI_MENU_AREXX_MAX + 1];
 static bool ami_menu_check_toggled = false;
 static bool menu_quit = false;
 
-static nserror ami_menu_scan(struct ami_menu_data **md);
+static slateerror ami_menu_scan(struct ami_menu_data **md);
 void ami_menu_arexx_scan(struct ami_menu_data **md);
 
 /*
@@ -99,19 +99,19 @@ void ami_menu_arexx_scan(struct ami_menu_data **md);
 
 HOOKF(void, ami_menu_item_project_newwin, APTR, window, struct IntuiMessage *)
 {
-	nsurl *url;
-	nserror error;
+	slateurl *url;
+	slateerror error;
 
-	error = nsurl_create(nsoption_charp(homepage_url), &url);
-	if (error == NSERROR_OK) {
+	error = slateurl_create(slateoption_charp(homepage_url), &url);
+	if (error == SLATEERROR_OK) {
 		error = browser_window_create(BW_CREATE_HISTORY,
 					      url,
 					      NULL,
 					      NULL,
 					      NULL);
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		amiga_warn_user(messages_get_errorcode(error), 0);
 	}
 }
@@ -173,8 +173,8 @@ HOOKF(void, ami_menu_item_project_about, APTR, window, struct IntuiMessage *)
 	struct gui_window_2 *gwin;
 	char *temp, *temp2;
 	int sel;
-	nsurl *url = NULL;
-	nserror error = NSERROR_OK;
+	slateurl *url = NULL;
+	slateerror error = SLATEERROR_OK;
 
 	GetAttr(WINDOW_UserData, (Object *)window, (ULONG *)&gwin);
 
@@ -191,8 +191,8 @@ HOOKF(void, ami_menu_item_project_about, APTR, window, struct IntuiMessage *)
 				TDR_TitleString, messages_get("NetSurf"),
 				TDR_Window, ami_gui2_get_window(gwin),
 				TDR_GadgetString, temp2,
-				TDR_FormatString,"NetSurf %s\nBuild date %s\n\nhttp://www.netsurf-browser.org",
-				TDR_Arg1,netsurf_version,
+				TDR_FormatString,"NetSurf %s\nBuild date %s\n\nhttp://www.slate-browser.org",
+				TDR_Arg1,slate_version,
 				TDR_Arg2,verdate,
 				TAG_DONE);
 #else
@@ -200,30 +200,30 @@ HOOKF(void, ami_menu_item_project_about, APTR, window, struct IntuiMessage *)
 		sizeof(struct EasyStruct),
 		0,
 		"NetSurf",
-		"NetSurf %s\nBuild date %s\n\nhttp://www.netsurf-browser.org",
+		"NetSurf %s\nBuild date %s\n\nhttp://www.slate-browser.org",
 		temp2,
 	};
 
-	sel = EasyRequest(ami_gui2_get_window(gwin), &about_req, NULL, netsurf_version, verdate);
+	sel = EasyRequest(ami_gui2_get_window(gwin), &about_req, NULL, slate_version, verdate);
 #endif
 	free(temp2);
 
 	if(sel == 2) {
-		error = nsurl_create("about:credits", &url);
+		error = slateurl_create("about:credits", &url);
 	} else if(sel == 0) {
-		error = nsurl_create("about:licence", &url);
+		error = slateurl_create("about:licence", &url);
 	}
 
 	if(url) {
-		if (error == NSERROR_OK) {
+		if (error == SLATEERROR_OK) {
 			error = browser_window_create(BW_CREATE_HISTORY,
 							  url,
 							  NULL,
 							  NULL,
 							  NULL);
-			nsurl_unref(url);
+			slateurl_unref(url);
 		}
-		if (error != NSERROR_OK) {
+		if (error != SLATEERROR_OK) {
 			amiga_warn_user(messages_get_errorcode(error), 0);
 		}
 	}
@@ -345,7 +345,7 @@ HOOKF(void, ami_menu_item_browser_foreimg, APTR, window, struct IntuiMessage *)
 	GetAttr(WINDOW_MenuStrip, (Object *)window, (ULONG *)&menustrip);
 	checked = ami_menu_get_selected(menustrip, msg);
 
-	nsoption_set_bool(foreground_images, checked);
+	slateoption_set_bool(foreground_images, checked);
 	ami_gui_menu_set_check_toggled();
 }
 
@@ -357,7 +357,7 @@ HOOKF(void, ami_menu_item_browser_backimg, APTR, window, struct IntuiMessage *)
 	GetAttr(WINDOW_MenuStrip, (Object *)window, (ULONG *)&menustrip);
 	checked = ami_menu_get_selected(menustrip, msg);
 	
-	nsoption_set_bool(background_images, checked);
+	slateoption_set_bool(background_images, checked);
 	ami_gui_menu_set_check_toggled();
 }
 
@@ -369,7 +369,7 @@ HOOKF(void, ami_menu_item_browser_enablejs, APTR, window, struct IntuiMessage *)
 	GetAttr(WINDOW_MenuStrip, (Object *)window, (ULONG *)&menustrip);
 	checked = ami_menu_get_selected(menustrip, msg);
 	
-	nsoption_set_bool(enable_javascript, checked);
+	slateoption_set_bool(enable_javascript, checked);
 	ami_gui_menu_set_check_toggled();
 }
 
@@ -381,7 +381,7 @@ HOOKF(void, ami_menu_item_browser_enablecss, APTR, window, struct IntuiMessage *
 	GetAttr(WINDOW_MenuStrip, (Object *)window, (ULONG *)&menustrip);
 	checked = ami_menu_get_selected(menustrip, msg);
 	
-	nsoption_set_bool(author_level_css, checked);
+	slateoption_set_bool(author_level_css, checked);
 	ami_gui_menu_set_check_toggled();
 }
 
@@ -440,7 +440,7 @@ HOOKF(void, ami_menu_item_hotlist_show, APTR, window, struct IntuiMessage *)
 
 HOOKF(void, ami_menu_item_hotlist_entries, APTR, window, struct IntuiMessage *)
 {
-	nsurl *url = hook->h_Data;
+	slateurl *url = hook->h_Data;
 	struct gui_window_2 *gwin;
 	GetAttr(WINDOW_UserData, (Object *)window, (ULONG *)&gwin);
 
@@ -462,7 +462,7 @@ HOOKF(void, ami_menu_item_settings_edit, APTR, window, struct IntuiMessage *)
 
 HOOKF(void, ami_menu_item_settings_save, APTR, window, struct IntuiMessage *)
 {
-	ami_nsoption_write();
+	ami_slateoption_write();
 }
 
 HOOKF(void, ami_menu_item_arexx_execute, APTR, window, struct IntuiMessage *)
@@ -477,7 +477,7 @@ HOOKF(void, ami_menu_item_arexx_execute, APTR, window, struct IntuiMessage *)
 						ASLFR_TitleText, messages_get("NetSurf"),
 						ASLFR_Screen, ami_gui_get_screen(),
 						ASLFR_DoSaveMode, FALSE,
-						ASLFR_InitialDrawer, nsoption_charp(arexx_dir),
+						ASLFR_InitialDrawer, slateoption_charp(arexx_dir),
 						ASLFR_InitialPattern, "#?.nsrx",
 						TAG_DONE)) {
 		if((temp = malloc(1024))) {
@@ -499,7 +499,7 @@ HOOKF(void, ami_menu_item_arexx_entries, APTR, window, struct IntuiMessage *)
 	if(script) {
 		if((temp = malloc(1024))) {
 			BPTR lock;
-			if((lock = Lock(nsoption_charp(arexx_dir), SHARED_LOCK))) {
+			if((lock = Lock(slateoption_charp(arexx_dir), SHARED_LOCK))) {
 				DevNameFromLock(lock, temp, 1024, DN_FULLPATH);
 				AddPart(temp, script, 1024);
 				ami_arexx_execute(temp);
@@ -686,21 +686,21 @@ void ami_gui_menu_update_checked(struct gui_window_2 *gwin)
 
 	GetAttr(WINDOW_MenuStrip, ami_gui2_get_object(gwin, AMI_WIN_MAIN), (ULONG *)&menustrip);
 	if(!menustrip) return;
-	if(nsoption_bool(enable_javascript) == true) {
+	if(slateoption_bool(enable_javascript) == true) {
 		if((ItemAddress(menustrip, ami_gui_menu_number(M_JS))->Flags & CHECKED) == 0)
 			ItemAddress(menustrip, ami_gui_menu_number(M_JS))->Flags ^= CHECKED;
 	} else {
 		if(ItemAddress(menustrip, ami_gui_menu_number(M_JS))->Flags & CHECKED)
 			ItemAddress(menustrip, ami_gui_menu_number(M_JS))->Flags ^= CHECKED;
 	}
-	if(nsoption_bool(author_level_css) == true) {
+	if(slateoption_bool(author_level_css) == true) {
 		if((ItemAddress(menustrip, ami_gui_menu_number(M_CSS))->Flags & CHECKED) == 0)
 			ItemAddress(menustrip, ami_gui_menu_number(M_CSS))->Flags ^= CHECKED;
 	} else {
 		if(ItemAddress(menustrip, ami_gui_menu_number(M_CSS))->Flags & CHECKED)
 			ItemAddress(menustrip, ami_gui_menu_number(M_CSS))->Flags ^= CHECKED;
 	}
-	if(nsoption_bool(foreground_images) == true) {
+	if(slateoption_bool(foreground_images) == true) {
 		if((ItemAddress(menustrip, ami_gui_menu_number(M_IMGFORE))->Flags & CHECKED) == 0)
 			ItemAddress(menustrip, ami_gui_menu_number(M_IMGFORE))->Flags ^= CHECKED;
 	} else {
@@ -708,7 +708,7 @@ void ami_gui_menu_update_checked(struct gui_window_2 *gwin)
 			ItemAddress(menustrip, ami_gui_menu_number(M_IMGFORE))->Flags ^= CHECKED;
 	}
 
-	if(nsoption_bool(background_images) == true) {
+	if(slateoption_bool(background_images) == true) {
 		if((ItemAddress(menustrip, ami_gui_menu_number(M_IMGBACK))->Flags & CHECKED) == 0)
 			ItemAddress(menustrip, ami_gui_menu_number(M_IMGBACK))->Flags ^= CHECKED;
 	} else {
@@ -723,7 +723,7 @@ void ami_gui_menu_update_disabled(struct gui_window *g, struct hlcache_handle *c
 {
 	struct Window *win = ami_gui_get_window(g);
 
-	if(nsoption_bool(kiosk_mode) == true) return;
+	if(slateoption_bool(kiosk_mode) == true) return;
 
 	if(content_get_type(c) <= CONTENT_CSS)
 	{
@@ -826,7 +826,7 @@ void ami_menu_arexx_scan(struct ami_menu_data **md)
 	struct ExAllData *ead;
 	char *menu_lab;
 
-	if((lock = Lock(nsoption_charp(arexx_dir), SHARED_LOCK))) {
+	if((lock = Lock(slateoption_charp(arexx_dir), SHARED_LOCK))) {
 		if((buffer = malloc(1024))) {
 			if((ctrl = AllocDosObject(DOS_EXALLCONTROL,NULL))) {
 				ctrl->eac_LastKey = 0;
@@ -865,7 +865,7 @@ void ami_menu_arexx_scan(struct ami_menu_data **md)
 	ami_menu_alloc_item(md, item, NM_END, NULL, NULL, NULL, NULL, NULL, 0);
 }
 
-static bool ami_menu_hotlist_add(void *userdata, int level, int item, const char *title, nsurl *url, bool is_folder)
+static bool ami_menu_hotlist_add(void *userdata, int level, int item, const char *title, slateurl *url, bool is_folder)
 {
 	UBYTE type;
 	STRPTR icon;
@@ -912,7 +912,7 @@ static bool ami_menu_hotlist_add(void *userdata, int level, int item, const char
 	return true;
 }
 
-static nserror ami_menu_scan(struct ami_menu_data **md)
+static slateerror ami_menu_scan(struct ami_menu_data **md)
 {
 	ami_menu_alloc_item(md, M_HLADD,    NM_ITEM, "HotlistAdd",   "B", "TBImages:list_favouriteadd",
 			ami_menu_item_hotlist_add, NULL, 0);
@@ -926,19 +926,19 @@ static nserror ami_menu_scan(struct ami_menu_data **md)
 static void ami_init_menulabs(struct ami_menu_data **md)
 {
 	UWORD js_flags = CHECKIT | MENUTOGGLE;
-	if(nsoption_bool(enable_javascript) == true)
+	if(slateoption_bool(enable_javascript) == true)
 		js_flags |= CHECKED;
 
 	UWORD css_flags = CHECKIT | MENUTOGGLE;
-	if(nsoption_bool(author_level_css) == true)
+	if(slateoption_bool(author_level_css) == true)
 		css_flags |= CHECKED;
 
 	UWORD imgfore_flags = CHECKIT | MENUTOGGLE;
-	if(nsoption_bool(foreground_images) == true)
+	if(slateoption_bool(foreground_images) == true)
 		imgfore_flags |= CHECKED;
 
 	UWORD imgback_flags = CHECKIT | MENUTOGGLE;
-	if(nsoption_bool(background_images) == true)
+	if(slateoption_bool(background_images) == true)
 		imgback_flags |= CHECKED;
 
 	ami_menu_alloc_item(md, M_PROJECT, NM_TITLE, "Project",      NULL, NULL, NULL, NULL, 0);

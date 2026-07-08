@@ -2,7 +2,7 @@
  * Copyright 2008 Adam Blokus <adamblokus@gmail.com>
  * Copyright 2009 John Tytgat <joty@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -59,10 +59,10 @@
 #include "utils/utils.h"
 #include "utils/useragent.h"
 #include "content/hlcache.h"
-#include "utils/nsoption.h"
-#include "netsurf/bitmap.h"
+#include "utils/slateoption.h"
+#include "slate/bitmap.h"
 
-#include "netsurf/plotters.h"
+#include "slate/plotters.h"
 #include "desktop/print.h"
 #include "desktop/printer.h"
 
@@ -791,9 +791,9 @@ void pdf_end(void)
 }
 
 /** saves the pdf with optional encryption */
-nserror save_pdf(const char *path)
+slateerror save_pdf(const char *path)
 {
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 
 	if (option_enable_PDF_password && owner_pass != NULL ) {
 		HPDF_SetPassword(pdf_doc, owner_pass, user_pass);
@@ -805,7 +805,7 @@ nserror save_pdf(const char *path)
 	if (path != NULL) {
 		if (HPDF_SaveToFile(pdf_doc, path) != HPDF_OK) {
 			remove(path);
-			res = NSERROR_SAVE_FAILED;
+			res = SLATEERROR_SAVE_FAILED;
 		}
 	}
 
@@ -989,8 +989,8 @@ void pdfw_gs_dash(HPDF_Page page, DashPattern_e dash)
 }
 
 #else
-nserror save_pdf(const char *path)
+slateerror save_pdf(const char *path)
 {
-	return NSERROR_NOT_IMPLEMENTED;
+	return SLATEERROR_NOT_IMPLEMENTED;
 }
 #endif /* WITH_PDF_EXPORT */

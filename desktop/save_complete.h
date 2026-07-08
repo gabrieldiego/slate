@@ -2,7 +2,7 @@
  * Copyright 2004 John M Bell <jmb202@ecs.soton.ac.uk>
  * Copyright 2009 Mark Benjamin <netsurf-browser.org.MarkBenjamin@dfgh.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * Save HTML document with dependencies (interface).
  */
 
-#ifndef NETSURF_DESKTOP_SAVE_COMPLETE_H_
-#define NETSURF_DESKTOP_SAVE_COMPLETE_H_
+#ifndef SLATE_DESKTOP_SAVE_COMPLETE_H_
+#define SLATE_DESKTOP_SAVE_COMPLETE_H_
 
 #include <stdbool.h>
 
@@ -48,7 +48,7 @@ void save_complete_init(void);
 /**
  * Finalise save complete module.
  */
-nserror save_complete_finalise(void);
+slateerror save_complete_finalise(void);
 
 /**
  * Save an HTML page with all dependencies.
@@ -56,9 +56,9 @@ nserror save_complete_finalise(void);
  * \param  c         CONTENT_HTML to save
  * \param  path      Native path to directory to save in to (must exist)
  * \param  set_type  Callback to set type of a file, or NULL
- * \return NSERROR_OK on success else error code
+ * \return SLATEERROR_OK on success else error code
  */
-nserror save_complete(struct hlcache_handle *c, const char *path,
+slateerror save_complete(struct hlcache_handle *c, const char *path,
 		save_complete_set_type_cb set_type);
 
 #endif

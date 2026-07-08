@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,21 +25,21 @@
 #include "utils/http/primitives.h"
 
 /* See content-disposition.h for documentation */
-nserror http_parse_content_disposition(const char *header_value,
+slateerror http_parse_content_disposition(const char *header_value,
 		http_content_disposition **result)
 {
 	const char *pos = header_value;
 	lwc_string *mtype;
 	http_parameter *params = NULL;
 	http_content_disposition *cd;
-	nserror error;
+	slateerror error;
 
 	/* disposition-type *( ";" parameter ) */
 
 	http__skip_LWS(&pos);
 
 	error = http__parse_token(&pos, &mtype);
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 
 	http__skip_LWS(&pos);
@@ -47,7 +47,7 @@ nserror http_parse_content_disposition(const char *header_value,
 	if (*pos == ';') {
 		error = http__item_list_parse(&pos,
 				http__parse_parameter, NULL, &params);
-		if (error != NSERROR_OK && error != NSERROR_NOT_FOUND) {
+		if (error != SLATEERROR_OK && error != SLATEERROR_NOT_FOUND) {
 			lwc_string_unref(mtype);
 			return error;
 		}
@@ -57,7 +57,7 @@ nserror http_parse_content_disposition(const char *header_value,
 	if (cd == NULL) {
 		http_parameter_list_destroy(params);
 		lwc_string_unref(mtype);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	cd->disposition_type = mtype;
@@ -65,7 +65,7 @@ nserror http_parse_content_disposition(const char *header_value,
 
 	*result = cd;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* See content-disposition.h for documentation */

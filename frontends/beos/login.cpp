@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 François Revol <mmu_man@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,10 +32,10 @@ extern "C" {
 #include "utils/messages.h"
 #include "utils/url.h"
 #include "utils/utils.h"
-#include "utils/nsurl.h"
-#include "netsurf/content_type.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/clipboard.h"
+#include "utils/slateurl.h"
+#include "slate/content_type.h"
+#include "slate/browser_window.h"
+#include "slate/clipboard.h"
 }
 
 #include "beos/gui.h"
@@ -44,11 +44,11 @@ extern "C" {
 
 class LoginAlert : public BAlert {
 public:
-        LoginAlert(nserror (*callback)(const char *username,
+        LoginAlert(slateerror (*callback)(const char *username,
 				const char *password,
 				void *pw),
                    void *callbaclpw,
-                   nsurl *url,
+                   slateurl *url,
                    const char *host,
                    const char *realm,
                    const char *text);
@@ -56,10 +56,10 @@ public:
         void MessageReceived(BMessage *message);
 
 private:
-        nsurl* fUrl;				/**< URL being fetched */
+        slateurl* fUrl;				/**< URL being fetched */
         BString fHost;				/**< Host for user display */
         BString fRealm;				/**< Authentication realm */
-        nserror (*fCallback)(const char *username,
+        slateerror (*fCallback)(const char *username,
 			const char *password,
 			void *pw);
         void *fCallbackPw;
@@ -68,9 +68,9 @@ private:
         BTextControl *fPassControl;
 };
 
-static void create_login_window(nsurl *host,
+static void create_login_window(slateurl *host,
                 lwc_string *realm, const char *fetchurl,
-                nserror (*cb)(const char *username,
+                slateerror (*cb)(const char *username,
 				const char *password,
 				void *pw), void *cbpw);
 
@@ -78,11 +78,11 @@ static void create_login_window(nsurl *host,
 #define TC_H 25
 #define TC_MARGIN 10
 
-LoginAlert::LoginAlert(nserror (*callback)(const char *username,
+LoginAlert::LoginAlert(slateerror (*callback)(const char *username,
 						const char *password,
 						void *pw),
 				void *callbackpw,
-				nsurl *url, 
+				slateurl *url, 
 				const char *host, 
 				const char *realm, 
 				const char *text)
@@ -98,9 +98,9 @@ LoginAlert::LoginAlert(nserror (*callback)(const char *username,
 	SetFeel(B_MODAL_SUBSET_WINDOW_FEEL);
 	/*
 	// XXX: can't do that anymore
-	nsbeos_scaffolding *s = nsbeos_get_scaffold(bw->window);
+	slatebeos_scaffolding *s = slatebeos_get_scaffold(bw->window);
 	if (s) {
-		NSBrowserWindow *w = nsbeos_get_bwindow_for_scaffolding(s);
+		NSBrowserWindow *w = slatebeos_get_bwindow_for_scaffolding(s);
 		if (w)
 			AddToSubset(w);
 	}*/
@@ -162,7 +162,7 @@ LoginAlert::MessageReceived(BMessage *message)
 		
 		// notify the main thread
 		// the event dispatcher will handle it
-		nsbeos_pipe_message(m, NULL, NULL);
+		slatebeos_pipe_message(m, NULL, NULL);
 	}
 		break;
 	default:
@@ -172,28 +172,28 @@ LoginAlert::MessageReceived(BMessage *message)
 }
 
 
-extern "C" nserror gui_401login_open(nsurl *url, const char *realm,
+extern "C" slateerror gui_401login_open(slateurl *url, const char *realm,
 		const char *username, const char *password,
-		nserror (*cb)(const char *username,
+		slateerror (*cb)(const char *username,
 				const char *password,
 				void *pw),
 		void *cbpw)
 {
 	lwc_string *host;
 
-	host = nsurl_get_component(url, NSURL_HOST);
+	host = slateurl_get_component(url, SLATEURL_HOST);
 
 	create_login_window(url, host, realm, cb, cbpw);
 
 	free(host);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 //void create_login_window(struct browser_window *bw, const char *host,
 //		const char *realm, const char *fetchurl)
-static void create_login_window(nsurl *url, lwc_string *host,
-                const char *realm, nserror (*cb)(
+static void create_login_window(slateurl *url, lwc_string *host,
+                const char *realm, slateerror (*cb)(
                 		const char *username,
                 		const char *password,
                 		void *pw),

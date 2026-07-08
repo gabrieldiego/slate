@@ -2,7 +2,7 @@
  * Copyright 2008 François Revol <mmu_man@users.sourceforge.net>
  * Copyright 2006 Rob Kendrick <rjek@rjek.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,12 +18,12 @@
  */
 
 
-#ifndef NETSURF_BEOS_OPTIONS_H_
-#define NETSURF_BEOS_OPTIONS_H_
+#ifndef SLATE_BEOS_OPTIONS_H_
+#define SLATE_BEOS_OPTIONS_H_
 
 /* currently nothing here */
 
 #endif
 
-NSOPTION_STRING(url_file, NULL)
+SLATEOPTION_STRING(url_file, NULL)
 

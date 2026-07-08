@@ -1,7 +1,7 @@
 /*
  * Copyright 2007-2008 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,9 +30,9 @@
 
 #include "utils/messages.h"
 #include "utils/utils.h"
-#include "utils/nsurl.h"
-#include "netsurf/plotters.h"
-#include "netsurf/content.h"
+#include "utils/slateurl.h"
+#include "slate/plotters.h"
+#include "slate/content.h"
 #include "content/content_protected.h"
 #include "content/content_factory.h"
 
@@ -49,7 +49,7 @@ typedef struct svg_content {
 
 
 
-static nserror svg_create_svg_data(svg_content *c)
+static slateerror svg_create_svg_data(svg_content *c)
 {
 	c->diagram = svgtiny_create();
 	if (c->diagram == NULL)
@@ -58,11 +58,11 @@ static nserror svg_create_svg_data(svg_content *c)
 	c->current_width = INT_MAX;
 	c->current_height = INT_MAX;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 
 no_memory:
-	content_broadcast_error(&c->base, NSERROR_NOMEM, NULL);
-	return NSERROR_NOMEM;
+	content_broadcast_error(&c->base, SLATEERROR_NOMEM, NULL);
+	return SLATEERROR_NOMEM;
 }
 
 
@@ -70,34 +70,34 @@ no_memory:
  * Create a CONTENT_SVG.
  */
 
-static nserror svg_create(const content_handler *handler,
+static slateerror svg_create(const content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		struct llcache_handle *llcache, const char *fallback_charset,
 		bool quirks, struct content **c)
 {
 	svg_content *svg;
-	nserror error;
+	slateerror error;
 
 	svg = calloc(1, sizeof(svg_content));
 	if (svg == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__init(&svg->base, handler, imime_type, params,
 			llcache, fallback_charset, quirks);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(svg);
 		return error;
 	}
 
 	error = svg_create_svg_data(svg);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(svg);
 		return error;
 	}
 
 	*c = (struct content *) svg;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -140,7 +140,7 @@ static void svg_reformat(struct content *c, int width, int height)
 		svgtiny_parse(svg->diagram,
 			      (const char *)source_data,
 			      source_size,
-			      nsurl_access(content_get_url(c)),
+			      slateurl_access(content_get_url(c)),
 			      width,
 			      height);
 
@@ -174,7 +174,7 @@ svg_redraw_internal(svg_content *svg,
 	unsigned int i;
 	plot_font_style_t fstyle = *plot_style_font;
 	plot_style_t pstyle;
-	nserror res;
+	slateerror res;
 
 	assert(diagram);
 
@@ -217,7 +217,7 @@ svg_redraw_internal(svg_content *svg,
 					diagram->shape[i].path,
 					diagram->shape[i].path_length,
 					transform);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return false;
 			}
 
@@ -238,7 +238,7 @@ svg_redraw_internal(svg_content *svg,
 					      px, py,
 					      diagram->shape[i].text,
 					      strlen(diagram->shape[i].text));
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return false;
 			}
 		}
@@ -335,24 +335,24 @@ static void svg_destroy(struct content *c)
 }
 
 
-static nserror svg_clone(const struct content *old, struct content **newc)
+static slateerror svg_clone(const struct content *old, struct content **newc)
 {
 	svg_content *svg;
-	nserror error;
+	slateerror error;
 
 	svg = calloc(1, sizeof(svg_content));
 	if (svg == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__clone(old, &svg->base);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&svg->base);
 		return error;
 	}
 
 	/* Simply replay create/convert */
 	error = svg_create_svg_data(svg);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&svg->base);
 		return error;
 	}
@@ -361,13 +361,13 @@ static nserror svg_clone(const struct content *old, struct content **newc)
 			old->status == CONTENT_STATUS_DONE) {
 		if (svg_convert(&svg->base) == false) {
 			content_destroy(&svg->base);
-			return NSERROR_CLONE_FAILED;
+			return SLATEERROR_CLONE_FAILED;
 		}
 	}
 
 	*newc = (struct content *) svg;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static content_type svg_content_type(void)

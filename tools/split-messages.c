@@ -48,7 +48,7 @@ struct trnsltn_entry {
 	char *value;
 };
 
-static nserror usage(int argc, char **argv)
+static slateerror usage(int argc, char **argv)
 {
 	fprintf(stderr,
 		"Usage: %s -l lang [-z] [-d lang] [-W warning] [-o <file>] [-i <file>] [-p platform] [-f format] [<file> [<file>]]\n"
@@ -62,7 +62,7 @@ static nserror usage(int argc, char **argv)
 		"  -i filename  Input file\n"
 		"  -o filename  Output file\n",
 		argv[0]);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -70,7 +70,7 @@ static nserror usage(int argc, char **argv)
  *
  *
  */
-static nserror process_cmdline(int argc, char **argv, struct param *param)
+static slateerror process_cmdline(int argc, char **argv, struct param *param)
 {
 	int opt;
 
@@ -114,13 +114,13 @@ static nserror process_cmdline(int argc, char **argv, struct param *param)
 					"output format %s not supported",
 					optarg);
 				usage(argc, argv);
-				return NSERROR_NOT_IMPLEMENTED;
+				return SLATEERROR_NOT_IMPLEMENTED;
 			}
 			break;
 
 		default:
 			usage(argc, argv);
-			return NSERROR_BAD_PARAMETER;
+			return SLATEERROR_BAD_PARAMETER;
 		}
 	}
 
@@ -139,19 +139,19 @@ static nserror process_cmdline(int argc, char **argv, struct param *param)
 	if (param->selected == NULL) {
 		fprintf(stderr, "A language to select must be specified\n");
 		usage(argc, argv);
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if (param->infilename == NULL) {
 		fprintf(stderr, "Input file required\n");
 		usage(argc, argv);
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if (param->outfilename == NULL) {
 		fprintf(stderr, "Output file required\n");
 		usage(argc, argv);
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if ((param->platform != NULL) &&
@@ -169,18 +169,18 @@ static nserror process_cmdline(int argc, char **argv, struct param *param)
 		param->format = OUTPUTFMT_MESSAGES;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * extract key/value from a line of input
  *
- * \retun NSERROR_OK and key_out and value_out updated
- *        NSERROR_NOT_FOUND if not a key/value input line
- *        NSERROR_INVALID if the line is and invalid format (missing colon)
+ * \retun SLATEERROR_OK and key_out and value_out updated
+ *        SLATEERROR_NOT_FOUND if not a key/value input line
+ *        SLATEERROR_INVALID if the line is and invalid format (missing colon)
  */
-static nserror
+static slateerror
 get_key_value(char *line, ssize_t linelen, char **key_out, char **value_out)
 {
 	char *key;
@@ -195,12 +195,12 @@ get_key_value(char *line, ssize_t linelen, char **key_out, char **value_out)
 
 	/* empty line or only whitespace */
 	if (*key == 0) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	/* comment */
 	if (*key == '#') {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	/* get start of value */
@@ -214,7 +214,7 @@ get_key_value(char *line, ssize_t linelen, char **key_out, char **value_out)
 
 	/* missing colon separator */
 	if (*value == 0) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	/* remove delimiter from value */
@@ -225,14 +225,14 @@ get_key_value(char *line, ssize_t linelen, char **key_out, char **value_out)
 
 	*key_out = key;
 	*value_out = value;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * extract language, platform and token elements from a string
  */
-static nserror
+static slateerror
 get_lang_plat_tok(char *str, char **lang_out, char **plat_out, char **tok_out)
 {
 	char *plat;
@@ -246,7 +246,7 @@ get_lang_plat_tok(char *str, char **lang_out, char **plat_out, char **tok_out)
 		}
 	}
 	if (*plat == 0) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	for (tok = plat; *tok != 0; tok++) {
@@ -257,21 +257,21 @@ get_lang_plat_tok(char *str, char **lang_out, char **plat_out, char **tok_out)
 		}
 	}
 	if (*tok == 0) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	*lang_out = str;
 	*plat_out = plat;
 	*tok_out = tok;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * reverse order of entries in a translation list
  */
-static nserror
+static slateerror
 translation_list_reverse(struct trnsltn_entry **tlist)
 {
 	struct trnsltn_entry *prev;
@@ -290,7 +290,7 @@ translation_list_reverse(struct trnsltn_entry **tlist)
 	}
 
 	*tlist = prev;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -305,30 +305,30 @@ translation_list_reverse(struct trnsltn_entry **tlist)
  * \param tlist translation list head
  * \param key The key of the translation to search for
  * \param trans_out The sucessful result
- * \return NSERROR_OK and trans_out updated on success else NSERROR_NOT_FOUND;
+ * \return SLATEERROR_OK and trans_out updated on success else SLATEERROR_NOT_FOUND;
  */
-static nserror
+static slateerror
 translation_from_key(struct trnsltn_entry *tlist,
 		     char *key,
 		     struct trnsltn_entry **trans_out)
 {
 	if (tlist == NULL) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	if (strcmp(tlist->key, key) != 0) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	*trans_out = tlist;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * create and link an entry into translation list
  */
-static nserror
+static slateerror
 translation_add(struct trnsltn_entry **tlist,
 		const char *lang,
 		const char *key,
@@ -338,7 +338,7 @@ translation_add(struct trnsltn_entry **tlist,
 
 	tnew = malloc(sizeof(*tnew));
 	if (tnew == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 	tnew->next = *tlist;
 	tnew->lang = strdup(lang);
@@ -346,14 +346,14 @@ translation_add(struct trnsltn_entry **tlist,
 	tnew->value = strdup(value);
 
 	*tlist = tnew;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * replace key and value on a translation entry
  */
-static nserror
+static slateerror
 translation_replace(struct trnsltn_entry *tran,
 		const char *lang,
 		const char *key,
@@ -366,7 +366,7 @@ translation_replace(struct trnsltn_entry *tran,
 	free(tran->value);
 	tran->value = strdup(value);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -374,12 +374,12 @@ translation_replace(struct trnsltn_entry *tran,
  * process a line of the input file
  *
  */
-static nserror
+static slateerror
 messageline(struct param *param,
 	    struct trnsltn_entry **tlist,
 	    char *line, ssize_t linelen)
 {
-	nserror res;
+	slateerror res;
 	char *key;
 	char *value;
 	char *lang;
@@ -388,13 +388,13 @@ messageline(struct param *param,
 	struct trnsltn_entry *tran;
 
 	res = get_key_value(line, linelen, &key, &value);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		/* skip line as no valid key value pair found */
 		return res;
 	}
 
 	res = get_lang_plat_tok(key, &lang, &plat, &tok);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		/* malformed key */
 		return res;
 	}
@@ -403,11 +403,11 @@ messageline(struct param *param,
 	    (strcmp(plat, "all") != 0) &&
 	    (strcmp(plat, param->platform) != 0)) {
 		/* this translation is not for the selected platform */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	res = translation_from_key(*tlist, tok, &tran);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		if (strcmp(tran->lang, param->selected) != 0) {
 			/* current entry is not the selected language */
 			if (strcmp(lang, param->selected) == 0) {
@@ -430,7 +430,7 @@ messageline(struct param *param,
 				res = translation_replace(tran, lang, tok, value);
 			}
 		}
-	} else if (res == NSERROR_NOT_FOUND) {
+	} else if (res == SLATEERROR_NOT_FOUND) {
 		res = translation_add(tlist, lang, tok, value);
 	}
 
@@ -441,10 +441,10 @@ messageline(struct param *param,
 /**
  * read fatmessages file and create a translation entry list
  */
-static nserror
+static slateerror
 fatmessages_read(struct param *param, struct trnsltn_entry **tlist)
 {
-	nserror res;
+	slateerror res;
 	FILE *infile;
 	char *line = NULL;
 	size_t linealloc = 0;
@@ -454,7 +454,7 @@ fatmessages_read(struct param *param, struct trnsltn_entry **tlist)
 	infile = fopen(param->infilename, "r");
 	if (infile == NULL) {
 		perror("Unable to open input file");
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	while (1) {
@@ -465,7 +465,7 @@ fatmessages_read(struct param *param, struct trnsltn_entry **tlist)
 		linenum++;
 
 		res = messageline(param, tlist, line, linelen);
-		if ((res == NSERROR_INVALID) && (param->warnings > 0)) {
+		if ((res == SLATEERROR_INVALID) && (param->warnings > 0)) {
 			fprintf(stderr, "line %d Malformed: \"%s\"\n",
 				linenum, line);
 		}
@@ -482,7 +482,7 @@ fatmessages_read(struct param *param, struct trnsltn_entry **tlist)
 /**
  * write output in NetSurf messages format
  */
-static nserror
+static slateerror
 message_write(struct param *param, struct trnsltn_entry *tlist)
 {
 	gzFile outf;
@@ -497,7 +497,7 @@ message_write(struct param *param, struct trnsltn_entry *tlist)
 	outf = gzopen(param->outfilename, mode);
 	if (outf == NULL) {
 		perror("Unable to open output file");
-		return NSERROR_PERMISSION;
+		return SLATEERROR_PERMISSION;
 	}
 
 	if (gzprintf(outf,
@@ -506,42 +506,42 @@ message_write(struct param *param, struct trnsltn_entry *tlist)
 		param->infilename) < 1) {
 		gzclose(outf);
 		unlink(param->outfilename);
-		return NSERROR_NOSPACE;
+		return SLATEERROR_NOSPACE;
 	};
 
 	while (tlist != NULL) {
 		if (gzprintf(outf, "%s:%s\n", tlist->key, tlist->value) < 1) {
 			gzclose(outf);
 			unlink(param->outfilename);
-			return NSERROR_NOSPACE;
+			return SLATEERROR_NOSPACE;
 		}
 		tlist = tlist->next;
 	}
 
 	gzclose(outf);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 int main(int argc, char **argv)
 {
-	nserror res;
+	slateerror res;
 	struct param param; /* control paramters */
 	struct trnsltn_entry *translations = NULL;
 
 	res = process_cmdline(argc, argv, &param);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return EXIT_FAILURE;
 	}
 
 	res = fatmessages_read(&param, &translations);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return EXIT_FAILURE;
 	}
 
 	switch (param.format) {
 	case OUTPUTFMT_NONE:
-		res = NSERROR_OK;
+		res = SLATEERROR_OK;
 		break;
 
 	case OUTPUTFMT_MESSAGES:
@@ -549,7 +549,7 @@ int main(int argc, char **argv)
 		break;
 	}
 
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return EXIT_FAILURE;
 	}
 

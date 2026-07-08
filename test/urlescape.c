@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -117,12 +117,12 @@ static const struct test_pairs url_escape_test_vec[] = {
 
 START_TEST(url_escape_test)
 {
-	nserror err;
+	slateerror err;
 	char *esc_str;
 	const struct test_pairs *tst = &url_escape_test_vec[_i];
 
 	err = url_escape(tst->test, false, "", &esc_str);
-	ck_assert(err == NSERROR_OK);
+	ck_assert(err == SLATEERROR_OK);
 
 	/* ensure result data is correct */
 	ck_assert_str_eq(esc_str, tst->res);
@@ -133,17 +133,17 @@ END_TEST
 
 START_TEST(url_escape_api_nullparam_test)
 {
-	nserror err;
+	slateerror err;
 	char *esc_str;
 
 	err = url_escape(NULL, false, NULL, &esc_str);
-	ck_assert(err == NSERROR_BAD_PARAMETER);
+	ck_assert(err == SLATEERROR_BAD_PARAMETER);
 
 	err = url_escape(&simple_string[0], false, NULL, NULL);
-	ck_assert(err == NSERROR_BAD_PARAMETER);
+	ck_assert(err == SLATEERROR_BAD_PARAMETER);
 
 	err = url_escape(&simple_string[0], false, NULL, &esc_str);
-	ck_assert(err == NSERROR_OK);
+	ck_assert(err == SLATEERROR_OK);
 
 	free(esc_str);
 }
@@ -185,14 +185,14 @@ static const struct test_pairs url_unescape_test_vec[] = {
  */
 START_TEST(url_unescape_simple_test)
 {
-	nserror err;
+	slateerror err;
 	char *unesc_str;
 	size_t unesc_length;
 
 	const struct test_pairs *tst = &url_unescape_test_vec[_i];
 
 	err = url_unescape(tst->test, 0 , &unesc_length, &unesc_str);
-	ck_assert(err == NSERROR_OK);
+	ck_assert(err == SLATEERROR_OK);
 
 	/* ensure length */
 	ck_assert_uint_eq(unesc_length, tst->res_len);
@@ -211,7 +211,7 @@ END_TEST
  */
 START_TEST(url_unescape_length_test)
 {
-	nserror err;
+	slateerror err;
 	char *unesc_str;
 	size_t unesc_length;
 
@@ -219,7 +219,7 @@ START_TEST(url_unescape_length_test)
 
 	err = url_unescape(tst->test, tst->test_len , &unesc_length, &unesc_str);
 
-	ck_assert(err == NSERROR_OK);
+	ck_assert(err == SLATEERROR_OK);
 
 	/* ensure length */
 	ck_assert_uint_eq(unesc_length, tst->res_len);
@@ -238,12 +238,12 @@ END_TEST
  */
 START_TEST(url_unescape_api_retlen_test)
 {
-	nserror err;
+	slateerror err;
 	char *unesc_str;
 
 	err = url_unescape(&most_escaped_upper[0], 0, NULL, &unesc_str);
 
-	ck_assert(err == NSERROR_OK);
+	ck_assert(err == SLATEERROR_OK);
 
 	/* ensure length */
 	ck_assert_uint_eq(strlen(unesc_str), SLEN(all_chars));
@@ -257,14 +257,14 @@ END_TEST
 
 START_TEST(url_unescape_api_nullparam_test)
 {
-	nserror err;
+	slateerror err;
 	char *unesc_str;
 
 	err = url_unescape(NULL, 0, NULL, &unesc_str);
-	ck_assert(err == NSERROR_BAD_PARAMETER);
+	ck_assert(err == SLATEERROR_BAD_PARAMETER);
 
 	err = url_unescape(&simple_string[0], 0, NULL, NULL);
-	ck_assert(err == NSERROR_BAD_PARAMETER);
+	ck_assert(err == SLATEERROR_BAD_PARAMETER);
 }
 END_TEST
 

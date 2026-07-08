@@ -21,14 +21,14 @@
  * about scheme URL method handler
  */
 
-#ifndef NETSURF_CONTENT_FETCHERS_ABOUT_ABOUT_H
-#define NETSURF_CONTENT_FETCHERS_ABOUT_ABOUT_H
+#ifndef SLATE_CONTENT_FETCHERS_ABOUT_ABOUT_H
+#define SLATE_CONTENT_FETCHERS_ABOUT_ABOUT_H
 
 /**
  * Register about scheme handler.
  *
- * \return NSERROR_OK on successful registration or error code on failure.
+ * \return SLATEERROR_OK on successful registration or error code on failure.
  */
-nserror fetch_about_register(void);
+slateerror fetch_about_register(void);
 
 #endif

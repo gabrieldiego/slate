@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,8 +22,8 @@
  * HTML internal font handling implementation.
  */
 
-#include "utils/nsoption.h"
-#include "netsurf/plot_style.h"
+#include "utils/slateoption.h"
+#include "slate/plot_style.h"
 #include "css/utils.h"
 
 #include "html/font.h"
@@ -152,14 +152,14 @@ void font_plot_style_from_css(
 				      INTTOFIX(PLOT_STYLE_SCALE)));
 
 	/* Clamp font size to configured minimum */
-	if (fstyle->size < (nsoption_int(font_min_size) * PLOT_STYLE_SCALE) / 10)
-		fstyle->size = (nsoption_int(font_min_size) * PLOT_STYLE_SCALE) / 10;
+	if (fstyle->size < (slateoption_int(font_min_size) * PLOT_STYLE_SCALE) / 10)
+		fstyle->size = (slateoption_int(font_min_size) * PLOT_STYLE_SCALE) / 10;
 
 	fstyle->weight = plot_font_weight(css_computed_font_weight(css));
 	fstyle->flags = plot_font_flags(css_computed_font_style(css),
 			css_computed_font_variant(css));
 
 	css_computed_color(css, &col);
-	fstyle->foreground = nscss_color_to_ns(col);
+	fstyle->foreground = slatecss_color_to_slate(col);
 	fstyle->background = 0;
 }

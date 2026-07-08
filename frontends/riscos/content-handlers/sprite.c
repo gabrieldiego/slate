@@ -1,7 +1,7 @@
 /*
  * Copyright 2003 John M Bell <jmb202@ecs.soton.ac.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,8 +33,8 @@
 #include "utils/log.h"
 #include "utils/messages.h"
 #include "utils/utils.h"
-#include "netsurf/plotters.h"
-#include "netsurf/content.h"
+#include "slate/plotters.h"
+#include "slate/content.h"
 #include "content/llcache.h"
 #include "content/content.h"
 #include "content/content_protected.h"
@@ -52,7 +52,7 @@ typedef struct sprite_content {
 	void *data;
 } sprite_content;
 
-static nserror sprite_create(const content_handler *handler,
+static slateerror sprite_create(const content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		llcache_handle *llcache, const char *fallback_charset,
 		bool quirks, struct content **c);
@@ -60,7 +60,7 @@ static bool sprite_convert(struct content *c);
 static void sprite_destroy(struct content *c);
 static bool sprite_redraw(struct content *c, struct content_redraw_data *data,
 		const struct rect *clip, const struct redraw_context *ctx);
-static nserror sprite_clone(const struct content *old, struct content **newc);
+static slateerror sprite_clone(const struct content *old, struct content **newc);
 static content_type sprite_content_type(void);
 
 static const content_handler sprite_content_handler = {
@@ -79,28 +79,28 @@ static const char *sprite_types[] = {
 
 CONTENT_FACTORY_REGISTER_TYPES(sprite, sprite_types, sprite_content_handler)
 
-nserror sprite_create(const content_handler *handler,
+slateerror sprite_create(const content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		llcache_handle *llcache, const char *fallback_charset,
 		bool quirks, struct content **c)
 {
 	sprite_content *sprite;
-	nserror error;
+	slateerror error;
 
 	sprite = calloc(1, sizeof(sprite_content));
 	if (sprite == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__init(&sprite->base, handler, imime_type, params,
 			llcache, fallback_charset, quirks);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(sprite);
 		return error;
 	}
 
 	*c = (struct content *) sprite;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -128,7 +128,7 @@ bool sprite_convert(struct content *c)
 
 	/* check for bad data */
 	if ((int)source_size + 4 != area->used) {
-		msg_data.errordata.errorcode = NSERROR_UNKNOWN;
+		msg_data.errordata.errorcode = SLATEERROR_UNKNOWN;
 		msg_data.errordata.errormsg = messages_get("BadSprite");
 		content_broadcast(c, CONTENT_MSG_ERROR, &msg_data);
 		return false;
@@ -143,7 +143,7 @@ bool sprite_convert(struct content *c)
 		      "xosspriteop_read_sprite_info: 0x%x: %s",
 		      error->errnum,
 		      error->errmess);
-		msg_data.errordata.errorcode = NSERROR_UNKNOWN;
+		msg_data.errordata.errorcode = SLATEERROR_UNKNOWN;
 		msg_data.errordata.errormsg = error->errmess;
 		content_broadcast(c, CONTENT_MSG_ERROR, &msg_data);
 		return false;
@@ -154,7 +154,7 @@ bool sprite_convert(struct content *c)
 
 	/* set title text */
 	title = messages_get_buff("SpriteTitle",
-			nsurl_access_leaf(llcache_handle_get_url(c->llcache)),
+			slateurl_access_leaf(llcache_handle_get_url(c->llcache)),
 			c->width, c->height);
 	if (title != NULL) {
 		content__set_title(c, title);
@@ -188,7 +188,7 @@ bool sprite_redraw(struct content *c, struct content_redraw_data *data,
 {
 	sprite_content *sprite = (sprite_content *) c;
 
-	if (ctx->plot->flush && (ctx->plot->flush(ctx) != NSERROR_OK))
+	if (ctx->plot->flush && (ctx->plot->flush(ctx) != SLATEERROR_OK))
 		return false;
 
 	return image_redraw(sprite->data,
@@ -202,17 +202,17 @@ bool sprite_redraw(struct content *c, struct content_redraw_data *data,
 			IMAGE_PLOT_OS);
 }
 
-nserror sprite_clone(const struct content *old, struct content **newc)
+slateerror sprite_clone(const struct content *old, struct content **newc)
 {
 	sprite_content *sprite;
-	nserror error;
+	slateerror error;
 
 	sprite = calloc(1, sizeof(sprite_content));
 	if (sprite == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__clone(old, &sprite->base);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&sprite->base);
 		return error;
 	}
@@ -222,13 +222,13 @@ nserror sprite_clone(const struct content *old, struct content **newc)
 			old->status == CONTENT_STATUS_DONE) {
 		if (sprite_convert(&sprite->base) == false) {
 			content_destroy(&sprite->base);
-			return NSERROR_CLONE_FAILED;
+			return SLATEERROR_CLONE_FAILED;
 		}
 	}
 
 	*newc = (struct content *) sprite;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 content_type sprite_content_type(void)

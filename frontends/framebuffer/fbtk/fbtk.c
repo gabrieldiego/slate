@@ -3,7 +3,7 @@
  *
  * Framebuffer windowing toolkit core.
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,8 +34,8 @@
 
 #include "utils/utils.h"
 #include "utils/log.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/plotters.h"
+#include "slate/browser_window.h"
+#include "slate/plotters.h"
 
 #include "framebuffer/gui.h"
 #include "framebuffer/fbtk.h"
@@ -627,7 +627,7 @@ fbtk_get_redraw_pending(fbtk_widget_t *widget)
  * children of a node should be considered.
  */
 static int
-do_redraw(nsfb_t *nsfb, fbtk_widget_t *widget)
+do_redraw(nsfb_t *slatefb, fbtk_widget_t *widget)
 {
 	nsfb_bbox_t plot_ctx;
 	fbtk_widget_t *cwidget; /* child widget */
@@ -645,7 +645,7 @@ do_redraw(nsfb_t *nsfb, fbtk_widget_t *widget)
 		      plot_ctx.x0, plot_ctx.y0,
 		      plot_ctx.x1, plot_ctx.y1);
 
-		if (nsfb_plot_set_clip(nsfb, &plot_ctx) == true) {
+		if (nsfb_plot_set_clip(slatefb, &plot_ctx) == true) {
 			fbtk_post_callback(widget, FBTK_CBT_REDRAW);
 		}
 		widget->redraw.needed = false;
@@ -655,7 +655,7 @@ do_redraw(nsfb_t *nsfb, fbtk_widget_t *widget)
 	if (widget->redraw.child) {
 		cwidget = widget->last_child;
 		while (cwidget != NULL) {
-			do_redraw(nsfb, cwidget);
+			do_redraw(slatefb, cwidget);
 			cwidget = cwidget->prev;
 		}
 		widget->redraw.child = false;

@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 - 2013 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,12 +26,12 @@
 #include "utils/utf8.h"
 #include "utils/libdom.h"
 #include "utils/log.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "content/urldb.h"
 
 #include "desktop/global_history.h"
 #include "desktop/treeview.h"
-#include "netsurf/browser_window.h"
+#include "slate/browser_window.h"
 
 #define N_DAYS 28
 #define N_SEC_PER_DAY (60 * 60 * 24)
@@ -78,7 +78,7 @@ struct global_history_entry {
 	bool user_delete;
 
 	int slot;
-	nsurl *url;
+	slateurl *url;
 	time_t t;
 	treeview_node *entry;
 	struct global_history_entry *next;
@@ -95,7 +95,7 @@ struct global_history_entry *gh_list[N_DAYS];
  * \param url The URL to find
  * \return Pointer to history entry, or NULL if not found
  */
-static struct global_history_entry *global_history_find(nsurl *url)
+static struct global_history_entry *global_history_find(slateurl *url)
 {
 	int i;
 	struct global_history_entry *e;
@@ -104,8 +104,8 @@ static struct global_history_entry *global_history_find(nsurl *url)
 		e = gh_list[i];
 
 		while (e != NULL) {
-			if (nsurl_compare(e->url, url,
-					NSURL_COMPLETE) == true) {
+			if (slateurl_compare(e->url, url,
+					SLATEURL_COMPLETE) == true) {
 				/* Got a match */
 				return e;
 			}
@@ -123,11 +123,11 @@ static struct global_history_entry *global_history_find(nsurl *url)
  * Initialise the treeview directories
  *
  * \param f		Ident for folder to create
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror global_history_create_dir(enum global_history_folders f)
+static slateerror global_history_create_dir(enum global_history_folders f)
 {
-	nserror err;
+	slateerror err;
 	treeview_node *relation = NULL;
 	enum treeview_relationship rel = TREE_REL_FIRST_CHILD;
 	const char *label;
@@ -175,7 +175,7 @@ static nserror global_history_create_dir(enum global_history_folders f)
 		break;
 
 	default:
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	label = messages_get(label);
@@ -209,14 +209,14 @@ static nserror global_history_create_dir(enum global_history_folders f)
  *
  * \param parent	Updated to parent folder.
  * \param slot		Global history slot of entry we want folder node for
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static inline nserror global_history_get_parent_treeview_node(
+static inline slateerror global_history_get_parent_treeview_node(
 		treeview_node **parent, int slot)
 {
 	int folder_index;
 	struct global_history_folder *f;
-	nserror err;
+	slateerror err;
 
 	if (slot < 7) {
 		folder_index = slot;
@@ -232,7 +232,7 @@ static inline nserror global_history_get_parent_treeview_node(
 
 	} else {
 		/* Slot value is invalid */
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	/* Get the folder */
@@ -240,7 +240,7 @@ static inline nserror global_history_get_parent_treeview_node(
 
 	if (f->folder == NULL) {
 		err = global_history_create_dir(folder_index);
-		if (err != NSERROR_OK) {
+		if (err != SLATEERROR_OK) {
 			*parent = NULL;
 			return err;
 		}
@@ -248,7 +248,7 @@ static inline nserror global_history_get_parent_treeview_node(
 
 	/* Return the parent treeview folder */
 	*parent = f->folder;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -257,9 +257,9 @@ static inline nserror global_history_get_parent_treeview_node(
  *
  * \param e		Global history entry to set up
  * \param data	Data associated with entry's URL
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror global_history_create_treeview_field_data(
+static slateerror global_history_create_treeview_field_data(
 		struct global_history_entry *e,
 		const struct url_data *data)
 {
@@ -276,8 +276,8 @@ static nserror global_history_create_treeview_field_data(
 			strlen(title) : 0;
 
 	e->data[GH_URL].field = gh_ctx.fields[GH_URL].field;
-	e->data[GH_URL].value = nsurl_access(e->url);
-	e->data[GH_URL].value_len = nsurl_length(e->url);
+	e->data[GH_URL].value = slateurl_access(e->url);
+	e->data[GH_URL].value_len = slateurl_length(e->url);
 
 	if ((lvtime = localtime(&data->last_visit)) != NULL) {
 		const size_t lvsize = 256;
@@ -302,7 +302,7 @@ static nserror global_history_create_treeview_field_data(
 	e->data[GH_VISITS].value = strdup(buffer);
 	e->data[GH_VISITS].value_len = len;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -310,19 +310,19 @@ static nserror global_history_create_treeview_field_data(
  *
  * \param e	entry to add to treeview
  * \param slot  global history slot containing entry
- * \return NSERROR_OK on success, or appropriate error otherwise
+ * \return SLATEERROR_OK on success, or appropriate error otherwise
  *
  * It is assumed that the entry is unique (for its URL) in the global
  * history table
  */
-static nserror global_history_entry_insert(struct global_history_entry *e,
+static slateerror global_history_entry_insert(struct global_history_entry *e,
 		int slot)
 {
-	nserror err;
+	slateerror err;
 
 	treeview_node *parent;
 	err = global_history_get_parent_treeview_node(&parent, slot);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
@@ -331,11 +331,11 @@ static nserror global_history_entry_insert(struct global_history_entry *e,
 			gh_ctx.built ? TREE_OPTION_NONE :
 					TREE_OPTION_SUPPRESS_RESIZE |
 					TREE_OPTION_SUPPRESS_REDRAW);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -352,30 +352,30 @@ static nserror global_history_entry_insert(struct global_history_entry *e,
  * \param slot		Global history slot to contain history entry
  * \param data		URL data for the entry
  * \param got_treeview	Whether the treeview has been created already
- * \return NSERROR_OK on success, or appropriate error otherwise
+ * \return SLATEERROR_OK on success, or appropriate error otherwise
  */
-static nserror global_history_add_entry_internal(nsurl *url, int slot,
+static slateerror global_history_add_entry_internal(slateurl *url, int slot,
 		const struct url_data *data, bool got_treeview)
 {
-	nserror err;
+	slateerror err;
 	struct global_history_entry *e;
 
 	/* Create new local history entry */
 	e = malloc(sizeof(struct global_history_entry));
 	if (e == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	e->user_delete = false;
 	e->slot = slot;
-	e->url = nsurl_ref(url);
+	e->url = slateurl_ref(url);
 	e->t = data->last_visit;
 	e->entry = NULL;
 	e->next = NULL;
 	e->prev = NULL;
 
 	err = global_history_create_treeview_field_data(e, data);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 	
@@ -410,12 +410,12 @@ static nserror global_history_add_entry_internal(nsurl *url, int slot,
 
 	if (got_treeview) {
 		err = global_history_entry_insert(e, slot);
-		if (err != NSERROR_OK) {
+		if (err != SLATEERROR_OK) {
 			return err;
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -460,7 +460,7 @@ static void global_history_delete_entry_internal(
 	free((void *)e->data[GH_TITLE].value); /* Eww */
 	free((void *)e->data[GH_LAST_VISIT].value); /* Eww */
 	free((void *)e->data[GH_VISITS].value); /* Eww */
-	nsurl_unref(e->url);
+	slateurl_unref(e->url);
 
 	/* Destroy entry */
 	free(e);
@@ -473,7 +473,7 @@ static void global_history_delete_entry_internal(
  * \param data URL data associated with URL
  * \return true (for urldb_iterate_entries)
  */
-static bool global_history_add_entry(nsurl *url,
+static bool global_history_add_entry(slateurl *url,
 		const struct url_data *data)
 {
 	int slot;
@@ -509,7 +509,7 @@ static bool global_history_add_entry(nsurl *url,
 	}
 
 	if (global_history_add_entry_internal(url, slot, data,
-			got_treeview) != NSERROR_OK) {
+			got_treeview) != SLATEERROR_OK) {
 		return false;
 	}
 
@@ -519,9 +519,9 @@ static bool global_history_add_entry(nsurl *url,
 /**
  * Initialise the treeview entry feilds
  *
- * \return NSERROR_OK on success, or appropriate error otherwise
+ * \return SLATEERROR_OK on success, or appropriate error otherwise
  */
-static nserror global_history_initialise_entry_fields(void)
+static slateerror global_history_initialise_entry_fields(void)
 {
 	int i;
 	const char *label;
@@ -576,22 +576,22 @@ static nserror global_history_initialise_entry_fields(void)
 		return false;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 
 error:
 	for (i = 0; i < N_FIELDS; i++)
 		lwc_string_unref(gh_ctx.fields[i].field);
 
-	return NSERROR_UNKNOWN;
+	return SLATEERROR_UNKNOWN;
 }
 
 
 /**
  * Initialise the time
  *
- * \return NSERROR_OK on success, or appropriate error otherwise
+ * \return SLATEERROR_OK on success, or appropriate error otherwise
  */
-static nserror global_history_initialise_time(void)
+static slateerror global_history_initialise_time(void)
 {
 	struct tm *full_time;
 	time_t t;
@@ -600,7 +600,7 @@ static nserror global_history_initialise_time(void)
 	t = time(NULL);
 	if (t == -1) {
 		NSLOG(netsurf, INFO, "time info unaviable");
-		return NSERROR_UNKNOWN;
+		return SLATEERROR_UNKNOWN;
 	}
 
 	/* get the time at the start of today */
@@ -611,25 +611,25 @@ static nserror global_history_initialise_time(void)
 	t = mktime(full_time);
 	if (t == -1) {
 		NSLOG(netsurf, INFO, "mktime failed");
-		return NSERROR_UNKNOWN;
+		return SLATEERROR_UNKNOWN;
 	}
 
 	gh_ctx.today = t;
 	gh_ctx.weekday = full_time->tm_wday;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * Initialise the treeview entries
  *
- * \return NSERROR_OK on success, or appropriate error otherwise
+ * \return SLATEERROR_OK on success, or appropriate error otherwise
  */
-static nserror global_history_init_entries(void)
+static slateerror global_history_init_entries(void)
 {
 	int i;
-	nserror err;
+	slateerror err;
 
 	/* Itterate over all global history data, inserting it into treeview */
 	for (i = 0; i < N_DAYS; i++) {
@@ -645,18 +645,18 @@ static nserror global_history_init_entries(void)
 		/* Insert the entries into the treeview */
 		while (l != NULL) {
 			err = global_history_entry_insert(l, i);
-			if (err != NSERROR_OK) {
+			if (err != SLATEERROR_OK) {
 				return err;
 			}
 			l = l->prev;
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-static nserror global_history_tree_node_folder_cb(
+static slateerror global_history_tree_node_folder_cb(
 		struct treeview_node_msg msg, void *data)
 {
 	struct global_history_folder *f = data;
@@ -673,14 +673,14 @@ static nserror global_history_tree_node_folder_cb(
 		break;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror
+static slateerror
 global_history_tree_node_entry_cb(struct treeview_node_msg msg, void *data)
 {
 	struct global_history_entry *e = data;
-	nserror ret = NSERROR_OK;
+	slateerror ret = SLATEERROR_OK;
 
 	switch (msg.msg) {
 	case TREE_MSG_NODE_DELETE:
@@ -722,12 +722,12 @@ struct treeview_callback_table gh_tree_cb_t = {
 
 
 /* Exported interface, documented in global_history.h */
-nserror global_history_init(void *core_window_handle)
+slateerror global_history_init(void *core_window_handle)
 {
-	nserror err;
+	slateerror err;
 
 	err = treeview_init();
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
@@ -735,14 +735,14 @@ nserror global_history_init(void *core_window_handle)
 
 	/* Init. global history treeview time */
 	err = global_history_initialise_time();
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		gh_ctx.tree = NULL;
 		return err;
 	}
 
 	/* Init. global history treeview entry fields */
 	err = global_history_initialise_entry_fields();
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		gh_ctx.tree = NULL;
 		return err;
 	}
@@ -756,27 +756,27 @@ nserror global_history_init(void *core_window_handle)
 			core_window_handle,
 			TREEVIEW_NO_MOVES | TREEVIEW_DEL_EMPTY_DIRS |
 			TREEVIEW_SEARCHABLE);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		gh_ctx.tree = NULL;
 		return err;
 	}
 
 	/* Ensure there is a folder for today */
 	err = global_history_create_dir(GH_TODAY);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
 	/* Add the history to the treeview */
 	err = global_history_init_entries();
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
 	/* Expand the "Today" folder node */
 	err = treeview_node_expand(gh_ctx.tree,
 			gh_ctx.folders[GH_TODAY].folder);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
@@ -790,15 +790,15 @@ nserror global_history_init(void *core_window_handle)
 
 	NSLOG(netsurf, INFO, "Loaded global history");
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* Exported interface, documented in global_history.h */
-nserror global_history_fini(void)
+slateerror global_history_fini(void)
 {
 	int i;
-	nserror err;
+	slateerror err;
 
 	NSLOG(netsurf, INFO, "Finalising global history");
 
@@ -813,7 +813,7 @@ nserror global_history_fini(void)
 		lwc_string_unref(gh_ctx.fields[i].field);
 
 	err = treeview_fini();
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		return err;
 	}
 
@@ -824,24 +824,24 @@ nserror global_history_fini(void)
 
 
 /* Exported interface, documented in global_history.h */
-nserror global_history_add(nsurl *url)
+slateerror global_history_add(slateurl *url)
 {
 	const struct url_data *data;
 
 	/* If we don't have a global history at the moment, just return OK */
 	if (gh_ctx.tree == NULL)
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 
 	data = urldb_get_url_data(url);
 	if (data == NULL) {
 		NSLOG(netsurf, INFO,
 		      "Can't add URL to history that's not present in urldb.");
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	global_history_add_entry(url, data);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -849,11 +849,11 @@ struct treeview_export_walk_ctx {
 	FILE *fp;
 };
 /** Callback for treeview_walk node entering */
-static nserror global_history_export_enter_cb(void *ctx, void *node_data,
+static slateerror global_history_export_enter_cb(void *ctx, void *node_data,
 		enum treeview_node_type type, bool *abort)
 {
 	struct treeview_export_walk_ctx *tw = ctx;
-	nserror ret;
+	slateerror ret;
 
 	if (type == TREE_NODE_ENTRY) {
 		struct global_history_entry *e = node_data;
@@ -862,14 +862,14 @@ static nserror global_history_export_enter_cb(void *ctx, void *node_data,
 
 		ret = utf8_to_html(e->data[GH_TITLE].value, "iso-8859-1",
 				e->data[GH_TITLE].value_len, &t_text);
-		if (ret != NSERROR_OK)
-			return NSERROR_SAVE_FAILED;
+		if (ret != SLATEERROR_OK)
+			return SLATEERROR_SAVE_FAILED;
 
 		ret = utf8_to_html(e->data[GH_URL].value, "iso-8859-1",
 				e->data[GH_URL].value_len, &u_text);
-		if (ret != NSERROR_OK) {
+		if (ret != SLATEERROR_OK) {
 			free(t_text);
-			return NSERROR_SAVE_FAILED;
+			return SLATEERROR_SAVE_FAILED;
 		}
 
 		fprintf(tw->fp, "<li><a href=\"%s\">%s</a></li>\n",
@@ -884,18 +884,18 @@ static nserror global_history_export_enter_cb(void *ctx, void *node_data,
 
 		ret = utf8_to_html(f->data.value, "iso-8859-1",
 				f->data.value_len, &f_text);
-		if (ret != NSERROR_OK)
-			return NSERROR_SAVE_FAILED;
+		if (ret != SLATEERROR_OK)
+			return SLATEERROR_SAVE_FAILED;
 
 		fprintf(tw->fp, "<li><h4>%s</h4>\n<ul>\n", f_text);
 
 		free(f_text);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 /** Callback for treeview_walk node leaving */
-static nserror global_history_export_leave_cb(void *ctx, void *node_data,
+static slateerror global_history_export_leave_cb(void *ctx, void *node_data,
 		enum treeview_node_type type, bool *abort)
 {
 	struct treeview_export_walk_ctx *tw = ctx;
@@ -904,18 +904,18 @@ static nserror global_history_export_leave_cb(void *ctx, void *node_data,
 		fputs("</ul></li>\n", tw->fp);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 /* Exported interface, documented in global_history.h */
-nserror global_history_export(const char *path, const char *title)
+slateerror global_history_export(const char *path, const char *title)
 {
 	struct treeview_export_walk_ctx tw;
-	nserror err;
+	slateerror err;
 	FILE *fp;
 
 	fp = fopen(path, "w");
 	if (fp == NULL)
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
 
 	if (title == NULL)
 		title = "NetSurf Browsing History";
@@ -934,14 +934,14 @@ nserror global_history_export(const char *path, const char *title)
 			global_history_export_enter_cb,
 			global_history_export_leave_cb,
 			&tw, TREE_NODE_ENTRY | TREE_NODE_FOLDER);
-	if (err != NSERROR_OK)
+	if (err != SLATEERROR_OK)
 		return err;
 
 	fputs("</ul>\n</body>\n</html>\n", fp);
 
 	fclose(fp);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -975,7 +975,7 @@ bool global_history_has_selection(void)
 
 
 /* Exported interface, documented in global_history.h */
-bool global_history_get_selection(nsurl **url, const char **title)
+bool global_history_get_selection(slateurl **url, const char **title)
 {
 	struct global_history_entry *e;
 	enum treeview_node_type type;
@@ -997,14 +997,14 @@ bool global_history_get_selection(nsurl **url, const char **title)
 
 
 /* Exported interface, documented in global_history.h */
-nserror global_history_expand(bool only_folders)
+slateerror global_history_expand(bool only_folders)
 {
 	return treeview_expand(gh_ctx.tree, only_folders);
 }
 
 
 /* Exported interface, documented in global_history.h */
-nserror global_history_contract(bool all)
+slateerror global_history_contract(bool all)
 {
 	return treeview_contract(gh_ctx.tree, all);
 }

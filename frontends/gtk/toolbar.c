@@ -1,7 +1,7 @@
 /*
  * Copyright 2019 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,9 +29,9 @@
 
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/file.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/corestrings.h"
 #include "desktop/browser_history.h"
 #include "desktop/searchweb.h"
@@ -40,9 +40,9 @@
 #include "desktop/save_text.h"
 #include "desktop/print.h"
 #include "desktop/hotlist.h"
-#include "netsurf/content.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/keypress.h"
+#include "slate/content.h"
+#include "slate/browser_window.h"
+#include "slate/keypress.h"
 
 #include "gtk/toolbar_items.h"
 #include "gtk/completion.h"
@@ -85,28 +85,28 @@
 /**
  * the minimum number of columns in the tool store
  */
-#define NSGTK_MIN_STORE_COLUMNS 4
+#define SLATEGTK_MIN_STORE_COLUMNS 4
 
 /**
  * the 'standard' width of a button that makes sufficient of its label visible
  */
-#define NSGTK_BUTTON_WIDTH 120
+#define SLATEGTK_BUTTON_WIDTH 120
 
 /**
  * the 'standard' height of a button that fits as many toolbars as
  *   possible into the store
  */
-#define NSGTK_BUTTON_HEIGHT 70
+#define SLATEGTK_BUTTON_HEIGHT 70
 
 /**
  * the 'normal' width of the websearch bar
  */
-#define NSGTK_WEBSEARCH_WIDTH 150
+#define SLATEGTK_WEBSEARCH_WIDTH 150
 
 /**
  * toolbar item context
  */
-struct nsgtk_toolbar_item {
+struct slategtk_toolbar_item {
 
 	/**
 	 * GTK widget in the toolbar
@@ -162,12 +162,12 @@ typedef enum {
 	LFS_WANT, /**< Want focus, will apply */
 	LFS_THROB, /**< Want focus, we have started throbbing */
 	LFS_LAST, /**< Last chance for a focus update */
-} nsgtk_toolbar_location_focus_state;
+} slategtk_toolbar_location_focus_state;
 
 /**
  * control toolbar context
  */
-struct nsgtk_toolbar {
+struct slategtk_toolbar {
 	/** gtk toolbar widget */
 	GtkToolbar *widget;
 
@@ -180,7 +180,7 @@ struct nsgtk_toolbar {
 	/**
 	 * Toolbar item contexts
 	 */
-	struct nsgtk_toolbar_item items[PLACEHOLDER_BUTTON];
+	struct slategtk_toolbar_item items[PLACEHOLDER_BUTTON];
 
 	/**
 	 * Current frame of throbber animation
@@ -205,19 +205,19 @@ struct nsgtk_toolbar {
 	/**
 	 * Location focus state machine, current state
 	 */
-	nsgtk_toolbar_location_focus_state loc_focus;
+	slategtk_toolbar_location_focus_state loc_focus;
 };
 
 
 /**
  * toolbar cusomisation context
  */
-struct nsgtk_toolbar_customisation {
+struct slategtk_toolbar_customisation {
 	/**
 	 * first entry is a toolbar widget so a customisation widget
 	 *   can be cast to toolbar and back.
 	 */
-	struct nsgtk_toolbar toolbar;
+	struct slategtk_toolbar toolbar;
 
 	/**
 	 * The top level container (tabBox)
@@ -247,8 +247,8 @@ struct nsgtk_toolbar_customisation {
 
 
 /* forward declaration */
-static nserror toolbar_item_create(nsgtk_toolbar_button id,
-				   struct nsgtk_toolbar_item *item_out);
+static slateerror toolbar_item_create(slategtk_toolbar_button id,
+				   struct slategtk_toolbar_item *item_out);
 
 
 /**
@@ -287,13 +287,13 @@ static char *remove_underscores(const char *s, bool replacespace)
 static GtkToolItem *
 make_toolbar_item_throbber(bool sensitivity, bool edit)
 {
-	nserror res;
+	slateerror res;
 	GtkToolItem *item;
 	GdkPixbuf *pixbuf;
 	GtkWidget *image;
 
-	res = nsgtk_throbber_get_frame(0, &pixbuf);
-	if (res != NSERROR_OK) {
+	res = slategtk_throbber_get_frame(0, &pixbuf);
+	if (res != SLATEERROR_OK) {
 		return NULL;
 	}
 
@@ -308,10 +308,10 @@ make_toolbar_item_throbber(bool sensitivity, bool edit)
 
 		image = gtk_image_new_from_pixbuf(pixbuf);
 		if (image != NULL) {
-			nsgtk_widget_set_alignment(image,
+			slategtk_widget_set_alignment(image,
 						   GTK_ALIGN_CENTER,
 						   GTK_ALIGN_CENTER);
-			nsgtk_widget_set_margins(image, 3, 0);
+			slategtk_widget_set_margins(image, 3, 0);
 
 			gtk_container_add(GTK_CONTAINER(item), image);
 		}
@@ -337,12 +337,12 @@ make_toolbar_item_url_bar(bool sensitivity, bool edit)
 	GtkWidget *entry;
 	GtkEntryCompletion *completion;
 
-	entry = nsgtk_entry_new();
+	entry = slategtk_entry_new();
 
 	if (entry == NULL) {
 		return NULL;
 	}
-	nsgtk_entry_set_icon_from_icon_name(entry,
+	slategtk_entry_set_icon_from_icon_name(entry,
 					    GTK_ENTRY_ICON_PRIMARY,
 					    "page-info-internal");
 
@@ -380,31 +380,31 @@ static GtkToolItem *
 make_toolbar_item_websearch(bool sensitivity, bool edit)
 {
 	GtkToolItem *item;
-	nserror res;
+	slateerror res;
 	GtkWidget *entry;
 	struct bitmap *bitmap;
 	GdkPixbuf *pixbuf = NULL;
 
 	res = search_web_get_provider_bitmap(&bitmap);
-	if ((res == NSERROR_OK) && (bitmap != NULL)) {
+	if ((res == SLATEERROR_OK) && (bitmap != NULL)) {
 		pixbuf = nsgdk_pixbuf_get_from_surface(bitmap->surface, 32, 32);
 	}
 
-	entry = nsgtk_entry_new();
+	entry = slategtk_entry_new();
 
 	if (entry == NULL) {
 		return NULL;
 	}
 
 	if (pixbuf != NULL) {
-		nsgtk_entry_set_icon_from_pixbuf(entry,
+		slategtk_entry_set_icon_from_pixbuf(entry,
 						 GTK_ENTRY_ICON_PRIMARY,
 						 pixbuf);
 		g_object_unref(pixbuf);
 	} else {
-		nsgtk_entry_set_icon_from_icon_name(entry,
+		slategtk_entry_set_icon_from_icon_name(entry,
 						    GTK_ENTRY_ICON_PRIMARY,
-						    NSGTK_STOCK_INFO);
+						    SLATEGTK_STOCK_INFO);
 	}
 
 	if (edit) {
@@ -414,7 +414,7 @@ make_toolbar_item_websearch(bool sensitivity, bool edit)
 		gtk_tool_button_set_icon_widget(GTK_TOOL_BUTTON(item),
 						entry);
 	} else {
-		gtk_widget_set_size_request(entry, NSGTK_WEBSEARCH_WIDTH, -1);
+		gtk_widget_set_size_request(entry, SLATEGTK_WEBSEARCH_WIDTH, -1);
 
 		item = gtk_tool_item_new();
 		if (item == NULL) {
@@ -482,7 +482,7 @@ make_toolbar_item_button(const char *labelmsg,
 
 		gtk_widget_set_sensitive(GTK_WIDGET(item), sensitivity);
 		if (edit) {
-			nsgtk_widget_set_margins(GTK_WIDGET(item), 0, 0);
+			slategtk_widget_set_margins(GTK_WIDGET(item), 0, 0);
 		}
 	}
 
@@ -498,7 +498,7 @@ make_toolbar_item_button(const char *labelmsg,
  * \return gtk widget
  */
 static GtkToolItem *
-make_toolbar_item(nsgtk_toolbar_button itemid, bool sensitivity)
+make_toolbar_item(slategtk_toolbar_button itemid, bool sensitivity)
 {
 	GtkToolItem *toolitem = NULL;
 
@@ -555,7 +555,7 @@ make_toolbar_item(nsgtk_toolbar_button itemid, bool sensitivity)
  * \return gtk tool item widget
  */
 static GtkToolItem *
-make_toolbox_item(nsgtk_toolbar_button itemid, bool bar)
+make_toolbox_item(slategtk_toolbar_button itemid, bool bar)
 {
 	GtkToolItem *toolitem = NULL;
 
@@ -611,7 +611,7 @@ make_toolbox_item(nsgtk_toolbar_button itemid, bool bar)
  * target entry for drag source
  */
 static GtkTargetEntry target_entry = {
-	 (char *)"nsgtk_button_data",
+	 (char *)"slategtk_button_data",
 	 GTK_TARGET_SAME_APP,
 	 0
 };
@@ -624,8 +624,8 @@ static GtkTargetEntry target_entry = {
  * \param locaction the location to search for
  * \return the item id for a location
  */
-static nsgtk_toolbar_button
-itemid_from_location(struct nsgtk_toolbar *tb, int location)
+static slategtk_toolbar_button
+itemid_from_location(struct slategtk_toolbar *tb, int location)
 {
 	int iidx;
 	for (iidx = BACK_BUTTON; iidx < PLACEHOLDER_BUTTON; iidx++) {
@@ -640,14 +640,14 @@ itemid_from_location(struct nsgtk_toolbar *tb, int location)
 /**
  * save toolbar settings to file
  */
-static nserror
-nsgtk_toolbar_customisation_save(struct nsgtk_toolbar *tb)
+static slateerror
+slategtk_toolbar_customisation_save(struct slategtk_toolbar *tb)
 {
 	int iidx; /* item index */
 	char *order; /* item ordering */
 	char *start; /* start of next item name to be output */
 	int orderlen = 0; /* length of item ordering */
-	nsgtk_toolbar_button itemid;
+	slategtk_toolbar_button itemid;
 	int location;
 	char *choices = NULL;
 
@@ -660,12 +660,12 @@ nsgtk_toolbar_customisation_save(struct nsgtk_toolbar *tb)
 
 	/* ensure there are some items to store */
 	if (orderlen == 0) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	order = malloc(orderlen);
 	if (order == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	start = order;
@@ -686,7 +686,7 @@ nsgtk_toolbar_customisation_save(struct nsgtk_toolbar *tb)
 		if ((written < 0) ||
 		    (written >= orderlen - (start - order))) {
 			free(order);
-			return NSERROR_UNKNOWN;
+			return SLATEERROR_UNKNOWN;
 		}
 		start += written;
 
@@ -697,16 +697,16 @@ nsgtk_toolbar_customisation_save(struct nsgtk_toolbar *tb)
 
 	order[orderlen - 1] = 0;
 
-	nsoption_set_charp(toolbar_items, order);
+	slateoption_set_charp(toolbar_items, order);
 
 	/* ensure choices are saved */
-	netsurf_mkpath(&choices, NULL, 2, nsgtk_config_home, "Choices");
+	slate_mkpath(&choices, NULL, 2, slategtk_config_home, "Choices");
 	if (choices != NULL) {
-		nsoption_write(choices, NULL, NULL);
+		slateoption_write(choices, NULL, NULL);
 		free(choices);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -715,10 +715,10 @@ nsgtk_toolbar_customisation_save(struct nsgtk_toolbar *tb)
  *
  * \param tb The toolbar
  * \param itemid The item id within to toolbar to connect
- * \param NSERROR_OK on success
+ * \param SLATEERROR_OK on success
  */
-static nserror
-toolbar_item_connect_signals(struct nsgtk_toolbar *tb, int itemid)
+static slateerror
+toolbar_item_connect_signals(struct slategtk_toolbar *tb, int itemid)
 {
 	/* set toolbar items to be a drag source */
 	gtk_tool_item_set_use_drag_window(tb->items[itemid].button, TRUE);
@@ -731,7 +731,7 @@ toolbar_item_connect_signals(struct nsgtk_toolbar *tb, int itemid)
 			 "drag-data-get",
 			 G_CALLBACK(tb->items[itemid].dataminus),
 			 tb);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -747,8 +747,8 @@ customisation_container_drag_drop_cb(GtkWidget *widget,
 				     guint time,
 				     gpointer data)
 {
-	struct nsgtk_toolbar_customisation *tbc;
-	tbc = (struct nsgtk_toolbar_customisation *)data;
+	struct slategtk_toolbar_customisation *tbc;
+	tbc = (struct slategtk_toolbar_customisation *)data;
 	int location;
 	int itemid;
 
@@ -815,12 +815,12 @@ customisation_toolbar_drag_drop_cb(GtkWidget *widget,
 				   guint time,
 				   gpointer data)
 {
-	struct nsgtk_toolbar_customisation *tbc;
-	tbc = (struct nsgtk_toolbar_customisation *)data;
+	struct slategtk_toolbar_customisation *tbc;
+	tbc = (struct slategtk_toolbar_customisation *)data;
 	gint position; /* drop position in toolbar */
 	int location;
 	int itemid;
-	struct nsgtk_toolbar_item *dragitem; /* toolbar item being dragged */
+	struct slategtk_toolbar_item *dragitem; /* toolbar item being dragged */
 
 	position = gtk_toolbar_get_drop_index(tbc->toolbar.widget, x, y);
 	if (tbc->dragitem == -1) {
@@ -857,7 +857,7 @@ customisation_toolbar_drag_drop_cb(GtkWidget *widget,
 	dragitem->button = make_toolbox_item(tbc->dragitem, true);
 
 	if (dragitem->button == NULL) {
-		nsgtk_warning("NoMemory", 0);
+		slategtk_warning("NoMemory", 0);
 		return TRUE;
 	}
 
@@ -914,7 +914,7 @@ customisation_toolbar_drag_motion_cb(GtkWidget *widget,
 				     guint time,
 				     gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	GtkToolItem *item;
 	gint position; /* position in toolbar */
 
@@ -950,35 +950,35 @@ customisation_toolbar_drag_leave_cb(GtkWidget *widget,
  * \param bw The browser window to pass for existing window/
  * \param intab true if the new window should be in a tab else false
  *                for new window.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsgtk_browser_window_create(struct browser_window *bw, bool intab)
+static slateerror
+slategtk_browser_window_create(struct browser_window *bw, bool intab)
 {
-	nserror res = NSERROR_OK;
-	nsurl *url = NULL;
+	slateerror res = SLATEERROR_OK;
+	slateurl *url = NULL;
 	int flags = BW_CREATE_HISTORY | BW_CREATE_FOREGROUND | BW_CREATE_FOCUS_LOCATION;
 
 	if (intab) {
 		flags |= BW_CREATE_TAB;
 	}
 
-	if (!nsoption_bool(new_blank)) {
+	if (!slateoption_bool(new_blank)) {
 		const char *addr;
-		if (nsoption_charp(homepage_url) != NULL) {
-			addr = nsoption_charp(homepage_url);
+		if (slateoption_charp(homepage_url) != NULL) {
+			addr = slateoption_charp(homepage_url);
 		} else {
-			addr = NETSURF_HOMEPAGE;
+			addr = SLATE_HOMEPAGE;
 		}
-		res = nsurl_create(addr, &url);
+		res = slateurl_create(addr, &url);
 	}
 
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		res = browser_window_create(flags, url, NULL, bw, NULL);
 	}
 
 	if (url != NULL) {
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
 
 	return res;
@@ -992,10 +992,10 @@ nsgtk_browser_window_create(struct browser_window *bw, bool intab)
  * [itemreference];[itemlocation]|[itemreference];[itemlocation]| etc
  *
  * \param tb The toolbar to apply customisation to
- * \param NSERROR_OK on success else error code.
+ * \param SLATEERROR_OK on success else error code.
  */
-static nserror
-apply_user_button_customisation(struct nsgtk_toolbar *tb)
+static slateerror
+apply_user_button_customisation(struct slategtk_toolbar *tb)
 {
 	const char *tbitems; /* item order user config */
 	const char *start;
@@ -1008,7 +1008,7 @@ apply_user_button_customisation(struct nsgtk_toolbar *tb)
 		tb->items[iidx].location = INACTIVE_LOCATION;
 	}
 
-	tbitems = nsoption_charp(toolbar_items);
+	tbitems = slateoption_charp(toolbar_items);
 	if (tbitems == NULL) {
 		tbitems = "";
 	}
@@ -1046,7 +1046,7 @@ apply_user_button_customisation(struct nsgtk_toolbar *tb)
 	}
 
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1064,9 +1064,9 @@ static void container_remove_widget(GtkWidget *widget, gpointer data)
  * populates a toolbar with widgets in correct order
  *
  * \param tb toolbar
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror populate_gtk_toolbar_widget(struct nsgtk_toolbar *tb)
+static slateerror populate_gtk_toolbar_widget(struct slategtk_toolbar *tb)
 {
 	int location; /* location index */
 	int itemid;
@@ -1093,7 +1093,7 @@ static nserror populate_gtk_toolbar_widget(struct nsgtk_toolbar *tb)
 
 	gtk_widget_show_all(GTK_WIDGET(tb->widget));
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1101,9 +1101,9 @@ static nserror populate_gtk_toolbar_widget(struct nsgtk_toolbar *tb)
  * populates the customization toolbar with widgets in correct order
  *
  * \param tb toolbar
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror customisation_toolbar_populate(struct nsgtk_toolbar *tb)
+static slateerror customisation_toolbar_populate(struct slategtk_toolbar *tb)
 {
 	int location; /* location index */
 	int itemid;
@@ -1128,7 +1128,7 @@ static nserror customisation_toolbar_populate(struct nsgtk_toolbar *tb)
 
 	gtk_widget_show_all(GTK_WIDGET(tb->widget));
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1139,8 +1139,8 @@ static nserror customisation_toolbar_populate(struct nsgtk_toolbar *tb)
  * \param toolitem the tool item widget to search for
  * \return the item id matching the widget
  */
-static nsgtk_toolbar_button
-itemid_from_gtktoolitem(struct nsgtk_toolbar *tb, GtkToolItem *toolitem)
+static slategtk_toolbar_button
+itemid_from_gtktoolitem(struct slategtk_toolbar *tb, GtkToolItem *toolitem)
 {
 	int iidx;
 	for (iidx = BACK_BUTTON; iidx < PLACEHOLDER_BUTTON; iidx++) {
@@ -1158,8 +1158,8 @@ itemid_from_gtktoolitem(struct nsgtk_toolbar *tb, GtkToolItem *toolitem)
  *
  * note this does not set menu items sensitivity
  */
-static nserror
-set_item_sensitivity(struct nsgtk_toolbar_item *item, bool sensitivity)
+static slateerror
+set_item_sensitivity(struct slategtk_toolbar_item *item, bool sensitivity)
 {
 	if (item->sensitivity != sensitivity) {
 		/* item requires sensitivity changing */
@@ -1171,7 +1171,7 @@ set_item_sensitivity(struct nsgtk_toolbar_item *item, bool sensitivity)
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1183,29 +1183,29 @@ set_item_sensitivity(struct nsgtk_toolbar_item *item, bool sensitivity)
  *
  * \param tb the toolbar instance
  */
-static nserror set_item_action(struct nsgtk_toolbar *tb, int itemid, bool alt)
+static slateerror set_item_action(struct slategtk_toolbar *tb, int itemid, bool alt)
 {
 	const char *iconname;
 	char *label = NULL;
 
 	if (itemid != RELOADSTOP_BUTTON) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 	if (tb->items[itemid].location == -1) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 	tb->items[itemid].sensitivity = alt;
 
 	if (tb->items[itemid].button == NULL) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	if (tb->items[itemid].sensitivity) {
-		iconname = NSGTK_STOCK_REFRESH;
+		iconname = SLATEGTK_STOCK_REFRESH;
 		label = remove_underscores(messages_get("Reload"), false);
 
 	} else {
-		iconname = NSGTK_STOCK_STOP;
+		iconname = SLATEGTK_STOCK_STOP;
 		label = remove_underscores(messages_get("gtkStop"), false);
 
 	}
@@ -1221,7 +1221,7 @@ static nserror set_item_action(struct nsgtk_toolbar *tb, int itemid, bool alt)
 		free(label);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1230,17 +1230,17 @@ static nserror set_item_action(struct nsgtk_toolbar *tb, int itemid, bool alt)
  *
  * \param tb the toolbar context.
  * \param urltxt The url string.
- * \return NSERROR_OK on success else appropriate error code.
+ * \return SLATEERROR_OK on success else appropriate error code.
  */
-static nserror
-toolbar_navigate_to_url(struct nsgtk_toolbar *tb, const char *urltxt)
+static slateerror
+toolbar_navigate_to_url(struct slategtk_toolbar *tb, const char *urltxt)
 {
 	struct browser_window *bw;
-	nsurl *url;
-	nserror res;
+	slateurl *url;
+	slateerror res;
 
-	res = nsurl_create(urltxt, &url);
-	if (res != NSERROR_OK) {
+	res = slateurl_create(urltxt, &url);
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -1253,7 +1253,7 @@ toolbar_navigate_to_url(struct nsgtk_toolbar *tb, const char *urltxt)
 				      NULL,
 				      NULL,
 				      NULL);
-	nsurl_unref(url);
+	slateurl_unref(url);
 
 	return res;
 }
@@ -1262,21 +1262,21 @@ toolbar_navigate_to_url(struct nsgtk_toolbar *tb, const char *urltxt)
 /**
  * run a gtk file chooser as a save dialog to obtain a path
  */
-static nserror
-nsgtk_saveas_dialog(struct browser_window *bw,
+static slateerror
+slategtk_saveas_dialog(struct browser_window *bw,
 		    const char *title,
 		    GtkWindow *parent,
 		    bool folder,
 		    gchar **path_out)
 {
-	nserror res;
+	slateerror res;
 	GtkWidget *fc; /* file chooser widget */
 	GtkFileChooserAction action;
 	char *path; /* proposed path */
 
 	if (!browser_window_has_content(bw)) {
 		/* cannot save a page with no content */
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	if (folder) {
@@ -1288,19 +1288,19 @@ nsgtk_saveas_dialog(struct browser_window *bw,
 	fc = gtk_file_chooser_dialog_new(title,
 					 parent,
 					 action,
-					 NSGTK_STOCK_CANCEL,
+					 SLATEGTK_STOCK_CANCEL,
 					 GTK_RESPONSE_CANCEL,
-					 NSGTK_STOCK_SAVE,
+					 SLATEGTK_STOCK_SAVE,
 					 GTK_RESPONSE_ACCEPT,
 					 NULL);
 
 	/* set a default file name */
-	res = nsurl_nice(browser_window_access_url(bw), &path, false);
-	if (res != NSERROR_OK) {
+	res = slateurl_nice(browser_window_access_url(bw), &path, false);
+	if (res != SLATEERROR_OK) {
 		path = strdup(messages_get("SaveText"));
 		if (path == NULL) {
 			gtk_widget_destroy(fc);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 	}
 
@@ -1315,22 +1315,22 @@ nsgtk_saveas_dialog(struct browser_window *bw,
 	/* run the dialog to let user select path */
 	if (gtk_dialog_run(GTK_DIALOG(fc)) != GTK_RESPONSE_ACCEPT) {
 		gtk_widget_destroy(fc);
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	*path_out = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(fc));
 
 	gtk_widget_destroy(fc);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * connect all signals to widgets in a customisation
  */
-static nserror
-toolbar_customisation_connect_signals(struct nsgtk_toolbar *tb)
+static slateerror
+toolbar_customisation_connect_signals(struct slategtk_toolbar *tb)
 {
 	int iidx;
 
@@ -1366,7 +1366,7 @@ toolbar_customisation_connect_signals(struct nsgtk_toolbar *tb)
 			  1,
 			  GDK_ACTION_COPY);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1375,11 +1375,11 @@ item_size_allocate_cb(GtkWidget *widget,
 		      GdkRectangle *alloc,
 		      gpointer user_data)
 {
-	if (alloc->width > NSGTK_BUTTON_WIDTH) {
-		alloc->width = NSGTK_BUTTON_WIDTH;
+	if (alloc->width > SLATEGTK_BUTTON_WIDTH) {
+		alloc->width = SLATEGTK_BUTTON_WIDTH;
 	}
-	if (alloc->height > NSGTK_BUTTON_HEIGHT) {
-		alloc->height = NSGTK_BUTTON_HEIGHT;
+	if (alloc->height > SLATEGTK_BUTTON_HEIGHT) {
+		alloc->height = SLATEGTK_BUTTON_HEIGHT;
 	}
 	gtk_widget_set_allocation(widget, alloc);
 }
@@ -1391,10 +1391,10 @@ item_size_allocate_cb(GtkWidget *widget,
  * \param tbc The toolbar customisation context
  * \param startitem The item index of the beginning of the row
  * \param enditem The item index of the beginning of the next row
- * \return NSERROR_OK on successs else error
+ * \return SLATEERROR_OK on successs else error
  */
-static nserror
-add_toolbox_row(struct nsgtk_toolbar_customisation *tbc,
+static slateerror
+add_toolbox_row(struct slategtk_toolbar_customisation *tbc,
 		int startitem,
 		int enditem)
 {
@@ -1403,7 +1403,7 @@ add_toolbox_row(struct nsgtk_toolbar_customisation *tbc,
 
 	rowbar = GTK_TOOLBAR(gtk_toolbar_new());
 	if (rowbar == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	gtk_toolbar_set_style(rowbar, GTK_TOOLBAR_BOTH);
@@ -1416,8 +1416,8 @@ add_toolbox_row(struct nsgtk_toolbar_customisation *tbc,
 			continue;
 		}
 		gtk_widget_set_size_request(GTK_WIDGET(tbc->items[iidx]),
-					    NSGTK_BUTTON_WIDTH,
-					    NSGTK_BUTTON_HEIGHT);
+					    SLATEGTK_BUTTON_WIDTH,
+					    SLATEGTK_BUTTON_HEIGHT);
 		gtk_tool_item_set_use_drag_window(tbc->items[iidx], TRUE);
 		gtk_drag_source_set(GTK_WIDGET(tbc->items[iidx]),
 				    GDK_BUTTON1_MASK,
@@ -1434,7 +1434,7 @@ add_toolbox_row(struct nsgtk_toolbar_customisation *tbc,
 				 NULL);
 		gtk_toolbar_insert(rowbar, tbc->items[iidx], -1);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1443,10 +1443,10 @@ add_toolbox_row(struct nsgtk_toolbar_customisation *tbc,
  *
  * \param tbc The toolbar customisation context
  * \param width The width to layout the toolbox to
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-toolbar_customisation_create_toolbox(struct nsgtk_toolbar_customisation *tbc,
+static slateerror
+toolbar_customisation_create_toolbox(struct slategtk_toolbar_customisation *tbc,
 				     int width)
 {
 	int columns; /* number of items in a single row */
@@ -1455,9 +1455,9 @@ toolbar_customisation_create_toolbox(struct nsgtk_toolbar_customisation *tbc,
 	int startidx; /* index of item at start of row */
 
 	/* ensure there are a minimum number of items per row */
-	columns = width / NSGTK_BUTTON_WIDTH;
-	if (columns < NSGTK_MIN_STORE_COLUMNS) {
-		columns = NSGTK_MIN_STORE_COLUMNS;
+	columns = width / SLATEGTK_BUTTON_WIDTH;
+	if (columns < SLATEGTK_MIN_STORE_COLUMNS) {
+		columns = SLATEGTK_MIN_STORE_COLUMNS;
 	}
 
 	curcol = 0;
@@ -1476,42 +1476,42 @@ toolbar_customisation_create_toolbox(struct nsgtk_toolbar_customisation *tbc,
 		add_toolbox_row(tbc, startidx, iidx);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * update toolbar in customisation to user settings
  */
-static nserror
-customisation_toolbar_update(struct nsgtk_toolbar_customisation *tbc)
+static slateerror
+customisation_toolbar_update(struct slategtk_toolbar_customisation *tbc)
 {
-	nserror res;
+	slateerror res;
 
 	res = apply_user_button_customisation(&tbc->toolbar);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
 	/* populate toolbar widget */
 	res = customisation_toolbar_populate(&tbc->toolbar);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
 	/* ensure icon sizes and text labels on toolbar are set */
-	res = nsgtk_toolbar_restyle(&tbc->toolbar);
-	if (res != NSERROR_OK) {
+	res = slategtk_toolbar_restyle(&tbc->toolbar);
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
 	/* attach handlers to toolbar widgets */
 	res = toolbar_customisation_connect_signals(&tbc->toolbar);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1523,12 +1523,12 @@ customisation_toolbar_update(struct nsgtk_toolbar_customisation *tbc)
 static gboolean
 customisation_apply_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar_customisation *tbc;
-	tbc = (struct nsgtk_toolbar_customisation *)data;
+	struct slategtk_toolbar_customisation *tbc;
+	tbc = (struct slategtk_toolbar_customisation *)data;
 
 	/* save state to file, update toolbars for all windows */
-	nsgtk_toolbar_customisation_save(&tbc->toolbar);
-	nsgtk_window_toolbar_update();
+	slategtk_toolbar_customisation_save(&tbc->toolbar);
+	slategtk_window_toolbar_update();
 	gtk_widget_destroy(tbc->container);
 
 	return TRUE;
@@ -1543,8 +1543,8 @@ customisation_apply_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 customisation_reset_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar_customisation *tbc;
-	tbc = (struct nsgtk_toolbar_customisation *)data;
+	struct slategtk_toolbar_customisation *tbc;
+	tbc = (struct slategtk_toolbar_customisation *)data;
 
 	customisation_toolbar_update(tbc);
 
@@ -1557,8 +1557,8 @@ customisation_reset_clicked_cb(GtkWidget *widget, gpointer data)
  */
 static void customisation_container_destroy_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar_customisation *tbc;
-	tbc = (struct nsgtk_toolbar_customisation *)data;
+	struct slategtk_toolbar_customisation *tbc;
+	tbc = (struct slategtk_toolbar_customisation *)data;
 
 	free(tbc);
 }
@@ -1577,8 +1577,8 @@ static void customisation_container_destroy_cb(GtkWidget *widget, gpointer data)
  */
 static gboolean cutomize_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar_customisation *tbc;
-	nserror res;
+	struct slategtk_toolbar_customisation *tbc;
+	slateerror res;
 	GtkBuilder *builder;
 	GtkNotebook *notebook; /* notebook containing widget */
 	GtkAllocation notebook_alloc; /* notebook size allocation */
@@ -1592,18 +1592,18 @@ static gboolean cutomize_button_clicked_cb(GtkWidget *widget, gpointer data)
 	}
 
 	/* create builder */
-	res = nsgtk_builder_new_from_resname("toolbar", &builder);
-	if (res != NSERROR_OK) {
+	res = slategtk_builder_new_from_resname("toolbar", &builder);
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Toolbar UI builder init failed");
 		return TRUE;
 	}
 	gtk_builder_connect_signals(builder, NULL);
 
-	/* create nsgtk_toolbar_customisation which has nsgtk_toolbar
+	/* create slategtk_toolbar_customisation which has slategtk_toolbar
 	 * at the front so we can reuse functions that take
-	 * nsgtk_toolbar
+	 * slategtk_toolbar
 	 */
-	tbc = calloc(1, sizeof(struct nsgtk_toolbar_customisation));
+	tbc = calloc(1, sizeof(struct slategtk_toolbar_customisation));
 	if (tbc == NULL) {
 		g_object_unref(builder);
 		return TRUE;
@@ -1632,13 +1632,13 @@ static gboolean cutomize_button_clicked_cb(GtkWidget *widget, gpointer data)
 
 	for (iidx = BACK_BUTTON; iidx < PLACEHOLDER_BUTTON; iidx++) {
 		res = toolbar_item_create(iidx, &tbc->toolbar.items[iidx]);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			goto cutomize_button_clicked_cb_error;
 		}
 	}
 
 	res = customisation_toolbar_update(tbc);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto cutomize_button_clicked_cb_error;
 	}
 
@@ -1646,7 +1646,7 @@ static gboolean cutomize_button_clicked_cb(GtkWidget *widget, gpointer data)
 	gtk_widget_get_allocation(GTK_WIDGET(notebook), &notebook_alloc);
 
 	res = toolbar_customisation_create_toolbox(tbc, notebook_alloc.width);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto cutomize_button_clicked_cb_error;
 	}
 
@@ -1693,7 +1693,7 @@ static gboolean cutomize_button_clicked_cb(GtkWidget *widget, gpointer data)
 			 tbc);
 
 
-	nsgtk_tab_add_page(notebook,
+	slategtk_tab_add_page(notebook,
 			   tbc->container,
 			   false,
 			   messages_get("gtkCustomizeToolbarTitle"),
@@ -1729,8 +1729,8 @@ toolbar_item_size_allocate_cb(GtkWidget *widget,
 			      GtkAllocation *alloc,
 			      gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
-	nsgtk_toolbar_button itemid;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
+	slategtk_toolbar_button itemid;
 
 	itemid = itemid_from_gtktoolitem(tb, GTK_TOOL_ITEM(widget));
 
@@ -1776,7 +1776,7 @@ toolbar_item_size_allocate_cb(GtkWidget *widget,
 static gboolean
 back_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 
 	bw = tb->get_bw(tb->get_ctx);
@@ -1792,7 +1792,7 @@ back_button_clicked_cb(GtkWidget *widget, gpointer data)
 		set_item_sensitivity(&tb->items[FORWARD_BUTTON],
 				browser_window_history_forward_available(bw));
 
-		nsgtk_local_history_hide();
+		slategtk_local_history_hide();
 	}
 	return TRUE;
 }
@@ -1808,7 +1808,7 @@ back_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 forward_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 
 	bw = tb->get_bw(tb->get_ctx);
@@ -1823,7 +1823,7 @@ forward_button_clicked_cb(GtkWidget *widget, gpointer data)
 				browser_window_history_back_available(bw));
 		set_item_sensitivity(&tb->items[FORWARD_BUTTON],
 				browser_window_history_forward_available(bw));
-		nsgtk_local_history_hide();
+		slategtk_local_history_hide();
 	}
 	return TRUE;
 }
@@ -1839,7 +1839,7 @@ forward_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 stop_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 
 	browser_window_stop(tb->get_bw(tb->get_ctx));
 
@@ -1857,7 +1857,7 @@ stop_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 reload_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 
 	bw = tb->get_bw(tb->get_ctx);
@@ -1881,7 +1881,7 @@ reload_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 reloadstop_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 
 	bw = tb->get_bw(tb->get_ctx);
@@ -1909,19 +1909,19 @@ reloadstop_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 home_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
-	nserror res;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
+	slateerror res;
 	const char *addr;
 
-	if (nsoption_charp(homepage_url) != NULL) {
-		addr = nsoption_charp(homepage_url);
+	if (slateoption_charp(homepage_url) != NULL) {
+		addr = slateoption_charp(homepage_url);
 	} else {
-		addr = NETSURF_HOMEPAGE;
+		addr = SLATE_HOMEPAGE;
 	}
 
 	res = toolbar_navigate_to_url(tb, addr);
-	if (res != NSERROR_OK) {
-		nsgtk_warning(messages_get_errorcode(res), 0);
+	if (res != SLATEERROR_OK) {
+		slategtk_warning(messages_get_errorcode(res), 0);
 	}
 
 	return TRUE;
@@ -1939,22 +1939,22 @@ home_button_clicked_cb(GtkWidget *widget, gpointer data)
  */
 static gboolean url_entry_activate_cb(GtkWidget *widget, gpointer data)
 {
-	nserror res;
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	slateerror res;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
-	nsurl *url;
+	slateurl *url;
 
 	res = search_web_omni(gtk_entry_get_text(GTK_ENTRY(widget)),
 			      SEARCH_WEB_OMNI_NONE,
 			      &url);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		bw = tb->get_bw(tb->get_ctx);
 		res = browser_window_navigate(
 			bw, url, NULL, BW_NAVIGATE_HISTORY, NULL, NULL, NULL);
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
-	if (res != NSERROR_OK) {
-		nsgtk_warning(messages_get_errorcode(res), 0);
+	if (res != SLATEERROR_OK) {
+		slategtk_warning(messages_get_errorcode(res), 0);
 	}
 
 	return TRUE;
@@ -1974,7 +1974,7 @@ static gboolean url_entry_activate_cb(GtkWidget *widget, gpointer data)
 static gboolean
 url_entry_changed_cb(GtkWidget *widget, GdkEventKey *event, gpointer data)
 {
-	return nsgtk_completion_update(GTK_ENTRY(widget));
+	return slategtk_completion_update(GTK_ENTRY(widget));
 }
 
 
@@ -1994,12 +1994,12 @@ url_entry_icon_release_cb(GtkEntry *entry,
 			   GdkEvent *event,
 			   gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 
 	bw = tb->get_bw(tb->get_ctx);
 
-	nsgtk_page_info(bw);
+	slategtk_page_info(bw);
 }
 
 
@@ -2017,15 +2017,15 @@ url_entry_icon_release_cb(GtkEntry *entry,
  */
 static gboolean websearch_entry_activate_cb(GtkWidget *widget, gpointer data)
 {
-	nserror res;
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	slateerror res;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
-	nsurl *url;
+	slateurl *url;
 
 	res = search_web_omni(gtk_entry_get_text(GTK_ENTRY(widget)),
 			      SEARCH_WEB_OMNI_SEARCHONLY,
 			      &url);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		bw = tb->get_bw(tb->get_ctx);
 
 		res = browser_window_create(
@@ -2034,10 +2034,10 @@ static gboolean websearch_entry_activate_cb(GtkWidget *widget, gpointer data)
 			NULL,
 			bw,
 			NULL);
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
-	if (res != NSERROR_OK) {
-		nsgtk_warning(messages_get_errorcode(res), 0);
+	if (res != SLATEERROR_OK) {
+		slategtk_warning(messages_get_errorcode(res), 0);
 	}
 
 	return TRUE;
@@ -2077,12 +2077,12 @@ websearch_entry_button_press_cb(GtkWidget *widget,
 static gboolean
 newwindow_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	nserror res;
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	slateerror res;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 
-	res = nsgtk_browser_window_create(tb->get_bw(tb->get_ctx), false);
-	if (res != NSERROR_OK) {
-		nsgtk_warning(messages_get_errorcode(res), 0);
+	res = slategtk_browser_window_create(tb->get_bw(tb->get_ctx), false);
+	if (res != SLATEERROR_OK) {
+		slategtk_warning(messages_get_errorcode(res), 0);
 	}
 
 	return TRUE;
@@ -2099,12 +2099,12 @@ newwindow_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 newtab_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	nserror res;
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	slateerror res;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 
-	res = nsgtk_browser_window_create(tb->get_bw(tb->get_ctx), true);
-	if (res != NSERROR_OK) {
-		nsgtk_warning(messages_get_errorcode(res), 0);
+	res = slategtk_browser_window_create(tb->get_bw(tb->get_ctx), true);
+	if (res != SLATEERROR_OK) {
+		slategtk_warning(messages_get_errorcode(res), 0);
 	}
 	return TRUE;
 }
@@ -2123,7 +2123,7 @@ openfile_button_clicked_cb(GtkWidget *widget, gpointer data)
 	GtkWidget *dlgOpen;
 	gint response;
 	GtkWidget *toplevel;
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 
 	toplevel = gtk_widget_get_ancestor(widget, GTK_TYPE_WINDOW);
@@ -2131,8 +2131,8 @@ openfile_button_clicked_cb(GtkWidget *widget, gpointer data)
 	dlgOpen = gtk_file_chooser_dialog_new("Open File",
 					      GTK_WINDOW(toplevel),
 			GTK_FILE_CHOOSER_ACTION_OPEN,
-			NSGTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
-			NSGTK_STOCK_OPEN, GTK_RESPONSE_OK,
+			SLATEGTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
+			SLATEGTK_STOCK_OPEN, GTK_RESPONSE_OK,
 			NULL, NULL);
 
 	response = gtk_dialog_run(GTK_DIALOG(dlgOpen));
@@ -2140,8 +2140,8 @@ openfile_button_clicked_cb(GtkWidget *widget, gpointer data)
 		size_t urltxt_size;
 		char *urltxt;
 		gchar *filename;
-		nserror res;
-		nsurl *url;
+		slateerror res;
+		slateurl *url;
 
 		filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dlgOpen));
 
@@ -2150,8 +2150,8 @@ openfile_button_clicked_cb(GtkWidget *widget, gpointer data)
 		if (urltxt != NULL) {
 			snprintf(urltxt, urltxt_size, FILE_SCHEME_PREFIX"%s", filename);
 
-			res = nsurl_create(urltxt, &url);
-			if (res == NSERROR_OK) {
+			res = slateurl_create(urltxt, &url);
+			if (res == SLATEERROR_OK) {
 				bw = tb->get_bw(tb->get_ctx);
 				res = browser_window_navigate(bw,
 							url,
@@ -2160,10 +2160,10 @@ openfile_button_clicked_cb(GtkWidget *widget, gpointer data)
 							NULL,
 							NULL,
 							NULL);
-				nsurl_unref(url);
+				slateurl_unref(url);
 			}
-			if (res != NSERROR_OK) {
-				nsgtk_warning(messages_get_errorcode(res), 0);
+			if (res != SLATEERROR_OK) {
+				slategtk_warning(messages_get_errorcode(res), 0);
 			}
 			free(urltxt);
 		}
@@ -2205,22 +2205,22 @@ closewindow_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 savepage_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 	DIR *d;
 	gchar *path;
-	nserror res;
+	slateerror res;
 	GtkWidget *toplevel;
 
 	bw = tb->get_bw(tb->get_ctx);
 	toplevel = gtk_widget_get_ancestor(widget, GTK_TYPE_WINDOW);
 
-	res = nsgtk_saveas_dialog(bw,
+	res = slategtk_saveas_dialog(bw,
 				  messages_get("gtkcompleteSave"),
 				  GTK_WINDOW(toplevel),
 				  true,
 				  &path);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return FALSE;
 	}
 
@@ -2231,9 +2231,9 @@ savepage_button_clicked_cb(GtkWidget *widget, gpointer data)
 		      path,
 		      strerror(errno));
 		if (errno == ENOTDIR) {
-			nsgtk_warning("NoDirError", path);
+			slategtk_warning("NoDirError", path);
 		} else {
-			nsgtk_warning("gtkFileError", path);
+			slategtk_warning("gtkFileError", path);
 		}
 		g_free(path);
 		return TRUE;
@@ -2257,22 +2257,22 @@ savepage_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 pdf_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 	GtkWidget *toplevel;
 	gchar *filename;
-	nserror res;
+	slateerror res;
 
 	bw = tb->get_bw(tb->get_ctx);
 
 	toplevel = gtk_widget_get_ancestor(widget, GTK_TYPE_WINDOW);
 
-	res = nsgtk_saveas_dialog(bw,
+	res = slategtk_saveas_dialog(bw,
 				  "Export to PDF",
 				  GTK_WINDOW(toplevel),
 				  false,
 				  &filename);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return FALSE;
 	}
 
@@ -2309,22 +2309,22 @@ pdf_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 plaintext_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 	GtkWidget *toplevel;
 	gchar *filename;
-	nserror res;
+	slateerror res;
 
 	bw = tb->get_bw(tb->get_ctx);
 
 	toplevel = gtk_widget_get_ancestor(widget, GTK_TYPE_WINDOW);
 
-	res = nsgtk_saveas_dialog(bw,
+	res = slategtk_saveas_dialog(bw,
 				  messages_get("gtkplainSave"),
 				  GTK_WINDOW(toplevel),
 				  false,
 				  &filename);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return FALSE;
 	}
 
@@ -2346,7 +2346,7 @@ plaintext_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 print_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 	GtkPrintOperation *print_op;
 	GtkPageSetup *page_setup;
@@ -2362,12 +2362,12 @@ print_button_clicked_cb(GtkWidget *widget, gpointer data)
 
 	print_op = gtk_print_operation_new();
 	if (print_op == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		return TRUE;
 	}
 
 	/* use previously saved settings if any */
-	netsurf_mkpath(&settings_fname, NULL, 2, nsgtk_config_home, "Print");
+	slate_mkpath(&settings_fname, NULL, 2, slategtk_config_home, "Print");
 	if (settings_fname != NULL) {
 		print_settings = gtk_print_settings_new_from_file(settings_fname, NULL);
 		if (print_settings != NULL) {
@@ -2385,7 +2385,7 @@ print_button_clicked_cb(GtkWidget *widget, gpointer data)
 						     NULL,
 						     NULL);
 	if (page_setup == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		free(settings_fname);
 		g_object_unref(print_op);
 		return TRUE;
@@ -2394,7 +2394,7 @@ print_button_clicked_cb(GtkWidget *widget, gpointer data)
 
 	nssettings = print_make_settings(PRINT_DEFAULT,
 					 NULL,
-					 nsgtk_layout_table);
+					 slategtk_layout_table);
 
 	g_signal_connect(print_op,
 			 "begin_print",
@@ -2446,7 +2446,7 @@ print_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 quit_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	nsgtk_scaffolding_destroy_all();
+	slategtk_scaffolding_destroy_all();
 	return TRUE;
 }
 
@@ -2461,7 +2461,7 @@ quit_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 cut_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 	GtkWidget *focused;
 	GtkWidget *toplevel;
@@ -2492,7 +2492,7 @@ cut_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 copy_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 	GtkWidget *focused;
 	GtkWidget *toplevel;
@@ -2523,7 +2523,7 @@ copy_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 paste_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 	GtkWidget *focused;
 	GtkWidget *toplevel;
@@ -2554,7 +2554,7 @@ paste_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 delete_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 	GtkWidget *focused;
 	GtkWidget *toplevel;
@@ -2585,7 +2585,7 @@ delete_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 selectall_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 	GtkWidget *focused;
 	GtkWidget *toplevel;
@@ -2616,7 +2616,7 @@ selectall_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 preferences_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 	GtkWidget *toplevel;
 	GtkWidget *wndpreferences;
@@ -2625,7 +2625,7 @@ preferences_button_clicked_cb(GtkWidget *widget, gpointer data)
 
 	toplevel = gtk_widget_get_ancestor(widget, GTK_TYPE_WINDOW);
 
-	wndpreferences = nsgtk_preferences(bw, GTK_WINDOW(toplevel));
+	wndpreferences = slategtk_preferences(bw, GTK_WINDOW(toplevel));
 	if (wndpreferences != NULL) {
 		gtk_widget_show(wndpreferences);
 	}
@@ -2644,7 +2644,7 @@ preferences_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 zoomplus_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 
 	bw = tb->get_bw(tb->get_ctx);
@@ -2665,7 +2665,7 @@ zoomplus_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 zoomminus_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 
 	bw = tb->get_bw(tb->get_ctx);
@@ -2687,7 +2687,7 @@ zoomminus_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 zoomnormal_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 
 	bw = tb->get_bw(tb->get_ctx);
@@ -2735,8 +2735,8 @@ fullscreen_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 viewsource_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	nserror res;
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	slateerror res;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 	GtkWindow *gtkwindow; /* gtk window widget is in */
 
@@ -2744,9 +2744,9 @@ viewsource_button_clicked_cb(GtkWidget *widget, gpointer data)
 
 	gtkwindow = GTK_WINDOW(gtk_widget_get_ancestor(widget,GTK_TYPE_WINDOW));
 
-	res = nsgtk_viewsource(gtkwindow, bw);
-	if (res != NSERROR_OK) {
-		nsgtk_warning(messages_get_errorcode(res), 0);
+	res = slategtk_viewsource(gtkwindow, bw);
+	if (res != SLATEERROR_OK) {
+		slategtk_warning(messages_get_errorcode(res), 0);
 	}
 
 	return TRUE;
@@ -2765,7 +2765,7 @@ downloads_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
 	GtkWindow *gtkwindow; /* gtk window widget is in */
 	gtkwindow = GTK_WINDOW(gtk_widget_get_ancestor(widget,GTK_TYPE_WINDOW));
-	nsgtk_download_show(gtkwindow);
+	slategtk_download_show(gtkwindow);
 	return TRUE;
 }
 
@@ -2789,14 +2789,14 @@ savewindowsize_button_clicked_cb(GtkWidget *widget, gpointer data)
 	gtk_window_get_position(gtkwindow, &x, &y);
 	gtk_window_get_size(gtkwindow, &w, &h);
 
-	nsoption_set_int(window_width, w);
-	nsoption_set_int(window_height, h);
-	nsoption_set_int(window_x, x);
-	nsoption_set_int(window_y, y);
+	slateoption_set_int(window_width, w);
+	slateoption_set_int(window_height, h);
+	slateoption_set_int(window_x, x);
+	slateoption_set_int(window_y, y);
 
-	netsurf_mkpath(&choices, NULL, 2, nsgtk_config_home, "Choices");
+	slate_mkpath(&choices, NULL, 2, slategtk_config_home, "Choices");
 	if (choices != NULL) {
-		nsoption_write(choices, NULL, NULL);
+		slateoption_write(choices, NULL, NULL);
 		free(choices);
 	}
 
@@ -2814,14 +2814,14 @@ savewindowsize_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 toggledebugging_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 
 	bw = tb->get_bw(tb->get_ctx);
 
 	browser_window_debug(bw, CONTENT_DEBUG_REDRAW);
 
-	nsgtk_window_update_all();
+	slategtk_window_update_all();
 
 	return TRUE;
 }
@@ -2837,13 +2837,13 @@ toggledebugging_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 debugboxtree_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 	gchar *fname;
 	gint handle;
 	FILE *f;
 
-	handle = g_file_open_tmp("nsgtkboxtreeXXXXXX", &fname, NULL);
+	handle = g_file_open_tmp("slategtkboxtreeXXXXXX", &fname, NULL);
 	if ((handle == -1) || (fname == NULL)) {
 		return TRUE;
 	}
@@ -2852,7 +2852,7 @@ debugboxtree_button_clicked_cb(GtkWidget *widget, gpointer data)
 	/* save data to temporary file */
 	f = fopen(fname, "w");
 	if (f == NULL) {
-		nsgtk_warning("Error saving box tree dump.",
+		slategtk_warning("Error saving box tree dump.",
 			      "Unable to open file for writing.");
 		unlink(fname);
 
@@ -2863,7 +2863,7 @@ debugboxtree_button_clicked_cb(GtkWidget *widget, gpointer data)
 
 		fclose(f);
 
-		nsgtk_viewfile("Box Tree Debug", "boxtree", fname);
+		slategtk_viewfile("Box Tree Debug", "boxtree", fname);
 	}
 	g_free(fname);
 
@@ -2881,13 +2881,13 @@ debugboxtree_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 debugdomtree_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 	gchar *fname;
 	gint handle;
 	FILE *f;
 
-	handle = g_file_open_tmp("nsgtkdomtreeXXXXXX", &fname, NULL);
+	handle = g_file_open_tmp("slategtkdomtreeXXXXXX", &fname, NULL);
 	if ((handle == -1) || (fname == NULL)) {
 		return TRUE;
 	}
@@ -2896,7 +2896,7 @@ debugdomtree_button_clicked_cb(GtkWidget *widget, gpointer data)
 	/* save data to temporary file */
 	f = fopen(fname, "w");
 	if (f == NULL) {
-		nsgtk_warning("Error saving box tree dump.",
+		slategtk_warning("Error saving box tree dump.",
 			      "Unable to open file for writing.");
 		unlink(fname);
 
@@ -2907,7 +2907,7 @@ debugdomtree_button_clicked_cb(GtkWidget *widget, gpointer data)
 
 		fclose(f);
 
-		nsgtk_viewfile("DOM Tree Debug", "domtree", fname);
+		slategtk_viewfile("DOM Tree Debug", "domtree", fname);
 	}
 	g_free(fname);
 
@@ -2926,8 +2926,8 @@ debugdomtree_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 localhistory_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	nserror res;
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	slateerror res;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 	GtkWidget *toplevel;
 
@@ -2935,8 +2935,8 @@ localhistory_button_clicked_cb(GtkWidget *widget, gpointer data)
 	if (toplevel != NULL) {
 		bw = tb->get_bw(tb->get_ctx);
 
-		res = nsgtk_local_history_present(GTK_WINDOW(toplevel), bw);
-		if (res != NSERROR_OK) {
+		res = slategtk_local_history_present(GTK_WINDOW(toplevel), bw);
+		if (res != SLATEERROR_OK) {
 			NSLOG(netsurf, INFO,
 			      "Unable to present local history window.");
 		}
@@ -2968,9 +2968,9 @@ history_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 globalhistory_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	nserror res;
-	res = nsgtk_global_history_present();
-	if (res != NSERROR_OK) {
+	slateerror res;
+	res = slategtk_global_history_present();
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO,
 		      "Unable to initialise global history window.");
 	}
@@ -2988,7 +2988,7 @@ globalhistory_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 addbookmarks_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct browser_window *bw;
 
 	bw = tb->get_bw(tb->get_ctx);
@@ -3009,9 +3009,9 @@ addbookmarks_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 showbookmarks_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	nserror res;
-	res = nsgtk_hotlist_present();
-	if (res != NSERROR_OK) {
+	slateerror res;
+	res = slategtk_hotlist_present();
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Unable to initialise bookmark window.");
 	}
 	return TRUE;
@@ -3028,9 +3028,9 @@ showbookmarks_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 showcookies_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	nserror res;
-	res = nsgtk_cookies_present(NULL);
-	if (res != NSERROR_OK) {
+	slateerror res;
+	res = slategtk_cookies_present(NULL);
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Unable to initialise cookies window.");
 	}
 	return TRUE;
@@ -3047,7 +3047,7 @@ showcookies_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 openlocation_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	GtkToolItem *urltitem;
 
 	urltitem = tb->items[URL_BAR_ITEM].button;
@@ -3070,12 +3070,12 @@ openlocation_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 contents_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
-	nserror res;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
+	slateerror res;
 
-	res = toolbar_navigate_to_url(tb, "https://www.netsurf-browser.org/documentation/");
-	if (res != NSERROR_OK) {
-		nsgtk_warning(messages_get_errorcode(res), 0);
+	res = toolbar_navigate_to_url(tb, "https://www.slate-browser.org/documentation/");
+	if (res != SLATEERROR_OK) {
+		slategtk_warning(messages_get_errorcode(res), 0);
 	}
 
 	return TRUE;
@@ -3091,12 +3091,12 @@ contents_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 guide_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
-	nserror res;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
+	slateerror res;
 
-	res = toolbar_navigate_to_url(tb, "https://www.netsurf-browser.org/documentation/guide");
-	if (res != NSERROR_OK) {
-		nsgtk_warning(messages_get_errorcode(res), 0);
+	res = toolbar_navigate_to_url(tb, "https://www.slate-browser.org/documentation/guide");
+	if (res != SLATEERROR_OK) {
+		slategtk_warning(messages_get_errorcode(res), 0);
 	}
 
 	return TRUE;
@@ -3113,12 +3113,12 @@ guide_button_clicked_cb(GtkWidget *widget, gpointer data)
 static gboolean
 info_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
-	nserror res;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
+	slateerror res;
 
-	res = toolbar_navigate_to_url(tb, "https://www.netsurf-browser.org/documentation/info");
-	if (res != NSERROR_OK) {
-		nsgtk_warning(messages_get_errorcode(res), 0);
+	res = toolbar_navigate_to_url(tb, "https://www.slate-browser.org/documentation/info");
+	if (res != SLATEERROR_OK) {
+		slategtk_warning(messages_get_errorcode(res), 0);
 	}
 
 	return TRUE;
@@ -3138,7 +3138,7 @@ static gboolean about_button_clicked_cb(GtkWidget *widget, gpointer data)
 
 	parent = GTK_WINDOW(gtk_widget_get_ancestor(widget, GTK_TYPE_WINDOW));
 
-	nsgtk_about_dialog_init(parent);
+	slategtk_about_dialog_init(parent);
 	return TRUE;
 }
 
@@ -3151,15 +3151,15 @@ static gboolean about_button_clicked_cb(GtkWidget *widget, gpointer data)
  */
 static gboolean openmenu_button_clicked_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct gui_window *gw;
-	struct nsgtk_scaffolding *gs;
+	struct slategtk_scaffolding *gs;
 
 	gw = tb->get_ctx; /** \todo stop assuming the context is a gui window */
 
-	gs = nsgtk_get_scaffold(gw);
+	gs = slategtk_get_scaffold(gw);
 
-	nsgtk_scaffolding_burger_menu(gs);
+	slategtk_scaffolding_burger_menu(gs);
 
 	return TRUE;
 }
@@ -3168,29 +3168,29 @@ static gboolean openmenu_button_clicked_cb(GtkWidget *widget, gpointer data)
 /* define data plus and data minus handlers */
 #define TOOLBAR_ITEM(identifier, name, snstvty, clicked, activate, label, iconame) \
 static gboolean								\
-nsgtk_toolbar_##name##_data_plus(GtkWidget *widget,			\
+slategtk_toolbar_##name##_data_plus(GtkWidget *widget,			\
 				 GdkDragContext *cont,			\
 				 GtkSelectionData *selection,		\
 				 guint info,				\
 				 guint time,				\
 				 gpointer data)				\
 {									\
-	struct nsgtk_toolbar_customisation *tbc;			\
-	tbc = (struct nsgtk_toolbar_customisation *)data;		\
+	struct slategtk_toolbar_customisation *tbc;			\
+	tbc = (struct slategtk_toolbar_customisation *)data;		\
 	tbc->dragitem = identifier;					\
 	tbc->dragfrom = true;						\
 	return TRUE;							\
 }									\
 static gboolean								\
-nsgtk_toolbar_##name##_data_minus(GtkWidget *widget,			\
+slategtk_toolbar_##name##_data_minus(GtkWidget *widget,			\
 				  GdkDragContext *cont,			\
 				  GtkSelectionData *selection,		\
 				  guint info,				\
 				  guint time,				\
 				  gpointer data)			\
 {									\
-	struct nsgtk_toolbar_customisation *tbc;			\
-	tbc = (struct nsgtk_toolbar_customisation *)data;		\
+	struct slategtk_toolbar_customisation *tbc;			\
+	tbc = (struct slategtk_toolbar_customisation *)data;		\
 	tbc->dragitem = identifier;					\
 	tbc->dragfrom = false;						\
 	return TRUE;							\
@@ -3206,8 +3206,8 @@ nsgtk_toolbar_##name##_data_minus(GtkWidget *widget,			\
  *
  * create a toolbar item and set up its default handlers
  */
-static nserror
-toolbar_item_create(nsgtk_toolbar_button id, struct nsgtk_toolbar_item *item)
+static slateerror
+toolbar_item_create(slategtk_toolbar_button id, struct slategtk_toolbar_item *item)
 {
 	item->location = INACTIVE_LOCATION;
 
@@ -3225,8 +3225,8 @@ toolbar_item_create(nsgtk_toolbar_button id, struct nsgtk_toolbar_item *item)
 	case identifier:						\
 		item->name = #iname;					\
 		item->sensitivity = snstvty;				\
-		item->dataplus = nsgtk_toolbar_##iname##_data_plus;	\
-		item->dataminus = nsgtk_toolbar_##iname##_data_minus;	\
+		item->dataplus = slategtk_toolbar_##iname##_data_plus;	\
+		item->dataminus = slategtk_toolbar_##iname##_data_minus;	\
 		TOOLBAR_ITEM_ ## clicked(iname)				\
 		break;
 
@@ -3238,10 +3238,10 @@ toolbar_item_create(nsgtk_toolbar_button id, struct nsgtk_toolbar_item *item)
 #undef TOOLBAR_ITEM
 
 	case PLACEHOLDER_BUTTON:
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -3250,23 +3250,23 @@ toolbar_item_create(nsgtk_toolbar_button id, struct nsgtk_toolbar_item *item)
  *
  * \param toolbar_item The toolbar item to update
  * \param frame The animation frame number to update to
- * \return NSERROR_OK on success,
- *         NSERROR_INVALID if the toolbar item does not contain an image,
- *         NSERROR_BAD_SIZE if the frame is out of range.
+ * \return SLATEERROR_OK on success,
+ *         SLATEERROR_INVALID if the toolbar item does not contain an image,
+ *         SLATEERROR_BAD_SIZE if the frame is out of range.
  */
-static nserror set_throbber_frame(GtkToolItem *toolbar_item, int frame)
+static slateerror set_throbber_frame(GtkToolItem *toolbar_item, int frame)
 {
-	nserror res;
+	slateerror res;
 	GdkPixbuf *pixbuf;
 	GtkImage *throbber;
 
 	if (toolbar_item == NULL) {
 		/* no toolbar item */
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
-	res = nsgtk_throbber_get_frame(frame, &pixbuf);
-	if (res != NSERROR_OK) {
+	res = slategtk_throbber_get_frame(frame, &pixbuf);
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -3274,7 +3274,7 @@ static nserror set_throbber_frame(GtkToolItem *toolbar_item, int frame)
 
 	gtk_image_set_from_pixbuf(throbber, pixbuf);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -3287,22 +3287,22 @@ static nserror set_throbber_frame(GtkToolItem *toolbar_item, int frame)
  */
 static void next_throbber_frame(void *p)
 {
-	struct nsgtk_toolbar *tb = p;
-	nserror res;
+	struct slategtk_toolbar *tb = p;
+	slateerror res;
 
 	tb->throb_frame++; /* advance to next frame */
 
 	res = set_throbber_frame(tb->items[THROBBER_ITEM].button,
 				 tb->throb_frame);
-	if (res == NSERROR_BAD_SIZE) {
+	if (res == SLATEERROR_BAD_SIZE) {
 		tb->throb_frame = 1;
 		res = set_throbber_frame(tb->items[THROBBER_ITEM].button,
 					 tb->throb_frame);
 	}
 
 	/* only schedule next frame if there are no errors */
-	if (res == NSERROR_OK) {
-		nsgtk_schedule(THROBBER_FRAME_TIME, next_throbber_frame, p);
+	if (res == SLATEERROR_OK) {
+		slategtk_schedule(THROBBER_FRAME_TIME, next_throbber_frame, p);
 	}
 }
 
@@ -3310,10 +3310,10 @@ static void next_throbber_frame(void *p)
 /**
  * connect signal handlers to a gtk toolbar item
  */
-static nserror
-toolbar_connect_signal(struct nsgtk_toolbar *tb, nsgtk_toolbar_button itemid)
+static slateerror
+toolbar_connect_signal(struct slategtk_toolbar *tb, slategtk_toolbar_button itemid)
 {
-	struct nsgtk_toolbar_item *item;
+	struct slategtk_toolbar_item *item;
 	GtkEntry *entry;
 
 	item = &tb->items[itemid];
@@ -3342,7 +3342,7 @@ toolbar_connect_signal(struct nsgtk_toolbar *tb, nsgtk_toolbar_button itemid)
 				 G_CALLBACK(url_entry_icon_release_cb),
 				 tb);
 
-		nsgtk_completion_connect_signals(entry,
+		slategtk_completion_connect_signals(entry,
 						 tb->get_bw,
 						 tb->get_ctx);
 		break;
@@ -3372,16 +3372,16 @@ toolbar_connect_signal(struct nsgtk_toolbar *tb, nsgtk_toolbar_button itemid)
 
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * connect all signals to widgets in a toolbar
  */
-static nserror toolbar_connect_signals(struct nsgtk_toolbar *tb)
+static slateerror toolbar_connect_signals(struct slategtk_toolbar *tb)
 {
 	int location; /* location index */
-	nsgtk_toolbar_button itemid; /* item id */
+	slategtk_toolbar_button itemid; /* item id */
 
 	for (location = BACK_BUTTON; location < PLACEHOLDER_BUTTON; location++) {
 		itemid = itemid_from_location(tb, location);
@@ -3392,7 +3392,7 @@ static nserror toolbar_connect_signals(struct nsgtk_toolbar *tb)
 		toolbar_connect_signal(tb, itemid);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -3413,15 +3413,15 @@ toolbar_popup_context_menu_cb(GtkToolbar *toolbar,
 			      gint button,
 			      gpointer data)
 {
-	struct nsgtk_toolbar *tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb = (struct slategtk_toolbar *)data;
 	struct gui_window *gw;
-	struct nsgtk_scaffolding *gs;
+	struct slategtk_scaffolding *gs;
 
 	gw = tb->get_ctx; /** \todo stop assuming the context is a gui window */
 
-	gs = nsgtk_get_scaffold(gw);
+	gs = slategtk_get_scaffold(gw);
 
-	nsgtk_scaffolding_toolbar_context_menu(gs);
+	slategtk_scaffolding_toolbar_context_menu(gs);
 
 	return TRUE;
 }
@@ -3432,31 +3432,31 @@ toolbar_popup_context_menu_cb(GtkToolbar *toolbar,
  */
 static void toolbar_destroy_cb(GtkWidget *widget, gpointer data)
 {
-	struct nsgtk_toolbar *tb;
-	tb = (struct nsgtk_toolbar *)data;
+	struct slategtk_toolbar *tb;
+	tb = (struct slategtk_toolbar *)data;
 
 	/* ensure any throbber scheduled is stopped */
-	nsgtk_schedule(-1, next_throbber_frame, tb);
+	slategtk_schedule(-1, next_throbber_frame, tb);
 
 	free(tb);
 }
 
 
 /* exported interface documented in toolbar.h */
-nserror
-nsgtk_toolbar_create(GtkBuilder *builder,
+slateerror
+slategtk_toolbar_create(GtkBuilder *builder,
 		     struct browser_window *(*get_bw)(void *ctx),
 		     void *get_ctx,
 		     bool want_location_focus,
-		     struct nsgtk_toolbar **tb_out)
+		     struct slategtk_toolbar **tb_out)
 {
-	nserror res;
-	struct nsgtk_toolbar *tb;
+	slateerror res;
+	struct slategtk_toolbar *tb;
 	int bidx; /* button index */
 
-	tb = calloc(1, sizeof(struct nsgtk_toolbar));
+	tb = calloc(1, sizeof(struct slategtk_toolbar));
 	if (tb == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	tb->get_bw = get_bw;
@@ -3486,23 +3486,23 @@ nsgtk_toolbar_create(GtkBuilder *builder,
 	/* allocate button contexts */
 	for (bidx = BACK_BUTTON; bidx < PLACEHOLDER_BUTTON; bidx++) {
 		res = toolbar_item_create(bidx, &tb->items[bidx]);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 	}
 
-	res = nsgtk_toolbar_update(tb);
-	if (res != NSERROR_OK) {
+	res = slategtk_toolbar_update(tb);
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
 	*tb_out = tb;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in toolbar.h */
-nserror nsgtk_toolbar_restyle(struct nsgtk_toolbar *tb)
+slateerror slategtk_toolbar_restyle(struct slategtk_toolbar *tb)
 {
 	/*
 	 * reset toolbar size allocation so icon size change affects
@@ -3510,7 +3510,7 @@ nserror nsgtk_toolbar_restyle(struct nsgtk_toolbar *tb)
 	 */
 	tb->offset = 0;
 
-	switch (nsoption_int(button_type)) {
+	switch (slateoption_int(button_type)) {
 
 	case 1: /* Small icons */
 		gtk_toolbar_set_style(GTK_TOOLBAR(tb->widget),
@@ -3542,14 +3542,14 @@ nserror nsgtk_toolbar_restyle(struct nsgtk_toolbar *tb)
 		break;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in toolbar.h */
-nserror nsgtk_toolbar_throbber(struct nsgtk_toolbar *tb, bool active)
+slateerror slategtk_toolbar_throbber(struct slategtk_toolbar *tb, bool active)
 {
-	nserror res;
+	slateerror res;
 	struct browser_window *bw;
 
 	/* Manage the location focus state */
@@ -3572,17 +3572,17 @@ nserror nsgtk_toolbar_throbber(struct nsgtk_toolbar *tb, bool active)
 
 	/* when activating the throbber simply schedule the next frame update */
 	if (active) {
-		nsgtk_schedule(THROBBER_FRAME_TIME, next_throbber_frame, tb);
+		slategtk_schedule(THROBBER_FRAME_TIME, next_throbber_frame, tb);
 
 		set_item_sensitivity(&tb->items[STOP_BUTTON], true);
 		set_item_sensitivity(&tb->items[RELOAD_BUTTON], false);
 		set_item_action(tb, RELOADSTOP_BUTTON, false);
 
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* stopping the throbber */
-	nsgtk_schedule(-1, next_throbber_frame, tb);
+	slategtk_schedule(-1, next_throbber_frame, tb);
 	tb->throb_frame = 0;
 	res =  set_throbber_frame(tb->items[THROBBER_ITEM].button,
 				  tb->throb_frame);
@@ -3597,14 +3597,14 @@ nserror nsgtk_toolbar_throbber(struct nsgtk_toolbar *tb, bool active)
 			     browser_window_history_back_available(bw));
 	set_item_sensitivity(&tb->items[FORWARD_BUTTON],
 			     browser_window_history_forward_available(bw));
-	nsgtk_local_history_hide();
+	slategtk_local_history_hide();
 
 	return res;
 }
 
 
 /* exported interface documented in toolbar.h */
-nserror nsgtk_toolbar_page_info_change(struct nsgtk_toolbar *tb)
+slateerror slategtk_toolbar_page_info_change(struct slategtk_toolbar *tb)
 {
 	GtkEntry *url_entry;
 	browser_window_page_info_state pistate;
@@ -3613,7 +3613,7 @@ nserror nsgtk_toolbar_page_info_change(struct nsgtk_toolbar *tb)
 
 	if (tb->items[URL_BAR_ITEM].button == NULL) {
 		/* no toolbar item */
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 	url_entry = GTK_ENTRY(gtk_bin_get_child(GTK_BIN(tb->items[URL_BAR_ITEM].button)));
 
@@ -3651,15 +3651,15 @@ nserror nsgtk_toolbar_page_info_change(struct nsgtk_toolbar *tb)
 		break;
 	}
 
-	nsgtk_entry_set_icon_from_icon_name(GTK_WIDGET(url_entry),
+	slategtk_entry_set_icon_from_icon_name(GTK_WIDGET(url_entry),
 					    GTK_ENTRY_ICON_PRIMARY,
 					    icon_name);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in toolbar.h */
-nserror nsgtk_toolbar_set_url(struct nsgtk_toolbar *tb, nsurl *url)
+slateerror slategtk_toolbar_set_url(struct slategtk_toolbar *tb, slateurl *url)
 {
 	size_t idn_url_l;
 	char *idn_url_s = NULL;
@@ -3668,18 +3668,18 @@ nserror nsgtk_toolbar_set_url(struct nsgtk_toolbar *tb, nsurl *url)
 
 	if (tb->items[URL_BAR_ITEM].button == NULL) {
 		/* no toolbar item */
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 	url_entry = GTK_ENTRY(gtk_bin_get_child(GTK_BIN(tb->items[URL_BAR_ITEM].button)));
 
-	if (nsoption_bool(display_decoded_idn) == true) {
-		if (nsurl_get_utf8(url, &idn_url_s, &idn_url_l) != NSERROR_OK) {
+	if (slateoption_bool(display_decoded_idn) == true) {
+		if (slateurl_get_utf8(url, &idn_url_s, &idn_url_l) != SLATEERROR_OK) {
 			idn_url_s = NULL;
 		}
 		url_text = idn_url_s;
 	}
 	if (url_text == NULL) {
-		url_text = nsurl_access(url);
+		url_text = slateurl_access(url);
 	}
 
 	if (strcmp(url_text, gtk_entry_get_text(url_entry)) != 0) {
@@ -3704,51 +3704,51 @@ nserror nsgtk_toolbar_set_url(struct nsgtk_toolbar *tb, nsurl *url)
 		free(idn_url_s);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in toolbar.h */
-nserror
-nsgtk_toolbar_set_websearch_image(struct nsgtk_toolbar *tb, GdkPixbuf *pixbuf)
+slateerror
+slategtk_toolbar_set_websearch_image(struct slategtk_toolbar *tb, GdkPixbuf *pixbuf)
 {
 	GtkWidget *entry;
 
 	if (tb->items[WEBSEARCH_ITEM].button == NULL) {
 		/* no toolbar item */
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	entry = gtk_bin_get_child(GTK_BIN(tb->items[WEBSEARCH_ITEM].button));
 
 	if (pixbuf != NULL) {
-		nsgtk_entry_set_icon_from_pixbuf(entry,
+		slategtk_entry_set_icon_from_pixbuf(entry,
 						 GTK_ENTRY_ICON_PRIMARY,
 						 pixbuf);
 	} else {
-		nsgtk_entry_set_icon_from_icon_name(entry,
+		slategtk_entry_set_icon_from_icon_name(entry,
 						    GTK_ENTRY_ICON_PRIMARY,
-						    NSGTK_STOCK_INFO);
+						    SLATEGTK_STOCK_INFO);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in toolbar.h */
-nserror
-nsgtk_toolbar_item_activate(struct nsgtk_toolbar *tb,
-			    nsgtk_toolbar_button itemid)
+slateerror
+slategtk_toolbar_item_activate(struct slategtk_toolbar *tb,
+			    slategtk_toolbar_button itemid)
 {
 	GtkWidget *widget;
 
 	/* ensure item id in range */
 	if ((itemid < BACK_BUTTON) || (itemid >= PLACEHOLDER_BUTTON)) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if (tb->items[itemid].clicked == NULL) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	/*
@@ -3763,42 +3763,42 @@ nsgtk_toolbar_item_activate(struct nsgtk_toolbar *tb,
 
 	tb->items[itemid].clicked(widget, tb);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in toolbar.h */
-nserror nsgtk_toolbar_show(struct nsgtk_toolbar *tb, bool show)
+slateerror slategtk_toolbar_show(struct slategtk_toolbar *tb, bool show)
 {
 	if (show) {
 		gtk_widget_show(GTK_WIDGET(tb->widget));
 	} else {
 		gtk_widget_hide(GTK_WIDGET(tb->widget));
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in toolbar.h */
-nserror nsgtk_toolbar_update(struct nsgtk_toolbar *tb)
+slateerror slategtk_toolbar_update(struct slategtk_toolbar *tb)
 {
-	nserror res;
+	slateerror res;
 
 	/* setup item locations based on user config */
 	res = apply_user_button_customisation(tb);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
 	/* populate toolbar widget */
 	res = populate_gtk_toolbar_widget(tb);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
 	/* ensure icon sizes and text labels on toolbar are set */
-	res = nsgtk_toolbar_restyle(tb);
-	if (res != NSERROR_OK) {
+	res = slategtk_toolbar_restyle(tb);
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -3815,13 +3815,13 @@ nserror nsgtk_toolbar_update(struct nsgtk_toolbar *tb)
  * \param out_x Filled with an appropriate X coordinate
  * \param out_y Filled with an appropriate Y coordinate
  */
-static nserror
-nsgtk_toolbar_get_icon_window_position(struct nsgtk_toolbar *tb,
+static slateerror
+slategtk_toolbar_get_icon_window_position(struct slategtk_toolbar *tb,
 				       int item_idx,
 				       int *out_x,
 				       int *out_y)
 {
-	struct nsgtk_toolbar_item *item = &tb->items[item_idx];
+	struct slategtk_toolbar_item *item = &tb->items[item_idx];
 	GtkWidget *widget = GTK_WIDGET(item->button);
 	GtkAllocation alloc;
 	gint rootx, rooty, x, y;
@@ -3835,14 +3835,14 @@ nsgtk_toolbar_get_icon_window_position(struct nsgtk_toolbar *tb,
 		break;
 	}
 
-	nsgtk_widget_get_allocation(widget, &alloc);
+	slategtk_widget_get_allocation(widget, &alloc);
 
 	if (gtk_widget_translate_coordinates(widget,
 					     gtk_widget_get_toplevel(widget),
 					     0,
 					     alloc.height - 1,
 					     &x, &y) != TRUE) {
-		return NSERROR_UNKNOWN;
+		return SLATEERROR_UNKNOWN;
 	}
 
 	gtk_window_get_position(GTK_WINDOW(gtk_widget_get_toplevel(widget)),
@@ -3851,37 +3851,37 @@ nsgtk_toolbar_get_icon_window_position(struct nsgtk_toolbar *tb,
 	*out_x = rootx + x + 4;
 	*out_y = rooty + y + 4;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-nserror nsgtk_toolbar_position_page_info(struct nsgtk_toolbar *tb,
-					 struct nsgtk_pi_window *win)
+slateerror slategtk_toolbar_position_page_info(struct slategtk_toolbar *tb,
+					 struct slategtk_pi_window *win)
 {
-	nserror res;
+	slateerror res;
 	int x, y;
 
-	res = nsgtk_toolbar_get_icon_window_position(tb, URL_BAR_ITEM, &x, &y);
-	if (res != NSERROR_OK) {
+	res = slategtk_toolbar_get_icon_window_position(tb, URL_BAR_ITEM, &x, &y);
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
-	nsgtk_page_info_set_position(win, x, y);
+	slategtk_page_info_set_position(win, x, y);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in toolbar.h */
-nserror nsgtk_toolbar_position_local_history(struct nsgtk_toolbar *tb)
+slateerror slategtk_toolbar_position_local_history(struct slategtk_toolbar *tb)
 {
-	nserror res;
+	slateerror res;
 	int x, y;
 
-	res = nsgtk_toolbar_get_icon_window_position(tb, HISTORY_BUTTON, &x, &y);
-	if (res != NSERROR_OK) {
+	res = slategtk_toolbar_get_icon_window_position(tb, HISTORY_BUTTON, &x, &y);
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
-	nsgtk_local_history_set_position(x, y);
+	slategtk_local_history_set_position(x, y);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }

@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -263,7 +263,7 @@ static int text( FONT_PLOTTER self,  int x, int y, const char *text, size_t leng
 	short fx=0;
 	GRECT canvas;
 	char *lstr = NULL;
-	assert( utf8_to_local_encoding(text, length, &lstr) == NSERROR_OK);
+	assert( utf8_to_local_encoding(text, length, &lstr) == SLATEERROR_OK);
 	assert( lstr != NULL );
 
 	int slen = strlen(lstr);

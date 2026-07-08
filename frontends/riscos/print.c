@@ -2,7 +2,7 @@
  * Copyright 2004 John M Bell <jmb202@ecs.soton.ac.uk>
  * Copyright 2006 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,10 +34,10 @@
 #include "utils/config.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "utils/nsoption.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/plotters.h"
-#include "netsurf/content.h"
+#include "utils/slateoption.h"
+#include "slate/browser_window.h"
+#include "slate/plotters.h"
+#include "slate/content.h"
 #include "content/content.h"
 
 #include "riscos/gui.h"
@@ -785,64 +785,64 @@ error:
 
 
 
-static nserror
+static slateerror
 print_fonts_plot_clip(const struct redraw_context *ctx, const struct rect *clip)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror
+static slateerror
 print_fonts_plot_arc(const struct redraw_context *ctx,
 	       const plot_style_t *style,
 	       int x, int y, int radius, int angle1, int angle2)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror
+static slateerror
 print_fonts_plot_disc(const struct redraw_context *ctx,
 		      const plot_style_t *style,
 		      int x, int y, int radius)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror
+static slateerror
 print_fonts_plot_line(const struct redraw_context *ctx,
 		      const plot_style_t *style,
 		      const struct rect *line)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror
+static slateerror
 print_fonts_plot_rectangle(const struct redraw_context *ctx,
 		     const plot_style_t *style,
 		     const struct rect *rect)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror
+static slateerror
 print_fonts_plot_polygon(const struct redraw_context *ctx,
 		   const plot_style_t *style,
 		   const int *p,
 		   unsigned int n)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror
+static slateerror
 print_fonts_plot_path(const struct redraw_context *ctx,
 		const plot_style_t *pstyle,
 		const float *p,
 		unsigned int n,
 		const float transform[6])
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror
+static slateerror
 print_fonts_plot_bitmap(const struct redraw_context *ctx,
 	       struct bitmap *bitmap,
 	       int x, int y,
@@ -851,7 +851,7 @@ print_fonts_plot_bitmap(const struct redraw_context *ctx,
 	       colour bg,
 	       bitmap_flags_t flags)
 {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -863,9 +863,9 @@ print_fonts_plot_bitmap(const struct redraw_context *ctx,
  * \param y y coordinate
  * \param text UTF-8 string to plot
  * \param length length of string, in bytes
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 print_fonts_plot_text(const struct redraw_context *ctx,
 		const struct plot_font_style *fstyle,
 		int x,
@@ -893,12 +893,12 @@ print_fonts_plot_text(const struct redraw_context *ctx,
 			NSLOG(netsurf, INFO, "rufl_paint_callback: 0x%x",
 			      code);
 		}
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 	if (print_fonts_error)
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 

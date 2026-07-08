@@ -6,7 +6,7 @@
  * Copyright 2008 Michael Drake <tlsa@netsurf-browser.org>
  * Copyright 2020 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,15 +30,15 @@
 #include <stdbool.h>
 #include <dom/dom.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/corestrings.h"
 #include "utils/log.h"
 #include "utils/messages.h"
 #include "utils/talloc.h"
 #include "utils/string.h"
 #include "utils/ascii.h"
-#include "utils/nsurl.h"
-#include "netsurf/plot_style.h"
+#include "utils/slateurl.h"
+#include "slate/plot_style.h"
 #include "css/hints.h"
 #include "desktop/frame_types.h"
 #include "content/content_factory.h"
@@ -98,11 +98,11 @@ static inline bool box_is_root(dom_node *n)
 static int box_object_talloc_destructor(struct object_params *o)
 {
 	if (o->codebase != NULL)
-		nsurl_unref(o->codebase);
+		slateurl_unref(o->codebase);
 	if (o->classid != NULL)
-		nsurl_unref(o->classid);
+		slateurl_unref(o->classid);
 	if (o->data != NULL)
-		nsurl_unref(o->data);
+		slateurl_unref(o->data);
 
 	return 0;
 }
@@ -175,7 +175,7 @@ box_parse_multi_lengths(const dom_string *ds, unsigned int *count)
 static int box_frames_talloc_destructor(struct content_html_frames *f)
 {
 	if (f->url != NULL) {
-		nsurl_unref(f->url);
+		slateurl_unref(f->url);
 		f->url = NULL;
 	}
 
@@ -195,7 +195,7 @@ box_create_frameset(struct content_html_frames *f,
 	unsigned int rows = 1, cols = 1;
 	dom_string *s;
 	dom_exception err;
-	nsurl *url;
+	slateurl *url;
 	struct frame_dimension *row_height = 0, *col_width = 0;
 	dom_node *c, *next;
 	struct content_html_frames *frame;
@@ -260,7 +260,7 @@ box_create_frameset(struct content_html_frames *f,
 		css_color color;
 
 		if (nscss_parse_colour(dom_string_data(s), &color))
-			default_border_colour = nscss_color_to_ns(color);
+			default_border_colour = slatecss_color_to_slate(color);
 
 		dom_string_unref(s);
 	}
@@ -394,8 +394,8 @@ box_create_frameset(struct content_html_frames *f,
 			/* copy url */
 			if (url != NULL) {
 				/* no self-references */
-				if (nsurl_compare(content->base_url, url,
-						NSURL_COMPLETE) == false)
+				if (slateurl_compare(content->base_url, url,
+						SLATEURL_COMPLETE) == false)
 					frame->url = url;
 				url = NULL;
 			}
@@ -457,7 +457,7 @@ box_create_frameset(struct content_html_frames *f,
 				if (nscss_parse_colour(dom_string_data(s),
 						&color))
 					frame->border_colour =
-						nscss_color_to_ns(color);
+						slatecss_color_to_slate(color);
 
 				dom_string_unref(s);
 			}
@@ -492,7 +492,7 @@ box_create_frameset(struct content_html_frames *f,
 static int box_iframes_talloc_destructor(struct content_html_iframe *f)
 {
 	if (f->url != NULL) {
-		nsurl_unref(f->url);
+		slateurl_unref(f->url);
 		f->url = NULL;
 	}
 
@@ -686,7 +686,7 @@ box_a(dom_node *n,
       bool *convert_children)
 {
 	bool ok;
-	nsurl *url;
+	slateurl *url;
 	dom_string *s;
 	dom_exception err;
 
@@ -698,7 +698,7 @@ box_a(dom_node *n,
 			return false;
 		if (url) {
 			if (box->href != NULL)
-				nsurl_unref(box->href);
+				slateurl_unref(box->href);
 			box->href = url;
 		}
 	}
@@ -766,10 +766,10 @@ box_body(dom_node *n,
 	css_color color;
 
 	css_computed_background_color(box->style, &color);
-	if (nscss_color_is_transparent(color)) {
+	if (slatecss_color_is_transparent(color)) {
 		content->background_colour = NS_TRANSPARENT;
 	} else {
-		content->background_colour = nscss_color_to_ns(color);
+		content->background_colour = slatecss_color_to_slate(color);
 	}
 
 	return true;
@@ -895,7 +895,7 @@ box_embed(dom_node *n,
 		return true;
 
 	/* Don't include ourself */
-	if (nsurl_compare(content->base_url, params->data, NSURL_COMPLETE))
+	if (slateurl_compare(content->base_url, params->data, SLATEURL_COMPLETE))
 		return true;
 
 	/* add attributes as parameters to linked list */
@@ -1027,7 +1027,7 @@ box_iframe(dom_node *n,
 	   struct box *box,
 	   bool *convert_children)
 {
-	nsurl *url;
+	slateurl *url;
 	dom_string *s;
 	dom_exception err;
 	struct content_html_iframe *iframe;
@@ -1058,15 +1058,15 @@ box_iframe(dom_node *n,
 		return true;
 
 	/* don't include ourself */
-	if (nsurl_compare(content->base_url, url, NSURL_COMPLETE)) {
-		nsurl_unref(url);
+	if (slateurl_compare(content->base_url, url, SLATEURL_COMPLETE)) {
+		slateurl_unref(url);
 		return true;
 	}
 
 	/* create a new iframe */
 	iframe = talloc(content->bctx, struct content_html_iframe);
 	if (iframe == NULL) {
-		nsurl_unref(url);
+		slateurl_unref(url);
 		return false;
 	}
 
@@ -1103,7 +1103,7 @@ box_iframe(dom_node *n,
 		css_color color;
 
 		if (nscss_parse_colour(dom_string_data(s), &color))
-			iframe->border_colour = nscss_color_to_ns(color);
+			iframe->border_colour = slatecss_color_to_slate(color);
 
 		dom_string_unref(s);
 	}
@@ -1155,7 +1155,7 @@ box_image(dom_node *n,
 	bool ok;
 	dom_string *s;
 	dom_exception err;
-	nsurl *url;
+	slateurl *url;
 	enum css_width_e wtype;
 	enum css_height_e htype;
 	css_fixed value = 0;
@@ -1180,7 +1180,7 @@ box_image(dom_node *n,
 		box->length = strlen(box->text);
 	}
 
-	if (nsoption_bool(foreground_images) == false) {
+	if (slateoption_bool(foreground_images) == false) {
 		return true;
 	}
 
@@ -1208,7 +1208,7 @@ box_image(dom_node *n,
 	/* start fetch */
 	box->flags |= IS_REPLACED;
 	ok = html_fetch_object(content, url, box, image_types, false);
-	nsurl_unref(url);
+	slateurl_unref(url);
 
 	wtype = css_computed_width(box->style, &value, &wunit);
 	htype = css_computed_height(box->style, &value, &hunit);
@@ -1238,8 +1238,8 @@ box_input(dom_node *n,
 	struct form_control *gadget;
 	dom_string *type = NULL;
 	dom_exception err;
-	nsurl *url;
-	nserror error;
+	slateurl *url;
+	slateerror error;
 
 	gadget = html_forms_get_control_for_node(content->forms, n);
 	if (gadget == NULL) {
@@ -1332,32 +1332,32 @@ box_input(dom_node *n,
 
 		if (box->style && ns_computed_display(box->style,
 				box_is_root(n)) != CSS_DISPLAY_NONE &&
-				nsoption_bool(foreground_images) == true) {
+				slateoption_bool(foreground_images) == true) {
 			dom_string *s;
 
 			err = dom_element_get_attribute(n, corestring_dom_src, &s);
 			if (err == DOM_NO_ERR && s != NULL) {
-				error = nsurl_join(content->base_url,
+				error = slateurl_join(content->base_url,
 						dom_string_data(s), &url);
 				dom_string_unref(s);
-				if (error != NSERROR_OK)
+				if (error != SLATEERROR_OK)
 					goto no_memory;
 
 				/* if url is equivalent to the parent's url,
 				 * we've got infinite inclusion. stop it here
 				 */
-				if (nsurl_compare(url, content->base_url,
-						NSURL_COMPLETE) == false) {
+				if (slateurl_compare(url, content->base_url,
+						SLATEURL_COMPLETE) == false) {
 					if (!html_fetch_object(content,
 							       url,
 							       box,
 							       image_types,
 							       false)) {
-						nsurl_unref(url);
+						slateurl_unref(url);
 						goto no_memory;
 					}
 				}
-				nsurl_unref(url);
+				slateurl_unref(url);
 			}
 		}
 	} else {
@@ -1447,7 +1447,7 @@ box_object(dom_node *n,
 		dom_string_unref(codebase);
 	}
 	if (params->codebase == NULL)
-		params->codebase = nsurl_ref(content->base_url);
+		params->codebase = slateurl_ref(content->base_url);
 
 	err = dom_element_get_attribute(n, corestring_dom_classid, &classid);
 	if (err == DOM_NO_ERR && classid != NULL) {
@@ -1474,12 +1474,12 @@ box_object(dom_node *n,
 		return true;
 
 	/* Don't include ourself */
-	if (params->classid != NULL && nsurl_compare(content->base_url,
-			params->classid, NSURL_COMPLETE))
+	if (params->classid != NULL && slateurl_compare(content->base_url,
+			params->classid, SLATEURL_COMPLETE))
 		return true;
 
-	if (params->data != NULL && nsurl_compare(content->base_url,
-			params->data, NSURL_COMPLETE))
+	if (params->data != NULL && slateurl_compare(content->base_url,
+			params->data, SLATEURL_COMPLETE))
 		return true;
 
 	/* codetype and type are MIME types */

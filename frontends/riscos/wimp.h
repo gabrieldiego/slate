@@ -1,7 +1,7 @@
 /*
  * Copyright 2004 Richard Wilson <not_ginger_matt@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  */
 
 
-#ifndef _NETSURF_RISCOS_WIMP_H_
-#define _NETSURF_RISCOS_WIMP_H_
+#ifndef _SLATE_RISCOS_WIMP_H_
+#define _SLATE_RISCOS_WIMP_H_
 
 #include <assert.h>
 #include <stdbool.h>

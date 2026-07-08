@@ -1,7 +1,7 @@
 /*
  * Copyright 2020 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * HTML content DOM event handling interface
  */
 
-#ifndef NETSURF_HTML_DOM_EVENT_H
-#define NETSURF_HTML_DOM_EVENT_H
+#ifndef SLATE_HTML_DOM_EVENT_H
+#define SLATE_HTML_DOM_EVENT_H
 
 /**
  * html content DOM action callback function selector

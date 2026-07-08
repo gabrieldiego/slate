@@ -1,7 +1,7 @@
 /*
  * Copyright 2005 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,10 +29,10 @@
 #include <oslib/wimp.h>
 
 #include "utils/log.h"
-#include "utils/nsoption.h"
-#include "utils/nsurl.h"
-#include "netsurf/url_db.h"
-#include "netsurf/browser_window.h"
+#include "utils/slateoption.h"
+#include "utils/slateurl.h"
+#include "slate/url_db.h"
+#include "slate/browser_window.h"
 
 #include "riscos/global_history.h"
 #include "riscos/gui.h"
@@ -47,7 +47,7 @@
 
 #define MAXIMUM_VISIBLE_LINES 7
 
-static nsurl **url_complete_matches = NULL;
+static slateurl **url_complete_matches = NULL;
 static int url_complete_matches_allocated = 0;
 static int url_complete_matches_available = 0;
 static char *url_complete_matched_string = NULL;
@@ -58,7 +58,7 @@ static bool url_complete_matches_reset = false;
 static char *url_complete_original_url = NULL;
 static bool url_complete_memory_exhausted = false;
 
-static nsurl *url_complete_redraw[MAXIMUM_VISIBLE_LINES];
+static slateurl *url_complete_redraw[MAXIMUM_VISIBLE_LINES];
 static char url_complete_icon_null[] = "";
 static char url_complete_icon_sprite[12];
 static wimp_icon url_complete_icon;
@@ -66,7 +66,7 @@ static wimp_icon url_complete_sprite;
 static int mouse_x;
 static int mouse_y;
 
-static bool url_complete_callback(nsurl *url,
+static bool url_complete_callback(slateurl *url,
 		const struct url_data *data);
 static void ro_gui_url_complete_mouse_at(wimp_pointer *pointer, void *data);
 
@@ -113,7 +113,7 @@ bool ro_gui_url_complete_keypress(struct toolbar *toolbar, uint32_t key)
 
 	/* we must have a toolbar/url bar */
 	if (!ro_toolbar_get_display_url(toolbar) ||
-	    (!nsoption_bool(url_suggestion))) {
+	    (!slateoption_bool(url_suggestion))) {
 		ro_gui_url_complete_close();
 		return false;
 	}
@@ -315,11 +315,11 @@ bool ro_gui_url_complete_keypress(struct toolbar *toolbar, uint32_t key)
 				url_complete_original_url, true, false);
 	} else {
 		ro_toolbar_set_url(toolbar,
-				nsurl_access(url_complete_matches[
+				slateurl_access(url_complete_matches[
 					url_complete_matches_selection]),
 				true, false);
 		free(url_complete_matched_string);
-		url_complete_matched_string = strdup(nsurl_access(
+		url_complete_matched_string = strdup(slateurl_access(
 					url_complete_matches[
 					url_complete_matches_selection]));
 	}
@@ -363,9 +363,9 @@ bool ro_gui_url_complete_keypress(struct toolbar *toolbar, uint32_t key)
  * \return true to continue iteration, false otherwise
  */
 
-bool url_complete_callback(nsurl *url, const struct url_data *data)
+bool url_complete_callback(slateurl *url, const struct url_data *data)
 {
-	nsurl **array_extend;
+	slateurl **array_extend;
 
 	/* Ignore unvisited URLs */
 	if (data->visits == 0)
@@ -376,9 +376,9 @@ bool url_complete_callback(nsurl *url, const struct url_data *data)
 	if (url_complete_matches_available >
 			url_complete_matches_allocated) {
 
-		array_extend = (nsurl **)realloc(url_complete_matches,
+		array_extend = (slateurl **)realloc(url_complete_matches,
 				(url_complete_matches_allocated + 64) *
-				sizeof(nsurl *));
+				sizeof(slateurl *));
 		if (!array_extend) {
 			url_complete_memory_exhausted = true;
 			return false;
@@ -591,10 +591,10 @@ void ro_gui_url_complete_redraw(wimp_draw *redraw)
 			url_complete_icon.extent.y1 = -line * 44;
 			url_complete_icon.extent.y0 = -(line + 1) * 44;
 			url_complete_icon.data.indirected_text.text =
-					(char *)nsurl_access(
+					(char *)slateurl_access(
 						url_complete_matches[line]);
 			url_complete_icon.data.indirected_text.size =
-					nsurl_length(
+					slateurl_length(
 						url_complete_matches[line]);
 
 			error = xwimp_plot_icon(&url_complete_icon);
@@ -733,7 +733,7 @@ bool ro_gui_url_complete_click(wimp_pointer *pointer)
 	/* Select sets the text and launches */
 	if (pointer->buttons == wimp_CLICK_SELECT) {
 		ro_toolbar_set_url(g->toolbar,
-				nsurl_access(url_complete_matches[
+				slateurl_access(url_complete_matches[
 					url_complete_matches_selection]),
 				true, false);
 
@@ -759,7 +759,7 @@ bool ro_gui_url_complete_click(wimp_pointer *pointer)
 	/* Adjust just sets the text */
 	} else if (pointer->buttons == wimp_CLICK_ADJUST) {
 		ro_toolbar_set_url(g->toolbar,
-				nsurl_access(url_complete_matches[
+				slateurl_access(url_complete_matches[
 					url_complete_matches_selection]),
 				true, false);
 		ro_gui_url_complete_keypress(g->toolbar, 0);

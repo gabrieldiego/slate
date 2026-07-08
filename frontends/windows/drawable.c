@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 Vincent Sanders <vince@simtec.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,9 +31,9 @@
 
 #include "utils/errors.h"
 #include "utils/log.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/plotters.h"
-#include "netsurf/keypress.h"
+#include "slate/browser_window.h"
+#include "slate/plotters.h"
+#include "slate/keypress.h"
 
 #include "windows/windbg.h"
 #include "windows/plot.h"
@@ -129,7 +129,7 @@ nsws_drawable_vscroll(struct gui_window *gw, HWND hwnd, WPARAM wparam)
 	si.fMask = SIF_POS;
 	if ((gw->bw != NULL) &&
 	    (browser_window_get_extents(gw->bw, true,
-					&width, &height) == NSERROR_OK)) {
+					&width, &height) == SLATEERROR_OK)) {
 		si.nPos = min(si.nPos, height - gw->height);
 	}
 
@@ -196,7 +196,7 @@ nsws_drawable_hscroll(struct gui_window *gw, HWND hwnd, WPARAM wparam)
 
 	if ((gw->bw != NULL) &&
 	    (browser_window_get_extents(gw->bw, true,
-					&width, &height) == NSERROR_OK)) {
+					&width, &height) == SLATEERROR_OK)) {
 		si.nPos = min(si.nPos, width - gw->width);
 	}
 	si.nPos = max(si.nPos, 0);
@@ -463,7 +463,7 @@ nsws_drawable_mousedown(struct gui_window *gw,
 	if ((gw == NULL) ||
 	    (gw->mouse == NULL) ||
 	    (gw->bw == NULL)) {
-		nsw32_local_history_hide();
+		slatew32_local_history_hide();
 		return 0;
 	}
 
@@ -584,7 +584,7 @@ nsws_window_drawable_event_callback(HWND hwnd,
 					GET_Y_LPARAM(lparam),
 					BROWSER_MOUSE_PRESS_1);
 		SetFocus(hwnd);
-		nsw32_local_history_hide();
+		slatew32_local_history_hide();
 		return 0;
 
 	case WM_RBUTTONDOWN:
@@ -703,9 +703,9 @@ nsws_window_create_drawable(HINSTANCE hinstance,
 /**
  * Create the drawable window class.
  */
-nserror
+slateerror
 nsws_create_drawable_class(HINSTANCE hinstance) {
-	nserror ret = NSERROR_OK;
+	slateerror ret = SLATEERROR_OK;
 	WNDCLASSEXW w;
 
 	/* drawable area */
@@ -724,7 +724,7 @@ nsws_create_drawable_class(HINSTANCE hinstance) {
 
 	if (RegisterClassExW(&w) == 0) {
 		win_perror("DrawableClass");
-		ret = NSERROR_INIT_FAILED;
+		ret = SLATEERROR_INIT_FAILED;
 	}
 
 	return ret;

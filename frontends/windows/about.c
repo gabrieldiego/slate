@@ -1,7 +1,7 @@
 /*
 * Copyright 2009 Mark Benjamin <netsurf-browser.org.MarkBenjamin@dfgh.net>
 *
-* This file is part of NetSurf, http://www.netsurf-browser.org/
+* This file is part of NetSurf, http://www.slate-browser.org/
 *
 * NetSurf is free software; you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -57,7 +57,7 @@ static BOOL init_about_dialog(HWND hwnd)
 		}
 
 		snprintf(ver_str, sizeof(ver_str), "%s %s", 
-			 messages_get("NetSurf"), netsurf_version); 
+			 messages_get("NetSurf"), slate_version); 
 		
 		SendMessage(dlg_itm, WM_SETTEXT, 0, (LPARAM)ver_str);
 	}
@@ -139,7 +139,7 @@ nsws_about_event_callback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 	return FALSE;
 }
 
-void nsw32_about_dialog_init(HINSTANCE hinst, HWND parent)
+void slatew32_about_dialog_init(HINSTANCE hinst, HWND parent)
 {
 	int ret = DialogBox(hinst, MAKEINTRESOURCE(IDD_ABOUT), parent,
 			nsws_about_event_callback);

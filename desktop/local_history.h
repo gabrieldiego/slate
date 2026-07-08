@@ -1,7 +1,7 @@
 /*
  * Copyright 2017 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,17 +16,17 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
  
-#ifndef NETSURF_DESKTOP_LOCAL_HISTORY_H
-#define NETSURF_DESKTOP_LOCAL_HISTORY_H
+#ifndef SLATE_DESKTOP_LOCAL_HISTORY_H
+#define SLATE_DESKTOP_LOCAL_HISTORY_H
 
 #include <stdbool.h>
 #include <stdint.h>
 
 #include "utils/errors.h"
-#include "netsurf/mouse.h"
+#include "slate/mouse.h"
 
 struct redraw_context;
-struct nsurl;
+struct slateurl;
 struct rect;
 struct local_history_session;
 struct browser_window;
@@ -44,9 +44,9 @@ struct browser_window;
  * \param[in] core_window_handle The core_window in which the treeview is shown.
  * \param[in] bw browser window to show history of.
  * \param[out] session The created local history session context.
- * \return NSERROR_OK on success and session set, appropriate error code otherwise
+ * \return SLATEERROR_OK on success and session set, appropriate error code otherwise
  */
-nserror local_history_init(void *core_window_handle,
+slateerror local_history_init(void *core_window_handle,
 			   struct browser_window *bw,
 			   struct local_history_session **session);
 
@@ -58,9 +58,9 @@ nserror local_history_init(void *core_window_handle,
  * local_history_init must be called to create a new session.
  *
  * \param session The local history session to finalise.
- * \return NSERROR_OK on success and session freed appropriate error otherwise
+ * \return SLATEERROR_OK on success and session freed appropriate error otherwise
  */
-nserror local_history_fini(struct local_history_session *session);
+slateerror local_history_fini(struct local_history_session *session);
 
 
 /**
@@ -75,7 +75,7 @@ nserror local_history_fini(struct local_history_session *session);
  * \param[in] clip  Current clip rectangle (wrt tree origin)
  * \param[in] ctx   Current redraw context
  */
-nserror local_history_redraw(struct local_history_session *session, int x, int y, struct rect *clip, const struct redraw_context *ctx);
+slateerror local_history_redraw(struct local_history_session *session, int x, int y, struct rect *clip, const struct redraw_context *ctx);
 
 
 /**
@@ -85,12 +85,12 @@ nserror local_history_redraw(struct local_history_session *session, int x, int y
  * \param[in] mouse The current mouse state
  * \param[in] x The current mouse X coordinate
  * \param[in] y The current mouse Y coordinate
- * \return NSERROR_OK if mouse action was processed.
- *         NSERROR_NOT_FOUND if nothing under the pointer where it was clicked
- *         NSERROR_NOT_IMPLEMENTED if the action was not processed.
- *         NSERROR_PERMISSION if the clicked item was the current page
+ * \return SLATEERROR_OK if mouse action was processed.
+ *         SLATEERROR_NOT_FOUND if nothing under the pointer where it was clicked
+ *         SLATEERROR_NOT_IMPLEMENTED if the action was not processed.
+ *         SLATEERROR_PERMISSION if the clicked item was the current page
  */
-nserror local_history_mouse_action(struct local_history_session *session, enum browser_mouse_state mouse, int x, int y);
+slateerror local_history_mouse_action(struct local_history_session *session, enum browser_mouse_state mouse, int x, int y);
 
 
 /**
@@ -108,9 +108,9 @@ bool local_history_keypress(struct local_history_session *session, uint32_t key)
  *
  * \param[in] session The local history session context.
  * \param bw browser window to show history of.
- * \return NSERROR_OK or appropriate error code.
+ * \return SLATEERROR_OK or appropriate error code.
  */
-nserror local_history_set(struct local_history_session *session, struct browser_window *bw);
+slateerror local_history_set(struct local_history_session *session, struct browser_window *bw);
 
 
 /**
@@ -119,31 +119,31 @@ nserror local_history_set(struct local_history_session *session, struct browser_
  * \param[in] session The local history session context.
  * \param[out] width on sucessful return the width of the localhistory content
  * \param[out] height on sucessful return the height of the localhistory content
- * \return NSERROR_OK or appropriate error code.
+ * \return SLATEERROR_OK or appropriate error code.
  */
-nserror local_history_get_size(struct local_history_session *session, int *width, int *height);
+slateerror local_history_get_size(struct local_history_session *session, int *width, int *height);
 
 
 /**
  * get url of entry at position in local history content area.
  *
- * \todo the returned url should be a referenced nsurl.
+ * \todo the returned url should be a referenced slateurl.
  *
  * \param[in] session The local history session context.
  * \param[in] x The x coordinate to get url of.
  * \param[in] y The y coordinate to get url of.
  * \param[out] url_out referenced url.
- * \return NSERROR_OK and url_out updated or NSERROR_NOT_FOUND if no url at
+ * \return SLATEERROR_OK and url_out updated or SLATEERROR_NOT_FOUND if no url at
  *          location.
  */
-nserror local_history_get_url(struct local_history_session *session, int x, int y, struct nsurl **url_out);
+slateerror local_history_get_url(struct local_history_session *session, int x, int y, struct slateurl **url_out);
 
 /**
  * Scroll the local history window to ensure the current cursor is shown.
  *
  * \param session The local history session
  */
-nserror local_history_scroll_to_cursor(struct local_history_session *session);
+slateerror local_history_scroll_to_cursor(struct local_history_session *session);
 
 
 #endif

@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,10 +16,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _NETSURF_GTK_VIEWSOURCE_H_
-#define _NETSURF_GTK_VIEWSOURCE_H_
+#ifndef _SLATE_GTK_VIEWSOURCE_H_
+#define _SLATE_GTK_VIEWSOURCE_H_
 
-nserror nsgtk_viewsource(GtkWindow *parent, struct browser_window *bw);
+slateerror slategtk_viewsource(GtkWindow *parent, struct browser_window *bw);
 
 #endif
 

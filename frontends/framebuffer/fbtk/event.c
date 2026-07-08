@@ -3,7 +3,7 @@
  *
  * Framebuffer windowing toolkit event processing.
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,8 +31,8 @@
 
 #include "utils/utils.h"
 #include "utils/log.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/keypress.h"
+#include "slate/browser_window.h"
+#include "slate/keypress.h"
 
 #include "framebuffer/gui.h"
 #include "framebuffer/fbtk.h"

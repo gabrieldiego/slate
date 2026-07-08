@@ -312,7 +312,7 @@
 				(append "/*\n"
 " * Copyright 2013, 2016 Chris Young <chris@unsatisfactorysoftware.co.uk>\n"
 " *\n"
-" * This file is part of NetSurf, http://www.netsurf-browser.org/\n"
+" * This file is part of NetSurf, http://www.slate-browser.org/\n"
 " *\n"
 " * NetSurf is free software; you can redistribute it and/or modify\n"
 " * it under the terms of the GNU General Public License as published by\n"
@@ -335,9 +335,9 @@
 "options results\n"
 "parse arg url\n"
 "\n"
-"if show('P', 'NETSURF') then do\n"
-" address NETSURF 'OPEN' url 'NEWTAB ACTIVE'\n"
-" address NETSURF 'TOFRONT'\n"
+"if show('P', 'SLATE') then do\n"
+" address SLATE 'OPEN' url 'NEWTAB ACTIVE'\n"
+" address SLATE 'TOFRONT'\n"
 "end\n"
 "else do\n"
 " address command 'APPDIR:NetSurf URL' url\n"
@@ -354,23 +354,23 @@
 	(
 		(working "Adding NetSurf to launch-handler config")
 		(if (= (p_chk_launch-handler "FILE.LH") 0)
-			(p_append "FILE.LH" "ClientName=\"NETSURF\"   ClientPath=\"Rexx:NetSurf\"   CMDFORMAT=\"*\"file:///%s*\"\"")
+			(p_append "FILE.LH" "ClientName=\"SLATE\"   ClientPath=\"Rexx:NetSurf\"   CMDFORMAT=\"*\"file:///%s*\"\"")
 		)
 
 		(if (= (p_chk_launch-handler "HTTP.LH") 0)
-			(p_append "HTTP.LH" "ClientName=\"NETSURF\"   ClientPath=\"Rexx:NetSurf\"   CMDFORMAT=\"*\"http://%s*\"\"")
+			(p_append "HTTP.LH" "ClientName=\"SLATE\"   ClientPath=\"Rexx:NetSurf\"   CMDFORMAT=\"*\"http://%s*\"\"")
 		)
 
 		(if (= (p_chk_launch-handler "HTTPS.LH") 0)
-			(p_append "HTTPS.LH" "ClientName=\"NETSURF\"   ClientPath=\"Rexx:NetSurf\"   CMDFORMAT=\"*\"https://%s*\"\"")
+			(p_append "HTTPS.LH" "ClientName=\"SLATE\"   ClientPath=\"Rexx:NetSurf\"   CMDFORMAT=\"*\"https://%s*\"\"")
 		)
 
 		(if (= (p_chk_launch-handler "WWW.LH") 0)
-			(p_append "WWW.LH" "ClientName=\"NETSURF\"   ClientPath=\"Rexx:NetSurf\"   CMDFORMAT=\"*\"http://www.%s*\"\"")
+			(p_append "WWW.LH" "ClientName=\"SLATE\"   ClientPath=\"Rexx:NetSurf\"   CMDFORMAT=\"*\"http://www.%s*\"\"")
 		)
 
 ;		(if (= (p_chk_launch-handler "FTP.LH") 0)
-;			(p_append "FTP.LH" "ClientName=\"NETSURF\"   ClientPath=\"Rexx:NetSurf\"   CMDFORMAT=\"*\"ftp://%s*\"\"")
+;			(p_append "FTP.LH" "ClientName=\"SLATE\"   ClientPath=\"Rexx:NetSurf\"   CMDFORMAT=\"*\"ftp://%s*\"\"")
 ;		)
 	)
 )

@@ -1,7 +1,7 @@
 /*
  * Copyright 2005-2007 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,13 +26,13 @@
 #include <string.h>
 #include <nsutils/time.h>
 
-#include "netsurf/inttypes.h"
+#include "slate/inttypes.h"
 #include "utils/log.h"
 #include "utils/messages.h"
 #include "utils/corestrings.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/content.h"
+#include "slate/browser_window.h"
+#include "slate/bitmap.h"
+#include "slate/content.h"
 #include "desktop/knockout.h"
 
 #include "content/content_protected.h"
@@ -77,7 +77,7 @@ static void content_convert(struct content *c)
 		return;
 
 	NSLOG(netsurf, INFO, "content "URL_FMT_SPC" (%p)",
-	      nsurl_access_log(llcache_handle_get_url(c->llcache)), c);
+	      slateurl_access_log(llcache_handle_get_url(c->llcache)), c);
 
 	if (c->handler->data_complete != NULL) {
 		c->locked = true;
@@ -98,15 +98,15 @@ static void content_convert(struct content *c)
  * \param llcache  Low-level cache handle
  * \param event	   Event details
  * \param pw	   Pointer to our context
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-static nserror
+static slateerror
 content_llcache_callback(llcache_handle *llcache,
 			 const llcache_event *event, void *pw)
 {
 	struct content *c = pw;
 	union content_msg_data msg_data;
-	nserror error = NSERROR_OK;
+	slateerror error = SLATEERROR_OK;
 
 	switch (event->type) {
 	case LLCACHE_EVENT_GOT_CERTS:
@@ -123,7 +123,7 @@ content_llcache_callback(llcache_handle *llcache,
 				llcache_handle_abort(c->llcache);
 				c->status = CONTENT_STATUS_ERROR;
 				/** \todo It's not clear what error this is */
-				error = NSERROR_NOMEM;
+				error = SLATEERROR_NOMEM;
 			}
 		}
 		break;
@@ -186,7 +186,7 @@ static void content_update_status(struct content *c)
 
 
 /* exported interface documented in content/protected.h */
-nserror
+slateerror
 content__init(struct content *c,
 	      const content_handler *handler,
 	      lwc_string *imime_type,
@@ -196,21 +196,21 @@ content__init(struct content *c,
 	      bool quirks)
 {
 	struct content_user *user_sentinel;
-	nserror error;
+	slateerror error;
 
 	NSLOG(netsurf, INFO, "url "URL_FMT_SPC" -> %p",
-	      nsurl_access_log(llcache_handle_get_url(llcache)), c);
+	      slateurl_access_log(llcache_handle_get_url(llcache)), c);
 
 	user_sentinel = calloc(1, sizeof(struct content_user));
 	if (user_sentinel == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	if (fallback_charset != NULL) {
 		c->fallback_charset = strdup(fallback_charset);
 		if (c->fallback_charset == NULL) {
 			free(user_sentinel);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 	}
 
@@ -245,12 +245,12 @@ content__init(struct content *c,
 	/* Finally, claim low-level cache events */
 	error = llcache_handle_change_callback(llcache,
 					       content_llcache_callback, c);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		lwc_string_unref(c->mime_type);
 		return error;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -357,7 +357,7 @@ void content_destroy(struct content *c)
 
 	assert(c);
 	NSLOG(netsurf, INFO, "content %p %s", c,
-	      nsurl_access_log(llcache_handle_get_url(c->llcache)));
+	      slateurl_access_log(llcache_handle_get_url(c->llcache)));
 	assert(c->locked == false);
 
 	if (c->handler->destroy != NULL)
@@ -500,8 +500,8 @@ bool content_exec(struct hlcache_handle *h, const char *src, size_t srclen)
 bool content_saw_insecure_objects(struct hlcache_handle *h)
 {
 	struct content *c = hlcache_handle_get_content(h);
-	struct nsurl *url = hlcache_handle_get_url(h);
-	lwc_string *scheme = nsurl_get_component(url, NSURL_SCHEME);
+	struct slateurl *url = hlcache_handle_get_url(h);
+	lwc_string *scheme = slateurl_get_component(url, SLATEURL_SCHEME);
 	bool match;
 
 	/* Is this an internal scheme? If so, we trust here and stop */
@@ -619,7 +619,7 @@ content_scaled_redraw(struct hlcache_handle *h,
 	/* Plot white background */
 	plot_ok &= (new_ctx.plot->rectangle(&new_ctx,
 					    plot_style_fill_white,
-					    &clip) == NSERROR_OK);
+					    &clip) == SLATEERROR_OK);
 
 	/* Set up content redraw data */
 	data.x = 0;
@@ -662,7 +662,7 @@ content_add_user(struct content *c,
 	struct content_user *user;
 
 	NSLOG(netsurf, INFO, "content "URL_FMT_SPC" (%p), user %p %p",
-	      nsurl_access_log(llcache_handle_get_url(c->llcache)),
+	      slateurl_access_log(llcache_handle_get_url(c->llcache)),
 	      c, callback, pw);
 	user = malloc(sizeof(struct content_user));
 	if (!user)
@@ -691,7 +691,7 @@ content_remove_user(struct content *c,
 {
 	struct content_user *user, *next;
 	NSLOG(netsurf, INFO, "content "URL_FMT_SPC" (%p), user %p %p",
-	      nsurl_access_log(llcache_handle_get_url(c->llcache)),
+	      slateurl_access_log(llcache_handle_get_url(c->llcache)),
 	      c, callback, pw);
 
 	/* user_list starts with a sentinel */
@@ -766,7 +766,7 @@ void content_broadcast(struct content *c, content_msg msg,
 
 /* exported interface documented in content_protected.h */
 void
-content_broadcast_error(struct content *c, nserror errorcode, const char *msg)
+content_broadcast_error(struct content *c, slateerror errorcode, const char *msg)
 {
 	struct content_user *user, *next;
 	union content_msg_data data;
@@ -787,47 +787,47 @@ content_broadcast_error(struct content *c, nserror errorcode, const char *msg)
 
 
 /* exported interface, documented in content/content.h */
-nserror
+slateerror
 content_open(hlcache_handle *h,
 	     struct browser_window *bw,
 	     struct content *page,
 	     struct object_params *params)
 {
 	struct content *c;
-	nserror res;
+	slateerror res;
 
 	c = hlcache_handle_get_content(h);
 	assert(c != 0);
 	NSLOG(netsurf, INFO, "content %p %s", c,
-	      nsurl_access_log(llcache_handle_get_url(c->llcache)));
+	      slateurl_access_log(llcache_handle_get_url(c->llcache)));
 	if (c->handler->open != NULL) {
 		res = c->handler->open(c, bw, page, params);
 	} else {
-		res = NSERROR_OK;
+		res = SLATEERROR_OK;
 	}
 	return res;
 }
 
 
 /* exported interface, documented in content/content.h */
-nserror content_close(hlcache_handle *h)
+slateerror content_close(hlcache_handle *h)
 {
 	struct content *c;
-	nserror res;
+	slateerror res;
 
 	c = hlcache_handle_get_content(h);
 	if (c == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if ((c->status != CONTENT_STATUS_READY) &&
 	    (c->status != CONTENT_STATUS_DONE)) {
 		/* status is not read or done so nothing to do */
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	NSLOG(netsurf, INFO, "content %p %s", c,
-	      nsurl_access_log(llcache_handle_get_url(c->llcache)));
+	      slateurl_access_log(llcache_handle_get_url(c->llcache)));
 
 	if (c->textsearch.context != NULL) {
 		content_textsearch_destroy(c->textsearch.context);
@@ -837,7 +837,7 @@ nserror content_close(hlcache_handle *h)
 	if (c->handler->close != NULL) {
 		res = c->handler->close(c);
 	} else {
-		res = NSERROR_OK;
+		res = SLATEERROR_OK;
 	}
 	return res;
 }
@@ -868,7 +868,7 @@ char * content_get_selection(hlcache_handle *h)
 
 
 /* exported interface documented in content/content.h */
-nserror
+slateerror
 content_get_contextual_content(struct hlcache_handle *h,
 			       int x, int y,
 			       struct browser_window_features *data)
@@ -881,7 +881,7 @@ content_get_contextual_content(struct hlcache_handle *h,
 	}
 
 	data->object = h;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -918,14 +918,14 @@ content_drop_file_at_point(struct hlcache_handle *h,
 
 
 /* exported interface documented in content/content.h */
-nserror
+slateerror
 content_debug_dump(struct hlcache_handle *h, FILE *f, enum content_debug op)
 {
 	struct content *c = hlcache_handle_get_content(h);
 	assert(c != 0);
 
 	if (c->handler->debug_dump == NULL) {
-		return NSERROR_NOT_IMPLEMENTED;
+		return SLATEERROR_NOT_IMPLEMENTED;
 	}
 
 	return c->handler->debug_dump(c, f, op);
@@ -933,16 +933,16 @@ content_debug_dump(struct hlcache_handle *h, FILE *f, enum content_debug op)
 
 
 /* exported interface documented in content/content.h */
-nserror content_debug(struct hlcache_handle *h, enum content_debug op)
+slateerror content_debug(struct hlcache_handle *h, enum content_debug op)
 {
 	struct content *c = hlcache_handle_get_content(h);
 
 	if (c == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if (c->handler->debug == NULL) {
-		return NSERROR_NOT_IMPLEMENTED;
+		return SLATEERROR_NOT_IMPLEMENTED;
 	}
 
 	return c->handler->debug(c, op);
@@ -976,7 +976,7 @@ content__free_rfc5988_link(struct content_rfc5988_link *link)
 
 	next = link->next;
 
-	nsurl_unref(link->href);
+	slateurl_unref(link->href);
 	lwc_string_unref(link->rel);
 	lwc_string_unref(link->hreflang);
 	lwc_string_unref(link->type);
@@ -1013,7 +1013,7 @@ content__add_rfc5988_link(struct content *c,
 
 	/* copy values */
 	newlink->rel = lwc_string_ref(link->rel);
-	newlink->href = nsurl_ref(link->href);
+	newlink->href = slateurl_ref(link->href);
 	if (link->hreflang != NULL) {
 		newlink->hreflang = lwc_string_ref(link->hreflang);
 	}
@@ -1040,7 +1040,7 @@ content__add_rfc5988_link(struct content *c,
 
 
 /* exported interface documented in content/content.h */
-nsurl *content_get_url(struct content *c)
+slateurl *content_get_url(struct content *c)
 {
 	if (c == NULL)
 		return NULL;
@@ -1108,7 +1108,7 @@ const char *content__get_title(struct content *c)
 		return NULL;
 
 	return c->title != NULL ? c->title :
-		nsurl_access(llcache_handle_get_url(c->llcache));
+		slateurl_access(llcache_handle_get_url(c->llcache));
 }
 
 
@@ -1236,14 +1236,14 @@ void content__invalidate_reuse_data(struct content *c)
 
 
 /* exported interface documented in content/content.h */
-nsurl *content_get_refresh_url(hlcache_handle *h)
+slateurl *content_get_refresh_url(hlcache_handle *h)
 {
 	return content__get_refresh_url(hlcache_handle_get_content(h));
 }
 
 
 /* exported interface documented in content/content_protected.h */
-nsurl *content__get_refresh_url(struct content *c)
+slateurl *content__get_refresh_url(struct content *c)
 {
 	if (c == NULL)
 		return NULL;
@@ -1360,10 +1360,10 @@ const llcache_handle *content_get_llcache_handle(struct content *c)
 struct content *content_clone(struct content *c)
 {
 	struct content *nc;
-	nserror error;
+	slateerror error;
 
 	error = c->handler->clone(c, &nc);
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return NULL;
 
 	return nc;
@@ -1371,12 +1371,12 @@ struct content *content_clone(struct content *c)
 
 
 /* exported interface documented in content/protected.h */
-nserror content__clone(const struct content *c, struct content *nc)
+slateerror content__clone(const struct content *c, struct content *nc)
 {
-	nserror error;
+	slateerror error;
 
 	error = llcache_handle_clone(c->llcache, &(nc->llcache));
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		return error;
 	}
 
@@ -1396,14 +1396,14 @@ nserror content__clone(const struct content *c, struct content *nc)
 	if (c->fallback_charset != NULL) {
 		nc->fallback_charset = strdup(c->fallback_charset);
 		if (nc->fallback_charset == NULL) {
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 	}
 
 	if (c->refresh != NULL) {
-		nc->refresh = nsurl_ref(c->refresh);
+		nc->refresh = slateurl_ref(c->refresh);
 		if (nc->refresh == NULL) {
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 	}
 
@@ -1414,7 +1414,7 @@ nserror content__clone(const struct content *c, struct content *nc)
 	if (c->title != NULL) {
 		nc->title = strdup(c->title);
 		if (nc->title == NULL) {
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 	}
 
@@ -1422,7 +1422,7 @@ nserror content__clone(const struct content *c, struct content *nc)
 
 	nc->user_list = calloc(1, sizeof(struct content_user));
 	if (nc->user_list == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	memcpy(&(nc->status_message), &(c->status_message), 120);
@@ -1432,12 +1432,12 @@ nserror content__clone(const struct content *c, struct content *nc)
 	nc->total_size = c->total_size;
 	nc->http_code = c->http_code;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in content/content.h */
-nserror content_abort(struct content *c)
+slateerror content_abort(struct content *c)
 {
 	NSLOG(netsurf, INFO, "Aborting %p", c);
 

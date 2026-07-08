@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 Daniel Silverstone <dsilvers@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,11 +16,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _NETSURF_WINDOWS_FINDFILE_H_
-#define _NETSURF_WINDOWS_FINDFILE_H_
+#ifndef _SLATE_WINDOWS_FINDFILE_H_
+#define _SLATE_WINDOWS_FINDFILE_H_
 
 extern char *nsws_find_resource(char *buf, const char *filename, const char *def);
 
 char **nsws_init_resource(const char *resource_path);
 
-#endif /* _NETSURF_WINDOWS_FINDFILE_H_ */
+#endif /* _SLATE_WINDOWS_FINDFILE_H_ */

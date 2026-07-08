@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,10 +19,10 @@
 #ifndef GTK_GUI_H
 #define GTK_GUI_H
 
-struct nsurl;
+struct slateurl;
 
 /** Directory where all configuration files are held. */
-extern char *nsgtk_config_home;
+extern char *slategtk_config_home;
 
 /** favicon default pixbuf */
 extern GdkPixbuf *favicon_pixbuf;
@@ -34,6 +34,6 @@ extern char **respaths;
 uint32_t gtk_gui_gdkkey_to_nskey(GdkEventKey *eventkey);
 
 /** set when no windows remain open. */
-extern bool nsgtk_complete;
+extern bool slategtk_complete;
 
 #endif /* GTK_GUI_H */

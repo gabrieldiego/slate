@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 Daniel Silverstone <dsilvers@digital-scurf.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,18 +35,18 @@ typedef struct cmdhandler {
 
 static monkey_cmdhandler_t *handler_ring = NULL;
 
-nserror
+slateerror
 monkey_register_handler(const char *cmd, handle_command_fn fn)
 {
 	monkey_cmdhandler_t *ret = calloc(1, sizeof(*ret));
 	if (ret == NULL) {
 		NSLOG(netsurf, INFO, "Unable to allocate handler");
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 	ret->cmd = strdup(cmd);
 	ret->fn = fn;
 	RING_INSERT(handler_ring, ret);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 void

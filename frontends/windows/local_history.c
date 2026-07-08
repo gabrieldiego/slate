@@ -1,7 +1,7 @@
 /*
  * Copyright 2017 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,9 +26,9 @@
 #include <windows.h>
 
 #include "utils/log.h"
-#include "utils/nsoption.h"
-#include "netsurf/keypress.h"
-#include "netsurf/plotters.h"
+#include "utils/slateoption.h"
+#include "slate/keypress.h"
+#include "slate/plotters.h"
 #include "desktop/local_history.h"
 
 #include "windows/plot.h"
@@ -36,107 +36,107 @@
 #include "windows/local_history.h"
 
 
-struct nsw32_local_history_window {
-	struct nsw32_corewindow core;
+struct slatew32_local_history_window {
+	struct slatew32_corewindow core;
 
 	struct local_history_session *session;
 };
 
-static struct nsw32_local_history_window *local_history_window = NULL;
+static struct slatew32_local_history_window *local_history_window = NULL;
 
 /**
  * callback for keypress on local_history window
  *
- * \param nsw32_cw The nsw32 core window structure.
+ * \param slatew32_cw The slatew32 core window structure.
  * \param nskey The netsurf key code
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
-nsw32_local_history_key(struct nsw32_corewindow *nsw32_cw, uint32_t nskey)
+static slateerror
+slatew32_local_history_key(struct slatew32_corewindow *slatew32_cw, uint32_t nskey)
 {
-	struct nsw32_local_history_window *lhw;
+	struct slatew32_local_history_window *lhw;
 
-	lhw = (struct nsw32_local_history_window *)nsw32_cw;
+	lhw = (struct slatew32_local_history_window *)slatew32_cw;
 
 	if (local_history_keypress(lhw->session,nskey)) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
-	return NSERROR_NOT_IMPLEMENTED;
+	return SLATEERROR_NOT_IMPLEMENTED;
 }
 
 /**
  * callback for mouse action on local_history window
  *
- * \param nsw32_cw The nsw32 core window structure.
+ * \param slatew32_cw The slatew32 core window structure.
  * \param mouse_state netsurf mouse state on event
  * \param x location of event
  * \param y location of event
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
-nsw32_local_history_mouse(struct nsw32_corewindow *nsw32_cw,
+static slateerror
+slatew32_local_history_mouse(struct slatew32_corewindow *slatew32_cw,
 		    browser_mouse_state mouse_state,
 		    int x, int y)
 {
-	struct nsw32_local_history_window *lhw;
+	struct slatew32_local_history_window *lhw;
 
-	lhw = (struct nsw32_local_history_window *)nsw32_cw;
+	lhw = (struct slatew32_local_history_window *)slatew32_cw;
 
 	local_history_mouse_action(lhw->session, mouse_state, x, y);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * callback on draw event for local_history window
  *
- * \param nsw32_cw The nsw32 core window structure.
+ * \param slatew32_cw The slatew32 core window structure.
  * \param scrollx The horizontal scroll offset.
  * \param scrolly The vertical scroll offset.
  * \param r The rectangle of the window that needs updating.
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
-nsw32_local_history_draw(struct nsw32_corewindow *nsw32_cw,
+static slateerror
+slatew32_local_history_draw(struct slatew32_corewindow *slatew32_cw,
 			  int scrollx,
 			  int scrolly,
 			  struct rect *r)
 {
-	struct nsw32_local_history_window *lhw;
+	struct slatew32_local_history_window *lhw;
 	struct redraw_context ctx = {
 		.interactive = true,
 		.background_images = true,
 		.plot = &win_plotters
 	};
 
-	lhw = (struct nsw32_local_history_window *)nsw32_cw;
+	lhw = (struct slatew32_local_history_window *)slatew32_cw;
 
 	local_history_redraw(lhw->session, -scrollx, -scrolly, r, &ctx);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
-static nserror
-nsw32_local_history_close(struct nsw32_corewindow *nsw32_cw)
+static slateerror
+slatew32_local_history_close(struct slatew32_corewindow *slatew32_cw)
 {
-	ShowWindow(nsw32_cw->hWnd, SW_HIDE);
+	ShowWindow(slatew32_cw->hWnd, SW_HIDE);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
  * Creates the window for the local_history tree.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-static nserror
-nsw32_local_history_init(HINSTANCE hInstance,
+static slateerror
+slatew32_local_history_init(HINSTANCE hInstance,
 			 struct browser_window *bw,
-			 struct nsw32_local_history_window **win_out)
+			 struct slatew32_local_history_window **win_out)
 {
-	struct nsw32_local_history_window *ncwin;
-	nserror res;
+	struct slatew32_local_history_window *ncwin;
+	slateerror res;
 
 	if ((*win_out) != NULL) {
 		res = local_history_set((*win_out)->session, bw);
@@ -145,17 +145,17 @@ nsw32_local_history_init(HINSTANCE hInstance,
 
 	ncwin = calloc(1, sizeof(*ncwin));
 	if (ncwin == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	ncwin->core.title = "NetSurf Local History";
-	ncwin->core.draw = nsw32_local_history_draw;
-	ncwin->core.key = nsw32_local_history_key;
-	ncwin->core.mouse = nsw32_local_history_mouse;
-	ncwin->core.close = nsw32_local_history_close;
+	ncwin->core.draw = slatew32_local_history_draw;
+	ncwin->core.key = slatew32_local_history_key;
+	ncwin->core.mouse = slatew32_local_history_mouse;
+	ncwin->core.close = slatew32_local_history_close;
 
-	res = nsw32_corewindow_init(hInstance, NULL, &ncwin->core);
-	if (res != NSERROR_OK) {
+	res = slatew32_corewindow_init(hInstance, NULL, &ncwin->core);
+	if (res != SLATEERROR_OK) {
 		free(ncwin);
 		return res;
 	}
@@ -163,7 +163,7 @@ nsw32_local_history_init(HINSTANCE hInstance,
 	res = local_history_init((struct core_window *)ncwin,
 				 bw,
 				 &ncwin->session);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		free(ncwin);
 		return res;
 	}
@@ -173,15 +173,15 @@ nsw32_local_history_init(HINSTANCE hInstance,
 	 */
 	*win_out = ncwin;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in windows/local_history.h */
-nserror
-nsw32_local_history_present(HWND hWndParent, struct browser_window *bw)
+slateerror
+slatew32_local_history_present(HWND hWndParent, struct browser_window *bw)
 {
-	nserror res;
+	slateerror res;
 	HINSTANCE hInstance;
 	RECT parentr;
 	int width, height;
@@ -189,8 +189,8 @@ nsw32_local_history_present(HWND hWndParent, struct browser_window *bw)
 
 	hInstance = (HINSTANCE)GetWindowLongPtr(hWndParent, GWLP_HINSTANCE);
 
-	res = nsw32_local_history_init(hInstance, bw, &local_history_window);
-	if (res == NSERROR_OK) {
+	res = slatew32_local_history_init(hInstance, bw, &local_history_window);
+	if (res == SLATEERROR_OK) {
 		GetWindowRect(hWndParent, &parentr);
 
 		/* resize history widget ensureing the drawing area is
@@ -221,9 +221,9 @@ nsw32_local_history_present(HWND hWndParent, struct browser_window *bw)
 
 
 /* exported interface documented in windows/local_history.h */
-nserror nsw32_local_history_hide(void)
+slateerror slatew32_local_history_hide(void)
 {
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 
 	if (local_history_window != NULL) {
 		ShowWindow(local_history_window->core.hWnd, SW_HIDE);
@@ -235,17 +235,17 @@ nserror nsw32_local_history_hide(void)
 }
 
 /* exported interface documented in windows/local_history.h */
-nserror nsw32_local_history_finalise(void)
+slateerror slatew32_local_history_finalise(void)
 {
-	nserror res;
+	slateerror res;
 
 	if (local_history_window == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	res = local_history_fini(local_history_window->session);
-	if (res == NSERROR_OK) {
-		res = nsw32_corewindow_fini(&local_history_window->core);
+	if (res == SLATEERROR_OK) {
+		res = slatew32_corewindow_fini(&local_history_window->core);
 		DestroyWindow(local_history_window->core.hWnd);
 		free(local_history_window);
 		local_history_window = NULL;

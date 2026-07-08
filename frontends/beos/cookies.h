@@ -1,7 +1,7 @@
 /*
  * Copyright 2015 Adrián Arroyo Calle <adrian.arroyocalle@gmail.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,6 @@
 #ifndef __BEOS_COOKIES_H__
 #define __BEOS_COOKIES_H__
 
-void nsbeos_cookies_init();
+void slatebeos_cookies_init();
 
 #endif /* __BEOS_ABOUT_H__ */

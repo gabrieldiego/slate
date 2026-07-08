@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -46,15 +46,15 @@
 
 #include <reaction/reaction_macros.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/messages.h"
 #include "utils/utils.h"
-#include "utils/nsurl.h"
-#include "netsurf/plotters.h"
-#include "netsurf/layout.h"
-#include "netsurf/mouse.h"
-#include "netsurf/window.h"
-#include "netsurf/content.h"
+#include "utils/slateurl.h"
+#include "slate/plotters.h"
+#include "slate/layout.h"
+#include "slate/mouse.h"
+#include "slate/window.h"
+#include "slate/content.h"
 #include "desktop/printer.h"
 #include "desktop/print.h"
 
@@ -287,7 +287,7 @@ void ami_print_ui(struct hlcache_handle *c)
 					GA_RelVerify, TRUE,
 					GA_TabCycle, TRUE,
 					CHOOSER_LabelArray, printers,
-					CHOOSER_Selected, nsoption_int(printer_unit),
+					CHOOSER_Selected, slateoption_int(printer_unit),
 				ChooserEnd,
 				CHILD_Label, LabelObject,
 					LABEL_Text, gadlab[PGID_PRINTER],
@@ -310,7 +310,7 @@ void ami_print_ui(struct hlcache_handle *c)
 						GA_ID, PGID_SCALE,
 						GA_RelVerify, TRUE,
 						GA_TabCycle, TRUE,
-						INTEGER_Number, nsoption_int(print_scale),
+						INTEGER_Number, slateoption_int(print_scale),
 						INTEGER_Minimum, 0,
 						INTEGER_Maximum, 100,
 						INTEGER_Arrows, TRUE,
@@ -380,8 +380,8 @@ static BOOL ami_print_event(void *w)
 						GetAttr(CHOOSER_Selected, pw->gadgets[PGID_PRINTER],
 							(ULONG *)&printer_unit);
 
-						nsoption_set_int(print_scale, print_scale);
-						nsoption_set_int(printer_unit, printer_unit);
+						slateoption_set_int(print_scale, print_scale);
+						slateoption_set_int(printer_unit, printer_unit);
 
 						c = pw->c;
 						ami_print_close(pw);
@@ -408,7 +408,7 @@ static BOOL ami_print_event(void *w)
 void ami_print(struct hlcache_handle *c, int copies)
 {
 	double height;
-	float scale = nsoption_int(print_scale) / 100.0;
+	float scale = slateoption_int(print_scale) / 100.0;
 
 	if(ami_print_info.msgport == NULL)
 		ami_print_init();
@@ -425,7 +425,7 @@ void ami_print(struct hlcache_handle *c, int copies)
 				sizeof(struct IODRPTagsReq)))) return;
 #endif
 
-	if(OpenDevice("printer.device", nsoption_int(printer_unit),
+	if(OpenDevice("printer.device", slateoption_int(printer_unit),
 			(struct IORequest *)ami_print_info.PReq, 0))
 	{
 		amiga_warn_user("CompError","printer.device");
@@ -435,7 +435,7 @@ void ami_print(struct hlcache_handle *c, int copies)
 	ami_print_info.PD = (struct PrinterData *)ami_print_info.PReq->io_Device;
 	ami_print_info.PED = &ami_print_info.PD->pd_SegmentData->ps_PED;
 
-	ami_print_info.ps = print_make_settings(PRINT_DEFAULT, nsurl_access(hlcache_handle_get_url(c)), ami_layout_table);
+	ami_print_info.ps = print_make_settings(PRINT_DEFAULT, slateurl_access(hlcache_handle_get_url(c)), ami_layout_table);
 	ami_print_info.ps->page_width = ami_print_info.PED->ped_MaxXDots;
 	ami_print_info.ps->page_height = ami_print_info.PED->ped_MaxYDots;
 	ami_print_info.ps->scale = scale;

@@ -2,7 +2,7 @@
  * Copyright 2004 John M Bell <jmb202@ecs.soton.ac.uk>
  * Copyright 2005 Adrian Lees <adrianl@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,9 +31,9 @@
 
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/search.h"
-#include "netsurf/content.h"
+#include "slate/browser_window.h"
+#include "slate/search.h"
+#include "slate/content.h"
 #include "desktop/search.h"
 
 #include "riscos/gui.h"

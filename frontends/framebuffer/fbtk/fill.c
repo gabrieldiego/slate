@@ -3,7 +3,7 @@
  *
  * Framebuffer windowing toolkit filled area widget
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,7 +24,7 @@
 #include <libnsfb.h>
 #include <libnsfb_plot.h>
 
-#include "netsurf/browser_window.h"
+#include "slate/browser_window.h"
 
 #include "framebuffer/gui.h"
 #include "framebuffer/fbtk.h"
@@ -35,21 +35,21 @@ static int
 fb_redraw_fill(fbtk_widget_t *widget, fbtk_callback_info *cbi)
 {
 	nsfb_bbox_t bbox;
-	nsfb_t *nsfb;
+	nsfb_t *slatefb;
 
-	nsfb = fbtk_get_nsfb(widget);
+	slatefb = fbtk_get_nsfb(widget);
 
 	fbtk_get_bbox(widget, &bbox);
 
-	nsfb_claim(nsfb, &bbox);
+	nsfb_claim(slatefb, &bbox);
 
 	/* clear background */
 	if ((widget->bg & 0xFF000000) != 0) {
 		/* transparent polygon filling isnt working so fake it */
-		nsfb_plot_rectangle_fill(nsfb, &bbox, widget->bg);
+		nsfb_plot_rectangle_fill(slatefb, &bbox, widget->bg);
 	}
 
-	nsfb_update(nsfb, &bbox);
+	nsfb_update(slatefb, &bbox);
 
 	return 0;
 }

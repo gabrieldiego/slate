@@ -1,7 +1,7 @@
 /*
  * Copyright 2017 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,21 +29,21 @@ struct browser_window;
 /**
  * make the local history window visible.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-nserror fb_local_history_present(fbtk_widget_t *parent, struct browser_window *bw);
+slateerror fb_local_history_present(fbtk_widget_t *parent, struct browser_window *bw);
 
 /**
  * hide the local history window from being visible.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-nserror fb_local_history_hide(void);
+slateerror fb_local_history_hide(void);
 
 /**
  * Destroys the local history window and performs any other necessary cleanup
  * actions.
  */
-nserror fb_local_history_destroy(void);
+slateerror fb_local_history_destroy(void);
 
 #endif

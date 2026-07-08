@@ -1,7 +1,7 @@
 /*
  * Copyright 2006 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,8 +28,8 @@
  * desktop/local_history.h
  */
 
-#ifndef NETSURF_DESKTOP_BROWSER_HISTORY_H
-#define NETSURF_DESKTOP_BROWSER_HISTORY_H
+#ifndef SLATE_DESKTOP_BROWSER_HISTORY_H
+#define SLATE_DESKTOP_BROWSER_HISTORY_H
 
 #include <stdbool.h>
 
@@ -44,9 +44,9 @@ struct bitmap;
  *
  * \param bw A browser window to navigate the history in.
  * \param new_window whether to open in new window.
- * \return NSERROR_OK or error code on faliure.
+ * \return SLATEERROR_OK or error code on faliure.
  */
-nserror browser_window_history_back(struct browser_window *bw, bool new_window);
+slateerror browser_window_history_back(struct browser_window *bw, bool new_window);
 
 
 /**
@@ -54,9 +54,9 @@ nserror browser_window_history_back(struct browser_window *bw, bool new_window);
  *
  * \param bw A browser window to navigate the history in.
  * \param new_window whether to open in new window.
- * \return NSERROR_OK or error code on faliure.
+ * \return SLATEERROR_OK or error code on faliure.
  */
-nserror browser_window_history_forward(struct browser_window *bw, bool new_window);
+slateerror browser_window_history_forward(struct browser_window *bw, bool new_window);
 
 
 /**
@@ -81,9 +81,9 @@ bool browser_window_history_forward_available(struct browser_window *bw);
  *
  * \param bw The browser window
  * \param bitmap The bitmat for the current history entry.
- * \return NSERROR_OK or error code on faliure.
+ * \return SLATEERROR_OK or error code on faliure.
  */
-nserror browser_window_history_get_thumbnail(struct browser_window *bw, struct bitmap **bitmap_out);
+slateerror browser_window_history_get_thumbnail(struct browser_window *bw, struct bitmap **bitmap_out);
 
 /**
  * Callback function type for history enumeration
@@ -137,9 +137,9 @@ void browser_window_history_enumerate_back(const struct browser_window *bw,
  * Returns the URL to a history entry
  *
  * \param entry the history entry to retrieve the URL from
- * \return A referenced nsurl URL
+ * \return A referenced slateurl URL
  */
-struct nsurl *browser_window_history_entry_get_url(const struct history_entry *entry);
+struct slateurl *browser_window_history_entry_get_url(const struct history_entry *entry);
 
 
 /**
@@ -166,8 +166,8 @@ const char *browser_window_history_entry_get_title(const struct history_entry *e
  * \param  bw          browser window
  * \param  entry       entry to open
  * \param  new_window  open entry in new window
- * \return NSERROR_OK or error code on faliure.
+ * \return SLATEERROR_OK or error code on faliure.
  */
-nserror browser_window_history_go(struct browser_window *bw, struct history_entry *entry, bool new_window);
+slateerror browser_window_history_go(struct browser_window *bw, struct history_entry *entry, bool new_window);
 
 #endif

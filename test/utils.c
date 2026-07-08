@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -172,10 +172,10 @@ static TCase *squash_whitespace_case_create(void)
 
 START_TEST(corestrings_init_fini_test)
 {
-	nserror res;
+	slateerror res;
 
 	res = corestrings_init();
-	ck_assert_int_eq(res, NSERROR_OK);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 
 	corestrings_fini();
 }
@@ -183,13 +183,13 @@ END_TEST
 
 START_TEST(corestrings_double_init_test)
 {
-	nserror res;
+	slateerror res;
 
 	res = corestrings_init();
-	ck_assert_int_eq(res, NSERROR_OK);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 
 	res = corestrings_init();
-	ck_assert_int_eq(res, NSERROR_OK);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 
 	corestrings_fini();
 }
@@ -197,10 +197,10 @@ END_TEST
 
 START_TEST(corestrings_double_fini_test)
 {
-	nserror res;
+	slateerror res;
 
 	res = corestrings_init();
-	ck_assert_int_eq(res, NSERROR_OK);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 
 	corestrings_fini();
 
@@ -295,30 +295,30 @@ static TCase *string_utils_case_create(void)
  */
 START_TEST(string_utils_snstrjoin_api_test)
 {
-	nserror res;
+	slateerror res;
 	char outstr[32];
 	char *resstr = &outstr[0];
 	size_t resstrlen = 32;
 
 	/* bad count parameters */
 	res = snstrjoin(&resstr, &resstrlen, ',', 0, "1");
-	ck_assert_int_eq(res, NSERROR_BAD_PARAMETER);
+	ck_assert_int_eq(res, SLATEERROR_BAD_PARAMETER);
 
 	res = snstrjoin(&resstr, &resstrlen, ',', 17, "1");
-	ck_assert_int_eq(res, NSERROR_BAD_PARAMETER);
+	ck_assert_int_eq(res, SLATEERROR_BAD_PARAMETER);
 
 	/* if there is a buffer must set length */
 	res = snstrjoin(&resstr, NULL, ',', 4, "1", "2", "3", "4");
-	ck_assert_int_eq(res, NSERROR_BAD_PARAMETER);
+	ck_assert_int_eq(res, SLATEERROR_BAD_PARAMETER);
 
 	/* null argument value is bad parameter */
 	res = snstrjoin(&resstr, &resstrlen, ',', 4, "1", NULL, "3", "4");
-	ck_assert_int_eq(res, NSERROR_BAD_PARAMETER);
+	ck_assert_int_eq(res, SLATEERROR_BAD_PARAMETER);
 
 	/* attempt to use an undersize buffer */
 	resstrlen = 1;
 	res = snstrjoin(&resstr, &resstrlen, ',', 4, "1", "2", "3", "4");
-	ck_assert_int_eq(res, NSERROR_NOSPACE);
+	ck_assert_int_eq(res, SLATEERROR_NOSPACE);
 
 }
 END_TEST
@@ -329,12 +329,12 @@ END_TEST
  */
 START_TEST(string_utils_snstrjoin_four_test)
 {
-	nserror res;
+	slateerror res;
 	char *resstr = NULL;
 	size_t resstrlen;
 
 	res = snstrjoin(&resstr, &resstrlen, ',', 4, "1", "2", "3", "4");
-	ck_assert_int_eq(res, NSERROR_OK);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 	ck_assert(resstr != NULL);
 	ck_assert_int_eq(resstrlen, 8);
 	ck_assert_str_eq(resstr, "1,2,3,4");
@@ -348,11 +348,11 @@ END_TEST
  */
 START_TEST(string_utils_snstrjoin_three_test)
 {
-	nserror res;
+	slateerror res;
 	char *resstr = NULL;
 
 	res = snstrjoin(&resstr, NULL, ',', 3, "1", "2,", "3");
-	ck_assert_int_eq(res, NSERROR_OK);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 	ck_assert(resstr != NULL);
 	ck_assert_str_eq(resstr, "1,2,3");
 	free(resstr);
@@ -364,13 +364,13 @@ END_TEST
  */
 START_TEST(string_utils_snstrjoin_two_test)
 {
-	nserror res;
+	slateerror res;
 	char outstr[32];
 	char *resstr = &outstr[0];
 	size_t resstrlen = 32;
 
 	res = snstrjoin(&resstr, &resstrlen, ',', 2, "1", "2");
-	ck_assert_int_eq(res, NSERROR_OK);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 	ck_assert(resstr != NULL);
 	ck_assert_int_eq(resstrlen, 4);
 	ck_assert_str_eq(resstr, "1,2");

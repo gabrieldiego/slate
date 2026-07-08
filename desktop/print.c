@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 Adam Blokus <adamblokus@gmail.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,11 +27,11 @@
 #include <dom/dom.h>
 
 #include "utils/utils.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/talloc.h"
-#include "netsurf/content.h"
-#include "netsurf/plotters.h"
+#include "slate/content.h"
+#include "slate/plotters.h"
 #include "content/hlcache.h"
 #include "css/utils.h"
 #include "html/box.h"
@@ -180,7 +180,7 @@ bool print_draw_next_page(const struct printer *printer,
 	struct content_redraw_data data;
 	struct redraw_context ctx = {
 		.interactive = false,
-		.background_images = !nsoption_bool(remove_backgrounds),
+		.background_images = !slateoption_bool(remove_backgrounds),
 		.plot = printer->plotter,
 		.priv = settings->priv
 	};
@@ -300,18 +300,18 @@ struct print_settings *print_make_settings(print_configuration configuration,
 			settings->page_height = DEFAULT_PAGE_HEIGHT;
 			settings->copies = DEFAULT_COPIES;
 
-			settings->scale = (float)nsoption_int(export_scale) / 100;
+			settings->scale = (float)slateoption_int(export_scale) / 100;
 
-			length = INTTOFIX(nsoption_int(margin_left));
+			length = INTTOFIX(slateoption_int(margin_left));
 			settings->margins[MARGINLEFT] = css_unit_len2device_px(
 					NULL, &unit_len_ctx, length, unit);
-			length = INTTOFIX(nsoption_int(margin_right));
+			length = INTTOFIX(slateoption_int(margin_right));
 			settings->margins[MARGINRIGHT] = css_unit_len2device_px(
 					NULL, &unit_len_ctx, length, unit);
-			length = INTTOFIX(nsoption_int(margin_top));
+			length = INTTOFIX(slateoption_int(margin_top));
 			settings->margins[MARGINTOP] = css_unit_len2device_px(
 					NULL, &unit_len_ctx, length, unit);
-			length = INTTOFIX(nsoption_int(margin_bottom));
+			length = INTTOFIX(slateoption_int(margin_bottom));
 			settings->margins[MARGINBOTTOM] = css_unit_len2device_px(
 					NULL, &unit_len_ctx, length, unit);
 			break;

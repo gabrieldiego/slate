@@ -1,7 +1,7 @@
 /*
  * Copyright 2021 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,12 +16,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_QT_FETCH_H
-#define NETSURF_QT_FETCH_H 1
+#ifndef SLATE_QT_FETCH_H
+#define SLATE_QT_FETCH_H 1
 
 /**
  * qt fetch operations table
  */
-extern struct gui_fetch_table *nsqt_fetch_table;
+extern struct gui_fetch_table *slateqt_fetch_table;
 
 #endif

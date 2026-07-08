@@ -1,7 +1,7 @@
 /*
  * Copyright 2004 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,9 +32,9 @@
 
 #include "utils/utils.h"
 #include "utils/errors.h"
-#include "netsurf/content.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/plotters.h"
+#include "slate/content.h"
+#include "slate/bitmap.h"
+#include "slate/plotters.h"
 
 #include "gtk/scaffolding.h"
 #include "gtk/plotters.h"
@@ -175,7 +175,7 @@ static void bitmap_modified(void *vbitmap)
 }
 
 /* exported interface documented in gtk/bitmap.h */
-int nsgtk_bitmap_get_width(void *vbitmap)
+int slategtk_bitmap_get_width(void *vbitmap)
 {
 	struct bitmap *gbitmap = (struct bitmap *)vbitmap;
 	assert(gbitmap);
@@ -184,7 +184,7 @@ int nsgtk_bitmap_get_width(void *vbitmap)
 }
 
 /* exported interface documented in gtk/bitmap.h */
-int nsgtk_bitmap_get_height(void *vbitmap)
+int slategtk_bitmap_get_height(void *vbitmap)
 {
 	struct bitmap *gbitmap = (struct bitmap *)vbitmap;
 	assert(gbitmap);
@@ -199,7 +199,7 @@ int nsgtk_bitmap_get_height(void *vbitmap)
  * \param  content The content to render
  * \return true on success and bitmap updated else false
  */
-static nserror
+static slateerror
 bitmap_render(struct bitmap *bitmap, struct hlcache_handle *content)
 {
 	cairo_surface_t *dsurface = bitmap->surface;
@@ -210,7 +210,7 @@ bitmap_render(struct bitmap *bitmap, struct hlcache_handle *content)
 	struct redraw_context ctx = {
 		.interactive = false,
 		.background_images = true,
-		.plot = &nsgtk_plotters
+		.plot = &slategtk_plotters
 	};
 
 	assert(content);
@@ -274,7 +274,7 @@ bitmap_render(struct bitmap *bitmap, struct hlcache_handle *content)
 
 	cairo_surface_destroy(surface);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -285,10 +285,10 @@ static struct gui_bitmap_table bitmap_table = {
 	.get_opaque = bitmap_get_opaque,
 	.get_buffer = bitmap_get_buffer,
 	.get_rowstride = bitmap_get_rowstride,
-	.get_width = nsgtk_bitmap_get_width,
-	.get_height = nsgtk_bitmap_get_height,
+	.get_width = slategtk_bitmap_get_width,
+	.get_height = slategtk_bitmap_get_height,
 	.modified = bitmap_modified,
 	.render = bitmap_render,
 };
 
-struct gui_bitmap_table *nsgtk_bitmap_table = &bitmap_table;
+struct gui_bitmap_table *slategtk_bitmap_table = &bitmap_table;

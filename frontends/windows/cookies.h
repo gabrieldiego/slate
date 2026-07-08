@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org> 
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
 
 /**
  * \file
- * Interface to win32 cookie viewing using nsw32 core windows.
+ * Interface to win32 cookie viewing using slatew32 core windows.
  *
  * The interface assumes there is only a single cookie window which is
  * presented (shown) when asked for and hidden by usual toolkit
@@ -27,21 +27,21 @@
  * The destructor is called once during browser shutdown
  */
 
-#ifndef NETSURF_WINDOWS_COOKIES_H
-#define NETSURF_WINDOWS_COOKIES_H
+#ifndef SLATE_WINDOWS_COOKIES_H
+#define SLATE_WINDOWS_COOKIES_H
 
 /**
  * make the cookie window visible.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-nserror nsw32_cookies_present(const char *search_term);
+slateerror slatew32_cookies_present(const char *search_term);
 
 /**
  * Free any resources allocated for the cookie window.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-nserror nsw32_cookies_finalise(void);
+slateerror slatew32_cookies_finalise(void);
 
-#endif /* NETSURF_WINDOWS_COOKIES_H */
+#endif /* SLATE_WINDOWS_COOKIES_H */

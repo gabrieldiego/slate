@@ -2,7 +2,7 @@
  * Copyright 2004-2007 James Bursa <bursa@users.sourceforge.net>
  * Copyright 2005 Adrian Lees <adrianl@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,15 +40,15 @@
 #include "utils/config.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "utils/nsoption.h"
-#include "utils/nsurl.h"
+#include "utils/slateoption.h"
+#include "utils/slateurl.h"
 #include "utils/utf8.h"
 #include "utils/utils.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/window.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/content.h"
-#include "netsurf/form.h"
+#include "slate/browser_window.h"
+#include "slate/window.h"
+#include "slate/bitmap.h"
+#include "slate/content.h"
+#include "slate/form.h"
 #include "desktop/hotlist.h"
 #include "desktop/global_history.h"
 #include "desktop/version.h"
@@ -293,14 +293,14 @@ ro_gui_save_create_thumbnail(struct hlcache_handle *h, const char *name)
  */
 static void
 ro_gui_save_set_state(struct hlcache_handle *h, gui_save_type save_type,
-		const nsurl *url, char *leaf_buf, size_t leaf_len,
+		const slateurl *url, char *leaf_buf, size_t leaf_len,
 		char *icon_buf, size_t icon_len)
 {
 	/* filename */
 	const char *name = gui_save_table[save_type].name;
 	bool done = false;
 	char *nice = NULL;
-	nserror err;
+	slateerror err;
 	char *local_name;
 
 	assert(icon_len >= 13);
@@ -330,8 +330,8 @@ ro_gui_save_set_state(struct hlcache_handle *h, gui_save_type save_type,
 
 	/* leafname */
 	if ((url != NULL) &&
-	    (nsurl_nice(url, &nice, nsoption_bool(strip_extensions)) ==
-	     NSERROR_OK)) {
+	    (slateurl_nice(url, &nice, slateoption_bool(strip_extensions)) ==
+	     SLATEERROR_OK)) {
 		size_t i;
 		for (i = 0; nice[i]; i++) {
 			if (nice[i] == '.')
@@ -355,9 +355,9 @@ ro_gui_save_set_state(struct hlcache_handle *h, gui_save_type save_type,
 	leaf_buf[leaf_len - 1] = 0;
 
 	err = utf8_to_local_encoding(name, 0, &local_name);
-	if (err != NSERROR_OK) {
+	if (err != SLATEERROR_OK) {
 		/* badenc should never happen */
-		assert(err != NSERROR_BAD_ENCODING);
+		assert(err != SLATEERROR_BAD_ENCODING);
 		local_name = NULL;
 	}
 
@@ -435,7 +435,7 @@ ro_gui_save_set_state(struct hlcache_handle *h, gui_save_type save_type,
  * \param  title      title (if any), when saving links
  */
 void ro_gui_save_prepare(gui_save_type save_type, struct hlcache_handle *h,
-		char *s, const nsurl *url, const char *title)
+		char *s, const slateurl *url, const char *title)
 {
 	char name_buf[FILENAME_MAX];
 	size_t leaf_offset = 0;
@@ -453,7 +453,7 @@ void ro_gui_save_prepare(gui_save_type save_type, struct hlcache_handle *h,
 
 	gui_save_selection = s;
 	if (url != NULL) {
-		gui_save_url = nsurl_access(url);
+		gui_save_url = slateurl_access(url);
 	} else {
 		gui_save_url = NULL;
 	}
@@ -543,11 +543,11 @@ static void ro_gui_save_drag_end(wimp_dragged *drag, void *data)
 	if (!saving_from_dialog) {
 		/* saving directly from browser window, choose a
 		 * name based upon the URL */
-		nserror err;
+		slateerror err;
 		err = utf8_to_local_encoding(save_leafname, 0, &local_name);
-		if (err != NSERROR_OK) {
+		if (err != SLATEERROR_OK) {
 			/* badenc should never happen */
-			assert(err != NSERROR_BAD_ENCODING);
+			assert(err != SLATEERROR_BAD_ENCODING);
 			local_name = NULL;
 		}
 		name = local_name ? local_name : save_leafname;
@@ -742,7 +742,7 @@ ro_gui_save_link(const char *url, const char *title, link_format format,
 	switch (format) {
 		case LINK_ACORN: /* URI */
 			fprintf(fp, "%s\t%s\n", "URI", "100");
-			fprintf(fp, "\t# NetSurf %s\n\n", netsurf_version);
+			fprintf(fp, "\t# NetSurf %s\n\n", slate_version);
 			fprintf(fp, "\t%s\n", url);
 			if (title)
 				fprintf(fp, "\t%s\n", title);
@@ -883,7 +883,7 @@ static bool ro_gui_save_complete(struct hlcache_handle *h, char *path)
 
 	/* save URL file with original URL */
 	snprintf(buf, sizeof buf, "%s.URL", path);
-	if (!ro_gui_save_link(nsurl_access(hlcache_handle_get_url(h)),
+	if (!ro_gui_save_link(slateurl_access(hlcache_handle_get_url(h)),
 			content_get_title(h), LINK_ANT, buf))
 		return false;
 
@@ -1054,7 +1054,7 @@ ro_gui_save_content(struct hlcache_handle *h, char *path, bool force_overwrite)
 					LINK_TEXT, path);
 
 		case GUI_SAVE_HOTLIST_EXPORT_HTML:
-			if (hotlist_export(path, NULL) != NSERROR_OK)
+			if (hotlist_export(path, NULL) != SLATEERROR_OK)
 				return false;
 			error = xosfile_set_type(path, 0xfaf);
 			if (error)
@@ -1064,7 +1064,7 @@ ro_gui_save_content(struct hlcache_handle *h, char *path, bool force_overwrite)
 				      error->errmess);
 			break;
 		case GUI_SAVE_HISTORY_EXPORT_HTML:
-			if (global_history_export(path, NULL) != NSERROR_OK)
+			if (global_history_export(path, NULL) != SLATEERROR_OK)
 				return false;
 			error = xosfile_set_type(path, 0xfaf);
 			if (error)
@@ -1126,7 +1126,7 @@ bool ro_gui_save_ok(wimp_w w)
 						|| !(pointer.buttons & wimp_CLICK_ADJUST);
 	memcpy(&gui_save_message.data.data_xfer.file_name, path, 1 + strlen(path));
 
-	if (ro_gui_save_content(gui_save_content, path, !nsoption_bool(confirm_overwrite))) {
+	if (ro_gui_save_content(gui_save_content, path, !slateoption_bool(confirm_overwrite))) {
 		ro_gui_save_done();
 		return true;
 	}
@@ -1231,7 +1231,7 @@ void gui_drag_save_selection(struct gui_window *g, const char *selection)
  * \param  g			gui window to save from
  * \
  */
-void ro_gui_drag_save_link(gui_save_type save_type, const nsurl *url,
+void ro_gui_drag_save_link(gui_save_type save_type, const slateurl *url,
 		const char *title, struct gui_window *g)
 {
 	wimp_pointer pointer;
@@ -1243,7 +1243,7 @@ void ro_gui_drag_save_link(gui_save_type save_type, const nsurl *url,
 	xwimp_create_menu(wimp_CLOSE_MENU, 0, 0);
 	ro_gui_dialog_close(dialog_saveas);
 
-	gui_save_url = nsurl_access(url);
+	gui_save_url = slateurl_access(url);
 	gui_save_title = title;
 	gui_save_sourcew = g->window;
 	saving_from_dialog = false;
@@ -1454,7 +1454,7 @@ void ro_gui_save_datasave_ack(wimp_message *message)
 	if (message->data.data_xfer.est_size == -1)
 		force_overwrite = true;
 	else
-		force_overwrite = !nsoption_bool(confirm_overwrite);
+		force_overwrite = !slateoption_bool(confirm_overwrite);
 
 	if (ro_gui_save_content(h, path, force_overwrite))
 		ro_gui_save_done();

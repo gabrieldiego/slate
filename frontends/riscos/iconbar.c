@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Stephen Fryatt <stevef@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,11 +33,11 @@
 #include <oslib/osbyte.h>
 #include <oslib/wimp.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "utils/nsurl.h"
-#include "netsurf/browser_window.h"
+#include "utils/slateurl.h"
+#include "slate/browser_window.h"
 
 #include "riscos/gui.h"
 #include "riscos/configure.h"
@@ -124,27 +124,27 @@ void ro_gui_iconbar_initialise(void)
 bool ro_gui_iconbar_click(wimp_pointer *pointer)
 {
 	int key_down = 0;
-	nsurl *url;
-	nserror error;
+	slateurl *url;
+	slateerror error;
 
 	switch (pointer->buttons) {
 	case wimp_CLICK_SELECT:
-		if (nsoption_charp(homepage_url) != NULL) {
-			error = nsurl_create(nsoption_charp(homepage_url), &url);
+		if (slateoption_charp(homepage_url) != NULL) {
+			error = slateurl_create(slateoption_charp(homepage_url), &url);
 		} else {
-			error = nsurl_create(NETSURF_HOMEPAGE, &url);
+			error = slateurl_create(SLATE_HOMEPAGE, &url);
 		}
 
 		/* create an initial browser window */
-		if (error == NSERROR_OK) {
+		if (error == SLATEERROR_OK) {
 			error = browser_window_create(BW_CREATE_HISTORY,
 					url,
 					NULL,
 					NULL,
 					NULL);
-			nsurl_unref(url);
+			slateurl_unref(url);
 		}
-		if (error != NSERROR_OK) {
+		if (error != SLATEERROR_OK) {
 			ro_warn_user(messages_get_errorcode(error), 0);
 		}
 		break;
@@ -199,24 +199,24 @@ void ro_gui_iconbar_menu_warning(wimp_w w, wimp_i i, wimp_menu *menu,
 bool ro_gui_iconbar_menu_select(wimp_w w, wimp_i i, wimp_menu *menu,
 		wimp_selection *selection, menu_action action)
 {
-	nsurl *url;
-	nserror error;
+	slateurl *url;
+	slateerror error;
 
 	if (w != wimp_ICON_BAR || i != wimp_ICON_WINDOW)
 		return false;
 
 	switch (action) {
 	case HELP_OPEN_CONTENTS:
-		error = nsurl_create("https://www.netsurf-browser.org/documentation/", &url);
-		if (error == NSERROR_OK) {
+		error = slateurl_create("https://www.slate-browser.org/documentation/", &url);
+		if (error == SLATEERROR_OK) {
 			error = browser_window_create(BW_CREATE_HISTORY,
 					url,
 					NULL,
 					NULL,
 					NULL);
-			nsurl_unref(url);
+			slateurl_unref(url);
 		}
-		if (error != NSERROR_OK) {
+		if (error != SLATEERROR_OK) {
 			ro_warn_user(messages_get_errorcode(error), 0);
 		}
 		return true;

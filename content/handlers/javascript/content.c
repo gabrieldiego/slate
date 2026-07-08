@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 Vincent Sanders <vince@kyllikki.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,28 +40,28 @@ typedef struct javascript_content {
 	struct content base;
 } javascript_content;
 
-static nserror javascript_create(const content_handler *handler,
+static slateerror javascript_create(const content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		llcache_handle *llcache, const char *fallback_charset,
 		bool quirks, struct content **c)
 {
 	javascript_content *script;
-	nserror error;
+	slateerror error;
 
 	script = calloc(1, sizeof(javascript_content));
 	if (script == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__init(&script->base, handler, imime_type, params,
 			llcache, fallback_charset, quirks);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(script);
 		return error;
 	}
 
 	*c = (struct content *) script;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static bool javascript_convert(struct content *c)
@@ -72,25 +72,25 @@ static bool javascript_convert(struct content *c)
 	return true;
 }
 
-static nserror 
+static slateerror 
 javascript_clone(const struct content *old, struct content **newc)
 {
 	javascript_content *script;
-	nserror error;
+	slateerror error;
 
 	script = calloc(1, sizeof(javascript_content));
 	if (script == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__clone(old, &script->base);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&script->base);
 		return error;
 	}
 
 	*newc = (struct content *) script;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void javascript_destroy(struct content *c)

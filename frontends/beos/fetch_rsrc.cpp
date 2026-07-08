@@ -37,12 +37,12 @@
 
 extern "C" {
 #include "utils/config.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/messages.h"
 #include "utils/utils.h"
 #include "utils/ring.h"
-#include "netsurf/inttypes.h"
+#include "slate/inttypes.h"
 #include "content/fetch.h"
 #include "content/fetchers.h"
 }
@@ -83,12 +83,12 @@ static void fetch_rsrc_finalise(lwc_string *scheme)
 	      lwc_string_data(scheme));
 }
 
-static bool fetch_rsrc_can_fetch(const nsurl *url)
+static bool fetch_rsrc_can_fetch(const slateurl *url)
 {
 	return true;
 }
 
-static void *fetch_rsrc_setup(struct fetch *parent_fetch, nsurl *url,
+static void *fetch_rsrc_setup(struct fetch *parent_fetch, slateurl *url,
 		 bool only_2xx, bool downgrade_tls, const char *post_urlenc,
 		 const struct fetch_multipart_data *post_multipart,
 		 const char **headers)
@@ -100,14 +100,14 @@ static void *fetch_rsrc_setup(struct fetch *parent_fetch, nsurl *url,
 		return NULL;
 		
 	ctx->parent_fetch = parent_fetch;
-	/* TODO: keep as nsurl to avoid copy */
-	ctx->url = (char *)malloc(nsurl_length(url) + 1);
+	/* TODO: keep as slateurl to avoid copy */
+	ctx->url = (char *)malloc(slateurl_length(url) + 1);
 	
 	if (ctx->url == NULL) {
 		free(ctx);
 		return NULL;
 	}
-	memcpy(ctx->url, nsurl_access(url), nsurl_length(url) + 1);
+	memcpy(ctx->url, slateurl_access(url), slateurl_length(url) + 1);
 
 	RING_INSERT(ring, ctx);
 	
@@ -341,7 +341,7 @@ static void fetch_rsrc_poll(lwc_string *scheme)
 static int find_app_resources()
 {
 	char path[B_PATH_NAME_LENGTH];
-	if (nsbeos_find_app_path(path) < B_OK)
+	if (slatebeos_find_app_path(path) < B_OK)
 		return B_ERROR;
 	//fprintf(stderr, "loading resources from '%s'\n", path);
 
@@ -367,7 +367,7 @@ void fetch_rsrc_register(void)
 {
 	lwc_string *scheme;
 	int err;
-	nserror ret;
+	slateerror ret;
 
 	const struct fetcher_operation_table fetcher_ops_rsrc = {
 		fetch_rsrc_initialise,
@@ -394,7 +394,7 @@ void fetch_rsrc_register(void)
 	}
 
 	ret = fetcher_add(scheme, &fetcher_ops_rsrc);
-        if (ret != NSERROR_OK) {
+        if (ret != SLATEERROR_OK) {
 		die("unable to add rsrc fetcher.");
         }
 }

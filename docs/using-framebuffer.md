@@ -65,7 +65,7 @@ Overview
 Running
 =======
 
-  The framebuffer frontend is executed with the nsfb command. This
+  The framebuffer frontend is executed with the slatefb command. This
    command takes parameters to control the operation of the
    browser. The 'Configuring' section describes the available options
    in detail.
@@ -74,16 +74,16 @@ Running
    switch, the available display surfaces can be shown by passing '?'
    as the parameter.
 
-    $ ./nsfb -f ?
-    ./nsfb: Valid surface names are:
-    ./nsfb: ram
-    ./nsfb: sdl
-    ./nsfb: x
-    ./nsfb: vnc
-    ./nsfb: wld
+    $ ./slatefb -f ?
+    ./slatefb: Valid surface names are:
+    ./slatefb: ram
+    ./slatefb: sdl
+    ./slatefb: x
+    ./slatefb: vnc
+    ./slatefb: wld
 
   The avilable surfaces are dependant on what was compiled into the
-   nsfb library.
+   slatefb library.
 
   Common issues
   -------------
@@ -123,9 +123,9 @@ Configuring
 
   As with any NetSurf frontend run-time configuration is read from a
    "Choices" file. This file is a simple key:value list and by default
-   is located in "${HOME}/.netsurf/Choices".
+   is located in "${HOME}/.slate/Choices".
 
-  The standard [core user options](docs/netsurf-options.md) are
+  The standard [core user options](docs/slate-options.md) are
    available. In addition to the core options there are a number of
    values to control specific aspects of the framebuffer version.
 

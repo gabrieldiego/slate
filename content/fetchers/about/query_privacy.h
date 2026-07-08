@@ -21,8 +21,8 @@
  * about scheme query privacy handler interface
  */
 
-#ifndef NETSURF_CONTENT_FETCHERS_ABOUT_QUERY_PRIVACY_H
-#define NETSURF_CONTENT_FETCHERS_ABOUT_QUERY_PRIVACY_H
+#ifndef SLATE_CONTENT_FETCHERS_ABOUT_QUERY_PRIVACY_H
+#define SLATE_CONTENT_FETCHERS_ABOUT_QUERY_PRIVACY_H
 
 /**
  * Handler to generate about scheme query privacy page.

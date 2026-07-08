@@ -138,8 +138,8 @@ LDFLAGS += -lz
 # define additional CFLAGS and LDFLAGS requirements for pkg-configed libs
 # We only need to define the ones where the feature name doesn't exactly
 # match the WITH_FEATURE flag
-NETSURF_FEATURE_NSSVG_CFLAGS := -DWITH_NS_SVG
-NETSURF_FEATURE_ROSPRITE_CFLAGS := -DWITH_NSSPRITE
+SLATE_FEATURE_NSSVG_CFLAGS := -DWITH_NS_SVG
+SLATE_FEATURE_ROSPRITE_CFLAGS := -DWITH_NSSPRITE
 
 # libcurl and openssl ordering matters as if libcurl requires ssl it
 #  needs to come first in link order to ensure its symbols can be
@@ -169,27 +169,27 @@ $(eval $(call pkg_config_find_and_add_enabled,NSLOG,libnslog,LOG))
 INCLUDE_DIRS :=. include $(OBJROOT)
 
 # export the user agent format
-CFLAGS += -DNETSURF_UA_FORMAT_STRING=\"$(NETSURF_UA_FORMAT_STRING)\"
-CXXFLAGS += -DNETSURF_UA_FORMAT_STRING=\"$(NETSURF_UA_FORMAT_STRING)\"
+CFLAGS += -DSLATE_UA_FORMAT_STRING=\"$(SLATE_UA_FORMAT_STRING)\"
+CXXFLAGS += -DSLATE_UA_FORMAT_STRING=\"$(SLATE_UA_FORMAT_STRING)\"
 
 # set the default homepage to use
-CFLAGS += -DNETSURF_HOMEPAGE=\"$(NETSURF_HOMEPAGE)\"
-CXXFLAGS += -DNETSURF_HOMEPAGE=\"$(NETSURF_HOMEPAGE)\"
+CFLAGS += -DSLATE_HOMEPAGE=\"$(SLATE_HOMEPAGE)\"
+CXXFLAGS += -DSLATE_HOMEPAGE=\"$(SLATE_HOMEPAGE)\"
 
 # set the logging level
-CFLAGS += -DNETSURF_LOG_LEVEL=$(NETSURF_LOG_LEVEL)
-CXXFLAGS += -DNETSURF_LOG_LEVEL=$(NETSURF_LOG_LEVEL)
+CFLAGS += -DSLATE_LOG_LEVEL=$(SLATE_LOG_LEVEL)
+CXXFLAGS += -DSLATE_LOG_LEVEL=$(SLATE_LOG_LEVEL)
 
 # If we're building the sanitize goal, override things
 ifneq ($(filter-out sanitize,$(MAKECMDGOALS)),$(MAKECMDGOALS))
-override NETSURF_USE_SANITIZER := YES
-override NETSURF_RECOVER_SANITIZERS := NO
+override SLATE_USE_SANITIZER := YES
+override SLATE_RECOVER_SANITIZERS := NO
 endif
 
 # If we're going to use the sanitizer set it up
-ifeq ($(NETSURF_USE_SANITIZER),YES)
+ifeq ($(SLATE_USE_SANITIZER),YES)
 SAN_FLAGS := -fsanitize=address -fsanitize=undefined
-ifeq ($(NETSURF_RECOVER_SANITIZERS),NO)
+ifeq ($(SLATE_RECOVER_SANITIZERS),NO)
 SAN_FLAGS += -fno-sanitize-recover
 endif
 else
@@ -200,11 +200,11 @@ CXXFLAGS += $(SAN_FLAGS)
 LDFLAGS += $(SAN_FLAGS)
 
 # and the logging filter
-CFLAGS += -DNETSURF_BUILTIN_LOG_FILTER=\"$(NETSURF_BUILTIN_LOG_FILTER)\"
-CXXFLAGS += -DNETSURF_BUILTIN_LOG_FILTER=\"$(NETSURF_BUILTIN_LOG_FILTER)\"
+CFLAGS += -DSLATE_BUILTIN_LOG_FILTER=\"$(SLATE_BUILTIN_LOG_FILTER)\"
+CXXFLAGS += -DSLATE_BUILTIN_LOG_FILTER=\"$(SLATE_BUILTIN_LOG_FILTER)\"
 # and the verbose logging filter
-CFLAGS += -DNETSURF_BUILTIN_VERBOSE_FILTER=\"$(NETSURF_BUILTIN_VERBOSE_FILTER)\"
-CXXFLAGS += -DNETSURF_BUILTIN_VERBOSE_FILTER=\"$(NETSURF_BUILTIN_VERBOSE_FILTER)\"
+CFLAGS += -DSLATE_BUILTIN_VERBOSE_FILTER=\"$(SLATE_BUILTIN_VERBOSE_FILTER)\"
+CXXFLAGS += -DSLATE_BUILTIN_VERBOSE_FILTER=\"$(SLATE_BUILTIN_VERBOSE_FILTER)\"
 
 # Determine if the C compiler supports statement expressions
 # This is needed to permit certain optimisations in our library headers
@@ -264,8 +264,8 @@ include utils/Makefile
 # http utility sources
 include utils/http/Makefile
 
-# nsurl utility sources
-include utils/nsurl/Makefile
+# slateurl utility sources
+include utils/slateurl/Makefile
 
 # Desktop sources
 include desktop/Makefile
@@ -276,7 +276,7 @@ S_COMMON := \
 	$(S_FETCHERS) \
 	$(S_UTILS) \
 	$(S_HTTP) \
-	$(S_NSURL) \
+	$(S_SLATEURL) \
 	$(S_DESKTOP) \
 	$(S_JAVASCRIPT_BINDING)
 
@@ -329,7 +329,7 @@ endif
 	$(VQ)echo "LINKDEPS: $(EXETARGET)"
 	$(Q)echo -n "$(EXETARGET) $(DEPROOT)/link.d: " > $(DEPROOT)/link.d
 	$(Q)$(PERL) tools/linktrace-to-depfile.pl < $(DEPROOT)/link-raw.d >> $(DEPROOT)/link.d
-ifeq ($(NETSURF_STRIP_BINARY),YES)
+ifeq ($(SLATE_STRIP_BINARY),YES)
 	$(VQ)echo "   STRIP: $(EXETARGET)"
 	$(Q)$(STRIP) $(EXETARGET)
 endif

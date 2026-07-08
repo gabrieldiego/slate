@@ -19,7 +19,7 @@ to a new operating system platform.
 
 It is recommend, in the strongest terms, that if the prospective
 developer is porting to both a new platform and toolkit that they
-*start* by getting the [monkey](docs/using-monkey.md) frontend
+*start* by getting the [Jotter](docs/using-jotter.md) frontend
 building and passing at least the basic integration tests on their
 platform.
 
@@ -110,7 +110,7 @@ NetSurf, these operations are listed in tables.
 The operation tables should be registered with the NetSurf core as one
 of the first operations of the frontend code. The functions in these
 tables (and the tables themselves) must remain valid until
-`netsurf_exit()` is called.
+`slate_exit()` is called.
 
 There are (currently) twelve sets of operation tables held in separate
 structures. Only five of these are mandatory (misc, window, fetch,
@@ -184,7 +184,7 @@ operations:
 Rather than attempt to describe every aspect of an implementation we
 will rather work from an actual minimal example for the FLTK toolkit.
 
-This is available as a single commit (`git show 28ecbf82ed3024f51be4c87928fd91bacfc15cbc`) in the NetSurf source repository. Alternatively it can be [viewed in a web browser](https://git.netsurf-browser.org/netsurf.git/commit/?h=vince/fltk&id=28ecbf82ed3024f51be4c87928fd91bacfc15cbc).
+This is available as a single commit (`git show 28ecbf82ed3024f51be4c87928fd91bacfc15cbc`) in the NetSurf source repository. Alternatively it can be [viewed in a web browser](https://git.slate-browser.org/netsurf.git/commit/?h=vince/fltk&id=28ecbf82ed3024f51be4c87928fd91bacfc15cbc).
 
 This represents the absolute minimum implementation to get a browser
 window on screen (and be able to click visible links). It is
@@ -193,35 +193,35 @@ equivalent implementation in other languages should be obvious.
 
 ## Building
 
-The [frontends/Makefile.hts](https://git.netsurf-browser.org/netsurf.git/diff/frontends/Makefile.hts?h=vince/fltk&id=28ecbf82ed3024f51be4c87928fd91bacfc15cbc)
+The [frontends/Makefile.hts](https://git.slate-browser.org/netsurf.git/diff/frontends/Makefile.hts?h=vince/fltk&id=28ecbf82ed3024f51be4c87928fd91bacfc15cbc)
 had the fltk target added to the VLDTARGET variable. This allows
 NetSurf to be built for this frontend with `make TARGET=fltk`
 
 As previously described the three GNU Make files are added:
 
-[Makefile](https://git.netsurf-browser.org/netsurf.git/diff/frontends/fltk/Makefile?h=vince/fltk&id=28ecbf82ed3024f51be4c87928fd91bacfc15cbc)
+[Makefile](https://git.slate-browser.org/netsurf.git/diff/frontends/fltk/Makefile?h=vince/fltk&id=28ecbf82ed3024f51be4c87928fd91bacfc15cbc)
 this shows how the flags are extended to add the fltk headers and
 library. Additionally the list of sources are built here, as the
 comment suggests it is important the SOURCES variable is not expanded
 here so the S_FRONTEND variable is used to allow expansion at the
 correct time in the build process.
 
-[Makefile.defaults](https://git.netsurf-browser.org/netsurf.git/diff/frontends/fltk/Makefile.defaults?h=vince/fltk&id=28ecbf82ed3024f51be4c87928fd91bacfc15cbc) 
+[Makefile.defaults](https://git.slate-browser.org/netsurf.git/diff/frontends/fltk/Makefile.defaults?h=vince/fltk&id=28ecbf82ed3024f51be4c87928fd91bacfc15cbc) 
 has the default setting to control the build parameters and file locations. These can be overridden by the `Makefile.config` at compile time.
 
-[Makefile.tools](https://git.netsurf-browser.org/netsurf.git/diff/frontends/fltk/Makefile.tools?h=vince/fltk&id=28ecbf82ed3024f51be4c87928fd91bacfc15cbc)
+[Makefile.tools](https://git.slate-browser.org/netsurf.git/diff/frontends/fltk/Makefile.tools?h=vince/fltk&id=28ecbf82ed3024f51be4c87928fd91bacfc15cbc)
 allows the configuration of additional tools necessary to build for the target as a minimum pkg-config is usually required to find libraries.
  
 ## Program entry
 
-In our example program entry is the classical `main()` in the [main.cpp](https://git.netsurf-browser.org/netsurf.git/diff/frontends/fltk/main.cpp?h=vince/fltk&id=28ecbf82ed3024f51be4c87928fd91bacfc15cbc) module.
+In our example program entry is the classical `main()` in the [main.cpp](https://git.slate-browser.org/netsurf.git/diff/frontends/fltk/main.cpp?h=vince/fltk&id=28ecbf82ed3024f51be4c87928fd91bacfc15cbc) module.
 
 This implements the six stage process outlined previously. 
 
 ### Operations table registration
 
-The `netsurf_table` structure is initialised and passed to
-`netsurf_register()`. It should be noted that the approach taken here
+The `slate_table` structure is initialised and passed to
+`slate_register()`. It should be noted that the approach taken here
 and in most frontends is to have a source module for each operation
 table. The header for each module exposes just the pointer to the
 individual operation set, this allows for all the operation functions to
@@ -240,7 +240,7 @@ message translation system here.
 
 ### NetSurf initialisation
 
-This is simply the call to `netsurf_init()` from this point the
+This is simply the call to `slate_init()` from this point the
 browser is fully operational and operations can and will be called.
 
 ### Frontend specific startup
@@ -256,7 +256,7 @@ example here is a good start.
 
 ### Toolkit run loop
 
-The function `nsfltk_run()` runs the toolkit event loop. In this case it is using the generic scheduling in the [misc.cpp](https://git.netsurf-browser.org/netsurf.git/diff/frontends/fltk/misc.cpp?h=vince/fltk&id=28ecbf82ed3024f51be4c87928fd91bacfc15cbc) module to ensure callbacks get made at the appropriate time.
+The function `nsfltk_run()` runs the toolkit event loop. In this case it is using the generic scheduling in the [misc.cpp](https://git.slate-browser.org/netsurf.git/diff/frontends/fltk/misc.cpp?h=vince/fltk&id=28ecbf82ed3024f51be4c87928fd91bacfc15cbc) module to ensure callbacks get made at the appropriate time.
 
 There is a `nsfltk_done` boolean global checked here so when all the
 browser windows are closed the program will exit.
@@ -272,11 +272,11 @@ activity based fetch progress instead of the fallback polling method.
 ### finalisation
 
 This simply finalises the browser stopping all activity and cleaning
-up any resource usage. After the call to `netsurf_exit()` no more
+up any resource usage. After the call to `slate_exit()` no more
 operation calls will be made and all caches used by the core will be
 flushed.
 
-If user option changes are to be made persistent `nsoption_finalise()`
+If user option changes are to be made persistent `slateoption_finalise()`
 should be called.
 
 The finalisation of logging will ensure that any output buffers are
@@ -284,7 +284,7 @@ flushed.
 
 ## The window operation table
 
-Amongst all the boilerplate of the default implementation the only novel code is in the window operation table in the [window.cpp](https://git.netsurf-browser.org/netsurf.git/diff/frontends/fltk/window.cpp?h=vince/fltk&id=28ecbf82ed3024f51be4c87928fd91bacfc15cbc) module.
+Amongst all the boilerplate of the default implementation the only novel code is in the window operation table in the [window.cpp](https://git.slate-browser.org/netsurf.git/diff/frontends/fltk/window.cpp?h=vince/fltk&id=28ecbf82ed3024f51be4c87928fd91bacfc15cbc) module.
 
 ### `nsfltk_window_create`
 
@@ -333,7 +333,7 @@ This obtains the fltk widget width and height and returns them.
 
 When the `NS_Widget::draw` method was discussed it was noted that a
 plotting context is built containing an operation table. That table is
-implemented in [plotters.cpp](https://git.netsurf-browser.org/netsurf.git/diff/frontends/fltk/plotters.cpp?h=vince/fltk&id=28ecbf82ed3024f51be4c87928fd91bacfc15cbc)
+implemented in [plotters.cpp](https://git.slate-browser.org/netsurf.git/diff/frontends/fltk/plotters.cpp?h=vince/fltk&id=28ecbf82ed3024f51be4c87928fd91bacfc15cbc)
 
 The implementation here is as minimal as can be, only line, rectangle
 and text have any implementation at all and even that simply sets a
@@ -348,7 +348,7 @@ the frontend.
 
 ## Improving the user interface
 
-The example discussion is based on a commit (`git show bc546388ce428be5cfa37cecb174d549c7b30320`) in the NetSurf source repository. Alternatively it can be [viewed in a web browser](https://git.netsurf-browser.org/netsurf.git/commit/?h=vince/fltk&id=bc546388ce428be5cfa37cecb174d549c7b30320).
+The example discussion is based on a commit (`git show bc546388ce428be5cfa37cecb174d549c7b30320`) in the NetSurf source repository. Alternatively it can be [viewed in a web browser](https://git.slate-browser.org/netsurf.git/commit/?h=vince/fltk&id=bc546388ce428be5cfa37cecb174d549c7b30320).
 
 This changes a single module `window.cpp` where the `NS_Window`,
 `NS_Widget` and `NS_URLBar` classes are used to create a basic

@@ -1,7 +1,7 @@
 /*
  * Copyright 2003 John M Bell <jmb202@ecs.soton.ac.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,8 +33,8 @@
 #include "utils/log.h"
 #include "utils/messages.h"
 #include "utils/utils.h"
-#include "netsurf/plotters.h"
-#include "netsurf/content.h"
+#include "slate/plotters.h"
+#include "slate/content.h"
 #include "content/content.h"
 #include "content/content_protected.h"
 #include "content/content_factory.h"
@@ -49,7 +49,7 @@ typedef struct draw_content {
 	int x0, y0;
 } draw_content;
 
-static nserror draw_create(const content_handler *handler,
+static slateerror draw_create(const content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		llcache_handle *llcache, const char *fallback_charset,
 		bool quirks, struct content **c);
@@ -57,7 +57,7 @@ static bool draw_convert(struct content *c);
 static void draw_destroy(struct content *c);
 static bool draw_redraw(struct content *c, struct content_redraw_data *data,
 		const struct rect *clip, const struct redraw_context *ctx);
-static nserror draw_clone(const struct content *old, struct content **newc);
+static slateerror draw_clone(const struct content *old, struct content **newc);
 static content_type draw_content_type(void);
 
 static const content_handler draw_content_handler = {
@@ -79,28 +79,28 @@ static const char *draw_types[] = {
 
 CONTENT_FACTORY_REGISTER_TYPES(draw, draw_types, draw_content_handler)
 
-nserror draw_create(const content_handler *handler,
+slateerror draw_create(const content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		llcache_handle *llcache, const char *fallback_charset,
 		bool quirks, struct content **c)
 {
 	draw_content *draw;
-	nserror error;
+	slateerror error;
 
 	draw = calloc(1, sizeof(draw_content));
 	if (draw == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__init(&draw->base, handler, imime_type, params,
 			llcache, fallback_charset, quirks);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(draw);
 		return error;
 	}
 
 	*c = (struct content *) draw;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -130,7 +130,7 @@ bool draw_convert(struct content *c)
 	if (error) {
 		NSLOG(netsurf, INFO, "xdrawfile_bbox: 0x%x: %s",
 		      error->errnum, error->errmess);
-		msg_data.errordata.errorcode = NSERROR_UNKNOWN;
+		msg_data.errordata.errorcode = SLATEERROR_UNKNOWN;
 		msg_data.errordata.errormsg = error->errmess;
 		content_broadcast(c, CONTENT_MSG_ERROR, &msg_data);
 		return false;
@@ -150,7 +150,7 @@ bool draw_convert(struct content *c)
 	draw->y0 = bbox.y0;
 
 	title = messages_get_buff("DrawTitle",
-			nsurl_access_leaf(llcache_handle_get_url(c->llcache)),
+			slateurl_access_leaf(llcache_handle_get_url(c->llcache)),
 			c->width, c->height);
 	if (title != NULL) {
 		content__set_title(c, title);
@@ -188,7 +188,7 @@ bool draw_redraw(struct content *c, struct content_redraw_data *data,
 	const void *src_data;
 	os_error *error;
 
-	if (ctx->plot->flush && (ctx->plot->flush(ctx) != NSERROR_OK))
+	if (ctx->plot->flush && (ctx->plot->flush(ctx) != SLATEERROR_OK))
 		return false;
 
 	if (!c->width || !c->height)
@@ -224,17 +224,17 @@ bool draw_redraw(struct content *c, struct content_redraw_data *data,
  * Clone a CONTENT_DRAW
  */
 
-nserror draw_clone(const struct content *old, struct content **newc)
+slateerror draw_clone(const struct content *old, struct content **newc)
 {
 	draw_content *draw;
-	nserror error;
+	slateerror error;
 
 	draw = calloc(1, sizeof(draw_content));
 	if (draw == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__clone(old, &draw->base);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&draw->base);
 		return error;
 	}
@@ -244,13 +244,13 @@ nserror draw_clone(const struct content *old, struct content **newc)
 			old->status == CONTENT_STATUS_DONE) {
 		if (draw_convert(&draw->base) == false) {
 			content_destroy(&draw->base);
-			return NSERROR_CLONE_FAILED;
+			return SLATEERROR_CLONE_FAILED;
 		}
 	}
 
 	*newc = (struct content *) draw;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 content_type draw_content_type(void)

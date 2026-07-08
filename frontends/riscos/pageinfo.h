@@ -1,7 +1,7 @@
 /*
  * Copyright 2020 Vincent Sanders <vince@nesurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,28 +21,28 @@
  * Interface to page info core window for RISC OS
  */
 
-#ifndef NETSURF_RISCOS_PAGEINFO_H_
-#define NETSURF_RISCOS_PAGEINFO_H_
+#ifndef SLATE_RISCOS_PAGEINFO_H_
+#define SLATE_RISCOS_PAGEINFO_H_
 
 struct gui_window;
 
 /**
  * initialise the pageinfo window template ready for subsequent use.
  */
-nserror ro_gui_pageinfo_initialise(void);
+slateerror ro_gui_pageinfo_initialise(void);
 
 /**
  * make the pageinfo window visible.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-nserror ro_gui_pageinfo_present(struct gui_window *gw);
+slateerror ro_gui_pageinfo_present(struct gui_window *gw);
 
 /**
  * Free any resources allocated for the page info window.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-nserror ro_gui_pageinfo_finalise(void);
+slateerror ro_gui_pageinfo_finalise(void);
 
 #endif

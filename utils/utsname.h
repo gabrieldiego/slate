@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Vincent Sanders <vince@kyllikki.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * \brief Interface to uts API to get name and information about current kernel.
  */
 
-#ifndef _NETSURF_UTILS_UTSNAME_H_
-#define _NETSURF_UTILS_UTSNAME_H_
+#ifndef _SLATE_UTILS_UTSNAME_H_
+#define _SLATE_UTILS_UTSNAME_H_
 
 #ifdef HAVE_UTSNAME
 #include <sys/utsname.h>

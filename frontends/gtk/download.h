@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 Michael Lester <element3260@gmail.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,21 +22,21 @@
 /**
  * download operation table for gtk
  */
-extern struct gui_download_table *nsgtk_download_table;
+extern struct gui_download_table *slategtk_download_table;
 
 
 /**
  * Initialise download window ready for use.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-nserror nsgtk_download_init(void);
+slateerror slategtk_download_init(void);
 
 
 /**
  * Destroy download window
  */
-void nsgtk_download_destroy(void);
+void slategtk_download_destroy(void);
 
 
 /**
@@ -45,7 +45,7 @@ void nsgtk_download_destroy(void);
  * \param parent The parent window for the prompt dialog.
  * \return true if the user wants to continue else false.
  */
-bool nsgtk_check_for_downloads(GtkWindow *parent);
+bool slategtk_check_for_downloads(GtkWindow *parent);
 
 
 /**
@@ -53,6 +53,6 @@ bool nsgtk_check_for_downloads(GtkWindow *parent);
  *
  * \param parent The parent window to use for the shown window
  */
-void nsgtk_download_show(GtkWindow *parent);
+void slategtk_download_show(GtkWindow *parent);
 
 #endif

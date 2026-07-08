@@ -1,7 +1,7 @@
 /*
  * Copyright 2005 Adrian Lees <adrianl@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,8 +36,8 @@
 #include "utils/log.h"
 #include "utils/messages.h"
 #include "utils/utils.h"
-#include "netsurf/plotters.h"
-#include "netsurf/content.h"
+#include "slate/plotters.h"
+#include "slate/content.h"
 #include "content/content.h"
 #include "content/content_protected.h"
 #include "content/content_factory.h"
@@ -109,7 +109,7 @@ extern os_error *awrender_render(const char *doc,
 		void *routine,
 		void *workspace);
 
-static nserror artworks_create(const content_handler *handler,
+static slateerror artworks_create(const content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		llcache_handle *llcache, const char *fallback_charset,
 		bool quirks, struct content **c);
@@ -117,7 +117,7 @@ static bool artworks_convert(struct content *c);
 static void artworks_destroy(struct content *c);
 static bool artworks_redraw(struct content *c, struct content_redraw_data *data,
 		const struct rect *clip, const struct redraw_context *ctx);
-static nserror artworks_clone(const struct content *old, struct content **newc);
+static slateerror artworks_clone(const struct content *old, struct content **newc);
 static content_type artworks_content_type(void);
 
 static const content_handler artworks_content_handler = {
@@ -137,28 +137,28 @@ static const char *artworks_types[] = {
 CONTENT_FACTORY_REGISTER_TYPES(artworks, artworks_types, 
 		artworks_content_handler)
 
-nserror artworks_create(const content_handler *handler,
+slateerror artworks_create(const content_handler *handler,
 		lwc_string *imime_type, const struct http_parameter *params,
 		llcache_handle *llcache, const char *fallback_charset,
 		bool quirks, struct content **c)
 {
 	artworks_content *aw;
-	nserror error;
+	slateerror error;
 
 	aw = calloc(1, sizeof(artworks_content));
 	if (aw == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__init(&aw->base, handler, imime_type, params,
 			llcache, fallback_charset, quirks);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(aw);
 		return error;
 	}
 
 	*c = (struct content *) aw;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -186,7 +186,7 @@ bool artworks_convert(struct content *c)
 				&used, NULL, NULL);
 	if (used >= 0) {
 		NSLOG(netsurf, INFO, "Alias$LoadArtWorksModules not defined");
-		msg_data.errordata.errorcode = NSERROR_UNKNOWN;
+		msg_data.errordata.errorcode = SLATEERROR_UNKNOWN;
 		msg_data.errordata.errormsg = messages_get("AWNotSeen");
 		content_broadcast(c, CONTENT_MSG_ERROR, &msg_data);
 		return false;
@@ -197,7 +197,7 @@ bool artworks_convert(struct content *c)
 	if (error) {
 		NSLOG(netsurf, INFO, "xos_cli: 0x%x: %s", error->errnum,
 		      error->errmess);
-		msg_data.errordata.errorcode = NSERROR_UNKNOWN;
+		msg_data.errordata.errorcode = SLATEERROR_UNKNOWN;
 		msg_data.errordata.errormsg = error->errmess;
 		content_broadcast(c, CONTENT_MSG_ERROR, &msg_data);
 		return false;
@@ -209,7 +209,7 @@ bool artworks_convert(struct content *c)
 	if (error) {
 		NSLOG(netsurf, INFO, "AWRender_FileInitAddress: 0x%x: %s",
 		      error->errnum, error->errmess);
-		msg_data.errordata.errorcode = NSERROR_UNKNOWN;
+		msg_data.errordata.errorcode = SLATEERROR_UNKNOWN;
 		msg_data.errordata.errormsg = error->errmess;
 		content_broadcast(c, CONTENT_MSG_ERROR, &msg_data);
 		return false;
@@ -221,7 +221,7 @@ bool artworks_convert(struct content *c)
 	if (error) {
 		NSLOG(netsurf, INFO, "AWRender_RenderAddress: 0x%x: %s",
 		      error->errnum, error->errmess);
-		msg_data.errordata.errorcode = NSERROR_UNKNOWN;
+		msg_data.errordata.errorcode = SLATEERROR_UNKNOWN;
 		msg_data.errordata.errormsg = error->errmess;
 		content_broadcast(c, CONTENT_MSG_ERROR, &msg_data);
 		return false;
@@ -235,7 +235,7 @@ bool artworks_convert(struct content *c)
 	if (error) {
 		NSLOG(netsurf, INFO, "awrender_init: 0x%x : %s",
 		      error->errnum, error->errmess);
-		msg_data.errordata.errorcode = NSERROR_UNKNOWN;
+		msg_data.errordata.errorcode = SLATEERROR_UNKNOWN;
 		msg_data.errordata.errormsg = error->errmess;
 		content_broadcast(c, CONTENT_MSG_ERROR, &msg_data);
 		return false;
@@ -252,7 +252,7 @@ bool artworks_convert(struct content *c)
 	if (error) {
 		NSLOG(netsurf, INFO, "AWRender_DocBounds: 0x%x: %s",
 		      error->errnum, error->errmess);
-		msg_data.errordata.errorcode = NSERROR_UNKNOWN;
+		msg_data.errordata.errorcode = SLATEERROR_UNKNOWN;
 		msg_data.errordata.errormsg = error->errmess;
 		content_broadcast(c, CONTENT_MSG_ERROR, &msg_data);
 		return false;
@@ -269,7 +269,7 @@ bool artworks_convert(struct content *c)
 	if (!aw->block) {
 		NSLOG(netsurf, INFO,
 		      "failed to create block for ArtworksRenderer");
-		msg_data.errordata.errorcode = NSERROR_NOMEM;
+		msg_data.errordata.errorcode = SLATEERROR_NOMEM;
 		msg_data.errordata.errormsg = messages_get("NoMemory");
 		content_broadcast(c, CONTENT_MSG_ERROR, &msg_data);
 		return false;
@@ -279,7 +279,7 @@ bool artworks_convert(struct content *c)
 	c->height = (aw->y1 - aw->y0) / 512;
 
 	title = messages_get_buff("ArtWorksTitle",
-			nsurl_access_leaf(llcache_handle_get_url(c->llcache)),
+			slateurl_access_leaf(llcache_handle_get_url(c->llcache)),
 			c->width, c->height);
 	if (title != NULL) {
 		content__set_title(c, title);
@@ -333,7 +333,7 @@ bool artworks_redraw(struct content *c, struct content_redraw_data *data,
 	int clip_x1 = clip->x1;
 	int clip_y1 = clip->y1;
 
-	if (ctx->plot->flush && (ctx->plot->flush(ctx) != NSERROR_OK))
+	if (ctx->plot->flush && (ctx->plot->flush(ctx) != SLATEERROR_OK))
 		return false;
 
 	/* pick up render addresses again in case they've changed
@@ -419,17 +419,17 @@ bool artworks_redraw(struct content *c, struct content_redraw_data *data,
 	return true;
 }
 
-nserror artworks_clone(const struct content *old, struct content **newc)
+slateerror artworks_clone(const struct content *old, struct content **newc)
 {
 	artworks_content *aw;
-	nserror error;
+	slateerror error;
 
 	aw = calloc(1, sizeof(artworks_content));
 	if (aw == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__clone(old, &aw->base);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&aw->base);
 		return error;
 	}
@@ -439,13 +439,13 @@ nserror artworks_clone(const struct content *old, struct content **newc)
 			old->status == CONTENT_STATUS_DONE) {
 		if (artworks_convert(&aw->base) == false) {
 			content_destroy(&aw->base);
-			return NSERROR_CLONE_FAILED;
+			return SLATEERROR_CLONE_FAILED;
 		}
 	}
 
 	*newc = (struct content *) aw;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 content_type artworks_content_type(void)

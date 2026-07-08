@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 Mark Benjamin <netsurf-browser.org.MarkBenjamin@dfgh.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,7 +26,7 @@
 #include <windows.h>
 #include <commctrl.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/messages.h"
 #include "utils/file.h"
@@ -65,24 +65,24 @@ static CHOOSEFONT *nsws_prefs_font_prepare(int fontfamily, HWND parent)
 	switch(fontfamily) {
 	case FF_ROMAN:
 		snprintf(lf->lfFaceName, LF_FACESIZE, "%s",
-			 nsoption_charp(font_serif));
+			 slateoption_charp(font_serif));
 		break;
 	case FF_MODERN:
 		snprintf(lf->lfFaceName, LF_FACESIZE, "%s",
-			 nsoption_charp(font_mono));
+			 slateoption_charp(font_mono));
 		break;
 	case FF_SCRIPT:
 		snprintf(lf->lfFaceName, LF_FACESIZE, "%s",
-			 nsoption_charp(font_cursive));
+			 slateoption_charp(font_cursive));
 		break;
 	case FF_DECORATIVE:
 		snprintf(lf->lfFaceName, LF_FACESIZE, "%s",
-			 nsoption_charp(font_fantasy));
+			 slateoption_charp(font_fantasy));
 		break;
 	case FF_SWISS:
 	default:
 		snprintf(lf->lfFaceName, LF_FACESIZE, "%s",
-			 nsoption_charp(font_sans));
+			 slateoption_charp(font_sans));
 		break;
 	}
 
@@ -165,70 +165,70 @@ static BOOL CALLBACK options_appearance_dialog_handler(HWND hwnd,
 		SendMessage(sub, CB_ADDSTRING, 0, (LPARAM)"Cursive");
 		SendMessage(sub, CB_ADDSTRING, 0, (LPARAM)"Fantasy");
 		SendMessage(sub, CB_SETCURSEL,
-			    (WPARAM) (nsoption_int(font_default) - 1), 0);
+			    (WPARAM) (slateoption_int(font_default) - 1), 0);
 
-		if ((nsoption_charp(font_sans) != NULL) &&
-		    (nsoption_charp(font_sans)[0] != '\0')) {
+		if ((slateoption_charp(font_sans) != NULL) &&
+		    (slateoption_charp(font_sans)[0] != '\0')) {
 			sub = GetDlgItem(hwnd, IDC_PREFS_SANS);
 			SendMessage(sub, WM_SETTEXT, 0,
-				    (LPARAM)nsoption_charp(font_sans));
+				    (LPARAM)slateoption_charp(font_sans));
 		}
-		if ((nsoption_charp(font_serif) != NULL) &&
-		    (nsoption_charp(font_serif)[0] != '\0')) {
+		if ((slateoption_charp(font_serif) != NULL) &&
+		    (slateoption_charp(font_serif)[0] != '\0')) {
 			sub = GetDlgItem(hwnd, IDC_PREFS_SERIF);
 			SendMessage(sub, WM_SETTEXT, 0,
-				    (LPARAM)nsoption_charp(font_serif));
+				    (LPARAM)slateoption_charp(font_serif));
 		}
-		if ((nsoption_charp(font_mono) != NULL) &&
-		    (nsoption_charp(font_mono)[0] != '\0')) {
+		if ((slateoption_charp(font_mono) != NULL) &&
+		    (slateoption_charp(font_mono)[0] != '\0')) {
 			sub = GetDlgItem(hwnd, IDC_PREFS_MONO);
 			SendMessage(sub, WM_SETTEXT, 0,
-				    (LPARAM)nsoption_charp(font_mono));
+				    (LPARAM)slateoption_charp(font_mono));
 		}
-		if ((nsoption_charp(font_cursive) != NULL) &&
-		    (nsoption_charp(font_cursive)[0] != '\0')) {
+		if ((slateoption_charp(font_cursive) != NULL) &&
+		    (slateoption_charp(font_cursive)[0] != '\0')) {
 			sub = GetDlgItem(hwnd, IDC_PREFS_CURSIVE);
 			SendMessage(sub, WM_SETTEXT, 0,
-				    (LPARAM)nsoption_charp(font_cursive));
+				    (LPARAM)slateoption_charp(font_cursive));
 		}
-		if ((nsoption_charp(font_fantasy) != NULL) &&
-		    (nsoption_charp(font_fantasy)[0] != '\0')) {
+		if ((slateoption_charp(font_fantasy) != NULL) &&
+		    (slateoption_charp(font_fantasy)[0] != '\0')) {
 			sub = GetDlgItem(hwnd, IDC_PREFS_FANTASY);
 			SendMessage(sub, WM_SETTEXT, 0,
-				    (LPARAM)nsoption_charp(font_fantasy));
+				    (LPARAM)slateoption_charp(font_fantasy));
 		}
-		if (nsoption_int(font_min_size) != 0) {
+		if (slateoption_int(font_min_size) != 0) {
 			sub = GetDlgItem(hwnd, IDC_PREFS_FONT_MINSIZE);
-			snprintf(number, 6, "%.1f", nsoption_int(font_min_size) / 10.0);
+			snprintf(number, 6, "%.1f", slateoption_int(font_min_size) / 10.0);
 			SendMessage(sub, WM_SETTEXT, 0, (LPARAM)number);
 		}
-		if (nsoption_int(font_size) != 0) {
+		if (slateoption_int(font_size) != 0) {
 			sub = GetDlgItem(hwnd, IDC_PREFS_FONT_SIZE);
-			snprintf(number, 6, "%.1f", nsoption_int(font_size) / 10.0);
+			snprintf(number, 6, "%.1f", slateoption_int(font_size) / 10.0);
 			SendMessage(sub, WM_SETTEXT, 0, (LPARAM)number);
 		}
-		if (nsoption_int(max_fetchers) != 0) {
+		if (slateoption_int(max_fetchers) != 0) {
 			sub = GetDlgItem(hwnd, IDC_PREFS_FETCHERS);
-			snprintf(number, 6, "%d", nsoption_int(max_fetchers));
+			snprintf(number, 6, "%d", slateoption_int(max_fetchers));
 			SendMessage(sub, WM_SETTEXT, 0, (LPARAM)number);
 		}
-		if (nsoption_int(max_fetchers_per_host) != 0) {
+		if (slateoption_int(max_fetchers_per_host) != 0) {
 			sub = GetDlgItem(hwnd, IDC_PREFS_FETCH_HOST);
 			snprintf(number, 6, "%d",
-				 nsoption_int(max_fetchers_per_host));
+				 slateoption_int(max_fetchers_per_host));
 			SendMessage(sub, WM_SETTEXT, 0, (LPARAM)number);
 		}
-		if (nsoption_int(max_cached_fetch_handles) != 0) {
+		if (slateoption_int(max_cached_fetch_handles) != 0) {
 			sub = GetDlgItem(hwnd, IDC_PREFS_FETCH_HANDLES);
 			snprintf(number, 6, "%d",
-				 nsoption_int(max_cached_fetch_handles));
+				 slateoption_int(max_cached_fetch_handles));
 			SendMessage(sub, WM_SETTEXT, 0, (LPARAM)number);
 		}
 
 
 		/* animation */
 		sub = GetDlgItem(hwnd, IDC_PREFS_NOANIMATION);
-		SendMessage(sub, BM_SETCHECK, (WPARAM)((nsoption_bool(animate_images))
+		SendMessage(sub, BM_SETCHECK, (WPARAM)((slateoption_bool(animate_images))
 						       ? BST_UNCHECKED : BST_CHECKED),	0);
 		break;
 
@@ -241,7 +241,7 @@ static BOOL CALLBACK options_appearance_dialog_handler(HWND hwnd,
 			if (temp != NULL) {
 				SendMessage(sub, WM_GETTEXT, (WPARAM)
 					    (len + 1), (LPARAM) temp);
-				nsoption_int(font_size) = (int)
+				slateoption_int(font_size) = (int)
 					(10 * strtod(temp, NULL));
 				free(temp);
 			}
@@ -252,13 +252,13 @@ static BOOL CALLBACK options_appearance_dialog_handler(HWND hwnd,
 			if (temp != NULL) {
 				SendMessage(sub, WM_GETTEXT, (WPARAM)
 					    (len + 1), (LPARAM) temp);
-				nsoption_set_int(font_min_size,
+				slateoption_set_int(font_min_size,
 						 (int)(10 * strtod(temp, NULL)));
 				free(temp);
 			}
 
 			/* animation */
-			nsoption_set_bool(animate_images,
+			slateoption_set_bool(animate_images,
 					  (IsDlgButtonChecked(hwnd, IDC_PREFS_NOANIMATION) == BST_CHECKED) ? true : false);
 
 			break;
@@ -287,13 +287,13 @@ static BOOL CALLBACK options_appearance_dialog_handler(HWND hwnd,
 		switch(LOWORD(wparam)) {
 		case IDC_PREFS_PROXYTYPE:
 			sub = GetDlgItem(hwnd, IDC_PREFS_PROXYTYPE);
-			nsoption_set_int(http_proxy_auth,
+			slateoption_set_int(http_proxy_auth,
 					 SendMessage(sub, CB_GETCURSEL, 0, 0) - 1);
-			nsoption_set_bool(http_proxy,
-					  (nsoption_int(http_proxy_auth) != -1));
-			nsoption_set_int(http_proxy_auth,
-					 nsoption_int(http_proxy_auth) +
-					 (nsoption_bool(http_proxy)) ? 0 : 1);
+			slateoption_set_bool(http_proxy,
+					  (slateoption_int(http_proxy_auth) != -1));
+			slateoption_set_int(http_proxy_auth,
+					 slateoption_int(http_proxy_auth) +
+					 (slateoption_bool(http_proxy)) ? 0 : 1);
 			break;
 
 		case IDC_PREFS_SANS: {
@@ -303,17 +303,17 @@ static BOOL CALLBACK options_appearance_dialog_handler(HWND hwnd,
 			}
 
 			if (ChooseFont(cf) == TRUE) {
-				nsoption_set_charp(font_sans,
+				slateoption_set_charp(font_sans,
 						   strdup(cf->lpLogFont->lfFaceName));
 			}
 
 			free(cf->lpLogFont);
 			free(cf);
-			if ((nsoption_charp(font_sans) != NULL) &&
-			    (nsoption_charp(font_sans)[0] != '\0')) {
+			if ((slateoption_charp(font_sans) != NULL) &&
+			    (slateoption_charp(font_sans)[0] != '\0')) {
 				sub = GetDlgItem(hwnd, IDC_PREFS_SANS);
 				SendMessage(sub, WM_SETTEXT, 0,
-					    (LPARAM)nsoption_charp(font_sans));
+					    (LPARAM)slateoption_charp(font_sans));
 			}
 			break;
 		}
@@ -325,17 +325,17 @@ static BOOL CALLBACK options_appearance_dialog_handler(HWND hwnd,
 			}
 
 			if (ChooseFont(cf) == TRUE) {
-				nsoption_set_charp(font_serif,
+				slateoption_set_charp(font_serif,
 						   strdup(cf->lpLogFont->lfFaceName));
 			}
 
 			free(cf->lpLogFont);
 			free(cf);
-			if ((nsoption_charp(font_serif) != NULL) &&
-			    (nsoption_charp(font_serif)[0] != '\0')) {
+			if ((slateoption_charp(font_serif) != NULL) &&
+			    (slateoption_charp(font_serif)[0] != '\0')) {
 				sub = GetDlgItem(hwnd, IDC_PREFS_SERIF);
 				SendMessage(sub, WM_SETTEXT, 0,
-					    (LPARAM)nsoption_charp(font_serif));
+					    (LPARAM)slateoption_charp(font_serif));
 			}
 			break;
 		}
@@ -347,18 +347,18 @@ static BOOL CALLBACK options_appearance_dialog_handler(HWND hwnd,
 			}
 
 			if (ChooseFont(cf) == TRUE) {
-				nsoption_set_charp(font_mono,
+				slateoption_set_charp(font_mono,
 						   strdup(cf->lpLogFont->lfFaceName));
 			}
 
 			free(cf->lpLogFont);
 			free(cf);
 
-			if ((nsoption_charp(font_mono) != NULL) &&
-			    (nsoption_charp(font_mono)[0] != '\0')) {
+			if ((slateoption_charp(font_mono) != NULL) &&
+			    (slateoption_charp(font_mono)[0] != '\0')) {
 				sub = GetDlgItem(hwnd, IDC_PREFS_MONO);
 				SendMessage(sub, WM_SETTEXT, 0,
-					    (LPARAM)nsoption_charp(font_mono));
+					    (LPARAM)slateoption_charp(font_mono));
 			}
 			break;
 		}
@@ -370,16 +370,16 @@ static BOOL CALLBACK options_appearance_dialog_handler(HWND hwnd,
 			}
 
 			if (ChooseFont(cf) == TRUE) {
-				nsoption_set_charp(font_cursive,
+				slateoption_set_charp(font_cursive,
 						   strdup(cf->lpLogFont->lfFaceName));
 			}
 			free(cf->lpLogFont);
 			free(cf);
-			if ((nsoption_charp(font_cursive) != NULL) &&
-			    (nsoption_charp(font_cursive)[0] != '\0')) {
+			if ((slateoption_charp(font_cursive) != NULL) &&
+			    (slateoption_charp(font_cursive)[0] != '\0')) {
 				sub = GetDlgItem(hwnd, IDC_PREFS_CURSIVE);
 				SendMessage(sub, WM_SETTEXT, 0,
-					    (LPARAM)nsoption_charp(font_cursive));
+					    (LPARAM)slateoption_charp(font_cursive));
 			}
 			break;
 		}
@@ -391,23 +391,23 @@ static BOOL CALLBACK options_appearance_dialog_handler(HWND hwnd,
 			}
 
 			if (ChooseFont(cf) == TRUE) {
-				nsoption_set_charp(font_fantasy,
+				slateoption_set_charp(font_fantasy,
 						   strdup(cf->lpLogFont->lfFaceName));
 			}
 			free(cf->lpLogFont);
 			free(cf);
-			if ((nsoption_charp(font_fantasy) != NULL) &&
-			    (nsoption_charp(font_fantasy)[0] != '\0')) {
+			if ((slateoption_charp(font_fantasy) != NULL) &&
+			    (slateoption_charp(font_fantasy)[0] != '\0')) {
 				sub = GetDlgItem(hwnd, IDC_PREFS_FANTASY);
 				SendMessage(sub, WM_SETTEXT, 0,
-					    (LPARAM)nsoption_charp(font_fantasy));
+					    (LPARAM)slateoption_charp(font_fantasy));
 			}
 			break;
 		}
 
 		case IDC_PREFS_FONTDEF:
 			sub = GetDlgItem(hwnd, IDC_PREFS_FONTDEF);
-			nsoption_set_int(font_default,
+			slateoption_set_int(font_default,
 					 SendMessage(sub, CB_GETCURSEL, 0, 0) + 1);
 			break;
 
@@ -446,47 +446,47 @@ static BOOL CALLBACK options_connections_dialog_handler(HWND hwnd,
 		SendMessage(sub, CB_ADDSTRING, 0, (LPARAM)"Simple");
 		SendMessage(sub, CB_ADDSTRING, 0, (LPARAM)"Basic Auth");
 		SendMessage(sub, CB_ADDSTRING, 0, (LPARAM)"NTLM Auth");
-		if (nsoption_bool(http_proxy)) {
+		if (slateoption_bool(http_proxy)) {
 			SendMessage(sub, CB_SETCURSEL, (WPARAM)
-				    (nsoption_int(http_proxy_auth) + 1), 0);
+				    (slateoption_int(http_proxy_auth) + 1), 0);
 		} else {
 			SendMessage(sub, CB_SETCURSEL, 0, 0);
 		}
 
 		sub = GetDlgItem(hwnd, IDC_PREFS_PROXYHOST);
-		if ((nsoption_charp(http_proxy_host) != NULL) &&
-		    (nsoption_charp(http_proxy_host)[0] != '\0'))
+		if ((slateoption_charp(http_proxy_host) != NULL) &&
+		    (slateoption_charp(http_proxy_host)[0] != '\0'))
 			SendMessage(sub, WM_SETTEXT, 0,
-				    (LPARAM)nsoption_charp(http_proxy_host));
+				    (LPARAM)slateoption_charp(http_proxy_host));
 
 		sub = GetDlgItem(hwnd, IDC_PREFS_PROXYPORT);
-		if (nsoption_int(http_proxy_port) != 0) {
-			snprintf(number, 6, "%d", nsoption_int(http_proxy_port));
+		if (slateoption_int(http_proxy_port) != 0) {
+			snprintf(number, 6, "%d", slateoption_int(http_proxy_port));
 			SendMessage(sub, WM_SETTEXT, 0,	(LPARAM)number);
 		}
 
 		sub = GetDlgItem(hwnd, IDC_PREFS_PROXYNAME);
-		if ((nsoption_charp(http_proxy_auth_user) != NULL) &&
-		    (nsoption_charp(http_proxy_auth_user)[0] != '\0'))
+		if ((slateoption_charp(http_proxy_auth_user) != NULL) &&
+		    (slateoption_charp(http_proxy_auth_user)[0] != '\0'))
 			SendMessage(sub, WM_SETTEXT, 0,
-				    (LPARAM)nsoption_charp(http_proxy_auth_user));
+				    (LPARAM)slateoption_charp(http_proxy_auth_user));
 
 		sub = GetDlgItem(hwnd, IDC_PREFS_PROXYPASS);
-		if ((nsoption_charp(http_proxy_auth_pass) != NULL) &&
-		    (nsoption_charp(http_proxy_auth_pass)[0] != '\0'))
+		if ((slateoption_charp(http_proxy_auth_pass) != NULL) &&
+		    (slateoption_charp(http_proxy_auth_pass)[0] != '\0'))
 			SendMessage(sub, WM_SETTEXT, 0,
-				    (LPARAM)nsoption_charp(http_proxy_auth_pass));
+				    (LPARAM)slateoption_charp(http_proxy_auth_pass));
 
 		sub = GetDlgItem(hwnd, IDC_PREFS_FETCHERS);
-		snprintf(number, 6, "%d", nsoption_int(max_fetchers));
+		snprintf(number, 6, "%d", slateoption_int(max_fetchers));
 		SendMessage(sub, WM_SETTEXT, 0, (LPARAM)number);
 
 		sub = GetDlgItem(hwnd, IDC_PREFS_FETCH_HOST);
-		snprintf(number, 6, "%d", nsoption_int(max_fetchers_per_host));
+		snprintf(number, 6, "%d", slateoption_int(max_fetchers_per_host));
 		SendMessage(sub, WM_SETTEXT, 0, (LPARAM)number);
 
 		sub = GetDlgItem(hwnd, IDC_PREFS_FETCH_HANDLES);
-		snprintf(number, 6, "%d", nsoption_int(max_cached_fetch_handles));
+		snprintf(number, 6, "%d", slateoption_int(max_cached_fetch_handles));
 		SendMessage(sub, WM_SETTEXT, 0, (LPARAM)number);
 
 		break;
@@ -500,7 +500,7 @@ static BOOL CALLBACK options_connections_dialog_handler(HWND hwnd,
 			if (temp != NULL) {
 				SendMessage(sub, WM_GETTEXT, (WPARAM)(len + 1),
 					    (LPARAM)temp);
-				nsoption_set_charp(http_proxy_host, strdup(temp));
+				slateoption_set_charp(http_proxy_host, strdup(temp));
 				free(temp);
 			}
 
@@ -510,7 +510,7 @@ static BOOL CALLBACK options_connections_dialog_handler(HWND hwnd,
 			if (temp != NULL) {
 				SendMessage(sub, WM_GETTEXT, (WPARAM)(len + 1),
 					    (LPARAM)temp);
-				nsoption_set_int(http_proxy_port, atoi(temp));
+				slateoption_set_int(http_proxy_port, atoi(temp));
 				free(temp);
 			}
 
@@ -520,7 +520,7 @@ static BOOL CALLBACK options_connections_dialog_handler(HWND hwnd,
 			if (temp != NULL) {
 				SendMessage(sub, WM_GETTEXT, (WPARAM)(len + 1),
 					    (LPARAM)temp);
-				nsoption_set_charp(http_proxy_auth_user, strdup(temp));
+				slateoption_set_charp(http_proxy_auth_user, strdup(temp));
 				free(temp);
 			}
 
@@ -530,7 +530,7 @@ static BOOL CALLBACK options_connections_dialog_handler(HWND hwnd,
 			if (temp != NULL) {
 				SendMessage(sub, WM_GETTEXT, (WPARAM)(len + 1),
 					    (LPARAM)temp);
-				nsoption_set_charp(http_proxy_auth_pass, strdup(temp));
+				slateoption_set_charp(http_proxy_auth_pass, strdup(temp));
 				free(temp);
 			}
 
@@ -541,7 +541,7 @@ static BOOL CALLBACK options_connections_dialog_handler(HWND hwnd,
 			if (temp != NULL) {
 				SendMessage(sub, WM_GETTEXT, (WPARAM)(len + 1),
 					    (LPARAM)temp);
-				nsoption_set_int(max_fetchers, atoi(temp));
+				slateoption_set_int(max_fetchers, atoi(temp));
 				free(temp);
 			}
 
@@ -551,7 +551,7 @@ static BOOL CALLBACK options_connections_dialog_handler(HWND hwnd,
 			if (temp != NULL) {
 				SendMessage(sub, WM_GETTEXT, (WPARAM)(len + 1),
 					    (LPARAM)temp);
-				nsoption_set_int(max_fetchers_per_host, atoi(temp));
+				slateoption_set_int(max_fetchers_per_host, atoi(temp));
 				free(temp);
 			}
 
@@ -561,7 +561,7 @@ static BOOL CALLBACK options_connections_dialog_handler(HWND hwnd,
 			if (temp != NULL) {
 				SendMessage(sub, WM_GETTEXT, (WPARAM)(len + 1),
 					    (LPARAM)temp);
-				nsoption_set_int(max_cached_fetch_handles, atoi(temp));
+				slateoption_set_int(max_cached_fetch_handles, atoi(temp));
 				free(temp);
 			}
 			break;
@@ -612,24 +612,24 @@ static BOOL CALLBACK options_general_dialog_handler(HWND hwnd,
 	case WM_INITDIALOG:
 		/* homepage url */
 		sub = GetDlgItem(hwnd, IDC_PREFS_HOMEPAGE);
-		SendMessage(sub, WM_SETTEXT, 0, (LPARAM)nsoption_charp(homepage_url));
+		SendMessage(sub, WM_SETTEXT, 0, (LPARAM)slateoption_charp(homepage_url));
 
 		/* Display images */
 		sub = GetDlgItem(hwnd, IDC_PREFS_IMAGES);
 		SendMessage(sub, BM_SETCHECK,
-			    (WPARAM) ((nsoption_bool(suppress_images)) ?
+			    (WPARAM) ((slateoption_bool(suppress_images)) ?
 				      BST_CHECKED : BST_UNCHECKED), 0);
 
 		/* advert blocking */
 		sub = GetDlgItem(hwnd, IDC_PREFS_ADVERTS);
 		SendMessage(sub, BM_SETCHECK,
-			    (WPARAM) ((nsoption_bool(block_advertisements)) ?
+			    (WPARAM) ((slateoption_bool(block_advertisements)) ?
 				      BST_CHECKED : BST_UNCHECKED), 0);
 
 		/* Referrer sending */
 		sub = GetDlgItem(hwnd, IDC_PREFS_REFERER);
 		SendMessage(sub, BM_SETCHECK,
-			    (WPARAM)((nsoption_bool(send_referer)) ?
+			    (WPARAM)((slateoption_bool(send_referer)) ?
 				     BST_CHECKED : BST_UNCHECKED), 0);
 		break;
 
@@ -648,17 +648,17 @@ static BOOL CALLBACK options_general_dialog_handler(HWND hwnd,
 					SendMessage(sub, WM_GETTEXT,
 						    (WPARAM)text_length + 1,
 						    (LPARAM)text);
-					nsoption_set_charp(homepage_url, text);
+					slateoption_set_charp(homepage_url, text);
 				}
 			}
 
-			nsoption_set_bool(suppress_images,
+			slateoption_set_bool(suppress_images,
 					  (IsDlgButtonChecked(hwnd, IDC_PREFS_IMAGES) == BST_CHECKED) ? true : false);
 
-			nsoption_set_bool(block_advertisements,
+			slateoption_set_bool(block_advertisements,
 					  (IsDlgButtonChecked(hwnd, IDC_PREFS_ADVERTS) == BST_CHECKED) ? true : false);
 
-			nsoption_set_bool(send_referer,
+			slateoption_set_bool(send_referer,
 					  (IsDlgButtonChecked(hwnd, IDC_PREFS_REFERER) == BST_CHECKED) ? true : false);
 
 			break;
@@ -670,15 +670,15 @@ static BOOL CALLBACK options_general_dialog_handler(HWND hwnd,
 
 
 /* exported interface documented in windows/prefs.h */
-nserror nsws_prefs_save(void)
+slateerror nsws_prefs_save(void)
 {
 	/* user saved changes */
 	char *choices = NULL;
-	nserror res;
+	slateerror res;
 
-	res = netsurf_mkpath(&choices, NULL, 2, G_config_path, "Choices");
-	if (res == NSERROR_OK) {
-		nsoption_write(choices, NULL, NULL);
+	res = slate_mkpath(&choices, NULL, 2, G_config_path, "Choices");
+	if (res == SLATEERROR_OK) {
+		slateoption_write(choices, NULL, NULL);
 		free(choices);
 	}
 	return res;
@@ -721,7 +721,7 @@ void nsws_prefs_dialog_init(HINSTANCE hinst, HWND parent)
 	psh.dwFlags = PSH_NOAPPLYNOW | PSH_USEICONID | PSH_PROPSHEETPAGE;
 	psh.hwndParent = parent;
 	psh.hInstance = hinst;
-	psh.pszIcon = MAKEINTRESOURCE(IDR_NETSURF_ICON);
+	psh.pszIcon = MAKEINTRESOURCE(IDR_SLATE_ICON);
 	psh.pszCaption = (LPSTR) "NetSurf Options";
 	psh.nPages = sizeof(psp) / sizeof(PROPSHEETPAGE);
 	psh.nStartPage = 0;

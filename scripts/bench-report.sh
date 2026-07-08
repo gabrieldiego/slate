@@ -6,14 +6,14 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN_ID="$(date -u +%Y%m%d-%H%M%S)"
 MODE="both"
 OUTPUT_DIR=""
-MONKEY="${ROOT}/nsmonkey"
+JOTTER="${ROOT}/jotter"
 TIME_BIN="/usr/bin/time"
 GCOV_BIN="${GCOV:-gcov}"
 BENCH_ROOT="file://${ROOT}/test/bench/pages"
 SUITES=(smoke practical stress)
 
 COVERAGE_SUBTARGET="-cov"
-COVERAGE_EXETARGET="nsmonkey-cov"
+COVERAGE_EXETARGET="jotter-cov"
 COVERAGE_CFLAGS="-O0 -g --coverage"
 COVERAGE_LDFLAGS="--coverage"
 CLEAN_COVERAGE=0
@@ -23,7 +23,7 @@ usage() {
 Usage:
   ${0##*/} [options] [suite...]
 
-Generate Markdown reports for the local Monkey benchmark suites.
+Generate Markdown reports for the local Jotter benchmark suites.
 Suites default to: ${SUITES[*]}
 
 Options:
@@ -31,8 +31,8 @@ Options:
                        default: ${MODE}
   -o, --output DIR     Report directory
                        default: build/bench/<timestamp>/
-  -m, --monkey PATH    Normal nsmonkey binary for memory runs
-                       default: ${MONKEY}
+  -j, --jotter PATH    Normal jotter binary for memory runs
+                       default: ${JOTTER}
   --clean              Rebuild coverage objects from scratch
   -h, --help           Show this help
 
@@ -74,9 +74,9 @@ while [ "$#" -gt 0 ]; do
 			OUTPUT_DIR="$2"
 			shift 2
 			;;
-		-m|--monkey)
+		-j|--jotter)
 			[ "$#" -ge 2 ] || die "Missing value for $1"
-			MONKEY="$2"
+			JOTTER="$2"
 			shift 2
 			;;
 		--clean)
@@ -185,15 +185,15 @@ run_memory_report() {
 	local report="$1"
 	local overall_status=0
 
-	[ -x "${MONKEY}" ] || die "Missing executable nsmonkey: ${MONKEY}"
+	[ -x "${JOTTER}" ] || die "Missing executable jotter: ${JOTTER}"
 	[ -x "${TIME_BIN}" ] || die "Missing GNU time binary: ${TIME_BIN}"
 
 	{
-		printf '# NetSurf Memory Benchmark Report\n\n'
+		printf '# Slate Memory Benchmark Report\n\n'
 		printf -- '- Generated: `%s`\n' "$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
 		printf -- '- Git revision: `%s` on `%s`\n' "${git_rev}" "${git_branch}"
 		printf -- '- Git dirty: `%s`\n' "${git_dirty}"
-		printf -- '- Monkey binary: `%s`\n' "${MONKEY}"
+		printf -- '- Jotter binary: `%s`\n' "${JOTTER}"
 		printf -- '- Bench root: `%s`\n' "${BENCH_ROOT}"
 		printf -- '- Time tool: `%s -v`\n\n' "${TIME_BIN}"
 		printf '## Summary\n\n'
@@ -208,9 +208,9 @@ run_memory_report() {
 		local status result max_rss elapsed user_cpu sys_cpu time_exit max_rss_mib
 
 		printf 'Running memory %s...\n' "${suite}" >&2
-		NETSURF_BENCH_ROOT="${BENCH_ROOT}" \
+		SLATE_BENCH_ROOT="${BENCH_ROOT}" \
 			"${ROOT}/test/monkey_driver.py" \
-			-m "${MONKEY}" \
+			-m "${JOTTER}" \
 			-w "${TIME_BIN} -v -o ${time_file}" \
 			-t "${test_file}" >"${log_file}" 2>&1
 		status=$?
@@ -244,7 +244,7 @@ run_memory_report() {
 
 	{
 		printf '\n## Notes\n\n'
-		printf -- '- `Max RSS` is reported by GNU `/usr/bin/time -v` for the `nsmonkey` process.\n'
+		printf -- '- `Max RSS` is reported by GNU `/usr/bin/time -v` for the `jotter` process.\n'
 		printf -- '- A failed suite still keeps its `.log` and `.time` files next to this report.\n'
 		printf -- '- Use this report as a baseline trend signal; compare runs made from similar build options and host conditions.\n'
 	} >> "${report}"
@@ -255,7 +255,7 @@ run_memory_report() {
 
 run_coverage_report() {
 	local report="$1"
-	local host objroot coverage_monkey build_log run_summary coverage_tsv gcov_dir
+	local host objroot coverage_jotter build_log run_summary coverage_tsv gcov_dir
 	local overall_status=0
 	local html_sources=()
 	local total_covered=0
@@ -266,35 +266,35 @@ run_coverage_report() {
 
 	host="$(host_name)"
 	objroot="${ROOT}/build/${host}-monkey${COVERAGE_SUBTARGET}"
-	coverage_monkey="${ROOT}/${COVERAGE_EXETARGET}"
-	build_log="${OUTPUT_DIR}/coverage-build-monkey.log"
+	coverage_jotter="${ROOT}/${COVERAGE_EXETARGET}"
+	build_log="${OUTPUT_DIR}/coverage-build-jotter.log"
 	run_summary="${OUTPUT_DIR}/coverage-suite-summary.tsv"
 	coverage_tsv="${OUTPUT_DIR}/html-coverage.tsv"
 	gcov_dir="${OUTPUT_DIR}/gcov"
 	mkdir -p "${gcov_dir}" || return 1
 
 	if [ "${CLEAN_COVERAGE}" -eq 1 ]; then
-		printf 'Cleaning coverage monkey build...\n' >&2
+		printf 'Cleaning coverage jotter build...\n' >&2
 		make -C "${ROOT}" \
-			TARGET=monkey \
+			TARGET=jotter \
 			SUBTARGET="${COVERAGE_SUBTARGET}" \
 			EXETARGET="${COVERAGE_EXETARGET}" \
 			clean >"${build_log}" 2>&1
 		clean_status=$?
 		if [ "${clean_status}" -ne 0 ]; then
-			printf 'Coverage monkey clean failed; see %s\n' "${build_log}" >&2
+			printf 'Coverage jotter clean failed; see %s\n' "${build_log}" >&2
 			return "${clean_status}"
 		fi
 	else
 		: > "${build_log}"
 	fi
 
-	printf 'Building monkey with coverage flags...\n' >&2
+	printf 'Building jotter with coverage flags...\n' >&2
 	CFLAGS="${COVERAGE_CFLAGS}" \
 	CXXFLAGS="${COVERAGE_CFLAGS}" \
 	LDFLAGS="${COVERAGE_LDFLAGS}" \
 	make -C "${ROOT}" ${USE_CPUS} \
-		TARGET=monkey \
+		TARGET=jotter \
 		SUBTARGET="${COVERAGE_SUBTARGET}" \
 		EXETARGET="${COVERAGE_EXETARGET}" >>"${build_log}" 2>&1
 	build_status=$?
@@ -312,9 +312,9 @@ run_coverage_report() {
 		local status result
 
 		printf 'Running coverage %s...\n' "${suite}" >&2
-		NETSURF_BENCH_ROOT="${BENCH_ROOT}" \
+		SLATE_BENCH_ROOT="${BENCH_ROOT}" \
 			"${ROOT}/test/monkey_driver.py" \
-			-m "${coverage_monkey}" \
+			-m "${coverage_jotter}" \
 			-t "${test_file}" >"${log_file}" 2>&1
 		status=$?
 
@@ -400,17 +400,17 @@ run_coverage_report() {
 	fi
 
 	{
-		printf '# NetSurf HTML Renderer Coverage Report\n\n'
+		printf '# Slate HTML Renderer Coverage Report\n\n'
 		printf -- '- Generated: `%s`\n' "$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
 		printf -- '- Git revision: `%s` on `%s`\n' "${git_rev}" "${git_branch}"
 		printf -- '- Git dirty: `%s`\n' "${git_dirty}"
-		printf -- '- Target: `monkey`\n'
-		printf -- '- Coverage binary: `%s`\n' "${coverage_monkey}"
+		printf -- '- Target: `jotter`\n'
+		printf -- '- Coverage binary: `%s`\n' "${coverage_jotter}"
 		printf -- '- Coverage object root: `%s`\n' "${objroot}"
 		printf -- '- Coverage flags: `%s`\n' "${COVERAGE_CFLAGS}"
 		printf -- '- Bench root: `%s`\n' "${BENCH_ROOT}"
 		printf -- '- Scope: `content/handlers/html/*.c`\n'
-		printf -- '- Raw build log: [coverage-build-monkey.log](%s)\n\n' "$(basename "${build_log}")"
+		printf -- '- Raw build log: [coverage-build-jotter.log](%s)\n\n' "$(basename "${build_log}")"
 
 		printf '## Summary\n\n'
 		printf '| Covered lines | Instrumented lines | Line coverage |\n'
@@ -439,8 +439,8 @@ run_coverage_report() {
 
 		printf '\n## Notes\n\n'
 		printf -- '- This report only tallies line coverage for `content/handlers/html/*.c`.\n'
-		printf -- '- Coverage objects are kept separately using `SUBTARGET=%s`.\n' "${COVERAGE_SUBTARGET}"
-		printf -- '- The instrumented binary is `%s`; the normal `nsmonkey` binary is not overwritten.\n' "${COVERAGE_EXETARGET}"
+		printf -- '- Coverage objects are kept separately using `SUBTARGET=%s` on the internal monkey target.\n' "${COVERAGE_SUBTARGET}"
+		printf -- '- The instrumented binary is `%s`; the normal `jotter` binary is not overwritten.\n' "${COVERAGE_EXETARGET}"
 		printf -- '- Platform-specific and frontend-specific browser code is intentionally outside this tally.\n'
 	} > "${report}"
 
@@ -451,7 +451,7 @@ run_coverage_report() {
 write_index_report() {
 	local report="${OUTPUT_DIR}/bench-report.md"
 	{
-		printf '# NetSurf Benchmark Report\n\n'
+		printf '# Slate Benchmark Report\n\n'
 		printf -- '- Generated: `%s`\n' "$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
 		printf -- '- Mode: `%s`\n' "${MODE}"
 		printf -- '- Suites: `%s`\n' "${SUITES[*]}"

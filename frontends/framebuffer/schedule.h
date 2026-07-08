@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 Vincent Sanders <vince@simtec.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,7 +30,7 @@
  * passed.
  */
 
-nserror framebuffer_schedule(int tival, void (*callback)(void *p), void *p);
+slateerror framebuffer_schedule(int tival, void (*callback)(void *p), void *p);
 
 /**
  * Process scheduled callbacks up to current time.

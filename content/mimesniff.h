@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * MIME type sniffer interface
  */
 
-#ifndef NETSURF_CONTENT_MIMESNIFF_H_
-#define NETSURF_CONTENT_MIMESNIFF_H_
+#ifndef SLATE_CONTENT_MIMESNIFF_H_
+#define SLATE_CONTENT_MIMESNIFF_H_
 
 #include <stdbool.h>
 
@@ -43,12 +43,12 @@ struct llcache_handle;
  * \param sniff_allowed   Whether MIME type sniffing is allowed
  * \param image_only      Sniff image types only
  * \param effective_type  Location to receive computed type
- * \return NSERROR_OK on success,
- *         NSERROR_NEED_DATA iff \a data is NULL and data is needed
- *         NSERROR_NOT_FOUND if sniffing is prohibited and no 
+ * \return SLATEERROR_OK on success,
+ *         SLATEERROR_NEED_DATA iff \a data is NULL and data is needed
+ *         SLATEERROR_NOT_FOUND if sniffing is prohibited and no 
  *                           Content-Type header was found
  */
-nserror mimesniff_compute_effective_type(const char *content_type_header,
+slateerror mimesniff_compute_effective_type(const char *content_type_header,
 		const uint8_t *data, size_t len, bool sniff_allowed,
 		bool image_only, lwc_string **effective_type);
 

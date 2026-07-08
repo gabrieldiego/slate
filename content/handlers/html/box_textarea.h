@@ -1,7 +1,7 @@
 /*
  * Copyright 2013 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * Box tree treeview box replacement (interface).
  */
 
-#ifndef NETSURF_HTML_BOX_TEXTAREA_H
-#define NETSURF_HTML_BOX_TEXTAREA_H
+#ifndef SLATE_HTML_BOX_TEXTAREA_H
+#define SLATE_HTML_BOX_TEXTAREA_H
 
 struct dom_node;
 struct html_content;
@@ -45,8 +45,8 @@ bool box_textarea_create_textarea(struct html_content *html,
  * \param html    html content object
  * \param box     box with textarea widget
  * \param key     keypress
- * \return NSERROR_OK iff keypress handled
+ * \return SLATEERROR_OK iff keypress handled
  */
-nserror box_textarea_keypress(struct html_content *html, struct box *box, uint32_t key);
+slateerror box_textarea_keypress(struct html_content *html, struct box *box, uint32_t key);
 
 #endif

@@ -1,7 +1,7 @@
 /*
  * Copyright 2024 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,8 +27,8 @@
 
 extern "C" {
 #include "utils/errors.h"
-#include "netsurf/core_window.h"
-#include "netsurf/mouse.h"
+#include "slate/core_window.h"
+#include "slate/mouse.h"
 }
 
 class NS_Corewindow : public QWidget
@@ -38,12 +38,12 @@ class NS_Corewindow : public QWidget
 public:
 	NS_Corewindow(QWidget *parent, Qt::WindowFlags f = Qt::Window);
 
-	static nserror static_invalidate(struct core_window *cw, const struct rect *rect);
-	static nserror static_set_extent(struct core_window *cw, int width, int height);
-	static nserror static_set_scroll(struct core_window *cw, int x, int y);
-	static nserror static_get_scroll(const struct core_window *cw, int *x, int *y);
-	static nserror static_get_dimensions(const struct core_window *cw, int *width, int *height);
-	static nserror static_drag_status(struct core_window *cw, core_window_drag_status ds);
+	static slateerror static_invalidate(struct core_window *cw, const struct rect *rect);
+	static slateerror static_set_extent(struct core_window *cw, int width, int height);
+	static slateerror static_set_scroll(struct core_window *cw, int x, int y);
+	static slateerror static_get_scroll(const struct core_window *cw, int *x, int *y);
+	static slateerror static_get_dimensions(const struct core_window *cw, int *width, int *height);
+	static slateerror static_drag_status(struct core_window *cw, core_window_drag_status ds);
 
 protected:
 	void paintEvent(QPaintEvent *event);
@@ -52,7 +52,7 @@ protected:
 	void mousePressEvent(QMouseEvent *event);
 	void mouseReleaseEvent(QMouseEvent *event);
 
-	struct nsqt_core_window *m_core_window;
+	struct slateqt_core_window *m_core_window;
 private:
 	virtual void draw(struct rect *clip, struct redraw_context *ctx) = 0;
 	virtual bool key_press(uint32_t nskey) = 0;

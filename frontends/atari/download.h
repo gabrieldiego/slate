@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,12 +30,12 @@ extern struct gui_download_table *atari_download_table;
 #define DOWNLOAD_BAR_MAX 300
 
 typedef enum {
-	NSATARI_DOWNLOAD_NONE,
-	NSATARI_DOWNLOAD_WORKING,
-	NSATARI_DOWNLOAD_ERROR,
-	NSATARI_DOWNLOAD_COMPLETE,
-	NSATARI_DOWNLOAD_CANCELED
-} nsatari_download_status;
+	SLATEATARI_DOWNLOAD_NONE,
+	SLATEATARI_DOWNLOAD_WORKING,
+	SLATEATARI_DOWNLOAD_ERROR,
+	SLATEATARI_DOWNLOAD_COMPLETE,
+	SLATEATARI_DOWNLOAD_CANCELED
+} slateatari_download_status;
 
 struct gui_download_window {
 	struct download_context *ctx;
@@ -43,7 +43,7 @@ struct gui_download_window {
 	GUIWIN *guiwin;
 	short aes_handle;
 	OBJECT *tree;
-	nsatari_download_status status;
+	slateatari_download_status status;
 	char *destination;
 	FILE * fd;
 	char lbl_done[MAX_SLEN_LBL_DONE];

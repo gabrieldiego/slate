@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,14 +28,14 @@
 #include <math.h>
 
 #include "utils/log.h"
-#include "netsurf/mouse.h"
-#include "netsurf/plotters.h"
+#include "slate/mouse.h"
+#include "slate/plotters.h"
 
 #include "atari/gui.h"
 #include "atari/statusbar.h"
 #include "atari/rootwin.h"
 #include "atari/misc.h"
-#include "atari/res/netsurf.rsh"
+#include "atari/res/slate.rsh"
 #include "atari/plot/plot.h"
 #include "atari/osspec.h"
 

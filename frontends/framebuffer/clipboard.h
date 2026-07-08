@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 Vincent Sanders <vince@simtec.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_FB_CLIPBOARD_H
-#define NETSURF_FB_CLIPBOARD_H
+#ifndef SLATE_FB_CLIPBOARD_H
+#define SLATE_FB_CLIPBOARD_H
 
 extern struct gui_clipboard_table *framebuffer_clipboard_table;
 

@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,10 +26,10 @@
  * call ro_corewindow_init()
  */
 
-#ifndef NETSURF_RISCOS_COREWINDOW_H
-#define NETSURF_RISCOS_COREWINDOW_H
+#ifndef SLATE_RISCOS_COREWINDOW_H
+#define SLATE_RISCOS_COREWINDOW_H
 
-#include "netsurf/core_window.h"
+#include "slate/core_window.h"
 
 extern struct core_window_table *riscos_core_window_table;
 
@@ -62,20 +62,20 @@ struct ro_corewindow {
 	 * \param originx The risc os plotter x origin.
 	 * \param originy The risc os plotter y origin.
          * \param r The rectangle of the window that needs updating.
-         * \return NSERROR_OK on success otherwise apropriate error code
+         * \return SLATEERROR_OK on success otherwise apropriate error code
          */
-        nserror (*draw)(struct ro_corewindow *ro_cw, int originx, int originy, struct rect *r);
+        slateerror (*draw)(struct ro_corewindow *ro_cw, int originx, int originy, struct rect *r);
 
         /**
          * callback for keypress on ro core window
          *
          * \param ro_cw The ro core window structure.
          * \param nskey The netsurf key code.
-         * \return NSERROR_OK if key processed,
-         *         NSERROR_NOT_IMPLEMENTED if key not processed
+         * \return SLATEERROR_OK if key processed,
+         *         SLATEERROR_NOT_IMPLEMENTED if key not processed
          *         otherwise apropriate error code
          */
-        nserror (*key)(struct ro_corewindow *ro_cw, uint32_t nskey);
+        slateerror (*key)(struct ro_corewindow *ro_cw, uint32_t nskey);
 
         /**
          * callback for mouse event on ro core window
@@ -84,35 +84,35 @@ struct ro_corewindow {
          * \param mouse_state mouse state
          * \param x location of event
          * \param y location of event
-         * \return NSERROR_OK on sucess otherwise apropriate error code.
+         * \return SLATEERROR_OK on sucess otherwise apropriate error code.
          */
-        nserror (*mouse)(struct ro_corewindow *ro_cw, browser_mouse_state mouse_state, int x, int y);
+        slateerror (*mouse)(struct ro_corewindow *ro_cw, browser_mouse_state mouse_state, int x, int y);
 
 	/**
          * callback for clicks in ro core window toolbar.
          *
          * \param ro_cw The ro core window structure.
          * \param action The button bar action.
-         * \return NSERROR_OK if config saved, otherwise apropriate error code
+         * \return SLATEERROR_OK if config saved, otherwise apropriate error code
          */
-        nserror (*toolbar_click)(struct ro_corewindow *ro_cw, button_bar_action action);
+        slateerror (*toolbar_click)(struct ro_corewindow *ro_cw, button_bar_action action);
 
 	/**
          * callback for updating state of buttons in ro core window toolbar.
          *
          * \param ro_cw The ro core window structure.
-         * \return NSERROR_OK if config saved, otherwise apropriate error code
+         * \return SLATEERROR_OK if config saved, otherwise apropriate error code
          */
-        nserror (*toolbar_update)(struct ro_corewindow *ro_cw);
+        slateerror (*toolbar_update)(struct ro_corewindow *ro_cw);
 
 	/**
          * callback for saving ro core window toolbar state.
          *
          * \param ro_cw The ro core window structure.
          * \param config The new toolbar configuration.
-         * \return NSERROR_OK if config saved, otherwise apropriate error code
+         * \return SLATEERROR_OK if config saved, otherwise apropriate error code
          */
-        nserror (*toolbar_save)(struct ro_corewindow *ro_cw, char *config);
+        slateerror (*toolbar_save)(struct ro_corewindow *ro_cw, char *config);
 
 };
 
@@ -126,17 +126,17 @@ struct ro_corewindow {
  * \param tb_order The order of toolbar buttons
  * \param tb_style The style of toolbar buttons
  * \param tb_help Thh toolbar help text
- * \return NSERROR_OK on successful initialisation otherwise error code.
+ * \return SLATEERROR_OK on successful initialisation otherwise error code.
  */
-nserror ro_corewindow_init(struct ro_corewindow *ro_cw, const struct button_bar_buttons *tb_buttons, char *tb_order, theme_style tb_style, const char *tb_help);
+slateerror ro_corewindow_init(struct ro_corewindow *ro_cw, const struct button_bar_buttons *tb_buttons, char *tb_order, theme_style tb_style, const char *tb_help);
 
 /**
  * finalise elements of ro core window.
  *
  * \param ro_cw A riscos core window structure to initialise
- * \return NSERROR_OK on successful finalisation otherwise error code.
+ * \return SLATEERROR_OK on successful finalisation otherwise error code.
  */
-nserror ro_corewindow_fini(struct ro_corewindow *ro_cw);
+slateerror ro_corewindow_fini(struct ro_corewindow *ro_cw);
 
 
 #endif

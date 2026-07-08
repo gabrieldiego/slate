@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 François Revol <mmu_man@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,7 +26,7 @@ extern "C" {
 #include "testament.h"
 #include "utils/useragent.h"
 #include "curl/curlver.h"
-#include "netsurf/clipboard.h"
+#include "slate/clipboard.h"
 }
 #include "beos/about.h"
 #include "beos/scaffolding.h"
@@ -41,11 +41,11 @@ extern "C" {
 /**
  * Creates the about alert
  */
-void nsbeos_about(struct gui_window *gui)
+void slatebeos_about(struct gui_window *gui)
 {
 	BString text;
 	text << "Netsurf  : " << user_agent_string() << "\n";
-	text << "Version  : " << netsurf_version << "\n";
+	text << "Version  : " << slate_version << "\n";
 	text << "Build ID : " << WT_REVID << "\n";
 	text << "Date     : " << WT_COMPILEDATE << "\n";
 	text << "cURL     : " << LIBCURL_VERSION << "\n";

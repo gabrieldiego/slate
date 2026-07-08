@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,8 +44,8 @@
 
 START_TEST(corestrings_test)
 {
-	nserror ires;
-	nserror res;
+	slateerror ires;
+	slateerror res;
 
 	malloc_limit(_i);
 
@@ -55,11 +55,11 @@ START_TEST(corestrings_test)
 	malloc_limit(UINT_MAX);
 	
 	if (_i < CORESTRING_TEST_COUNT) {
-		ck_assert_int_eq(ires, NSERROR_NOMEM);
+		ck_assert_int_eq(ires, SLATEERROR_NOMEM);
 	} else {
-		ck_assert_int_eq(ires, NSERROR_OK);
+		ck_assert_int_eq(ires, SLATEERROR_OK);
 	}
-	ck_assert_int_eq(res, NSERROR_OK);
+	ck_assert_int_eq(res, SLATEERROR_OK);
 }
 END_TEST
 

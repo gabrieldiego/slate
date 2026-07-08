@@ -1,7 +1,7 @@
 /*
  * Copyright 2023 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,9 +28,9 @@
 
 extern "C" {
 
-#include "netsurf/types.h"
-#include "netsurf/content_type.h"
-#include "netsurf/browser_window.h"
+#include "slate/types.h"
+#include "slate/content_type.h"
+#include "slate/browser_window.h"
 
 }
 
@@ -55,7 +55,7 @@ class NS_URLBar :public QToolBar
 
 public:
 	NS_URLBar(QWidget *parent, NS_Actions *actions, struct browser_window *bw);
-	nserror set_url(struct nsurl *url);
+	slateerror set_url(struct slateurl *url);
 
 public slots:
 	void input_pressed();

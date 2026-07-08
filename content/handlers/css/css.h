@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef netsurf_css_css_h_
-#define netsurf_css_css_h_
+#ifndef slate_css_css_h_
+#define slate_css_css_h_
 
 #include <stdint.h>
 
@@ -37,9 +37,9 @@ struct nscss_import {
 /**
  * Initialise the CSS content handler
  *
- * \return NSERROR_OK on success or error code on faliure
+ * \return SLATEERROR_OK on success or error code on faliure
  */
-nserror nscss_init(void);
+slateerror nscss_init(void);
 
 /**
  * Retrieve the stylesheet object associated with a CSS content

@@ -2,7 +2,7 @@
  * Copyright 2012 John-Mark Bell <jmb@netsurf-browser.org>
  * Copyright 2004-2007 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,20 +34,20 @@
 #include "utils/regex.h"
 #include "utils/corestrings.h"
 #include "utils/log.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/utf8.h"
 #include "utils/utils.h"
 #include "utils/file.h"
 #include "utils/messages.h"
 #include "utils/ascii.h"
-#include "netsurf/content.h"
+#include "slate/content.h"
 #include "content/hlcache.h"
 #include "css/css.h"
 #include "html/box.h"
 #include "html/html_save.h"
 #include "html/html.h"
 
-#include "netsurf/misc.h"
+#include "slate/misc.h"
 #include "desktop/gui_internal.h"
 #include "desktop/save_complete.h"
 
@@ -64,7 +64,7 @@ typedef struct save_complete_ctx {
     save_complete_entry *list;
     save_complete_set_type_cb set_type;
 
-    nsurl *base;
+    slateurl *base;
     FILE *fp;
     enum { STATE_NORMAL, STATE_IN_STYLE } iter_state;
 } save_complete_ctx;
@@ -75,8 +75,8 @@ typedef enum {
 } save_complete_event_type;
 
 
-static nserror save_complete_save_html(save_complete_ctx *ctx, struct hlcache_handle *c, bool index);
-static nserror save_complete_save_imported_sheets(save_complete_ctx *ctx,
+static slateerror save_complete_save_html(save_complete_ctx *ctx, struct hlcache_handle *c, bool index);
+static slateerror save_complete_save_imported_sheets(save_complete_ctx *ctx,
 		struct nscss_import *imports, uint32_t import_count);
 
 
@@ -99,7 +99,7 @@ static void save_complete_ctx_finalise(save_complete_ctx *ctx)
 	}
 }
 
-static nserror
+static slateerror
 save_complete_ctx_add_content(save_complete_ctx *ctx,
 			      struct hlcache_handle *content)
 {
@@ -107,14 +107,14 @@ save_complete_ctx_add_content(save_complete_ctx *ctx,
 
 	entry = malloc(sizeof (*entry));
 	if (entry == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	entry->content = content;
 	entry->next = ctx->list;
 	ctx->list = entry;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -125,14 +125,14 @@ save_complete_ctx_add_content(save_complete_ctx *ctx,
  * \return The content handle or NULL if not found.
  */
 static struct hlcache_handle *
-save_complete_ctx_find_content(save_complete_ctx *ctx, const nsurl *url)
+save_complete_ctx_find_content(save_complete_ctx *ctx, const slateurl *url)
 {
 	save_complete_entry *entry;
 
 	for (entry = ctx->list; entry != NULL; entry = entry->next) {
-		if (nsurl_compare(url,
+		if (slateurl_compare(url,
 				  hlcache_handle_get_url(entry->content),
-				  NSURL_COMPLETE)) {
+				  SLATEURL_COMPLETE)) {
 			return entry->content;
 		}
 	}
@@ -156,19 +156,19 @@ save_complete_ctx_has_content(save_complete_ctx *ctx,
 	return false;
 }
 
-static nserror
+static slateerror
 save_complete_save_buffer(save_complete_ctx *ctx,
 			  const char *leafname,
 			  const uint8_t *data,
 			  size_t data_len,
 			  lwc_string *mime_type)
 {
-	nserror ret;
+	slateerror ret;
 	FILE *fp;
 	char *fname = NULL;
 
-	ret = netsurf_mkpath(&fname, NULL, 2, ctx->path, leafname);
-	if (ret != NSERROR_OK) {
+	ret = slate_mkpath(&fname, NULL, 2, ctx->path, leafname);
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
@@ -176,7 +176,7 @@ save_complete_save_buffer(save_complete_ctx *ctx,
 	if (fp == NULL) {
 		free(fname);
 		NSLOG(netsurf, INFO, "fopen(): %s", strerror(errno));
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
 	}
 
 	fwrite(data, sizeof(*data), data_len, fp);
@@ -188,7 +188,7 @@ save_complete_save_buffer(save_complete_ctx *ctx,
 	}
 	free(fname);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -234,13 +234,13 @@ static uint8_t *
 save_complete_rewrite_stylesheet_urls(save_complete_ctx *ctx,
 				      const uint8_t *source,
 				      size_t size,
-				      const nsurl *base,
+				      const slateurl *base,
 				      size_t *osize)
 {
 	uint8_t *rewritten;
 	unsigned long offset = 0;
 	unsigned int imports = 0;
-	nserror error;
+	slateerror error;
 
 	/* count number occurrences of @import to (over)estimate result size */
 	/* can't use strstr because source is not 0-terminated string */
@@ -268,7 +268,7 @@ save_complete_rewrite_stylesheet_urls(save_complete_ctx *ctx,
 		const uint8_t *import_url = NULL;
 		char *import_url_copy;
 		int import_url_len = 0;
-		nsurl *url = NULL;
+		slateurl *url = NULL;
 		regmatch_t match[11];
 		int m;
 
@@ -306,9 +306,9 @@ save_complete_rewrite_stylesheet_urls(save_complete_ctx *ctx,
 			return NULL;
 		}
 
-		error = nsurl_join(base, import_url_copy, &url);
+		error = slateurl_join(base, import_url_copy, &url);
 		free(import_url_copy);
-		if (error == NSERROR_NOMEM) {
+		if (error == SLATEERROR_NOMEM) {
 			free(rewritten);
 			return NULL;
 		}
@@ -334,7 +334,7 @@ save_complete_rewrite_stylesheet_urls(save_complete_ctx *ctx,
 					match[0].rm_eo - match[0].rm_so);
 				*osize += match[0].rm_eo - match[0].rm_so;
 			}
-			nsurl_unref(url);
+			slateurl_unref(url);
 		} else {
 			/* copy import */
 			memcpy(rewritten + *osize,
@@ -356,7 +356,7 @@ save_complete_rewrite_stylesheet_urls(save_complete_ctx *ctx,
 	return rewritten;
 }
 
-static nserror
+static slateerror
 save_complete_save_stylesheet(save_complete_ctx *ctx, hlcache_handle *css)
 {
 	const uint8_t *css_data;
@@ -367,15 +367,15 @@ save_complete_save_stylesheet(save_complete_ctx *ctx, hlcache_handle *css)
 	uint32_t import_count;
 	lwc_string *type;
 	char filename[32];
-	nserror result;
+	slateerror result;
 
 	if (save_complete_ctx_find_content(ctx,
 			hlcache_handle_get_url(css)) != NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	result = save_complete_ctx_add_content(ctx, css);
-	if (result != NSERROR_OK) {
+	if (result != SLATEERROR_OK) {
 		return result;
 	}
 
@@ -383,7 +383,7 @@ save_complete_save_stylesheet(save_complete_ctx *ctx, hlcache_handle *css)
 	result = save_complete_save_imported_sheets(ctx,
 						    imports,
 						    import_count);
-	if (result != NSERROR_OK) {
+	if (result != SLATEERROR_OK) {
 		return result;
 	}
 
@@ -395,13 +395,13 @@ save_complete_save_stylesheet(save_complete_ctx *ctx, hlcache_handle *css)
 		hlcache_handle_get_url(css),
 		&source_len);
 	if (source == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	type = content_get_mime_type(css);
 	if (type == NULL) {
 		free(source);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	snprintf(filename, sizeof filename, "%p", css);
@@ -415,19 +415,19 @@ save_complete_save_stylesheet(save_complete_ctx *ctx, hlcache_handle *css)
 	return result;
 }
 
-static nserror
+static slateerror
 save_complete_save_imported_sheets(save_complete_ctx *ctx,
 				   struct nscss_import *imports,
 				   uint32_t import_count)
 {
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 	uint32_t i;
 
 	for (i = 0; i < import_count; i++) {
 		/* treat a valid content as a stylesheet to save */
 		if (imports[i].c != NULL) {
 			res = save_complete_save_stylesheet(ctx, imports[i].c);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return res;
 			}
 		}
@@ -436,62 +436,62 @@ save_complete_save_imported_sheets(save_complete_ctx *ctx,
 	return res;
 }
 
-static nserror
+static slateerror
 save_complete_save_html_stylesheet(save_complete_ctx *ctx,
 				   struct html_stylesheet *sheet)
 {
 	if (sheet->sheet == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	return save_complete_save_stylesheet(ctx, sheet->sheet);
 }
 
-static nserror
+static slateerror
 save_complete_save_html_stylesheets(save_complete_ctx *ctx,
 				    hlcache_handle *c)
 {
 	struct html_stylesheet *sheets;
 	unsigned int i, count;
-	nserror res;
+	slateerror res;
 
 	sheets = html_get_stylesheets(c, &count);
 
 	for (i = STYLESHEET_START; i != count; i++) {
 		res = save_complete_save_html_stylesheet(ctx, &sheets[i]);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror
+static slateerror
 save_complete_save_html_object(save_complete_ctx *ctx, hlcache_handle *obj)
 {
 	const uint8_t *obj_data;
 	size_t obj_size;
 	lwc_string *type;
-	nserror result;
+	slateerror result;
 	char filename[32];
 
 	if (content_get_type(obj) == CONTENT_NONE) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	obj_data = content_get_source_data(obj, &obj_size);
 	if (obj_data == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	if (save_complete_ctx_find_content(ctx,
 			hlcache_handle_get_url(obj)) != NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	result = save_complete_ctx_add_content(ctx, obj);
-	if (result != NSERROR_OK) {
+	if (result != SLATEERROR_OK) {
 		return result;
 	}
 
@@ -503,7 +503,7 @@ save_complete_save_html_object(save_complete_ctx *ctx, hlcache_handle *obj)
 
 	type = content_get_mime_type(obj);
 	if (type == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	result = save_complete_save_buffer(ctx, filename, obj_data, obj_size, type);
@@ -513,13 +513,13 @@ save_complete_save_html_object(save_complete_ctx *ctx, hlcache_handle *obj)
 	return result;
 }
 
-static nserror
+static slateerror
 save_complete_save_html_objects(save_complete_ctx *ctx,
 				hlcache_handle *c)
 {
 	struct content_html_object *object;
 	unsigned int count;
-	nserror res;
+	slateerror res;
 
 	object = html_get_objects(c, &count);
 
@@ -527,13 +527,13 @@ save_complete_save_html_objects(save_complete_ctx *ctx,
 		if ((object->content != NULL) &&
 		    (object->box != NULL)) {
 			res = save_complete_save_html_object(ctx, object->content);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return res;
 			}
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static bool
@@ -635,29 +635,29 @@ save_complete_libdom_treewalk(dom_node *root,
 static bool save_complete_rewrite_url_value(save_complete_ctx *ctx,
 		const char *value, size_t value_len)
 {
-	nsurl *url;
+	slateurl *url;
 	hlcache_handle *content;
 	char *escaped;
-	nserror error;
+	slateerror error;
 
-	error = nsurl_join(ctx->base, value, &url);
-	if (error == NSERROR_NOMEM)
+	error = slateurl_join(ctx->base, value, &url);
+	if (error == SLATEERROR_NOMEM)
 		return false;
 
 	if (url != NULL) {
 		content = save_complete_ctx_find_content(ctx, url);
 		if (content != NULL) {
 			/* found a match */
-			nsurl_unref(url);
+			slateurl_unref(url);
 
 			fprintf(ctx->fp, "\"%p\"", content);
 		} else {
 			/* no match found */
-			error = utf8_to_html(nsurl_access(url), "UTF-8",
-					nsurl_length(url), &escaped);
-			nsurl_unref(url);
+			error = utf8_to_html(slateurl_access(url), "UTF-8",
+					slateurl_length(url), &escaped);
+			slateurl_unref(url);
 
-			if (error != NSERROR_OK)
+			if (error != SLATEERROR_OK)
 				return false;
 
 			fprintf(ctx->fp, "\"%s\"", escaped);
@@ -666,7 +666,7 @@ static bool save_complete_rewrite_url_value(save_complete_ctx *ctx,
 		}
 	} else {
 		error = utf8_to_html(value, "UTF-8", value_len, &escaped);
-		if (error != NSERROR_OK)
+		if (error != SLATEERROR_OK)
 			return false;
 
 		fprintf(ctx->fp, "\"%s\"", escaped);
@@ -681,10 +681,10 @@ static bool save_complete_write_value(save_complete_ctx *ctx,
 		const char *value, size_t value_len)
 {
 	char *escaped;
-	nserror ret;
+	slateerror ret;
 
 	ret = utf8_to_html(value, "UTF-8", value_len, &escaped);
-	if (ret != NSERROR_OK)
+	if (ret != SLATEERROR_OK)
 		return false;
 
 	fprintf(ctx->fp, "\"%s\"", escaped);
@@ -1021,7 +1021,7 @@ save_complete_node_handler(dom_node *node,
 	save_complete_ctx *ctx = ctxin;
 	dom_node_type type;
 	dom_exception error;
-	nserror ret;
+	slateerror ret;
 
 	error = dom_node_get_node_type(node, &type);
 	if (error != DOM_NO_ERR)
@@ -1055,7 +1055,7 @@ save_complete_node_handler(dom_node *node,
 
 				ret = utf8_to_html(text_data, "UTF-8",
 						text_len, &escaped);
-				if (ret != NSERROR_OK)
+				if (ret != SLATEERROR_OK)
 					return false;
 
 				fwrite(escaped, sizeof(*escaped),
@@ -1134,12 +1134,12 @@ save_complete_node_handler(dom_node *node,
 	return true;
 }
 
-static nserror
+static slateerror
 save_complete_save_html_document(save_complete_ctx *ctx,
 				 hlcache_handle *c,
 				 bool index)
 {
-	nserror ret;
+	slateerror ret;
 	FILE *fp;
 	char *fname = NULL;
 	dom_document *doc;
@@ -1152,8 +1152,8 @@ save_complete_save_html_document(save_complete_ctx *ctx,
 		snprintf(filename, sizeof filename, "%p", c);
 	}
 
-	ret = netsurf_mkpath(&fname, NULL, 2, ctx->path, filename);
-	if (ret != NSERROR_OK) {
+	ret = slate_mkpath(&fname, NULL, 2, ctx->path, filename);
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
@@ -1161,7 +1161,7 @@ save_complete_save_html_document(save_complete_ctx *ctx,
 	if (fp == NULL) {
 		free(fname);
 		NSLOG(netsurf, INFO, "fopen(): %s", strerror(errno));
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
 	}
 
 	ctx->base = html_get_base_url(c);
@@ -1175,7 +1175,7 @@ save_complete_save_html_document(save_complete_ctx *ctx,
 					  ctx) == false) {
 		free(fname);
 		fclose(fp);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	fclose(fp);
@@ -1190,7 +1190,7 @@ save_complete_save_html_document(save_complete_ctx *ctx,
 	}
 	free(fname);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -1201,28 +1201,28 @@ save_complete_save_html_document(save_complete_ctx *ctx,
  * \param  index  true to save as "index"
  * \return  true on success, false on error and error reported
  */
-static nserror
+static slateerror
 save_complete_save_html(save_complete_ctx *ctx,
 			hlcache_handle *c,
 			bool index)
 {
-	nserror res;
+	slateerror res;
 
 	if (content_get_type(c) != CONTENT_HTML) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	if (save_complete_ctx_has_content(ctx, c)) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	res = save_complete_save_html_stylesheets(ctx, c);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
 	res = save_complete_save_html_objects(ctx, c);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -1234,15 +1234,15 @@ save_complete_save_html(save_complete_ctx *ctx,
  * Create the inventory file listing original URLs.
  */
 
-static nserror save_complete_inventory(save_complete_ctx *ctx)
+static slateerror save_complete_inventory(save_complete_ctx *ctx)
 {
-	nserror ret;
+	slateerror ret;
 	FILE *fp;
 	char *fname = NULL;
 	save_complete_entry *entry;
 
-	ret = netsurf_mkpath(&fname, NULL, 2, ctx->path, "Inventory");
-	if (ret != NSERROR_OK) {
+	ret = slate_mkpath(&fname, NULL, 2, ctx->path, "Inventory");
+	if (ret != SLATEERROR_OK) {
 		return ret;
 	}
 
@@ -1250,19 +1250,19 @@ static nserror save_complete_inventory(save_complete_ctx *ctx)
 	free(fname);
 	if (fp == NULL) {
 		NSLOG(netsurf, INFO, "fopen(): %s", strerror(errno));
-		return NSERROR_SAVE_FAILED;
+		return SLATEERROR_SAVE_FAILED;
 	}
 
 	for (entry = ctx->list; entry != NULL; entry = entry->next) {
 		fprintf(fp, "%p %s\n",
 			entry->content,
-			nsurl_access(hlcache_handle_get_url(
+			slateurl_access(hlcache_handle_get_url(
 					     entry->content)));
 	}
 
 	fclose(fp);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -1270,7 +1270,7 @@ static nserror save_complete_inventory(save_complete_ctx *ctx)
  *
  * Parameters as for regcomp(), see man regex.
  */
-static nserror regcomp_wrapper(regex_t *preg, const char *regex, int cflags)
+static slateerror regcomp_wrapper(regex_t *preg, const char *regex, int cflags)
 {
 	int r;
 	r = regcomp(preg, regex, cflags);
@@ -1279,9 +1279,9 @@ static nserror regcomp_wrapper(regex_t *preg, const char *regex, int cflags)
 		regerror(r, preg, errbuf, sizeof errbuf);
 		NSLOG(netsurf, INFO, "Failed to compile regexp '%s': %s\n",
 		      regex, errbuf);
-		return NSERROR_INIT_FAILED;
+		return SLATEERROR_INIT_FAILED;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1319,26 +1319,26 @@ void save_complete_init(void)
 }
 
 /* Documented in save_complete.h */
-nserror save_complete_finalise(void)
+slateerror save_complete_finalise(void)
 {
 	regfree(&save_complete_import_re);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* Documented in save_complete.h */
-nserror
+slateerror
 save_complete(hlcache_handle *c,
 	      const char *path,
 	      save_complete_set_type_cb set_type)
 {
-	nserror result;
+	slateerror result;
 	save_complete_ctx ctx;
 
 	save_complete_ctx_initialise(&ctx, path, set_type);
 
 	result = save_complete_save_html(&ctx, c, true);
 
-	if (result == NSERROR_OK) {
+	if (result == SLATEERROR_OK) {
 		result = save_complete_inventory(&ctx);
 	}
 

@@ -1,7 +1,7 @@
 /*
  * Copyright 2023 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,9 +25,9 @@
 #include <QMenu>
 
 extern "C" {
-#include "netsurf/types.h"
-#include "netsurf/content_type.h"
-#include "netsurf/browser_window.h"
+#include "slate/types.h"
+#include "slate/content_type.h"
+#include "slate/browser_window.h"
 }
 
 #include "qt/actions.cls.h"
@@ -41,8 +41,8 @@ public:
 
 	QSize sizeHint() const override;
 	bool get_scroll(int *sx, int *sy);
-	nserror get_dimensions(int *width, int *height);
-	nserror invalidate(const struct rect *rect);
+	slateerror get_dimensions(int *width, int *height);
+	slateerror invalidate(const struct rect *rect);
 	void set_pointer(enum gui_pointer_shape shape);
 	void setCaret(bool visible, int x, int y, int height);
 

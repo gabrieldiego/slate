@@ -1,7 +1,7 @@
 /*
  * Copyright 2008-2021 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,13 +26,13 @@
 #include <proto/exec.h>
 #include <proto/utility.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/utf8.h"
-#include "netsurf/utf8.h"
+#include "slate/utf8.h"
 
 #include "amiga/utf8.h"
 
-static nserror ami_utf8_codesets(const char *string, size_t len, char **result, bool to_local)
+static slateerror ami_utf8_codesets(const char *string, size_t len, char **result, bool to_local)
 {
 	char *out;
 	ULONG utf8_tag = CSA_SourceCodeset, local_tag = CSA_DestCodeset, len_tag = CSA_SourceLen;
@@ -41,7 +41,7 @@ static nserror ami_utf8_codesets(const char *string, size_t len, char **result, 
 
 	if(local_cs == NULL) local_cs = CodesetsFind(NULL,
 #ifdef __amigaos4__
-						CSA_MIBenum, nsoption_int(local_codeset),
+						CSA_MIBenum, slateoption_int(local_codeset),
 #else
 						NULL,
 #endif
@@ -71,26 +71,26 @@ static nserror ami_utf8_codesets(const char *string, size_t len, char **result, 
 		*result = strdup(out);
 		CodesetsFreeA(out, NULL);
 	} else {
-		return NSERROR_BAD_ENCODING;
+		return SLATEERROR_BAD_ENCODING;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-nserror utf8_from_local_encoding(const char *string, size_t len, char **result)
+slateerror utf8_from_local_encoding(const char *string, size_t len, char **result)
 {
 	if(__builtin_expect((CodesetsBase == NULL), 0)) {
-		return utf8_from_enc(string, nsoption_charp(local_charset), len, result, NULL);
+		return utf8_from_enc(string, slateoption_charp(local_charset), len, result, NULL);
 	} else {
 		return ami_utf8_codesets(string, len, result, false);
 	}
 }
 
-nserror utf8_to_local_encoding(const char *string, size_t len, char **result)
+slateerror utf8_to_local_encoding(const char *string, size_t len, char **result)
 {
 	if(__builtin_expect((CodesetsBase == NULL), 0)) {
-		nserror err = NSERROR_NOMEM;
-		char *local_charset = ASPrintf("%s//IGNORE", nsoption_charp(local_charset));
+		slateerror err = SLATEERROR_NOMEM;
+		char *local_charset = ASPrintf("%s//IGNORE", slateoption_charp(local_charset));
 		if(local_charset) {
 			err = utf8_to_enc(string, local_charset, len, result);
 			FreeVec(local_charset);
@@ -109,7 +109,7 @@ void ami_utf8_free(char *ptr)
 char *ami_utf8_easy(const char *string)
 {
 	char *localtext;
-	if(utf8_to_local_encoding(string, strlen(string), &localtext) == NSERROR_OK) {
+	if(utf8_to_local_encoding(string, strlen(string), &localtext) == SLATEERROR_OK) {
 		return localtext;
 	} else {
 		return strdup(string);
@@ -120,7 +120,7 @@ char *ami_to_utf8_easy(const char *string)
 {
 	char *localtext;
 
-	if(utf8_from_local_encoding(string, strlen(string), &localtext) == NSERROR_OK) {
+	if(utf8_from_local_encoding(string, strlen(string), &localtext) == SLATEERROR_OK) {
 		return localtext;
 	} else {
 		return strdup(string);

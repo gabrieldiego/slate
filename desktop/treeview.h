@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 - 2013 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,14 +21,14 @@
  * Treeview handling interface.
  */
 
-#ifndef _NETSURF_DESKTOP_TREEVIEW_H_
-#define _NETSURF_DESKTOP_TREEVIEW_H_
+#ifndef _SLATE_DESKTOP_TREEVIEW_H_
+#define _SLATE_DESKTOP_TREEVIEW_H_
 
 #include <stdbool.h>
 #include <stdint.h>
 #include <libwapcaplet/libwapcaplet.h>
 
-#include "netsurf/mouse.h"
+#include "slate/mouse.h"
 
 struct redraw_context;
 struct core_window;
@@ -145,25 +145,25 @@ struct treeview_field_data {
  * Client callbacks for events concerning nodes
  */
 struct treeview_callback_table {
-	nserror (*folder)(struct treeview_node_msg msg, void *data);
-	nserror (*entry)(struct treeview_node_msg msg, void *data);
+	slateerror (*folder)(struct treeview_node_msg msg, void *data);
+	slateerror (*entry)(struct treeview_node_msg msg, void *data);
 };
 
 
 /**
  * Prepare treeview module for treeview usage
  *
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror treeview_init(void);
+slateerror treeview_init(void);
 
 
 /**
  * Finalise the treeview module (all treeviews must have been destroyed first)
  *
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror treeview_fini(void);
+slateerror treeview_fini(void);
 
 
 /**
@@ -184,9 +184,9 @@ nserror treeview_fini(void);
  * \param cw_t		Callback table for core_window containing the treeview
  * \param cw		The core_window in which the treeview is shown
  * \param flags		Treeview behaviour flags
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror treeview_create(treeview **tree,
+slateerror treeview_create(treeview **tree,
 			const struct treeview_callback_table *callbacks,
 			int n_fields,
 			struct treeview_field_desc fields[],
@@ -202,18 +202,18 @@ nserror treeview_create(treeview **tree,
  * \param tree		Treeview object
  * \param cw_t		Callback table for core_window containing the treeview
  * \param cw		The core_window in which the treeview is shown
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror treeview_cw_attach(treeview *tree, struct core_window *cw);
+slateerror treeview_cw_attach(treeview *tree, struct core_window *cw);
 
 
 /**
  * Detach a treeview from a corewindow
  *
  * \param tree Treeview object
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror treeview_cw_detach(treeview *tree);
+slateerror treeview_cw_detach(treeview *tree);
 
 
 /**
@@ -222,9 +222,9 @@ nserror treeview_cw_detach(treeview *tree);
  * Will emit folder and entry deletion msg callbacks for all nodes in treeview.
  *
  * \param tree Treeview object to destroy
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror treeview_destroy(treeview *tree);
+slateerror treeview_destroy(treeview *tree);
 
 
 /**
@@ -241,9 +241,9 @@ nserror treeview_destroy(treeview *tree);
  * \param rel		Folder's relationship to relation
  * \param at_y		Iff true, insert at y-offset
  * \param y		Y-offset in px from top of hotlist.  Ignored if (!at_y).
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror treeview_get_relation(treeview *tree, treeview_node **relation,
+slateerror treeview_get_relation(treeview *tree, treeview_node **relation,
 			      enum treeview_relationship *rel,
 			      bool at_y, int y);
 
@@ -258,13 +258,13 @@ nserror treeview_get_relation(treeview *tree, treeview_node **relation,
  * \param field		Field data
  * \param data		Client data for node event callbacks
  * \param flags		Treeview node options flags
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  *
  * Field name must match name past in treeview_create fields[N-1].
  *
  * If relation is NULL, will insert as child of root node.
  */
-nserror treeview_create_node_folder(treeview *tree,
+slateerror treeview_create_node_folder(treeview *tree,
 				    treeview_node **folder,
 				    treeview_node *relation,
 				    enum treeview_relationship rel,
@@ -283,13 +283,13 @@ nserror treeview_create_node_folder(treeview *tree,
  * \param fields	Array of field data
  * \param data		Client data for node event callbacks
  * \param flags		Treeview node options flags
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  *
  * Fields array names must match names past in treeview_create fields[0...N-2].
  *
  * If relation is NULL, will insert as child of root node.
  */
-nserror treeview_create_node_entry(treeview *tree,
+slateerror treeview_create_node_entry(treeview *tree,
 				   treeview_node **entry,
 				   treeview_node *relation,
 				   enum treeview_relationship rel,
@@ -305,11 +305,11 @@ nserror treeview_create_node_entry(treeview *tree,
  * \param folder Folder node to update
  * \param field	 New field data
  * \param data	 Client data for node event callbacks
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  *
  * Field name must match name past in treeview_create fields[N-1].
  */
-nserror treeview_update_node_folder(treeview *tree,
+slateerror treeview_update_node_folder(treeview *tree,
 				    treeview_node *folder,
 				    const struct treeview_field_data *field,
 				    void *data);
@@ -322,11 +322,11 @@ nserror treeview_update_node_folder(treeview *tree,
  * \param entry		Entry node to update
  * \param fields	Array of new field data
  * \param data		Client data for node event callbacks
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  *
  * Fields array names must match names past in treeview_create fields[0...N-2].
  */
-nserror treeview_update_node_entry(treeview *tree,
+slateerror treeview_update_node_entry(treeview *tree,
 				   treeview_node *entry,
 				   const struct treeview_field_data fields[],
 				   void *data);
@@ -339,9 +339,9 @@ nserror treeview_update_node_entry(treeview *tree,
  * \param node_data	Client data for the current treeview node
  * \param type		The node type
  * \param abort		Set to true to abort treeview walk prematurely
- * \return NSERROR_OK on success, or appropriate error otherwise
+ * \return SLATEERROR_OK on success, or appropriate error otherwise
  */
-typedef nserror (*treeview_walk_cb)(void *ctx, void *node_data,
+typedef slateerror (*treeview_walk_cb)(void *ctx, void *node_data,
 				    enum treeview_node_type type, bool *abort);
 
 
@@ -361,9 +361,9 @@ typedef nserror (*treeview_walk_cb)(void *ctx, void *node_data,
  * \param leave_cb	Function to call on leaving nodes, or NULL
  * \param ctx		Client context, passed back to callback function
  * \param type		The node type(s) of interest
- * \return NSERROR_OK on success, or appropriate error otherwise
+ * \return SLATEERROR_OK on success, or appropriate error otherwise
  */
-nserror treeview_walk(treeview *tree, treeview_node *root,
+slateerror treeview_walk(treeview *tree, treeview_node *root,
 		      treeview_walk_cb enter_cb, treeview_walk_cb leave_cb,
 		      void *ctx, enum treeview_node_type type);
 
@@ -374,11 +374,11 @@ nserror treeview_walk(treeview *tree, treeview_node *root,
  * \param tree		Treeview object to delete node from
  * \param n		Node to delete
  * \param flags		Treeview node options flags
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  *
  * Will emit folder or entry deletion msg callback.
  */
-nserror treeview_delete_node(treeview *tree, treeview_node *n,
+slateerror treeview_delete_node(treeview *tree, treeview_node *n,
 			     treeview_node_options_flags flags);
 
 
@@ -387,9 +387,9 @@ nserror treeview_delete_node(treeview *tree, treeview_node *n,
  *
  * \param tree		Treeview object to expand node in
  * \param node		Node to expand
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror treeview_node_expand(treeview *tree, treeview_node *node);
+slateerror treeview_node_expand(treeview *tree, treeview_node *node);
 
 
 /**
@@ -397,9 +397,9 @@ nserror treeview_node_expand(treeview *tree, treeview_node *node);
  *
  * \param tree		Treeview object to contract node in
  * \param node		Node to contract
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror treeview_node_contract(treeview *tree, treeview_node *node);
+slateerror treeview_node_contract(treeview *tree, treeview_node *node);
 
 
 /**
@@ -407,9 +407,9 @@ nserror treeview_node_contract(treeview *tree, treeview_node *node);
  *
  * \param tree		Treeview object to expand nodes in
  * \param only_folders	Iff true, only folders are expanded.
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror treeview_expand(treeview *tree, bool only_folders);
+slateerror treeview_expand(treeview *tree, bool only_folders);
 
 
 /**
@@ -417,9 +417,9 @@ nserror treeview_expand(treeview *tree, bool only_folders);
  *
  * \param tree		Treeview object to contract nodes in
  * \param all		Iff false, only entries are contracted.
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror treeview_contract(treeview *tree, bool all);
+slateerror treeview_contract(treeview *tree, bool all);
 
 
 /**
@@ -498,9 +498,9 @@ int treeview_get_height(treeview *tree);
  * Set the search string for a treeview with \ref TREEVIEW_SEARCHABLE
  *
  * \param tree  Tree to set the search string for.
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror treeview_set_search_string(
+slateerror treeview_set_search_string(
 		treeview *tree,
 		const char *string);
 

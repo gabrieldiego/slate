@@ -1,7 +1,7 @@
 /*
  * Copyright 2025 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@
 #include <stdbool.h>
 #include <sys/types.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/messages.h"
 
@@ -51,7 +51,7 @@ static void ro_gui_options_search_default(wimp_pointer *pointer)
 	}
 
 	ro_gui_set_icon_selected_state(pointer->w, SEARCH_WEB_URLBAR,
-				       nsoption_bool(search_url_bar));
+				       slateoption_bool(search_url_bar));
 
 	ro_gui_set_icon_string(pointer->w, SEARCH_WEB_PROVIDER_FIELD,
 			       defprovider, true);
@@ -63,7 +63,7 @@ static bool ro_gui_options_search_ok(wimp_w w)
 	char *provider;
 	const char* defprovider;
 
-	nsoption_set_bool(search_url_bar,
+	slateoption_set_bool(search_url_bar,
 			  ro_gui_get_icon_selected_state(w, SEARCH_WEB_URLBAR));
 
 	provider = strdup(ro_gui_get_icon_string(w, SEARCH_WEB_PROVIDER_FIELD));
@@ -80,7 +80,7 @@ static bool ro_gui_options_search_ok(wimp_w w)
 		}
 
 		/* set the option which takes owership of the provider allocation */
-		nsoption_set_charp(search_web_provider, provider);
+		slateoption_set_charp(search_web_provider, provider);
 
 	} else {
 		NSLOG(netsurf, INFO, "No memory to duplicate search code");
@@ -98,7 +98,7 @@ bool ro_gui_options_search_initialise(wimp_w w)
 	
 	/* set the current values */
 	ro_gui_set_icon_selected_state(w, SEARCH_WEB_URLBAR,
-                                       nsoption_bool(search_url_bar));
+                                       slateoption_bool(search_url_bar));
 
 	search_web_iterate_providers(-1, &defprovider);
 	if (defprovider == NULL) {
@@ -106,8 +106,8 @@ bool ro_gui_options_search_initialise(wimp_w w)
 	}
 	
 	ro_gui_set_icon_string(w, SEARCH_WEB_PROVIDER_FIELD,
-			       nsoption_charp(search_web_provider) ?
-			       nsoption_charp(search_web_provider) :
+			       slateoption_charp(search_web_provider) ?
+			       slateoption_charp(search_web_provider) :
 			       defprovider, true);
 
 	/* initialise all functions for a newly created window */

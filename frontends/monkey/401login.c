@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 Daniel Silverstone <dsilvers@digital-scurf.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,7 +22,7 @@
 #include <string.h>
 
 #include "utils/ring.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 
 #include "monkey/output.h"
 #include "monkey/401login.h"
@@ -30,24 +30,24 @@
 struct monkey401 {
 	struct monkey401 *r_next, *r_prev;
 	uint32_t num;
-	nserror (*cb)(struct nsurl*, const char *, const char *, const char *, void *);
+	slateerror (*cb)(struct slateurl*, const char *, const char *, const char *, void *);
 	void *cbpw;
 	char *username;
 	char *password;
 	char *realm;
-	struct nsurl *url;
+	struct slateurl *url;
 };
 
 static struct monkey401 *m401_ring = NULL;
 static uint32_t m401_ctr = 0;
 
 
-nserror
-gui_401login_open(struct nsurl *url,
+slateerror
+gui_401login_open(struct slateurl *url,
 		  const char *realm,
 		  const char *username,
 		  const char *password,
-		  nserror (*cb)(struct nsurl *url,
+		  slateerror (*cb)(struct slateurl *url,
 				const char *realm,
 				const char *username,
 				const char *password,
@@ -58,14 +58,14 @@ gui_401login_open(struct nsurl *url,
 
 	m401_ctx = calloc(1, sizeof(*m401_ctx));
 	if (m401_ctx == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 	m401_ctx->realm = strdup(realm);
 	if (m401_ctx->realm == NULL) {
 		free(m401_ctx);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
-	m401_ctx->url = nsurl_ref(url);
+	m401_ctx->url = slateurl_ref(url);
 	m401_ctx->cb = cb;
 	m401_ctx->cbpw = cbpw;
 	m401_ctx->num = m401_ctr++;
@@ -80,12 +80,12 @@ gui_401login_open(struct nsurl *url,
 		password = "";
 	}
 
-	moutf(MOUT_LOGIN, "OPEN LWIN %u URL %s", m401_ctx->num, nsurl_access(url));
+	moutf(MOUT_LOGIN, "OPEN LWIN %u URL %s", m401_ctx->num, slateurl_access(url));
 	moutf(MOUT_LOGIN, "USER LWIN %u STR %s", m401_ctx->num, username);
 	moutf(MOUT_LOGIN, "PASS LWIN %u STR %s", m401_ctx->num, password);
 	moutf(MOUT_LOGIN, "REALM LWIN %u STR %s", m401_ctx->num, realm);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static struct monkey401 *
@@ -113,7 +113,7 @@ static void free_login_context(struct monkey401 *m401_ctx) {
 		free(m401_ctx->password);
 	}
 	free(m401_ctx->realm);
-	nsurl_unref(m401_ctx->url);
+	slateurl_unref(m401_ctx->url);
 	free(m401_ctx);
 }
 

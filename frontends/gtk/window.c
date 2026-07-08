@@ -2,7 +2,7 @@
  * Copyright 2006 Daniel Silverstone <dsilvers@digital-scurf.org>
  * Copyright 2006 Rob Kendrick <rjek@rjek.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,17 +34,17 @@
 #include "utils/utils.h"
 #include "utils/log.h"
 #include "utils/utf8.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/messages.h"
-#include "utils/nsurl.h"
-#include "netsurf/inttypes.h"
-#include "netsurf/content.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/mouse.h"
-#include "netsurf/window.h"
-#include "netsurf/plotters.h"
-#include "netsurf/form.h"
-#include "netsurf/keypress.h"
+#include "utils/slateurl.h"
+#include "slate/inttypes.h"
+#include "slate/content.h"
+#include "slate/browser_window.h"
+#include "slate/mouse.h"
+#include "slate/window.h"
+#include "slate/plotters.h"
+#include "slate/form.h"
+#include "slate/keypress.h"
 #include "desktop/searchweb.h"
 #include "desktop/textinput.h"
 
@@ -79,7 +79,7 @@ struct gui_window {
 	 * The gtk scaffold object containing menu, buttons, url bar, [tabs],
 	 * drawing area, etc that may contain one or more gui_windows.
 	 */
-	struct nsgtk_scaffolding *scaffold;
+	struct slategtk_scaffolding *scaffold;
 
 	/** The 'content' window that is rendered in the gui_window */
 	struct browser_window	*bw;
@@ -104,7 +104,7 @@ struct gui_window {
 	int last_x, last_y;
 
 	/** controls toolbar context */
-	struct nsgtk_toolbar *toolbar;
+	struct slategtk_toolbar *toolbar;
 
 	/** search toolbar context */
 	struct gtk_search *search;
@@ -147,7 +147,7 @@ struct gui_window {
 struct gui_window *window_list = NULL;
 
 static void
-nsgtk_select_menu_clicked(GtkCheckMenuItem *checkmenuitem,
+slategtk_select_menu_clicked(GtkCheckMenuItem *checkmenuitem,
 			  gpointer user_data)
 {
 	form_select_process_selection(select_menu_control,
@@ -157,7 +157,7 @@ nsgtk_select_menu_clicked(GtkCheckMenuItem *checkmenuitem,
 #if GTK_CHECK_VERSION(3,0,0)
 
 static gboolean
-nsgtk_window_draw_event(GtkWidget *widget, cairo_t *cr, gpointer data)
+slategtk_window_draw_event(GtkWidget *widget, cairo_t *cr, gpointer data)
 {
 	struct gui_window *gw = data;
 	struct gui_window *z;
@@ -165,7 +165,7 @@ nsgtk_window_draw_event(GtkWidget *widget, cairo_t *cr, gpointer data)
 	struct redraw_context ctx = {
 		.interactive = true,
 		.background_images = true,
-		.plot = &nsgtk_plotters
+		.plot = &slategtk_plotters
 	};
 
 	double x1;
@@ -183,8 +183,8 @@ nsgtk_window_draw_event(GtkWidget *widget, cairo_t *cr, gpointer data)
 
 	current_cr = cr;
 
-	GtkAdjustment *vscroll = nsgtk_layout_get_vadjustment(gw->layout);
-	GtkAdjustment *hscroll = nsgtk_layout_get_hadjustment(gw->layout);
+	GtkAdjustment *vscroll = slategtk_layout_get_vadjustment(gw->layout);
+	GtkAdjustment *hscroll = slategtk_layout_get_hadjustment(gw->layout);
 
 	cairo_clip_extents(cr, &x1, &y1, &x2, &y2);
 
@@ -200,7 +200,7 @@ nsgtk_window_draw_event(GtkWidget *widget, cairo_t *cr, gpointer data)
 			      &ctx);
 
 	if (gw->careth != 0) {
-		nsgtk_plot_caret(gw->caretx, gw->carety, gw->careth);
+		slategtk_plot_caret(gw->caretx, gw->carety, gw->careth);
 	}
 
 	return FALSE;
@@ -209,7 +209,7 @@ nsgtk_window_draw_event(GtkWidget *widget, cairo_t *cr, gpointer data)
 #else
 
 static gboolean
-nsgtk_window_draw_event(GtkWidget *widget, GdkEventExpose *event, gpointer data)
+slategtk_window_draw_event(GtkWidget *widget, GdkEventExpose *event, gpointer data)
 {
 	struct gui_window *gw = data;
 	struct gui_window *z;
@@ -217,7 +217,7 @@ nsgtk_window_draw_event(GtkWidget *widget, GdkEventExpose *event, gpointer data)
 	struct redraw_context ctx = {
 		.interactive = true,
 		.background_images = true,
-		.plot = &nsgtk_plotters
+		.plot = &slategtk_plotters
 	};
 
 	assert(gw);
@@ -228,7 +228,7 @@ nsgtk_window_draw_event(GtkWidget *widget, GdkEventExpose *event, gpointer data)
 	assert(z);
 	assert(GTK_WIDGET(gw->layout) == widget);
 
-	current_cr = gdk_cairo_create(nsgtk_layout_get_bin_window(gw->layout));
+	current_cr = gdk_cairo_create(slategtk_layout_get_bin_window(gw->layout));
 
 	clip.x0 = event->area.x;
 	clip.y0 = event->area.y;
@@ -238,7 +238,7 @@ nsgtk_window_draw_event(GtkWidget *widget, GdkEventExpose *event, gpointer data)
 	browser_window_redraw(gw->bw, 0, 0, &clip, &ctx);
 
 	if (gw->careth != 0) {
-		nsgtk_plot_caret(gw->caretx, gw->carety, gw->careth);
+		slategtk_plot_caret(gw->caretx, gw->carety, gw->careth);
 	}
 
 	cairo_destroy(current_cr);
@@ -249,7 +249,7 @@ nsgtk_window_draw_event(GtkWidget *widget, GdkEventExpose *event, gpointer data)
 #endif
 
 static gboolean
-nsgtk_window_motion_notify_event(GtkWidget *widget,
+slategtk_window_motion_notify_event(GtkWidget *widget,
 				 GdkEventMotion *event,
 				 gpointer data)
 {
@@ -308,7 +308,7 @@ nsgtk_window_motion_notify_event(GtkWidget *widget,
  * when focus leaves the layout widget ensure the caret is cleared
  */
 static gboolean
-nsgtk_window_focus_out_event(GtkWidget *widget,
+slategtk_window_focus_out_event(GtkWidget *widget,
 			     GdkEvent *event,
 			     gpointer data)
 {
@@ -322,7 +322,7 @@ nsgtk_window_focus_out_event(GtkWidget *widget,
  * GTK signal handler for button-press-event on layout
  */
 static gboolean
-nsgtk_window_button_press_event(GtkWidget *widget,
+slategtk_window_button_press_event(GtkWidget *widget,
 				GdkEventButton *event,
 				gpointer data)
 {
@@ -330,7 +330,7 @@ nsgtk_window_button_press_event(GtkWidget *widget,
 
 	gtk_im_context_reset(g->input_method);
 	gtk_widget_grab_focus(GTK_WIDGET(g->layout));
-	nsgtk_local_history_hide();
+	slategtk_local_history_hide();
 
 	g->mouse.pressed_x = event->x;
 	g->mouse.pressed_y = event->y;
@@ -347,7 +347,7 @@ nsgtk_window_button_press_event(GtkWidget *widget,
 	case 3:	/* Right button, usually. Action button, context menu. */
 		/** \todo determine if hiding the caret here is necessary */
 		browser_window_remove_caret(g->bw, true);
-		nsgtk_scaffolding_context_menu(g->scaffold,
+		slategtk_scaffolding_context_menu(g->scaffold,
 					       g->mouse.pressed_x,
 					       g->mouse.pressed_y);
 		return TRUE;
@@ -393,7 +393,7 @@ nsgtk_window_button_press_event(GtkWidget *widget,
 
 
 static gboolean
-nsgtk_window_button_release_event(GtkWidget *widget,
+slategtk_window_button_release_event(GtkWidget *widget,
 				  GdkEventButton *event,
 				  gpointer data)
 {
@@ -443,7 +443,7 @@ nsgtk_window_button_release_event(GtkWidget *widget,
 
 
 static gboolean
-nsgtk_window_scroll_event(GtkWidget *widget,
+slategtk_window_scroll_event(GtkWidget *widget,
 			  GdkEventScroll *event,
 			  gpointer data)
 {
@@ -451,8 +451,8 @@ nsgtk_window_scroll_event(GtkWidget *widget,
 	double value;
 	double deltax = 0;
 	double deltay = 0;
-	GtkAdjustment *vscroll = nsgtk_layout_get_vadjustment(g->layout);
-	GtkAdjustment *hscroll = nsgtk_layout_get_hadjustment(g->layout);
+	GtkAdjustment *vscroll = slategtk_layout_get_vadjustment(g->layout);
+	GtkAdjustment *hscroll = slategtk_layout_get_hadjustment(g->layout);
 	GtkAllocation alloc;
 
 	switch (event->direction) {
@@ -482,8 +482,8 @@ nsgtk_window_scroll_event(GtkWidget *widget,
 		return TRUE;
 	}
 
-	deltax *= nsgtk_adjustment_get_step_increment(hscroll);
-	deltay *= nsgtk_adjustment_get_step_increment(vscroll);
+	deltax *= slategtk_adjustment_get_step_increment(hscroll);
+	deltay *= slategtk_adjustment_get_step_increment(vscroll);
 
 	if (browser_window_scroll_at_point(g->bw,
 					   event->x, event->y,
@@ -496,13 +496,13 @@ nsgtk_window_scroll_event(GtkWidget *widget,
 			value = gtk_adjustment_get_value(hscroll) + deltax;
 
 			/* @todo consider gtk_widget_get_allocated_width() */
-			nsgtk_widget_get_allocation(GTK_WIDGET(g->layout), &alloc);
+			slategtk_widget_get_allocation(GTK_WIDGET(g->layout), &alloc);
 
-			if (value > nsgtk_adjustment_get_upper(hscroll) - alloc.width) {
-				value = nsgtk_adjustment_get_upper(hscroll) - alloc.width;
+			if (value > slategtk_adjustment_get_upper(hscroll) - alloc.width) {
+				value = slategtk_adjustment_get_upper(hscroll) - alloc.width;
 			}
-			if (value < nsgtk_adjustment_get_lower(hscroll)) {
-				value = nsgtk_adjustment_get_lower(hscroll);
+			if (value < slategtk_adjustment_get_lower(hscroll)) {
+				value = slategtk_adjustment_get_lower(hscroll);
 			}
 
 			gtk_adjustment_set_value(hscroll, value);
@@ -513,13 +513,13 @@ nsgtk_window_scroll_event(GtkWidget *widget,
 			value = gtk_adjustment_get_value(vscroll) + deltay;
 
 			/* @todo consider gtk_widget_get_allocated_height */
-			nsgtk_widget_get_allocation(GTK_WIDGET(g->layout), &alloc);
+			slategtk_widget_get_allocation(GTK_WIDGET(g->layout), &alloc);
 
-			if (value > (nsgtk_adjustment_get_upper(vscroll) - alloc.height)) {
-				value = nsgtk_adjustment_get_upper(vscroll) - alloc.height;
+			if (value > (slategtk_adjustment_get_upper(vscroll) - alloc.height)) {
+				value = slategtk_adjustment_get_upper(vscroll) - alloc.height;
 			}
-			if (value < nsgtk_adjustment_get_lower(vscroll)) {
-				value = nsgtk_adjustment_get_lower(vscroll);
+			if (value < slategtk_adjustment_get_lower(vscroll)) {
+				value = slategtk_adjustment_get_lower(vscroll);
 			}
 
 			gtk_adjustment_set_value(vscroll, value);
@@ -531,7 +531,7 @@ nsgtk_window_scroll_event(GtkWidget *widget,
 
 
 static gboolean
-nsgtk_window_keypress_event(GtkWidget *widget,
+slategtk_window_keypress_event(GtkWidget *widget,
 			    GdkEventKey *event,
 			    gpointer data)
 {
@@ -550,27 +550,27 @@ nsgtk_window_keypress_event(GtkWidget *widget,
 		return TRUE;
 
 	double value;
-	GtkAdjustment *vscroll = nsgtk_layout_get_vadjustment(g->layout);
-	GtkAdjustment *hscroll = nsgtk_layout_get_hadjustment(g->layout);
+	GtkAdjustment *vscroll = slategtk_layout_get_vadjustment(g->layout);
+	GtkAdjustment *hscroll = slategtk_layout_get_hadjustment(g->layout);
 	GtkAllocation alloc;
 
 	/* @todo consider gtk_widget_get_allocated_width() */
-	nsgtk_widget_get_allocation(GTK_WIDGET(g->layout), &alloc);
+	slategtk_widget_get_allocation(GTK_WIDGET(g->layout), &alloc);
 
 	switch (event->keyval) {
 
 	case GDK_KEY(Home):
 	case GDK_KEY(KP_Home):
-		value = nsgtk_adjustment_get_lower(vscroll);
+		value = slategtk_adjustment_get_lower(vscroll);
 		gtk_adjustment_set_value(vscroll, value);
 		break;
 
 	case GDK_KEY(End):
 	case GDK_KEY(KP_End):
-		value = nsgtk_adjustment_get_upper(vscroll) - alloc.height;
+		value = slategtk_adjustment_get_upper(vscroll) - alloc.height;
 
-		if (value < nsgtk_adjustment_get_lower(vscroll))
-			value = nsgtk_adjustment_get_lower(vscroll);
+		if (value < slategtk_adjustment_get_lower(vscroll))
+			value = slategtk_adjustment_get_lower(vscroll);
 
 		gtk_adjustment_set_value(vscroll, value);
 		break;
@@ -578,10 +578,10 @@ nsgtk_window_keypress_event(GtkWidget *widget,
 	case GDK_KEY(Left):
 	case GDK_KEY(KP_Left):
 		value = gtk_adjustment_get_value(hscroll) -
-			nsgtk_adjustment_get_step_increment(hscroll);
+			slategtk_adjustment_get_step_increment(hscroll);
 
-		if (value < nsgtk_adjustment_get_lower(hscroll))
-			value = nsgtk_adjustment_get_lower(hscroll);
+		if (value < slategtk_adjustment_get_lower(hscroll))
+			value = slategtk_adjustment_get_lower(hscroll);
 
 		gtk_adjustment_set_value(hscroll, value);
 		break;
@@ -589,10 +589,10 @@ nsgtk_window_keypress_event(GtkWidget *widget,
 	case GDK_KEY(Up):
 	case GDK_KEY(KP_Up):
 		value = gtk_adjustment_get_value(vscroll) -
-			nsgtk_adjustment_get_step_increment(vscroll);
+			slategtk_adjustment_get_step_increment(vscroll);
 
-		if (value < nsgtk_adjustment_get_lower(vscroll))
-			value = nsgtk_adjustment_get_lower(vscroll);
+		if (value < slategtk_adjustment_get_lower(vscroll))
+			value = slategtk_adjustment_get_lower(vscroll);
 
 		gtk_adjustment_set_value(vscroll, value);
 		break;
@@ -600,10 +600,10 @@ nsgtk_window_keypress_event(GtkWidget *widget,
 	case GDK_KEY(Right):
 	case GDK_KEY(KP_Right):
 		value = gtk_adjustment_get_value(hscroll) +
-			nsgtk_adjustment_get_step_increment(hscroll);
+			slategtk_adjustment_get_step_increment(hscroll);
 
-		if (value > nsgtk_adjustment_get_upper(hscroll) - alloc.width)
-			value = nsgtk_adjustment_get_upper(hscroll) - alloc.width;
+		if (value > slategtk_adjustment_get_upper(hscroll) - alloc.width)
+			value = slategtk_adjustment_get_upper(hscroll) - alloc.width;
 
 		gtk_adjustment_set_value(hscroll, value);
 		break;
@@ -611,10 +611,10 @@ nsgtk_window_keypress_event(GtkWidget *widget,
 	case GDK_KEY(Down):
 	case GDK_KEY(KP_Down):
 		value = gtk_adjustment_get_value(vscroll) +
-			nsgtk_adjustment_get_step_increment(vscroll);
+			slategtk_adjustment_get_step_increment(vscroll);
 
-		if (value > nsgtk_adjustment_get_upper(vscroll) - alloc.height)
-			value = nsgtk_adjustment_get_upper(vscroll) - alloc.height;
+		if (value > slategtk_adjustment_get_upper(vscroll) - alloc.height)
+			value = slategtk_adjustment_get_upper(vscroll) - alloc.height;
 
 		gtk_adjustment_set_value(vscroll, value);
 		break;
@@ -622,10 +622,10 @@ nsgtk_window_keypress_event(GtkWidget *widget,
 	case GDK_KEY(Page_Up):
 	case GDK_KEY(KP_Page_Up):
 		value = gtk_adjustment_get_value(vscroll) -
-			nsgtk_adjustment_get_page_increment(vscroll);
+			slategtk_adjustment_get_page_increment(vscroll);
 
-		if (value < nsgtk_adjustment_get_lower(vscroll))
-			value = nsgtk_adjustment_get_lower(vscroll);
+		if (value < slategtk_adjustment_get_lower(vscroll))
+			value = slategtk_adjustment_get_lower(vscroll);
 
 		gtk_adjustment_set_value(vscroll, value);
 		break;
@@ -633,10 +633,10 @@ nsgtk_window_keypress_event(GtkWidget *widget,
 	case GDK_KEY(Page_Down):
 	case GDK_KEY(KP_Page_Down):
 		value = gtk_adjustment_get_value(vscroll) +
-			nsgtk_adjustment_get_page_increment(vscroll);
+			slategtk_adjustment_get_page_increment(vscroll);
 
-		if (value > nsgtk_adjustment_get_upper(vscroll) - alloc.height)
-			value = nsgtk_adjustment_get_upper(vscroll) - alloc.height;
+		if (value > slategtk_adjustment_get_upper(vscroll) - alloc.height)
+			value = slategtk_adjustment_get_upper(vscroll) - alloc.height;
 
 		gtk_adjustment_set_value(vscroll, value);
 		break;
@@ -651,7 +651,7 @@ nsgtk_window_keypress_event(GtkWidget *widget,
 
 
 static gboolean
-nsgtk_window_keyrelease_event(GtkWidget *widget,
+slategtk_window_keyrelease_event(GtkWidget *widget,
 			      GdkEventKey *event,
 			      gpointer data)
 {
@@ -662,7 +662,7 @@ nsgtk_window_keyrelease_event(GtkWidget *widget,
 
 
 static void
-nsgtk_window_input_method_commit(GtkIMContext *ctx,
+slategtk_window_input_method_commit(GtkIMContext *ctx,
 				 const gchar *str,
 				 gpointer data)
 {
@@ -680,7 +680,7 @@ nsgtk_window_input_method_commit(GtkIMContext *ctx,
 
 
 static gboolean
-nsgtk_window_size_allocate_event(GtkWidget *widget,
+slategtk_window_size_allocate_event(GtkWidget *widget,
 				 GtkAllocation *allocation,
 				 gpointer data)
 {
@@ -703,7 +703,7 @@ nsgtk_window_size_allocate_event(GtkWidget *widget,
  * percentage of pane total width not an absolute value.
  */
 static void
-nsgtk_paned_notify__position(GObject *gobject, GParamSpec *pspec, gpointer data)
+slategtk_paned_notify__position(GObject *gobject, GParamSpec *pspec, gpointer data)
 {
 	struct gui_window *g = data;
 	GtkAllocation pane_alloc;
@@ -714,11 +714,11 @@ nsgtk_paned_notify__position(GObject *gobject, GParamSpec *pspec, gpointer data)
 	{
 		g->paned_sized = true;
 		gtk_paned_set_position(g->paned,
-		(nsoption_int(toolbar_status_size) * pane_alloc.width) / 10000);
+		(slateoption_int(toolbar_status_size) * pane_alloc.width) / 10000);
 		return;
 	}
 
-	nsoption_set_int(toolbar_status_size,
+	slateoption_set_int(toolbar_status_size,
 	 ((gtk_paned_get_position(g->paned) * 10000) / (pane_alloc.width - 1)));
 }
 
@@ -728,12 +728,12 @@ nsgtk_paned_notify__position(GObject *gobject, GParamSpec *pspec, gpointer data)
  *   when pane is resized.
  */
 static gboolean
-nsgtk_paned_size_allocate_event(GtkWidget *widget,
+slategtk_paned_size_allocate_event(GtkWidget *widget,
 				GtkAllocation *allocation,
 				gpointer data)
 {
 	gtk_paned_set_position(GTK_PANED(widget),
-	       (nsoption_int(toolbar_status_size) * allocation->width) / 10000);
+	       (slateoption_int(toolbar_status_size) * allocation->width) / 10000);
 
 	return TRUE;
 }
@@ -773,7 +773,7 @@ static bool get_tool_bar_show(void)
 {
 	const char *cur_bar_show;
 
-	cur_bar_show = nsoption_charp(bar_show);
+	cur_bar_show = slateoption_charp(bar_show);
 	if (cur_bar_show != NULL) {
 		if (strcmp(cur_bar_show, "menu/tool") == 0) {
 			return true;
@@ -795,21 +795,21 @@ static bool get_tool_bar_show(void)
 static void next_throbber_frame(void *p)
 {
 	struct gui_window *gw = p;
-	nserror res;
+	slateerror res;
 	GdkPixbuf *pixbuf;
 
 	gw->throb_frame++; /* advance to next frame */
 
-	res = nsgtk_throbber_get_frame(gw->throb_frame, &pixbuf);
-	if (res == NSERROR_BAD_SIZE) {
+	res = slategtk_throbber_get_frame(gw->throb_frame, &pixbuf);
+	if (res == SLATEERROR_BAD_SIZE) {
 		gw->throb_frame = 1;
-		res = nsgtk_throbber_get_frame(gw->throb_frame, &pixbuf);
+		res = slategtk_throbber_get_frame(gw->throb_frame, &pixbuf);
 	}
 
-	if (res == NSERROR_OK) {
-		nsgtk_tab_set_icon(gw->container, pixbuf);
+	if (res == SLATEERROR_OK) {
+		slategtk_tab_set_icon(gw->container, pixbuf);
 		/* only schedule next frame if there are no errors */
-		nsgtk_schedule(THROBBER_FRAME_TIME, next_throbber_frame, p);
+		slategtk_schedule(THROBBER_FRAME_TIME, next_throbber_frame, p);
 	}
 }
 
@@ -835,10 +835,10 @@ gui_window_create(struct browser_window *bw,
 	struct gui_window *g; /* what is being created to return */
 	bool open_in_background = !(flags & GW_CREATE_FOREGROUND);
 	GtkBuilder* tab_builder;
-	nserror res;
+	slateerror res;
 
-	res = nsgtk_builder_new_from_resname("tabcontents", &tab_builder);
-	if (res != NSERROR_OK) {
+	res = slategtk_builder_new_from_resname("tabcontents", &tab_builder);
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Tab contents UI builder init failed");
 		return NULL;
 	}
@@ -847,7 +847,7 @@ gui_window_create(struct browser_window *bw,
 
 	g = calloc(1, sizeof(*g));
 	if (!g) {
-		nsgtk_warning("NoMemory", 0);
+		slategtk_warning("NoMemory", 0);
 		g_object_unref(tab_builder);
 		return NULL;
 	}
@@ -865,14 +865,14 @@ gui_window_create(struct browser_window *bw,
 		if (existing != NULL) {
 			g->scaffold = existing->scaffold;
 		} else {
-			g->scaffold = nsgtk_current_scaffolding();
+			g->scaffold = slategtk_current_scaffolding();
 		}
 	} else {
 		/* open in new window, create and attach to scaffold */
-		g->scaffold = nsgtk_new_scaffolding(g);
+		g->scaffold = slategtk_new_scaffolding(g);
 	}
 	if (g->scaffold == NULL) {
-		nsgtk_warning("NoMemory", 0);
+		slategtk_warning("NoMemory", 0);
 		free(g);
 		g_object_unref(tab_builder);
 		return NULL;
@@ -888,18 +888,18 @@ gui_window_create(struct browser_window *bw,
 
 
 	/* create toolbar */
-	res = nsgtk_toolbar_create(tab_builder, bw_from_gw, g,
+	res = slategtk_toolbar_create(tab_builder, bw_from_gw, g,
 				   !!(flags & GW_CREATE_FOCUS_LOCATION),
 				   &g->toolbar);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		free(g);
 		g_object_unref(tab_builder);
 		return NULL;
 	}
 
 	/* local page text search toolbar */
-	res = nsgtk_search_create(tab_builder, g->bw, &g->search);
-	if (res != NSERROR_OK) {
+	res = slategtk_search_create(tab_builder, g->bw, &g->search);
+	if (res != SLATEERROR_OK) {
 		free(g);
 		g_object_unref(tab_builder);
 		return NULL;
@@ -930,15 +930,15 @@ gui_window_create(struct browser_window *bw,
 				GDK_KEY_PRESS_MASK |
 				GDK_KEY_RELEASE_MASK |
 				GDK_SCROLL_MASK);
-	nsgtk_widget_set_can_focus(GTK_WIDGET(g->layout), TRUE);
+	slategtk_widget_set_can_focus(GTK_WIDGET(g->layout), TRUE);
 
 	/* set the default background colour of the drawing area to white. */
-	nsgtk_widget_override_background_color(GTK_WIDGET(g->layout),
+	slategtk_widget_override_background_color(GTK_WIDGET(g->layout),
 					       GTK_STATE_FLAG_NORMAL,
 					       0, 0xffff, 0xffff, 0xffff);
 
-	nsgtk_connect_draw_event(GTK_WIDGET(g->layout),
-				G_CALLBACK(nsgtk_window_draw_event), g);
+	slategtk_connect_draw_event(GTK_WIDGET(g->layout),
+				G_CALLBACK(slategtk_window_draw_event), g);
 
 	/* helper macro to conect signals to callbacks */
 #define CONNECT(obj, sig, callback, ptr)				\
@@ -946,51 +946,51 @@ gui_window_create(struct browser_window *bw,
 
 	/* layout signals */
 	CONNECT(g->layout, "motion-notify-event",
-			nsgtk_window_motion_notify_event, g);
+			slategtk_window_motion_notify_event, g);
 	CONNECT(g->layout, "button-press-event",
-			nsgtk_window_button_press_event, g);
+			slategtk_window_button_press_event, g);
 	CONNECT(g->layout, "button-release-event",
-			nsgtk_window_button_release_event, g);
+			slategtk_window_button_release_event, g);
 	CONNECT(g->layout, "key-press-event",
-			nsgtk_window_keypress_event, g);
+			slategtk_window_keypress_event, g);
 	CONNECT(g->layout, "key-release-event",
-			nsgtk_window_keyrelease_event, g);
+			slategtk_window_keyrelease_event, g);
 	CONNECT(g->layout, "size-allocate",
-			nsgtk_window_size_allocate_event, g);
+			slategtk_window_size_allocate_event, g);
 	CONNECT(g->layout, "scroll-event",
-			nsgtk_window_scroll_event, g);
+			slategtk_window_scroll_event, g);
 	CONNECT(g->layout, "focus-out-event",
-			nsgtk_window_focus_out_event, g);
+			slategtk_window_focus_out_event, g);
 
 	/* status pane signals */
 	CONNECT(g->paned, "size-allocate",
-		nsgtk_paned_size_allocate_event, g);
+		slategtk_paned_size_allocate_event, g);
 
 	CONNECT(g->paned, "notify::position",
-		nsgtk_paned_notify__position, g);
+		slategtk_paned_notify__position, g);
 
 	/* gtk container destructor */
 	CONNECT(g->container, "destroy", window_destroy, g);
 
 	/* input method */
 	gtk_im_context_set_client_window(g->input_method,
-			nsgtk_layout_get_bin_window(g->layout));
+			slategtk_layout_get_bin_window(g->layout));
 	gtk_im_context_set_use_preedit(g->input_method, FALSE);
 
 	/* input method signals */
 	CONNECT(g->input_method, "commit",
-		nsgtk_window_input_method_commit, g);
+		slategtk_window_input_method_commit, g);
 
 	/* add the tab container to the scaffold notebook */
-	nsgtk_tab_add(g, g->container,
+	slategtk_tab_add(g, g->container,
 		      open_in_background,
 		      messages_get("NewTab"), g->icon);
 
 	/* initialy should not be visible */
-	nsgtk_search_toggle_visibility(g->search);
+	slategtk_search_toggle_visibility(g->search);
 
 	/* set toolbar visibility from user option */
-	nsgtk_toolbar_show(g->toolbar, get_tool_bar_show());
+	slategtk_toolbar_show(g->toolbar, get_tool_bar_show());
 
 	/* safe to drop the reference to the tab_builder as the container is
 	 * referenced by the notebook now.
@@ -999,7 +999,7 @@ gui_window_create(struct browser_window *bw,
 
 	/* Finally we need to focus the location bar if requested */
 	if (flags & GW_CREATE_FOCUS_LOCATION) {
-		if (nsgtk_window_item_activate(g, OPENLOCATION_BUTTON) != NSERROR_OK) {
+		if (slategtk_window_item_activate(g, OPENLOCATION_BUTTON) != SLATEERROR_OK) {
 			NSLOG(netsurf, WARNING, "Unable to focus location input");
 		}
 	}
@@ -1016,7 +1016,7 @@ static void gui_window_destroy(struct gui_window *gw)
 	NSLOG(netsurf, INFO, "scaffolding: %p", gw->scaffold);
 
 	/* kill off any throbber that might be running */
-	nsgtk_schedule(-1, next_throbber_frame, gw);
+	slategtk_schedule(-1, next_throbber_frame, gw);
 
 	/* remove from window list */
 	if (gw->prev) {
@@ -1066,15 +1066,15 @@ gui_window_set_icon(struct gui_window *gw, struct hlcache_handle *icon)
 
 	/* only set icon if throbber not running */
 	if (gw->throb_frame == 0) {
-		nsgtk_tab_set_icon(gw->container, gw->icon);
+		slategtk_tab_set_icon(gw->container, gw->icon);
 	}
 }
 
 
 static bool gui_window_get_scroll(struct gui_window *g, int *sx, int *sy)
 {
-	GtkAdjustment *vadj = nsgtk_layout_get_vadjustment(g->layout);
-	GtkAdjustment *hadj = nsgtk_layout_get_hadjustment(g->layout);
+	GtkAdjustment *vadj = slategtk_layout_get_vadjustment(g->layout);
+	GtkAdjustment *hadj = slategtk_layout_get_hadjustment(g->layout);
 
 	assert(vadj);
 	assert(hadj);
@@ -1086,7 +1086,7 @@ static bool gui_window_get_scroll(struct gui_window *g, int *sx, int *sy)
 }
 
 
-static void nsgtk_redraw_caret(struct gui_window *g)
+static void slategtk_redraw_caret(struct gui_window *g)
 {
 	int sx, sy;
 
@@ -1124,20 +1124,20 @@ static void gui_window_remove_caret(struct gui_window *g)
  *
  * \param g gui_window
  * \param rect area to redraw or NULL for the entire window area
- * \return NSERROR_OK on success or appropriate error code
+ * \return SLATEERROR_OK on success or appropriate error code
  */
-static nserror
-nsgtk_window_invalidate_area(struct gui_window *g, const struct rect *rect)
+static slateerror
+slategtk_window_invalidate_area(struct gui_window *g, const struct rect *rect)
 {
 	int sx, sy;
 
 	if (rect == NULL) {
 		gtk_widget_queue_draw(GTK_WIDGET(g->layout));
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	if (!browser_window_has_content(g->bw)) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	gui_window_get_scroll(g, &sx, &sy);
@@ -1148,7 +1148,7 @@ nsgtk_window_invalidate_area(struct gui_window *g, const struct rect *rect)
 				   rect->x1 - rect->x0,
 				   rect->y1 - rect->y0);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1169,13 +1169,13 @@ static void gui_window_set_status(struct gui_window *g, const char *text)
  *
  * \param g gui window to scroll
  * \param rect The rectangle to ensure is shown.
- * \return NSERROR_OK on success or apropriate error code.
+ * \return SLATEERROR_OK on success or apropriate error code.
  */
-static nserror
+static slateerror
 gui_window_set_scroll(struct gui_window *g, const struct rect *rect)
 {
-	GtkAdjustment *vadj = nsgtk_layout_get_vadjustment(g->layout);
-	GtkAdjustment *hadj = nsgtk_layout_get_hadjustment(g->layout);
+	GtkAdjustment *vadj = slategtk_layout_get_vadjustment(g->layout);
+	GtkAdjustment *hadj = slategtk_layout_get_hadjustment(g->layout);
 	gdouble vlower, vpage, vupper, hlower, hpage, hupper;
 	gdouble x = (gdouble)rect->x0;
 	gdouble y = (gdouble)rect->y0;
@@ -1202,7 +1202,7 @@ gui_window_set_scroll(struct gui_window *g, const struct rect *rect)
 	gtk_adjustment_set_value(vadj, y);
 	gtk_adjustment_set_value(hadj, x);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1210,7 +1210,7 @@ static void gui_window_update_extent(struct gui_window *g)
 {
 	int w, h;
 
-	if (browser_window_get_extents(g->bw, true, &w, &h) == NSERROR_OK) {
+	if (browser_window_get_extents(g->bw, true, &w, &h) == SLATEERROR_OK) {
 		gtk_layout_set_size(g->layout, w, h);
 		gtk_widget_queue_resize(g->grid);
 	}
@@ -1273,7 +1273,7 @@ gui_window_set_pointer(struct gui_window *g, gui_pointer_shape shape)
 		cursortype = GDK_QUESTION_ARROW;
 		break;
 	case GUI_POINTER_MENU:
-		cursor = nsgtk_create_menu_cursor();
+		cursor = slategtk_create_menu_cursor();
 		nullcursor = true;
 		break;
 	case GUI_POINTER_PROGRESS:
@@ -1295,7 +1295,7 @@ gui_window_set_pointer(struct gui_window *g, gui_pointer_shape shape)
 				gtk_widget_get_display(
 					GTK_WIDGET(g->layout)),
 					cursortype);
-	gdk_window_set_cursor(nsgtk_widget_get_window(GTK_WIDGET(g->layout)),
+	gdk_window_set_cursor(slategtk_widget_get_window(GTK_WIDGET(g->layout)),
 			      cursor);
 
 	if (!nullcursor)
@@ -1308,7 +1308,7 @@ gui_window_place_caret(struct gui_window *g,
 		       int x, int y, int height,
 		       const struct rect *clip)
 {
-	nsgtk_redraw_caret(g);
+	slategtk_redraw_caret(g);
 
 	y += 1;
 	height -= 1;
@@ -1326,7 +1326,7 @@ gui_window_place_caret(struct gui_window *g,
 	g->carety = y;
 	g->careth = height;
 
-	nsgtk_redraw_caret(g);
+	slategtk_redraw_caret(g);
 
 	gtk_widget_grab_focus(GTK_WIDGET(g->layout));
 }
@@ -1338,21 +1338,21 @@ gui_window_place_caret(struct gui_window *g,
  * \param gw The gui window to measure content area of.
  * \param width receives width of window
  * \param height receives height of window
- * \return NSERROR_OK on sucess and width and height updated
+ * \return SLATEERROR_OK on sucess and width and height updated
  *          else error code.
  */
-static nserror
+static slateerror
 gui_window_get_dimensions(struct gui_window *gw, int *width, int *height)
 {
 	GtkAllocation alloc;
 
 	/** @todo consider gtk_widget_get_allocated_width() */
-	nsgtk_widget_get_allocation(GTK_WIDGET(gw->layout), &alloc);
+	slategtk_widget_get_allocation(GTK_WIDGET(gw->layout), &alloc);
 
 	*width = alloc.width;
 	*height = alloc.height;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1401,7 +1401,7 @@ gui_window_create_form_select_menu(struct gui_window *g,
 		 * for a context with a single integer in it.
 		 */
 		g_signal_connect(menu_item, "toggled",
-			G_CALLBACK(nsgtk_select_menu_clicked), (gpointer)item);
+			G_CALLBACK(slategtk_select_menu_clicked), (gpointer)item);
 
 		gtk_menu_shell_append(GTK_MENU_SHELL(select_menu), menu_item);
 
@@ -1411,7 +1411,7 @@ gui_window_create_form_select_menu(struct gui_window *g,
 
 	gtk_widget_show_all(select_menu);
 
-	nsgtk_menu_popup_at_pointer(GTK_MENU(select_menu), NULL);
+	slategtk_menu_popup_at_pointer(GTK_MENU(select_menu), NULL);
 }
 
 
@@ -1428,10 +1428,10 @@ gui_window_file_gadget_open(struct gui_window *g,
 	GtkWidget *dialog;
 
 	dialog = gtk_file_chooser_dialog_new("Select File",
-			nsgtk_scaffolding_window(g->scaffold),
+			slategtk_scaffolding_window(g->scaffold),
 			GTK_FILE_CHOOSER_ACTION_OPEN,
-			NSGTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
-			NSGTK_STOCK_OPEN, GTK_RESPONSE_ACCEPT,
+			SLATEGTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
+			SLATEGTK_STOCK_OPEN, GTK_RESPONSE_ACCEPT,
 			NULL);
 
 	NSLOG(netsurf, INFO, "*** open dialog: %p", dialog);
@@ -1456,29 +1456,29 @@ gui_window_file_gadget_open(struct gui_window *g,
 /**
  * handle throbber changing state
  */
-static nserror throbber(struct gui_window *gw, bool active)
+static slateerror throbber(struct gui_window *gw, bool active)
 {
-	nsgtk_toolbar_throbber(gw->toolbar, active);
-	nsgtk_scaffolding_throbber(gw, active);
+	slategtk_toolbar_throbber(gw->toolbar, active);
+	slategtk_scaffolding_throbber(gw, active);
 	if (active) {
-		nsgtk_schedule(THROBBER_FRAME_TIME, next_throbber_frame, gw);
+		slategtk_schedule(THROBBER_FRAME_TIME, next_throbber_frame, gw);
 	} else {
-		nsgtk_schedule(-1, next_throbber_frame, gw);
+		slategtk_schedule(-1, next_throbber_frame, gw);
 		gw->throb_frame = 0;
 		/* set tab back to favicon */
-		nsgtk_tab_set_icon(gw->container, gw->icon);
+		slategtk_tab_set_icon(gw->container, gw->icon);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * handle page info changing
  */
-static nserror page_info_change(struct gui_window *gw)
+static slateerror page_info_change(struct gui_window *gw)
 {
-	nsgtk_toolbar_page_info_change(gw->toolbar);
-	return NSERROR_OK;
+	slategtk_toolbar_page_info_change(gw->toolbar);
+	return SLATEERROR_OK;
 }
 
 /**
@@ -1486,9 +1486,9 @@ static nserror page_info_change(struct gui_window *gw)
  *
  * \param gw The window receiving the event.
  * \param event The event code.
- * \return NSERROR_OK when processed ok
+ * \return SLATEERROR_OK when processed ok
  */
-static nserror
+static slateerror
 gui_window_event(struct gui_window *gw, enum gui_window_event event)
 {
 	switch (event) {
@@ -1519,7 +1519,7 @@ gui_window_event(struct gui_window *gw, enum gui_window_event event)
 	default:
 		break;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1529,9 +1529,9 @@ gui_window_event(struct gui_window *gw, enum gui_window_event event)
  * \param gw The gui window on which the url has been set.
  * \param url The new url.
  */
-static nserror gui_window_set_url(struct gui_window *gw, nsurl *url)
+static slateerror gui_window_set_url(struct gui_window *gw, slateurl *url)
 {
-	return nsgtk_toolbar_set_url(gw->toolbar, url);
+	return slategtk_toolbar_set_url(gw->toolbar, url);
 }
 
 
@@ -1545,9 +1545,9 @@ static void gui_window_set_title(struct gui_window *gw, const char *title)
 {
 
 	if ((title != NULL) && (title[0] != '\0')) {
-		nsgtk_tab_set_title(gw->container, title);
+		slategtk_tab_set_title(gw->container, title);
 	}
-	nsgtk_scaffolding_set_title(gw, title);
+	slategtk_scaffolding_set_title(gw, title);
 }
 
 
@@ -1556,9 +1556,9 @@ static void gui_window_set_title(struct gui_window *gw, const char *title)
  *
  * \param name The providers name.
  * \param bitmap The bitmap representing the provider.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 gui_search_web_provider_update(const char *name, struct bitmap *bitmap)
 {
 	struct gui_window *gw;
@@ -1569,14 +1569,14 @@ gui_search_web_provider_update(const char *name, struct bitmap *bitmap)
 	}
 
 	for (gw = window_list; gw != NULL; gw = gw->next) {
-		nsgtk_toolbar_set_websearch_image(gw->toolbar, pixbuf);
+		slategtk_toolbar_set_websearch_image(gw->toolbar, pixbuf);
 	}
 
 	if (pixbuf != NULL) {
 		g_object_unref(pixbuf);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -1587,7 +1587,7 @@ static struct gui_search_web_table search_web_table = {
 	.provider_update = gui_search_web_provider_update,
 };
 
-struct gui_search_web_table *nsgtk_search_web_table = &search_web_table;
+struct gui_search_web_table *slategtk_search_web_table = &search_web_table;
 
 
 /**
@@ -1596,7 +1596,7 @@ struct gui_search_web_table *nsgtk_search_web_table = &search_web_table;
 static struct gui_window_table window_table = {
 	.create = gui_window_create,
 	.destroy = gui_window_destroy,
-	.invalidate = nsgtk_window_invalidate_area,
+	.invalidate = slategtk_window_invalidate_area,
 	.get_scroll = gui_window_get_scroll,
 	.set_scroll = gui_window_set_scroll,
 	.get_dimensions = gui_window_get_dimensions,
@@ -1614,48 +1614,48 @@ static struct gui_window_table window_table = {
 
 };
 
-struct gui_window_table *nsgtk_window_table = &window_table;
+struct gui_window_table *slategtk_window_table = &window_table;
 
 
 /* exported interface documented in window.h */
-struct nsgtk_scaffolding *nsgtk_get_scaffold(struct gui_window *g)
+struct slategtk_scaffolding *slategtk_get_scaffold(struct gui_window *g)
 {
 	return g->scaffold;
 }
 
 
 /* exported interface documented in window.h */
-struct browser_window *nsgtk_get_browser_window(struct gui_window *g)
+struct browser_window *slategtk_get_browser_window(struct gui_window *g)
 {
 	return g->bw;
 }
 
 
 /* exported interface documented in window.h */
-GtkLayout *nsgtk_window_get_layout(struct gui_window *g)
+GtkLayout *slategtk_window_get_layout(struct gui_window *g)
 {
 	return g->layout;
 }
 
 
 /* exported interface documented in window.h */
-nserror
-nsgtk_window_search_toggle(struct gui_window *gw)
+slateerror
+slategtk_window_search_toggle(struct gui_window *gw)
 {
-	return nsgtk_search_toggle_visibility(gw->search);
+	return slategtk_search_toggle_visibility(gw->search);
 }
 
 
 /* exported interface documented in window.h */
-nserror
-nsgtk_window_item_activate(struct gui_window *gw, nsgtk_toolbar_button itemid)
+slateerror
+slategtk_window_item_activate(struct gui_window *gw, slategtk_toolbar_button itemid)
 {
-	return nsgtk_toolbar_item_activate(gw->toolbar, itemid);
+	return slategtk_toolbar_item_activate(gw->toolbar, itemid);
 }
 
 
 /* exported interface documented in window.h */
-void nsgtk_window_destroy_browser(struct gui_window *gw)
+void slategtk_window_destroy_browser(struct gui_window *gw)
 {
 	/* remove tab */
 	gtk_widget_destroy(gw->container);
@@ -1663,52 +1663,52 @@ void nsgtk_window_destroy_browser(struct gui_window *gw)
 
 
 /* exported interface documented in window.h */
-nserror nsgtk_window_update_all(void)
+slateerror slategtk_window_update_all(void)
 {
 	struct gui_window *gw;
 	for (gw = window_list; gw != NULL; gw = gw->next) {
-		nsgtk_tab_options_changed(nsgtk_scaffolding_notebook(gw->scaffold));
-		nsgtk_toolbar_restyle(gw->toolbar);
-		nsgtk_search_restyle(gw->search);
+		slategtk_tab_options_changed(slategtk_scaffolding_notebook(gw->scaffold));
+		slategtk_toolbar_restyle(gw->toolbar);
+		slategtk_search_restyle(gw->search);
 		browser_window_schedule_reformat(gw->bw);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in window.h */
-nserror nsgtk_window_toolbar_show(struct nsgtk_scaffolding *gs, bool show)
+slateerror slategtk_window_toolbar_show(struct slategtk_scaffolding *gs, bool show)
 {
 	struct gui_window *gw;
 	for (gw = window_list; gw != NULL; gw = gw->next) {
 		if (gw->scaffold == gs) {
-			nsgtk_toolbar_show(gw->toolbar, show);
+			slategtk_toolbar_show(gw->toolbar, show);
 		}
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in window.h */
-nserror nsgtk_window_toolbar_update(void)
+slateerror slategtk_window_toolbar_update(void)
 {
 	struct gui_window *gw;
 	for (gw = window_list; gw != NULL; gw = gw->next) {
-		nsgtk_toolbar_update(gw->toolbar);
+		slategtk_toolbar_update(gw->toolbar);
 
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in window.h */
-nserror nsgtk_window_position_page_info(struct gui_window *gw,
-					struct nsgtk_pi_window *win)
+slateerror slategtk_window_position_page_info(struct gui_window *gw,
+					struct slategtk_pi_window *win)
 {
-	return nsgtk_toolbar_position_page_info(gw->toolbar, win);
+	return slategtk_toolbar_position_page_info(gw->toolbar, win);
 }
 
 /* exported interface documented in window.h */
-nserror nsgtk_window_position_local_history(struct gui_window *gw)
+slateerror slategtk_window_position_local_history(struct gui_window *gw)
 {
-	return nsgtk_toolbar_position_local_history(gw->toolbar);
+	return slategtk_toolbar_position_local_history(gw->toolbar);
 }

@@ -1,7 +1,7 @@
 /*
  * Copyright 2006 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -70,9 +70,9 @@
 #include "utils/utils.h"
 #include "utils/log.h"
 #include "utils/errors.h"
-#include "netsurf/bitmap.h"
+#include "slate/bitmap.h"
 #include "content/content.h"
-#include "netsurf/plotters.h"
+#include "slate/plotters.h"
 
 #include "desktop/gui_internal.h"
 #include "desktop/knockout.h"
@@ -186,14 +186,14 @@ static int nested_depth = 0;
 /**
  * fill an area recursively
  */
-static nserror
+static slateerror
 knockout_plot_fill_recursive(const struct redraw_context *ctx,
 			     struct knockout_box *box,
 			     plot_style_t *plot_style)
 {
 	struct knockout_box *parent;
-	nserror res;
-	nserror ffres = NSERROR_OK; /* first failing result */
+	slateerror res;
+	slateerror ffres = SLATEERROR_OK; /* first failing result */
 
 	for (parent = box; parent; parent = parent->next) {
 		if (parent->deleted)
@@ -206,7 +206,7 @@ knockout_plot_fill_recursive(const struct redraw_context *ctx,
 			res = real_plot.rectangle(ctx, plot_style, &parent->bbox);
 		}
 		/* remember the first error */
-		if ((res != NSERROR_OK) && (ffres == NSERROR_OK)) {
+		if ((res != SLATEERROR_OK) && (ffres == SLATEERROR_OK)) {
 			ffres = res;
 		}
 	}
@@ -217,13 +217,13 @@ knockout_plot_fill_recursive(const struct redraw_context *ctx,
 /**
  * bitmap plot recusivley
  */
-static nserror
+static slateerror
 knockout_plot_bitmap_recursive(const struct redraw_context *ctx,
 			       struct knockout_box *box,
 			       struct knockout_entry *entry)
 {
-	nserror res;
-	nserror ffres = NSERROR_OK; /* first failing result */
+	slateerror res;
+	slateerror ffres = SLATEERROR_OK; /* first failing result */
 	struct knockout_box *parent;
 
 	for (parent = box; parent; parent = parent->next) {
@@ -245,7 +245,7 @@ knockout_plot_bitmap_recursive(const struct redraw_context *ctx,
 					       entry->data.bitmap.flags);
 		}
 		/* remember the first error */
-		if ((res != NSERROR_OK) && (ffres == NSERROR_OK)) {
+		if ((res != SLATEERROR_OK) && (ffres == SLATEERROR_OK)) {
 			ffres = res;
 		}
 
@@ -258,12 +258,12 @@ knockout_plot_bitmap_recursive(const struct redraw_context *ctx,
  *
  * \return  true on success, false otherwise
  */
-static nserror knockout_plot_flush(const struct redraw_context *ctx)
+static slateerror knockout_plot_flush(const struct redraw_context *ctx)
 {
 	int i;
 	struct knockout_box *box;
-	nserror res = NSERROR_OK; /* operation result */
-	nserror ffres = NSERROR_OK; /* first failing result */
+	slateerror res = SLATEERROR_OK; /* operation result */
+	slateerror ffres = SLATEERROR_OK; /* first failing result */
 
 	/* debugging information */
 #ifdef KNOCKOUT_DEBUG
@@ -366,7 +366,7 @@ static nserror knockout_plot_flush(const struct redraw_context *ctx)
 		}
 
 		/* remember the first error */
-		if ((res != NSERROR_OK) && (ffres == NSERROR_OK)) {
+		if ((res != SLATEERROR_OK) && (ffres == SLATEERROR_OK)) {
 			ffres = res;
 		}
 	}
@@ -520,15 +520,15 @@ knockout_calculate(const struct redraw_context *ctx,
  * \param ctx The current redraw context.
  * \param pstyle Style controlling the rectangle plot.
  * \param rect A rectangle defining the line to be drawn
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 knockout_plot_rectangle(const struct redraw_context *ctx,
 			const plot_style_t *pstyle,
 			const struct rect *rect)
 {
 	int kx0, ky0, kx1, ky1;
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 
 	if (pstyle->fill_type != PLOT_OP_TYPE_NONE) {
 		/* filled draw */
@@ -540,7 +540,7 @@ knockout_plot_rectangle(const struct redraw_context *ctx,
 		ky1 = (rect->y1 < clip_cur.y1) ? rect->y1 : clip_cur.y1;
 		if ((kx0 > clip_cur.x1) || (kx1 < clip_cur.x0) ||
 		    (ky0 > clip_cur.y1) || (ky1 < clip_cur.y0)) {
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 
 		/* fills both knock out and get knocked out */
@@ -585,9 +585,9 @@ knockout_plot_rectangle(const struct redraw_context *ctx,
  * \param ctx The current redraw context.
  * \param pstyle Style controlling the line plot.
  * \param line A rectangle defining the line to be drawn
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 knockout_plot_line(const struct redraw_context *ctx,
 		   const plot_style_t *pstyle,
 		   const struct rect *line)
@@ -598,7 +598,7 @@ knockout_plot_line(const struct redraw_context *ctx,
 	if (++knockout_entry_cur >= KNOCKOUT_ENTRIES) {
 		return knockout_plot_flush(ctx);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -614,24 +614,24 @@ knockout_plot_line(const struct redraw_context *ctx,
  * \param pstyle Style controlling the polygon plot.
  * \param p verticies of polygon
  * \param n number of verticies.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 knockout_plot_polygon(const struct redraw_context *ctx,
 		      const plot_style_t *pstyle,
 		      const int *p,
 		      unsigned int n)
 {
 	int *dest;
-	nserror res = NSERROR_OK;
-	nserror ffres = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
+	slateerror ffres = SLATEERROR_OK;
 
 	/* ensure we have sufficient room even when flushed */
 	if (n * 2 >= KNOCKOUT_POLYGONS) {
 		ffres = knockout_plot_flush(ctx);
 		res = real_plot.polygon(ctx, pstyle, p, n);
 		/* return the first error */
-		if ((res != NSERROR_OK) && (ffres == NSERROR_OK)) {
+		if ((res != SLATEERROR_OK) && (ffres == SLATEERROR_OK)) {
 			ffres = res;
 		}
 		return ffres;
@@ -654,7 +654,7 @@ knockout_plot_polygon(const struct redraw_context *ctx,
 		res = knockout_plot_flush(ctx);
 	}
 	/* return the first error */
-	if ((res != NSERROR_OK) && (ffres == NSERROR_OK)) {
+	if ((res != SLATEERROR_OK) && (ffres == SLATEERROR_OK)) {
 		ffres = res;
 	}
 	return ffres;
@@ -672,40 +672,40 @@ knockout_plot_polygon(const struct redraw_context *ctx,
  * \param p elements of path
  * \param n nunber of elements on path
  * \param transform A transform to apply to the path.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 knockout_plot_path(const struct redraw_context *ctx,
 		   const plot_style_t *pstyle,
 		   const float *p,
 		   unsigned int n,
 		   const float transform[6])
 {
-	nserror res;
-	nserror ffres;
+	slateerror res;
+	slateerror ffres;
 
 	ffres = knockout_plot_flush(ctx);
 	res = real_plot.path(ctx, pstyle, p, n, transform);
 
 	/* return the first error */
-	if ((res != NSERROR_OK) && (ffres == NSERROR_OK)) {
+	if ((res != SLATEERROR_OK) && (ffres == SLATEERROR_OK)) {
 		ffres = res;
 	}
 	return ffres;
 }
 
 
-static nserror
+static slateerror
 knockout_plot_clip(const struct redraw_context *ctx, const struct rect *clip)
 {
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 
 	if (clip->x1 < clip->x0 || clip->y0 > clip->y1) {
 #ifdef KNOCKOUT_DEBUG
 		NSLOG(netsurf, INFO, "bad clip rectangle %i %i %i %i",
 		      clip->x0, clip->y0, clip->x1, clip->y1);
 #endif
-		return NSERROR_BAD_SIZE;
+		return SLATEERROR_BAD_SIZE;
 	}
 
 	/* memorise clip for bitmap tiling */
@@ -729,9 +729,9 @@ knockout_plot_clip(const struct redraw_context *ctx, const struct rect *clip)
  * \param y y coordinate
  * \param text UTF-8 string to plot
  * \param length length of string, in bytes
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 knockout_plot_text(const struct redraw_context *ctx,
 		   const plot_font_style_t *fstyle,
 		   int x,
@@ -739,7 +739,7 @@ knockout_plot_text(const struct redraw_context *ctx,
 		   const char *text,
 		   size_t length)
 {
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 
 	knockout_entries[knockout_entry_cur].data.text.x = x;
 	knockout_entries[knockout_entry_cur].data.text.y = y;
@@ -764,16 +764,16 @@ knockout_plot_text(const struct redraw_context *ctx,
  * \param x x coordinate of circle centre.
  * \param y y coordinate of circle centre.
  * \param radius circle radius.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 knockout_plot_disc(const struct redraw_context *ctx,
 		   const plot_style_t *pstyle,
 		   int x,
 		   int y,
 		   int radius)
 {
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 
 	knockout_entries[knockout_entry_cur].data.disc.x = x;
 	knockout_entries[knockout_entry_cur].data.disc.y = y;
@@ -801,9 +801,9 @@ knockout_plot_disc(const struct redraw_context *ctx,
  * \param radius The radius of the arc.
  * \param angle1 The start angle of the arc.
  * \param angle2 The finish angle of the arc.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 knockout_plot_arc(const struct redraw_context *ctx,
 		  const plot_style_t *pstyle,
 		  int x,
@@ -812,7 +812,7 @@ knockout_plot_arc(const struct redraw_context *ctx,
 		  int angle1,
 		  int angle2)
 {
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 
 	knockout_entries[knockout_entry_cur].data.arc.x = x;
 	knockout_entries[knockout_entry_cur].data.arc.y = y;
@@ -850,9 +850,9 @@ knockout_plot_arc(const struct redraw_context *ctx,
  * \param height The height of area to plot the bitmap into
  * \param bg the background colour to alpha blend into
  * \param flags the flags controlling the type of plot operation
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 knockout_plot_bitmap(const struct redraw_context *ctx,
 		     struct bitmap *bitmap,
 		     int x, int y,
@@ -861,8 +861,8 @@ knockout_plot_bitmap(const struct redraw_context *ctx,
 		     bitmap_flags_t flags)
 {
 	int kx0, ky0, kx1, ky1;
-	nserror res;
-	nserror ffres = NSERROR_OK;
+	slateerror res;
+	slateerror ffres = SLATEERROR_OK;
 
 	/* get our bounds */
 	kx0 = clip_cur.x0;
@@ -875,7 +875,7 @@ knockout_plot_bitmap(const struct redraw_context *ctx,
 		if (x + width < kx1)
 			kx1 = x + width;
 		if ((kx0 > clip_cur.x1) || (kx1 < clip_cur.x0))
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 	}
 	if (!(flags & BITMAPF_REPEAT_Y)) {
 		if (y > ky0)
@@ -883,7 +883,7 @@ knockout_plot_bitmap(const struct redraw_context *ctx,
 		if (y + height < ky1)
 			ky1 = y + height;
 		if ((ky0 > clip_cur.y1) || (ky1 < clip_cur.y0))
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 	}
 
 	/* tiled bitmaps both knock out and get knocked out */
@@ -914,7 +914,7 @@ knockout_plot_bitmap(const struct redraw_context *ctx,
 	}
 	res = knockout_plot_clip(ctx, &clip_cur);
 	/* return the first error */
-	if ((res != NSERROR_OK) && (ffres == NSERROR_OK)) {
+	if ((res != SLATEERROR_OK) && (ffres == SLATEERROR_OK)) {
 		ffres = res;
 	}
 	return ffres;
@@ -928,13 +928,13 @@ knockout_plot_bitmap(const struct redraw_context *ctx,
  *
  * \param ctx The current redraw context.
  * \param name The name of the group being started.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 knockout_plot_group_start(const struct redraw_context *ctx, const char *name)
 {
 	if (real_plot.group_start == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	knockout_entries[knockout_entry_cur].data.group_start.name = name;
@@ -942,7 +942,7 @@ knockout_plot_group_start(const struct redraw_context *ctx, const char *name)
 	if (++knockout_entry_cur >= KNOCKOUT_ENTRIES) {
 		return knockout_plot_flush(ctx);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -952,19 +952,19 @@ knockout_plot_group_start(const struct redraw_context *ctx, const char *name)
  * Used when plotter implements export to a vector graphics file format.
  *
  * \param ctx The current redraw context.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror knockout_plot_group_end(const struct redraw_context *ctx)
+static slateerror knockout_plot_group_end(const struct redraw_context *ctx)
 {
 	if (real_plot.group_end == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	knockout_entries[knockout_entry_cur].type = KNOCKOUT_PLOT_GROUP_END;
 	if (++knockout_entry_cur >= KNOCKOUT_ENTRIES) {
 		return knockout_plot_flush(ctx);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported functions documented in desktop/knockout.h */

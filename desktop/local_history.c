@@ -1,7 +1,7 @@
 /*
  * Copyright 2017 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,17 +24,17 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/errors.h"
 
-#include "netsurf/types.h"
-#include "netsurf/layout.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/core_window.h"
-#include "netsurf/plotters.h"
-#include "netsurf/keypress.h"
+#include "slate/types.h"
+#include "slate/layout.h"
+#include "slate/browser_window.h"
+#include "slate/core_window.h"
+#include "slate/plotters.h"
+#include "slate/keypress.h"
 
-#include "utils/nscolour.h"
+#include "utils/slatecolor.h"
 
 #include "desktop/cw_helper.h"
 #include "desktop/gui_internal.h"
@@ -130,7 +130,7 @@ static plot_font_style_t pfstyle_node_sel = {
  * \param y       window y offset
  * \param ctx     current redraw context
  */
-static nserror
+static slateerror
 redraw_entry(struct history *history,
 	     struct history_entry *entry,
 	     struct history_entry *cursor,
@@ -146,7 +146,7 @@ redraw_entry(struct history *history,
 	plot_style_t *pstyle;
 	plot_font_style_t *pfstyle;
 	struct rect rect;
-	nserror res;
+	slateerror res;
 
 	/* setup plot styles */
 	if (entry == history->current) {
@@ -167,7 +167,7 @@ redraw_entry(struct history *history,
 					LOCAL_HISTORY_HEIGHT,
 					0xffffff,
 					0);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 	}
@@ -181,7 +181,7 @@ redraw_entry(struct history *history,
 	if (entry != cursor) {
 		/* Not cursor position */
 		res = ctx->plot->rectangle(ctx, pstyle, &rect);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 	} else {
@@ -196,7 +196,7 @@ redraw_entry(struct history *history,
 	res = guit->layout->position(plot_style_font, entry->page.title,
 				     strlen(entry->page.title), LOCAL_HISTORY_WIDTH,
 				     &char_offset, &actual_x);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -206,7 +206,7 @@ redraw_entry(struct history *history,
 			      entry->y + LOCAL_HISTORY_HEIGHT + 12 + y,
 			      entry->page.title,
 			      char_offset);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -217,7 +217,7 @@ redraw_entry(struct history *history,
 		rect.x1 = entry->x + LOCAL_HISTORY_WIDTH + tailsize + x;
 		rect.y1 = entry->y + LOCAL_HISTORY_HEIGHT / 2 + y;
 		res = ctx->plot->line(ctx, &pstyle_line, &rect);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 
@@ -226,7 +226,7 @@ redraw_entry(struct history *history,
 		rect.x1 = child->x - tailsize + x;
 		rect.y1 = child->y + LOCAL_HISTORY_HEIGHT / 2 + y;
 		res = ctx->plot->line(ctx, &pstyle_line, &rect);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 
@@ -235,17 +235,17 @@ redraw_entry(struct history *history,
 		rect.x1 = child->x + x;
 		rect.y1 = child->y + LOCAL_HISTORY_HEIGHT / 2 + y;
 		res = ctx->plot->line(ctx, &pstyle_line, &rect);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 
 		res = redraw_entry(history, child, cursor, clip, x, y, ctx);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return res;
 		}
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -285,13 +285,13 @@ find_entry_position(struct history_entry *entry, int x, int y)
 }
 
 /* exported interface documented in desktop/local_history.h */
-nserror
+slateerror
 local_history_scroll_to_cursor(struct local_history_session *session)
 {
 	rect cursor;
 
 	if (session->cursor == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	cursor.x0 = session->cursor->x - LOCAL_HISTORY_RIGHT_MARGIN / 2;
@@ -305,28 +305,28 @@ local_history_scroll_to_cursor(struct local_history_session *session)
 }
 
 /* exported interface documented in desktop/local_history.h */
-nserror
+slateerror
 local_history_init(void *core_window_handle,
 		   struct browser_window *bw,
 		   struct local_history_session **session)
 {
 	struct local_history_session *nses;
 
-	pstyle_bg.fill_colour = nscolours[NSCOLOUR_WIN_EVEN_BG];
-	pstyle_line.stroke_colour = nscolours[NSCOLOUR_WIN_EVEN_BORDER];
+	pstyle_bg.fill_colour = slatecolors[SLATECOLOR_WIN_EVEN_BG];
+	pstyle_line.stroke_colour = slatecolors[SLATECOLOR_WIN_EVEN_BORDER];
 
 	pstyle_rect.stroke_colour = pstyle_line.stroke_colour;
-	pstyle_rect_sel.stroke_colour = nscolours[NSCOLOUR_WIN_EVEN_BORDER];
-	pstyle_rect_cursor.stroke_colour = nscolours[NSCOLOUR_SEL_BG];
+	pstyle_rect_sel.stroke_colour = slatecolors[SLATECOLOR_WIN_EVEN_BORDER];
+	pstyle_rect_cursor.stroke_colour = slatecolors[SLATECOLOR_SEL_BG];
 
-	pfstyle_node.foreground = nscolours[NSCOLOUR_WIN_EVEN_FG];
-	pfstyle_node.background = nscolours[NSCOLOUR_WIN_EVEN_BG];
-	pfstyle_node_sel.foreground = nscolours[NSCOLOUR_WIN_EVEN_FG];
-	pfstyle_node_sel.background = nscolours[NSCOLOUR_WIN_EVEN_BG];
+	pfstyle_node.foreground = slatecolors[SLATECOLOR_WIN_EVEN_FG];
+	pfstyle_node.background = slatecolors[SLATECOLOR_WIN_EVEN_BG];
+	pfstyle_node_sel.foreground = slatecolors[SLATECOLOR_WIN_EVEN_FG];
+	pfstyle_node_sel.background = slatecolors[SLATECOLOR_WIN_EVEN_BG];
 
 	nses = calloc(1, sizeof(struct local_history_session));
 	if (nses == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	nses->core_window_handle = core_window_handle;
@@ -335,20 +335,20 @@ local_history_init(void *core_window_handle,
 
 	*session = nses;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in desktop/local_history.h */
-nserror local_history_fini(struct local_history_session *session)
+slateerror local_history_fini(struct local_history_session *session)
 {
 	free(session);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in desktop/local_history.h */
-nserror
+slateerror
 local_history_redraw(struct local_history_session *session,
 		     int x,
 		     int y,
@@ -363,11 +363,11 @@ local_history_redraw(struct local_history_session *session,
 	};
 
 	if (session->bw == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	if (session->bw->history->start == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	ctx->plot->clip(ctx, &r);
@@ -383,7 +383,7 @@ local_history_redraw(struct local_history_session *session,
 }
 
 /* exported interface documented in desktop/local_history.h */
-nserror
+slateerror
 local_history_mouse_action(struct local_history_session *session,
 			   enum browser_mouse_state mouse,
 			   int x,
@@ -393,20 +393,20 @@ local_history_mouse_action(struct local_history_session *session,
 	bool new_window;
 
 	if (session->bw == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	if ((mouse & (BROWSER_MOUSE_PRESS_1 | BROWSER_MOUSE_PRESS_2)) == 0) {
-		return NSERROR_NOT_IMPLEMENTED;
+		return SLATEERROR_NOT_IMPLEMENTED;
 	}
 
 	entry = find_entry_position(session->bw->history->start, x, y);
 	if (entry == NULL) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	if (entry == session->bw->history->current) {
-		return NSERROR_PERMISSION;
+		return SLATEERROR_PERMISSION;
 	}
 
 	if (mouse & BROWSER_MOUSE_PRESS_1) {
@@ -538,7 +538,7 @@ local_history_keypress(struct local_history_session *session, uint32_t key)
 }
 
 /* exported interface documented in desktop/local_history.h */
-nserror
+slateerror
 local_history_set(struct local_history_session *session,
 		  struct browser_window *bw)
 {
@@ -555,12 +555,12 @@ local_history_set(struct local_history_session *session,
 		local_history_scroll_to_cursor(session);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in desktop/local_history.h */
-nserror
+slateerror
 local_history_get_size(struct local_history_session *session,
 		       int *width,
 		       int *height)
@@ -568,28 +568,28 @@ local_history_get_size(struct local_history_session *session,
 	*width = session->bw->history->width + 20;
 	*height = session->bw->history->height + 20;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in desktop/local_history.h */
-nserror
+slateerror
 local_history_get_url(struct local_history_session *session,
 		      int x, int y,
-		      nsurl **url_out)
+		      slateurl **url_out)
 {
 	struct history_entry *entry;
 
 	if (session->bw == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	entry = find_entry_position(session->bw->history->start, x, y);
 	if (entry == NULL) {
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
-	*url_out = nsurl_ref(entry->page.url);
+	*url_out = slateurl_ref(entry->page.url);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }

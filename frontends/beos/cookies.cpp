@@ -1,7 +1,7 @@
 /*
  * Copyright 2015 Adrián Arroyo Calle <adrian.arroyocalle@gmail.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,10 +22,10 @@
 #include <string.h>
 extern "C" {
 #include "utils/log.h"
-#include "netsurf/mouse.h"
-#include "netsurf/plotters.h"
-#include "netsurf/cookie_db.h"
-#include "netsurf/keypress.h"
+#include "slate/mouse.h"
+#include "slate/plotters.h"
+#include "slate/cookie_db.h"
+#include "slate/keypress.h"
 #include "desktop/cookie_manager.h"
 }
 #include "beos/cookies.h"
@@ -378,7 +378,7 @@ CookieWindow::_ShowCookiesForDomain(BString domain)
 	}
 }
 
-static bool nsbeos_cookie_parser(const struct cookie_data* data)
+static bool slatebeos_cookie_parser(const struct cookie_data* data)
 {
 	cookieJar.push_back((struct cookie_data*)data);
 	return true;
@@ -399,7 +399,7 @@ CookieWindow::_DeleteCookies()
 
 	urldb_delete_cookie(row->fCookie.domain, row->fCookie.path, row->fCookie.name);
 	cookieJar.clear();
-	urldb_iterate_cookies(&nsbeos_cookie_parser);
+	urldb_iterate_cookies(&slatebeos_cookie_parser);
 
 	delete row;
 }
@@ -407,10 +407,10 @@ CookieWindow::_DeleteCookies()
 /**
  * Creates the Cookie Manager
  */
-void nsbeos_cookies_init(void)
+void slatebeos_cookies_init(void)
 {
 	CookieWindow* cookWin=new CookieWindow(BRect(100,100,700,500));
 	cookWin->Show();
 	cookWin->Activate();
-	urldb_iterate_cookies(&nsbeos_cookie_parser);
+	urldb_iterate_cookies(&slatebeos_cookie_parser);
 }

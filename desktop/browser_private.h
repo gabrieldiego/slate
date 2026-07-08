@@ -2,7 +2,7 @@
  * Copyright 2003 Phil Mellor <monkeyson@users.sourceforge.net>
  * Copyright 2006 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,8 +22,8 @@
  * Browser window private structure.
  */
 
-#ifndef NETSURF_DESKTOP_BROWSER_PRIVATE_H_
-#define NETSURF_DESKTOP_BROWSER_PRIVATE_H_
+#ifndef SLATE_DESKTOP_BROWSER_PRIVATE_H_
+#define SLATE_DESKTOP_BROWSER_PRIVATE_H_
 
 #include "content/fetch.h"
 #include "desktop/frame_types.h"
@@ -32,13 +32,13 @@ struct box;
 struct hlcache_handle;
 struct gui_window;
 struct selection;
-struct nsurl;
+struct slateurl;
 
 /**
  * history entry page information
  */
 struct history_page {
-	struct nsurl *url;    /**< Page URL, never NULL. */
+	struct slateurl *url;    /**< Page URL, never NULL. */
 	lwc_string *frag_id; /** Fragment identifier, or NULL. */
 	char *title;  /**< Page title, never NULL. */
 	struct bitmap *bitmap;  /**< Thumbnail bitmap, or NULL. */
@@ -80,8 +80,8 @@ struct history {
  * The parameters for a fetch.
  */
 struct browser_fetch_parameters {
-	struct nsurl *url;                           /**< The URL to fetch */
-	struct nsurl *referrer;			     /**< Optional refererer */
+	struct slateurl *url;                           /**< The URL to fetch */
+	struct slateurl *referrer;			     /**< Optional refererer */
 	enum browser_window_nav_flags flags;	     /**< Navigation flags */
 	char *post_urlenc;			     /**< URL encoded post data */
 	struct fetch_multipart_data *post_multipart; /**< Multipart post data */
@@ -282,7 +282,7 @@ struct browser_window {
  * \param bw        The window to initialise
  * \param existing  The existing window if cloning, else NULL
  */
-nserror browser_window_initialise_common(enum browser_window_create_flags flags,
+slateerror browser_window_initialise_common(enum browser_window_create_flags flags,
 		struct browser_window *bw,
 		const struct browser_window *existing);
 
@@ -292,7 +292,7 @@ nserror browser_window_initialise_common(enum browser_window_create_flags flags,
  *
  * \param bw browser window
  */
-nserror browser_window_destroy_internal(struct browser_window *bw);
+slateerror browser_window_destroy_internal(struct browser_window *bw);
 
 /**
  * Get the dimensions of the area a browser window occupies
@@ -300,9 +300,9 @@ nserror browser_window_destroy_internal(struct browser_window *bw);
  * \param  bw      The browser window to get dimensions of
  * \param  width   Updated to the browser window viewport width
  * \param  height  Updated to the browser window viewport height
- * \return NSERROR_OK and width and height updated otherwise error code
+ * \return SLATEERROR_OK and width and height updated otherwise error code
  */
-nserror browser_window_get_dimensions(struct browser_window *bw,
+slateerror browser_window_get_dimensions(struct browser_window *bw,
 		int *width, int *height);
 
 
@@ -321,7 +321,7 @@ void browser_window_update_extent(struct browser_window *bw);
  * \param bw The browser window to update.
  * \param rect The area to redraw
  */
-nserror browser_window_invalidate_rect(struct browser_window *bw, struct rect *rect);
+slateerror browser_window_invalidate_rect(struct browser_window *bw, struct rect *rect);
 
 
 /**
@@ -348,9 +348,9 @@ struct browser_window * browser_window_get_root(
  *
  * \param bw browser window to create history for.
  *
- * \return NSERROR_OK or appropriate error otherwise
+ * \return SLATEERROR_OK or appropriate error otherwise
  */
-nserror browser_window_history_create(struct browser_window *bw);
+slateerror browser_window_history_create(struct browser_window *bw);
 
 /**
  * Clone a bw's history tree for new bw
@@ -358,9 +358,9 @@ nserror browser_window_history_create(struct browser_window *bw);
  * \param  existing	browser window with history to clone.
  * \param  clone	browser window to make cloned history for.
  *
- * \return  NSERROR_OK or appropriate error otherwise
+ * \return  SLATEERROR_OK or appropriate error otherwise
  */
-nserror browser_window_history_clone(const struct browser_window *existing,
+slateerror browser_window_history_clone(const struct browser_window *existing,
 		struct browser_window *clone);
 
 
@@ -370,11 +370,11 @@ nserror browser_window_history_clone(const struct browser_window *existing,
  * \param  bw       browser window with history object
  * \param  content  content to add to history
  * \param  frag_id  fragment identifier, or NULL.
- * \return NSERROR_OK or error code on faliure.
+ * \return SLATEERROR_OK or error code on faliure.
  *
  * The page is added after the current entry and becomes current.
  */
-nserror browser_window_history_add(struct browser_window *bw,
+slateerror browser_window_history_add(struct browser_window *bw,
 		struct hlcache_handle *content, lwc_string *frag_id);
 
 /**
@@ -382,9 +382,9 @@ nserror browser_window_history_add(struct browser_window *bw,
  *
  * \param bw The browser window to update the history within.
  * \param content content for current entry
- * \return NSERROR_OK or error code on faliure.
+ * \return SLATEERROR_OK or error code on faliure.
  */
-nserror browser_window_history_update(struct browser_window *bw,
+slateerror browser_window_history_update(struct browser_window *bw,
 		struct hlcache_handle *content);
 
 /**
@@ -393,9 +393,9 @@ nserror browser_window_history_update(struct browser_window *bw,
  * \param bw The browser window to retrieve scroll offsets for.
  * \param sx Pointer to a float for the X scroll offset
  * \param sy Pointer to a float for the Y scroll offset
- * \return NSERROR_OK or error code on failure.
+ * \return SLATEERROR_OK or error code on failure.
  */
-nserror browser_window_history_get_scroll(struct browser_window *bw,
+slateerror browser_window_history_get_scroll(struct browser_window *bw,
 					  float *sx, float *sy);
 
 /**
@@ -408,13 +408,13 @@ void browser_window_history_destroy(struct browser_window *bw);
 /**
  * Type for handling query responses short-term
  */
-typedef nserror (*browser_window_query_callback)(bool proceed, void *pw);
+typedef slateerror (*browser_window_query_callback)(bool proceed, void *pw);
 
 /**
  * Navigate a browser window to the current parameters
  *
  * \param bw The browser window to cause to navigate
  */
-nserror browser_window__reload_current_parameters(struct browser_window *bw);
+slateerror browser_window__reload_current_parameters(struct browser_window *bw);
 
 #endif

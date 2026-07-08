@@ -2,7 +2,7 @@
  * Copyright 2008 Vincent Sanders <vince@simtec.co.uk>
  * Copyright 2009 Mark Benjamin <netsurf-browser.org.MarkBenjamin@dfgh.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,9 +32,9 @@
 
 #include "utils/log.h"
 #include "utils/utf8.h"
-#include "netsurf/mouse.h"
-#include "netsurf/window.h"
-#include "netsurf/plotters.h"
+#include "slate/mouse.h"
+#include "slate/window.h"
+#include "slate/plotters.h"
 
 #include "windows/bitmap.h"
 #include "windows/font.h"
@@ -55,9 +55,9 @@ static RECT plot_clip;
  * \param y the y coordinate to plot at
  * \param width the width of block to plot
  * \param height the height to plot
- * \return NSERROR_OK on sucess else error code.
+ * \return SLATEERROR_OK on sucess else error code.
  */
-static nserror
+static slateerror
 plot_block(COLORREF col, int x, int y, int width, int height)
 {
 	HRGN clipregion;
@@ -69,18 +69,18 @@ plot_block(COLORREF col, int x, int y, int width, int height)
 	    (y >= plot_clip.bottom) ||
 	    ((y + height) < plot_clip.top)) {
 		/* Image completely outside clip region */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* ensure the plot HDC is set */
 	if (plot_hdc == NULL) {
 		NSLOG(netsurf, INFO, "HDC not set on call to plotters");
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	clipregion = CreateRectRgnIndirect(&plot_clip);
 	if (clipregion == NULL) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	SelectClipRgn(plot_hdc, clipregion);
@@ -98,7 +98,7 @@ plot_block(COLORREF col, int x, int y, int width, int height)
 
 	DeleteObject(clipregion);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 
 }
 
@@ -114,9 +114,9 @@ plot_block(COLORREF col, int x, int y, int width, int height)
  * \param y y coordinate to plot at
  * \param width The width to plot the bitmap into
  * \param height The height to plot the bitmap into
- * \return NSERROR_OK on success else appropriate error code.
+ * \return SLATEERROR_OK on success else appropriate error code.
  */
-static nserror
+static slateerror
 plot_alpha_bitmap(HDC hdc,
 		  struct bitmap *bitmap,
 		  int x, int y,
@@ -137,7 +137,7 @@ plot_alpha_bitmap(HDC hdc,
 			    blnd);
 	DeleteDC(bmihdc);
 	if (!bltres) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 #else
 	HDC Memhdc;
@@ -157,7 +157,7 @@ plot_alpha_bitmap(HDC hdc,
 
 	Memhdc = CreateCompatibleDC(hdc);
 	if (Memhdc == NULL) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	if ((bitmap->width != width) ||
@@ -166,7 +166,7 @@ plot_alpha_bitmap(HDC hdc,
 			 bitmap->width, bitmap->height, width, height);
 		bitmap = bitmap_scale(bitmap, width, height);
 		if (bitmap == NULL) {
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
 		isscaled = true;
 	}
@@ -175,14 +175,14 @@ plot_alpha_bitmap(HDC hdc,
 				    (bitmap->width * bitmap->height * 4));
 	if (bmi == NULL) {
 		DeleteDC(Memhdc);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	MemBMh = CreateCompatibleBitmap(hdc, bitmap->width, bitmap->height);
 	if (MemBMh == NULL){
 		free(bmi);
 		DeleteDC(Memhdc);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	/* save 'background' data for alpha channel work */
@@ -258,7 +258,7 @@ plot_alpha_bitmap(HDC hdc,
 	DeleteDC(Memhdc);
 #endif
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -270,13 +270,13 @@ plot_alpha_bitmap(HDC hdc,
  * \param y y coordinate to plot at
  * \param width The width to plot the bitmap into
  * \param height The height to plot the bitmap into
- * \return NSERROR_OK on success else appropriate error code.
+ * \return SLATEERROR_OK on success else appropriate error code.
  */
-static nserror
+static slateerror
 plot_bitmap(struct bitmap *bitmap, int x, int y, int width, int height)
 {
 	HRGN clipregion;
-	nserror res = NSERROR_OK;
+	slateerror res = SLATEERROR_OK;
 
 	/* Bail early if we can */
 	if ((x >= plot_clip.right) ||
@@ -284,18 +284,18 @@ plot_bitmap(struct bitmap *bitmap, int x, int y, int width, int height)
 	    (y >= plot_clip.bottom) ||
 	    ((y + height) < plot_clip.top)) {
 		/* Image completely outside clip region */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* ensure the plot HDC is set */
 	if (plot_hdc == NULL) {
 		NSLOG(netsurf, INFO, "HDC not set on call to plotters");
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	clipregion = CreateRectRgnIndirect(&plot_clip);
 	if (clipregion == NULL) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	SelectClipRgn(plot_hdc, clipregion);
@@ -332,7 +332,7 @@ plot_bitmap(struct bitmap *bitmap, int x, int y, int width, int height)
 		}
 		/* check to see if GDI operation failed */
 		if (bltres == 0) {
-			res = NSERROR_INVALID;
+			res = SLATEERROR_INVALID;
 		}
 		NSLOG(plot, DEEPDEBUG, "bltres = %d", bltres);
 	} else {
@@ -352,9 +352,9 @@ plot_bitmap(struct bitmap *bitmap, int x, int y, int width, int height)
  * \param ctx The current redraw context.
  * \param clip The rectangle to limit all subsequent plot
  *              operations within.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror clip(const struct redraw_context *ctx, const struct rect *clip)
+static slateerror clip(const struct redraw_context *ctx, const struct rect *clip)
 {
 	NSLOG(plot, DEEPDEBUG, "clip %d,%d to %d,%d", clip->x0, clip->y0, clip->x1, clip->y1);
 
@@ -363,7 +363,7 @@ static nserror clip(const struct redraw_context *ctx, const struct rect *clip)
 	plot_clip.right = clip->x1 + 1; /* co-ordinates are exclusive */
 	plot_clip.bottom = clip->y1 + 1; /* co-ordinates are exclusive */
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -381,9 +381,9 @@ static nserror clip(const struct redraw_context *ctx, const struct rect *clip)
  * \param radius The radius of the arc.
  * \param angle1 The start angle of the arc.
  * \param angle2 The finish angle of the arc.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 arc(const struct redraw_context *ctx,
     const plot_style_t *style,
     int x, int y,
@@ -395,25 +395,25 @@ arc(const struct redraw_context *ctx,
 	/* ensure the plot HDC is set */
 	if (plot_hdc == NULL) {
 		NSLOG(netsurf, INFO, "HDC not set on call to plotters");
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	HRGN clipregion = CreateRectRgnIndirect(&plot_clip);
 	if (clipregion == NULL) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	COLORREF col = (DWORD)(style->stroke_colour & 0x00FFFFFF);
 	HPEN pen = CreatePen(PS_GEOMETRIC | PS_SOLID, 1, col);
 	if (pen == NULL) {
 		DeleteObject(clipregion);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 	HGDIOBJ penbak = SelectObject(plot_hdc, (HGDIOBJ) pen);
 	if (penbak == NULL) {
 		DeleteObject(clipregion);
 		DeleteObject(pen);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	int q1, q2;
@@ -480,7 +480,7 @@ arc(const struct redraw_context *ctx,
 	DeleteObject(clipregion);
 	DeleteObject(pen);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -494,9 +494,9 @@ arc(const struct redraw_context *ctx,
  * \param x x coordinate of circle centre.
  * \param y y coordinate of circle centre.
  * \param radius circle radius.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 disc(const struct redraw_context *ctx,
      const plot_style_t *style,
      int x, int y, int radius)
@@ -506,12 +506,12 @@ disc(const struct redraw_context *ctx,
 	/* ensure the plot HDC is set */
 	if (plot_hdc == NULL) {
 		NSLOG(netsurf, INFO, "HDC not set on call to plotters");
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	HRGN clipregion = CreateRectRgnIndirect(&plot_clip);
 	if (clipregion == NULL) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	COLORREF col = (DWORD)((style->fill_colour | style->stroke_colour)
@@ -519,20 +519,20 @@ disc(const struct redraw_context *ctx,
 	HPEN pen = CreatePen(PS_GEOMETRIC | PS_SOLID, 1, col);
 	if (pen == NULL) {
 		DeleteObject(clipregion);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 	HGDIOBJ penbak = SelectObject(plot_hdc, (HGDIOBJ) pen);
 	if (penbak == NULL) {
 		DeleteObject(clipregion);
 		DeleteObject(pen);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 	HBRUSH brush = CreateSolidBrush(col);
 	if (brush == NULL) {
 		DeleteObject(clipregion);
 		SelectObject(plot_hdc, penbak);
 		DeleteObject(pen);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 	HGDIOBJ brushbak = SelectObject(plot_hdc, (HGDIOBJ) brush);
 	if (brushbak == NULL) {
@@ -540,7 +540,7 @@ disc(const struct redraw_context *ctx,
 		SelectObject(plot_hdc, penbak);
 		DeleteObject(pen);
 		DeleteObject(brush);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	SelectClipRgn(plot_hdc, clipregion);
@@ -560,7 +560,7 @@ disc(const struct redraw_context *ctx,
 	DeleteObject(pen);
 	DeleteObject(brush);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -573,9 +573,9 @@ disc(const struct redraw_context *ctx,
  * \param ctx The current redraw context.
  * \param style Style controlling the line plot.
  * \param line A rectangle defining the line to be drawn
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 line(const struct redraw_context *ctx,
      const plot_style_t *style,
      const struct rect *line)
@@ -586,12 +586,12 @@ line(const struct redraw_context *ctx,
 	/* ensure the plot HDC is set */
 	if (plot_hdc == NULL) {
 		NSLOG(netsurf, INFO, "HDC not set on call to plotters");
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	HRGN clipregion = CreateRectRgnIndirect(&plot_clip);
 	if (clipregion == NULL) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	COLORREF col = (DWORD)(style->stroke_colour & 0x00FFFFFF);
@@ -606,13 +606,13 @@ line(const struct redraw_context *ctx,
 			&lb, 0, NULL);
 	if (pen == NULL) {
 		DeleteObject(clipregion);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 	HGDIOBJ bak = SelectObject(plot_hdc, (HGDIOBJ) pen);
 	if (bak == NULL) {
 		DeleteObject(pen);
 		DeleteObject(clipregion);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	SelectClipRgn(plot_hdc, clipregion);
@@ -627,7 +627,7 @@ line(const struct redraw_context *ctx,
 	DeleteObject(pen);
 	DeleteObject(clipregion);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -642,9 +642,9 @@ line(const struct redraw_context *ctx,
  * \param ctx The current redraw context.
  * \param style Style controlling the rectangle plot.
  * \param rect A rectangle defining the line to be drawn
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 rectangle(const struct redraw_context *ctx,
 	  const plot_style_t *style,
 	  const struct rect *rect)
@@ -655,12 +655,12 @@ rectangle(const struct redraw_context *ctx,
 	/* ensure the plot HDC is set */
 	if (plot_hdc == NULL) {
 		NSLOG(netsurf, INFO, "HDC not set on call to plotters");
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	HRGN clipregion = CreateRectRgnIndirect(&plot_clip);
 	if (clipregion == NULL) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	COLORREF pencol = (DWORD)(style->stroke_colour & 0x00FFFFFF);
@@ -678,25 +678,25 @@ rectangle(const struct redraw_context *ctx,
 			plot_style_fixed_to_int(style->stroke_width),
 			&lb, 0, NULL);
 	if (pen == NULL) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 	HGDIOBJ penbak = SelectObject(plot_hdc, (HGDIOBJ) pen);
 	if (penbak == NULL) {
 		DeleteObject(pen);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 	HBRUSH brush = CreateBrushIndirect(&lb1);
 	if (brush  == NULL) {
 		SelectObject(plot_hdc, penbak);
 		DeleteObject(pen);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 	HGDIOBJ brushbak = SelectObject(plot_hdc, (HGDIOBJ) brush);
 	if (brushbak == NULL) {
 		SelectObject(plot_hdc, penbak);
 		DeleteObject(pen);
 		DeleteObject(brush);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	SelectClipRgn(plot_hdc, clipregion);
@@ -711,7 +711,7 @@ rectangle(const struct redraw_context *ctx,
 	DeleteObject(brush);
 	DeleteObject(clipregion);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -727,9 +727,9 @@ rectangle(const struct redraw_context *ctx,
  * \param style Style controlling the polygon plot.
  * \param p verticies of polygon
  * \param n number of verticies.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 polygon(const struct redraw_context *ctx,
 	const plot_style_t *style,
 	const int *p,
@@ -740,14 +740,14 @@ polygon(const struct redraw_context *ctx,
 	/* ensure the plot HDC is set */
 	if (plot_hdc == NULL) {
 		NSLOG(netsurf, INFO, "HDC not set on call to plotters");
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	POINT points[n];
 	unsigned int i;
 	HRGN clipregion = CreateRectRgnIndirect(&plot_clip);
 	if (clipregion == NULL) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	COLORREF pencol = (DWORD)(style->fill_colour & 0x00FFFFFF);
@@ -755,20 +755,20 @@ polygon(const struct redraw_context *ctx,
 	HPEN pen = CreatePen(PS_GEOMETRIC | PS_NULL, 1, pencol);
 	if (pen == NULL) {
 		DeleteObject(clipregion);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 	HPEN penbak = SelectObject(plot_hdc, pen);
 	if (penbak == NULL) {
 		DeleteObject(clipregion);
 		DeleteObject(pen);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 	HBRUSH brush = CreateSolidBrush(brushcol);
 	if (brush == NULL) {
 		DeleteObject(clipregion);
 		SelectObject(plot_hdc, penbak);
 		DeleteObject(pen);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 	HBRUSH brushbak = SelectObject(plot_hdc, brush);
 	if (brushbak == NULL) {
@@ -776,7 +776,7 @@ polygon(const struct redraw_context *ctx,
 		SelectObject(plot_hdc, penbak);
 		DeleteObject(pen);
 		DeleteObject(brush);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 	SetPolyFillMode(plot_hdc, WINDING);
 	for (i = 0; i < n; i++) {
@@ -800,7 +800,7 @@ polygon(const struct redraw_context *ctx,
 	DeleteObject(pen);
 	DeleteObject(brush);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -815,9 +815,9 @@ polygon(const struct redraw_context *ctx,
  * \param p elements of path
  * \param n nunber of elements on path
  * \param transform A transform to apply to the path.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 path(const struct redraw_context *ctx,
      const plot_style_t *pstyle,
      const float *p,
@@ -825,7 +825,7 @@ path(const struct redraw_context *ctx,
      const float transform[6])
 {
 	NSLOG(plot, DEEPDEBUG, "path unimplemented");
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -851,9 +851,9 @@ path(const struct redraw_context *ctx,
  * \param height The height of area to plot the bitmap into
  * \param bg the background colour to alpha blend into
  * \param flags the flags controlling the type of plot operation
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 bitmap(const struct redraw_context *ctx,
        struct bitmap *bitmap,
        int x, int y,
@@ -872,12 +872,12 @@ bitmap(const struct redraw_context *ctx,
 
 	if (bitmap == NULL) {
 		NSLOG(netsurf, INFO, "Passed null bitmap!");
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* check if nothing to plot */
 	if (width == 0 || height == 0)
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 
 	/* x and y define coordinate of top left of of the initial explicitly
 	 * placed tile. The width and height are the image scaling and the
@@ -889,7 +889,7 @@ bitmap(const struct redraw_context *ctx,
 		/* Not repeating at all, so just plot it */
 		if ((bitmap->width == 1) && (bitmap->height == 1)) {
 			if ((*(bitmap->pixdata + 3) & 0xff) == 0) {
-				return NSERROR_OK;
+				return SLATEERROR_OK;
 			}
 			return plot_block((*(COLORREF *)bitmap->pixdata) & 0xffffff,
 					  x,
@@ -959,7 +959,7 @@ bitmap(const struct redraw_context *ctx,
 		if (!repeat_x)
 			break;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -972,9 +972,9 @@ bitmap(const struct redraw_context *ctx,
  * \param y y coordinate
  * \param text UTF-8 string to plot
  * \param length length of string, in bytes
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 text(const struct redraw_context *ctx,
      const struct plot_font_style *fstyle,
      int x,
@@ -987,18 +987,18 @@ text(const struct redraw_context *ctx,
 	/* ensure the plot HDC is set */
 	if (plot_hdc == NULL) {
 		NSLOG(netsurf, INFO, "HDC not set on call to plotters");
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	HRGN clipregion = CreateRectRgnIndirect(&plot_clip);
 	if (clipregion == NULL) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	HFONT fontbak, font = get_font(fstyle);
 	if (font == NULL) {
 		DeleteObject(clipregion);
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 	int wlen;
 	SIZE s;
@@ -1019,7 +1019,7 @@ text(const struct redraw_context *ctx,
 	wlen = MultiByteToWideChar(CP_UTF8, 0, text, length, NULL, 0);
 	wstring = malloc(2 * (wlen + 1));
 	if (wstring == NULL) {
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 	MultiByteToWideChar(CP_UTF8, 0, text, length, wstring, wlen);
 	TextOutW(plot_hdc, x, y, wstring, wlen);
@@ -1030,7 +1030,7 @@ text(const struct redraw_context *ctx,
 	DeleteObject(clipregion);
 	DeleteObject(font);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 

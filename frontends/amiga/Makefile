@@ -2,7 +2,7 @@
 # Amiga target setup
 # ----------------------------------------------------------------------------
 
-CFLAGS += -std=c99 -Dnsamiga
+CFLAGS += -std=c99 -Dslateamiga
 
 ifneq ($(SUBTARGET),os3)
   CFLAGS += -flto -mstrict-align -finline-functions -U__STRICT_ANSI__ -D__USE_INLINE__ -D__USE_BASETYPE__
@@ -23,7 +23,7 @@ LDFLAGS += -L$(GCCSDK_INSTALL_ENV)/lib
 
 LDFLAGS += -lpbl -liconv
 
-ifeq ($(NETSURF_USE_OPENSSL),YES)
+ifeq ($(SLATE_USE_OPENSSL),YES)
   LDFLAGS += $(shell $(PKG_CONFIG) --static --libs openssl)
 endif
 
@@ -53,7 +53,7 @@ S_FRONTEND := gui.c history.c hotlist.c schedule.c file.c	\
 	stringview/stringview.c stringview/urlhistory.c rtg.c		\
 	agclass/amigaguide_class.c os3support.c font_diskfont.c		\
 	selectmenu.c hash/xxhash.c font_cache.c font_bullet.c		\
-	nsoption.c corewindow.c gui_menu.c pageinfo.c
+	slateoption.c corewindow.c gui_menu.c pageinfo.c
 
 # This is the final source build list
 # Note this is deliberately *not* expanded here as common and image
@@ -94,12 +94,12 @@ netsurf.lha: $(EXETARGET) $(POSTEXES)
 	$(Q)cp -p resources/default.css $(AMIGA_INSTALL_TARGET_DIR)/NetSurf/Resources/nsdefault.css
 	$(Q)cp -p resources/internal.css $(AMIGA_INSTALL_TARGET_DIR)/NetSurf/Resources/internal.css
 	$(Q)cp -p resources/quirks.css $(AMIGA_INSTALL_TARGET_DIR)/NetSurf/Resources/quirks.css
-	$(Q)cp -p resources/netsurf.png $(AMIGA_INSTALL_TARGET_DIR)/NetSurf/Resources/netsurf.png
+	$(Q)cp -p resources/slate.png $(AMIGA_INSTALL_TARGET_DIR)/NetSurf/Resources/slate.png
 	$(Q)cp -p $(AMIGA_PKG_DIR)/drawer.info $(AMIGA_INSTALL_TARGET_DIR)/NetSurf.info
 	$(Q)cp -p $(AMIGA_PKG_DIR)/AutoInstall $(AMIGA_INSTALL_TARGET_DIR)
   ifeq ($(SUBTARGET),os3)
-	$(Q)cp -p $(AMIGA_PKG_DIR)/netsurf_os3.readme $(AMIGA_INSTALL_TARGET_DIR)/NetSurf
-	$(Q)cp -p $(AMIGA_PKG_DIR)/netsurf_os3.readme.info $(AMIGA_INSTALL_TARGET_DIR)/NetSurf
+	$(Q)cp -p $(AMIGA_PKG_DIR)/slate_os3.readme $(AMIGA_INSTALL_TARGET_DIR)/NetSurf
+	$(Q)cp -p $(AMIGA_PKG_DIR)/slate_os3.readme.info $(AMIGA_INSTALL_TARGET_DIR)/NetSurf
   else
 	$(Q)cp -p $(AMIGA_PKG_DIR)/netsurf.readme $(AMIGA_INSTALL_TARGET_DIR)/NetSurf
 	$(Q)cp -p $(AMIGA_PKG_DIR)/netsurf.readme.info $(AMIGA_INSTALL_TARGET_DIR)/NetSurf

@@ -2,7 +2,7 @@
  * Copyright 2010 Michael Drake <tlsa@netsurf-browser.org>
  * Copyright 2020 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,15 +27,15 @@
 #include "utils/config.h"
 #include "utils/utils.h"
 #include "utils/corestrings.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/ascii.h"
 #include "utils/string.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "content/content.h"
 #include "javascript/js.h"
 
-#include "netsurf/bitmap.h"
+#include "slate/bitmap.h"
 
 #include "html/private.h"
 #include "html/object.h"
@@ -51,7 +51,7 @@
  *
  * \param htmlc The html content containing the DOM
  * \param node The DOM node being inserted
- * \return NSERROR_OK on success else appropriate error code
+ * \return SLATEERROR_OK on success else appropriate error code
  */
 static bool html_process_inserted_base(html_content *htmlc, dom_node *node)
 {
@@ -61,15 +61,15 @@ static bool html_process_inserted_base(html_content *htmlc, dom_node *node)
 	/* get href attribute if present */
 	exc = dom_element_get_attribute(node, corestring_dom_href, &atr_string);
 	if ((exc == DOM_NO_ERR) && (atr_string != NULL)) {
-		nsurl *url;
-		nserror error;
+		slateurl *url;
+		slateerror error;
 
 		/* get url from string */
-		error = nsurl_create(dom_string_data(atr_string), &url);
+		error = slateurl_create(dom_string_data(atr_string), &url);
 		dom_string_unref(atr_string);
-		if (error == NSERROR_OK) {
+		if (error == SLATEERROR_OK) {
 			if (htmlc->base_url != NULL) {
-				nsurl_unref(htmlc->base_url);
+				slateurl_unref(htmlc->base_url);
 			}
 			htmlc->base_url = url;
 		}
@@ -114,18 +114,18 @@ static bool html_process_inserted_base(html_content *htmlc, dom_node *node)
  *
  * \param htmlc The html content containing the DOM
  * \param node The DOM node being inserted
- * \return NSERROR_OK on success else appropriate error code
+ * \return SLATEERROR_OK on success else appropriate error code
  */
 static bool html_process_inserted_img(html_content *htmlc, dom_node *node)
 {
 	dom_string *src;
-	nsurl *url;
-	nserror err;
+	slateurl *url;
+	slateerror err;
 	dom_exception exc;
 	bool success;
 
 	/* Do nothing if foreground images are disabled */
-	if (nsoption_bool(foreground_images) == false) {
+	if (slateoption_bool(foreground_images) == false) {
 		return true;
 	}
 
@@ -134,8 +134,8 @@ static bool html_process_inserted_img(html_content *htmlc, dom_node *node)
 		return true;
 	}
 
-	err = nsurl_join(htmlc->base_url, dom_string_data(src), &url);
-	if (err != NSERROR_OK) {
+	err = slateurl_join(htmlc->base_url, dom_string_data(src), &url);
+	if (err != SLATEERROR_OK) {
 		dom_string_unref(src);
 		return false;
 	}
@@ -143,7 +143,7 @@ static bool html_process_inserted_img(html_content *htmlc, dom_node *node)
 
 	/* Speculatively fetch the image */
 	success = html_fetch_object(htmlc, url, NULL, CONTENT_IMAGE, false);
-	nsurl_unref(url);
+	slateurl_unref(url);
 
 	return success;
 }
@@ -156,14 +156,14 @@ static bool html_process_inserted_img(html_content *htmlc, dom_node *node)
  *
  * \param htmlc The html content containing the DOM
  * \param n The DOM node being inserted
- * \return NSERROR_OK on success else appropriate error code
+ * \return SLATEERROR_OK on success else appropriate error code
  */
 static bool html_process_inserted_link(html_content *c, dom_node *node)
 {
 	struct content_rfc5988_link link; /* the link added to the content */
 	dom_exception exc; /* returned by libdom functions */
 	dom_string *atr_string;
-	nserror error;
+	slateerror error;
 
 	/* Handle stylesheet loading */
 	html_css_process_link(c, (dom_node *)node);
@@ -191,11 +191,11 @@ static bool html_process_inserted_link(html_content *c, dom_node *node)
 		return false;
 	}
 
-	/* get nsurl */
-	error = nsurl_join(c->base_url, dom_string_data(atr_string),
+	/* get slateurl */
+	error = slateurl_join(c->base_url, dom_string_data(atr_string),
 			&link.href);
 	dom_string_unref(atr_string);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		lwc_string_unref(link.rel);
 		return false;
 	}
@@ -242,7 +242,7 @@ static bool html_process_inserted_link(html_content *c, dom_node *node)
 	lwc_string_unref(link.type);
 	lwc_string_unref(link.hreflang);
 
-	nsurl_unref(link.href);
+	slateurl_unref(link.href);
 	lwc_string_unref(link.rel);
 
 	return true;
@@ -307,9 +307,9 @@ dom_SCRIPT_showed_up(html_content *htmlc, dom_html_script_element *script)
  *
  * \param htmlc The html content containing the DOM
  * \param n The DOM node being inserted
- * \return NSERROR_OK on success else appropriate error code
+ * \return SLATEERROR_OK on success else appropriate error code
  */
-static nserror html_process_inserted_meta(html_content *c, dom_node *n)
+static slateerror html_process_inserted_meta(html_content *c, dom_node *n)
 {
 	union content_msg_data msg_data;
 	const char *url, *end, *refresh = NULL;
@@ -317,37 +317,37 @@ static nserror html_process_inserted_meta(html_content *c, dom_node *n)
 	char quote = '\0';
 	dom_string *equiv, *content;
 	dom_exception exc;
-	nsurl *nsurl;
-	nserror error = NSERROR_OK;
+	slateurl *slateurl;
+	slateerror error = SLATEERROR_OK;
 
 	if (c->refresh) {
 		/* refresh already delt with */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	exc = dom_element_get_attribute(n, corestring_dom_http_equiv, &equiv);
 	if (exc != DOM_NO_ERR) {
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	if (equiv == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	if (!dom_string_caseless_lwc_isequal(equiv, corestring_lwc_refresh)) {
 		dom_string_unref(equiv);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	dom_string_unref(equiv);
 
 	exc = dom_element_get_attribute(n, corestring_dom_content, &content);
 	if (exc != DOM_NO_ERR) {
-		return NSERROR_DOM;
+		return SLATEERROR_DOM;
 	}
 
 	if (content == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	end = dom_string_data(content) + dom_string_byte_length(content);
@@ -374,7 +374,7 @@ static nserror html_process_inserted_meta(html_content *c, dom_node *n)
 	if (url == end || (*url < '0' || '9' < *url)) {
 		/* Empty content, or invalid timeval */
 		dom_string_unref(content);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	msg_data.delay = (int) strtol(url, &new_url, 10);
@@ -411,11 +411,11 @@ static nserror html_process_inserted_meta(html_content *c, dom_node *n)
 		/* Just delay specified, so refresh current page */
 		dom_string_unref(content);
 
-		c->base.refresh = nsurl_ref(content_get_url(&c->base));
+		c->base.refresh = slateurl_ref(content_get_url(&c->base));
 
 		content_broadcast(&c->base, CONTENT_MSG_REFRESH, &msg_data);
 
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* "url" */
@@ -425,12 +425,12 @@ static nserror html_process_inserted_meta(html_content *c, dom_node *n)
 		} else {
 			/* Unexpected input, ignore this header */
 			dom_string_unref(content);
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 	} else {
 		/* Insufficient input, ignore this header */
 		dom_string_unref(content);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* *LWS */
@@ -445,12 +445,12 @@ static nserror html_process_inserted_meta(html_content *c, dom_node *n)
 		} else {
 			/* Unexpected input, ignore this header */
 			dom_string_unref(content);
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 	} else {
 		/* Insufficient input, ignore this header */
 		dom_string_unref(content);
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* *LWS */
@@ -483,14 +483,14 @@ static nserror html_process_inserted_meta(html_content *c, dom_node *n)
 		new_url = strndup(refresh, url - refresh);
 		if (new_url == NULL) {
 			dom_string_unref(content);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 
-		error = nsurl_join(c->base_url, new_url, &nsurl);
-		if (error == NSERROR_OK) {
+		error = slateurl_join(c->base_url, new_url, &slateurl);
+		if (error == SLATEERROR_OK) {
 			/* broadcast valid refresh url */
 
-			c->base.refresh = nsurl;
+			c->base.refresh = slateurl;
 
 			content_broadcast(&c->base,
 					  CONTENT_MSG_REFRESH,
@@ -515,15 +515,15 @@ static nserror html_process_inserted_meta(html_content *c, dom_node *n)
  *
  * \param htmlc The html content containing the DOM
  * \param node The DOM node being inserted
- * \return NSERROR_OK on success else appropriate error code
+ * \return SLATEERROR_OK on success else appropriate error code
  */
-static nserror html_process_inserted_title(html_content *htmlc, dom_node *node)
+static slateerror html_process_inserted_title(html_content *htmlc, dom_node *node)
 {
 	if (htmlc->title == NULL) {
 		/* only the first title is considered */
 		htmlc->title = dom_node_ref(node);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -619,7 +619,7 @@ dom_default_action_DOMNodeInserted_cb(struct dom_event *evt, void *pw)
 			break;
 
 		case DOM_HTML_ELEMENT_TYPE_STYLE:
-			if (nsoption_bool(author_level_css)) {
+			if (slateoption_bool(author_level_css)) {
 				html_css_process_style(htmlc, (dom_node *)node);
 			}
 			break;
@@ -730,7 +730,7 @@ dom_default_action_DOMSubtreeModified_cb(struct dom_event *evt, void *pw)
 
 			switch (tag_type) {
 			case DOM_HTML_ELEMENT_TYPE_STYLE:
-				if (nsoption_bool(author_level_css)) {
+				if (slateoption_bool(author_level_css)) {
 					html_css_update_style(htmlc,
 							(dom_node *)node);
 				}

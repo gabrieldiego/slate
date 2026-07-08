@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 Mark Benjamin <netsurf-browser.org.MarkBenjamin@dfgh.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,7 +40,7 @@
  */
 
 static bool
-nsgtk_menu_add_image_item(GtkMenu *menu,
+slategtk_menu_add_image_item(GtkMenu *menu,
 			  GtkWidget **item_out,
 			  const char *message,
 			  GtkAccelGroup *group)
@@ -50,12 +50,12 @@ nsgtk_menu_add_image_item(GtkMenu *menu,
 	GtkWidget *item;
 	const char *accelerator_desc; /* accelerator key description */
 
-	item = nsgtk_image_menu_item_new_with_mnemonic(messages_get(message));
+	item = slategtk_image_menu_item_new_with_mnemonic(messages_get(message));
 	if (item == NULL) {
 		return false;
 	}
 
-	accelerator_desc = nsgtk_accelerator_get_desc(message);
+	accelerator_desc = slategtk_accelerator_get_desc(message);
 	if (accelerator_desc != NULL) {
 		gtk_accelerator_parse(accelerator_desc, &key, &mod);
 		if (key > 0) {
@@ -83,7 +83,7 @@ nsgtk_menu_add_image_item(GtkMenu *menu,
 	n->m##_menu = GTK_MENU(gtk_menu_new())
 
 #define IMAGE_ITEM(p, q, r, s, t)\
-	nsgtk_menu_add_image_item(s->p##_menu, &(s->q##_menuitem), #r, t)
+	slategtk_menu_add_image_item(s->p##_menu, &(s->q##_menuitem), #r, t)
 
 #define CHECK_ITEM(p, q, r, s)					\
 	do {							\
@@ -99,7 +99,7 @@ nsgtk_menu_add_image_item(GtkMenu *menu,
 
 #define SET_SUBMENU(q, r)					\
 	do {							\
-		r->q##_submenu = nsgtk_menu_##q##_submenu(group);	\
+		r->q##_submenu = slategtk_menu_##q##_submenu(group);	\
 		if ((r->q##_submenu != NULL) &&				\
 		    (r->q##_submenu->q##_menu != NULL) &&		\
 		    (r->q##_menuitem != NULL)) {			\
@@ -141,20 +141,20 @@ nsgtk_menu_add_image_item(GtkMenu *menu,
 * creates an export submenu
 * \param group the 'global' in a gtk sense accelerator reference
 */
-static struct nsgtk_export_submenu *
-nsgtk_menu_export_submenu(GtkAccelGroup *group)
+static struct slategtk_export_submenu *
+slategtk_menu_export_submenu(GtkAccelGroup *group)
 {
-	struct nsgtk_export_submenu *ret;
-	ret = malloc(sizeof(struct nsgtk_export_submenu));
+	struct slategtk_export_submenu *ret;
+	ret = malloc(sizeof(struct slategtk_export_submenu));
 
 	if (ret == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		return NULL;
 	}
 
 	ret->export_menu = GTK_MENU(gtk_menu_new());
 	if (ret->export_menu == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		free(ret);
 		return NULL;
 	}
@@ -170,18 +170,18 @@ nsgtk_menu_export_submenu(GtkAccelGroup *group)
 * \param group the 'global' in a gtk sense accelerator reference
 */
 
-static struct nsgtk_scaleview_submenu *
-nsgtk_menu_scaleview_submenu(GtkAccelGroup *group)
+static struct slategtk_scaleview_submenu *
+slategtk_menu_scaleview_submenu(GtkAccelGroup *group)
 {
-	struct nsgtk_scaleview_submenu *ret =
-			malloc(sizeof(struct nsgtk_scaleview_submenu));
+	struct slategtk_scaleview_submenu *ret =
+			malloc(sizeof(struct slategtk_scaleview_submenu));
 	if (ret == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		return NULL;
 	}
 	ret->scaleview_menu = GTK_MENU(gtk_menu_new());
 	if (ret->scaleview_menu == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		free(ret);
 		return NULL;
 	}
@@ -196,17 +196,17 @@ nsgtk_menu_scaleview_submenu(GtkAccelGroup *group)
 * \param group the 'global' in a gtk sense accelerator reference
 */
 
-static struct nsgtk_tabs_submenu *nsgtk_menu_tabs_submenu(GtkAccelGroup *group)
+static struct slategtk_tabs_submenu *slategtk_menu_tabs_submenu(GtkAccelGroup *group)
 {
-	struct nsgtk_tabs_submenu *ret;
-	ret = malloc(sizeof(struct nsgtk_tabs_submenu));
+	struct slategtk_tabs_submenu *ret;
+	ret = malloc(sizeof(struct slategtk_tabs_submenu));
 	if (ret == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		return NULL;
 	}
 	ret->tabs_menu = GTK_MENU(gtk_menu_new());
 	if (ret->tabs_menu == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		free(ret);
 		return NULL;
 	}
@@ -223,20 +223,20 @@ static struct nsgtk_tabs_submenu *nsgtk_menu_tabs_submenu(GtkAccelGroup *group)
  *
  * \param group the 'global' in a gtk sense accelerator reference
  */
-static struct nsgtk_toolbars_submenu *
-nsgtk_menu_toolbars_submenu(GtkAccelGroup *group)
+static struct slategtk_toolbars_submenu *
+slategtk_menu_toolbars_submenu(GtkAccelGroup *group)
 {
-	struct nsgtk_toolbars_submenu *tmenu;
+	struct slategtk_toolbars_submenu *tmenu;
 
-	tmenu = malloc(sizeof(struct nsgtk_toolbars_submenu));
+	tmenu = malloc(sizeof(struct slategtk_toolbars_submenu));
 	if (tmenu == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		return NULL;
 	}
 
 	tmenu->toolbars_menu = GTK_MENU(gtk_menu_new());
 	if (tmenu->toolbars_menu == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		free(tmenu);
 		return NULL;
 	}
@@ -263,18 +263,18 @@ nsgtk_menu_toolbars_submenu(GtkAccelGroup *group)
 * \param group the 'global' in a gtk sense accelerator reference
 */
 
-static struct nsgtk_developer_submenu *
-nsgtk_menu_developer_submenu(GtkAccelGroup *group)
+static struct slategtk_developer_submenu *
+slategtk_menu_developer_submenu(GtkAccelGroup *group)
 {
-	struct nsgtk_developer_submenu *dmenu =
-			malloc(sizeof(struct nsgtk_developer_submenu));
+	struct slategtk_developer_submenu *dmenu =
+			malloc(sizeof(struct slategtk_developer_submenu));
 	if (dmenu == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		return NULL;
 	}
 	dmenu->developer_menu = GTK_MENU(gtk_menu_new());
 	if (dmenu->developer_menu == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		free(dmenu);
 		return NULL;
 	}
@@ -293,19 +293,19 @@ nsgtk_menu_developer_submenu(GtkAccelGroup *group)
  * \param group The gtk 'global' accelerator reference
  * \return The new file menu or NULL on error
  */
-static struct nsgtk_file_menu *nsgtk_menu_file_submenu(GtkAccelGroup *group)
+static struct slategtk_file_menu *slategtk_menu_file_submenu(GtkAccelGroup *group)
 {
-	struct nsgtk_file_menu *fmenu;
+	struct slategtk_file_menu *fmenu;
 
-	fmenu = malloc(sizeof(struct nsgtk_file_menu));
+	fmenu = malloc(sizeof(struct slategtk_file_menu));
 	if (fmenu == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		return NULL;
 	}
 
 	fmenu->file_menu = GTK_MENU(gtk_menu_new());
 	if (fmenu->file_menu == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		free(fmenu);
 		return NULL;
 	}
@@ -331,16 +331,16 @@ static struct nsgtk_file_menu *nsgtk_menu_file_submenu(GtkAccelGroup *group)
 * \param group the 'global' in a gtk sense accelerator reference
 */
 
-static struct nsgtk_edit_menu *nsgtk_menu_edit_submenu(GtkAccelGroup *group)
+static struct slategtk_edit_menu *slategtk_menu_edit_submenu(GtkAccelGroup *group)
 {
-	struct nsgtk_edit_menu *ret = malloc(sizeof(struct nsgtk_edit_menu));
+	struct slategtk_edit_menu *ret = malloc(sizeof(struct slategtk_edit_menu));
 	if (ret == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		return NULL;
 	}
 	ret->edit_menu = GTK_MENU(gtk_menu_new());
 	if (ret->edit_menu == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		free(ret);
 		return NULL;
 	}
@@ -363,16 +363,16 @@ static struct nsgtk_edit_menu *nsgtk_menu_edit_submenu(GtkAccelGroup *group)
 * \param group the 'global' in a gtk sense accelerator reference
 */
 
-static struct nsgtk_view_menu *nsgtk_menu_view_submenu(GtkAccelGroup *group)
+static struct slategtk_view_menu *slategtk_menu_view_submenu(GtkAccelGroup *group)
 {
-	struct nsgtk_view_menu *ret = malloc(sizeof(struct nsgtk_view_menu));
+	struct slategtk_view_menu *ret = malloc(sizeof(struct slategtk_view_menu));
 	if (ret == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		return NULL;
 	}
 	ret->view_menu = GTK_MENU(gtk_menu_new());
 	if (ret->view_menu == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		free(ret);
 		return NULL;
 	}
@@ -395,16 +395,16 @@ static struct nsgtk_view_menu *nsgtk_menu_view_submenu(GtkAccelGroup *group)
 * \param group the 'global' in a gtk sense accelerator reference
 */
 
-static struct nsgtk_nav_menu *nsgtk_menu_nav_submenu(GtkAccelGroup *group)
+static struct slategtk_nav_menu *slategtk_menu_nav_submenu(GtkAccelGroup *group)
 {
-	struct nsgtk_nav_menu *ret = malloc(sizeof(struct nsgtk_nav_menu));
+	struct slategtk_nav_menu *ret = malloc(sizeof(struct slategtk_nav_menu));
 	if (ret == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		return NULL;
 	}
 	ret->nav_menu = GTK_MENU(gtk_menu_new());
 	if (ret->nav_menu == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		free(ret);
 		return NULL;
 	}
@@ -430,16 +430,16 @@ static struct nsgtk_nav_menu *nsgtk_menu_nav_submenu(GtkAccelGroup *group)
  * creates the tools menu
  * \param group the 'global' in a gtk sense accelerator reference
  */
-static struct nsgtk_tools_menu *nsgtk_menu_tools_submenu(GtkAccelGroup *group)
+static struct slategtk_tools_menu *slategtk_menu_tools_submenu(GtkAccelGroup *group)
 {
-	struct nsgtk_tools_menu *ret = malloc(sizeof(struct nsgtk_tools_menu));
+	struct slategtk_tools_menu *ret = malloc(sizeof(struct slategtk_tools_menu));
 	if (ret == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		return NULL;
 	}
 	ret->tools_menu = GTK_MENU(gtk_menu_new());
 	if (ret->tools_menu == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		free(ret);
 		return NULL;
 	}
@@ -456,16 +456,16 @@ static struct nsgtk_tools_menu *nsgtk_menu_tools_submenu(GtkAccelGroup *group)
  * creates a help menu
  * \param group the 'global' in a gtk sense accelerator reference
  */
-static struct nsgtk_help_menu *nsgtk_menu_help_submenu(GtkAccelGroup *group)
+static struct slategtk_help_menu *slategtk_menu_help_submenu(GtkAccelGroup *group)
 {
-	struct nsgtk_help_menu *ret = malloc(sizeof(struct nsgtk_help_menu));
+	struct slategtk_help_menu *ret = malloc(sizeof(struct slategtk_help_menu));
 	if (ret == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		return NULL;
 	}
 	ret->help_menu = GTK_MENU(gtk_menu_new());
 	if (ret->help_menu == NULL) {
-		nsgtk_warning(messages_get("NoMemory"), 0);
+		slategtk_warning(messages_get("NoMemory"), 0);
 		free(ret);
 		return NULL;
 	}
@@ -484,23 +484,23 @@ static struct nsgtk_help_menu *nsgtk_menu_help_submenu(GtkAccelGroup *group)
  *
  * Generate the main menu structure and attach it to a menubar widget.
  */
-struct nsgtk_bar_submenu *
-nsgtk_menu_bar_create(GtkMenuShell *menubar, GtkAccelGroup *group)
+struct slategtk_bar_submenu *
+slategtk_menu_bar_create(GtkMenuShell *menubar, GtkAccelGroup *group)
 {
-	struct nsgtk_bar_submenu *nmenu;
+	struct slategtk_bar_submenu *nmenu;
 
-	nmenu = calloc(1, sizeof(struct nsgtk_bar_submenu));
+	nmenu = calloc(1, sizeof(struct slategtk_bar_submenu));
 	if (nmenu == NULL) {
 		return NULL;
 	}
 
 	/* create sub menus */
-	nmenu->file_submenu = nsgtk_menu_file_submenu(group);
-	nmenu->edit_submenu = nsgtk_menu_edit_submenu(group);
-	nmenu->view_submenu = nsgtk_menu_view_submenu(group);
-	nmenu->nav_submenu = nsgtk_menu_nav_submenu(group);
-	nmenu->tools_submenu = nsgtk_menu_tools_submenu(group);
-	nmenu->help_submenu = nsgtk_menu_help_submenu(group);
+	nmenu->file_submenu = slategtk_menu_file_submenu(group);
+	nmenu->edit_submenu = slategtk_menu_edit_submenu(group);
+	nmenu->view_submenu = slategtk_menu_view_submenu(group);
+	nmenu->nav_submenu = slategtk_menu_nav_submenu(group);
+	nmenu->tools_submenu = slategtk_menu_tools_submenu(group);
+	nmenu->help_submenu = slategtk_menu_help_submenu(group);
 
 	if (menubar != NULL) {
 		nmenu->bar_menu = GTK_MENU_BAR(menubar);
@@ -519,9 +519,9 @@ nsgtk_menu_bar_create(GtkMenuShell *menubar, GtkAccelGroup *group)
 
 
 /* exported function documented in gtk/menu.h */
-struct nsgtk_burger_menu *nsgtk_burger_menu_create(GtkAccelGroup *group)
+struct slategtk_burger_menu *slategtk_burger_menu_create(GtkAccelGroup *group)
 {
-	struct nsgtk_burger_menu *nmenu;
+	struct slategtk_burger_menu *nmenu;
 
 	NEW_MENU(nmenu, burger);
 
@@ -548,9 +548,9 @@ struct nsgtk_burger_menu *nsgtk_burger_menu_create(GtkAccelGroup *group)
 
 
 /* exported function documented in gtk/menu.h */
-struct nsgtk_popup_menu *nsgtk_popup_menu_create(GtkAccelGroup *group)
+struct slategtk_popup_menu *slategtk_popup_menu_create(GtkAccelGroup *group)
 {
-	struct nsgtk_popup_menu *nmenu;
+	struct slategtk_popup_menu *nmenu;
 
 	NEW_MENU(nmenu, popup);
 
@@ -578,10 +578,10 @@ struct nsgtk_popup_menu *nsgtk_popup_menu_create(GtkAccelGroup *group)
 
 
 /* exported function documented in gtk/menu.h */
-struct nsgtk_link_menu *
-nsgtk_link_menu_create(GtkAccelGroup *group)
+struct slategtk_link_menu *
+slategtk_link_menu_create(GtkAccelGroup *group)
 {
-	struct nsgtk_link_menu *nmenu;
+	struct slategtk_link_menu *nmenu;
 
 	NEW_MENU(nmenu, link);
 
@@ -599,7 +599,7 @@ nsgtk_link_menu_create(GtkAccelGroup *group)
 
 
 /* exported function documented in gtk/menu.h */
-nserror nsgtk_menu_bar_destroy(struct nsgtk_bar_submenu *menu)
+slateerror slategtk_menu_bar_destroy(struct slategtk_bar_submenu *menu)
 {
 	gtk_widget_destroy(GTK_WIDGET(menu->bar_menu));
 
@@ -616,11 +616,11 @@ nserror nsgtk_menu_bar_destroy(struct nsgtk_bar_submenu *menu)
 	free(menu->help_submenu);
 	free(menu);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported function documented in gtk/menu.h */
-nserror nsgtk_burger_menu_destroy(struct nsgtk_burger_menu *menu)
+slateerror slategtk_burger_menu_destroy(struct slategtk_burger_menu *menu)
 {
 	gtk_widget_destroy(GTK_WIDGET(menu->burger_menu));
 
@@ -637,12 +637,12 @@ nserror nsgtk_burger_menu_destroy(struct nsgtk_burger_menu *menu)
 	free(menu->help_submenu);
 	free(menu);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported function documented in gtk/menu.h */
-nserror nsgtk_popup_menu_destroy(struct nsgtk_popup_menu *menu)
+slateerror slategtk_popup_menu_destroy(struct slategtk_popup_menu *menu)
 {
 	gtk_widget_destroy(GTK_WIDGET(menu->popup_menu));
 
@@ -651,16 +651,16 @@ nserror nsgtk_popup_menu_destroy(struct nsgtk_popup_menu *menu)
 	free(menu->tools_submenu);
 	free(menu);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported function documented in gtk/menu.h */
-nserror nsgtk_link_menu_destroy(struct nsgtk_link_menu *menu)
+slateerror slategtk_link_menu_destroy(struct slategtk_link_menu *menu)
 {
 	gtk_widget_destroy(GTK_WIDGET(menu->link_menu));
 
 	free(menu);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }

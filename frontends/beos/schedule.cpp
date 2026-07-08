@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 François Revol <mmu_man@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,9 +25,9 @@
 extern "C" {
 #include "utils/errors.h"
 #include "beos/schedule.h"
-#include "netsurf/inttypes.h"
-#include "netsurf/content_type.h"
-#include "netsurf/browser_window.h"
+#include "slate/inttypes.h"
+#include "slate/content_type.h"
+#include "slate/browser_window.h"
 
 #include "utils/log.h"
 }
@@ -39,7 +39,7 @@ typedef struct {
 	bool callback_killed;		/**< Whether or not this was killed. */
 	bool callback_fired;		/**< Whether or not this has fired yet. */
 	bigtime_t timeout;
-} _nsbeos_callback_t;
+} _slatebeos_callback_t;
 
 /** List of all callbacks. */
 static BList *callbacks = NULL;
@@ -49,10 +49,10 @@ bigtime_t earliest_callback_timeout = B_INFINITE_TIMEOUT;
 
 
 static bool
-nsbeos_schedule_kill_callback(void *_target, void *_match)
+slatebeos_schedule_kill_callback(void *_target, void *_match)
 {
-	_nsbeos_callback_t *target = (_nsbeos_callback_t *)_target;
-	_nsbeos_callback_t *match = (_nsbeos_callback_t *)_match;
+	_slatebeos_callback_t *target = (_slatebeos_callback_t *)_target;
+	_slatebeos_callback_t *match = (_slatebeos_callback_t *)_match;
 	if ((target->callback == match->callback) &&
 	    (target->context == match->context)) {
 		NSLOG(schedule, DEBUG,
@@ -74,14 +74,14 @@ schedule_remove(void (*callback)(void *p), void *p)
 	      callback, p);
 	if (callbacks == NULL)
 		return;
-	_nsbeos_callback_t cb_match;
+	_slatebeos_callback_t cb_match;
 	cb_match.callback = callback;
 	cb_match.context = p;
 
-	callbacks->DoForEach(nsbeos_schedule_kill_callback, &cb_match);
+	callbacks->DoForEach(slatebeos_schedule_kill_callback, &cb_match);
 }
 
-nserror beos_schedule(int t, void (*callback)(void *p), void *p)
+slateerror beos_schedule(int t, void (*callback)(void *p), void *p)
 {
 	NSLOG(schedule, DEBUG, "t:%d cb:%p p:%p", t, callback, p);
 
@@ -93,11 +93,11 @@ nserror beos_schedule(int t, void (*callback)(void *p), void *p)
 	schedule_remove(callback, p);
 
         if (t < 0) {
-          return NSERROR_OK;
+          return SLATEERROR_OK;
         }
 
 	bigtime_t timeout = system_time() + t * 1000LL;
-	_nsbeos_callback_t *cb = (_nsbeos_callback_t *)malloc(sizeof(_nsbeos_callback_t));
+	_slatebeos_callback_t *cb = (_slatebeos_callback_t *)malloc(sizeof(_slatebeos_callback_t));
 	cb->callback = callback;
 	cb->context = p;
 	cb->callback_killed = cb->callback_fired = false;
@@ -107,7 +107,7 @@ nserror beos_schedule(int t, void (*callback)(void *p), void *p)
 	}
 	callbacks->AddItem(cb);
 
-        return NSERROR_OK;
+        return SLATEERROR_OK;
 }
 
 bool
@@ -128,7 +128,7 @@ schedule_run(void)
 
 	/* Run all the callbacks which made it this far. */
 	for (i = 0; i < callbacks->CountItems(); ) {
-		_nsbeos_callback_t *cb = (_nsbeos_callback_t *)(callbacks->ItemAt(i));
+		_slatebeos_callback_t *cb = (_slatebeos_callback_t *)(callbacks->ItemAt(i));
 		if (cb->timeout > now) {
 			// update next deadline
 			if (earliest_callback_timeout > cb->timeout)

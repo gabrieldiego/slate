@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 John Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@
 #include "content/fetch.h"
 #include "content/llcache.h"
 #include "utils/ring.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 #include "utils/url.h"
 #include "utils/corestrings.h"
 #include "utils/utils.h"
@@ -95,7 +95,7 @@ char *url_to_path(const char *url)
 	char *url_path;
 	char *path = NULL;
 
-	if (url_unescape(url, 0, NULL, &url_path) == NSERROR_OK) {
+	if (url_unescape(url, 0, NULL, &url_path) == SLATEERROR_OK) {
 		/* return the absolute path including leading / */
 		path = strdup(url_path + (FILE_SCHEME_PREFIX_LEN - 1));
 		free(url_path);
@@ -177,7 +177,7 @@ bool test_initialise(lwc_string *scheme)
 	return true;
 }
 
-bool test_can_fetch(const nsurl *url)
+bool test_can_fetch(const slateurl *url)
 {
 	/* Nothing to do */
 	return true;
@@ -188,7 +188,7 @@ void test_finalise(lwc_string *scheme)
 	/* Nothing to do */
 }
 
-void *test_setup_fetch(struct fetch *parent, nsurl *url, bool only_2xx,
+void *test_setup_fetch(struct fetch *parent, slateurl *url, bool only_2xx,
 		bool downgrade_tls, const char *post_urlenc,
 		const struct fetch_multipart_data *post_multipart,
 		const char **headers)
@@ -259,16 +259,16 @@ void test_poll(lwc_string *scheme)
  * The actual test code                                                       *
  ******************************************************************************/
 
-nserror query_handler(const llcache_query *query, void *pw,
+slateerror query_handler(const llcache_query *query, void *pw,
 		llcache_query_response cb, void *cbpw)
 {
 	/* I'm too lazy to actually implement this. It should queue the query, 
 	 * then deliver the response from main(). */
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-nserror event_handler(llcache_handle *handle, 
+slateerror event_handler(llcache_handle *handle, 
 		const llcache_event *event, void *pw)
 {
 	static char *event_names[] = {
@@ -283,16 +283,16 @@ nserror event_handler(llcache_handle *handle,
 	if (event->type == LLCACHE_EVENT_DONE)
 		*done = true;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 int main(int argc, char **argv)
 {
-	nserror error;
+	slateerror error;
 	llcache_handle *handle;
 	llcache_handle *handle2;
 	lwc_string *scheme;
-	nsurl *url;
+	slateurl *url;
 	bool done = false;
 
 	/* Initialise subsystems */
@@ -309,12 +309,12 @@ int main(int argc, char **argv)
 
 	/* Initialise low-level cache */
 	error = llcache_initialise(query_handler, NULL, 1024 * 1024);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		fprintf(stderr, "llcache_initialise: %d\n", error);
 		return 1;
 	}
 
-	if (nsurl_create("http://www.netsurf-browser.org", &url) != NSERROR_OK) {
+	if (slateurl_create("http://www.slate-browser.org", &url) != SLATEERROR_OK) {
 		fprintf(stderr, "Failed creating url\n");
 		return 1;
 	}
@@ -323,7 +323,7 @@ int main(int argc, char **argv)
 	error = llcache_handle_retrieve(url, 
 			LLCACHE_RETRIEVE_VERIFIABLE, NULL, NULL,
 			event_handler, &done, &handle);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		fprintf(stderr, "llcache_handle_retrieve: %d\n", error);
 		return 1;
 	}
@@ -337,7 +337,7 @@ int main(int argc, char **argv)
 	error = llcache_handle_retrieve(url,
 			LLCACHE_RETRIEVE_VERIFIABLE, NULL, NULL,
 			event_handler, &done, &handle2);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		fprintf(stderr, "llcache_handle_retrieve: %d\n", error);
 		return 1;
 	}

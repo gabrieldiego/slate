@@ -1,7 +1,7 @@
 /*
  * Copyright 2023 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,7 @@ extern "C" {
 #include "utils/log.h"
 #include "utils/messages.h"
 
-#include "netsurf/netsurf.h"
+#include "slate/slate.h"
 }
 
 #include "qt/application.cls.h"
@@ -41,26 +41,26 @@ extern "C" {
 int main(int argc, char** argv)
 {
 	int ret = 0;
-	struct netsurf_table nsqt_table = {
-		.misc = nsqt_misc_table,
-		.window = nsqt_window_table,
-		.corewindow = nsqt_core_window_table,
+	struct slate_table slateqt_table = {
+		.misc = slateqt_misc_table,
+		.window = slateqt_window_table,
+		.corewindow = slateqt_core_window_table,
 		.download = NULL, /* no download functionality */
 		.clipboard = NULL, /* no clipboard functionality */
-		.fetch = nsqt_fetch_table,
+		.fetch = slateqt_fetch_table,
 		.file = NULL, /* use the posix default file operations */
 		.utf8 = NULL, /* use default utf-8 processing */
 		.search = NULL, /* use the default text search */
 		.search_web = NULL, /* use default web search */
 		.llcache = NULL, /* use default low level cache storage */
-		.bitmap = nsqt_bitmap_table,
-		.layout = nsqt_layout_table,
+		.bitmap = slateqt_bitmap_table,
+		.layout = slateqt_layout_table,
 	};
 	NS_Application *nsapp;
 
 	/* qt application */
 	try {
-		nsapp = new NS_Application(argc, argv, &nsqt_table);
+		nsapp = new NS_Application(argc, argv, &slateqt_table);
 	} catch(NS_Exception &exp) {
 		fprintf(stderr,
 			"NetSurf qt application initialisation failed. %s (%s)\n",

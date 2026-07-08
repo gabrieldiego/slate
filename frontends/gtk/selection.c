@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 Mike Lester <element3260@gmail.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
 #include <stdlib.h>
 
 #include "utils/log.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/clipboard.h"
+#include "slate/browser_window.h"
+#include "slate/clipboard.h"
 
 #include "gtk/toolbar_items.h"
 #include "gtk/window.h"
@@ -74,7 +74,7 @@ static void gui_get_clipboard(char **buffer, size_t *length)
  * \param  n_styles  Number of text run styles in array
  */
 static void gui_set_clipboard(const char *buffer, size_t length,
-		nsclipboard_styles styles[], int n_styles)
+		slateclipboard_styles styles[], int n_styles)
 {
 	clipboard = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
 
@@ -94,4 +94,4 @@ static struct gui_clipboard_table clipboard_table = {
 	.set = gui_set_clipboard,
 };
 
-struct gui_clipboard_table *nsgtk_clipboard_table = &clipboard_table;
+struct gui_clipboard_table *slategtk_clipboard_table = &clipboard_table;

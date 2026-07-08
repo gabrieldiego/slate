@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@
 #include <string.h>
 #include <libcss/libcss.h>
 
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 
 #include "css/internal.h"
 
@@ -28,36 +28,36 @@ css_error nscss_resolve_url(void *pw, const char *base,
 		lwc_string *rel, lwc_string **abs)
 {
 	lwc_error lerror;
-	nserror error;
-	nsurl *nsbase;
-	nsurl *nsabs;
+	slateerror error;
+	slateurl *nsbase;
+	slateurl *nsabs;
 
-	/* Create nsurl from base */
+	/* Create slateurl from base */
 	/* TODO: avoid this */
-	error = nsurl_create(base, &nsbase);
-	if (error != NSERROR_OK) {
-		return error == NSERROR_NOMEM ? CSS_NOMEM : CSS_INVALID;
+	error = slateurl_create(base, &nsbase);
+	if (error != SLATEERROR_OK) {
+		return error == SLATEERROR_NOMEM ? CSS_NOMEM : CSS_INVALID;
 	}
 
 	/* Resolve URI */
-	error = nsurl_join(nsbase, lwc_string_data(rel), &nsabs);
-	if (error != NSERROR_OK) {
-		nsurl_unref(nsbase);
-		return error == NSERROR_NOMEM ? CSS_NOMEM : CSS_INVALID;
+	error = slateurl_join(nsbase, lwc_string_data(rel), &nsabs);
+	if (error != SLATEERROR_OK) {
+		slateurl_unref(nsbase);
+		return error == SLATEERROR_NOMEM ? CSS_NOMEM : CSS_INVALID;
 	}
 
-	nsurl_unref(nsbase);
+	slateurl_unref(nsbase);
 
 	/* Intern it */
-	lerror = lwc_intern_string(nsurl_access(nsabs),
-			nsurl_length(nsabs), abs);
+	lerror = lwc_intern_string(slateurl_access(nsabs),
+			slateurl_length(nsabs), abs);
 	if (lerror != lwc_error_ok) {
 		*abs = NULL;
-		nsurl_unref(nsabs);
+		slateurl_unref(nsabs);
 		return lerror == lwc_error_oom ? CSS_NOMEM : CSS_INVALID;
 	}
 
-	nsurl_unref(nsabs);
+	slateurl_unref(nsabs);
 
 	return CSS_OK;
 }

@@ -1,7 +1,7 @@
 /*
  * Copyright 2017 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,13 +25,13 @@
 #include <stdlib.h>
 #include <oslib/wimp.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/messages.h"
 #include "utils/log.h"
-#include "utils/nsurl.h"
-#include "netsurf/window.h"
-#include "netsurf/plotters.h"
-#include "netsurf/keypress.h"
+#include "utils/slateurl.h"
+#include "slate/window.h"
+#include "slate/plotters.h"
+#include "slate/keypress.h"
 #include "desktop/local_history.h"
 
 #include "riscos/dialog.h"
@@ -71,9 +71,9 @@ static wimp_window *dialog_local_history_template;
  * \param r The rectangle of the window that needs updating.
  * \param originx The risc os plotter x origin.
  * \param originy The risc os plotter y origin.
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
+static slateerror
 ro_local_history_draw(struct ro_corewindow *ro_cw,
 		      int originx,
 		      int originy,
@@ -94,7 +94,7 @@ ro_local_history_draw(struct ro_corewindow *ro_cw,
 	local_history_redraw(lhw->session, 0, 0, r, &ctx);
 	no_font_blending = false;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -103,11 +103,11 @@ ro_local_history_draw(struct ro_corewindow *ro_cw,
  *
  * \param ro_cw The ro core window structure.
  * \param nskey The netsurf key code.
- * \return NSERROR_OK if key processed,
- *         NSERROR_NOT_IMPLEMENTED if key not processed
+ * \return SLATEERROR_OK if key processed,
+ *         SLATEERROR_NOT_IMPLEMENTED if key not processed
  *         otherwise apropriate error code
  */
-static nserror
+static slateerror
 ro_local_history_key(struct ro_corewindow *ro_cw, uint32_t nskey)
 {
 	struct ro_local_history_window *lhw;
@@ -115,67 +115,67 @@ ro_local_history_key(struct ro_corewindow *ro_cw, uint32_t nskey)
 	lhw = (struct ro_local_history_window *)ro_cw;
 
 	if (local_history_keypress(lhw->session, nskey)) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
-	return NSERROR_NOT_IMPLEMENTED;
+	return SLATEERROR_NOT_IMPLEMENTED;
 }
 
 
 /**
  * handle hover mouse movement for tooltips
  */
-static nserror
+static slateerror
 ro_local_history_tooltip(struct ro_local_history_window *lhw, int x, int y)
 {
 	int width;
-	nsurl *url;
+	slateurl *url;
 	wimp_window_state state;
 	wimp_icon_state ic;
 	os_box box = {0, 0, 0, 0};
 	os_error *error;
 	wimp_pointer pointer;
-	nserror res;
+	slateerror res;
 
 	/* check if tooltip are required */
-	if (!nsoption_bool(history_tooltip)) {
-		return NSERROR_OK;
+	if (!slateoption_bool(history_tooltip)) {
+		return SLATEERROR_OK;
 	}
 
 	/* ensure pointer has moved */
 	if ((lhw->x == x) && (lhw->y == y)) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	lhw->x = x;
 	lhw->y = y;
 
 	res = local_history_get_url(lhw->session, x, y, &url);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		/* not over a tree entry => close tooltip window. */
 		error = xwimp_close_window(dialog_tooltip);
 		if (error) {
 			NSLOG(netsurf, INFO, "xwimp_close_window: 0x%x: %s",
 			      error->errnum, error->errmess);
 			ro_warn_user("WimpError", error->errmess);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* get width of string */
-	error = xwimptextop_string_width(nsurl_access(url),
-					 nsurl_length(url) > 256 ? 256 : nsurl_length(url),
+	error = xwimptextop_string_width(slateurl_access(url),
+					 slateurl_length(url) > 256 ? 256 : slateurl_length(url),
 					 &width);
 	if (error) {
 		NSLOG(netsurf, INFO, "xwimptextop_string_width: 0x%x: %s",
 		      error->errnum, error->errmess);
 		ro_warn_user("WimpError", error->errmess);
-		nsurl_unref(url);
-		return NSERROR_NOMEM;
+		slateurl_unref(url);
+		return SLATEERROR_NOMEM;
 	}
 
-	ro_gui_set_icon_string(dialog_tooltip, 0, nsurl_access(url), true);
-	nsurl_unref(url);
+	ro_gui_set_icon_string(dialog_tooltip, 0, slateurl_access(url), true);
+	slateurl_unref(url);
 
 	/* resize icon appropriately */
 	ic.w = dialog_tooltip;
@@ -185,7 +185,7 @@ ro_local_history_tooltip(struct ro_local_history_window *lhw, int x, int y)
 		NSLOG(netsurf, INFO, "xwimp_get_icon_state: 0x%x: %s",
 		      error->errnum, error->errmess);
 		ro_warn_user("WimpError", error->errmess);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 	error = xwimp_resize_icon(dialog_tooltip, 0,
 				  ic.icon.extent.x0, ic.icon.extent.y0,
@@ -194,7 +194,7 @@ ro_local_history_tooltip(struct ro_local_history_window *lhw, int x, int y)
 		NSLOG(netsurf, INFO, "xwimp_resize_icon: 0x%x: %s",
 		      error->errnum, error->errmess);
 		ro_warn_user("WimpError", error->errmess);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	state.w = dialog_tooltip;
@@ -203,7 +203,7 @@ ro_local_history_tooltip(struct ro_local_history_window *lhw, int x, int y)
 		NSLOG(netsurf, INFO, "xwimp_get_window_state: 0x%x: %s",
 		      error->errnum, error->errmess);
 		ro_warn_user("WimpError", error->errmess);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* update window extent */
@@ -214,7 +214,7 @@ ro_local_history_tooltip(struct ro_local_history_window *lhw, int x, int y)
 		NSLOG(netsurf, INFO, "xwimp_set_extent: 0x%x: %s",
 		      error->errnum, error->errmess);
 		ro_warn_user("WimpError", error->errmess);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	error = xwimp_get_pointer_info(&pointer);
@@ -222,7 +222,7 @@ ro_local_history_tooltip(struct ro_local_history_window *lhw, int x, int y)
 		NSLOG(netsurf, INFO, "xwimp_get_pointer_info: 0x%x: %s",
 		      error->errnum, error->errmess);
 		ro_warn_user("WimpError", error->errmess);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* set visible area */
@@ -237,9 +237,9 @@ ro_local_history_tooltip(struct ro_local_history_window *lhw, int x, int y)
 		NSLOG(netsurf, INFO, "xwimp_open_window: 0x%x: %s",
 		      error->errnum, error->errmess);
 		ro_warn_user("WimpError", error->errmess);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -250,9 +250,9 @@ ro_local_history_tooltip(struct ro_local_history_window *lhw, int x, int y)
  * \param mouse_state mouse state
  * \param x location of event
  * \param y location of event
- * \return NSERROR_OK on sucess otherwise apropriate error code.
+ * \return SLATEERROR_OK on sucess otherwise apropriate error code.
  */
-static nserror
+static slateerror
 ro_local_history_mouse(struct ro_corewindow *ro_cw,
 		       browser_mouse_state mouse_state,
 		       int x, int y)
@@ -276,22 +276,22 @@ ro_local_history_mouse(struct ro_corewindow *ro_cw,
 		break;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * Creates the window for the local_history tree.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-static nserror
+static slateerror
 ro_local_history_init(struct browser_window *bw,
 		      struct ro_local_history_window **win_out)
 {
 	os_error *error;
 	struct ro_local_history_window *ncwin;
-	nserror res;
+	slateerror res;
 
 	/* memoise window so it can be represented when necessary
 	 * instead of recreating every time.
@@ -303,7 +303,7 @@ ro_local_history_init(struct browser_window *bw,
 
 	ncwin = calloc(1, sizeof(*ncwin));
 	if (ncwin == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* create window from template */
@@ -314,7 +314,7 @@ ro_local_history_init(struct browser_window *bw,
 		      error->errnum, error->errmess);
 		ro_warn_user("WimpError", error->errmess);
 		free(ncwin);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* initialise callbacks */
@@ -328,7 +328,7 @@ ro_local_history_init(struct browser_window *bw,
 				 NULL,
 				 0,
 				 NULL);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		free(ncwin);
 		return res;
 	}
@@ -336,31 +336,31 @@ ro_local_history_init(struct browser_window *bw,
 	res = local_history_init((struct core_window *)ncwin,
 				 bw,
 				 &ncwin->session);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		free(ncwin);
 		return res;
 	}
 
 	*win_out = ncwin;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /**
  * open RISC OS local history window at the correct size
  */
-static nserror
+static slateerror
 ro_local_history_open(struct ro_local_history_window *lhw, wimp_w parent)
 {
-	nserror res;
+	slateerror res;
 	int width, height;
 	os_box box = {0, 0, 0, 0};
 	wimp_window_state state;
 	os_error *error;
 
 	res = local_history_get_size(lhw->session, &width, &height);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -375,7 +375,7 @@ ro_local_history_open(struct ro_local_history_window *lhw, wimp_w parent)
 		NSLOG(netsurf, INFO, "xwimp_set_extent: 0x%x: %s",
 		      error->errnum, error->errmess);
 		ro_warn_user("WimpError", error->errmess);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* open full size */
@@ -385,7 +385,7 @@ ro_local_history_open(struct ro_local_history_window *lhw, wimp_w parent)
 		NSLOG(netsurf, INFO, "xwimp_get_window_state: 0x%x: %s",
 		      error->errnum, error->errmess);
 		ro_warn_user("WimpError", error->errmess);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 	state.visible.x0 = 0;
 	state.visible.y0 = 0;
@@ -397,7 +397,7 @@ ro_local_history_open(struct ro_local_history_window *lhw, wimp_w parent)
 		NSLOG(netsurf, INFO, "xwimp_open_window: 0x%x: %s",
 		      error->errnum, error->errmess);
 		ro_warn_user("WimpError", error->errmess);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	ro_gui_dialog_open_persistent(parent, lhw->core.wh, true);
@@ -413,16 +413,16 @@ ro_local_history_open(struct ro_local_history_window *lhw, wimp_w parent)
 
 	local_history_scroll_to_cursor(lhw->session);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in riscos/local_history.h */
-nserror ro_gui_local_history_present(wimp_w parent, struct browser_window *bw)
+slateerror ro_gui_local_history_present(wimp_w parent, struct browser_window *bw)
 {
-	nserror res;
+	slateerror res;
 
 	res = ro_local_history_init(bw, &local_history_window);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Presenting");
 		res = ro_local_history_open(local_history_window, parent);
 	} else {
@@ -441,16 +441,16 @@ void ro_gui_local_history_initialise(void)
 
 
 /* exported interface documented in riscos/local_history.h */
-nserror ro_gui_local_history_finalise(void)
+slateerror ro_gui_local_history_finalise(void)
 {
-	nserror res;
+	slateerror res;
 
 	if (local_history_window == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	res = local_history_fini(local_history_window->session);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		res = ro_corewindow_fini(&local_history_window->core);
 
 		free(local_history_window);

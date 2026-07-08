@@ -1,7 +1,7 @@
 /*
  * Copyright 2023 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,7 +26,7 @@
 
 extern "C" {
 #include "utils/messages.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 
 #include "desktop/browser_history.h"
 #include "desktop/searchweb.h"
@@ -109,11 +109,11 @@ NS_URLBar::NS_URLBar(QWidget* parent, NS_Actions *actions, struct browser_window
 
 void NS_URLBar::input_pressed()
 {
-	nserror res;
-	nsurl *url;
+	slateerror res;
+	slateurl *url;
 	QByteArray url_string = m_input->text().toUtf8();
 	res = search_web_omni(url_string, SEARCH_WEB_OMNI_NONE, &url);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		res = browser_window_navigate(this->m_bw,
 					      url,
 					      NULL,
@@ -121,21 +121,21 @@ void NS_URLBar::input_pressed()
 					      NULL,
 					      NULL,
 					      NULL);
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
 }
 
-nserror NS_URLBar::set_url(struct nsurl *url)
+slateerror NS_URLBar::set_url(struct slateurl *url)
 {
 	size_t idn_url_l;
 	char *idn_url_s = NULL;
-	if (nsurl_get_utf8(url, &idn_url_s, &idn_url_l) == NSERROR_OK) {
+	if (slateurl_get_utf8(url, &idn_url_s, &idn_url_l) == SLATEERROR_OK) {
 		m_input->setText(QString::fromUtf8(idn_url_s, idn_url_l));
 		free(idn_url_s);
 	} else {
-		m_input->setText(QString::fromUtf8(nsurl_access(url),
-						   nsurl_length(url)));
+		m_input->setText(QString::fromUtf8(slateurl_access(url),
+						   slateurl_length(url)));
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }

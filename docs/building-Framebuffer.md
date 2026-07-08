@@ -145,7 +145,7 @@
   From your workspace directory, run the following command to get the NetSurf
   source:
 
-     $ git clone git://git.netsurf-browser.org/netsurf.git
+     $ git clone git://git.slate-browser.org/netsurf.git
 
   And change to the 'netsurf' directory:
 
@@ -176,26 +176,26 @@
   need to "make clean" before attempting to build after installing the 
   dependencies.
 
-  Run NetSurf by executing the "nsfb" program:
+  Run NetSurf by executing the "slatefb" program:
 
-      $ ./nsfb
+      $ ./slatefb
 
   | Note: NetSurf uses certain resources at run time.  In order to find these
   |       resources, it searches three locations:
   |
-  |           1. ~/.netsurf/
-  |           2. $NETSURFRES/
+  |           1. ~/.slate/
+  |           2. $SLATERES/
   |           3. /usr/share/netsurf/
   |
   |       In the build tree, the resources are located at
   |
   |           framebuffer/res
   |
-  |       Setting $NETSURFRES to point at the resources in the build tree
+  |       Setting $SLATERES to point at the resources in the build tree
   |       will enable you to run NetSurf from here without installation.
   |       To do this, run:
   |
-  |           export NETSURFRES=`pwd`/framebuffer/res
+  |           export SLATERES=`pwd`/framebuffer/res
 
 
   Fonts
@@ -203,7 +203,7 @@
 
   The framebuffer port currently has two choices for font
   handling. The font handler may be selected at compile time by using
-  the NETSURF_FB_FONTLIB configuration key. Currently supported values
+  the SLATE_FB_FONTLIB configuration key. Currently supported values
   are internal and freetype
 
   Internal
@@ -232,16 +232,16 @@
   be set to the absolute path of the relevant font file including its
   .ttf extension. The variables are:
 
-  NETSURF_FB_FONT_SANS_SERIF
-  NETSURF_FB_FONT_SANS_SERIF_BOLD
-  NETSURF_FB_FONT_SANS_SERIF_ITALIC
-  NETSURF_FB_FONT_SANS_SERIF_ITALIC_BOLD
-  NETSURF_FB_FONT_SERIF
-  NETSURF_FB_FONT_SERIF_BOLD
-  NETSURF_FB_FONT_MONOSPACE
-  NETSURF_FB_FONT_MONOSPACE_BOLD
-  NETSURF_FB_FONT_CURSIVE
-  NETSURF_FB_FONT_FANTASY
+  SLATE_FB_FONT_SANS_SERIF
+  SLATE_FB_FONT_SANS_SERIF_BOLD
+  SLATE_FB_FONT_SANS_SERIF_ITALIC
+  SLATE_FB_FONT_SANS_SERIF_ITALIC_BOLD
+  SLATE_FB_FONT_SERIF
+  SLATE_FB_FONT_SERIF_BOLD
+  SLATE_FB_FONT_MONOSPACE
+  SLATE_FB_FONT_MONOSPACE_BOLD
+  SLATE_FB_FONT_CURSIVE
+  SLATE_FB_FONT_FANTASY
   
   The font selection may be changed by placing truetype font files
   in the resources path. The resource files will be the generic names

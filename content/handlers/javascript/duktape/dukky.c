@@ -4,7 +4,7 @@
  * Copyright 2016 Michael Drake <tlsa@netsurf-browser.org>
  * Copyright 2016 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,9 +29,9 @@
 #include <string.h>
 #include <nsutils/time.h>
 
-#include "netsurf/inttypes.h"
+#include "slate/inttypes.h"
 #include "utils/utils.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/log.h"
 #include "utils/corestrings.h"
 #include "content/content.h"
@@ -582,7 +582,7 @@ void js_initialise(void)
 	 * lest we incur the wrath of others.
 	 */
 	/* Disabled force-on for forthcoming release */
-	/* nsoption_set_bool(enable_javascript, true);
+	/* slateoption_set_bool(enable_javascript, true);
 	 */
 	javascript_init();
 }
@@ -596,21 +596,21 @@ void js_finalise(void)
 
 
 /* exported interface documented in js.h */
-nserror
+slateerror
 js_newheap(int timeout, jsheap **heap)
 {
 	duk_context *ctx;
 	jsheap *ret = calloc(1, sizeof(*ret));
 	*heap = NULL;
 	NSLOG(dukky, DEBUG, "Creating new duktape javascript heap");
-	if (ret == NULL) return NSERROR_NOMEM;
+	if (ret == NULL) return SLATEERROR_NOMEM;
 	ctx = ret->ctx = duk_create_heap(
 		dukky_alloc_function,
 		dukky_realloc_function,
 		dukky_free_function,
 		ret,
 		NULL);
-	if (ret->ctx == NULL) { free(ret); return NSERROR_NOMEM; }
+	if (ret->ctx == NULL) { free(ret); return SLATEERROR_NOMEM; }
 	/* Create the prototype stuffs */
 	duk_push_global_object(ctx);
 	duk_push_boolean(ctx, true);
@@ -623,7 +623,7 @@ js_newheap(int timeout, jsheap **heap)
 	duk_put_global_string(ctx, THREAD_MAP);
 
 	*heap = ret;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -649,7 +649,7 @@ void js_destroyheap(jsheap *heap)
 #define CTX (ret->ctx)
 
 /* exported interface documented in js.h */
-nserror js_newthread(jsheap *heap, void *win_priv, void *doc_priv, jsthread **thread)
+slateerror js_newthread(jsheap *heap, void *win_priv, void *doc_priv, jsthread **thread)
 {
 	jsthread *ret;
 	assert(heap != NULL);
@@ -658,7 +658,7 @@ nserror js_newthread(jsheap *heap, void *win_priv, void *doc_priv, jsthread **th
 	ret = calloc(1, sizeof (*ret));
 	if (ret == NULL) {
 		NSLOG(dukky, ERROR, "Unable to allocate new JS thread structure");
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	NSLOG(dukky, DEBUG,
@@ -706,13 +706,13 @@ nserror js_newthread(jsheap *heap, void *win_priv, void *doc_priv, jsthread **th
 		NSLOG(dukky, CRITICAL, "%s", duk_safe_to_string(CTX, -1));
 		NSLOG(dukky, CRITICAL, "Unable to compile polyfill.js, thread aborted");
 		js_destroythread(ret);
-		return NSERROR_INIT_FAILED;
+		return SLATEERROR_INIT_FAILED;
 	}
 	/* ..., (generics.js) */
 	if (dukky_pcall(CTX, 0, true) != 0) {
 		NSLOG(dukky, CRITICAL, "Unable to run polyfill.js, thread aborted");
 		js_destroythread(ret);
-		return NSERROR_INIT_FAILED;
+		return SLATEERROR_INIT_FAILED;
 	}
 	/* ..., result */
 	duk_pop(CTX);
@@ -727,13 +727,13 @@ nserror js_newthread(jsheap *heap, void *win_priv, void *doc_priv, jsthread **th
 		NSLOG(dukky, CRITICAL, "%s", duk_safe_to_string(CTX, -1));
 		NSLOG(dukky, CRITICAL, "Unable to compile generics.js, thread aborted");
 		js_destroythread(ret);
-		return NSERROR_INIT_FAILED;
+		return SLATEERROR_INIT_FAILED;
 	}
 	/* ..., (generics.js) */
 	if (dukky_pcall(CTX, 0, true) != 0) {
 		NSLOG(dukky, CRITICAL, "Unable to run generics.js, thread aborted");
 		js_destroythread(ret);
-		return NSERROR_INIT_FAILED;
+		return SLATEERROR_INIT_FAILED;
 	}
 	/* ..., result */
 	duk_pop(CTX);
@@ -752,7 +752,7 @@ nserror js_newthread(jsheap *heap, void *win_priv, void *doc_priv, jsthread **th
 	NSLOG(dukky, DEBUG, "New thread is %p in heap %p", thread, heap);
 	*thread = ret;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* Now switch to the long term CTX behaviour */
@@ -760,7 +760,7 @@ nserror js_newthread(jsheap *heap, void *win_priv, void *doc_priv, jsthread **th
 #define CTX (thread->ctx)
 
 /* exported interface documented in js.h */
-nserror js_closethread(jsthread *thread)
+slateerror js_closethread(jsthread *thread)
 {
 	/* We can always close down a thread, it might just confuse
 	 * the code running, though we don't mind since we're in the
@@ -776,7 +776,7 @@ nserror js_closethread(jsthread *thread)
 	/* Restore whatever stack we had */
 	duk_set_top(CTX, top);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**

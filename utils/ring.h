@@ -1,7 +1,7 @@
 /*
  * Copyright 2006, 2007 Daniel Silverstone <dsilvers@digital-scurf.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,8 +30,8 @@
  * of use to others and are thus included here.
  */
 
-#ifndef _NETSURF_UTILS_RING_H_
-#define _NETSURF_UTILS_RING_H_
+#ifndef _SLATE_UTILS_RING_H_
+#define _SLATE_UTILS_RING_H_
 
 
 /** Insert the given item into the specified ring.
@@ -102,7 +102,7 @@
 		sizevar = 0; \
 		do { \
 			bool matches = false; \
-			/* nsurl guarantees lowercase host */ \
+			/* slateurl guarantees lowercase host */ \
 			if (lwc_string_isequal(p->host, lwc_hostname, \
 					&matches) == lwc_error_ok) \
 				if (matches) \

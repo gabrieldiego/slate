@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,9 +22,9 @@
 #include "utils/utils.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/plotters.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/content.h"
+#include "slate/plotters.h"
+#include "slate/bitmap.h"
+#include "slate/content.h"
 #include "desktop/gui_internal.h"
 #include "desktop/bitmap.h"
 
@@ -43,69 +43,69 @@
 /**
  * Initialise image content handlers
  *
- * \return NSERROR_OK on success, appropriate error otherwise.
+ * \return SLATEERROR_OK on success, appropriate error otherwise.
  */
-nserror image_init(void)
+slateerror image_init(void)
 {
-	nserror error = NSERROR_OK;
+	slateerror error = SLATEERROR_OK;
 
 #ifdef WITH_BMP
 	error = nsbmp_init();
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 #endif
 
 #ifdef WITH_GIF
 	error = nsgif_init();
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 #endif
 
 #ifdef WITH_BMP
 	error = nsico_init();
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 #endif
 
 #ifdef WITH_JPEG
 	error = nsjpeg_init();
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 #endif
 
 #ifdef WITH_JPEGXL
 	error = nsjpegxl_init();
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 #endif
 
 #ifdef WITH_PNG
 	error = nspng_init();
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 #endif
 
 #ifdef WITH_NSSPRITE
 	error = nssprite_init();
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 #endif
 
 	/* Prefer rsvg over libsvgtiny for svgs */
 #ifdef WITH_NS_SVG
 	error = svg_init();
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 #endif
 #ifdef WITH_RSVG
 	error = nsrsvg_init();
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 #endif
 
 #ifdef WITH_WEBP
 	error = nswebp_init();
-	if (error != NSERROR_OK)
+	if (error != SLATEERROR_OK)
 		return error;
 #endif
 
@@ -154,7 +154,7 @@ bool image_bitmap_plot(struct bitmap *bitmap,
 
 				return (ctx->plot->rectangle(ctx,
 							     &fill_style,
-							     &area) == NSERROR_OK);
+							     &area) == SLATEERROR_OK);
 
 			} else if ((fill_style.fill_colour & 0xff000000) == 0) {
 				/* transparent pixel used as spacer, skip it */
@@ -174,5 +174,5 @@ bool image_bitmap_plot(struct bitmap *bitmap,
 				  data->x, data->y,
 				  data->width, data->height,
 				  data->background_colour,
-				  flags) == NSERROR_OK);
+				  flags) == SLATEERROR_OK);
 }

@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,15 +29,15 @@
 #include "utils/log.h"
 #include "utils/utf8.h"
 #include "utils/utils.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/plotters.h"
-#include "netsurf/mouse.h"
+#include "slate/bitmap.h"
+#include "slate/plotters.h"
+#include "slate/mouse.h"
 
 #include "atari/gui.h"
 #include "atari/osspec.h"
 #include "atari/misc.h"
 #include "atari/bitmap.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "atari/plot/eddi.h"
 #include "atari/plot/fontplot.h"
 #include "atari/plot/plot.h"
@@ -1614,11 +1614,11 @@ int plot_init(const struct redraw_context *ctx, char *fdrvrname)
     GRECT loc_pos = { 0, 0, 360, 400 };
     int err=0;
 
-    if( nsoption_int(atari_dither) == 1)
+    if( slateoption_int(atari_dither) == 1)
 	atari_plot_flags |= PLOT_FLAG_DITHER;
-    if( nsoption_int(atari_transparency) == 1 )
+    if( slateoption_int(atari_transparency) == 1 )
 	atari_plot_flags |= PLOT_FLAG_TRANS;
-    if( nsoption_int(atari_font_monochrom) == 1 )
+    if( slateoption_int(atari_font_monochrom) == 1 )
 	atari_font_flags |= FONTPLOT_FLAG_MONOGLYPH;
 
     if (atari_plot_vdi_handle == -1) {
@@ -1968,9 +1968,9 @@ void plot_set_text_plotter(FONT_PLOTTER font_plotter)
  * \param ctx The current redraw context.
  * \param clip The rectangle to limit all subsequent plot
  *              operations within.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 plot_clip(const struct redraw_context *ctx, const struct rect *clip)
 {
     GRECT canvas, screen, gclip, maxclip;
@@ -2019,7 +2019,7 @@ plot_clip(const struct redraw_context *ctx, const struct rect *clip)
 
     vs_clip(atari_plot_vdi_handle, 1, (short*)&pxy);
 
-    return NSERROR_OK;
+    return SLATEERROR_OK;
 }
 
 
@@ -2037,16 +2037,16 @@ plot_clip(const struct redraw_context *ctx, const struct rect *clip)
  * \param radius The radius of the arc.
  * \param angle1 The start angle of the arc.
  * \param angle2 The finish angle of the arc.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 plot_arc(const struct redraw_context *ctx,
 	 const plot_style_t *pstyle,
 	 int x, int y, int radius, int angle1, int angle2)
 {
     vswr_mode(atari_plot_vdi_handle, MD_REPLACE);
     if (pstyle->fill_type == PLOT_OP_TYPE_NONE) {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
     }
 
     if (pstyle->fill_type != PLOT_OP_TYPE_SOLID) {
@@ -2070,7 +2070,7 @@ plot_arc(const struct redraw_context *ctx,
 	      angle2 * 10);
     }
 
-    return NSERROR_OK;
+    return SLATEERROR_OK;
 }
 
 
@@ -2084,9 +2084,9 @@ plot_arc(const struct redraw_context *ctx,
  * \param x x coordinate of circle centre.
  * \param y y coordinate of circle centre.
  * \param radius circle radius.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 plot_disc(const struct redraw_context *ctx,
 	  const plot_style_t *pstyle,
 	  int x, int y, int radius)
@@ -2102,7 +2102,7 @@ plot_disc(const struct redraw_context *ctx,
 	vsf_interior(atari_plot_vdi_handle, FIS_SOLID);
 	v_circle(atari_plot_vdi_handle, view.x + x, view.y + y, radius);
     }
-    return NSERROR_OK;
+    return SLATEERROR_OK;
 }
 
 
@@ -2115,9 +2115,9 @@ plot_disc(const struct redraw_context *ctx,
  * \param ctx The current redraw context.
  * \param pstyle Style controlling the line plot.
  * \param line A rectangle defining the line to be drawn
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 plot_line(const struct redraw_context *ctx,
 	  const plot_style_t *pstyle,
 	  const struct rect *line)
@@ -2128,7 +2128,7 @@ plot_line(const struct redraw_context *ctx,
 
     if (((line->x0 < 0) && (line->x1 < 0)) ||
 	((line->y0 < 0) && (line->y1 < 0))) {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
     }
 
     pxy[0] = view.x + MAX(0, line->x0);
@@ -2137,7 +2137,7 @@ plot_line(const struct redraw_context *ctx,
     pxy[3] = view.y + MAX(0, line->y1);
 
     if ((line->y0 > view.h-1) && (line->y1 > view.h-1)) {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
     }
 
     //printf("view: %d,%d,%d,%d\n", view.x, view.y, view.w, view.h);
@@ -2159,7 +2159,7 @@ plot_line(const struct redraw_context *ctx,
     v_pline(atari_plot_vdi_handle, 2, (short *)&pxy );
     //plot_vdi_clip(false);
 
-    return NSERROR_OK;
+    return SLATEERROR_OK;
 }
 
 
@@ -2174,9 +2174,9 @@ plot_line(const struct redraw_context *ctx,
  * \param ctx The current redraw context.
  * \param pstyle Style controlling the rectangle plot.
  * \param rect A rectangle defining the line to be drawn
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 plot_rectangle(const struct redraw_context *ctx,
 	       const plot_style_t *pstyle,
 	       const struct rect *rect)
@@ -2205,7 +2205,7 @@ plot_rectangle(const struct redraw_context *ctx,
     r.g_h = rect->y1 - rect->y0;
 
     if (!rc_intersect(&rclip, &r)) {
-	return NSERROR_OK;
+	return SLATEERROR_OK;
     }
 
     if (pstyle->stroke_type != PLOT_OP_TYPE_NONE) {
@@ -2282,7 +2282,7 @@ plot_rectangle(const struct redraw_context *ctx,
 	v_bar(atari_plot_vdi_handle, (short*)&pxy);
     }
 
-    return NSERROR_OK;
+    return SLATEERROR_OK;
 }
 
 
@@ -2298,9 +2298,9 @@ plot_rectangle(const struct redraw_context *ctx,
  * \param pstyle Style controlling the polygon plot.
  * \param p verticies of polygon
  * \param n number of verticies.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 plot_polygon(const struct redraw_context *ctx,
 	     const plot_style_t *pstyle,
 	     const int *p,
@@ -2329,7 +2329,7 @@ plot_polygon(const struct redraw_context *ctx,
 	v_pline(atari_plot_vdi_handle, n+1,  (short *)&pxy);
     }
 
-    return NSERROR_OK;
+    return SLATEERROR_OK;
 }
 
 
@@ -2344,9 +2344,9 @@ plot_polygon(const struct redraw_context *ctx,
  * \param p elements of path
  * \param n nunber of elements on path
  * \param transform A transform to apply to the path.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 plot_path(const struct redraw_context *ctx,
 	  const plot_style_t *pstyle,
 	  const float *p,
@@ -2354,7 +2354,7 @@ plot_path(const struct redraw_context *ctx,
 	  const float transform[6])
 {
     /** \todo Implement atari path plot */
-    return NSERROR_OK;
+    return SLATEERROR_OK;
 }
 
 
@@ -2380,9 +2380,9 @@ plot_path(const struct redraw_context *ctx,
  * \param height The height of area to plot the bitmap into
  * \param bg the background colour to alpha blend into
  * \param flags the flags controlling the type of plot operation
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 plot_bitmap(const struct redraw_context *ctx,
 	    struct bitmap *bitmap,
 	    int x, int y,
@@ -2432,7 +2432,7 @@ plot_bitmap(const struct redraw_context *ctx,
     if (bm == NULL) {
 	printf("plot: out of memory! bmp: %p, bmpres: %p\n",
 	       bitmap, bitmap->resized );
-	return NSERROR_NOMEM;
+	return SLATEERROR_NOMEM;
     }
 
     if (!(repeat_x || repeat_y) ) {
@@ -2469,7 +2469,7 @@ plot_bitmap(const struct redraw_context *ctx,
 	}
     }
 
-    return NSERROR_OK;
+    return SLATEERROR_OK;
 }
 
 
@@ -2482,9 +2482,9 @@ plot_bitmap(const struct redraw_context *ctx,
  * \param y y coordinate
  * \param text UTF-8 string to plot
  * \param length length of string, in bytes
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
+static slateerror
 plot_text(const struct redraw_context *ctx,
 	  const struct plot_font_style *fstyle,
 	  int x,
@@ -2500,7 +2500,7 @@ plot_text(const struct redraw_context *ctx,
 	fplotter->text(fplotter, x, y, text, length, fstyle);
     }
 
-    return NSERROR_OK;
+    return SLATEERROR_OK;
 }
 
 /** atari plottr operation table */

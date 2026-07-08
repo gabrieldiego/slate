@@ -1,7 +1,7 @@
 /*
  * Copyright 2012 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,8 +22,8 @@
  * Provide gettext interface to the utility localisation routines
  */
 
-#ifndef _NETSURF_GTK_GETTEXT_MESSAGES_H_
-#define _NETSURF_GTK_GETTEXT_MESSAGES_H_
+#ifndef _SLATE_GTK_GETTEXT_MESSAGES_H_
+#define _SLATE_GTK_GETTEXT_MESSAGES_H_
 
 char *gettext(const char *msgid);
 char *dgettext(const char *domainname, const char *msgid);

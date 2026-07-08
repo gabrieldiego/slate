@@ -1,7 +1,7 @@
 /*
  * Copyright 2005 John M Bell <jmb202@ecs.soton.ac.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,8 +32,8 @@
 #include "utils/log.h"
 #include "utils/utf8.h"
 
-#include "netsurf/inttypes.h"
-#include "netsurf/utf8.h"
+#include "slate/inttypes.h"
+#include "slate/utf8.h"
 #include "desktop/gui_internal.h"
 
 
@@ -157,7 +157,7 @@ static inline void utf8_clear_cd_cache(void)
  *
  * either return the cached conversion descriptor or create one if required
  */
-static nserror
+static slateerror
 get_cached_cd(const char *enc_from, const char *enc_to, iconv_t *cd_out)
 {
 	iconv_t cd;
@@ -167,17 +167,17 @@ get_cached_cd(const char *enc_from, const char *enc_to, iconv_t *cd_out)
 	    strncasecmp(last_cd.to, enc_to, sizeof(last_cd.to)) == 0 &&
 	    last_cd.cd != 0) {
 		*cd_out = last_cd.cd;
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* no match, so create a new cd */
 	cd = iconv_open(enc_to, enc_from);
 	if (cd == (iconv_t) -1) {
 		if (errno == EINVAL) {
-			return NSERROR_BAD_ENCODING;
+			return SLATEERROR_BAD_ENCODING;
 		}
 		/* default to no memory */
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* close the last cd - we don't care if this fails */
@@ -190,11 +190,11 @@ get_cached_cd(const char *enc_from, const char *enc_to, iconv_t *cd_out)
 	snprintf(last_cd.to, sizeof(last_cd.to), "%s", enc_to);
 	*cd_out = last_cd.cd = cd;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in utils/utf8.h */
-nserror utf8_finalise(void)
+slateerror utf8_finalise(void)
 {
 	if (last_cd.cd != 0)
 		iconv_close(last_cd.cd);
@@ -202,7 +202,7 @@ nserror utf8_finalise(void)
 	/* paranoia follows */
 	utf8_clear_cd_cache();
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -215,10 +215,10 @@ nserror utf8_finalise(void)
  * \param to      The encoding name to convert to
  * \param result_out  Pointer to location in which to store result.
  * \param result_len_out Pointer to location in which to store result length.
- * \return NSERROR_OK for no error, NSERROR_NOMEM on allocation error,
- *         NSERROR_BAD_ENCODING for a bad character encoding
+ * \return SLATEERROR_OK for no error, SLATEERROR_NOMEM on allocation error,
+ *         SLATEERROR_BAD_ENCODING for a bad character encoding
  */
-static nserror
+static slateerror
 utf8_convert(const char *string,
 	     size_t slen,
 	     const char *from,
@@ -229,7 +229,7 @@ utf8_convert(const char *string,
 	iconv_t cd;
 	char *temp, *out, *in, *result;
 	size_t result_len;
-	nserror res;
+	slateerror res;
 
 	assert(string && from && to && result_out);
 
@@ -247,19 +247,19 @@ utf8_convert(const char *string,
 	if ((slen == 0) || (strcasecmp(from, to) == 0)) {
 		*result_out = strndup(string, slen);
 		if (*result_out == NULL) {
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 		if (result_len_out != NULL) {
 			*result_len_out = slen;
 		}
 
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	in = (char *)string;
 
 	res = get_cached_cd(from, to, &cd);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -271,7 +271,7 @@ utf8_convert(const char *string,
 
 	temp = out = malloc(result_len);
 	if (!out) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* perform conversion */
@@ -286,7 +286,7 @@ utf8_convert(const char *string,
 		 * a) Insufficiently large output buffer
 		 * b) Invalid input byte sequence
 		 * c) Incomplete input sequence */
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	result_len = out - temp;
@@ -295,7 +295,7 @@ utf8_convert(const char *string,
 	result = realloc(temp, result_len + 4);
 	if (result == NULL) {
 		free(temp);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* NULL terminate - needs 4 characters as we may have
@@ -307,18 +307,18 @@ utf8_convert(const char *string,
 		*result_len_out = result_len;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in utils/utf8.h */
-nserror utf8_to_enc(const char *string, const char *encname,
+slateerror utf8_to_enc(const char *string, const char *encname,
 		    size_t len, char **result)
 {
 	return utf8_convert(string, len, "UTF-8", encname, result, NULL);
 }
 
 /* exported interface documented in utils/utf8.h */
-nserror utf8_from_enc(const char *string, const char *encname,
+slateerror utf8_from_enc(const char *string, const char *encname,
 		      size_t len, char **result, size_t *result_len)
 {
 	return utf8_convert(string, len, encname, "UTF-8", result, result_len);
@@ -327,7 +327,7 @@ nserror utf8_from_enc(const char *string, const char *encname,
 /**
  * convert a chunk of html data
  */
-static nserror
+static slateerror
 utf8_convert_html_chunk(iconv_t cd,
 			const char *chunk,
 			size_t inlen,
@@ -344,7 +344,7 @@ utf8_convert_html_chunk(iconv_t cd,
 			break;
 
 		if (errno != EILSEQ)
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 
 		ucs4 = utf8_to_ucs4(chunk, inlen);
 		esclen = snprintf(escape, sizeof(escape), "&#x%06"PRIx32";", ucs4);
@@ -352,35 +352,35 @@ utf8_convert_html_chunk(iconv_t cd,
 		ret = iconv(cd, (void *) &pescape, &esclen,
 			    (void *) out, outlen);
 		if (ret == (size_t) -1)
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 
 		esclen = utf8_next(chunk, inlen, 0);
 		chunk += esclen;
 		inlen -= esclen;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 
 /* exported interface documented in utils/utf8.h */
-nserror
+slateerror
 utf8_to_html(const char *string, const char *encname, size_t len, char **result_out)
 {
 	iconv_t cd;
 	const char *in;
 	char *out, *origout, *result;
 	size_t off, prev_off, inlen, outlen, origoutlen, esclen;
-	nserror ret;
+	slateerror ret;
 	char *pescape, escape[11];
-	nserror res;
+	slateerror res;
 
 	if (len == 0)
 		len = strlen(string);
 
 	res = get_cached_cd("UTF-8", encname, &cd);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return res;
 	}
 
@@ -393,7 +393,7 @@ utf8_to_html(const char *string, const char *encname, size_t len, char **result_
 	if (out == NULL) {
 		iconv_close(cd);
 		utf8_clear_cd_cache();
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* Process input in chunks between characters we must escape */
@@ -408,7 +408,7 @@ utf8_to_html(const char *string, const char *encname, size_t len, char **result_
 				inlen = off - prev_off;
 				ret = utf8_convert_html_chunk(cd, in, inlen,
 							      &out, &outlen);
-				if (ret != NSERROR_OK) {
+				if (ret != SLATEERROR_OK) {
 					free(origout);
 					iconv_close(cd);
 					utf8_clear_cd_cache();
@@ -422,7 +422,7 @@ utf8_to_html(const char *string, const char *encname, size_t len, char **result_
 			pescape = escape;
 			ret = utf8_convert_html_chunk(cd, pescape, esclen,
 						      &out, &outlen);
-			if (ret != NSERROR_OK) {
+			if (ret != SLATEERROR_OK) {
 				free(origout);
 				iconv_close(cd);
 				utf8_clear_cd_cache();
@@ -440,7 +440,7 @@ utf8_to_html(const char *string, const char *encname, size_t len, char **result_
 		in = string + prev_off;
 		inlen = len - prev_off;
 		ret = utf8_convert_html_chunk(cd, in, inlen, &out, &outlen);
-		if (ret != NSERROR_OK) {
+		if (ret != SLATEERROR_OK) {
 			free(origout);
 			iconv_close(cd);
 			utf8_clear_cd_cache();
@@ -456,22 +456,22 @@ utf8_to_html(const char *string, const char *encname, size_t len, char **result_
 	result = realloc(origout, origoutlen - outlen);
 	if (result == NULL) {
 		free(origout);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 	*result_out = result;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in utils/utf8.h */
 bool utf8_save_text(const char *utf8_text, const char *path)
 {
-	nserror ret;
+	slateerror ret;
 	char *conv;
 	FILE *out;
 
 	ret = guit->utf8->utf8_to_local(utf8_text, strlen(utf8_text), &conv);
-	if (ret != NSERROR_OK) {
+	if (ret != SLATEERROR_OK) {
 		NSLOG(netsurf, INFO,
 		      "failed to convert to local encoding, return %d", ret);
 		return false;

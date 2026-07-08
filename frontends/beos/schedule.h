@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 François Revol <mmu_man@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,14 +16,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_BEOS_CALLBACK_H
-#define NETSURF_BEOS_CALLBACK_H 1
+#ifndef SLATE_BEOS_CALLBACK_H
+#define SLATE_BEOS_CALLBACK_H 1
 
 extern bigtime_t earliest_callback_timeout;
 
-extern "C" nserror beos_schedule(int t, void (*callback)(void *p), void *p);
+extern "C" slateerror beos_schedule(int t, void (*callback)(void *p), void *p);
 
 extern "C" bool schedule_run(void);
 
 
-#endif /* NETSURF_BEOS_CALLBACK_H */
+#endif /* SLATE_BEOS_CALLBACK_H */

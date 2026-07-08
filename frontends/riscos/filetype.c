@@ -1,7 +1,7 @@
 /*
  * Copyright 2004 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,7 +24,7 @@
 
 #include "utils/config.h"
 #include "utils/log.h"
-#include "netsurf/content.h"
+#include "slate/content.h"
 
 #include "riscos/filetype.h"
 #include "riscos/gui.h"

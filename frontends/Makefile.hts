@@ -114,6 +114,12 @@ else
   endif
 endif
 
+ifeq ($(TARGET),jotter)
+  # Jotter is the public name for the monkey test frontend.
+  override TARGET := monkey
+  SUBTARGET=
+endif
+
 # valid values for the TARGET
 VLDTARGET := amiga atari beos framebuffer gtk monkey qt riscos windows
 

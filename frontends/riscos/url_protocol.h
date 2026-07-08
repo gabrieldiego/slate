@@ -1,7 +1,7 @@
 /*
  * Copyright 2003 John M Bell <jmb202@ecs.soton.ac.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,8 +20,8 @@
  * ANT URL launching protocol (interface).
  */
 
-#ifndef _NETSURF_RISCOS_URL_H_
-#define _NETSURF_RISCOS_URL_H_
+#ifndef _SLATE_RISCOS_URL_H_
+#define _SLATE_RISCOS_URL_H_
 
 #include "utils/config.h"
 

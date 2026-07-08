@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 Paul Blokus <paul_pl@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,21 +21,21 @@
  * Interface to GTK bookmarks (hotlist).
  */
 
-#ifndef __NSGTK_HOTLIST_H__
-#define __NSGTK_HOTLIST_H__
+#ifndef __SLATEGTK_HOTLIST_H__
+#define __SLATEGTK_HOTLIST_H__
 
 /**
  * make the hotlist window visible.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-nserror nsgtk_hotlist_present(void);
+slateerror slategtk_hotlist_present(void);
 
 /**
  * Free any resources allocated for the hotlist window.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-nserror nsgtk_hotlist_destroy(void);
+slateerror slategtk_hotlist_destroy(void);
 
-#endif /* __NSGTK_HOTLIST_H__ */
+#endif /* __SLATEGTK_HOTLIST_H__ */

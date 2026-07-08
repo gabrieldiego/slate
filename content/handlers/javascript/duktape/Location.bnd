@@ -3,30 +3,30 @@
  * Copyright 2015 Vincent Sanders <vince@netsurf-browser.org>
  * Copyright 2015 Daniel Silverstone <dsilvers@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * Released under the terms of the MIT License,
  *         http://www.opensource.org/licenses/mit-license
  */
 
 class Location {
-	private nsurl *url;
+	private slateurl *url;
 };
 
 prologue Location()
 %{
-#include "netsurf/browser_window.h"
+#include "slate/browser_window.h"
 %}
 
-init Location(nsurl *url)
+init Location(slateurl *url)
 %{
 	priv->url = url;
-	nsurl_ref(url);
+	slateurl_ref(url);
 %}
 
 fini Location()
 %{
-	nsurl_unref(priv->url);
+	slateurl_unref(priv->url);
 %}
 
 method Location::reload()
@@ -58,11 +58,11 @@ method Location::assign()
 		return 0;
 	}
 
-	nsurl *joined;
+	slateurl *joined;
 	duk_size_t slen;
 	const char *url = duk_safe_to_lstring(ctx, 0, &slen);
 
-	nsurl_join(priv->url, url, &joined);
+	slateurl_join(priv->url, url, &joined);
 	browser_window_navigate(priv_win->win,
 				joined,
 				NULL,
@@ -70,7 +70,7 @@ method Location::assign()
 				NULL,
 				NULL,
 				NULL);
-	nsurl_unref(joined);
+	slateurl_unref(joined);
 	return 0;
 %}
 
@@ -87,11 +87,11 @@ method Location::replace()
 		return 0;
 	}
 
-	nsurl *joined;
+	slateurl *joined;
 	duk_size_t slen;
 	const char *url = duk_safe_to_lstring(ctx, 0, &slen);
 
-	nsurl_join(priv->url, url, &joined);
+	slateurl_join(priv->url, url, &joined);
 	browser_window_navigate(priv_win->win,
 				joined,
 				NULL,
@@ -99,7 +99,7 @@ method Location::replace()
 				NULL,
 				NULL,
 				NULL);
-	nsurl_unref(joined);
+	slateurl_unref(joined);
 	return 0;
 %}
 
@@ -108,7 +108,7 @@ getter Location::href()
 	char *url_s = NULL;
 	size_t url_l;
 
-	nsurl_get(priv->url, NSURL_COMPLETE, &url_s, &url_l);
+	slateurl_get(priv->url, SLATEURL_COMPLETE, &url_s, &url_l);
 	if (url_s == NULL) {
 		return 0;
 	}
@@ -135,11 +135,11 @@ setter Location::href()
 		return 0;
 	}
 
-	nsurl *joined;
+	slateurl *joined;
 	duk_size_t slen;
 	const char *url = duk_safe_to_lstring(ctx, 0, &slen);
 
-	nsurl_join(priv->url, url, &joined);
+	slateurl_join(priv->url, url, &joined);
 	browser_window_navigate(priv_win->win,
 				joined,
 				NULL,
@@ -147,7 +147,7 @@ setter Location::href()
 				NULL,
 				NULL,
 				NULL);
-	nsurl_unref(joined);
+	slateurl_unref(joined);
 	return 0;
 %}
 
@@ -156,7 +156,7 @@ getter Location::origin()
 	char *url_s = NULL;
 	size_t url_l;
 
-	nsurl_get(priv->url, NSURL_SCHEME | NSURL_HOST | NSURL_PORT, &url_s, &url_l);
+	slateurl_get(priv->url, SLATEURL_SCHEME | SLATEURL_HOST | SLATEURL_PORT, &url_s, &url_l);
 
 	/* if url_s is NULL duk_push_lstring pushes an empty string
 	 * which is correct for this API
@@ -175,7 +175,7 @@ getter Location::protocol()
 	char *url_s = NULL;
 	size_t url_l;
 
-	nsurl_get(priv->url, NSURL_SCHEME, &url_s, &url_l);
+	slateurl_get(priv->url, SLATEURL_SCHEME, &url_s, &url_l);
 
 	/* if url_s is NULL duk_push_lstring pushes an empty string
 	 * which is correct for this API
@@ -195,7 +195,7 @@ getter Location::username()
 	char *url_s = NULL;
 	size_t url_l;
 
-	nsurl_get(priv->url, NSURL_USERNAME, &url_s, &url_l);
+	slateurl_get(priv->url, SLATEURL_USERNAME, &url_s, &url_l);
 
 	/* if url_s is NULL duk_push_lstring pushes an empty string
 	 * which is correct for this API
@@ -215,7 +215,7 @@ getter Location::password()
 	char *url_s = NULL;
 	size_t url_l;
 
-	nsurl_get(priv->url, NSURL_PASSWORD, &url_s, &url_l);
+	slateurl_get(priv->url, SLATEURL_PASSWORD, &url_s, &url_l);
 
 	/* if url_s is NULL duk_push_lstring pushes an empty string
 	 * which is correct for this API
@@ -235,7 +235,7 @@ getter Location::host()
 	char *url_s = NULL;
 	size_t url_l;
 
-	nsurl_get(priv->url, NSURL_HOST, &url_s, &url_l);
+	slateurl_get(priv->url, SLATEURL_HOST, &url_s, &url_l);
 
 	/* if url_s is NULL duk_push_lstring pushes an empty string
 	 * which is correct for this API
@@ -255,7 +255,7 @@ getter Location::hostname()
 	char *url_s = NULL;
 	size_t url_l;
 
-	nsurl_get(priv->url, NSURL_HOST, &url_s, &url_l);
+	slateurl_get(priv->url, SLATEURL_HOST, &url_s, &url_l);
 
 	/* if url_s is NULL duk_push_lstring pushes an empty string
 	 * which is correct for this API
@@ -276,7 +276,7 @@ getter Location::port()
 	char *url_s = NULL;
 	size_t url_l;
 
-	nsurl_get(priv->url, NSURL_PORT, &url_s, &url_l);
+	slateurl_get(priv->url, SLATEURL_PORT, &url_s, &url_l);
 
 	/* if url_s is NULL duk_push_lstring pushes an empty string
 	 * which is correct for this API
@@ -296,7 +296,7 @@ getter Location::pathname()
 	char *url_s = NULL;
 	size_t url_l;
 
-	nsurl_get(priv->url, NSURL_PATH, &url_s, &url_l);
+	slateurl_get(priv->url, SLATEURL_PATH, &url_s, &url_l);
 
 	/* if url_s is NULL duk_push_lstring pushes an empty string
 	 * which is correct for this API
@@ -316,7 +316,7 @@ getter Location::search()
 	char *url_s = NULL;
 	size_t url_l;
 
-	nsurl_get(priv->url, NSURL_QUERY, &url_s, &url_l);
+	slateurl_get(priv->url, SLATEURL_QUERY, &url_s, &url_l);
 
 	/* if url_s is NULL duk_push_lstring pushes an empty string
 	 * which is correct for this API
@@ -336,7 +336,7 @@ getter Location::hash()
 	char *url_s = NULL;
 	size_t url_l;
 
-	nsurl_get(priv->url, NSURL_FRAGMENT, &url_s, &url_l);
+	slateurl_get(priv->url, SLATEURL_FRAGMENT, &url_s, &url_l);
 
 	/* if url_s is NULL duk_push_lstring pushes an empty string
 	 * which is correct for this API

@@ -2,7 +2,7 @@
  * Copyright 2003 James Bursa <bursa@users.sourceforge.net>
  * Copyright 2004 John Tytgat <joty@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,8 +17,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_LOG_H
-#define NETSURF_LOG_H
+#ifndef SLATE_LOG_H
+#define SLATE_LOG_H
 
 #include <stdio.h>
 #include <stdbool.h>
@@ -41,7 +41,7 @@ typedef bool(nslog_ensure_t)(FILE *fptr);
  * to remove the -v switch for verbose logging. If necessary ensures
  * the output file handle is available.
  */
-extern nserror nslog_init(nslog_ensure_t *ensure, int *pargc, char **argv);
+extern slateerror nslog_init(nslog_ensure_t *ensure, int *pargc, char **argv);
 
 /**
  * Shut down the logging system.
@@ -57,21 +57,21 @@ extern void nslog_finalise(void);
  *
  * Compiles and enables the given logging filter.
  */
-extern nserror nslog_set_filter(const char *filter);
+extern slateerror nslog_set_filter(const char *filter);
 
 /**
  * Set the logging filter according to the options.
  */
-extern nserror nslog_set_filter_by_options(void);
+extern slateerror nslog_set_filter_by_options(void);
 
 /* ensure a logging level is defined */
-#ifndef NETSURF_LOG_LEVEL
-#define NETSURF_LOG_LEVEL INFO
+#ifndef SLATE_LOG_LEVEL
+#define SLATE_LOG_LEVEL INFO
 #endif
 
 #define NSLOG_LVL(level) NSLOG_LEVEL_ ## level
 #define NSLOG_EVL(level) NSLOG_LVL(level)
-#define NSLOG_COMPILED_MIN_LEVEL NSLOG_EVL(NETSURF_LOG_LEVEL)
+#define NSLOG_COMPILED_MIN_LEVEL NSLOG_EVL(SLATE_LOG_LEVEL)
 
 #ifdef WITH_NSLOG
 

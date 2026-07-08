@@ -1,7 +1,7 @@
 /*
  * Copyright 2004 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,9 +20,9 @@
  * Content for image/jpeg (interface).
  */
 
-#ifndef _NETSURF_IMAGE_JPEG_H_
-#define _NETSURF_IMAGE_JPEG_H_
+#ifndef _SLATE_IMAGE_JPEG_H_
+#define _SLATE_IMAGE_JPEG_H_
 
-nserror nsjpeg_init(void);
+slateerror nsjpeg_init(void);
 
 #endif

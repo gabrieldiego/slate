@@ -7,8 +7,8 @@
 # QT flag setup (using pkg-config)
 # ----------------------------------------------------------------------------
 
-CFLAGS += -Dnsqt
-CXXFLAGS += -DQT_RESPATH=\"$(NETSURF_QT_RES_PATH)\" -Dnsqt -g
+CFLAGS += -Dslateqt
+CXXFLAGS += -DQT_RESPATH=\"$(SLATE_QT_RES_PATH)\" -Dslateqt -g
 
 $(eval $(call pkg_config_find_and_add,Qt6Widgets,Qt6Widgets))
 $(eval $(call pkg_config_find_and_add,Qt6Core,Qt6Core))
@@ -21,7 +21,7 @@ LDFLAGS += -lm -lstdc++
 # ---------------------------------------------------------------------------
 
 # The binary target.
-EXETARGET := nsqt
+EXETARGET := slateqt
 
 # The filter and target for split messages
 MESSAGES_FILTER=qt

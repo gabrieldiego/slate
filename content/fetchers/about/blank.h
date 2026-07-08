@@ -21,8 +21,8 @@
  * about scheme blank handler interface
  */
 
-#ifndef NETSURF_CONTENT_FETCHERS_ABOUT_BLANK_H
-#define NETSURF_CONTENT_FETCHERS_ABOUT_BLANK_H
+#ifndef SLATE_CONTENT_FETCHERS_ABOUT_BLANK_H
+#define SLATE_CONTENT_FETCHERS_ABOUT_BLANK_H
 
 /**
  * Handler to generate about scheme blank page.

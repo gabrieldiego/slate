@@ -1,7 +1,7 @@
 /*
  * Copyright 2013 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,14 +40,14 @@ struct s_search_form_session {
 
 typedef struct s_search_form_session * SEARCH_FORM_SESSION;
 
-struct s_search_form_session * nsatari_search_session_create(OBJECT * obj,
+struct s_search_form_session * slateatari_search_session_create(OBJECT * obj,
 		struct gui_window *gw);
 
 extern struct gui_search_table *atari_search_table;
 
-void nsatari_search_session_destroy(struct s_search_form_session *s);
-void nsatari_search_perform(struct s_search_form_session *s, OBJECT *obj,
+void slateatari_search_session_destroy(struct s_search_form_session *s);
+void slateatari_search_perform(struct s_search_form_session *s, OBJECT *obj,
 		search_flags_t f);
-void nsatari_search_restore_form( struct s_search_form_session *s, OBJECT *obj);
+void slateatari_search_restore_form( struct s_search_form_session *s, OBJECT *obj);
 
 #endif

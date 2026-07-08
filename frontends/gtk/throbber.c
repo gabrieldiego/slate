@@ -2,7 +2,7 @@
  * Copyright 2008 Rob Kendrick <rjek@netsurf-browser.org>
  * Copyright 2008 Sean Fox <dyntryx@gmail.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,41 +31,41 @@
 /**
  * Throbber images context
  */
-struct nsgtk_throbber
+struct slategtk_throbber
 {
 	int nframes; /**< Number of frames in the throbber */
 	GdkPixbuf **framedata; /* pixbuf data for the frames */
 };
 
-static struct nsgtk_throbber *nsgtk_throbber = NULL;
+static struct slategtk_throbber *slategtk_throbber = NULL;
 
 #define THROBBER_FRAMES 9
 #define THROBBER_FMT "throbber/throbber%d.png"
 
 /* exported interface documented in gtk/throbber.h */
-nserror nsgtk_throbber_init(void)
+slateerror slategtk_throbber_init(void)
 {
-	nserror res = NSERROR_OK;
-	struct nsgtk_throbber *throb;
+	slateerror res = SLATEERROR_OK;
+	struct slategtk_throbber *throb;
 	int frame;
 	char resname[] = THROBBER_FMT;
 
 	throb = malloc(sizeof(*throb));
 	if (throb == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	throb->framedata = malloc(sizeof(GdkPixbuf *) * THROBBER_FRAMES);
 	if (throb->framedata == NULL) {
 		free(throb);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	for (frame = 0; frame < THROBBER_FRAMES; frame++) {
 		snprintf(resname, sizeof(resname), THROBBER_FMT, frame);
 		res = nsgdk_pixbuf_new_from_resname(resname,
 						    throb->framedata + frame);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			break;
 		}
 		NSLOG(netsurf, INFO, "%s", resname);
@@ -76,46 +76,46 @@ nserror nsgtk_throbber_init(void)
 		NSLOG(netsurf, INFO,
 		      "Insufficent number of frames (%d) in throbber animation.",
 		      frame);
-		res = NSERROR_INIT_FAILED;
+		res = SLATEERROR_INIT_FAILED;
 	}
 
 	throb->nframes = frame;
-	nsgtk_throbber = throb;
+	slategtk_throbber = throb;
 	return res;
 }
 
 /* exported interface documented in gtk/throbber.h */
-void nsgtk_throbber_finalise(void)
+void slategtk_throbber_finalise(void)
 {
 	int i;
 
-	for (i = 0; i < nsgtk_throbber->nframes; i++)
-		g_object_unref(nsgtk_throbber->framedata[i]);
+	for (i = 0; i < slategtk_throbber->nframes; i++)
+		g_object_unref(slategtk_throbber->framedata[i]);
 
-	free(nsgtk_throbber->framedata);
-	free(nsgtk_throbber);
+	free(slategtk_throbber->framedata);
+	free(slategtk_throbber);
 
-	nsgtk_throbber = NULL;
+	slategtk_throbber = NULL;
 }
 
 
 /* exported interface documented in gtk/throbber.h */
-nserror nsgtk_throbber_get_frame(int frame, GdkPixbuf **pixbuf)
+slateerror slategtk_throbber_get_frame(int frame, GdkPixbuf **pixbuf)
 {
-	if (nsgtk_throbber == NULL) {
-		return NSERROR_INIT_FAILED;
+	if (slategtk_throbber == NULL) {
+		return SLATEERROR_INIT_FAILED;
 	}
 
 	/* ensure frame in range */
-	if ((frame < 0) || (frame >= nsgtk_throbber->nframes)) {
-		return NSERROR_BAD_SIZE;
+	if ((frame < 0) || (frame >= slategtk_throbber->nframes)) {
+		return SLATEERROR_BAD_SIZE;
 	}
 
 	/* ensure there is frame data */
-	if (nsgtk_throbber->framedata[frame] == NULL) {
-		return NSERROR_INVALID;
+	if (slategtk_throbber->framedata[frame] == NULL) {
+		return SLATEERROR_INVALID;
 	}
 
-	*pixbuf = nsgtk_throbber->framedata[frame];
-	return NSERROR_OK;
+	*pixbuf = slategtk_throbber->framedata[frame];
+	return SLATEERROR_OK;
 }

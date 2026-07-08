@@ -2,7 +2,7 @@
  * Copyright 2004 James Bursa <bursa@users.sourceforge.net>
  * Copyright 2006 Rob Kendrick <rjek@rjek.com>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -109,12 +109,12 @@ static void messages_destroy_ctx(struct hash_table *ctx)
  *
  * \param  path  pathname of messages file
  * \param  ctx   reference of hash table to merge with or NULL to create one.
- * \return NSERROR_OK on sucess and ctx updated or error code on faliure.
+ * \return SLATEERROR_OK on sucess and ctx updated or error code on faliure.
  */
-static nserror messages_load_ctx(const char *path, struct hash_table **ctx)
+static slateerror messages_load_ctx(const char *path, struct hash_table **ctx)
 {
 	struct hash_table *nctx; /* new context */
-	nserror res;
+	slateerror res;
 
 	if (*ctx != NULL) {
 		/**
@@ -129,11 +129,11 @@ static nserror messages_load_ctx(const char *path, struct hash_table **ctx)
 		NSLOG(netsurf, INFO,
 		      "Unable to create hash table for messages file %s",
 		      path);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	res = hash_add_file(nctx, path);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		*ctx = nctx;
 	} else {
 		hash_destroy(nctx);
@@ -174,10 +174,10 @@ messages_get_ctx(const char *key, struct hash_table *ctx)
 
 
 /* exported interface documented in messages.h */
-nserror messages_add_from_file(const char *path)
+slateerror messages_add_from_file(const char *path)
 {
 	if (path == NULL) {
-		return NSERROR_BAD_PARAMETER;
+		return SLATEERROR_BAD_PARAMETER;
 	}
 
 	NSLOG(netsurf, INFO, "Loading Messages from '%s'", path);
@@ -187,7 +187,7 @@ nserror messages_add_from_file(const char *path)
 
 
 /* exported interface documented in messages.h */
-nserror messages_add_from_inline(const uint8_t *data, size_t size)
+slateerror messages_add_from_inline(const uint8_t *data, size_t size)
 {
 	/* ensure the hash table is initialised */
 	if (messages_hash == NULL) {
@@ -195,14 +195,14 @@ nserror messages_add_from_inline(const uint8_t *data, size_t size)
 	}
 	if (messages_hash == NULL) {
 		NSLOG(netsurf, INFO, "Unable to create hash table");
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 	return hash_add_inline(messages_hash, data, size);
 }
 
 
 /* exported interface documented in messages.h */
-nserror messages_add_key_value(const char *key, const char *value)
+slateerror messages_add_key_value(const char *key, const char *value)
 {
 	/* ensure the hash table is initialised */
 	if (messages_hash == NULL) {
@@ -210,7 +210,7 @@ nserror messages_add_key_value(const char *key, const char *value)
 	}
 	if (messages_hash == NULL) {
 		NSLOG(netsurf, INFO, "Unable to create hash table");
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 	return hash_add(messages_hash, key, value);
 }
@@ -260,158 +260,158 @@ const char *messages_get(const char *key)
 
 
 /* exported function documented in utils/messages.h */
-const char *messages_get_errorcode(nserror code)
+const char *messages_get_errorcode(slateerror code)
 {
 	switch (code) {
-	case NSERROR_OK:
+	case SLATEERROR_OK:
 		/* No error */
 		return messages_get_ctx("OK", messages_hash);
 
-	case NSERROR_NOMEM:
+	case SLATEERROR_NOMEM:
 		/* Memory exhaustion */
 		return messages_get_ctx("NoMemory", messages_hash);
 
-	case NSERROR_NO_FETCH_HANDLER:
+	case SLATEERROR_NO_FETCH_HANDLER:
 		/* No fetch handler for URL scheme */
 		return messages_get_ctx("NoHandler", messages_hash);
 
-	case NSERROR_NOT_FOUND:
+	case SLATEERROR_NOT_FOUND:
 		/* Requested item not found */
 		return messages_get_ctx("NotFound", messages_hash);
 
-	case NSERROR_NOT_DIRECTORY:
+	case SLATEERROR_NOT_DIRECTORY:
 		/* Missing directory */
 		return messages_get_ctx("NotDirectory", messages_hash);
 
-	case NSERROR_SAVE_FAILED:
+	case SLATEERROR_SAVE_FAILED:
 		/* Failed to save data */
 		return messages_get_ctx("SaveFailed", messages_hash);
 
-	case NSERROR_CLONE_FAILED:
+	case SLATEERROR_CLONE_FAILED:
 		/* Failed to clone handle */
 		return messages_get_ctx("CloneFailed", messages_hash);
 
-	case NSERROR_INIT_FAILED:
+	case SLATEERROR_INIT_FAILED:
 		/* Initialisation failed */
 		return messages_get_ctx("InitFailed", messages_hash);
 
-	case NSERROR_BMP_ERROR:
+	case SLATEERROR_BMP_ERROR:
 		/* A BMP error occurred */
 		return messages_get_ctx("BMPError", messages_hash);
 
-	case NSERROR_GIF_ERROR:
+	case SLATEERROR_GIF_ERROR:
 		/* A GIF error occurred */
 		return messages_get_ctx("GIFError", messages_hash);
 
-	case NSERROR_ICO_ERROR:
+	case SLATEERROR_ICO_ERROR:
 		/* A ICO error occurred */
 		return messages_get_ctx("ICOError", messages_hash);
 
-	case NSERROR_PNG_ERROR:
+	case SLATEERROR_PNG_ERROR:
 		/* A PNG error occurred */
 		return messages_get_ctx("PNGError", messages_hash);
 
-	case NSERROR_SPRITE_ERROR:
+	case SLATEERROR_SPRITE_ERROR:
 		/* A RISC OS Sprite error occurred */
 		return messages_get_ctx("SpriteError", messages_hash);
 
-	case NSERROR_SVG_ERROR:
+	case SLATEERROR_SVG_ERROR:
 		/* A SVG error occurred */
 		return messages_get_ctx("SVGError", messages_hash);
 
-	case NSERROR_BAD_ENCODING:
+	case SLATEERROR_BAD_ENCODING:
 		/* The character set is unknown */
 		return messages_get_ctx("BadEncoding", messages_hash);
 
-	case NSERROR_NEED_DATA:
+	case SLATEERROR_NEED_DATA:
 		/* More data needed */
 		return messages_get_ctx("NeedData", messages_hash);
 
-	case NSERROR_ENCODING_CHANGE:
+	case SLATEERROR_ENCODING_CHANGE:
 		/* The character set encoding change was unhandled */
 		return messages_get_ctx("EncodingChanged", messages_hash);
 
-	case NSERROR_BAD_PARAMETER:
+	case SLATEERROR_BAD_PARAMETER:
 		/* Bad Parameter */
 		return messages_get_ctx("BadParameter", messages_hash);
 
-	case NSERROR_INVALID:
+	case SLATEERROR_INVALID:
 		/* Invalid data */
 		return messages_get_ctx("Invalid", messages_hash);
 
-	case NSERROR_BOX_CONVERT:
+	case SLATEERROR_BOX_CONVERT:
 		/* Box conversion failed */
 		return messages_get_ctx("BoxConvert", messages_hash);
 
-	case NSERROR_STOPPED:
+	case SLATEERROR_STOPPED:
 		/* Content conversion stopped */
 		return messages_get_ctx("Stopped", messages_hash);
 
-	case NSERROR_DOM:
+	case SLATEERROR_DOM:
 		/* DOM call returned error */
 		return messages_get_ctx("ParsingFail", messages_hash);
 
-	case NSERROR_CSS:
+	case SLATEERROR_CSS:
 		/* CSS call returned error */
 		return messages_get_ctx("CSSGeneric", messages_hash);
 
-	case NSERROR_CSS_BASE:
+	case SLATEERROR_CSS_BASE:
 		/* CSS base sheet failed */
 		return messages_get_ctx("CSSBase", messages_hash);
 
-	case NSERROR_BAD_URL:
+	case SLATEERROR_BAD_URL:
 		/* Bad URL */
 		return messages_get_ctx("BadURL", messages_hash);
 
-	case NSERROR_BAD_CONTENT:
+	case SLATEERROR_BAD_CONTENT:
 		/* Bad Content */
 		return messages_get_ctx("BadContent", messages_hash);
 
-	case NSERROR_FRAME_DEPTH:
+	case SLATEERROR_FRAME_DEPTH:
 		/* Exceeded frame depth */
 		return messages_get_ctx("FrameDepth", messages_hash);
 
-	case NSERROR_PERMISSION:
+	case SLATEERROR_PERMISSION:
 		/* Permission error */
 		return messages_get_ctx("PermissionError", messages_hash);
 
-	case NSERROR_BAD_SIZE:
+	case SLATEERROR_BAD_SIZE:
 		/* Bad size */
 		return messages_get_ctx("BadSize", messages_hash);
 
-	case NSERROR_NOSPACE:
+	case SLATEERROR_NOSPACE:
 		/* Insufficient space */
 		return messages_get_ctx("NoSpace", messages_hash);
 
-	case NSERROR_NOT_IMPLEMENTED:
+	case SLATEERROR_NOT_IMPLEMENTED:
 		/* Functionality is not implemented */
 		return messages_get_ctx("NotImplemented", messages_hash);
 
-	case NSERROR_UNKNOWN:
+	case SLATEERROR_UNKNOWN:
 		/* Unknown error */
 		return messages_get_ctx("Unknown", messages_hash);
 
-	case NSERROR_BAD_AUTH:
+	case SLATEERROR_BAD_AUTH:
 		/* Authentication required */
 		return messages_get_ctx("BadAuth", messages_hash);
 
-	case NSERROR_BAD_REDIRECT:
+	case SLATEERROR_BAD_REDIRECT:
 		/* unsupported redirects */
 		return messages_get_ctx("UnsupportedRedirect", messages_hash);
 
-	case NSERROR_CYCLIC_REDIRECT:
+	case SLATEERROR_CYCLIC_REDIRECT:
 		/* Too many redirects */
 		return messages_get_ctx("CyclicRedirect", messages_hash);
 
-	case NSERROR_UNSAFE_REDIRECT:
+	case SLATEERROR_UNSAFE_REDIRECT:
 		/* Unsafe redirects */
 		return messages_get_ctx("UnsafeRedirect", messages_hash);
 
-	case NSERROR_BAD_CERTS:
+	case SLATEERROR_BAD_CERTS:
 		/* Certificate chain verification failure */
 		return messages_get_ctx("CertificateVerificationNeeded", messages_hash);
 
-	case NSERROR_TIMEOUT:
+	case SLATEERROR_TIMEOUT:
 		/* Operation timed out */
 		return messages_get_ctx("Timeout", messages_hash);
 	}

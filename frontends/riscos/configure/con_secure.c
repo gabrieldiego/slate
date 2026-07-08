@@ -1,7 +1,7 @@
 /*
  * Copyright 2006 Richard Wilson <info@tinct.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
 
 #include <stdbool.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/messages.h"
 
 #include "riscos/gui.h"
@@ -43,9 +43,9 @@ bool ro_gui_options_security_initialise(wimp_w w)
 {
 	/* set the current values */
 	ro_gui_set_icon_selected_state(w, SECURITY_REFERRER,
-                                       nsoption_bool(send_referer));
+                                       slateoption_bool(send_referer));
 	ro_gui_set_icon_integer(w, SECURITY_DURATION_FIELD,
-                                nsoption_int(expire_url));
+                                slateoption_int(expire_url));
 
 	/* initialise all functions for a newly created window */
 	ro_gui_wimp_event_register_checkbox(w, SECURITY_REFERRER);
@@ -72,10 +72,10 @@ void ro_gui_options_security_default(wimp_pointer *pointer)
 
 bool ro_gui_options_security_ok(wimp_w w)
 {
-	nsoption_set_bool(send_referer,
+	slateoption_set_bool(send_referer,
 			  ro_gui_get_icon_selected_state(w, SECURITY_REFERRER));
 
-	nsoption_set_int(expire_url,
+	slateoption_set_int(expire_url,
 			 ro_gui_get_icon_decimal(w,SECURITY_DURATION_FIELD, 0));
 
 	ro_gui_save_options();

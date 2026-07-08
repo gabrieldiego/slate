@@ -55,7 +55,7 @@ Each exported user interface element wraps this generic interface with
 a concrete implementation. For example the SSL certificate viewer is
 initialised with:
 
-    nserror sslcert_viewer_init(struct core_window_callback_table *cw_t,
+    slateerror sslcert_viewer_init(struct core_window_callback_table *cw_t,
                                 void *core_window_handle,
                                 struct sslcert_session_data *ssl_d);
 
@@ -102,9 +102,9 @@ processing, keypress processing etc.
 
 The GTK corewindow (not to be confused with the core window API
 itself, this is purely the gtk wrapper) is used by ssl_cert.c which
-creates a nsgtk_crtvrfy_window structure containing the
-nsgtk_corewindow structure. It attaches actual GTK window handles to
-this structure and populates elements of nsgtk_corewindow and then
+creates a slategtk_crtvrfy_window structure containing the
+slategtk_corewindow structure. It attaches actual GTK window handles to
+this structure and populates elements of slategtk_corewindow and then
 calls sslcert_viewer_init() directly.
 
 frontend skeleton
@@ -121,7 +121,7 @@ frontends/example/corewindow.h
     /*
      * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
      *
-     * This file is part of NetSurf, http://www.netsurf-browser.org/
+     * This file is part of NetSurf, http://www.slate-browser.org/
      *
      * NetSurf is free software; you can redistribute it and/or modify
      * it under the terms of the GNU General Public License as published by
@@ -166,20 +166,20 @@ frontends/example/corewindow.h
              *
              * \param example_cw The example core window structure.
              * \param r The rectangle of the window that needs updating.
-             * \return NSERROR_OK on success otherwise apropriate error code
+             * \return SLATEERROR_OK on success otherwise apropriate error code
              */
-            nserror (*draw)(struct example_corewindow *example_cw, struct rect *r);
+            slateerror (*draw)(struct example_corewindow *example_cw, struct rect *r);
     
             /**
              * callback for keypress on example core window
              *
              * \param example_cw The example core window structure.
              * \param nskey The netsurf key code.
-             * \return NSERROR_OK if key processed,
-             *         NSERROR_NOT_IMPLEMENTED if key not processed
+             * \return SLATEERROR_OK if key processed,
+             *         SLATEERROR_NOT_IMPLEMENTED if key not processed
              *         otherwise apropriate error code
              */
-            nserror (*key)(struct example_corewindow *example_cw, uint32_t nskey);
+            slateerror (*key)(struct example_corewindow *example_cw, uint32_t nskey);
     
             /**
              * callback for mouse event on example core window
@@ -188,9 +188,9 @@ frontends/example/corewindow.h
              * \param mouse_state mouse state
              * \param x location of event
              * \param y location of event
-             * \return NSERROR_OK on sucess otherwise apropriate error code.
+             * \return SLATEERROR_OK on sucess otherwise apropriate error code.
              */
-            nserror (*mouse)(struct example_corewindow *example_cw, browser_mouse_state mouse_state, int x, int y);
+            slateerror (*mouse)(struct example_corewindow *example_cw, browser_mouse_state mouse_state, int x, int y);
     };
     
     /**
@@ -199,17 +199,17 @@ frontends/example/corewindow.h
      * As a pre-requisite the draw, key and mouse callbacks must be defined
      *
      * \param example_cw A example core window structure to initialise
-     * \return NSERROR_OK on successful initialisation otherwise error code.
+     * \return SLATEERROR_OK on successful initialisation otherwise error code.
      */
-    nserror example_corewindow_init(struct example_corewindow *example_cw);
+    slateerror example_corewindow_init(struct example_corewindow *example_cw);
     
     /**
      * finalise elements of example core window.
      *
      * \param example_cw A example core window structure to initialise
-     * \return NSERROR_OK on successful finalisation otherwise error code.
+     * \return SLATEERROR_OK on successful finalisation otherwise error code.
      */
-    nserror example_corewindow_fini(struct example_corewindow *example_cw);
+    slateerror example_corewindow_fini(struct example_corewindow *example_cw);
     
     #endif
 
@@ -219,7 +219,7 @@ frontends/example/corewindow.c
     /*
      * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
      *
-     * This file is part of NetSurf, http://www.netsurf-browser.org/
+     * This file is part of NetSurf, http://www.slate-browser.org/
      *
      * NetSurf is free software; you can redistribute it and/or modify
      * it under the terms of the GNU General Public License as published by
@@ -313,7 +313,7 @@ frontends/example/corewindow.c
     /**
      * callback from core to request a redraw
      */
-    static nserror
+    static slateerror
     example_cw_invalidate(struct core_window *cw, const struct rect *r)
     {
             struct example_corewindow *example_cw = (struct example_corewindow *)cw;
@@ -370,7 +370,7 @@ frontends/example/corewindow.c
     };
     
     /* exported function documented example/corewindow.h */
-    nserror example_corewindow_init(struct example_corewindow *example_cw)
+    slateerror example_corewindow_init(struct example_corewindow *example_cw)
     {
             /* setup the core window callback table */
             example_cw->cb_table = &example_cw_cb_table;
@@ -406,13 +406,13 @@ frontends/example/corewindow.c
                                          example_cw);
     
     
-            return NSERROR_OK;
+            return SLATEERROR_OK;
     }
     
     /* exported interface documented in example/corewindow.h */
-    nserror example_corewindow_fini(struct example_corewindow *example_cw)
+    slateerror example_corewindow_fini(struct example_corewindow *example_cw)
     {
-            return NSERROR_OK;
+            return SLATEERROR_OK;
     }
 
 
@@ -422,7 +422,7 @@ frontends/example/ssl_cert.h
     /*
      * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
      *
-     * This file is part of NetSurf, http://www.netsurf-browser.org/
+     * This file is part of NetSurf, http://www.slate-browser.org/
      *
      * NetSurf is free software; you can redistribute it and/or modify
      * it under the terms of the GNU General Public License as published by
@@ -437,10 +437,10 @@ frontends/example/ssl_cert.h
      * along with this program.  If not, see <http://www.gnu.org/licenses/>.
      */
     
-    #ifndef NETSURF_EXAMPLE_SSL_CERT_H
-    #define NETSURF_EXAMPLE_SSL_CERT_H 1
+    #ifndef SLATE_EXAMPLE_SSL_CERT_H
+    #define SLATE_EXAMPLE_SSL_CERT_H 1
     
-    struct nsurl;
+    struct slateurl;
     struct ssl_cert_info;
     
     /**
@@ -451,9 +451,9 @@ frontends/example/ssl_cert.h
      * \param num The number of certificates to be verified.
      * \param cb Callback upon user decision.
      * \param cbpw Context pointer passed to cb
-     * \return NSERROR_OK or error code if prompt creation failed.
+     * \return SLATEERROR_OK or error code if prompt creation failed.
      */
-    nserror example_cert_verify(struct nsurl *url, const struct ssl_cert_info *certs, unsigned long num, nserror (*cb)(bool proceed, void *pw), void *cbpw);
+    slateerror example_cert_verify(struct slateurl *url, const struct ssl_cert_info *certs, unsigned long num, slateerror (*cb)(bool proceed, void *pw), void *cbpw);
     
     #endif
 
@@ -463,7 +463,7 @@ frontends/example/ssl_cert.c
     /*
      * Copyright 2015 Vincent Sanders <vince@netsurf-browser.org>
      *
-     * This file is part of NetSurf, http://www.netsurf-browser.org/
+     * This file is part of NetSurf, http://www.slate-browser.org/
      *
      * NetSurf is free software; you can redistribute it and/or modify
      * it under the terms of the GNU General Public License as published by
@@ -508,12 +508,12 @@ frontends/example/ssl_cert.c
     /**
      * destroy a previously created certificate view
      */
-    static nserror example_crtvrfy_destroy(struct example_crtvrfy_window *crtvrfy_win)
+    static slateerror example_crtvrfy_destroy(struct example_crtvrfy_window *crtvrfy_win)
     {
-            nserror res;
+            slateerror res;
     
             res = sslcert_viewer_fini(crtvrfy_win->ssl_data);
-            if (res == NSERROR_OK) {
+            if (res == SLATEERROR_OK) {
                     res = example_corewindow_fini(&crtvrfy_win->core);
                     toolkit_windown_destroy(crtvrfy_win->window);
                     free(crtvrfy_win);
@@ -551,9 +551,9 @@ frontends/example/ssl_cert.c
      * \param mouse_state netsurf mouse state on event
      * \param x location of event
      * \param y location of event
-     * \return NSERROR_OK on success otherwise apropriate error code
+     * \return SLATEERROR_OK on success otherwise apropriate error code
      */
-    static nserror
+    static slateerror
     example_crtvrfy_mouse(struct example_corewindow *example_cw,
                         browser_mouse_state mouse_state,
                         int x, int y)
@@ -564,7 +564,7 @@ frontends/example/ssl_cert.c
     
             sslcert_viewer_mouse_action(crtvrfy_win->ssl_data, mouse_state, x, y);
     
-            return NSERROR_OK;
+            return SLATEERROR_OK;
     }
     
     /**
@@ -572,9 +572,9 @@ frontends/example/ssl_cert.c
      *
      * \param example_cw The example core window structure.
      * \param nskey The netsurf key code
-     * \return NSERROR_OK on success otherwise apropriate error code
+     * \return SLATEERROR_OK on success otherwise apropriate error code
      */
-    static nserror
+    static slateerror
     example_crtvrfy_key(struct example_corewindow *example_cw, uint32_t nskey)
     {
             struct example_crtvrfy_window *crtvrfy_win;
@@ -583,9 +583,9 @@ frontends/example/ssl_cert.c
             crtvrfy_win = (struct example_crtvrfy_window *)example_cw;
     
             if (sslcert_viewer_keypress(crtvrfy_win->ssl_data, nskey)) {
-                    return NSERROR_OK;
+                    return SLATEERROR_OK;
             }
-            return NSERROR_NOT_IMPLEMENTED;
+            return SLATEERROR_NOT_IMPLEMENTED;
     }
     
     /**
@@ -593,9 +593,9 @@ frontends/example/ssl_cert.c
      *
      * \param example_cw The example core window structure.
      * \param r The rectangle of the window that needs updating.
-     * \return NSERROR_OK on success otherwise apropriate error code
+     * \return SLATEERROR_OK on success otherwise apropriate error code
      */
-    static nserror
+    static slateerror
     example_crtvrfy_draw(struct example_corewindow *example_cw, struct rect *r)
     {
             struct redraw_context ctx = {
@@ -610,26 +610,26 @@ frontends/example/ssl_cert.c
     
             sslcert_viewer_redraw(crtvrfy_win->ssl_data, 0, 0, r, &ctx);
     
-            return NSERROR_OK;
+            return SLATEERROR_OK;
     }
     
     /* exported interface documented in example/ssl_cert.h */
-    nserror example_cert_verify(struct nsurl *url,
+    slateerror example_cert_verify(struct slateurl *url,
                             const struct ssl_cert_info *certs,
                             unsigned long num,
-                            nserror (*cb)(bool proceed, void *pw),
+                            slateerror (*cb)(bool proceed, void *pw),
                             void *cbpw)
     {
             struct example_crtvrfy_window *ncwin;
-            nserror res;
+            slateerror res;
     
             ncwin = malloc(sizeof(struct example_crtvrfy_window));
             if (ncwin == NULL) {
-                    return NSERROR_NOMEM;
+                    return SLATEERROR_NOMEM;
             }
     
             res = toolkit_create_window(&ncwin->window);
-            if (res != NSERROR_OK) {
+            if (res != SLATEERROR_OK) {
                     LOG("SSL UI builder init failed");
                     free(ncwin);
                     return res;
@@ -650,7 +650,7 @@ frontends/example/ssl_cert.c
             ncwin->core.mouse = example_crtvrfy_mouse;
     
             res = example_corewindow_init(&ncwin->core);
-            if (res != NSERROR_OK) {
+            if (res != SLATEERROR_OK) {
                     free(ncwin);
                     return res;
             }
@@ -658,7 +658,7 @@ frontends/example/ssl_cert.c
             /* initialise certificate viewing interface */
             res = sslcert_viewer_create_session_data(num, url, cb, cbpw, certs,
                                                &ncwin->ssl_data);
-            if (res != NSERROR_OK) {
+            if (res != SLATEERROR_OK) {
                     free(ncwin);
                     return res;
             }
@@ -666,12 +666,12 @@ frontends/example/ssl_cert.c
             res = sslcert_viewer_init(ncwin->core.cb_table,
                                       (struct core_window *)ncwin,
                                       ncwin->ssl_data);
-            if (res != NSERROR_OK) {
+            if (res != SLATEERROR_OK) {
                     free(ncwin);
                     return res;
             }
     
             toolkit_widget_show(ncwin->window);
     
-            return NSERROR_OK;
+            return SLATEERROR_OK;
     }

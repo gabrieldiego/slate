@@ -1,7 +1,7 @@
 /*
  * Copyright 2008 François Revol <mmu_man@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,10 +23,10 @@
 
 extern struct gui_bitmap_table *beos_bitmap_table;
 
-BBitmap *nsbeos_bitmap_get_primary(struct bitmap*);
-BBitmap *nsbeos_bitmap_get_pretile_x(struct bitmap*);
-BBitmap *nsbeos_bitmap_get_pretile_y(struct bitmap*);
-BBitmap *nsbeos_bitmap_get_pretile_xy(struct bitmap*);
+BBitmap *slatebeos_bitmap_get_primary(struct bitmap*);
+BBitmap *slatebeos_bitmap_get_pretile_x(struct bitmap*);
+BBitmap *slatebeos_bitmap_get_pretile_y(struct bitmap*);
+BBitmap *slatebeos_bitmap_get_pretile_xy(struct bitmap*);
 
 void bitmap_modified(void *vbitmap);
 

@@ -1,7 +1,7 @@
 /*
  * Copyright 2013 Michael Drake <tlsa@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,14 +20,14 @@
  * Cookie Manager (interface).
  */
 
-#ifndef _NETSURF_DESKTOP_COOKIE_MANAGER_H_
-#define _NETSURF_DESKTOP_COOKIE_MANAGER_H_
+#ifndef _SLATE_DESKTOP_COOKIE_MANAGER_H_
+#define _SLATE_DESKTOP_COOKIE_MANAGER_H_
 
 #include <stdbool.h>
 #include <stdint.h>
 
 #include "utils/errors.h"
-#include "netsurf/mouse.h"
+#include "slate/mouse.h"
 
 struct redraw_context;
 struct cookie_data;
@@ -42,9 +42,9 @@ struct rect;
  * This must be called before any other cookie_manager_* function.
  *
  * \param core_window_handle The core_window in which the cookie view is shown
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror cookie_manager_init(void *core_window_handle);
+slateerror cookie_manager_init(void *core_window_handle);
 
 /**
  * Finalise the cookie manager.
@@ -53,9 +53,9 @@ nserror cookie_manager_init(void *core_window_handle);
  * internal data.  After calling this if the cookie manager is required again,
  * cookie_manager_init must be called.
  *
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror cookie_manager_fini(void);
+slateerror cookie_manager_fini(void);
 
 /**
  * Add/update a cookie to the viewer. (Called by urldb.)
@@ -76,9 +76,9 @@ void cookie_manager_remove(const struct cookie_data *data);
  * Set the cookie manager search string.
  *
  * \param string  Sering to set as search string.
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror cookie_manager_set_search_string(
+slateerror cookie_manager_set_search_string(
 		const char *string);
 
 /**
@@ -120,16 +120,16 @@ bool cookie_manager_has_selection(void);
  * Expand the treeview's nodes
  *
  * \param only_folders	Iff true, only folders are expanded.
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror cookie_manager_expand(bool only_folders);
+slateerror cookie_manager_expand(bool only_folders);
 
 /**
  * Contract the treeview's nodes
  *
  * \param all		Iff false, only entries are contracted.
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror cookie_manager_contract(bool all);
+slateerror cookie_manager_contract(bool all);
 
 #endif

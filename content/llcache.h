@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,15 +20,15 @@
  * Low-level resource cache (interface)
  */
 
-#ifndef NETSURF_CONTENT_LLCACHE_H_
-#define NETSURF_CONTENT_LLCACHE_H_
+#ifndef SLATE_CONTENT_LLCACHE_H_
+#define SLATE_CONTENT_LLCACHE_H_
 
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
 #include "utils/errors.h"
-#include "utils/nsurl.h"
+#include "utils/slateurl.h"
 
 struct cert_chain;
 struct fetch_multipart_data;
@@ -90,13 +90,13 @@ typedef struct {
 			size_t len;	    /**< Byte length of buffer */
 		} data;                     /**< Received data */
 		struct {
-			nserror code;       /**< The error code */
+			slateerror code;       /**< The error code */
 			const char *msg;    /**< Error message */
 		} error;
 		const char *progress_msg;   /**< Progress message */
 		struct {
-			nsurl *from;	    /**< Redirect origin */
-			nsurl *to;	    /**< Redirect target */
+			slateurl *from;	    /**< Redirect origin */
+			slateurl *to;	    /**< Redirect target */
 		} redirect;                 /**< Fetch URL redirect occured */
 		const struct cert_chain *chain;    /**< Certificate chain */
 	} data;				    /**< Event data */
@@ -108,9 +108,9 @@ typedef struct {
  * \param handle  Handle for which event is issued
  * \param event   Event data
  * \param pw      Pointer to client-specific data
- * \return NSERROR_OK on success, appropriate error otherwise.
+ * \return SLATEERROR_OK on success, appropriate error otherwise.
  */
-typedef nserror (*llcache_handle_callback)(llcache_handle *handle,
+typedef slateerror (*llcache_handle_callback)(llcache_handle *handle,
 		const llcache_event *event, void *pw);
 
 /**
@@ -157,9 +157,9 @@ struct llcache_parameters {
  * Initialise the low-level cache
  *
  * \param parameters cache configuration parameters.
- * \return NSERROR_OK on success, appropriate error otherwise.
+ * \return SLATEERROR_OK on success, appropriate error otherwise.
  */
-nserror llcache_initialise(const struct llcache_parameters *parameters);
+slateerror llcache_initialise(const struct llcache_parameters *parameters);
 
 /**
  * Finalise the low-level cache
@@ -187,10 +187,10 @@ void llcache_clean(bool purge);
  * \param cb       Client callback for events
  * \param pw       Pointer to client-specific data
  * \param result   Pointer to location to recieve cache handle
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror llcache_handle_retrieve(nsurl *url, uint32_t flags,
-		nsurl *referer, const llcache_post_data *post,
+slateerror llcache_handle_retrieve(slateurl *url, uint32_t flags,
+		slateurl *referer, const llcache_post_data *post,
 		llcache_handle_callback cb, void *pw,
 		llcache_handle **result);
 
@@ -200,18 +200,18 @@ nserror llcache_handle_retrieve(nsurl *url, uint32_t flags,
  * \param handle  Handle to change callback of
  * \param cb      New callback
  * \param pw      Client data for new callback
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror llcache_handle_change_callback(llcache_handle *handle,
+slateerror llcache_handle_change_callback(llcache_handle *handle,
 		llcache_handle_callback cb, void *pw);
 
 /**
  * Release a low-level cache handle
  *
  * \param handle  Handle to release
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror llcache_handle_release(llcache_handle *handle);
+slateerror llcache_handle_release(llcache_handle *handle);
 
 /**
  * Clone a low-level cache handle, producing a new handle to
@@ -219,33 +219,33 @@ nserror llcache_handle_release(llcache_handle *handle);
  *
  * \param handle  Handle to clone
  * \param result  Pointer to location to receive cloned handle
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror llcache_handle_clone(llcache_handle *handle, llcache_handle **result);
+slateerror llcache_handle_clone(llcache_handle *handle, llcache_handle **result);
 
 /**
  * Abort a low-level fetch, informing all users of this action.
  *
  * \param handle  Handle to abort
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror llcache_handle_abort(llcache_handle *handle);
+slateerror llcache_handle_abort(llcache_handle *handle);
 
 /**
  * Force a low-level cache handle into streaming mode
  *
  * \param handle  Handle to stream
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror llcache_handle_force_stream(llcache_handle *handle);
+slateerror llcache_handle_force_stream(llcache_handle *handle);
 
 /**
  * Invalidate cache data for a low-level cache object
  *
  * \param handle  Handle to invalidate
- * \return NSERROR_OK on success, appropriate error otherwise
+ * \return SLATEERROR_OK on success, appropriate error otherwise
  */
-nserror llcache_handle_invalidate_cache_data(llcache_handle *handle);
+slateerror llcache_handle_invalidate_cache_data(llcache_handle *handle);
 
 /**
  * Retrieve the post-redirect URL of a low-level cache object
@@ -253,7 +253,7 @@ nserror llcache_handle_invalidate_cache_data(llcache_handle *handle);
  * \param handle  Handle to retrieve URL from
  * \return Post-redirect URL of cache object or NULL if no object
  */
-nsurl *llcache_handle_get_url(const llcache_handle *handle);
+slateurl *llcache_handle_get_url(const llcache_handle *handle);
 
 /**
  * Retrieve source data of a low-level cache object

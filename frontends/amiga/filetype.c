@@ -1,7 +1,7 @@
 /*
  * Copyright 2008, 2011 Chris Young <chris@unsatisfactorysoftware.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,7 +26,7 @@
 #include <proto/exec.h>
 #include <workbench/icon.h>
 
-#include "netsurf/content.h"
+#include "slate/content.h"
 #include "utils/log.h"
 #include "utils/utils.h"
 
@@ -174,7 +174,7 @@ static void ami_mime_entry_free(void *nso)
 	lwc_string_unref(mimeentry->plugincmd);
 }
 
-nserror ami_mime_init(const char *mimefile)
+slateerror ami_mime_init(const char *mimefile)
 {
 	lwc_error lerror;
 	char buffer[256];
@@ -191,7 +191,7 @@ nserror ami_mime_init(const char *mimefile)
 		ami_mime_list = NewObjList();
 
 	rargs = AllocDosObjectTags(DOS_RDARGS,TAG_DONE);
-	if(rargs == NULL) return NSERROR_NOMEM;
+	if(rargs == NULL) return SLATEERROR_NOMEM;
 
 	if((fh = FOpen(mimefile, MODE_OLDFILE, 0)))
 	{
@@ -224,7 +224,7 @@ nserror ami_mime_init(const char *mimefile)
 						lerror = lwc_intern_string((char *)rarray[AMI_MIME_MIMETYPE],
 									strlen((char *)rarray[AMI_MIME_MIMETYPE]), &mimeentry->mimetype);
 						if (lerror != lwc_error_ok)
-							return NSERROR_NOMEM;
+							return SLATEERROR_NOMEM;
 					}
 
 					if(rarray[AMI_MIME_DATATYPE])
@@ -232,7 +232,7 @@ nserror ami_mime_init(const char *mimefile)
 						lerror = lwc_intern_string((char *)rarray[AMI_MIME_DATATYPE],
 									strlen((char *)rarray[AMI_MIME_DATATYPE]), &mimeentry->datatype);
 						if (lerror != lwc_error_ok)
-							return NSERROR_NOMEM;
+							return SLATEERROR_NOMEM;
 					}
 
 					if(rarray[AMI_MIME_FILETYPE])
@@ -240,7 +240,7 @@ nserror ami_mime_init(const char *mimefile)
 						lerror = lwc_intern_string((char *)rarray[AMI_MIME_FILETYPE],
 									strlen((char *)rarray[AMI_MIME_FILETYPE]), &mimeentry->filetype);
 						if (lerror != lwc_error_ok)
-							return NSERROR_NOMEM;
+							return SLATEERROR_NOMEM;
 					}
 
 					if(rarray[AMI_MIME_PLUGINCMD])
@@ -248,7 +248,7 @@ nserror ami_mime_init(const char *mimefile)
 						lerror = lwc_intern_string((char *)rarray[AMI_MIME_PLUGINCMD],
 									strlen((char *)rarray[AMI_MIME_PLUGINCMD]), &mimeentry->plugincmd);
 						if (lerror != lwc_error_ok)
-							return NSERROR_NOMEM;
+							return SLATEERROR_NOMEM;
 					}
 				}
 				FreeArgs(rargs);
@@ -258,7 +258,7 @@ nserror ami_mime_init(const char *mimefile)
 	}
 	FreeDosObject(DOS_RDARGS, rargs);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 void ami_mime_free(void)

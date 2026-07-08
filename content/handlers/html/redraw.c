@@ -7,7 +7,7 @@
  * Copyright 2008 Michael Drake <tlsa@netsurf-browser.org>
  * Copyright 2009 Paul Blokus <paul_pl@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,13 +39,13 @@
 #include "utils/log.h"
 #include "utils/messages.h"
 #include "utils/utils.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/corestrings.h"
-#include "netsurf/content.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/plotters.h"
-#include "netsurf/bitmap.h"
-#include "netsurf/layout.h"
+#include "slate/content.h"
+#include "slate/browser_window.h"
+#include "slate/plotters.h"
+#include "slate/bitmap.h"
+#include "slate/layout.h"
 #include "content/content.h"
 #include "content/content_protected.h"
 #include "content/textsearch.h"
@@ -83,7 +83,7 @@ static bool html_redraw_box_has_background(struct box *box)
 
 		css_computed_background_color(box->style, &colour);
 
-		if (nscss_color_is_transparent(colour) == false)
+		if (slatecss_color_is_transparent(colour) == false)
 			return true;
 	}
 
@@ -172,7 +172,7 @@ text_redraw(const char *utf8_text,
 {
 	bool highlighted = false;
 	plot_font_style_t plot_fstyle = *fstyle;
-	nserror res;
+	slateerror res;
 
 	/* Need scaled text size to pass to plotters */
 	plot_fstyle.size *= scale;
@@ -223,14 +223,14 @@ text_redraw(const char *utf8_text,
 			res = guit->layout->width(fstyle,
 						  utf8_text, start_idx,
 						  &startx);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				startx = 0;
 			}
 
 			res = guit->layout->width(fstyle,
 						  utf8_text, endtxt_idx,
 						  &endx);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				endx = 0;
 			}
 
@@ -252,7 +252,7 @@ text_redraw(const char *utf8_text,
 					     x,
 					     y + (int)(height * 0.75 * scale),
 					     utf8_text,
-					     start_idx) != NSERROR_OK))
+					     start_idx) != SLATEERROR_OK))
 				return false;
 
 			pstyle_fill_hback.fill_colour = fstyle->foreground;
@@ -263,7 +263,7 @@ text_redraw(const char *utf8_text,
 			r.x1 = x + endx;
 			r.y1 = y + height * scale;
 			res = ctx->plot->rectangle(ctx, &pstyle_fill_hback, &r);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return false;
 			}
 
@@ -277,7 +277,7 @@ text_redraw(const char *utf8_text,
 					r.x1 = px1;
 					r.y1 = clip->y1;
 					res = ctx->plot->clip(ctx, &r);
-					if (res != NSERROR_OK) {
+					if (res != SLATEERROR_OK) {
 						return false;
 					}
 
@@ -298,7 +298,7 @@ text_redraw(const char *utf8_text,
 					     x,
 					     y + (int)(height * 0.75 * scale),
 					     utf8_text,
-					     endtxt_idx) != NSERROR_OK)) {
+					     endtxt_idx) != SLATEERROR_OK)) {
 				return false;
 			}
 
@@ -312,7 +312,7 @@ text_redraw(const char *utf8_text,
 					r.x1 = clip->x1;
 					r.y1 = clip->y1;
 					res = ctx->plot->clip(ctx, &r);
-					if (res != NSERROR_OK) {
+					if (res != SLATEERROR_OK) {
 						return false;
 					}
 
@@ -324,14 +324,14 @@ text_redraw(const char *utf8_text,
 							      y + (int)(height * 0.75 * scale),
 							      utf8_text,
 							      utf8_len);
-					if (res != NSERROR_OK) {
+					if (res != SLATEERROR_OK) {
 						return false;
 					}
 				}
 			}
 
 			if (clip_changed &&
-			    (ctx->plot->clip(ctx, clip) != NSERROR_OK)) {
+			    (ctx->plot->clip(ctx, clip) != SLATEERROR_OK)) {
 				return false;
 			}
 		}
@@ -344,7 +344,7 @@ text_redraw(const char *utf8_text,
 				      y + (int) (height * 0.75 * scale),
 				      utf8_text,
 				      utf8_len);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return false;
 		}
 	}
@@ -368,7 +368,7 @@ static bool html_redraw_checkbox(int x, int y, int width, int height,
 		bool selected, const struct redraw_context *ctx)
 {
 	double z;
-	nserror res;
+	slateerror res;
 	struct rect rect;
 
 	z = width * 0.15;
@@ -381,14 +381,14 @@ static bool html_redraw_checkbox(int x, int y, int width, int height,
 	rect.x1 = x + width;
 	rect.y1 = y + height;
 	res = ctx->plot->rectangle(ctx, plot_style_fill_wbasec, &rect);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return false;
 	}
 
 	/* dark line across top */
 	rect.y1 = y;
 	res = ctx->plot->line(ctx, plot_style_stroke_darkwbasec, &rect);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return false;
 	}
 
@@ -396,7 +396,7 @@ static bool html_redraw_checkbox(int x, int y, int width, int height,
 	rect.x1 = x;
 	rect.y1 = y + height;
 	res = ctx->plot->line(ctx, plot_style_stroke_darkwbasec, &rect);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return false;
 	}
 
@@ -404,7 +404,7 @@ static bool html_redraw_checkbox(int x, int y, int width, int height,
 	rect.x0 = x + width;
 	rect.x1 = x + width;
 	res = ctx->plot->line(ctx, plot_style_stroke_lightwbasec, &rect);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return false;
 	}
 
@@ -412,7 +412,7 @@ static bool html_redraw_checkbox(int x, int y, int width, int height,
 	rect.x0 = x;
 	rect.y0 = y + height;
 	res = ctx->plot->line(ctx, plot_style_stroke_lightwbasec, &rect);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return false;
 	}
 
@@ -424,7 +424,7 @@ static bool html_redraw_checkbox(int x, int y, int width, int height,
 			rect.x1 = x + width - z;
 			rect.y1 = y + height - z;
 			res = ctx->plot->rectangle(ctx, plot_style_fill_wblobc, &rect);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return false;
 			}
 		} else {
@@ -434,7 +434,7 @@ static bool html_redraw_checkbox(int x, int y, int width, int height,
 			rect.x1 = x + (z * 3);
 			rect.y1 = y + height - z;
 			res = ctx->plot->line(ctx, plot_style_stroke_wblobc, &rect);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return false;
 			}
 
@@ -443,7 +443,7 @@ static bool html_redraw_checkbox(int x, int y, int width, int height,
 			rect.x1 = x + z + z;
 			rect.y1 = y + (height / 2);
 			res = ctx->plot->line(ctx, plot_style_stroke_wblobc, &rect);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return false;
 			}
 		}
@@ -466,7 +466,7 @@ static bool html_redraw_checkbox(int x, int y, int width, int height,
 static bool html_redraw_radio(int x, int y, int width, int height,
 		bool selected, const struct redraw_context *ctx)
 {
-	nserror res;
+	slateerror res;
 
 	/* plot background of radio button */
 	res = ctx->plot->disc(ctx,
@@ -474,7 +474,7 @@ static bool html_redraw_radio(int x, int y, int width, int height,
 			      x + width * 0.5,
 			      y + height * 0.5,
 			      width * 0.5 - 1);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return false;
 	}
 
@@ -486,7 +486,7 @@ static bool html_redraw_radio(int x, int y, int width, int height,
 			     width * 0.5 - 1,
 			     45,
 			     225);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return false;
 	}
 
@@ -498,7 +498,7 @@ static bool html_redraw_radio(int x, int y, int width, int height,
 			     width * 0.5 - 1,
 			     225,
 			     45);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return false;
 	}
 
@@ -509,7 +509,7 @@ static bool html_redraw_radio(int x, int y, int width, int height,
 				      x + width * 0.5,
 				      y + height * 0.5,
 				      width * 0.3 - 1);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return false;
 		}
 	}
@@ -542,7 +542,7 @@ static bool html_redraw_file(int x, int y, int width, int height,
 	const char *text;
 	size_t length;
 	plot_font_style_t fstyle;
-	nserror res;
+	slateerror res;
 
 	font_plot_style_from_css(unit_len_ctx, box->style, &fstyle);
 	fstyle.background = background_colour;
@@ -555,7 +555,7 @@ static bool html_redraw_file(int x, int y, int width, int height,
 	length = strlen(text);
 
 	res = guit->layout->width(&fstyle, text, length, &text_width);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return false;
 	}
 	text_width *= scale;
@@ -566,7 +566,7 @@ static bool html_redraw_file(int x, int y, int width, int height,
 	}
 
 	res = ctx->plot->text(ctx, &fstyle, x, y + height * 0.75, text, length);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		return false;
 	}
 	return true;
@@ -615,7 +615,7 @@ static bool html_redraw_background(int x, int y, struct box *box, float scale,
 		.fill_type = PLOT_OP_TYPE_SOLID,
 		.fill_colour = *background_colour,
 	};
-	nserror res;
+	slateerror res;
 
 	if (ctx->background_images == false)
 		return true;
@@ -735,7 +735,7 @@ static bool html_redraw_background(int x, int y, struct box *box, float scale,
 			 */
 			if ((r.x0 >= r.x1) ||
 			    (r.y0 >= r.y1) ||
-			    (nscss_color_is_transparent(bgcol) == false) ||
+			    (slatecss_color_is_transparent(bgcol) == false) ||
 			    ((clip_box->background != NULL) &&
 			     content_get_opaque(clip_box->background)))
 				continue;
@@ -744,12 +744,12 @@ static bool html_redraw_background(int x, int y, struct box *box, float scale,
 		/* plot the background colour */
 		css_computed_background_color(background->style, &bgcol);
 
-		if (nscss_color_is_transparent(bgcol) == false) {
-			*background_colour = nscss_color_to_ns(bgcol);
+		if (slatecss_color_is_transparent(bgcol) == false) {
+			*background_colour = slatecss_color_to_slate(bgcol);
 			pstyle_fill_bg.fill_colour = *background_colour;
 			if (plot_colour) {
 				res = ctx->plot->rectangle(ctx, &pstyle_fill_bg, &r);
-				if (res != NSERROR_OK) {
+				if (res != SLATEERROR_OK) {
 					return false;
 				}
 			}
@@ -777,7 +777,7 @@ static bool html_redraw_background(int x, int y, struct box *box, float scale,
 				struct content_redraw_data bg_data;
 
 				res = ctx->plot->clip(ctx, &r);
-				if (res != NSERROR_OK) {
+				if (res != SLATEERROR_OK) {
 					return false;
 				}
 
@@ -839,11 +839,11 @@ static bool html_redraw_inline_background(int x, int y, struct box *box,
 		.fill_type = PLOT_OP_TYPE_SOLID,
 		.fill_colour = *background_colour,
 	};
-	nserror res;
+	slateerror res;
 
 	plot_content = (box->background != NULL);
 
-	if (html_redraw_printing && nsoption_bool(remove_backgrounds))
+	if (html_redraw_printing && slateoption_bool(remove_backgrounds))
 		return true;
 
 	if (plot_content) {
@@ -904,13 +904,13 @@ static bool html_redraw_inline_background(int x, int y, struct box *box,
 	/* plot the background colour */
 	css_computed_background_color(box->style, &bgcol);
 
-	if (nscss_color_is_transparent(bgcol) == false) {
-		*background_colour = nscss_color_to_ns(bgcol);
+	if (slatecss_color_is_transparent(bgcol) == false) {
+		*background_colour = slatecss_color_to_slate(bgcol);
 		pstyle_fill_bg.fill_colour = *background_colour;
 
 		if (plot_colour) {
 			res = ctx->plot->rectangle(ctx, &pstyle_fill_bg, &r);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return false;
 			}
 		}
@@ -937,7 +937,7 @@ static bool html_redraw_inline_background(int x, int y, struct box *box,
 			struct content_redraw_data bg_data;
 
 			res = ctx->plot->clip(ctx, &r);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return false;
 			}
 
@@ -985,7 +985,7 @@ html_redraw_text_decoration_inline(struct box *box,
 		.stroke_type = PLOT_OP_TYPE_SOLID,
 		.stroke_colour = colour,
 	};
-	nserror res;
+	slateerror res;
 	struct rect rect;
 
 	for (c = box->next;
@@ -999,7 +999,7 @@ html_redraw_text_decoration_inline(struct box *box,
 		rect.x1 = (x + c->x + c->width) * scale;
 		rect.y1 = (y + c->y + c->height * ratio) * scale;
 		res = ctx->plot->line(ctx, &plot_style_box, &rect);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			return false;
 		}
 	}
@@ -1033,7 +1033,7 @@ html_redraw_text_decoration_block(struct box *box,
 		.stroke_type = PLOT_OP_TYPE_SOLID,
 		.stroke_colour = colour,
 	};
-	nserror res;
+	slateerror res;
 	struct rect rect;
 
 	/* draw through text descendants */
@@ -1044,7 +1044,7 @@ html_redraw_text_decoration_block(struct box *box,
 			rect.x1 = (x + c->x + c->width) * scale;
 			rect.y1 = (y + c->y + c->height * ratio) * scale;
 			res = ctx->plot->line(ctx, &plot_style_box, &rect);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return false;
 			}
 		} else if ((c->type == BOX_INLINE_CONTAINER) || (c->type == BOX_BLOCK)) {
@@ -1083,7 +1083,7 @@ static bool html_redraw_text_decoration(struct box *box,
 	css_color col;
 
 	css_computed_color(box->style, &col);
-	fgcol = nscss_color_to_ns(col);
+	fgcol = slatecss_color_to_slate(col);
 
 	/* antialias colour for under/overline */
 	if (html_redraw_printing == false)
@@ -1397,16 +1397,16 @@ bool html_redraw_box(const html_content *html, struct box *box,
 	    css_computed_visibility(box->style) == CSS_VISIBILITY_HIDDEN &&
 	    box_visible(box) == false) {
 		if ((ctx->plot->group_start) &&
-		    (ctx->plot->group_start(ctx, "hidden box") != NSERROR_OK))
+		    (ctx->plot->group_start(ctx, "hidden box") != SLATEERROR_OK))
 			return false;
 		if (!html_redraw_box_children(html, box, x_parent, y_parent,
 				&r, scale, current_background_color, ctx))
 			return false;
-		return ((!ctx->plot->group_end) || (ctx->plot->group_end(ctx) == NSERROR_OK));
+		return ((!ctx->plot->group_end) || (ctx->plot->group_end(ctx) == SLATEERROR_OK));
 	}
 
 	if ((ctx->plot->group_start) &&
-	    (ctx->plot->group_start(ctx,"vis box") != NSERROR_OK)) {
+	    (ctx->plot->group_start(ctx,"vis box") != SLATEERROR_OK)) {
 		return false;
 	}
 
@@ -1445,9 +1445,9 @@ bool html_redraw_box(const html_content *html, struct box *box,
 		if (r.x0 >= r.x1 || r.y0 >= r.y1)
 			/* not an error */
 			return ((!ctx->plot->group_end) ||
-				(ctx->plot->group_end(ctx) == NSERROR_OK));
+				(ctx->plot->group_end(ctx) == SLATEERROR_OK));
 		/* clip to it */
-		if (ctx->plot->clip(ctx, &r) != NSERROR_OK)
+		if (ctx->plot->clip(ctx, &r) != SLATEERROR_OK)
 			return false;
 
 	} else if (box->type == BOX_BLOCK || box->type == BOX_INLINE_BLOCK ||
@@ -1461,14 +1461,14 @@ bool html_redraw_box(const html_content *html, struct box *box,
 		if (r.x0 == r.x1 || r.y0 == r.y1)
 			/* not an error */
 			return ((!ctx->plot->group_end) ||
-				(ctx->plot->group_end(ctx) == NSERROR_OK));
+				(ctx->plot->group_end(ctx) == SLATEERROR_OK));
 		/* clip to it */
-		if (ctx->plot->clip(ctx, &r) != NSERROR_OK)
+		if (ctx->plot->clip(ctx, &r) != SLATEERROR_OK)
 			return false;
 	} else {
 		/* clip box is fine, clip to it */
 		r = *clip;
-		if (ctx->plot->clip(ctx, &r) != NSERROR_OK)
+		if (ctx->plot->clip(ctx, &r) != SLATEERROR_OK)
 			return false;
 	}
 
@@ -1526,7 +1526,7 @@ bool html_redraw_box(const html_content *html, struct box *box,
 					&html->unit_len_ctx, ctx))
 				return false;
 			/* restore previous graphics window */
-			if (ctx->plot->clip(ctx, &r) != NSERROR_OK)
+			if (ctx->plot->clip(ctx, &r) != SLATEERROR_OK)
 				return false;
 		}
 	}
@@ -1606,7 +1606,7 @@ bool html_redraw_box(const html_content *html, struct box *box,
 						&html->unit_len_ctx, ctx))
 					return false;
 				/* restore previous graphics window */
-				if (ctx->plot->clip(ctx, &r) != NSERROR_OK)
+				if (ctx->plot->clip(ctx, &r) != SLATEERROR_OK)
 					return false;
 				if (!html_redraw_inline_borders(box, b, &r,
 						scale, first, false, ctx))
@@ -1639,7 +1639,7 @@ bool html_redraw_box(const html_content *html, struct box *box,
 				&html->unit_len_ctx, ctx))
 			return false;
 		/* restore previous graphics window */
-		if (ctx->plot->clip(ctx, &r) != NSERROR_OK)
+		if (ctx->plot->clip(ctx, &r) != SLATEERROR_OK)
 			return false;
 		if (!html_redraw_inline_borders(box, b, &r, scale, first, true,
 				ctx))
@@ -1668,7 +1668,7 @@ bool html_redraw_box(const html_content *html, struct box *box,
 		rect.y0 = y + padding_top;
 		rect.x1 = x + padding_left + width;
 		rect.y1 = y + padding_top + height;
-		if (ctx->plot->rectangle(ctx, plot_style_content_edge, &rect) != NSERROR_OK)
+		if (ctx->plot->rectangle(ctx, plot_style_content_edge, &rect) != SLATEERROR_OK)
 			return false;
 
 		/* Padding edge -- red */
@@ -1676,7 +1676,7 @@ bool html_redraw_box(const html_content *html, struct box *box,
 		rect.y0 = y;
 		rect.x1 = x + padding_width;
 		rect.y1 = y + padding_height;
-		if (ctx->plot->rectangle(ctx, plot_style_padding_edge, &rect) != NSERROR_OK)
+		if (ctx->plot->rectangle(ctx, plot_style_padding_edge, &rect) != SLATEERROR_OK)
 			return false;
 
 		/* Margin edge -- yellow */
@@ -1684,7 +1684,7 @@ bool html_redraw_box(const html_content *html, struct box *box,
 		rect.y0 = y - border_top - margin_top;
 		rect.x1 = x + padding_width + border_right + margin_right;
 		rect.y1 = y + padding_height + border_bottom + margin_bottom;
-		if (ctx->plot->rectangle(ctx, plot_style_margin_edge, &rect) != NSERROR_OK)
+		if (ctx->plot->rectangle(ctx, plot_style_margin_edge, &rect) != SLATEERROR_OK)
 			return false;
 	}
 
@@ -1705,7 +1705,7 @@ bool html_redraw_box(const html_content *html, struct box *box,
 			if (clip->y1 < r.y1) r.y1 = clip->y1;
 			if (r.x1 <= r.x0 || r.y1 <= r.y0) {
 				return (!ctx->plot->group_end ||
-					(ctx->plot->group_end(ctx) == NSERROR_OK));
+					(ctx->plot->group_end(ctx) == SLATEERROR_OK));
 			}
 			need_clip = true;
 
@@ -1718,7 +1718,7 @@ bool html_redraw_box(const html_content *html, struct box *box,
 			if (clip->x1 < r.x1) r.x1 = clip->x1;
 			if (r.x1 <= r.x0) {
 				return (!ctx->plot->group_end ||
-					(ctx->plot->group_end(ctx) == NSERROR_OK));
+					(ctx->plot->group_end(ctx) == SLATEERROR_OK));
 			}
 			need_clip = true;
 
@@ -1731,7 +1731,7 @@ bool html_redraw_box(const html_content *html, struct box *box,
 			if (clip->y1 < r.y1) r.y1 = clip->y1;
 			if (r.y1 <= r.y0) {
 				return (!ctx->plot->group_end ||
-					(ctx->plot->group_end(ctx) == NSERROR_OK));
+					(ctx->plot->group_end(ctx) == SLATEERROR_OK));
 			}
 			need_clip = true;
 		}
@@ -1740,7 +1740,7 @@ bool html_redraw_box(const html_content *html, struct box *box,
 		    (box->type == BOX_BLOCK ||
 		     box->type == BOX_INLINE_BLOCK ||
 		     box->type == BOX_TABLE_CELL || box->object)) {
-			if (ctx->plot->clip(ctx, &r) != NSERROR_OK)
+			if (ctx->plot->clip(ctx, &r) != SLATEERROR_OK)
 				return false;
 		}
 	}
@@ -1789,14 +1789,14 @@ bool html_redraw_box(const html_content *html, struct box *box,
 			const char *obj = "\xef\xbf\xbc";
 			int obj_width;
 			int obj_x = x + padding_left;
-			nserror res;
+			slateerror res;
 
 			rect.x0 = x + padding_left;
 			rect.y0 = y + padding_top;
 			rect.x1 = x + padding_left + width - 1;
 			rect.y1 = y + padding_top + height - 1;
 			res = ctx->plot->rectangle(ctx, plot_style_broken_object, &rect);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				return false;
 			}
 
@@ -1804,7 +1804,7 @@ bool html_redraw_box(const html_content *html, struct box *box,
 						  obj,
 						  sizeof(obj) - 1,
 						  &obj_width);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				obj_x += 1;
 			} else {
 				obj_x += width / 2 - obj_width / 2;
@@ -1813,7 +1813,7 @@ bool html_redraw_box(const html_content *html, struct box *box,
 			if (ctx->plot->text(ctx,
 					    plot_fstyle_broken_object,
 					    obj_x, y + padding_top + (int)(height * 0.75),
-					    obj, sizeof(obj) - 1) != NSERROR_OK)
+					    obj, sizeof(obj) - 1) != SLATEERROR_OK)
 				return false;
 		}
 	} else if (tag_type == DOM_HTML_ELEMENT_TYPE_CANVAS &&
@@ -1830,7 +1830,7 @@ bool html_redraw_box(const html_content *html, struct box *box,
 		if (bitmap != NULL &&
 		    ctx->plot->bitmap(ctx, bitmap, x + padding_left, y + padding_top,
 				      width, height, current_background_color,
-				      BITMAPF_NONE) != NSERROR_OK)
+				      BITMAPF_NONE) != SLATEERROR_OK)
 			return false;
 	} else if (box->iframe) {
 		/* Offset is passed to browser window redraw unscaled */
@@ -1874,7 +1874,7 @@ bool html_redraw_box(const html_content *html, struct box *box,
 
 	if (box->type == BOX_BLOCK || box->type == BOX_INLINE_BLOCK ||
 			box->type == BOX_TABLE_CELL || box->type == BOX_INLINE)
-		if (ctx->plot->clip(ctx, clip) != NSERROR_OK)
+		if (ctx->plot->clip(ctx, clip) != SLATEERROR_OK)
 			return false;
 
 	/* list marker */
@@ -1898,7 +1898,7 @@ bool html_redraw_box(const html_content *html, struct box *box,
 	       overflow_y == CSS_OVERFLOW_AUTO)) ||
 	     (box->object && content_get_type(box->object) ==
 	      CONTENT_HTML)) && box->parent != NULL) {
-		nserror res;
+		slateerror res;
 		bool has_x_scroll = (overflow_x == CSS_OVERFLOW_SCROLL);
 		bool has_y_scroll = (overflow_y == CSS_OVERFLOW_SCROLL);
 
@@ -1909,7 +1909,7 @@ bool html_redraw_box(const html_content *html, struct box *box,
 
 		res = box_handle_scrollbars((struct content *)html,
 					    box, has_x_scroll, has_y_scroll);
-		if (res != NSERROR_OK) {
+		if (res != SLATEERROR_OK) {
 			NSLOG(netsurf, INFO, "%s", messages_get_errorcode(res));
 			return false;
 		}
@@ -1930,11 +1930,11 @@ bool html_redraw_box(const html_content *html, struct box *box,
 
 	if (box->type == BOX_BLOCK || box->type == BOX_INLINE_BLOCK ||
 	    box->type == BOX_TABLE_CELL || box->type == BOX_INLINE) {
-		if (ctx->plot->clip(ctx, clip) != NSERROR_OK)
+		if (ctx->plot->clip(ctx, clip) != SLATEERROR_OK)
 			return false;
 	}
 
-	return ((!plot->group_end) || (ctx->plot->group_end(ctx) == NSERROR_OK));
+	return ((!plot->group_end) || (ctx->plot->group_end(ctx) == SLATEERROR_OK));
 }
 
 /**
@@ -1980,12 +1980,12 @@ bool html_redraw(struct content *c, struct content_redraw_data *data,
 
 	if (!select_only) {
 		/* clear to background colour */
-		result = (ctx->plot->clip(ctx, clip) == NSERROR_OK);
+		result = (ctx->plot->clip(ctx, clip) == SLATEERROR_OK);
 
 		if (html->background_colour != NS_TRANSPARENT)
 			pstyle_fill_bg.fill_colour = html->background_colour;
 
-		result &= (ctx->plot->rectangle(ctx, &pstyle_fill_bg, clip) == NSERROR_OK);
+		result &= (ctx->plot->rectangle(ctx, &pstyle_fill_bg, clip) == SLATEERROR_OK);
 
 		result &= html_redraw_box(html, box, data->x, data->y, clip,
 				data->scale, pstyle_fill_bg.fill_colour, ctx);

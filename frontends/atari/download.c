@@ -1,7 +1,7 @@
 /*
  * Copyright 2010 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,17 +28,17 @@
 
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/string.h"
-#include "netsurf/inttypes.h"
-#include "netsurf/browser_window.h"
-#include "netsurf/download.h"
+#include "slate/inttypes.h"
+#include "slate/browser_window.h"
+#include "slate/download.h"
 #include "desktop/save_complete.h"
 #include "desktop/download.h"
 
 #include "atari/gui.h"
 #include "atari/misc.h"
-#include "atari/res/netsurf.rsh"
+#include "atari/res/slate.rsh"
 #include "atari/download.h"
 #include "atari/osspec.h"
 
@@ -168,11 +168,11 @@ static void on_redraw(struct gui_download_window *dw, GRECT *clip)
 
 static void on_abort_click(struct gui_download_window *dw)
 {
-	if( dw->status == NSATARI_DOWNLOAD_COMPLETE
-		|| dw->status == NSATARI_DOWNLOAD_ERROR ) {
+	if( dw->status == SLATEATARI_DOWNLOAD_COMPLETE
+		|| dw->status == SLATEATARI_DOWNLOAD_ERROR ) {
 			gemtk_wm_send_msg(dw->guiwin, WM_CLOSED, 0,0,0,0);
 	}
-	else if( dw->status != NSATARI_DOWNLOAD_CANCELED ){
+	else if( dw->status != SLATEATARI_DOWNLOAD_CANCELED ){
 		dw->abort = true;
 	}
 }
@@ -180,7 +180,7 @@ static void on_abort_click(struct gui_download_window *dw)
 static void on_cbrdy_click(struct gui_download_window *dw)
 {
 	dw->close_on_finish = !dw->close_on_finish;
-	if (dw->close_on_finish && dw->status == NSATARI_DOWNLOAD_COMPLETE) {
+	if (dw->close_on_finish && dw->status == SLATEATARI_DOWNLOAD_COMPLETE) {
 		gemtk_wm_send_msg(dw->guiwin, WM_CLOSED, 0,0,0,0);
 	}
 	gemtk_wm_exec_redraw(dw->guiwin, NULL);
@@ -196,7 +196,7 @@ static void gui_download_window_destroy( struct gui_download_window * gdw)
 {
         NSLOG(netsurf, INFO, "gdw %p", gdw);
 
-	if (gdw->status == NSATARI_DOWNLOAD_WORKING) {
+	if (gdw->status == SLATEATARI_DOWNLOAD_WORKING) {
 		download_context_abort(gdw->ctx);
 	}
 
@@ -271,14 +271,14 @@ gui_download_window_create(download_context *ctx, struct gui_window *parent)
 		return( NULL );
 	}
 	else if( dlgres == 2 ){
-		gemdos_realpath(nsoption_charp(downloads_path), gdos_path);
+		gemdos_realpath(slateoption_charp(downloads_path), gdos_path);
 		char * tmp = select_filepath( gdos_path, filename );
 		if( tmp == NULL )
 			return( NULL );
 		destination = tmp;
 	} else {
 		int dstsize=0;
-		gemdos_realpath(nsoption_charp(downloads_path), gdos_path);
+		gemdos_realpath(slateoption_charp(downloads_path), gdos_path);
 		dstsize = strlen(gdos_path) + strlen(filename) + 2;
 		destination = malloc( dstsize );
 		snprintf(destination, dstsize, "%s/%s", gdos_path, filename);
@@ -295,7 +295,7 @@ gui_download_window_create(download_context *ctx, struct gui_window *parent)
 	gdw->abort = false;
 	gdw->start = clock() / CLOCKS_PER_SEC;
 	gdw->lastrdw = 0;
-	gdw->status = NSATARI_DOWNLOAD_WORKING;
+	gdw->status = SLATEATARI_DOWNLOAD_WORKING;
 	gdw->parent = parent;
 	gdw->fbufsize = MAX(BUFSIZ, 48000);
 	gdw->size_downloaded = 0;
@@ -352,7 +352,7 @@ gui_download_window_create(download_context *ctx, struct gui_window *parent)
 }
 
 
-static nserror gui_download_window_data(struct gui_download_window *dw,
+static slateerror gui_download_window_data(struct gui_download_window *dw,
 		const char *data, unsigned int size)
 {
 	uint32_t clck = clock();
@@ -362,11 +362,11 @@ static nserror gui_download_window_data(struct gui_download_window *dw,
 	NSLOG(netsurf, INFO, "dw %p", dw);
 
 	if (dw->abort == true){
-		dw->status = NSATARI_DOWNLOAD_CANCELED;
+		dw->status = SLATEATARI_DOWNLOAD_CANCELED;
 		dw->abort = false;
 		download_context_abort(dw->ctx);
 		gemtk_wm_exec_redraw(dw->guiwin, NULL);
-		return(NSERROR_OK);
+		return(SLATEERROR_OK);
 	}
 
 	/* save data */
@@ -401,7 +401,7 @@ static nserror gui_download_window_data(struct gui_download_window *dw,
 
 		gemtk_wm_exec_redraw(dw->guiwin, NULL);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static void gui_download_window_error(struct gui_download_window *dw,
@@ -410,7 +410,7 @@ static void gui_download_window_error(struct gui_download_window *dw,
 	NSLOG(netsurf, INFO, "%s", error_msg);
 
 	strncpy((char*)&dw->lbl_file, error_msg, MAX_SLEN_LBL_FILE-1);
-	dw->status = NSATARI_DOWNLOAD_ERROR;
+	dw->status = SLATEATARI_DOWNLOAD_ERROR;
 	gemtk_wm_exec_redraw(dw->guiwin, NULL);
 	atari_window_set_status(input_window, messages_get("Done") );
 	// TODO: change abort to close
@@ -421,7 +421,7 @@ static void gui_download_window_done(struct gui_download_window *dw)
 	NSLOG(netsurf, INFO, "dw %p", dw);
 
 // TODO: change abort to close
-	dw->status = NSATARI_DOWNLOAD_COMPLETE;
+	dw->status = SLATEATARI_DOWNLOAD_COMPLETE;
 
 	if( dw->fd != NULL ) {
 		fclose( dw->fd );

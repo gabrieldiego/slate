@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,11 +27,11 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "netsurf/inttypes.h"
+#include "slate/inttypes.h"
 #include "utils/utils.h"
 #include "utils/log.h"
-#include "netsurf/misc.h"
-#include "netsurf/bitmap.h"
+#include "slate/misc.h"
+#include "slate/bitmap.h"
 #include "content/llcache.h"
 #include "content/content_protected.h"
 #include "desktop/gui_internal.h"
@@ -412,12 +412,12 @@ struct bitmap *image_cache_find_bitmap(struct content *c)
 }
 
 /* exported interface documented in image_cache.h */
-nserror
+slateerror
 image_cache_init(const struct image_cache_parameters *image_cache_parameters)
 {
 	image_cache = calloc(1, sizeof(struct image_cache_s));
 	if (image_cache == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	image_cache->params = *image_cache_parameters;
@@ -431,11 +431,11 @@ image_cache_init(const struct image_cache_parameters *image_cache_parameters)
 	      image_cache->params.limit,
 	      image_cache->params.hysteresis);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in image_cache.h */
-nserror image_cache_fini(void)
+slateerror image_cache_fini(void)
 {
 	unsigned int op_count;
 	uint64_t op_size;
@@ -503,11 +503,11 @@ nserror image_cache_fini(void)
 
 	free(image_cache);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in image_cache.h */
-nserror image_cache_add(struct content *content,
+slateerror image_cache_add(struct content *content,
 			struct bitmap *bitmap,
 			image_cache_convert_fn *convert)
 {
@@ -523,7 +523,7 @@ nserror image_cache_add(struct content *content,
 		/* new cache entry, content not previously added */
 		centry = calloc(1, sizeof(struct image_cache_entry_s));
 		if (centry == NULL) {
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 		image_cache__link(centry);
 		centry->content = content;
@@ -560,11 +560,11 @@ nserror image_cache_add(struct content *content,
 
 
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in image_cache.h */
-nserror image_cache_remove(struct content *content)
+slateerror image_cache_remove(struct content *content)
 {
 	struct image_cache_entry_s *centry;
 
@@ -573,12 +573,12 @@ nserror image_cache_remove(struct content *content)
 	if (centry == NULL) {
 		NSLOG(netsurf, INFO,
 		      "Could not find cache entry for content (%p)", content);
-		return NSERROR_NOT_FOUND;
+		return SLATEERROR_NOT_FOUND;
 	}
 
 	image_cache__free_entry(centry);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /* exported interface documented in image_cache.h */
@@ -740,18 +740,18 @@ image_cache_snentryf(char *string,
 
 			case 'U':
 				slen += snprintf(string + slen, size - slen,
-						"%s", nsurl_access(llcache_handle_get_url(centry->content->llcache)));
+						"%s", slateurl_access(llcache_handle_get_url(centry->content->llcache)));
 				break;
 
 			case 'o':
-				if (nsurl_has_component(llcache_handle_get_url(
+				if (slateurl_has_component(llcache_handle_get_url(
 						centry->content->llcache),
-						NSURL_HOST)) {
-					origin = nsurl_get_component(
+						SLATEURL_HOST)) {
+					origin = slateurl_get_component(
 							llcache_handle_get_url(
 							centry->content->
 								llcache),
-							NSURL_HOST);
+							SLATEURL_HOST);
 
 					slen += snprintf(string + slen,
 							size - slen, "%s",

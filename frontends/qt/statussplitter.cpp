@@ -1,7 +1,7 @@
 /*
  * Copyright 2025 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,7 +22,7 @@
  */
 
 extern "C" {
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 }
 
 #include "qt/statussplitter.cls.h"
@@ -45,7 +45,7 @@ void NS_StatusSplitter::moved_slot(int pos,int index)
 	if (m_resize_move) {
 		m_resize_move = false;
 	} else {
-		nsoption_set_int(toolbar_status_size,
+		slateoption_set_int(toolbar_status_size,
 				 ((pos * 10000) / size().width()));
 	}
 }
@@ -55,5 +55,5 @@ void NS_StatusSplitter::resizeEvent(QResizeEvent *event)
 {
 	QSplitter::resizeEvent(event);
 	m_resize_move = true;
-	moveSplitter((event->size().width() * nsoption_int(toolbar_status_size))/10000, 1);
+	moveSplitter((event->size().width() * slateoption_int(toolbar_status_size))/10000, 1);
 }

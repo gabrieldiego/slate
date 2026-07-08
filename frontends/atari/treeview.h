@@ -1,7 +1,7 @@
 /*
  * Copyright 2013 Ole Loots <ole@monochrom.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NSATARI_TREEVIEW_H
-#define NSATARI_TREEVIEW_H
+#ifndef SLATEATARI_TREEVIEW_H
+#define SLATEATARI_TREEVIEW_H
 
 #include "atari/gui.h"
 #include "atari/gemtk/gemtk.h"
@@ -50,7 +50,7 @@ struct atari_treeview_window;
  */
 
 /** \todo atari add drag_status callback */
-typedef nserror (*atari_treeview_init2_callback)(struct core_window *cw);
+typedef slateerror (*atari_treeview_init2_callback)(struct core_window *cw);
 typedef void (*atari_treeview_finish_callback)(struct core_window *cw);
 typedef void (*atari_treeview_keypress_callback)(struct core_window *cw, uint32_t ucs4);
 typedef void (*atari_treeview_mouse_action_callback)(struct core_window *cw, browser_mouse_state mouse, int x, int y);
@@ -122,4 +122,4 @@ void *atari_treeview_get_user_data(struct core_window *cw);
  */
 void atari_treeview_flush_redraws(void);
 
-#endif //NSATARI_TREEVIEW_H
+#endif //SLATEATARI_TREEVIEW_H

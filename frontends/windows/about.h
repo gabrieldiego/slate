@@ -1,7 +1,7 @@
 /*
 * Copyright 2009 Mark Benjamin <netsurf-browser.org.MarkBenjamin@dfgh.net>
 *
-* This file is part of NetSurf, http://www.netsurf-browser.org/
+* This file is part of NetSurf, http://www.slate-browser.org/
 *
 * NetSurf is free software; you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -16,9 +16,9 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef NETSURF_WINDOWS_ABOUT_H
-#define NETSURF_WINDOWS_ABOUT_H
+#ifndef SLATE_WINDOWS_ABOUT_H
+#define SLATE_WINDOWS_ABOUT_H
 
-void nsw32_about_dialog_init(HINSTANCE hinst, HWND parent);
+void slatew32_about_dialog_init(HINSTANCE hinst, HWND parent);
 
 #endif

@@ -1,7 +1,7 @@
 /*
  * Copyright 2023 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,11 +32,11 @@
 
 extern "C" {
 #include "utils/messages.h"
-#include "utils/nsoption.h"
-#include "utils/nsurl.h"
+#include "utils/slateoption.h"
+#include "utils/slateurl.h"
 #include "utils/log.h"
 
-#include "netsurf/content.h"
+#include "slate/content.h"
 
 #include "desktop/browser_history.h"
 #include "desktop/hotlist.h"
@@ -187,7 +187,7 @@ NS_Actions::NS_Actions(QWidget* parent, struct browser_window *bw) :
 		this, &NS_Actions::debug_dom_tree_slot);
 
 	connect(m_about_netsurf, &QAction::triggered,
-		this, &NS_Actions::about_netsurf_slot);
+		this, &NS_Actions::about_slate_slot);
 
 	connect(m_link_new_tab, &QAction::triggered,
 		this, &NS_Actions::link_new_tab_slot);
@@ -305,7 +305,7 @@ void NS_Actions::update(NS_Actions::Update update)
 	}
 }
 
-void NS_Actions::update(struct nsurl *link, struct hlcache_handle *object,char *selection)
+void NS_Actions::update(struct slateurl *link, struct hlcache_handle *object,char *selection)
 {
 	m_link = link;
 	m_object = object;
@@ -314,7 +314,7 @@ void NS_Actions::update(struct nsurl *link, struct hlcache_handle *object,char *
 	}
 	m_selection = selection;
 
-	m_sel_search->setText(QString::asprintf(messages_get("SearchProviderFor"), nsoption_charp(search_web_provider), m_selection));
+	m_sel_search->setText(QString::asprintf(messages_get("SearchProviderFor"), slateoption_charp(search_web_provider), m_selection));
 }
 
 /*
@@ -370,7 +370,7 @@ QIcon NS_Actions::QIconFromText(QString text)
 }
 
 
-QString NS_Actions::QStringFromNsurl(struct nsurl *url)
+QString NS_Actions::QStringFromNsurl(struct slateurl *url)
 {
 	if (url == NULL) {
 		return QString();
@@ -378,9 +378,9 @@ QString NS_Actions::QStringFromNsurl(struct nsurl *url)
 
 	size_t idn_url_l;
 	char *idn_url_s = NULL;
-	if (nsurl_get_utf8(url, &idn_url_s, &idn_url_l) != NSERROR_OK) {
+	if (slateurl_get_utf8(url, &idn_url_s, &idn_url_l) != SLATEERROR_OK) {
 		/* idna conversion failed so use url verbaitum */
-		return QString::fromUtf8(nsurl_access(url), nsurl_length(url));
+		return QString::fromUtf8(slateurl_access(url), slateurl_length(url));
 	}
 	QString res = QString::fromUtf8(idn_url_s, idn_url_l);
 	free(idn_url_s);
@@ -393,7 +393,7 @@ void NS_Actions::update_page_scale()
 {
 	double scale = browser_window_get_scale(m_bw) * 100.0;
 	QString scaletext = QString::number(scale)+"%";
-	m_reset_page_scale->setVisible(scale != nsoption_int(scale));
+	m_reset_page_scale->setVisible(scale != slateoption_int(scale));
 #ifdef USE_ICON_FOR_SCALE
 	m_reset_page_scale->setIcon(QIconFromText(scaletext));
 #endif
@@ -442,12 +442,12 @@ void NS_Actions::update_page_info()
 void NS_Actions::update_bookmarks()
 {
 	/* manage bookmark state */
-	struct nsurl *url;
-	if (browser_window_get_url(m_bw, true, &url) != NSERROR_OK) {
+	struct slateurl *url;
+	if (browser_window_get_url(m_bw, true, &url) != SLATEERROR_OK) {
 		return;
 	}
 	bool marked = hotlist_has_url(url);
-	nsurl_unref(url);
+	slateurl_unref(url);
 	if (marked != m_marked) {
 		m_marked = marked;
 		if (m_marked) {
@@ -553,8 +553,8 @@ void NS_Actions::bookmarks_slot(bool checked)
 
 void NS_Actions::add_edit_bookmark_slot(bool checked)
 {
-	struct nsurl *url;
-	if (browser_window_get_url(m_bw, true, &url) == NSERROR_OK) {
+	struct slateurl *url;
+	if (browser_window_get_url(m_bw, true, &url) == SLATEERROR_OK) {
 		bool marked = hotlist_has_url(url);
 		if (marked) {
 			hotlist_remove_url(url);
@@ -562,7 +562,7 @@ void NS_Actions::add_edit_bookmark_slot(bool checked)
 			hotlist_add_url(url);
 		}
 		update_bookmarks();
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
 }
 
@@ -593,7 +593,7 @@ void NS_Actions::page_info_slot(bool checked)
 
 void NS_Actions::reset_page_scale_slot(bool checked)
 {
-	browser_window_set_scale(m_bw, (float)nsoption_int(scale)/100.0, true);
+	browser_window_set_scale(m_bw, (float)slateoption_int(scale)/100.0, true);
 	update_page_scale();
 }
 
@@ -652,7 +652,7 @@ void NS_Actions::debug_dom_tree_slot(bool checked)
 }
 
 
-void NS_Actions::about_netsurf_slot(bool checked)
+void NS_Actions::about_slate_slot(bool checked)
 {
 }
 
@@ -723,20 +723,20 @@ void NS_Actions::sel_search_slot(bool checked)
 	if (m_selection == NULL) {
 		return;
 	}
-	nserror res;
-	nsurl *url;
+	slateerror res;
+	slateurl *url;
 
 	res = search_web_omni(m_selection, SEARCH_WEB_OMNI_SEARCHONLY, &url);
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		res = browser_window_create(
 			(enum browser_window_create_flags)(BW_CREATE_HISTORY | BW_CREATE_TAB | BW_CREATE_FOREGROUND),
 			url,
 			NULL,
 			m_bw,
 			NULL);
-		nsurl_unref(url);
+		slateurl_unref(url);
 	}
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		NSLOG(netsurf,WARNING,"web search for %s failed with %s",m_selection, messages_get_errorcode(res));
 	}
 }

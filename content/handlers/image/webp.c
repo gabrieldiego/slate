@@ -1,7 +1,7 @@
 /*
  * Copyright 2019 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,7 +33,7 @@
 #include "utils/utils.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/bitmap.h"
+#include "slate/bitmap.h"
 #include "content/llcache.h"
 #include "content/content_protected.h"
 #include "content/content_factory.h"
@@ -49,7 +49,7 @@
  *
  * create a content object for the webp
  */
-static nserror
+static slateerror
 webp_create(const content_handler *handler,
 	      lwc_string *imime_type,
 	      const struct http_parameter *params,
@@ -59,11 +59,11 @@ webp_create(const content_handler *handler,
 	      struct content **c)
 {
 	struct content *webp_c; /* webp content object */
-	nserror res;
+	slateerror res;
 
 	webp_c = calloc(1, sizeof(struct content));
 	if (webp_c == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	res = content__init(webp_c,
@@ -73,14 +73,14 @@ webp_create(const content_handler *handler,
 			    llcache,
 			    fallback_charset,
 			    quirks);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		free(webp_c);
 		return res;
 	}
 
 	*c = webp_c;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 /**
@@ -211,18 +211,18 @@ static bool webp_convert(struct content *c)
 /**
  * Clone content.
  */
-static nserror webp_clone(const struct content *old, struct content **new_c)
+static slateerror webp_clone(const struct content *old, struct content **new_c)
 {
 	struct content *webp_c; /* cloned webp content */
-	nserror res;
+	slateerror res;
 
 	webp_c = calloc(1, sizeof(struct content));
 	if (webp_c == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	res = content__clone(old, webp_c);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		content_destroy(webp_c);
 		return res;
 	}
@@ -232,13 +232,13 @@ static nserror webp_clone(const struct content *old, struct content **new_c)
 	    (old->status == CONTENT_STATUS_DONE)) {
 		if (webp_convert(webp_c) == false) {
 			content_destroy(webp_c);
-			return NSERROR_CLONE_FAILED;
+			return SLATEERROR_CLONE_FAILED;
 		}
 	}
 
 	*new_c = webp_c;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static const content_handler webp_content_handler = {

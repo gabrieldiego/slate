@@ -2,7 +2,7 @@
  * Copyright 2007 Daniel Silverstone <dsilvers@digital-scurf.org>
  * Copyright 2007 Rob Kendrick <rjek@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,8 +29,8 @@
 
 static const char *core_user_agent_string = NULL;
 
-#ifndef NETSURF_UA_FORMAT_STRING
-#define NETSURF_UA_FORMAT_STRING "Mozilla/5.0 (%s) NetSurf/%d.%d"
+#ifndef SLATE_UA_FORMAT_STRING
+#define SLATE_UA_FORMAT_STRING "Mozilla/5.0 (%s) NetSurf/%d.%d"
 #endif
 
 /**
@@ -53,20 +53,20 @@ user_agent_build_string(void)
                 }
         }
 
-        len = snprintf(NULL, 0, NETSURF_UA_FORMAT_STRING,
+        len = snprintf(NULL, 0, SLATE_UA_FORMAT_STRING,
                        sysname,
-                       netsurf_version_major,
-                       netsurf_version_minor);
+                       slate_version_major,
+                       slate_version_minor);
         ua_string = malloc(len + 1);
         if (!ua_string) {
                 /** \todo this needs handling better */
                 return;
         }
         snprintf(ua_string, len + 1,
-                 NETSURF_UA_FORMAT_STRING,
+                 SLATE_UA_FORMAT_STRING,
                  sysname,
-                 netsurf_version_major,
-                 netsurf_version_minor);
+                 slate_version_major,
+                 slate_version_minor);
 
         core_user_agent_string = ua_string;
 

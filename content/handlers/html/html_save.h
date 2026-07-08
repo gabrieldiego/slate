@@ -1,7 +1,7 @@
 /*
  * Copyright 2018 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,8 +24,8 @@
  *         exporting the html content to disc.
  */
 
-#ifndef NETSURF_HTML_HTML_SAVE_H
-#define NETSURF_HTML_HTML_SAVE_H
+#ifndef SLATE_HTML_HTML_SAVE_H
+#define SLATE_HTML_HTML_SAVE_H
 
 /**
  * get the dom document of a html content from a handle
@@ -41,6 +41,6 @@ struct box *html_get_box_tree(struct hlcache_handle *h);
 /**
  * get the base url of an html content from a handle
  */
-struct nsurl *html_get_base_url(struct hlcache_handle *h);
+struct slateurl *html_get_base_url(struct hlcache_handle *h);
 
 #endif

@@ -3,7 +3,7 @@
  * Copyright 2004 Richard Wilson <not_ginger_matt@hotmail.com>
  * Copyright 2008 Daniel Silverstone <dsilvers@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,11 +23,11 @@
 #include <stdlib.h>
 #include <png.h>
 
-#include "netsurf/inttypes.h"
+#include "slate/inttypes.h"
 #include "utils/utils.h"
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "netsurf/bitmap.h"
+#include "slate/bitmap.h"
 #include "content/llcache.h"
 #include "content/content_protected.h"
 #include "content/content_factory.h"
@@ -268,14 +268,14 @@ static void end_callback(png_structp png_s, png_infop info)
 {
 }
 
-static nserror nspng_create_png_data(nspng_content *png_c)
+static slateerror nspng_create_png_data(nspng_content *png_c)
 {
 	png_c->bitmap = NULL;
 
 	png_c->png = png_create_read_struct(PNG_LIBPNG_VER_STRING, 0, 0, 0);
 	if (png_c->png == NULL) {
-		content_broadcast_error(&png_c->base, NSERROR_NOMEM, NULL);
-		return NSERROR_NOMEM;
+		content_broadcast_error(&png_c->base, SLATEERROR_NOMEM, NULL);
+		return SLATEERROR_NOMEM;
 	}
 
 	png_set_error_fn(png_c->png, NULL, nspng_error, nspng_warning);
@@ -284,8 +284,8 @@ static nserror nspng_create_png_data(nspng_content *png_c)
 	if (png_c->info == NULL) {
 		png_destroy_read_struct(&png_c->png, &png_c->info, 0);
 
-		content_broadcast_error(&png_c->base, NSERROR_NOMEM, NULL);
-		return NSERROR_NOMEM;
+		content_broadcast_error(&png_c->base, SLATEERROR_NOMEM, NULL);
+		return SLATEERROR_NOMEM;
 	}
 
 	if (setjmp(png_jmpbuf(png_c->png))) {
@@ -294,17 +294,17 @@ static nserror nspng_create_png_data(nspng_content *png_c)
 		png_c->png = NULL;
 		png_c->info = NULL;
 
-		content_broadcast_error(&png_c->base, NSERROR_PNG_ERROR, NULL);
-		return NSERROR_NOMEM;
+		content_broadcast_error(&png_c->base, SLATEERROR_PNG_ERROR, NULL);
+		return SLATEERROR_NOMEM;
 	}
 
 	png_set_progressive_read_fn(png_c->png, png_c,
 			info_callback, row_callback, end_callback);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
-static nserror
+static slateerror
 nspng_create(const content_handler *handler,
 	     lwc_string *imime_type,
 	     const struct http_parameter *params,
@@ -314,11 +314,11 @@ nspng_create(const content_handler *handler,
 	     struct content **c)
 {
 	nspng_content *png_c;
-	nserror error;
+	slateerror error;
 
 	png_c = calloc(1, sizeof(nspng_content));
 	if (png_c == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__init(&png_c->base, 
 			      handler, 
@@ -327,20 +327,20 @@ nspng_create(const content_handler *handler,
 			      llcache, 
 			      fallback_charset, 
 			      quirks);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(png_c);
 		return error;
 	}
 
 	error = nspng_create_png_data(png_c);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		free(png_c);
 		return error;
 	}
 
 	*c = (struct content *)png_c;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -387,7 +387,7 @@ static bool nspng_process_data(struct content *c, const char *data,
 			png_c->png = NULL;
 			png_c->info = NULL;
 
-			content_broadcast_error(c, NSERROR_PNG_ERROR, NULL);
+			content_broadcast_error(c, SLATEERROR_PNG_ERROR, NULL);
 
 			ret = false;
 
@@ -563,7 +563,7 @@ static bool nspng_convert(struct content *c)
 
 	/* set title text */
 	title = messages_get_buff("PNGTitle",
-			nsurl_access_leaf(llcache_handle_get_url(c->llcache)),
+			slateurl_access_leaf(llcache_handle_get_url(c->llcache)),
 			c->width, c->height);
 	if (title != NULL) {
 		content__set_title(c, title);
@@ -590,26 +590,26 @@ static bool nspng_convert(struct content *c)
 }
 
 
-static nserror nspng_clone(const struct content *old_c, struct content **new_c)
+static slateerror nspng_clone(const struct content *old_c, struct content **new_c)
 {
 	nspng_content *clone_png_c;
-	nserror error;
+	slateerror error;
 	const uint8_t *data;
 	size_t size;
 
 	clone_png_c = calloc(1, sizeof(nspng_content));
 	if (clone_png_c == NULL)
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 
 	error = content__clone(old_c, &clone_png_c->base);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&clone_png_c->base);
 		return error;
 	}
 
 	/* Simply replay create/process/convert */
 	error = nspng_create_png_data(clone_png_c);
-	if (error != NSERROR_OK) {
+	if (error != SLATEERROR_OK) {
 		content_destroy(&clone_png_c->base);
 		return error;
 	}
@@ -618,7 +618,7 @@ static nserror nspng_clone(const struct content *old_c, struct content **new_c)
 	if (size > 0) {
 		if (nspng_process_data(&clone_png_c->base, (const char *)data, size) == false) {
 			content_destroy(&clone_png_c->base);
-			return NSERROR_NOMEM;
+			return SLATEERROR_NOMEM;
 		}
 	}
 
@@ -626,13 +626,13 @@ static nserror nspng_clone(const struct content *old_c, struct content **new_c)
 	    (old_c->status == CONTENT_STATUS_DONE)) {
 		if (nspng_convert(&clone_png_c->base) == false) {
 			content_destroy(&clone_png_c->base);
-			return NSERROR_CLONE_FAILED;
+			return SLATEERROR_CLONE_FAILED;
 		}
 	}
 
 	*new_c = (struct content *)clone_png_c;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 static const content_handler nspng_content_handler = {

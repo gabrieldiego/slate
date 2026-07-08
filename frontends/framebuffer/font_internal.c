@@ -2,7 +2,7 @@
  * Copyright 2005 James Bursa <bursa@users.sourceforge.net>
  *           2008 Vincent Sanders <vince@simtec.co.uk>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,12 +22,12 @@
 #include <assert.h>
 #include <stdlib.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/utils.h"
 #include "utils/utf8.h"
-#include "netsurf/utf8.h"
-#include "netsurf/layout.h"
-#include "netsurf/plot_style.h"
+#include "slate/utf8.h"
+#include "slate/layout.h"
+#include "slate/plot_style.h"
 
 #include "framebuffer/gui.h"
 #include "framebuffer/font.h"
@@ -212,8 +212,8 @@ int
 fb_get_font_size(const plot_font_style_t *fstyle)
 {
 	int size = fstyle->size * 10 /
-			(((nsoption_int(font_min_size) * 3 +
-			   nsoption_int(font_size)) / 4) * PLOT_STYLE_SCALE);
+			(((slateoption_int(font_min_size) * 3 +
+			   slateoption_int(font_size)) / 4) * PLOT_STYLE_SCALE);
 	if (size > 2)
 		size = 2;
 	else if (size <= 0)
@@ -328,7 +328,7 @@ fb_get_glyph(uint32_t ucs4, enum fb_font_style style, int scale)
 	return glyph_data;
 }
 
-static nserror utf8_to_local(const char *string,
+static slateerror utf8_to_local(const char *string,
 				       size_t len,
 				       char **result)
 {
@@ -336,25 +336,25 @@ static nserror utf8_to_local(const char *string,
 
 }
 
-static nserror utf8_from_local(const char *string,
+static slateerror utf8_from_local(const char *string,
 					size_t len,
 					char **result)
 {
 	*result = malloc(len + 1);
 	if (*result == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	memcpy(*result, string, len);
 
 	(*result)[len] = '\0';
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in framebuffer/freetype_font.h */
-nserror
+slateerror
 fb_font_width(const plot_font_style_t *fstyle,
 	      const char *string,
 	      size_t length,
@@ -374,12 +374,12 @@ fb_font_width(const plot_font_style_t *fstyle,
         }
 
 	*width *= fb_get_font_size(fstyle);
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in framebuffer/freetype_font.h */
-nserror
+slateerror
 fb_font_position(const plot_font_style_t *fstyle,
 		 const char *string,
 		 size_t length,
@@ -407,7 +407,7 @@ fb_font_position(const plot_font_style_t *fstyle,
         *actual_x = x_pos;
 
         *char_offset = nxtchr;
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -433,7 +433,7 @@ fb_font_position(const plot_font_style_t *fstyle,
  *
  * Returning char_offset == length means no split possible
  */
-static nserror
+static slateerror
 fb_font_split(const plot_font_style_t *fstyle,
 	      const char *string,
 	      size_t length,
@@ -465,7 +465,7 @@ fb_font_split(const plot_font_style_t *fstyle,
                          * found a space; return previous space */
                         *actual_x = last_space_x;
                         *char_offset = last_space_idx;
-                        return NSERROR_OK;
+                        return SLATEERROR_OK;
                 }
 
                 nxtchr = utf8_next(string, length, nxtchr);
@@ -473,7 +473,7 @@ fb_font_split(const plot_font_style_t *fstyle,
 
         *char_offset = nxtchr;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 

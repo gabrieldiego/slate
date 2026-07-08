@@ -24,7 +24,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#include "netsurf/types.h"
+#include "slate/types.h"
 
 #include "image/image_cache.h"
 
@@ -39,7 +39,7 @@ bool fetch_about_imagecache_handler(struct fetch_about_context *ctx)
 	int slen;
 	unsigned int cent_loop = 0;
 	int elen = 0; /* entry length */
-	nserror res;
+	slateerror res;
 	bool even = false;
 
 	/* content is going to return ok */
@@ -58,7 +58,7 @@ bool fetch_about_imagecache_handler(struct fetch_about_context *ctx)
 		"</head>\n"
 		"<body id =\"cachelist\" class=\"ns-even-bg ns-even-fg ns-border\">\n"
 		"<h1 class=\"ns-border\">Image Cache Status</h1>\n");
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_imagecache_handler_aborted;
 	}
 
@@ -78,7 +78,7 @@ bool fetch_about_imagecache_handler(struct fetch_about_context *ctx)
 	}
 
 	res = fetch_about_senddata(ctx, (const uint8_t *)buffer, slen);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_imagecache_handler_aborted;
 	}
 
@@ -99,7 +99,7 @@ bool fetch_about_imagecache_handler(struct fetch_about_context *ctx)
 	}
 
 	res = fetch_about_senddata(ctx, (const uint8_t *)buffer, slen);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_imagecache_handler_aborted;
 	}
 
@@ -115,7 +115,7 @@ bool fetch_about_imagecache_handler(struct fetch_about_context *ctx)
 			"<span>Bitmap Size</span>"
 			"<span>Source</span>"
 			"</strong>\n");
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_imagecache_handler_aborted;
 	}
 
@@ -158,7 +158,7 @@ bool fetch_about_imagecache_handler(struct fetch_about_context *ctx)
 			res = fetch_about_senddata(ctx,
 						   (const uint8_t *)buffer,
 						   slen);
-			if (res != NSERROR_OK) {
+			if (res != SLATEERROR_OK) {
 				goto fetch_about_imagecache_handler_aborted;
 			}
 
@@ -175,7 +175,7 @@ bool fetch_about_imagecache_handler(struct fetch_about_context *ctx)
 			 "</p>\n</body>\n</html>\n");
 
 	res = fetch_about_senddata(ctx, (const uint8_t *)buffer, slen);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		goto fetch_about_imagecache_handler_aborted;
 	}
 

@@ -2,7 +2,7 @@
  * Copyright 2006 Richard Wilson <info@tinct.net>
  * Copyright 2010 Stephen Fryatt <stevef@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,8 +28,8 @@
  * The destructor is called once during browser shutdown
  */
 
-#ifndef NETSURF_RISCOS_COOKIES_H
-#define NETSURF_RISCOS_COOKIES_H
+#ifndef SLATE_RISCOS_COOKIES_H
+#define SLATE_RISCOS_COOKIES_H
 
 /**
  * initialise the cookies window template ready for subsequent use.
@@ -39,16 +39,16 @@ void ro_gui_cookies_initialise(void);
 /**
  * make the cookie window visible.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-nserror ro_gui_cookies_present(const char *search_term);
+slateerror ro_gui_cookies_present(const char *search_term);
 
 /**
  * Free any resources allocated for the cookie window.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-nserror ro_gui_cookies_finalise(void);
+slateerror ro_gui_cookies_finalise(void);
 
 /**
  * check if window handle is for the cookies window
@@ -60,4 +60,4 @@ bool ro_gui_cookies_check_window(wimp_w window);
  */
 bool ro_gui_cookies_check_menu(wimp_menu *menu);
 
-#endif /* NETSURF_RISCOS_COOKIES_H */
+#endif /* SLATE_RISCOS_COOKIES_H */

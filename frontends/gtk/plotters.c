@@ -2,7 +2,7 @@
  * Copyright 2006 Rob Kendrick <rjek@rjek.com>
  * Copyright 2005 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,8 +31,8 @@
 #include <gtk/gtk.h>
 
 #include "utils/log.h"
-#include "netsurf/plotters.h"
-#include "utils/nsoption.h"
+#include "slate/plotters.h"
+#include "utils/slateoption.h"
 
 #include "gtk/layout_pango.h"
 #include "gtk/plotters.h"
@@ -44,11 +44,11 @@ cairo_t *current_cr;
 static GdkRectangle cliprect;
 
 /**
- * Set cairo context colour to nsgtk colour.
+ * Set cairo context colour to slategtk colour.
  *
  * \param c the netsurf colour to set in cairo
  */
-void nsgtk_set_colour(colour c)
+void slategtk_set_colour(colour c)
 {
 	cairo_set_source_rgba(current_cr, 
 			      (c & 0xff) / 255.0, 
@@ -61,7 +61,7 @@ void nsgtk_set_colour(colour c)
 /**
  * Set cairo context to solid plot operation.
  */
-static inline void nsgtk_set_solid(void)
+static inline void slategtk_set_solid(void)
 {
 	double dashes = 0;
 	cairo_set_dash(current_cr, &dashes, 0, 0);
@@ -71,7 +71,7 @@ static inline void nsgtk_set_solid(void)
 /**
  * Set cairo context to dotted plot operation.
  */
-static inline void nsgtk_set_dotted(void)
+static inline void slategtk_set_dotted(void)
 {
 	double cdashes[] = { 1.0, 2.0 };
 	cairo_set_dash(current_cr, cdashes, 2, 0);
@@ -81,7 +81,7 @@ static inline void nsgtk_set_dotted(void)
 /**
  * Set cairo context to dashed plot operation.
  */
-static inline void nsgtk_set_dashed(void)
+static inline void slategtk_set_dashed(void)
 {
 	double cdashes[] = { 8.0, 2.0 };
 	cairo_set_dash(current_cr, cdashes, 2, 0);
@@ -91,7 +91,7 @@ static inline void nsgtk_set_dashed(void)
 /**
  * Set cairo context line width.
  */
-static inline void nsgtk_set_line_width(plot_style_fixed width)
+static inline void slategtk_set_line_width(plot_style_fixed width)
 {
 	if (width == 0) {
 		cairo_set_line_width(current_cr, 1);
@@ -108,10 +108,10 @@ static inline void nsgtk_set_line_width(plot_style_fixed width)
  * \param ctx The current redraw context.
  * \param clip The rectangle to limit all subsequent plot
  *              operations within.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsgtk_plot_clip(const struct redraw_context *ctx, const struct rect *clip)
+static slateerror
+slategtk_plot_clip(const struct redraw_context *ctx, const struct rect *clip)
 {
 	cairo_reset_clip(current_cr);
 	cairo_rectangle(current_cr, clip->x0, clip->y0,
@@ -123,7 +123,7 @@ nsgtk_plot_clip(const struct redraw_context *ctx, const struct rect *clip)
 	cliprect.width = clip->x1 - clip->x0;
 	cliprect.height = clip->y1 - clip->y0;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -141,15 +141,15 @@ nsgtk_plot_clip(const struct redraw_context *ctx, const struct rect *clip)
  * \param radius The radius of the arc.
  * \param angle1 The start angle of the arc.
  * \param angle2 The finish angle of the arc.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsgtk_plot_arc(const struct redraw_context *ctx,
+static slateerror
+slategtk_plot_arc(const struct redraw_context *ctx,
 	       const plot_style_t *style,
 	       int x, int y, int radius, int angle1, int angle2)
 {
-	nsgtk_set_colour(style->fill_colour);
-	nsgtk_set_solid();
+	slategtk_set_colour(style->fill_colour);
+	slategtk_set_solid();
 
 	cairo_set_line_width(current_cr, 1);
 	cairo_arc(current_cr, x, y, radius,
@@ -157,7 +157,7 @@ nsgtk_plot_arc(const struct redraw_context *ctx,
 		  (angle2 + 90) * (M_PI / 180));
 	cairo_stroke(current_cr);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -171,16 +171,16 @@ nsgtk_plot_arc(const struct redraw_context *ctx,
  * \param x x coordinate of circle centre.
  * \param y y coordinate of circle centre.
  * \param radius circle radius.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsgtk_plot_disc(const struct redraw_context *ctx,
+static slateerror
+slategtk_plot_disc(const struct redraw_context *ctx,
 		const plot_style_t *style,
 		int x, int y, int radius)
 {
 	if (style->fill_type != PLOT_OP_TYPE_NONE) {
-		nsgtk_set_colour(style->fill_colour);
-		nsgtk_set_solid();
+		slategtk_set_colour(style->fill_colour);
+		slategtk_set_solid();
 		cairo_set_line_width(current_cr, 0);
 		cairo_arc(current_cr, x, y, radius, 0, M_PI * 2);
 		cairo_fill(current_cr);
@@ -188,31 +188,31 @@ nsgtk_plot_disc(const struct redraw_context *ctx,
 	}
 
 	if (style->stroke_type != PLOT_OP_TYPE_NONE) {
-		nsgtk_set_colour(style->stroke_colour);
+		slategtk_set_colour(style->stroke_colour);
 
 		switch (style->stroke_type) {
 		case PLOT_OP_TYPE_SOLID: /* Solid colour */
 		default:
-			nsgtk_set_solid();
+			slategtk_set_solid();
 			break;
 
 		case PLOT_OP_TYPE_DOT: /* Doted plot */
-			nsgtk_set_dotted();
+			slategtk_set_dotted();
 			break;
 
 		case PLOT_OP_TYPE_DASH: /* dashed plot */
-			nsgtk_set_dashed();
+			slategtk_set_dashed();
 			break;
 		}
 
-		nsgtk_set_line_width(style->stroke_width);
+		slategtk_set_line_width(style->stroke_width);
 
 		cairo_arc(current_cr, x, y, radius, 0, M_PI * 2);
 
 		cairo_stroke(current_cr);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -225,35 +225,35 @@ nsgtk_plot_disc(const struct redraw_context *ctx,
  * \param ctx The current redraw context.
  * \param style Style controlling the line plot.
  * \param line A rectangle defining the line to be drawn
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsgtk_plot_line(const struct redraw_context *ctx,
+static slateerror
+slategtk_plot_line(const struct redraw_context *ctx,
 		const plot_style_t *style,
 		const struct rect *line)
 {
-	nsgtk_set_colour(style->stroke_colour);
+	slategtk_set_colour(style->stroke_colour);
 
 	switch (style->stroke_type) {
 	case PLOT_OP_TYPE_SOLID: /* Solid colour */
 	default:
-		nsgtk_set_solid();
+		slategtk_set_solid();
 		break;
 
 	case PLOT_OP_TYPE_DOT: /* Doted plot */
-		nsgtk_set_dotted();
+		slategtk_set_dotted();
 		break;
 
 	case PLOT_OP_TYPE_DASH: /* dashed plot */
-		nsgtk_set_dashed();
+		slategtk_set_dashed();
 		break;
 	}
 
 	if (style->stroke_type != PLOT_OP_TYPE_NONE) {
-		nsgtk_set_colour(style->stroke_colour);
+		slategtk_set_colour(style->stroke_colour);
 	}
 
-	nsgtk_set_line_width(style->stroke_width);
+	slategtk_set_line_width(style->stroke_width);
 
 	/* core expects horizontal and vertical lines to be on pixels, not
 	 * between pixels
@@ -266,7 +266,7 @@ nsgtk_plot_line(const struct redraw_context *ctx,
 		      (line->y0 == line->y1) ? line->y1 + 0.5 : line->y1);
 	cairo_stroke(current_cr);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -275,10 +275,10 @@ nsgtk_plot_line(const struct redraw_context *ctx,
  *
  * @note It is assumed that the plotters have been set up.
  */
-void nsgtk_plot_caret(int x, int y, int h)
+void slategtk_plot_caret(int x, int y, int h)
 {
-	nsgtk_set_solid(); /* solid line */
-	nsgtk_set_colour(0); /* black */
+	slategtk_set_solid(); /* solid line */
+	slategtk_set_colour(0); /* black */
 	cairo_set_line_width(current_cr, 1); /* thin line */
 
 	/* core expects horizontal and vertical lines to be on pixels, not
@@ -300,16 +300,16 @@ void nsgtk_plot_caret(int x, int y, int h)
  * \param ctx The current redraw context.
  * \param style Style controlling the rectangle plot.
  * \param rect A rectangle defining the line to be drawn
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsgtk_plot_rectangle(const struct redraw_context *ctx,
+static slateerror
+slategtk_plot_rectangle(const struct redraw_context *ctx,
 		     const plot_style_t *style,
 		     const struct rect *rect)
 {
 	if (style->fill_type != PLOT_OP_TYPE_NONE) {
-		nsgtk_set_colour(style->fill_colour);
-		nsgtk_set_solid();
+		slategtk_set_colour(style->fill_colour);
+		slategtk_set_solid();
 
 		cairo_set_line_width(current_cr, 0);
 		cairo_rectangle(current_cr,
@@ -322,24 +322,24 @@ nsgtk_plot_rectangle(const struct redraw_context *ctx,
 	}
 
 	if (style->stroke_type != PLOT_OP_TYPE_NONE) {
-		nsgtk_set_colour(style->stroke_colour);
+		slategtk_set_colour(style->stroke_colour);
 
 		switch (style->stroke_type) {
 		case PLOT_OP_TYPE_SOLID: /* Solid colour */
 		default:
-			nsgtk_set_solid();
+			slategtk_set_solid();
 			break;
 
 		case PLOT_OP_TYPE_DOT: /* Doted plot */
-			nsgtk_set_dotted();
+			slategtk_set_dotted();
 			break;
 
 		case PLOT_OP_TYPE_DASH: /* dashed plot */
-			nsgtk_set_dashed();
+			slategtk_set_dashed();
 			break;
 		}
 
-		nsgtk_set_line_width(style->stroke_width);
+		slategtk_set_line_width(style->stroke_width);
 
 		cairo_rectangle(current_cr,
 				rect->x0 + 0.5,
@@ -348,7 +348,7 @@ nsgtk_plot_rectangle(const struct redraw_context *ctx,
 				rect->y1 - rect->y0);
 		cairo_stroke(current_cr);
 	}
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -364,18 +364,18 @@ nsgtk_plot_rectangle(const struct redraw_context *ctx,
  * \param style Style controlling the polygon plot.
  * \param p verticies of polygon
  * \param n number of verticies.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsgtk_plot_polygon(const struct redraw_context *ctx,
+static slateerror
+slategtk_plot_polygon(const struct redraw_context *ctx,
 		   const plot_style_t *style,
 		   const int *p,
 		   unsigned int n)
 {
 	unsigned int i;
 
-	nsgtk_set_colour(style->fill_colour);
-	nsgtk_set_solid();
+	slategtk_set_colour(style->fill_colour);
+	slategtk_set_solid();
 
 	cairo_set_line_width(current_cr, 0);
 	cairo_move_to(current_cr, p[0], p[1]);
@@ -385,7 +385,7 @@ nsgtk_plot_polygon(const struct redraw_context *ctx,
 	cairo_fill(current_cr);
 	cairo_stroke(current_cr);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -412,10 +412,10 @@ nsgtk_plot_polygon(const struct redraw_context *ctx,
  * \param p elements of path
  * \param n nunber of elements on path
  * \param transform A transform to apply to the path.
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsgtk_plot_path(const struct redraw_context *ctx,
+static slateerror
+slategtk_plot_path(const struct redraw_context *ctx,
 		const plot_style_t *pstyle,
 		const float *p,
 		unsigned int n,
@@ -425,19 +425,19 @@ nsgtk_plot_path(const struct redraw_context *ctx,
 	cairo_matrix_t old_ctm, n_ctm;
 
 	if (n == 0)
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 
 	if (p[0] != PLOTTER_PATH_MOVE) {
 		NSLOG(netsurf, INFO, "Path does not start with move");
-		return NSERROR_INVALID;
+		return SLATEERROR_INVALID;
 	}
 
 	/* Save CTM */
 	cairo_get_matrix(current_cr, &old_ctm);
 
 	/* Set up line style and width */
-	nsgtk_set_line_width(pstyle->stroke_width);
-	nsgtk_set_solid();
+	slategtk_set_line_width(pstyle->stroke_width);
+	slategtk_set_solid();
 
 	/* Load new CTM */
 	n_ctm.xx = transform[0];
@@ -469,7 +469,7 @@ nsgtk_plot_path(const struct redraw_context *ctx,
 			NSLOG(netsurf, INFO, "bad path command %f", p[i]);
 			/* Reset matrix for safety */
 			cairo_set_matrix(current_cr, &old_ctm);
-			return NSERROR_INVALID;
+			return SLATEERROR_INVALID;
 		}
 	}
 
@@ -478,12 +478,12 @@ nsgtk_plot_path(const struct redraw_context *ctx,
 
 	/* Now draw path */
 	if (pstyle->fill_colour != NS_TRANSPARENT) {
-		nsgtk_set_colour(pstyle->fill_colour);
+		slategtk_set_colour(pstyle->fill_colour);
 
 		if (pstyle->stroke_colour != NS_TRANSPARENT) {
 			/* Fill & Stroke */
 			cairo_fill_preserve(current_cr);
-			nsgtk_set_colour(pstyle->stroke_colour);
+			slategtk_set_colour(pstyle->stroke_colour);
 			cairo_stroke(current_cr);
 		} else {
 			/* Fill only */
@@ -491,11 +491,11 @@ nsgtk_plot_path(const struct redraw_context *ctx,
 		}
 	} else if (pstyle->stroke_colour != NS_TRANSPARENT) {
 		/* Stroke only */
-		nsgtk_set_colour(pstyle->stroke_colour);
+		slategtk_set_colour(pstyle->stroke_colour);
 		cairo_stroke(current_cr);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -521,10 +521,10 @@ nsgtk_plot_path(const struct redraw_context *ctx,
  * \param height The height of area to plot the bitmap into
  * \param bg the background colour to alpha blend into
  * \param flags the flags controlling the type of plot operation
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsgtk_plot_bitmap(const struct redraw_context *ctx,
+static slateerror
+slategtk_plot_bitmap(const struct redraw_context *ctx,
 		  struct bitmap *bitmap,
 		  int x, int y,
 		  int width,
@@ -541,7 +541,7 @@ nsgtk_plot_bitmap(const struct redraw_context *ctx,
 	/* Bail early if we can */
 	if (width <= 0 || height <= 0) {
 		/* Nothing to plot */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* Copy the clip rectangle into bitmap plot clip rectangle */
@@ -570,7 +570,7 @@ nsgtk_plot_bitmap(const struct redraw_context *ctx,
 	/* Bail early if we can */
 	if (cliprect_bitmap.width <= 0 || cliprect_bitmap.height <= 0) {
 		/* Nothing to plot */
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	/* Get the image's surface and intrinsic dimensions */
@@ -628,7 +628,7 @@ nsgtk_plot_bitmap(const struct redraw_context *ctx,
 		cairo_restore(current_cr);
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -641,10 +641,10 @@ nsgtk_plot_bitmap(const struct redraw_context *ctx,
  * \param y y coordinate
  * \param text UTF-8 string to plot
  * \param length length of string, in bytes
- * \return NSERROR_OK on success else error code.
+ * \return SLATEERROR_OK on success else error code.
  */
-static nserror
-nsgtk_plot_text(const struct redraw_context *ctx,
+static slateerror
+slategtk_plot_text(const struct redraw_context *ctx,
 		const struct plot_font_style *fstyle,
 		int x,
 		int y,
@@ -656,15 +656,15 @@ nsgtk_plot_text(const struct redraw_context *ctx,
 
 
 /** GTK plotter table */
-const struct plotter_table nsgtk_plotters = {
-	.clip = nsgtk_plot_clip,
-	.arc = nsgtk_plot_arc,
-	.disc = nsgtk_plot_disc,
-	.line = nsgtk_plot_line,
-	.rectangle = nsgtk_plot_rectangle,
-	.polygon = nsgtk_plot_polygon,
-	.path = nsgtk_plot_path,
-	.bitmap = nsgtk_plot_bitmap,
-	.text = nsgtk_plot_text,
+const struct plotter_table slategtk_plotters = {
+	.clip = slategtk_plot_clip,
+	.arc = slategtk_plot_arc,
+	.disc = slategtk_plot_disc,
+	.line = slategtk_plot_line,
+	.rectangle = slategtk_plot_rectangle,
+	.polygon = slategtk_plot_polygon,
+	.path = slategtk_plot_path,
+	.bitmap = slategtk_plot_bitmap,
+	.text = slategtk_plot_text,
 	.option_knockout = true
 };

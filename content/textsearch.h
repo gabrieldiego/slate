@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 Mark Benjamin <netsurf-browser.org.MarkBenjamin@dfgh.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
  * Interface to HTML searching.
  */
 
-#ifndef NETSURF_CONTENT_SEARCH_H
-#define NETSURF_CONTENT_SEARCH_H
+#ifndef SLATE_CONTENT_SEARCH_H
+#define SLATE_CONTENT_SEARCH_H
 
 #include "desktop/search.h"
 
@@ -38,22 +38,22 @@ struct box;
  * \param[in] context The context passed to gui table search handlers
  * \param[in] flags The flags that control the search
  * \param[in] The string being searched for.
- * \retun NSERROR_OK on success else error code on faliure
+ * \retun SLATEERROR_OK on success else error code on faliure
  */
-nserror content_textsearch(struct hlcache_handle *h, void *context, search_flags_t flags, const char *string);
+slateerror content_textsearch(struct hlcache_handle *h, void *context, search_flags_t flags, const char *string);
 
 /**
  * Clear a search
  *
  * \param[in] h Handle to content to clear search from.
  */
-nserror content_textsearch_clear(struct hlcache_handle *h);
+slateerror content_textsearch_clear(struct hlcache_handle *h);
 
 /**
  * Ends the search process, invalidating all state freeing the list of
  * found boxes.
  */
-nserror content_textsearch_destroy(struct textsearch_context *textsearch);
+slateerror content_textsearch_destroy(struct textsearch_context *textsearch);
 
 /**
  * Determines whether any portion of the given text box should be
@@ -94,8 +94,8 @@ const char *content_textsearch_find_pattern(const char *string, int s_len, const
  * \param end_idx Offset of match end
  * \param start A pointer for the start
  * \param end A pointer for the end
- * \return NSERROR_OK on sucess else error code on faliure
+ * \return SLATEERROR_OK on sucess else error code on faliure
  */
-nserror content_textsearch_add_match(struct textsearch_context *context, unsigned start_idx, unsigned end_idx, struct box *start_ptr, struct box *end_ptr);
+slateerror content_textsearch_add_match(struct textsearch_context *context, unsigned start_idx, unsigned end_idx, struct box *start_ptr, struct box *end_ptr);
 
 #endif

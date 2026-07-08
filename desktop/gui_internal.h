@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,14 +24,14 @@
  * \note must not be used by frontends directly.
  */
 
-#ifndef _NETSURF_DESKTOP_GUI_INTERNAL_H_
-#define _NETSURF_DESKTOP_GUI_INTERNAL_H_
+#ifndef _SLATE_DESKTOP_GUI_INTERNAL_H_
+#define _SLATE_DESKTOP_GUI_INTERNAL_H_
 
 #include "desktop/gui_table.h"
 
 /**
  * The global operation table.
  */
-extern struct netsurf_table *guit;
+extern struct slate_table *guit;
 
 #endif

@@ -2,7 +2,7 @@
  * Copyright 2006 Rob Kendrick <rjek@rjek.com>
  * Copyright 2009 Paul Blokus <paul_pl@users.sourceforge.net> 
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,20 +22,20 @@
  * Interface to GTK global history manager
  */
 
-#ifndef __NSGTK_HISTORY_H__
-#define __NSGTK_HISTORY_H__
+#ifndef __SLATEGTK_HISTORY_H__
+#define __SLATEGTK_HISTORY_H__
 
 /**
  * make the global history window visible.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-nserror nsgtk_global_history_present(void);
+slateerror slategtk_global_history_present(void);
 
 /**
  * Destroys the global history window and performs any other necessary cleanup
  * actions.
  */
-nserror nsgtk_global_history_destroy(void);
+slateerror slategtk_global_history_destroy(void);
 
 #endif

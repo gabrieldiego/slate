@@ -1,7 +1,7 @@
 /*
  * Copyright 2011 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,8 +20,8 @@
  * GDK support functions for missing interfaces
  */
 
-#ifndef NETSURF_GTK_GDK_H_
-#define NETSURF_GTK_GDK_H_
+#ifndef SLATE_GTK_GDK_H_
+#define SLATE_GTK_GDK_H_
 
 #include <gtk/gtk.h>
 
@@ -32,4 +32,4 @@
  */
 GdkPixbuf *nsgdk_pixbuf_get_from_surface(cairo_surface_t *surface, int width, int height);
 
-#endif /* NETSURF_GTK_GDK_H */
+#endif /* SLATE_GTK_GDK_H */

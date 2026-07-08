@@ -2,7 +2,7 @@
  * Copyright 2010, 2013 Stephen Fryatt <stevef@netsurf-browser.org>
  * Copyright 2016 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,12 +29,12 @@
 
 #include "utils/log.h"
 #include "utils/messages.h"
-#include "utils/nsoption.h"
-#include "utils/nsurl.h"
-#include "netsurf/url_db.h"
-#include "netsurf/window.h"
-#include "netsurf/plotters.h"
-#include "netsurf/keypress.h"
+#include "utils/slateoption.h"
+#include "utils/slateurl.h"
+#include "slate/url_db.h"
+#include "slate/window.h"
+#include "slate/plotters.h"
+#include "slate/keypress.h"
 #include "desktop/hotlist.h"
 
 #include "riscos/gui.h"
@@ -65,7 +65,7 @@ static wimp_window *dialog_hotlist_template;
 
 /** Hotlist Query Handler. */
 static query_id	hotlist_query = QUERY_INVALID;
-static nsurl *hotlist_delete_url = NULL;
+static slateurl *hotlist_delete_url = NULL;
 
 /**
  * URL adding hotlist protocol message block.
@@ -101,9 +101,9 @@ static char *hotlist_title = NULL;
  * \param r The rectangle of the window that needs updating.
  * \param originx The risc os plotter x origin.
  * \param originy The risc os plotter y origin.
- * \return NSERROR_OK on success otherwise apropriate error code
+ * \return SLATEERROR_OK on success otherwise apropriate error code
  */
-static nserror
+static slateerror
 hotlist_draw(struct ro_corewindow *ro_cw,
 	     int originx,
 	     int originy,
@@ -121,7 +121,7 @@ hotlist_draw(struct ro_corewindow *ro_cw,
 	hotlist_redraw(0, 0, r, &ctx);
 	no_font_blending = false;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -130,16 +130,16 @@ hotlist_draw(struct ro_corewindow *ro_cw,
  *
  * \param ro_cw The ro core window structure.
  * \param nskey The netsurf key code.
- * \return NSERROR_OK if key processed,
- *         NSERROR_NOT_IMPLEMENTED if key not processed
+ * \return SLATEERROR_OK if key processed,
+ *         SLATEERROR_NOT_IMPLEMENTED if key not processed
  *         otherwise apropriate error code
  */
-static nserror hotlist_key(struct ro_corewindow *ro_cw, uint32_t nskey)
+static slateerror hotlist_key(struct ro_corewindow *ro_cw, uint32_t nskey)
 {
 	if (hotlist_keypress(nskey)) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
-	return NSERROR_NOT_IMPLEMENTED;
+	return SLATEERROR_NOT_IMPLEMENTED;
 }
 
 
@@ -150,16 +150,16 @@ static nserror hotlist_key(struct ro_corewindow *ro_cw, uint32_t nskey)
  * \param mouse_state mouse state
  * \param x location of event
  * \param y location of event
- * \return NSERROR_OK on sucess otherwise apropriate error code.
+ * \return SLATEERROR_OK on sucess otherwise apropriate error code.
  */
-static nserror
+static slateerror
 hotlist_mouse(struct ro_corewindow *ro_cw,
 	      browser_mouse_state mouse_state,
 	      int x, int y)
 {
 	hotlist_mouse_action(mouse_state, x, y);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -168,9 +168,9 @@ hotlist_mouse(struct ro_corewindow *ro_cw,
  *
  * \param ro_cw The ro core window structure.
  * \param action The button bar action.
- * \return NSERROR_OK if config saved, otherwise apropriate error code
+ * \return SLATEERROR_OK if config saved, otherwise apropriate error code
  */
-static nserror
+static slateerror
 hotlist_toolbar_click(struct ro_corewindow *ro_cw, button_bar_action action)
 {
 	switch (action) {
@@ -207,7 +207,7 @@ hotlist_toolbar_click(struct ro_corewindow *ro_cw, button_bar_action action)
 		break;
 	}
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -215,9 +215,9 @@ hotlist_toolbar_click(struct ro_corewindow *ro_cw, button_bar_action action)
  * Handle updating state of buttons in ro core window toolbar.
  *
  * \param ro_cw The ro core window structure.
- * \return NSERROR_OK if config saved, otherwise apropriate error code
+ * \return SLATEERROR_OK if config saved, otherwise apropriate error code
  */
-static nserror hotlist_toolbar_update(struct ro_corewindow *ro_cw)
+static slateerror hotlist_toolbar_update(struct ro_corewindow *ro_cw)
 {
 	bool has_selection;
 
@@ -231,7 +231,7 @@ static nserror hotlist_toolbar_update(struct ro_corewindow *ro_cw)
 					   TOOLBAR_BUTTON_LAUNCH,
 					   !has_selection);
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -240,14 +240,14 @@ static nserror hotlist_toolbar_update(struct ro_corewindow *ro_cw)
  *
  * \param ro_cw The ro core window structure.
  * \param config The new toolbar configuration.
- * \return NSERROR_OK if config saved, otherwise apropriate error code
+ * \return SLATEERROR_OK if config saved, otherwise apropriate error code
  */
-static nserror hotlist_toolbar_save(struct ro_corewindow *ro_cw, char *config)
+static slateerror hotlist_toolbar_save(struct ro_corewindow *ro_cw, char *config)
 {
-	nsoption_set_charp(toolbar_hotlist, config);
+	slateoption_set_charp(toolbar_hotlist, config);
 	ro_gui_save_options();
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
@@ -419,13 +419,13 @@ hotlist_menu_select(wimp_w w,
 /**
  * Creates the window for the hotlist tree.
  *
- * \return NSERROR_OK on success else appropriate error code on faliure.
+ * \return SLATEERROR_OK on success else appropriate error code on faliure.
  */
-static nserror ro_hotlist_init(void)
+static slateerror ro_hotlist_init(void)
 {
 	os_error *error;
 	struct ro_hotlist_window *ncwin;
-	nserror res;
+	slateerror res;
 	static const struct ns_menu hotlist_menu_def = {
 		"Hotlist", {
 			{ "Hotlist", NO_ACTION, 0 },
@@ -464,12 +464,12 @@ static nserror ro_hotlist_init(void)
 	};
 
 	if (hotlist_window != NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	ncwin = calloc(1, sizeof(*ncwin));
 	if (ncwin == NULL) {
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	/* create window from template */
@@ -479,7 +479,7 @@ static nserror ro_hotlist_init(void)
 		      error->errnum, error->errmess);
 		ro_warn_user("WimpError", error->errmess);
 		free(ncwin);
-		return NSERROR_NOMEM;
+		return SLATEERROR_NOMEM;
 	}
 
 	ro_gui_set_window_title(ncwin->core.wh, messages_get("Hotlist"));
@@ -496,16 +496,16 @@ static nserror ro_hotlist_init(void)
 	/* initialise core window */
 	res = ro_corewindow_init(&ncwin->core,
 				 hotlist_toolbar_buttons,
-				 nsoption_charp(toolbar_hotlist),
+				 slateoption_charp(toolbar_hotlist),
 				 THEME_STYLE_HOTLIST_TOOLBAR,
 				 "HelpHotToolbar");
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		free(ncwin);
 		return res;
 	}
 
 	res = hotlist_manager_init((struct core_window *)ncwin);
-	if (res != NSERROR_OK) {
+	if (res != SLATEERROR_OK) {
 		free(ncwin);
 		return res;
 	}
@@ -531,28 +531,28 @@ static nserror ro_hotlist_init(void)
 	 */
 	hotlist_window = ncwin;
 
-	return NSERROR_OK;
+	return SLATEERROR_OK;
 }
 
 
 /* exported interface documented in riscos/hotlist.h */
-nserror ro_gui_hotlist_present(void)
+slateerror ro_gui_hotlist_present(void)
 {
-	nserror res;
+	slateerror res;
 
 	/* deal with external hotlist handler */
-	if (nsoption_bool(external_hotlists) &&
-	    (nsoption_charp(external_hotlist_app) != NULL) &&
-	    (*nsoption_charp(external_hotlist_app) != '\0')) {
+	if (slateoption_bool(external_hotlists) &&
+	    (slateoption_charp(external_hotlist_app) != NULL) &&
+	    (*slateoption_charp(external_hotlist_app) != '\0')) {
 		char command[2048];
 		os_error *error;
 
 		snprintf(command, sizeof(command), "Filer_Run %s",
-			 nsoption_charp(external_hotlist_app));
+			 slateoption_charp(external_hotlist_app));
 		error = xos_cli(command);
 
 		if (error == NULL) {
-			return NSERROR_OK;
+			return SLATEERROR_OK;
 		}
 
 		NSLOG(netsurf, INFO, "xos_cli: 0x%x: %s", error->errnum,
@@ -562,7 +562,7 @@ nserror ro_gui_hotlist_present(void)
 	}
 
 	res = ro_hotlist_init();
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		NSLOG(netsurf, INFO, "Presenting");
 		ro_gui_dialog_open_top(hotlist_window->core.wh,
 				       hotlist_window->core.toolbar,
@@ -583,16 +583,16 @@ void ro_gui_hotlist_initialise(void)
 
 
 /* exported interface documented in riscos/hotlist.h */
-nserror ro_gui_hotlist_finalise(void)
+slateerror ro_gui_hotlist_finalise(void)
 {
-	nserror res;
+	slateerror res;
 
 	if (hotlist_window == NULL) {
-		return NSERROR_OK;
+		return SLATEERROR_OK;
 	}
 
 	res = hotlist_fini();
-	if (res == NSERROR_OK) {
+	if (res == SLATEERROR_OK) {
 		res = ro_corewindow_fini(&hotlist_window->core);
 
 		free(hotlist_window);
@@ -646,13 +646,13 @@ static void ro_gui_hotlist_scheduled_callback(void *p)
 static void ro_gui_hotlist_addurl_bounce(wimp_message *message)
 {
 	if (hotlist_url != NULL) {
-		nsurl *nsurl;
+		slateurl *slateurl;
 
-		if (nsurl_create(hotlist_url, &nsurl) != NSERROR_OK)
+		if (slateurl_create(hotlist_url, &slateurl) != SLATEERROR_OK)
 			return;
 
-		hotlist_add_url(nsurl);
-		nsurl_unref(nsurl);
+		hotlist_add_url(slateurl);
+		slateurl_unref(slateurl);
 	}
 
 	ro_gui_hotlist_add_cleanup();
@@ -664,7 +664,7 @@ static void ro_gui_hotlist_addurl_bounce(wimp_message *message)
 
 
 /* exported interface documented in riscos/hotlist.h */
-void ro_gui_hotlist_add_page(nsurl *url)
+void ro_gui_hotlist_add_page(slateurl *url)
 {
 	const struct url_data *data;
 	wimp_message message;
@@ -678,7 +678,7 @@ void ro_gui_hotlist_add_page(nsurl *url)
 	/* If we're not using external hotlists, add the page to NetSurf's
 	 * own hotlist and return...
 	 */
-	if (!nsoption_bool(external_hotlists)) {
+	if (!slateoption_bool(external_hotlists)) {
 		hotlist_add_url(url);
 		return;
 	}
@@ -694,7 +694,7 @@ void ro_gui_hotlist_add_page(nsurl *url)
 	if (data == NULL)
 		return;
 
-	hotlist_url = osmodule_alloc(nsurl_length(url) + 1);
+	hotlist_url = osmodule_alloc(slateurl_length(url) + 1);
 	hotlist_title = osmodule_alloc(strlen(data->title) + 1);
 
 	if (hotlist_url == NULL || hotlist_title == NULL) {
@@ -702,7 +702,7 @@ void ro_gui_hotlist_add_page(nsurl *url)
 		return;
 	}
 
-	strcpy(hotlist_url, nsurl_access(url));
+	strcpy(hotlist_url, slateurl_access(url));
 	strcpy(hotlist_title, data->title);
 
 	add_url->size = 60;
@@ -754,7 +754,7 @@ ro_gui_hotlist_remove_confirmed(query_id id, enum query_response res, void *p)
 	hotlist_remove_url(hotlist_delete_url);
 	ro_toolbar_update_all_hotlists();
 
-	nsurl_unref(hotlist_delete_url);
+	slateurl_unref(hotlist_delete_url);
 	hotlist_delete_url = NULL;
 	hotlist_query = QUERY_INVALID;
 }
@@ -770,7 +770,7 @@ ro_gui_hotlist_remove_confirmed(query_id id, enum query_response res, void *p)
 static void
 ro_gui_hotlist_remove_cancelled(query_id id, enum query_response res, void *p)
 {
-	nsurl_unref(hotlist_delete_url);
+	slateurl_unref(hotlist_delete_url);
 	hotlist_delete_url = NULL;
 	hotlist_query = QUERY_INVALID;
 }
@@ -786,10 +786,10 @@ static const query_callback remove_funcs = {
 
 
 /* exported interface documented in riscos/hotlist.h */
-void ro_gui_hotlist_remove_page(nsurl *url)
+void ro_gui_hotlist_remove_page(slateurl *url)
 {
 	if ((url == NULL) ||
-	    nsoption_bool(external_hotlists) ||
+	    slateoption_bool(external_hotlists) ||
 	    !hotlist_has_url(url)) {
 		return;
 	}
@@ -801,20 +801,20 @@ void ro_gui_hotlist_remove_page(nsurl *url)
 	}
 
 	if (hotlist_delete_url != NULL) {
-		nsurl_unref(hotlist_delete_url);
+		slateurl_unref(hotlist_delete_url);
 		hotlist_delete_url = NULL;
 	}
 
 	/* Check with the user before removing the URL, unless they don't
 	 * want us to be careful in which case just do it.
 	 */
-	if (nsoption_bool(confirm_hotlist_remove)) {
+	if (slateoption_bool(confirm_hotlist_remove)) {
 		hotlist_query = query_user("RemoveHotlist", NULL,
 					   &remove_funcs, NULL,
 					   messages_get("Remove"),
 					   messages_get("DontRemove"));
 
-		hotlist_delete_url = nsurl_ref(url);
+		hotlist_delete_url = slateurl_ref(url);
 	} else {
 		hotlist_remove_url(url);
 		ro_toolbar_update_all_hotlists();
@@ -823,10 +823,10 @@ void ro_gui_hotlist_remove_page(nsurl *url)
 
 
 /* exported interface documented in riscos/hotlist.h */
-bool ro_gui_hotlist_has_page(nsurl *url)
+bool ro_gui_hotlist_has_page(slateurl *url)
 {
 	if ((url == NULL) ||
-	    nsoption_bool(external_hotlists)) {
+	    slateoption_bool(external_hotlists)) {
 		return false;
 	}
 

@@ -1,7 +1,7 @@
 /*
  * Copyright 2023 Vincent Sanders <vince@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,20 +16,20 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_QT_MISC_H
-#define NETSURF_QT_MISC_H 1
+#ifndef SLATE_QT_MISC_H
+#define SLATE_QT_MISC_H 1
 
 /**
  * qt miscellaneous (scheduling) operations table
  */
-extern struct gui_misc_table *nsqt_misc_table;
+extern struct gui_misc_table *slateqt_misc_table;
 
 /**
  * run and pending scheduling callbacks
  *
  * \return number of miliseconds before next scheduled event
  */
-int nsqt_schedule_run(void);
+int slateqt_schedule_run(void);
 
 /**
  * Schedule a callback.
@@ -38,7 +38,7 @@ int nsqt_schedule_run(void);
  *          negative value to remove any existing callback.
  * \param callback callback function
  * \param p user parameter passed to callback function
- * \return NSERROR_OK on sucess or appropriate error on faliure
+ * \return SLATEERROR_OK on sucess or appropriate error on faliure
  *
  * The callback function will be called as soon as possible
  * after the timeout has elapsed.
@@ -47,6 +47,6 @@ int nsqt_schedule_run(void);
  * reset the callback time to the newly specified value.
  *
  */
-nserror nsqt_schedule(int tival, void (*callback)(void *p), void *p);
+slateerror slateqt_schedule(int tival, void (*callback)(void *p), void *p);
 
 #endif

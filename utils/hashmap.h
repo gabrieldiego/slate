@@ -1,7 +1,7 @@
 /*
  * Copyright 2020 Daniel Silverstone <dsilvers@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NETSURF_HASHMAP_H
-#define NETSURF_HASHMAP_H
+#ifndef SLATE_HASHMAP_H
+#define SLATE_HASHMAP_H
 
 #include <stdint.h>
 #include <stdbool.h>

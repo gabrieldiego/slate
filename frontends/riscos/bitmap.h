@@ -1,7 +1,7 @@
 /*
  * Copyright 2004 James Bursa <bursa@users.sourceforge.net>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,10 +16,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _NETSURF_RISCOS_BITMAP_H_
-#define _NETSURF_RISCOS_BITMAP_H_
+#ifndef _SLATE_RISCOS_BITMAP_H_
+#define _SLATE_RISCOS_BITMAP_H_
 
-#include "netsurf/bitmap.h"
+#include "slate/bitmap.h"
 
 struct osspriteop_area;
 struct osspriteop_header;
@@ -60,7 +60,7 @@ struct osspriteop_area *riscos_bitmap_convert_8bpp(struct bitmap *bitmap);
  * \param content content structure to render
  * \return true on success and bitmap updated else false
  */
-nserror riscos_bitmap_render(struct bitmap *bitmap, struct hlcache_handle *content);
+slateerror riscos_bitmap_render(struct bitmap *bitmap, struct hlcache_handle *content);
 
 /**
  * Overlay a sprite onto the given bitmap

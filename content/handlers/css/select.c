@@ -1,7 +1,7 @@
 /*
  * Copyright 2009 John-Mark Bell <jmb@netsurf-browser.org>
  *
- * This file is part of NetSurf, http://www.netsurf-browser.org/
+ * This file is part of NetSurf, http://www.slate-browser.org/
  *
  * NetSurf is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,12 +20,12 @@
 #include <string.h>
 #include <strings.h>
 
-#include "utils/nsoption.h"
+#include "utils/slateoption.h"
 #include "utils/corestrings.h"
 #include "utils/log.h"
-#include "utils/nsurl.h"
-#include "netsurf/plot_style.h"
-#include "netsurf/url_db.h"
+#include "utils/slateurl.h"
+#include "slate/plot_style.h"
+#include "slate/url_db.h"
 #include "desktop/system_colour.h"
 
 #include "css/internal.h"
@@ -163,7 +163,7 @@ css_stylesheet *nscss_create_inline_style(const uint8_t *data, size_t len,
 	params.resolve_pw = NULL;
 	params.import = NULL;
 	params.import_pw = NULL;
-	params.color = ns_system_colour;
+	params.color = slate_system_colour;
 	params.color_pw = NULL;
 	params.font = NULL;
 	params.font_pw = NULL;
@@ -1471,8 +1471,8 @@ css_error node_is_link(void *pw, void *n, bool *match)
 css_error node_is_visited(void *pw, void *node, bool *match)
 {
 	nscss_select_ctx *ctx = pw;
-	nsurl *url;
-	nserror error;
+	slateurl *url;
+	slateerror error;
 	const struct url_data *data;
 
 	dom_exception exc;
@@ -1505,13 +1505,13 @@ css_error node_is_visited(void *pw, void *node, bool *match)
 	/* Make href absolute */
 	/* TODO: this duplicates what we do for box->href
 	 *       should we put the absolute URL on the dom node? */
-	error = nsurl_join(ctx->base_url, dom_string_data(s), &url);
+	error = slateurl_join(ctx->base_url, dom_string_data(s), &url);
 
 	/* Finished with href string */
 	dom_string_unref(s);
 
-	if (error != NSERROR_OK) {
-		/* Couldn't make nsurl object */
+	if (error != SLATEERROR_OK) {
+		/* Couldn't make slateurl object */
 		return CSS_NOMEM;
 	}
 
@@ -1522,7 +1522,7 @@ css_error node_is_visited(void *pw, void *node, bool *match)
 	if (data != NULL && data->visits > 0)
 		*match = true;
 
-	nsurl_unref(url);
+	slateurl_unref(url);
 
 	return CSS_OK;
 }
@@ -1697,7 +1697,7 @@ css_error ua_default_for_property(void *pw, uint32_t property, css_hint *hint)
 		hint->status = CSS_COLOR_COLOR;
 	} else if (property == CSS_PROP_FONT_FAMILY) {
 		hint->data.strings = NULL;
-		switch (nsoption_int(font_default)) {
+		switch (slateoption_int(font_default)) {
 		case PLOT_FONT_FAMILY_SANS_SERIF:
 			hint->status = CSS_FONT_FAMILY_SANS_SERIF;
 			break;
