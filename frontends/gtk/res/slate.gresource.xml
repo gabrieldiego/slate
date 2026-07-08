@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
   <gresource prefix="/org/slate">
-    <file alias="favicon.png" preprocess="to-pixdata">../../../resources/favicon.png</file>
-    <file preprocess="to-pixdata">slate.xpm</file>
-    <file preprocess="to-pixdata">menu_cursor.png</file>
-    <file alias="throbber/throbber0.png" preprocess="to-pixdata">../../../resources/throbber/throbber0.png</file>
-    <file alias="throbber/throbber1.png" preprocess="to-pixdata">../../../resources/throbber/throbber1.png</file>
-    <file alias="throbber/throbber2.png" preprocess="to-pixdata">../../../resources/throbber/throbber2.png</file>
-    <file alias="throbber/throbber3.png" preprocess="to-pixdata">../../../resources/throbber/throbber3.png</file>
-    <file alias="throbber/throbber4.png" preprocess="to-pixdata">../../../resources/throbber/throbber4.png</file>
-    <file alias="throbber/throbber5.png" preprocess="to-pixdata">../../../resources/throbber/throbber5.png</file>
-    <file alias="throbber/throbber6.png" preprocess="to-pixdata">../../../resources/throbber/throbber6.png</file>
-    <file alias="throbber/throbber7.png" preprocess="to-pixdata">../../../resources/throbber/throbber7.png</file>
-    <file alias="throbber/throbber8.png" preprocess="to-pixdata">../../../resources/throbber/throbber8.png</file>
+    <file alias="favicon.png">../../../resources/favicon.png</file>
+    <file>slate.xpm</file>
+    <file>menu_cursor.png</file>
+    <file alias="throbber/throbber0.png">../../../resources/throbber/throbber0.png</file>
+    <file alias="throbber/throbber1.png">../../../resources/throbber/throbber1.png</file>
+    <file alias="throbber/throbber2.png">../../../resources/throbber/throbber2.png</file>
+    <file alias="throbber/throbber3.png">../../../resources/throbber/throbber3.png</file>
+    <file alias="throbber/throbber4.png">../../../resources/throbber/throbber4.png</file>
+    <file alias="throbber/throbber5.png">../../../resources/throbber/throbber5.png</file>
+    <file alias="throbber/throbber6.png">../../../resources/throbber/throbber6.png</file>
+    <file alias="throbber/throbber7.png">../../../resources/throbber/throbber7.png</file>
+    <file alias="throbber/throbber8.png">../../../resources/throbber/throbber8.png</file>
     <file alias="credits.html">../../../resources/en/credits.html</file>
     <file alias="fr/credits.html">../../../resources/fr/credits.html</file>
     <file alias="it/credits.html">../../../resources/it/credits.html</file>
