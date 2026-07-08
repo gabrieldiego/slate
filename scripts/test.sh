@@ -19,7 +19,7 @@ EOF
 	exit 1
 fi
 
-if [ ! -d "${TARGET_WORKSPACE}" ] || [ ! -x "${BUILD_PREFIX}/bin/nsgenbind" ]; then
+if [ ! -d "${TARGET_WORKSPACE}" ] || [ ! -x "${BUILD_PREFIX}/bin/slategenbind" ]; then
 	"${ROOT}/scripts/fetch-deps.sh"
 	"${ROOT}/scripts/build-libs.sh"
 fi

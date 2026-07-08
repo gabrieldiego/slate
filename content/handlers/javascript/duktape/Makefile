@@ -31,7 +31,7 @@ GBFLAGS+=-D
 $(OBJROOT)/duktape/binding.h $(OBJROOT)/duktape/Makefile: content/handlers/javascript/duktape/slate.bnd $(BINDINGS)
 	$(Q)$(MKDIR) -p $(OBJROOT)/duktape
 	$(VQ)echo " GENBIND: $<"
-	$(Q)nsgenbind $(GBFLAGS) -I content/handlers/javascript/WebIDL $< $(OBJROOT)/duktape
+	$(Q)slategenbind $(GBFLAGS) -I content/handlers/javascript/WebIDL $< $(OBJROOT)/duktape
 
 # create unimplemented report for doxygen
 docs/UnimplementedJavascript.md: content/handlers/javascript/duktape/slate.bnd $(BINDINGS)
@@ -44,17 +44,36 @@ docs/UnimplementedJavascript.md: content/handlers/javascript/duktape/slate.bnd $
 	$(VQ)echo "Type | Unimplemented binding" >> $@
 	$(VQ)echo "---- | ---------------------" >> $@
 	$(VQ)echo " GENBIND: $<"
-	$(Q)nsgenbind $(GBFLAGS) -Wunimplemented -I content/handlers/javascript/WebIDL $< $(OBJROOT)/duktape 2>&1 >/dev/null | awk 'BEGIN{count=0} /.*Unimplemented.*/{count++; out=$$4" |"; for(i=5;i<=NF;i++){out=out" "$$i}; print out} END{print "\n",count,"unimplemented bindings"}' >> $@
+	$(Q)slategenbind $(GBFLAGS) -Wunimplemented -I content/handlers/javascript/WebIDL $< $(OBJROOT)/duktape 2>&1 >/dev/null | awk 'BEGIN{count=0} /.*Unimplemented.*/{count++; out=$$4" |"; for(i=5;i<=NF;i++){out=out" "$$i}; print out} END{print "\n",count,"unimplemented bindings"}' >> $@
 	$(VQ)echo "" >> $@
 
 ifeq ($(filter $(MAKECMDGOALS),clean test coverage),)
 -include $(OBJROOT)/duktape/Makefile
 endif
 
-S_JAVASCRIPT_BINDING:=$(addprefix $(OBJROOT)/duktape/,$(NSGENBIND_SOURCES))
+S_JAVASCRIPT_BINDING:=$(addprefix $(OBJROOT)/duktape/,$(SLATEGENBIND_SOURCES))
 
 $(S_JAVASCRIPT_BINDING): $(BINDINGS)
 
-S_JAVASCRIPT += content.c duktape/dukky.c duktape/duktape.c
+QUICKJS_DIR := projects/quickjs
+QUICKJS_SOURCES := \
+	$(QUICKJS_DIR)/cutils.c \
+	$(QUICKJS_DIR)/dtoa.c \
+	$(QUICKJS_DIR)/libregexp.c \
+	$(QUICKJS_DIR)/libunicode.c \
+	$(QUICKJS_DIR)/quickjs.c
 
-CFLAGS += -DDUK_OPT_HAVE_CUSTOM_H
+S_JAVASCRIPT_BINDING += $(QUICKJS_SOURCES)
+
+S_JAVASCRIPT += content.c duktape/dukky.c duktape/qjs_duk.c
+
+QUICKJS_CFLAGS := -std=gnu99 -I$(QUICKJS_DIR) -D_GNU_SOURCE \
+	-DCONFIG_VERSION=\"$(shell cat $(QUICKJS_DIR)/VERSION)\" \
+	-Wno-error -Wno-missing-prototypes -Wno-redundant-decls
+
+CFLAGS_content_handlers_javascript_duktape_qjs_duk.c += -I$(QUICKJS_DIR)
+CFLAGS_projects_quickjs_cutils.c += $(QUICKJS_CFLAGS)
+CFLAGS_projects_quickjs_dtoa.c += $(QUICKJS_CFLAGS)
+CFLAGS_projects_quickjs_libregexp.c += $(QUICKJS_CFLAGS)
+CFLAGS_projects_quickjs_libunicode.c += $(QUICKJS_CFLAGS)
+CFLAGS_projects_quickjs_quickjs.c += $(QUICKJS_CFLAGS)

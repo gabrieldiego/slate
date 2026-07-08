@@ -123,7 +123,6 @@ include Makefile.defaults
 $(eval $(call feature_switch,JPEG,JPEG (libjpeg),-DWITH_JPEG,-ljpeg,-UWITH_JPEG,))
 $(eval $(call feature_switch,HARU_PDF,PDF export (haru),-DWITH_PDF_EXPORT,-lhpdf -lpng,-UWITH_PDF_EXPORT,))
 $(eval $(call feature_switch,LIBICONV_PLUG,glibc internal iconv,-DLIBICONV_PLUG,,-ULIBICONV_PLUG,-liconv))
-$(eval $(call feature_switch,DUKTAPE,Javascript (Duktape),,,,,))
 
 # Common libraries with pkgconfig
 $(eval $(call pkg_config_find_and_add,libcss,CSS))
@@ -461,4 +460,3 @@ messages-fetch-tfx:
 # merge property files into fat messages
 messages-import-tfx: messages-fetch-tfx
 	for tfxlang in $(FAT_LANGUAGES);do $(PERL) ./utils/import-messages.pl -l $${tfxlang} -p any -f transifex -o resources/FatMessages -i resources/FatMessages -I Messages.any.$${tfxlang}.tfx ; $(RM) Messages.any.$${tfxlang}.tfx; done
-

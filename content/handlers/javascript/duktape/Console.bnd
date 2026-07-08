@@ -51,10 +51,19 @@ write_log_entry(duk_context *ctx, unsigned int group, browser_window_console_fla
 	duk_size_t msglen;
 	const char *msg = duk_safe_to_lstring(ctx, 0, &msglen);
 
-	if (priv_win == NULL || priv_win->win == NULL || priv_win->closed_down == true ||
-	    browser_window_console_log(priv_win->win, BW_CS_SCRIPT_CONSOLE,
-				       msg, msglen,
-				       flags) != SLATEERROR_OK) {
+	slateerror logerr = SLATEERROR_OK;
+	bool no_priv = priv_win == NULL;
+	bool no_win = no_priv ? true : priv_win->win == NULL;
+	bool closed = no_priv ? true : priv_win->closed_down == true;
+
+	if (!no_priv && !no_win && !closed) {
+		logerr = browser_window_console_log(priv_win->win,
+						    BW_CS_SCRIPT_CONSOLE,
+						    msg, msglen,
+						    flags);
+	}
+
+	if (no_priv || no_win || closed || logerr != SLATEERROR_OK) {
 		NSLOG(netsurf, DEBUG, "Unable to log: %s", duk_safe_to_string(ctx, 0));
 	}
 }

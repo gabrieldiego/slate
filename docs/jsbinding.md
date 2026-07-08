@@ -12,7 +12,7 @@ Language (WebIDL) within the relevant specifications
 Each interface described by the WebIDL must be bound (connected) to
 the browsers internal representation for the DOM or CSS, etc. These
 bindings descriptions are processed together with the WebIDL by the
-nsgenbind tool to generate source code.
+slategenbind tool to generate source code.
 
 A list of [DOM and CSSOM methods](unimplemented.html) is available
 outlining the remaining unimplemented API bindings.
@@ -79,7 +79,7 @@ code may unexpectedly terminate early.
 Interface binding introduction
 ------------------------------
 
-The binding files are processed by the nsgenbind tool to generate c
+The binding files are processed by the slategenbind tool to generate c
 source code which implements the interfaces within the JavaScript
 engine.
 
@@ -101,9 +101,9 @@ references all the WebIDL to be bound and includes all additional
 binding definitions to implement the interfaces.
 
 The bindings are a Domain Specific Language (DSL) which allows
-implementations to be added to each WebIDL method. nsgenbind
+implementations to be added to each WebIDL method. slategenbind
 documentation contains a [full description of the
-language](https://ci.slate-browser.org/jenkins/view/Categorized/job/docs-nsgenbind/doxygen/index.html).
+language](https://ci.slate-browser.org/jenkins/view/Categorized/job/docs-slategenbind/doxygen/index.html).
 
 The main focus on creating binding is to implement the content within
 getter, setter and method stanzas. These correspond to implementations
@@ -153,7 +153,7 @@ The top level `netsurf.bnd` binding includes `Window.bnd` (using a
 `#include` directive) which contains the implementation of the Window
 class. This is purely to split the bindings up into logical units.
 
-The nsgenbind tool generates code that automatically allows acess to
+The slategenbind tool generates code that automatically allows acess to
 the classes private data structure elements through a variable called
 `priv` and the duktape stack in the variable `ctx`.
 
@@ -244,11 +244,11 @@ the attribute example used `Window.bnd`
             return 0;
     %}
 
-The nsgenbind tool generates code that automatically allows acess to
+The slategenbind tool generates code that automatically allows acess to
 the classes private data structure elements through a variable called
 `priv` and the duktape stack in the variable `ctx`.
 
-In this case nsgenbind will generate code that will ensure there is at
+In this case slategenbind will generate code that will ensure there is at
 least one parameter and coerce it to a string on the duktape `ctx`
 stack returning a type error if it is unable to do so.
 
@@ -258,7 +258,7 @@ handle (pointer) which is obtained from the global object (the window)
 private structure.
 
 Note that the duk_safe_to_lstring() call used to obtain the url
-parameter needs no additional checking as nsgenbind emits this code
+parameter needs no additional checking as slategenbind emits this code
 automaticaly.
 
 ### Overloaded method example
@@ -301,11 +301,11 @@ The method binding will be added to `Window.bnd` as the attribute example
             return 0;
     %}
 
-The nsgenbind tool generates code that automatically allows acess to
+The slategenbind tool generates code that automatically allows acess to
 the classes private data structure elements through a variable called
 `priv` and the duktape stack in the variable `ctx`.
 
-For overloaded method calls nsgenbind does not emit code to do
+For overloaded method calls slategenbind does not emit code to do
 parameter verification and the binding code has to deal with all
 possible parameters itself.
 

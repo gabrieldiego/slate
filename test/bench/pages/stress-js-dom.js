@@ -11,6 +11,46 @@
 		node.appendChild(document.createTextNode(text));
 	}
 
+	function churnFinalizerCandidates() {
+		var bucket = document.createElement("div");
+		var j;
+
+		bucket.className = "stress-card finalizer-churn";
+		document.body.appendChild(bucket);
+		for (j = 0; j < 260; j++) {
+			var item = document.createElement("span");
+			var child = document.createElement("em");
+			var attrs;
+			var list;
+			var clone;
+
+			item.className = "finalizer-item item-" + (j % 11);
+			item.setAttribute("data-finalizer", "candidate-" + j);
+			child.appendChild(document.createTextNode("child " + j));
+			item.appendChild(child);
+			bucket.appendChild(item);
+
+			attrs = item.attributes;
+			if (attrs && attrs.length) {
+				checksum += attrs.length;
+			}
+			if (item.classList) {
+				item.classList.add("touched");
+				item.classList.remove("touched");
+			}
+			list = bucket.getElementsByTagName("span");
+			if (list && list.length && list.item) {
+				list.item(0);
+			}
+			clone = item.cloneNode(false);
+			bucket.appendChild(clone);
+			bucket.removeChild(clone);
+			bucket.removeChild(item);
+		}
+		document.body.removeChild(bucket);
+		console.log("stress-js-finalizer-churn");
+	}
+
 	for (i = 0; i < 180; i++) {
 		var card = document.createElement("article");
 		var title = document.createElement("strong");
@@ -26,6 +66,8 @@
 		card.appendChild(body);
 		grid.appendChild(card);
 	}
+
+	churnFinalizerCandidates();
 
 	expand.onclick = function () {
 		var summary = document.createElement("p");

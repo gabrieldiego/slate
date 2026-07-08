@@ -67,10 +67,6 @@ SLATE_USE_VIDEO := NO
 # Valid options: YES, NO, AUTO
 SLATE_USE_WEBP := AUTO
 
-# Enable NetSurf's use of duktape for javascript
-# Valid options: YES, NO
-SLATE_USE_DUKTAPE := YES
-
 # Enable NetSurf's use of libharu for PDF export and GTK printing support.
 # There is no auto-detection available for this, as it does not have a
 # pkg-config file.

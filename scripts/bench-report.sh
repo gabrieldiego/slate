@@ -376,30 +376,35 @@ run_coverage_report() {
 		write_coverage_scope_report "HTML renderer" "${coverage_tsv}" "content/handlers/html/*.c"
 	} > "${report}"
 
-	local duktape_sources=()
+	local javascript_sources=()
 	if [ -d "${objroot}/duktape" ]; then
 		while IFS= read -r source_file; do
-			duktape_sources+=("${source_file#${ROOT}/}")
+			javascript_sources+=("${source_file#${ROOT}/}")
 		done < <(find "${objroot}/duktape" -maxdepth 1 -name '*.c' | sort)
 	fi
-	duktape_sources+=(
+	javascript_sources+=(
 		"content/handlers/javascript/content.c"
 		"content/handlers/javascript/fetcher.c"
 		"content/handlers/javascript/duktape/dukky.c"
-		"content/handlers/javascript/duktape/duktape.c"
+		"content/handlers/javascript/duktape/qjs_duk.c"
+		"projects/quickjs/cutils.c"
+		"projects/quickjs/dtoa.c"
+		"projects/quickjs/libregexp.c"
+		"projects/quickjs/libunicode.c"
+		"projects/quickjs/quickjs.c"
 	)
 
-	printf 'Collecting Duktape coverage...\n' >&2
-	collect_coverage_scope "Duktape" "duktape" "${OUTPUT_DIR}/duktape-coverage.tsv" "${gcov_dir}" "${objroot}" \
-		"${duktape_sources[@]}"
+	printf 'Collecting JavaScript engine coverage...\n' >&2
+	collect_coverage_scope "JavaScript engine" "javascript" "${OUTPUT_DIR}/javascript-coverage.tsv" "${gcov_dir}" "${objroot}" \
+		"${javascript_sources[@]}"
 
 	{
-		write_coverage_scope_report "Duktape JavaScript engine" "${OUTPUT_DIR}/duktape-coverage.tsv" \
-			"generated Duktape bindings and content/handlers/javascript/{content,fetcher,duktape}*.c"
+		write_coverage_scope_report "QuickJS JavaScript engine" "${OUTPUT_DIR}/javascript-coverage.tsv" \
+			"generated DOM bindings, content/handlers/javascript/{content,fetcher,duktape}*.c, and projects/quickjs/*.c"
 
 		printf '\n## Notes\n\n'
 		printf -- '- HTML renderer coverage is tallied for `content/handlers/html/*.c`.\n'
-		printf -- '- Duktape coverage is tallied separately so JS engine movement does not obscure HTML renderer movement.\n'
+		printf -- '- JavaScript engine coverage is tallied separately so JS engine movement does not obscure HTML renderer movement.\n'
 		printf -- '- Coverage objects are kept separately using `TARGET=jotter SUBTARGET=%s`.\n' "${COVERAGE_SUBTARGET}"
 		printf -- '- The instrumented binary is `%s`; the normal `jotter` binary is not overwritten.\n' "${COVERAGE_EXETARGET}"
 		printf -- '- Platform-specific and frontend-specific browser code is intentionally outside this tally.\n'

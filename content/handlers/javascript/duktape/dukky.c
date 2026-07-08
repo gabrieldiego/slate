@@ -1181,11 +1181,16 @@ error:
 static void dukky_dump_error(duk_context *ctx)
 {
 	/* stack is ..., errobj */
+	duk_get_prop_string(ctx, -1, "name");
+	duk_get_prop_string(ctx, -2, "message");
 	duk_dup_top(ctx);
-	/* ..., errobj, errobj */
-	NSLOG(jserrors, WARNING, "Uncaught error in JS: %s", duk_safe_to_stacktrace(ctx, -1));
+	/* ..., errobj, name, message, message */
+	NSLOG(jserrors, WARNING, "Uncaught error in JS: %s: %s\n%s",
+	      duk_safe_to_string(ctx, -3),
+	      duk_safe_to_string(ctx, -2),
+	      duk_safe_to_stacktrace(ctx, -1));
 	/* ..., errobj, errobj.stackstring */
-	duk_pop(ctx);
+	duk_pop_3(ctx);
 	/* ..., errobj */
 }
 
@@ -1649,13 +1654,13 @@ static void dukky_generic_event_handler(dom_event *evt, void *pw)
 		duk_get_prop_string(ctx, -4, "lineNumber");
 		duk_get_prop_string(ctx, -5, "stack");
 		/* ... err name message fileName lineNumber stack */
-		NSLOG(dukky, DEBUG, "Uncaught error in JS: %s: %s",
+		NSLOG(jserrors, WARNING, "JavaScript callback error: %s: %s",
 		      duk_safe_to_string(ctx, -5),
 		      duk_safe_to_string(ctx, -4));
-		NSLOG(dukky, INFO, "              was at: %s line %s",
+		NSLOG(jserrors, WARNING, "JavaScript callback location: %s line %s",
 		      duk_safe_to_string(ctx, -3),
 		      duk_safe_to_string(ctx, -2));
-		NSLOG(dukky, INFO, "         Stack trace: %s",
+		NSLOG(jserrors, WARNING, "JavaScript callback stack: %s",
 		      duk_safe_to_string(ctx, -1));
 
 		duk_pop_n(ctx, 6);

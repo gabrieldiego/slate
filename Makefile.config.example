@@ -28,9 +28,6 @@
 ### following line
 # override SLATE_FB_FONTLIB := freetype
 
-### To disable JavaScript support, uncomment the appropriate line below.
-# override SLATE_USE_DUKTAPE := NO
-
 ### To change flags to javascript binding generator
 # GBFLAGS:=-g
 

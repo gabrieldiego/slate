@@ -24,7 +24,7 @@ fini Event ()
 	dom_event_unref(priv->evt);
 %}
 
-/* Note: many of these could be automatics once nsgenbind gets there. */
+/* Note: many of these could be automatics once slategenbind gets there. */
 
 getter Event::type ()
 %{

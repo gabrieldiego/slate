@@ -59,6 +59,9 @@ steps:
 - action: wait-log
   window: win1
   substring: stress-js-dom-ready
+- action: wait-log
+  window: win1
+  substring: stress-js-finalizer-churn
 - action: click
   window: win1
   target:
