@@ -70,7 +70,7 @@ install-amiga:
 # Package target
 # ----------------------------------------------------------------------------
 
-package-amiga: netsurf.lha
+package-amiga: slate.lha
 
 AMIGA_LANGUAGES := de en it ja nl
 AMIGA_PLATFORM_RESOURCES := Pointers Themes default.css default.css.info favicon.png LangNames mimetypes Resource.map splash.png
@@ -78,10 +78,10 @@ AMIGA_GENERIC_RESOURCES := $(AMIGA_LANGUAGES) ca-bundle icons
 AMIGA_RESOURCES := $(addprefix $(FRONTEND_SOURCE_DIR)/resources/,$(AMIGA_PLATFORM_RESOURCES)) $(addprefix resources/,$(AMIGA_GENERIC_RESOURCES))
 AMIGA_DISTRIBUTION_FILES := $(FRONTEND_SOURCE_DIR)/dist/*
 AMIGA_PKG_DIR := $(FRONTEND_SOURCE_DIR)/pkg
-AMIGA_INSTALL_TARGET_DIR := NetSurf_Amiga
+AMIGA_INSTALL_TARGET_DIR := Slate_Amiga
 
-netsurf.lha: $(EXETARGET) $(POSTEXES)
-	$(VQ)echo Creating netsurf.lha
+slate.lha: $(EXETARGET) $(POSTEXES)
+	$(VQ)echo Creating slate.lha
 	$(Q)rm -rf $(AMIGA_INSTALL_TARGET_DIR)
 	$(Q)$(MKDIR) -p $(AMIGA_INSTALL_TARGET_DIR)/NetSurf
 	$(Q)cp -p $(EXETARGET) $(AMIGA_INSTALL_TARGET_DIR)/NetSurf
@@ -101,9 +101,9 @@ netsurf.lha: $(EXETARGET) $(POSTEXES)
 	$(Q)cp -p $(AMIGA_PKG_DIR)/slate_os3.readme $(AMIGA_INSTALL_TARGET_DIR)/NetSurf
 	$(Q)cp -p $(AMIGA_PKG_DIR)/slate_os3.readme.info $(AMIGA_INSTALL_TARGET_DIR)/NetSurf
   else
-	$(Q)cp -p $(AMIGA_PKG_DIR)/netsurf.readme $(AMIGA_INSTALL_TARGET_DIR)/NetSurf
-	$(Q)cp -p $(AMIGA_PKG_DIR)/netsurf.readme.info $(AMIGA_INSTALL_TARGET_DIR)/NetSurf
+	$(Q)cp -p $(AMIGA_PKG_DIR)/slate.readme $(AMIGA_INSTALL_TARGET_DIR)/NetSurf
+	$(Q)cp -p $(AMIGA_PKG_DIR)/slate.readme.info $(AMIGA_INSTALL_TARGET_DIR)/NetSurf
   endif
 	$(Q)cd $(AMIGA_INSTALL_TARGET_DIR); \
-	  lha ao6 netsurf.lha NetSurf NetSurf.info AutoInstall
+	  lha ao6 slate.lha NetSurf NetSurf.info AutoInstall
 

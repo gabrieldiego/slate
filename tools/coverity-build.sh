@@ -34,7 +34,7 @@
 #
 # either PREFIX or JENKINS_HOME
 
-COVERITY_PROJECT="NetSurf+Browser"
+COVERITY_PROJECT="Slate+Browser"
 
 # build gtk2, framebuffer and jotter frontend by default
 TARGETS="gtk2 framebuffer jotter"

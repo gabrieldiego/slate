@@ -4,8 +4,8 @@
 # show up in a few places.
 # All the other settings can be tweaked by editing the !defines at the top of this script
 
-!define APPNAME "NetSurf"
-!define COMPANYNAME "NetSurf"
+!define APPNAME "Slate"
+!define COMPANYNAME "Slate"
 !define DESCRIPTION "Web Browser"
 
 # The version values must be simple integers
@@ -28,7 +28,7 @@
 
 # output filename
 !ifndef OUTFNAME
-  !define OUTFNAME "netsurf-installer.exe"
+  !define OUTFNAME "slate-installer.exe"
 !endif
 
 # path to resources

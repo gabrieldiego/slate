@@ -31,7 +31,7 @@ MESSAGES_TARGET=$(FRONTEND_RESOURCES_DIR)
 # Builtin resource handling
 # ----------------------------------------------------------------------------
 
-QRC_FILE := netsurf
+QRC_FILE := slate
 
 # use RCC to generate resource source
 $(OBJROOT)/%.qrc.cpp: $(FRONTEND_RESOURCES_DIR)/%.qrc $(addsuffix /Messages,$(addprefix $(MESSAGES_TARGET)/,$(MESSAGES_LANGUAGES)))

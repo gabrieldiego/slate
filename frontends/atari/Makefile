@@ -7,7 +7,7 @@
 # manually via env. variables, because the m68k-atari-mint
 # toolchain is located in /usr/bin and the wildcard matching
 # fails then. So this wildcard matches only works for
-# the netsurf environment!
+# the Slate environment!
 STRIP := $(wildcard $(GCCSDK_INSTALL_CROSSBIN)/*-strip)
 STACK := $(wildcard $(GCCSDK_INSTALL_CROSSBIN)/*stack)
 FT2CF := $(GCCSDK_INSTALL_ENV)/bin/freetype-config
@@ -27,21 +27,21 @@ endif
 
 ifeq ($(ATARIARCH),68000)
 PRGSUFFIX := 000.app
-PKGNAME := ns000.zip
+PKGNAME := slate000.zip
 endif
 
 ifeq ($(ATARIARCH),68020-60)
 CFLAGS += -m68020-60
 LDFLAGS += -m68020-60
 PRGSUFFIX := 020.app
-PKGNAME := ns020.zip
+PKGNAME := slate020.zip
 endif
 
 ifeq ($(ATARIARCH),v4e)
 CFLAGS += -mcpu=5475
 LDFLAGS += -mcpu=5475
 PRGSUFFIX := v4e.app
-PKGNAME := nsv4e.zip
+PKGNAME := slatev4e.zip
 endif
 
 # non-pkgconfig components
@@ -141,7 +141,7 @@ SOURCES = $(S_COMMON) $(S_IMAGE) $(S_BROWSER) $(S_FRONTEND)
 # Target setup
 # ---------------------------------------------------------------------------
 
-EXETARGET := ns$(SUBTARGET)$(PRGSUFFIX)
+EXETARGET := slate$(SUBTARGET)$(PRGSUFFIX)
 
 # The filter and target for split messages
 MESSAGES_FILTER=atari
@@ -150,7 +150,7 @@ MESSAGES_FILTER=atari
 # Install target
 # ----------------------------------------------------------------------------
 
-ATARI_TARGET_DIR := netsurf/
+ATARI_TARGET_DIR := slate/
 ATARI_RES_DIR := $(FRONTEND_RESOURCES_DIR)/
 ATARI_DOC_DIR := $(FRONTEND_SOURCE_DIR)/doc/
 ATARI_FONT_NAME := ttf-bitstream-vera-1.10

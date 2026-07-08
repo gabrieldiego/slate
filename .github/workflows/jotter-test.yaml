@@ -48,13 +48,13 @@ jobs:
 
     - name: Build and install project libs
       env:
-        REPO_BASE_URI: https://github.com/netsurf-browser
+        REPO_BASE_URI: https://github.com/gabrieldiego
       run: |
           export TARGET_WORKSPACE="$(pwd)/projects"
           source docs/env.sh
-          ns-clone -d -s -b ${GITHUB_REF_NAME}
-          ns-make-tools install
-          ns-make-libs install
+          slate-clone -d -s -b ${GITHUB_REF_NAME}
+          slate-make-tools install
+          slate-make-libs install
 
     - name: Disable -Werror
       # We can remove this step if we ever move to GitHub properly.

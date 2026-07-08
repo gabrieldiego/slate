@@ -13,7 +13,7 @@ COMPONENT_VERSION := 0.9
 
 # Tooling
 PREFIX ?= /opt/slate
-NSSHARED ?= $(PREFIX)/share/netsurf-buildsystem
+NSSHARED ?= $(PREFIX)/share/slate-buildsystem
 include $(NSSHARED)/makefiles/Makefile.tools
 
 TESTRUNNER := test/testrunner.sh

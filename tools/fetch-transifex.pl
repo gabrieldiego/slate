@@ -47,7 +47,7 @@ use constant GETOPT_SPEC =>
 use bytes;
 
 # default option values:
-my %opt = qw( resource messagesany project netsurf user netsurf );
+my %opt = qw( resource messagesany project slate user slate );
 
 sub output_stream ();
 sub usage         ();
@@ -102,9 +102,9 @@ usage:
            [-o output-file] [-r resource] [-p project] [-u user] [-w password] 
 
      lang-code  : en fr ko ...  (no default)
-     project    : transifex project (default 'netsurf')
+     project    : transifex project (default 'slate')
      resource   : transifex resource (default 'messagesany')
-     user       : transifex resource (default 'netsurf')
+     user       : transifex resource (default 'slate')
      password   : transifex resource (no default)
      output-file: defaults to standard output
 TXT

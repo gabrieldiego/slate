@@ -14,7 +14,7 @@ jobs:
           - ubuntu-22.04
           - ubuntu-24.04
         compiler:
-          # The NetSurf build system can't find LLVM AR (it looks for it
+          # The Slate build system can't find LLVM AR (it looks for it
           # in /usr/lib instead of /usr/bin:
           #     `make: /usr/lib/llvm-ar: No such file or directory`).
           # So we need to make it explicit for llvm.
@@ -59,13 +59,13 @@ jobs:
       env:
         CC: ${{ matrix.compiler.CC }}
         CXX: ${{ matrix.compiler.CXX }}
-        REPO_BASE_URI: https://github.com/netsurf-browser
+        REPO_BASE_URI: https://github.com/gabrieldiego
         TARGET_WORKSPACE: "${{ github.workspace }}/projects" # Same as "$(pwd)/projects"
       run: |
           source docs/env.sh
-          ns-clone -d -s -b ${GITHUB_REF_NAME}
-          ns-make-tools install
-          ns-make-libs install
+          slate-clone -d -s -b ${GITHUB_REF_NAME}
+          slate-make-tools install
+          slate-make-libs install
 
     - name: Disable -Werror
       # We can remove this step if we ever move to GitHub properly.
@@ -75,7 +75,7 @@ jobs:
     - name: Unit Tests
       # Fails when built with clang:
       #  test/corestrings.c:58:F:corestrings:corestrings_test:486:
-      #  Assertion 'ires == NSERROR_NOMEM' failed: ires == 0, NSERROR_NOMEM == 2
+      #  Assertion for the out-of-memory result failed.
       # Looks like `malloc_limit()` not working.
       if: ${{ matrix.compiler.vendor != 'llvm' }}
       env:
@@ -86,7 +86,7 @@ jobs:
           source docs/env.sh
           make test
 
-    - name: Build NetSurf GTK
+    - name: Build Slate GTK
       env:
         CC: ${{ matrix.compiler.CC }}
         CXX: ${{ matrix.compiler.CXX }}
@@ -104,7 +104,7 @@ jobs:
           source docs/env.sh
           make -j"$(nproc)" TARGET=jotter
 
-    - name: Build NetSurf Framebuffer
+    - name: Build Slate Framebuffer
       env:
         CC: ${{ matrix.compiler.CC }}
         CXX: ${{ matrix.compiler.CXX }}
@@ -121,14 +121,14 @@ jobs:
       fail-fast: false
       matrix:
         build:
-          - { toolchain: arm-riscos-gnueabi,   frontend: riscos,   pkg-file: netsurf.zip }
-          - { toolchain: arm-unknown-riscos,   frontend: riscos,   pkg-file: netsurf.zip }
-          - { toolchain: i686-w64-mingw32,     frontend: windows,  pkg-file: netsurf-installer.exe }
-          - { toolchain: m5475-atari-mint,     frontend: atari,    pkg-file: nsv4e.zip }
-          - { toolchain: m68k-atari-mint,      frontend: atari,    pkg-file: ns020.zip }
-          - { toolchain: m68k-unknown-amigaos, frontend: amigaos3, pkg-file: NetSurf_Amiga/netsurf.lha }
-          - { toolchain: ppc-amigaos,          frontend: amiga,    pkg-file: NetSurf_Amiga/netsurf.lha }
-          - { toolchain: x86_64-w64-mingw32,   frontend: windows,  pkg-file: netsurf-installer.exe }
+          - { toolchain: arm-riscos-gnueabi,   frontend: riscos,   pkg-file: slate.zip }
+          - { toolchain: arm-unknown-riscos,   frontend: riscos,   pkg-file: slate.zip }
+          - { toolchain: i686-w64-mingw32,     frontend: windows,  pkg-file: slate-installer.exe }
+          - { toolchain: m5475-atari-mint,     frontend: atari,    pkg-file: slatev4e.zip }
+          - { toolchain: m68k-atari-mint,      frontend: atari,    pkg-file: slate020.zip }
+          - { toolchain: m68k-unknown-amigaos, frontend: amigaos3, pkg-file: Slate_Amiga/slate.lha }
+          - { toolchain: ppc-amigaos,          frontend: amiga,    pkg-file: Slate_Amiga/slate.lha }
+          - { toolchain: x86_64-w64-mingw32,   frontend: windows,  pkg-file: slate-installer.exe }
 
     steps:
     - name: Checkout repository
@@ -208,12 +208,12 @@ jobs:
         sudo tar -xzf "${{ matrix.build.toolchain }}.tar.gz" -C /
         rm "${{ matrix.build.toolchain }}.tar.gz"
         echo "Toolchain testament:"
-        cat /opt/netsurf/${{ matrix.build.toolchain }}/BUILD_INFO.txt
+        cat /opt/slate/${{ matrix.build.toolchain }}/BUILD_INFO.txt
 
     - name: Build and install project libs
       env:
         HOST: "${{ matrix.build.toolchain }}"
-        REPO_BASE_URI: https://github.com/netsurf-browser
+        REPO_BASE_URI: https://github.com/gabrieldiego
         TARGET_WORKSPACE: "${{ github.workspace }}/projects" # Same as "$(pwd)/projects"
         Q:
       run: |
@@ -221,15 +221,15 @@ jobs:
         echo "TARGET_WORKSPACE=$TARGET_WORKSPACE"
         
         echo "Looking for cross-compiler tools..."
-        echo "Expected path: /opt/netsurf/${HOST}/cross/bin/"
-        if [ -f "/opt/netsurf/${HOST}/cross/bin/${HOST}-gcc" ]; then
-          echo "Found: /opt/netsurf/${HOST}/cross/bin/${HOST}-gcc"
+        echo "Expected path: /opt/slate/${HOST}/cross/bin/"
+        if [ -f "/opt/slate/${HOST}/cross/bin/${HOST}-gcc" ]; then
+          echo "Found: /opt/slate/${HOST}/cross/bin/${HOST}-gcc"
           echo "Testing if it's executable:"
-          /opt/netsurf/${HOST}/cross/bin/${HOST}-gcc --version || echo "Failed to execute gcc --version"
+          /opt/slate/${HOST}/cross/bin/${HOST}-gcc --version || echo "Failed to execute gcc --version"
           echo "Testing dumpmachine output:"
-          /opt/netsurf/${HOST}/cross/bin/${HOST}-gcc -dumpmachine || echo "Failed to execute gcc -dumpmachine"
+          /opt/slate/${HOST}/cross/bin/${HOST}-gcc -dumpmachine || echo "Failed to execute gcc -dumpmachine"
         else
-          echo "NOT FOUND: /opt/netsurf/${HOST}/cross/bin/${HOST}-gcc"
+          echo "NOT FOUND: /opt/slate/${HOST}/cross/bin/${HOST}-gcc"
         fi
         
         echo "Sourcing env.sh with error checking..."
@@ -245,13 +245,13 @@ jobs:
         echo "USE_CPUS=$USE_CPUS"
 
         echo "Cloning libs..."
-        ns-clone -d -s -b ${GITHUB_REF_NAME}
+        slate-clone -d -s -b ${GITHUB_REF_NAME}
         echo "Building and installing tools..."
-        ns-make-tools install
+        slate-make-tools install
         echo "Building and installing libs..."
-        ns-make-libs install
+        slate-make-libs install
 
-    - name: Build NetSurf
+    - name: Build Slate
       env:
         HOST: "${{ matrix.build.toolchain }}"
         TARGET_WORKSPACE: "${{ github.workspace }}/projects" # Same as "$(pwd)/projects"

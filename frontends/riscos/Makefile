@@ -179,9 +179,9 @@ install-riscos:
 # Package target
 # ----------------------------------------------------------------------------
 
-package-riscos: netsurf.zip
+package-riscos: slate.zip
 
-netsurf.zip: $(EXETARGET) $(POSTEXES)
+slate.zip: $(EXETARGET) $(POSTEXES)
 	$(eval $@_TMPDIR := $(shell mktemp -d))
 	$(Q) $(RM) $@
 	$(Q) cp -rLvp $(FRONTEND_SOURCE_DIR)/appdir $($@_TMPDIR)/!NetSurf
