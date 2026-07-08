@@ -21,6 +21,11 @@ steps:
   - ${SLATE_BENCH_ROOT}/practical-interaction.html
   - ${SLATE_BENCH_ROOT}/practical-interaction-advanced.html
   - ${SLATE_BENCH_ROOT}/practical-script-resources.html
+  - ${SLATE_BENCH_ROOT}/practical-js-feed.html
+  - ${SLATE_BENCH_ROOT}/practical-js-shop.html
+  - ${SLATE_BENCH_ROOT}/practical-map.html
+  - ${SLATE_BENCH_ROOT}/practical-webmail.html
+  - ${SLATE_BENCH_ROOT}/practical-calendar.html
   - ${SLATE_BENCH_ROOT}/practical-search-results.html
   - ${SLATE_BENCH_ROOT}/practical-product-listing.html
   - ${SLATE_BENCH_ROOT}/practical-checkout.html
@@ -148,6 +153,164 @@ steps:
     text: Run Practical Action
 - action: sleep-ms
   time: 50
+- action: navigate
+  window: win1
+  url: ${SLATE_BENCH_ROOT}/practical-js-feed.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: wait-log
+  window: win1
+  substring: practical-js-feed-ready
+- action: click
+  window: win1
+  target:
+    text: Show Unread Bench Items
+- action: wait-log
+  window: win1
+  substring: practical-js-feed-filter-unread
+- action: click
+  window: win1
+  target:
+    text: Add Bench Feed
+- action: wait-log
+  window: win1
+  substring: practical-js-feed-item-added
+- action: click
+  window: win1
+  target:
+    text: Refresh Async
+- action: wait-log
+  window: win1
+  substring: practical-js-feed-async-refresh
+- action: navigate
+  window: win1
+  url: ${SLATE_BENCH_ROOT}/practical-js-shop.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: wait-log
+  window: win1
+  substring: practical-js-shop-ready
+- action: click
+  window: win1
+  target:
+    text: Search Shop Bench
+- action: wait-log
+  window: win1
+  substring: shop-search-complete
+- action: click
+  window: win1
+  target:
+    text: Apply Shop Filters
+- action: wait-log
+  window: win1
+  substring: shop-filters-applied
+- action: click
+  window: win1
+  area: extent
+  target:
+    text: Add Bench Camera
+- action: wait-log
+  window: win1
+  substring: shop-added-bench-camera
+- action: click
+  window: win1
+  area: extent
+  target:
+    text: Apply Bench
+- action: wait-log
+  window: win1
+  substring: shop-discount-applied
+- action: click
+  window: win1
+  area: extent
+  target:
+    text: Open Checkout
+- action: wait-log
+  window: win1
+  substring: shop-checkout-drawer
+- action: navigate
+  window: win1
+  url: ${SLATE_BENCH_ROOT}/practical-map.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: wait-log
+  window: win1
+  substring: practical-map-ready
+- action: click
+  window: win1
+  target:
+    text: Zoom In
+- action: wait-log
+  window: win1
+  substring: map-zoom-in
+- action: navigate
+  window: win1
+  url: ${SLATE_BENCH_ROOT}/practical-webmail.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: wait-log
+  window: win1
+  substring: practical-webmail-ready
+- action: click
+  window: win1
+  target:
+    text: Renderer memory
+- action: wait-log
+  window: win1
+  substring: webmail-open-message
+- action: click
+  window: win1
+  target:
+    text: Search Bench
+- action: wait-log
+  window: win1
+  substring: webmail-search-complete
+- action: click
+  window: win1
+  target:
+    text: Select All
+- action: wait-log
+  window: win1
+  substring: webmail-select-all
+- action: click
+  window: win1
+  target:
+    text: Send Bench
+- action: wait-log
+  window: win1
+  substring: webmail-send-complete
+- action: navigate
+  window: win1
+  url: ${SLATE_BENCH_ROOT}/practical-calendar.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: wait-log
+  window: win1
+  substring: practical-calendar-ready
+- action: click
+  window: win1
+  target:
+    text: Next Week
+- action: wait-log
+  window: win1
+  substring: calendar-next-week
+- action: click
+  window: win1
+  target:
+    text: Add Bench Event
+- action: wait-log
+  window: win1
+  substring: calendar-event-added
 - action: window-new
   tag: win3
 - action: navigate

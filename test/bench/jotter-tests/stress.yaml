@@ -21,6 +21,8 @@ steps:
   - ${SLATE_BENCH_ROOT}/stress-inline-flow.html
   - ${SLATE_BENCH_ROOT}/stress-object-media.html
   - ${SLATE_BENCH_ROOT}/stress-special-elements.html
+  - ${SLATE_BENCH_ROOT}/stress-js-dom.html
+  - ${SLATE_BENCH_ROOT}/stress-js-runtime.html
   - ${SLATE_BENCH_ROOT}/stress-deep-dom.html
   - ${SLATE_BENCH_ROOT}/stress-wide-table.html
   - ${SLATE_BENCH_ROOT}/stress-complex-table.html
@@ -30,6 +32,8 @@ steps:
   - ${SLATE_BENCH_ROOT}/stress-inline-flow.html
   - ${SLATE_BENCH_ROOT}/stress-object-media.html
   - ${SLATE_BENCH_ROOT}/stress-special-elements.html
+  - ${SLATE_BENCH_ROOT}/stress-js-dom.html
+  - ${SLATE_BENCH_ROOT}/stress-js-runtime.html
   steps:
   - action: navigate
     window: win1
@@ -43,6 +47,39 @@ steps:
     area: extent
     checks:
     - text-contains: Stress Bench
+- action: navigate
+  window: win1
+  url: ${SLATE_BENCH_ROOT}/stress-js-dom.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: wait-log
+  window: win1
+  substring: stress-js-dom-ready
+- action: click
+  window: win1
+  target:
+    text: Expand Stress JS Summary
+- action: wait-log
+  window: win1
+  substring: stress-js-summary-expanded
+- action: navigate
+  window: win1
+  url: ${SLATE_BENCH_ROOT}/stress-js-runtime.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: wait-log
+  window: win1
+  substring: stress-js-runtime-ready
+- action: plot-check
+  window: win1
+  area: extent
+  checks:
+  - text-contains: Stress JS runtime complete
+  - text-contains: descriptor
 - action: window-close
   window: win1
 - action: quit

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench JS Feed</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+.feed-shell {
+	display: table;
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 14px;
+}
+.feed-main,
+.feed-side {
+	display: table-cell;
+	vertical-align: top;
+	background: #ffffff;
+	border: 1px solid #b8c2cc;
+	padding: 14px;
+}
+.feed-main {
+	width: 68%;
+}
+.feed-toolbar button,
+.feed-side button {
+	margin: 0 8px 8px 0;
+	padding: 7px 10px;
+}
+.feed-item {
+	border-top: 1px solid #d4dce4;
+	padding: 10px 0;
+}
+.feed-item h2 {
+	font-size: 18px;
+	margin: 0 0 4px;
+}
+.feed-item p {
+	margin: 4px 0;
+}
+.status-line {
+	background: #eef5fb;
+	border-left: 4px solid #2f6f9f;
+	padding: 8px 10px;
+}
+</style>
+</head>
+<body class="bench-page">
+<header class="site-head">
+<img src="assets/icon-news.png" width="64" height="64" alt="Practical Bench news icon">
+<h1>Practical Bench JS Feed</h1>
+</header>
+<main class="feed-shell">
+<section class="feed-main">
+<p class="bench-kicker">Practical Bench page with a script-rendered news feed, filters, counters, and event handlers.</p>
+<p id="feed-status" class="status-line">Feed waiting</p>
+<div class="feed-toolbar">
+<button id="feed-all" type="button">Show All Bench Items</button>
+<button id="feed-unread" type="button">Show Unread Bench Items</button>
+<button id="feed-saved" type="button">Show Saved Bench Items</button>
+</div>
+<div id="feed-list"></div>
+</section>
+<aside class="feed-side">
+<h2>Bench Actions</h2>
+<p id="feed-count">No items rendered</p>
+<button id="feed-add" type="button">Add Bench Feed Item</button>
+<button id="feed-refresh" type="button">Refresh Async Widget</button>
+<p id="feed-widget">Widget idle</p>
+</aside>
+</main>
+<script src="practical-js-feed.js"></script>
+</body>
+</html>

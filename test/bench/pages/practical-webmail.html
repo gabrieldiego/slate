@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench Webmail</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+body {
+	background: #f0f3f6;
+}
+.mail-app {
+	display: table;
+	width: 100%;
+	border-spacing: 12px;
+}
+.mail-folders,
+.mail-list,
+.mail-reader {
+	display: table-cell;
+	vertical-align: top;
+	background: #ffffff;
+	border: 1px solid #bac5d0;
+	padding: 12px;
+}
+.mail-folders {
+	width: 18%;
+}
+.mail-list {
+	width: 32%;
+}
+.mail-folder {
+	display: block;
+	margin: 5px 0;
+	padding: 5px;
+	background: #eef3f8;
+	border: 1px solid #c5d0da;
+}
+.mail-row {
+	display: block;
+	width: 100%;
+	text-align: left;
+	border: 0;
+	border-bottom: 1px solid #d5dde5;
+	background: #ffffff;
+	padding: 8px 4px;
+}
+.mail-row strong {
+	display: block;
+}
+.mail-row.unread strong {
+	color: #174f7a;
+}
+.mail-toolbar button {
+	margin: 0 6px 6px 0;
+}
+.tag {
+	display: inline-block;
+	border: 1px solid #9aa8b6;
+	background: #f4f7fa;
+	padding: 1px 5px;
+	margin-right: 4px;
+}
+.compose-grid label {
+	display: block;
+	margin: 7px 0;
+}
+.compose-grid input,
+.compose-grid textarea {
+	width: 94%;
+}
+</style>
+</head>
+<body>
+<header class="site-head">
+<img src="assets/avatar-profile.png" width="64" height="64" alt="Practical Bench profile avatar">
+<h1>Practical Bench Webmail</h1>
+</header>
+<main class="mail-app">
+<aside class="mail-folders">
+<p class="bench-kicker">Practical Bench page with inbox folders, message list, detail reader, compose form, search, labels, and selection state.</p>
+<button type="button" id="compose-open">Compose Bench Mail</button>
+<nav>
+<a class="mail-folder" href="#inbox">Inbox <span id="inbox-count">4</span></a>
+<a class="mail-folder" href="#starred">Starred</a>
+<a class="mail-folder" href="#sent">Sent</a>
+<a class="mail-folder" href="#archive">Archive</a>
+</nav>
+<form action="about:blank" method="get">
+<label>Search mail <input id="mail-search" type="search" value="memory baseline"></label>
+<button type="button" id="mail-search-button">Search Bench Mail</button>
+</form>
+</aside>
+<section class="mail-list">
+<h2>Inbox</h2>
+<div class="mail-toolbar">
+<button type="button" id="mail-select-all">Select All</button>
+<button type="button" id="mail-archive">Archive Selected</button>
+<button type="button" id="mail-star">Star Selected</button>
+</div>
+<div id="message-list"></div>
+</section>
+<section class="mail-reader">
+<h2 id="message-subject">Select a message</h2>
+<p id="message-meta">No message selected</p>
+<p id="message-body">Choose a Practical Bench message from the inbox.</p>
+<p id="message-tags"></p>
+<section id="compose-panel" class="compose-grid">
+<h2>Compose</h2>
+<label>To <input id="compose-to" type="email" value="team@example.test"></label>
+<label>Subject <input id="compose-subject" type="text" value="Bench status"></label>
+<label>Message <textarea id="compose-body" rows="5">The renderer benchmark report is ready.</textarea></label>
+<button type="button" id="compose-send">Send Bench Mail</button>
+</section>
+<p id="mail-status">Webmail ready</p>
+</section>
+</main>
+<script src="practical-webmail.js"></script>
+</body>
+</html>

@@ -681,6 +681,7 @@ def run_test_step_action_quit(ctx, step):
     assert_browser(ctx)
     browser = ctx.pop('browser')
     assert browser.quit_and_wait()
+    browser.farmer.report_js_diagnostics()
     # clean up context as all windows have gone away after browser quit
     ctx.pop('windows')
 
@@ -749,7 +750,12 @@ def main(argv):
     plan = load_test_plan(path_test)
     ctx["jotter"] = path_jotter
     ctx["wrapper"] = wrapper
-    run_test_plan(ctx, plan)
+    try:
+        run_test_plan(ctx, plan)
+    finally:
+        browser = ctx.get("browser")
+        if browser is not None:
+            browser.farmer.report_js_diagnostics()
 
 
 # Some python weirdness to get to main().

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Smoke Bench JavaScript</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+.smoke-js-panel {
+	border: 1px solid #9aa8b6;
+	padding: 14px;
+	background: #ffffff;
+}
+.smoke-js-panel strong {
+	color: #24517a;
+}
+</style>
+</head>
+<body class="bench-page">
+<header class="site-head">
+<img src="assets/bench-logo.png" width="120" height="48" alt="Smoke Bench logo">
+<h1>Smoke Bench JavaScript</h1>
+</header>
+<main>
+<section class="smoke-js-panel">
+<p id="smoke-js-status">Smoke JS waiting</p>
+<p id="smoke-js-list">Smoke JS list:</p>
+<button id="smoke-js-button" type="button">Run Smoke JS Action</button>
+</section>
+<script>
+(function () {
+	var status = document.getElementById("smoke-js-status");
+	var list = document.getElementById("smoke-js-list");
+	var button = document.getElementById("smoke-js-button");
+	var item = document.createElement("strong");
+
+	item.appendChild(document.createTextNode(" Smoke JS ready"));
+	list.appendChild(item);
+	status.innerHTML = "Smoke Bench JS status updated";
+
+	button.onclick = function () {
+		status.innerHTML = "Smoke JS clicked";
+		console.log("smoke-js-clicked");
+	};
+
+	console.log("smoke-js-ready");
+}());
+</script>
+</main>
+</body>
+</html>

@@ -38,6 +38,8 @@ class StderrEcho:
         self.sock = sockend
         self.sock.setblocking(False)
         self.incoming = b""
+        self.lines = []
+        self.js_diagnostics = []
         self.closed = False
 
     def close(self):
@@ -65,7 +67,23 @@ class StderrEcho:
                     print("WARNING: Unicode decode error")
                     line = line.decode('utf-8', 'replace')
 
+                self.lines.append(line)
+                if self._is_js_diagnostic(line):
+                    self.js_diagnostics.append(line)
                 sys.stderr.write("{}\n".format(line))
+
+    @staticmethod
+    def _is_js_diagnostic(line):
+        needles = (
+            "jserrors",
+            "Uncaught error in JS",
+            "SyntaxError",
+            "TypeError",
+            "ReferenceError",
+            "RangeError",
+            "dukky_dump_error",
+        )
+        return any(needle in line for needle in needles)
 
 
 class JotterFarmer:
@@ -190,6 +208,18 @@ class JotterFarmer:
         cmd = cmd + "\n"
         self.buffer += cmd.encode('utf-8')
         self._set_jotter_events()
+
+    def report_js_diagnostics(self):
+        diagnostics = self._errwrapper.js_diagnostics
+        if not diagnostics:
+            print("JS diagnostics: none")
+            return
+
+        print("JS diagnostics: {} warning/error lines".format(len(diagnostics)))
+        for line in diagnostics[:40]:
+            print("JS diagnostic: {}".format(line))
+        if len(diagnostics) > 40:
+            print("JS diagnostic: ... {} more lines".format(len(diagnostics) - 40))
 
     def jotter_says(self, line):
         try:

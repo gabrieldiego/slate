@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stress Bench JavaScript DOM</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+.stress-controls {
+	background: #ffffff;
+	border: 1px solid #aeb9c4;
+	padding: 12px;
+}
+.stress-grid {
+	margin-top: 12px;
+	column-count: 3;
+}
+.stress-card {
+	break-inside: avoid;
+	border: 1px solid #c7d0d9;
+	background: #f8fafc;
+	margin: 0 0 8px;
+	padding: 7px;
+}
+.stress-card strong {
+	color: #214f6d;
+}
+</style>
+</head>
+<body class="bench-page">
+<header class="site-head">
+<img src="assets/bench-logo.png" width="120" height="48" alt="Stress Bench logo">
+<h1>Stress Bench JavaScript DOM</h1>
+</header>
+<main>
+<section class="stress-controls">
+<p class="bench-kicker">Stress Bench page with script-generated DOM, repeated attributes, string work, arrays, and event handlers.</p>
+<p id="stress-js-status">Stress JS waiting</p>
+<button id="stress-js-expand" type="button">Expand Stress JS Summary</button>
+</section>
+<section id="stress-js-grid" class="stress-grid"></section>
+<script src="stress-js-dom.js"></script>
+</main>
+</body>
+</html>

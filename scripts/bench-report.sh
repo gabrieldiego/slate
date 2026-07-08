@@ -158,6 +158,18 @@ kib_to_mib() {
 	fi
 }
 
+js_diagnostic_count() {
+	local file="$1"
+	awk '
+		/jserrors|Uncaught error in JS|SyntaxError|TypeError|ReferenceError|RangeError|dukky_dump_error/ {
+			count++
+		}
+		END {
+			print count + 0
+		}
+	' "${file}" 2>/dev/null
+}
+
 host_name() {
 	local host
 	host="$(uname -s)"
@@ -197,18 +209,19 @@ run_memory_report() {
 		printf -- '- Bench root: `%s`\n' "${BENCH_ROOT}"
 		printf -- '- Time tool: `%s -v`\n\n' "${TIME_BIN}"
 		printf '## Summary\n\n'
-		printf '| Suite | Result | Max RSS KiB | Max RSS MiB | Elapsed | User CPU | System CPU | Exit | Raw files |\n'
-		printf '| --- | --- | ---: | ---: | --- | ---: | ---: | ---: | --- |\n'
+		printf '| Suite | Result | Max RSS KiB | Max RSS MiB | JS diagnostics | Elapsed | User CPU | System CPU | Exit | Raw files |\n'
+		printf '| --- | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |\n'
 	} > "${report}"
 
 	for suite in "${SUITES[@]}"; do
 		local test_file="${ROOT}/test/bench/jotter-tests/${suite}.yaml"
 		local log_file="${OUTPUT_DIR}/memory-${suite}.log"
 		local time_file="${OUTPUT_DIR}/memory-${suite}.time"
-		local status result max_rss elapsed user_cpu sys_cpu time_exit max_rss_mib
+		local status result max_rss elapsed user_cpu sys_cpu time_exit max_rss_mib js_diag
 
 		printf 'Running memory %s...\n' "${suite}" >&2
 		SLATE_BENCH_ROOT="${BENCH_ROOT}" \
+			PYTHONUNBUFFERED=1 \
 			"${ROOT}/test/jotter_driver.py" \
 			-m "${JOTTER}" \
 			-w "${TIME_BIN} -v -o ${time_file}" \
@@ -228,12 +241,14 @@ run_memory_report() {
 		sys_cpu="$(metric 'System time (seconds)' "${time_file}")"
 		time_exit="$(metric 'Exit status' "${time_file}")"
 		max_rss_mib="$(kib_to_mib "${max_rss}")"
+		js_diag="$(js_diagnostic_count "${log_file}")"
 
-		printf '| `%s` | %s | %s | %s | `%s` | %s | %s | %s | [log](%s), [time](%s) |\n' \
+		printf '| `%s` | %s | %s | %s | %s | `%s` | %s | %s | %s | [log](%s), [time](%s) |\n' \
 			"${suite}" \
 			"${result}" \
 			"${max_rss:-}" \
 			"${max_rss_mib:-}" \
+			"${js_diag}" \
 			"${elapsed:-}" \
 			"${user_cpu:-}" \
 			"${sys_cpu:-}" \
@@ -245,6 +260,7 @@ run_memory_report() {
 	{
 		printf '\n## Notes\n\n'
 		printf -- '- `Max RSS` is reported by GNU `/usr/bin/time -v` for the `jotter` process.\n'
+		printf -- '- `JS diagnostics` counts JavaScript interpreter warning/error lines found in the suite log.\n'
 		printf -- '- A failed suite still keeps its `.log` and `.time` files next to this report.\n'
 		printf -- '- Use this report as a baseline trend signal; compare runs made from similar build options and host conditions.\n'
 	} >> "${report}"
@@ -269,7 +285,7 @@ run_coverage_report() {
 	coverage_jotter="${ROOT}/${COVERAGE_EXETARGET}"
 	build_log="${OUTPUT_DIR}/coverage-build-jotter.log"
 	run_summary="${OUTPUT_DIR}/coverage-suite-summary.tsv"
-	coverage_tsv="${OUTPUT_DIR}/html-coverage.tsv"
+	coverage_tsv="${OUTPUT_DIR}/coverage.tsv"
 	gcov_dir="${OUTPUT_DIR}/gcov"
 	mkdir -p "${gcov_dir}" || return 1
 
@@ -309,10 +325,11 @@ run_coverage_report() {
 	for suite in "${SUITES[@]}"; do
 		local test_file="${ROOT}/test/bench/jotter-tests/${suite}.yaml"
 		local log_file="${OUTPUT_DIR}/coverage-${suite}.log"
-		local status result
+		local status result js_diag
 
 		printf 'Running coverage %s...\n' "${suite}" >&2
 		SLATE_BENCH_ROOT="${BENCH_ROOT}" \
+			PYTHONUNBUFFERED=1 \
 			"${ROOT}/test/jotter_driver.py" \
 			-m "${coverage_jotter}" \
 			-t "${test_file}" >"${log_file}" 2>&1
@@ -325,27 +342,97 @@ run_coverage_report() {
 			overall_status=1
 		fi
 
-		printf '%s\t%s\t%s\t%s\n' "${suite}" "${result}" "${status}" "$(basename "${log_file}")" >> "${run_summary}"
+		js_diag="$(js_diagnostic_count "${log_file}")"
+		printf '%s\t%s\t%s\t%s\t%s\n' "${suite}" "${result}" "${status}" "${js_diag}" "$(basename "${log_file}")" >> "${run_summary}"
 	done
 
 	while IFS= read -r source_file; do
 		html_sources+=("${source_file}")
 	done < <(find "${ROOT}/content/handlers/html" -maxdepth 1 -name '*.c' -printf '%P\n' | sort)
 
+	printf 'Collecting HTML renderer coverage...\n' >&2
+	collect_coverage_scope "HTML renderer" "html" "${coverage_tsv}" "${gcov_dir}" "${objroot}" \
+		"${html_sources[@]/#/content/handlers/html/}"
+
+	{
+		printf '# Slate Engine Coverage Report\n\n'
+		printf -- '- Generated: `%s`\n' "$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+		printf -- '- Git revision: `%s` on `%s`\n' "${git_rev}" "${git_branch}"
+		printf -- '- Git dirty: `%s`\n' "${git_dirty}"
+		printf -- '- Target: `jotter`\n'
+		printf -- '- Coverage binary: `%s`\n' "${coverage_jotter}"
+		printf -- '- Coverage object root: `%s`\n' "${objroot}"
+		printf -- '- Coverage flags: `%s`\n' "${COVERAGE_CFLAGS}"
+		printf -- '- Bench root: `%s`\n' "${BENCH_ROOT}"
+		printf -- '- Raw build log: [coverage-build-jotter.log](%s)\n\n' "$(basename "${build_log}")"
+
+		printf '## Benchmark Runs\n\n'
+		printf '| Suite | Result | Exit | JS diagnostics | Log |\n'
+		printf '| --- | --- | ---: | ---: | --- |\n'
+		while IFS=$'\t' read -r suite result status js_diag log_name; do
+			printf '| `%s` | %s | %s | %s | [log](%s) |\n' "${suite}" "${result}" "${status}" "${js_diag}" "${log_name}"
+		done < "${run_summary}"
+
+		write_coverage_scope_report "HTML renderer" "${coverage_tsv}" "content/handlers/html/*.c"
+	} > "${report}"
+
+	local duktape_sources=()
+	if [ -d "${objroot}/duktape" ]; then
+		while IFS= read -r source_file; do
+			duktape_sources+=("${source_file#${ROOT}/}")
+		done < <(find "${objroot}/duktape" -maxdepth 1 -name '*.c' | sort)
+	fi
+	duktape_sources+=(
+		"content/handlers/javascript/content.c"
+		"content/handlers/javascript/fetcher.c"
+		"content/handlers/javascript/duktape/dukky.c"
+		"content/handlers/javascript/duktape/duktape.c"
+	)
+
+	printf 'Collecting Duktape coverage...\n' >&2
+	collect_coverage_scope "Duktape" "duktape" "${OUTPUT_DIR}/duktape-coverage.tsv" "${gcov_dir}" "${objroot}" \
+		"${duktape_sources[@]}"
+
+	{
+		write_coverage_scope_report "Duktape JavaScript engine" "${OUTPUT_DIR}/duktape-coverage.tsv" \
+			"generated Duktape bindings and content/handlers/javascript/{content,fetcher,duktape}*.c"
+
+		printf '\n## Notes\n\n'
+		printf -- '- HTML renderer coverage is tallied for `content/handlers/html/*.c`.\n'
+		printf -- '- Duktape coverage is tallied separately so JS engine movement does not obscure HTML renderer movement.\n'
+		printf -- '- Coverage objects are kept separately using `TARGET=jotter SUBTARGET=%s`.\n' "${COVERAGE_SUBTARGET}"
+		printf -- '- The instrumented binary is `%s`; the normal `jotter` binary is not overwritten.\n' "${COVERAGE_EXETARGET}"
+		printf -- '- Platform-specific and frontend-specific browser code is intentionally outside this tally.\n'
+	} >> "${report}"
+
+	printf 'Wrote %s\n' "${report}" >&2
+	return "${overall_status}"
+}
+
+collect_coverage_scope() {
+	local scope_name="$1"
+	local scope_slug="$2"
+	local coverage_tsv="$3"
+	local gcov_dir="$4"
+	local objroot="$5"
+	shift 5
+	local total_covered=0
+	local total_lines=0
+	local total_percent
+
 	: > "${coverage_tsv}"
 
-	printf 'Collecting HTML renderer coverage...\n' >&2
-	for source_name in "${html_sources[@]}"; do
-		local source_rel="content/handlers/html/${source_name}"
+	for source_rel in "$@"; do
 		local object_name="${source_rel%.c}"
 		local object_path gcov_file gcov_log gcov_status covered lines percent
 		object_name="${object_name//\//_}.o"
 		object_path="${objroot}/${object_name}"
-		gcov_file="${gcov_dir}/${source_name}.gcov"
-		gcov_log="${gcov_dir}/${source_name}.gcov.log"
+		local raw_name="${scope_slug}-${object_name%.o}.gcov"
+		gcov_file="${gcov_dir}/${raw_name}"
+		gcov_log="${gcov_dir}/${raw_name}.log"
 
 		if [ ! -f "${object_path%.o}.gcno" ]; then
-			printf '%s\t0\t0\t0.0\tmissing-gcno\t%s\n' "${source_rel}" "${source_name}.gcov.log" >> "${coverage_tsv}"
+			printf '%s\t0\t0\t0.0\tmissing-gcno\t%s\n' "${source_rel}" "$(basename "${gcov_log}")" >> "${coverage_tsv}"
 			continue
 		fi
 
@@ -356,7 +443,7 @@ run_coverage_report() {
 		gcov_status=$?
 
 		if [ "${gcov_status}" -ne 0 ]; then
-			printf '%s\t0\t0\t0.0\tgcov-failed\t%s\n' "${source_rel}" "${source_name}.gcov.log" >> "${coverage_tsv}"
+			printf '%s\t0\t0\t0.0\tgcov-failed\t%s\n' "${source_rel}" "$(basename "${gcov_log}")" >> "${coverage_tsv}"
 			continue
 		fi
 
@@ -390,7 +477,7 @@ run_coverage_report() {
 
 		total_covered=$((total_covered + covered))
 		total_lines=$((total_lines + lines))
-		printf '%s\t%s\t%s\t%s\tok\t%s\n' "${source_rel}" "${covered}" "${lines}" "${percent}" "${source_name}.gcov" >> "${coverage_tsv}"
+		printf '%s\t%s\t%s\t%s\tok\t%s\n' "${source_rel}" "${covered}" "${lines}" "${percent}" "$(basename "${gcov_file}")" >> "${coverage_tsv}"
 	done
 
 	if [ "${total_lines}" -gt 0 ]; then
@@ -399,53 +486,36 @@ run_coverage_report() {
 		total_percent="0.0"
 	fi
 
-	{
-		printf '# Slate HTML Renderer Coverage Report\n\n'
-		printf -- '- Generated: `%s`\n' "$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-		printf -- '- Git revision: `%s` on `%s`\n' "${git_rev}" "${git_branch}"
-		printf -- '- Git dirty: `%s`\n' "${git_dirty}"
-		printf -- '- Target: `jotter`\n'
-		printf -- '- Coverage binary: `%s`\n' "${coverage_jotter}"
-		printf -- '- Coverage object root: `%s`\n' "${objroot}"
-		printf -- '- Coverage flags: `%s`\n' "${COVERAGE_CFLAGS}"
-		printf -- '- Bench root: `%s`\n' "${BENCH_ROOT}"
-		printf -- '- Scope: `content/handlers/html/*.c`\n'
-		printf -- '- Raw build log: [coverage-build-jotter.log](%s)\n\n' "$(basename "${build_log}")"
+	printf 'TOTAL\t%s\t%s\t%s\tok\t-\n' "${total_covered}" "${total_lines}" "${total_percent}" >> "${coverage_tsv}"
+}
 
-		printf '## Summary\n\n'
-		printf '| Covered lines | Instrumented lines | Line coverage |\n'
-		printf '| ---: | ---: | ---: |\n'
-		printf '| %s | %s | %s%% |\n\n' "${total_covered}" "${total_lines}" "${total_percent}"
+write_coverage_scope_report() {
+	local scope_name="$1"
+	local coverage_tsv="$2"
+	local scope_note="$3"
+	local total_covered total_lines total_percent
 
-		printf '## Benchmark Runs\n\n'
-		printf '| Suite | Result | Exit | Log |\n'
-		printf '| --- | --- | ---: | --- |\n'
-		while IFS=$'\t' read -r suite result status log_name; do
-			printf '| `%s` | %s | %s | [log](%s) |\n' "${suite}" "${result}" "${status}" "${log_name}"
-		done < "${run_summary}"
+	read -r _total total_covered total_lines total_percent _status _raw < <(tail -n 1 "${coverage_tsv}")
 
-		printf '\n## HTML Renderer Files\n\n'
-		printf '| Source | Covered | Lines | Coverage | Status | Raw |\n'
-		printf '| --- | ---: | ---: | ---: | --- | --- |\n'
-		while IFS=$'\t' read -r source_rel covered lines percent status raw_name; do
-			if [ "${status}" = "ok" ]; then
-				raw_link="[$(basename "${raw_name}")](gcov/${raw_name})"
-			else
-				raw_link="[log](gcov/${raw_name})"
-			fi
-			printf '| `%s` | %s | %s | %s%% | %s | %s |\n' \
-				"${source_rel}" "${covered}" "${lines}" "${percent}" "${status}" "${raw_link}"
-		done < "${coverage_tsv}"
+	printf '\n## %s Coverage\n\n' "${scope_name}"
+	printf -- '- Scope: `%s`\n\n' "${scope_note}"
+	printf '| Covered lines | Instrumented lines | Line coverage |\n'
+	printf '| ---: | ---: | ---: |\n'
+	printf '| %s | %s | %s%% |\n\n' "${total_covered}" "${total_lines}" "${total_percent}"
 
-		printf '\n## Notes\n\n'
-		printf -- '- This report only tallies line coverage for `content/handlers/html/*.c`.\n'
-		printf -- '- Coverage objects are kept separately using `TARGET=jotter SUBTARGET=%s`.\n' "${COVERAGE_SUBTARGET}"
-		printf -- '- The instrumented binary is `%s`; the normal `jotter` binary is not overwritten.\n' "${COVERAGE_EXETARGET}"
-		printf -- '- Platform-specific and frontend-specific browser code is intentionally outside this tally.\n'
-	} > "${report}"
-
-	printf 'Wrote %s\n' "${report}" >&2
-	return "${overall_status}"
+	printf '### %s Files\n\n' "${scope_name}"
+	printf '| Source | Covered | Lines | Coverage | Status | Raw |\n'
+	printf '| --- | ---: | ---: | ---: | --- | --- |\n'
+	while IFS=$'\t' read -r source_rel covered lines percent status raw_name; do
+		[ "${source_rel}" != "TOTAL" ] || continue
+		if [ "${status}" = "ok" ]; then
+			raw_link="[$(basename "${raw_name}")](gcov/${raw_name})"
+		else
+			raw_link="[log](gcov/${raw_name})"
+		fi
+		printf '| `%s` | %s | %s | %s%% | %s | %s |\n' \
+			"${source_rel}" "${covered}" "${lines}" "${percent}" "${status}" "${raw_link}"
+	done < "${coverage_tsv}"
 }
 
 write_index_report() {
@@ -461,8 +531,8 @@ write_index_report() {
 		if [ -f "${OUTPUT_DIR}/memory-report.md" ]; then
 			printf -- '- [Memory report](memory-report.md)\n'
 		fi
-		if [ -f "${OUTPUT_DIR}/html-coverage-report.md" ]; then
-			printf -- '- [HTML renderer coverage report](html-coverage-report.md)\n'
+		if [ -f "${OUTPUT_DIR}/coverage-report.md" ]; then
+			printf -- '- [Engine coverage report](coverage-report.md)\n'
 		fi
 	} > "${report}"
 	printf 'Wrote %s\n' "${report}" >&2
@@ -476,13 +546,13 @@ case "${MODE}" in
 		overall_status=$?
 		;;
 	coverage)
-		run_coverage_report "${OUTPUT_DIR}/html-coverage-report.md"
+		run_coverage_report "${OUTPUT_DIR}/coverage-report.md"
 		overall_status=$?
 		;;
 	both)
 		run_memory_report "${OUTPUT_DIR}/memory-report.md"
 		memory_status=$?
-		run_coverage_report "${OUTPUT_DIR}/html-coverage-report.md"
+		run_coverage_report "${OUTPUT_DIR}/coverage-report.md"
 		coverage_status=$?
 		write_index_report
 		if [ "${memory_status}" -ne 0 ] || [ "${coverage_status}" -ne 0 ]; then

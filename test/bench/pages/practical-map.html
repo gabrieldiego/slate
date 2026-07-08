@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench Slippy Map</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+body {
+	background: #eef2f5;
+}
+.map-app {
+	display: table;
+	width: 100%;
+	border-spacing: 12px;
+}
+.map-sidebar,
+.map-stage,
+.map-details {
+	display: table-cell;
+	vertical-align: top;
+	background: #ffffff;
+	border: 1px solid #b9c4cf;
+	padding: 12px;
+}
+.map-sidebar {
+	width: 22%;
+}
+.map-details {
+	width: 24%;
+}
+.map-toolbar button {
+	margin: 0 5px 6px 0;
+	padding: 5px 8px;
+}
+.map-viewport {
+	position: relative;
+	width: 100%;
+	height: 420px;
+	overflow: hidden;
+	border: 2px solid #607080;
+	background: #dce8ef;
+}
+.tile-grid {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 768px;
+	height: 768px;
+}
+.map-tile {
+	position: absolute;
+	width: 128px;
+	height: 128px;
+	border: 1px solid rgba(40, 70, 90, 0.25);
+	background: #cfe0e8;
+}
+.tile-water {
+	background: #9dc8dd;
+}
+.tile-park {
+	background: #acd6a4;
+}
+.tile-city {
+	background: #dfd3bd;
+}
+.road {
+	position: absolute;
+	background: #ffffff;
+	border: 1px solid #b5a16e;
+}
+.road-main {
+	height: 16px;
+	width: 620px;
+	left: 52px;
+	top: 202px;
+}
+.road-cross {
+	width: 18px;
+	height: 640px;
+	left: 340px;
+	top: 35px;
+}
+.route-line {
+	position: absolute;
+	left: 170px;
+	top: 118px;
+	width: 320px;
+	height: 120px;
+	border-top: 6px solid #c0392b;
+	border-right: 6px solid #c0392b;
+}
+.marker {
+	position: absolute;
+	border: 2px solid #ffffff;
+	background: #1f6fb2;
+	color: #ffffff;
+	padding: 3px 6px;
+	font-weight: bold;
+}
+.marker-food {
+	background: #8e44ad;
+}
+.marker-transit {
+	background: #0f766e;
+}
+.marker-alert {
+	background: #c0392b;
+}
+.map-popup {
+	position: absolute;
+	left: 230px;
+	top: 70px;
+	width: 190px;
+	background: #ffffff;
+	border: 2px solid #304050;
+	padding: 8px;
+}
+.layer-list label {
+	display: block;
+	margin: 5px 0;
+}
+.route-steps li {
+	margin-bottom: 6px;
+}
+</style>
+</head>
+<body>
+<header class="site-head">
+<img src="assets/icon-travel.png" width="64" height="64" alt="Practical Bench map icon">
+<h1>Practical Bench Slippy Map</h1>
+</header>
+<main class="map-app">
+<aside class="map-sidebar">
+<p class="bench-kicker">Practical Bench page with map tiles, marker layers, route state, and dynamic popup content.</p>
+<form id="map-search" action="about:blank" method="get">
+<label>Search map <input id="map-query" type="search" name="q" value="coffee near station"></label>
+<button type="button" id="map-search-button">Search Map Bench</button>
+</form>
+<h2>Layers</h2>
+<div class="layer-list">
+<label><input type="checkbox" id="layer-transit" checked> Transit stops</label>
+<label><input type="checkbox" id="layer-food" checked> Food and cafes</label>
+<label><input type="checkbox" id="layer-alerts" checked> Traffic alerts</label>
+</div>
+<h2>Route</h2>
+<ol id="route-steps" class="route-steps">
+<li>Walk to Bench Station</li>
+<li>Take compact memory line</li>
+<li>Arrive at Renderer Plaza</li>
+</ol>
+</aside>
+<section class="map-stage">
+<div class="map-toolbar">
+<button type="button" id="map-pan-left">Pan Left</button>
+<button type="button" id="map-pan-right">Pan Right</button>
+<button type="button" id="map-pan-up">Pan Up</button>
+<button type="button" id="map-pan-down">Pan Down</button>
+<button type="button" id="map-zoom-in">Zoom In</button>
+<button type="button" id="map-zoom-out">Zoom Out</button>
+</div>
+<div id="map-viewport" class="map-viewport">
+<div id="tile-grid" class="tile-grid"></div>
+<div class="road road-main"></div>
+<div class="road road-cross"></div>
+<div class="route-line"></div>
+<button id="marker-transit" type="button" class="marker marker-transit" data-kind="Transit" style="left:318px;top:178px;">Station</button>
+<button id="marker-food" type="button" class="marker marker-food" data-kind="Food" style="left:186px;top:128px;">Cafe</button>
+<button id="marker-alert" type="button" class="marker marker-alert" data-kind="Alert" style="left:475px;top:225px;">Delay</button>
+<div id="map-popup" class="map-popup">Select a Practical Bench map marker.</div>
+</div>
+</section>
+<aside class="map-details">
+<h2>Map Details</h2>
+<p id="map-status">Map ready</p>
+<dl class="meta-list">
+<dt>Zoom</dt><dd id="map-zoom">12</dd>
+<dt>Center</dt><dd id="map-center">0,0</dd>
+<dt>Results</dt><dd id="map-results">3 nearby places</dd>
+</dl>
+<h2>Nearby</h2>
+<ul id="map-nearby">
+<li>Bench Cafe, 0.2 mi</li>
+<li>Renderer Plaza, 0.4 mi</li>
+<li>Low Memory Hotel, 0.7 mi</li>
+</ul>
+</aside>
+</main>
+<script src="practical-map.js"></script>
+</body>
+</html>

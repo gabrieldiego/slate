@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench JS Shop</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+.shop-grid {
+	display: table;
+	width: 100%;
+	border-spacing: 14px;
+}
+.shop-hero,
+.filter-bar,
+.recommendations,
+.reviews {
+	background: #ffffff;
+	border: 1px solid #b9c2ca;
+	padding: 14px;
+	margin-bottom: 12px;
+}
+.product-list,
+.cart-panel {
+	display: table-cell;
+	vertical-align: top;
+	background: #ffffff;
+	border: 1px solid #b9c2ca;
+	padding: 14px;
+}
+.product-card {
+	border-bottom: 1px solid #d5dde5;
+	padding: 10px 0;
+	min-height: 120px;
+}
+.product-card img {
+	float: left;
+	margin-right: 12px;
+}
+.cart-panel {
+	width: 30%;
+}
+.cart-total {
+	font-weight: bold;
+	color: #24517a;
+}
+.badge {
+	display: inline-block;
+	border: 1px solid #8796a5;
+	background: #eef3f8;
+	margin: 2px;
+	padding: 2px 5px;
+}
+.stock {
+	color: #206a42;
+}
+.sale {
+	color: #9a3412;
+	font-weight: bold;
+}
+.variant-row label,
+.filter-bar label {
+	display: inline-block;
+	margin: 4px 10px 4px 0;
+}
+</style>
+</head>
+<body class="bench-page">
+<header class="site-head">
+<img src="assets/icon-store.png" width="64" height="64" alt="Practical Bench store icon">
+<h1>Practical Bench JS Shop</h1>
+</header>
+<section class="shop-hero">
+<p class="bench-kicker">Practical Bench scripted commerce page with filters, variants, ratings, cart updates, recommendations, and review snippets.</p>
+<form id="shop-search" action="about:blank" method="get">
+<label>Search products <input id="shop-query" type="search" value="compact"></label>
+<button id="shop-search-button" type="button">Search Shop Bench</button>
+</form>
+</section>
+<section class="filter-bar">
+<label>Department
+<select id="shop-department">
+<option selected>Electronics</option>
+<option>Office</option>
+<option>Travel</option>
+</select>
+</label>
+<label>Sort
+<select id="shop-sort">
+<option selected>Featured</option>
+<option>Price low to high</option>
+<option>Highest rated</option>
+</select>
+</label>
+<label><input id="shop-in-stock" type="checkbox" checked> In stock</label>
+<label><input id="shop-pickup" type="checkbox" checked> Pickup today</label>
+<button id="shop-apply-filters" type="button">Apply Shop Filters</button>
+</section>
+<main class="shop-grid">
+<section class="product-list">
+<div id="shop-products"></div>
+</section>
+<aside class="cart-panel">
+<h2>Cart Summary</h2>
+<p id="cart-status">Cart is empty</p>
+<p id="cart-total" class="cart-total">Cart total: $0</p>
+<p id="cart-fulfillment">Choose pickup or shipping.</p>
+<button id="cart-discount" type="button">Apply Bench Discount</button>
+<button id="cart-checkout" type="button">Open Checkout Drawer</button>
+<div id="checkout-drawer"></div>
+</aside>
+</main>
+<section class="recommendations">
+<h2>Recommended For Practical Bench</h2>
+<div id="shop-recommendations"></div>
+</section>
+<section class="reviews">
+<h2>Recent Reviews</h2>
+<div id="shop-reviews"></div>
+</section>
+<script src="practical-js-shop.js"></script>
+</body>
+</html>

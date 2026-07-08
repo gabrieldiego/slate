@@ -5,11 +5,11 @@ repeatable and do not depend on the network.
 
 The suites intentionally keep three runtime profiles:
 
-* `smoke`: tiny parser, CSS, layout, and shutdown checks.
+* `smoke`: tiny parser, CSS, JavaScript, layout, and shutdown checks.
 * `practical`: ordinary browsing-shaped pages with articles, forms, component
-  layouts, embedded content, and one DOM event interaction.
+  layouts, embedded content, JavaScript DOM updates, and DOM event interactions.
 * `stress`: synthetic high-pressure pages for DOM size, CSS selectors, tables,
-  flex, forms, objects, image maps, and inline layout.
+  flex, forms, objects, image maps, inline layout, and JavaScript-generated DOM.
 
 Run one suite:
 
@@ -29,7 +29,7 @@ By default the Jotter process is wrapped with `/usr/bin/time -v`, which reports
 maximum resident set size. Override `BENCH_WRAPPER` to use Massif, Heaptrack, or
 no wrapper.
 
-Generate Markdown memory and/or HTML renderer coverage reports:
+Generate Markdown memory and/or engine coverage reports:
 
 ```sh
 scripts/bench-report.sh --mode both
@@ -41,9 +41,10 @@ Reports are written under `build/bench/<timestamp>/` by default, alongside the
 raw Jotter and `/usr/bin/time -v` logs for each suite. Treat the numbers as a
 baseline trend signal rather than a hard pass/fail threshold.
 
-Coverage mode rebuilds the Jotter frontend with GCC coverage instrumentation, runs the
-benchmark suites, and tallies only `content/handlers/html/*.c`. It only needs
-`gcov` from GCC; `lcov` and `gcovr` are not required for this report.
+Coverage mode rebuilds the Jotter frontend with GCC coverage instrumentation,
+runs the benchmark suites, and tallies the HTML renderer and Duktape JavaScript
+engine separately. It only needs `gcov` from GCC; `lcov` and `gcovr` are not
+required for this report.
 
 Coverage builds are kept separate from the normal Jotter binary:
 

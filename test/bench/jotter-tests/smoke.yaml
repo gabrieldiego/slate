@@ -4,7 +4,7 @@ steps:
 - action: launch
   language: en
   options:
-  - enable_javascript=0
+  - enable_javascript=1
   - memory_cache_size=1048576
   - disc_cache_size=0
 - action: window-new
@@ -15,6 +15,7 @@ steps:
   - ${SLATE_BENCH_ROOT}/smoke-basic.html
   - ${SLATE_BENCH_ROOT}/smoke-css.html
   - ${SLATE_BENCH_ROOT}/smoke-inline.html
+  - ${SLATE_BENCH_ROOT}/smoke-js.html
   - ${SLATE_BENCH_ROOT}/smoke-noscript-canvas.html
   - ${SLATE_BENCH_ROOT}/smoke-interactions.html
   steps:
@@ -29,6 +30,23 @@ steps:
     window: win1
     checks:
     - text-contains: Smoke Bench
+- action: navigate
+  window: win1
+  url: ${SLATE_BENCH_ROOT}/smoke-js.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: wait-log
+  window: win1
+  substring: smoke-js-ready
+- action: click
+  window: win1
+  target:
+    text: Run Smoke JS Action
+- action: wait-log
+  window: win1
+  substring: smoke-js-clicked
 - action: navigate
   window: win1
   url: ${SLATE_BENCH_ROOT}/smoke-interactions.html

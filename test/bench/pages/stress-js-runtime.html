@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stress Bench JavaScript Runtime</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+.runtime-panel {
+	background: #ffffff;
+	border: 1px solid #aeb9c4;
+	padding: 12px;
+}
+.runtime-table {
+	border-collapse: collapse;
+	margin-top: 12px;
+	width: 100%;
+}
+.runtime-table th,
+.runtime-table td {
+	border: 1px solid #c5cfd8;
+	padding: 5px 7px;
+}
+</style>
+</head>
+<body class="bench-page">
+<header class="site-head">
+<img src="assets/bench-logo.png" width="120" height="48" alt="Stress Bench logo">
+<h1>Stress Bench JavaScript Runtime</h1>
+</header>
+<main>
+<section class="runtime-panel">
+<p class="bench-kicker">Stress Bench page for Duktape runtime work: arrays, dates, regexps, JSON, property descriptors, and errors.</p>
+<p id="runtime-status">Runtime waiting</p>
+<table class="runtime-table">
+<thead><tr><th>Metric</th><th>Value</th></tr></thead>
+<tbody id="runtime-results"></tbody>
+</table>
+</section>
+<script src="stress-js-runtime.js"></script>
+</main>
+</body>
+</html>

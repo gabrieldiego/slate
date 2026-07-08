@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench Calendar</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+body {
+	background: #f6f7f9;
+}
+.calendar-layout {
+	display: table;
+	width: 100%;
+	border-spacing: 12px;
+}
+.calendar-main,
+.calendar-side {
+	display: table-cell;
+	vertical-align: top;
+	background: #ffffff;
+	border: 1px solid #bcc6cf;
+	padding: 12px;
+}
+.calendar-side {
+	width: 28%;
+}
+.calendar-grid {
+	display: table;
+	width: 100%;
+	border-collapse: collapse;
+}
+.calendar-row {
+	display: table-row;
+}
+.calendar-cell {
+	display: table-cell;
+	border: 1px solid #c8d1da;
+	height: 72px;
+	padding: 5px;
+}
+.event-pill {
+	display: block;
+	background: #e7f1fb;
+	border-left: 4px solid #2d6f9f;
+	margin-top: 4px;
+	padding: 2px 4px;
+}
+</style>
+</head>
+<body>
+<header class="site-head">
+<img src="assets/icon-issue.png" width="64" height="64" alt="Practical Bench calendar icon">
+<h1>Practical Bench Calendar</h1>
+</header>
+<main class="calendar-layout">
+<section class="calendar-main">
+<p class="bench-kicker">Practical Bench page with calendar grid, event creation, reminders, attendee list, and dynamic agenda updates.</p>
+<div class="bench-actions">
+<button type="button" id="calendar-prev">Previous Week</button>
+<button type="button" id="calendar-next">Next Week</button>
+<button type="button" id="calendar-today">Today</button>
+</div>
+<div id="calendar-grid" class="calendar-grid"></div>
+</section>
+<aside class="calendar-side">
+<h2>Create Event</h2>
+<form action="about:blank" method="get">
+<label>Title <input id="event-title" type="text" value="Renderer sync"></label>
+<label>Attendees <input id="event-attendees" type="text" value="html, css, js"></label>
+<label>Reminder
+<select id="event-reminder">
+<option>None</option>
+<option selected>15 minutes</option>
+<option>1 hour</option>
+</select>
+</label>
+<label><input id="event-video" type="checkbox" checked> Add video link</label>
+<button type="button" id="event-add">Add Bench Event</button>
+</form>
+<h2>Agenda</h2>
+<ul id="agenda-list"></ul>
+<p id="calendar-status">Calendar ready</p>
+</aside>
+</main>
+<script src="practical-calendar.js"></script>
+</body>
+</html>
