@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 WAIT_SECONDS=30
 LOG_FILE="${ROOT}/jotter-js-dry-run.log"
-ERROR_FILTER='^(warn|error|die)( |$)|javascript|duktape|exception|failed|critical'
+ERROR_FILTER='^(warn|error|die)( |$)|javascript|quickjs|exception|failed|critical'
 LOG_FILTER='level:WARNING'
 VERBOSE=0
 PRINT_ALL=0

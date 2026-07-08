@@ -1,0 +1,208 @@
+/* Console binding for browser using quickjs and libdom
+ *
+ * Copyright 2015 Vincent Sanders <vince@netsurf-browser.org>
+ * Copyright 2015 Daniel Silverstone <dsilvers@netsurf-browser.org>
+ *
+ * This file is part of NetSurf, http://www.slate-browser.org/
+ *
+ * Released under the terms of the MIT License,
+ *         http://www.opensource.org/licenses/mit-license
+ */
+
+class Console {
+      private unsigned int group;
+      prologue %{
+#include <nsutils/time.h>
+#include "slate/browser_window.h"
+
+#define CONSOLE_TIMERS MAGIC(ConsoleTimers)
+
+static void
+write_log_entry(slatejs_context *ctx, unsigned int group, browser_window_console_flags flags)
+{
+	/* objs... */
+	slatejs_bind_push_generics(ctx, "consoleFormatter");
+	slatejs_insert(ctx, 0);
+	if (slatejs_bind_pcall(ctx, slatejs_get_top(ctx) - 1, false)) {
+		/* Failed to convert somehow, oh dear, you get to keep
+		 * all the pieces.
+		 */
+		slatejs_pop(ctx);
+		slatejs_push_string(ctx, "Oh dear, formatter went banananas");
+	}
+	/* str?objs?... */
+	for (int i = 0; i < slatejs_get_top(ctx); ++i) {
+		(void)slatejs_safe_to_string(ctx, i);
+	}
+	/* strs... */
+	for (unsigned int u = 0; u < group; ++u) {
+		slatejs_push_lstring(ctx, " ", 1);
+		slatejs_insert(ctx, 0);
+	}
+	/* spcs... strs... */
+	slatejs_concat(ctx, slatejs_get_top(ctx));
+	/* str */
+
+	slatejs_push_global_object(ctx);
+	slatejs_get_prop_string(ctx, -1, PRIVATE_MAGIC);
+	window_private_t *priv_win = slatejs_get_pointer(ctx, -1);
+	slatejs_pop(ctx);
+
+	slatejs_size_t msglen;
+	const char *msg = slatejs_safe_to_lstring(ctx, 0, &msglen);
+
+	slateerror logerr = SLATEERROR_OK;
+	bool no_priv = priv_win == NULL;
+	bool no_win = no_priv ? true : priv_win->win == NULL;
+	bool closed = no_priv ? true : priv_win->closed_down == true;
+
+	if (!no_priv && !no_win && !closed) {
+		logerr = browser_window_console_log(priv_win->win,
+						    BW_CS_SCRIPT_CONSOLE,
+						    msg, msglen,
+						    flags);
+	}
+
+	if (no_priv || no_win || closed || logerr != SLATEERROR_OK) {
+		NSLOG(netsurf, DEBUG, "Unable to log: %s", slatejs_safe_to_string(ctx, 0));
+	}
+}
+
+%};
+};
+
+init Console ()
+%{
+	priv->group = 0;
+	slatejs_push_object(ctx);
+	slatejs_put_prop_string(ctx, 0, CONSOLE_TIMERS);
+%}
+
+method Console::group ()
+%{
+	priv->group ++;
+	return 0;
+%}
+
+method Console::groupCollapsed ()
+%{
+	priv->group ++;
+	return 0;
+%}
+
+method Console::groupEnd ()
+%{
+	if (priv->group)
+		priv->group --;
+	return 0;
+%}
+
+method Console::info()
+%{
+	write_log_entry(ctx, priv->group, BW_CS_FLAG_LEVEL_INFO);
+	return 0;
+%}
+
+method Console::debug()
+%{
+	write_log_entry(ctx, priv->group, BW_CS_FLAG_LEVEL_DEBUG);
+	return 0;
+%}
+
+method Console::error()
+%{
+	write_log_entry(ctx, priv->group, BW_CS_FLAG_LEVEL_ERROR);
+	return 0;
+%}
+
+method Console::log()
+%{
+	write_log_entry(ctx, priv->group, BW_CS_FLAG_LEVEL_LOG);
+	return 0;
+%}
+
+method Console::warn()
+%{
+	write_log_entry(ctx, priv->group, BW_CS_FLAG_LEVEL_WARN);
+	return 0;
+%}
+
+method Console::dir()
+%{
+	write_log_entry(ctx, priv->group, BW_CS_FLAG_LEVEL_INFO);
+	return 0;
+%}
+
+method Console::time()
+%{
+	uint64_t time_ms = 0;
+
+	if (nsu_getmonotonic_ms(&time_ms) != NSUERROR_OK)
+		return 0;
+
+	if (!slatejs_is_string(ctx, 0)) {
+		return slatejs_error(ctx, SLATEJS_ERR_ERROR, "Console.time() takes a string");
+	}
+
+	slatejs_set_top(ctx, 1);
+
+	slatejs_push_uint(ctx, (slatejs_uint_t)time_ms);
+
+	slatejs_push_this(ctx);
+	slatejs_get_prop_string(ctx, -1, CONSOLE_TIMERS);
+	slatejs_insert(ctx, 0);
+	slatejs_pop(ctx);
+
+	slatejs_put_prop(ctx, 0);
+
+	return 0;
+%}
+
+method Console::timeEnd()
+%{
+	uint64_t time_ms = 0;
+	uint64_t old_time_ms = 0;
+
+	if (nsu_getmonotonic_ms(&time_ms) != NSUERROR_OK)
+		return 0;
+
+	if (!slatejs_is_string(ctx, 0)) {
+		return slatejs_error(ctx, SLATEJS_ERR_ERROR, "Console.time() takes a string");
+	}
+
+	slatejs_set_top(ctx, 1);
+
+	slatejs_push_this(ctx);
+	slatejs_get_prop_string(ctx, -1, CONSOLE_TIMERS);
+	slatejs_insert(ctx, 0);
+	slatejs_pop(ctx);
+
+	slatejs_dup(ctx, -1);
+	slatejs_get_prop(ctx, 0);
+	if (slatejs_is_undefined(ctx, -1)) {
+		slatejs_pop(ctx);
+		slatejs_push_uint(ctx, (slatejs_uint_t)time_ms);
+	}
+	/* timers timername oldval */
+	old_time_ms = slatejs_to_uint32(ctx, -1);
+	slatejs_pop(ctx);
+	slatejs_dup(ctx, -1);
+	slatejs_insert(ctx, 0);
+	slatejs_del_prop(ctx, 0);
+	slatejs_push_string(ctx, "Timer elapsed: ");
+	slatejs_insert(ctx, 0);
+	slatejs_push_sprintf(ctx, "%u ms", (slatejs_uint_t)(time_ms - old_time_ms));
+	write_log_entry(ctx, priv->group, BW_CS_FLAG_LEVEL_INFO);
+	return 0;
+%}
+
+method Console::trace ()
+%{
+	slatejs_idx_t i = slatejs_push_error_object(ctx, SLATEJS_ERR_ERROR, "Dummy Error");
+	slatejs_get_prop_string(ctx, i, "stack");
+	slatejs_safe_to_string(ctx, -1);
+	slatejs_insert(ctx, 0);
+	slatejs_set_top(ctx, 1);
+	write_log_entry(ctx, priv->group, BW_CS_FLAG_LEVEL_INFO);
+	return 0;
+%}

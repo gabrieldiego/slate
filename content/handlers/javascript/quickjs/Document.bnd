@@ -1,0 +1,679 @@
+/* document binding for browser using quickjs and libdom
+ *
+ * Copyright 2015 Vincent Sanders <vince@netsurf-browser.org>
+ *
+ * This file is part of NetSurf, http://www.slate-browser.org/
+ *
+ * Released under the terms of the MIT License,
+ *         http://www.opensource.org/licenses/mit-license
+ */
+
+prologue Document()
+%{
+#include <string.h>
+
+#include "utils/corestrings.h"
+#include "utils/libdom.h"
+#include "utils/utils.h"
+#include "content/hlcache.h"
+#include "html/private.h"
+#include "content/urldb.h"
+
+#define HANDLER_MAGIC MAGIC(HANDLER_MAP)
+%}
+
+
+init Document(struct dom_document *document::node);
+
+getter Document::defaultView()
+%{
+	slatejs_push_global_object(ctx);
+	return 1;
+%}
+
+method Document::write()
+%{
+	struct html_content *htmlc;
+	slatejs_size_t text_len;
+	dom_exception err;
+	const char *text;
+
+	for (int i = 0; i < slatejs_get_top(ctx); ++i) {
+		slatejs_safe_to_string(ctx, i);
+	}
+	slatejs_concat(ctx, slatejs_get_top(ctx));
+	text = slatejs_safe_to_lstring(ctx, 0, &text_len);
+	NSLOG(netsurf, DEBUG, "Writing %*s", (int)text_len, text);
+
+	err = dom_node_get_user_data(priv->parent.node,
+				     corestring_dom___ns_key_html_content_data,
+				     &htmlc);
+	if ((err != DOM_NO_ERR) || (htmlc == NULL)) {
+		NSLOG(netsurf, INFO,
+		      "error getting htmlc. parent node:%p htmlc:%p",
+		      priv->parent.node, htmlc);
+		return 0;
+	} else if (htmlc->parser == NULL) {
+		NSLOG(netsurf, INFO, "error; no parser for htmlc: %p", htmlc);
+		return 0;
+	}
+
+	dom_hubbub_parser_insert_chunk(htmlc->parser,
+			(uint8_t *)text, text_len);
+
+	return 0;
+%}
+
+method Document::writeln()
+%{
+	const char nl[] = "\n";
+	struct html_content *htmlc;
+	slatejs_size_t text_len;
+	const char *text;
+	dom_exception err;
+
+	for (int i = 0; i < slatejs_get_top(ctx); ++i) {
+		slatejs_safe_to_string(ctx, i);
+	}
+	slatejs_concat(ctx, slatejs_get_top(ctx));
+	text = slatejs_safe_to_lstring(ctx, 0, &text_len);
+
+	NSLOG(netsurf, DEBUG, "Writeln %*s", (int)text_len, text);
+	err = dom_node_get_user_data(priv->parent.node,
+				     corestring_dom___ns_key_html_content_data,
+				     &htmlc);
+	if ((err != DOM_NO_ERR) || (htmlc == NULL)) {
+		NSLOG(netsurf, INFO,
+		      "error getting htmlc. parent node:%p htmlc:%p",
+		      priv->parent.node, htmlc);
+		return 0;
+	} else if (htmlc->parser == NULL) {
+		NSLOG(netsurf, INFO, "error; no parser for htmlc: %p", htmlc);
+		return 0;
+	}
+
+	dom_hubbub_parser_insert_chunk(htmlc->parser, (uint8_t *)text, text_len);
+	dom_hubbub_parser_insert_chunk(htmlc->parser, (uint8_t *)nl, SLEN(nl));
+
+	return 0;
+%}
+
+method Document::createTextNode()
+%{
+	dom_node *newnode;
+	dom_exception err;
+	slatejs_size_t text_len;
+	const char *text = slatejs_safe_to_lstring(ctx, 0, &text_len);
+	dom_string *text_str;
+
+	err = dom_string_create((const uint8_t*)text, text_len, &text_str);
+	if (err != DOM_NO_ERR) return 0; /* coerced to undefined */
+
+	err = dom_document_create_text_node(priv->parent.node,
+					    text_str,
+					    &newnode);
+	if (err != DOM_NO_ERR) {
+		dom_string_unref(text_str);
+		return 0; /* coerced to undefined */
+	}
+
+	dom_string_unref(text_str);
+
+	slatejs_bind_push_node(ctx, newnode);
+
+	dom_node_unref(newnode);
+
+	return 1;
+%}
+
+method Document::createElement()
+%{
+	dom_node *newnode;
+	dom_exception err;
+	slatejs_size_t text_len;
+	const char *text = slatejs_safe_to_lstring(ctx, 0, &text_len);
+	dom_string *text_str;
+
+	err = dom_string_create((const uint8_t*)text, text_len, &text_str);
+	if (err != DOM_NO_ERR) return 0; /* coerced to undefined */
+
+	err = dom_document_create_element_ns(priv->parent.node,
+					     corestring_dom_html_namespace,
+					     text_str,
+					     &newnode);
+	if (err != DOM_NO_ERR) {
+		dom_string_unref(text_str);
+		return 0; /* coerced to undefined */
+	}
+
+	dom_string_unref(text_str);
+
+	slatejs_bind_push_node(ctx, newnode);
+
+	dom_node_unref(newnode);
+
+	return 1;
+%}
+
+method Document::createElementNS()
+%{
+	dom_node *newnode;
+	dom_exception err;
+	slatejs_size_t text_len;
+	slatejs_size_t ns_len;
+	const char *ns = slatejs_safe_to_lstring(ctx, 0, &ns_len);
+	const char *text = slatejs_safe_to_lstring(ctx, 1, &text_len);
+	dom_string *text_str;
+	dom_string *ns_str;
+
+	err = dom_string_create((const uint8_t*)ns, ns_len, &ns_str);
+	if (err != DOM_NO_ERR) return 0; /* coerced to undefined */
+
+	err = dom_string_create((const uint8_t*)text, text_len, &text_str);
+	if (err != DOM_NO_ERR) {
+		dom_string_unref(ns_str);
+		return 0; /* coerced to undefined */
+	}
+
+	err = dom_document_create_element_ns(priv->parent.node,
+					     ns_str,
+					     text_str,
+					     &newnode);
+	if (err != DOM_NO_ERR) {
+		dom_string_unref(ns_str);
+		dom_string_unref(text_str);
+		return 0; /* coerced to undefined */
+	}
+
+	dom_string_unref(text_str);
+	dom_string_unref(ns_str);
+
+	slatejs_bind_push_node(ctx, newnode);
+
+	dom_node_unref(newnode);
+
+	return 1;
+%}
+
+method Document::createDocumentFragment()
+%{
+	struct dom_document_fragment *frag = NULL;
+	dom_exception err;
+
+	err = dom_document_create_document_fragment(priv->parent.node, &frag);
+
+	if (err != DOM_NO_ERR) return 0; /* coerced to undefined */
+
+	slatejs_bind_push_node(ctx, (dom_node *)frag);
+
+	dom_node_unref(frag); /* The pushed node holds the reference now */
+
+	return 1;
+%}
+
+getter Document::head()
+%{
+	struct dom_nodelist *nodes;
+	struct dom_node *retnode;
+	dom_exception err;
+	err = dom_document_get_elements_by_tag_name(priv->parent.node,
+						    corestring_dom_HEAD,
+						    &nodes);
+	if (err != DOM_NO_ERR) return 0; /* coerced to undefined */
+
+	err = dom_nodelist_item(nodes, 0, &retnode);
+
+	if (err != DOM_NO_ERR) {
+		dom_nodelist_unref(nodes);
+		return 0; /* coerced to undefined */
+	}
+
+	dom_nodelist_unref(nodes);
+
+	if (retnode == NULL) return 0; /* coerced to undefined */
+
+	slatejs_bind_push_node(ctx, retnode);
+
+	dom_node_unref(retnode);
+
+	return 1;
+%}
+
+getter Document::body()
+%{
+	struct dom_nodelist *nodes;
+	struct dom_node *retnode;
+	dom_exception err;
+	err = dom_document_get_elements_by_tag_name(priv->parent.node,
+						    corestring_dom_BODY,
+						    &nodes);
+	if (err != DOM_NO_ERR) {
+		return 0; /* coerced to undefined */
+	}
+
+	err = dom_nodelist_item(nodes, 0, &retnode);
+
+	if (err != DOM_NO_ERR) {
+		dom_nodelist_unref(nodes);
+		return 0; /* coerced to undefined */
+	}
+
+	dom_nodelist_unref(nodes);
+
+	if (retnode != NULL) {
+		slatejs_bind_push_node(ctx, retnode);
+
+		dom_node_unref(retnode);
+
+		return 1;
+	}
+
+	return 0; /* coerced to undefined */
+%}
+
+getter Document::location()
+%{
+	/* retrieve the location object from the root object (window) */
+	slatejs_push_global_object(ctx);
+	slatejs_get_prop_string(ctx, -1, "location");
+	if (slatejs_is_undefined(ctx, -1)) {
+		slatejs_pop(ctx);
+		return 0;
+	}
+	return 1;
+%}
+
+
+method Document::getElementById()
+%{
+	dom_string *elementId_dom;
+	dom_element *element;
+	dom_exception exc;
+	slatejs_size_t text_len;
+	const char *text = slatejs_safe_to_lstring(ctx, 0, &text_len);
+
+	exc = dom_string_create((uint8_t*)text, text_len, &elementId_dom);
+	if (exc != DOM_NO_ERR) {
+		return 0;
+	}
+
+	exc = dom_document_get_element_by_id(((node_private_t *)priv)->node,
+					     elementId_dom, &element);
+	dom_string_unref(elementId_dom);
+	if (exc != DOM_NO_ERR) {
+		return 0;
+	}
+
+	if (element != NULL) {
+		slatejs_bind_push_node(ctx, (dom_node *)element);
+		dom_node_unref(element);
+		return 1;
+	}
+
+	return 0;
+%}
+
+getter Document::documentElement()
+%{
+	dom_exception exc;
+	dom_element *element;
+
+	exc = dom_document_get_document_element(((node_private_t *)priv)->node,
+						&element);
+	if (exc != DOM_NO_ERR) {
+		return 0;
+	}
+
+	if (element == NULL) {
+		return 0;
+	}
+
+	slatejs_bind_push_node(ctx, (dom_node *)element);
+	dom_node_unref(element);
+
+	return 1;
+
+%}
+
+method Document::getElementsByTagName()
+%{
+	dom_nodelist *nodes;
+	dom_exception err;
+	slatejs_size_t text_len;
+	const char *text = slatejs_safe_to_lstring(ctx, 0, &text_len);
+	dom_string *tag;
+
+	err = dom_string_create((uint8_t*)text, text_len, &tag);
+
+	if (err != DOM_NO_ERR) return 0; /* coerced to undefined */
+
+	err = dom_document_get_elements_by_tag_name(((node_private_t *)priv)->node,
+						    tag, &nodes);
+	dom_string_unref(tag);
+	if (err != DOM_NO_ERR) return 0; /* coerced to undefined */
+
+	if (nodes == NULL) return 0; /* coerced to undefined */
+
+	slatejs_bind_push_generics(ctx, "makeListProxy");
+
+	slatejs_push_pointer(ctx, nodes);
+	slatejs_bind_create_object(ctx, PROTO_NAME(NODELIST), 1);
+	dom_nodelist_unref(nodes);
+
+	if (slatejs_bind_pcall(ctx, 1, false) != 0) {
+		NSLOG(quickjs, DEBUG, "Unable to construct nodelist?");
+		return 0; /* coerced to undefined */
+	}
+
+	return 1; /* The Proxy(NodeList) wrapper */
+%}
+
+getter Document::cookie()
+%{
+	char *cookie_str;
+	struct html_content *htmlc;
+	dom_exception err;
+
+	err = dom_node_get_user_data(priv->parent.node,
+				     corestring_dom___ns_key_html_content_data,
+				     &htmlc);
+	if ((err == DOM_NO_ERR) && (htmlc != NULL)) {
+		cookie_str = urldb_get_cookie(llcache_handle_get_url(htmlc->base.llcache), false);
+		if (cookie_str != NULL) {
+			slatejs_push_string(ctx, cookie_str);
+			free(cookie_str);
+		} else {
+			slatejs_push_string(ctx, "");
+		}
+		return 1;
+	} else {
+		NSLOG(netsurf, INFO,
+		      "error getting htmlc. parent node:%p htmlc:%p",
+		      priv->parent.node, htmlc);
+	}
+	return 0;
+%}
+
+setter Document::cookie()
+%{
+	struct html_content *htmlc;
+	dom_exception err;
+
+	const char * cookie_str = slatejs_safe_to_string(ctx, 0);
+
+	err = dom_node_get_user_data(priv->parent.node,
+				     corestring_dom___ns_key_html_content_data,
+				     &htmlc);
+	if ((err == DOM_NO_ERR) && (htmlc != NULL)) {
+		/* At this point we need to get the given cookie string parsed
+		 * and inserted into the urldb
+		 */
+		bool ok = urldb_set_cookie(cookie_str, /* The cookie string to set */
+					   /* The location to set the cookie for */
+					   llcache_handle_get_url(htmlc->base.llcache),
+					   NULL); /* The referer, which we trust */
+		if (!ok) {
+			NSLOG(netsurf, DEEPDEBUG, "unable to set cookie: %s", cookie_str);
+			/* However there's no useful way to signal that to JS */
+		}
+	} else {
+		NSLOG(netsurf, INFO,
+		      "error getting htmlc. parent node:%p htmlc:%p",
+		      priv->parent.node, htmlc);
+	}
+	return 0;
+%}
+
+method Document::createEvent ()
+%{
+	/* Create a new event, mark it untrusted since it's new from JS */
+	dom_event *evt = NULL;
+	dom_string *event_type = NULL;
+	const char *event_name = slatejs_safe_to_string(ctx, 0);
+	const char *prototype = PROTO_NAME(EVENT);
+	dom_exception exc;
+
+	if ((strcmp(event_name, "CustomEvent") == 0) ||
+	    (strcmp(event_name, "CustomEvents") == 0)) {
+		event_name = "CustomEvent";
+		prototype = PROTO_NAME(CUSTOMEVENT);
+	} else if ((strcmp(event_name, "UIEvent") == 0) ||
+		   (strcmp(event_name, "UIEvents") == 0)) {
+		event_name = "UIEvent";
+		prototype = PROTO_NAME(UIEVENT);
+	} else if ((strcmp(event_name, "KeyboardEvent") == 0) ||
+		   (strcmp(event_name, "KeyboardEvents") == 0)) {
+		event_name = "KeyboardEvent";
+		prototype = PROTO_NAME(KEYBOARDEVENT);
+	} else if ((strcmp(event_name, "MouseEvent") == 0) ||
+		   (strcmp(event_name, "MouseEvents") == 0)) {
+		event_name = "MouseEvent";
+		prototype = PROTO_NAME(MOUSEEVENT);
+	} else if (strcmp(event_name, "DragEvent") == 0) {
+		event_name = "MouseEvent";
+		prototype = PROTO_NAME(DRAGEVENT);
+	} else if (strcmp(event_name, "WheelEvent") == 0) {
+		event_name = "MouseEvent";
+		prototype = PROTO_NAME(WHEELEVENT);
+	} else if (strcmp(event_name, "FocusEvent") == 0) {
+		event_name = "UIEvent";
+		prototype = PROTO_NAME(FOCUSEVENT);
+	} else if (strcmp(event_name, "CompositionEvent") == 0) {
+		event_name = "UIEvent";
+		prototype = PROTO_NAME(COMPOSITIONEVENT);
+	} else if ((strcmp(event_name, "MutationEvent") == 0) ||
+		   (strcmp(event_name, "MutationEvents") == 0)) {
+		event_name = "MutationEvent";
+		prototype = PROTO_NAME(MUTATIONEVENT);
+	} else if (strcmp(event_name, "StorageEvent") == 0) {
+		event_name = "Event";
+		prototype = PROTO_NAME(STORAGEEVENT);
+	} else if (strcmp(event_name, "CloseEvent") == 0) {
+		event_name = "Event";
+		prototype = PROTO_NAME(CLOSEEVENT);
+	} else if (strcmp(event_name, "MessageEvent") == 0) {
+		event_name = "Event";
+		prototype = PROTO_NAME(MESSAGEEVENT);
+	} else if (strcmp(event_name, "ErrorEvent") == 0) {
+		event_name = "Event";
+		prototype = PROTO_NAME(ERROREVENT);
+	} else if (strcmp(event_name, "BeforeUnloadEvent") == 0) {
+		event_name = "Event";
+		prototype = PROTO_NAME(BEFOREUNLOADEVENT);
+	} else if (strcmp(event_name, "PageTransitionEvent") == 0) {
+		event_name = "Event";
+		prototype = PROTO_NAME(PAGETRANSITIONEVENT);
+	} else if (strcmp(event_name, "HashChangeEvent") == 0) {
+		event_name = "Event";
+		prototype = PROTO_NAME(HASHCHANGEEVENT);
+	} else if (strcmp(event_name, "PopStateEvent") == 0) {
+		event_name = "Event";
+		prototype = PROTO_NAME(POPSTATEEVENT);
+	} else if (strcmp(event_name, "RelatedEvent") == 0) {
+		event_name = "Event";
+		prototype = PROTO_NAME(RELATEDEVENT);
+	} else if (strcmp(event_name, "AutocompleteErrorEvent") == 0) {
+		event_name = "Event";
+		prototype = PROTO_NAME(AUTOCOMPLETEERROREVENT);
+	} else if (strcmp(event_name, "TrackEvent") == 0) {
+		event_name = "Event";
+		prototype = PROTO_NAME(TRACKEVENT);
+	} else {
+		event_name = "Event";
+	}
+
+	exc = dom_string_create((const uint8_t *)event_name,
+				strlen(event_name),
+				&event_type);
+	if (exc == DOM_NO_ERR) {
+		exc = dom_document_event_create_event(
+				(dom_document_event *)priv->parent.node,
+				event_type,
+				&evt);
+		dom_string_unref(event_type);
+	}
+	if (exc != DOM_NO_ERR) {
+		exc = dom_event_create(&evt);
+		prototype = PROTO_NAME(EVENT);
+	}
+	if (exc != DOM_NO_ERR) return 0;
+	exc = dom_event_set_is_trusted(evt, false);
+	if (exc != DOM_NO_ERR) { dom_event_unref(evt); return 0; }
+
+	slatejs_push_pointer(ctx, evt);
+	if (slatejs_bind_create_object(ctx, prototype, 1) != SLATEJS_EXEC_SUCCESS) {
+		dom_event_unref(evt);
+		return 0;
+	}
+
+	dom_event_unref(evt);
+	return 1;
+%}
+
+getter Document::implementation ()
+%{
+	/* Create a new DOMImplementation instance */
+	slatejs_push_this(ctx);
+	slatejs_get_prop_string(ctx, -1, MAGIC(DOMImplementation));
+	if (slatejs_is_undefined(ctx, -1)) {
+		slatejs_pop(ctx);
+
+		if (slatejs_bind_create_object(ctx,
+					PROTO_NAME(DOMIMPLEMENTATION),
+					0) != SLATEJS_EXEC_SUCCESS) {
+			return slatejs_error(ctx,
+				  SLATEJS_ERR_ERROR,
+				  "Unable to create dom implementation object");
+		}
+		slatejs_dup(ctx, -1);
+		slatejs_put_prop_string(ctx, -3, MAGIC(DOMImplementation));
+	}
+	return 1;
+%}
+
+getter Document::onabort();
+setter Document::onabort();
+getter Document::onautocompleteerror();
+setter Document::onautocompleteerror();
+getter Document::onautocomplete();
+setter Document::onautocomplete();
+getter Document::onblur();
+setter Document::onblur();
+getter Document::oncancel();
+setter Document::oncancel();
+getter Document::oncanplaythrough();
+setter Document::oncanplaythrough();
+getter Document::oncanplay();
+setter Document::oncanplay();
+getter Document::onchange();
+setter Document::onchange();
+getter Document::onclick();
+setter Document::onclick();
+getter Document::onclose();
+setter Document::onclose();
+getter Document::oncontextmenu();
+setter Document::oncontextmenu();
+getter Document::oncuechange();
+setter Document::oncuechange();
+getter Document::ondblclick();
+setter Document::ondblclick();
+getter Document::ondragend();
+setter Document::ondragend();
+getter Document::ondragenter();
+setter Document::ondragenter();
+getter Document::ondragexit();
+setter Document::ondragexit();
+getter Document::ondragleave();
+setter Document::ondragleave();
+getter Document::ondragover();
+setter Document::ondragover();
+getter Document::ondragstart();
+setter Document::ondragstart();
+getter Document::ondrag();
+setter Document::ondrag();
+getter Document::ondrop();
+setter Document::ondrop();
+getter Document::ondurationchange();
+setter Document::ondurationchange();
+getter Document::onemptied();
+setter Document::onemptied();
+getter Document::onended();
+setter Document::onended();
+getter Document::onfocus();
+setter Document::onfocus();
+getter Document::oninput();
+setter Document::oninput();
+getter Document::oninvalid();
+setter Document::oninvalid();
+getter Document::onkeydown();
+setter Document::onkeydown();
+getter Document::onkeypress();
+setter Document::onkeypress();
+getter Document::onkeyup();
+setter Document::onkeyup();
+getter Document::onloadeddata();
+setter Document::onloadeddata();
+getter Document::onloadedmetadata();
+setter Document::onloadedmetadata();
+getter Document::onloadstart();
+setter Document::onloadstart();
+getter Document::onload();
+setter Document::onload();
+getter Document::onmousedown();
+setter Document::onmousedown();
+getter Document::onmouseenter();
+setter Document::onmouseenter();
+getter Document::onmouseleave();
+setter Document::onmouseleave();
+getter Document::onmousemove();
+setter Document::onmousemove();
+getter Document::onmouseout();
+setter Document::onmouseout();
+getter Document::onmouseover();
+setter Document::onmouseover();
+getter Document::onmouseup();
+setter Document::onmouseup();
+getter Document::onpause();
+setter Document::onpause();
+getter Document::onplaying();
+setter Document::onplaying();
+getter Document::onplay();
+setter Document::onplay();
+getter Document::onprogress();
+setter Document::onprogress();
+getter Document::onratechange();
+setter Document::onratechange();
+getter Document::onreadystatechange();
+setter Document::onreadystatechange();
+getter Document::onreset();
+setter Document::onreset();
+getter Document::onresize();
+setter Document::onresize();
+getter Document::onscroll();
+setter Document::onscroll();
+getter Document::onseeked();
+setter Document::onseeked();
+getter Document::onseeking();
+setter Document::onseeking();
+getter Document::onselect();
+setter Document::onselect();
+getter Document::onshow();
+setter Document::onshow();
+getter Document::onsort();
+setter Document::onsort();
+getter Document::onstalled();
+setter Document::onstalled();
+getter Document::onsubmit();
+setter Document::onsubmit();
+getter Document::onsuspend();
+setter Document::onsuspend();
+getter Document::ontimeupdate();
+setter Document::ontimeupdate();
+getter Document::ontoggle();
+setter Document::ontoggle();
+getter Document::onvolumechange();
+setter Document::onvolumechange();
+getter Document::onwaiting();
+setter Document::onwaiting();
+getter Document::onwheel();
+setter Document::onwheel();

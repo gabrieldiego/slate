@@ -1,0 +1,87 @@
+/* Navigator binding for browser using quickjs and libdom
+ *
+ * Copyright 2015 Vincent Sanders <vince@netsurf-browser.org>
+ *
+ * This file is part of NetSurf, http://www.slate-browser.org/
+ *
+ * Released under the terms of the MIT License,
+ *         http://www.opensource.org/licenses/mit-license
+ */
+
+prologue Navigator()
+%{
+#include "utils/useragent.h"
+%}
+
+method Navigator::taintEnabled()
+%{
+	slatejs_push_boolean(ctx, false);
+	return 1;
+%}
+
+getter Navigator::appCodeName()
+%{
+	slatejs_push_string(ctx, "Mozilla");
+	return 1;
+%}
+
+getter Navigator::appName()
+%{
+	slatejs_push_string(ctx, "Netscape");
+	return 1;
+%}
+
+getter Navigator::appVersion()
+%{
+	slatejs_push_string(ctx, "3.4");
+	return 1;
+%}
+
+getter Navigator::platform()
+%{
+	slatejs_push_string(ctx, "Linux x86_64");
+	return 1;
+%}
+
+getter Navigator::product()
+%{
+	slatejs_push_string(ctx, "Gecko");
+	return 1;
+%}
+
+getter Navigator::productSub()
+%{
+	slatejs_push_string(ctx, "20100101");
+	return 1;
+%}
+
+getter Navigator::vendor()
+%{
+	slatejs_push_string(ctx, "");
+	return 1;
+%}
+
+getter Navigator::vendorSub()
+%{
+	slatejs_push_string(ctx, "");
+	return 1;
+%}
+
+getter Navigator::cookieEnabled()
+%{
+	slatejs_push_boolean(ctx, false);
+	return 1;
+%}
+
+/* indicate there is no plugin for java installed */
+getter Navigator::javaEnabled()
+%{
+	slatejs_push_boolean(ctx, false);
+	return 1;
+%}
+
+getter Navigator::userAgent()
+%{
+	slatejs_push_string(ctx, user_agent_string());
+	return 1;
+%}

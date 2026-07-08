@@ -42,7 +42,7 @@ raw Jotter and `/usr/bin/time -v` logs for each suite. Treat the numbers as a
 baseline trend signal rather than a hard pass/fail threshold.
 
 Coverage mode rebuilds the Jotter frontend with GCC coverage instrumentation,
-runs the benchmark suites, and tallies the HTML renderer and Duktape JavaScript
+runs the benchmark suites, and tallies the HTML renderer and QuickJS JavaScript
 engine separately. It only needs `gcov` from GCC; `lcov` and `gcovr` are not
 required for this report.
 

@@ -81,7 +81,7 @@ class StderrEcho:
             "TypeError",
             "ReferenceError",
             "RangeError",
-            "dukky_dump_error",
+            "slatejs_dump_error",
         )
         return any(needle in line for needle in needles)
 

@@ -1,0 +1,745 @@
+/* CSS style declaration binding for NetSurf using quickjs and libdom
+ *
+ * Copyright 2026
+ *
+ * Released under the terms of the MIT License,
+ *         http://www.opensource.org/licenses/mit-license
+ */
+
+class CSSStyleDeclaration {
+	private struct dom_element *element;
+	prologue %{
+#include <stdbool.h>
+#include <string.h>
+#include <utils/corestrings.h>
+#include "content/content.h"
+#include "content/content_protected.h"
+#include "html/private.h"
+
+static void css_style_request_redraw(dom_element *element)
+{
+	dom_document *doc = NULL;
+	struct html_content *htmlc = NULL;
+	union content_msg_data data;
+	int width;
+	int height;
+
+	if (element == NULL) {
+		return;
+	}
+
+	if (dom_node_get_owner_document((dom_node *)element, &doc) !=
+			DOM_NO_ERR || doc == NULL) {
+		return;
+	}
+
+	if (dom_node_get_user_data(doc,
+			corestring_dom___ns_key_html_content_data,
+			&htmlc) != DOM_NO_ERR || htmlc == NULL) {
+		dom_node_unref(doc);
+		return;
+	}
+
+	dom_node_unref(doc);
+
+	width = content__get_width(&htmlc->base);
+	height = content__get_height(&htmlc->base);
+	if (width <= 0) {
+		width = htmlc->base.available_width;
+	}
+	if (height <= 0) {
+		height = htmlc->base.height;
+	}
+
+	data.redraw.x = 0;
+	data.redraw.y = 0;
+	data.redraw.width = width > 0 ? width : 4096;
+	data.redraw.height = height > 0 ? height : 4096;
+	content_broadcast(&htmlc->base, CONTENT_MSG_REDRAW, &data);
+}
+
+static bool css_style_property_affects_leaflet_position(const char *property)
+{
+	return strcmp(property, "left") == 0 ||
+			strcmp(property, "top") == 0 ||
+			strcmp(property, "transform") == 0;
+}
+
+static bool css_style_ascii_ieq(const char *a, size_t a_len, const char *b)
+{
+	size_t i;
+
+	for (i = 0; i < a_len; i++) {
+		char ca = a[i];
+		char cb = b[i];
+
+		if (cb == '\0') {
+			return false;
+		}
+		if ((ca >= 'A') && (ca <= 'Z')) {
+			ca = (char)(ca - 'A' + 'a');
+		}
+		if ((cb >= 'A') && (cb <= 'Z')) {
+			cb = (char)(cb - 'A' + 'a');
+		}
+		if (ca != cb) {
+			return false;
+		}
+	}
+
+	return b[a_len] == '\0';
+}
+
+static bool css_style_decl_name_matches(const char *start, const char *end,
+		const char *property)
+{
+	const char *colon;
+	const char *name_start;
+	const char *name_end;
+
+	for (colon = start; colon < end; colon++) {
+		if (*colon == ':') {
+			break;
+		}
+	}
+	if (colon == end) {
+		return false;
+	}
+
+	name_start = start;
+	while ((name_start < colon) &&
+			((*name_start == ' ') || (*name_start == '\t') ||
+			 (*name_start == '\n') || (*name_start == '\r'))) {
+		name_start++;
+	}
+
+	name_end = colon;
+	while ((name_end > name_start) &&
+			((name_end[-1] == ' ') || (name_end[-1] == '\t') ||
+			 (name_end[-1] == '\n') || (name_end[-1] == '\r'))) {
+		name_end--;
+	}
+
+	return css_style_ascii_ieq(name_start, (size_t)(name_end - name_start),
+			property);
+}
+
+static dom_exception css_style_get_attribute(dom_element *element,
+		dom_string **style)
+{
+	dom_exception exc;
+
+	*style = NULL;
+	if (element == NULL) {
+		return DOM_NO_ERR;
+	}
+
+	exc = dom_element_get_attribute(element, corestring_dom_style, style);
+	if ((exc == DOM_NO_ERR) && (*style == NULL)) {
+		return DOM_NO_ERR;
+	}
+
+	return exc;
+}
+
+static bool css_style_set_text(dom_element *element, const char *text,
+		size_t text_len)
+{
+	dom_string *style;
+	dom_exception exc;
+
+	if (element == NULL) {
+		return false;
+	}
+
+	exc = dom_string_create((const uint8_t *)text, text_len, &style);
+	if (exc != DOM_NO_ERR) {
+		return false;
+	}
+
+	exc = dom_element_set_attribute(element, corestring_dom_style, style);
+	dom_string_unref(style);
+
+	return exc == DOM_NO_ERR;
+}
+
+static bool css_style_copy_without_property(char *out, size_t *out_len,
+		const char *style, size_t style_len, const char *property)
+{
+	const char *pos = style;
+	const char *end = style + style_len;
+
+	*out_len = 0;
+
+	while (pos < end) {
+		const char *decl_start = pos;
+		const char *decl_end;
+		const char *copy_start;
+		const char *copy_end;
+
+		while ((decl_start < end) &&
+				((*decl_start == ';') || (*decl_start == ' ') ||
+				 (*decl_start == '\t') || (*decl_start == '\n') ||
+				 (*decl_start == '\r'))) {
+			decl_start++;
+		}
+		decl_end = decl_start;
+		while ((decl_end < end) && (*decl_end != ';')) {
+			decl_end++;
+		}
+
+		if ((decl_start < decl_end) &&
+				!css_style_decl_name_matches(decl_start, decl_end, property)) {
+			copy_start = decl_start;
+			copy_end = decl_end;
+			while ((copy_end > copy_start) &&
+					((copy_end[-1] == ' ') || (copy_end[-1] == '\t') ||
+					 (copy_end[-1] == '\n') || (copy_end[-1] == '\r'))) {
+				copy_end--;
+			}
+			memcpy(out + *out_len, copy_start, (size_t)(copy_end - copy_start));
+			*out_len += (size_t)(copy_end - copy_start);
+			out[(*out_len)++] = ';';
+			out[(*out_len)++] = ' ';
+		}
+
+		pos = decl_end;
+		if (pos < end) {
+			pos++;
+		}
+	}
+
+	return true;
+}
+
+static bool css_style_set_property(dom_element *element, const char *property,
+		const char *value, size_t value_len)
+{
+	dom_string *style = NULL;
+	const char *style_data = NULL;
+	size_t style_len = 0;
+	size_t property_len = strlen(property);
+	size_t out_len = 0;
+	size_t out_cap;
+	char *out;
+	bool ret;
+
+	if (css_style_get_attribute(element, &style) != DOM_NO_ERR) {
+		return false;
+	}
+
+	if (style != NULL) {
+		style_data = dom_string_data(style);
+		style_len = dom_string_length(style);
+	}
+
+	out_cap = style_len + property_len + value_len + 8;
+	out = calloc(1, out_cap);
+	if (out == NULL) {
+		if (style != NULL) {
+			dom_string_unref(style);
+		}
+		return false;
+	}
+
+	ret = css_style_copy_without_property(out, &out_len, style_data, style_len,
+			property);
+	if (ret && (value_len > 0)) {
+		memcpy(out + out_len, property, property_len);
+		out_len += property_len;
+		out[out_len++] = ':';
+		out[out_len++] = ' ';
+		memcpy(out + out_len, value, value_len);
+		out_len += value_len;
+		out[out_len++] = ';';
+	}
+
+	if (ret) {
+		ret = css_style_set_text(element, out, out_len);
+	}
+
+	free(out);
+	if (style != NULL) {
+		dom_string_unref(style);
+	}
+
+	return ret;
+}
+
+static bool css_style_get_property(dom_element *element, const char *property,
+		slatejs_context *ctx)
+{
+	dom_string *style = NULL;
+	const char *style_data = NULL;
+	size_t style_len = 0;
+	const char *pos;
+	const char *end;
+	const char *last_value = NULL;
+	size_t last_value_len = 0;
+
+	if (css_style_get_attribute(element, &style) != DOM_NO_ERR) {
+		slatejs_push_string(ctx, "");
+		return false;
+	}
+
+	if (style != NULL) {
+		style_data = dom_string_data(style);
+		style_len = dom_string_length(style);
+	}
+
+	pos = style_data;
+	end = style_data + style_len;
+	while (pos < end) {
+		const char *decl_start = pos;
+		const char *decl_end;
+		const char *colon;
+		const char *value_start;
+		const char *value_end;
+
+		while ((decl_start < end) &&
+				((*decl_start == ';') || (*decl_start == ' ') ||
+				 (*decl_start == '\t') || (*decl_start == '\n') ||
+				 (*decl_start == '\r'))) {
+			decl_start++;
+		}
+		decl_end = decl_start;
+		while ((decl_end < end) && (*decl_end != ';')) {
+			decl_end++;
+		}
+
+		if ((decl_start < decl_end) &&
+				css_style_decl_name_matches(decl_start, decl_end, property)) {
+			for (colon = decl_start; colon < decl_end; colon++) {
+				if (*colon == ':') {
+					break;
+				}
+			}
+			value_start = colon + 1;
+			while ((value_start < decl_end) &&
+					((*value_start == ' ') || (*value_start == '\t') ||
+					 (*value_start == '\n') || (*value_start == '\r'))) {
+				value_start++;
+			}
+			value_end = decl_end;
+			while ((value_end > value_start) &&
+					((value_end[-1] == ' ') || (value_end[-1] == '\t') ||
+					 (value_end[-1] == '\n') || (value_end[-1] == '\r'))) {
+				value_end--;
+			}
+			last_value = value_start;
+			last_value_len = (size_t)(value_end - value_start);
+		}
+
+		pos = decl_end;
+		if (pos < end) {
+			pos++;
+		}
+	}
+
+	if (last_value == NULL) {
+		slatejs_push_string(ctx, "");
+	} else {
+		slatejs_push_lstring(ctx, last_value, last_value_len);
+	}
+
+	if (style != NULL) {
+		dom_string_unref(style);
+	}
+	return true;
+}
+
+static slatejs_ret_t css_style_get_named_property(slatejs_context *ctx,
+		css_style_declaration_private_t *priv, const char *property)
+{
+	css_style_get_property(priv->element, property, ctx);
+	return 1;
+}
+
+static slatejs_ret_t css_style_set_named_property(slatejs_context *ctx,
+		css_style_declaration_private_t *priv, const char *property)
+{
+	slatejs_size_t value_len = 0;
+	const char *value = "";
+
+	if (!slatejs_is_null_or_undefined(ctx, 0)) {
+		value = slatejs_safe_to_lstring(ctx, 0, &value_len);
+	}
+	css_style_set_property(priv->element, property, value, value_len);
+	if (css_style_property_affects_leaflet_position(property)) {
+		css_style_request_redraw(priv->element);
+	}
+	return 0;
+}
+%};
+};
+
+init CSSStyleDeclaration(struct dom_element *element)
+%{
+	priv->element = element;
+	if (element != NULL) {
+		dom_node_ref((dom_node *)element);
+	}
+%}
+
+fini CSSStyleDeclaration()
+%{
+	if (priv->element != NULL) {
+		dom_node_unref((dom_node *)priv->element);
+	}
+%}
+
+getter CSSStyleDeclaration::cssText()
+%{
+	dom_string *style = NULL;
+
+	if (css_style_get_attribute(priv->element, &style) != DOM_NO_ERR) {
+		slatejs_push_string(ctx, "");
+		return 1;
+	}
+
+	if (style == NULL) {
+		slatejs_push_string(ctx, "");
+	} else {
+		slatejs_push_lstring(ctx, dom_string_data(style), dom_string_length(style));
+		dom_string_unref(style);
+	}
+	return 1;
+%}
+
+setter CSSStyleDeclaration::cssText()
+%{
+	slatejs_size_t text_len = 0;
+	const char *text = "";
+
+	if (!slatejs_is_null_or_undefined(ctx, 0)) {
+		text = slatejs_safe_to_lstring(ctx, 0, &text_len);
+	}
+	css_style_set_text(priv->element, text, text_len);
+	css_style_request_redraw(priv->element);
+	return 0;
+%}
+
+method CSSStyleDeclaration::getPropertyValue()
+%{
+	const char *property = slatejs_safe_to_string(ctx, 0);
+	css_style_get_property(priv->element, property, ctx);
+	return 1;
+%}
+
+method CSSStyleDeclaration::getPropertyPriority()
+%{
+	slatejs_push_string(ctx, "");
+	return 1;
+%}
+
+method CSSStyleDeclaration::setProperty()
+%{
+	const char *property = slatejs_safe_to_string(ctx, 0);
+	slatejs_size_t value_len = 0;
+	const char *value = "";
+
+	if (!slatejs_is_null_or_undefined(ctx, 1)) {
+		value = slatejs_safe_to_lstring(ctx, 1, &value_len);
+	}
+	css_style_set_property(priv->element, property, value, value_len);
+	if (css_style_property_affects_leaflet_position(property)) {
+		css_style_request_redraw(priv->element);
+	}
+	return 0;
+%}
+
+method CSSStyleDeclaration::setPropertyValue()
+%{
+	const char *property = slatejs_safe_to_string(ctx, 0);
+	slatejs_size_t value_len = 0;
+	const char *value = "";
+
+	if (!slatejs_is_null_or_undefined(ctx, 1)) {
+		value = slatejs_safe_to_lstring(ctx, 1, &value_len);
+	}
+	css_style_set_property(priv->element, property, value, value_len);
+	if (css_style_property_affects_leaflet_position(property)) {
+		css_style_request_redraw(priv->element);
+	}
+	return 0;
+%}
+
+method CSSStyleDeclaration::removeProperty()
+%{
+	const char *property = slatejs_safe_to_string(ctx, 0);
+	css_style_get_property(priv->element, property, ctx);
+	css_style_set_property(priv->element, property, "", 0);
+	if (css_style_property_affects_leaflet_position(property)) {
+		css_style_request_redraw(priv->element);
+	}
+	return 1;
+%}
+
+getter CSSStyleDeclaration::length()
+%{
+	dom_string *style = NULL;
+	const char *pos;
+	const char *end;
+	slatejs_uint_t count = 0;
+
+	if (css_style_get_attribute(priv->element, &style) != DOM_NO_ERR ||
+			style == NULL) {
+		slatejs_push_uint(ctx, 0);
+		return 1;
+	}
+
+	pos = dom_string_data(style);
+	end = pos + dom_string_length(style);
+	while (pos < end) {
+		const char *decl_start = pos;
+		const char *decl_end;
+
+		while ((decl_start < end) &&
+				((*decl_start == ';') || (*decl_start == ' ') ||
+				 (*decl_start == '\t') || (*decl_start == '\n') ||
+				 (*decl_start == '\r'))) {
+			decl_start++;
+		}
+		decl_end = decl_start;
+		while ((decl_end < end) && (*decl_end != ';')) {
+			decl_end++;
+		}
+		if (decl_start < decl_end) {
+			count++;
+		}
+		pos = decl_end;
+		if (pos < end) {
+			pos++;
+		}
+	}
+	dom_string_unref(style);
+
+	slatejs_push_uint(ctx, count);
+	return 1;
+%}
+
+getter CSSStyleDeclaration::parentRule()
+%{
+	slatejs_push_null(ctx);
+	return 1;
+%}
+
+getter CSSStyleDeclaration::cssFloat()
+%{
+	return css_style_get_named_property(ctx, priv, "float");
+%}
+
+setter CSSStyleDeclaration::cssFloat()
+%{
+	return css_style_set_named_property(ctx, priv, "float");
+%}
+
+getter CSSStyleDeclaration::backgroundImage()
+%{
+	return css_style_get_named_property(ctx, priv, "background-image");
+%}
+
+setter CSSStyleDeclaration::backgroundImage()
+%{
+	return css_style_set_named_property(ctx, priv, "background-image");
+%}
+
+getter CSSStyleDeclaration::backgroundPosition()
+%{
+	return css_style_get_named_property(ctx, priv, "background-position");
+%}
+
+setter CSSStyleDeclaration::backgroundPosition()
+%{
+	return css_style_set_named_property(ctx, priv, "background-position");
+%}
+
+getter CSSStyleDeclaration::behavior()
+%{
+	return css_style_get_named_property(ctx, priv, "behavior");
+%}
+
+setter CSSStyleDeclaration::behavior()
+%{
+	return css_style_set_named_property(ctx, priv, "behavior");
+%}
+
+getter CSSStyleDeclaration::bottom()
+%{
+	return css_style_get_named_property(ctx, priv, "bottom");
+%}
+
+setter CSSStyleDeclaration::bottom()
+%{
+	return css_style_set_named_property(ctx, priv, "bottom");
+%}
+
+getter CSSStyleDeclaration::display()
+%{
+	return css_style_get_named_property(ctx, priv, "display");
+%}
+
+setter CSSStyleDeclaration::display()
+%{
+	return css_style_set_named_property(ctx, priv, "display");
+%}
+
+getter CSSStyleDeclaration::filter()
+%{
+	return css_style_get_named_property(ctx, priv, "filter");
+%}
+
+setter CSSStyleDeclaration::filter()
+%{
+	return css_style_set_named_property(ctx, priv, "filter");
+%}
+
+getter CSSStyleDeclaration::height()
+%{
+	return css_style_get_named_property(ctx, priv, "height");
+%}
+
+setter CSSStyleDeclaration::height()
+%{
+	return css_style_set_named_property(ctx, priv, "height");
+%}
+
+getter CSSStyleDeclaration::left()
+%{
+	return css_style_get_named_property(ctx, priv, "left");
+%}
+
+setter CSSStyleDeclaration::left()
+%{
+	return css_style_set_named_property(ctx, priv, "left");
+%}
+
+getter CSSStyleDeclaration::marginLeft()
+%{
+	return css_style_get_named_property(ctx, priv, "margin-left");
+%}
+
+setter CSSStyleDeclaration::marginLeft()
+%{
+	return css_style_set_named_property(ctx, priv, "margin-left");
+%}
+
+getter CSSStyleDeclaration::marginBottom()
+%{
+	return css_style_get_named_property(ctx, priv, "margin-bottom");
+%}
+
+setter CSSStyleDeclaration::marginBottom()
+%{
+	return css_style_set_named_property(ctx, priv, "margin-bottom");
+%}
+
+getter CSSStyleDeclaration::marginTop()
+%{
+	return css_style_get_named_property(ctx, priv, "margin-top");
+%}
+
+setter CSSStyleDeclaration::marginTop()
+%{
+	return css_style_set_named_property(ctx, priv, "margin-top");
+%}
+
+getter CSSStyleDeclaration::objectFit()
+%{
+	return css_style_get_named_property(ctx, priv, "object-fit");
+%}
+
+setter CSSStyleDeclaration::objectFit()
+%{
+	return css_style_set_named_property(ctx, priv, "object-fit");
+%}
+
+getter CSSStyleDeclaration::opacity()
+%{
+	return css_style_get_named_property(ctx, priv, "opacity");
+%}
+
+setter CSSStyleDeclaration::opacity()
+%{
+	return css_style_set_named_property(ctx, priv, "opacity");
+%}
+
+getter CSSStyleDeclaration::outlineStyle()
+%{
+	return css_style_get_named_property(ctx, priv, "outline-style");
+%}
+
+setter CSSStyleDeclaration::outlineStyle()
+%{
+	return css_style_set_named_property(ctx, priv, "outline-style");
+%}
+
+getter CSSStyleDeclaration::position()
+%{
+	return css_style_get_named_property(ctx, priv, "position");
+%}
+
+setter CSSStyleDeclaration::position()
+%{
+	return css_style_set_named_property(ctx, priv, "position");
+%}
+
+getter CSSStyleDeclaration::top()
+%{
+	return css_style_get_named_property(ctx, priv, "top");
+%}
+
+setter CSSStyleDeclaration::top()
+%{
+	return css_style_set_named_property(ctx, priv, "top");
+%}
+
+getter CSSStyleDeclaration::transform()
+%{
+	return css_style_get_named_property(ctx, priv, "transform");
+%}
+
+setter CSSStyleDeclaration::transform()
+%{
+	return css_style_set_named_property(ctx, priv, "transform");
+%}
+
+getter CSSStyleDeclaration::visibility()
+%{
+	return css_style_get_named_property(ctx, priv, "visibility");
+%}
+
+setter CSSStyleDeclaration::visibility()
+%{
+	return css_style_set_named_property(ctx, priv, "visibility");
+%}
+
+getter CSSStyleDeclaration::whiteSpace()
+%{
+	return css_style_get_named_property(ctx, priv, "white-space");
+%}
+
+setter CSSStyleDeclaration::whiteSpace()
+%{
+	return css_style_set_named_property(ctx, priv, "white-space");
+%}
+
+getter CSSStyleDeclaration::width()
+%{
+	return css_style_get_named_property(ctx, priv, "width");
+%}
+
+setter CSSStyleDeclaration::width()
+%{
+	return css_style_set_named_property(ctx, priv, "width");
+%}
+
+getter CSSStyleDeclaration::zIndex()
+%{
+	return css_style_get_named_property(ctx, priv, "z-index");
+%}
+
+setter CSSStyleDeclaration::zIndex()
+%{
+	return css_style_set_named_property(ctx, priv, "z-index");
+%}

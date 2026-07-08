@@ -4,7 +4,7 @@
 # Included by Makefile
 #
 
-include content/handlers/javascript/duktape/Makefile
+include content/handlers/javascript/quickjs/Makefile
 
 # Fetcher for javascript scheme is always required
 S_JAVASCRIPT += fetcher.c

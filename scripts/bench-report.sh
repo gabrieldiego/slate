@@ -161,7 +161,7 @@ kib_to_mib() {
 js_diagnostic_count() {
 	local file="$1"
 	awk '
-		/jserrors|Uncaught error in JS|SyntaxError|TypeError|ReferenceError|RangeError|dukky_dump_error/ {
+		/jserrors|Uncaught error in JS|SyntaxError|TypeError|ReferenceError|RangeError|slatejs_dump_error/ {
 			count++
 		}
 		END {
@@ -377,16 +377,16 @@ run_coverage_report() {
 	} > "${report}"
 
 	local javascript_sources=()
-	if [ -d "${objroot}/duktape" ]; then
+	if [ -d "${objroot}/quickjs" ]; then
 		while IFS= read -r source_file; do
 			javascript_sources+=("${source_file#${ROOT}/}")
-		done < <(find "${objroot}/duktape" -maxdepth 1 -name '*.c' | sort)
+		done < <(find "${objroot}/quickjs" -maxdepth 1 -name '*.c' | sort)
 	fi
 	javascript_sources+=(
 		"content/handlers/javascript/content.c"
 		"content/handlers/javascript/fetcher.c"
-		"content/handlers/javascript/duktape/dukky.c"
-		"content/handlers/javascript/duktape/qjs_duk.c"
+		"content/handlers/javascript/quickjs/bindings.c"
+		"content/handlers/javascript/quickjs/api.c"
 		"projects/quickjs/cutils.c"
 		"projects/quickjs/dtoa.c"
 		"projects/quickjs/libregexp.c"
@@ -400,7 +400,7 @@ run_coverage_report() {
 
 	{
 		write_coverage_scope_report "QuickJS JavaScript engine" "${OUTPUT_DIR}/javascript-coverage.tsv" \
-			"generated DOM bindings, content/handlers/javascript/{content,fetcher,duktape}*.c, and projects/quickjs/*.c"
+			"generated DOM bindings, content/handlers/javascript/{content,fetcher,quickjs}*.c, and projects/quickjs/*.c"
 
 		printf '\n## Notes\n\n'
 		printf -- '- HTML renderer coverage is tallied for `content/handlers/html/*.c`.\n'
