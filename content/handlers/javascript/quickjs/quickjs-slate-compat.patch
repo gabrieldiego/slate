@@ -2,10 +2,14 @@ diff --git a/cutils.h b/cutils.h
 index 133bb3a..0a4f2d5 100644
 --- a/cutils.h
 +++ b/cutils.h
-@@ -57,7 +57,9 @@
+@@ -57,7 +57,13 @@
  #define minimum_length(n)  n
  #endif
  
++#if defined(slateamiga) || defined(__amigaos__) || defined(__amigaos4__)
++#define SLATE_QUICKJS_HAVE_BOOL
++#endif
++
 +#ifndef SLATE_QUICKJS_HAVE_BOOL
  typedef int BOOL;
 +#endif
@@ -16,7 +20,7 @@ diff --git a/quickjs.c b/quickjs.c
 index 8d327d3..f3b6fb9 100644
 --- a/quickjs.c
 +++ b/quickjs.c
-@@ -30,7 +30,9 @@
+@@ -30,7 +30,80 @@
  #include <assert.h>
  #include <sys/time.h>
  #include <time.h>
@@ -24,9 +28,80 @@ index 8d327d3..f3b6fb9 100644
  #include <fenv.h>
 +#endif
  #include <math.h>
++#ifdef SLATE_QUICKJS_MATH_COMPAT
++static double slate_quickjs_trunc(double x)
++{
++    return x < 0 ? ceil(x) : floor(x);
++}
++
++static double slate_quickjs_expm1(double x)
++{
++    return exp(x) - 1.0;
++}
++
++static double slate_quickjs_log1p(double x)
++{
++    return log(1.0 + x);
++}
++
++static double slate_quickjs_log2(double x)
++{
++    return log(x) / log(2.0);
++}
++
++static double slate_quickjs_cbrt(double x)
++{
++    return x < 0 ? -pow(-x, 1.0 / 3.0) : pow(x, 1.0 / 3.0);
++}
++
++static double slate_quickjs_round(double x)
++{
++    return x < 0 ? ceil(x - 0.5) : floor(x + 0.5);
++}
++
++static long slate_quickjs_lrint(double x)
++{
++    double f = floor(x);
++    double d = x - f;
++    long i;
++
++    if (d > 0.5)
++        return (long)(f + 1.0);
++    if (d < 0.5)
++        return (long)f;
++
++    i = (long)f;
++    return (i & 1) ? i + 1 : i;
++}
++
++static double slate_quickjs_fmin(double a, double b)
++{
++    return a < b ? a : b;
++}
++
++static double slate_quickjs_fmax(double a, double b)
++{
++    return a > b ? a : b;
++}
++
++#define trunc slate_quickjs_trunc
++#define expm1 slate_quickjs_expm1
++#define log1p slate_quickjs_log1p
++#define log2 slate_quickjs_log2
++#define cbrt slate_quickjs_cbrt
++#define round slate_quickjs_round
++#define lrint slate_quickjs_lrint
++#define fmin slate_quickjs_fmin
++#define fmax slate_quickjs_fmax
++#define SLATE_QUICKJS_NAN __builtin_nan("")
++#define SLATE_QUICKJS_INFINITY __builtin_inf()
++#else
++#define SLATE_QUICKJS_NAN NAN
++#define SLATE_QUICKJS_INFINITY INFINITY
++#endif
  #if defined(__APPLE__)
  #include <malloc/malloc.h>
-@@ -68,8 +70,8 @@
+@@ -68,8 +141,8 @@
  #endif
  
  /* define to include Atomics.* operations which depend on the OS
@@ -36,7 +111,7 @@ index 8d327d3..f3b6fb9 100644
  #define CONFIG_ATOMICS
  #endif
  
-@@ -2136,7 +2138,9 @@ void JS_SetRuntimeOpaque(JSRuntime *rt, void *opaque)
+@@ -2136,7 +2209,9 @@ void JS_SetRuntimeOpaque(JSRuntime *rt, void *opaque)
  /* default memory allocation functions with memory limitation */
  static size_t js_def_malloc_usable_size(const void *ptr)
  {
@@ -47,3 +122,23 @@ index 8d327d3..f3b6fb9 100644
      return malloc_size(ptr);
  #elif defined(_WIN32)
      return _msize((void *)ptr);
+@@ -44916,7 +44991,7 @@ static const JSCFunctionListEntry js_number_funcs[] = {
+     JS_CFUNC_DEF("isSafeInteger", 1, js_number_isSafeInteger ),
+     JS_PROP_DOUBLE_DEF("MAX_VALUE", 1.7976931348623157e+308, 0 ),
+     JS_PROP_DOUBLE_DEF("MIN_VALUE", 5e-324, 0 ),
+-    JS_PROP_DOUBLE_DEF("NaN", NAN, 0 ),
++    JS_PROP_DOUBLE_DEF("NaN", SLATE_QUICKJS_NAN, 0 ),
+-    JS_PROP_DOUBLE_DEF("NEGATIVE_INFINITY", -INFINITY, 0 ),
+-    JS_PROP_DOUBLE_DEF("POSITIVE_INFINITY", INFINITY, 0 ),
++    JS_PROP_DOUBLE_DEF("NEGATIVE_INFINITY", -SLATE_QUICKJS_INFINITY, 0 ),
++    JS_PROP_DOUBLE_DEF("POSITIVE_INFINITY", SLATE_QUICKJS_INFINITY, 0 ),
+     JS_PROP_DOUBLE_DEF("EPSILON", 2.220446049250313e-16, 0 ), /* ES6 */
+@@ -55003,6 +55078,6 @@ static const JSCFunctionListEntry js_global_funcs[] = {
+     JS_CFUNC_MAGIC_DEF("encodeURIComponent", 1, js_global_encodeURI, 1 ),
+     JS_CFUNC_DEF("escape", 1, js_global_escape ),
+     JS_CFUNC_DEF("unescape", 1, js_global_unescape ),
+-    JS_PROP_DOUBLE_DEF("Infinity", 1.0 / 0.0, 0 ),
+-    JS_PROP_DOUBLE_DEF("NaN", NAN, 0 ),
++    JS_PROP_DOUBLE_DEF("Infinity", SLATE_QUICKJS_INFINITY, 0 ),
++    JS_PROP_DOUBLE_DEF("NaN", SLATE_QUICKJS_NAN, 0 ),
+     JS_PROP_UNDEFINED_DEF("undefined", 0 ),

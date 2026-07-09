@@ -75,10 +75,11 @@ ifneq ($(HOST),$(BUILD))
 QUICKJS_CFLAGS += \
 	-DSLATE_QUICKJS_NO_ATOMICS \
 	-DSLATE_QUICKJS_NO_FENV \
+	-DSLATE_QUICKJS_MATH_COMPAT \
 	-DSLATE_QUICKJS_NO_MALLOC_USABLE_SIZE
 endif
 
-ifneq ($(findstring amiga,$(HOST)),)
+ifneq ($(findstring amiga,$(HOST))$(filter amiga amigaos3,$(TARGET)),)
 QUICKJS_CFLAGS += -DSLATE_QUICKJS_HAVE_BOOL
 endif
 
