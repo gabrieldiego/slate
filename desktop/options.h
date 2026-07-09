@@ -124,7 +124,7 @@ SLATEOPTION_BOOL(background_images, true)
 SLATEOPTION_BOOL(animate_images, true)
 
 /** Whether to execute javascript */
-SLATEOPTION_BOOL(enable_javascript, false)
+SLATEOPTION_BOOL(enable_javascript, true)
 
 /** Whether to allow Author level CSS. */
 SLATEOPTION_BOOL(author_level_css, true)
