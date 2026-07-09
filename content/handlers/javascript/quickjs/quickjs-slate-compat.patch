@@ -2,15 +2,14 @@ diff --git a/cutils.h b/cutils.h
 index 133bb3a..0a4f2d5 100644
 --- a/cutils.h
 +++ b/cutils.h
-@@ -57,7 +57,13 @@
+@@ -57,7 +57,12 @@
  #define minimum_length(n)  n
  #endif
  
-+#if defined(slateamiga) || defined(__amigaos__) || defined(__amigaos4__)
-+#define SLATE_QUICKJS_HAVE_BOOL
-+#endif
-+
-+#ifndef SLATE_QUICKJS_HAVE_BOOL
++#if defined(__amigaos__) && defined(__mc68000__)
++typedef int SLATE_QUICKJS_BOOL;
++#define BOOL SLATE_QUICKJS_BOOL
++#else
  typedef int BOOL;
 +#endif
  
@@ -111,6 +110,15 @@ index 8d327d3..f3b6fb9 100644
  #define CONFIG_ATOMICS
  #endif
  
+@@ -1279,7 +1352,7 @@ static int JS_ToBigInt64Free(JSContext *ctx, int64_t *pres, JSValue val);
+ JSValue JS_ThrowOutOfMemory(JSContext *ctx);
+ static JSValue JS_ThrowTypeErrorRevokedProxy(JSContext *ctx);
+ 
+-static int js_resolve_proxy(JSContext *ctx, JSValueConst *pval, int throw_exception);
++static int js_resolve_proxy(JSContext *ctx, JSValueConst *pval, BOOL throw_exception);
+ static int JS_CreateProperty(JSContext *ctx, JSObject *p,
+                              JSAtom prop, JSValueConst val,
+                              JSValueConst getter, JSValueConst setter,
 @@ -2136,7 +2209,9 @@ void JS_SetRuntimeOpaque(JSRuntime *rt, void *opaque)
  /* default memory allocation functions with memory limitation */
  static size_t js_def_malloc_usable_size(const void *ptr)
@@ -133,6 +141,30 @@ index 8d327d3..f3b6fb9 100644
 +    JS_PROP_DOUBLE_DEF("NEGATIVE_INFINITY", -SLATE_QUICKJS_INFINITY, 0 ),
 +    JS_PROP_DOUBLE_DEF("POSITIVE_INFINITY", SLATE_QUICKJS_INFINITY, 0 ),
      JS_PROP_DOUBLE_DEF("EPSILON", 2.220446049250313e-16, 0 ), /* ES6 */
+@@ -47495,6 +47570,23 @@ static int getTimezoneOffset(int64_t time)
+ 
+         res = (gm_ti - loc_ti) / 60;
+     }
++#elif defined(SLATE_QUICKJS_NO_TM_GMTOFF)
++    {
++        struct tm *tm;
++        time_t gm_ti, loc_ti;
++
++        tm = gmtime(&ti);
++        if (!tm)
++            return 0;
++        gm_ti = mktime(tm);
++
++        tm = localtime(&ti);
++        if (!tm)
++            return 0;
++        loc_ti = mktime(tm);
++
++        res = (gm_ti - loc_ti) / 60;
++    }
+ #else
+     {
+         struct tm tm;
 @@ -55003,6 +55078,6 @@ static const JSCFunctionListEntry js_global_funcs[] = {
      JS_CFUNC_MAGIC_DEF("encodeURIComponent", 1, js_global_encodeURI, 1 ),
      JS_CFUNC_DEF("escape", 1, js_global_escape ),
@@ -142,3 +174,12 @@ index 8d327d3..f3b6fb9 100644
 +    JS_PROP_DOUBLE_DEF("Infinity", SLATE_QUICKJS_INFINITY, 0 ),
 +    JS_PROP_DOUBLE_DEF("NaN", SLATE_QUICKJS_NAN, 0 ),
      JS_PROP_UNDEFINED_DEF("undefined", 0 ),
+@@ -56837,7 +56929,7 @@ static JSValue js_array_buffer_constructor1(JSContext *ctx,
+ 
+ JSValue JS_NewArrayBuffer(JSContext *ctx, uint8_t *buf, size_t len,
+                           JSFreeArrayBufferDataFunc *free_func, void *opaque,
+-                          BOOL is_shared)
++                          JS_BOOL is_shared)
+ {
+     JSClassID class_id =
+         is_shared ? JS_CLASS_SHARED_ARRAY_BUFFER : JS_CLASS_ARRAY_BUFFER;

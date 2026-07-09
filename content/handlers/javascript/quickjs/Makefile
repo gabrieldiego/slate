@@ -80,7 +80,7 @@ QUICKJS_CFLAGS += \
 endif
 
 ifneq ($(findstring amiga,$(HOST))$(filter amiga amigaos3,$(TARGET)),)
-QUICKJS_CFLAGS += -DSLATE_QUICKJS_HAVE_BOOL
+QUICKJS_CFLAGS += -DSLATE_QUICKJS_NO_TM_GMTOFF
 endif
 
 CFLAGS_content_handlers_javascript_quickjs_api.c += -I$(QUICKJS_DIR)
