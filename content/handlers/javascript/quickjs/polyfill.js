@@ -414,53 +414,198 @@ DOMSettableTokenList.prototype.toString = DOMTokenList.prototype.toString;
     return false;
   }
 
-  function simpleMatch(node, selector) {
-    var tag = "";
-    var cls = "";
-    var id = "";
-    var hash;
-    var dot;
+  function trimSelector(value) {
+    return String(value || "").replace(/^\s+|\s+$/g, "");
+  }
 
-    selector = String(selector || "").replace(/^\s+|\s+$/g, "");
-    if (!node || node.nodeType !== 1 || selector === "") {
+  function parseSelectorAttr(text) {
+    var eq;
+    var name;
+    var op = "";
+    var value = "";
+
+    text = trimSelector(text);
+    eq = text.indexOf("=");
+    if (eq >= 0) {
+      name = trimSelector(text.substring(0, eq));
+      value = trimSelector(text.substring(eq + 1));
+      if (name.length > 0 && "~|^$*".indexOf(name.charAt(name.length - 1)) >= 0) {
+        op = name.charAt(name.length - 1);
+        name = trimSelector(name.substring(0, name.length - 1));
+      } else {
+        op = "=";
+      }
+      if (value.length >= 2 &&
+          ((value.charAt(0) === "\"" && value.charAt(value.length - 1) === "\"") ||
+           (value.charAt(0) === "'" && value.charAt(value.length - 1) === "'"))) {
+        value = value.substring(1, value.length - 1);
+      }
+    } else {
+      name = text;
+    }
+
+    return name ? { name: name, op: op, value: value } : null;
+  }
+
+  function parseSimpleSelector(selector) {
+    var out = { tag: "", id: "", classes: [], attrs: [] };
+    var start = 0;
+    var pos = 0;
+    var marker;
+    var end;
+    var attr;
+
+    selector = trimSelector(selector);
+    if (!selector) {
+      return null;
+    }
+
+    while (pos < selector.length &&
+        selector.charAt(pos) !== "#" &&
+        selector.charAt(pos) !== "." &&
+        selector.charAt(pos) !== "[") {
+      if (">+~:".indexOf(selector.charAt(pos)) >= 0) {
+        return null;
+      }
+      pos++;
+    }
+    out.tag = selector.substring(start, pos);
+
+    while (pos < selector.length) {
+      marker = selector.charAt(pos++);
+      if (marker === "[") {
+        end = selector.indexOf("]", pos);
+        if (end < 0) {
+          return null;
+        }
+        attr = parseSelectorAttr(selector.substring(pos, end));
+        if (!attr) {
+          return null;
+        }
+        out.attrs.push(attr);
+        pos = end + 1;
+        continue;
+      }
+
+      start = pos;
+      while (pos < selector.length &&
+          selector.charAt(pos) !== "#" &&
+          selector.charAt(pos) !== "." &&
+          selector.charAt(pos) !== "[") {
+        pos++;
+      }
+
+      if (marker === "#") {
+        out.id = selector.substring(start, pos);
+      } else if (marker === ".") {
+        out.classes.push(selector.substring(start, pos));
+      } else {
+        return null;
+      }
+    }
+
+    return out;
+  }
+
+  function attrMatches(node, attr) {
+    var value;
+    var text;
+    var words;
+    var i;
+
+    if (!node.getAttribute) {
+      return false;
+    }
+    value = node.getAttribute(attr.name);
+    if (value === null || value === undefined) {
+      return false;
+    }
+    if (!attr.op) {
+      return true;
+    }
+
+    text = String(value);
+    if (attr.op === "=") {
+      return text === attr.value;
+    }
+    if (attr.op === "^") {
+      return text.indexOf(attr.value) === 0;
+    }
+    if (attr.op === "$") {
+      return text.length >= attr.value.length &&
+          text.substring(text.length - attr.value.length) === attr.value;
+    }
+    if (attr.op === "*") {
+      return text.indexOf(attr.value) >= 0;
+    }
+    if (attr.op === "~") {
+      words = splitClasses(text);
+      for (i = 0; i < words.length; i++) {
+        if (words[i] === attr.value) {
+          return true;
+        }
+      }
+      return false;
+    }
+    if (attr.op === "|") {
+      return text === attr.value || text.indexOf(attr.value + "-") === 0;
+    }
+
+    return false;
+  }
+
+  function simpleMatch(node, selector) {
+    var parsed = parseSimpleSelector(selector);
+    var i;
+
+    if (!node || node.nodeType !== 1 || !parsed) {
       return false;
     }
     if (selector === "*") {
       return true;
     }
+    if (parsed.id && node.id !== parsed.id) {
+      return false;
+    }
+    if (parsed.tag && parsed.tag !== "*" &&
+        String(node.tagName || node.nodeName).toLowerCase() !== parsed.tag.toLowerCase()) {
+      return false;
+    }
+    for (i = 0; i < parsed.classes.length; i++) {
+      if (!hasClass(node, parsed.classes[i])) {
+        return false;
+      }
+    }
+    for (i = 0; i < parsed.attrs.length; i++) {
+      if (!attrMatches(node, parsed.attrs[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
 
-    hash = selector.indexOf("#");
-    if (hash >= 0) {
-      id = selector.substring(hash + 1);
-      selector = selector.substring(0, hash);
-      dot = id.indexOf(".");
-      if (dot >= 0) {
-        cls = id.substring(dot + 1);
-        id = id.substring(0, dot);
+  function selectorMatches(node, selector) {
+    var parts = trimSelector(selector).split(/\s+/);
+    var idx = parts.length - 1;
+    var cur = node;
+
+    if (!parts.length || !parts[0]) {
+      return false;
+    }
+    if (!simpleMatch(cur, parts[idx])) {
+      return false;
+    }
+
+    for (idx = idx - 1; idx >= 0; idx--) {
+      cur = cur.parentElement || cur.parentNode;
+      while (cur && !simpleMatch(cur, parts[idx])) {
+        cur = cur.parentElement || cur.parentNode;
+      }
+      if (!cur) {
+        return false;
       }
     }
 
-    dot = selector.indexOf(".");
-    if (dot >= 0) {
-      tag = selector.substring(0, dot);
-      cls = selector.substring(dot + 1);
-    } else if (selector.charAt(0) === ".") {
-      cls = selector.substring(1);
-    } else if (selector.charAt(0) === "#") {
-      id = selector.substring(1);
-    } else {
-      tag = selector;
-    }
-
-    if (id && node.id !== id) {
-      return false;
-    }
-    if (tag && tag !== "*" && String(node.tagName || node.nodeName).toLowerCase() !== tag.toLowerCase()) {
-      return false;
-    }
-    if (cls && !hasClass(node, cls)) {
-      return false;
-    }
     return true;
   }
 
@@ -483,7 +628,7 @@ DOMSettableTokenList.prototype.toString = DOMTokenList.prototype.toString;
 
     for (i = 0; i < all.length; i++) {
       for (s = 0; s < selectors.length; s++) {
-        if (simpleMatch(all[i], selectors[s])) {
+        if (selectorMatches(all[i], selectors[s])) {
           out.push(all[i]);
           break;
         }
@@ -564,7 +709,7 @@ DOMSettableTokenList.prototype.toString = DOMTokenList.prototype.toString;
   function closest(selector) {
     var node = this;
     while (node) {
-      if (simpleMatch(node, selector)) {
+      if (selectorMatches(node, selector)) {
         return node;
       }
       node = node.parentElement || node.parentNode;
@@ -599,7 +744,7 @@ DOMSettableTokenList.prototype.toString = DOMTokenList.prototype.toString;
 
   if (typeof Element !== "undefined") {
     own(Element.prototype, "matches", function (selector) {
-      return simpleMatch(this, selector);
+      return selectorMatches(this, selector);
     });
     own(Element.prototype, "closest", closest);
   }

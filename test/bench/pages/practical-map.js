@@ -190,7 +190,10 @@
 			return document.querySelectorAll(".leaflet-control .control-button").length === 6;
 		});
 		probeMapFeature("selector-attribute", supported, missing, function () {
-			return document.querySelectorAll("button[data-action]").length === 6;
+			return document.querySelectorAll("button[data-action]").length === 6 &&
+				document.querySelectorAll("link[type=\"application/atom+xml\"]").length === 1 &&
+				document.querySelectorAll("[data-language-code]").length === 1 &&
+				document.querySelectorAll("button[data-bs-target$=\"_edit\"]").length === 1;
 		});
 		probeMapFeature("computed-custom-property", supported, missing, function () {
 			var value = window.getComputedStyle(document.documentElement)

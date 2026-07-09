@@ -10,6 +10,7 @@
 
 #include <stdbool.h>
 #include <ctype.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 
@@ -37,26 +38,217 @@ slatejs_selector_trim(const char *s, size_t *len)
 	return s;
 }
 
+enum slatejs_selector_attr_operator {
+	SLATEJS_SELECTOR_ATTR_EXISTS,
+	SLATEJS_SELECTOR_ATTR_EQUALS,
+	SLATEJS_SELECTOR_ATTR_PREFIX,
+	SLATEJS_SELECTOR_ATTR_SUFFIX,
+	SLATEJS_SELECTOR_ATTR_CONTAINS,
+	SLATEJS_SELECTOR_ATTR_WORD,
+	SLATEJS_SELECTOR_ATTR_DASH
+};
+
+struct slatejs_selector_attr {
+	const char *name;
+	size_t name_len;
+	const char *value;
+	size_t value_len;
+	enum slatejs_selector_attr_operator op;
+};
+
 static bool
-slatejs_selector_attr_equals(dom_element *element, dom_string *attr,
-		const char *value, size_t value_len)
+slatejs_selector_bytes_equal(const char *a, size_t a_len,
+		const char *b, size_t b_len)
 {
+	return a_len == b_len && strncmp(a, b, a_len) == 0;
+}
+
+static bool
+slatejs_selector_bytes_contains(const char *data, size_t data_len,
+		const char *needle, size_t needle_len)
+{
+	size_t pos;
+
+	if (needle_len == 0) {
+		return true;
+	}
+	if (needle_len > data_len) {
+		return false;
+	}
+	for (pos = 0; pos + needle_len <= data_len; pos++) {
+		if (strncmp(data + pos, needle, needle_len) == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool
+slatejs_selector_attr_value_matches(const char *data, size_t data_len,
+		const struct slatejs_selector_attr *attr)
+{
+	size_t pos = 0;
+
+	switch (attr->op) {
+	case SLATEJS_SELECTOR_ATTR_EXISTS:
+		return true;
+	case SLATEJS_SELECTOR_ATTR_EQUALS:
+		return slatejs_selector_bytes_equal(data, data_len,
+				attr->value, attr->value_len);
+	case SLATEJS_SELECTOR_ATTR_PREFIX:
+		return data_len >= attr->value_len &&
+				strncmp(data, attr->value, attr->value_len) == 0;
+	case SLATEJS_SELECTOR_ATTR_SUFFIX:
+		return data_len >= attr->value_len &&
+				strncmp(data + data_len - attr->value_len,
+					attr->value, attr->value_len) == 0;
+	case SLATEJS_SELECTOR_ATTR_CONTAINS:
+		return slatejs_selector_bytes_contains(data, data_len,
+				attr->value, attr->value_len);
+	case SLATEJS_SELECTOR_ATTR_WORD:
+		while (pos < data_len) {
+			size_t start;
+			size_t end;
+
+			while (pos < data_len && isspace((unsigned char)data[pos])) {
+				pos++;
+			}
+			start = pos;
+			while (pos < data_len && !isspace((unsigned char)data[pos])) {
+				pos++;
+			}
+			end = pos;
+			if (slatejs_selector_bytes_equal(data + start, end - start,
+					attr->value, attr->value_len)) {
+				return true;
+			}
+		}
+		return false;
+	case SLATEJS_SELECTOR_ATTR_DASH:
+		return slatejs_selector_bytes_equal(data, data_len,
+				attr->value, attr->value_len) ||
+				(data_len > attr->value_len &&
+				 strncmp(data, attr->value, attr->value_len) == 0 &&
+				 data[attr->value_len] == '-');
+	}
+
+	return false;
+}
+
+static bool
+slatejs_selector_attr_matches(dom_element *element,
+		const struct slatejs_selector_attr *attr)
+{
+	dom_string *attr_name = NULL;
 	dom_string *attr_value = NULL;
 	bool ret = false;
 
-	if (attr == NULL || value == NULL) {
-		return true;
-	}
-
-	if (dom_element_get_attribute(element, attr, &attr_value) != DOM_NO_ERR ||
-			attr_value == NULL) {
+	if (attr->name == NULL || attr->name_len == 0) {
 		return false;
 	}
 
-	ret = dom_string_length(attr_value) == value_len &&
-			strncmp(dom_string_data(attr_value), value, value_len) == 0;
+	if (dom_string_create((const uint8_t *)attr->name,
+			attr->name_len, &attr_name) != DOM_NO_ERR) {
+		return false;
+	}
+
+	if (dom_element_get_attribute(element, attr_name, &attr_value) !=
+			DOM_NO_ERR || attr_value == NULL) {
+		dom_string_unref(attr_name);
+		return false;
+	}
+
+	ret = slatejs_selector_attr_value_matches(dom_string_data(attr_value),
+			dom_string_length(attr_value), attr);
+
 	dom_string_unref(attr_value);
+	dom_string_unref(attr_name);
 	return ret;
+}
+
+static bool
+slatejs_selector_parse_attr(const char *selector, size_t selector_len,
+		size_t *pos, struct slatejs_selector_attr *attr)
+{
+	size_t start = *pos + 1;
+	size_t end = start;
+	size_t eq;
+	const char *name;
+	size_t name_len;
+	const char *value;
+	size_t value_len;
+
+	while (end < selector_len && selector[end] != ']') {
+		end++;
+	}
+	if (end == selector_len) {
+		return false;
+	}
+
+	name_len = end - start;
+	name = slatejs_selector_trim(selector + start, &name_len);
+	eq = 0;
+	while (eq < name_len && name[eq] != '=') {
+		eq++;
+	}
+
+	attr->name = name;
+	attr->value = NULL;
+	attr->value_len = 0;
+	attr->op = SLATEJS_SELECTOR_ATTR_EXISTS;
+
+	if (eq < name_len) {
+		size_t name_part_len = eq;
+		char op = '=';
+
+		if (eq > 0 && (name[eq - 1] == '~' || name[eq - 1] == '|' ||
+				name[eq - 1] == '^' || name[eq - 1] == '$' ||
+				name[eq - 1] == '*')) {
+			op = name[eq - 1];
+			name_part_len--;
+		}
+
+		attr->name = slatejs_selector_trim(name, &name_part_len);
+		attr->name_len = name_part_len;
+
+		value_len = name_len - eq - 1;
+		value = slatejs_selector_trim(name + eq + 1, &value_len);
+		if (value_len >= 2 &&
+				((value[0] == '"' && value[value_len - 1] == '"') ||
+				 (value[0] == '\'' && value[value_len - 1] == '\''))) {
+			value++;
+			value_len -= 2;
+		}
+
+		attr->value = value;
+		attr->value_len = value_len;
+		switch (op) {
+		case '~':
+			attr->op = SLATEJS_SELECTOR_ATTR_WORD;
+			break;
+		case '|':
+			attr->op = SLATEJS_SELECTOR_ATTR_DASH;
+			break;
+		case '^':
+			attr->op = SLATEJS_SELECTOR_ATTR_PREFIX;
+			break;
+		case '$':
+			attr->op = SLATEJS_SELECTOR_ATTR_SUFFIX;
+			break;
+		case '*':
+			attr->op = SLATEJS_SELECTOR_ATTR_CONTAINS;
+			break;
+		default:
+			attr->op = SLATEJS_SELECTOR_ATTR_EQUALS;
+			break;
+		}
+	} else {
+		attr->name = slatejs_selector_trim(name, &name_len);
+		attr->name_len = name_len;
+	}
+
+	*pos = end + 1;
+	return attr->name_len > 0;
 }
 
 static bool
@@ -112,8 +304,11 @@ slatejs_selector_part_matches(dom_node *node, const char *selector,
 	size_t tag_len = 0;
 	const char *id = NULL;
 	size_t id_len = 0;
-	const char *cls = NULL;
-	size_t cls_len = 0;
+	const char *classes[8];
+	size_t class_lens[8];
+	size_t class_count = 0;
+	struct slatejs_selector_attr attrs[8];
+	size_t attr_count = 0;
 	size_t pos = 0;
 	size_t start;
 	bool ret;
@@ -124,6 +319,12 @@ slatejs_selector_part_matches(dom_node *node, const char *selector,
 	}
 
 	for (pos = 0; pos < selector_len; pos++) {
+		if (selector[pos] == '[') {
+			while (pos < selector_len && selector[pos] != ']') {
+				pos++;
+			}
+			continue;
+		}
 		switch (selector[pos]) {
 		case ' ':
 		case '\t':
@@ -132,7 +333,6 @@ slatejs_selector_part_matches(dom_node *node, const char *selector,
 		case '>':
 		case '+':
 		case '~':
-		case '[':
 		case ':':
 			return false;
 		default:
@@ -148,7 +348,7 @@ slatejs_selector_part_matches(dom_node *node, const char *selector,
 	pos = 0;
 	start = pos;
 	while (pos < selector_len && selector[pos] != '#' &&
-			selector[pos] != '.') {
+			selector[pos] != '.' && selector[pos] != '[') {
 		pos++;
 	}
 	tag = selector + start;
@@ -156,21 +356,40 @@ slatejs_selector_part_matches(dom_node *node, const char *selector,
 
 	while (pos < selector_len) {
 		char marker = selector[pos++];
+		if (marker == '[') {
+			pos--;
+			if (attr_count >= 8 ||
+					!slatejs_selector_parse_attr(selector,
+						selector_len, &pos,
+						&attrs[attr_count])) {
+				return false;
+			}
+			attr_count++;
+			continue;
+		}
+
 		start = pos;
 		while (pos < selector_len && selector[pos] != '#' &&
-				selector[pos] != '.') {
+				selector[pos] != '.' && selector[pos] != '[') {
 			pos++;
 		}
 		if (marker == '#') {
 			id = selector + start;
 			id_len = pos - start;
 		} else if (marker == '.') {
-			cls = selector + start;
-			cls_len = pos - start;
+			if (class_count >= 8) {
+				return false;
+			}
+			classes[class_count] = selector + start;
+			class_lens[class_count] = pos - start;
+			class_count++;
+		} else {
+			return false;
 		}
 	}
 
-	if (tag_len == 0 && id == NULL && cls == NULL) {
+	if (tag_len == 0 && id == NULL && class_count == 0 &&
+			attr_count == 0) {
 		return false;
 	}
 
@@ -187,13 +406,30 @@ slatejs_selector_part_matches(dom_node *node, const char *selector,
 		}
 	}
 
-	if (!slatejs_selector_attr_equals((dom_element *)node,
-			corestring_dom_id, id, id_len)) {
-		return false;
+	if (id != NULL) {
+		struct slatejs_selector_attr id_attr = {
+			.name = "id",
+			.name_len = 2,
+			.value = id,
+			.value_len = id_len,
+			.op = SLATEJS_SELECTOR_ATTR_EQUALS
+		};
+		if (!slatejs_selector_attr_matches((dom_element *)node, &id_attr)) {
+			return false;
+		}
 	}
 
-	if (!slatejs_selector_class_contains((dom_element *)node, cls, cls_len)) {
-		return false;
+	for (pos = 0; pos < class_count; pos++) {
+		if (!slatejs_selector_class_contains((dom_element *)node,
+				classes[pos], class_lens[pos])) {
+			return false;
+		}
+	}
+
+	for (pos = 0; pos < attr_count; pos++) {
+		if (!slatejs_selector_attr_matches((dom_element *)node, &attrs[pos])) {
+			return false;
+		}
 	}
 
 	return true;
@@ -326,16 +562,25 @@ slatejs_selector_push_all(slatejs_context *ctx, dom_node *root,
 	dom_node_type root_type;
 	dom_string *star = NULL;
 	dom_nodelist *nodes = NULL;
+	char *selector_copy = NULL;
 	uint32_t length = 0;
 	uint32_t out_idx = 0;
 	uint32_t idx;
-	slatejs_idx_t array_idx = -1;
 
 	if (dom_node_get_node_type(root, &root_type) != DOM_NO_ERR) {
 		return 0;
 	}
 
+	selector_copy = malloc(selector_len + 1);
+	if (selector_copy == NULL) {
+		return 0;
+	}
+	memcpy(selector_copy, selector, selector_len);
+	selector_copy[selector_len] = '\0';
+	selector = selector_copy;
+
 	if (dom_string_create((const uint8_t *)"*", 1, &star) != DOM_NO_ERR) {
+		free(selector_copy);
 		return 0;
 	}
 
@@ -343,16 +588,19 @@ slatejs_selector_push_all(slatejs_context *ctx, dom_node *root,
 		if (dom_document_get_elements_by_tag_name((dom_document *)root,
 				star, &nodes) != DOM_NO_ERR) {
 			dom_string_unref(star);
+			free(selector_copy);
 			return 0;
 		}
 	} else if (root_type == DOM_ELEMENT_NODE) {
 		if (dom_element_get_elements_by_tag_name((dom_element *)root,
 				star, &nodes) != DOM_NO_ERR) {
 			dom_string_unref(star);
+			free(selector_copy);
 			return 0;
 		}
 	} else {
 		dom_string_unref(star);
+		free(selector_copy);
 		if (first_only) {
 			slatejs_push_null(ctx);
 		} else {
@@ -364,11 +612,12 @@ slatejs_selector_push_all(slatejs_context *ctx, dom_node *root,
 
 	if (dom_nodelist_get_length(nodes, &length) != DOM_NO_ERR) {
 		dom_nodelist_unref(nodes);
+		free(selector_copy);
 		return 0;
 	}
 
 	if (!first_only) {
-		array_idx = slatejs_push_array(ctx);
+		slatejs_push_array(ctx);
 	}
 
 	for (idx = 0; idx < length; idx++) {
@@ -384,17 +633,19 @@ slatejs_selector_push_all(slatejs_context *ctx, dom_node *root,
 				slatejs_bind_push_node(ctx, node);
 				dom_node_unref(node);
 				dom_nodelist_unref(nodes);
+				free(selector_copy);
 				return 1;
 			}
 
 			if (slatejs_bind_push_node(ctx, node)) {
-				slatejs_put_prop_index(ctx, array_idx, out_idx++);
+				slatejs_put_prop_index(ctx, -2, out_idx++);
 			}
 		}
 		dom_node_unref(node);
 	}
 
 	dom_nodelist_unref(nodes);
+	free(selector_copy);
 	if (first_only) {
 		slatejs_push_null(ctx);
 	}

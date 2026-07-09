@@ -299,6 +299,9 @@ steps:
   substring: map-search-updated
 - action: wait-log
   window: win1
+  substring: map-feature-supported selector-descendant,selector-attribute
+- action: wait-log
+  window: win1
   substring: map-feature-gaps
 - action: click
   window: win1
