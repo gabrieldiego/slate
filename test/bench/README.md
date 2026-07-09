@@ -11,6 +11,11 @@ The suites intentionally keep three runtime profiles:
 * `stress`: synthetic high-pressure pages for DOM size, CSS selectors, tables,
   flex, forms, objects, image maps, inline layout, and JavaScript-generated DOM.
 
+The practical slippy-map page also logs map-site compatibility gaps such as
+selector forms, computed CSS properties, abort signals, and observer APIs.  Each
+compatibility fix should add or tighten checks in one of these existing suites
+instead of adding a network-dependent page.
+
 Run one suite:
 
 ```sh

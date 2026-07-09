@@ -174,6 +174,62 @@
 		}, false);
 	}
 
+	function probeMapFeature(name, supported, missing, fn) {
+		try {
+			(supported && fn() ? supported : missing).push(name);
+		} catch (err) {
+			missing.push(name);
+		}
+	}
+
+	function logMapFeatureGaps() {
+		var supported = [];
+		var missing = [];
+
+		probeMapFeature("selector-descendant", supported, missing, function () {
+			return document.querySelectorAll(".leaflet-control .control-button").length === 6;
+		});
+		probeMapFeature("selector-attribute", supported, missing, function () {
+			return document.querySelectorAll("button[data-action]").length === 6;
+		});
+		probeMapFeature("computed-custom-property", supported, missing, function () {
+			var value = window.getComputedStyle(document.documentElement)
+				.getPropertyValue("--bs-breakpoint-md");
+			return String(value).replace(/\s+/g, "") === "768px";
+		});
+		probeMapFeature("geometry-rect", supported, missing, function () {
+			var rect = map.getBoundingClientRect();
+			return typeof rect.left === "number" && typeof rect.height === "number";
+		});
+		probeMapFeature("dataset-read", supported, missing, function () {
+			return map.dataset.zoom === "12";
+		});
+		probeMapFeature("event-dispatch", supported, missing, function () {
+			var seen = false;
+			var evt = document.createEvent("Event");
+			map.addEventListener("map-feature-probe", function (event) {
+				seen = true;
+				event.preventDefault();
+			}, false);
+			evt.initEvent("map-feature-probe", true, true);
+			return map.dispatchEvent(evt) === false && seen;
+		});
+		probeMapFeature("abort-controller", supported, missing, function () {
+			var controller = new AbortController();
+			controller.abort();
+			return controller.signal.aborted;
+		});
+		probeMapFeature("intersection-observer", supported, missing, function () {
+			var observer = new IntersectionObserver(function () {});
+			observer.observe(map);
+			observer.disconnect();
+			return true;
+		});
+
+		console.log("map-feature-supported " + supported.join(","));
+		console.log("map-feature-gaps " + (missing.join(",") || "none"));
+	}
+
 	for (i = 0; i < 36; i++) {
 		var x = i % 6;
 		var y = Math.floor(i / 6);
@@ -200,6 +256,7 @@
 	bindLayer("layer-alerts", "Alerts", "Alert");
 	addControlIcon();
 	updateSearch();
+	logMapFeatureGaps();
 
 	if (map.matches(".leaflet-container") &&
 			document.querySelector(".leaflet-marker-icon").closest(".leaflet-container") === map &&

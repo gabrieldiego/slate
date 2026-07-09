@@ -297,6 +297,9 @@ steps:
 - action: wait-log
   window: win1
   substring: map-search-updated
+- action: wait-log
+  window: win1
+  substring: map-feature-gaps
 - action: click
   window: win1
   target:
