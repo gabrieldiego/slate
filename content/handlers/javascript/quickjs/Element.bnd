@@ -218,6 +218,47 @@ method Element::createSVGRect()
 	return 1;
 %}
 
+getter Element::textContent()
+%{
+	dom_exception exc;
+	dom_string *content;
+
+	exc = dom_node_get_text_content(priv->parent.node, &content);
+	if (exc != DOM_NO_ERR) {
+		return 0;
+	}
+
+	if (content != NULL) {
+		slatejs_push_lstring(ctx, dom_string_data(content),
+				dom_string_length(content));
+		dom_string_unref(content);
+		return 1;
+	}
+	slatejs_push_lstring(ctx, "", 0);
+	return 1;
+%}
+
+setter Element::textContent()
+%{
+	dom_exception exc;
+	dom_string *content;
+	slatejs_size_t slen;
+	const char *s = slatejs_safe_to_lstring(ctx, 0, &slen);
+
+	exc = dom_string_create((const uint8_t *)s, slen, &content);
+	if (exc != DOM_NO_ERR) {
+		return 0;
+	}
+
+	exc = dom_node_set_text_content(priv->parent.node, content);
+	dom_string_unref(content);
+	if (exc != DOM_NO_ERR) {
+		return 0;
+	}
+
+	return 0;
+%}
+
 getter Element::style()
 %{
 	slatejs_push_this(ctx);

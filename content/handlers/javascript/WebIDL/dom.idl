@@ -286,6 +286,7 @@ interface Element : Node {
 
            attribute DOMString id;
            attribute DOMString className;
+           attribute DOMString? textContent;
   [SameObject] readonly attribute DOMTokenList classList;
 
   boolean hasAttributes();
