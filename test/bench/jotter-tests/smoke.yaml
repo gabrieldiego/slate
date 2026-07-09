@@ -15,6 +15,7 @@ steps:
   - ${SLATE_BENCH_ROOT}/smoke-basic.html
   - ${SLATE_BENCH_ROOT}/smoke-css.html
   - ${SLATE_BENCH_ROOT}/smoke-inline.html
+  - ${SLATE_BENCH_ROOT}/smoke-inline-svg.html
   - ${SLATE_BENCH_ROOT}/smoke-js.html
   - ${SLATE_BENCH_ROOT}/smoke-noscript-canvas.html
   - ${SLATE_BENCH_ROOT}/smoke-interactions.html

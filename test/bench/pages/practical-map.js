@@ -5,6 +5,7 @@
 	var zoomText = document.getElementById("map-zoom");
 	var centerText = document.getElementById("map-center");
 	var nearby = document.getElementById("map-nearby");
+	var svgCount = document.getElementsByTagName("svg").length;
 	var offsetX = 0;
 	var offsetY = 0;
 	var zoom = 12;
@@ -99,5 +100,6 @@
 	};
 
 	updateTransform();
+	console.log("map-inline-svg-count-" + svgCount);
 	console.log("practical-map-ready");
 }());

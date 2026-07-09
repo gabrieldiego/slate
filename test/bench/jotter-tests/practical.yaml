@@ -282,6 +282,9 @@ steps:
 - action: wait-log
   window: win1
   substring: practical-map-ready
+- action: wait-log
+  window: win1
+  substring: map-inline-svg-count
 - action: click
   window: win1
   target:

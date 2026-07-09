@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Smoke Bench Inline SVG</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+.svg-card {
+	display: inline-block;
+	padding: 12px;
+	border: 1px solid #9aa8b4;
+	background: #f4f8fb;
+}
+.svg-card svg {
+	display: block;
+	width: 160px;
+	height: 112px;
+}
+</style>
+</head>
+<body class="bench-page">
+<h1>Smoke Bench Inline SVG</h1>
+<p>This page checks that inline SVG tags can be treated as a visible image without laying out their child tags as HTML.</p>
+<div class="svg-card">
+<svg width="160" height="112" viewBox="0 0 160 112" role="img" aria-label="Smoke Bench map icon">
+<defs>
+<linearGradient id="smoke-sky" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#d9eef8"></stop>
+<stop offset="1" stop-color="#a8d3e8"></stop>
+</linearGradient>
+<g id="smoke-pin">
+<path d="M0,-18 C10,-18 18,-10 18,0 C18,13 0,30 0,30 C0,30 -18,13 -18,0 C-18,-10 -10,-18 0,-18 Z" fill="#d84f45"></path>
+<circle cx="0" cy="0" r="6" fill="#ffffff"></circle>
+</g>
+</defs>
+<rect x="4" y="4" width="152" height="104" rx="8" fill="url(#smoke-sky)" stroke="#536878" stroke-width="2"></rect>
+<path d="M10,78 C34,66 48,88 76,72 C102,57 119,68 150,54" fill="none" stroke="#ffffff" stroke-width="10"></path>
+<path d="M12,82 C36,70 48,92 78,76 C104,61 120,72 150,58" fill="none" stroke="#8b7b5e" stroke-width="2"></path>
+<use href="#smoke-pin" x="76" y="48"></use>
+</svg>
+</div>
+</body>
+</html>

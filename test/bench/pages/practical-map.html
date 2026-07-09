@@ -31,6 +31,28 @@ body {
 .map-toolbar button {
 	margin: 0 5px 6px 0;
 	padding: 5px 8px;
+	min-width: 96px;
+	border: 1px solid #748595;
+	background: #f7fafc;
+	text-align: left;
+}
+.map-brand-icon {
+	display: inline-block;
+	width: 64px;
+	height: 64px;
+	margin-right: 10px;
+	vertical-align: middle;
+}
+.control-icon {
+	display: inline-block;
+	width: 16px;
+	height: 16px;
+	margin-right: 4px;
+	vertical-align: middle;
+}
+.map-options label {
+	display: block;
+	margin: 8px 0;
 }
 .map-viewport {
 	position: relative;
@@ -89,6 +111,13 @@ body {
 	border-top: 6px solid #c0392b;
 	border-right: 6px solid #c0392b;
 }
+.map-vector-overlay {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 768px;
+	height: 768px;
+}
 .marker {
 	position: absolute;
 	border: 2px solid #ffffff;
@@ -122,11 +151,35 @@ body {
 .route-steps li {
 	margin-bottom: 6px;
 }
+.results-frame {
+	display: block;
+	border-top: 1px solid #d3dce4;
+	margin-top: 10px;
+	padding-top: 8px;
+}
 </style>
 </head>
 <body>
 <header class="site-head">
-<img src="assets/icon-travel.png" width="64" height="64" alt="Practical Bench map icon">
+<svg class="map-brand-icon" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Practical Bench map icon">
+<defs>
+<linearGradient id="brand-water" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="#d9f0fa"></stop>
+<stop offset="1" stop-color="#9cc8dd"></stop>
+</linearGradient>
+<clipPath id="brand-round">
+<circle cx="32" cy="32" r="29"></circle>
+</clipPath>
+</defs>
+<circle cx="32" cy="32" r="30" fill="#ffffff" stroke="#536878" stroke-width="2"></circle>
+<g clip-path="url(#brand-round)">
+<rect x="3" y="3" width="58" height="58" fill="url(#brand-water)"></rect>
+<path d="M4,42 C15,33 21,46 34,38 C47,30 50,35 60,27" fill="none" stroke="#ffffff" stroke-width="9"></path>
+<path d="M4,45 C16,36 22,49 36,41 C48,34 51,39 60,31" fill="none" stroke="#8a7a5c" stroke-width="2"></path>
+<path d="M32,13 C41,13 48,20 48,29 C48,42 32,57 32,57 C32,57 16,42 16,29 C16,20 23,13 32,13 Z" fill="#d54d43"></path>
+<circle cx="32" cy="29" r="6" fill="#ffffff"></circle>
+</g>
+</svg>
 <h1>Practical Bench Slippy Map</h1>
 </header>
 <main class="map-app">
@@ -136,6 +189,22 @@ body {
 <label>Search map <input id="map-query" type="search" name="q" value="coffee near station"></label>
 <button type="button" id="map-search-button">Search Map Bench</button>
 </form>
+<div class="map-options">
+<label>Map style
+<select id="base-layer" name="base-layer">
+<option>Standard</option>
+<option>Transit</option>
+<option>Cycle</option>
+</select>
+</label>
+<label>Route mode
+<select id="route-mode" name="route-mode">
+<option>Walk</option>
+<option>Bus</option>
+<option>Drive</option>
+</select>
+</label>
+</div>
 <h2>Layers</h2>
 <div class="layer-list">
 <label><input type="checkbox" id="layer-transit" checked> Transit stops</label>
@@ -151,15 +220,53 @@ body {
 </aside>
 <section class="map-stage">
 <div class="map-toolbar">
-<button type="button" id="map-pan-left">Pan Left</button>
-<button type="button" id="map-pan-right">Pan Right</button>
-<button type="button" id="map-pan-up">Pan Up</button>
-<button type="button" id="map-pan-down">Pan Down</button>
-<button type="button" id="map-zoom-in">Zoom In</button>
-<button type="button" id="map-zoom-out">Zoom Out</button>
+<button type="button" id="map-pan-left"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M10,3 L5,8 L10,13 Z" fill="#304050"></path></svg><span>Pan Left</span></button>
+<button type="button" id="map-pan-right"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M6,3 L11,8 L6,13 Z" fill="#304050"></path></svg><span>Pan Right</span></button>
+<button type="button" id="map-pan-up"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3,10 L8,5 L13,10 Z" fill="#304050"></path></svg><span>Pan Up</span></button>
+<button type="button" id="map-pan-down"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3,6 L8,11 L13,6 Z" fill="#304050"></path></svg><span>Pan Down</span></button>
+<button type="button" id="map-zoom-in"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="#304050" stroke-width="2"></circle><line x1="8" y1="4" x2="8" y2="12" stroke="#304050" stroke-width="2"></line><line x1="4" y1="8" x2="12" y2="8" stroke="#304050" stroke-width="2"></line></svg><span>Zoom In</span></button>
+<button type="button" id="map-zoom-out"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="#304050" stroke-width="2"></circle><line x1="4" y1="8" x2="12" y2="8" stroke="#304050" stroke-width="2"></line></svg><span>Zoom Out</span></button>
 </div>
 <div id="map-viewport" class="map-viewport">
 <div id="tile-grid" class="tile-grid"></div>
+<svg id="map-svg-overlay" class="map-vector-overlay" width="768" height="768" viewBox="0 0 768 768" role="img" aria-label="Vector map overlay">
+<defs>
+<linearGradient id="map-water-gradient" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="#b8dce9"></stop>
+<stop offset="1" stop-color="#7cb6d0"></stop>
+</linearGradient>
+<filter id="map-soft-shadow" x="-20%" y="-20%" width="140%" height="140%">
+<feGaussianBlur in="SourceAlpha" stdDeviation="2"></feGaussianBlur>
+</filter>
+<clipPath id="map-park-clip">
+<ellipse cx="158" cy="158" rx="92" ry="54"></ellipse>
+</clipPath>
+<g id="map-tree">
+<circle cx="0" cy="-8" r="10" fill="#377e4b"></circle>
+<rect x="-2" y="0" width="4" height="14" fill="#6b573f"></rect>
+</g>
+<g id="map-stop">
+<circle cx="0" cy="0" r="10" fill="#0f766e" stroke="#ffffff" stroke-width="3"></circle>
+<line x1="-5" y1="0" x2="5" y2="0" stroke="#ffffff" stroke-width="2"></line>
+</g>
+</defs>
+<ellipse cx="585" cy="120" rx="122" ry="64" fill="url(#map-water-gradient)" opacity="0.85"></ellipse>
+<rect x="72" y="95" width="185" height="120" fill="#a8d79f" clip-path="url(#map-park-clip)"></rect>
+<path d="M45,535 C150,480 215,565 330,505 C430,452 520,496 705,420" fill="none" stroke="#8fb9cf" stroke-width="34"></path>
+<path d="M50,205 L690,205" stroke="#ffffff" stroke-width="20"></path>
+<path d="M50,205 L690,205" stroke="#c2a66d" stroke-width="3"></path>
+<path d="M350,38 L350,680" stroke="#ffffff" stroke-width="22"></path>
+<path d="M350,38 L350,680" stroke="#c2a66d" stroke-width="3"></path>
+<path d="M166,116 L490,116 L490,242" fill="none" stroke="#c0392b" stroke-width="7"></path>
+<g filter="url(#map-soft-shadow)">
+<path d="M312,145 C345,112 392,110 425,145" fill="none" stroke="#635a50" stroke-width="6"></path>
+</g>
+<use href="#map-tree" x="115" y="144"></use>
+<use href="#map-tree" x="152" y="176"></use>
+<use href="#map-tree" x="202" y="142"></use>
+<use href="#map-stop" x="350" y="205"></use>
+<use href="#map-stop" x="490" y="242"></use>
+</svg>
 <div class="road road-main"></div>
 <div class="road road-cross"></div>
 <div class="route-line"></div>
@@ -177,12 +284,14 @@ body {
 <dt>Center</dt><dd id="map-center">0,0</dd>
 <dt>Results</dt><dd id="map-results">3 nearby places</dd>
 </dl>
+<turbo-frame id="map-results-frame" class="results-frame">
 <h2>Nearby</h2>
 <ul id="map-nearby">
 <li>Bench Cafe, 0.2 mi</li>
 <li>Renderer Plaza, 0.4 mi</li>
 <li>Low Memory Hotel, 0.7 mi</li>
 </ul>
+</turbo-frame>
 </aside>
 </main>
 <script src="practical-map.js"></script>

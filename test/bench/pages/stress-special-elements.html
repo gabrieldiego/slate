@@ -24,6 +24,13 @@ canvas, embed, object {
 	background: #eef3f7;
 	margin: 5px 0;
 }
+.inline-svg-strip svg {
+	width: 120px;
+	height: 90px;
+	margin: 4px;
+	border: 1px solid #90a4b4;
+	background: #f7fbfd;
+}
 </style>
 </head>
 <body class="bench-page">
@@ -47,6 +54,53 @@ Object fallback text for Stress Bench.
 <object classid="assets/icon-issue.png" codetype="image/png" width="96" height="96">
 <param name="classid-mode" value="local">
 </object>
+</section>
+</div>
+<div class="legacy-row">
+<section class="legacy-cell" colspan="2">
+<h2>Inline SVG symbols</h2>
+<div class="inline-svg-strip">
+<svg width="120" height="90" viewBox="0 0 120 90" role="img" aria-label="Stress Bench SVG marker set">
+<defs>
+<linearGradient id="stress-water-a" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="#cce8f0"></stop>
+<stop offset="1" stop-color="#74abc2"></stop>
+</linearGradient>
+<filter id="stress-shadow-a" x="-20%" y="-20%" width="140%" height="140%">
+<feGaussianBlur in="SourceAlpha" stdDeviation="1.5"></feGaussianBlur>
+</filter>
+<clipPath id="stress-clip-a">
+<rect x="6" y="6" width="108" height="78" rx="6"></rect>
+</clipPath>
+<g id="stress-marker-a">
+<path d="M0,-14 C8,-14 14,-8 14,0 C14,10 0,24 0,24 C0,24 -14,10 -14,0 C-14,-8 -8,-14 0,-14 Z" fill="#cc433b"></path>
+<circle cx="0" cy="0" r="5" fill="#ffffff"></circle>
+</g>
+</defs>
+<g clip-path="url(#stress-clip-a)">
+<rect x="0" y="0" width="120" height="90" fill="url(#stress-water-a)"></rect>
+<path d="M5,64 C26,48 40,72 62,58 C82,45 96,55 116,36" fill="none" stroke="#ffffff" stroke-width="8"></path>
+<line x1="12" y1="24" x2="108" y2="24" stroke="#f7f2e8" stroke-width="9"></line>
+<line x1="12" y1="24" x2="108" y2="24" stroke="#af986e" stroke-width="2"></line>
+<use href="#stress-marker-a" x="42" y="38" filter="url(#stress-shadow-a)"></use>
+<use href="#stress-marker-a" x="84" y="58"></use>
+</g>
+</svg>
+<svg width="120" height="90" viewBox="0 0 120 90" role="img" aria-label="Stress Bench SVG route set">
+<defs>
+<g id="stress-stop-b">
+<circle cx="0" cy="0" r="8" fill="#0f766e" stroke="#ffffff" stroke-width="3"></circle>
+<line x1="-4" y1="0" x2="4" y2="0" stroke="#ffffff" stroke-width="2"></line>
+</g>
+</defs>
+<rect x="5" y="5" width="110" height="80" fill="#dce9dd" stroke="#536878" stroke-width="2"></rect>
+<ellipse cx="36" cy="32" rx="24" ry="15" fill="#a4d29b"></ellipse>
+<path d="M12,70 L46,50 L72,56 L108,24" fill="none" stroke="#ffffff" stroke-width="12"></path>
+<path d="M12,70 L46,50 L72,56 L108,24" fill="none" stroke="#c0392b" stroke-width="4"></path>
+<use href="#stress-stop-b" x="46" y="50"></use>
+<use href="#stress-stop-b" x="72" y="56"></use>
+</svg>
+</div>
 </section>
 </div>
 <div class="legacy-row">
