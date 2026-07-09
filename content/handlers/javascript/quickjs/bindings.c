@@ -1309,10 +1309,12 @@ static void slatejs_generic_event_handler(dom_event *evt, void *pw)
 	slatejs_context *ctx = (slatejs_context *)pw;
 	dom_string *name;
 	dom_exception exc;
-	dom_event_target *targ;
+	dom_event_target *targ = NULL;
+	dom_event_target *target = NULL;
 	dom_event_flow_phase phase;
 	slatejs_uarridx_t idx;
 	event_listener_flags flags;
+	bool bubbling_on_target = false;
 
 	NSLOG(quickjs, DEBUG, "Handling an event in quickjs interface...");
 	exc = dom_event_get_type(evt, &name);
@@ -1336,6 +1338,22 @@ static void slatejs_generic_event_handler(dom_event *evt, void *pw)
 		dom_string_unref(name);
 		NSLOG(quickjs, DEBUG, "Unable to find the event target");
 		return;
+	}
+
+	if (phase == DOM_BUBBLING_PHASE) {
+		bool is_same = false;
+
+		exc = dom_event_get_target(evt, &target);
+		if (exc == DOM_NO_ERR && target != NULL &&
+				dom_node_is_same((dom_node *)target,
+					(dom_node *)targ, &is_same) == DOM_NO_ERR &&
+				is_same) {
+			bubbling_on_target = true;
+		}
+	}
+
+	if (bubbling_on_target) {
+		goto out;
 	}
 
 	/* If we're capturing right now, we skip the 'event handler'
@@ -1501,6 +1519,9 @@ handle_extras:
 	slatejs_pop_2(ctx);
 out:
 	/* ... */
+	if (target != NULL) {
+		dom_node_unref(target);
+	}
 	dom_node_unref(targ);
 	dom_string_unref(name);
 }

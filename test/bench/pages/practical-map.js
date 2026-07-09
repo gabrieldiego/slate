@@ -39,6 +39,7 @@
 			setText(centerText, offsetX + "," + offsetY);
 			setText(zoomText, zoom);
 			setText(status, "Map center " + offsetX + "," + offsetY + " zoom " + zoom);
+			console.log("map-frame-" + offsetX + "," + offsetY);
 		});
 	}
 

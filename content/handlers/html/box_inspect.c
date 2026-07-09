@@ -59,6 +59,21 @@ enum box_walk_dir {
 #define box_is_float(box) (box->type == BOX_FLOAT_LEFT ||	\
 			   box->type == BOX_FLOAT_RIGHT)
 
+static inline void
+box_display_position(struct box *box, int *x, int *y)
+{
+	int dynamic_x = 0;
+	int dynamic_y = 0;
+
+	if (!box_dynamic_style_offset(box, &dynamic_x, &dynamic_y)) {
+		dynamic_x = 0;
+		dynamic_y = 0;
+	}
+
+	*x = box->x + dynamic_x;
+	*y = box->y + dynamic_y;
+}
+
 /**
  * Determine if a point lies within a box.
  *
@@ -212,8 +227,12 @@ box_move_xy(struct box *b, enum box_walk_dir dir, int *x, int *y)
 		b = b->children;
 		if (b == NULL)
 			break;
-		*x += b->x;
-		*y += b->y;
+		{
+			int bx, by;
+			box_display_position(b, &bx, &by);
+			*x += bx;
+			*y += by;
+		}
 		if (!box_is_float(b)) {
 			rb = b;
 			break;
@@ -222,20 +241,32 @@ box_move_xy(struct box *b, enum box_walk_dir dir, int *x, int *y)
 
 	case BOX_WALK_NEXT_SIBLING:
 		do {
-			*x -= b->x;
-			*y -= b->y;
+			{
+				int bx, by;
+				box_display_position(b, &bx, &by);
+				*x -= bx;
+				*y -= by;
+			}
 			b = b->next;
 			if (b == NULL)
 				break;
-			*x += b->x;
-			*y += b->y;
+			{
+				int bx, by;
+				box_display_position(b, &bx, &by);
+				*x += bx;
+				*y += by;
+			}
 		} while (box_is_float(b));
 		rb = b;
 		break;
 
 	case BOX_WALK_PARENT:
-		*x -= b->x;
-		*y -= b->y;
+		{
+			int bx, by;
+			box_display_position(b, &bx, &by);
+			*x -= bx;
+			*y -= by;
+		}
 		rb = b->parent;
 		break;
 
@@ -243,25 +274,41 @@ box_move_xy(struct box *b, enum box_walk_dir dir, int *x, int *y)
 		b = b->float_children;
 		if (b == NULL)
 			break;
-		*x += b->x;
-		*y += b->y;
+		{
+			int bx, by;
+			box_display_position(b, &bx, &by);
+			*x += bx;
+			*y += by;
+		}
 		rb = b;
 		break;
 
 	case BOX_WALK_NEXT_FLOAT_SIBLING:
-		*x -= b->x;
-		*y -= b->y;
+		{
+			int bx, by;
+			box_display_position(b, &bx, &by);
+			*x -= bx;
+			*y -= by;
+		}
 		b = b->next_float;
 		if (b == NULL)
 			break;
-		*x += b->x;
-		*y += b->y;
+		{
+			int bx, by;
+			box_display_position(b, &bx, &by);
+			*x += bx;
+			*y += by;
+		}
 		rb = b;
 		break;
 
 	case BOX_WALK_FLOAT_CONTAINER:
-		*x -= b->x;
-		*y -= b->y;
+		{
+			int bx, by;
+			box_display_position(b, &bx, &by);
+			*x -= bx;
+			*y -= by;
+		}
 		rb = b->float_container;
 		break;
 
@@ -503,16 +550,19 @@ box_nearest_text_box(struct box *box,
 	}
 
 	while (child) {
+		int child_x, child_y;
+
+		box_display_position(child, &child_x, &child_y);
 		if (child->type == BOX_FLOAT_LEFT ||
-		    child->type == BOX_FLOAT_RIGHT) {
-			c_bx = fx + child->x -
+			    child->type == BOX_FLOAT_RIGHT) {
+			c_bx = fx + child_x -
 				scrollbar_get_offset(child->scroll_x);
-			c_by = fy + child->y -
+			c_by = fy + child_y -
 				scrollbar_get_offset(child->scroll_y);
 		} else {
-			c_bx = bx + child->x -
+			c_bx = bx + child_x -
 				scrollbar_get_offset(child->scroll_x);
-			c_by = by + child->y -
+			c_by = by + child_y -
 				scrollbar_get_offset(child->scroll_y);
 		}
 		if (child->float_children) {
@@ -553,8 +603,11 @@ box_nearest_text_box(struct box *box,
 /* Exported function documented in html/box.h */
 void box_coords(struct box *box, int *x, int *y)
 {
-	*x = box->x;
-	*y = box->y;
+	int bx, by;
+
+	box_display_position(box, &bx, &by);
+	*x = bx;
+	*y = by;
 	while (box->parent) {
 		if (box_is_float(box)) {
 			assert(box->float_container);
@@ -562,8 +615,9 @@ void box_coords(struct box *box, int *x, int *y)
 		} else {
 			box = box->parent;
 		}
-		*x += box->x - scrollbar_get_offset(box->scroll_x);
-		*y += box->y - scrollbar_get_offset(box->scroll_y);
+		box_display_position(box, &bx, &by);
+		*x += bx - scrollbar_get_offset(box->scroll_x);
+		*y += by - scrollbar_get_offset(box->scroll_y);
 	}
 }
 

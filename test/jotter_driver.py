@@ -649,10 +649,14 @@ def run_test_step_action_wait_log(ctx, step):
     foldable = step.get('foldable')
     level = step.get('level')
     substr = step.get('substring')
+    timeout = step.get('timeout')
+    if timeout is not None:
+        timeout = int(timeout) / 1000
     print(get_indent(ctx) + "        " + tag + " Wait for logging")
     win = ctx['windows'].get(tag)
     assert win is not None
-    win.wait_for_log(source=source, foldable=foldable, level=level, substr=substr)
+    win.wait_for_log(source=source, foldable=foldable, level=level,
+                     substr=substr, timeout=timeout)
 
 
 def run_test_step_action_js_exec(ctx, step):

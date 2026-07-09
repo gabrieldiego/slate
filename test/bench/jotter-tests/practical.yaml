@@ -304,6 +304,10 @@ steps:
 - action: wait-log
   window: win1
   substring: map-pan
+- action: wait-log
+  window: win1
+  substring: map-frame--48,0
+  timeout: 2000
 - action: click
   window: win1
   target:

@@ -692,8 +692,14 @@ class BrowserWindow:
 
         return False
 
-    def wait_for_log(self, source=None, foldable=None, level=None, substr=None):
+    def wait_for_log(self, source=None, foldable=None, level=None, substr=None, timeout=None):
+        start = time.time()
         while not self.log_contains(source=source, foldable=foldable, level=level, substr=substr):
+            if timeout is not None and time.time() - start > timeout:
+                recent = [entry[3] for entry in self.log_entries[-8:]]
+                raise AssertionError(
+                    "Timed out waiting for log substring {!r}; recent logs: {}".format(
+                        substr, recent))
             self.browser.farmer.loop(once=True)
 
 

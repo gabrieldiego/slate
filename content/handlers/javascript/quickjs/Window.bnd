@@ -15,6 +15,7 @@ class Window {
 	private bool closed_down;
 	prologue %{
 #include <string.h>
+#include <nsutils/time.h>
 #include "utils/corestrings.h"
 #include "utils/slateurl.h"
 #include "slate/browser_window.h"
@@ -624,6 +625,34 @@ method Window::setTimeout()
 
 	slatejs_push_int(ctx, (slatejs_int_t)handle);
 	return 1;
+%}
+
+method Window::requestAnimationFrame()
+%{
+	uint64_t time_ms = 0;
+	size_t handle;
+
+	if (priv->closed_down == true) {
+		return 0; /* coerced to undefined */
+	}
+
+	(void) nsu_getmonotonic_ms(&time_ms);
+
+	/* callback, timeout, timestamp */
+	slatejs_push_int(ctx, 16);
+	slatejs_push_number(ctx, (slatejs_double_t)time_ms);
+	handle = window_alloc_new_callback(ctx, priv, false, 16);
+
+	slatejs_push_int(ctx, (slatejs_int_t)handle);
+	return 1;
+%}
+
+method Window::cancelAnimationFrame()
+%{
+	slatejs_int_t handle = slatejs_get_int(ctx, 0);
+	window_remove_callback_by_handle(ctx, priv, (size_t) handle);
+
+	return 0;
 %}
 
 method Window::setInterval()
