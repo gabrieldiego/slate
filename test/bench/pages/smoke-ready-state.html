@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Smoke Bench Ready State</title>
+<link rel="stylesheet" href="bench-shared.css">
+<script>
+(function () {
+	window.slateHeadReadyState = document.readyState;
+	if (document.readyState === "loading") {
+		console.log("smoke-ready-state-loading");
+	}
+}());
+</script>
+</head>
+<body class="bench-page">
+<header class="site-head">
+<img src="assets/bench-logo.png" width="120" height="48" alt="Smoke Bench logo">
+<h1>Smoke Bench Ready State</h1>
+</header>
+<main>
+<p id="smoke-ready-state-status">Smoke ready state waiting</p>
+<script>
+(function () {
+	var status = document.getElementById("smoke-ready-state-status");
+	status.innerHTML = "Smoke ready state head value: " + window.slateHeadReadyState;
+	console.log("smoke-ready-state-ready");
+}());
+</script>
+</main>
+</body>
+</html>

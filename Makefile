@@ -54,6 +54,20 @@ include frontends/Makefile.hts
 # tools used in builds
 include Makefile.tools
 
+# Prefer libraries built in the local dependency workspace when available.
+# This lets a plain native `make` find projects/inst-<triplet> without first
+# sourcing scripts/local-env.sh.
+SLATE_LOCAL_WORKSPACE ?= $(CURDIR)/projects
+SLATE_LOCAL_TRIPLET := $(shell $(CC) -dumpmachine 2>/dev/null)
+SLATE_LOCAL_PREFIX ?= $(SLATE_LOCAL_WORKSPACE)/inst-$(SLATE_LOCAL_TRIPLET)
+SLATE_LOCAL_PKGCONFIG := $(SLATE_LOCAL_PREFIX)/lib/pkgconfig
+
+ifneq ($(wildcard $(SLATE_LOCAL_PKGCONFIG)),)
+  export PKG_CONFIG_PATH := $(SLATE_LOCAL_PKGCONFIG):$(PKG_CONFIG_PATH)
+  export PATH := $(SLATE_LOCAL_PREFIX)/bin:$(PATH)
+  export LD_LIBRARY_PATH := $(SLATE_LOCAL_PREFIX)/lib:$(LD_LIBRARY_PATH)
+endif
+
 # Target paths
 OBJROOT = build/$(HOST)-$(TARGET)$(SUBTARGET)
 DEPROOT := $(OBJROOT)/deps

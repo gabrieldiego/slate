@@ -10,6 +10,8 @@
 
 prologue HTMLElement()
 %{
+#include <stdlib.h>
+#include <string.h>
 #include <utils/corestrings.h>
 #define HANDLER_MAGIC MAGIC(HANDLER_MAP)
 %}
@@ -24,6 +26,94 @@ setter HTMLElement::lang();
 
 getter HTMLElement::title();
 setter HTMLElement::title();
+
+getter HTMLElement::dataset()
+%{
+	dom_namednodemap *attrs = NULL;
+	dom_exception exc;
+	dom_ulong len;
+	dom_ulong idx;
+
+	slatejs_push_object(ctx);
+
+	exc = dom_node_get_attributes(priv->parent.parent.node, &attrs);
+	if (exc != DOM_NO_ERR || attrs == NULL) {
+		return 1;
+	}
+
+	exc = dom_namednodemap_get_length(attrs, &len);
+	if (exc != DOM_NO_ERR) {
+		dom_namednodemap_unref(attrs);
+		return 1;
+	}
+
+	for (idx = 0; idx < len; idx++) {
+		const size_t data_prefix_len = 5;
+		dom_node *attr_node = NULL;
+		dom_attr *attr;
+		dom_string *name = NULL;
+		dom_string *value = NULL;
+		const char *name_data;
+		size_t name_len;
+		char *key;
+		size_t key_len = 0;
+		size_t pos;
+
+		exc = dom_namednodemap_item(attrs, idx, &attr_node);
+		if (exc != DOM_NO_ERR || attr_node == NULL) {
+			continue;
+		}
+
+		attr = (dom_attr *)attr_node;
+		exc = dom_attr_get_name(attr, &name);
+		if (exc != DOM_NO_ERR || name == NULL) {
+			dom_node_unref(attr_node);
+			continue;
+		}
+
+		name_data = dom_string_data(name);
+		name_len = dom_string_length(name);
+		if (name_len <= data_prefix_len ||
+		    memcmp(name_data, "data-", data_prefix_len) != 0) {
+			dom_string_unref(name);
+			dom_node_unref(attr_node);
+			continue;
+		}
+
+		key = malloc(name_len - data_prefix_len + 1);
+		if (key == NULL) {
+			dom_string_unref(name);
+			dom_node_unref(attr_node);
+			continue;
+		}
+
+		for (pos = data_prefix_len; pos < name_len; pos++) {
+			char c = name_data[pos];
+			if (c == '-' && pos + 1 < name_len &&
+			    name_data[pos + 1] >= 'a' && name_data[pos + 1] <= 'z') {
+				key[key_len++] = name_data[++pos] - ('a' - 'A');
+			} else {
+				key[key_len++] = c;
+			}
+		}
+		key[key_len] = '\0';
+
+		exc = dom_attr_get_value(attr, &value);
+		if (exc == DOM_NO_ERR && value != NULL) {
+			slatejs_push_lstring(ctx, dom_string_data(value),
+					dom_string_length(value));
+			slatejs_put_prop_string(ctx, -2, key);
+			dom_string_unref(value);
+		}
+
+		free(key);
+		dom_string_unref(name);
+		dom_node_unref(attr_node);
+	}
+
+	dom_namednodemap_unref(attrs);
+	return 1;
+%}
 
 getter HTMLElement::onchange();
 setter HTMLElement::onchange();

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Smoke Bench Turbo Shim</title>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+	Turbo.session.drive = false;
+	document.getElementById("status").textContent =
+		"Turbo drive " + String(Turbo.session.drive);
+	console.log("smoke-turbo-shim-ready");
+});
+</script>
+</head>
+<body>
+<main>
+<h1>Smoke Bench Turbo Shim</h1>
+<p id="status">pending</p>
+</main>
+</body>
+</html>

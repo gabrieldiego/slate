@@ -526,6 +526,8 @@ slatejs_bind_push_node_klass(slatejs_context *ctx, struct dom_node *node)
 		slatejs_push_string(ctx, PROTO_NAME(DOCUMENT));
 		break;
 	case DOM_ATTRIBUTE_NODE:
+		slatejs_push_string(ctx, PROTO_NAME(ATTR));
+		break;
 	case DOM_PROCESSING_INSTRUCTION_NODE:
 	case DOM_DOCUMENT_TYPE_NODE:
 	case DOM_DOCUMENT_FRAGMENT_NODE:
@@ -914,283 +916,17 @@ slatejs_bool_t slatejs_bind_check_timeout(void *udata)
 			now > (heap->exec_start_time + JS_EXEC_TIMEOUT_MS);
 }
 
-static bool slatejs_jsbuf_append(char **buf, size_t *len, size_t *cap, const char *data, size_t data_len)
-{
-	char *nbuf;
-	size_t ncap;
-
-	if (data_len == 0) {
-		return true;
-	}
-
-	if (*len + data_len + 1 <= *cap) {
-		memcpy(*buf + *len, data, data_len);
-		*len += data_len;
-		(*buf)[*len] = '\0';
-		return true;
-	}
-
-	ncap = *cap;
-	while (*len + data_len + 1 > ncap) {
-		ncap *= 2;
-	}
-
-	nbuf = realloc(*buf, ncap);
-	if (nbuf == NULL) {
-		return false;
-	}
-
-	*buf = nbuf;
-	*cap = ncap;
-	memcpy(*buf + *len, data, data_len);
-	*len += data_len;
-	(*buf)[*len] = '\0';
-	return true;
-}
-
-static bool slatejs_jsbuf_append_ch(char **buf, size_t *len, size_t *cap, char ch)
-{
-	return slatejs_jsbuf_append(buf, len, cap, &ch, 1);
-}
-
-static bool slatejs_jsbuf_append_js_string_ch(char **buf, size_t *len, size_t *cap, char ch)
-{
-	switch (ch) {
-	case '"':
-		return slatejs_jsbuf_append(buf, len, cap, "\\\"", 2);
-	case '\\':
-		return slatejs_jsbuf_append(buf, len, cap, "\\\\", 2);
-	case '\n':
-		return slatejs_jsbuf_append(buf, len, cap, "\\n", 2);
-	case '\r':
-		return slatejs_jsbuf_append(buf, len, cap, "\\r", 2);
-	case '\t':
-		return slatejs_jsbuf_append(buf, len, cap, "\\t", 2);
-	default:
-		return slatejs_jsbuf_append_ch(buf, len, cap, ch);
-	}
-}
-
-static bool slatejs_transform_template_literal(const char *src, size_t src_len, size_t *idx,
-		char **buf, size_t *len, size_t *cap)
-{
-	size_t i = *idx + 1; /* skip opening backtick */
-	unsigned int expr_depth;
-	char quote;
-
-	if (!slatejs_jsbuf_append(buf, len, cap, "(\"", 2)) {
-		return false;
-	}
-
-	while (i < src_len) {
-		char ch = src[i];
-
-		if (ch == '`') {
-			if (!slatejs_jsbuf_append(buf, len, cap, "\")", 2)) {
-				return false;
-			}
-			*idx = i + 1;
-			return true;
-		}
-
-		if (ch == '\\') {
-			if (i + 1 >= src_len) {
-				return false;
-			}
-			i++;
-			if (!slatejs_jsbuf_append_js_string_ch(buf, len, cap, src[i])) {
-				return false;
-			}
-			i++;
-			continue;
-		}
-
-		if (ch == '$' && i + 1 < src_len && src[i + 1] == '{') {
-			if (!slatejs_jsbuf_append(buf, len, cap, "\"+(", 3)) {
-				return false;
-			}
-			i += 2;
-			expr_depth = 1;
-
-			while (i < src_len && expr_depth > 0) {
-				ch = src[i];
-
-				if (ch == '\'' || ch == '"') {
-					quote = ch;
-					if (!slatejs_jsbuf_append_ch(buf, len, cap, ch)) {
-						return false;
-					}
-					i++;
-					while (i < src_len) {
-						ch = src[i];
-						if (!slatejs_jsbuf_append_ch(buf, len, cap, ch)) {
-							return false;
-						}
-						i++;
-						if (ch == '\\' && i < src_len) {
-							if (!slatejs_jsbuf_append_ch(buf, len, cap, src[i])) {
-								return false;
-							}
-							i++;
-						} else if (ch == quote) {
-							break;
-						}
-					}
-					continue;
-				}
-
-				if (ch == '{') {
-					expr_depth++;
-				} else if (ch == '}') {
-					expr_depth--;
-					if (expr_depth == 0) {
-						i++;
-						break;
-					}
-				}
-
-				if (!slatejs_jsbuf_append_ch(buf, len, cap, ch)) {
-					return false;
-				}
-				i++;
-			}
-
-			if (expr_depth != 0 || !slatejs_jsbuf_append(buf, len, cap, ")+\"", 3)) {
-				return false;
-			}
-			continue;
-		}
-
-		if (!slatejs_jsbuf_append_js_string_ch(buf, len, cap, ch)) {
-			return false;
-		}
-		i++;
-	}
-
-	return false;
-}
-
-static bool slatejs_transform_template_literals(const uint8_t *txt, size_t txtlen,
-		char **out, size_t *outlen)
-{
-	const char *src = (const char *) txt;
-	char *buf;
-	size_t len = 0;
-	size_t cap = txtlen * 2 + 64;
-	size_t i = 0;
-	char quote;
-
-	*out = NULL;
-	*outlen = 0;
-
-	if (memchr(txt, '`', txtlen) == NULL) {
-		return true;
-	}
-
-	buf = malloc(cap);
-	if (buf == NULL) {
-		return false;
-	}
-	buf[0] = '\0';
-
-	while (i < txtlen) {
-		char ch = src[i];
-
-		if (ch == '\'' || ch == '"') {
-			quote = ch;
-			if (!slatejs_jsbuf_append_ch(&buf, &len, &cap, ch)) {
-				goto error;
-			}
-			i++;
-			while (i < txtlen) {
-				ch = src[i];
-				if (!slatejs_jsbuf_append_ch(&buf, &len, &cap, ch)) {
-					goto error;
-				}
-				i++;
-				if (ch == '\\' && i < txtlen) {
-					if (!slatejs_jsbuf_append_ch(&buf, &len, &cap, src[i])) {
-						goto error;
-					}
-					i++;
-				} else if (ch == quote) {
-					break;
-				}
-			}
-			continue;
-		}
-
-		if (ch == '/' && i + 1 < txtlen && src[i + 1] == '/') {
-			while (i < txtlen) {
-				ch = src[i];
-				if (!slatejs_jsbuf_append_ch(&buf, &len, &cap, ch)) {
-					goto error;
-				}
-				i++;
-				if (ch == '\n') {
-					break;
-				}
-			}
-			continue;
-		}
-
-		if (ch == '/' && i + 1 < txtlen && src[i + 1] == '*') {
-			if (!slatejs_jsbuf_append(&buf, &len, &cap, "/*", 2)) {
-				goto error;
-			}
-			i += 2;
-			while (i < txtlen) {
-				ch = src[i];
-				if (!slatejs_jsbuf_append_ch(&buf, &len, &cap, ch)) {
-					goto error;
-				}
-				i++;
-				if (ch == '*' && i < txtlen && src[i] == '/') {
-					if (!slatejs_jsbuf_append_ch(&buf, &len, &cap, src[i])) {
-						goto error;
-					}
-					i++;
-					break;
-				}
-			}
-			continue;
-		}
-
-		if (ch == '`') {
-			if (!slatejs_transform_template_literal(src, txtlen, &i, &buf, &len, &cap)) {
-				goto error;
-			}
-			continue;
-		}
-
-		if (!slatejs_jsbuf_append_ch(&buf, &len, &cap, ch)) {
-			goto error;
-		}
-		i++;
-	}
-
-	*out = buf;
-	*outlen = len;
-	return true;
-
-error:
-	free(buf);
-	return false;
-}
-
 static void slatejs_dump_error(slatejs_context *ctx)
 {
 	/* stack is ..., errobj */
 	slatejs_get_prop_string(ctx, -1, "name");
 	slatejs_get_prop_string(ctx, -2, "message");
-	slatejs_dup_top(ctx);
-	/* ..., errobj, name, message, message */
+	/* ..., errobj, name, message */
 	NSLOG(jserrors, WARNING, "Uncaught error in JS: %s: %s\n%s",
-	      slatejs_safe_to_string(ctx, -3),
 	      slatejs_safe_to_string(ctx, -2),
-	      slatejs_safe_to_stacktrace(ctx, -1));
-	/* ..., errobj, errobj.stackstring */
-	slatejs_pop_3(ctx);
+	      slatejs_safe_to_string(ctx, -1),
+	      slatejs_safe_to_stacktrace(ctx, -3));
+	slatejs_pop_2(ctx);
 	/* ..., errobj */
 }
 
@@ -1252,10 +988,6 @@ bool
 js_exec(jsthread *thread, const uint8_t *txt, size_t txtlen, const char *name)
 {
 	bool ret = false;
-	char *transformed = NULL;
-	size_t transformed_len = 0;
-	const char *compile_txt;
-	size_t compile_len;
 	assert(thread);
 
 	if (txt == NULL || txtlen == 0) {
@@ -1273,14 +1005,6 @@ js_exec(jsthread *thread, const uint8_t *txt, size_t txtlen, const char *name)
 	NSLOG(quickjs, DEEPDEBUG, "Running %"PRIsizet" bytes from %s", txtlen, name);
 	/* NSLOG(quickjs, DEEPDEBUG, "\n%s\n", txt); */
 
-	if (!slatejs_transform_template_literals(txt, txtlen, &transformed, &transformed_len)) {
-		NSLOG(quickjs, DEBUG, "Failed to transform JavaScript template literals");
-		goto out;
-	}
-
-	compile_txt = transformed != NULL ? transformed : (const char *) txt;
-	compile_len = transformed != NULL ? transformed_len : txtlen;
-
 	slatejs_reset_start_time(CTX);
 	if (name != NULL) {
 		slatejs_push_string(CTX, name);
@@ -1289,8 +1013,8 @@ js_exec(jsthread *thread, const uint8_t *txt, size_t txtlen, const char *name)
 	}
 	if (slatejs_pcompile_lstring_filename(CTX,
 					  SLATEJS_COMPILE_EVAL,
-					  compile_txt,
-					  compile_len) != 0) {
+					  (const char *) txt,
+					  txtlen) != 0) {
 		NSLOG(quickjs, DEBUG, "Failed to compile JavaScript input");
 		goto handle_error;
 	}
@@ -1309,7 +1033,6 @@ js_exec(jsthread *thread, const uint8_t *txt, size_t txtlen, const char *name)
 handle_error:
 	slatejs_dump_error(CTX);
 out:
-	free(transformed);
 	slatejs_leave_thread(thread);
 	return ret;
 }
@@ -1753,14 +1476,14 @@ handle_extras:
 			slatejs_get_prop_string(ctx, -4, "lineNumber");
 			slatejs_get_prop_string(ctx, -5, "stack");
 			/* ... err name message fileName lineNumber stack */
-			NSLOG(quickjs, DEBUG, "Uncaught error in JS: %s: %s",
+			NSLOG(jserrors, WARNING, "JavaScript callback error: %s: %s",
 			      slatejs_safe_to_string(ctx, -5),
 			      slatejs_safe_to_string(ctx, -4));
-			NSLOG(quickjs, DEBUG,
-			      "              was at: %s line %s",
+			NSLOG(jserrors, WARNING,
+			      "JavaScript callback location: %s line %s",
 			      slatejs_safe_to_string(ctx, -3),
 			      slatejs_safe_to_string(ctx, -2));
-			NSLOG(quickjs, DEBUG, "         Stack trace: %s",
+			NSLOG(jserrors, WARNING, "JavaScript callback stack: %s",
 			      slatejs_safe_to_string(ctx, -1));
 
 			slatejs_pop_n(ctx, 7);
@@ -1780,6 +1503,122 @@ out:
 	/* ... */
 	dom_node_unref(targ);
 	dom_string_unref(name);
+}
+
+static void slatejs_dispatch_window_event_listeners(slatejs_context *ctx,
+		dom_event *evt,
+		dom_string *name)
+{
+	slatejs_uarridx_t idx;
+	event_listener_flags flags;
+
+	/* Window objects do not sit in libdom's event target tree, so their
+	 * addEventListener() callbacks need to be driven from the browser
+	 * event hook.
+	 */
+	slatejs_push_lstring(ctx, dom_string_data(name), dom_string_length(name));
+	slatejs_push_global_object(ctx);
+	/* ... type window */
+	if (slatejs_bind_event_target_push_listeners(ctx, true)) {
+		slatejs_pop(ctx);
+		return;
+	}
+	/* ... sublisteners */
+	slatejs_push_array(ctx);
+	/* ... sublisteners copy */
+	idx = 0;
+	while (slatejs_get_prop_index(ctx, -2, idx)) {
+		/* ... sublisteners copy handler */
+		slatejs_get_prop_index(ctx, -1, 1);
+		/* ... sublisteners copy handler flags */
+		if ((event_listener_flags)slatejs_to_int(ctx, -1) & ELF_ONCE) {
+			slatejs_dup(ctx, -4);
+			/* ... sublisteners copy handler flags sublisteners */
+			slatejs_bind_shuffle_array(ctx, idx);
+			slatejs_pop(ctx);
+			/* ... sublisteners copy handler flags */
+		}
+		slatejs_pop(ctx);
+		/* ... sublisteners copy handler */
+		slatejs_put_prop_index(ctx, -2, idx);
+		/* ... sublisteners copy */
+		idx++;
+	}
+	/* ... sublisteners copy undefined */
+	slatejs_pop(ctx);
+	/* ... sublisteners copy */
+	slatejs_insert(ctx, -2);
+	/* ... copy sublisteners */
+	slatejs_pop(ctx);
+	/* ... copy */
+	idx = 0;
+	while (slatejs_get_prop_index(ctx, -1, idx++)) {
+		/* ... copy handler */
+		if (slatejs_get_prop_index(ctx, -1, 2)) {
+			/* ... copy handler removed */
+			slatejs_pop_2(ctx);
+			continue;
+		}
+		slatejs_pop(ctx);
+		slatejs_get_prop_index(ctx, -1, 0);
+		slatejs_get_prop_index(ctx, -2, 1);
+		/* ... copy handler callback flags */
+		flags = (event_listener_flags)slatejs_get_int(ctx, -1);
+		slatejs_pop(ctx);
+		/* ... copy handler callback */
+		if (flags & ELF_CAPTURE) {
+			slatejs_pop_2(ctx);
+			continue;
+		}
+		slatejs_push_global_object(ctx);
+		slatejs_bind_push_event(ctx, evt);
+		/* ... copy handler callback window event */
+		slatejs_reset_start_time(ctx);
+		if (slatejs_pcall_method(ctx, 1) != 0) {
+			NSLOG(quickjs, DEBUG,
+			      "Window event listener failed");
+			slatejs_get_prop_string(ctx, -1, "name");
+			slatejs_get_prop_string(ctx, -2, "message");
+			slatejs_get_prop_string(ctx, -3, "fileName");
+			slatejs_get_prop_string(ctx, -4, "lineNumber");
+			slatejs_get_prop_string(ctx, -5, "stack");
+			/* ... err name message fileName lineNumber stack */
+			NSLOG(jserrors, WARNING, "JavaScript callback error: %s: %s",
+			      slatejs_safe_to_string(ctx, -5),
+			      slatejs_safe_to_string(ctx, -4));
+			NSLOG(jserrors, WARNING,
+			      "JavaScript callback location: %s line %s",
+			      slatejs_safe_to_string(ctx, -3),
+			      slatejs_safe_to_string(ctx, -2));
+			NSLOG(jserrors, WARNING, "JavaScript callback stack: %s",
+			      slatejs_safe_to_string(ctx, -1));
+
+			slatejs_pop_n(ctx, 7);
+			/* ... copy */
+			continue;
+		}
+		/* ... copy handler result */
+		if (slatejs_is_boolean(ctx, -1) &&
+		    slatejs_to_boolean(ctx, -1) == 0) {
+			dom_event_prevent_default(evt);
+		}
+		slatejs_pop_2(ctx);
+		/* ... copy */
+	}
+	slatejs_pop_2(ctx);
+}
+
+static void slatejs_clear_window_event_listeners(slatejs_context *ctx,
+		dom_string *name)
+{
+	slatejs_push_global_object(ctx);
+	slatejs_get_prop_string(ctx, -1, EVENT_LISTENER_JS_MAGIC);
+	if (!slatejs_is_undefined(ctx, -1)) {
+		slatejs_push_lstring(ctx, dom_string_data(name),
+				dom_string_length(name));
+		slatejs_del_prop(ctx, -2);
+	}
+	slatejs_pop_2(ctx);
 }
 
 void slatejs_bind_register_event_listener_for(slatejs_context *ctx,
@@ -2042,6 +1881,8 @@ bool js_fire_event(jsthread *thread, const char *type, struct dom_document *doc,
 		return true;
 	}
 	slatejs_enter_thread(thread);
+	slatejs_dispatch_window_event_listeners(CTX, evt, corestring_dom_load);
+	slatejs_clear_window_event_listeners(CTX, corestring_dom_load);
 	/* ... */
 	slatejs_get_global_string(CTX, HANDLER_MAGIC);
 	/* ... handlers */

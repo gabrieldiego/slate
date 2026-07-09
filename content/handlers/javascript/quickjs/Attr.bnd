@@ -1,0 +1,190 @@
+/* Attr binding for browser using quickjs and libdom
+ *
+ * Released under the terms of the MIT License,
+ *         http://www.opensource.org/licenses/mit-license
+ */
+
+class Attr {
+	private struct dom_attr *attr;
+	prologue %{
+#include <dom/core/attr.h>
+%};
+};
+
+init Attr(struct dom_attr *attr)
+%{
+	priv->attr = attr;
+	dom_node_ref((dom_node *)attr);
+%}
+
+fini Attr()
+%{
+	dom_node_unref((dom_node *)priv->attr);
+%}
+
+getter Attr::name()
+%{
+	dom_exception exc;
+	dom_string *name = NULL;
+
+	exc = dom_attr_get_name(priv->attr, &name);
+	if (exc != DOM_NO_ERR || name == NULL) {
+		return 0;
+	}
+
+	slatejs_push_lstring(ctx, dom_string_data(name), dom_string_length(name));
+	dom_string_unref(name);
+	return 1;
+%}
+
+getter Attr::localName()
+%{
+	dom_exception exc;
+	dom_string *name = NULL;
+
+	exc = dom_attr_get_name(priv->attr, &name);
+	if (exc != DOM_NO_ERR || name == NULL) {
+		return 0;
+	}
+
+	slatejs_push_lstring(ctx, dom_string_data(name), dom_string_length(name));
+	dom_string_unref(name);
+	return 1;
+%}
+
+getter Attr::value()
+%{
+	dom_exception exc;
+	dom_string *value = NULL;
+
+	exc = dom_attr_get_value(priv->attr, &value);
+	if (exc != DOM_NO_ERR || value == NULL) {
+		return 0;
+	}
+
+	slatejs_push_lstring(ctx, dom_string_data(value), dom_string_length(value));
+	dom_string_unref(value);
+	return 1;
+%}
+
+setter Attr::value()
+%{
+	dom_exception exc;
+	dom_string *value = NULL;
+	slatejs_size_t value_len;
+	const char *value_s = slatejs_safe_to_lstring(ctx, 0, &value_len);
+
+	exc = dom_string_create((const uint8_t *)value_s, value_len, &value);
+	if (exc != DOM_NO_ERR) {
+		return 0;
+	}
+
+	exc = dom_attr_set_value(priv->attr, value);
+	dom_string_unref(value);
+	if (exc != DOM_NO_ERR) {
+		return 0;
+	}
+
+	return 0;
+%}
+
+getter Attr::nodeValue()
+%{
+	dom_exception exc;
+	dom_string *value = NULL;
+
+	exc = dom_attr_get_value(priv->attr, &value);
+	if (exc != DOM_NO_ERR || value == NULL) {
+		return 0;
+	}
+
+	slatejs_push_lstring(ctx, dom_string_data(value), dom_string_length(value));
+	dom_string_unref(value);
+	return 1;
+%}
+
+setter Attr::nodeValue()
+%{
+	dom_exception exc;
+	dom_string *value = NULL;
+	slatejs_size_t value_len;
+	const char *value_s = slatejs_safe_to_lstring(ctx, 0, &value_len);
+
+	exc = dom_string_create((const uint8_t *)value_s, value_len, &value);
+	if (exc != DOM_NO_ERR) {
+		return 0;
+	}
+
+	exc = dom_attr_set_value(priv->attr, value);
+	dom_string_unref(value);
+	if (exc != DOM_NO_ERR) {
+		return 0;
+	}
+
+	return 0;
+%}
+
+getter Attr::textContent()
+%{
+	dom_exception exc;
+	dom_string *value = NULL;
+
+	exc = dom_attr_get_value(priv->attr, &value);
+	if (exc != DOM_NO_ERR || value == NULL) {
+		return 0;
+	}
+
+	slatejs_push_lstring(ctx, dom_string_data(value), dom_string_length(value));
+	dom_string_unref(value);
+	return 1;
+%}
+
+setter Attr::textContent()
+%{
+	dom_exception exc;
+	dom_string *value = NULL;
+	slatejs_size_t value_len;
+	const char *value_s = slatejs_safe_to_lstring(ctx, 0, &value_len);
+
+	exc = dom_string_create((const uint8_t *)value_s, value_len, &value);
+	if (exc != DOM_NO_ERR) {
+		return 0;
+	}
+
+	exc = dom_attr_set_value(priv->attr, value);
+	dom_string_unref(value);
+	if (exc != DOM_NO_ERR) {
+		return 0;
+	}
+
+	return 0;
+%}
+
+getter Attr::specified()
+%{
+	dom_exception exc;
+	bool specified = true;
+
+	exc = dom_attr_get_specified(priv->attr, &specified);
+	if (exc != DOM_NO_ERR) {
+		return 0;
+	}
+
+	slatejs_push_boolean(ctx, specified);
+	return 1;
+%}
+
+getter Attr::ownerElement()
+%{
+	dom_exception exc;
+	dom_element *element = NULL;
+
+	exc = dom_attr_get_owner_element(priv->attr, &element);
+	if (exc != DOM_NO_ERR || element == NULL) {
+		return 0;
+	}
+
+	slatejs_bind_push_node(ctx, (dom_node *)element);
+	dom_node_unref(element);
+	return 1;
+%}

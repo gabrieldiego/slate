@@ -54,6 +54,44 @@ static script_handler_t *select_script_handler(content_type ctype)
 	return NULL;
 }
 
+static bool html_script_type_equals(dom_string *type, const char *name)
+{
+	const char *data = dom_string_data(type);
+	size_t start = 0;
+	size_t end = dom_string_byte_length(type);
+	size_t name_len = strlen(name);
+	size_t i;
+
+	while ((start < end) && isspace((unsigned char)data[start])) {
+		start++;
+	}
+
+	while ((end > start) && isspace((unsigned char)data[end - 1])) {
+		end--;
+	}
+
+	if ((end - start) != name_len) {
+		return false;
+	}
+
+	for (i = 0; i < name_len; i++) {
+		if (tolower((unsigned char)data[start + i]) != name[i]) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+static bool html_script_type_unsupported(dom_string *type)
+{
+	/* TODO: Implement ES module loading once Slate has a module-capable
+	 * script pipeline. For now, do not feed module source to the classic
+	 * script executor.
+	 */
+	return html_script_type_equals(type, "module");
+}
+
 
 /* exported internal interface documented in html/html_internal.h */
 slateerror html_script_exec(html_content *c, bool allow_defer)
@@ -570,6 +608,19 @@ html_process_script(void *ctx, dom_node *node)
 	dom_string *src, *mimetype;
 	dom_hubbub_error err = DOM_HUBBUB_OK;
 
+	exc = dom_element_get_attribute(node, corestring_dom_type, &mimetype);
+	if (exc != DOM_NO_ERR || mimetype == NULL) {
+		mimetype = dom_string_ref(corestring_dom_text_javascript);
+	}
+
+	if (html_script_type_unsupported(mimetype)) {
+		NSLOG(netsurf, INFO, "skipping unsupported script type '%.*s'",
+		      (int)dom_string_byte_length(mimetype),
+		      dom_string_data(mimetype));
+		dom_string_unref(mimetype);
+		return DOM_HUBBUB_OK;
+	}
+
 	/* ensure javascript context is available */
 	/* We should only ever be here if scripting was enabled for this
 	 * content so it's correct to make a javascript context if there
@@ -588,11 +639,6 @@ html_process_script(void *ctx, dom_node *node)
 
 	NSLOG(netsurf, INFO, "content %p parser %p node %p", c, c->parser,
 	      node);
-
-	exc = dom_element_get_attribute(node, corestring_dom_type, &mimetype);
-	if (exc != DOM_NO_ERR || mimetype == NULL) {
-		mimetype = dom_string_ref(corestring_dom_text_javascript);
-	}
 
 	exc = dom_element_get_attribute(node, corestring_dom_src, &src);
 	if (exc != DOM_NO_ERR || src == NULL) {

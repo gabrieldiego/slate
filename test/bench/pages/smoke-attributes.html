@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Smoke Bench Attributes</title>
+</head>
+<body>
+<main>
+<h1>Smoke Bench Attributes</h1>
+<div id="fixture" data-kind="map" data-map-layer="standard" title="Attribute fixture"></div>
+<p id="status">pending</p>
+</main>
+<script>
+(function () {
+  var fixture = document.getElementById("fixture");
+  var attrs = fixture.attributes;
+  var first = attrs.item(0);
+  var names = [];
+  var values = [];
+
+  for (var i = 0; i < attrs.length; i++) {
+    names.push(attrs[i].name);
+    values.push(attrs[i].value);
+  }
+
+  first.value = first.value;
+  document.getElementById("status").textContent =
+    "Attributes " + attrs.length + " " + names.join(",") + " " + values.join(",") +
+    " dataset " + fixture.dataset.kind + " " + fixture.dataset.mapLayer +
+    " text " + String(document.createElement("span").textContent.length);
+  console.log("smoke-attributes-ready", attrs.length, first.name, first.value,
+    fixture.dataset.kind, fixture.dataset.mapLayer);
+}());
+</script>
+</body>
+</html>

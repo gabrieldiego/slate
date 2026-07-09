@@ -16,6 +16,23 @@ class Location {
 prologue Location()
 %{
 #include "slate/browser_window.h"
+
+static void location_push_url_part(slatejs_context *ctx, slateurl *url,
+		int components)
+{
+	char *url_s = NULL;
+	size_t url_l = 0;
+
+	slateurl_get(url, components, &url_s, &url_l);
+
+	if (url_s == NULL) {
+		slatejs_push_lstring(ctx, "", 0);
+		return;
+	}
+
+	slatejs_push_lstring(ctx, url_s, url_l);
+	free(url_s);
+}
 %}
 
 init Location(slateurl *url)
@@ -105,20 +122,7 @@ method Location::replace()
 
 getter Location::href()
 %{
-	char *url_s = NULL;
-	size_t url_l;
-
-	slateurl_get(priv->url, SLATEURL_COMPLETE, &url_s, &url_l);
-	if (url_s == NULL) {
-		return 0;
-	}
-
-	slatejs_push_lstring(ctx, url_s, url_l);
-
-	if (url_s != NULL) {
-		free(url_s);
-	}
-
+	location_push_url_part(ctx, priv->url, SLATEURL_COMPLETE);
 	return 1;
 %}
 
@@ -153,119 +157,42 @@ setter Location::href()
 
 getter Location::origin()
 %{
-	char *url_s = NULL;
-	size_t url_l;
-
-	slateurl_get(priv->url, SLATEURL_SCHEME | SLATEURL_HOST | SLATEURL_PORT, &url_s, &url_l);
-
-	/* if url_s is NULL slatejs_push_lstring pushes an empty string
-	 * which is correct for this API
-	 */
-	slatejs_push_lstring(ctx, url_s, url_l);
-
-	if (url_s != NULL) {
-		free(url_s);
-	}
-
+	location_push_url_part(ctx, priv->url,
+			SLATEURL_SCHEME | SLATEURL_HOST | SLATEURL_PORT);
 	return 1;
 %}
 
 getter Location::protocol()
 %{
-	char *url_s = NULL;
-	size_t url_l;
-
-	slateurl_get(priv->url, SLATEURL_SCHEME, &url_s, &url_l);
-
-	/* if url_s is NULL slatejs_push_lstring pushes an empty string
-	 * which is correct for this API
-	 */
-	slatejs_push_lstring(ctx, url_s, url_l);
-
-	if (url_s != NULL) {
-		free(url_s);
-	}
-
+	location_push_url_part(ctx, priv->url, SLATEURL_SCHEME);
 	return 1;
 %}
 
 
 getter Location::username()
 %{
-	char *url_s = NULL;
-	size_t url_l;
-
-	slateurl_get(priv->url, SLATEURL_USERNAME, &url_s, &url_l);
-
-	/* if url_s is NULL slatejs_push_lstring pushes an empty string
-	 * which is correct for this API
-	 */
-	slatejs_push_lstring(ctx, url_s, url_l);
-
-	if (url_s != NULL) {
-		free(url_s);
-	}
-
+	location_push_url_part(ctx, priv->url, SLATEURL_USERNAME);
 	return 1;
 %}
 
 
 getter Location::password()
 %{
-	char *url_s = NULL;
-	size_t url_l;
-
-	slateurl_get(priv->url, SLATEURL_PASSWORD, &url_s, &url_l);
-
-	/* if url_s is NULL slatejs_push_lstring pushes an empty string
-	 * which is correct for this API
-	 */
-	slatejs_push_lstring(ctx, url_s, url_l);
-
-	if (url_s != NULL) {
-		free(url_s);
-	}
-
+	location_push_url_part(ctx, priv->url, SLATEURL_PASSWORD);
 	return 1;
 %}
 
 
 getter Location::host()
 %{
-	char *url_s = NULL;
-	size_t url_l;
-
-	slateurl_get(priv->url, SLATEURL_HOST, &url_s, &url_l);
-
-	/* if url_s is NULL slatejs_push_lstring pushes an empty string
-	 * which is correct for this API
-	 */
-	slatejs_push_lstring(ctx, url_s, url_l);
-
-	if (url_s != NULL) {
-		free(url_s);
-	}
-
+	location_push_url_part(ctx, priv->url, SLATEURL_HOST);
 	return 1;
 %}
 
 
 getter Location::hostname()
 %{
-	char *url_s = NULL;
-	size_t url_l;
-
-	slateurl_get(priv->url, SLATEURL_HOST, &url_s, &url_l);
-
-	/* if url_s is NULL slatejs_push_lstring pushes an empty string
-	 * which is correct for this API
-	 */
-	slatejs_push_lstring(ctx, url_s, url_l);
-
-	if (url_s != NULL) {
-		free(url_s);
-	}
-
+	location_push_url_part(ctx, priv->url, SLATEURL_HOST);
 	return 1;
 %}
 
@@ -273,81 +200,28 @@ getter Location::hostname()
 
 getter Location::port()
 %{
-	char *url_s = NULL;
-	size_t url_l;
-
-	slateurl_get(priv->url, SLATEURL_PORT, &url_s, &url_l);
-
-	/* if url_s is NULL slatejs_push_lstring pushes an empty string
-	 * which is correct for this API
-	 */
-	slatejs_push_lstring(ctx, url_s, url_l);
-
-	if (url_s != NULL) {
-		free(url_s);
-	}
-
+	location_push_url_part(ctx, priv->url, SLATEURL_PORT);
 	return 1;
 %}
 
 
 getter Location::pathname()
 %{
-	char *url_s = NULL;
-	size_t url_l;
-
-	slateurl_get(priv->url, SLATEURL_PATH, &url_s, &url_l);
-
-	/* if url_s is NULL slatejs_push_lstring pushes an empty string
-	 * which is correct for this API
-	 */
-	slatejs_push_lstring(ctx, url_s, url_l);
-
-	if (url_s != NULL) {
-		free(url_s);
-	}
-
+	location_push_url_part(ctx, priv->url, SLATEURL_PATH);
 	return 1;
 %}
 
 
 getter Location::search()
 %{
-	char *url_s = NULL;
-	size_t url_l;
-
-	slateurl_get(priv->url, SLATEURL_QUERY, &url_s, &url_l);
-
-	/* if url_s is NULL slatejs_push_lstring pushes an empty string
-	 * which is correct for this API
-	 */
-	slatejs_push_lstring(ctx, url_s, url_l);
-
-	if (url_s != NULL) {
-		free(url_s);
-	}
-
+	location_push_url_part(ctx, priv->url, SLATEURL_QUERY);
 	return 1;
 %}
 
 
 getter Location::hash()
 %{
-	char *url_s = NULL;
-	size_t url_l;
-
-	slateurl_get(priv->url, SLATEURL_FRAGMENT, &url_s, &url_l);
-
-	/* if url_s is NULL slatejs_push_lstring pushes an empty string
-	 * which is correct for this API
-	 */
-	slatejs_push_lstring(ctx, url_s, url_l);
-
-	if (url_s != NULL) {
-		free(url_s);
-	}
-
+	location_push_url_part(ctx, priv->url, SLATEURL_FRAGMENT);
 	return 1;
 %}
-
 

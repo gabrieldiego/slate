@@ -34,7 +34,11 @@ var NetSurf = {
 	    get: function(target, key) {
 		var index = NetSurf.arrayIndexKey(key);
 		if (index !== undefined) {
-		    return target.item(index);
+		    if (index >= target.length) {
+			return undefined;
+		    }
+		    var item = target.item(index);
+		    return item === null ? undefined : item;
 		} else {
 		    return target[key];
 		}
@@ -55,7 +59,11 @@ var NetSurf = {
 	    get: function(target, key) {
 		var index = NetSurf.arrayIndexKey(key);
 		if (index !== undefined) {
-		    return target.item(index);
+		    if (index >= target.length) {
+			return undefined;
+		    }
+		    var item = target.item(index);
+		    return item === null ? undefined : item;
 		} else {
 		    var attr = target.getNamedItem(key);
 		    if (attr) {

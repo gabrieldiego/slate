@@ -208,7 +208,8 @@ getter Node::nodeValue()
 		dom_string_unref(content);
 		return 1;
 	}
-	return 0;
+	slatejs_push_lstring(ctx, "", 0);
+	return 1;
 %}
 
 setter Node::nodeValue()

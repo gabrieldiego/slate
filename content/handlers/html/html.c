@@ -268,6 +268,27 @@ bool fire_dom_mouse_event(dom_string *type, dom_node *target,
 	return result;
 }
 
+static void html_fire_dom_content_loaded(struct html_content *htmlc)
+{
+	dom_exception exc;
+	dom_string *event_type = NULL;
+	const char event_name[] = "DOMContentLoaded";
+
+	if (htmlc->jsthread == NULL) {
+		return;
+	}
+
+	exc = dom_string_create((const uint8_t *)event_name,
+			SLEN(event_name), &event_type);
+	if (exc != DOM_NO_ERR) {
+		return;
+	}
+
+	fire_generic_dom_event(event_type, (dom_node *)htmlc->document,
+			true, false);
+	dom_string_unref(event_type);
+}
+
 /**
  * Perform post-box-creation conversion of a document
  *
@@ -960,6 +981,7 @@ html_begin_conversion(html_content *htmlc)
 	/* fire a simple event that bubbles named DOMContentLoaded at
 	 * the Document.
 	 */
+	html_fire_dom_content_loaded(htmlc);
 
 	/* get encoding */
 	if (htmlc->encoding == NULL) {

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Smoke Bench Module Skip</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+.smoke-module-panel {
+	border: 1px solid #9aa8b6;
+	padding: 14px;
+	background: #ffffff;
+}
+.smoke-module-panel strong {
+	color: #24517a;
+}
+</style>
+</head>
+<body class="bench-page">
+<header class="site-head">
+<img src="assets/bench-logo.png" width="120" height="48" alt="Smoke Bench logo">
+<h1>Smoke Bench Module Skip</h1>
+</header>
+<main>
+<section class="smoke-module-panel">
+<p id="smoke-module-status">Smoke module waiting</p>
+<p>This page verifies that unsupported module scripts are skipped cleanly.</p>
+</section>
+<script type="module">
+window.slateModuleScriptRan = true;
+</script>
+<script type="module">
+export const unsupportedModuleSyntax = true;
+</script>
+<script>
+(function () {
+	var status = document.getElementById("smoke-module-status");
+
+	if (window.slateModuleScriptRan) {
+		status.innerHTML = "Module executed";
+		console.log("smoke-module-ran");
+	} else {
+		status.innerHTML = "<strong>Module skipped</strong>";
+		console.log("smoke-module-skip-ready");
+	}
+}());
+</script>
+</main>
+</body>
+</html>

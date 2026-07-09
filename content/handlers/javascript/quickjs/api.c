@@ -714,6 +714,46 @@ void slatejs_gc(slatejs_context *ctx, slatejs_uint_t flags)
 	slatejs_collect_and_drain(ctx);
 }
 
+slatejs_int_t slatejs_execute_pending_jobs(slatejs_context *ctx,
+		slatejs_uint_t max_jobs)
+{
+	slatejs_context *root = slatejs_root_context(ctx);
+	JSContext *job_ctx = NULL;
+	void *old_opaque;
+	slatejs_uint_t count = 0;
+
+	if (root == NULL) {
+		return SLATEJS_EXEC_SUCCESS;
+	}
+
+	old_opaque = JS_GetContextOpaque(ctx->qctx);
+	slatejs_sync_qjs_global(ctx);
+
+	while (max_jobs == 0 || count < max_jobs) {
+		int ret = JS_ExecutePendingJob(root->rt, &job_ctx);
+
+		if (ret == 0) {
+			break;
+		}
+
+		if (ret < 0) {
+			JSContext *err_ctx = job_ctx != NULL ? job_ctx : ctx->qctx;
+			JSValue exception = JS_GetException(err_ctx);
+
+			JS_SetContextOpaque(ctx->qctx, old_opaque);
+			slatejs_push_owned(ctx, exception);
+			slatejs_drain_finalizers(ctx);
+			return SLATEJS_EXEC_ERROR;
+		}
+
+		count++;
+	}
+
+	JS_SetContextOpaque(ctx->qctx, old_opaque);
+	slatejs_drain_finalizers(ctx);
+	return SLATEJS_EXEC_SUCCESS;
+}
+
 void slatejs_get_memory_functions(slatejs_context *ctx, slatejs_memory_functions *out_funcs)
 {
 	if (out_funcs != NULL) {
@@ -1677,8 +1717,21 @@ static slatejs_int_t slatejs_call_js(slatejs_context *ctx, slatejs_idx_t func_po
 		return SLATEJS_EXEC_ERROR;
 	}
 
-	JS_SetContextOpaque(ctx->qctx, old_opaque);
 	slatejs_replace_call_values(ctx, func_pos, consume_count, result);
+
+	if (slatejs_execute_pending_jobs(ctx, 1024) == SLATEJS_EXEC_ERROR) {
+		JSValue exception = ctx->stack[ctx->top - 1];
+
+		ctx->stack[ctx->top - 1] = JS_UNDEFINED;
+		slatejs_free_range(ctx, func_pos, ctx->top - func_pos);
+		ctx->top = func_pos;
+		slatejs_push_owned(ctx, exception);
+		JS_SetContextOpaque(ctx->qctx, old_opaque);
+		slatejs_drain_finalizers(ctx);
+		return SLATEJS_EXEC_ERROR;
+	}
+
+	JS_SetContextOpaque(ctx->qctx, old_opaque);
 	slatejs_drain_finalizers(ctx);
 	return SLATEJS_EXEC_SUCCESS;
 }

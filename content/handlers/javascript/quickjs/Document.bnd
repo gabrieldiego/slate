@@ -16,6 +16,7 @@ prologue Document()
 #include "utils/corestrings.h"
 #include "utils/libdom.h"
 #include "utils/utils.h"
+#include "slate/content_type.h"
 #include "content/hlcache.h"
 #include "html/private.h"
 #include "content/urldb.h"
@@ -282,6 +283,30 @@ getter Document::location()
 		slatejs_pop(ctx);
 		return 0;
 	}
+	return 1;
+%}
+
+getter Document::readyState()
+%{
+	struct html_content *htmlc;
+	dom_exception err;
+
+	err = dom_node_get_user_data(priv->parent.node,
+				     corestring_dom___ns_key_html_content_data,
+				     &htmlc);
+	if ((err != DOM_NO_ERR) || (htmlc == NULL)) {
+		slatejs_push_string(ctx, "loading");
+		return 1;
+	}
+
+	if (!htmlc->parse_completed) {
+		slatejs_push_string(ctx, "loading");
+	} else if (content__get_status(&htmlc->base) == CONTENT_STATUS_DONE) {
+		slatejs_push_string(ctx, "complete");
+	} else {
+		slatejs_push_string(ctx, "interactive");
+	}
+
 	return 1;
 %}
 

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Smoke Bench Fetch Shim</title>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+	fetch("/empty").then(function (response) {
+		return response.text().then(function (text) {
+			document.getElementById("status").textContent =
+				"fetch " + response.status + " " + text.length;
+			console.log("smoke-fetch-shim-ready");
+		});
+	});
+});
+</script>
+</head>
+<body>
+<main>
+<h1>Smoke Bench Fetch Shim</h1>
+<p id="status">pending</p>
+</main>
+</body>
+</html>

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Smoke Bench Location</title>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+	var emptyPartsAreStrings =
+		typeof location.hash === "string" &&
+		typeof location.search === "string" &&
+		typeof location.port === "string";
+	document.getElementById("status").textContent =
+		emptyPartsAreStrings ? "location strings" : "location mismatch";
+	console.log("smoke-location-ready");
+});
+</script>
+</head>
+<body>
+<main>
+<h1>Smoke Bench Location</h1>
+<p id="status">pending</p>
+</main>
+</body>
+</html>

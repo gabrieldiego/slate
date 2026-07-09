@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Smoke Bench DOMContentLoaded</title>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  document.getElementById("status").textContent = "DOMContentLoaded fired";
+  console.log("smoke-domcontentloaded-ready", document.readyState);
+});
+</script>
+</head>
+<body>
+<main>
+<h1>Smoke Bench DOMContentLoaded</h1>
+<p id="status">pending</p>
+</main>
+</body>
+</html>

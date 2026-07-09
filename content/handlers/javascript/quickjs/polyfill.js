@@ -84,6 +84,246 @@ if (!Array.from) {
   }());
 }
 
+if (typeof TextDecoder === "undefined") {
+  (function () {
+    var replacement = 0xfffd;
+
+    function bytesFrom(input) {
+      if (input == null) {
+        return new Uint8Array(0);
+      }
+      if (ArrayBuffer.isView(input)) {
+        return new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
+      }
+      if (input instanceof ArrayBuffer) {
+        return new Uint8Array(input);
+      }
+      throw new TypeError("TextDecoder.decode expects a buffer source");
+    }
+
+    function utf8Error(decoder) {
+      if (decoder.fatal) {
+        throw new TypeError("The encoded data is not valid UTF-8");
+      }
+      return replacement;
+    }
+
+    function appendCodePoint(state, cp) {
+      if (cp <= 0xffff) {
+        state.chunk += String.fromCharCode(cp);
+      } else {
+        cp -= 0x10000;
+        state.chunk += String.fromCharCode(0xd800 + (cp >> 10),
+            0xdc00 + (cp & 0x3ff));
+      }
+      if (state.chunk.length >= 8192) {
+        state.parts.push(state.chunk);
+        state.chunk = "";
+      }
+    }
+
+    function decodeUtf8(decoder, bytes) {
+      var state = { parts: [], chunk: "" };
+      var i = 0;
+
+      while (i < bytes.length) {
+        var b1 = bytes[i++];
+        var b2;
+        var b3;
+        var b4;
+        var cp;
+
+        if (b1 < 0x80) {
+          appendCodePoint(state, b1);
+        } else if (b1 >= 0xc2 && b1 <= 0xdf && i < bytes.length) {
+          b2 = bytes[i];
+          if ((b2 & 0xc0) === 0x80) {
+            i++;
+            appendCodePoint(state, ((b1 & 0x1f) << 6) | (b2 & 0x3f));
+          } else {
+            appendCodePoint(state, utf8Error(decoder));
+          }
+        } else if (b1 >= 0xe0 && b1 <= 0xef && i + 1 < bytes.length) {
+          b2 = bytes[i];
+          b3 = bytes[i + 1];
+          if ((b2 & 0xc0) === 0x80 && (b3 & 0xc0) === 0x80 &&
+              !(b1 === 0xe0 && b2 < 0xa0) &&
+              !(b1 === 0xed && b2 >= 0xa0)) {
+            i += 2;
+            cp = ((b1 & 0x0f) << 12) | ((b2 & 0x3f) << 6) | (b3 & 0x3f);
+            appendCodePoint(state, cp);
+          } else {
+            appendCodePoint(state, utf8Error(decoder));
+          }
+        } else if (b1 >= 0xf0 && b1 <= 0xf4 && i + 2 < bytes.length) {
+          b2 = bytes[i];
+          b3 = bytes[i + 1];
+          b4 = bytes[i + 2];
+          if ((b2 & 0xc0) === 0x80 && (b3 & 0xc0) === 0x80 &&
+              (b4 & 0xc0) === 0x80 &&
+              !(b1 === 0xf0 && b2 < 0x90) &&
+              !(b1 === 0xf4 && b2 >= 0x90)) {
+            i += 3;
+            cp = ((b1 & 0x07) << 18) | ((b2 & 0x3f) << 12) |
+                ((b3 & 0x3f) << 6) | (b4 & 0x3f);
+            appendCodePoint(state, cp);
+          } else {
+            appendCodePoint(state, utf8Error(decoder));
+          }
+        } else {
+          appendCodePoint(state, utf8Error(decoder));
+        }
+      }
+
+      state.parts.push(state.chunk);
+      return state.parts.join("");
+    }
+
+    function TextDecoderPolyfill(label, options) {
+      var enc = String(label || "utf-8").toLowerCase();
+      if (enc !== "utf-8" && enc !== "utf8" && enc !== "unicode-1-1-utf-8") {
+        throw new RangeError("Unsupported TextDecoder encoding");
+      }
+      options = options || {};
+      this.encoding = "utf-8";
+      this.fatal = !!options.fatal;
+      this.ignoreBOM = !!options.ignoreBOM;
+    }
+
+    TextDecoderPolyfill.prototype.decode = function (input) {
+      var bytes = bytesFrom(input);
+      var text = decodeUtf8(this, bytes);
+      if (!this.ignoreBOM && text.charCodeAt(0) === 0xfeff) {
+        return text.substring(1);
+      }
+      return text;
+    };
+
+    Object.defineProperty(globalThis, "TextDecoder", {
+      value: TextDecoderPolyfill,
+      writable: true,
+      configurable: true
+    });
+  }());
+}
+
+if (typeof Blob === "undefined") {
+  (function () {
+    function utf8Bytes(text) {
+      var out = [];
+      var i;
+      var cp;
+
+      text = String(text);
+      for (i = 0; i < text.length; i++) {
+        cp = text.charCodeAt(i);
+        if (cp >= 0xd800 && cp <= 0xdbff && i + 1 < text.length) {
+          var next = text.charCodeAt(i + 1);
+          if (next >= 0xdc00 && next <= 0xdfff) {
+            i++;
+            cp = 0x10000 + ((cp - 0xd800) << 10) + (next - 0xdc00);
+          }
+        }
+
+        if (cp < 0x80) {
+          out.push(cp);
+        } else if (cp < 0x800) {
+          out.push(0xc0 | (cp >> 6), 0x80 | (cp & 0x3f));
+        } else if (cp < 0x10000) {
+          out.push(0xe0 | (cp >> 12), 0x80 | ((cp >> 6) & 0x3f),
+              0x80 | (cp & 0x3f));
+        } else {
+          out.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 0x3f),
+              0x80 | ((cp >> 6) & 0x3f), 0x80 | (cp & 0x3f));
+        }
+      }
+      return new Uint8Array(out);
+    }
+
+    function bytesFromPart(part) {
+      if (part instanceof SlateBlob) {
+        return part._bytes;
+      }
+      if (typeof part === "string") {
+        return utf8Bytes(part);
+      }
+      if (ArrayBuffer.isView(part)) {
+        return new Uint8Array(part.buffer, part.byteOffset, part.byteLength);
+      }
+      if (part instanceof ArrayBuffer) {
+        return new Uint8Array(part);
+      }
+      return utf8Bytes(String(part));
+    }
+
+    function concatBytes(parts) {
+      var arrays = [];
+      var size = 0;
+      var offset = 0;
+      var i;
+      var out;
+
+      for (i = 0; i < parts.length; i++) {
+        arrays[i] = bytesFromPart(parts[i]);
+        size += arrays[i].byteLength;
+      }
+
+      out = new Uint8Array(size);
+      for (i = 0; i < arrays.length; i++) {
+        out.set(arrays[i], offset);
+        offset += arrays[i].byteLength;
+      }
+      return out;
+    }
+
+    function copyBytes(bytes) {
+      var out = new Uint8Array(bytes.byteLength);
+      out.set(bytes);
+      return out;
+    }
+
+    function SlateBlob(parts, options) {
+      options = options || {};
+      this._bytes = concatBytes(parts || []);
+      this.size = this._bytes.byteLength;
+      this.type = options.type ? String(options.type).toLowerCase() : "";
+    }
+
+    SlateBlob.prototype.arrayBuffer = function () {
+      return Promise.resolve(copyBytes(this._bytes).buffer);
+    };
+
+    SlateBlob.prototype.text = function () {
+      return Promise.resolve(new TextDecoder("utf-8").decode(this._bytes));
+    };
+
+    SlateBlob.prototype.slice = function (start, end, type) {
+      var size = this._bytes.byteLength;
+      var from = start == null ? 0 : Number(start);
+      var to = end == null ? size : Number(end);
+      if (from < 0) {
+        from = Math.max(size + from, 0);
+      } else {
+        from = Math.min(from, size);
+      }
+      if (to < 0) {
+        to = Math.max(size + to, 0);
+      } else {
+        to = Math.min(to, size);
+      }
+      return new SlateBlob([this._bytes.slice(from, Math.max(from, to))], {
+        type: type || ""
+      });
+    };
+
+    Object.defineProperty(globalThis, "Blob", {
+      value: SlateBlob,
+      writable: true,
+      configurable: true
+    });
+  }());
+}
+
 // DOMTokenList formatter, in theory we can remove this if we do the stringifier IDL support
 
 DOMTokenList.prototype.toString = function () {
@@ -450,6 +690,192 @@ DOMSettableTokenList.prototype.toString = DOMTokenList.prototype.toString;
     }
   }
 
+  var needsURL = false;
+  try {
+    var testURL = new URL("https://slate.invalid/path?x=1");
+    testURL.searchParams.set("y", "2");
+    String(testURL);
+  } catch (e) {
+    needsURL = true;
+  }
+
+  if (needsURL) {
+    var SlateURL = function URL(value, base) {
+      var text = String(value);
+      var hashAt;
+      var queryAt;
+      var originMatch;
+
+      if (base && !/^[a-z][a-z0-9+.-]*:/i.test(text)) {
+        if (text.charAt(0) === "/") {
+          text = String(base).replace(/^(https?:\/\/[^\/]+).*$/, "$1") + text;
+        } else {
+          text = String(base).replace(/[^\/]*$/, "") + text;
+        }
+      }
+
+      hashAt = text.indexOf("#");
+      this.hash = hashAt >= 0 ? text.substring(hashAt) : "";
+      if (hashAt >= 0) {
+        text = text.substring(0, hashAt);
+      }
+
+      queryAt = text.indexOf("?");
+      this.search = queryAt >= 0 ? text.substring(queryAt) : "";
+      this.pathname = queryAt >= 0 ? text.substring(0, queryAt) : text;
+      this.protocol = "";
+      this.host = "";
+      this.hostname = "";
+      this.port = "";
+      this.origin = "";
+      originMatch = /^([a-z][a-z0-9+.-]*:)\/\/([^\/?#]*)(.*)$/i.exec(this.pathname);
+      if (originMatch) {
+        this.protocol = originMatch[1];
+        this.host = originMatch[2];
+        this.hostname = this.host.split(":")[0];
+        this.port = this.host.indexOf(":") >= 0 ? this.host.split(":").pop() : "";
+        this.origin = this.protocol + "//" + this.host;
+        this.pathname = originMatch[3] || "/";
+      }
+      this.href = this.origin + this.pathname + this.search + this.hash;
+      this.searchParams = new URLSearchParams(this.search);
+    };
+    SlateURL.prototype.toString = function () {
+      var query = this.searchParams ? this.searchParams.toString() : "";
+      return this.origin + this.pathname + (query ? "?" + query : "") + this.hash;
+    };
+    own(window, "URL", SlateURL);
+    URL = SlateURL;
+  }
+
+  if (typeof URL !== "undefined") {
+    if (!URL.createObjectURL) {
+      var blobUrlNextId = 1;
+      var blobUrlStore = {};
+      URL.createObjectURL = function (blob) {
+        var id = "blob:slate/" + blobUrlNextId++;
+        blobUrlStore[id] = blob;
+        return id;
+      };
+      URL.revokeObjectURL = function (url) {
+        delete blobUrlStore[String(url)];
+      };
+    } else if (!URL.revokeObjectURL) {
+      URL.revokeObjectURL = function () {};
+    }
+  }
+
+  /* TODO: Replace this with a native binding once generated MessageChannel
+   * instances can deliver messages.
+   */
+  {
+    var SlateMessagePort = function MessagePort() {
+      this.onmessage = null;
+      this._peer = null;
+      this._closed = false;
+      this._listeners = {};
+    };
+    SlateMessagePort.prototype.addEventListener = function (type, listener) {
+      type = String(type);
+      if (!this._listeners[type]) {
+        this._listeners[type] = [];
+      }
+      this._listeners[type].push(listener);
+    };
+    SlateMessagePort.prototype.removeEventListener = function (type, listener) {
+      var list = this._listeners[String(type)] || [];
+      var out = [];
+      for (var i = 0; i < list.length; i++) {
+        if (list[i] !== listener) {
+          out.push(list[i]);
+        }
+      }
+      this._listeners[String(type)] = out;
+    };
+    SlateMessagePort.prototype.dispatchEvent = function (event) {
+      var list = this._listeners[String(event && event.type)] || [];
+      for (var i = 0; i < list.length; i++) {
+        list[i].call(this, event);
+      }
+      return true;
+    };
+    SlateMessagePort.prototype.postMessage = function (data) {
+      var target = this._peer;
+      var event;
+      if (!target || target._closed) {
+        return;
+      }
+      event = { type: "message", data: data, target: target, currentTarget: target };
+      if (typeof target.onmessage === "function") {
+        target.onmessage.call(target, event);
+      }
+      target.dispatchEvent(event);
+    };
+    SlateMessagePort.prototype.start = function () {};
+    SlateMessagePort.prototype.close = function () {
+      this._closed = true;
+    };
+
+    var SlateMessageChannel = function MessageChannel() {
+      this.port1 = new SlateMessagePort();
+      this.port2 = new SlateMessagePort();
+      this.port1._peer = this.port2;
+      this.port2._peer = this.port1;
+    };
+
+    own(window, "MessagePort", SlateMessagePort);
+    own(window, "MessageChannel", SlateMessageChannel);
+    MessagePort = SlateMessagePort;
+    MessageChannel = SlateMessageChannel;
+  }
+
+  var needsWorker = false;
+  try {
+    var testWorker = new Worker("blob:slate/empty-worker");
+    if (testWorker && testWorker.terminate) {
+      testWorker.terminate();
+    }
+  } catch (e) {
+    needsWorker = true;
+  }
+
+  if (needsWorker) {
+    var SlateWorker = function Worker(scriptURL) {
+      this.scriptURL = String(scriptURL || "");
+      this.onmessage = null;
+      this.onerror = null;
+      this._listeners = {};
+    };
+    SlateWorker.prototype.addEventListener = function (type, listener) {
+      type = String(type);
+      if (!this._listeners[type]) {
+        this._listeners[type] = [];
+      }
+      this._listeners[type].push(listener);
+    };
+    SlateWorker.prototype.removeEventListener = function (type, listener) {
+      var list = this._listeners[String(type)] || [];
+      var out = [];
+      for (var i = 0; i < list.length; i++) {
+        if (list[i] !== listener) {
+          out.push(list[i]);
+        }
+      }
+      this._listeners[String(type)] = out;
+    };
+    SlateWorker.prototype.dispatchEvent = function (event) {
+      var list = this._listeners[String(event && event.type)] || [];
+      for (var i = 0; i < list.length; i++) {
+        list[i].call(this, event);
+      }
+      return true;
+    };
+    SlateWorker.prototype.postMessage = function () {};
+    SlateWorker.prototype.terminate = function () {};
+    own(window, "Worker", SlateWorker);
+    Worker = SlateWorker;
+  }
+
   var needsURLSearchParams = false;
   try {
     if (typeof URLSearchParams === "undefined") {
@@ -526,5 +952,79 @@ DOMSettableTokenList.prototype.toString = DOMTokenList.prototype.toString;
       own(window, "URLSearchParams", SlateURLSearchParams);
     }
     URLSearchParams = SlateURLSearchParams;
+  }
+
+  if (typeof window.Turbo === "undefined") {
+    own(window, "Turbo", {
+      session: {
+        drive: true
+      },
+      visit: function (url) {
+        window.location.href = String(url);
+      },
+      clearCache: function () {}
+    });
+    Turbo = window.Turbo;
+  } else if (!window.Turbo.session) {
+    window.Turbo.session = {
+      drive: true
+    };
+  }
+
+  if (typeof window.Headers === "undefined") {
+    var SlateHeaders = function Headers(init) {
+      this._values = {};
+      if (init) {
+        for (var key in init) {
+          if (Object.prototype.hasOwnProperty.call(init, key)) {
+            this.set(key, init[key]);
+          }
+        }
+      }
+    };
+    SlateHeaders.prototype.get = function (key) {
+      key = String(key).toLowerCase();
+      return Object.prototype.hasOwnProperty.call(this._values, key) ?
+        this._values[key] : null;
+    };
+    SlateHeaders.prototype.set = function (key, value) {
+      this._values[String(key).toLowerCase()] = String(value);
+    };
+    own(window, "Headers", SlateHeaders);
+    Headers = SlateHeaders;
+  }
+
+  if (typeof window.Response === "undefined") {
+    var SlateResponse = function Response(body, options) {
+      options = options || {};
+      this._body = body == null ? "" : String(body);
+      this.status = options.status || 200;
+      this.statusText = options.statusText || "";
+      this.ok = this.status >= 200 && this.status < 300;
+      this.headers = new Headers(options.headers || {});
+    };
+    SlateResponse.prototype.text = function () {
+      return Promise.resolve(this._body);
+    };
+    SlateResponse.prototype.json = function () {
+      return this.text().then(function (text) {
+        return JSON.parse(text);
+      });
+    };
+    SlateResponse.prototype.blob = function () {
+      return Promise.resolve(new Blob([this._body], {
+        type: this.headers.get("content-type") || "text/plain"
+      }));
+    };
+    own(window, "Response", SlateResponse);
+    Response = SlateResponse;
+  }
+
+  if (typeof window.fetch === "undefined") {
+    /* TODO: Replace this with a native fetch binding backed by llcache. */
+    own(window, "fetch", function fetch() {
+      return Promise.resolve(new Response("", { status: 204 }));
+    });
+    fetch = window.fetch;
   }
 }());

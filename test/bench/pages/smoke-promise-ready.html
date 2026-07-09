@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Smoke Bench Promise Ready</title>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+	Promise.resolve("ready").then(function (value) {
+		document.getElementById("status").textContent =
+			"Promise ready fired: " + value;
+		console.log("smoke-promise-ready");
+	});
+});
+</script>
+</head>
+<body>
+<main>
+<h1>Smoke Bench Promise Ready</h1>
+<p id="status">pending</p>
+</main>
+</body>
+</html>

@@ -83,6 +83,8 @@ slatejs_context *slatejs_create_heap(slatejs_alloc_function alloc_func,
 		slatejs_fatal_function fatal_handler);
 void slatejs_destroy_heap(slatejs_context *ctx);
 void slatejs_gc(slatejs_context *ctx, slatejs_uint_t flags);
+slatejs_int_t slatejs_execute_pending_jobs(slatejs_context *ctx,
+		slatejs_uint_t max_jobs);
 void slatejs_get_memory_functions(slatejs_context *ctx, slatejs_memory_functions *out_funcs);
 
 slatejs_idx_t slatejs_get_top(slatejs_context *ctx);

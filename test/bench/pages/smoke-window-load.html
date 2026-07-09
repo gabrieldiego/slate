@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Smoke Bench Window Load</title>
+<script>
+window.addEventListener("load", function () {
+	document.getElementById("status").textContent = "window load fired";
+	console.log("smoke-window-load-ready");
+});
+</script>
+</head>
+<body>
+<main>
+<h1>Smoke Bench Window Load</h1>
+<p id="status">pending</p>
+</main>
+</body>
+</html>

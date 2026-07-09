@@ -28,6 +28,7 @@ class Window {
 
 #define WINDOW_CALLBACKS MAGIC(WindowCallbacks)
 #define HANDLER_MAGIC MAGIC(HANDLER_MAP)
+#define EVENT_LISTENER_JS_MAGIC MAGIC(EVENT_LISTENER_JS_MAP)
 
 static size_t next_handle = 0;
 
@@ -234,6 +235,13 @@ static slatejs_ret_t slatejs_window_closedown_thread(slatejs_context *ctx)
 
 	priv->closed_down = true;
 
+	slatejs_push_global_object(ctx);
+	slatejs_push_object(ctx);
+	slatejs_put_prop_string(ctx, -2, EVENT_LISTENER_JS_MAGIC);
+	slatejs_push_object(ctx);
+	slatejs_put_prop_string(ctx, -2, HANDLER_MAGIC);
+	slatejs_pop(ctx);
+
 	NSLOG(quickjs, DEEPDEBUG, "Closing down thread");
 	while (priv->schedule_ring != NULL) {
 		window_schedule_t *to_remove = NULL;
@@ -290,6 +298,8 @@ init Window(struct browser_window *win, struct html_content *htmlc)
 
 	NSLOG(netsurf, DEEPDEBUG,
 	      "URL is %s", slateurl_access(browser_window_access_url(priv->win)));
+	slatejs_push_object(ctx);
+	slatejs_put_prop_string(ctx, 0, EVENT_LISTENER_JS_MAGIC);
 	slatejs_push_object(ctx);
 	slatejs_put_prop_string(ctx, 0, WINDOW_CALLBACKS);
 %}

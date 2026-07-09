@@ -14,10 +14,21 @@ steps:
   values:
   - ${SLATE_BENCH_ROOT}/smoke-basic.html
   - ${SLATE_BENCH_ROOT}/smoke-css.html
+  - ${SLATE_BENCH_ROOT}/smoke-domcontentloaded.html
+  - ${SLATE_BENCH_ROOT}/smoke-event-listeners.html
+  - ${SLATE_BENCH_ROOT}/smoke-fetch-shim.html
   - ${SLATE_BENCH_ROOT}/smoke-inline.html
   - ${SLATE_BENCH_ROOT}/smoke-inline-svg.html
   - ${SLATE_BENCH_ROOT}/smoke-js.html
+  - ${SLATE_BENCH_ROOT}/smoke-location.html
+  - ${SLATE_BENCH_ROOT}/smoke-attributes.html
+  - ${SLATE_BENCH_ROOT}/smoke-module-skip.html
   - ${SLATE_BENCH_ROOT}/smoke-noscript-canvas.html
+  - ${SLATE_BENCH_ROOT}/smoke-promise-ready.html
+  - ${SLATE_BENCH_ROOT}/smoke-ready-state.html
+  - ${SLATE_BENCH_ROOT}/smoke-textdecoder.html
+  - ${SLATE_BENCH_ROOT}/smoke-turbo-shim.html
+  - ${SLATE_BENCH_ROOT}/smoke-window-load.html
   - ${SLATE_BENCH_ROOT}/smoke-interactions.html
   steps:
   - action: navigate
@@ -31,6 +42,48 @@ steps:
     window: win1
     checks:
     - text-contains: Smoke Bench
+- action: navigate
+  window: win1
+  url: ${SLATE_BENCH_ROOT}/smoke-domcontentloaded.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: wait-log
+  window: win1
+  substring: smoke-domcontentloaded-ready
+- action: plot-check
+  window: win1
+  checks:
+  - text-contains: DOMContentLoaded fired
+- action: navigate
+  window: win1
+  url: ${SLATE_BENCH_ROOT}/smoke-event-listeners.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: wait-log
+  window: win1
+  substring: smoke-event-listeners-ready
+- action: plot-check
+  window: win1
+  checks:
+  - text-contains: first second
+- action: navigate
+  window: win1
+  url: ${SLATE_BENCH_ROOT}/smoke-fetch-shim.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: wait-log
+  window: win1
+  substring: smoke-fetch-shim-ready
+- action: plot-check
+  window: win1
+  checks:
+  - text-contains: fetch 204 0
 - action: navigate
   window: win1
   url: ${SLATE_BENCH_ROOT}/smoke-js.html
@@ -48,6 +101,121 @@ steps:
 - action: wait-log
   window: win1
   substring: smoke-js-clicked
+- action: navigate
+  window: win1
+  url: ${SLATE_BENCH_ROOT}/smoke-location.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: wait-log
+  window: win1
+  substring: smoke-location-ready
+- action: plot-check
+  window: win1
+  checks:
+  - text-contains: location strings
+- action: navigate
+  window: win1
+  url: ${SLATE_BENCH_ROOT}/smoke-attributes.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: wait-log
+  window: win1
+  substring: smoke-attributes-ready
+- action: plot-check
+  window: win1
+  checks:
+  - text-contains: Attributes
+- action: navigate
+  window: win1
+  url: ${SLATE_BENCH_ROOT}/smoke-module-skip.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: wait-log
+  window: win1
+  substring: smoke-module-skip-ready
+- action: plot-check
+  window: win1
+  checks:
+  - text-contains: Module skipped
+- action: navigate
+  window: win1
+  url: ${SLATE_BENCH_ROOT}/smoke-ready-state.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: wait-log
+  window: win1
+  substring: smoke-ready-state-loading
+- action: wait-log
+  window: win1
+  substring: smoke-ready-state-ready
+- action: plot-check
+  window: win1
+  checks:
+  - text-contains: "head value: loading"
+- action: navigate
+  window: win1
+  url: ${SLATE_BENCH_ROOT}/smoke-promise-ready.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: wait-log
+  window: win1
+  substring: smoke-promise-ready
+- action: plot-check
+  window: win1
+  checks:
+  - text-contains: Promise ready fired
+- action: navigate
+  window: win1
+  url: ${SLATE_BENCH_ROOT}/smoke-textdecoder.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: wait-log
+  window: win1
+  substring: smoke-textdecoder-ready
+- action: plot-check
+  window: win1
+  checks:
+  - text-contains: Slate
+- action: navigate
+  window: win1
+  url: ${SLATE_BENCH_ROOT}/smoke-turbo-shim.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: wait-log
+  window: win1
+  substring: smoke-turbo-shim-ready
+- action: plot-check
+  window: win1
+  checks:
+  - text-contains: Turbo drive false
+- action: navigate
+  window: win1
+  url: ${SLATE_BENCH_ROOT}/smoke-window-load.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: wait-log
+  window: win1
+  substring: smoke-window-load-ready
+- action: plot-check
+  window: win1
+  checks:
+  - text-contains: window load fired
 - action: navigate
   window: win1
   url: ${SLATE_BENCH_ROOT}/smoke-interactions.html

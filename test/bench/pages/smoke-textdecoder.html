@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Smoke Bench TextDecoder</title>
+<link rel="stylesheet" href="bench-shared.css">
+</head>
+<body class="bench-page">
+<header class="site-head">
+<img src="assets/bench-logo.png" width="120" height="48" alt="Smoke Bench logo">
+<h1>Smoke Bench TextDecoder</h1>
+</header>
+<main>
+<p id="smoke-textdecoder-status">Smoke TextDecoder waiting</p>
+<script>
+(function () {
+	var bytes = new Uint8Array([83, 108, 97, 116, 101, 32, 226, 156, 147]);
+	var text = new TextDecoder("utf-8").decode(bytes);
+	var blob = new Blob([text, new Uint8Array([32, 79, 75])], {
+		type: "text/plain"
+	});
+	var url = URL.createObjectURL(blob);
+	var parsed = new URL("/bench?mode=smoke", "https://slate.invalid/root/");
+	var worker = new Worker(url);
+	var channel = new MessageChannel();
+	parsed.searchParams.set("blob", "ok");
+
+	worker.terminate();
+	URL.revokeObjectURL(url);
+	channel.port2.onmessage = function (event) {
+		document.getElementById("smoke-textdecoder-status").innerHTML =
+			text + " Blob " + blob.type + " " + blob.size + " " +
+			parsed.searchParams.get("blob") + " " + event.data;
+		console.log("smoke-textdecoder-ready");
+	};
+	channel.port1.postMessage("channel");
+}());
+</script>
+</main>
+</body>
+</html>

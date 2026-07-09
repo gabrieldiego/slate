@@ -68,6 +68,7 @@ struct dom_html_br_element;
 #include "Location.bnd"
 #include "Navigator.bnd"
 #include "DOMImplementation.bnd"
+#include "Attr.bnd"
 
 /* events */
 

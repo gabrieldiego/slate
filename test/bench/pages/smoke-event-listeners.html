@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Smoke Bench Event Listeners</title>
+<script>
+var firstSeen = false;
+var secondSeen = false;
+var removedSeen = false;
+
+function updateStatus() {
+	var status = document.getElementById("status");
+	status.textContent =
+		(firstSeen ? "first " : "") +
+		(secondSeen ? "second" : "") +
+		(removedSeen ? " removed" : "");
+	if (firstSeen && secondSeen && !removedSeen) {
+		console.log("smoke-event-listeners-ready");
+	}
+}
+
+function removedListener() {
+	removedSeen = true;
+	updateStatus();
+}
+
+document.addEventListener("DOMContentLoaded", removedListener);
+document.removeEventListener("DOMContentLoaded", removedListener);
+document.addEventListener("DOMContentLoaded", function () {
+	firstSeen = true;
+	updateStatus();
+});
+document.addEventListener("DOMContentLoaded", function () {
+	secondSeen = true;
+	updateStatus();
+});
+</script>
+</head>
+<body>
+<main>
+<h1>Smoke Bench Event Listeners</h1>
+<p id="status">pending</p>
+</main>
+</body>
+</html>
