@@ -8,19 +8,33 @@
  */
 
 var NetSurf = {
+    arrayIndexKey: function(key) {
+	if (typeof key == 'number') {
+	    return key;
+	}
+	if (typeof key == 'string' && key != '') {
+	    var index = Number(key);
+	    if (String(index) == key && index >= 0 && Math.floor(index) == index) {
+		return index;
+	    }
+	}
+	return undefined;
+    },
     /* The make-proxy call for list-type objects */
     makeListProxy: function(inner) {
 	return new Proxy(inner, {
 	    has: function(target, key) {
-		if (typeof key == 'number') {
-		    return (key >= 0) && (key < target.length);
+		var index = NetSurf.arrayIndexKey(key);
+		if (index !== undefined) {
+		    return index < target.length;
 		} else {
 		    return key in target;
 		}
 	    },
 	    get: function(target, key) {
-		if (typeof key == 'number') {
-		    return target.item(key);
+		var index = NetSurf.arrayIndexKey(key);
+		if (index !== undefined) {
+		    return target.item(index);
 		} else {
 		    return target[key];
 		}
@@ -31,15 +45,17 @@ var NetSurf = {
     makeNodeMapProxy: function(inner) {
 	return new Proxy(inner, {
 	    has: function(target, key) {
-		if (typeof key == 'number') {
-		    return (key >= 0) && (key < target.length);
+		var index = NetSurf.arrayIndexKey(key);
+		if (index !== undefined) {
+		    return index < target.length;
 		} else {
 		    return target.getNamedItem(key) || (key in target);
 		}
 	    },
 	    get: function(target, key) {
-		if (typeof key == 'number') {
-		    return target.item(key);
+		var index = NetSurf.arrayIndexKey(key);
+		if (index !== undefined) {
+		    return target.item(index);
 		} else {
 		    var attr = target.getNamedItem(key);
 		    if (attr) {

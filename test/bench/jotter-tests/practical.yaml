@@ -285,6 +285,25 @@ steps:
 - action: wait-log
   window: win1
   substring: map-inline-svg-count
+- action: wait-log
+  window: win1
+  substring: map-dom-compat-ready
+- action: wait-log
+  window: win1
+  substring: map-tile-count-36
+- action: wait-log
+  window: win1
+  substring: map-controls-bound-6
+- action: wait-log
+  window: win1
+  substring: map-search-updated
+- action: click
+  window: win1
+  target:
+    text: Pan Right
+- action: wait-log
+  window: win1
+  substring: map-pan
 - action: click
   window: win1
   target:
@@ -292,6 +311,20 @@ steps:
 - action: wait-log
   window: win1
   substring: map-zoom-in
+- action: click
+  window: win1
+  target:
+    text: CafePin
+- action: wait-log
+  window: win1
+  substring: map-marker-popup
+- action: click
+  window: win1
+  target:
+    text: Food and
+- action: wait-log
+  window: win1
+  substring: map-layer-food-off
 - action: navigate
   window: win1
   url: ${SLATE_BENCH_ROOT}/practical-webmail.html

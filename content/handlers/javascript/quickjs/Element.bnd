@@ -10,6 +10,7 @@
 
 class Element {
 prologue %{
+#include <stdlib.h>
 #include <utils/corestrings.h>
 #include <dom/bindings/hubbub/parser.h>
 #include "content/content.h"
@@ -18,6 +19,7 @@ prologue %{
 #include "html/box_inspect.h"
 #include "html/box_construct.h"
 #include "html/private.h"
+#include "javascript/quickjs/simple-selectors.h"
 
 static struct html_content *
 element_get_html_content(dom_node *node)
@@ -80,6 +82,94 @@ element_pre_layout_height(dom_node *node)
 	}
 
 	return 300;
+}
+
+static dom_exception
+element_create_optional_dom_string(slatejs_context *ctx, slatejs_idx_t idx,
+		dom_string **out)
+{
+	slatejs_size_t len;
+	const char *str;
+
+	*out = NULL;
+	if (slatejs_is_null_or_undefined(ctx, idx)) {
+		return DOM_NO_ERR;
+	}
+
+	str = slatejs_safe_to_lstring(ctx, idx, &len);
+	return dom_string_create((const uint8_t *)str, len, out);
+}
+
+static dom_exception
+element_arg_to_node(slatejs_context *ctx, dom_document *doc, slatejs_idx_t idx,
+		dom_node **out)
+{
+	if (slatejs_bind_instanceof(ctx, idx, PROTO_NAME(NODE))) {
+		node_private_t *node_priv;
+
+		slatejs_get_prop_string(ctx, idx, PRIVATE_MAGIC);
+		node_priv = slatejs_get_pointer(ctx, -1);
+		slatejs_pop(ctx);
+		if (node_priv == NULL || node_priv->node == NULL) {
+			return DOM_NO_ERR;
+		}
+
+		*out = dom_node_ref(node_priv->node);
+		return DOM_NO_ERR;
+	}
+
+	slatejs_size_t len;
+	const char *text = slatejs_safe_to_lstring(ctx, idx, &len);
+	dom_string *text_str = NULL;
+	dom_exception exc;
+
+	exc = dom_string_create((const uint8_t *)text, len, &text_str);
+	if (exc != DOM_NO_ERR) {
+		return exc;
+	}
+
+	exc = dom_document_create_text_node(doc, text_str, out);
+	dom_string_unref(text_str);
+	return exc;
+}
+
+static dom_exception
+element_insert_arg(slatejs_context *ctx, dom_node *parent, dom_document *doc,
+		slatejs_idx_t idx, dom_node *before)
+{
+	dom_node *node = NULL;
+	dom_node *spare = NULL;
+	dom_exception exc;
+
+	exc = element_arg_to_node(ctx, doc, idx, &node);
+	if (exc != DOM_NO_ERR || node == NULL) {
+		return exc;
+	}
+
+	exc = dom_node_insert_before(parent, node, before, &spare);
+	dom_node_unref(node);
+	if (spare != NULL) {
+		dom_node_unref(spare);
+	}
+	return exc;
+}
+
+static dom_exception
+element_insert_args(slatejs_context *ctx, dom_node *parent, dom_document *doc,
+		dom_node *before)
+{
+	slatejs_idx_t argc = slatejs_get_top(ctx);
+	slatejs_idx_t idx;
+	dom_exception exc = DOM_NO_ERR;
+
+	for (idx = 0; idx < argc; idx++) {
+		exc = element_insert_arg(ctx, parent, doc, idx, before);
+		if (exc != DOM_NO_ERR) {
+			break;
+		}
+	}
+
+	return exc;
 }
 
 static int
@@ -403,6 +493,23 @@ method Element::getElementsByTagName ()
 	return 1;
 %}
 
+method Element::getElementsByClassName()
+%{
+	slatejs_size_t len;
+	const char *selector = slatejs_safe_to_lstring(ctx, 0, &len);
+	char *class_selector = malloc(len + 2);
+	slatejs_ret_t ret;
+
+	if (class_selector == NULL) return 0;
+	class_selector[0] = '.';
+	memcpy(class_selector + 1, selector, len);
+	class_selector[len + 1] = '\0';
+	ret = slatejs_selector_push_all(ctx, priv->parent.node,
+			class_selector, len + 1, false);
+	free(class_selector);
+	return ret;
+%}
+
 getter Element::id ()
 %{
 	dom_string *idstr = NULL;
@@ -488,6 +595,39 @@ method Element::getAttribute()
 	return 1;
 %}
 
+method Element::getAttributeNS()
+%{
+	dom_string *ns = NULL;
+	dom_string *local = NULL;
+	dom_string *value = NULL;
+	dom_exception exc;
+	slatejs_size_t local_len;
+	const char *local_s = slatejs_safe_to_lstring(ctx, 1, &local_len);
+
+	exc = element_create_optional_dom_string(ctx, 0, &ns);
+	if (exc != DOM_NO_ERR) return 0;
+
+	exc = dom_string_create((const uint8_t *)local_s, local_len, &local);
+	if (exc != DOM_NO_ERR) {
+		if (ns != NULL) dom_string_unref(ns);
+		return 0;
+	}
+
+	exc = dom_element_get_attribute_ns(priv->parent.node, ns, local, &value);
+	if (ns != NULL) dom_string_unref(ns);
+	dom_string_unref(local);
+	if (exc != DOM_NO_ERR) return 0;
+
+	if (value == NULL) {
+		slatejs_push_null(ctx);
+	} else {
+		slatejs_push_lstring(ctx, dom_string_data(value),
+				dom_string_length(value));
+		dom_string_unref(value);
+	}
+	return 1;
+%}
+
 method Element::setAttribute()
 %{
 	dom_exception exc;
@@ -509,6 +649,41 @@ method Element::setAttribute()
 			attr_str, value_str);
 	dom_string_unref(attr_str);
 	dom_string_unref(value_str);
+	if (exc != DOM_NO_ERR) return 0;
+	return 0;
+%}
+
+method Element::setAttributeNS()
+%{
+	dom_exception exc;
+	dom_string *ns = NULL;
+	dom_string *name = NULL;
+	dom_string *value = NULL;
+	slatejs_size_t name_len;
+	slatejs_size_t value_len;
+	const char *name_s = slatejs_safe_to_lstring(ctx, 1, &name_len);
+	const char *value_s = slatejs_safe_to_lstring(ctx, 2, &value_len);
+
+	exc = element_create_optional_dom_string(ctx, 0, &ns);
+	if (exc != DOM_NO_ERR) return 0;
+
+	exc = dom_string_create((const uint8_t *)name_s, name_len, &name);
+	if (exc != DOM_NO_ERR) {
+		if (ns != NULL) dom_string_unref(ns);
+		return 0;
+	}
+
+	exc = dom_string_create((const uint8_t *)value_s, value_len, &value);
+	if (exc != DOM_NO_ERR) {
+		if (ns != NULL) dom_string_unref(ns);
+		dom_string_unref(name);
+		return 0;
+	}
+
+	exc = dom_element_set_attribute_ns(priv->parent.node, ns, name, value);
+	if (ns != NULL) dom_string_unref(ns);
+	dom_string_unref(name);
+	dom_string_unref(value);
 	if (exc != DOM_NO_ERR) return 0;
 	return 0;
 %}
@@ -535,6 +710,57 @@ method Element::hasAttribute()
 	}
 
 	slatejs_push_boolean(ctx, res);
+	return 1;
+%}
+
+method Element::removeAttributeNS()
+%{
+	dom_string *ns = NULL;
+	dom_string *local = NULL;
+	dom_exception exc;
+	slatejs_size_t local_len;
+	const char *local_s = slatejs_safe_to_lstring(ctx, 1, &local_len);
+
+	exc = element_create_optional_dom_string(ctx, 0, &ns);
+	if (exc != DOM_NO_ERR) return 0;
+
+	exc = dom_string_create((const uint8_t *)local_s, local_len, &local);
+	if (exc != DOM_NO_ERR) {
+		if (ns != NULL) dom_string_unref(ns);
+		return 0;
+	}
+
+	exc = dom_element_remove_attribute_ns(priv->parent.node, ns, local);
+	if (ns != NULL) dom_string_unref(ns);
+	dom_string_unref(local);
+	if (exc != DOM_NO_ERR) return 0;
+	return 0;
+%}
+
+method Element::hasAttributeNS()
+%{
+	dom_string *ns = NULL;
+	dom_string *local = NULL;
+	dom_exception exc;
+	bool present = false;
+	slatejs_size_t local_len;
+	const char *local_s = slatejs_safe_to_lstring(ctx, 1, &local_len);
+
+	exc = element_create_optional_dom_string(ctx, 0, &ns);
+	if (exc != DOM_NO_ERR) return 0;
+
+	exc = dom_string_create((const uint8_t *)local_s, local_len, &local);
+	if (exc != DOM_NO_ERR) {
+		if (ns != NULL) dom_string_unref(ns);
+		return 0;
+	}
+
+	exc = dom_element_has_attribute_ns(priv->parent.node, ns, local, &present);
+	if (ns != NULL) dom_string_unref(ns);
+	dom_string_unref(local);
+	if (exc != DOM_NO_ERR) return 0;
+
+	slatejs_push_boolean(ctx, present);
 	return 1;
 %}
 
@@ -604,6 +830,172 @@ getter Element::classList ()
 	}
 
 	return 1;
+%}
+
+method Element::query()
+%{
+	slatejs_size_t len;
+	const char *selector = slatejs_safe_to_lstring(ctx, 0, &len);
+
+	return slatejs_selector_push_all(ctx, priv->parent.node,
+			selector, len, true);
+%}
+
+method Element::queryAll()
+%{
+	slatejs_size_t len;
+	const char *selector = slatejs_safe_to_lstring(ctx, 0, &len);
+
+	return slatejs_selector_push_all(ctx, priv->parent.node,
+			selector, len, false);
+%}
+
+method Element::querySelector()
+%{
+	slatejs_size_t len;
+	const char *selector = slatejs_safe_to_lstring(ctx, 0, &len);
+
+	return slatejs_selector_push_all(ctx, priv->parent.node,
+			selector, len, true);
+%}
+
+method Element::querySelectorAll()
+%{
+	slatejs_size_t len;
+	const char *selector = slatejs_safe_to_lstring(ctx, 0, &len);
+
+	return slatejs_selector_push_all(ctx, priv->parent.node,
+			selector, len, false);
+%}
+
+method Element::matches()
+%{
+	slatejs_size_t len;
+	const char *selector = slatejs_safe_to_lstring(ctx, 0, &len);
+
+	slatejs_push_boolean(ctx, slatejs_selector_matches(priv->parent.node,
+			selector, len));
+	return 1;
+%}
+
+method Element::closest()
+%{
+	slatejs_size_t len;
+	const char *selector = slatejs_safe_to_lstring(ctx, 0, &len);
+
+	return slatejs_selector_push_closest(ctx, priv->parent.node,
+			selector, len);
+%}
+
+method Element::append()
+%{
+	dom_document *doc = NULL;
+	dom_exception exc;
+
+	exc = dom_node_get_owner_document(priv->parent.node, &doc);
+	if (exc != DOM_NO_ERR || doc == NULL) return 0;
+	exc = element_insert_args(ctx, priv->parent.node, doc, NULL);
+	dom_node_unref(doc);
+	if (exc != DOM_NO_ERR) return 0;
+	return 0;
+%}
+
+method Element::prepend()
+%{
+	dom_document *doc = NULL;
+	dom_node *first = NULL;
+	dom_exception exc;
+
+	exc = dom_node_get_owner_document(priv->parent.node, &doc);
+	if (exc != DOM_NO_ERR || doc == NULL) return 0;
+	exc = dom_node_get_first_child(priv->parent.node, &first);
+	if (exc == DOM_NO_ERR) {
+		exc = element_insert_args(ctx, priv->parent.node, doc, first);
+	}
+	if (first != NULL) dom_node_unref(first);
+	dom_node_unref(doc);
+	if (exc != DOM_NO_ERR) return 0;
+	return 0;
+%}
+
+method Element::before()
+%{
+	dom_document *doc = NULL;
+	dom_node *parent = NULL;
+	dom_exception exc;
+
+	exc = dom_node_get_parent_node(priv->parent.node, &parent);
+	if (exc != DOM_NO_ERR || parent == NULL) return 0;
+	exc = dom_node_get_owner_document(priv->parent.node, &doc);
+	if (exc == DOM_NO_ERR && doc != NULL) {
+		exc = element_insert_args(ctx, parent, doc, priv->parent.node);
+	}
+	if (doc != NULL) dom_node_unref(doc);
+	dom_node_unref(parent);
+	if (exc != DOM_NO_ERR) return 0;
+	return 0;
+%}
+
+method Element::after()
+%{
+	dom_document *doc = NULL;
+	dom_node *parent = NULL;
+	dom_node *next = NULL;
+	dom_exception exc;
+
+	exc = dom_node_get_parent_node(priv->parent.node, &parent);
+	if (exc != DOM_NO_ERR || parent == NULL) return 0;
+	exc = dom_node_get_next_sibling(priv->parent.node, &next);
+	if (exc == DOM_NO_ERR) {
+		exc = dom_node_get_owner_document(priv->parent.node, &doc);
+	}
+	if (exc == DOM_NO_ERR && doc != NULL) {
+		exc = element_insert_args(ctx, parent, doc, next);
+	}
+	if (next != NULL) dom_node_unref(next);
+	if (doc != NULL) dom_node_unref(doc);
+	dom_node_unref(parent);
+	if (exc != DOM_NO_ERR) return 0;
+	return 0;
+%}
+
+method Element::replaceWith()
+%{
+	dom_node *parent = NULL;
+	dom_node *spare = NULL;
+	dom_document *doc = NULL;
+	dom_exception exc;
+
+	exc = dom_node_get_parent_node(priv->parent.node, &parent);
+	if (exc != DOM_NO_ERR || parent == NULL) return 0;
+
+	exc = dom_node_get_owner_document(priv->parent.node, &doc);
+	if (exc == DOM_NO_ERR && doc != NULL) {
+		exc = element_insert_args(ctx, parent, doc, priv->parent.node);
+	}
+	if (doc != NULL) dom_node_unref(doc);
+	if (exc == DOM_NO_ERR) {
+		exc = dom_node_remove_child(parent, priv->parent.node, &spare);
+	}
+	if (spare != NULL) dom_node_unref(spare);
+	if (parent != NULL) dom_node_unref(parent);
+	if (exc != DOM_NO_ERR) return 0;
+	return 0;
+%}
+
+method Element::remove()
+%{
+	dom_node *parent = NULL;
+	dom_node *spare = NULL;
+	dom_exception exc;
+
+	exc = dom_node_get_parent_node(priv->parent.node, &parent);
+	if (exc != DOM_NO_ERR || parent == NULL) return 0;
+	exc = dom_node_remove_child(parent, priv->parent.node, &spare);
+	dom_node_unref(parent);
+	if (spare != NULL) dom_node_unref(spare);
+	if (exc != DOM_NO_ERR) return 0;
+	return 0;
 %}
 
 getter Element::innerHTML()

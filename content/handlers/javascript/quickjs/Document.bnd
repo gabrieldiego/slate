@@ -10,6 +10,7 @@
 
 prologue Document()
 %{
+#include <stdlib.h>
 #include <string.h>
 
 #include "utils/corestrings.h"
@@ -18,6 +19,7 @@ prologue Document()
 #include "content/hlcache.h"
 #include "html/private.h"
 #include "content/urldb.h"
+#include "javascript/quickjs/simple-selectors.h"
 
 #define HANDLER_MAGIC MAGIC(HANDLER_MAP)
 %}
@@ -366,6 +368,84 @@ method Document::getElementsByTagName()
 	}
 
 	return 1; /* The Proxy(NodeList) wrapper */
+%}
+
+method Document::getElementsByClassName()
+%{
+	slatejs_size_t len;
+	const char *selector = slatejs_safe_to_lstring(ctx, 0, &len);
+	char *class_selector = malloc(len + 2);
+	slatejs_ret_t ret;
+
+	if (class_selector == NULL) return 0;
+	class_selector[0] = '.';
+	memcpy(class_selector + 1, selector, len);
+	class_selector[len + 1] = '\0';
+	ret = slatejs_selector_push_all(ctx, priv->parent.node,
+			class_selector, len + 1, false);
+	free(class_selector);
+	return ret;
+%}
+
+method Document::query()
+%{
+	slatejs_size_t len;
+	const char *selector = slatejs_safe_to_lstring(ctx, 0, &len);
+
+	return slatejs_selector_push_all(ctx, priv->parent.node,
+			selector, len, true);
+%}
+
+method Document::queryAll()
+%{
+	slatejs_size_t len;
+	const char *selector = slatejs_safe_to_lstring(ctx, 0, &len);
+
+	return slatejs_selector_push_all(ctx, priv->parent.node,
+			selector, len, false);
+%}
+
+method Document::querySelector()
+%{
+	slatejs_size_t len;
+	const char *selector = slatejs_safe_to_lstring(ctx, 0, &len);
+
+	if (len > 1 && selector[0] == '#' &&
+			strpbrk(selector, " .>+~[:,") == NULL) {
+		dom_string *id = NULL;
+		dom_element *element = NULL;
+		dom_exception exc;
+
+		exc = dom_string_create((const uint8_t *)selector + 1,
+				len - 1, &id);
+		if (exc != DOM_NO_ERR) return 0;
+
+		exc = dom_document_get_element_by_id(
+				(dom_document *)priv->parent.node,
+				id, &element);
+		dom_string_unref(id);
+		if (exc != DOM_NO_ERR) return 0;
+
+		if (element == NULL) {
+			slatejs_push_null(ctx);
+		} else {
+			slatejs_bind_push_node(ctx, (dom_node *)element);
+			dom_node_unref(element);
+		}
+		return 1;
+	}
+
+	return slatejs_selector_push_all(ctx, priv->parent.node,
+			selector, len, true);
+%}
+
+method Document::querySelectorAll()
+%{
+	slatejs_size_t len;
+	const char *selector = slatejs_safe_to_lstring(ctx, 0, &len);
+
+	return slatejs_selector_push_all(ctx, priv->parent.node,
+			selector, len, false);
 %}
 
 getter Document::cookie()

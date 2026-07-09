@@ -1,12 +1,18 @@
 <!doctype html>
 <html lang="en">
-<head>
+<head data-locale="en" data-preferred-editor="id" data-location="{&quot;minlon&quot;:-124.7,&quot;minlat&quot;:24.5,&quot;maxlon&quot;:-66.9,&quot;maxlat&quot;:49.3}">
 <meta charset="utf-8">
 <title>Practical Bench Slippy Map</title>
+<link rel="manifest" href="assets/manifest-bench.json">
+<link rel="search" type="application/opensearchdescription+xml" title="Practical Bench Map Search" href="assets/map-search.xml">
 <link rel="stylesheet" href="bench-shared.css">
+<script type="module">console.log("practical-map-module-present");</script>
 <style>
 body {
 	background: #eef2f5;
+}
+body.map-layout {
+	margin: 0;
 }
 .map-app {
 	display: table;
@@ -61,6 +67,55 @@ body {
 	overflow: hidden;
 	border: 2px solid #607080;
 	background: #dce8ef;
+	outline: 1px solid #9aa8b5;
+}
+.leaflet-container {
+	font-family: Arial, sans-serif;
+	cursor: grab;
+}
+.leaflet-pane {
+	position: absolute;
+	left: 0;
+	top: 0;
+}
+.leaflet-map-pane {
+	z-index: 100;
+}
+.leaflet-tile-pane {
+	z-index: 200;
+}
+.leaflet-overlay-pane {
+	z-index: 400;
+	pointer-events: none;
+}
+.leaflet-marker-pane {
+	z-index: 600;
+}
+.leaflet-popup-pane {
+	z-index: 700;
+}
+.leaflet-control {
+	position: relative;
+	z-index: 800;
+}
+.leaflet-control .control-button {
+	background-color: rgba(0, 0, 0, 0.68);
+	color: #ffffff;
+}
+.leaflet-control .control-button.control-button-active {
+	background-color: #3b7f3a;
+}
+.leaflet-tile {
+	position: absolute;
+	width: 128px;
+	height: 128px;
+	max-width: none;
+	border: 1px solid rgba(40, 70, 90, 0.25);
+	background: #cfe0e8;
+	visibility: hidden;
+}
+.leaflet-tile-loaded {
+	visibility: inherit;
 }
 .tile-grid {
 	position: absolute;
@@ -125,6 +180,7 @@ body {
 	color: #ffffff;
 	padding: 3px 6px;
 	font-weight: bold;
+	cursor: pointer;
 }
 .marker-food {
 	background: #8e44ad;
@@ -157,9 +213,26 @@ body {
 	margin-top: 10px;
 	padding-top: 8px;
 }
+#attribution {
+	font-size: 12px;
+	margin-top: 8px;
+	color: #5b6773;
+}
+#map-context-menu {
+	position: absolute;
+	left: 18px;
+	top: 18px;
+	z-index: 1000;
+	background: #ffffff;
+	border: 1px solid #8fa0ae;
+	padding: 6px;
+}
+.d-none {
+	display: none;
+}
 </style>
 </head>
-<body>
+<body class="map-layout">
 <header class="site-head">
 <svg class="map-brand-icon" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Practical Bench map icon">
 <defs>
@@ -187,7 +260,7 @@ body {
 <p class="bench-kicker">Practical Bench page with map tiles, marker layers, route state, and dynamic popup content.</p>
 <form id="map-search" action="about:blank" method="get">
 <label>Search map <input id="map-query" type="search" name="q" value="coffee near station"></label>
-<button type="button" id="map-search-button">Search Map Bench</button>
+<button type="button" id="map-search-button">Find</button>
 </form>
 <div class="map-options">
 <label>Map style
@@ -219,17 +292,18 @@ body {
 </ol>
 </aside>
 <section class="map-stage">
-<div class="map-toolbar">
-<button type="button" id="map-pan-left"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M10,3 L5,8 L10,13 Z" fill="#304050"></path></svg><span>Pan Left</span></button>
-<button type="button" id="map-pan-right"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M6,3 L11,8 L6,13 Z" fill="#304050"></path></svg><span>Pan Right</span></button>
-<button type="button" id="map-pan-up"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3,10 L8,5 L13,10 Z" fill="#304050"></path></svg><span>Pan Up</span></button>
-<button type="button" id="map-pan-down"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3,6 L8,11 L13,6 Z" fill="#304050"></path></svg><span>Pan Down</span></button>
-<button type="button" id="map-zoom-in"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="#304050" stroke-width="2"></circle><line x1="8" y1="4" x2="8" y2="12" stroke="#304050" stroke-width="2"></line><line x1="4" y1="8" x2="12" y2="8" stroke="#304050" stroke-width="2"></line></svg><span>Zoom In</span></button>
-<button type="button" id="map-zoom-out"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="#304050" stroke-width="2"></circle><line x1="4" y1="8" x2="12" y2="8" stroke="#304050" stroke-width="2"></line></svg><span>Zoom Out</span></button>
+<div class="map-toolbar leaflet-control zoom">
+<button type="button" id="map-pan-left" class="control-button" data-action="pan" data-dx="48" data-dy="0"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M10,3 L5,8 L10,13 Z" fill="currentColor"></path></svg><span>Pan Left</span></button>
+<button type="button" id="map-pan-right" class="control-button" data-action="pan" data-dx="-48" data-dy="0"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M6,3 L11,8 L6,13 Z" fill="currentColor"></path></svg><span>Pan Right</span></button>
+<button type="button" id="map-pan-up" class="control-button" data-action="pan" data-dx="0" data-dy="48"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3,10 L8,5 L13,10 Z" fill="currentColor"></path></svg><span>Pan Up</span></button>
+<button type="button" id="map-pan-down" class="control-button" data-action="pan" data-dx="0" data-dy="-48"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3,6 L8,11 L13,6 Z" fill="currentColor"></path></svg><span>Pan Down</span></button>
+<button type="button" id="map-zoom-in" class="control-button" data-action="zoom" data-dz="1"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2"></circle><line x1="8" y1="4" x2="8" y2="12" stroke="currentColor" stroke-width="2"></line><line x1="4" y1="8" x2="12" y2="8" stroke="currentColor" stroke-width="2"></line></svg><span>Zoom In</span></button>
+<button type="button" id="map-zoom-out" class="control-button" data-action="zoom" data-dz="-1"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2"></circle><line x1="4" y1="8" x2="12" y2="8" stroke="currentColor" stroke-width="2"></line></svg><span>Zoom Out</span></button>
 </div>
-<div id="map-viewport" class="map-viewport">
-<div id="tile-grid" class="tile-grid"></div>
-<svg id="map-svg-overlay" class="map-vector-overlay" width="768" height="768" viewBox="0 0 768 768" role="img" aria-label="Vector map overlay">
+<div id="map" class="map-viewport leaflet-container leaflet-touch-zoom leaflet-touch-drag" data-lat="37.78" data-lon="-122.42" data-zoom="12">
+<div id="leaflet-map-pane" class="leaflet-pane leaflet-map-pane">
+<div id="tile-grid" class="tile-grid leaflet-pane leaflet-tile-pane"></div>
+<svg id="map-svg-overlay" class="map-vector-overlay leaflet-pane leaflet-overlay-pane leaflet-zoom-animated" width="768" height="768" viewBox="0 0 768 768" role="img" aria-label="Vector map overlay">
 <defs>
 <linearGradient id="map-water-gradient" x1="0" y1="0" x2="1" y2="1">
 <stop offset="0" stop-color="#b8dce9"></stop>
@@ -270,13 +344,19 @@ body {
 <div class="road road-main"></div>
 <div class="road road-cross"></div>
 <div class="route-line"></div>
-<button id="marker-transit" type="button" class="marker marker-transit" data-kind="Transit" style="left:318px;top:178px;">Station</button>
-<button id="marker-food" type="button" class="marker marker-food" data-kind="Food" style="left:186px;top:128px;">Cafe</button>
-<button id="marker-alert" type="button" class="marker marker-alert" data-kind="Alert" style="left:475px;top:225px;">Delay</button>
+<div class="leaflet-pane leaflet-marker-pane">
+<button id="marker-transit" type="button" class="marker marker-transit leaflet-marker-icon leaflet-interactive" data-kind="Transit" style="left:318px;top:178px;">Station</button>
+<button id="marker-food" type="button" class="marker marker-food leaflet-marker-icon leaflet-interactive" data-kind="Food" style="left:186px;top:128px;">CafePin</button>
+<button id="marker-alert" type="button" class="marker marker-alert leaflet-marker-icon leaflet-interactive" data-kind="Alert" style="left:475px;top:225px;">Delay</button>
+</div>
+<div class="leaflet-pane leaflet-popup-pane">
 <div id="map-popup" class="map-popup">Select a Practical Bench map marker.</div>
 </div>
+<div id="map-context-menu" class="dropdown d-none shadow cm_dropdown">Practical map menu</div>
+</div>
+</div>
 </section>
-<aside class="map-details">
+<aside id="map-ui" class="map-details bg-body z-2">
 <h2>Map Details</h2>
 <p id="map-status">Map ready</p>
 <dl class="meta-list">
@@ -292,6 +372,12 @@ body {
 <li>Low Memory Hotel, 0.7 mi</li>
 </ul>
 </turbo-frame>
+<div id="attribution" class="d-none">
+<table>
+<tr><td>https://openstreetmap.org/copyright</td><td>https://openstreetmap.org</td></tr>
+<tr><td colspan="2">Synthetic Practical Bench map attribution</td></tr>
+</table>
+</div>
 </aside>
 </main>
 <script src="practical-map.js"></script>
