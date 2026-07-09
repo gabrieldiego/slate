@@ -2,12 +2,12 @@ Updating QuickJS
 ================
 
 Slate embeds QuickJS from the `projects/quickjs` dependency checkout. The
-checkout is pinned by `QUICKJS_REF` in `scripts/local-env.sh` so CI and local
+checkout is pinned by `QUICKJS_REF` in `scripts/deps-config.sh` so CI and local
 benchmark runs do not drift with upstream `HEAD`.
 
 1.  Update the QuickJS checkout to the revision Slate should consume.
 
-2.  Update the default `QUICKJS_REF` in `scripts/local-env.sh` to the selected
+2.  Update the default `QUICKJS_REF` in `scripts/deps-config.sh` to the selected
     commit.
 
 3.  Rebuild the local dependencies and the `jotter` target.

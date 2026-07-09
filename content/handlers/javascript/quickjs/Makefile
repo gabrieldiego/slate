@@ -71,6 +71,17 @@ QUICKJS_CFLAGS := -std=gnu99 -I$(QUICKJS_DIR) -D_GNU_SOURCE \
 	-DCONFIG_VERSION=\"$(shell cat $(QUICKJS_DIR)/VERSION)\" \
 	-Wno-error -Wno-missing-prototypes -Wno-redundant-decls
 
+ifneq ($(HOST),$(BUILD))
+QUICKJS_CFLAGS += \
+	-DSLATE_QUICKJS_NO_ATOMICS \
+	-DSLATE_QUICKJS_NO_FENV \
+	-DSLATE_QUICKJS_NO_MALLOC_USABLE_SIZE
+endif
+
+ifneq ($(findstring amiga,$(HOST)),)
+QUICKJS_CFLAGS += -DSLATE_QUICKJS_HAVE_BOOL
+endif
+
 CFLAGS_content_handlers_javascript_quickjs_api.c += -I$(QUICKJS_DIR)
 CFLAGS_projects_quickjs_cutils.c += $(QUICKJS_CFLAGS)
 CFLAGS_projects_quickjs_dtoa.c += $(QUICKJS_CFLAGS)

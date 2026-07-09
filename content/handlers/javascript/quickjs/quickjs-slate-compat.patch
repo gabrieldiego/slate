@@ -1,0 +1,49 @@
+diff --git a/cutils.h b/cutils.h
+index 133bb3a..0a4f2d5 100644
+--- a/cutils.h
++++ b/cutils.h
+@@ -57,7 +57,9 @@
+ #define minimum_length(n)  n
+ #endif
+ 
++#ifndef SLATE_QUICKJS_HAVE_BOOL
+ typedef int BOOL;
++#endif
+ 
+ #ifndef FALSE
+ enum {
+diff --git a/quickjs.c b/quickjs.c
+index 8d327d3..f3b6fb9 100644
+--- a/quickjs.c
++++ b/quickjs.c
+@@ -30,7 +30,9 @@
+ #include <assert.h>
+ #include <sys/time.h>
+ #include <time.h>
++#ifndef SLATE_QUICKJS_NO_FENV
+ #include <fenv.h>
++#endif
+ #include <math.h>
+ #if defined(__APPLE__)
+ #include <malloc/malloc.h>
+@@ -68,8 +70,8 @@
+ #endif
+ 
+ /* define to include Atomics.* operations which depend on the OS
+    threads */
+-#if !defined(__EMSCRIPTEN__)
++#if !defined(__EMSCRIPTEN__) && !defined(SLATE_QUICKJS_NO_ATOMICS)
+ #define CONFIG_ATOMICS
+ #endif
+ 
+@@ -2136,7 +2138,9 @@ void JS_SetRuntimeOpaque(JSRuntime *rt, void *opaque)
+ /* default memory allocation functions with memory limitation */
+ static size_t js_def_malloc_usable_size(const void *ptr)
+ {
+-#if defined(__APPLE__)
++#if defined(SLATE_QUICKJS_NO_MALLOC_USABLE_SIZE)
++    return 0;
++#elif defined(__APPLE__)
+     return malloc_size(ptr);
+ #elif defined(_WIN32)
+     return _msize((void *)ptr);

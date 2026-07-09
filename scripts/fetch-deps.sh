@@ -15,3 +15,15 @@ else
 fi
 
 git -C "${TARGET_WORKSPACE}/quickjs" checkout --detach "${QUICKJS_REF}"
+
+quickjs_patch="${ROOT}/content/handlers/javascript/quickjs/quickjs-slate-compat.patch"
+if [ -f "${quickjs_patch}" ]; then
+	if git -C "${TARGET_WORKSPACE}/quickjs" apply --check "${quickjs_patch}"; then
+		git -C "${TARGET_WORKSPACE}/quickjs" apply "${quickjs_patch}"
+	elif git -C "${TARGET_WORKSPACE}/quickjs" apply --reverse --check "${quickjs_patch}"; then
+		echo "QuickJS Slate compatibility patch already applied"
+	else
+		echo "Unable to apply QuickJS Slate compatibility patch" >&2
+		exit 1
+	fi
+fi

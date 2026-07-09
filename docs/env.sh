@@ -25,6 +25,29 @@
 #     http://gcc.gnu.org/onlinedocs/gccint/Configure-Terms.html
 #
 
+_slate_env_source=
+if [ -n "${BASH_SOURCE:-}" ]; then
+    _slate_env_source="${BASH_SOURCE}"
+elif [ -n "${ZSH_VERSION:-}" ]; then
+    eval '_slate_env_source="${(%):-%x}"'
+fi
+
+if [ -n "${_slate_env_source}" ]; then
+    _slate_env_root="$(cd "$(dirname "${_slate_env_source}")/.." && pwd)"
+else
+    _slate_env_root="$(pwd)"
+fi
+
+if [ -f "${_slate_env_root}/scripts/deps-config.sh" ]; then
+    . "${_slate_env_root}/scripts/deps-config.sh"
+elif [ -f scripts/deps-config.sh ]; then
+    . scripts/deps-config.sh
+else
+    echo "Unable to locate scripts/deps-config.sh" >&2
+    return 1 2>/dev/null || exit 1
+fi
+unset _slate_env_source _slate_env_root
+
 ###############################################################################
 # OS Package installation
 ###############################################################################
@@ -324,7 +347,7 @@ export SLATE_GTK_MAJOR
 MAKE=make
 
 # Slate GIT repositories
-SLATE_GIT="${REPO_BASE_URI:-https://github.com/gabrieldiego}"
+SLATE_GIT="${REPO_BASE_URI}"
 
 # Buildsystem: everything depends on this
 SLATE_BUILDSYSTEM="buildsystem"
