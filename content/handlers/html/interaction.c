@@ -27,6 +27,7 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <string.h>
+#include <strings.h>
 
 #include <dom/dom.h>
 
@@ -1051,6 +1052,159 @@ gadget_mouse_action(html_content *html,
 	return SLATEERROR_OK;
 }
 
+static bool
+dom_string_caseless_equals_literal(dom_string *str, const char *literal)
+{
+	size_t len;
+
+	if (str == NULL || literal == NULL) {
+		return false;
+	}
+
+	len = strlen(literal);
+	if (dom_string_byte_length(str) != len) {
+		return false;
+	}
+
+	return strncasecmp((const char *)dom_string_data(str), literal, len) == 0;
+}
+
+static dom_node *
+mouse_action_find_label_node(dom_node *start)
+{
+	dom_node *node;
+
+	if (start == NULL) {
+		return NULL;
+	}
+
+	node = dom_node_ref(start);
+	while (node != NULL) {
+		dom_node_type type;
+		dom_node *parent = NULL;
+
+		if (dom_node_get_node_type(node, &type) == DOM_NO_ERR &&
+				type == DOM_ELEMENT_NODE) {
+			dom_string *tag_name = NULL;
+
+			if (dom_element_get_tag_name((dom_element *)node,
+					&tag_name) == DOM_NO_ERR &&
+					dom_string_caseless_equals_literal(
+							tag_name, "label")) {
+				if (tag_name != NULL) {
+					dom_string_unref(tag_name);
+				}
+				return node;
+			}
+
+			if (tag_name != NULL) {
+				dom_string_unref(tag_name);
+			}
+		}
+
+		if (dom_node_get_parent_node(node, &parent) != DOM_NO_ERR) {
+			parent = NULL;
+		}
+		dom_node_unref(node);
+		node = parent;
+	}
+
+	return NULL;
+}
+
+static slateerror
+label_mouse_action(html_content *html,
+		   browser_mouse_state mouse,
+		   int x, int y,
+		   struct mouse_action_state *mas,
+		   bool *handled)
+{
+	dom_node *label = NULL;
+	dom_document *doc = NULL;
+	dom_element *target = NULL;
+	dom_string *for_attr = NULL;
+	dom_string *for_value = NULL;
+	struct form_control *control = NULL;
+	slateerror res = SLATEERROR_OK;
+
+	*handled = false;
+
+	if ((mouse & BROWSER_MOUSE_CLICK_1) == 0) {
+		return SLATEERROR_OK;
+	}
+
+	label = mouse_action_find_label_node(mas->node);
+	if (label == NULL) {
+		return SLATEERROR_OK;
+	}
+
+	if (dom_string_create((const uint8_t *)"for", SLEN("for"),
+			&for_attr) != DOM_NO_ERR) {
+		goto out;
+	}
+
+	if (dom_element_get_attribute((dom_element *)label, for_attr,
+			&for_value) != DOM_NO_ERR || for_value == NULL) {
+		goto out;
+	}
+
+	if (dom_node_get_owner_document(label, &doc) != DOM_NO_ERR ||
+			doc == NULL) {
+		goto out;
+	}
+
+	if (dom_document_get_element_by_id(doc, for_value, &target) !=
+			DOM_NO_ERR || target == NULL) {
+		goto out;
+	}
+
+	control = html_forms_get_control_for_node(html->forms,
+			(dom_node *)target);
+	if (control == NULL || control->disabled ||
+			(control->type != GADGET_RADIO &&
+			 control->type != GADGET_CHECKBOX)) {
+		goto out;
+	}
+
+	{
+		struct mouse_action_state label_mas = *mas;
+
+		label_mas.gadget.control = control;
+		label_mas.gadget.box = control->box;
+		label_mas.gadget.box_x = 0;
+		label_mas.gadget.box_y = 0;
+		label_mas.gadget.target = control->form ?
+				control->form->target : NULL;
+
+		res = gadget_mouse_action(html, mouse, x, y, &label_mas);
+		mas->result = label_mas.result;
+		mas->gadget = label_mas.gadget;
+	}
+
+	fire_generic_dom_event(corestring_dom_click, (dom_node *)target,
+			true, true);
+	*handled = true;
+
+out:
+	if (target != NULL) {
+		dom_node_unref(target);
+	}
+	if (doc != NULL) {
+		dom_node_unref(doc);
+	}
+	if (for_value != NULL) {
+		dom_string_unref(for_value);
+	}
+	if (for_attr != NULL) {
+		dom_string_unref(for_attr);
+	}
+	if (label != NULL) {
+		dom_node_unref(label);
+	}
+
+	return res;
+}
+
 
 /**
  * process mouse activity on an iframe
@@ -1397,6 +1551,7 @@ mouse_action_drag_none(html_content *html,
 	struct content *c = (struct content *)html;
 	union content_msg_data msg_data;
 	lwc_string *path;
+	bool label_handled = false;
 
 	/**
 	 * computed state
@@ -1448,6 +1603,13 @@ mouse_action_drag_none(html_content *html,
 
 	} else if (mas.link.url != NULL) {
 		res = link_mouse_action(html, bw, mouse, x, y, &mas);
+
+	} else if ((res = label_mouse_action(html, mouse, x, y, &mas,
+			&label_handled)) != SLATEERROR_OK) {
+		return res;
+
+	} else if (label_handled) {
+		/* Done. */
 
 	} else {
 		res = default_mouse_action(html, bw, mouse, x, y, &mas);

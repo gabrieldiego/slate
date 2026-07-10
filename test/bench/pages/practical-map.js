@@ -9,6 +9,12 @@
 	var centerText = document.querySelector("#map-center");
 	var nearby = document.querySelector("#map-nearby");
 	var contextMenu = document.querySelector("#map-context-menu");
+	var mapToolsButton = document.querySelector("#map-tools-button");
+	var mapToolsMenu = document.querySelector("#map-tools-menu");
+	var languageDialog = document.querySelector("#map-language-dialog");
+	var routeFrom = document.querySelector("#route-from");
+	var routeTo = document.querySelector("#route-to");
+	var mapLoader = document.querySelector("#map-loader");
 	var controls = [];
 	var svgCount = document.getElementsByTagName("svg").length;
 	var tileCount = 0;
@@ -105,6 +111,193 @@
 		circle.setAttributeNS(null, "stroke-width", "2");
 		icon.append(circle);
 		document.getElementById("map-search-button").append(icon);
+	}
+
+	function toggleDropdown(button, menu) {
+		var expanded = button.getAttribute("aria-expanded") === "true";
+		if (expanded) {
+			menu.classList.remove("show");
+			button.setAttribute("aria-expanded", "false");
+			console.log("map-dropdown-closed");
+		} else {
+			menu.classList.add("show");
+			button.setAttribute("aria-expanded", "true");
+			console.log("map-dropdown-open");
+		}
+	}
+
+	function openModal(dialog) {
+		dialog.classList.add("map-modal-open");
+		dialog.style.visibility = "visible";
+		dialog.setAttribute("aria-hidden", "false");
+		console.log("map-modal-open");
+	}
+
+	function closeModal(dialog) {
+		dialog.classList.remove("map-modal-open");
+		dialog.style.visibility = "hidden";
+		dialog.setAttribute("aria-hidden", "true");
+		console.log("map-modal-close");
+	}
+
+	function countElementsWithAttribute(tagName, attributeName, value) {
+		var nodes = document.getElementsByTagName(tagName);
+		var count = 0;
+		var current;
+		var i;
+
+		for (i = 0; i < nodes.length; i++) {
+			current = nodes[i].getAttribute(attributeName);
+			if (value === undefined ? current !== null : current === value) {
+				count++;
+			}
+		}
+
+		return count;
+	}
+
+	function findTargetBySelectorId(selector) {
+		if (selector && selector.charAt(0) === "#") {
+			return document.getElementById(selector.substring(1));
+		}
+		return null;
+	}
+
+	function bindBootstrapLikeControls() {
+		var buttons = document.getElementsByTagName("button");
+		var i;
+
+		for (i = 0; i < buttons.length; i++) {
+			(function (button) {
+				if (button.getAttribute("data-bs-toggle") !== null) {
+					button.addEventListener("click", function () {
+						var target;
+						if (button.getAttribute("data-bs-toggle") === "dropdown") {
+							toggleDropdown(button, mapToolsMenu);
+						} else if (button.getAttribute("data-bs-toggle") === "modal") {
+							target = findTargetBySelectorId(button.getAttribute("data-bs-target"));
+							if (target) {
+								openModal(target);
+							}
+						}
+					}, false);
+				}
+				if (button.getAttribute("data-bs-dismiss") === "modal") {
+					button.addEventListener("click", function () {
+						var target = languageDialog;
+						if (target) {
+							closeModal(target);
+						}
+					}, false);
+				}
+			}(buttons[i]));
+		}
+	}
+
+	function setRouteModeActive(input) {
+		var labels = document.getElementsByTagName("label");
+		var i;
+
+		for (i = 0; i < labels.length; i++) {
+			if (labels[i].getAttribute("for") === input.id) {
+				labels[i].classList.add("route-mode-active");
+			} else {
+				labels[i].classList.remove("route-mode-active");
+			}
+		}
+	}
+
+	function bindRoutingControls() {
+		var inputs = document.getElementsByTagName("input");
+		var modes = [];
+		var i;
+
+		for (i = 0; i < inputs.length; i++) {
+			if (inputs[i].getAttribute("name") === "routing_mode") {
+				modes.push(inputs[i]);
+			}
+		}
+
+		for (i = 0; i < modes.length; i++) {
+			modes[i].addEventListener("click", function () {
+				if (this.checked) {
+					setRouteModeActive(this);
+					setText(status, "Route mode " + this.value);
+					console.log("map-route-mode-" + this.value);
+				}
+			}, false);
+		}
+
+		document.getElementById("reverse-route").addEventListener("click", function () {
+			var from = routeFrom.value;
+			routeFrom.value = routeTo.value;
+			routeTo.value = from;
+			setText(status, "Route reversed");
+			console.log("map-route-reversed");
+		}, false);
+
+		document.getElementById("route-loader-toggle").addEventListener("click", function () {
+			mapLoader.removeAttribute("hidden");
+			setText(status, "Route loader visible");
+			console.log("map-loader-visible");
+		}, false);
+	}
+
+	function countRouteMarkerSvg() {
+		var markers = document.getElementsByClassName("routing-marker");
+		var count = 0;
+		var i;
+
+		for (i = 0; i < markers.length; i++) {
+			if (markers[i].getElementsByTagName("svg").length === 1) {
+				count++;
+			}
+		}
+
+		return count;
+	}
+
+	function countElementsWithDisabledAttribute(tagName) {
+		var nodes = document.getElementsByTagName(tagName);
+		var count = 0;
+		var i;
+
+		for (i = 0; i < nodes.length; i++) {
+			if (nodes[i].hasAttribute("disabled")) {
+				count++;
+			}
+		}
+
+		return count;
+	}
+
+	function countRoutingLabels() {
+		var labels = document.getElementsByTagName("label");
+		var count = 0;
+		var i;
+
+		for (i = 0; i < labels.length; i++) {
+			if (String(labels[i].getAttribute("for")).indexOf("routing-mode-") === 0) {
+				count++;
+			}
+		}
+
+		return count;
+	}
+
+	function countDraggableRouteMarkers() {
+		var markers = document.getElementsByClassName("routing-marker");
+		var count = 0;
+		var i;
+
+		for (i = 0; i < markers.length; i++) {
+			if (markers[i].getAttribute("draggable") === "true" &&
+					markers[i].getAttribute("data-type") !== null) {
+				count++;
+			}
+		}
+
+		return count;
 	}
 
 	function collectControlButtons() {
@@ -287,8 +480,24 @@
 		probeMapFeature("selector-attribute", supported, missing, function () {
 			return document.querySelectorAll("button[data-action]").length === 7 &&
 				document.querySelectorAll("link[type=\"application/atom+xml\"]").length === 1 &&
-				document.querySelectorAll("[data-language-code]").length === 1 &&
+				document.querySelectorAll("[data-language-code]").length >= 3 &&
 				document.querySelectorAll("button[data-bs-target$=\"_edit\"]").length === 1;
+		});
+		probeMapFeature("osm-modal-dropdown-tags", supported, missing, function () {
+			return countElementsWithAttribute("button", "data-bs-toggle", "modal") === 1 &&
+				countElementsWithAttribute("button", "data-bs-toggle", "dropdown") === 1 &&
+				countElementsWithAttribute("button", "data-bs-dismiss", "modal") === 2 &&
+				countElementsWithAttribute("turbo-frame", "loading", "lazy") === 1;
+		});
+		probeMapFeature("osm-routing-tags", supported, missing, function () {
+			return document.querySelectorAll("select optgroup option").length >= 3 &&
+				countRoutingLabels() === 3 &&
+				countDraggableRouteMarkers() === 2 &&
+				countRouteMarkerSvg() === 2;
+		});
+		probeMapFeature("disabled-attributes", supported, missing, function () {
+			return countElementsWithDisabledAttribute("option") >= 2 &&
+				countElementsWithDisabledAttribute("input") === 1;
 		});
 		probeMapFeature("computed-custom-property", supported, missing, function () {
 			var value = window.getComputedStyle(document.documentElement)
@@ -347,6 +556,8 @@
 	console.log("map-controls-bound-" + controls.length);
 
 	document.getElementById("map-search-button").addEventListener("click", updateSearch, false);
+	bindBootstrapLikeControls();
+	bindRoutingControls();
 	map.addEventListener("mousedown", beginDrag, false);
 	map.addEventListener("wheel", wheelZoom, false);
 	document.addEventListener("mousemove", dragMap, false);
@@ -361,6 +572,13 @@
 	addControlIcon();
 	updateSearch();
 	logMapFeatureGaps();
+
+	if (mapToolsButton && mapToolsMenu && languageDialog &&
+			document.getElementsByTagName("turbo-frame").length >= 2 &&
+			document.getElementsByTagName("optgroup").length >= 1 &&
+			countRouteMarkerSvg() === 2) {
+		console.log("map-osm-tags-ready");
+	}
 
 	if (map.matches(".leaflet-container") &&
 			document.querySelector(".leaflet-marker-icon").closest(".leaflet-container") === map &&

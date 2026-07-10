@@ -18,6 +18,99 @@ body {
 body.map-layout {
 	margin: 0;
 }
+.site-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 12px;
+	background: #ffffff;
+	border-bottom: 1px solid #b9c4cf;
+}
+.site-head h1 {
+	margin: 0;
+	font-size: 24px;
+}
+.header-actions {
+	margin-left: auto;
+}
+.header-actions button,
+.dropdown-item,
+.dialog-button {
+	border: 1px solid #748595;
+	background: #f7fafc;
+	color: #203040;
+	padding: 6px 10px;
+}
+.osm-like-dropdown {
+	position: relative;
+	display: inline-block;
+}
+.dropdown-menu {
+	display: none;
+	position: absolute;
+	right: 0;
+	top: 32px;
+	z-index: 1200;
+	min-width: 180px;
+	margin: 0;
+	padding: 4px;
+	list-style: none;
+	background: #ffffff;
+	border: 1px solid #8fa0ae;
+}
+.dropdown-menu.show {
+	display: block;
+}
+.dropdown-item {
+	display: block;
+	width: 100%;
+	margin: 0 0 4px;
+	text-align: left;
+}
+.modal {
+	display: block;
+	position: absolute;
+	left: 28%;
+	top: 70px;
+	z-index: 1300;
+	width: 360px;
+	background: #ffffff;
+	border: 2px solid #607080;
+	box-shadow: 0 12px 28px rgba(20, 30, 40, 0.24);
+	visibility: hidden;
+}
+.map-modal-open {
+	visibility: visible;
+}
+.modal-header,
+.modal-body,
+.modal-footer {
+	padding: 10px 12px;
+}
+.modal-header {
+	border-bottom: 1px solid #d3dce4;
+}
+.modal-title {
+	margin: 0;
+	font-size: 18px;
+}
+.btn-close {
+	float: right;
+}
+.spinner-border {
+	display: inline-block;
+	width: 22px;
+	height: 22px;
+	border: 3px solid #b8c3cd;
+	border-top-color: #305f8a;
+}
+.visually-hidden {
+	position: absolute;
+	left: -9999px;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+}
 .map-app {
 	display: table;
 	width: 100%;
@@ -34,6 +127,13 @@ body.map-layout {
 }
 .map-sidebar {
 	width: 22%;
+}
+.map-sidebar h2 {
+	margin: 7px 0 4px;
+	font-size: 16px;
+}
+.map-sidebar p {
+	margin: 4px 0 8px;
 }
 .map-details {
 	width: 24%;
@@ -54,7 +154,67 @@ body.map-layout {
 }
 .map-options label {
 	display: block;
-	margin: 8px 0;
+	margin: 4px 0;
+}
+.directions-form {
+	margin-top: 8px;
+	padding-top: 6px;
+	border-top: 1px solid #d3dce4;
+}
+.routing-modes {
+	margin: 4px 0;
+}
+.btn-check {
+	position: absolute;
+	left: -9999px;
+}
+.routing-modes label {
+	display: inline-block;
+	margin-right: 2px;
+	padding: 3px 5px;
+	border: 1px solid #748595;
+	background: #f7fafc;
+}
+.routing-modes label.route-mode-active {
+	background: #305f8a;
+	color: #ffffff;
+}
+.routing-modes label.route-mode-disabled {
+	color: #8b98a4;
+	background: #eef2f5;
+}
+.routing-engine,
+.route-field,
+.route-tools {
+	margin-top: 8px;
+}
+.routing-engine select {
+	max-width: 100%;
+}
+.route-field {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.route-field input {
+	width: 150px;
+}
+.routing-marker {
+	display: inline-block;
+	width: 22px;
+	height: 32px;
+	color: #197a46;
+}
+.routing-marker svg {
+	width: 22px;
+	height: 32px;
+}
+.routing-marker-destination {
+	color: #c0392b;
+}
+.route-tools button {
+	margin: 0 2px 2px 0;
+	padding: 3px 5px;
 }
 .map-viewport {
 	position: relative;
@@ -271,7 +431,7 @@ body.map-layout {
 }
 .layer-list label {
 	display: block;
-	margin: 5px 0;
+	margin: 2px 0;
 }
 .route-steps li {
 	margin-bottom: 6px;
@@ -323,7 +483,41 @@ body.map-layout {
 </g>
 </svg>
 <h1>Practical Bench Slippy Map</h1>
+<div class="header-actions">
+<div class="osm-like-dropdown">
+<button type="button" id="map-tools-button" class="dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">Map Tools</button>
+<ul id="map-tools-menu" class="dropdown-menu" role="menu">
+<li><button type="button" class="dropdown-item" data-map-menu="edit">Edit with Jotter</button></li>
+<li><button type="button" class="dropdown-item" data-map-menu="history">View History</button></li>
+</ul>
+</div>
+<button type="button" id="map-language-button" data-bs-toggle="modal" data-bs-target="#map-language-dialog">Languages</button>
+</div>
 </header>
+<div class="modal fade" id="map-language-dialog" tabindex="-1" aria-labelledby="map-language-title" aria-hidden="true">
+<div class="modal-dialog">
+<div class="modal-content">
+<div class="modal-header">
+<h2 id="map-language-title" class="modal-title">Select Language</h2>
+<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">Close language dialog</button>
+</div>
+<div class="modal-body">
+<turbo-frame id="map-language-list" data-src="assets/languages.html" loading="lazy">
+<div class="text-center">
+<span class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></span>
+</div>
+<ul>
+<li><button type="button" class="dialog-button" data-language-code="en">English</button></li>
+<li><button type="button" class="dialog-button" data-language-code="pt">Portuguese</button></li>
+</ul>
+</turbo-frame>
+</div>
+<div class="modal-footer">
+<button type="button" class="dialog-button" data-bs-dismiss="modal">Close</button>
+</div>
+</div>
+</div>
+</div>
 <main class="map-app">
 <aside class="map-sidebar">
 <p class="bench-kicker">Practical Bench page with map tiles, marker layers, route state, and dynamic popup content.</p>
@@ -339,13 +533,6 @@ body.map-layout {
 <option>Cycle</option>
 </select>
 </label>
-<label>Route mode
-<select id="route-mode" name="route-mode">
-<option>Walk</option>
-<option>Bus</option>
-<option>Drive</option>
-</select>
-</label>
 </div>
 <h2>Layers</h2>
 <div class="layer-list">
@@ -353,6 +540,41 @@ body.map-layout {
 <label><input type="checkbox" id="layer-food" checked> Food and cafes</label>
 <label><input type="checkbox" id="layer-alerts" checked> Traffic alerts</label>
 </div>
+<form id="directions-form" class="directions-form" action="about:blank" method="get">
+<h2>Directions</h2>
+<div class="route-tools">
+<button type="button" id="reverse-route" title="Reverse Directions">Swap</button>
+<button type="button" id="route-loader-toggle" title="Show Route Loader">Loader</button>
+</div>
+<div class="routing-modes" role="group" aria-label="Route mode">
+<input type="radio" name="routing_mode" id="routing-mode-walk" value="walk" class="btn-check" autocomplete="off" checked>
+<label for="routing-mode-walk" class="route-mode-active">Walk</label>
+<input type="radio" name="routing_mode" id="routing-mode-bicycle" value="bicycle" class="btn-check" autocomplete="off">
+<label for="routing-mode-bicycle">Bike</label>
+<input type="radio" name="routing_mode" id="routing-mode-car" value="car" class="btn-check" autocomplete="off" disabled>
+<label for="routing-mode-car" class="route-mode-disabled">Car</label>
+</div>
+<label class="routing-engine">Routing engine
+<select id="routing-engine" name="routing_engine">
+<optgroup label="Directions services">
+<option disabled value="graphhopper">GraphHopper</option>
+<option selected value="benchroute">BenchRoute</option>
+<option disabled value="valhalla">Valhalla</option>
+</optgroup>
+</select>
+</label>
+<div class="route-field">
+<span class="routing-marker" data-type="from" draggable="true"><svg viewBox="0 0 25 40"><path d="M12.5 40 3 21 C1.5 18 0 15 0 12.5a12.5 12.5 0 0 1 25 0c0 2.5-1.5 5.5-3 8.5z" fill="currentColor"></path><path d="M5.5 13h7v7l5-12z" fill="#ffffff"></path></svg></span>
+<input type="text" id="route-from" name="route_from" placeholder="From" autocomplete="on" dir="auto" value="Bench Station">
+</div>
+<div class="route-field">
+<span class="routing-marker routing-marker-destination" data-type="to" draggable="true"><svg viewBox="0 0 25 40"><path d="M12.5 40 3 21 C1.5 18 0 15 0 12.5a12.5 12.5 0 0 1 25 0c0 2.5-1.5 5.5-3 8.5z" fill="currentColor"></path><path d="M8 20V7c5-2 6 2 11 0v8c-5 2-6-2-11 0" fill="#ffffff"></path></svg></span>
+<input type="text" id="route-to" name="route_to" placeholder="To" autocomplete="on" dir="auto" value="Renderer Plaza">
+</div>
+<div id="map-loader" class="loader" hidden>
+<span class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></span>
+</div>
+</form>
 <h2>Route</h2>
 <ol id="route-steps" class="route-steps">
 <li>Walk to Bench Station</li>
@@ -455,6 +677,11 @@ body.map-layout {
 </div>
 </aside>
 </main>
+<noscript>
+<div class="map-noscript">
+<p>JavaScript is required for the Practical Bench slippy map.</p>
+</div>
+</noscript>
 <script src="practical-map.js"></script>
 </body>
 </html>

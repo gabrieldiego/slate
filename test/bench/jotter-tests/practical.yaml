@@ -303,6 +303,44 @@ steps:
 - action: wait-log
   window: win1
   substring: map-feature-gaps
+- action: wait-log
+  window: win1
+  substring: map-osm-tags-ready
+- action: click
+  window: win1
+  target:
+    text: Map Tools
+- action: wait-log
+  window: win1
+  substring: map-dropdown-open
+- action: click
+  window: win1
+  target:
+    text: Languages
+- action: wait-log
+  window: win1
+  substring: map-modal-open
+- action: click
+  window: win1
+  target:
+    text: Bike
+- action: wait-log
+  window: win1
+  substring: map-route-mode-bicycle
+- action: click
+  window: win1
+  target:
+    text: Swap
+- action: wait-log
+  window: win1
+  substring: map-route-reversed
+- action: click
+  window: win1
+  target:
+    text: Loader
+- action: wait-log
+  window: win1
+  substring: map-loader-visible
 - action: mouse-click
   window: win1
   x: 457
