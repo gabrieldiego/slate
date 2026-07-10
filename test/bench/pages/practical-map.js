@@ -15,6 +15,11 @@
 	var offsetX = 0;
 	var offsetY = 0;
 	var zoom = parseInt(map.getAttribute("data-zoom"), 10) || 12;
+	var dragging = false;
+	var dragStartX = 0;
+	var dragStartY = 0;
+	var dragOriginX = 0;
+	var dragOriginY = 0;
 	var i;
 
 	function setText(node, text) {
@@ -36,11 +41,28 @@
 			pane.style.left = offsetX + "px";
 			pane.style.top = offsetY + "px";
 			pane.style.transform = "translate3d(" + offsetX + "px," + offsetY + "px,0)";
+			map.setAttribute("data-zoom", String(zoom));
 			setText(centerText, offsetX + "," + offsetY);
 			setText(zoomText, zoom);
 			setText(status, "Map center " + offsetX + "," + offsetY + " zoom " + zoom);
 			console.log("map-frame-" + offsetX + "," + offsetY);
 		});
+	}
+
+	function zoomBy(delta, source) {
+		var nextZoom = zoom + delta;
+		if (nextZoom < 1) {
+			nextZoom = 1;
+		} else if (nextZoom > 19) {
+			nextZoom = 19;
+		}
+		if (nextZoom === zoom) {
+			console.log(source + "-unchanged");
+			return;
+		}
+		zoom = nextZoom;
+		updateTransform();
+		console.log(source);
 	}
 
 	function addTile(x, y, kind) {
@@ -118,15 +140,88 @@
 			offsetY += parseInt(button.getAttribute("data-dy"), 10);
 			updateTransform();
 			console.log("map-pan");
-		} else {
-			zoom += parseInt(button.getAttribute("data-dz"), 10);
-			updateTransform();
+			console.log("map-pan-button");
+		} else if (button.getAttribute("data-action") === "zoom") {
 			if (button.id === "map-zoom-in") {
-				console.log("map-zoom-in");
+				zoomBy(1, "map-zoom-in");
 			} else {
-				console.log("map-zoom-out");
+				zoomBy(-1, "map-zoom-out");
+			}
+		} else if (button.getAttribute("data-action") === "edit") {
+			setText(status, "Map edit action opened");
+			console.log("map-edit-open");
+		}
+	}
+
+	function stopControlDrag(evt) {
+		if (evt && evt.stopPropagation) {
+			evt.stopPropagation();
+		}
+	}
+
+	function beginDrag(evt) {
+		if (evt && evt.button !== 0) {
+			return;
+		}
+		dragging = true;
+		dragStartX = evt ? evt.clientX : 0;
+		dragStartY = evt ? evt.clientY : 0;
+		dragOriginX = offsetX;
+		dragOriginY = offsetY;
+		map.classList.add("leaflet-dragging");
+		setText(status, "Dragging map");
+		if (evt && evt.preventDefault) {
+			evt.preventDefault();
+		}
+		console.log("map-drag-start");
+	}
+
+	function dragMap(evt) {
+		if (!dragging) {
+			return;
+		}
+		offsetX = dragOriginX + ((evt ? evt.clientX : dragStartX) - dragStartX);
+		offsetY = dragOriginY + ((evt ? evt.clientY : dragStartY) - dragStartY);
+		updateTransform();
+		if (evt && evt.preventDefault) {
+			evt.preventDefault();
+		}
+		console.log("map-drag-move");
+	}
+
+	function endDrag(evt) {
+		if (!dragging) {
+			return;
+		}
+		dragging = false;
+		map.classList.remove("leaflet-dragging");
+		setText(status, "Map drag finished");
+		if (evt && evt.preventDefault) {
+			evt.preventDefault();
+		}
+		console.log("map-pan");
+		console.log("map-drag-end");
+	}
+
+	function wheelZoom(evt) {
+		var deltaY = 0;
+		if (evt) {
+			if (typeof evt.deltaY === "number") {
+				deltaY = evt.deltaY;
+			} else if (typeof evt.wheelDelta === "number") {
+				deltaY = -evt.wheelDelta;
 			}
 		}
+		console.log("map-wheel-event-" + deltaY);
+		if (deltaY === 0) {
+			console.log("map-wheel-zero");
+			return;
+		}
+		if (evt && evt.preventDefault) {
+			evt.preventDefault();
+		}
+		zoomBy(deltaY < 0 ? 1 : -1,
+			deltaY < 0 ? "map-wheel-zoom-in" : "map-wheel-zoom-out");
 	}
 
 	function updateSearch() {
@@ -187,10 +282,10 @@
 		var missing = [];
 
 		probeMapFeature("selector-descendant", supported, missing, function () {
-			return document.querySelectorAll(".leaflet-control .control-button").length === 6;
+			return document.querySelectorAll(".leaflet-control .control-button").length === 7;
 		});
 		probeMapFeature("selector-attribute", supported, missing, function () {
-			return document.querySelectorAll("button[data-action]").length === 6 &&
+			return document.querySelectorAll("button[data-action]").length === 7 &&
 				document.querySelectorAll("link[type=\"application/atom+xml\"]").length === 1 &&
 				document.querySelectorAll("[data-language-code]").length === 1 &&
 				document.querySelectorAll("button[data-bs-target$=\"_edit\"]").length === 1;
@@ -243,6 +338,7 @@
 	controls = collectControlButtons();
 	for (i = 0; i < controls.length; i++) {
 		(function (button) {
+			button.addEventListener("mousedown", stopControlDrag, false);
 			button.addEventListener("click", function () {
 				handleControlButton(button);
 			}, false);
@@ -251,6 +347,11 @@
 	console.log("map-controls-bound-" + controls.length);
 
 	document.getElementById("map-search-button").addEventListener("click", updateSearch, false);
+	map.addEventListener("mousedown", beginDrag, false);
+	map.addEventListener("wheel", wheelZoom, false);
+	document.addEventListener("mousemove", dragMap, false);
+	document.addEventListener("mouseup", endDrag, false);
+	document.addEventListener("mouseleave", endDrag, false);
 	bindMarker("marker-transit", "Transit");
 	bindMarker("marker-food", "Food");
 	bindMarker("marker-alert", "Alert");

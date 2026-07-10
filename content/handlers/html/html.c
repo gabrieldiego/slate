@@ -29,6 +29,8 @@
 #include <stdlib.h>
 #include <nsutils/time.h>
 
+#include <dom/events/mouse_multi_wheel_event.h>
+
 #include "utils/utils.h"
 #include "utils/config.h"
 #include "utils/corestrings.h"
@@ -265,6 +267,71 @@ bool fire_dom_mouse_event(dom_string *type, dom_node *target,
 	      target);
 	result = fire_dom_event(evt, target);
 	dom_event_unref(evt);
+	return result;
+}
+
+/* Exported interface, see html_internal.h */
+bool fire_dom_wheel_event(dom_node *target,
+		bool bubbles, bool cancelable, int x, int y,
+		int delta_x, int delta_y)
+{
+	dom_exception exc;
+	dom_document *doc = NULL;
+	dom_event *evt = NULL;
+	dom_string *event_interface = NULL;
+	dom_string *event_type = NULL;
+	bool result = true;
+
+	if (target == NULL) {
+		return true;
+	}
+
+	exc = dom_node_get_owner_document(target, &doc);
+	if (exc != DOM_NO_ERR || doc == NULL) {
+		return true;
+	}
+
+	exc = dom_string_create((const uint8_t *)"MouseMultiWheelEvent",
+			SLEN("MouseMultiWheelEvent"), &event_interface);
+	if (exc != DOM_NO_ERR) {
+		goto out;
+	}
+
+	exc = dom_document_event_create_event((dom_document_event *)doc,
+			event_interface, &evt);
+	if (exc != DOM_NO_ERR || evt == NULL) {
+		goto out;
+	}
+
+	exc = dom_string_create((const uint8_t *)"wheel", SLEN("wheel"),
+			&event_type);
+	if (exc != DOM_NO_ERR) {
+		goto out;
+	}
+
+	exc = dom_mouse_multi_wheel_event_init_ns(
+			(dom_mouse_multi_wheel_event *)evt,
+			NULL, event_type, bubbles, cancelable, NULL, delta_y,
+			x, y, x, y, 0, NULL, NULL, delta_x, delta_y, 0);
+	if (exc != DOM_NO_ERR) {
+		goto out;
+	}
+
+	result = fire_dom_event(evt, target);
+
+out:
+	if (event_type != NULL) {
+		dom_string_unref(event_type);
+	}
+	if (event_interface != NULL) {
+		dom_string_unref(event_interface);
+	}
+	if (evt != NULL) {
+		dom_event_unref(evt);
+	}
+	if (doc != NULL) {
+		dom_node_unref(doc);
+	}
 	return result;
 }
 
@@ -1607,6 +1674,52 @@ html_get_contextual_content(struct content *c, int x, int y,
 
 
 /**
+ * Dispatch a DOM wheel event at the deepest element under the pointer.
+ *
+ * \param html	html content to look inside
+ * \param x	x-coordinate of point of interest
+ * \param y	y-coordinate of point of interest
+ * \param scrx	horizontal wheel delta
+ * \param scry	vertical wheel delta
+ * \return true iff the event was cancelled by page script
+ */
+static bool
+html_scroll_dom_wheel_event(html_content *html, int x, int y, int scrx, int scry)
+{
+	struct box *box;
+	struct box *next;
+	struct dom_node *target = NULL;
+	int box_x = 0;
+	int box_y = 0;
+
+	if (!html->enable_scripting || html->layout == NULL) {
+		return false;
+	}
+
+	box = html->layout;
+	while ((next = box_at_point(&html->unit_len_ctx, box, x, y,
+			&box_x, &box_y)) != NULL) {
+		box = next;
+
+		if (box->style && css_computed_visibility(box->style) ==
+				CSS_VISIBILITY_HIDDEN) {
+			continue;
+		}
+
+		if (box->node != NULL) {
+			target = box->node;
+		}
+	}
+
+	if (target == NULL) {
+		return false;
+	}
+
+	return fire_dom_wheel_event(target, true, true, x, y, scrx, scry) == false;
+}
+
+
+/**
  * Scroll deepest thing within the content which can be scrolled at given point
  *
  * \param c	html content to look inside
@@ -1625,6 +1738,10 @@ html_scroll_at_point(struct content *c, int x, int y, int scrx, int scry)
 	struct box *next;
 	int box_x = 0, box_y = 0;
 	bool handled_scroll = false;
+
+	if (html_scroll_dom_wheel_event(html, x, y, scrx, scry)) {
+		return true;
+	}
 
 	/* TODO: invert order; visit deepest box first */
 

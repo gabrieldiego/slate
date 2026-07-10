@@ -359,6 +359,13 @@ bool fire_dom_mouse_event(dom_string *type, dom_node *target,
 		bool bubbles, bool cancelable, int x, int y,
 		browser_mouse_state mouse);
 
+/**
+ * Construct a wheel event and fire it at the DOM
+ */
+bool fire_dom_wheel_event(dom_node *target,
+		bool bubbles, bool cancelable, int x, int y,
+		int delta_x, int delta_y);
+
 /* Useful dom_string pointers */
 struct dom_string;
 

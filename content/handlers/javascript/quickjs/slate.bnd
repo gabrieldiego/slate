@@ -85,7 +85,7 @@ init MouseMultiWheelEvent(struct dom_mouse_multi_wheel_event *evt::evt);
 init DocumentEvent(struct dom_document_event *evt::evt);
 init CustomEvent(struct dom_custom_event *evt::evt);
 init CompositionEvent(struct dom_ui_event *evt::evt);
-init WheelEvent(struct dom_mouse_event *evt::evt);
+#include "WheelEvent.bnd"
 init FocusEvent(struct dom_ui_event *evt::evt);
 init StorageEvent(struct dom_event *evt::evt);
 init CloseEvent(struct dom_event *evt::evt);

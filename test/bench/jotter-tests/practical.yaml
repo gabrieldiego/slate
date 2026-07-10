@@ -293,7 +293,7 @@ steps:
   substring: map-tile-count-36
 - action: wait-log
   window: win1
-  substring: map-controls-bound-6
+  substring: map-controls-bound-7
 - action: wait-log
   window: win1
   substring: map-search-updated
@@ -303,21 +303,63 @@ steps:
 - action: wait-log
   window: win1
   substring: map-feature-gaps
-- action: click
+- action: mouse-click
   window: win1
-  target:
-    text: Pan Right
+  x: 457
+  y: 205
+  state: press_1
+- action: wait-log
+  window: win1
+  substring: map-drag-start
+- action: mouse-track
+  window: win1
+  x: 521
+  y: 237
+  state: drag_1
+- action: wait-log
+  window: win1
+  substring: map-drag-move
+- action: wait-log
+  window: win1
+  substring: map-frame-64,32
+  timeout: 2000
+- action: mouse-track
+  window: win1
+  x: 0
+  y: 0
+  state: hover
 - action: wait-log
   window: win1
   substring: map-pan
 - action: wait-log
   window: win1
-  substring: map-frame--48,0
+  substring: map-drag-end
+  timeout: 2000
+- action: scroll
+  window: win1
+  x: 412
+  y: 259
+  dy: -160
+- action: wait-log
+  window: win1
+  substring: map-wheel-zoom-in
+- action: click
+  window: win1
+  area: extent
+  target:
+    text: '>'
+- action: wait-log
+  window: win1
+  substring: map-pan-button
+- action: wait-log
+  window: win1
+  substring: map-frame-16,32
   timeout: 2000
 - action: click
   window: win1
+  area: extent
   target:
-    text: Zoom In
+    text: +
 - action: wait-log
   window: win1
   substring: map-zoom-in

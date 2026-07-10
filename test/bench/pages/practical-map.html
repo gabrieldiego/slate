@@ -38,14 +38,6 @@ body.map-layout {
 .map-details {
 	width: 24%;
 }
-.map-toolbar button {
-	margin: 0 5px 6px 0;
-	padding: 5px 8px;
-	min-width: 96px;
-	border: 1px solid #748595;
-	background: #f7fafc;
-	text-align: left;
-}
 .map-brand-icon {
 	display: inline-block;
 	width: 64px;
@@ -77,6 +69,9 @@ body.map-layout {
 	font-family: Arial, sans-serif;
 	cursor: grab;
 }
+.leaflet-dragging {
+	cursor: grabbing;
+}
 .leaflet-pane {
 	position: absolute;
 	left: 0;
@@ -103,11 +98,81 @@ body.map-layout {
 	z-index: 800;
 }
 .leaflet-control .control-button {
+	border: 1px solid rgba(30, 45, 60, 0.9);
 	background-color: rgba(0, 0, 0, 0.68);
 	color: #ffffff;
 }
 .leaflet-control .control-button.control-button-active {
 	background-color: #3b7f3a;
+}
+.map-control {
+	position: absolute;
+	z-index: 850;
+	background: rgba(255, 255, 255, 0.88);
+	border: 1px solid rgba(60, 80, 100, 0.55);
+	padding: 4px;
+}
+.map-control .control-button {
+	display: block;
+	width: 34px;
+	height: 34px;
+	min-width: 34px;
+	margin: 0;
+	padding: 0;
+	text-align: center;
+	font-weight: bold;
+}
+.map-control .control-icon {
+	display: none;
+}
+.map-control .control-label {
+	display: block;
+	line-height: 32px;
+}
+.map-dpad {
+	left: 12px;
+	top: 12px;
+	width: 108px;
+	height: 108px;
+}
+.map-dpad .control-button {
+	position: absolute;
+}
+.map-pan-up {
+	left: 41px;
+	top: 4px;
+}
+.map-pan-left {
+	left: 4px;
+	top: 41px;
+}
+.map-pan-right {
+	left: 78px;
+	top: 41px;
+}
+.map-pan-down {
+	left: 41px;
+	top: 78px;
+}
+.map-dpad-center {
+	position: absolute;
+	left: 45px;
+	top: 45px;
+	width: 26px;
+	height: 26px;
+	border: 1px solid rgba(60, 80, 100, 0.55);
+	background: #ffffff;
+}
+.map-zoom-control {
+	left: 14px;
+	top: 132px;
+}
+.map-zoom-control .control-button + .control-button {
+	margin-top: 4px;
+}
+.map-edit-control {
+	right: 12px;
+	top: 12px;
 }
 .leaflet-tile {
 	position: absolute;
@@ -296,14 +361,6 @@ body.map-layout {
 </ol>
 </aside>
 <section class="map-stage">
-<div class="map-toolbar leaflet-control zoom">
-<button type="button" id="map-pan-left" class="control-button" data-action="pan" data-dx="48" data-dy="0"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M10,3 L5,8 L10,13 Z" fill="currentColor"></path></svg><span>Pan Left</span></button>
-<button type="button" id="map-pan-right" class="control-button" data-action="pan" data-bs-target="map_edit" data-dx="-48" data-dy="0"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M6,3 L11,8 L6,13 Z" fill="currentColor"></path></svg><span>Pan Right</span></button>
-<button type="button" id="map-pan-up" class="control-button" data-action="pan" data-dx="0" data-dy="48"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3,10 L8,5 L13,10 Z" fill="currentColor"></path></svg><span>Pan Up</span></button>
-<button type="button" id="map-pan-down" class="control-button" data-action="pan" data-dx="0" data-dy="-48"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3,6 L8,11 L13,6 Z" fill="currentColor"></path></svg><span>Pan Down</span></button>
-<button type="button" id="map-zoom-in" class="control-button" data-action="zoom" data-dz="1"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2"></circle><line x1="8" y1="4" x2="8" y2="12" stroke="currentColor" stroke-width="2"></line><line x1="4" y1="8" x2="12" y2="8" stroke="currentColor" stroke-width="2"></line></svg><span>Zoom In</span></button>
-<button type="button" id="map-zoom-out" class="control-button" data-action="zoom" data-dz="-1"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2"></circle><line x1="4" y1="8" x2="12" y2="8" stroke="currentColor" stroke-width="2"></line></svg><span>Zoom Out</span></button>
-</div>
 <div id="map" class="map-viewport leaflet-container leaflet-touch-zoom leaflet-touch-drag" data-lat="37.78" data-lon="-122.42" data-zoom="12">
 <div id="leaflet-map-pane" class="leaflet-pane leaflet-map-pane">
 <div id="tile-grid" class="tile-grid leaflet-pane leaflet-tile-pane"></div>
@@ -357,6 +414,20 @@ body.map-layout {
 <div id="map-popup" class="map-popup">Select a Practical Bench map marker.</div>
 </div>
 <div id="map-context-menu" class="dropdown d-none shadow cm_dropdown">Practical map menu</div>
+</div>
+<div class="map-control map-dpad leaflet-control" aria-label="Map pan controls">
+<button type="button" id="map-pan-up" class="control-button map-pan-up" aria-label="Pan up" data-action="pan" data-dx="0" data-dy="48"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3,10 L8,5 L13,10 Z" fill="currentColor"></path></svg><span class="control-label">^</span></button>
+<button type="button" id="map-pan-left" class="control-button map-pan-left" aria-label="Pan left" data-action="pan" data-dx="48" data-dy="0"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M10,3 L5,8 L10,13 Z" fill="currentColor"></path></svg><span class="control-label">&lt;</span></button>
+<span class="map-dpad-center" aria-hidden="true"></span>
+<button type="button" id="map-pan-right" class="control-button map-pan-right" aria-label="Pan right" data-action="pan" data-dx="-48" data-dy="0"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M6,3 L11,8 L6,13 Z" fill="currentColor"></path></svg><span class="control-label">&gt;</span></button>
+<button type="button" id="map-pan-down" class="control-button map-pan-down" aria-label="Pan down" data-action="pan" data-dx="0" data-dy="-48"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3,6 L8,11 L13,6 Z" fill="currentColor"></path></svg><span class="control-label">v</span></button>
+</div>
+<div class="map-control map-zoom-control leaflet-control" aria-label="Map zoom controls">
+<button type="button" id="map-zoom-in" class="control-button" aria-label="Zoom in" data-action="zoom" data-dz="1"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2"></circle><line x1="8" y1="4" x2="8" y2="12" stroke="currentColor" stroke-width="2"></line><line x1="4" y1="8" x2="12" y2="8" stroke="currentColor" stroke-width="2"></line></svg><span class="control-label">+</span></button>
+<button type="button" id="map-zoom-out" class="control-button" aria-label="Zoom out" data-action="zoom" data-dz="-1"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2"></circle><line x1="4" y1="8" x2="12" y2="8" stroke="currentColor" stroke-width="2"></line></svg><span class="control-label">-</span></button>
+</div>
+<div class="map-control map-edit-control leaflet-control">
+<button type="button" id="map-edit" class="control-button" aria-label="Edit map" data-action="edit" data-bs-target="map_edit"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3,12 L4,9 L11,2 L14,5 L7,12 Z" fill="none" stroke="currentColor" stroke-width="2"></path><path d="M3,13 L8,13" stroke="currentColor" stroke-width="2"></path></svg><span class="control-label">E</span></button>
 </div>
 </div>
 </section>

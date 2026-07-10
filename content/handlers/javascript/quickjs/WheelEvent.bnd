@@ -1,0 +1,56 @@
+/* Wheel event binding using quickjs and libdom
+ *
+ * This file is part of Slate, http://www.slate-browser.org/
+ *
+ * Released under the terms of the MIT License,
+ *         http://www.opensource.org/licenses/mit-license
+ */
+
+init WheelEvent(struct dom_mouse_event *evt::evt);
+
+getter WheelEvent::deltaX()
+%{
+	int32_t value = 0;
+	if (dom_mouse_multi_wheel_event_get_wheel_delta_x(
+			(dom_mouse_multi_wheel_event *)priv->parent.parent.parent.evt,
+			&value) != DOM_NO_ERR) {
+		return 0;
+	}
+	slatejs_push_int(ctx, value);
+	return 1;
+%}
+
+getter WheelEvent::deltaY()
+%{
+	int32_t value = 0;
+	if (dom_mouse_multi_wheel_event_get_wheel_delta_y(
+			(dom_mouse_multi_wheel_event *)priv->parent.parent.parent.evt,
+			&value) != DOM_NO_ERR) {
+		return 0;
+	}
+	if (value == 0) {
+		dom_ui_event_get_detail(
+			(dom_ui_event *)priv->parent.parent.parent.evt,
+			&value);
+	}
+	slatejs_push_int(ctx, value);
+	return 1;
+%}
+
+getter WheelEvent::deltaZ()
+%{
+	int32_t value = 0;
+	if (dom_mouse_multi_wheel_event_get_wheel_delta_z(
+			(dom_mouse_multi_wheel_event *)priv->parent.parent.parent.evt,
+			&value) != DOM_NO_ERR) {
+		return 0;
+	}
+	slatejs_push_int(ctx, value);
+	return 1;
+%}
+
+getter WheelEvent::deltaMode()
+%{
+	slatejs_push_int(ctx, 0);
+	return 1;
+%}
