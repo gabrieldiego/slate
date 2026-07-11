@@ -523,6 +523,15 @@
 		probeMapFeature("document-active-element", supported, missing, function () {
 			return document.activeElement === document.body;
 		});
+		probeMapFeature("navigator-runtime-hints", supported, missing, function () {
+			return navigator.onLine === true &&
+				navigator.language === "en-US" &&
+				navigator.languages &&
+				navigator.languages.length >= 2 &&
+				navigator.languages[0] === "en-US" &&
+				navigator.hardwareConcurrency >= 1 &&
+				navigator.maxTouchPoints === 0;
+		});
 		probeMapFeature("abort-controller", supported, missing, function () {
 			var controller = new AbortController();
 			controller.abort();
