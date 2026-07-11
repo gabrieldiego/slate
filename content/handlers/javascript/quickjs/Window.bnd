@@ -737,7 +737,8 @@ method Window::getComputedStyle()
 	}
 
 	slatejs_push_pointer(ctx, element);
-	if (slatejs_bind_create_object(ctx, PROTO_NAME(CSSSTYLEDECLARATION), 1) != SLATEJS_EXEC_SUCCESS) {
+	slatejs_push_int(ctx, 1);
+	if (slatejs_bind_create_object(ctx, PROTO_NAME(CSSSTYLEDECLARATION), 2) != SLATEJS_EXEC_SUCCESS) {
 		return 0;
 	}
 

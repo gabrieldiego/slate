@@ -346,7 +346,8 @@ getter Element::style()
 	if (slatejs_is_undefined(ctx, -1)) {
 		slatejs_pop(ctx);
 		slatejs_push_pointer(ctx, (dom_element *)priv->parent.node);
-		if (slatejs_bind_create_object(ctx, PROTO_NAME(CSSSTYLEDECLARATION), 1) != SLATEJS_EXEC_SUCCESS) {
+		slatejs_push_int(ctx, 0);
+		if (slatejs_bind_create_object(ctx, PROTO_NAME(CSSSTYLEDECLARATION), 2) != SLATEJS_EXEC_SUCCESS) {
 			return 0;
 		}
 		slatejs_dup(ctx, -1);

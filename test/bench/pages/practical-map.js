@@ -351,12 +351,14 @@
 			if (width >= 35 && width <= 80 &&
 					height >= 35 && height <= 80) {
 				console.log("map-osm-control-visible");
+				logMapFeatureGaps();
 			} else if (attempt < 8) {
 				setTimeout(function () {
 					measure(attempt + 1);
 				}, 150);
 			} else {
 				console.log("map-osm-control-collapsed");
+				logMapFeatureGaps();
 			}
 		}
 
@@ -606,6 +608,19 @@
 			var value = window.getComputedStyle(document.documentElement)
 				.getPropertyValue("--bs-breakpoint-md");
 			return String(value).replace(/\s+/g, "") === "768px";
+		});
+		probeMapFeature("computed-layout-style", supported, missing, function () {
+			var control = document.getElementById("map-osm-grid-control");
+			var rect = control.getBoundingClientRect();
+			var style = window.getComputedStyle(control);
+
+			return control.style.width === "" &&
+				style.getPropertyValue("display") === "grid" &&
+				style.display === "grid" &&
+				style.getPropertyValue("width") === Math.round(rect.width) + "px" &&
+				style.width === Math.round(rect.width) + "px" &&
+				style.getPropertyValue("height") === Math.round(rect.height) + "px" &&
+				style.height === Math.round(rect.height) + "px";
 		});
 		probeMapFeature("geometry-rect", supported, missing, function () {
 			var rect = map.getBoundingClientRect();
@@ -912,7 +927,6 @@
 	addControlIcon();
 	updateSearch();
 	updateGeoLinks();
-	logMapFeatureGaps();
 
 	if (mapToolsButton && mapToolsMenu && languageDialog &&
 			document.getElementsByTagName("turbo-frame").length >= 2 &&

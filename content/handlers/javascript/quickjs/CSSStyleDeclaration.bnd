@@ -8,12 +8,16 @@
 
 class CSSStyleDeclaration {
 	private struct dom_element *element;
+	private bool computed;
 	prologue %{
 #include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
 #include <utils/corestrings.h>
 #include "content/content.h"
 #include "content/content_protected.h"
+#include "html/box.h"
+#include "html/box_construct.h"
 #include "html/private.h"
 
 static void css_style_request_redraw(dom_element *element)
@@ -99,6 +103,149 @@ static bool css_style_ascii_ieq(const char *a, size_t a_len, const char *b)
 	}
 
 	return b[a_len] == '\0';
+}
+
+static void css_style_push_px(slatejs_context *ctx, int value)
+{
+	char buffer[32];
+
+	if (value < 0) {
+		value = 0;
+	}
+	snprintf(buffer, sizeof(buffer), "%dpx", value);
+	slatejs_push_string(ctx, buffer);
+}
+
+static const char *css_style_display_name(uint8_t display)
+{
+	switch (display) {
+	case CSS_DISPLAY_INLINE:
+		return "inline";
+	case CSS_DISPLAY_BLOCK:
+		return "block";
+	case CSS_DISPLAY_LIST_ITEM:
+		return "list-item";
+	case CSS_DISPLAY_RUN_IN:
+		return "run-in";
+	case CSS_DISPLAY_INLINE_BLOCK:
+		return "inline-block";
+	case CSS_DISPLAY_TABLE:
+		return "table";
+	case CSS_DISPLAY_INLINE_TABLE:
+		return "inline-table";
+	case CSS_DISPLAY_TABLE_ROW_GROUP:
+		return "table-row-group";
+	case CSS_DISPLAY_TABLE_HEADER_GROUP:
+		return "table-header-group";
+	case CSS_DISPLAY_TABLE_FOOTER_GROUP:
+		return "table-footer-group";
+	case CSS_DISPLAY_TABLE_ROW:
+		return "table-row";
+	case CSS_DISPLAY_TABLE_COLUMN_GROUP:
+		return "table-column-group";
+	case CSS_DISPLAY_TABLE_COLUMN:
+		return "table-column";
+	case CSS_DISPLAY_TABLE_CELL:
+		return "table-cell";
+	case CSS_DISPLAY_TABLE_CAPTION:
+		return "table-caption";
+	case CSS_DISPLAY_NONE:
+		return "none";
+	case CSS_DISPLAY_FLEX:
+		return "flex";
+	case CSS_DISPLAY_INLINE_FLEX:
+		return "inline-flex";
+	case CSS_DISPLAY_GRID:
+		return "grid";
+	case CSS_DISPLAY_INLINE_GRID:
+		return "inline-grid";
+	default:
+		return NULL;
+	}
+}
+
+static const char *css_style_position_name(uint8_t position)
+{
+	switch (position) {
+	case CSS_POSITION_STATIC:
+		return "static";
+	case CSS_POSITION_RELATIVE:
+		return "relative";
+	case CSS_POSITION_ABSOLUTE:
+		return "absolute";
+	case CSS_POSITION_FIXED:
+		return "fixed";
+	default:
+		return NULL;
+	}
+}
+
+static const char *css_style_visibility_name(uint8_t visibility)
+{
+	switch (visibility) {
+	case CSS_VISIBILITY_VISIBLE:
+		return "visible";
+	case CSS_VISIBILITY_HIDDEN:
+		return "hidden";
+	case CSS_VISIBILITY_COLLAPSE:
+		return "collapse";
+	default:
+		return NULL;
+	}
+}
+
+static bool css_style_get_computed_property(dom_element *element,
+		const char *property, slatejs_context *ctx)
+{
+	struct box *box;
+	const char *value;
+
+	if (element == NULL) {
+		return false;
+	}
+
+	box = box_for_node((dom_node *)element);
+	if (box == NULL) {
+		return false;
+	}
+
+	if (strcmp(property, "width") == 0) {
+		css_style_push_px(ctx, box->padding[LEFT] + box->width +
+				box->padding[RIGHT] + box->border[LEFT].width +
+				box->border[RIGHT].width);
+		return true;
+	}
+
+	if (strcmp(property, "height") == 0) {
+		css_style_push_px(ctx, box->padding[TOP] + box->height +
+				box->padding[BOTTOM] + box->border[TOP].width +
+				box->border[BOTTOM].width);
+		return true;
+	}
+
+	if (box->style == NULL) {
+		return false;
+	}
+
+	if (strcmp(property, "display") == 0) {
+		value = css_style_display_name(css_computed_display_static(
+				box->style));
+	} else if (strcmp(property, "position") == 0) {
+		value = css_style_position_name(css_computed_position(
+				box->style));
+	} else if (strcmp(property, "visibility") == 0) {
+		value = css_style_visibility_name(css_computed_visibility(
+				box->style));
+	} else {
+		value = NULL;
+	}
+
+	if (value == NULL) {
+		return false;
+	}
+
+	slatejs_push_string(ctx, value);
+	return true;
 }
 
 static bool css_style_decl_name_matches(const char *start, const char *end,
@@ -277,8 +424,8 @@ static bool css_style_set_property(dom_element *element, const char *property,
 	return ret;
 }
 
-static bool css_style_get_property(dom_element *element, const char *property,
-		slatejs_context *ctx)
+static bool css_style_get_property(dom_element *element, bool computed,
+		const char *property, slatejs_context *ctx)
 {
 	dom_string *style = NULL;
 	const char *style_data = NULL;
@@ -347,16 +494,25 @@ static bool css_style_get_property(dom_element *element, const char *property,
 		}
 	}
 
-	if (last_value == NULL) {
+	if (last_value != NULL) {
+		slatejs_push_lstring(ctx, last_value, last_value_len);
+	} else {
 		const char *builtin = css_style_builtin_custom_property(property);
+
+		if (style != NULL) {
+			dom_string_unref(style);
+			style = NULL;
+		}
 
 		if (builtin != NULL) {
 			slatejs_push_string(ctx, builtin);
-		} else {
-			slatejs_push_string(ctx, "");
+			return true;
 		}
-	} else {
-		slatejs_push_lstring(ctx, last_value, last_value_len);
+		if (computed && css_style_get_computed_property(element, property,
+				ctx)) {
+			return true;
+		}
+		slatejs_push_string(ctx, "");
 	}
 
 	if (style != NULL) {
@@ -368,7 +524,7 @@ static bool css_style_get_property(dom_element *element, const char *property,
 static slatejs_ret_t css_style_get_named_property(slatejs_context *ctx,
 		css_style_declaration_private_t *priv, const char *property)
 {
-	css_style_get_property(priv->element, property, ctx);
+	css_style_get_property(priv->element, priv->computed, property, ctx);
 	return 1;
 }
 
@@ -390,9 +546,10 @@ static slatejs_ret_t css_style_set_named_property(slatejs_context *ctx,
 %};
 };
 
-init CSSStyleDeclaration(struct dom_element *element)
+init CSSStyleDeclaration(struct dom_element *element, int computed)
 %{
 	priv->element = element;
+	priv->computed = computed != 0;
 	if (element != NULL) {
 		dom_node_ref((dom_node *)element);
 	}
@@ -439,7 +596,7 @@ setter CSSStyleDeclaration::cssText()
 method CSSStyleDeclaration::getPropertyValue()
 %{
 	const char *property = slatejs_safe_to_string(ctx, 0);
-	css_style_get_property(priv->element, property, ctx);
+	css_style_get_property(priv->element, priv->computed, property, ctx);
 	return 1;
 %}
 
@@ -484,7 +641,7 @@ method CSSStyleDeclaration::setPropertyValue()
 method CSSStyleDeclaration::removeProperty()
 %{
 	const char *property = slatejs_safe_to_string(ctx, 0);
-	css_style_get_property(priv->element, property, ctx);
+	css_style_get_property(priv->element, priv->computed, property, ctx);
 	css_style_set_property(priv->element, property, "", 0);
 	if (css_style_property_affects_leaflet_position(property)) {
 		css_style_request_redraw(priv->element);
