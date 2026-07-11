@@ -1099,6 +1099,146 @@ DOMSettableTokenList.prototype.toString = DOMTokenList.prototype.toString;
     URLSearchParams = SlateURLSearchParams;
   }
 
+  if (typeof window.FormData === "undefined") {
+    var formControlValue = function (control, fallback) {
+      var value = control.value;
+      if (value === undefined || value === null) {
+        value = control.getAttribute && control.getAttribute("value");
+      }
+      if (value === undefined || value === null) {
+        value = fallback || "";
+      }
+      return String(value);
+    };
+    var optionValue = function (option) {
+      var value = option.getAttribute && option.getAttribute("value");
+      return value === null || value === undefined ?
+        String(option.textContent || "") : String(value);
+    };
+    var SlateFormData = function FormData(form) {
+      this._pairs = [];
+      if (form && typeof form.getElementsByTagName === "function") {
+        this._readForm(form);
+      }
+    };
+    SlateFormData.prototype._appendControl = function (control) {
+      if (!control || !control.getAttribute) {
+        return;
+      }
+
+      var name = control.getAttribute("name");
+      if (!name || control.hasAttribute("disabled")) {
+        return;
+      }
+
+      var tag = String(control.nodeName || "").toLowerCase();
+      var type = String(control.getAttribute("type") || "text").toLowerCase();
+      if (tag === "button" || type === "button" || type === "reset" ||
+          type === "submit" || type === "file") {
+        return;
+      }
+
+      if (type === "checkbox" || type === "radio") {
+        if (!(control.checked || control.hasAttribute("checked"))) {
+          return;
+        }
+        this.append(name, formControlValue(control, "on"));
+        return;
+      }
+
+      if (tag === "select") {
+        var options = control.getElementsByTagName("option");
+        var selected = false;
+        for (var i = 0; i < options.length; i++) {
+          if (options[i].selected || options[i].hasAttribute("selected")) {
+            this.append(name, optionValue(options[i]));
+            selected = true;
+          }
+        }
+        if (!selected && options.length > 0 && !control.hasAttribute("multiple")) {
+          this.append(name, optionValue(options[0]));
+        }
+        return;
+      }
+
+      this.append(name, formControlValue(control, ""));
+    };
+    SlateFormData.prototype._readForm = function (form) {
+      var tags = ["input", "select", "textarea", "button"];
+      for (var t = 0; t < tags.length; t++) {
+        var controls = form.getElementsByTagName(tags[t]);
+        for (var i = 0; i < controls.length; i++) {
+          this._appendControl(controls[i]);
+        }
+      }
+    };
+    SlateFormData.prototype.append = function (name, value) {
+      this._pairs.push([String(name), value == null ? "" : String(value)]);
+    };
+    SlateFormData.prototype.delete = function (name) {
+      var key = String(name);
+      var out = [];
+      for (var i = 0; i < this._pairs.length; i++) {
+        if (this._pairs[i][0] !== key) {
+          out.push(this._pairs[i]);
+        }
+      }
+      this._pairs = out;
+    };
+    SlateFormData.prototype.get = function (name) {
+      var key = String(name);
+      for (var i = 0; i < this._pairs.length; i++) {
+        if (this._pairs[i][0] === key) {
+          return this._pairs[i][1];
+        }
+      }
+      return null;
+    };
+    SlateFormData.prototype.getAll = function (name) {
+      var key = String(name);
+      var out = [];
+      for (var i = 0; i < this._pairs.length; i++) {
+        if (this._pairs[i][0] === key) {
+          out.push(this._pairs[i][1]);
+        }
+      }
+      return out;
+    };
+    SlateFormData.prototype.has = function (name) {
+      return this.get(name) !== null;
+    };
+    SlateFormData.prototype.set = function (name, value) {
+      this.delete(name);
+      this.append(name, value);
+    };
+    SlateFormData.prototype.entries = function () {
+      return this._pairs.slice()[Symbol.iterator]();
+    };
+    SlateFormData.prototype.keys = function () {
+      var keys = [];
+      for (var i = 0; i < this._pairs.length; i++) {
+        keys.push(this._pairs[i][0]);
+      }
+      return keys[Symbol.iterator]();
+    };
+    SlateFormData.prototype.values = function () {
+      var values = [];
+      for (var i = 0; i < this._pairs.length; i++) {
+        values.push(this._pairs[i][1]);
+      }
+      return values[Symbol.iterator]();
+    };
+    SlateFormData.prototype.forEach = function (callback, thisArg) {
+      for (var i = 0; i < this._pairs.length; i++) {
+        callback.call(thisArg, this._pairs[i][1], this._pairs[i][0], this);
+      }
+    };
+    SlateFormData.prototype[Symbol.iterator] =
+      SlateFormData.prototype.entries;
+    own(window, "FormData", SlateFormData);
+    FormData = SlateFormData;
+  }
+
   if (typeof window.Turbo === "undefined") {
     own(window, "Turbo", {
       session: {

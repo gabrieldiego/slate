@@ -557,6 +557,52 @@
 			document.title = original;
 			return ok && document.title === original;
 		});
+		probeMapFeature("formdata-basic", supported, missing, function () {
+			var form = document.createElement("form");
+			var query = document.createElement("input");
+			var hidden = document.createElement("input");
+			var checked = document.createElement("input");
+			var skipped = document.createElement("input");
+			var select = document.createElement("select");
+			var option = document.createElement("option");
+			query.setAttribute("name", "q");
+			query.setAttribute("value", "coffee");
+			hidden.setAttribute("name", "bbox");
+			hidden.setAttribute("type", "hidden");
+			hidden.setAttribute("value", "-122,37,-121,38");
+			checked.setAttribute("name", "amenity");
+			checked.setAttribute("type", "checkbox");
+			checked.setAttribute("checked", "checked");
+			checked.setAttribute("value", "cafe");
+			skipped.setAttribute("name", "skip");
+			skipped.setAttribute("type", "checkbox");
+			skipped.setAttribute("value", "no");
+			select.setAttribute("name", "mode");
+			option.setAttribute("value", "walk");
+			option.setAttribute("selected", "selected");
+			option.appendChild(document.createTextNode("Walk"));
+			select.appendChild(option);
+			form.appendChild(query);
+			form.appendChild(hidden);
+			form.appendChild(checked);
+			form.appendChild(skipped);
+			form.appendChild(select);
+
+			var data = new FormData(form);
+			data.append("tag", "map");
+			data.set("q", "bakery");
+			var seen = [];
+			data.forEach(function (value, key) {
+				seen.push(key + "=" + value);
+			});
+			return data.get("q") === "bakery" &&
+				data.get("amenity") === "cafe" &&
+				data.get("mode") === "walk" &&
+				data.get("skip") === null &&
+				data.has("bbox") &&
+				data.getAll("tag").length === 1 &&
+				Array.from(data.entries()).length === seen.length;
+		});
 		probeMapFeature("window-scroll-api", supported, missing, function () {
 			var scrollToResult = window.scrollTo(0, 0);
 			var scrollByResult = window.scrollBy(0, 0);
