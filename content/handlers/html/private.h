@@ -125,6 +125,9 @@ typedef struct html_content {
 	/** Whether an initial layout has been done */
 	bool had_initial_layout;
 
+	/** Whether a DOM mutation has scheduled a box rebuild */
+	bool box_rebuild_pending;
+
 	/** Whether scripts are enabled for this content */
 	bool enable_scripting;
 
@@ -242,6 +245,17 @@ void html__redraw_a_box(html_content *htmlc, struct box *box);
  * \param htmlc Content to convert
  */
 void html_finish_conversion(html_content *htmlc);
+
+/**
+ * Rebuild the render box tree after JavaScript mutates the DOM.
+ *
+ * This is a compatibility-oriented full rebuild used for pages that create
+ * visible controls after initial layout.
+ *
+ * \param htmlc Content whose current DOM should be converted to boxes again.
+ * \param delay_ms Delay used to coalesce batches of related DOM mutations.
+ */
+void html_schedule_box_rebuild(html_content *htmlc, int delay_ms);
 
 
 /**

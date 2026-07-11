@@ -272,6 +272,21 @@ body.map-layout {
 .leaflet-control .control-button.control-button-active {
 	background-color: #3b7f3a;
 }
+.map-osm-control {
+	position: absolute;
+	right: 12px;
+	top: 58px;
+	z-index: 850;
+}
+.map-osm-control .control-button {
+	display: grid;
+	width: 40px;
+	height: 40px;
+	color: #ffffff;
+	place-content: center;
+	background-color: rgba(0, 0, 0, 0.68);
+	text-decoration: none;
+}
 .map-control {
 	position: absolute;
 	z-index: 850;
@@ -683,6 +698,7 @@ body.map-layout {
 <div class="map-control map-edit-control leaflet-control">
 <button type="button" id="map-edit" class="control-button" aria-label="Edit map" data-action="edit" data-bs-target="map_edit"><svg class="control-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3,12 L4,9 L11,2 L14,5 L7,12 Z" fill="none" stroke="currentColor" stroke-width="2"></path><path d="M3,13 L8,13" stroke="currentColor" stroke-width="2"></path></svg><span class="control-label">E</span></button>
 </div>
+<div id="map-osm-control-wrap" class="map-osm-control leaflet-control" aria-label="OSM style dynamic controls"></div>
 </div>
 </section>
 <aside id="map-ui" class="map-details bg-body z-2">

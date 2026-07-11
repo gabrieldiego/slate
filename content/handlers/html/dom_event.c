@@ -695,6 +695,8 @@ dom_default_action_DOMNodeInsertedIntoDocument_cb(struct dom_event *evt,
 		}
 		dom_node_unref(node);
 	}
+
+	html_schedule_box_rebuild(htmlc, 100);
 }
 
 
@@ -745,6 +747,7 @@ dom_default_action_DOMSubtreeModified_cb(struct dom_event *evt, void *pw)
 		}
 		dom_node_unref(node);
 	}
+
 }
 
 

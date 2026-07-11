@@ -69,6 +69,7 @@
 #include "html/box.h"
 #include "html/box_construct.h"
 #include "html/box_inspect.h"
+#include "css/select.h"
 #include "html/form_internal.h"
 #include "html/imagemap.h"
 #include "html/layout.h"
@@ -513,7 +514,17 @@ void html_finish_conversion(html_content *htmlc)
 	 */
 	if (htmlc->select_ctx != NULL) {
 		NSLOG(netsurf, INFO,
-				"Ignoring style change: NS layout is static.");
+				"Stylesheet changed after initial layout; scheduling DOM rebuild.");
+		css_select_ctx_destroy(htmlc->select_ctx);
+		htmlc->select_ctx = NULL;
+		error = html_css_new_selection_context(htmlc,
+				&htmlc->select_ctx);
+		if (error != SLATEERROR_OK) {
+			content_broadcast_error(&htmlc->base, error, NULL);
+			content_set_error(&htmlc->base);
+			return;
+		}
+		html_schedule_box_rebuild(htmlc, 100);
 		return;
 	}
 
@@ -621,6 +632,7 @@ html_create_html_data(html_content *c, const http_parameter *params)
 	c->aborted = false;
 	c->refresh = false;
 	c->reflowing = false;
+	c->box_rebuild_pending = false;
 	c->title = NULL;
 	c->bctx = NULL;
 	c->layout = NULL;
@@ -1212,6 +1224,10 @@ static void html_reformat(struct content *c, int width, int height)
 
 	nsu_getmonotonic_ms(&ms_before);
 
+	if (htmlc->layout == NULL) {
+		return;
+	}
+
 	htmlc->reflowing = true;
 
 	htmlc->unit_len_ctx.viewport_width = css_unit_device2css_px(
@@ -1344,6 +1360,128 @@ static void html_free_layout(html_content *htmlc)
 		 * set be destroyed
 		 */
 		talloc_free(htmlc->bctx);
+		htmlc->bctx = NULL;
+		htmlc->layout = NULL;
+	}
+}
+
+static void html_clear_box_node_data(dom_node *root)
+{
+	dom_node *child = NULL;
+	dom_node *next = NULL;
+	void *old_node_data = NULL;
+
+	if (root == NULL) {
+		return;
+	}
+
+	(void)dom_node_set_user_data(root,
+			corestring_dom___ns_key_box_node_data,
+			NULL, NULL, &old_node_data);
+
+	if (dom_node_get_first_child(root, &child) != DOM_NO_ERR) {
+		return;
+	}
+
+	while (child != NULL) {
+		(void)dom_node_get_next_sibling(child, &next);
+		html_clear_box_node_data(child);
+		dom_node_unref(child);
+		child = next;
+	}
+}
+
+static void html_box_rebuild_done(html_content *c, bool success)
+{
+	int width;
+	int height;
+
+	NSLOG(netsurf, INFO, "DOM rebuild to box conversion complete (content %p)", c);
+
+	c->box_conversion_context = NULL;
+
+	if (success == false || c->aborted || c->layout == NULL) {
+		NSLOG(netsurf, INFO, "DOM rebuild failed or was aborted");
+		return;
+	}
+
+	imagemap_destroy(c);
+	c->imagemaps = NULL;
+	if (imagemap_extract(c) != SLATEERROR_OK) {
+		NSLOG(netsurf, INFO, "imagemap extraction failed during DOM rebuild");
+	}
+
+	width = c->base.available_width;
+	height = c->base.available_height;
+	if (width <= 0) {
+		width = content__get_width(&c->base);
+	}
+	if (height <= 0) {
+		height = content__get_height(&c->base);
+	}
+	if (width <= 0) {
+		width = 800;
+	}
+
+	content__reformat(&c->base, false, width, height);
+}
+
+static void html_box_rebuild(void *p)
+{
+	html_content *htmlc = p;
+	dom_node *html;
+	dom_exception exc;
+	slateerror error;
+
+	if (htmlc == NULL) {
+		return;
+	}
+
+	htmlc->box_rebuild_pending = false;
+
+	if (htmlc->had_initial_layout == false ||
+			htmlc->layout == NULL || htmlc->select_ctx == NULL ||
+			htmlc->box_conversion_context != NULL ||
+			htmlc->reflowing || htmlc->aborted) {
+		return;
+	}
+
+	exc = dom_document_get_document_element(htmlc->document, (void *) &html);
+	if ((exc != DOM_NO_ERR) || (html == NULL)) {
+		return;
+	}
+
+	nscss_clear_libcss_node_data(html);
+	html_clear_box_node_data(html);
+	html_object_free_objects(htmlc);
+	htmlc->num_objects = 0;
+	html_free_layout(htmlc);
+	htmlc->had_initial_layout = false;
+
+	error = dom_to_box(html, htmlc, html_box_rebuild_done,
+			&htmlc->box_conversion_context);
+	dom_node_unref(html);
+
+	if (error != SLATEERROR_OK) {
+		NSLOG(netsurf, INFO, "DOM rebuild box conversion failed to schedule");
+		htmlc->box_conversion_context = NULL;
+		htmlc->had_initial_layout = true;
+	}
+}
+
+void html_schedule_box_rebuild(html_content *htmlc, int delay_ms)
+{
+	if (htmlc == NULL || htmlc->box_rebuild_pending ||
+			htmlc->had_initial_layout == false ||
+			htmlc->layout == NULL || htmlc->select_ctx == NULL ||
+			htmlc->box_conversion_context != NULL ||
+			htmlc->reflowing || htmlc->aborted) {
+		return;
+	}
+
+	htmlc->box_rebuild_pending = true;
+	if (guit->misc->schedule(delay_ms, html_box_rebuild, htmlc) != SLATEERROR_OK) {
+		htmlc->box_rebuild_pending = false;
 	}
 }
 
@@ -1363,6 +1501,10 @@ static void html_destroy(struct content *c)
 		if (cancel_dom_to_box(html->box_conversion_context) != SLATEERROR_OK) {
 			NSLOG(netsurf, CRITICAL, "WARNING, Unable to cancel conversion context, browser may crash");
 		}
+	}
+	if (html->box_rebuild_pending) {
+		guit->misc->schedule(-1, html_box_rebuild, html);
+		html->box_rebuild_pending = false;
 	}
 
 	selection_destroy(html->sel);

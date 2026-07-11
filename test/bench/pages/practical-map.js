@@ -318,6 +318,53 @@
 		return found;
 	}
 
+	function addOsmLikeControl() {
+		var wrap = document.getElementById("map-osm-control-wrap");
+		var control = document.createElement("a");
+		var label = document.createElement("span");
+
+		if (document.getElementById("map-osm-grid-control")) {
+			return;
+		}
+
+		control.id = "map-osm-grid-control";
+		control.href = "#";
+		control.title = "Zoom In";
+		control.className = "control-button control-button-first control-button-last plus-lg";
+		label.className = "visually-hidden";
+		label.appendChild(document.createTextNode("Zoom In"));
+		control.appendChild(label);
+		control.addEventListener("click", function (evt) {
+			if (evt && evt.preventDefault) {
+				evt.preventDefault();
+			}
+			console.log("map-osm-control-click");
+		}, false);
+		wrap.appendChild(control);
+
+		function measure(attempt) {
+			var rect = control.getBoundingClientRect();
+			var width = Math.round(rect.width);
+			var height = Math.round(rect.height);
+
+			console.log("map-osm-control-geometry-" + width + "x" + height);
+			if (width >= 35 && width <= 80 &&
+					height >= 35 && height <= 80) {
+				console.log("map-osm-control-visible");
+			} else if (attempt < 8) {
+				setTimeout(function () {
+					measure(attempt + 1);
+				}, 150);
+			} else {
+				console.log("map-osm-control-collapsed");
+			}
+		}
+
+		requestAnimationFrame(function () {
+			measure(0);
+		});
+	}
+
 	function setActiveControl(button) {
 		var active = document.getElementsByClassName("control-button-active");
 		var i;
@@ -500,7 +547,7 @@
 		var missing = [];
 
 		probeMapFeature("selector-descendant", supported, missing, function () {
-			return document.querySelectorAll(".leaflet-control .control-button").length === 7;
+			return document.querySelectorAll(".leaflet-control .control-button").length >= 7;
 		});
 		probeMapFeature("selector-attribute", supported, missing, function () {
 			return document.querySelectorAll("button[data-action]").length === 7 &&
@@ -816,6 +863,7 @@
 	}
 	console.log("map-controls-bound-" + controls.length);
 
+	setTimeout(addOsmLikeControl, 1000);
 	document.getElementById("map-search-button").addEventListener("click", updateSearch, false);
 	bindBootstrapLikeControls();
 	bindRoutingControls();

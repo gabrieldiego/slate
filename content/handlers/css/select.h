@@ -53,6 +53,8 @@ css_computed_style *nscss_get_blank_style(nscss_select_ctx *ctx,
 		const css_unit_ctx *unit_len_ctx,
 		const css_computed_style *parent);
 
+void nscss_clear_libcss_node_data(dom_node *root);
+
 
 css_error named_ancestor_node(void *pw, void *node,
 		const css_qname *qname, void **ancestor);

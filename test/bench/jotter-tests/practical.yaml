@@ -299,6 +299,9 @@ steps:
   substring: map-controls-bound-7
 - action: wait-log
   window: win1
+  substring: map-osm-control-visible
+- action: wait-log
+  window: win1
   substring: map-route-modes-3
 - action: wait-log
   window: win1

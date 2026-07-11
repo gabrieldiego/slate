@@ -682,8 +682,13 @@ get_mouse_action_node(html_content *html,
 
 	/* initialise the mouse action state data */
 	memset(man, 0, sizeof(struct mouse_action_state));
-	man->node = html->layout->node; /* Default dom node to the <HTML> */
 	man->result.pointer = BROWSER_POINTER_DEFAULT;
+
+	if (html->layout == NULL) {
+		return SLATEERROR_OK;
+	}
+
+	man->node = html->layout->node; /* Default dom node to the <HTML> */
 
 	/* search the box tree for a link, imagemap, form control, or
 	 * box with scrollbars
@@ -1708,6 +1713,10 @@ html_mouse_action(struct content *c,
 	html_content *html = (html_content *)c;
 	slateerror res = SLATEERROR_OK;
 	bool dom_handled = false;
+
+	if (html->layout == NULL) {
+		return SLATEERROR_OK;
+	}
 
 	/* handle open select menu */
 	if (html->visible_select_menu != NULL) {

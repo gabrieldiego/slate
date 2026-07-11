@@ -17,6 +17,8 @@
  */
 
 #include <assert.h>
+#include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 
@@ -90,6 +92,11 @@ static css_error set_libcss_node_data(void *pw, void *node,
 		void *libcss_node_data);
 static css_error get_libcss_node_data(void *pw, void *node,
 		void **libcss_node_data);
+
+static bool nscss_class_space(char c)
+{
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f';
+}
 
 /**
  * Selection callback table for libcss
@@ -411,14 +418,82 @@ css_error node_classes(void *pw, void *node,
 		lwc_string ***classes, uint32_t *n_classes)
 {
 	dom_node *n = node;
+	dom_string *class_attr = NULL;
+	const char *data;
+	const char *end;
+	const char *pos;
+	lwc_string **out;
+	uint32_t count = 0;
+	uint32_t idx = 0;
 	dom_exception err;
 
 	*classes = NULL;
 	*n_classes = 0;
 
-	err = dom_element_get_classes(n, classes, n_classes);
-	if (err != DOM_NO_ERR)
+	err = dom_element_get_attribute(n, corestring_dom_class, &class_attr);
+	if ((err != DOM_NO_ERR) || (class_attr == NULL)) {
+		return CSS_OK;
+	}
+
+	data = (const char *)dom_string_data(class_attr);
+	end = data + dom_string_byte_length(class_attr);
+
+	for (pos = data; pos < end; ) {
+		while (pos < end && nscss_class_space(*pos)) {
+			pos++;
+		}
+		if (pos < end) {
+			count++;
+			while (pos < end && !nscss_class_space(*pos)) {
+				pos++;
+			}
+		}
+	}
+
+	if (count == 0) {
+		dom_string_unref(class_attr);
+		return CSS_OK;
+	}
+
+	out = malloc(sizeof(*out) * count);
+	if (out == NULL) {
+		dom_string_unref(class_attr);
 		return CSS_NOMEM;
+	}
+
+	for (pos = data; pos < end; ) {
+		const char *start;
+		size_t len;
+
+		while (pos < end && nscss_class_space(*pos)) {
+			pos++;
+		}
+
+		start = pos;
+		while (pos < end && !nscss_class_space(*pos)) {
+			pos++;
+		}
+
+		len = (size_t)(pos - start);
+		if (len == 0) {
+			continue;
+		}
+
+		if (lwc_intern_string(start, len, &out[idx]) != lwc_error_ok) {
+			while (idx > 0) {
+				lwc_string_unref(out[--idx]);
+			}
+			free(out);
+			dom_string_unref(class_attr);
+			return CSS_NOMEM;
+		}
+		idx++;
+	}
+
+	dom_string_unref(class_attr);
+
+	*classes = out;
+	*n_classes = idx;
 
 	return CSS_OK;
 }
@@ -754,13 +829,64 @@ css_error node_has_class(void *pw, void *node,
 		lwc_string *name, bool *match)
 {
 	dom_node *n = node;
+	dom_document *doc = NULL;
+	dom_string *classes = NULL;
 	dom_exception err;
+	dom_document_quirks_mode quirks_mode = DOM_DOCUMENT_QUIRKS_MODE_NONE;
+	const char *class_data;
+	const char *class_end;
+	const char *class_pos;
+	const char *name_data = lwc_string_data(name);
+	size_t name_len = lwc_string_length(name);
+	bool caseless = false;
 
-	/** \todo: Ensure that libdom performs case-insensitive
-	 * matching in quirks mode */
-	err = dom_element_has_class(n, name, match);
+	*match = false;
 
-	assert(err == DOM_NO_ERR);
+	err = dom_element_get_attribute(n, corestring_dom_class, &classes);
+	if ((err != DOM_NO_ERR) || (classes == NULL)) {
+		return CSS_OK;
+	}
+
+	err = dom_node_get_owner_document(n, &doc);
+	if ((err == DOM_NO_ERR) && (doc != NULL)) {
+		if (dom_document_get_quirks_mode(doc, &quirks_mode) ==
+				DOM_NO_ERR) {
+			caseless = quirks_mode != DOM_DOCUMENT_QUIRKS_MODE_NONE;
+		}
+		dom_node_unref(doc);
+	}
+
+	class_data = (const char *)dom_string_data(classes);
+	class_end = class_data + dom_string_byte_length(classes);
+	class_pos = class_data;
+
+	while (class_pos < class_end) {
+		const char *start;
+		size_t token_len;
+
+		while (class_pos < class_end &&
+				nscss_class_space(*class_pos)) {
+			class_pos++;
+		}
+
+		start = class_pos;
+		while (class_pos < class_end &&
+				!nscss_class_space(*class_pos)) {
+			class_pos++;
+		}
+
+		token_len = (size_t)(class_pos - start);
+		if (token_len == name_len &&
+				((caseless && strncasecmp(start, name_data,
+						name_len) == 0) ||
+				 (!caseless && strncmp(start, name_data,
+						name_len) == 0))) {
+			*match = true;
+			break;
+		}
+	}
+
+	dom_string_unref(classes);
 
 	return CSS_OK;
 }
@@ -1763,4 +1889,44 @@ css_error get_libcss_node_data(void *pw, void *node, void **libcss_node_data)
 	}
 
 	return CSS_OK;
+}
+
+void nscss_clear_libcss_node_data(dom_node *root)
+{
+	dom_node *child = NULL;
+	dom_node *next = NULL;
+	void *node_data = NULL;
+	void *old_node_data = NULL;
+
+	if (root == NULL) {
+		return;
+	}
+
+	if (dom_node_get_user_data(root,
+			corestring_dom___ns_key_libcss_node_data,
+			&node_data) == DOM_NO_ERR && node_data != NULL) {
+		css_error error;
+
+		error = css_libcss_node_data_handler(&selection_handler,
+				CSS_NODE_DELETED, NULL, root, NULL, node_data);
+		if (error != CSS_OK) {
+			NSLOG(netsurf, INFO,
+			      "Failed to clear libcss_node_data.");
+		}
+
+		(void)dom_node_set_user_data(root,
+				corestring_dom___ns_key_libcss_node_data,
+				NULL, NULL, &old_node_data);
+	}
+
+	if (dom_node_get_first_child(root, &child) != DOM_NO_ERR) {
+		return;
+	}
+
+	while (child != NULL) {
+		(void)dom_node_get_next_sibling(child, &next);
+		nscss_clear_libcss_node_data(child);
+		dom_node_unref(child);
+		child = next;
+	}
 }
