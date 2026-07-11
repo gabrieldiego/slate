@@ -598,6 +598,31 @@ def run_test_step_action_plot_check(ctx, step):
             raise AssertionError("Unknown check: {}".format(repr(check)))
 
 
+def run_test_step_action_dump_plot(ctx, step):
+    print(get_indent(ctx) + "Action: " + step["action"])
+    assert_browser(ctx)
+    win = ctx['windows'][step['window']]
+
+    area = get_redraw_area(step)
+    kind = step.get('kind')
+    limit = int(step.get('limit', 0))
+    total = 0
+    printed = 0
+
+    for plot in win.redraw(coords=area):
+        total += 1
+        if kind is not None and plot[0] != kind:
+            continue
+
+        print(get_indent(ctx) + "        " + " ".join(plot))
+        printed += 1
+        if limit > 0 and printed >= limit:
+            break
+
+    print(get_indent(ctx) +
+          "        Dumped {} of {} plot commands".format(printed, total))
+
+
 def run_test_step_action_timer_start(ctx, step):
 
     # pylint: disable=locally-disabled, invalid-name
@@ -784,6 +809,7 @@ STEP_HANDLERS = {
     "timer-stop":    run_test_step_action_timer_stop,
     "timer-check":   run_test_step_action_timer_check,
     "plot-check":    run_test_step_action_plot_check,
+    "dump-plot":     run_test_step_action_dump_plot,
     "click":         run_test_step_action_click,
     "keypress":      run_test_step_action_keypress,
     "key":           run_test_step_action_keypress,
