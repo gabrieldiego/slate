@@ -836,6 +836,77 @@ DOMSettableTokenList.prototype.toString = DOMTokenList.prototype.toString;
         return controller.signal;
       });
     }
+    if (!window.IntersectionObserver) {
+      (function () {
+        function thresholdList(threshold) {
+          if (Array.isArray(threshold)) {
+            return threshold.slice();
+          }
+          if (threshold == null) {
+            return [0];
+          }
+          return [Number(threshold) || 0];
+        }
+
+        function visibleEntry(target) {
+          var rect = target && target.getBoundingClientRect ?
+              target.getBoundingClientRect() : {};
+
+          return {
+            time: Date.now(),
+            target: target,
+            rootBounds: null,
+            boundingClientRect: rect,
+            intersectionRect: rect,
+            isIntersecting: true,
+            intersectionRatio: 1
+          };
+        }
+
+        function IntersectionObserverPolyfill(callback, options) {
+          if (typeof callback !== "function") {
+            throw new TypeError("IntersectionObserver callback must be a function");
+          }
+          options = options || {};
+          this.root = options.root || null;
+          this.rootMargin = options.rootMargin || "0px";
+          this.thresholds = thresholdList(options.threshold);
+          this._callback = callback;
+          this._observed = [];
+        }
+
+        IntersectionObserverPolyfill.prototype.observe = function (target) {
+          var self = this;
+
+          if (this._observed.indexOf(target) < 0) {
+            this._observed.push(target);
+          }
+          setTimeout(function () {
+            if (self._observed.indexOf(target) >= 0) {
+              self._callback([visibleEntry(target)], self);
+            }
+          }, 0);
+        };
+
+        IntersectionObserverPolyfill.prototype.unobserve = function (target) {
+          var index = this._observed.indexOf(target);
+
+          if (index >= 0) {
+            this._observed.splice(index, 1);
+          }
+        };
+
+        IntersectionObserverPolyfill.prototype.disconnect = function () {
+          this._observed = [];
+        };
+
+        IntersectionObserverPolyfill.prototype.takeRecords = function () {
+          return [];
+        };
+
+        own(window, "IntersectionObserver", IntersectionObserverPolyfill);
+      }());
+    }
     if (!window.requestAnimationFrame) {
       window.requestAnimationFrame = function (callback) {
         return setTimeout(function () {
