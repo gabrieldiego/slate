@@ -182,6 +182,7 @@ interface Node : EventTarget {
   readonly attribute Node? parentNode;
   readonly attribute Element? parentElement;
   readonly attribute boolean isConnected;
+  Node getRootNode();
   boolean hasChildNodes();
   [SameObject] readonly attribute NodeList childNodes;
   readonly attribute Node? firstChild;

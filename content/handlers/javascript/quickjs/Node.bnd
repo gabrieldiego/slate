@@ -132,6 +132,33 @@ getter Node::isConnected()
 	return 1;
 %}
 
+method Node::getRootNode()
+%{
+	dom_node *node = dom_node_ref(priv->node);
+
+	while (node != NULL) {
+		dom_node *parent = NULL;
+		dom_exception exc;
+
+		exc = dom_node_get_parent_node(node, &parent);
+		if (exc != DOM_NO_ERR) {
+			dom_node_unref(node);
+			return 0;
+		}
+		if (parent == NULL) {
+			slatejs_bind_push_node(ctx, node);
+			dom_node_unref(node);
+			return 1;
+		}
+
+		dom_node_unref(node);
+		node = parent;
+	}
+
+	slatejs_push_null(ctx);
+	return 1;
+%}
+
 method Node::hasChildNodes()
 %{
 	dom_exception exc;

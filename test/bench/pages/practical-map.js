@@ -574,6 +574,16 @@
 				detached.isConnected === false &&
 				child.isConnected === false;
 		});
+		probeMapFeature("node-get-root", supported, missing, function () {
+			var detached = document.createElement("div");
+			var child = document.createElement("span");
+
+			detached.appendChild(child);
+			return map.getRootNode().nodeType === 9 &&
+				child.getRootNode().nodeType === 1 &&
+				child.getRootNode().nodeName === "DIV" &&
+				detached.getRootNode().nodeName === "DIV";
+		});
 		probeMapFeature("replace-children", supported, missing, function () {
 			var holder = document.createElement("button");
 			var old = document.createElement("span");
