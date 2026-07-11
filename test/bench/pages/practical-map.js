@@ -526,6 +526,13 @@
 		probeMapFeature("document-has-focus", supported, missing, function () {
 			return document.hasFocus() === true;
 		});
+		probeMapFeature("document-metadata", supported, missing, function () {
+			return document.URL.indexOf("practical-map.html") >= 0 &&
+				document.documentURI === document.URL &&
+				document.contentType === "text/html" &&
+				document.characterSet.length > 0 &&
+				document.inputEncoding === document.characterSet;
+		});
 		probeMapFeature("navigator-runtime-hints", supported, missing, function () {
 			return navigator.onLine === true &&
 				navigator.language === "en-US" &&

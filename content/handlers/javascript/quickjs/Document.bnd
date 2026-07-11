@@ -15,6 +15,7 @@ prologue Document()
 
 #include "utils/corestrings.h"
 #include "utils/libdom.h"
+#include "utils/slateurl.h"
 #include "utils/utils.h"
 #include "slate/content_type.h"
 #include "content/hlcache.h"
@@ -23,6 +24,21 @@ prologue Document()
 #include "javascript/quickjs/simple-selectors.h"
 
 #define HANDLER_MAGIC MAGIC(HANDLER_MAP)
+
+static struct html_content *slate_document_get_html_content(dom_node *node)
+{
+	struct html_content *htmlc = NULL;
+	dom_exception err;
+
+	err = dom_node_get_user_data(node,
+			corestring_dom___ns_key_html_content_data,
+			&htmlc);
+	if (err != DOM_NO_ERR) {
+		return NULL;
+	}
+
+	return htmlc;
+}
 %}
 
 
@@ -384,6 +400,66 @@ getter Document::visibilityState()
 method Document::hasFocus()
 %{
 	slatejs_push_boolean(ctx, true);
+	return 1;
+%}
+
+getter Document::URL()
+%{
+	struct html_content *htmlc =
+			slate_document_get_html_content(priv->parent.node);
+	struct slateurl *url = htmlc == NULL ? NULL : content_get_url(&htmlc->base);
+
+	slatejs_push_string(ctx, url == NULL ? "about:blank" : slateurl_access(url));
+	return 1;
+%}
+
+getter Document::documentURI()
+%{
+	struct html_content *htmlc =
+			slate_document_get_html_content(priv->parent.node);
+	struct slateurl *url = htmlc == NULL ? NULL : content_get_url(&htmlc->base);
+
+	slatejs_push_string(ctx, url == NULL ? "about:blank" : slateurl_access(url));
+	return 1;
+%}
+
+getter Document::characterSet()
+%{
+	struct html_content *htmlc =
+			slate_document_get_html_content(priv->parent.node);
+	const char *encoding = htmlc == NULL ? NULL :
+			content__get_encoding(&htmlc->base, CONTENT_ENCODING_NORMAL);
+
+	slatejs_push_string(ctx, encoding == NULL ? "UTF-8" : encoding);
+	return 1;
+%}
+
+getter Document::inputEncoding()
+%{
+	struct html_content *htmlc =
+			slate_document_get_html_content(priv->parent.node);
+	const char *encoding = htmlc == NULL ? NULL :
+			content__get_encoding(&htmlc->base, CONTENT_ENCODING_NORMAL);
+
+	slatejs_push_string(ctx, encoding == NULL ? "UTF-8" : encoding);
+	return 1;
+%}
+
+getter Document::contentType()
+%{
+	struct html_content *htmlc =
+			slate_document_get_html_content(priv->parent.node);
+	lwc_string *mime_type = htmlc == NULL ? NULL :
+			content__get_mime_type(&htmlc->base);
+
+	if (mime_type == NULL) {
+		slatejs_push_string(ctx, "text/html");
+		return 1;
+	}
+
+	slatejs_push_lstring(ctx, lwc_string_data(mime_type),
+			lwc_string_length(mime_type));
+	lwc_string_unref(mime_type);
 	return 1;
 %}
 
