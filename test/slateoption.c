@@ -222,7 +222,7 @@ struct format_test_vec_s format_test_vec[] = {
 	},
 	{
 		SLATEOPTION_enable_javascript,
-		"<tr><th>enable_javascript</th><td>boolean</td><td>user</td><td>true</td></tr>",
+		"<tr><th>enable_javascript</th><td>boolean</td><td>default</td><td>true</td></tr>",
 		"enable_javascript:1"
 	},
 	{

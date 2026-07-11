@@ -6,7 +6,6 @@ font_cursive:Serif
 font_fantasy:Serif
 accept_language:en
 disc_cache_size:42
-enable_javascript:1
 ca_path:/etc/ssl/certs
 cookie_file:/home/vince/.slate/Cookies
 cookie_jar:/home/vince/.slate/Cookies
