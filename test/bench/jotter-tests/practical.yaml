@@ -538,6 +538,15 @@ steps:
   window: win3
   area: extent
   target:
+    text: Related target probe
+- action: wait-log
+  window: win3
+  substring: advanced-click-relatedTarget-none
+  timeout: 2000
+- action: click
+  window: win3
+  area: extent
+  target:
     text: editable bench value
 - action: keypress
   window: win3
@@ -598,24 +607,15 @@ steps:
   target:
     text: Overflow item 01
   dy: 160
-- action: mouse-click
+- action: select-text
   window: win3
   area: extent
-  target:
+  start:
     text: Selection start text
-  state: press_1
-- action: mouse-track
-  window: win3
-  area: extent
-  target:
+  end:
     text: Selection end text
-  state: drag_1
-- action: mouse-track
-  window: win3
-  area: extent
-  target:
-    text: Selection end text
-  state: hover
+- action: sleep-ms
+  time: 50
 - action: keypress
   window: win3
   key: COPY_SELECTION

@@ -80,6 +80,8 @@ esac
 # shellcheck source=/dev/null
 source "${ROOT}/scripts/local-env.sh" >/dev/null || exit 1
 
+export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
+
 CMD=("${ROOT}/test/jotter_driver.py" -m "${JOTTER}" -t "${PLAN}")
 if [ "${#WRAPPER_ARGS[@]}" -gt 0 ]; then
 	CMD+=(-w "${WRAPPER_ARGS[*]}")

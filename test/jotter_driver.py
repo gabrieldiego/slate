@@ -450,6 +450,24 @@ def find_window_target(ctx, win, step, action_name):
     return x, y
 
 
+def find_window_point(ctx, win, step, key, action_name):
+    point = step.get(key)
+    assert point is not None, "{} requires {}".format(action_name, key)
+
+    point_step = {}
+    if 'area' in step:
+        point_step['area'] = step['area']
+
+    if isinstance(point, dict) and 'x' in point and 'y' in point:
+        point_step['x'] = point['x']
+        point_step['y'] = point['y']
+    else:
+        point_step['target'] = point
+
+    return find_window_target(ctx, win, point_step,
+                              "{} {}".format(action_name, key))
+
+
 def run_test_step_action_click(ctx, step):
     print(get_indent(ctx) + "Action: " + step["action"])
     assert_browser(ctx)
@@ -498,6 +516,30 @@ def run_test_step_action_mouse_click(ctx, step):
     x, y = find_window_target(ctx, win, step, "Mouse click")
     print(get_indent(ctx) + "        Mouse click at {}, {} (state={})".format(x, y, state))
     win.mouse_click(x, y, state=state)
+
+
+def run_test_step_action_select_text(ctx, step):
+    print(get_indent(ctx) + "Action: " + step["action"])
+    assert_browser(ctx)
+    win = ctx['windows'][step['window']]
+
+    start_x, start_y = find_window_point(ctx, win, step, 'start', "Select text")
+    end_x, end_y = find_window_point(ctx, win, step, 'end', "Select text")
+
+    press_state = step.get('press-state', 'press_1')
+    drag_start_state = step.get('drag-start-state', 'drag_1')
+    drag_state = step.get('drag-state', ['holding_1', 'drag_on'])
+    release_state = step.get('release-state', 'hover')
+
+    print(get_indent(ctx) +
+          "        Select text from {}, {} to {}, {} (press={}, drag-start={}, drag={}, release={})".format(
+              start_x, start_y, end_x, end_y,
+              press_state, drag_start_state, drag_state, release_state))
+
+    win.mouse_click(start_x, start_y, state=press_state)
+    win.mouse_click(start_x, start_y, state=drag_start_state)
+    win.mouse_track(end_x, end_y, state=drag_state)
+    win.mouse_track(end_x, end_y, state=release_state)
 
 
 def run_test_step_action_scroll(ctx, step):
@@ -711,6 +753,7 @@ STEP_HANDLERS = {
     "mouse":         run_test_step_action_mouse,
     "mouse-track":   run_test_step_action_mouse,
     "mouse-click":   run_test_step_action_mouse_click,
+    "select-text":   run_test_step_action_select_text,
     "scroll":        run_test_step_action_scroll,
     "wait-loading":  run_test_step_action_wait_loading,
     "add-auth":      run_test_step_action_add_auth,

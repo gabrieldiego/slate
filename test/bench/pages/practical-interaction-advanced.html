@@ -97,6 +97,7 @@ textarea {
 </map>
 </p>
 <p id="mapped-result" class="status">Mapped logo destination for Practical Bench interactions.</p>
+<p><button type="button" id="related-target-probe">Related target probe</button></p>
 </section>
 
 <section class="panel">
@@ -138,6 +139,42 @@ textarea {
 </section>
 </div>
 </main>
+<script>
+(function () {
+	var box = document.querySelector(".selection-copy");
+	var relatedTargetProbe = document.getElementById("related-target-probe");
+	var seen = {};
+
+	function nodeName(node) {
+		return node && node.nodeName ? node.nodeName : "none";
+	}
+
+	function logSelectionEvent(event) {
+		var key = event.type;
+		if (seen[key]) {
+			return;
+		}
+		seen[key] = true;
+		console.log("advanced-selection-" + event.type + "-" +
+				nodeName(event.target) + "-" +
+				nodeName(event.currentTarget) + "-" +
+				nodeName(event.relatedTarget));
+	}
+
+	if (box && box.addEventListener) {
+		box.addEventListener("mousedown", logSelectionEvent, false);
+		box.addEventListener("mousemove", logSelectionEvent, false);
+		box.addEventListener("mouseup", logSelectionEvent, false);
+	}
+
+	if (relatedTargetProbe && relatedTargetProbe.addEventListener) {
+		relatedTargetProbe.addEventListener("click", function (event) {
+			console.log("advanced-click-relatedTarget-" +
+					nodeName(event.relatedTarget));
+		}, false);
+	}
+}());
+</script>
 <script src="practical-common.js"></script>
 </body>
 </html>

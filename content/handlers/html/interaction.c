@@ -1181,8 +1181,8 @@ label_mouse_action(html_content *html,
 		mas->gadget = label_mas.gadget;
 	}
 
-	fire_generic_dom_event(corestring_dom_click, (dom_node *)target,
-			true, true);
+	fire_dom_mouse_event(corestring_dom_click, (dom_node *)target,
+			true, true, x, y, mouse);
 	*handled = true;
 
 out:
@@ -1630,7 +1630,8 @@ mouse_action_drag_none(html_content *html,
 
 	/* fire dom click event */
 	if (mouse & BROWSER_MOUSE_CLICK_1) {
-		fire_generic_dom_event(corestring_dom_click, mas.node, true, true);
+		fire_dom_mouse_event(corestring_dom_click, mas.node, true, true,
+				x, y, mouse);
 	}
 
 	/* deferred actions that can cause this browser_window to be destroyed
