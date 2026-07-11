@@ -574,6 +574,21 @@
 				detached.isConnected === false &&
 				child.isConnected === false;
 		});
+		probeMapFeature("replace-children", supported, missing, function () {
+			var holder = document.createElement("button");
+			var old = document.createElement("span");
+			var icon = document.createElement("i");
+
+			old.appendChild(document.createTextNode("Old"));
+			icon.className = "maplibregl-ctrl-icon fs-5";
+			holder.appendChild(old);
+			holder.replaceChildren("Layer ", icon);
+
+			return holder.childNodes.length === 2 &&
+				holder.firstChild.nodeValue === "Layer " &&
+				holder.firstElementChild.className === "maplibregl-ctrl-icon fs-5" &&
+				old.parentNode === null;
+		});
 		probeMapFeature("document-title", supported, missing, function () {
 			var original = document.title;
 			var updated = original + " Updated";

@@ -941,6 +941,40 @@ method Element::append()
 	return 0;
 %}
 
+method Element::replaceChildren()
+%{
+	dom_document *doc = NULL;
+	dom_node *child = NULL;
+	dom_exception exc;
+
+	exc = dom_node_get_owner_document(priv->parent.node, &doc);
+	if (exc != DOM_NO_ERR || doc == NULL) return 0;
+
+	exc = dom_node_get_first_child(priv->parent.node, &child);
+	while (exc == DOM_NO_ERR && child != NULL) {
+		dom_node *spare = NULL;
+
+		exc = dom_node_remove_child(priv->parent.node, child, &spare);
+		dom_node_unref(child);
+		child = NULL;
+		if (spare != NULL) {
+			dom_node_unref(spare);
+		}
+		if (exc == DOM_NO_ERR) {
+			exc = dom_node_get_first_child(priv->parent.node, &child);
+		}
+	}
+	if (child != NULL) {
+		dom_node_unref(child);
+	}
+	if (exc == DOM_NO_ERR) {
+		exc = element_insert_args(ctx, priv->parent.node, doc, NULL);
+	}
+	dom_node_unref(doc);
+	if (exc != DOM_NO_ERR) return 0;
+	return 0;
+%}
+
 method Element::prepend()
 %{
 	dom_document *doc = NULL;
