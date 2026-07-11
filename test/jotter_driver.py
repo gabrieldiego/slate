@@ -701,6 +701,43 @@ def run_test_step_action_wait_log(ctx, step):
                      substr=substr, timeout=timeout)
 
 
+def run_test_step_action_dump_log(ctx, step):
+    print(get_indent(ctx) + "Action: " + step["action"])
+    assert_browser(ctx)
+    tag = step['window']
+    source = step.get('source')
+    foldable = step.get('foldable')
+    level = step.get('level')
+    substr = step.get('substring')
+    limit = int(step.get('limit', 0))
+    printed = 0
+
+    win = ctx['windows'].get(tag)
+    assert win is not None
+
+    for source_, foldable_, level_, msg_ in win.log_entries:
+        ok = True
+        if (source is not None) and (source != source_):
+            ok = False
+        if (foldable is not None) and (foldable != foldable_):
+            ok = False
+        if (level is not None) and (level != level_):
+            ok = False
+        if (substr is not None) and (substr not in msg_):
+            ok = False
+        if not ok:
+            continue
+
+        print(get_indent(ctx) +
+              "        {} {} {} {}".format(source_, foldable_, level_, msg_))
+        printed += 1
+        if limit > 0 and printed >= limit:
+            break
+
+    print(get_indent(ctx) + "        " + tag +
+          " Dumped {} log entries".format(printed))
+
+
 def run_test_step_action_js_exec(ctx, step):
     print(get_indent(ctx) + "Action: " + step["action"])
     assert_browser(ctx)
@@ -760,6 +797,7 @@ STEP_HANDLERS = {
     "remove-auth":   run_test_step_action_remove_auth,
     "clear-log":     run_test_step_action_clear_log,
     "wait-log":      run_test_step_action_wait_log,
+    "dump-log":      run_test_step_action_dump_log,
     "js-exec":       run_test_step_action_js_exec,
     "page-info-state":
                      run_test_step_action_page_info_state,
