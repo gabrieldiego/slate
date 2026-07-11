@@ -520,6 +520,9 @@
 			return document.hidden === false &&
 				document.visibilityState === "visible";
 		});
+		probeMapFeature("document-active-element", supported, missing, function () {
+			return document.activeElement === document.body;
+		});
 		probeMapFeature("abort-controller", supported, missing, function () {
 			var controller = new AbortController();
 			controller.abort();

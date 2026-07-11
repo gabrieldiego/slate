@@ -322,6 +322,33 @@ getter Document::visibilityState()
 	return 1;
 %}
 
+getter Document::activeElement()
+%{
+	struct dom_nodelist *nodes;
+	struct dom_node *retnode;
+	dom_exception err;
+
+	err = dom_document_get_elements_by_tag_name(priv->parent.node,
+						    corestring_dom_BODY,
+						    &nodes);
+	if (err != DOM_NO_ERR) {
+		slatejs_push_null(ctx);
+		return 1;
+	}
+
+	err = dom_nodelist_item(nodes, 0, &retnode);
+	dom_nodelist_unref(nodes);
+	if (err != DOM_NO_ERR || retnode == NULL) {
+		slatejs_push_null(ctx);
+		return 1;
+	}
+
+	slatejs_bind_push_node(ctx, retnode);
+	dom_node_unref(retnode);
+
+	return 1;
+%}
+
 
 method Document::getElementById()
 %{

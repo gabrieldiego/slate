@@ -305,7 +305,7 @@ steps:
   substring: map-feature-supported selector-descendant,selector-attribute
 - action: wait-log
   window: win1
-  substring: event-dispatch,document-visibility
+  substring: event-dispatch,document-visibility,document-active-element
 - action: wait-log
   window: win1
   substring: map-feature-gaps
