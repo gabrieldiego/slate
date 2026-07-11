@@ -589,6 +589,37 @@
 				holder.firstElementChild.className === "maplibregl-ctrl-icon fs-5" &&
 				old.parentNode === null;
 		});
+		probeMapFeature("form-submit-methods", supported, missing, function () {
+			var form = document.createElement("form");
+			var submitSeen = false;
+			var resetSeen = false;
+			var requestResult;
+			var submitResult;
+			var resetResult;
+
+			form.addEventListener("submit", function (event) {
+				submitSeen = event.bubbles === true &&
+					event.cancelable === true;
+				event.preventDefault();
+			}, false);
+			form.addEventListener("reset", function (event) {
+				resetSeen = event.bubbles === true &&
+					event.cancelable === true;
+				event.preventDefault();
+			}, false);
+
+			requestResult = form.requestSubmit();
+			submitResult = form.submit();
+			resetResult = form.reset();
+
+			return submitSeen &&
+				resetSeen &&
+				form.checkValidity() === true &&
+				form.reportValidity() === true &&
+				requestResult === undefined &&
+				submitResult === undefined &&
+				resetResult === undefined;
+		});
 		probeMapFeature("document-title", supported, missing, function () {
 			var original = document.title;
 			var updated = original + " Updated";

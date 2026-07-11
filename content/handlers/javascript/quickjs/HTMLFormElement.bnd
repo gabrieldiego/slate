@@ -24,3 +24,86 @@ setter HTMLFormElement::method();
 
 getter HTMLFormElement::target();
 setter HTMLFormElement::target();
+
+method HTMLFormElement::submit()
+%{
+	return 0;
+%}
+
+method HTMLFormElement::requestSubmit()
+%{
+	dom_string *type = NULL;
+	dom_event *evt = NULL;
+	dom_exception exc;
+	bool success;
+
+	exc = dom_string_create((const uint8_t *)"submit", 6, &type);
+	if (exc != DOM_NO_ERR) {
+		return 0;
+	}
+
+	exc = dom_event_create(&evt);
+	if (exc == DOM_NO_ERR) {
+		exc = dom_event_init(evt, type, true, true);
+	}
+	dom_string_unref(type);
+	if (exc != DOM_NO_ERR) {
+		if (evt != NULL) {
+			dom_event_unref(evt);
+		}
+		return 0;
+	}
+
+	exc = dom_event_target_dispatch_event(
+			((node_private_t *)priv)->node, evt, &success);
+	dom_event_unref(evt);
+	if (exc != DOM_NO_ERR) {
+		return 0;
+	}
+	return 0;
+%}
+
+method HTMLFormElement::reset()
+%{
+	dom_string *type = NULL;
+	dom_event *evt = NULL;
+	dom_exception exc;
+	bool success;
+
+	exc = dom_string_create((const uint8_t *)"reset", 5, &type);
+	if (exc != DOM_NO_ERR) {
+		return 0;
+	}
+
+	exc = dom_event_create(&evt);
+	if (exc == DOM_NO_ERR) {
+		exc = dom_event_init(evt, type, true, true);
+	}
+	dom_string_unref(type);
+	if (exc != DOM_NO_ERR) {
+		if (evt != NULL) {
+			dom_event_unref(evt);
+		}
+		return 0;
+	}
+
+	exc = dom_event_target_dispatch_event(
+			((node_private_t *)priv)->node, evt, &success);
+	dom_event_unref(evt);
+	if (exc != DOM_NO_ERR) {
+		return 0;
+	}
+	return 0;
+%}
+
+method HTMLFormElement::checkValidity()
+%{
+	slatejs_push_boolean(ctx, true);
+	return 1;
+%}
+
+method HTMLFormElement::reportValidity()
+%{
+	slatejs_push_boolean(ctx, true);
+	return 1;
+%}
