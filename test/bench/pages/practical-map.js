@@ -548,6 +548,15 @@
 		probeMapFeature("document-current-script", supported, missing, function () {
 			return document.currentScript === null;
 		});
+		probeMapFeature("document-title", supported, missing, function () {
+			var original = document.title;
+			var updated = original + " Updated";
+			document.title = updated;
+			var ok = original.indexOf("Slippy Map") >= 0 &&
+				document.title === updated;
+			document.title = original;
+			return ok && document.title === original;
+		});
 		probeMapFeature("window-scroll-api", supported, missing, function () {
 			var scrollToResult = window.scrollTo(0, 0);
 			var scrollByResult = window.scrollBy(0, 0);

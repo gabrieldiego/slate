@@ -381,6 +381,48 @@ getter Document::visibilityState()
 	return 1;
 %}
 
+getter Document::title()
+%{
+	dom_exception err;
+	dom_string *title = NULL;
+
+	err = dom_html_document_get_title((dom_html_document *)priv->parent.node,
+			&title);
+	if (err != DOM_NO_ERR || title == NULL) {
+		slatejs_push_lstring(ctx, "", 0);
+		return 1;
+	}
+
+	slatejs_push_lstring(ctx, dom_string_data(title),
+			dom_string_length(title));
+	dom_string_unref(title);
+
+	return 1;
+%}
+
+setter Document::title()
+%{
+	dom_exception err;
+	dom_string *title;
+	slatejs_size_t title_len;
+	const char *title_data = slatejs_safe_to_lstring(ctx, 0, &title_len);
+
+	err = dom_string_create((const uint8_t *)title_data, title_len,
+			&title);
+	if (err != DOM_NO_ERR) {
+		return 0;
+	}
+
+	err = dom_html_document_set_title((dom_html_document *)priv->parent.node,
+			title);
+	dom_string_unref(title);
+	if (err != DOM_NO_ERR) {
+		return 0;
+	}
+
+	return 0;
+%}
+
 getter Document::activeElement()
 %{
 	struct dom_nodelist *nodes;
