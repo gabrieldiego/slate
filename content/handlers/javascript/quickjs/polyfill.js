@@ -750,6 +750,76 @@ DOMSettableTokenList.prototype.toString = DOMTokenList.prototype.toString;
   }
 
   if (typeof window !== "undefined") {
+    if (!window.AbortController) {
+      (function () {
+        function AbortSignalPolyfill() {
+          this.aborted = false;
+          this.reason = undefined;
+          this.onabort = null;
+          this._abortListeners = [];
+        }
+
+        AbortSignalPolyfill.prototype.addEventListener = function (type, callback) {
+          if (type === "abort" && typeof callback === "function") {
+            this._abortListeners.push(callback);
+          }
+        };
+
+        AbortSignalPolyfill.prototype.removeEventListener = function (type, callback) {
+          var index;
+
+          if (type !== "abort") {
+            return;
+          }
+          index = this._abortListeners.indexOf(callback);
+          if (index >= 0) {
+            this._abortListeners.splice(index, 1);
+          }
+        };
+
+        AbortSignalPolyfill.prototype.dispatchEvent = function (event) {
+          var listeners = this._abortListeners.slice();
+          var i;
+
+          event = event || { type: "abort" };
+          try {
+            event.target = this;
+            event.currentTarget = this;
+          } catch (e) {
+          }
+          for (i = 0; i < listeners.length; i++) {
+            listeners[i].call(this, event);
+          }
+          if (event.type === "abort" && typeof this.onabort === "function") {
+            this.onabort.call(this, event);
+          }
+          return true;
+        };
+
+        AbortSignalPolyfill.prototype.throwIfAborted = function () {
+          if (this.aborted) {
+            throw this.reason || new Error("AbortError");
+          }
+        };
+
+        function AbortControllerPolyfill() {
+          this.signal = new AbortSignalPolyfill();
+        }
+
+        AbortControllerPolyfill.prototype.abort = function (reason) {
+          if (this.signal.aborted) {
+            return;
+          }
+          this.signal.aborted = true;
+          this.signal.reason = reason === undefined ?
+              new Error("AbortError") : reason;
+          this.signal.dispatchEvent({ type: "abort" });
+        };
+
+        own(window, "AbortSignal", AbortSignalPolyfill);
+        own(window, "AbortController", AbortControllerPolyfill);
+      }());
+    }
     if (window.AbortController && typeof window.AbortSignal === "undefined") {
       try {
         own(window, "AbortSignal", (new AbortController()).signal.constructor);
