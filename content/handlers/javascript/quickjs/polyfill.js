@@ -750,6 +750,22 @@ DOMSettableTokenList.prototype.toString = DOMTokenList.prototype.toString;
   }
 
   if (typeof window !== "undefined") {
+    if (window.AbortController && typeof window.AbortSignal === "undefined") {
+      try {
+        own(window, "AbortSignal", (new AbortController()).signal.constructor);
+      } catch (e) {
+      }
+    }
+    if (window.AbortController && window.AbortSignal &&
+        !window.AbortSignal.timeout) {
+      own(window.AbortSignal, "timeout", function (milliseconds) {
+        var controller = new AbortController();
+        setTimeout(function () {
+          controller.abort();
+        }, Math.max(0, Number(milliseconds) || 0));
+        return controller.signal;
+      });
+    }
     if (!window.requestAnimationFrame) {
       window.requestAnimationFrame = function (callback) {
         return setTimeout(function () {

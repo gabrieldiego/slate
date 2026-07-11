@@ -311,6 +311,9 @@ steps:
   substring: map-feature-gaps
 - action: wait-log
   window: win1
+  substring: abort-controller,abort-signal-timeout,intersection-observer
+- action: wait-log
+  window: win1
   substring: map-osm-tags-ready
 - action: click
   window: win1

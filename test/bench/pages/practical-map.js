@@ -628,6 +628,12 @@
 			controller.abort();
 			return controller.signal.aborted;
 		});
+		probeMapFeature("abort-signal-timeout", supported, missing, function () {
+			var signal = AbortSignal.timeout(25);
+			return signal &&
+				signal.aborted === false &&
+				typeof signal.addEventListener === "function";
+		});
 		probeMapFeature("intersection-observer", supported, missing, function () {
 			var observer = new IntersectionObserver(function () {});
 			observer.observe(map);
