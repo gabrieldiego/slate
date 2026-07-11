@@ -408,6 +408,12 @@ getter Document::activeElement()
 	return 1;
 %}
 
+getter Document::currentScript()
+%{
+	slatejs_push_null(ctx);
+	return 1;
+%}
+
 
 method Document::getElementById()
 %{

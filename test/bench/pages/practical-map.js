@@ -545,6 +545,9 @@
 				imported.firstChild.firstChild.nodeValue === "imported" &&
 				adopted.ownerDocument === document;
 		});
+		probeMapFeature("document-current-script", supported, missing, function () {
+			return document.currentScript === null;
+		});
 		probeMapFeature("abort-controller", supported, missing, function () {
 			var controller = new AbortController();
 			controller.abort();
