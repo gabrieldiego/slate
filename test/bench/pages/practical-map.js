@@ -426,6 +426,30 @@
 		console.log("map-search-updated");
 	}
 
+	function updateGeoLinks() {
+		var links = document.getElementsByClassName("geolink");
+		var i;
+
+		for (i = 0; i < links.length; i++) {
+			var link = links[i];
+			var base = link.href.split(/[?#]/)[0];
+			var params = new URLSearchParams(link.search);
+			var hash = "#map=" + zoom + "/" + map.getAttribute("data-lat") +
+				"/" + map.getAttribute("data-lon");
+
+			params.delete("node");
+			params.delete("way");
+			params.delete("relation");
+			if (link.classList.contains("editlink")) {
+				params.set("editor", link.getAttribute("data-editor") || "id");
+			}
+			params.set("zoom", String(zoom));
+			link.href = base + "?" + params.toString() + hash;
+		}
+
+		console.log("map-geolinks-updated-" + links.length);
+	}
+
 	function bindMarker(id, kind) {
 		document.getElementById(id).addEventListener("click", function () {
 			setText(popup, kind + " marker selected: " + this.textContent);
@@ -477,6 +501,19 @@
 				document.querySelectorAll("link[type=\"application/atom+xml\"]").length === 1 &&
 				document.querySelectorAll("[data-language-code]").length >= 3 &&
 				document.querySelectorAll("button[data-bs-target$=\"_edit\"]").length === 1;
+		});
+		probeMapFeature("anchor-urlutils", supported, missing, function () {
+			var link = document.getElementById("map-history-link");
+			var before = link.href.split(/[?#]/)[0];
+			var params = new URLSearchParams(link.search);
+
+			params.set("probe", "1");
+			link.href = before + "?" + params.toString() + "#probe";
+
+			return typeof link.href === "string" &&
+				link.href.indexOf("/history") >= 0 &&
+				link.search.indexOf("probe=1") >= 0 &&
+				link.hash === "#probe";
 		});
 		probeMapFeature("osm-modal-dropdown-tags", supported, missing, function () {
 			return countElementsWithAttribute("button", "data-bs-toggle", "modal") === 1 &&
@@ -775,6 +812,7 @@
 	bindLayer("layer-alerts", "Alerts", "Alert");
 	addControlIcon();
 	updateSearch();
+	updateGeoLinks();
 	logMapFeatureGaps();
 
 	if (mapToolsButton && mapToolsMenu && languageDialog &&

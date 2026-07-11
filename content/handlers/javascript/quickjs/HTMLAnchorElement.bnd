@@ -8,7 +8,234 @@
  *         http://www.opensource.org/licenses/mit-license
  */
 
+prologue HTMLAnchorElement()
+%{
+#include <stdlib.h>
+
+#include "utils/corestrings.h"
+#include "utils/slateurl.h"
+#include "html/private.h"
+
+static struct html_content *html_anchor_element_get_html_content(dom_node *node)
+{
+	dom_document *doc = NULL;
+	struct html_content *htmlc = NULL;
+	dom_exception exc;
+
+	exc = dom_node_get_owner_document(node, &doc);
+	if (exc != DOM_NO_ERR || doc == NULL) {
+		return NULL;
+	}
+
+	exc = dom_node_get_user_data(doc,
+			corestring_dom___ns_key_html_content_data,
+			&htmlc);
+	dom_node_unref(doc);
+	if (exc != DOM_NO_ERR) {
+		return NULL;
+	}
+
+	return htmlc;
+}
+
+static dom_exception html_anchor_element_set_href_attr(dom_node *node,
+		const char *href, slatejs_size_t href_len)
+{
+	dom_string *str = NULL;
+	dom_exception exc;
+
+	exc = dom_string_create((const uint8_t *)href, href_len, &str);
+	if (exc != DOM_NO_ERR) {
+		return exc;
+	}
+
+	exc = dom_html_anchor_element_set_href(
+			(dom_html_anchor_element *)node, str);
+	dom_string_unref(str);
+	return exc;
+}
+
+static slateurl *html_anchor_element_get_url(dom_node *node)
+{
+	struct html_content *htmlc;
+	dom_string *href = NULL;
+	slateurl *url = NULL;
+	slateerror err;
+
+	if (dom_html_anchor_element_get_href(
+			(dom_html_anchor_element *)node,
+			&href) != DOM_NO_ERR || href == NULL) {
+		return NULL;
+	}
+
+	htmlc = html_anchor_element_get_html_content(node);
+	if (htmlc != NULL && htmlc->base_url != NULL) {
+		err = slateurl_join(htmlc->base_url, dom_string_data(href),
+				&url);
+	} else {
+		err = slateurl_create(dom_string_data(href), &url);
+	}
+	dom_string_unref(href);
+
+	return err == SLATEERROR_OK ? url : NULL;
+}
+
+static void html_anchor_element_push_raw_href(slatejs_context *ctx,
+		dom_node *node)
+{
+	dom_string *href = NULL;
+
+	if (dom_html_anchor_element_get_href(
+			(dom_html_anchor_element *)node,
+			&href) != DOM_NO_ERR || href == NULL) {
+		slatejs_push_lstring(ctx, "", 0);
+		return;
+	}
+
+	slatejs_push_lstring(ctx, dom_string_data(href),
+			dom_string_length(href));
+	dom_string_unref(href);
+}
+
+static void html_anchor_element_push_url_component(slatejs_context *ctx,
+		dom_node *node, slateurl_component component,
+		const char *prefix)
+{
+	slateurl *url;
+	char *value = NULL;
+	size_t value_len = 0;
+
+	url = html_anchor_element_get_url(node);
+	if (url == NULL) {
+		slatejs_push_lstring(ctx, "", 0);
+		return;
+	}
+
+	if (slateurl_get(url, component, &value, &value_len) !=
+			SLATEERROR_OK || value == NULL || value_len == 0) {
+		slateurl_unref(url);
+		slatejs_push_lstring(ctx, "", 0);
+		return;
+	}
+
+	if (prefix != NULL) {
+		slatejs_push_string(ctx, prefix);
+		slatejs_push_lstring(ctx, value, value_len);
+		slatejs_concat(ctx, 2);
+	} else {
+		slatejs_push_lstring(ctx, value, value_len);
+	}
+
+	free(value);
+	slateurl_unref(url);
+}
+%}
+
 init HTMLAnchorElement(struct dom_html_element *html_anchor_element::html_element);
+
+getter HTMLAnchorElement::href()
+%{
+	dom_node *node = ((node_private_t*)priv)->node;
+	slateurl *url = html_anchor_element_get_url(node);
+	char *value = NULL;
+	size_t value_len = 0;
+
+	if (url == NULL ||
+			slateurl_get(url, SLATEURL_WITH_FRAGMENT, &value,
+					&value_len) != SLATEERROR_OK ||
+			value == NULL) {
+		if (url != NULL) {
+			slateurl_unref(url);
+		}
+		html_anchor_element_push_raw_href(ctx, node);
+		return 1;
+	}
+
+	slatejs_push_lstring(ctx, value, value_len);
+	free(value);
+	slateurl_unref(url);
+	return 1;
+%}
+
+setter HTMLAnchorElement::href()
+%{
+	slatejs_size_t href_len;
+	const char *href = slatejs_safe_to_lstring(ctx, 0, &href_len);
+
+	(void)html_anchor_element_set_href_attr(((node_private_t*)priv)->node,
+			href, href_len);
+	return 0;
+%}
+
+getter HTMLAnchorElement::origin()
+%{
+	html_anchor_element_push_url_component(ctx, ((node_private_t*)priv)->node,
+			SLATEURL_SCHEME | SLATEURL_HOST | SLATEURL_PORT, NULL);
+	return 1;
+%}
+
+getter HTMLAnchorElement::protocol()
+%{
+	html_anchor_element_push_url_component(ctx, ((node_private_t*)priv)->node,
+			SLATEURL_SCHEME, ":");
+	return 1;
+%}
+
+getter HTMLAnchorElement::username()
+%{
+	html_anchor_element_push_url_component(ctx, ((node_private_t*)priv)->node,
+			SLATEURL_USERNAME, NULL);
+	return 1;
+%}
+
+getter HTMLAnchorElement::password()
+%{
+	html_anchor_element_push_url_component(ctx, ((node_private_t*)priv)->node,
+			SLATEURL_PASSWORD, NULL);
+	return 1;
+%}
+
+getter HTMLAnchorElement::host()
+%{
+	html_anchor_element_push_url_component(ctx, ((node_private_t*)priv)->node,
+			SLATEURL_HOST | SLATEURL_PORT, NULL);
+	return 1;
+%}
+
+getter HTMLAnchorElement::hostname()
+%{
+	html_anchor_element_push_url_component(ctx, ((node_private_t*)priv)->node,
+			SLATEURL_HOST, NULL);
+	return 1;
+%}
+
+getter HTMLAnchorElement::port()
+%{
+	html_anchor_element_push_url_component(ctx, ((node_private_t*)priv)->node,
+			SLATEURL_PORT, NULL);
+	return 1;
+%}
+
+getter HTMLAnchorElement::pathname()
+%{
+	html_anchor_element_push_url_component(ctx, ((node_private_t*)priv)->node,
+			SLATEURL_PATH, NULL);
+	return 1;
+%}
+
+getter HTMLAnchorElement::search()
+%{
+	html_anchor_element_push_url_component(ctx, ((node_private_t*)priv)->node,
+			SLATEURL_QUERY, "?");
+	return 1;
+%}
+
+getter HTMLAnchorElement::hash()
+%{
+	html_anchor_element_push_url_component(ctx, ((node_private_t*)priv)->node,
+			SLATEURL_FRAGMENT, "#");
+	return 1;
+%}
 
 getter HTMLAnchorElement::charset();
 setter HTMLAnchorElement::charset();
@@ -33,7 +260,6 @@ setter HTMLAnchorElement::shape();
 
 getter HTMLAnchorElement::target();
 setter HTMLAnchorElement::target();
-
 
 
 

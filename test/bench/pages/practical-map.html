@@ -30,6 +30,13 @@ body.map-layout {
 	margin: 0;
 	font-size: 24px;
 }
+.map-links {
+	margin-left: 12px;
+}
+.map-links a {
+	margin-right: 8px;
+	color: #305f8a;
+}
 .header-actions {
 	margin-left: auto;
 }
@@ -483,6 +490,11 @@ body.map-layout {
 </g>
 </svg>
 <h1>Practical Bench Slippy Map</h1>
+<nav class="map-links" aria-label="Map links">
+<a id="map-history-link" class="geolink" href="/history?layers=bench">History</a>
+<a id="map-export-link" class="geolink" href="/export">Export</a>
+<a id="map-edit-link" class="geolink editlink" data-editor="id" href="/edit?editor=id">Edit</a>
+</nav>
 <div class="header-actions">
 <div class="osm-like-dropdown">
 <button type="button" id="map-tools-button" class="dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">Map Tools</button>
