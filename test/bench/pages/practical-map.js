@@ -506,6 +506,14 @@
 		probeMapFeature("dataset-read", supported, missing, function () {
 			return map.dataset.zoom === "12";
 		});
+		probeMapFeature("element-tag-local-name", supported, missing, function () {
+			var section = document.createElement("section");
+
+			return document.documentElement.localName === "html" &&
+				document.documentElement.tagName === "HTML" &&
+				section.localName === "section" &&
+				section.tagName === "SECTION";
+		});
 		probeMapFeature("event-dispatch", supported, missing, function () {
 			var seen = false;
 			var evt = document.createEvent("Event");

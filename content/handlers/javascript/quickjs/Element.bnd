@@ -10,6 +10,7 @@
 
 class Element {
 prologue %{
+#include <ctype.h>
 #include <stdlib.h>
 #include <utils/corestrings.h>
 #include <dom/bindings/hubbub/parser.h>
@@ -42,6 +43,23 @@ element_get_html_content(dom_node *node)
 	}
 
 	return htmlc;
+}
+
+static bool
+element_is_html_node(dom_node *node)
+{
+	dom_string *namespace = NULL;
+	bool is_html = false;
+	dom_exception exc;
+
+	exc = dom_node_get_namespace(node, &namespace);
+	if (exc == DOM_NO_ERR && namespace != NULL) {
+		is_html = dom_string_isequal(namespace,
+				corestring_dom_html_namespace);
+		dom_string_unref(namespace);
+	}
+
+	return is_html;
 }
 
 static int
@@ -257,6 +275,68 @@ setter Element::textContent()
 	}
 
 	return 0;
+%}
+
+getter Element::localName()
+%{
+	dom_exception exc;
+	dom_string *name = NULL;
+	size_t len;
+	const char *data;
+
+	exc = dom_node_get_local_name(priv->parent.node, &name);
+	if (exc != DOM_NO_ERR) {
+		return 0;
+	}
+
+	if (name == NULL) {
+		slatejs_push_lstring(ctx, "", 0);
+		return 1;
+	}
+
+	len = dom_string_length(name);
+	data = dom_string_data(name);
+	if (element_is_html_node(priv->parent.node)) {
+		char *lower = malloc(len);
+		size_t index;
+
+		if (lower == NULL) {
+			dom_string_unref(name);
+			return 0;
+		}
+
+		for (index = 0; index < len; index++) {
+			lower[index] = (char)tolower((unsigned char)data[index]);
+		}
+		slatejs_push_lstring(ctx, lower, len);
+		free(lower);
+	} else {
+		slatejs_push_lstring(ctx, data, len);
+	}
+	dom_string_unref(name);
+	return 1;
+%}
+
+getter Element::tagName()
+%{
+	dom_exception exc;
+	dom_string *name = NULL;
+
+	exc = dom_element_get_tag_name((dom_element *)priv->parent.node,
+			&name);
+	if (exc != DOM_NO_ERR) {
+		return 0;
+	}
+
+	if (name == NULL) {
+		slatejs_push_lstring(ctx, "", 0);
+		return 1;
+	}
+
+	slatejs_push_lstring(ctx, dom_string_data(name),
+			dom_string_length(name));
+	dom_string_unref(name);
+	return 1;
 %}
 
 getter Element::style()
