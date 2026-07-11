@@ -523,6 +523,9 @@
 		probeMapFeature("document-active-element", supported, missing, function () {
 			return document.activeElement === document.body;
 		});
+		probeMapFeature("document-has-focus", supported, missing, function () {
+			return document.hasFocus() === true;
+		});
 		probeMapFeature("navigator-runtime-hints", supported, missing, function () {
 			return navigator.onLine === true &&
 				navigator.language === "en-US" &&

@@ -381,6 +381,12 @@ getter Document::visibilityState()
 	return 1;
 %}
 
+method Document::hasFocus()
+%{
+	slatejs_push_boolean(ctx, true);
+	return 1;
+%}
+
 getter Document::title()
 %{
 	dom_exception err;
