@@ -558,6 +558,22 @@
 		probeMapFeature("document-current-script", supported, missing, function () {
 			return document.currentScript === null;
 		});
+		probeMapFeature("node-is-connected", supported, missing, function () {
+			var detached = document.createElement("span");
+			var child = document.createElement("em");
+			var attached;
+
+			detached.appendChild(child);
+			map.appendChild(detached);
+			attached = map.isConnected === true &&
+				detached.isConnected === true &&
+				child.isConnected === true;
+			map.removeChild(detached);
+
+			return attached &&
+				detached.isConnected === false &&
+				child.isConnected === false;
+		});
 		probeMapFeature("document-title", supported, missing, function () {
 			var original = document.title;
 			var updated = original + " Updated";

@@ -180,6 +180,7 @@ interface Node : EventTarget {
   readonly attribute Document? ownerDocument;
   readonly attribute Node? parentNode;
   readonly attribute Element? parentElement;
+  readonly attribute boolean isConnected;
   boolean hasChildNodes();
   [SameObject] readonly attribute NodeList childNodes;
   readonly attribute Node? firstChild;

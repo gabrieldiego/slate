@@ -305,7 +305,7 @@ steps:
   substring: map-feature-supported selector-descendant,selector-attribute
 - action: wait-log
   window: win1
-  substring: event-dispatch,document-visibility,document-active-element,document-has-focus,document-metadata,navigator-runtime-hints,document-import-adopt-node,document-current-script,document-title,formdata-basic,window-scroll-api
+  substring: event-dispatch,document-visibility,document-active-element,document-has-focus,document-metadata,navigator-runtime-hints,document-import-adopt-node,document-current-script,node-is-connected,document-title,formdata-basic,window-scroll-api
 - action: wait-log
   window: win1
   substring: map-feature-gaps

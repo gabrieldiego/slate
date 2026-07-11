@@ -99,6 +99,39 @@ getter Node::parentElement()
 	return 1;
 %}
 
+getter Node::isConnected()
+%{
+	dom_node *node = dom_node_ref(priv->node);
+	bool connected = false;
+
+	while (node != NULL) {
+		dom_node_type ntype;
+		dom_node *parent = NULL;
+		dom_exception exc;
+
+		exc = dom_node_get_node_type(node, &ntype);
+		if (exc != DOM_NO_ERR) {
+			dom_node_unref(node);
+			return 0;
+		}
+		if (ntype == DOM_DOCUMENT_NODE) {
+			connected = true;
+			dom_node_unref(node);
+			break;
+		}
+
+		exc = dom_node_get_parent_node(node, &parent);
+		dom_node_unref(node);
+		if (exc != DOM_NO_ERR) {
+			return 0;
+		}
+		node = parent;
+	}
+
+	slatejs_push_boolean(ctx, connected);
+	return 1;
+%}
+
 method Node::hasChildNodes()
 %{
 	dom_exception exc;
