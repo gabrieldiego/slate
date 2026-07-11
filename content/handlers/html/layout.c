@@ -4791,6 +4791,20 @@ layout_absolute(struct box *box,
 		/** \todo inline ancestors */
 	}
 	box->width = width;
+
+	if (top != AUTO && height == AUTO && bottom != AUTO) {
+		if (margin[TOP] == AUTO)
+			margin[TOP] = 0;
+		if (margin[BOTTOM] == AUTO)
+			margin[BOTTOM] = 0;
+
+		height = containing_block->height -
+				top - margin[TOP] - border[TOP].width -
+				padding[TOP] - padding[BOTTOM] -
+				border[BOTTOM].width - margin[BOTTOM] -
+				bottom;
+	}
+
 	box->height = height;
 
 	if (box->type == BOX_BLOCK || box->type == BOX_INLINE_BLOCK ||

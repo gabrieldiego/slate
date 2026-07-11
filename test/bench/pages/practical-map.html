@@ -353,6 +353,26 @@ body.map-layout {
 .leaflet-tile-loaded {
 	visibility: inherit;
 }
+.absolute-layout-probe {
+	position: relative;
+	height: 90px;
+	margin-top: 12px;
+	border: 1px solid #8fa0ae;
+	background: #eef4f7;
+}
+.absolute-layout-fill {
+	position: absolute;
+	left: 8px;
+	right: 8px;
+	top: 12px;
+	bottom: 10px;
+	overflow: hidden;
+	background: #d6e7ef;
+}
+.absolute-layout-half {
+	height: 50%;
+	background: #7ebc6f;
+}
 .tile-grid {
 	position: absolute;
 	left: 0;
@@ -673,6 +693,11 @@ body.map-layout {
 <dt>Center</dt><dd id="map-center">0,0</dd>
 <dt>Results</dt><dd id="map-results">3 nearby places</dd>
 </dl>
+<div id="absolute-layout-probe" class="absolute-layout-probe" aria-hidden="true">
+<div id="absolute-layout-fill" class="absolute-layout-fill">
+<div id="absolute-layout-half" class="absolute-layout-half"></div>
+</div>
+</div>
 <turbo-frame id="map-results-frame" class="results-frame">
 <h2>Nearby</h2>
 <ul id="map-nearby">

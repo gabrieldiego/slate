@@ -540,6 +540,13 @@
 			var rect = map.getBoundingClientRect();
 			return typeof rect.left === "number" && typeof rect.height === "number";
 		});
+		probeMapFeature("absolute-percent-height", supported, missing, function () {
+			var fill = document.getElementById("absolute-layout-fill").getBoundingClientRect();
+			var half = document.getElementById("absolute-layout-half").getBoundingClientRect();
+
+			return fill.height >= 60 && half.height >= 30 &&
+				half.height <= fill.height;
+		});
 		probeMapFeature("dataset-read", supported, missing, function () {
 			return map.dataset.zoom === "12";
 		});

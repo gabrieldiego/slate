@@ -511,6 +511,13 @@ static inline void layout_find_dimensions(
 					containing_block->height != AUTO &&
 					(css_computed_position(box->style) ==
 							CSS_POSITION_ABSOLUTE ||
+						css_computed_position(box->style) ==
+							CSS_POSITION_FIXED ||
+						(containing_block->style != NULL &&
+						 (css_computed_position(containing_block->style) ==
+							CSS_POSITION_ABSOLUTE ||
+						  css_computed_position(containing_block->style) ==
+							CSS_POSITION_FIXED)) ||
 						cbhtype == CSS_HEIGHT_SET)) {
 					/* Box is absolutely positioned or its
 					 * containing block has a valid

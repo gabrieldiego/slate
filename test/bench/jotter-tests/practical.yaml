@@ -302,7 +302,13 @@ steps:
   substring: map-search-updated
 - action: wait-log
   window: win1
-  substring: map-feature-supported selector-descendant,selector-attribute
+  substring: map-feature-supported selector-descendant,selector-attribute,anchor-urlutils
+- action: wait-log
+  window: win1
+  substring: absolute-percent-height
+- action: wait-log
+  window: win1
+  substring: map-geolinks-updated-3
 - action: wait-log
   window: win1
   substring: disabled-attributes,computed-custom-property,geometry-rect
