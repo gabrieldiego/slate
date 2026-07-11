@@ -928,6 +928,11 @@ method Element::closest()
 			selector, len);
 %}
 
+method Element::scrollIntoView()
+%{
+	return 0;
+%}
+
 method Element::append()
 %{
 	dom_document *doc = NULL;

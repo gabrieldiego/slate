@@ -620,6 +620,9 @@
 				submitResult === undefined &&
 				resetResult === undefined;
 		});
+		probeMapFeature("scroll-into-view", supported, missing, function () {
+			return map.scrollIntoView({ block: "center", behavior: "auto" }) === undefined;
+		});
 		probeMapFeature("document-title", supported, missing, function () {
 			var original = document.title;
 			var updated = original + " Updated";

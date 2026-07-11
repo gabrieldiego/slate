@@ -316,6 +316,7 @@ interface Element : Node {
   readonly attribute long offsetWidth;
   readonly attribute long offsetHeight;
   object getBoundingClientRect();
+  void scrollIntoView();
 
   HTMLCollection getElementsByTagName(DOMString localName);
   HTMLCollection getElementsByTagNameNS(DOMString? namespace, DOMString localName);
