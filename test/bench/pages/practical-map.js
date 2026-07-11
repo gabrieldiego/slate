@@ -548,6 +548,16 @@
 		probeMapFeature("document-current-script", supported, missing, function () {
 			return document.currentScript === null;
 		});
+		probeMapFeature("window-scroll-api", supported, missing, function () {
+			var scrollToResult = window.scrollTo(0, 0);
+			var scrollByResult = window.scrollBy(0, 0);
+			return window.scrollX === 0 &&
+				window.pageXOffset === 0 &&
+				window.scrollY === 0 &&
+				window.pageYOffset === 0 &&
+				scrollToResult === undefined &&
+				scrollByResult === undefined;
+		});
 		probeMapFeature("abort-controller", supported, missing, function () {
 			var controller = new AbortController();
 			controller.abort();

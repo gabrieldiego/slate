@@ -517,6 +517,30 @@ getter Window::screen()
 	return 1;
 %}
 
+getter Window::scrollX()
+%{
+	slatejs_push_int(ctx, 0);
+	return 1;
+%}
+
+getter Window::pageXOffset()
+%{
+	slatejs_push_int(ctx, 0);
+	return 1;
+%}
+
+getter Window::scrollY()
+%{
+	slatejs_push_int(ctx, 0);
+	return 1;
+%}
+
+getter Window::pageYOffset()
+%{
+	slatejs_push_int(ctx, 0);
+	return 1;
+%}
+
 getter Window::name()
 %{
 	const char *name;
@@ -548,6 +572,16 @@ method Window::alert()
 		msg = slatejs_safe_to_lstring(ctx, 0, &msg_len);
 		NSLOG(netsurf, INFO, "JS ALERT: %*s", (int)msg_len, msg);
 	}
+	return 0;
+%}
+
+method Window::scrollTo()
+%{
+	return 0;
+%}
+
+method Window::scrollBy()
+%{
 	return 0;
 %}
 

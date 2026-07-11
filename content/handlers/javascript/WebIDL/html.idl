@@ -1434,6 +1434,12 @@ dictionary DragEventInit : MouseEventInit {
 
   unsigned long requestAnimationFrame(FrameRequestCallback callback);
   void cancelAnimationFrame(unsigned long handle);
+  readonly attribute long scrollX;
+  readonly attribute long pageXOffset;
+  readonly attribute long scrollY;
+  readonly attribute long pageYOffset;
+  void scrollTo(optional double x = 0, optional double y = 0);
+  void scrollBy(optional double x = 0, optional double y = 0);
 
   void postMessage(any message, DOMString targetOrigin, optional sequence<Transferable> transfer);
 
