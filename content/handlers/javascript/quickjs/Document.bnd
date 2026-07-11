@@ -412,6 +412,75 @@ method Document::getElementsByClassName()
 	return ret;
 %}
 
+method Document::getElementsByName()
+%{
+	dom_nodelist *nodes = NULL;
+	dom_string *star = NULL;
+	dom_exception err;
+	slatejs_size_t name_len;
+	const char *name = slatejs_safe_to_lstring(ctx, 0, &name_len);
+	char *name_copy;
+	uint32_t length = 0;
+	uint32_t out_idx = 0;
+	uint32_t idx;
+
+	name_copy = malloc(name_len == 0 ? 1 : name_len);
+	if (name_copy == NULL) {
+		return 0;
+	}
+	memcpy(name_copy, name, name_len);
+
+	slatejs_push_array(ctx);
+
+	err = dom_string_create((const uint8_t *)"*", 1, &star);
+	if (err != DOM_NO_ERR) {
+		free(name_copy);
+		return 1;
+	}
+
+	err = dom_document_get_elements_by_tag_name(
+			((node_private_t *)priv)->node, star, &nodes);
+	dom_string_unref(star);
+	if (err != DOM_NO_ERR || nodes == NULL) {
+		free(name_copy);
+		return 1;
+	}
+
+	if (dom_nodelist_get_length(nodes, &length) != DOM_NO_ERR) {
+		dom_nodelist_unref(nodes);
+		free(name_copy);
+		return 1;
+	}
+
+	for (idx = 0; idx < length; idx++) {
+		dom_node *node = NULL;
+		dom_string *attr = NULL;
+
+		if (dom_nodelist_item(nodes, idx, &node) != DOM_NO_ERR ||
+				node == NULL) {
+			continue;
+		}
+
+		err = dom_element_get_attribute((dom_element *)node,
+				corestring_dom_name, &attr);
+		if (err == DOM_NO_ERR && attr != NULL) {
+			if (dom_string_length(attr) == name_len &&
+					memcmp(dom_string_data(attr), name_copy,
+						name_len) == 0 &&
+					slatejs_bind_push_node(ctx, node)) {
+				slatejs_put_prop_index(ctx, -2, out_idx++);
+			}
+			dom_string_unref(attr);
+		}
+
+		dom_node_unref(node);
+	}
+
+	dom_nodelist_unref(nodes);
+	free(name_copy);
+	return 1;
+%}
+
 method Document::query()
 %{
 	slatejs_size_t len;

@@ -208,15 +208,10 @@
 	}
 
 	function bindRoutingControls() {
-		var inputs = document.getElementsByTagName("input");
-		var modes = [];
+		var modes = document.getElementsByName("routing_mode");
 		var i;
 
-		for (i = 0; i < inputs.length; i++) {
-			if (inputs[i].getAttribute("name") === "routing_mode") {
-				modes.push(inputs[i]);
-			}
-		}
+		console.log("map-route-modes-" + modes.length);
 
 		for (i = 0; i < modes.length; i++) {
 			modes[i].addEventListener("click", function () {
