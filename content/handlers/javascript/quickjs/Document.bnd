@@ -310,6 +310,18 @@ getter Document::readyState()
 	return 1;
 %}
 
+getter Document::hidden()
+%{
+	slatejs_push_boolean(ctx, false);
+	return 1;
+%}
+
+getter Document::visibilityState()
+%{
+	slatejs_push_string(ctx, "visible");
+	return 1;
+%}
+
 
 method Document::getElementById()
 %{

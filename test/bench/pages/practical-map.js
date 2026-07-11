@@ -516,6 +516,10 @@
 			evt.initEvent("map-feature-probe", true, true);
 			return map.dispatchEvent(evt) === false && seen;
 		});
+		probeMapFeature("document-visibility", supported, missing, function () {
+			return document.hidden === false &&
+				document.visibilityState === "visible";
+		});
 		probeMapFeature("abort-controller", supported, missing, function () {
 			var controller = new AbortController();
 			controller.abort();
