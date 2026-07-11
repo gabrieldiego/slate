@@ -65,6 +65,17 @@ static bool css_style_property_affects_leaflet_position(const char *property)
 			strcmp(property, "transform") == 0;
 }
 
+static const char *css_style_builtin_custom_property(const char *property)
+{
+	if (strcmp(property, "--bs-breakpoint-xs") == 0) return "0";
+	if (strcmp(property, "--bs-breakpoint-sm") == 0) return "576px";
+	if (strcmp(property, "--bs-breakpoint-md") == 0) return "768px";
+	if (strcmp(property, "--bs-breakpoint-lg") == 0) return "992px";
+	if (strcmp(property, "--bs-breakpoint-xl") == 0) return "1200px";
+	if (strcmp(property, "--bs-breakpoint-xxl") == 0) return "1400px";
+	return NULL;
+}
+
 static bool css_style_ascii_ieq(const char *a, size_t a_len, const char *b)
 {
 	size_t i;
@@ -337,7 +348,13 @@ static bool css_style_get_property(dom_element *element, const char *property,
 	}
 
 	if (last_value == NULL) {
-		slatejs_push_string(ctx, "");
+		const char *builtin = css_style_builtin_custom_property(property);
+
+		if (builtin != NULL) {
+			slatejs_push_string(ctx, builtin);
+		} else {
+			slatejs_push_string(ctx, "");
+		}
 	} else {
 		slatejs_push_lstring(ctx, last_value, last_value_len);
 	}
