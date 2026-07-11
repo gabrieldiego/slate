@@ -532,6 +532,19 @@
 				navigator.hardwareConcurrency >= 1 &&
 				navigator.maxTouchPoints === 0;
 		});
+		probeMapFeature("document-import-adopt-node", supported, missing, function () {
+			var source = document.createElement("div");
+			var child = document.createElement("span");
+			child.appendChild(document.createTextNode("imported"));
+			source.appendChild(child);
+
+			var imported = document.importNode(source, true);
+			var adopted = document.adoptNode(document.createElement("strong"));
+			return imported !== source &&
+				imported.childNodes.length === 1 &&
+				imported.firstChild.firstChild.nodeValue === "imported" &&
+				adopted.ownerDocument === document;
+		});
 		probeMapFeature("abort-controller", supported, missing, function () {
 			var controller = new AbortController();
 			controller.abort();

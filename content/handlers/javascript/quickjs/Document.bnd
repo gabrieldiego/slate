@@ -214,6 +214,65 @@ method Document::createDocumentFragment()
 	return 1;
 %}
 
+method Document::importNode()
+%{
+	dom_exception err;
+	dom_node *imported = NULL;
+	node_private_t *node_priv;
+	bool deep = false;
+
+	if (!slatejs_bind_instanceof(ctx, 0, PROTO_NAME(NODE))) {
+		return 0;
+	}
+
+	if (slatejs_get_top(ctx) > 1) {
+		deep = slatejs_to_boolean(ctx, 1);
+	}
+
+	slatejs_get_prop_string(ctx, 0, PRIVATE_MAGIC);
+	node_priv = slatejs_get_pointer(ctx, -1);
+	slatejs_pop(ctx);
+
+	err = dom_document_import_node(priv->parent.node, node_priv->node,
+			deep, &imported);
+	if (err != DOM_NO_ERR || imported == NULL) {
+		return 0;
+	}
+
+	slatejs_set_top(ctx, 0);
+	slatejs_bind_push_node(ctx, imported);
+	dom_node_unref(imported);
+
+	return 1;
+%}
+
+method Document::adoptNode()
+%{
+	dom_exception err;
+	dom_node *adopted = NULL;
+	node_private_t *node_priv;
+
+	if (!slatejs_bind_instanceof(ctx, 0, PROTO_NAME(NODE))) {
+		return 0;
+	}
+
+	slatejs_get_prop_string(ctx, 0, PRIVATE_MAGIC);
+	node_priv = slatejs_get_pointer(ctx, -1);
+	slatejs_pop(ctx);
+
+	err = dom_document_adopt_node(priv->parent.node, node_priv->node,
+			&adopted);
+	if (err != DOM_NO_ERR || adopted == NULL) {
+		return 0;
+	}
+
+	slatejs_set_top(ctx, 0);
+	slatejs_bind_push_node(ctx, adopted);
+	dom_node_unref(adopted);
+
+	return 1;
+%}
+
 getter Document::head()
 %{
 	struct dom_nodelist *nodes;
