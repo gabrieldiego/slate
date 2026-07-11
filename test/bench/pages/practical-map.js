@@ -455,11 +455,22 @@
 
 	function wheelZoom(evt) {
 		var deltaY = 0;
+		var rect;
+		var pointX;
+		var pointY;
 		if (evt) {
 			if (typeof evt.deltaY === "number") {
 				deltaY = evt.deltaY;
 			} else if (typeof evt.wheelDelta === "number") {
 				deltaY = -evt.wheelDelta;
+			}
+			rect = map.getBoundingClientRect();
+			pointX = evt.clientX - rect.left - map.clientLeft;
+			pointY = evt.clientY - rect.top - map.clientTop;
+			if (isFinite(pointX) && isFinite(pointY)) {
+				console.log("map-wheel-container-point-valid");
+			} else {
+				console.log("map-wheel-container-point-invalid");
 			}
 		}
 		console.log("map-wheel-event-" + deltaY);
@@ -626,6 +637,31 @@
 			var rect = map.getBoundingClientRect();
 			return typeof rect.left === "number" && typeof rect.height === "number";
 		});
+		probeMapFeature("geometry-offset-scroll", supported, missing, function () {
+			var control = document.getElementById("map-osm-grid-control");
+			var rect = control.getBoundingClientRect();
+
+			return typeof control.offsetLeft === "number" &&
+				typeof control.offsetTop === "number" &&
+				control.offsetLeft === Math.round(rect.left) &&
+				control.offsetTop === Math.round(rect.top) &&
+				control.offsetWidth === Math.round(rect.width) &&
+				control.offsetHeight === Math.round(rect.height) &&
+				control.scrollWidth >= control.clientWidth &&
+				control.scrollHeight >= control.clientHeight;
+		});
+		probeMapFeature("geometry-client-edge", supported, missing, function () {
+			return typeof map.clientLeft === "number" &&
+				typeof map.clientTop === "number" &&
+				map.clientLeft >= 0 &&
+				map.clientTop >= 0;
+		});
+		probeMapFeature("wheel-event-constants", supported, missing, function () {
+			return typeof WheelEvent === "function" &&
+				WheelEvent.DOM_DELTA_PIXEL === 0 &&
+				WheelEvent.DOM_DELTA_LINE === 1 &&
+				WheelEvent.DOM_DELTA_PAGE === 2;
+		});
 		probeMapFeature("absolute-percent-height", supported, missing, function () {
 			var fill = document.getElementById("absolute-layout-fill").getBoundingClientRect();
 			var half = document.getElementById("absolute-layout-half").getBoundingClientRect();
@@ -718,6 +754,20 @@
 			return attached &&
 				detached.isConnected === false &&
 				child.isConnected === false;
+		});
+		probeMapFeature("element-children-collection", supported, missing, function () {
+			var holder = document.createElement("div");
+			var first = document.createElement("span");
+			var second = document.createElement("em");
+
+			holder.appendChild(document.createTextNode("skip"));
+			holder.appendChild(first);
+			holder.appendChild(document.createComment("skip"));
+			holder.appendChild(second);
+
+			return holder.children.length === 2 &&
+				holder.children[0] === first &&
+				holder.children[1] === second;
 		});
 		probeMapFeature("node-get-root", supported, missing, function () {
 			var detached = document.createElement("div");

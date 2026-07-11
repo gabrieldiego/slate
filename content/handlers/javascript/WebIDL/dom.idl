@@ -314,6 +314,12 @@ interface Element : Node {
 
   readonly attribute long clientWidth;
   readonly attribute long clientHeight;
+  readonly attribute long clientLeft;
+  readonly attribute long clientTop;
+  readonly attribute long scrollWidth;
+  readonly attribute long scrollHeight;
+  readonly attribute long offsetLeft;
+  readonly attribute long offsetTop;
   readonly attribute long offsetWidth;
   readonly attribute long offsetHeight;
   attribute long scrollLeft;

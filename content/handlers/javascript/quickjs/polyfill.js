@@ -959,6 +959,17 @@ DOMSettableTokenList.prototype.toString = DOMTokenList.prototype.toString;
     if (window.devicePixelRatio === undefined) {
       window.devicePixelRatio = 1;
     }
+    if (typeof window.WheelEvent === "function") {
+      if (window.WheelEvent.DOM_DELTA_PIXEL === undefined) {
+        window.WheelEvent.DOM_DELTA_PIXEL = 0;
+      }
+      if (window.WheelEvent.DOM_DELTA_LINE === undefined) {
+        window.WheelEvent.DOM_DELTA_LINE = 1;
+      }
+      if (window.WheelEvent.DOM_DELTA_PAGE === undefined) {
+        window.WheelEvent.DOM_DELTA_PAGE = 2;
+      }
+    }
     if (window.innerWidth === undefined) {
       window.innerWidth = screen && screen.width ? screen.width : 800;
     }

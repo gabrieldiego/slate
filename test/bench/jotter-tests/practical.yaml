@@ -314,10 +314,10 @@ steps:
   substring: map-geolinks-updated-3
 - action: wait-log
   window: win1
-  substring: disabled-attributes,computed-custom-property,computed-layout-style,geometry-rect
+  substring: disabled-attributes,computed-custom-property,computed-layout-style,geometry-rect,geometry-offset-scroll,geometry-client-edge,wheel-event-constants
 - action: wait-log
   window: win1
-  substring: image-load-state-api,dataset-read,element-tag-local-name,event-dispatch,document-visibility,document-active-element,document-has-focus,document-metadata,navigator-runtime-hints,document-import-adopt-node,document-current-script,node-is-connected,node-get-root,replace-children,form-submit-methods,scroll-into-view,document-title,formdata-basic,window-scroll-api,window-match-media,abort-controller,abort-signal-timeout,intersection-observer
+  substring: image-load-state-api,dataset-read,element-tag-local-name,event-dispatch,document-visibility,document-active-element,document-has-focus,document-metadata,navigator-runtime-hints,document-import-adopt-node,document-current-script,node-is-connected,element-children-collection,node-get-root,replace-children,form-submit-methods,scroll-into-view,document-title,formdata-basic,window-scroll-api,window-match-media,abort-controller,abort-signal-timeout,intersection-observer
 - action: wait-log
   window: win1
   substring: map-feature-gaps
@@ -421,6 +421,9 @@ steps:
   x: 412
   y: 259
   dy: -160
+- action: wait-log
+  window: win1
+  substring: map-wheel-container-point-valid
 - action: wait-log
   window: win1
   substring: map-wheel-zoom-in
