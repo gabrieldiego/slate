@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 JOTTER="${ROOT}/jotter"
 TIMEOUT_SECS=30
+WAIT_TIMEOUT_MS=""
 WAITS=()
 PAGE=""
 
@@ -21,6 +22,7 @@ Options:
                         default: ${JOTTER}
   --timeout SECONDS     Kill the driver after this many seconds
                         default: ${TIMEOUT_SECS}; use 0 to disable
+  --wait-timeout MS     Timeout applied to each --wait check
   --wait TEXT           Wait for a console log substring
                         may be repeated
   -h, --help            Show this help
@@ -66,6 +68,15 @@ while [ "$#" -gt 0 ]; do
 			TIMEOUT_SECS="${1#*=}"
 			shift
 			;;
+		--wait-timeout)
+			[ "$#" -ge 2 ] || die "Missing value for $1"
+			WAIT_TIMEOUT_MS="$2"
+			shift 2
+			;;
+		--wait-timeout=*)
+			WAIT_TIMEOUT_MS="${1#*=}"
+			shift
+			;;
 		--wait)
 			[ "$#" -ge 2 ] || die "Missing value for $1"
 			WAITS+=("$2")
@@ -91,6 +102,12 @@ while [ "$#" -gt 0 ]; do
 done
 
 [ -n "${PAGE}" ] || die "Missing page"
+
+case "${WAIT_TIMEOUT_MS}" in
+	''|*[!0-9]*)
+		[ -z "${WAIT_TIMEOUT_MS}" ] || die "Wait timeout must be a non-negative integer"
+		;;
+esac
 
 PLAN="$(mktemp "${TMPDIR:-/tmp}/slate-jotter-page.XXXXXX.yaml")" || exit 1
 trap 'rm -f "${PLAN}"' EXIT
@@ -124,6 +141,9 @@ URL="$(page_to_url "${PAGE}")"
 		printf '  substring: '
 		yaml_quote "${wait}"
 		printf '\n'
+		if [ -n "${WAIT_TIMEOUT_MS}" ]; then
+			printf '%s\n' "  timeout: ${WAIT_TIMEOUT_MS}"
+		fi
 	done
 	printf '%s\n' "- action: quit"
 } >"${PLAN}"
