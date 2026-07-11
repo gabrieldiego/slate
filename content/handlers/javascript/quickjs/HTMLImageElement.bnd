@@ -8,6 +8,40 @@
  *         http://www.opensource.org/licenses/mit-license
  */
 
+prologue HTMLImageElement()
+%{
+#include "slate/content.h"
+#include "content/content.h"
+#include "html/box.h"
+#include "html/box_construct.h"
+
+static struct hlcache_handle *html_image_element_get_object(dom_node *node)
+{
+	struct box *box = box_for_node(node);
+
+	if (box == NULL) {
+		return NULL;
+	}
+
+	return box->object;
+}
+
+static bool html_image_element_has_empty_src(dom_node *node)
+{
+	dom_string *src = NULL;
+	bool empty = true;
+
+	if (dom_html_image_element_get_src((dom_html_image_element *)node,
+			&src) != DOM_NO_ERR || src == NULL) {
+		return true;
+	}
+
+	empty = dom_string_length(src) == 0;
+	dom_string_unref(src);
+	return empty;
+}
+%}
+
 init HTMLImageElement(struct dom_html_element *html_image_element::html_element);
 
 getter HTMLImageElement::align();
@@ -45,3 +79,38 @@ setter HTMLImageElement::vspace();
 
 getter HTMLImageElement::width();
 setter HTMLImageElement::width();
+
+getter HTMLImageElement::naturalWidth()
+%{
+	struct hlcache_handle *object =
+			html_image_element_get_object(((node_private_t *)priv)->node);
+
+	slatejs_push_uint(ctx, object == NULL ? 0 : content_get_width(object));
+	return 1;
+%}
+
+getter HTMLImageElement::naturalHeight()
+%{
+	struct hlcache_handle *object =
+			html_image_element_get_object(((node_private_t *)priv)->node);
+
+	slatejs_push_uint(ctx, object == NULL ? 0 : content_get_height(object));
+	return 1;
+%}
+
+getter HTMLImageElement::complete()
+%{
+	dom_node *node = ((node_private_t *)priv)->node;
+	struct hlcache_handle *object = html_image_element_get_object(node);
+	bool complete = html_image_element_has_empty_src(node);
+
+	if (object != NULL) {
+		content_status status = content_get_status(object);
+
+		complete = status == CONTENT_STATUS_READY ||
+				status == CONTENT_STATUS_DONE;
+	}
+
+	slatejs_push_boolean(ctx, complete);
+	return 1;
+%}

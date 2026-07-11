@@ -89,6 +89,12 @@
 		tile.style.top = (y * 128) + "px";
 		tile.addEventListener("load", function () {
 			this.classList.add("leaflet-tile-loaded");
+			if (x === 0 && y === 0 &&
+					this.complete === true &&
+					this.naturalWidth >= 100 &&
+					this.naturalHeight >= 100) {
+				console.log("map-image-natural-state");
+			}
 		}, false);
 		tile.src = markerSvg(colors[kind] || colors.city, label);
 		tile.classList.add("leaflet-tile-loaded");
@@ -546,6 +552,13 @@
 
 			return fill.height >= 60 && half.height >= 30 &&
 				half.height <= fill.height;
+		});
+		probeMapFeature("image-load-state-api", supported, missing, function () {
+			var tile = document.querySelector(".leaflet-tile");
+
+			return typeof tile.complete === "boolean" &&
+				typeof tile.naturalWidth === "number" &&
+				typeof tile.naturalHeight === "number";
 		});
 		probeMapFeature("dataset-read", supported, missing, function () {
 			return map.dataset.zoom === "12";

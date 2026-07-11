@@ -293,6 +293,9 @@ steps:
   substring: map-tile-count-36
 - action: wait-log
   window: win1
+  substring: map-image-natural-state
+- action: wait-log
+  window: win1
   substring: map-controls-bound-7
 - action: wait-log
   window: win1
@@ -314,7 +317,7 @@ steps:
   substring: disabled-attributes,computed-custom-property,geometry-rect
 - action: wait-log
   window: win1
-  substring: element-tag-local-name,event-dispatch,document-visibility,document-active-element,document-has-focus,document-metadata,navigator-runtime-hints,document-import-adopt-node,document-current-script,node-is-connected,node-get-root,replace-children,form-submit-methods,scroll-into-view,document-title,formdata-basic,window-scroll-api,window-match-media,abort-controller,abort-signal-timeout,intersection-observer
+  substring: image-load-state-api,dataset-read,element-tag-local-name,event-dispatch,document-visibility,document-active-element,document-has-focus,document-metadata,navigator-runtime-hints,document-import-adopt-node,document-current-script,node-is-connected,node-get-root,replace-children,form-submit-methods,scroll-into-view,document-title,formdata-basic,window-scroll-api,window-match-media,abort-controller,abort-signal-timeout,intersection-observer
 - action: wait-log
   window: win1
   substring: map-feature-gaps
