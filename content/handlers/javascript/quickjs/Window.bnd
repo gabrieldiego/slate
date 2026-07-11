@@ -13,7 +13,8 @@ class Window {
 	private struct html_content * htmlc;
 	private struct window_schedule_s * schedule_ring;
 	private bool closed_down;
-	prologue %{
+prologue %{
+#include <stdlib.h>
 #include <string.h>
 #include <nsutils/time.h>
 #include "utils/corestrings.h"
@@ -33,6 +34,9 @@ class Window {
 
 static size_t next_handle = 0;
 
+slateerror browser_window_get_dimensions(struct browser_window *bw,
+		int *width, int *height);
+
 typedef struct window_schedule_s {
 	window_private_t *owner;
 	slatejs_context *ctx;
@@ -42,6 +46,74 @@ typedef struct window_schedule_s {
 	int repeat_timeout;
 	bool running;
 } window_schedule_t;
+
+static bool
+window_match_dimension_feature(const char *query, const char *feature,
+		int dimension, bool minimum, bool *known)
+{
+	const char *pos = strstr(query, feature);
+	char *end = NULL;
+	double value;
+
+	if (pos == NULL) {
+		return true;
+	}
+
+	pos = strchr(pos, ':');
+	if (pos == NULL) {
+		return false;
+	}
+
+	value = strtod(pos + 1, &end);
+	if (end == pos + 1) {
+		return false;
+	}
+
+	*known = true;
+	return minimum ? dimension >= value : dimension <= value;
+}
+
+static bool
+window_match_media_query(const char *query, int width, int height)
+{
+	bool known = false;
+	bool matches = true;
+
+	if (query == NULL || query[0] == '\0') {
+		return true;
+	}
+	if (strstr(query, "not ") != NULL) {
+		return false;
+	}
+
+	matches &= window_match_dimension_feature(query, "min-width",
+			width, true, &known);
+	matches &= window_match_dimension_feature(query, "max-width",
+			width, false, &known);
+	matches &= window_match_dimension_feature(query, "min-height",
+			height, true, &known);
+	matches &= window_match_dimension_feature(query, "max-height",
+			height, false, &known);
+
+	if (known) {
+		return matches;
+	}
+
+	return strstr(query, "all") != NULL || strstr(query, "screen") != NULL;
+}
+
+static slatejs_ret_t
+window_media_query_list_noop(slatejs_context *ctx)
+{
+	return 0;
+}
+
+static slatejs_ret_t
+window_media_query_list_dispatch(slatejs_context *ctx)
+{
+	slatejs_push_boolean(ctx, true);
+	return 1;
+}
 
 static void window_remove_callback_bits(slatejs_context *ctx, size_t handle) {
 	/* stack is ... */
@@ -583,6 +655,50 @@ method Window::scrollTo()
 method Window::scrollBy()
 %{
 	return 0;
+%}
+
+method Window::matchMedia()
+%{
+	slatejs_size_t query_len;
+	const char *query_arg = slatejs_safe_to_lstring(ctx, 0, &query_len);
+	char *query = malloc(query_len + 1);
+	int width = 800;
+	int height = 600;
+	bool matches;
+
+	if (query == NULL) {
+		return 0;
+	}
+	memcpy(query, query_arg, query_len);
+	query[query_len] = '\0';
+
+	if (priv->win != NULL) {
+		(void)browser_window_get_dimensions(priv->win, &width, &height);
+	}
+	matches = window_match_media_query(query, width, height);
+
+	slatejs_push_object(ctx);
+	slatejs_push_lstring(ctx, query, query_len);
+	slatejs_put_prop_string(ctx, -2, "media");
+	slatejs_push_boolean(ctx, matches);
+	slatejs_put_prop_string(ctx, -2, "matches");
+	slatejs_push_null(ctx);
+	slatejs_put_prop_string(ctx, -2, "onchange");
+
+	slatejs_push_c_function(ctx, window_media_query_list_noop, SLATEJS_VARARGS);
+	slatejs_put_prop_string(ctx, -2, "addListener");
+	slatejs_push_c_function(ctx, window_media_query_list_noop, SLATEJS_VARARGS);
+	slatejs_put_prop_string(ctx, -2, "removeListener");
+	slatejs_push_c_function(ctx, window_media_query_list_noop, SLATEJS_VARARGS);
+	slatejs_put_prop_string(ctx, -2, "addEventListener");
+	slatejs_push_c_function(ctx, window_media_query_list_noop, SLATEJS_VARARGS);
+	slatejs_put_prop_string(ctx, -2, "removeEventListener");
+	slatejs_push_c_function(ctx, window_media_query_list_dispatch,
+			SLATEJS_VARARGS);
+	slatejs_put_prop_string(ctx, -2, "dispatchEvent");
+
+	free(query);
+	return 1;
 %}
 
 method Window::getComputedStyle()

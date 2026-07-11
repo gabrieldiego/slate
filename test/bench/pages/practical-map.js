@@ -706,6 +706,19 @@
 				scrollToResult === undefined &&
 				scrollByResult === undefined;
 		});
+		probeMapFeature("window-match-media", supported, missing, function () {
+			var wide = window.matchMedia("(min-width: 1px)");
+			var narrow = window.matchMedia("(max-width: 1px)");
+
+			return wide.media === "(min-width: 1px)" &&
+				wide.matches === true &&
+				narrow.matches === false &&
+				typeof wide.addListener === "function" &&
+				typeof wide.removeListener === "function" &&
+				typeof wide.addEventListener === "function" &&
+				typeof wide.removeEventListener === "function" &&
+				wide.dispatchEvent(document.createEvent("Event")) === true;
+		});
 		probeMapFeature("abort-controller", supported, missing, function () {
 			var controller = new AbortController();
 			controller.abort();

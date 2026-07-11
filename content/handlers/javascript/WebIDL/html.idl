@@ -1441,6 +1441,7 @@ dictionary DragEventInit : MouseEventInit {
   readonly attribute long pageYOffset;
   void scrollTo(optional double x = 0, optional double y = 0);
   void scrollBy(optional double x = 0, optional double y = 0);
+  object matchMedia(DOMString query);
 
   void postMessage(any message, DOMString targetOrigin, optional sequence<Transferable> transfer);
 
