@@ -411,6 +411,13 @@
 		dragOriginY = offsetY;
 		map.classList.add("leaflet-dragging");
 		setText(status, "Dragging map");
+		if (evt && typeof evt.pageX === "number" &&
+				typeof evt.pageY === "number") {
+			console.log("map-pointer-page-coordinates");
+		}
+		if (evt && evt.which === 1) {
+			console.log("map-pointer-primary-button");
+		}
 		if (evt && evt.preventDefault) {
 			evt.preventDefault();
 		}
@@ -504,7 +511,9 @@
 	}
 
 	function bindMarker(id, kind) {
-		document.getElementById(id).addEventListener("click", function () {
+		var marker = document.getElementById(id);
+		marker.addEventListener("mousedown", stopControlDrag, false);
+		marker.addEventListener("click", function () {
 			setText(popup, kind + " marker selected: " + this.textContent);
 			setText(status, "Marker popup updated");
 			this.classList.toggle("active", true);
@@ -567,6 +576,15 @@
 				link.href.indexOf("/history") >= 0 &&
 				link.search.indexOf("probe=1") >= 0 &&
 				link.hash === "#probe";
+		});
+		probeMapFeature("history-state-api", supported, missing, function () {
+			var pushed = history.pushState({ map: true }, "", "#map-state");
+			var replaced = history.replaceState({ map: true }, "", "#map-replaced");
+
+			return history.length === 1 &&
+				history.state === null &&
+				pushed === undefined &&
+				replaced === undefined;
 		});
 		probeMapFeature("osm-modal-dropdown-tags", supported, missing, function () {
 			return countElementsWithAttribute("button", "data-bs-toggle", "modal") === 1 &&
@@ -801,14 +819,27 @@
 				Array.from(data.entries()).length === seen.length;
 		});
 		probeMapFeature("window-scroll-api", supported, missing, function () {
+			var html = document.documentElement;
 			var scrollToResult = window.scrollTo(0, 0);
 			var scrollByResult = window.scrollBy(0, 0);
+			var looseScrollResult = window.scrollTo(
+				document.body.scrollLeft || html.scrollLeft,
+				document.body.scrollTop || html.scrollTop);
+			var undefinedScrollResult = window.scrollTo(undefined, undefined);
+			document.body.scrollTop = 12;
+			document.body.scrollLeft = 8;
 			return window.scrollX === 0 &&
 				window.pageXOffset === 0 &&
 				window.scrollY === 0 &&
 				window.pageYOffset === 0 &&
+				document.body.scrollTop === 0 &&
+				document.body.scrollLeft === 0 &&
+				html.scrollTop === 0 &&
+				html.scrollLeft === 0 &&
 				scrollToResult === undefined &&
-				scrollByResult === undefined;
+				scrollByResult === undefined &&
+				looseScrollResult === undefined &&
+				undefinedScrollResult === undefined;
 		});
 		probeMapFeature("window-match-media", supported, missing, function () {
 			var wide = window.matchMedia("(min-width: 1px)");

@@ -316,6 +316,8 @@ interface Element : Node {
   readonly attribute long clientHeight;
   readonly attribute long offsetWidth;
   readonly attribute long offsetHeight;
+  attribute long scrollLeft;
+  attribute long scrollTop;
   object getBoundingClientRect();
   void scrollIntoView();
 

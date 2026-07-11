@@ -52,6 +52,28 @@ getter MouseEvent::clientY()
 	return 1;
 %}
 
+getter MouseEvent::pageX()
+%{
+	int32_t value = 0;
+	if (dom_mouse_event_get_client_x(priv->parent.parent.evt, &value) !=
+			DOM_NO_ERR) {
+		return 0;
+	}
+	slatejs_push_int(ctx, value);
+	return 1;
+%}
+
+getter MouseEvent::pageY()
+%{
+	int32_t value = 0;
+	if (dom_mouse_event_get_client_y(priv->parent.parent.evt, &value) !=
+			DOM_NO_ERR) {
+		return 0;
+	}
+	slatejs_push_int(ctx, value);
+	return 1;
+%}
+
 getter MouseEvent::ctrlKey()
 %{
 	bool value = false;
@@ -115,6 +137,23 @@ getter MouseEvent::buttons()
 		return 0;
 	}
 	slatejs_push_int(ctx, value == 0 ? 1 : 0);
+	return 1;
+%}
+
+getter MouseEvent::which()
+%{
+	unsigned short value = 0;
+	if (dom_mouse_event_get_button(priv->parent.parent.evt, &value) !=
+			DOM_NO_ERR) {
+		return 0;
+	}
+	if (value == 0) {
+		slatejs_push_int(ctx, 1);
+	} else if (value == 1) {
+		slatejs_push_int(ctx, 3);
+	} else {
+		slatejs_push_int(ctx, value + 1);
+	}
 	return 1;
 %}
 

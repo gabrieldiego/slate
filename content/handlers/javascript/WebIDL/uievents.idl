@@ -28,6 +28,8 @@ interface MouseEvent : UIEvent {
     readonly    attribute long           screenY;
     readonly    attribute long           clientX;
     readonly    attribute long           clientY;
+    readonly    attribute long           pageX;
+    readonly    attribute long           pageY;
     readonly    attribute boolean        ctrlKey;
     readonly    attribute boolean        shiftKey;
     readonly    attribute boolean        altKey;
@@ -36,6 +38,7 @@ interface MouseEvent : UIEvent {
     readonly    attribute EventTarget?   relatedTarget;
     // Introduced in this specification
     readonly    attribute unsigned short buttons;
+    readonly    attribute unsigned long  which;
     boolean getModifierState (DOMString keyArg);
 };
 
@@ -182,4 +185,3 @@ interface MutationEvent : Event {
     readonly    attribute unsigned short attrChange;
     void initMutationEvent (DOMString typeArg, boolean bubblesArg, boolean cancelableArg, Node? relatedNodeArg, DOMString prevValueArg, DOMString newValueArg, DOMString attrNameArg, unsigned short attrChangeArg);
 };
-

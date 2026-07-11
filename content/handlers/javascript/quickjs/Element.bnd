@@ -379,6 +379,28 @@ getter Element::offsetHeight()
 	return 1;
 %}
 
+getter Element::scrollLeft()
+%{
+	slatejs_push_int(ctx, 0);
+	return 1;
+%}
+
+setter Element::scrollLeft()
+%{
+	return 0;
+%}
+
+getter Element::scrollTop()
+%{
+	slatejs_push_int(ctx, 0);
+	return 1;
+%}
+
+setter Element::scrollTop()
+%{
+	return 0;
+%}
+
 method Element::getBoundingClientRect()
 %{
 	struct box *box = box_for_node(priv->parent.node);

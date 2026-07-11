@@ -1962,7 +1962,9 @@ bool html_redraw(struct content *c, struct content_redraw_data *data,
 	};
 
 	box = html->layout;
-	assert(box);
+	if (box == NULL) {
+		return false;
+	}
 
 	/* The select menu needs special treating because, when opened, it
 	 * reaches beyond its layout box.

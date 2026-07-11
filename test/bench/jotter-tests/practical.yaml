@@ -293,9 +293,6 @@ steps:
   substring: map-tile-count-36
 - action: wait-log
   window: win1
-  substring: map-image-natural-state
-- action: wait-log
-  window: win1
   substring: map-controls-bound-7
 - action: wait-log
   window: win1
@@ -365,6 +362,22 @@ steps:
 - action: wait-log
   window: win1
   substring: map-loader-visible
+- action: click
+  window: win1
+  target:
+    text: CafePin
+- action: wait-log
+  window: win1
+  substring: map-marker-popup
+- action: sleep-ms
+  time: 200
+- action: click
+  window: win1
+  target:
+    text: Food and
+- action: wait-log
+  window: win1
+  substring: map-layer-food-off
 - action: mouse-click
   window: win1
   x: 457
@@ -373,6 +386,12 @@ steps:
 - action: wait-log
   window: win1
   substring: map-drag-start
+- action: wait-log
+  window: win1
+  substring: map-pointer-page-coordinates
+- action: wait-log
+  window: win1
+  substring: map-pointer-primary-button
 - action: mouse-track
   window: win1
   x: 521
@@ -405,6 +424,8 @@ steps:
 - action: wait-log
   window: win1
   substring: map-wheel-zoom-in
+- action: sleep-ms
+  time: 200
 - action: click
   window: win1
   area: extent
@@ -417,6 +438,8 @@ steps:
   window: win1
   substring: map-frame-16,32
   timeout: 2000
+- action: sleep-ms
+  time: 200
 - action: click
   window: win1
   area: extent
@@ -425,20 +448,8 @@ steps:
 - action: wait-log
   window: win1
   substring: map-zoom-in
-- action: click
-  window: win1
-  target:
-    text: CafePin
-- action: wait-log
-  window: win1
-  substring: map-marker-popup
-- action: click
-  window: win1
-  target:
-    text: Food and
-- action: wait-log
-  window: win1
-  substring: map-layer-food-off
+- action: sleep-ms
+  time: 200
 - action: navigate
   window: win1
   url: ${SLATE_BENCH_ROOT}/practical-webmail.html

@@ -1,0 +1,47 @@
+/* History binding using quickjs
+ *
+ * This file is part of Slate, http://www.slate-browser.org/
+ *
+ * Released under the terms of the MIT License,
+ *         http://www.opensource.org/licenses/mit-license
+ */
+
+class History {
+};
+
+getter History::length()
+%{
+	slatejs_push_int(ctx, 1);
+	return 1;
+%}
+
+getter History::state()
+%{
+	slatejs_push_null(ctx);
+	return 1;
+%}
+
+method History::go()
+%{
+	return 0;
+%}
+
+method History::back()
+%{
+	return 0;
+%}
+
+method History::forward()
+%{
+	return 0;
+%}
+
+method History::pushState()
+%{
+	return 0;
+%}
+
+method History::replaceState()
+%{
+	return 0;
+%}

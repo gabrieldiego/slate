@@ -543,6 +543,26 @@ getter Window::location()
 	return 1;
 %}
 
+getter Window::history()
+%{
+	slatejs_push_this(ctx);
+	slatejs_get_prop_string(ctx, -1, MAGIC(History));
+	if (slatejs_is_undefined(ctx, -1)) {
+		slatejs_pop(ctx);
+
+		if (slatejs_bind_create_object(ctx,
+					PROTO_NAME(HISTORY),
+					0) != SLATEJS_EXEC_SUCCESS) {
+			return slatejs_error(ctx,
+				  SLATEJS_ERR_ERROR,
+				  "Unable to create history object");
+		}
+		slatejs_dup(ctx, -1);
+		slatejs_put_prop_string(ctx, -3, MAGIC(History));
+	}
+	return 1;
+%}
+
 getter Window::navigator()
 %{
 	slatejs_push_this(ctx);
