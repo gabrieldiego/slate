@@ -534,6 +534,14 @@ getter Document::activeElement()
 
 getter Document::currentScript()
 %{
+	struct html_content *htmlc = slate_document_get_html_content(
+			priv->parent.node);
+
+	if (htmlc != NULL && htmlc->current_script != NULL) {
+		slatejs_bind_push_node(ctx, htmlc->current_script);
+		return 1;
+	}
+
 	slatejs_push_null(ctx);
 	return 1;
 %}

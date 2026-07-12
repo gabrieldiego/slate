@@ -750,6 +750,36 @@ DOMSettableTokenList.prototype.toString = DOMTokenList.prototype.toString;
   }
 
   if (typeof window !== "undefined") {
+    (function () {
+      var needsCustomEvent = false;
+      var proto = window.CustomEvent && window.CustomEvent.prototype;
+
+      try {
+        new window.CustomEvent("__slate_probe__");
+      } catch (e) {
+        needsCustomEvent = true;
+      }
+
+      if (needsCustomEvent && document && document.createEvent) {
+        function CustomEventPolyfill(type, options) {
+          var event = document.createEvent("Event");
+
+          options = options || {};
+          event.initEvent(String(type),
+              !!options.bubbles,
+              !!options.cancelable);
+          own(event, "detail", options.detail);
+          return event;
+        }
+
+        CustomEventPolyfill.prototype = proto ||
+            (window.Event && window.Event.prototype) || {};
+        own(window, "CustomEvent", CustomEventPolyfill);
+        if (typeof globalThis !== "undefined") {
+          own(globalThis, "CustomEvent", CustomEventPolyfill);
+        }
+      }
+    }());
     if (!window.AbortController) {
       (function () {
         function AbortSignalPolyfill() {
@@ -907,6 +937,54 @@ DOMSettableTokenList.prototype.toString = DOMTokenList.prototype.toString;
         own(window, "IntersectionObserver", IntersectionObserverPolyfill);
       }());
     }
+    (function () {
+      var needsMutationObserver = false;
+
+      try {
+        if (!window.MutationObserver) {
+          needsMutationObserver = true;
+        } else {
+          new window.MutationObserver(function () {}).disconnect();
+        }
+      } catch (e) {
+        needsMutationObserver = true;
+      }
+
+      if (needsMutationObserver) {
+        (function () {
+          function MutationObserverPolyfill(callback) {
+            if (typeof callback !== "function") {
+              throw new TypeError("MutationObserver callback must be a function");
+            }
+            this._callback = callback;
+            this._observed = [];
+          }
+
+          MutationObserverPolyfill.prototype.observe = function (target, options) {
+            if (!target) {
+              throw new TypeError("MutationObserver target is required");
+            }
+            this._observed.push({
+              target: target,
+              options: options || {}
+            });
+          };
+
+          MutationObserverPolyfill.prototype.disconnect = function () {
+            this._observed = [];
+          };
+
+          MutationObserverPolyfill.prototype.takeRecords = function () {
+            return [];
+          };
+
+          own(window, "MutationObserver", MutationObserverPolyfill);
+          if (typeof globalThis !== "undefined") {
+            own(globalThis, "MutationObserver", MutationObserverPolyfill);
+          }
+        }());
+      }
+    }());
     if (!window.requestAnimationFrame) {
       window.requestAnimationFrame = function (callback) {
         return setTimeout(function () {

@@ -54,6 +54,26 @@ static script_handler_t *select_script_handler(content_type ctype)
 	return NULL;
 }
 
+static bool html_script_run(html_content *c,
+		dom_node *node,
+		script_handler_t *script_handler,
+		const uint8_t *data,
+		size_t size,
+		const char *name)
+{
+	dom_node *previous = c->current_script;
+	bool ret;
+
+	c->current_script = node != NULL ? dom_node_ref(node) : NULL;
+	ret = script_handler(c->jsthread, data, size, name);
+	if (c->current_script != NULL) {
+		dom_node_unref(c->current_script);
+	}
+	c->current_script = previous;
+
+	return ret;
+}
+
 static bool html_script_type_equals(dom_string *type, const char *name)
 {
 	const char *data = dom_string_data(type);
@@ -134,7 +154,7 @@ slateerror html_script_exec(html_content *c, bool allow_defer)
 				size_t size;
 				data = content_get_source_data(
 						s->data.handle, &size );
-				script_handler(c->jsthread, data, size,
+				html_script_run(c, s->node, script_handler, data, size,
 					       slateurl_access(hlcache_handle_get_url(s->data.handle)));
 				have_run_something = true;
 				/* We have to re-acquire this here since the
@@ -144,6 +164,10 @@ slateerror html_script_exec(html_content *c, bool allow_defer)
 				s = &(c->scripts[i]);
 
 				s->already_started = true;
+				if (s->node != NULL) {
+					dom_node_unref(s->node);
+					s->node = NULL;
+				}
 
 			}
 		}
@@ -184,6 +208,7 @@ html_process_new_script(html_content *c,
 	nscript->defer = false;
 
 	nscript->type = type;
+	nscript->node = NULL;
 
 	nscript->mimetype = dom_string_ref(mimetype); /* reference mimetype */
 
@@ -232,6 +257,10 @@ convert_script_async_cb(hlcache_handle *script,
 
 		hlcache_handle_release(script);
 		s->data.handle = NULL;
+		if (s->node != NULL) {
+			dom_node_unref(s->node);
+			s->node = NULL;
+		}
 		parent->base.active--;
 		NSLOG(netsurf, INFO, "%d fetches active", parent->base.active);
 
@@ -295,6 +324,10 @@ convert_script_defer_cb(hlcache_handle *script,
 
 		hlcache_handle_release(script);
 		s->data.handle = NULL;
+		if (s->node != NULL) {
+			dom_node_unref(s->node);
+			s->node = NULL;
+		}
 		parent->base.active--;
 		NSLOG(netsurf, INFO, "%d fetches active", parent->base.active);
 
@@ -361,8 +394,13 @@ convert_script_sync_cb(hlcache_handle *script,
 			const uint8_t *data;
 			size_t size;
 			data = content_get_source_data(s->data.handle, &size );
-			script_handler(parent->jsthread, data, size,
+			html_script_run(parent, s->node, script_handler, data, size,
 				       slateurl_access(hlcache_handle_get_url(s->data.handle)));
+			s = &(parent->scripts[i]);
+			if (s->node != NULL) {
+				dom_node_unref(s->node);
+				s->node = NULL;
+			}
 		}
 
 		/* continue parse */
@@ -382,6 +420,10 @@ convert_script_sync_cb(hlcache_handle *script,
 
 		hlcache_handle_release(script);
 		s->data.handle = NULL;
+		if (s->node != NULL) {
+			dom_node_unref(s->node);
+			s->node = NULL;
+		}
 		parent->base.active--;
 
 		NSLOG(netsurf, INFO, "%d fetches active", parent->base.active);
@@ -500,6 +542,7 @@ exec_src_script(html_content *c,
 		content_broadcast_error(&c->base, SLATEERROR_NOMEM, NULL);
 		return DOM_HUBBUB_NOMEM;
 	}
+	nscript->node = dom_node_ref(node);
 
 	/* set up child fetch encoding and quirks */
 	child.charset = c->encoding;
@@ -586,7 +629,9 @@ exec_inline_script(html_content *c, dom_node *node, dom_string *mimetype)
 	lwc_string_unref(lwcmimetype);
 
 	if (script_handler != NULL) {
-		script_handler(c->jsthread,
+		html_script_run(c,
+			       node,
+			       script_handler,
 			       (const uint8_t *)dom_string_data(script),
 			       dom_string_byte_length(script),
 			       "?inline script?");
@@ -687,6 +732,9 @@ slateerror html_script_free(html_content *html)
 		if (html->scripts[i].mimetype != NULL) {
 			dom_string_unref(html->scripts[i].mimetype);
 		}
+		if (html->scripts[i].node != NULL) {
+			dom_node_unref(html->scripts[i].node);
+		}
 
 		switch (html->scripts[i].type) {
 		case HTML_SCRIPT_INLINE:
@@ -706,6 +754,10 @@ slateerror html_script_free(html_content *html)
 		}
 	}
 	free(html->scripts);
+	if (html->current_script != NULL) {
+		dom_node_unref(html->current_script);
+		html->current_script = NULL;
+	}
 
 	return SLATEERROR_OK;
 }

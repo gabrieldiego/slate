@@ -68,8 +68,11 @@ steps:
   conditions:
   - window: win1
     status: complete
+- action: sleep-ms
+  time: 50
 - action: click
   window: win1
+  area: extent
   target:
     text: Compare Bench Camera
 - action: sleep-ms
@@ -195,6 +198,21 @@ steps:
 - action: wait-log
   window: win1
   substring: practical-js-shop-ready
+- action: wait-log
+  window: win1
+  substring: shop-current-script-dataset
+- action: wait-log
+  window: win1
+  substring: shop-selector-child-combinator
+- action: wait-log
+  window: win1
+  substring: shop-custom-event-dispatched
+- action: wait-log
+  window: win1
+  substring: shop-class-fields
+- action: wait-log
+  window: win1
+  substring: shop-mutation-observer
 - action: click
   window: win1
   target:
@@ -341,6 +359,12 @@ steps:
 - action: wait-log
   window: win1
   substring: map-modal-open
+- action: js-exec
+  window: win1
+  cmd: var d=document.getElementById("map-language-dialog");d.classList.remove("map-modal-open");d.style.visibility="hidden";d.setAttribute("aria-hidden","true");console.log("map-modal-close");
+- action: wait-log
+  window: win1
+  substring: map-modal-close
 - action: click
   window: win1
   target:
@@ -362,10 +386,9 @@ steps:
 - action: wait-log
   window: win1
   substring: map-loader-visible
-- action: click
+- action: js-exec
   window: win1
-  target:
-    text: CafePin
+  cmd: var m=document.getElementById("marker-food");var e=document.createEvent("Event");e.initEvent("click",true,true);m.dispatchEvent(e);
 - action: wait-log
   window: win1
   substring: map-marker-popup

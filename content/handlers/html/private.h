@@ -133,6 +133,8 @@ typedef struct html_content {
 
 	/* Title element node */
 	dom_node *title;
+	/** Script element currently executing, or NULL. */
+	dom_node *current_script;
 
 	/** A talloc context purely for the render box tree */
 	int *bctx;

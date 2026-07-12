@@ -76,6 +76,7 @@ struct html_script {
 		struct hlcache_handle *handle;
 		struct dom_string *string;
 	} data;	/**< Script data */
+	struct dom_node *node; /**< Script element for delayed execution */
 	struct dom_string *mimetype;
 	struct dom_string *encoding;
 	bool already_started;

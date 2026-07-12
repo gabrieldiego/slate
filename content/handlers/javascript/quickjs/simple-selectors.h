@@ -437,20 +437,59 @@ slatejs_selector_part_matches(dom_node *node, const char *selector,
 
 static bool
 slatejs_selector_prev_token(const char *start, const char **endp,
-		const char **token, size_t *token_len)
+		const char **token, size_t *token_len, char *combinator)
 {
 	const char *end = *endp;
 	const char *begin;
+	unsigned int attr_depth = 0;
+	char quote = '\0';
 
 	while (end > start && isspace((unsigned char)end[-1])) {
 		end--;
+	}
+	if (end > start && end[-1] == '>') {
+		*combinator = '>';
+		end--;
+		while (end > start && isspace((unsigned char)end[-1])) {
+			end--;
+		}
+	} else {
+		*combinator = ' ';
 	}
 	if (end == start) {
 		return false;
 	}
 
 	begin = end;
-	while (begin > start && !isspace((unsigned char)begin[-1])) {
+	while (begin > start) {
+		char c = begin[-1];
+
+		if (quote != '\0') {
+			if (c == quote) {
+				quote = '\0';
+			}
+			begin--;
+			continue;
+		}
+		if (c == '"' || c == '\'') {
+			quote = c;
+			begin--;
+			continue;
+		}
+		if (c == ']') {
+			attr_depth++;
+			begin--;
+			continue;
+		}
+		if (c == '[' && attr_depth > 0) {
+			attr_depth--;
+			begin--;
+			continue;
+		}
+		if (attr_depth == 0 &&
+				(isspace((unsigned char)c) || c == '>')) {
+			break;
+		}
 		begin--;
 	}
 
@@ -468,13 +507,15 @@ slatejs_selector_sequence_matches(dom_node *node, const char *selector,
 	const char *scan_end;
 	const char *token;
 	size_t token_len;
+	char combinator;
 	dom_node *cur = node;
 	bool cur_owned = false;
 
 	start = slatejs_selector_trim(selector, &selector_len);
 	scan_end = start + selector_len;
 
-	if (!slatejs_selector_prev_token(start, &scan_end, &token, &token_len)) {
+	if (!slatejs_selector_prev_token(start, &scan_end,
+			&token, &token_len, &combinator)) {
 		return false;
 	}
 
@@ -483,7 +524,7 @@ slatejs_selector_sequence_matches(dom_node *node, const char *selector,
 	}
 
 	while (slatejs_selector_prev_token(start, &scan_end,
-			&token, &token_len)) {
+			&token, &token_len, &combinator)) {
 		dom_node *candidate = NULL;
 		bool found = false;
 
@@ -498,24 +539,36 @@ slatejs_selector_sequence_matches(dom_node *node, const char *selector,
 			cur_owned = false;
 		}
 
-		while (candidate != NULL) {
-			dom_node *parent = NULL;
-
-			if (slatejs_selector_part_matches(candidate,
-					token, token_len)) {
+		if (combinator == '>') {
+			if (candidate != NULL &&
+					slatejs_selector_part_matches(candidate,
+						token, token_len)) {
 				cur = candidate;
 				cur_owned = true;
 				found = true;
-				break;
-			}
-
-			if (dom_node_get_parent_node(candidate, &parent) !=
-					DOM_NO_ERR) {
+			} else if (candidate != NULL) {
 				dom_node_unref(candidate);
-				break;
 			}
-			dom_node_unref(candidate);
-			candidate = parent;
+		} else {
+			while (candidate != NULL) {
+				dom_node *parent = NULL;
+
+				if (slatejs_selector_part_matches(candidate,
+						token, token_len)) {
+					cur = candidate;
+					cur_owned = true;
+					found = true;
+					break;
+				}
+
+				if (dom_node_get_parent_node(candidate, &parent) !=
+						DOM_NO_ERR) {
+					dom_node_unref(candidate);
+					break;
+				}
+				dom_node_unref(candidate);
+				candidate = parent;
+			}
 		}
 
 		if (!found) {

@@ -126,6 +126,71 @@
 		});
 	}
 
+	function verifyMarketplaceSelectors() {
+		var heading = document.querySelector(".shop-marketplace > h2");
+		var cards = document.querySelectorAll(".shop-marketplace > .marketplace-card");
+		var firstNav = document.querySelector("#marketplace-nav > li[data-track='electronics']");
+
+		if (heading && cards.length === 3 && firstNav) {
+			console.log("shop-selector-child-combinator");
+		}
+	}
+
+	function verifyMarketplaceEvents() {
+		window.addEventListener("shop-marketplace-event", function (event) {
+			if (event.detail && event.detail.source === "marketplace") {
+				console.log("shop-custom-event-dispatched");
+			}
+		});
+		window.dispatchEvent(new CustomEvent("shop-marketplace-event", {
+			detail: window.shopInlinePayload || { source: "marketplace" }
+		}));
+	}
+
+	function verifyMarketplaceClassFields() {
+		class MarketplaceRequest {
+			xhr;
+			route;
+			async;
+			static MAX_TIMEOUT;
+
+			constructor(route) {
+				this.route = route;
+				this.async = true;
+			}
+
+			attach(xhr) {
+				this.xhr = xhr;
+				return this.route + ":" + this.xhr;
+			}
+		}
+
+		MarketplaceRequest.MAX_TIMEOUT = 5000;
+		var request = new MarketplaceRequest("/shop/search");
+		if (request.async &&
+				request.attach("inventory") === "/shop/search:inventory" &&
+				MarketplaceRequest.MAX_TIMEOUT === 5000) {
+			console.log("shop-class-fields");
+		}
+	}
+
+	function verifyMarketplaceMutationObserver() {
+		var target = document.getElementById("shop-products");
+		var observer = new MutationObserver(function () {});
+		var records;
+
+		observer.observe(target, {
+			childList: true,
+			subtree: true
+		});
+		records = observer.takeRecords();
+		observer.disconnect();
+
+		if (records && records.length === 0) {
+			console.log("shop-mutation-observer");
+		}
+	}
+
 	document.getElementById("cart-discount").onclick = function () {
 		discount = 20;
 		renderCart();
@@ -159,6 +224,10 @@
 	renderProducts(data);
 	renderRecommendations();
 	renderReviews();
+	verifyMarketplaceSelectors();
+	verifyMarketplaceEvents();
+	verifyMarketplaceClassFields();
+	verifyMarketplaceMutationObserver();
 	setText(status, "Practical Bench JS shop ready");
 	console.log("practical-js-shop-ready");
 }());

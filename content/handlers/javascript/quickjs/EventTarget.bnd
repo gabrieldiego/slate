@@ -128,6 +128,93 @@ static void event_target_unregister_listener(slatejs_context *ctx,
 	/* ... */
 }
 
+static void event_target_dispatch_js_listeners(slatejs_context *ctx,
+		dom_event *evt,
+		slatejs_idx_t event_idx)
+{
+	dom_string *name = NULL;
+	slatejs_uarridx_t idx;
+	event_listener_flags flags;
+
+	event_idx = slatejs_normalize_index(ctx, event_idx);
+
+	if (dom_event_get_type(evt, &name) != DOM_NO_ERR || name == NULL) {
+		return;
+	}
+
+	slatejs_push_lstring(ctx, dom_string_data(name), dom_string_length(name));
+	slatejs_push_this(ctx);
+	/* ... type this */
+	if (slatejs_bind_event_target_push_listeners(ctx, true)) {
+		slatejs_pop(ctx);
+		dom_string_unref(name);
+		return;
+	}
+
+	slatejs_push_array(ctx);
+	idx = 0;
+	while (slatejs_get_prop_index(ctx, -2, idx)) {
+		slatejs_get_prop_index(ctx, -1, 1);
+		if ((event_listener_flags)slatejs_to_int(ctx, -1) & ELF_ONCE) {
+			slatejs_dup(ctx, -4);
+			slatejs_bind_shuffle_array(ctx, idx);
+			slatejs_pop(ctx);
+		}
+		slatejs_pop(ctx);
+		slatejs_put_prop_index(ctx, -2, idx);
+		idx++;
+	}
+	slatejs_pop(ctx);
+	slatejs_insert(ctx, -2);
+	slatejs_pop(ctx);
+
+	idx = 0;
+	while (slatejs_get_prop_index(ctx, -1, idx++)) {
+		if (slatejs_get_prop_index(ctx, -1, 2)) {
+			slatejs_pop_2(ctx);
+			continue;
+		}
+		slatejs_pop(ctx);
+		slatejs_get_prop_index(ctx, -1, 0);
+		slatejs_get_prop_index(ctx, -2, 1);
+		flags = (event_listener_flags)slatejs_get_int(ctx, -1);
+		slatejs_pop(ctx);
+		if (flags & ELF_CAPTURE) {
+			slatejs_pop_2(ctx);
+			continue;
+		}
+
+		slatejs_push_this(ctx);
+		slatejs_dup(ctx, event_idx);
+		if (slatejs_pcall_method(ctx, 1) != 0) {
+			NSLOG(quickjs, DEBUG, "EventTarget listener failed");
+			slatejs_get_prop_string(ctx, -1, "name");
+			slatejs_get_prop_string(ctx, -2, "message");
+			slatejs_get_prop_string(ctx, -3, "fileName");
+			slatejs_get_prop_string(ctx, -4, "lineNumber");
+			slatejs_get_prop_string(ctx, -5, "stack");
+			NSLOG(jserrors, WARNING, "JavaScript callback error: %s: %s",
+			      slatejs_safe_to_string(ctx, -5),
+			      slatejs_safe_to_string(ctx, -4));
+			NSLOG(jserrors, WARNING,
+			      "JavaScript callback location: %s line %s",
+			      slatejs_safe_to_string(ctx, -3),
+			      slatejs_safe_to_string(ctx, -2));
+			NSLOG(jserrors, WARNING, "JavaScript callback stack: %s",
+			      slatejs_safe_to_string(ctx, -1));
+			slatejs_pop_n(ctx, 7);
+			continue;
+		}
+		if (slatejs_is_boolean(ctx, -1) &&
+				slatejs_to_boolean(ctx, -1) == 0) {
+			dom_event_prevent_default(evt);
+		}
+		slatejs_pop_2(ctx);
+	}
+	slatejs_pop_2(ctx);
+	dom_string_unref(name);
+}
+
 
 %}
 
@@ -262,8 +349,11 @@ method EventTarget::dispatchEvent()
 
 	if (dom_event_set_is_trusted(evt, false) != DOM_NO_ERR) return 0;
 
-	/** \todo work out how to dispatch against non-node things */
-	if (priv->is_node == false) return 0;
+	if (priv->is_node == false) {
+		event_target_dispatch_js_listeners(ctx, evt, 0);
+		slatejs_push_boolean(ctx, true);
+		return 1;
+	}
 
 	bool success;
 	/* Event prepared, dispatch against ourselves */
