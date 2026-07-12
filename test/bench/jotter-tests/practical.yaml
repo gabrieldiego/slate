@@ -30,6 +30,7 @@ steps:
   - ${SLATE_BENCH_ROOT}/practical-search-results.html
   - ${SLATE_BENCH_ROOT}/practical-product-listing.html
   - ${SLATE_BENCH_ROOT}/practical-checkout.html
+  - ${SLATE_BENCH_ROOT}/practical-verification-wall.html
   - ${SLATE_BENCH_ROOT}/practical-submit-inputs.html
   - ${SLATE_BENCH_ROOT}/practical-profile-settings.html
   - ${SLATE_BENCH_ROOT}/practical-social-thread.html
@@ -61,6 +62,8 @@ steps:
     text: Search Practical Bench
 - action: sleep-ms
   time: 50
+- action: clear-log
+  window: win1
 - action: navigate
   window: win1
   url: ${SLATE_BENCH_ROOT}/practical-product-listing.html
@@ -68,8 +71,9 @@ steps:
   conditions:
   - window: win1
     status: complete
-- action: sleep-ms
-  time: 50
+- action: wait-log
+  window: win1
+  substring: "practical-common-ready Practical Bench Product Listing"
 - action: click
   window: win1
   area: extent
@@ -144,6 +148,45 @@ steps:
     status: complete
 - action: window-close
   window: win2
+- action: clear-log
+  window: win1
+- action: navigate
+  window: win1
+  url: ${SLATE_BENCH_ROOT}/practical-verification-wall.html
+- action: block
+  conditions:
+  - window: win1
+    status: complete
+- action: wait-log
+  window: win1
+  substring: practical-verification-wall-ready
+- action: wait-log
+  window: win1
+  substring: verification-wall-detected
+- action: plot-check
+  window: win1
+  area: extent
+  checks:
+  - text-contains: Verification required
+  - text-contains: I am not a robot
+  - text-contains: Submit Verification Form
+- action: click
+  window: win1
+  area: extent
+  target:
+    text: I am not a robot
+    offset-x: -30
+- action: wait-log
+  window: win1
+  substring: verification-wall-checkbox-checked
+- action: click
+  window: win1
+  area: extent
+  target:
+    text: Continue to Practical Site
+- action: wait-log
+  window: win1
+  substring: verification-wall-continue-clicked
 - action: navigate
   window: win1
   url: ${SLATE_BENCH_ROOT}/practical-interaction.html
@@ -379,10 +422,9 @@ steps:
 - action: wait-log
   window: win1
   substring: map-route-reversed
-- action: click
+- action: js-exec
   window: win1
-  target:
-    text: Loader
+  cmd: var b=document.getElementById("route-loader-toggle");var e=document.createEvent("Event");e.initEvent("click",true,true);b.dispatchEvent(e);
 - action: wait-log
   window: win1
   substring: map-loader-visible

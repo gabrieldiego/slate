@@ -7,6 +7,7 @@ JOTTER="${ROOT}/jotter"
 TIMEOUT_SECS=30
 WAIT_TIMEOUT_MS=""
 WAITS=()
+DUMP_TEXT=0
 PAGE=""
 
 usage() {
@@ -25,6 +26,7 @@ Options:
   --wait-timeout MS     Timeout applied to each --wait check
   --wait TEXT           Wait for a console log substring
                         may be repeated
+  --dump-text           Print rendered TEXT plot commands before quitting
   -h, --help            Show this help
 EOF
 }
@@ -86,6 +88,10 @@ while [ "$#" -gt 0 ]; do
 			WAITS+=("${1#*=}")
 			shift
 			;;
+		--dump-text)
+			DUMP_TEXT=1
+			shift
+			;;
 		-h|--help)
 			usage
 			exit 0
@@ -145,6 +151,12 @@ URL="$(page_to_url "${PAGE}")"
 			printf '%s\n' "  timeout: ${WAIT_TIMEOUT_MS}"
 		fi
 	done
+	if [ "${DUMP_TEXT}" -eq 1 ]; then
+		printf '%s\n' "- action: dump-plot"
+		printf '%s\n' "  window: win1"
+		printf '%s\n' "  area: extent"
+		printf '%s\n' "  kind: TEXT"
+	fi
 	printf '%s\n' "- action: quit"
 } >"${PLAN}"
 

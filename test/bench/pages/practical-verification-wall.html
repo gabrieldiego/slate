@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Practical Bench Verification Wall</title>
+<link rel="stylesheet" href="bench-shared.css">
+<style>
+body {
+	background: #f3f5f7;
+	color: #1f2a33;
+	font-family: Arial, sans-serif;
+	margin: 0;
+}
+.verification-shell {
+	max-width: 760px;
+	margin: 28px auto;
+	padding: 0 16px;
+}
+.verification-card {
+	background: #ffffff;
+	border: 1px solid #c7d1da;
+	box-shadow: 0 8px 24px rgba(28, 42, 56, 0.12);
+	padding: 22px;
+}
+.verification-kicker {
+	color: #5b6975;
+	font-size: 13px;
+	font-weight: bold;
+	letter-spacing: 0;
+	text-transform: uppercase;
+}
+.verification-grid {
+	display: grid;
+	grid-template-columns: 1fr 220px;
+	gap: 18px;
+	align-items: start;
+}
+.challenge-box {
+	border: 1px solid #9ba9b5;
+	background: #f7fafc;
+	padding: 14px;
+}
+.challenge-box label {
+	display: block;
+	font-size: 18px;
+	font-weight: bold;
+	margin-bottom: 10px;
+}
+.challenge-box input {
+	width: 22px;
+	height: 22px;
+	vertical-align: middle;
+	margin-right: 8px;
+}
+.challenge-actions {
+	margin-top: 14px;
+}
+.challenge-actions button,
+.challenge-actions a {
+	display: inline-block;
+	border: 1px solid #415a72;
+	background: #e9f1f8;
+	color: #172635;
+	padding: 8px 12px;
+	text-decoration: none;
+}
+.challenge-actions button[disabled] {
+	color: #6e7b86;
+	background: #eef1f4;
+}
+.challenge-details {
+	border-left: 4px solid #6b8db0;
+	background: #eef4fa;
+	padding: 12px;
+}
+.challenge-details dt {
+	font-weight: bold;
+}
+.challenge-details dd {
+	margin: 0 0 8px 0;
+}
+.fallback-form {
+	border-top: 1px solid #d3dce4;
+	margin-top: 18px;
+	padding-top: 14px;
+}
+.fallback-form input[type="text"] {
+	border: 1px solid #9ba9b5;
+	padding: 7px;
+	width: 180px;
+}
+#verification-result {
+	margin-top: 14px;
+	padding: 10px;
+	border: 1px solid #aeb9c3;
+	background: #f8fbfd;
+}
+</style>
+</head>
+<body class="bench-page">
+<main class="verification-shell" data-challenge="rate-limit">
+<section class="verification-card" aria-labelledby="verification-title">
+<p class="verification-kicker">Practical Bench verification interstitial</p>
+<h1 id="verification-title">Verification required</h1>
+<p>Practical Bench checkpoint page for inspecting human verification walls.</p>
+<p>This page represents a common rate-control wall with a manual human check, fallback token form, diagnostics, and a normal continue action.</p>
+<div class="verification-grid">
+<div class="challenge-box" id="challenge-box">
+<label><input id="human-check" type="checkbox" name="human-check" value="1"> I am not a robot</label>
+<p id="challenge-message">Check the box to enable the continuation control.</p>
+<div class="challenge-actions">
+<button id="continue-button" type="button" disabled>Continue to Practical Site</button>
+<a id="help-link" href="#verification-help">Why am I seeing this?</a>
+</div>
+<p id="verification-result">Waiting for manual verification.</p>
+</div>
+<dl class="challenge-details">
+<dt>HTTP status</dt><dd>429 Too Many Requests</dd>
+<dt>Challenge kind</dt><dd>human verification wall</dd>
+<dt>Session marker</dt><dd id="session-marker">bench-session-pending</dd>
+</dl>
+</div>
+<form class="fallback-form" action="about:blank" method="post">
+<fieldset>
+<legend>Fallback challenge form</legend>
+<input type="hidden" name="challenge-token" value="bench-token-123">
+<label>Visible code <input id="visible-code" type="text" name="visible-code" value="bench"></label>
+<button type="submit">Submit Verification Form</button>
+</fieldset>
+</form>
+<section id="verification-help">
+<h2>Manual inspection notes</h2>
+<p>Slate should show the reason text, the checkbox, the continue button, the fallback form, and the help link without hiding controls behind overlays.</p>
+</section>
+</section>
+</main>
+<script src="practical-verification-wall.js"></script>
+</body>
+</html>
