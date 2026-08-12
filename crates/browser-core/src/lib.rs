@@ -1,7 +1,11 @@
 #![forbid(unsafe_code)]
 
+use core::fmt;
 use slate_apps::AppId;
-use slate_rendering::{MetricAccent, RenderBackend, RenderMetric, RenderSurface};
+use slate_rendering::{
+    MetricAccent, RenderBackend, RenderDocument, RenderMetric, RenderSurface, ServoBackend,
+};
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BrowserState {
@@ -24,6 +28,21 @@ pub struct BrowserStatus {
     pub privacy: String,
     pub sync: String,
 }
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum NavigationError {
+    Empty,
+}
+
+impl fmt::Display for NavigationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Empty => formatter.write_str("navigation input is empty"),
+        }
+    }
+}
+
+impl std::error::Error for NavigationError {}
 
 impl BrowserState {
     pub fn new<B: RenderBackend>(backend: &B) -> Self {
@@ -59,13 +78,12 @@ impl BrowserState {
     }
 
     pub fn activate_tab(&mut self, index: usize) -> bool {
-        let Some(tab) = self.tabs.get(index) else {
+        let Some(tab) = self.tabs.get(index).cloned() else {
             return false;
         };
 
         self.active_tab = index;
-        self.active_app = app_for_address(&tab.address);
-        self.surface = surface_for_tab(tab);
+        self.open_tab_surface(&tab);
         true
     }
 
@@ -76,36 +94,9 @@ impl BrowserState {
                 .active_tab()
                 .map(surface_for_tab)
                 .unwrap_or_else(surface_for_web_home),
-            AppId::Downloads => app_surface(
-                "Downloads",
-                "slate://downloads",
-                "Download queue and saved broadweb files.",
-                [
-                    ("Active", "0", MetricAccent::Teal),
-                    ("Pinned", "3", MetricAccent::Blue),
-                    ("Verified", "On", MetricAccent::Amber),
-                ],
-            ),
-            AppId::Calendar => app_surface(
-                "Calendar",
-                "slate://calendar",
-                "Local-first calendar surface.",
-                [
-                    ("Today", "11", MetricAccent::Teal),
-                    ("Events", "4", MetricAccent::Blue),
-                    ("Private", "On", MetricAccent::Amber),
-                ],
-            ),
-            AppId::Messaging => app_surface(
-                "Messaging",
-                "slate://messages",
-                "Private messaging surface.",
-                [
-                    ("Inbox", "2", MetricAccent::Teal),
-                    ("Muted", "1", MetricAccent::Amber),
-                    ("Routes", "Tor", MetricAccent::Blue),
-                ],
-            ),
+            AppId::Downloads => downloads_surface(),
+            AppId::Calendar => calendar_surface(),
+            AppId::Messaging => messaging_surface(),
         };
     }
 
@@ -118,6 +109,148 @@ impl BrowserState {
         let index = self.tabs.len().saturating_sub(1);
         let _ = self.activate_tab(index);
     }
+
+    pub fn navigate(&mut self, input: &str) -> Result<(), NavigationError> {
+        let address = normalize_navigation_input(input)?;
+        let surface = surface_for_address(&address, None);
+        let tab = Tab {
+            title: surface.title.clone(),
+            address: surface.address.clone(),
+        };
+
+        if let Some(active_tab) = self.tabs.get_mut(self.active_tab) {
+            *active_tab = tab;
+        } else {
+            self.tabs.push(tab);
+            self.active_tab = self.tabs.len().saturating_sub(1);
+        }
+
+        self.active_app = app_for_address(&surface.address);
+        self.surface = surface;
+        Ok(())
+    }
+
+    fn open_tab_surface(&mut self, tab: &Tab) {
+        self.active_app = app_for_address(&tab.address);
+        self.surface = surface_for_tab(tab);
+    }
+}
+
+pub fn normalize_navigation_input(input: &str) -> Result<String, NavigationError> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Err(NavigationError::Empty);
+    }
+
+    let lower = trimmed.to_ascii_lowercase();
+    if has_supported_scheme(&lower) {
+        return Ok(trimmed.to_string());
+    }
+
+    if looks_like_local_html_path(&lower) {
+        return Ok(local_file_address(trimmed));
+    }
+
+    if lower.contains("://") {
+        return Ok(format!("slate://search?q={}", encode_query(trimmed)));
+    }
+
+    if looks_like_host(trimmed) {
+        if lower.starts_with("localhost") || lower.contains(".onion") || lower.contains(".i2p") {
+            Ok(format!("http://{trimmed}"))
+        } else {
+            Ok(format!("https://{trimmed}"))
+        }
+    } else {
+        Ok(format!("slate://search?q={}", encode_query(trimmed)))
+    }
+}
+
+fn has_supported_scheme(lower: &str) -> bool {
+    lower.starts_with("slate://")
+        || lower.starts_with("https://")
+        || lower.starts_with("http://")
+        || lower.starts_with("ipfs://")
+        || lower.starts_with("ipns://")
+        || lower.starts_with("i2p://")
+        || lower.starts_with("file://")
+}
+
+fn looks_like_local_html_path(lower: &str) -> bool {
+    lower.ends_with(".html") || lower.ends_with(".htm")
+}
+
+fn local_file_address(input: &str) -> String {
+    let path = Path::new(input);
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(path)
+    };
+
+    format!(
+        "file://{}",
+        percent_encode_file_path(&absolute.to_string_lossy())
+    )
+}
+
+fn looks_like_host(input: &str) -> bool {
+    !input.chars().any(char::is_whitespace)
+        && (input.contains('.')
+            || input.starts_with("localhost")
+            || input.split(':').next().is_some_and(is_ipv4_like))
+}
+
+fn is_ipv4_like(input: &str) -> bool {
+    let mut segment_count = 0;
+    for segment in input.split('.') {
+        if segment.is_empty() || !segment.chars().all(|ch| ch.is_ascii_digit()) {
+            return false;
+        }
+        segment_count += 1;
+    }
+    segment_count == 4
+}
+
+fn encode_query(input: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut output = String::new();
+
+    for ch in input.chars() {
+        if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | '~') {
+            output.push(ch);
+        } else if ch.is_whitespace() {
+            output.push('+');
+        } else {
+            let mut buffer = [0_u8; 4];
+            for byte in ch.encode_utf8(&mut buffer).bytes() {
+                output.push('%');
+                output.push(char::from(HEX[usize::from(byte / 16)]));
+                output.push(char::from(HEX[usize::from(byte % 16)]));
+            }
+        }
+    }
+
+    output
+}
+
+fn percent_encode_file_path(input: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut output = String::new();
+
+    for byte in input.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'-' | b'_' | b'~') {
+            output.push(char::from(byte));
+        } else {
+            output.push('%');
+            output.push(char::from(HEX[usize::from(byte / 16)]));
+            output.push(char::from(HEX[usize::from(byte % 16)]));
+        }
+    }
+
+    output
 }
 
 fn app_for_address(address: &str) -> AppId {
@@ -133,32 +266,66 @@ fn app_for_address(address: &str) -> AppId {
 }
 
 fn surface_for_tab(tab: &Tab) -> RenderSurface {
-    if tab.address == "slate://home" || tab.address == "slate://new" {
-        surface_for_web_home()
-    } else {
-        app_surface(
-            &tab.title,
-            &tab.address,
-            "Servo boundary active; page rendering pending.",
-            [
-                ("Privacy", "On", MetricAccent::Teal),
-                ("Trackers", "23", MetricAccent::Amber),
-                ("Routes", "4", MetricAccent::Blue),
-            ],
-        )
+    surface_for_address(&tab.address, Some(&tab.title))
+}
+
+fn surface_for_address(address: &str, fallback_title: Option<&str>) -> RenderSurface {
+    match app_for_address(address) {
+        AppId::Downloads => downloads_surface(),
+        AppId::Calendar => calendar_surface(),
+        AppId::Messaging => messaging_surface(),
+        AppId::Web => {
+            let backend = ServoBackend;
+            let mut surface = backend.load_address(address);
+            if let Some(fallback_title) = fallback_title
+                && surface.title.is_empty()
+            {
+                surface.title = fallback_title.to_string();
+            }
+            surface
+        }
     }
 }
 
 fn surface_for_web_home() -> RenderSurface {
+    ServoBackend.load_home()
+}
+
+fn downloads_surface() -> RenderSurface {
     app_surface(
-        "New Tab",
-        "slate://home",
-        "Servo boundary active; renderer embedding pending.",
+        "Downloads",
+        "slate://downloads",
+        "Download queue and saved broadweb files.",
         [
-            ("Privacy First", "", MetricAccent::Teal),
-            ("Tracker Blocked", "23", MetricAccent::Amber),
-            ("Ads Blocked", "184", MetricAccent::Blue),
-            ("Time Saved", "2h 14m", MetricAccent::Teal),
+            ("Active", "0", MetricAccent::Teal),
+            ("Pinned", "3", MetricAccent::Blue),
+            ("Verified", "On", MetricAccent::Amber),
+        ],
+    )
+}
+
+fn calendar_surface() -> RenderSurface {
+    app_surface(
+        "Calendar",
+        "slate://calendar",
+        "Local-first calendar surface.",
+        [
+            ("Today", "11", MetricAccent::Teal),
+            ("Events", "4", MetricAccent::Blue),
+            ("Private", "On", MetricAccent::Amber),
+        ],
+    )
+}
+
+fn messaging_surface() -> RenderSurface {
+    app_surface(
+        "Messaging",
+        "slate://messages",
+        "Private messaging surface.",
+        [
+            ("Inbox", "2", MetricAccent::Teal),
+            ("Muted", "1", MetricAccent::Amber),
+            ("Routes", "Tor", MetricAccent::Blue),
         ],
     )
 }
@@ -181,13 +348,14 @@ fn app_surface<const N: usize>(
                 accent,
             })
             .collect(),
+        document: RenderDocument::App,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::BrowserState;
-    use slate_rendering::ServoBackend;
+    use super::{BrowserState, normalize_navigation_input, percent_encode_file_path};
+    use slate_rendering::{RenderDocument, ServoBackend};
 
     #[test]
     fn initial_state_has_home_tab() {
@@ -214,5 +382,54 @@ mod tests {
             state.active_tab().map(|tab| tab.address.as_str()),
             Some("slate://new")
         );
+    }
+
+    #[test]
+    fn navigation_normalizes_bare_hosts() {
+        assert_eq!(
+            normalize_navigation_input("servo.org").expect("address"),
+            "https://servo.org"
+        );
+        assert_eq!(
+            normalize_navigation_input("localhost:8080").expect("address"),
+            "http://localhost:8080"
+        );
+    }
+
+    #[test]
+    fn navigation_turns_search_terms_into_local_search() {
+        assert_eq!(
+            normalize_navigation_input("servo broadweb").expect("search"),
+            "slate://search?q=servo+broadweb"
+        );
+    }
+
+    #[test]
+    fn navigation_normalizes_local_html_paths() {
+        let path = std::env::temp_dir().join("slate local page.html");
+        let path = path.to_string_lossy();
+        assert_eq!(
+            normalize_navigation_input(&path).expect("file address"),
+            format!("file://{}", percent_encode_file_path(&path))
+        );
+        assert_eq!(
+            normalize_navigation_input("file:///tmp/page.html").expect("file address"),
+            "file:///tmp/page.html"
+        );
+    }
+
+    #[test]
+    fn navigating_updates_active_tab_and_loads_html_shim() {
+        let mut state = BrowserState::new(&ServoBackend);
+        state
+            .navigate("slate://tests/hello")
+            .expect("navigation should load");
+
+        assert_eq!(state.surface.address, "slate://tests/hello");
+        assert_eq!(
+            state.active_tab().map(|tab| tab.title.as_str()),
+            Some("Slate HTML Shim")
+        );
+        assert!(matches!(state.surface.document, RenderDocument::Html(_)));
     }
 }

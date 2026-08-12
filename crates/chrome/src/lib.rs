@@ -4,7 +4,9 @@ use fontdb::{Database, Family, Query};
 use fontdue::{Font, FontSettings};
 use slate_apps::{AppDescriptor, AppIcon, AppId, default_apps};
 use slate_browser_core::BrowserState;
-use slate_rendering::{MetricAccent, RenderMetric};
+use slate_rendering::{
+    HtmlDocument, HtmlDocumentSource, MetricAccent, RenderDocument, RenderMetric,
+};
 
 const BG: u32 = 0x00FBFAF8;
 const SURFACE: u32 = 0x00FFFFFF;
@@ -76,6 +78,21 @@ enum WindowControl {
     Minimize,
     Maximize,
     Close,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ChromeKeyCommand {
+    Enter,
+    Escape,
+    Backspace,
+    Delete,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct AddressEditor {
+    focused: bool,
+    draft: String,
+    replace_on_input: bool,
 }
 
 struct TextRenderer {
@@ -195,6 +212,7 @@ pub struct ChromeView {
     apps: Vec<AppDescriptor>,
     text: TextRenderer,
     window_state: WindowVisualState,
+    address_editor: AddressEditor,
 }
 
 impl ChromeView {
@@ -204,6 +222,7 @@ impl ChromeView {
             apps: default_apps().to_vec(),
             text: TextRenderer::load(),
             window_state: WindowVisualState::Normal,
+            address_editor: AddressEditor::default(),
         }
     }
 
@@ -213,6 +232,73 @@ impl ChromeView {
 
     pub fn set_window_state(&mut self, state: WindowVisualState) {
         self.window_state = state;
+    }
+
+    pub fn focus_address_bar(&mut self) {
+        self.address_editor.focused = true;
+        self.address_editor.draft = self.state.surface.address.clone();
+        self.address_editor.replace_on_input = true;
+    }
+
+    pub fn is_address_bar_focused(&self) -> bool {
+        self.address_editor.focused
+    }
+
+    pub fn address_draft(&self) -> &str {
+        &self.address_editor.draft
+    }
+
+    pub fn handle_text_input(&mut self, ch: char) -> bool {
+        if !self.address_editor.focused || ch.is_control() {
+            return false;
+        }
+
+        if self.address_editor.replace_on_input {
+            self.address_editor.draft.clear();
+            self.address_editor.replace_on_input = false;
+        }
+
+        if self.address_editor.draft.len() < 2048 {
+            self.address_editor.draft.push(ch);
+        }
+        true
+    }
+
+    pub fn handle_key_command(&mut self, command: ChromeKeyCommand) -> bool {
+        if !self.address_editor.focused {
+            return false;
+        }
+
+        match command {
+            ChromeKeyCommand::Enter => {
+                let draft = self.address_editor.draft.clone();
+                if self.state.navigate(&draft).is_ok() {
+                    self.address_editor.focused = false;
+                    self.address_editor.replace_on_input = false;
+                }
+            }
+            ChromeKeyCommand::Escape => {
+                self.address_editor.focused = false;
+                self.address_editor.draft = self.state.surface.address.clone();
+                self.address_editor.replace_on_input = false;
+            }
+            ChromeKeyCommand::Backspace => {
+                if self.address_editor.replace_on_input {
+                    self.address_editor.draft.clear();
+                    self.address_editor.replace_on_input = false;
+                } else {
+                    let _ = self.address_editor.draft.pop();
+                }
+            }
+            ChromeKeyCommand::Delete => {
+                if self.address_editor.replace_on_input {
+                    self.address_editor.draft.clear();
+                    self.address_editor.replace_on_input = false;
+                }
+            }
+        }
+
+        true
     }
 
     pub fn handle_click(
@@ -234,19 +320,30 @@ impl ChromeView {
             return WindowCommand::None;
         }
 
+        if self.hit_address_bar(x, y, width) {
+            self.focus_address_bar();
+            return WindowCommand::None;
+        }
+
         if let Some(app) = self.hit_app(x, y, height) {
+            self.address_editor.focused = false;
             self.state.select_app(app);
             return WindowCommand::None;
         }
 
         if let Some(tab) = self.hit_tab(x, y, width) {
+            self.address_editor.focused = false;
             let _ = self.state.activate_tab(tab);
             return WindowCommand::None;
         }
 
         if self.hit_new_tab(x, y, width) {
+            self.address_editor.focused = false;
             self.state.add_mock_tab();
+            return WindowCommand::None;
         }
+
+        self.address_editor.focused = false;
 
         WindowCommand::None
     }
@@ -346,6 +443,12 @@ impl ChromeView {
         } else {
             None
         }
+    }
+
+    fn hit_address_bar(&self, x: usize, y: usize, width: usize) -> bool {
+        let (address_x, address_y, address_w, address_h) = address_bar_rect(width);
+        (address_x..address_x.saturating_add(address_w)).contains(&x)
+            && (address_y..address_y.saturating_add(address_h)).contains(&y)
     }
 
     fn draw_window(&self, canvas: &mut Canvas<'_>, width: usize, height: usize) {
@@ -518,18 +621,47 @@ impl ChromeView {
             TEXT,
         );
 
-        let address_x = rail_w + 170;
-        let address_w = width.saturating_sub(address_x + 130).max(160);
-        canvas.rounded_rect_panel(address_x, y + 15, address_w, 42, 8, BORDER, SURFACE);
+        let (address_x, address_y, address_w, address_h) = address_bar_rect(width);
+        let address_border = if self.address_editor.focused {
+            TEAL
+        } else {
+            BORDER
+        };
+        canvas.rounded_rect_panel(
+            address_x,
+            address_y,
+            address_w,
+            address_h,
+            8,
+            address_border,
+            SURFACE,
+        );
         self.draw_shield(canvas, address_x + 23, y + 36, 11, MUTED);
+        let address_text = if self.address_editor.focused {
+            self.address_editor.draft.as_str()
+        } else {
+            &self.state.surface.address
+        };
+        let address_text_x = address_x + 52;
+        let address_text_w = address_w.saturating_sub(98);
         canvas.draw_text_clipped(
-            address_x + 52,
+            address_text_x,
             y + 27,
             2,
-            &self.state.surface.address,
+            address_text,
             TEXT,
-            address_w.saturating_sub(98),
+            address_text_w,
         );
+        if self.address_editor.focused {
+            let caret_x = address_caret_x(
+                address_text_x,
+                canvas.measure_text(2, address_text),
+                address_text_w,
+            );
+            let caret_h = 20;
+            let caret_y = address_y + address_h.saturating_sub(caret_h) / 2;
+            canvas.vline(caret_x, caret_y, caret_h, TEAL);
+        }
         self.draw_star_icon(
             canvas,
             address_x + address_w.saturating_sub(28),
@@ -565,10 +697,85 @@ impl ChromeView {
 
     fn draw_content(&self, canvas: &mut Canvas<'_>, x: usize, y: usize, w: usize, h: usize) {
         match self.state.active_app {
-            AppId::Web => self.draw_home(canvas, x, y, w, h),
+            AppId::Web => match &self.state.surface.document {
+                RenderDocument::Html(document) => {
+                    self.draw_web_document(canvas, x, y, w, h, document);
+                }
+                RenderDocument::Home | RenderDocument::App => self.draw_home(canvas, x, y, w, h),
+            },
             AppId::Downloads => self.draw_downloads(canvas, x, y, w, h),
             AppId::Calendar => self.draw_calendar(canvas, x, y, w, h),
             AppId::Messaging => self.draw_messaging(canvas, x, y, w, h),
+        }
+    }
+
+    fn draw_web_document(
+        &self,
+        canvas: &mut Canvas<'_>,
+        x: usize,
+        y: usize,
+        w: usize,
+        h: usize,
+        document: &HtmlDocument,
+    ) {
+        canvas.rect(x, y, w, h, SURFACE);
+        let content_x = x + 76;
+        let content_w = w.saturating_sub(152).min(900);
+        let top_y = y + 62;
+
+        canvas.draw_text_clipped(content_x, top_y, 4, &document.heading, TEXT, content_w);
+        canvas.hline(content_x, top_y + 56, content_w, BORDER);
+
+        let badge_text = match document.source {
+            HtmlDocumentSource::BuiltinShim => "Servo HTML shim",
+            HtmlDocumentSource::NavigationShim => "Servo navigation shim",
+            HtmlDocumentSource::LocalFile => "Local HTML file",
+        };
+        let badge_w = canvas.measure_text(1, badge_text).saturating_add(22);
+        canvas.rounded_rect(content_x, top_y + 76, badge_w, 24, 12, TEAL_SOFT);
+        canvas.draw_text_clipped(
+            content_x + 11,
+            top_y + 82,
+            1,
+            badge_text,
+            TEAL,
+            badge_w.saturating_sub(22),
+        );
+
+        let mut paragraph_y = top_y + 126;
+        for paragraph in document.paragraphs.iter().take(5) {
+            canvas.draw_text_clipped(
+                content_x,
+                paragraph_y,
+                2,
+                paragraph,
+                TEXT,
+                content_w.min(760),
+            );
+            paragraph_y = paragraph_y.saturating_add(34);
+        }
+
+        let metric_y = y + h.saturating_sub(112);
+        let mut metric_x = content_x;
+        for metric in &self.state.surface.metrics {
+            let metric_text = if metric.value.is_empty() {
+                metric.label.clone()
+            } else {
+                format!("{} {}", metric.label, metric.value)
+            };
+            let text_w = canvas.measure_text(1, &metric_text);
+            let chip_w = text_w.saturating_add(48).min(220);
+            canvas.rounded_rect_panel(metric_x, metric_y, chip_w, 38, 8, BORDER, BG);
+            canvas.circle_fill(metric_x + 18, metric_y + 20, 5, metric_color(metric.accent));
+            canvas.draw_text_clipped(
+                metric_x + 32,
+                metric_y + 13,
+                1,
+                &metric_text,
+                TEXT,
+                chip_w.saturating_sub(38),
+            );
+            metric_x = metric_x.saturating_add(chip_w + 14);
         }
     }
 
@@ -1695,6 +1902,22 @@ fn window_control_positions(width: usize) -> [usize; 3] {
     ]
 }
 
+fn address_bar_rect(width: usize) -> (usize, usize, usize, usize) {
+    let x = RAIL_W + 170;
+    let y = TAB_H + 15;
+    let w = width.saturating_sub(x + 130).max(160);
+    (x, y, w, 42)
+}
+
+fn address_caret_x(text_x: usize, text_width: usize, max_width: usize) -> usize {
+    let visible_width = text_width.min(max_width);
+    let gap = usize::from(visible_width > 0);
+    text_x
+        .saturating_add(visible_width)
+        .saturating_add(gap)
+        .min(text_x.saturating_add(max_width))
+}
+
 fn channel(color: u32, shift: u32) -> u32 {
     (color >> shift) & 0xff
 }
@@ -1853,11 +2076,12 @@ fn glyph(ch: char) -> [u8; 7] {
 #[cfg(test)]
 mod tests {
     use super::{
-        APP_ICON_SIZE, ChromeView, HOME_FOOTER_SHIELD_MASK, HOME_FOOTER_SHIELD_SIZE,
-        HOME_HERO_SHIELD_MASK, HOME_HERO_SHIELD_SIZE, HOME_METRIC_ICON_SIZE, HOME_SEARCH_ICON_MASK,
-        HOME_SEARCH_ICON_SIZE, NAV_BACK_ICON_MASK, NAV_FORWARD_ICON_MASK, NAV_ICON_SIZE,
-        NAV_REFRESH_ICON_MASK, TAB_H, TAB_ICON_SIZE, TAB_X, TAB_Y, TOP_SHIELD_ICON_MASK,
-        TOP_SHIELD_ICON_SIZE, WindowCommand, app_icon_mask, home_metric_icon_mask, tab_icon_mask,
+        APP_ICON_SIZE, ChromeKeyCommand, ChromeView, HOME_FOOTER_SHIELD_MASK,
+        HOME_FOOTER_SHIELD_SIZE, HOME_HERO_SHIELD_MASK, HOME_HERO_SHIELD_SIZE,
+        HOME_METRIC_ICON_SIZE, HOME_SEARCH_ICON_MASK, HOME_SEARCH_ICON_SIZE, NAV_BACK_ICON_MASK,
+        NAV_FORWARD_ICON_MASK, NAV_ICON_SIZE, NAV_REFRESH_ICON_MASK, TAB_H, TAB_ICON_SIZE, TAB_X,
+        TAB_Y, TOP_SHIELD_ICON_MASK, TOP_SHIELD_ICON_SIZE, WindowCommand, address_bar_rect,
+        address_caret_x, app_icon_mask, home_metric_icon_mask, tab_icon_mask,
         window_control_positions,
     };
     use slate_apps::{AppIcon, AppId};
@@ -1890,6 +2114,50 @@ mod tests {
         view.handle_click(plus_x, TAB_Y + 20, 1280, 720);
         assert_eq!(view.state().tabs.len(), 4);
         assert_eq!(view.state().active_tab, 3);
+    }
+
+    #[test]
+    fn address_bar_accepts_input_and_navigates() {
+        let state = BrowserState::new(&ServoBackend);
+        let mut view = ChromeView::new(state);
+        let (address_x, address_y, _, _) = address_bar_rect(1280);
+
+        view.handle_click(address_x + 80, address_y + 20, 1280, 720);
+        assert!(view.is_address_bar_focused());
+
+        for ch in "slate://tests/hello".chars() {
+            assert!(view.handle_text_input(ch));
+        }
+        assert_eq!(view.address_draft(), "slate://tests/hello");
+        assert!(view.handle_key_command(ChromeKeyCommand::Enter));
+
+        assert!(!view.is_address_bar_focused());
+        assert_eq!(view.state().surface.address, "slate://tests/hello");
+        assert_eq!(
+            view.state().active_tab().map(|tab| tab.title.as_str()),
+            Some("Slate HTML Shim")
+        );
+    }
+
+    #[test]
+    fn address_bar_escape_restores_current_address() {
+        let state = BrowserState::new(&ServoBackend);
+        let mut view = ChromeView::new(state);
+        view.focus_address_bar();
+        assert!(view.handle_text_input('x'));
+        assert_eq!(view.address_draft(), "x");
+        assert!(view.handle_key_command(ChromeKeyCommand::Escape));
+
+        assert!(!view.is_address_bar_focused());
+        assert_eq!(view.address_draft(), "slate://home");
+        assert_eq!(view.state().surface.address, "slate://home");
+    }
+
+    #[test]
+    fn address_caret_tracks_visible_text_width() {
+        assert_eq!(address_caret_x(100, 0, 220), 100);
+        assert_eq!(address_caret_x(100, 36, 220), 137);
+        assert_eq!(address_caret_x(100, 360, 220), 320);
     }
 
     #[test]

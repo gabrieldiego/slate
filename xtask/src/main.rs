@@ -15,8 +15,12 @@ fn main() -> ExitCode {
         Some("run") => run("cargo", &["run", "-p", "slate"]),
         Some("fmt") => run("cargo", &["fmt", "--all"]),
         Some("snapshot") => snapshot(),
+        Some("snapshot-html") => snapshot_html(),
+        Some("snapshot-local") => snapshot_local(),
         _ => {
-            eprintln!("usage: cargo run -p xtask -- <check|test|run|fmt|snapshot>");
+            eprintln!(
+                "usage: cargo run -p xtask -- <check|test|run|fmt|snapshot|snapshot-html|snapshot-local>"
+            );
             ExitCode::from(2)
         }
     }
@@ -38,7 +42,7 @@ fn run(program: &str, args: &[&str]) -> ExitCode {
 }
 
 fn snapshot() -> ExitCode {
-    match write_snapshot(Path::new("target/slate-ui.ppm")) {
+    match write_snapshot(Path::new("target/slate-ui.ppm"), None) {
         Ok(()) => {
             println!("wrote target/slate-ui.ppm");
             ExitCode::SUCCESS
@@ -50,8 +54,47 @@ fn snapshot() -> ExitCode {
     }
 }
 
-fn write_snapshot(path: &Path) -> io::Result<()> {
-    let view = ChromeView::new(BrowserState::new(&ServoBackend));
+fn snapshot_html() -> ExitCode {
+    match write_snapshot(
+        Path::new("target/slate-ui-html.ppm"),
+        Some("slate://tests/hello"),
+    ) {
+        Ok(()) => {
+            println!("wrote target/slate-ui-html.ppm");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("failed to write HTML snapshot: {error}");
+            ExitCode::from(1)
+        }
+    }
+}
+
+fn snapshot_local() -> ExitCode {
+    match write_snapshot(
+        Path::new("target/slate-ui-local.ppm"),
+        Some("examples/local-page.html"),
+    ) {
+        Ok(()) => {
+            println!("wrote target/slate-ui-local.ppm");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("failed to write local HTML snapshot: {error}");
+            ExitCode::from(1)
+        }
+    }
+}
+
+fn write_snapshot(path: &Path, address: Option<&str>) -> io::Result<()> {
+    let mut state = BrowserState::new(&ServoBackend);
+    if let Some(address) = address {
+        state
+            .navigate(address)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    }
+
+    let view = ChromeView::new(state);
     let frame = view.render(1280, 720);
     let mut data = Vec::with_capacity(
         frame
