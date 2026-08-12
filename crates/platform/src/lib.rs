@@ -13,8 +13,8 @@ const MINIMIZED_WIDTH: usize = 440;
 const MINIMIZED_HEIGHT: usize = 136;
 const MAXIMIZED_WIDTH: usize = 1600;
 const MAXIMIZED_HEIGHT: usize = 900;
-const IDLE_SLEEP: Duration = Duration::from_millis(16);
-const INPUT_SLEEP: Duration = Duration::from_millis(4);
+const IDLE_SLEEP: Duration = Duration::from_millis(50);
+const INPUT_SLEEP: Duration = Duration::from_millis(16);
 const DRAG_SLEEP: Duration = Duration::from_millis(1);
 const KEY_REPEAT_DELAY: f32 = 0.18;
 const KEY_REPEAT_RATE: f32 = 0.025;
@@ -215,16 +215,13 @@ pub fn run_browser_window(mut view: ChromeView, config: WindowConfig) -> Result<
         }
 
         let dragging = drag.is_some();
-        if dragging && cached_frame.is_some() && !frame_dirty {
-            window.update();
-        } else {
-            if frame_dirty || cached_frame.is_none() {
-                cached_frame = Some(view.render(width.max(1), height.max(1)));
-                cached_size = (width, height);
-                frame_dirty = false;
-            }
-
+        if frame_dirty || cached_frame.is_none() {
+            cached_frame = Some(view.render(width.max(1), height.max(1)));
+            cached_size = (width, height);
+            frame_dirty = false;
             update_window_buffer(&mut window, cached_frame.as_ref())?;
+        } else {
+            window.update();
         }
 
         match process_keyboard_input(&text_input, &mut view) {
