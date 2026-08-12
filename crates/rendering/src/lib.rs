@@ -1,9 +1,32 @@
 #![forbid(unsafe_code)]
 
-use std::fs;
-use std::path::PathBuf;
+use core::fmt;
+use dpi::PhysicalSize;
+use headers::{ContentType, HeaderMapExt};
+use servo::protocol_handler::{
+    DoneChannel, FetchContext, HttpStatus, ProtocolHandler, ProtocolRegistry, Request,
+    ResourceFetchTiming, Response, ResponseBody,
+};
+use servo::{
+    EventLoopWaker, LoadStatus, Preferences, RenderingContext, Servo, ServoBuilder,
+    SoftwareRenderingContext, WebView, WebViewBuilder, WebViewDelegate,
+};
+use std::cell::RefCell;
+use std::future::Future;
+use std::pin::Pin;
+use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Once};
+use std::time::{Duration, Instant};
+use url::Url;
 
 pub const VENDORED_SERVO_PATH: &str = "third_party/servo";
+
+const SERVO_VIEWPORT_WIDTH: u32 = 1080;
+const SERVO_VIEWPORT_HEIGHT: u32 = 620;
+const LOAD_TIMEOUT: Duration = Duration::from_secs(20);
+const SCREENSHOT_TIMEOUT: Duration = Duration::from_secs(10);
+const SPIN_SLEEP: Duration = Duration::from_millis(4);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RenderSurface {
@@ -18,23 +41,38 @@ pub struct RenderSurface {
 pub enum RenderDocument {
     App,
     Home,
-    Html(HtmlDocument),
+    Web(ServoDocument),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct HtmlDocument {
+pub struct ServoDocument {
     pub title: String,
-    pub heading: String,
-    pub paragraphs: Vec<String>,
-    pub source: HtmlDocumentSource,
+    pub address: String,
+    pub frame: ServoFrame,
+    pub source: ServoDocumentSource,
+    pub status: ServoDocumentStatus,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ServoFrame {
+    pub width: usize,
+    pub height: usize,
+    pub pixels: Vec<u32>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum HtmlDocumentSource {
-    BuiltinShim,
-    NavigationShim,
+pub enum ServoDocumentSource {
+    SlateGenerated,
     LocalFile,
-    WebFetch,
+    Web,
+    Broadweb,
+    Blocked,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ServoDocumentStatus {
+    Rendered,
+    Failed(String),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -69,9 +107,11 @@ impl ServoBackend {
         self,
         address: &str,
         html: impl Into<String>,
-        source: HtmlDocumentSource,
+        source: ServoDocumentSource,
     ) -> RenderSurface {
-        HtmlShim::from_html(address, html, source).render()
+        let html = html.into();
+        let target = data_html_url(&html);
+        self.render_servo_url(address, &target, source)
     }
 
     pub fn render_error(
@@ -80,13 +120,16 @@ impl ServoBackend {
         title: &str,
         heading: &str,
         details: &[String],
-        source: HtmlDocumentSource,
+        source: ServoDocumentSource,
     ) -> RenderSurface {
         let escaped_title = escape_html_text(title);
         let escaped_heading = escape_html_text(heading);
         let mut body = format!(
-            "<!doctype html><html><head><title>{escaped_title}</title></head>\
-             <body><h1>{escaped_heading}</h1>"
+            "<!doctype html><html><head><meta charset=\"utf-8\">\
+             <title>{escaped_title}</title>\
+             <style>body{{font-family:sans-serif;margin:48px;color:#262626;background:#fbfaf8}}\
+             h1{{font-size:34px;color:#0b6b68}}p{{font-size:17px;line-height:1.5}}</style>\
+             </head><body><h1>{escaped_heading}</h1>"
         );
         for detail in details {
             body.push_str("<p>");
@@ -94,13 +137,26 @@ impl ServoBackend {
             body.push_str("</p>");
         }
         body.push_str("</body></html>");
-        HtmlShim::from_html(address, body, source).render()
+        self.render_html(address, body, source)
+    }
+
+    fn render_servo_url(
+        self,
+        display_address: &str,
+        servo_address: &str,
+        source: ServoDocumentSource,
+    ) -> RenderSurface {
+        let result = render_with_servo(display_address, servo_address, source);
+        match result {
+            Ok(document) => surface_from_servo_document(document),
+            Err(error) => engine_error_surface(display_address, source, error),
+        }
     }
 }
 
 impl RenderBackend for ServoBackend {
     fn name(&self) -> &'static str {
-        "Servo vendored backend"
+        "Servo engine"
     }
 
     fn load_home(&self) -> RenderSurface {
@@ -110,153 +166,335 @@ impl RenderBackend for ServoBackend {
     fn load_address(&self, address: &str) -> RenderSurface {
         match address {
             "slate://home" | "slate://new" => home_surface(),
-            address if address.starts_with("slate://tests/") => {
-                HtmlShim::builtin_test(address).render()
+            address if address.starts_with("slate://tests/") => self.render_html(
+                address,
+                builtin_test_html(address),
+                ServoDocumentSource::SlateGenerated,
+            ),
+            address if address.starts_with("slate://search?") => self.render_html(
+                address,
+                search_html(address),
+                ServoDocumentSource::SlateGenerated,
+            ),
+            address if address.starts_with("slate://") => self.render_html(
+                address,
+                internal_html(address),
+                ServoDocumentSource::SlateGenerated,
+            ),
+            address if requires_private_network_host_adapter(address) => self.render_error(
+                address,
+                "Protocol Adapter Required",
+                "This route needs a Slate protocol adapter",
+                &[
+                    address.to_string(),
+                    "Slate will not send this address through normal DNS or direct web routing."
+                        .to_string(),
+                ],
+                ServoDocumentSource::Blocked,
+            ),
+            address if has_broadweb_scheme(address) => {
+                self.render_servo_url(address, address, ServoDocumentSource::Broadweb)
             }
-            address if address.starts_with("slate://search?") => HtmlShim::search(address).render(),
-            address if address.starts_with("slate://") => HtmlShim::internal(address).render(),
-            address if address.starts_with("file://") => HtmlShim::local_file(address).render(),
-            address => HtmlShim::navigation(address).render(),
+            address if has_servo_supported_scheme(address) => {
+                let source = if address.starts_with("file://") {
+                    ServoDocumentSource::LocalFile
+                } else {
+                    ServoDocumentSource::Web
+                };
+                self.render_servo_url(address, address, source)
+            }
+            address => self.render_error(
+                address,
+                "Unsupported Address",
+                "Servo cannot navigate this address yet",
+                &[address.to_string()],
+                ServoDocumentSource::Blocked,
+            ),
         }
     }
+}
+
+#[derive(Clone)]
+struct ServoWaker {
+    triggered: Arc<AtomicBool>,
+}
+
+impl ServoWaker {
+    fn new() -> Self {
+        Self {
+            triggered: Arc::new(AtomicBool::new(false)),
+        }
+    }
+}
+
+impl EventLoopWaker for ServoWaker {
+    fn clone_box(&self) -> Box<dyn EventLoopWaker> {
+        Box::new(self.clone())
+    }
+
+    fn wake(&self) {
+        self.triggered.store(true, Ordering::Relaxed);
+    }
+}
+
+#[derive(Default)]
+struct ServoDelegateState {
+    page_title: RefCell<Option<String>>,
+}
+
+impl WebViewDelegate for ServoDelegateState {
+    fn notify_page_title_changed(&self, _webview: WebView, title: Option<String>) {
+        *self.page_title.borrow_mut() = title;
+    }
+
+    fn notify_new_frame_ready(&self, webview: WebView) {
+        webview.paint();
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct BroadwebProtocolHandler;
+
+impl ProtocolHandler for BroadwebProtocolHandler {
+    fn load(
+        &self,
+        request: &mut Request,
+        _done_chan: &mut DoneChannel,
+        _context: &FetchContext,
+    ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
+        let url = request.current_url();
+        let html = broadweb_placeholder_html(&url.to_string());
+        let mut response = Response::new(url, ResourceFetchTiming::new(request.timing_type()));
+        *response.body.lock() = ResponseBody::Done(html.into_bytes());
+        response.headers.typed_insert(ContentType::html());
+        response.status = HttpStatus::default();
+
+        Box::pin(std::future::ready(response))
+    }
+
+    fn is_fetchable(&self) -> bool {
+        true
+    }
+
+    fn is_secure(&self) -> bool {
+        true
+    }
+}
+
+fn render_with_servo(
+    display_address: &str,
+    servo_address: &str,
+    source: ServoDocumentSource,
+) -> Result<ServoDocument, ServoRenderError> {
+    init_servo_crypto();
+    let url = Url::parse(servo_address)
+        .map_err(|error| ServoRenderError::new(format!("invalid Servo URL: {error}")))?;
+    let rendering_context = servo_rendering_context()?;
+    rendering_context
+        .make_current()
+        .map_err(|error| ServoRenderError::new(format!("Servo context setup failed: {error:?}")))?;
+
+    let mut preferences = Preferences::default();
+    preferences.network_http_proxy_uri.clear();
+    preferences.network_https_proxy_uri.clear();
+
+    let waker = ServoWaker::new();
+    let servo = ServoBuilder::default()
+        .preferences(preferences)
+        .protocol_registry(broadweb_protocol_registry())
+        .event_loop_waker(Box::new(waker))
+        .build();
+    let delegate = Rc::new(ServoDelegateState::default());
+    let webview = WebViewBuilder::new(&servo, rendering_context.clone())
+        .url(url)
+        .delegate(delegate.clone())
+        .build();
+
+    let load_webview = webview.clone();
+    let loaded = spin_until(&servo, LOAD_TIMEOUT, move || {
+        load_webview.load_status() != LoadStatus::Complete
+    });
+    if !loaded {
+        return Err(ServoRenderError::new(format!(
+            "Servo load timed out after {} seconds",
+            LOAD_TIMEOUT.as_secs()
+        )));
+    }
+
+    let captured = Rc::new(RefCell::new(None));
+    let captured_result = Rc::clone(&captured);
+    webview.take_screenshot(None, move |result| {
+        *captured_result.borrow_mut() = Some(result.map_err(|error| format!("{error:?}")));
+    });
+
+    let screenshot_ready = spin_until(&servo, SCREENSHOT_TIMEOUT, {
+        let captured = Rc::clone(&captured);
+        move || captured.borrow().is_none()
+    });
+    if !screenshot_ready {
+        return Err(ServoRenderError::new(format!(
+            "Servo screenshot timed out after {} seconds",
+            SCREENSHOT_TIMEOUT.as_secs()
+        )));
+    }
+
+    let image = captured
+        .borrow_mut()
+        .take()
+        .ok_or_else(|| ServoRenderError::new("Servo did not return a screenshot"))?
+        .map_err(ServoRenderError::new)?;
+    let frame = frame_from_image(image)?;
+    let title = delegate
+        .page_title
+        .borrow()
+        .clone()
+        .or_else(|| webview.page_title())
+        .filter(|title| !title.is_empty())
+        .unwrap_or_else(|| display_address.to_string());
+    let address = match source {
+        ServoDocumentSource::SlateGenerated | ServoDocumentSource::Blocked => {
+            display_address.to_string()
+        }
+        ServoDocumentSource::LocalFile
+        | ServoDocumentSource::Web
+        | ServoDocumentSource::Broadweb => webview
+            .url()
+            .map(|url| url.to_string())
+            .unwrap_or_else(|| display_address.to_string()),
+    };
+
+    Ok(ServoDocument {
+        title,
+        address,
+        frame,
+        source,
+        status: ServoDocumentStatus::Rendered,
+    })
+}
+
+fn servo_rendering_context() -> Result<Rc<dyn RenderingContext>, ServoRenderError> {
+    let context = SoftwareRenderingContext::new(PhysicalSize {
+        width: SERVO_VIEWPORT_WIDTH,
+        height: SERVO_VIEWPORT_HEIGHT,
+    })
+    .map_err(|error| ServoRenderError::new(format!("software rendering failed: {error:?}")))?;
+    Ok(Rc::new(context))
+}
+
+fn spin_until(servo: &Servo, timeout: Duration, waiting: impl Fn() -> bool) -> bool {
+    let deadline = Instant::now() + timeout;
+    while waiting() {
+        if Instant::now() >= deadline {
+            return false;
+        }
+        servo.spin_event_loop();
+        std::thread::sleep(SPIN_SLEEP);
+    }
+    true
+}
+
+fn init_servo_crypto() {
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+    });
+}
+
+fn broadweb_protocol_registry() -> ProtocolRegistry {
+    let mut registry = ProtocolRegistry::with_internal_protocols();
+    for scheme in ["ipfs", "ipns", "i2p", "gemini", "magnet"] {
+        let _ = registry.register(scheme, BroadwebProtocolHandler);
+    }
+    registry
+}
+
+fn frame_from_image(image: servo::RgbaImage) -> Result<ServoFrame, ServoRenderError> {
+    let width = usize::try_from(image.width())
+        .map_err(|_| ServoRenderError::new("Servo screenshot width is too large"))?;
+    let height = usize::try_from(image.height())
+        .map_err(|_| ServoRenderError::new("Servo screenshot height is too large"))?;
+    let pixels = image.as_raw().chunks_exact(4).map(rgb_from_rgba).collect();
+    Ok(ServoFrame {
+        width,
+        height,
+        pixels,
+    })
+}
+
+fn rgb_from_rgba(rgba: &[u8]) -> u32 {
+    let red = u32::from(rgba[0]);
+    let green = u32::from(rgba[1]);
+    let blue = u32::from(rgba[2]);
+    let alpha = u32::from(rgba[3]);
+    let inverse_alpha = 255_u32.saturating_sub(alpha);
+    let blended_red = red
+        .saturating_mul(alpha)
+        .saturating_add(255_u32.saturating_mul(inverse_alpha))
+        / 255;
+    let blended_green = green
+        .saturating_mul(alpha)
+        .saturating_add(255_u32.saturating_mul(inverse_alpha))
+        / 255;
+    let blended_blue = blue
+        .saturating_mul(alpha)
+        .saturating_add(255_u32.saturating_mul(inverse_alpha))
+        / 255;
+    (blended_red << 16) | (blended_green << 8) | blended_blue
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct HtmlShim {
-    address: String,
-    html: String,
-    source: HtmlDocumentSource,
+struct ServoRenderError {
+    message: String,
 }
 
-impl HtmlShim {
-    fn from_html(address: &str, html: impl Into<String>, source: HtmlDocumentSource) -> Self {
+impl ServoRenderError {
+    fn new(message: impl Into<String>) -> Self {
         Self {
+            message: message.into(),
+        }
+    }
+}
+
+impl fmt::Display for ServoRenderError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for ServoRenderError {}
+
+fn surface_from_servo_document(document: ServoDocument) -> RenderSurface {
+    RenderSurface {
+        title: document.title.clone(),
+        address: document.address.clone(),
+        summary: "Rendered by Servo".to_string(),
+        metrics: document_metrics(document.source, true),
+        document: RenderDocument::Web(document),
+    }
+}
+
+fn engine_error_surface(
+    address: &str,
+    source: ServoDocumentSource,
+    error: ServoRenderError,
+) -> RenderSurface {
+    RenderSurface {
+        title: "Servo Render Error".to_string(),
+        address: address.to_string(),
+        summary: error.to_string(),
+        metrics: document_metrics(source, false),
+        document: RenderDocument::Web(ServoDocument {
+            title: "Servo Render Error".to_string(),
             address: address.to_string(),
-            html: html.into(),
+            frame: ServoFrame {
+                width: 0,
+                height: 0,
+                pixels: Vec::new(),
+            },
             source,
-        }
+            status: ServoDocumentStatus::Failed(error.to_string()),
+        }),
     }
-
-    fn builtin_test(address: &str) -> Self {
-        let escaped_address = escape_html_text(address);
-        Self::from_html(
-            address,
-            format!(
-                "<!doctype html><html><head><title>Slate HTML Shim</title></head>\
-                 <body><h1>Hello from Slate</h1>\
-                 <p>This test page is rendered through the Servo backend boundary.</p>\
-                 <p>{escaped_address}</p></body></html>"
-            ),
-            HtmlDocumentSource::BuiltinShim,
-        )
-    }
-
-    fn search(address: &str) -> Self {
-        let query = address
-            .split_once("?q=")
-            .map(|(_, value)| value.replace('+', " "))
-            .unwrap_or_default();
-        let escaped_query = escape_html_text(&query);
-        Self::from_html(
-            address,
-            format!(
-                "<!doctype html><html><head><title>Search</title></head>\
-                 <body><h1>{escaped_query}</h1>\
-                 <p>Local search shim.</p>\
-                 <p>No remote search request has been issued.</p></body></html>"
-            ),
-            HtmlDocumentSource::BuiltinShim,
-        )
-    }
-
-    fn internal(address: &str) -> Self {
-        let escaped_address = escape_html_text(address);
-        Self::from_html(
-            address,
-            format!(
-                "<!doctype html><html><head><title>Slate Internal Page</title></head>\
-                 <body><h1>Slate Internal Page</h1>\
-                 <p>{escaped_address}</p>\
-                 <p>This address is handled locally.</p></body></html>"
-            ),
-            HtmlDocumentSource::BuiltinShim,
-        )
-    }
-
-    fn navigation(address: &str) -> Self {
-        let escaped_address = escape_html_text(address);
-        Self::from_html(
-            address,
-            format!(
-                "<!doctype html><html><head><title>{escaped_address}</title></head>\
-                 <body><h1>{escaped_address}</h1>\
-                 <p>Loaded by the Servo navigation shim.</p>\
-                 <p>Full document loading will replace this surface.</p></body></html>"
-            ),
-            HtmlDocumentSource::NavigationShim,
-        )
-    }
-
-    fn local_file(address: &str) -> Self {
-        match read_local_html(address) {
-            Ok(html) => Self::from_html(address, html, HtmlDocumentSource::LocalFile),
-            Err(error) => {
-                let escaped_address = escape_html_text(address);
-                let escaped_error = escape_html_text(&error);
-                Self::from_html(
-                    address,
-                    format!(
-                        "<!doctype html><html><head><title>Local File Error</title></head>\
-                         <body><h1>Could not read local file</h1>\
-                         <p>{escaped_address}</p><p>{escaped_error}</p></body></html>"
-                    ),
-                    HtmlDocumentSource::LocalFile,
-                )
-            }
-        }
-    }
-
-    fn render(self) -> RenderSurface {
-        let title = first_tag_text(&self.html, "title").unwrap_or_else(|| self.address.clone());
-        let heading = first_tag_text(&self.html, "h1").unwrap_or_else(|| title.clone());
-        let paragraphs = tag_texts(&self.html, "p");
-        let summary = paragraphs
-            .first()
-            .cloned()
-            .unwrap_or_else(|| heading.clone());
-
-        RenderSurface {
-            title: title.clone(),
-            address: self.address,
-            summary,
-            metrics: document_metrics(self.source),
-            document: RenderDocument::Html(HtmlDocument {
-                title,
-                heading,
-                paragraphs,
-                source: self.source,
-            }),
-        }
-    }
-}
-
-fn read_local_html(address: &str) -> Result<String, String> {
-    let path = file_path_from_address(address)
-        .ok_or_else(|| "expected file:///absolute/path.html".to_string())?;
-    fs::read_to_string(&path).map_err(|error| format!("{}: {error}", path.to_string_lossy()))
-}
-
-fn file_path_from_address(address: &str) -> Option<PathBuf> {
-    let file = address.strip_prefix("file://")?;
-    let path = file
-        .strip_prefix("localhost/")
-        .map(|path| format!("/{path}"))
-        .unwrap_or_else(|| file.to_string());
-    if !path.starts_with('/') {
-        return None;
-    }
-
-    Some(PathBuf::from(percent_decode(&path)))
 }
 
 fn home_surface() -> RenderSurface {
@@ -290,120 +528,139 @@ fn home_surface() -> RenderSurface {
     }
 }
 
-fn document_metrics(source: HtmlDocumentSource) -> Vec<RenderMetric> {
+fn document_metrics(source: ServoDocumentSource, rendered: bool) -> Vec<RenderMetric> {
+    vec![
+        RenderMetric {
+            label: "HTML".to_string(),
+            value: if rendered { "Servo" } else { "Error" }.to_string(),
+            accent: MetricAccent::Teal,
+        },
+        RenderMetric {
+            label: "CSS".to_string(),
+            value: if rendered { "Servo" } else { "Off" }.to_string(),
+            accent: MetricAccent::Blue,
+        },
+        RenderMetric {
+            label: "JS".to_string(),
+            value: if rendered { "Servo" } else { "Off" }.to_string(),
+            accent: MetricAccent::Amber,
+        },
+        RenderMetric {
+            label: "Route".to_string(),
+            value: route_label(source).to_string(),
+            accent: MetricAccent::Teal,
+        },
+    ]
+}
+
+fn route_label(source: ServoDocumentSource) -> &'static str {
     match source {
-        HtmlDocumentSource::WebFetch => vec![
-            RenderMetric {
-                label: "HTML".to_string(),
-                value: "Web".to_string(),
-                accent: MetricAccent::Teal,
-            },
-            RenderMetric {
-                label: "Scripts".to_string(),
-                value: "Off".to_string(),
-                accent: MetricAccent::Amber,
-            },
-            RenderMetric {
-                label: "Route".to_string(),
-                value: "Web".to_string(),
-                accent: MetricAccent::Blue,
-            },
-        ],
-        HtmlDocumentSource::LocalFile => vec![
-            RenderMetric {
-                label: "HTML".to_string(),
-                value: "File".to_string(),
-                accent: MetricAccent::Teal,
-            },
-            RenderMetric {
-                label: "Scripts".to_string(),
-                value: "Off".to_string(),
-                accent: MetricAccent::Amber,
-            },
-            RenderMetric {
-                label: "Route".to_string(),
-                value: "Disk".to_string(),
-                accent: MetricAccent::Blue,
-            },
-        ],
-        HtmlDocumentSource::BuiltinShim | HtmlDocumentSource::NavigationShim => vec![
-            RenderMetric {
-                label: "HTML".to_string(),
-                value: "Shim".to_string(),
-                accent: MetricAccent::Teal,
-            },
-            RenderMetric {
-                label: "Scripts".to_string(),
-                value: "Off".to_string(),
-                accent: MetricAccent::Amber,
-            },
-            RenderMetric {
-                label: "Route".to_string(),
-                value: "Local".to_string(),
-                accent: MetricAccent::Blue,
-            },
-        ],
+        ServoDocumentSource::SlateGenerated => "Local",
+        ServoDocumentSource::LocalFile => "Disk",
+        ServoDocumentSource::Web => "Web",
+        ServoDocumentSource::Broadweb => "Broadweb",
+        ServoDocumentSource::Blocked => "Blocked",
     }
 }
 
-fn first_tag_text(html: &str, tag: &str) -> Option<String> {
-    tag_texts(html, tag).into_iter().next()
+fn builtin_test_html(address: &str) -> String {
+    let escaped_address = escape_html_text(address);
+    format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\">\
+         <title>Slate Servo Test</title>\
+         <style>body{{font-family:sans-serif;margin:48px;background:#f4fbf8;color:#24302e}}\
+         h1{{color:#0b6b68;font-size:38px}}p{{font-size:18px;line-height:1.5}}</style>\
+         <script>document.addEventListener('DOMContentLoaded',()=>{{\
+         document.body.dataset.servoScript='ready';\
+         const marker=document.createElement('p');\
+         marker.textContent='JavaScript executed inside Servo.';\
+         document.body.appendChild(marker);\
+         }});</script></head>\
+         <body><h1>Hello from Servo</h1>\
+         <p>This test page is rendered by the vendored Servo engine.</p>\
+         <p>{escaped_address}</p></body></html>"
+    )
 }
 
-fn tag_texts(html: &str, tag: &str) -> Vec<String> {
-    let lower = html.to_ascii_lowercase();
-    let open_prefix = format!("<{tag}");
-    let close_tag = format!("</{tag}>");
-    let mut results = Vec::new();
-    let mut cursor = 0;
-
-    while let Some(open_relative) = lower[cursor..].find(&open_prefix) {
-        let open = cursor.saturating_add(open_relative);
-        let Some(open_end_relative) = lower[open..].find('>') else {
-            break;
-        };
-        let content_start = open.saturating_add(open_end_relative).saturating_add(1);
-        let Some(close_relative) = lower[content_start..].find(&close_tag) else {
-            break;
-        };
-        let content_end = content_start.saturating_add(close_relative);
-        let text = strip_tags(&html[content_start..content_end]);
-        if !text.is_empty() {
-            results.push(text);
-        }
-        cursor = content_end.saturating_add(close_tag.len());
-    }
-
-    results
+fn search_html(address: &str) -> String {
+    let query = address
+        .split_once("?q=")
+        .map(|(_, value)| value.replace('+', " "))
+        .unwrap_or_default();
+    let escaped_query = escape_html_text(&query);
+    format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>Search</title>\
+         <style>body{{font-family:sans-serif;margin:48px;color:#262626;background:#fbfaf8}}\
+         h1{{font-size:34px;color:#0b6b68}}p{{font-size:17px}}</style></head>\
+         <body><h1>{escaped_query}</h1><p>Local search surface.</p>\
+         <p>No remote search request has been issued.</p></body></html>"
+    )
 }
 
-fn strip_tags(input: &str) -> String {
+fn internal_html(address: &str) -> String {
+    let escaped_address = escape_html_text(address);
+    format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\">\
+         <title>Slate Internal Page</title>\
+         <style>body{{font-family:sans-serif;margin:48px;color:#262626;background:#fbfaf8}}\
+         h1{{font-size:34px;color:#0b6b68}}p{{font-size:17px}}</style></head>\
+         <body><h1>Slate Internal Page</h1><p>{escaped_address}</p>\
+         <p>This address is handled locally, then painted by Servo.</p></body></html>"
+    )
+}
+
+fn broadweb_placeholder_html(address: &str) -> String {
+    let escaped_address = escape_html_text(address);
+    format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\">\
+         <title>Broadweb Route Pending</title>\
+         <style>body{{font-family:sans-serif;margin:48px;color:#262626;background:#f2fbf7}}\
+         h1{{font-size:34px;color:#0b6b68}}p{{font-size:17px;line-height:1.5}}\
+         code{{background:#e5f0ee;padding:4px 6px;border-radius:4px}}</style></head>\
+         <body><h1>Broadweb route pending</h1>\
+         <p><code>{escaped_address}</code></p>\
+         <p>Servo received this address through Slate's broadweb protocol callback.</p>\
+         <p>No IPFS, IPNS, I2P, Gemini, or magnet network request has been issued yet.</p>\
+         </body></html>"
+    )
+}
+
+fn has_servo_supported_scheme(address: &str) -> bool {
+    Url::parse(address)
+        .ok()
+        .is_some_and(|url| matches!(url.scheme(), "http" | "https" | "file" | "data" | "about"))
+}
+
+fn has_broadweb_scheme(address: &str) -> bool {
+    Url::parse(address)
+        .ok()
+        .is_some_and(|url| matches!(url.scheme(), "ipfs" | "ipns" | "i2p" | "gemini" | "magnet"))
+}
+
+fn requires_private_network_host_adapter(address: &str) -> bool {
+    let lower = address.to_ascii_lowercase();
+    lower.contains(".onion") || lower.contains(".i2p")
+}
+
+fn data_html_url(html: &str) -> String {
+    format!("data:text/html;charset=utf-8,{}", percent_encode_data(html))
+}
+
+fn percent_encode_data(input: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
     let mut output = String::new();
-    let mut inside_tag = false;
 
-    for ch in input.chars() {
-        match ch {
-            '<' => inside_tag = true,
-            '>' => inside_tag = false,
-            _ if !inside_tag => output.push(ch),
-            _ => {}
+    for byte in input.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
+            output.push(char::from(byte));
+        } else {
+            output.push('%');
+            output.push(char::from(HEX[usize::from(byte / 16)]));
+            output.push(char::from(HEX[usize::from(byte % 16)]));
         }
     }
 
-    collapse_whitespace(&decode_basic_entities(&output))
-}
-
-fn decode_basic_entities(input: &str) -> String {
-    input
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
-        .replace("&amp;", "&")
-}
-
-fn collapse_whitespace(input: &str) -> String {
-    input.split_whitespace().collect::<Vec<_>>().join(" ")
+    output
 }
 
 fn escape_html_text(input: &str) -> String {
@@ -421,42 +678,11 @@ fn escape_html_text(input: &str) -> String {
     output
 }
 
-fn percent_decode(input: &str) -> String {
-    let bytes = input.as_bytes();
-    let mut output = Vec::new();
-    let mut index = 0;
-
-    while index < bytes.len() {
-        if bytes[index] == b'%'
-            && index + 2 < bytes.len()
-            && let (Some(high), Some(low)) =
-                (hex_value(bytes[index + 1]), hex_value(bytes[index + 2]))
-        {
-            output.push(high.saturating_mul(16).saturating_add(low));
-            index += 3;
-            continue;
-        }
-
-        output.push(bytes[index]);
-        index += 1;
-    }
-
-    String::from_utf8_lossy(&output).into_owned()
-}
-
-fn hex_value(byte: u8) -> Option<u8> {
-    match byte {
-        b'0'..=b'9' => Some(byte.saturating_sub(b'0')),
-        b'a'..=b'f' => Some(byte.saturating_sub(b'a').saturating_add(10)),
-        b'A'..=b'F' => Some(byte.saturating_sub(b'A').saturating_add(10)),
-        _ => None,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        HtmlDocumentSource, RenderBackend, RenderDocument, ServoBackend, VENDORED_SERVO_PATH,
+        RenderBackend, RenderDocument, ServoBackend, ServoDocumentSource, ServoDocumentStatus,
+        VENDORED_SERVO_PATH,
     };
     use std::fs;
 
@@ -468,52 +694,36 @@ mod tests {
     }
 
     #[test]
-    fn servo_backend_loads_builtin_html_shim() {
-        let backend = ServoBackend;
-        let surface = backend.load_address("slate://tests/hello");
+    fn servo_backend_renders_generated_html_with_servo() {
+        let surface = ServoBackend.load_address("slate://tests/hello");
 
-        assert_eq!(surface.title, "Slate HTML Shim");
-        assert_eq!(
-            surface.summary,
-            "This test page is rendered through the Servo backend boundary."
-        );
-        let RenderDocument::Html(document) = surface.document else {
-            panic!("expected HTML document");
+        assert_eq!(surface.title, "Slate Servo Test");
+        let RenderDocument::Web(document) = surface.document else {
+            panic!("expected Servo document");
         };
-        assert_eq!(document.heading, "Hello from Slate");
-        assert_eq!(document.source, HtmlDocumentSource::BuiltinShim);
+        assert_eq!(document.source, ServoDocumentSource::SlateGenerated);
+        assert_eq!(document.status, ServoDocumentStatus::Rendered);
+        assert!(!document.frame.pixels.is_empty());
     }
 
     #[test]
-    fn servo_backend_loads_navigation_shim() {
-        let backend = ServoBackend;
-        let surface = backend.load_address("https://example.com");
-
-        assert_eq!(surface.title, "https://example.com");
-        assert!(matches!(
-            surface.document,
-            RenderDocument::Html(super::HtmlDocument {
-                source: HtmlDocumentSource::NavigationShim,
-                ..
-            })
-        ));
-    }
-
-    #[test]
-    fn servo_backend_renders_fetched_html_body() {
+    fn servo_backend_executes_css_and_javascript() {
         let surface = ServoBackend.render_html(
-            "https://example.test",
-            "<!doctype html><title>Fetched Fixture</title><h1>Fetched Heading</h1><p>Fetched body.</p>",
-            HtmlDocumentSource::WebFetch,
+            "slate://tests/css-js",
+            "<!doctype html><html><head><meta charset=\"utf-8\">\
+             <title>Before Script</title>\
+             <style>body{background:#143d3a;color:white}h1{font-size:42px}</style>\
+             <script>document.title='After Script';</script></head>\
+             <body><h1>Styled Page</h1></body></html>",
+            ServoDocumentSource::SlateGenerated,
         );
 
-        assert_eq!(surface.title, "Fetched Fixture");
-        assert_eq!(surface.summary, "Fetched body.");
-        let RenderDocument::Html(document) = surface.document else {
-            panic!("expected HTML document");
+        assert_eq!(surface.title, "After Script");
+        let RenderDocument::Web(document) = surface.document else {
+            panic!("expected Servo document");
         };
-        assert_eq!(document.heading, "Fetched Heading");
-        assert_eq!(document.source, HtmlDocumentSource::WebFetch);
+        assert_eq!(document.status, ServoDocumentStatus::Rendered);
+        assert!(!document.frame.pixels.is_empty());
     }
 
     #[test]
@@ -522,8 +732,11 @@ mod tests {
             std::env::temp_dir().join(format!("slate local html {}.html", std::process::id()));
         fs::write(
             &path,
-            "<!doctype html><html><head><title>Local Fixture</title></head>\
-             <body><h1>Local Heading</h1><p>Read from disk.</p></body></html>",
+            "<!doctype html><html><head><meta charset=\"utf-8\">\
+             <title>Local Servo Fixture</title>\
+             <style>body{background:#f0faf8}</style>\
+             <script>document.title='Local Servo Script';</script></head>\
+             <body><h1>Local Heading</h1></body></html>",
         )
         .expect("write local fixture");
 
@@ -532,25 +745,35 @@ mod tests {
         let surface = ServoBackend.load_address(&address);
         let _ = fs::remove_file(&path);
 
-        assert_eq!(surface.title, "Local Fixture");
-        assert_eq!(surface.summary, "Read from disk.");
-        let RenderDocument::Html(document) = surface.document else {
-            panic!("expected HTML document");
+        assert_eq!(surface.title, "Local Servo Script");
+        let RenderDocument::Web(document) = surface.document else {
+            panic!("expected Servo document");
         };
-        assert_eq!(document.heading, "Local Heading");
-        assert_eq!(document.source, HtmlDocumentSource::LocalFile);
+        assert_eq!(document.source, ServoDocumentSource::LocalFile);
+        assert_eq!(document.status, ServoDocumentStatus::Rendered);
     }
 
     #[test]
-    fn servo_backend_renders_missing_local_file_error() {
-        let address = "file:///tmp/slate-missing-local-page.html";
-        let surface = ServoBackend.load_address(address);
+    fn private_protocol_addresses_do_not_fall_through_to_web() {
+        let surface = ServoBackend.load_address("http://example.onion");
 
-        assert_eq!(surface.title, "Local File Error");
-        let RenderDocument::Html(document) = surface.document else {
-            panic!("expected HTML document");
+        assert_eq!(surface.title, "Protocol Adapter Required");
+        let RenderDocument::Web(document) = surface.document else {
+            panic!("expected Servo document");
         };
-        assert_eq!(document.heading, "Could not read local file");
-        assert_eq!(document.source, HtmlDocumentSource::LocalFile);
+        assert_eq!(document.source, ServoDocumentSource::Blocked);
+        assert_eq!(document.status, ServoDocumentStatus::Rendered);
+    }
+
+    #[test]
+    fn broadweb_schemes_use_servo_protocol_callback() {
+        let surface = ServoBackend.load_address("ipfs://bafybeigdyrzt");
+
+        assert_eq!(surface.title, "Broadweb Route Pending");
+        let RenderDocument::Web(document) = surface.document else {
+            panic!("expected Servo document");
+        };
+        assert_eq!(document.source, ServoDocumentSource::Broadweb);
+        assert_eq!(document.status, ServoDocumentStatus::Rendered);
     }
 }

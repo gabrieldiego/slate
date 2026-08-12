@@ -6,6 +6,12 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[dependencies]
+dpi.workspace = true
+headers.workspace = true
+rustls.workspace = true
+servo.workspace = true
+url.workspace = true
+
 [lints]
 workspace = true
-

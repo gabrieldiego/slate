@@ -19,7 +19,7 @@ resolver = "3"
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.95"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/gabrieldiego/slate"
 
@@ -31,6 +31,11 @@ unsafe_code = "forbid"
 # temporary framebuffer host uses X11/XWayland until Slate has native OS shims.
 minifb = { version = "0.28", default-features = false, features = ["x11"] }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+servo = { path = "third_party/servo/components/servo" }
+dpi = "0.1"
+headers = "0.4"
+rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs", "logging", "std", "tls12"] }
+url = "2.5"
 slate-apps = { path = "crates/apps" }
 slate-browser-core = { path = "crates/browser-core" }
 slate-chrome = { path = "crates/chrome" }

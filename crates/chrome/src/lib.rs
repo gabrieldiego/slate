@@ -5,7 +5,8 @@ use fontdue::{Font, FontSettings};
 use slate_apps::{AppDescriptor, AppIcon, AppId, default_apps};
 use slate_browser_core::BrowserState;
 use slate_rendering::{
-    HtmlDocument, HtmlDocumentSource, MetricAccent, RenderDocument, RenderMetric,
+    MetricAccent, RenderDocument, RenderMetric, ServoDocument, ServoDocumentSource,
+    ServoDocumentStatus, ServoFrame,
 };
 
 const BG: u32 = 0x00FBFAF8;
@@ -698,8 +699,8 @@ impl ChromeView {
     fn draw_content(&self, canvas: &mut Canvas<'_>, x: usize, y: usize, w: usize, h: usize) {
         match self.state.active_app {
             AppId::Web => match &self.state.surface.document {
-                RenderDocument::Html(document) => {
-                    self.draw_web_document(canvas, x, y, w, h, document);
+                RenderDocument::Web(document) => {
+                    self.draw_servo_document(canvas, x, y, w, h, document);
                 }
                 RenderDocument::Home | RenderDocument::App => self.draw_home(canvas, x, y, w, h),
             },
@@ -709,54 +710,91 @@ impl ChromeView {
         }
     }
 
-    fn draw_web_document(
+    fn draw_servo_document(
         &self,
         canvas: &mut Canvas<'_>,
         x: usize,
         y: usize,
         w: usize,
         h: usize,
-        document: &HtmlDocument,
+        document: &ServoDocument,
     ) {
-        canvas.rect(x, y, w, h, SURFACE);
-        let content_x = x + 76;
-        let content_w = w.saturating_sub(152).min(900);
-        let top_y = y + 62;
-
-        canvas.draw_text_clipped(content_x, top_y, 4, &document.heading, TEXT, content_w);
-        canvas.hline(content_x, top_y + 56, content_w, BORDER);
+        canvas.rect(x, y, w, h, BG);
+        let content_x = x + 40;
+        let content_y = y + 30;
+        let content_w = w.saturating_sub(80);
+        let content_h = h.saturating_sub(104);
 
         let badge_text = match document.source {
-            HtmlDocumentSource::BuiltinShim => "Servo HTML shim",
-            HtmlDocumentSource::NavigationShim => "Servo navigation shim",
-            HtmlDocumentSource::LocalFile => "Local HTML file",
-            HtmlDocumentSource::WebFetch => "Fetched HTML",
+            ServoDocumentSource::SlateGenerated => "Servo local page",
+            ServoDocumentSource::LocalFile => "Servo file page",
+            ServoDocumentSource::Web => "Servo web page",
+            ServoDocumentSource::Broadweb => "Servo broadweb callback",
+            ServoDocumentSource::Blocked => "Blocked route",
         };
         let badge_w = canvas.measure_text(1, badge_text).saturating_add(22);
-        canvas.rounded_rect(content_x, top_y + 76, badge_w, 24, 12, TEAL_SOFT);
+        canvas.rounded_rect(content_x, y + 12, badge_w, 24, 12, TEAL_SOFT);
         canvas.draw_text_clipped(
             content_x + 11,
-            top_y + 82,
+            y + 18,
             1,
             badge_text,
             TEAL,
             badge_w.saturating_sub(22),
         );
 
-        let mut paragraph_y = top_y + 126;
-        for paragraph in document.paragraphs.iter().take(5) {
-            canvas.draw_text_clipped(
-                content_x,
-                paragraph_y,
-                2,
-                paragraph,
-                TEXT,
-                content_w.min(760),
-            );
-            paragraph_y = paragraph_y.saturating_add(34);
+        canvas.rounded_rect(
+            content_x + 2,
+            content_y + 2,
+            content_w,
+            content_h,
+            8,
+            SHADOW,
+        );
+        canvas.rounded_rect_panel(
+            content_x, content_y, content_w, content_h, 8, BORDER, SURFACE,
+        );
+
+        match &document.status {
+            ServoDocumentStatus::Rendered if !document.frame.pixels.is_empty() => {
+                canvas.draw_frame_fit(
+                    content_x + 1,
+                    content_y + 1,
+                    content_w.saturating_sub(2),
+                    content_h.saturating_sub(2),
+                    &document.frame,
+                );
+            }
+            ServoDocumentStatus::Rendered => {
+                self.draw_status_band(
+                    canvas,
+                    content_x + 32,
+                    content_y + 42,
+                    content_w.saturating_sub(64),
+                    "Servo rendered no pixels",
+                );
+            }
+            ServoDocumentStatus::Failed(error) => {
+                canvas.draw_text_clipped(
+                    content_x + 32,
+                    content_y + 34,
+                    3,
+                    "Servo Render Error",
+                    TEXT,
+                    content_w.saturating_sub(64),
+                );
+                canvas.draw_text_clipped(
+                    content_x + 32,
+                    content_y + 80,
+                    2,
+                    error,
+                    MUTED,
+                    content_w.saturating_sub(64),
+                );
+            }
         }
 
-        let metric_y = y + h.saturating_sub(112);
+        let metric_y = y + h.saturating_sub(58);
         let mut metric_x = content_x;
         for metric in &self.state.surface.metrics {
             let metric_text = if metric.value.is_empty() {
@@ -1626,6 +1664,36 @@ impl<'a> Canvas<'a> {
         self.text
             .measure_width(text_size(scale), text)
             .unwrap_or_else(|| text.chars().count().saturating_mul(6 * scale))
+    }
+
+    fn draw_frame_fit(&mut self, x: usize, y: usize, w: usize, h: usize, frame: &ServoFrame) {
+        if w == 0 || h == 0 || frame.width == 0 || frame.height == 0 || frame.pixels.is_empty() {
+            return;
+        }
+
+        let height_for_width = w.saturating_mul(frame.height) / frame.width.max(1);
+        let (draw_w, draw_h) = if height_for_width <= h {
+            (w, height_for_width.max(1))
+        } else {
+            (
+                (h.saturating_mul(frame.width) / frame.height.max(1)).max(1),
+                h,
+            )
+        };
+        let draw_x = x + w.saturating_sub(draw_w) / 2;
+        let draw_y = y + h.saturating_sub(draw_h) / 2;
+
+        for row in 0..draw_h {
+            let src_y = row.saturating_mul(frame.height) / draw_h;
+            for col in 0..draw_w {
+                let src_x = col.saturating_mul(frame.width) / draw_w;
+                let source_index = src_y.saturating_mul(frame.width).saturating_add(src_x);
+                let Some(color) = frame.pixels.get(source_index).copied() else {
+                    continue;
+                };
+                self.frame.set_pixel(draw_x + col, draw_y + row, color);
+            }
+        }
     }
 
     fn draw_alpha_mask_centered(

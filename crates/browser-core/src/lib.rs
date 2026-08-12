@@ -2,10 +2,8 @@
 
 use core::fmt;
 use slate_apps::AppId;
-use slate_net::fetch_web_page;
 use slate_rendering::{
-    HtmlDocumentSource, MetricAccent, RenderBackend, RenderDocument, RenderMetric, RenderSurface,
-    ServoBackend,
+    MetricAccent, RenderBackend, RenderDocument, RenderMetric, RenderSurface, ServoBackend,
 };
 use std::path::{Path, PathBuf};
 
@@ -175,6 +173,8 @@ fn has_supported_scheme(lower: &str) -> bool {
         || lower.starts_with("ipfs://")
         || lower.starts_with("ipns://")
         || lower.starts_with("i2p://")
+        || lower.starts_with("gemini://")
+        || lower.starts_with("magnet:")
         || lower.starts_with("file://")
 }
 
@@ -278,11 +278,7 @@ fn surface_for_address(address: &str, fallback_title: Option<&str>) -> RenderSur
         AppId::Messaging => messaging_surface(),
         AppId::Web => {
             let backend = ServoBackend;
-            let mut surface = if is_web_address(address) {
-                web_surface(address)
-            } else {
-                backend.load_address(address)
-            };
+            let mut surface = backend.load_address(address);
             if let Some(fallback_title) = fallback_title
                 && surface.title.is_empty()
             {
@@ -290,24 +286,6 @@ fn surface_for_address(address: &str, fallback_title: Option<&str>) -> RenderSur
             }
             surface
         }
-    }
-}
-
-fn is_web_address(address: &str) -> bool {
-    address.starts_with("http://") || address.starts_with("https://")
-}
-
-fn web_surface(address: &str) -> RenderSurface {
-    let backend = ServoBackend;
-    match fetch_web_page(address) {
-        Ok(page) => backend.render_html(&page.final_url, page.body, HtmlDocumentSource::WebFetch),
-        Err(error) => backend.render_error(
-            address,
-            "Web Load Error",
-            "Could not load web page",
-            &[address.to_string(), error.to_string()],
-            HtmlDocumentSource::WebFetch,
-        ),
     }
 }
 
@@ -379,7 +357,7 @@ fn app_surface<const N: usize>(
 #[cfg(test)]
 mod tests {
     use super::{BrowserState, normalize_navigation_input, percent_encode_file_path};
-    use slate_rendering::{HtmlDocumentSource, RenderDocument, ServoBackend};
+    use slate_rendering::{RenderDocument, ServoBackend, ServoDocumentSource};
     use std::io::{Read, Write};
     use std::net::TcpListener;
     use std::thread;
@@ -455,13 +433,13 @@ mod tests {
         assert_eq!(state.surface.address, "slate://tests/hello");
         assert_eq!(
             state.active_tab().map(|tab| tab.title.as_str()),
-            Some("Slate HTML Shim")
+            Some("Slate Servo Test")
         );
-        assert!(matches!(state.surface.document, RenderDocument::Html(_)));
+        assert!(matches!(state.surface.document, RenderDocument::Web(_)));
     }
 
     #[test]
-    fn navigating_http_fetches_and_renders_html() {
+    fn navigating_http_hands_page_to_servo() {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind local server");
         let address = format!("http://{}", listener.local_addr().expect("local socket"));
         let server = thread::spawn(move || {
@@ -485,11 +463,11 @@ mod tests {
         server.join().expect("server thread");
 
         assert_eq!(state.surface.title, "Browser Core Web");
-        assert_eq!(state.surface.summary, "HTTP fixture body.");
-        let RenderDocument::Html(document) = &state.surface.document else {
-            panic!("expected HTML document");
+        assert_eq!(state.surface.summary, "Rendered by Servo");
+        let RenderDocument::Web(document) = &state.surface.document else {
+            panic!("expected Servo document");
         };
-        assert_eq!(document.heading, "Fetched From Web");
-        assert_eq!(document.source, HtmlDocumentSource::WebFetch);
+        assert_eq!(document.source, ServoDocumentSource::Web);
+        assert!(!document.frame.pixels.is_empty());
     }
 }
