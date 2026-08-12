@@ -140,6 +140,7 @@ Servo vendoring and patch rules:
 - Document each Slate-specific Servo patch with the reason it exists, the Slate feature it supports, and what would allow it to be removed.
 - Treat Servo and Servo patches as third-party engine code. The Slate safe Rust policy applies to Slate-owned crates, not to Servo's internal implementation.
 - Do not add `#![forbid(unsafe_code)]` to Servo crates unless that change is accepted by Servo upstream.
+- Do not lint or format vendored Servo code for style-only reasons. Run Servo linting or formatting only when preparing an actual Servo code patch and it is necessary for that patch to build, pass review, or be pushed upstream.
 - Keep the Slate-to-Servo boundary narrow, preferably inside `crates/rendering/`.
 
 ## Protocol Adapter Rules
@@ -214,6 +215,12 @@ When adding dependencies:
 - Avoid dependencies that perform implicit telemetry or background networking.
 - Record why the dependency is needed.
 - Keep protocol implementations behind interfaces so they can be replaced.
+
+When committing:
+
+- Prefer atomic commits grouped by one coherent behavior, dependency change, documentation update, or submodule pointer move.
+- Do not batch unrelated code, docs, formatting, dependency, and vendored-submodule changes into one large commit.
+- If a task naturally spans multiple boundaries, split the work into separate commits that can be reviewed, reverted, or bisected independently.
 
 ## Testing Expectations
 
