@@ -8,7 +8,7 @@ Slate uses Servo as its primary rendering engine and is designed around safe Rus
 
 Slate is currently a scaffolded Rust workspace with an initial runnable browser-shell mockup. The first UI is code-native and portable: Slate draws its own browser chrome into a framebuffer and uses a small windowing layer to show it.
 
-The current renderer is a `ServoBackend` boundary in `crates/rendering/`. Real Servo embedding is the next step behind that boundary.
+The current renderer is a `ServoBackend` boundary in `crates/rendering/`. It creates a Servo `WebView`, lets vendored Servo load the page, and captures Servo's software-rendered bitmap into the Slate chrome. This is still an early embedding path, not a fully interactive compositor integration.
 
 ## Goals
 
@@ -51,7 +51,7 @@ xtask/
 
 ## Running
 
-Install the platform libraries needed by `minifb` on your OS, then run:
+Install Rust 1.95 or newer, plus the platform libraries needed by `minifb` and Servo on your OS, then run:
 
 ```bash
 cargo run -p slate
@@ -75,7 +75,7 @@ or:
 scripts/check.sh
 ```
 
-The window opens a Slate mockup with the intended first shape: left app rail, tab strip, navigation toolbar, address bar, and a quiet home viewport. The side rail switches between Web, Downloads, Calendar, and Messaging panes; tabs can be selected; the `+` tab button creates a mock tab; and the address bar can navigate to deterministic HTML shims such as `slate://tests/hello`, local HTML files such as `examples/local-page.html`, and HTTP(S) pages.
+The window opens a Slate mockup with the intended first shape: left app rail, tab strip, navigation toolbar, address bar, and a quiet home viewport. The side rail switches between Web, Downloads, Calendar, and Messaging panes; tabs can be selected; the `+` tab button creates a mock tab; and the address bar can navigate to Servo-rendered internal pages such as `slate://tests/hello`, local HTML files such as `examples/local-page.html`, HTTP(S) pages, and placeholder broadweb URLs such as `ipfs://bafy...`.
 
 ## Servo
 
@@ -87,15 +87,15 @@ git -C third_party/servo remote add upstream https://github.com/servo/servo.git
 git -C third_party/servo checkout <pinned-tag-or-commit>
 ```
 
-Slate crates should depend on Servo through the vendored crate path when the real compositor integration is introduced:
+Slate crates depend on Servo through the vendored crate path:
 
 ```toml
 servo = { path = "third_party/servo/components/servo" }
 ```
 
-The current `ServoBackend` in `crates/rendering/` loads safe Rust HTML shims, local `file://` HTML pages, and fetched HTTP(S) HTML bodies so browser-core, tabs, and the address bar can be tested before full Servo composition is wired in. Some Servo patches are expected to be necessary later. Keep them small, documented, easy to rebase, and suitable for upstream submission when they are not Slate-specific.
+The current `ServoBackend` in `crates/rendering/` hands internal `data:` pages, local `file://` pages, HTTP(S) pages, and registered broadweb schemes to Servo. CSS and JavaScript behavior come from Servo and its SpiderMonkey integration. Slate does not implement local HTML, CSS, or JavaScript rendering.
 
-Network fetching currently lives in `crates/net/` and is only triggered by explicit navigation. The temporary renderer extracts the title, first heading, and paragraphs; it does not execute JavaScript or apply CSS yet.
+Broadweb schemes such as `ipfs://`, `ipns://`, `i2p://`, `gemini://`, and `magnet:` currently use a Servo custom protocol handler that returns a local placeholder page. It does not contact those networks yet. `.onion` and `.i2p` hostnames stay blocked before normal web routing to avoid accidental DNS leaks until the Tor and I2P adapters exist.
 
 GitHub deploy keys are repository-scoped. Use a dedicated key for the Servo fork, not the Slate repository key.
 

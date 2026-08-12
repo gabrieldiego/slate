@@ -3,11 +3,35 @@
   <head>
     <meta charset="utf-8">
     <title>Slate Local HTML Test</title>
+    <style>
+      body {
+        background: #f0faf8;
+        color: #24302e;
+        font-family: sans-serif;
+        margin: 48px;
+      }
+
+      h1 {
+        color: #0b6b68;
+      }
+
+      .marker {
+        background: #e5f0ee;
+        border-radius: 6px;
+        padding: 12px 14px;
+      }
+    </style>
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        document.title = "Slate Local HTML Test - Servo";
+        document.querySelector(".marker").textContent = "JavaScript executed in Servo.";
+      });
+    </script>
   </head>
   <body>
     <h1>Slate Local HTML Test</h1>
     <p>This page is loaded from a local HTML file on disk.</p>
-    <p>The address bar should accept this file path and render the title, heading, and paragraphs.</p>
-    <p>Scripts are intentionally not executed in this temporary HTML shim.</p>
+    <p>The address bar should accept this file path and render it through Servo.</p>
+    <p class="marker">JavaScript has not updated this marker yet.</p>
   </body>
 </html>
