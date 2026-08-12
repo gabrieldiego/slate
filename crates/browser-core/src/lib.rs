@@ -2,8 +2,10 @@
 
 use core::fmt;
 use slate_apps::AppId;
+use slate_net::fetch_web_page;
 use slate_rendering::{
-    MetricAccent, RenderBackend, RenderDocument, RenderMetric, RenderSurface, ServoBackend,
+    HtmlDocumentSource, MetricAccent, RenderBackend, RenderDocument, RenderMetric, RenderSurface,
+    ServoBackend,
 };
 use std::path::{Path, PathBuf};
 
@@ -276,7 +278,11 @@ fn surface_for_address(address: &str, fallback_title: Option<&str>) -> RenderSur
         AppId::Messaging => messaging_surface(),
         AppId::Web => {
             let backend = ServoBackend;
-            let mut surface = backend.load_address(address);
+            let mut surface = if is_web_address(address) {
+                web_surface(address)
+            } else {
+                backend.load_address(address)
+            };
             if let Some(fallback_title) = fallback_title
                 && surface.title.is_empty()
             {
@@ -284,6 +290,24 @@ fn surface_for_address(address: &str, fallback_title: Option<&str>) -> RenderSur
             }
             surface
         }
+    }
+}
+
+fn is_web_address(address: &str) -> bool {
+    address.starts_with("http://") || address.starts_with("https://")
+}
+
+fn web_surface(address: &str) -> RenderSurface {
+    let backend = ServoBackend;
+    match fetch_web_page(address) {
+        Ok(page) => backend.render_html(&page.final_url, page.body, HtmlDocumentSource::WebFetch),
+        Err(error) => backend.render_error(
+            address,
+            "Web Load Error",
+            "Could not load web page",
+            &[address.to_string(), error.to_string()],
+            HtmlDocumentSource::WebFetch,
+        ),
     }
 }
 
@@ -355,7 +379,10 @@ fn app_surface<const N: usize>(
 #[cfg(test)]
 mod tests {
     use super::{BrowserState, normalize_navigation_input, percent_encode_file_path};
-    use slate_rendering::{RenderDocument, ServoBackend};
+    use slate_rendering::{HtmlDocumentSource, RenderDocument, ServoBackend};
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::thread;
 
     #[test]
     fn initial_state_has_home_tab() {
@@ -431,5 +458,38 @@ mod tests {
             Some("Slate HTML Shim")
         );
         assert!(matches!(state.surface.document, RenderDocument::Html(_)));
+    }
+
+    #[test]
+    fn navigating_http_fetches_and_renders_html() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind local server");
+        let address = format!("http://{}", listener.local_addr().expect("local socket"));
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept request");
+            let mut request = [0_u8; 1024];
+            let _ = stream.read(&mut request).expect("read request");
+            let body = "<!doctype html><html><head><title>Browser Core Web</title></head>\
+                        <body><h1>Fetched From Web</h1><p>HTTP fixture body.</p></body></html>";
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            stream
+                .write_all(response.as_bytes())
+                .expect("write response");
+        });
+
+        let mut state = BrowserState::new(&ServoBackend);
+        state.navigate(&address).expect("HTTP navigation");
+        server.join().expect("server thread");
+
+        assert_eq!(state.surface.title, "Browser Core Web");
+        assert_eq!(state.surface.summary, "HTTP fixture body.");
+        let RenderDocument::Html(document) = &state.surface.document else {
+            panic!("expected HTML document");
+        };
+        assert_eq!(document.heading, "Fetched From Web");
+        assert_eq!(document.source, HtmlDocumentSource::WebFetch);
     }
 }

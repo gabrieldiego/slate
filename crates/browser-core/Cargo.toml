@@ -8,8 +8,8 @@ repository.workspace = true
 
 [dependencies]
 slate-apps.workspace = true
+slate-net.workspace = true
 slate-rendering.workspace = true
 
 [lints]
 workspace = true
-

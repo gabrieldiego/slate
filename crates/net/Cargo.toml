@@ -7,8 +7,9 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+# HTTP(S) client for explicit address-bar web navigations, contained in the net boundary.
+reqwest.workspace = true
 slate-routing.workspace = true
 
 [lints]
 workspace = true
-

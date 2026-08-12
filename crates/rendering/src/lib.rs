@@ -34,6 +34,7 @@ pub enum HtmlDocumentSource {
     BuiltinShim,
     NavigationShim,
     LocalFile,
+    WebFetch,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -62,6 +63,38 @@ pub struct ServoBackend;
 impl ServoBackend {
     pub fn vendored_path(self) -> &'static str {
         VENDORED_SERVO_PATH
+    }
+
+    pub fn render_html(
+        self,
+        address: &str,
+        html: impl Into<String>,
+        source: HtmlDocumentSource,
+    ) -> RenderSurface {
+        HtmlShim::from_html(address, html, source).render()
+    }
+
+    pub fn render_error(
+        self,
+        address: &str,
+        title: &str,
+        heading: &str,
+        details: &[String],
+        source: HtmlDocumentSource,
+    ) -> RenderSurface {
+        let escaped_title = escape_html_text(title);
+        let escaped_heading = escape_html_text(heading);
+        let mut body = format!(
+            "<!doctype html><html><head><title>{escaped_title}</title></head>\
+             <body><h1>{escaped_heading}</h1>"
+        );
+        for detail in details {
+            body.push_str("<p>");
+            body.push_str(&escape_html_text(detail));
+            body.push_str("</p>");
+        }
+        body.push_str("</body></html>");
+        HtmlShim::from_html(address, body, source).render()
     }
 }
 
@@ -96,18 +129,26 @@ struct HtmlShim {
 }
 
 impl HtmlShim {
-    fn builtin_test(address: &str) -> Self {
-        let escaped_address = escape_html_text(address);
+    fn from_html(address: &str, html: impl Into<String>, source: HtmlDocumentSource) -> Self {
         Self {
             address: address.to_string(),
-            html: format!(
+            html: html.into(),
+            source,
+        }
+    }
+
+    fn builtin_test(address: &str) -> Self {
+        let escaped_address = escape_html_text(address);
+        Self::from_html(
+            address,
+            format!(
                 "<!doctype html><html><head><title>Slate HTML Shim</title></head>\
                  <body><h1>Hello from Slate</h1>\
                  <p>This test page is rendered through the Servo backend boundary.</p>\
                  <p>{escaped_address}</p></body></html>"
             ),
-            source: HtmlDocumentSource::BuiltinShim,
-        }
+            HtmlDocumentSource::BuiltinShim,
+        )
     }
 
     fn search(address: &str) -> Self {
@@ -116,65 +157,61 @@ impl HtmlShim {
             .map(|(_, value)| value.replace('+', " "))
             .unwrap_or_default();
         let escaped_query = escape_html_text(&query);
-        Self {
-            address: address.to_string(),
-            html: format!(
+        Self::from_html(
+            address,
+            format!(
                 "<!doctype html><html><head><title>Search</title></head>\
                  <body><h1>{escaped_query}</h1>\
                  <p>Local search shim.</p>\
                  <p>No remote search request has been issued.</p></body></html>"
             ),
-            source: HtmlDocumentSource::BuiltinShim,
-        }
+            HtmlDocumentSource::BuiltinShim,
+        )
     }
 
     fn internal(address: &str) -> Self {
         let escaped_address = escape_html_text(address);
-        Self {
-            address: address.to_string(),
-            html: format!(
+        Self::from_html(
+            address,
+            format!(
                 "<!doctype html><html><head><title>Slate Internal Page</title></head>\
                  <body><h1>Slate Internal Page</h1>\
                  <p>{escaped_address}</p>\
                  <p>This address is handled locally.</p></body></html>"
             ),
-            source: HtmlDocumentSource::BuiltinShim,
-        }
+            HtmlDocumentSource::BuiltinShim,
+        )
     }
 
     fn navigation(address: &str) -> Self {
         let escaped_address = escape_html_text(address);
-        Self {
-            address: address.to_string(),
-            html: format!(
+        Self::from_html(
+            address,
+            format!(
                 "<!doctype html><html><head><title>{escaped_address}</title></head>\
                  <body><h1>{escaped_address}</h1>\
                  <p>Loaded by the Servo navigation shim.</p>\
                  <p>Full document loading will replace this surface.</p></body></html>"
             ),
-            source: HtmlDocumentSource::NavigationShim,
-        }
+            HtmlDocumentSource::NavigationShim,
+        )
     }
 
     fn local_file(address: &str) -> Self {
         match read_local_html(address) {
-            Ok(html) => Self {
-                address: address.to_string(),
-                html,
-                source: HtmlDocumentSource::LocalFile,
-            },
+            Ok(html) => Self::from_html(address, html, HtmlDocumentSource::LocalFile),
             Err(error) => {
                 let escaped_address = escape_html_text(address);
                 let escaped_error = escape_html_text(&error);
-                Self {
-                    address: address.to_string(),
-                    html: format!(
+                Self::from_html(
+                    address,
+                    format!(
                         "<!doctype html><html><head><title>Local File Error</title></head>\
                          <body><h1>Could not read local file</h1>\
                          <p>{escaped_address}</p><p>{escaped_error}</p></body></html>"
                     ),
-                    source: HtmlDocumentSource::LocalFile,
-                }
+                    HtmlDocumentSource::LocalFile,
+                )
             }
         }
     }
@@ -255,6 +292,23 @@ fn home_surface() -> RenderSurface {
 
 fn document_metrics(source: HtmlDocumentSource) -> Vec<RenderMetric> {
     match source {
+        HtmlDocumentSource::WebFetch => vec![
+            RenderMetric {
+                label: "HTML".to_string(),
+                value: "Web".to_string(),
+                accent: MetricAccent::Teal,
+            },
+            RenderMetric {
+                label: "Scripts".to_string(),
+                value: "Off".to_string(),
+                accent: MetricAccent::Amber,
+            },
+            RenderMetric {
+                label: "Route".to_string(),
+                value: "Web".to_string(),
+                accent: MetricAccent::Blue,
+            },
+        ],
         HtmlDocumentSource::LocalFile => vec![
             RenderMetric {
                 label: "HTML".to_string(),
@@ -443,6 +497,23 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn servo_backend_renders_fetched_html_body() {
+        let surface = ServoBackend.render_html(
+            "https://example.test",
+            "<!doctype html><title>Fetched Fixture</title><h1>Fetched Heading</h1><p>Fetched body.</p>",
+            HtmlDocumentSource::WebFetch,
+        );
+
+        assert_eq!(surface.title, "Fetched Fixture");
+        assert_eq!(surface.summary, "Fetched body.");
+        let RenderDocument::Html(document) = surface.document else {
+            panic!("expected HTML document");
+        };
+        assert_eq!(document.heading, "Fetched Heading");
+        assert_eq!(document.source, HtmlDocumentSource::WebFetch);
     }
 
     #[test]

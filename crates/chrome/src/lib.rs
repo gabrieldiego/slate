@@ -730,6 +730,7 @@ impl ChromeView {
             HtmlDocumentSource::BuiltinShim => "Servo HTML shim",
             HtmlDocumentSource::NavigationShim => "Servo navigation shim",
             HtmlDocumentSource::LocalFile => "Local HTML file",
+            HtmlDocumentSource::WebFetch => "Fetched HTML",
         };
         let badge_w = canvas.measure_text(1, badge_text).saturating_add(22);
         canvas.rounded_rect(content_x, top_y + 76, badge_w, 24, 12, TEAL_SOFT);

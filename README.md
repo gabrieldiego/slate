@@ -75,7 +75,7 @@ or:
 scripts/check.sh
 ```
 
-The window opens a Slate mockup with the intended first shape: left app rail, tab strip, navigation toolbar, address bar, and a quiet home viewport. The side rail switches between Web, Downloads, Calendar, and Messaging panes; tabs can be selected; the `+` tab button creates a mock tab; and the address bar can navigate to deterministic HTML shims such as `slate://tests/hello` or local HTML files such as `examples/local-page.html`.
+The window opens a Slate mockup with the intended first shape: left app rail, tab strip, navigation toolbar, address bar, and a quiet home viewport. The side rail switches between Web, Downloads, Calendar, and Messaging panes; tabs can be selected; the `+` tab button creates a mock tab; and the address bar can navigate to deterministic HTML shims such as `slate://tests/hello`, local HTML files such as `examples/local-page.html`, and HTTP(S) pages.
 
 ## Servo
 
@@ -93,7 +93,9 @@ Slate crates should depend on Servo through the vendored crate path when the rea
 servo = { path = "third_party/servo/components/servo" }
 ```
 
-The current `ServoBackend` in `crates/rendering/` loads safe Rust HTML shims and local `file://` HTML pages so browser-core, tabs, and the address bar can be tested before full Servo composition is wired in. Some Servo patches are expected to be necessary later. Keep them small, documented, easy to rebase, and suitable for upstream submission when they are not Slate-specific.
+The current `ServoBackend` in `crates/rendering/` loads safe Rust HTML shims, local `file://` HTML pages, and fetched HTTP(S) HTML bodies so browser-core, tabs, and the address bar can be tested before full Servo composition is wired in. Some Servo patches are expected to be necessary later. Keep them small, documented, easy to rebase, and suitable for upstream submission when they are not Slate-specific.
+
+Network fetching currently lives in `crates/net/` and is only triggered by explicit navigation. The temporary renderer extracts the title, first heading, and paragraphs; it does not execute JavaScript or apply CSS yet.
 
 GitHub deploy keys are repository-scoped. Use a dedicated key for the Servo fork, not the Slate repository key.
 
