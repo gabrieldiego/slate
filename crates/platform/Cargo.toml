@@ -7,9 +7,9 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+arboard.workspace = true
 minifb.workspace = true
 slate-chrome.workspace = true
 
 [lints]
 workspace = true
-

@@ -130,7 +130,7 @@ impl BrowserState {
     }
 
     pub fn ensure_active_web_viewport(&mut self, viewport: RenderViewport) -> bool {
-        if self.active_app != AppId::Web || !self.active_surface_needs_viewport(viewport) {
+        if !self.active_web_viewport_needs_refresh(viewport) {
             return false;
         }
 
@@ -140,6 +140,10 @@ impl BrowserState {
         let surface = surface_for_address_with_viewport(&tab.address, Some(&tab.title), viewport);
         self.set_active_surface(surface);
         true
+    }
+
+    pub fn active_web_viewport_needs_refresh(&self, viewport: RenderViewport) -> bool {
+        self.active_app == AppId::Web && self.active_surface_needs_viewport(viewport)
     }
 
     fn set_active_surface(&mut self, surface: RenderSurface) {

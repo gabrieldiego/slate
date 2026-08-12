@@ -2,12 +2,13 @@
 
 use core::fmt;
 use minifb::{
-    CursorStyle, InputCallback, Key, MouseButton, MouseMode, ScaleMode, Window, WindowOptions,
+    CursorStyle, InputCallback, Key, KeyRepeat, MouseButton, MouseMode, ScaleMode, Window,
+    WindowOptions,
 };
 use slate_chrome::{ChromeKeyCommand, ChromeView, Frame, WindowCommand, WindowVisualState};
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const MINIMIZED_WIDTH: usize = 440;
 const MINIMIZED_HEIGHT: usize = 136;
@@ -16,6 +17,7 @@ const MAXIMIZED_HEIGHT: usize = 900;
 const IDLE_SLEEP: Duration = Duration::from_millis(50);
 const INPUT_SLEEP: Duration = Duration::from_millis(16);
 const DRAG_SLEEP: Duration = Duration::from_millis(1);
+const VIEWPORT_REFRESH_DEBOUNCE: Duration = Duration::from_millis(140);
 const KEY_REPEAT_DELAY: f32 = 0.18;
 const KEY_REPEAT_RATE: f32 = 0.025;
 
@@ -34,12 +36,14 @@ struct WindowDrag {
 #[derive(Clone, Debug, Default)]
 struct TextInputQueue {
     events: Rc<RefCell<Vec<TextInputEvent>>>,
+    ctrl_down: Rc<RefCell<bool>>,
 }
 
 impl TextInputQueue {
     fn callback(&self) -> TextInputCallback {
         TextInputCallback {
             events: Rc::clone(&self.events),
+            ctrl_down: Rc::clone(&self.ctrl_down),
         }
     }
 
@@ -51,6 +55,7 @@ impl TextInputQueue {
 #[derive(Clone, Debug)]
 struct TextInputCallback {
     events: Rc<RefCell<Vec<TextInputEvent>>>,
+    ctrl_down: Rc<RefCell<bool>>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -61,12 +66,20 @@ enum TextInputEvent {
 
 impl InputCallback for TextInputCallback {
     fn add_char(&mut self, uni_char: u32) {
+        if *self.ctrl_down.borrow() {
+            return;
+        }
+
         if let Some(ch) = char::from_u32(uni_char) {
             self.events.borrow_mut().push(TextInputEvent::Char(ch));
         }
     }
 
     fn set_key_state(&mut self, key: Key, state: bool) {
+        if matches!(key, Key::LeftCtrl | Key::RightCtrl) {
+            *self.ctrl_down.borrow_mut() = state;
+        }
+
         if state && let Some(command) = key_command(key) {
             self.events
                 .borrow_mut()
@@ -103,10 +116,52 @@ impl fmt::Display for PlatformError {
 
 impl std::error::Error for PlatformError {}
 
+struct ClipboardDriver {
+    system: Option<arboard::Clipboard>,
+    fallback: String,
+}
+
+impl ClipboardDriver {
+    fn new() -> Self {
+        Self {
+            system: arboard::Clipboard::new().ok(),
+            fallback: String::new(),
+        }
+    }
+
+    fn set_text(&mut self, text: String) {
+        self.fallback = text.clone();
+        if let Some(system) = &mut self.system
+            && system.set_text(text).is_err()
+        {
+            self.system = None;
+        }
+    }
+
+    fn text(&mut self) -> String {
+        if let Some(system) = &mut self.system {
+            match system.get_text() {
+                Ok(text) => return text,
+                Err(_) => self.system = None,
+            }
+        }
+
+        self.fallback.clone()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum EditShortcut {
+    SelectAll,
+    Copy,
+    Paste,
+}
+
 pub fn run_browser_window(mut view: ChromeView, config: WindowConfig) -> Result<(), PlatformError> {
     let normal_size = (config.width, config.height);
     let mut visual_state = WindowVisualState::Normal;
     let text_input = TextInputQueue::default();
+    let mut clipboard = ClipboardDriver::new();
     let mut window = create_window(&config.title, normal_size.0, normal_size.1)?;
     install_text_input(&mut window, &text_input);
     let mut window_position = window.get_position();
@@ -115,11 +170,17 @@ pub fn run_browser_window(mut view: ChromeView, config: WindowConfig) -> Result<
     let mut cached_frame = None;
     let mut cached_size = (0, 0);
     let mut frame_dirty = true;
+    let mut viewport_refresh_pending = false;
+    let mut last_resize_at = None;
 
     while window.is_open() {
         let (width, height) = window.get_size();
         if cached_size != (width, height) {
             frame_dirty = true;
+            if view.update_web_viewport(width.max(1), height.max(1)) {
+                viewport_refresh_pending = true;
+            }
+            last_resize_at = Some(Instant::now());
         }
 
         let left_down = window.get_mouse_down(MouseButton::Left);
@@ -204,14 +265,35 @@ pub fn run_browser_window(mut view: ChromeView, config: WindowConfig) -> Result<
 
         previous_left_down = if window_recreated { false } else { left_down };
 
+        if process_edit_shortcuts(&window, &mut view, &mut clipboard)
+            && !update_cached_toolbar(&mut window, &view, &mut cached_frame, cached_size)?
+        {
+            frame_dirty = true;
+        }
+
         match process_keyboard_input(&text_input, &mut view) {
-            KeyboardOutcome::Changed => frame_dirty = true,
+            KeyboardOutcome::Changed => {
+                if !update_cached_toolbar(&mut window, &view, &mut cached_frame, cached_size)? {
+                    frame_dirty = true;
+                }
+            }
             KeyboardOutcome::CloseRequested => close_requested = true,
             KeyboardOutcome::Idle => {}
         }
 
         if close_requested {
             break;
+        }
+
+        if viewport_refresh_ready(
+            last_resize_at.map(|instant| instant.elapsed()),
+            viewport_refresh_pending,
+            view.is_address_bar_focused(),
+        ) {
+            if view.refresh_web_viewport() {
+                frame_dirty = true;
+            }
+            viewport_refresh_pending = view.web_viewport_needs_refresh();
         }
 
         let dragging = drag.is_some();
@@ -224,13 +306,25 @@ pub fn run_browser_window(mut view: ChromeView, config: WindowConfig) -> Result<
             window.update();
         }
 
+        if process_edit_shortcuts(&window, &mut view, &mut clipboard)
+            && !update_cached_toolbar(&mut window, &view, &mut cached_frame, cached_size)?
+        {
+            let (width, height) = window.get_size();
+            cached_frame = Some(view.render(width.max(1), height.max(1)));
+            cached_size = (width, height);
+            frame_dirty = false;
+            update_window_buffer(&mut window, cached_frame.as_ref())?;
+        }
+
         match process_keyboard_input(&text_input, &mut view) {
             KeyboardOutcome::Changed => {
-                let (width, height) = window.get_size();
-                cached_frame = Some(view.render(width.max(1), height.max(1)));
-                cached_size = (width, height);
-                frame_dirty = false;
-                update_window_buffer(&mut window, cached_frame.as_ref())?;
+                if !update_cached_toolbar(&mut window, &view, &mut cached_frame, cached_size)? {
+                    let (width, height) = window.get_size();
+                    cached_frame = Some(view.render(width.max(1), height.max(1)));
+                    cached_size = (width, height);
+                    frame_dirty = false;
+                    update_window_buffer(&mut window, cached_frame.as_ref())?;
+                }
             }
             KeyboardOutcome::CloseRequested => break,
             KeyboardOutcome::Idle => {}
@@ -272,6 +366,86 @@ fn update_window_buffer(window: &mut Window, frame: Option<&Frame>) -> Result<()
     window
         .update_with_buffer(frame.pixels(), frame.width(), frame.height())
         .map_err(|error| PlatformError(format!("failed to update Slate window: {error}")))
+}
+
+fn update_cached_toolbar(
+    window: &mut Window,
+    view: &ChromeView,
+    cached_frame: &mut Option<Frame>,
+    cached_size: (usize, usize),
+) -> Result<bool, PlatformError> {
+    let (width, height) = window.get_size();
+    if cached_size != (width, height) || !view.is_address_bar_focused() {
+        return Ok(false);
+    }
+
+    let Some(frame) = cached_frame.as_mut() else {
+        return Ok(false);
+    };
+    if !view.render_toolbar_update(frame) {
+        return Ok(false);
+    }
+
+    update_window_buffer(window, Some(frame))?;
+    Ok(true)
+}
+
+fn process_edit_shortcuts(
+    window: &Window,
+    view: &mut ChromeView,
+    clipboard: &mut ClipboardDriver,
+) -> bool {
+    if !view.is_address_bar_focused() || !ctrl_modifier_down(window) {
+        return false;
+    }
+
+    let mut changed = false;
+    for key in window.get_keys_pressed(KeyRepeat::No) {
+        match edit_shortcut(true, key) {
+            Some(EditShortcut::SelectAll) => {
+                changed |= view.select_all_address_text();
+            }
+            Some(EditShortcut::Copy) => {
+                if let Some(text) = view.copy_address_text() {
+                    clipboard.set_text(text);
+                }
+            }
+            Some(EditShortcut::Paste) => {
+                let text = clipboard.text();
+                changed |= view.paste_address_text(&text);
+            }
+            None => {}
+        }
+    }
+
+    changed
+}
+
+fn ctrl_modifier_down(window: &Window) -> bool {
+    window.is_key_down(Key::LeftCtrl) || window.is_key_down(Key::RightCtrl)
+}
+
+fn edit_shortcut(ctrl_down: bool, key: Key) -> Option<EditShortcut> {
+    if !ctrl_down {
+        return None;
+    }
+
+    match key {
+        Key::A => Some(EditShortcut::SelectAll),
+        Key::C => Some(EditShortcut::Copy),
+        Key::V => Some(EditShortcut::Paste),
+        _ => None,
+    }
+}
+
+fn viewport_refresh_ready(
+    resize_elapsed: Option<Duration>,
+    pending: bool,
+    address_bar_focused: bool,
+) -> bool {
+    pending
+        && !address_bar_focused
+        && resize_elapsed.is_some_and(|elapsed| elapsed >= VIEWPORT_REFRESH_DEBOUNCE)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -379,11 +553,13 @@ fn loop_sleep(dragging: bool, text_input_active: bool) -> Duration {
 #[cfg(test)]
 mod tests {
     use super::{
-        DRAG_SLEEP, IDLE_SLEEP, INPUT_SLEEP, PointerPosition, TextInputEvent, TextInputQueue,
-        WindowDrag, coord_to_isize, dragged_window_position, key_command, loop_sleep,
+        DRAG_SLEEP, EditShortcut, IDLE_SLEEP, INPUT_SLEEP, PointerPosition, TextInputEvent,
+        TextInputQueue, VIEWPORT_REFRESH_DEBOUNCE, WindowDrag, coord_to_isize,
+        dragged_window_position, edit_shortcut, key_command, loop_sleep, viewport_refresh_ready,
     };
     use minifb::{InputCallback, Key};
     use slate_chrome::ChromeKeyCommand;
+    use std::time::Duration;
 
     #[test]
     fn converts_finite_coordinates_for_dragging() {
@@ -424,6 +600,40 @@ mod tests {
     }
 
     #[test]
+    fn viewport_refresh_waits_for_resize_to_settle_and_idle_text_input() {
+        assert!(!viewport_refresh_ready(None, true, false));
+        assert!(!viewport_refresh_ready(
+            Some(VIEWPORT_REFRESH_DEBOUNCE - Duration::from_millis(1)),
+            true,
+            false
+        ));
+        assert!(!viewport_refresh_ready(
+            Some(VIEWPORT_REFRESH_DEBOUNCE),
+            true,
+            true
+        ));
+        assert!(!viewport_refresh_ready(
+            Some(VIEWPORT_REFRESH_DEBOUNCE),
+            false,
+            false
+        ));
+        assert!(viewport_refresh_ready(
+            Some(VIEWPORT_REFRESH_DEBOUNCE),
+            true,
+            false
+        ));
+    }
+
+    #[test]
+    fn maps_ctrl_edit_shortcuts() {
+        assert_eq!(edit_shortcut(true, Key::A), Some(EditShortcut::SelectAll));
+        assert_eq!(edit_shortcut(true, Key::C), Some(EditShortcut::Copy));
+        assert_eq!(edit_shortcut(true, Key::V), Some(EditShortcut::Paste));
+        assert_eq!(edit_shortcut(false, Key::V), None);
+        assert_eq!(edit_shortcut(true, Key::Enter), None);
+    }
+
+    #[test]
     fn maps_editing_keys_to_chrome_commands() {
         assert_eq!(key_command(Key::Enter), Some(ChromeKeyCommand::Enter));
         assert_eq!(key_command(Key::NumPadEnter), Some(ChromeKeyCommand::Enter));
@@ -452,5 +662,18 @@ mod tests {
                 TextInputEvent::Command(ChromeKeyCommand::Enter)
             ]
         );
+    }
+
+    #[test]
+    fn text_callback_suppresses_ctrl_modified_text() {
+        let queue = TextInputQueue::default();
+        let mut callback = queue.callback();
+
+        callback.set_key_state(Key::LeftCtrl, true);
+        callback.add_char(u32::from('v'));
+        callback.set_key_state(Key::LeftCtrl, false);
+        callback.add_char(u32::from('s'));
+
+        assert_eq!(queue.drain(), [TextInputEvent::Char('s')]);
     }
 }

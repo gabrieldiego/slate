@@ -251,6 +251,44 @@ impl ChromeView {
         &self.address_editor.draft
     }
 
+    pub fn select_all_address_text(&mut self) -> bool {
+        if !self.address_editor.focused {
+            return false;
+        }
+
+        self.address_editor.replace_on_input = true;
+        true
+    }
+
+    pub fn copy_address_text(&self) -> Option<String> {
+        self.address_editor
+            .focused
+            .then(|| self.address_editor.draft.clone())
+    }
+
+    pub fn paste_address_text(&mut self, text: &str) -> bool {
+        if !self.address_editor.focused {
+            return false;
+        }
+
+        let mut changed = false;
+        if self.address_editor.replace_on_input {
+            self.address_editor.draft.clear();
+            self.address_editor.replace_on_input = false;
+            changed = true;
+        }
+
+        for ch in text.chars().filter(|ch| !ch.is_control()) {
+            if self.address_editor.draft.len() >= 2048 {
+                break;
+            }
+            self.address_editor.draft.push(ch);
+            changed = true;
+        }
+
+        changed
+    }
+
     pub fn handle_text_input(&mut self, ch: char) -> bool {
         if !self.address_editor.focused || ch.is_control() {
             return false;
@@ -366,7 +404,7 @@ impl ChromeView {
     pub fn render(&mut self, width: usize, height: usize) -> Frame {
         let width = width.max(320);
         let height = height.max(240);
-        self.prepare_web_viewport(width, height);
+        let _ = self.update_web_viewport(width, height);
         let mut frame = Frame::new(width, height, BG);
         let mut canvas = Canvas::new(&mut frame, &self.text);
 
@@ -379,14 +417,51 @@ impl ChromeView {
         frame
     }
 
-    fn prepare_web_viewport(&mut self, width: usize, height: usize) {
+    pub fn update_web_viewport(&mut self, width: usize, height: usize) -> bool {
         if self.window_state == WindowVisualState::Minimized {
-            return;
+            return false;
         }
 
         let viewport = web_document_viewport(width, height);
         self.web_viewport = Some(viewport);
-        let _ = self.state.ensure_active_web_viewport(viewport);
+        self.state.active_web_viewport_needs_refresh(viewport)
+    }
+
+    pub fn refresh_web_viewport(&mut self) -> bool {
+        let Some(viewport) = self.web_viewport else {
+            return false;
+        };
+
+        self.state.ensure_active_web_viewport(viewport)
+    }
+
+    pub fn web_viewport_needs_refresh(&self) -> bool {
+        self.web_viewport
+            .is_some_and(|viewport| self.state.active_web_viewport_needs_refresh(viewport))
+    }
+
+    pub fn render_toolbar_update(&self, frame: &mut Frame) -> bool {
+        if self.window_state == WindowVisualState::Minimized {
+            return false;
+        }
+
+        let width = frame.width().max(320);
+        let mut canvas = Canvas::new(frame, &self.text);
+        canvas.rect(
+            RAIL_W,
+            TAB_H,
+            width.saturating_sub(RAIL_W),
+            TOOLBAR_H,
+            SURFACE,
+        );
+        canvas.hline(
+            RAIL_W,
+            TAB_H + TOOLBAR_H,
+            width.saturating_sub(RAIL_W),
+            BORDER,
+        );
+        self.draw_toolbar(&mut canvas, RAIL_W, TAB_H, width, TOOLBAR_H);
+        true
     }
 
     fn visible_tab_count(&self) -> usize {
@@ -663,6 +738,19 @@ impl ChromeView {
         };
         let address_text_x = address_x + 52;
         let address_text_w = address_w.saturating_sub(98);
+        let address_text_width = canvas.measure_text(2, address_text).min(address_text_w);
+        if self.address_editor.focused
+            && self.address_editor.replace_on_input
+            && !address_text.is_empty()
+        {
+            canvas.rect(
+                address_text_x.saturating_sub(3),
+                y + 23,
+                address_text_width.saturating_add(6),
+                25,
+                TEAL_SOFT,
+            );
+        }
         canvas.draw_text_clipped(
             address_text_x,
             y + 27,
@@ -672,11 +760,7 @@ impl ChromeView {
             address_text_w,
         );
         if self.address_editor.focused {
-            let caret_x = address_caret_x(
-                address_text_x,
-                canvas.measure_text(2, address_text),
-                address_text_w,
-            );
+            let caret_x = address_caret_x(address_text_x, address_text_width, address_text_w);
             let caret_h = 20;
             let caret_y = address_y + address_h.saturating_sub(caret_h) / 2;
             canvas.vline(caret_x, caret_y, caret_h, TEAL);
@@ -2180,17 +2264,20 @@ fn glyph(ch: char) -> [u8; 7] {
 #[cfg(test)]
 mod tests {
     use super::{
-        APP_ICON_SIZE, ChromeKeyCommand, ChromeView, HOME_FOOTER_SHIELD_MASK,
+        APP_ICON_SIZE, ChromeKeyCommand, ChromeView, FOOTER_H, Frame, HOME_FOOTER_SHIELD_MASK,
         HOME_FOOTER_SHIELD_SIZE, HOME_HERO_SHIELD_MASK, HOME_HERO_SHIELD_SIZE,
         HOME_METRIC_ICON_SIZE, HOME_SEARCH_ICON_MASK, HOME_SEARCH_ICON_SIZE, NAV_BACK_ICON_MASK,
-        NAV_FORWARD_ICON_MASK, NAV_ICON_SIZE, NAV_REFRESH_ICON_MASK, TAB_H, TAB_ICON_SIZE, TAB_X,
-        TAB_Y, TOP_SHIELD_ICON_MASK, TOP_SHIELD_ICON_SIZE, WindowCommand, address_bar_rect,
-        address_caret_x, app_icon_mask, home_metric_icon_mask, tab_icon_mask,
+        NAV_FORWARD_ICON_MASK, NAV_ICON_SIZE, NAV_REFRESH_ICON_MASK, RAIL_W, TAB_H, TAB_ICON_SIZE,
+        TAB_X, TAB_Y, TOOLBAR_H, TOP_SHIELD_ICON_MASK, TOP_SHIELD_ICON_SIZE, WindowCommand,
+        address_bar_rect, address_caret_x, app_icon_mask, home_metric_icon_mask, tab_icon_mask,
         web_document_viewport, window_control_positions,
     };
     use slate_apps::{AppIcon, AppId};
     use slate_browser_core::BrowserState;
-    use slate_rendering::ServoBackend;
+    use slate_rendering::{
+        RenderDocument, RenderSurface, ServoBackend, ServoDocument, ServoDocumentSource,
+        ServoDocumentStatus, ServoFrame,
+    };
 
     #[test]
     fn renders_non_empty_frame() {
@@ -2250,6 +2337,63 @@ mod tests {
 
         assert_eq!(viewport.width, 1114);
         assert_eq!(viewport.height, 428);
+    }
+
+    #[test]
+    fn render_does_not_refresh_stale_web_viewport() {
+        let mut view = ChromeView::new(state_with_web_frame(320, 240));
+
+        assert!(view.update_web_viewport(1280, 720));
+        assert!(view.web_viewport_needs_refresh());
+        let frame = view.render(1280, 720);
+
+        assert_eq!(frame.width(), 1280);
+        assert_eq!(frame.height(), 720);
+        assert_eq!(web_frame_size(view.state()), Some((320, 240)));
+        assert!(view.web_viewport_needs_refresh());
+    }
+
+    #[test]
+    fn address_bar_edit_repaints_toolbar_without_redrawing_content() {
+        let state = BrowserState::new(&ServoBackend);
+        let mut view = ChromeView::new(state);
+        let mut frame = view.render(1280, 720);
+        let before = frame.pixels().to_vec();
+
+        view.focus_address_bar();
+        assert!(view.handle_text_input('s'));
+        assert!(view.render_toolbar_update(&mut frame));
+
+        assert!(region_changed(
+            &before,
+            &frame,
+            RAIL_W,
+            TAB_H,
+            1280 - RAIL_W,
+            TOOLBAR_H
+        ));
+        assert!(!region_changed(
+            &before,
+            &frame,
+            RAIL_W,
+            TAB_H + TOOLBAR_H + 1,
+            1280 - RAIL_W,
+            720 - TAB_H - TOOLBAR_H - FOOTER_H - 1
+        ));
+    }
+
+    #[test]
+    fn address_bar_supports_select_copy_and_paste() {
+        let state = BrowserState::new(&ServoBackend);
+        let mut view = ChromeView::new(state);
+
+        view.focus_address_bar();
+        assert_eq!(view.copy_address_text().as_deref(), Some("slate://home"));
+        assert!(view.paste_address_text("https://servo.org"));
+        assert_eq!(view.address_draft(), "https://servo.org");
+        assert!(view.select_all_address_text());
+        assert!(view.paste_address_text("slate://tests/hello"));
+        assert_eq!(view.address_draft(), "slate://tests/hello");
     }
 
     #[test]
@@ -2363,5 +2507,60 @@ mod tests {
                 HOME_METRIC_ICON_SIZE * HOME_METRIC_ICON_SIZE
             );
         }
+    }
+
+    fn state_with_web_frame(width: usize, height: usize) -> BrowserState {
+        let mut state = BrowserState::new(&ServoBackend);
+        state.surface = RenderSurface {
+            title: "Stale Web Frame".to_string(),
+            address: "slate://tests/stale".to_string(),
+            summary: "Rendered by Servo".to_string(),
+            metrics: Vec::new(),
+            document: RenderDocument::Web(ServoDocument {
+                title: "Stale Web Frame".to_string(),
+                address: "slate://tests/stale".to_string(),
+                frame: ServoFrame {
+                    width,
+                    height,
+                    pixels: vec![0x00EAF4F2; width.saturating_mul(height)],
+                },
+                source: ServoDocumentSource::SlateGenerated,
+                status: ServoDocumentStatus::Rendered,
+            }),
+        };
+        if let Some(tab) = state.tabs.get_mut(0) {
+            tab.title = state.surface.title.clone();
+            tab.address = state.surface.address.clone();
+        }
+        state
+    }
+
+    fn web_frame_size(state: &BrowserState) -> Option<(usize, usize)> {
+        let RenderDocument::Web(document) = &state.surface.document else {
+            return None;
+        };
+        Some((document.frame.width, document.frame.height))
+    }
+
+    fn region_changed(
+        before: &[u32],
+        frame: &Frame,
+        x: usize,
+        y: usize,
+        w: usize,
+        h: usize,
+    ) -> bool {
+        let frame_w = frame.width();
+        for row in y..y.saturating_add(h).min(frame.height()) {
+            let start = row.saturating_mul(frame_w).saturating_add(x);
+            let end = start
+                .saturating_add(w)
+                .min(before.len())
+                .min(frame.pixels().len());
+            if before.get(start..end) != frame.pixels().get(start..end) {
+                return true;
+            }
+        }
+        false
     }
 }

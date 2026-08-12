@@ -27,6 +27,7 @@ repository = "https://github.com/gabrieldiego/slate"
 unsafe_code = "forbid"
 
 [workspace.dependencies]
+arboard = "3.6"
 # minifb's Wayland backend does not expose true top-level movement, so the
 # temporary framebuffer host uses X11/XWayland until Slate has native OS shims.
 minifb = { version = "0.28", default-features = false, features = ["x11"] }

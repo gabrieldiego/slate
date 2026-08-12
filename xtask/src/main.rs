@@ -95,6 +95,8 @@ fn write_snapshot(path: &Path, address: Option<&str>) -> io::Result<()> {
     }
 
     let mut view = ChromeView::new(state);
+    let _ = view.update_web_viewport(1280, 720);
+    let _ = view.refresh_web_viewport();
     let frame = view.render(1280, 720);
     let mut data = Vec::with_capacity(
         frame
