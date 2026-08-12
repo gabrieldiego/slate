@@ -6,7 +6,9 @@ Slate uses Servo as its primary rendering engine and is designed around safe Rus
 
 ## Status
 
-This repository is currently in project setup and architecture definition. The browser implementation has not been scaffolded yet.
+Slate is currently a scaffolded Rust workspace with an initial runnable browser-shell mockup. The first UI is code-native and portable: Slate draws its own browser chrome into a framebuffer and uses a small windowing layer to show it.
+
+The current renderer is a `ServoBackend` boundary in `crates/rendering/`. Real Servo embedding is the next step behind that boundary.
 
 ## Goals
 
@@ -47,12 +49,40 @@ tests/
 xtask/
 ```
 
+## Running
+
+Install the platform libraries needed by `minifb` on your OS, then run:
+
+```bash
+cargo run -p slate
+```
+
+or:
+
+```bash
+scripts/run.sh
+```
+
+Check the workspace with:
+
+```bash
+cargo check --workspace
+```
+
+or:
+
+```bash
+scripts/check.sh
+```
+
+The window opens a Slate mockup with the intended first shape: left app rail, tab strip, navigation toolbar, address bar, and a quiet home viewport. The side rail switches between Web, Downloads, Calendar, and Messaging panes; tabs can be selected; and the `+` tab button creates a mock tab.
+
 ## Servo
 
 Servo should be vendored as a pinned git submodule:
 
 ```bash
-git submodule add https://github.com/gabrieldiego/servo.git third_party/servo
+git submodule add git@github.com:gabrieldiego/servo.git third_party/servo
 git -C third_party/servo remote add upstream https://github.com/servo/servo.git
 git -C third_party/servo checkout <pinned-tag-or-commit>
 ```
@@ -65,6 +95,8 @@ servo = { path = "third_party/servo/components/servo" }
 
 Some Servo patches are expected to be necessary. Keep them small, documented, easy to rebase, and suitable for upstream submission when they are not Slate-specific.
 
+GitHub deploy keys are repository-scoped. Use a dedicated key for the Servo fork, not the Slate repository key.
+
 ## License
 
 Slate-owned code is intended to be licensed under the GNU General Public License, version 3 or later:
@@ -76,4 +108,3 @@ SPDX-License-Identifier: GPL-3.0-or-later
 See [LICENSE](LICENSE) for the GPLv3 text.
 
 Vendored third-party code keeps its own license. In particular, Servo is MPL-2.0 licensed and should remain under `third_party/servo` with its original license notices preserved.
-

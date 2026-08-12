@@ -1,0 +1,17 @@
+[package]
+name = "slate-chrome"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+fontdb = "0.24"
+fontdue = "0.9"
+slate-apps.workspace = true
+slate-browser-core.workspace = true
+slate-rendering.workspace = true
+
+[lints]
+workspace = true

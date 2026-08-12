@@ -30,6 +30,12 @@ Use `chrome` for Slate's browser UI layer intentionally. This is the historical 
 
 The name Slate can be understood as a nod to a very early surface for expression: a simple frame or medium that lets marks, symbols, and messages become visible. Treat the name as aligned with the browser's purpose: a quiet, durable surface for broadweb navigation rather than a decorative brand concept.
 
+## UI Direction
+
+Start with portable Rust UI code and avoid full GUI toolkits unless they become strictly necessary. Slate-owned UI should render the browser chrome itself and keep native OS shims isolated in `crates/platform/`.
+
+The initial browser shell should be inspired by the Slate concept direction: a left app rail, traditional top tab strip, navigation toolbar, address bar, and quiet home viewport. Use the concept screenshot as visual guidance, not as the UI asset itself.
+
 ## Broadweb Purpose
 
 Slate's main purpose is broadweb browsing: giving users one coherent browser for the conventional web and for distributed, private, peer-to-peer, local-first, and alternative protocol spaces.
