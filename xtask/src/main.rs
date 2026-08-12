@@ -94,7 +94,7 @@ fn write_snapshot(path: &Path, address: Option<&str>) -> io::Result<()> {
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
     }
 
-    let view = ChromeView::new(state);
+    let mut view = ChromeView::new(state);
     let frame = view.render(1280, 720);
     let mut data = Vec::with_capacity(
         frame

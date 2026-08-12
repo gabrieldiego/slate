@@ -3,7 +3,8 @@
 use core::fmt;
 use slate_apps::AppId;
 use slate_rendering::{
-    MetricAccent, RenderBackend, RenderDocument, RenderMetric, RenderSurface, ServoBackend,
+    MetricAccent, RenderBackend, RenderDocument, RenderMetric, RenderSurface, RenderViewport,
+    ServoBackend, ServoDocumentStatus,
 };
 use std::path::{Path, PathBuf};
 
@@ -113,6 +114,35 @@ impl BrowserState {
     pub fn navigate(&mut self, input: &str) -> Result<(), NavigationError> {
         let address = normalize_navigation_input(input)?;
         let surface = surface_for_address(&address, None);
+        self.set_active_surface(surface);
+        Ok(())
+    }
+
+    pub fn navigate_with_viewport(
+        &mut self,
+        input: &str,
+        viewport: RenderViewport,
+    ) -> Result<(), NavigationError> {
+        let address = normalize_navigation_input(input)?;
+        let surface = surface_for_address_with_viewport(&address, None, viewport);
+        self.set_active_surface(surface);
+        Ok(())
+    }
+
+    pub fn ensure_active_web_viewport(&mut self, viewport: RenderViewport) -> bool {
+        if self.active_app != AppId::Web || !self.active_surface_needs_viewport(viewport) {
+            return false;
+        }
+
+        let Some(tab) = self.active_tab().cloned() else {
+            return false;
+        };
+        let surface = surface_for_address_with_viewport(&tab.address, Some(&tab.title), viewport);
+        self.set_active_surface(surface);
+        true
+    }
+
+    fn set_active_surface(&mut self, surface: RenderSurface) {
         let tab = Tab {
             title: surface.title.clone(),
             address: surface.address.clone(),
@@ -127,12 +157,22 @@ impl BrowserState {
 
         self.active_app = app_for_address(&surface.address);
         self.surface = surface;
-        Ok(())
     }
 
     fn open_tab_surface(&mut self, tab: &Tab) {
         self.active_app = app_for_address(&tab.address);
         self.surface = surface_for_tab(tab);
+    }
+
+    fn active_surface_needs_viewport(&self, viewport: RenderViewport) -> bool {
+        let RenderDocument::Web(document) = &self.surface.document else {
+            return false;
+        };
+        if !matches!(document.status, ServoDocumentStatus::Rendered) {
+            return false;
+        }
+        document.frame.width != viewport.width as usize
+            || document.frame.height != viewport.height as usize
     }
 }
 
@@ -272,13 +312,21 @@ fn surface_for_tab(tab: &Tab) -> RenderSurface {
 }
 
 fn surface_for_address(address: &str, fallback_title: Option<&str>) -> RenderSurface {
+    surface_for_address_with_viewport(address, fallback_title, RenderViewport::default())
+}
+
+fn surface_for_address_with_viewport(
+    address: &str,
+    fallback_title: Option<&str>,
+    viewport: RenderViewport,
+) -> RenderSurface {
     match app_for_address(address) {
         AppId::Downloads => downloads_surface(),
         AppId::Calendar => calendar_surface(),
         AppId::Messaging => messaging_surface(),
         AppId::Web => {
             let backend = ServoBackend;
-            let mut surface = backend.load_address(address);
+            let mut surface = backend.load_address_with_viewport(address, viewport);
             if let Some(fallback_title) = fallback_title
                 && surface.title.is_empty()
             {

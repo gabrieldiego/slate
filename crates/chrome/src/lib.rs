@@ -5,7 +5,7 @@ use fontdue::{Font, FontSettings};
 use slate_apps::{AppDescriptor, AppIcon, AppId, default_apps};
 use slate_browser_core::BrowserState;
 use slate_rendering::{
-    MetricAccent, RenderDocument, RenderMetric, ServoDocument, ServoDocumentSource,
+    MetricAccent, RenderDocument, RenderMetric, RenderViewport, ServoDocument, ServoDocumentSource,
     ServoDocumentStatus, ServoFrame,
 };
 
@@ -214,6 +214,7 @@ pub struct ChromeView {
     text: TextRenderer,
     window_state: WindowVisualState,
     address_editor: AddressEditor,
+    web_viewport: Option<RenderViewport>,
 }
 
 impl ChromeView {
@@ -224,6 +225,7 @@ impl ChromeView {
             text: TextRenderer::load(),
             window_state: WindowVisualState::Normal,
             address_editor: AddressEditor::default(),
+            web_viewport: None,
         }
     }
 
@@ -273,7 +275,12 @@ impl ChromeView {
         match command {
             ChromeKeyCommand::Enter => {
                 let draft = self.address_editor.draft.clone();
-                if self.state.navigate(&draft).is_ok() {
+                let result = if let Some(viewport) = self.web_viewport {
+                    self.state.navigate_with_viewport(&draft, viewport)
+                } else {
+                    self.state.navigate(&draft)
+                };
+                if result.is_ok() {
                     self.address_editor.focused = false;
                     self.address_editor.replace_on_input = false;
                 }
@@ -356,9 +363,10 @@ impl ChromeView {
             && !self.hit_new_tab(x, y, width)
     }
 
-    pub fn render(&self, width: usize, height: usize) -> Frame {
+    pub fn render(&mut self, width: usize, height: usize) -> Frame {
         let width = width.max(320);
         let height = height.max(240);
+        self.prepare_web_viewport(width, height);
         let mut frame = Frame::new(width, height, BG);
         let mut canvas = Canvas::new(&mut frame, &self.text);
 
@@ -369,6 +377,16 @@ impl ChromeView {
         }
 
         frame
+    }
+
+    fn prepare_web_viewport(&mut self, width: usize, height: usize) {
+        if self.window_state == WindowVisualState::Minimized {
+            return;
+        }
+
+        let viewport = web_document_viewport(width, height);
+        self.web_viewport = Some(viewport);
+        let _ = self.state.ensure_active_web_viewport(viewport);
     }
 
     fn visible_tab_count(&self) -> usize {
@@ -1971,6 +1989,23 @@ fn window_control_positions(width: usize) -> [usize; 3] {
     ]
 }
 
+fn web_document_viewport(width: usize, height: usize) -> RenderViewport {
+    let width = width.max(320);
+    let height = height.max(240);
+    let top_h = TAB_H + TOOLBAR_H;
+    let footer_y = height.saturating_sub(FOOTER_H);
+    let content_w = width
+        .saturating_sub(RAIL_W)
+        .saturating_sub(80)
+        .saturating_sub(2);
+    let content_h = footer_y
+        .saturating_sub(top_h)
+        .saturating_sub(104)
+        .saturating_sub(2);
+
+    RenderViewport::new(content_w.max(1), content_h.max(1))
+}
+
 fn address_bar_rect(width: usize) -> (usize, usize, usize, usize) {
     let x = RAIL_W + 170;
     let y = TAB_H + 15;
@@ -2151,7 +2186,7 @@ mod tests {
         NAV_FORWARD_ICON_MASK, NAV_ICON_SIZE, NAV_REFRESH_ICON_MASK, TAB_H, TAB_ICON_SIZE, TAB_X,
         TAB_Y, TOP_SHIELD_ICON_MASK, TOP_SHIELD_ICON_SIZE, WindowCommand, address_bar_rect,
         address_caret_x, app_icon_mask, home_metric_icon_mask, tab_icon_mask,
-        window_control_positions,
+        web_document_viewport, window_control_positions,
     };
     use slate_apps::{AppIcon, AppId};
     use slate_browser_core::BrowserState;
@@ -2160,7 +2195,8 @@ mod tests {
     #[test]
     fn renders_non_empty_frame() {
         let state = BrowserState::new(&ServoBackend);
-        let frame = ChromeView::new(state).render(800, 500);
+        let mut view = ChromeView::new(state);
+        let frame = view.render(800, 500);
         assert_eq!(frame.width(), 800);
         assert_eq!(frame.height(), 500);
         assert!(frame.pixels().iter().any(|pixel| *pixel != 0x00FAF9F6));
@@ -2204,8 +2240,16 @@ mod tests {
         assert_eq!(view.state().surface.address, "slate://tests/hello");
         assert_eq!(
             view.state().active_tab().map(|tab| tab.title.as_str()),
-            Some("Slate HTML Shim")
+            Some("Slate Servo Test")
         );
+    }
+
+    #[test]
+    fn web_document_viewport_matches_inner_servo_panel() {
+        let viewport = web_document_viewport(1280, 720);
+
+        assert_eq!(viewport.width, 1114);
+        assert_eq!(viewport.height, 428);
     }
 
     #[test]

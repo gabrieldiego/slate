@@ -22,8 +22,9 @@ use url::Url;
 
 pub const VENDORED_SERVO_PATH: &str = "third_party/servo";
 
-const SERVO_VIEWPORT_WIDTH: u32 = 1080;
-const SERVO_VIEWPORT_HEIGHT: u32 = 620;
+const DEFAULT_SERVO_VIEWPORT_WIDTH: u32 = 1080;
+const DEFAULT_SERVO_VIEWPORT_HEIGHT: u32 = 620;
+const MAX_SERVO_VIEWPORT_SIZE: u32 = 4096;
 const LOAD_TIMEOUT: Duration = Duration::from_secs(20);
 const SCREENSHOT_TIMEOUT: Duration = Duration::from_secs(10);
 const SPIN_SLEEP: Duration = Duration::from_millis(4);
@@ -61,6 +62,30 @@ pub struct ServoFrame {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RenderViewport {
+    pub width: u32,
+    pub height: u32,
+}
+
+impl RenderViewport {
+    pub fn new(width: usize, height: usize) -> Self {
+        Self {
+            width: viewport_dimension(width),
+            height: viewport_dimension(height),
+        }
+    }
+}
+
+impl Default for RenderViewport {
+    fn default() -> Self {
+        Self {
+            width: DEFAULT_SERVO_VIEWPORT_WIDTH,
+            height: DEFAULT_SERVO_VIEWPORT_HEIGHT,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ServoDocumentSource {
     SlateGenerated,
     LocalFile,
@@ -93,6 +118,14 @@ pub trait RenderBackend {
     fn name(&self) -> &'static str;
     fn load_home(&self) -> RenderSurface;
     fn load_address(&self, address: &str) -> RenderSurface;
+
+    fn load_address_with_viewport(
+        &self,
+        address: &str,
+        _viewport: RenderViewport,
+    ) -> RenderSurface {
+        self.load_address(address)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -109,9 +142,19 @@ impl ServoBackend {
         html: impl Into<String>,
         source: ServoDocumentSource,
     ) -> RenderSurface {
+        self.render_html_with_viewport(address, html, source, RenderViewport::default())
+    }
+
+    pub fn render_html_with_viewport(
+        self,
+        address: &str,
+        html: impl Into<String>,
+        source: ServoDocumentSource,
+        viewport: RenderViewport,
+    ) -> RenderSurface {
         let html = html.into();
         let target = data_html_url(&html);
-        self.render_servo_url(address, &target, source)
+        self.render_servo_url(address, &target, source, viewport)
     }
 
     pub fn render_error(
@@ -121,6 +164,25 @@ impl ServoBackend {
         heading: &str,
         details: &[String],
         source: ServoDocumentSource,
+    ) -> RenderSurface {
+        self.render_error_with_viewport(
+            address,
+            title,
+            heading,
+            details,
+            source,
+            RenderViewport::default(),
+        )
+    }
+
+    pub fn render_error_with_viewport(
+        self,
+        address: &str,
+        title: &str,
+        heading: &str,
+        details: &[String],
+        source: ServoDocumentSource,
+        viewport: RenderViewport,
     ) -> RenderSurface {
         let escaped_title = escape_html_text(title);
         let escaped_heading = escape_html_text(heading);
@@ -137,7 +199,7 @@ impl ServoBackend {
             body.push_str("</p>");
         }
         body.push_str("</body></html>");
-        self.render_html(address, body, source)
+        self.render_html_with_viewport(address, body, source, viewport)
     }
 
     fn render_servo_url(
@@ -145,8 +207,9 @@ impl ServoBackend {
         display_address: &str,
         servo_address: &str,
         source: ServoDocumentSource,
+        viewport: RenderViewport,
     ) -> RenderSurface {
-        let result = render_with_servo(display_address, servo_address, source);
+        let result = render_with_servo(display_address, servo_address, source, viewport);
         match result {
             Ok(document) => surface_from_servo_document(document),
             Err(error) => engine_error_surface(display_address, source, error),
@@ -164,24 +227,32 @@ impl RenderBackend for ServoBackend {
     }
 
     fn load_address(&self, address: &str) -> RenderSurface {
+        self.load_address_with_viewport(address, RenderViewport::default())
+    }
+
+    fn load_address_with_viewport(&self, address: &str, viewport: RenderViewport) -> RenderSurface {
         match address {
             "slate://home" | "slate://new" => home_surface(),
-            address if address.starts_with("slate://tests/") => self.render_html(
+            address if address.starts_with("slate://tests/") => self.render_html_with_viewport(
                 address,
                 builtin_test_html(address),
                 ServoDocumentSource::SlateGenerated,
+                viewport,
             ),
-            address if address.starts_with("slate://search?") => self.render_html(
+            address if address.starts_with("slate://search?") => self.render_html_with_viewport(
                 address,
                 search_html(address),
                 ServoDocumentSource::SlateGenerated,
+                viewport,
             ),
-            address if address.starts_with("slate://") => self.render_html(
+            address if address.starts_with("slate://") => self.render_html_with_viewport(
                 address,
                 internal_html(address),
                 ServoDocumentSource::SlateGenerated,
+                viewport,
             ),
-            address if requires_private_network_host_adapter(address) => self.render_error(
+            address if requires_private_network_host_adapter(address) => self
+                .render_error_with_viewport(
                 address,
                 "Protocol Adapter Required",
                 "This route needs a Slate protocol adapter",
@@ -191,9 +262,10 @@ impl RenderBackend for ServoBackend {
                         .to_string(),
                 ],
                 ServoDocumentSource::Blocked,
+                viewport,
             ),
             address if has_broadweb_scheme(address) => {
-                self.render_servo_url(address, address, ServoDocumentSource::Broadweb)
+                self.render_servo_url(address, address, ServoDocumentSource::Broadweb, viewport)
             }
             address if has_servo_supported_scheme(address) => {
                 let source = if address.starts_with("file://") {
@@ -201,14 +273,15 @@ impl RenderBackend for ServoBackend {
                 } else {
                     ServoDocumentSource::Web
                 };
-                self.render_servo_url(address, address, source)
+                self.render_servo_url(address, address, source, viewport)
             }
-            address => self.render_error(
+            address => self.render_error_with_viewport(
                 address,
                 "Unsupported Address",
                 "Servo cannot navigate this address yet",
                 &[address.to_string()],
                 ServoDocumentSource::Blocked,
+                viewport,
             ),
         }
     }
@@ -281,104 +354,140 @@ impl ProtocolHandler for BroadwebProtocolHandler {
     }
 }
 
+struct ServoRenderer {
+    servo: Servo,
+}
+
+impl ServoRenderer {
+    fn new() -> Self {
+        init_servo_crypto();
+
+        let mut preferences = Preferences::default();
+        preferences.network_http_proxy_uri.clear();
+        preferences.network_https_proxy_uri.clear();
+
+        let waker = ServoWaker::new();
+        let servo = ServoBuilder::default()
+            .preferences(preferences)
+            .protocol_registry(broadweb_protocol_registry())
+            .event_loop_waker(Box::new(waker))
+            .build();
+
+        Self { servo }
+    }
+
+    fn render(
+        &self,
+        display_address: &str,
+        servo_address: &str,
+        source: ServoDocumentSource,
+        viewport: RenderViewport,
+    ) -> Result<ServoDocument, ServoRenderError> {
+        let url = Url::parse(servo_address)
+            .map_err(|error| ServoRenderError::new(format!("invalid Servo URL: {error}")))?;
+        let rendering_context = servo_rendering_context(viewport)?;
+        rendering_context.make_current().map_err(|error| {
+            ServoRenderError::new(format!("Servo context setup failed: {error:?}"))
+        })?;
+
+        let delegate = Rc::new(ServoDelegateState::default());
+        let webview = WebViewBuilder::new(&self.servo, rendering_context.clone())
+            .url(url)
+            .delegate(delegate.clone())
+            .build();
+
+        let load_webview = webview.clone();
+        let loaded = spin_until(&self.servo, LOAD_TIMEOUT, move || {
+            load_webview.load_status() != LoadStatus::Complete
+        });
+        if !loaded {
+            return Err(ServoRenderError::new(format!(
+                "Servo load timed out after {} seconds",
+                LOAD_TIMEOUT.as_secs()
+            )));
+        }
+
+        let captured = Rc::new(RefCell::new(None));
+        let captured_result = Rc::clone(&captured);
+        webview.take_screenshot(None, move |result| {
+            *captured_result.borrow_mut() = Some(result.map_err(|error| format!("{error:?}")));
+        });
+
+        let screenshot_ready = spin_until(&self.servo, SCREENSHOT_TIMEOUT, {
+            let captured = Rc::clone(&captured);
+            move || captured.borrow().is_none()
+        });
+        if !screenshot_ready {
+            return Err(ServoRenderError::new(format!(
+                "Servo screenshot timed out after {} seconds",
+                SCREENSHOT_TIMEOUT.as_secs()
+            )));
+        }
+
+        let image = captured
+            .borrow_mut()
+            .take()
+            .ok_or_else(|| ServoRenderError::new("Servo did not return a screenshot"))?
+            .map_err(ServoRenderError::new)?;
+        let frame = frame_from_image(image)?;
+        let title = delegate
+            .page_title
+            .borrow()
+            .clone()
+            .or_else(|| webview.page_title())
+            .filter(|title| !title.is_empty())
+            .unwrap_or_else(|| display_address.to_string());
+        let address = match source {
+            ServoDocumentSource::SlateGenerated | ServoDocumentSource::Blocked => {
+                display_address.to_string()
+            }
+            ServoDocumentSource::LocalFile
+            | ServoDocumentSource::Web
+            | ServoDocumentSource::Broadweb => webview
+                .url()
+                .map(|url| url.to_string())
+                .unwrap_or_else(|| display_address.to_string()),
+        };
+
+        Ok(ServoDocument {
+            title,
+            address,
+            frame,
+            source,
+            status: ServoDocumentStatus::Rendered,
+        })
+    }
+}
+
 fn render_with_servo(
     display_address: &str,
     servo_address: &str,
     source: ServoDocumentSource,
+    viewport: RenderViewport,
 ) -> Result<ServoDocument, ServoRenderError> {
-    init_servo_crypto();
-    let url = Url::parse(servo_address)
-        .map_err(|error| ServoRenderError::new(format!("invalid Servo URL: {error}")))?;
-    let rendering_context = servo_rendering_context()?;
-    rendering_context
-        .make_current()
-        .map_err(|error| ServoRenderError::new(format!("Servo context setup failed: {error:?}")))?;
-
-    let mut preferences = Preferences::default();
-    preferences.network_http_proxy_uri.clear();
-    preferences.network_https_proxy_uri.clear();
-
-    let waker = ServoWaker::new();
-    let servo = ServoBuilder::default()
-        .preferences(preferences)
-        .protocol_registry(broadweb_protocol_registry())
-        .event_loop_waker(Box::new(waker))
-        .build();
-    let delegate = Rc::new(ServoDelegateState::default());
-    let webview = WebViewBuilder::new(&servo, rendering_context.clone())
-        .url(url)
-        .delegate(delegate.clone())
-        .build();
-
-    let load_webview = webview.clone();
-    let loaded = spin_until(&servo, LOAD_TIMEOUT, move || {
-        load_webview.load_status() != LoadStatus::Complete
-    });
-    if !loaded {
-        return Err(ServoRenderError::new(format!(
-            "Servo load timed out after {} seconds",
-            LOAD_TIMEOUT.as_secs()
-        )));
+    thread_local! {
+        static SERVO_RENDERER: ServoRenderer = ServoRenderer::new();
     }
 
-    let captured = Rc::new(RefCell::new(None));
-    let captured_result = Rc::clone(&captured);
-    webview.take_screenshot(None, move |result| {
-        *captured_result.borrow_mut() = Some(result.map_err(|error| format!("{error:?}")));
-    });
-
-    let screenshot_ready = spin_until(&servo, SCREENSHOT_TIMEOUT, {
-        let captured = Rc::clone(&captured);
-        move || captured.borrow().is_none()
-    });
-    if !screenshot_ready {
-        return Err(ServoRenderError::new(format!(
-            "Servo screenshot timed out after {} seconds",
-            SCREENSHOT_TIMEOUT.as_secs()
-        )));
-    }
-
-    let image = captured
-        .borrow_mut()
-        .take()
-        .ok_or_else(|| ServoRenderError::new("Servo did not return a screenshot"))?
-        .map_err(ServoRenderError::new)?;
-    let frame = frame_from_image(image)?;
-    let title = delegate
-        .page_title
-        .borrow()
-        .clone()
-        .or_else(|| webview.page_title())
-        .filter(|title| !title.is_empty())
-        .unwrap_or_else(|| display_address.to_string());
-    let address = match source {
-        ServoDocumentSource::SlateGenerated | ServoDocumentSource::Blocked => {
-            display_address.to_string()
-        }
-        ServoDocumentSource::LocalFile
-        | ServoDocumentSource::Web
-        | ServoDocumentSource::Broadweb => webview
-            .url()
-            .map(|url| url.to_string())
-            .unwrap_or_else(|| display_address.to_string()),
-    };
-
-    Ok(ServoDocument {
-        title,
-        address,
-        frame,
-        source,
-        status: ServoDocumentStatus::Rendered,
-    })
+    SERVO_RENDERER
+        .with(|renderer| renderer.render(display_address, servo_address, source, viewport))
 }
 
-fn servo_rendering_context() -> Result<Rc<dyn RenderingContext>, ServoRenderError> {
+fn servo_rendering_context(
+    viewport: RenderViewport,
+) -> Result<Rc<dyn RenderingContext>, ServoRenderError> {
     let context = SoftwareRenderingContext::new(PhysicalSize {
-        width: SERVO_VIEWPORT_WIDTH,
-        height: SERVO_VIEWPORT_HEIGHT,
+        width: viewport.width,
+        height: viewport.height,
     })
     .map_err(|error| ServoRenderError::new(format!("software rendering failed: {error:?}")))?;
     Ok(Rc::new(context))
+}
+
+fn viewport_dimension(value: usize) -> u32 {
+    u32::try_from(value.max(1))
+        .unwrap_or(MAX_SERVO_VIEWPORT_SIZE)
+        .clamp(1, MAX_SERVO_VIEWPORT_SIZE)
 }
 
 fn spin_until(servo: &Servo, timeout: Duration, waiting: impl Fn() -> bool) -> bool {
@@ -681,8 +790,8 @@ fn escape_html_text(input: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        RenderBackend, RenderDocument, ServoBackend, ServoDocumentSource, ServoDocumentStatus,
-        VENDORED_SERVO_PATH,
+        RenderBackend, RenderDocument, RenderViewport, ServoBackend, ServoDocumentSource,
+        ServoDocumentStatus, VENDORED_SERVO_PATH,
     };
     use std::fs;
 
@@ -724,6 +833,23 @@ mod tests {
         };
         assert_eq!(document.status, ServoDocumentStatus::Rendered);
         assert!(!document.frame.pixels.is_empty());
+    }
+
+    #[test]
+    fn servo_backend_renders_requested_viewport_size() {
+        let viewport = RenderViewport::new(640, 360);
+        let surface = ServoBackend.render_html_with_viewport(
+            "slate://tests/viewport",
+            "<!doctype html><title>Viewport Fixture</title><body>Viewport</body>",
+            ServoDocumentSource::SlateGenerated,
+            viewport,
+        );
+
+        let RenderDocument::Web(document) = surface.document else {
+            panic!("expected Servo document");
+        };
+        assert_eq!(document.frame.width, 640);
+        assert_eq!(document.frame.height, 360);
     }
 
     #[test]
