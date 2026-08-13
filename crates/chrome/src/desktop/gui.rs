@@ -41,13 +41,16 @@ use crate::desktop::slate_theme::{self, SlateIcon, SlateIconCache, SlateRaster};
 use crate::running_app_state::{RunningAppState, UserInterfaceCommand};
 use crate::window::ServoShellWindow;
 
-const TAB_STRIP_HEIGHT: f32 = 48.0;
-const TOOLBAR_HEIGHT: f32 = 64.0;
-const APP_RAIL_WIDTH: f32 = 64.0;
-const FOOTER_HEIGHT: f32 = 52.0;
+const TAB_STRIP_HEIGHT: f32 = 76.0;
+const TOOLBAR_HEIGHT: f32 = 86.0;
+const APP_RAIL_WIDTH: f32 = 104.0;
+const FOOTER_HEIGHT: f32 = 80.0;
+const APP_TITLE_WIDTH: f32 = 160.0;
+const TAB_WIDTH: f32 = 300.0;
 const TOOLBAR_ICON_SIZE: f32 = 24.0;
-const RAIL_ICON_SIZE: f32 = 28.0;
-const TAB_ICON_SIZE: f32 = 18.0;
+const RAIL_ICON_SIZE: f32 = 34.0;
+const RAIL_BUTTON_SIZE: f32 = 72.0;
+const TAB_ICON_SIZE: f32 = 20.0;
 const ADDRESS_MIN_WIDTH: f32 = 260.0;
 const HOME_SEARCH_MIN_WIDTH: f32 = 280.0;
 const HOME_SEARCH_MAX_WIDTH: f32 = 880.0;
@@ -413,7 +416,7 @@ impl Gui {
         );
         let button = egui::Button::image(Self::icon_image(texture, RAIL_ICON_SIZE))
             .frame(false)
-            .min_size(Vec2::splat(48.0))
+            .min_size(Vec2::splat(RAIL_BUTTON_SIZE))
             .corner_radius(8);
 
         let response = if selected {
@@ -430,13 +433,13 @@ impl Gui {
 
     fn draw_app_rail(ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
         ui.vertical_centered(|ui| {
-            ui.add_space(12.0);
+            ui.add_space(18.0);
             Self::rail_icon_button(ui, slate_icons, SlateIcon::AppWeb, true, "Web");
-            ui.add_space(18.0);
+            ui.add_space(16.0);
             Self::rail_icon_button(ui, slate_icons, SlateIcon::AppDownloads, false, "Downloads");
-            ui.add_space(18.0);
+            ui.add_space(16.0);
             Self::rail_icon_button(ui, slate_icons, SlateIcon::AppCalendar, false, "Calendar");
-            ui.add_space(18.0);
+            ui.add_space(16.0);
             Self::rail_icon_button(ui, slate_icons, SlateIcon::AppMessaging, false, "Messages");
         });
     }
@@ -678,6 +681,7 @@ impl Gui {
             .inner_margin(egui::Margin::symmetric(8, 6))
             .begin(ui);
         {
+            tab_frame.content_ui.set_width(TAB_WIDTH);
             tab_frame.content_ui.set_min_height(28.0);
 
             let visuals = tab_frame.content_ui.visuals_mut();
@@ -788,9 +792,10 @@ impl Gui {
                             egui::Layout::left_to_right(egui::Align::Center),
                             |ui| {
                                 ui.allocate_ui_with_layout(
-                                    egui::vec2(116.0, 32.0),
+                                    egui::vec2(APP_TITLE_WIDTH, 56.0),
                                     egui::Layout::left_to_right(egui::Align::Center),
                                     |ui| {
+                                        ui.add_space(22.0);
                                         let logo = slate_icons
                                             .raster_texture(ui.ctx(), SlateRaster::Logo32);
                                         ui.add(
@@ -1283,46 +1288,62 @@ mod tests {
     use euclid::{Point2D, Size2D};
     use servo::DeviceIndependentPixel;
 
-    use super::{HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_MAX_WIDTH, egui_chrome_owns_position};
+    use super::{
+        APP_RAIL_WIDTH, FOOTER_HEIGHT, HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_MAX_WIDTH,
+        TAB_STRIP_HEIGHT, TOOLBAR_HEIGHT, egui_chrome_owns_position,
+    };
     use super::{HOME_METRIC_CARD_MIN_WIDTH, home_metrics_layout};
+
+    fn chrome_webview_origin() -> Point2D<f32, DeviceIndependentPixel> {
+        Point2D::new(APP_RAIL_WIDTH, TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT)
+    }
 
     #[test]
     fn normal_webview_area_forwards_inside_points_to_servo() {
-        let origin = Point2D::<f32, DeviceIndependentPixel>::new(64.0, 112.0);
+        let origin = chrome_webview_origin();
         let size = Size2D::<f32, DeviceIndependentPixel>::new(900.0, 500.0);
+        let inside_webview = Point2D::new(origin.x + 36.0, origin.y + 36.0);
 
         assert!(!egui_chrome_owns_position(
             origin,
             size,
             false,
-            Point2D::new(100.0, 140.0),
+            inside_webview,
         ));
     }
 
     #[test]
     fn native_home_area_keeps_inside_points_in_egui() {
-        let origin = Point2D::<f32, DeviceIndependentPixel>::new(64.0, 112.0);
+        let origin = chrome_webview_origin();
         let size = Size2D::<f32, DeviceIndependentPixel>::new(900.0, 500.0);
+        let inside_webview = Point2D::new(origin.x + 36.0, origin.y + 36.0);
 
         assert!(egui_chrome_owns_position(
             origin,
             size,
             true,
-            Point2D::new(100.0, 140.0),
+            inside_webview,
         ));
     }
 
     #[test]
     fn chrome_keeps_points_outside_the_webview() {
-        let origin = Point2D::<f32, DeviceIndependentPixel>::new(64.0, 112.0);
+        let origin = chrome_webview_origin();
         let size = Size2D::<f32, DeviceIndependentPixel>::new(900.0, 500.0);
 
         assert!(egui_chrome_owns_position(
             origin,
             size,
             false,
-            Point2D::new(30.0, 140.0),
+            Point2D::new(30.0, origin.y + 36.0),
         ));
+    }
+
+    #[test]
+    fn static_chrome_dimensions_match_concept_offsets() {
+        assert_eq!(APP_RAIL_WIDTH, 104.0);
+        assert_eq!(TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT, 162.0);
+        assert_eq!(FOOTER_HEIGHT, 80.0);
     }
 
     #[test]
