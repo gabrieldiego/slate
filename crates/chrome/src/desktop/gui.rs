@@ -92,6 +92,7 @@ const ADDRESS_LEADING_GAP: f32 = 26.0;
 const ADDRESS_MIN_WIDTH: f32 = 260.0;
 const ADDRESS_HEIGHT: f32 = 54.0;
 const ADDRESS_TEXT_HEIGHT: f32 = 34.0;
+const ADDRESS_INPUT_TEXT_SIZE: f32 = 18.0;
 const ADDRESS_CORNER_RADIUS: u8 = 8;
 const ADDRESS_INNER_MARGIN_X: i8 = 12;
 const ADDRESS_SECURITY_ICON_SIZE: f32 = 24.0;
@@ -1201,6 +1202,9 @@ impl Gui {
                                                 [text_width, ADDRESS_TEXT_HEIGHT],
                                                 egui::TextEdit::singleline(location)
                                                     .id(location_id)
+                                                    .font(egui::FontId::proportional(
+                                                        ADDRESS_INPUT_TEXT_SIZE,
+                                                    ))
                                                     .frame(egui::Frame::NONE)
                                                     .hint_text(
                                                         "Search the web or enter an address",
@@ -1512,13 +1516,13 @@ mod tests {
         toolbar_address_width,
     };
     use super::{
-        ADDRESS_HEIGHT, APP_RAIL_WIDTH, APP_TITLE_HEIGHT, APP_TITLE_LEFT_PADDING,
-        APP_TITLE_TEXT_SIZE, FOOTER_HEIGHT, FOOTER_ICON_SIZE, FOOTER_ITEM_SPACING,
-        FOOTER_LEFT_PADDING, FOOTER_PANEL_MARGIN_X, FOOTER_PANEL_MARGIN_Y, FOOTER_RIGHT_PADDING,
-        FOOTER_SETTINGS_BUTTON_SIZE, FOOTER_SETTINGS_ICON_SIZE, FOOTER_SYNC_DOT_SIZE,
-        FOOTER_TEXT_SIZE, HOME_HERO_SIZE, HOME_HERO_TO_SEARCH_GAP, HOME_METRIC_BADGE_MARGIN_X,
-        HOME_METRIC_BADGE_MARGIN_Y, HOME_METRIC_BADGE_TEXT_SIZE, HOME_METRIC_CARD_GAP,
-        HOME_METRIC_CARD_INNER_MARGIN_X, HOME_METRIC_CARD_INNER_MARGIN_Y,
+        ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH, APP_TITLE_HEIGHT,
+        APP_TITLE_LEFT_PADDING, APP_TITLE_TEXT_SIZE, FOOTER_HEIGHT, FOOTER_ICON_SIZE,
+        FOOTER_ITEM_SPACING, FOOTER_LEFT_PADDING, FOOTER_PANEL_MARGIN_X, FOOTER_PANEL_MARGIN_Y,
+        FOOTER_RIGHT_PADDING, FOOTER_SETTINGS_BUTTON_SIZE, FOOTER_SETTINGS_ICON_SIZE,
+        FOOTER_SYNC_DOT_SIZE, FOOTER_TEXT_SIZE, HOME_HERO_SIZE, HOME_HERO_TO_SEARCH_GAP,
+        HOME_METRIC_BADGE_MARGIN_X, HOME_METRIC_BADGE_MARGIN_Y, HOME_METRIC_BADGE_TEXT_SIZE,
+        HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_INNER_MARGIN_X, HOME_METRIC_CARD_INNER_MARGIN_Y,
         HOME_METRIC_CARD_MAX_WIDTH, HOME_METRIC_DETAIL_GAP, HOME_METRIC_DETAIL_TEXT_SIZE,
         HOME_METRIC_ICON_LABEL_GAP, HOME_METRIC_ICON_SIZE, HOME_METRIC_LABEL_TEXT_SIZE,
         HOME_SEARCH_ICON_SIZE, HOME_SEARCH_TO_METRICS_GAP, HOME_TOP_SPACE_FACTOR,
@@ -1608,6 +1612,7 @@ mod tests {
         assert_eq!(FOOTER_SETTINGS_BUTTON_SIZE, 40.0);
         assert_eq!(FOOTER_SETTINGS_ICON_SIZE, 28.0);
         assert_eq!(ADDRESS_HEIGHT, 54.0);
+        assert_eq!(ADDRESS_INPUT_TEXT_SIZE, 18.0);
         assert_eq!(ADDRESS_CORNER_RADIUS, 8);
         assert_eq!(APP_TITLE_HEIGHT, TAB_STRIP_HEIGHT);
         assert_eq!(APP_TITLE_LEFT_PADDING, 30.0);
