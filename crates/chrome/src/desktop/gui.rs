@@ -124,6 +124,8 @@ const HOME_METRIC_CARD_INNER_MARGIN_X: i8 = 16;
 const HOME_METRIC_CARD_INNER_MARGIN_Y: i8 = 28;
 const HOME_METRIC_ICON_SIZE: f32 = 40.0;
 const HOME_METRIC_ICON_LABEL_GAP: f32 = 18.0;
+const HOME_METRIC_LABEL_TEXT_SIZE: f32 = 16.0;
+const HOME_METRIC_DETAIL_TEXT_SIZE: f32 = 14.0;
 const HOME_METRIC_DETAIL_GAP: f32 = 4.0;
 const HOME_METRIC_BADGE_TEXT_SIZE: f32 = 11.0;
 const HOME_METRIC_BADGE_MARGIN_X: i8 = 6;
@@ -693,14 +695,22 @@ impl Gui {
                     ui.add(Self::icon_image(texture, HOME_METRIC_ICON_SIZE));
                     ui.add_space(HOME_METRIC_ICON_LABEL_GAP);
                     ui.horizontal_centered(|ui| {
-                        ui.label(egui::RichText::new(label).color(slate_theme::TEXT));
+                        ui.label(
+                            egui::RichText::new(label)
+                                .size(HOME_METRIC_LABEL_TEXT_SIZE)
+                                .color(slate_theme::TEXT),
+                        );
                         if let Some((text, fill)) = badge {
                             Self::draw_badge(ui, text, fill);
                         }
                     });
                     if let Some(detail) = detail {
                         ui.add_space(HOME_METRIC_DETAIL_GAP);
-                        ui.label(egui::RichText::new(detail).color(slate_theme::MUTED));
+                        ui.label(
+                            egui::RichText::new(detail)
+                                .size(HOME_METRIC_DETAIL_TEXT_SIZE)
+                                .color(slate_theme::MUTED),
+                        );
                     }
                 });
             });
@@ -1509,15 +1519,16 @@ mod tests {
         FOOTER_TEXT_SIZE, HOME_HERO_SIZE, HOME_HERO_TO_SEARCH_GAP, HOME_METRIC_BADGE_MARGIN_X,
         HOME_METRIC_BADGE_MARGIN_Y, HOME_METRIC_BADGE_TEXT_SIZE, HOME_METRIC_CARD_GAP,
         HOME_METRIC_CARD_INNER_MARGIN_X, HOME_METRIC_CARD_INNER_MARGIN_Y,
-        HOME_METRIC_CARD_MAX_WIDTH, HOME_METRIC_DETAIL_GAP, HOME_METRIC_ICON_LABEL_GAP,
-        HOME_METRIC_ICON_SIZE, HOME_SEARCH_ICON_SIZE, HOME_SEARCH_TO_METRICS_GAP,
-        HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN, NEW_TAB_BUTTON_SIZE,
-        NEW_TAB_LEFT_GAP, NEW_TAB_TEXT_SIZE, TAB_CLOSE_ICON_SIZE, TAB_CONTENT_HEIGHT,
-        TAB_CORNER_RADIUS, TAB_HEIGHT, TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y,
-        TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH,
-        TAB_TITLE_TEXT_SIZE, TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE,
-        TOOLBAR_ITEM_SPACING, TOOLBAR_MENU_TEXT_SIZE, TOOLBAR_NAV_ICON_SIZE,
-        TOOLBAR_PRIVACY_ICON_SIZE, egui_chrome_owns_position,
+        HOME_METRIC_CARD_MAX_WIDTH, HOME_METRIC_DETAIL_GAP, HOME_METRIC_DETAIL_TEXT_SIZE,
+        HOME_METRIC_ICON_LABEL_GAP, HOME_METRIC_ICON_SIZE, HOME_METRIC_LABEL_TEXT_SIZE,
+        HOME_SEARCH_ICON_SIZE, HOME_SEARCH_TO_METRICS_GAP, HOME_TOP_SPACE_FACTOR,
+        HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN, NEW_TAB_BUTTON_SIZE, NEW_TAB_LEFT_GAP,
+        NEW_TAB_TEXT_SIZE, TAB_CLOSE_ICON_SIZE, TAB_CONTENT_HEIGHT, TAB_CORNER_RADIUS, TAB_HEIGHT,
+        TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_CONTENT_ALIGN,
+        TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH, TAB_TITLE_TEXT_SIZE, TAB_WIDTH,
+        TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE, TOOLBAR_ITEM_SPACING,
+        TOOLBAR_MENU_TEXT_SIZE, TOOLBAR_NAV_ICON_SIZE, TOOLBAR_PRIVACY_ICON_SIZE,
+        egui_chrome_owns_position,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -1652,6 +1663,8 @@ mod tests {
         assert_eq!(HOME_METRIC_CARD_INNER_MARGIN_Y, 28);
         assert_eq!(HOME_METRIC_ICON_SIZE, 40.0);
         assert_eq!(HOME_METRIC_ICON_LABEL_GAP, 18.0);
+        assert_eq!(HOME_METRIC_LABEL_TEXT_SIZE, 16.0);
+        assert_eq!(HOME_METRIC_DETAIL_TEXT_SIZE, 14.0);
         assert_eq!(HOME_METRIC_DETAIL_GAP, 4.0);
         assert_eq!(HOME_METRIC_BADGE_TEXT_SIZE, 11.0);
         assert_eq!(HOME_METRIC_BADGE_MARGIN_X, 6);
