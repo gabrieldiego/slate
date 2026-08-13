@@ -42,6 +42,7 @@ use crate::running_app_state::{RunningAppState, UserInterfaceCommand};
 use crate::window::ServoShellWindow;
 
 const TAB_STRIP_HEIGHT: f32 = 76.0;
+const TAB_STRIP_CONTENT_ALIGN: egui::Align = egui::Align::Max;
 const TOOLBAR_HEIGHT: f32 = 86.0;
 const APP_RAIL_WIDTH: f32 = 104.0;
 const FOOTER_HEIGHT: f32 = 80.0;
@@ -973,7 +974,7 @@ impl Gui {
                                     .show(ui, |ui| {
                                         ui.allocate_ui_with_layout(
                                             ui.available_size(),
-                                            egui::Layout::left_to_right(egui::Align::Center),
+                                            egui::Layout::left_to_right(TAB_STRIP_CONTENT_ALIGN),
                                             |ui| {
                                                 ui.spacing_mut().item_spacing =
                                                     egui::vec2(0.0, 0.0);
@@ -1473,8 +1474,9 @@ mod tests {
         HOME_SEARCH_TO_METRICS_GAP, HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN,
         NEW_TAB_BUTTON_SIZE, NEW_TAB_LEFT_GAP, NEW_TAB_TEXT_SIZE, TAB_CONTENT_HEIGHT,
         TAB_CORNER_RADIUS, TAB_HEIGHT, TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y,
-        TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH, TAB_WIDTH, TOOLBAR_BUTTON_SIZE,
-        TOOLBAR_HEIGHT, TOOLBAR_ITEM_SPACING, TOOLBAR_MENU_TEXT_SIZE, egui_chrome_owns_position,
+        TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH,
+        TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ITEM_SPACING,
+        TOOLBAR_MENU_TEXT_SIZE, egui_chrome_owns_position,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -1541,6 +1543,7 @@ mod tests {
         assert_eq!(RAIL_TOP_SPACE, 24.0);
         assert_eq!(RAIL_ITEM_GAP, 16.0);
         assert_eq!(TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT, 162.0);
+        assert_eq!(TAB_STRIP_CONTENT_ALIGN, egui::Align::Max);
         assert_eq!(FOOTER_HEIGHT, 80.0);
         assert_eq!(FOOTER_PANEL_MARGIN_X, 0);
         assert_eq!(FOOTER_PANEL_MARGIN_Y, 8);
