@@ -108,6 +108,7 @@ const HOME_SEARCH_MIN_WIDTH: f32 = 280.0;
 const HOME_SEARCH_MAX_WIDTH: f32 = 880.0;
 const HOME_SEARCH_HORIZONTAL_PADDING: f32 = 32.0;
 const HOME_SEARCH_HEIGHT: f32 = 72.0;
+const HOME_SEARCH_FRAME_EXTRA_HEIGHT: f32 = 8.0;
 const HOME_SEARCH_TEXT_HEIGHT: f32 = 34.0;
 const HOME_SEARCH_INPUT_TEXT_SIZE: f32 = 18.0;
 const HOME_SEARCH_INNER_MARGIN_X: i8 = 32;
@@ -122,6 +123,7 @@ const HOME_HERO_SIZE: f32 = 64.0;
 const HOME_HERO_TO_SEARCH_GAP: f32 = 44.0;
 const HOME_SEARCH_TO_METRICS_GAP: f32 = 62.0;
 const HOME_METRIC_CARD_HEIGHT: f32 = 172.0;
+const HOME_METRIC_GRID_EXTRA_HEIGHT: f32 = 25.0;
 const HOME_METRIC_CARD_MIN_WIDTH: f32 = 156.0;
 const HOME_METRIC_CARD_MAX_WIDTH: f32 = 194.0;
 const HOME_METRIC_CARD_GAP: f32 = 34.0;
@@ -203,6 +205,29 @@ struct HomeMetricsLayout {
     spacing: f32,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct HomeContentLayout {
+    hero_rect: egui::Rect,
+    search_rect: egui::Rect,
+    metrics_rect: egui::Rect,
+}
+
+impl Default for HomeContentLayout {
+    fn default() -> Self {
+        Self {
+            hero_rect: egui::Rect::NOTHING,
+            search_rect: egui::Rect::NOTHING,
+            metrics_rect: egui::Rect::NOTHING,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct HomeContentResponse {
+    navigation_request: Option<String>,
+    layout: HomeContentLayout,
+}
+
 fn home_metrics_layout(available_width: f32) -> HomeMetricsLayout {
     let available_width = available_width.max(0.0);
     let columns: usize = if available_width < 360.0 {
@@ -241,6 +266,10 @@ fn home_search_width(available_width: f32) -> f32 {
         .max(HOME_SEARCH_MIN_WIDTH.min(available_width))
 }
 
+fn home_search_content_width(search_width: f32) -> f32 {
+    (search_width - f32::from(HOME_SEARCH_INNER_MARGIN_X) * 2.0).max(0.0)
+}
+
 fn home_metric_card_content_width(card_width: f32) -> f32 {
     (card_width - f32::from(HOME_METRIC_CARD_INNER_MARGIN_X) * 2.0).max(0.0)
 }
@@ -249,12 +278,20 @@ fn home_metric_card_content_height() -> f32 {
     (HOME_METRIC_CARD_HEIGHT - f32::from(HOME_METRIC_CARD_INNER_MARGIN_Y) * 2.0).max(0.0)
 }
 
+fn home_search_rendered_height() -> f32 {
+    HOME_SEARCH_HEIGHT + HOME_SEARCH_FRAME_EXTRA_HEIGHT
+}
+
+fn home_metrics_rendered_height() -> f32 {
+    HOME_METRIC_CARD_HEIGHT + HOME_METRIC_GRID_EXTRA_HEIGHT
+}
+
 fn home_content_fixed_height() -> f32 {
     HOME_HERO_SIZE
         + HOME_HERO_TO_SEARCH_GAP
-        + HOME_SEARCH_HEIGHT
+        + home_search_rendered_height()
         + HOME_SEARCH_TO_METRICS_GAP
-        + HOME_METRIC_CARD_HEIGHT
+        + home_metrics_rendered_height()
         + HOME_BOTTOM_MIN_GAP
 }
 
@@ -269,9 +306,9 @@ fn home_content_stack_height(available_height: f32) -> f32 {
     home_top_space(available_height)
         + HOME_HERO_SIZE
         + HOME_HERO_TO_SEARCH_GAP
-        + HOME_SEARCH_HEIGHT
+        + home_search_rendered_height()
         + HOME_SEARCH_TO_METRICS_GAP
-        + HOME_METRIC_CARD_HEIGHT
+        + home_metrics_rendered_height()
 }
 
 fn home_top_space(available_height: f32) -> f32 {
@@ -286,6 +323,11 @@ fn home_top_space(available_height: f32) -> f32 {
 #[cfg(test)]
 fn default_opening_home_view_height() -> f32 {
     740.0 - TAB_STRIP_HEIGHT - TOOLBAR_HEIGHT - FOOTER_HEIGHT
+}
+
+#[cfg(test)]
+fn default_opening_home_view_size() -> egui::Vec2 {
+    egui::vec2(1024.0 - APP_RAIL_WIDTH, default_opening_home_view_height())
 }
 
 fn tab_title_width(available_width: f32) -> f32 {
@@ -736,37 +778,41 @@ impl Gui {
                 HOME_METRIC_CARD_INNER_MARGIN_Y,
             ))
             .show(ui, |ui| {
-                ui.set_min_size(egui::vec2(
+                let content_size = egui::vec2(
                     home_metric_card_content_width(width),
                     home_metric_card_content_height(),
-                ));
-                ui.vertical_centered(|ui| {
-                    let texture = slate_icons.texture(ui.ctx(), icon, slate_theme::TEAL);
-                    ui.add(Self::icon_image(texture, HOME_METRIC_ICON_SIZE));
-                    ui.add_space(HOME_METRIC_ICON_LABEL_GAP);
-                    ui.horizontal_centered(|ui| {
-                        ui.label(
-                            egui::RichText::new(label)
-                                .size(HOME_METRIC_LABEL_TEXT_SIZE)
-                                .color(slate_theme::TEXT),
-                        );
-                        if let Some((text, fill)) = badge {
-                            Self::draw_badge(ui, text, fill);
+                );
+                ui.allocate_ui_with_layout(
+                    content_size,
+                    egui::Layout::top_down(egui::Align::Center),
+                    |ui| {
+                        let texture = slate_icons.texture(ui.ctx(), icon, slate_theme::TEAL);
+                        ui.add(Self::icon_image(texture, HOME_METRIC_ICON_SIZE));
+                        ui.add_space(HOME_METRIC_ICON_LABEL_GAP);
+                        ui.horizontal_centered(|ui| {
+                            ui.label(
+                                egui::RichText::new(label)
+                                    .size(HOME_METRIC_LABEL_TEXT_SIZE)
+                                    .color(slate_theme::TEXT),
+                            );
+                            if let Some((text, fill)) = badge {
+                                Self::draw_badge(ui, text, fill);
+                            }
+                        });
+                        if let Some(detail) = detail {
+                            ui.add_space(HOME_METRIC_DETAIL_GAP);
+                            ui.label(
+                                egui::RichText::new(detail)
+                                    .size(HOME_METRIC_DETAIL_TEXT_SIZE)
+                                    .color(slate_theme::MUTED),
+                            );
                         }
-                    });
-                    if let Some(detail) = detail {
-                        ui.add_space(HOME_METRIC_DETAIL_GAP);
-                        ui.label(
-                            egui::RichText::new(detail)
-                                .size(HOME_METRIC_DETAIL_TEXT_SIZE)
-                                .color(slate_theme::MUTED),
-                        );
-                    }
-                });
+                    },
+                );
             });
     }
 
-    fn draw_home_metrics(ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
+    fn draw_home_metrics(ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) -> egui::Rect {
         let layout = home_metrics_layout(ui.available_width());
 
         egui::Grid::new("slate_home_metrics")
@@ -810,7 +856,87 @@ impl Gui {
                         ui.end_row();
                     }
                 }
-            });
+            })
+            .response
+            .rect
+    }
+
+    fn draw_home_content(
+        ui: &mut egui::Ui,
+        home_rect: egui::Rect,
+        slate_icons: &mut SlateIconCache,
+        home_search: &mut String,
+    ) -> HomeContentResponse {
+        let mut layout = HomeContentLayout::default();
+        let mut navigation_request = None;
+
+        ui.add_space(home_top_space(home_rect.height()));
+        ui.vertical_centered(|ui| {
+            let hero = slate_icons.texture(ui.ctx(), SlateIcon::HomeHeroShield, slate_theme::TEAL);
+            let hero_response = ui.add(
+                egui::Image::from_texture(hero)
+                    .fit_to_exact_size(egui::vec2(HOME_HERO_SIZE, HOME_HERO_SIZE)),
+            );
+            layout.hero_rect = hero_response.rect;
+            ui.add_space(HOME_HERO_TO_SEARCH_GAP);
+
+            let search_width = home_search_width(ui.available_width());
+            let search_content_width = home_search_content_width(search_width);
+            let home_search_id = egui::Id::new("home_search_input");
+            let search_frame_response = egui::Frame::NONE
+                .fill(slate_theme::SURFACE)
+                .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
+                .corner_radius(HOME_SEARCH_CORNER_RADIUS)
+                .inner_margin(egui::Margin::symmetric(HOME_SEARCH_INNER_MARGIN_X, 0))
+                .show(ui, |ui| {
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(search_content_width, HOME_SEARCH_HEIGHT),
+                        egui::Layout::left_to_right(egui::Align::Center),
+                        |ui| {
+                            let search_icon = slate_icons.texture(
+                                ui.ctx(),
+                                SlateIcon::HomeSearch,
+                                slate_theme::MUTED,
+                            );
+                            ui.add(Self::icon_image(search_icon, HOME_SEARCH_ICON_SIZE));
+                            ui.add_space(HOME_SEARCH_ICON_GAP);
+                            ui.add_sized(
+                                [ui.available_width(), HOME_SEARCH_TEXT_HEIGHT],
+                                egui::TextEdit::singleline(home_search)
+                                    .id(home_search_id)
+                                    .font(egui::FontId::proportional(HOME_SEARCH_INPUT_TEXT_SIZE))
+                                    .frame(egui::Frame::NONE)
+                                    .hint_text("Search the web or enter an address"),
+                            )
+                        },
+                    )
+                    .inner
+                });
+            let search_response = search_frame_response.inner;
+            layout.search_rect = search_frame_response.response.rect;
+
+            if search_response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
+                let request = home_search.trim().to_owned();
+                if !request.is_empty() {
+                    navigation_request = Some(request);
+                    home_search.clear();
+                }
+            }
+
+            ui.add_space(HOME_SEARCH_TO_METRICS_GAP);
+            let metrics_height = ui.available_height().max(0.0);
+            let metrics_response = ui.allocate_ui_with_layout(
+                egui::vec2(search_width, metrics_height),
+                egui::Layout::top_down(egui::Align::Center),
+                |ui| Self::draw_home_metrics(ui, slate_icons),
+            );
+            layout.metrics_rect = metrics_response.inner;
+        });
+
+        HomeContentResponse {
+            navigation_request,
+            layout,
+        }
     }
 
     fn draw_home_view(
@@ -827,74 +953,15 @@ impl Gui {
                 let home_rect = egui::Rect::from_min_size(ui.min_rect().min, available_rect.size());
                 ui.set_min_size(home_rect.size());
                 ui.painter().rect_filled(home_rect, 0.0, slate_theme::BG);
-                ui.scope_builder(egui::UiBuilder::new().max_rect(home_rect), |ui| {
-                    ui.add_space(home_top_space(home_rect.height()));
-                    ui.vertical_centered(|ui| {
-                        let hero = slate_icons.texture(
-                            ui.ctx(),
-                            SlateIcon::HomeHeroShield,
-                            slate_theme::TEAL,
-                        );
-                        ui.add(
-                            egui::Image::from_texture(hero)
-                                .fit_to_exact_size(egui::vec2(HOME_HERO_SIZE, HOME_HERO_SIZE)),
-                        );
-                        ui.add_space(HOME_HERO_TO_SEARCH_GAP);
-
-                        let search_width = home_search_width(ui.available_width());
-                        let home_search_id = egui::Id::new("home_search_input");
-                        let search_response = egui::Frame::NONE
-                            .fill(slate_theme::SURFACE)
-                            .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
-                            .corner_radius(HOME_SEARCH_CORNER_RADIUS)
-                            .inner_margin(egui::Margin::symmetric(HOME_SEARCH_INNER_MARGIN_X, 0))
-                            .show(ui, |ui| {
-                                ui.set_width(search_width);
-                                ui.set_min_height(HOME_SEARCH_HEIGHT);
-                                ui.horizontal_centered(|ui| {
-                                    let search_icon = slate_icons.texture(
-                                        ui.ctx(),
-                                        SlateIcon::HomeSearch,
-                                        slate_theme::MUTED,
-                                    );
-                                    ui.add(Self::icon_image(search_icon, HOME_SEARCH_ICON_SIZE));
-                                    ui.add_space(HOME_SEARCH_ICON_GAP);
-                                    ui.add_sized(
-                                        [ui.available_width(), HOME_SEARCH_TEXT_HEIGHT],
-                                        egui::TextEdit::singleline(home_search)
-                                            .id(home_search_id)
-                                            .font(egui::FontId::proportional(
-                                                HOME_SEARCH_INPUT_TEXT_SIZE,
-                                            ))
-                                            .frame(egui::Frame::NONE)
-                                            .hint_text("Search the web or enter an address"),
-                                    )
-                                })
-                                .inner
-                            })
-                            .inner;
-
-                        if search_response.lost_focus()
-                            && ui.input(|i| i.clone().key_pressed(Key::Enter))
-                        {
-                            let request = home_search.trim().to_owned();
-                            if !request.is_empty() {
-                                window.queue_user_interface_command(UserInterfaceCommand::Go(
-                                    request,
-                                ));
-                                home_search.clear();
-                            }
-                        }
-
-                        ui.add_space(HOME_SEARCH_TO_METRICS_GAP);
-                        let metrics_height = ui.available_height();
-                        ui.allocate_ui_with_layout(
-                            egui::vec2(search_width, metrics_height),
-                            egui::Layout::top_down(egui::Align::Center),
-                            |ui| Self::draw_home_metrics(ui, slate_icons),
-                        );
-                    });
-                });
+                let response = ui
+                    .scope_builder(egui::UiBuilder::new().max_rect(home_rect), |ui| {
+                        Self::draw_home_content(ui, home_rect, slate_icons, home_search)
+                    })
+                    .inner;
+                let _ = response.layout;
+                if let Some(request) = response.navigation_request {
+                    window.queue_user_interface_command(UserInterfaceCommand::Go(request));
+                }
             });
     }
 
@@ -1572,11 +1639,12 @@ mod tests {
         ADDRESS_BOOKMARK_BUTTON_RADIUS, ADDRESS_BOOKMARK_BUTTON_SIZE, ADDRESS_BOOKMARK_ICON_SIZE,
         ADDRESS_BOOKMARK_RESERVED_WIDTH, ADDRESS_CORNER_RADIUS, ADDRESS_ICON_GAP,
         ADDRESS_INNER_MARGIN_X, ADDRESS_LEADING_GAP, ADDRESS_MIN_WIDTH, ADDRESS_SECURITY_ICON_SIZE,
-        ADDRESS_TRAILING_CONTROLS_WIDTH, HOME_METRIC_CARD_MIN_WIDTH,
-        default_opening_home_view_height, home_content_stack_height,
-        home_metric_card_content_height, home_metric_card_content_width, home_metrics_layout,
-        home_metrics_row_width, home_search_width, home_top_space, tab_corner_radius,
-        tab_title_width, toolbar_address_width,
+        ADDRESS_TRAILING_CONTROLS_WIDTH, Gui, HOME_METRIC_CARD_MIN_WIDTH, HomeContentLayout,
+        SlateIconCache, default_opening_home_view_height, default_opening_home_view_size,
+        home_content_stack_height, home_metric_card_content_height, home_metric_card_content_width,
+        home_metrics_layout, home_metrics_rendered_height, home_metrics_row_width,
+        home_search_rendered_height, home_search_width, home_top_space, slate_theme,
+        tab_corner_radius, tab_title_width, toolbar_address_width,
     };
     use super::{
         ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH, APP_TITLE_HEIGHT,
@@ -1588,16 +1656,16 @@ mod tests {
         HOME_METRIC_BADGE_MARGIN_Y, HOME_METRIC_BADGE_TEXT_SIZE, HOME_METRIC_CARD_GAP,
         HOME_METRIC_CARD_HEIGHT, HOME_METRIC_CARD_INNER_MARGIN_X, HOME_METRIC_CARD_INNER_MARGIN_Y,
         HOME_METRIC_CARD_MAX_WIDTH, HOME_METRIC_DETAIL_GAP, HOME_METRIC_DETAIL_TEXT_SIZE,
-        HOME_METRIC_ICON_LABEL_GAP, HOME_METRIC_ICON_SIZE, HOME_METRIC_LABEL_TEXT_SIZE,
-        HOME_SEARCH_ICON_SIZE, HOME_SEARCH_INPUT_TEXT_SIZE, HOME_SEARCH_TO_METRICS_GAP,
-        HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN, NEW_TAB_BUTTON_SIZE,
-        NEW_TAB_LEFT_GAP, NEW_TAB_TEXT_SIZE, TAB_CLOSE_ICON_SIZE, TAB_CONTENT_HEIGHT,
-        TAB_CORNER_RADIUS, TAB_HEIGHT, TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y,
-        TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH,
-        TAB_TITLE_TEXT_SIZE, TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE,
-        TOOLBAR_ITEM_SPACING, TOOLBAR_MENU_TEXT_SIZE, TOOLBAR_NAV_ICON_SIZE,
-        TOOLBAR_PANEL_MARGIN_X, TOOLBAR_PANEL_MARGIN_Y, TOOLBAR_PRIVACY_ICON_SIZE,
-        egui_chrome_owns_position,
+        HOME_METRIC_GRID_EXTRA_HEIGHT, HOME_METRIC_ICON_LABEL_GAP, HOME_METRIC_ICON_SIZE,
+        HOME_METRIC_LABEL_TEXT_SIZE, HOME_SEARCH_FRAME_EXTRA_HEIGHT, HOME_SEARCH_ICON_SIZE,
+        HOME_SEARCH_INPUT_TEXT_SIZE, HOME_SEARCH_TO_METRICS_GAP, HOME_TOP_SPACE_FACTOR,
+        HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN, NEW_TAB_BUTTON_SIZE, NEW_TAB_LEFT_GAP,
+        NEW_TAB_TEXT_SIZE, TAB_CLOSE_ICON_SIZE, TAB_CONTENT_HEIGHT, TAB_CORNER_RADIUS, TAB_HEIGHT,
+        TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_CONTENT_ALIGN,
+        TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH, TAB_TITLE_TEXT_SIZE, TAB_WIDTH,
+        TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE, TOOLBAR_ITEM_SPACING,
+        TOOLBAR_MENU_TEXT_SIZE, TOOLBAR_NAV_ICON_SIZE, TOOLBAR_PANEL_MARGIN_X,
+        TOOLBAR_PANEL_MARGIN_Y, TOOLBAR_PRIVACY_ICON_SIZE, egui_chrome_owns_position,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -1609,8 +1677,43 @@ mod tests {
         RAIL_TOP_SPACE, TAB_CLOSE_BUTTON_SIZE,
     };
 
+    const LAYOUT_EPSILON: f32 = 1.0;
+
     fn chrome_webview_origin() -> Point2D<f32, DeviceIndependentPixel> {
         Point2D::new(APP_RAIL_WIDTH, TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT)
+    }
+
+    fn rect_has_area(rect: egui::Rect) -> bool {
+        rect.width() > 0.0 && rect.height() > 0.0
+    }
+
+    fn rect_is_inside(outer: egui::Rect, inner: egui::Rect) -> bool {
+        inner.min.x >= outer.min.x - LAYOUT_EPSILON
+            && inner.min.y >= outer.min.y - LAYOUT_EPSILON
+            && inner.max.x <= outer.max.x + LAYOUT_EPSILON
+            && inner.max.y <= outer.max.y + LAYOUT_EPSILON
+    }
+
+    fn render_home_content_layout(viewport_size: egui::Vec2) -> HomeContentLayout {
+        let ctx = egui::Context::default();
+        slate_theme::apply(&ctx);
+
+        let screen_rect = egui::Rect::from_min_size(egui::Pos2::ZERO, viewport_size);
+        let input = egui::RawInput {
+            screen_rect: Some(screen_rect),
+            ..Default::default()
+        };
+        let mut slate_icons = SlateIconCache::default();
+        let mut home_search = String::new();
+        let mut layout = None;
+
+        let _ = ctx.run_ui(input, |ui| {
+            let response =
+                Gui::draw_home_content(ui, screen_rect, &mut slate_icons, &mut home_search);
+            layout = Some(response.layout);
+        });
+
+        layout.expect("home content should be rendered")
     }
 
     #[test]
@@ -1703,6 +1806,8 @@ mod tests {
         assert_eq!(HOME_SEARCH_MAX_WIDTH, 880.0);
         assert_eq!(HOME_SEARCH_HORIZONTAL_PADDING, 32.0);
         assert_eq!(HOME_SEARCH_HEIGHT, 72.0);
+        assert_eq!(HOME_SEARCH_FRAME_EXTRA_HEIGHT, 8.0);
+        assert_eq!(home_search_rendered_height(), 80.0);
         assert_eq!(HOME_SEARCH_TEXT_HEIGHT, 34.0);
         assert_eq!(HOME_SEARCH_INPUT_TEXT_SIZE, 18.0);
         assert_eq!(HOME_SEARCH_INNER_MARGIN_X, 32);
@@ -1734,6 +1839,8 @@ mod tests {
         assert_eq!(HOME_HERO_TO_SEARCH_GAP, 44.0);
         assert_eq!(HOME_SEARCH_TO_METRICS_GAP, 62.0);
         assert_eq!(HOME_METRIC_CARD_HEIGHT, 172.0);
+        assert_eq!(HOME_METRIC_GRID_EXTRA_HEIGHT, 25.0);
+        assert_eq!(home_metrics_rendered_height(), 197.0);
         assert_eq!(HOME_METRIC_CARD_INNER_MARGIN_X, 16);
         assert_eq!(HOME_METRIC_CARD_INNER_MARGIN_Y, 28);
         assert_eq!(HOME_METRIC_ICON_SIZE, 40.0);
@@ -1828,6 +1935,34 @@ mod tests {
             162.0
         );
         assert_eq!(home_metric_card_content_height(), 116.0);
+    }
+
+    #[test]
+    fn headless_home_content_fits_default_opening_view() {
+        let viewport_size = default_opening_home_view_size();
+        let bounds = egui::Rect::from_min_size(egui::Pos2::ZERO, viewport_size);
+        let layout = render_home_content_layout(viewport_size);
+
+        for rect in [layout.hero_rect, layout.search_rect, layout.metrics_rect] {
+            assert!(rect_has_area(rect), "expected visible rect: {rect:?}");
+            assert!(
+                rect_is_inside(bounds, rect),
+                "expected {rect:?} to fit inside {bounds:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn headless_home_content_keeps_search_usable_when_constrained() {
+        let viewport_size = egui::vec2(420.0, 320.0);
+        let bounds = egui::Rect::from_min_size(egui::Pos2::ZERO, viewport_size);
+        let layout = render_home_content_layout(viewport_size);
+
+        assert!(rect_has_area(layout.search_rect));
+        assert!(
+            rect_is_inside(bounds, layout.search_rect),
+            "expected search input to stay usable inside constrained bounds"
+        );
     }
 }
 
