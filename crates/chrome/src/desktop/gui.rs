@@ -1044,12 +1044,13 @@ impl Gui {
                             ui.available_size(),
                             egui::Layout::left_to_right(egui::Align::Center),
                             |ui| {
-                                let back_icon = slate_icons.raster_texture(
+                                let back_icon = slate_icons.texture(
                                     ui.ctx(),
+                                    SlateIcon::NavBack,
                                     if self.can_go_back {
-                                        SlateRaster::NavBack
+                                        slate_theme::TEXT
                                     } else {
-                                        SlateRaster::NavBackDisabled
+                                        slate_theme::MUTED
                                     },
                                 );
                                 let back_button = ui.add_enabled(
@@ -1066,12 +1067,13 @@ impl Gui {
                                     window.queue_user_interface_command(UserInterfaceCommand::Back);
                                 }
 
-                                let forward_icon = slate_icons.raster_texture(
+                                let forward_icon = slate_icons.texture(
                                     ui.ctx(),
+                                    SlateIcon::NavForward,
                                     if self.can_go_forward {
-                                        SlateRaster::NavForward
+                                        slate_theme::TEXT
                                     } else {
-                                        SlateRaster::NavForwardDisabled
+                                        slate_theme::MUTED
                                     },
                                 );
                                 let forward_button = ui.add_enabled(
@@ -1106,8 +1108,11 @@ impl Gui {
                                         }
                                     }
                                     LoadStatus::Complete => {
-                                        let reload_icon = slate_icons
-                                            .raster_texture(ui.ctx(), SlateRaster::NavRefresh);
+                                        let reload_icon = slate_icons.texture(
+                                            ui.ctx(),
+                                            SlateIcon::NavRefresh,
+                                            slate_theme::TEXT,
+                                        );
                                         let reload_button =
                                             ui.add(Gui::toolbar_icon_button(reload_icon));
                                         reload_button.widget_info(|| {
