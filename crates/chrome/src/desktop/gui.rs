@@ -13,12 +13,12 @@ use std::sync::Arc;
 use dpi::PhysicalSize;
 use egui::text::{CCursor, CCursorRange};
 use egui::text_edit::TextEditState;
-use egui::{
-    Button, FontDefinitions, Id, Key, Label, LayerId, Modifiers, Order, PaintCallback, Panel, Vec2,
-    WidgetInfo, WidgetType, pos2,
-};
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
 use egui::{FontData, FontFamily};
+use egui::{
+    FontDefinitions, Id, Key, Label, LayerId, Modifiers, Order, PaintCallback, Panel, Vec2,
+    WidgetInfo, WidgetType, pos2,
+};
 use egui_glow::{CallbackFn, EguiGlow};
 use egui_winit::EventResponse;
 use euclid::{Length, Point2D, Rect, Scale, Size2D};
@@ -819,6 +819,33 @@ impl Gui {
         response.on_hover_text("Close")
     }
 
+    fn tab_title_button(ui: &mut egui::Ui, label: &str, active: bool) -> egui::Response {
+        let (rect, response) = ui.allocate_exact_size(
+            egui::vec2(tab_title_width(TAB_WIDTH), TAB_CONTENT_HEIGHT),
+            egui::Sense::click(),
+        );
+
+        if ui.is_rect_visible(rect) {
+            ui.painter().text(
+                egui::pos2(rect.left(), rect.center().y),
+                egui::Align2::LEFT_CENTER,
+                truncate_with_ellipsis(label, 20),
+                egui::FontId::proportional(TAB_TITLE_TEXT_SIZE),
+                slate_theme::TEXT,
+            );
+        }
+
+        response.widget_info(|| {
+            let mut info = WidgetInfo::new(WidgetType::Button);
+            info.label = Some(label.into());
+            info.selected = Some(active);
+            info
+        });
+        response.on_hover_ui(|ui| {
+            ui.label(label);
+        })
+    }
+
     fn address_raster_button_sized(
         ui: &mut egui::Ui,
         texture: egui::load::SizedTexture,
@@ -1208,8 +1235,6 @@ impl Gui {
     }
 
     /// Draws a browser tab, checking for clicks and queues appropriate [`UserInterfaceCommand`]s.
-    /// Using a custom widget here would've been nice, but it doesn't seem as though egui
-    /// supports that, so we arrange multiple Widgets in a way that they look connected.
     fn browser_tab(
         ui: &mut egui::Ui,
         window: &ServoShellWindow,
@@ -1279,21 +1304,7 @@ impl Gui {
                 .add(Self::icon_image(icon, TAB_ICON_SIZE));
             tab_frame.content_ui.add_space(TAB_ICON_TITLE_GAP);
 
-            let tab = tab_frame
-                .content_ui
-                .add_sized(
-                    [tab_title_width(TAB_WIDTH), TAB_CONTENT_HEIGHT],
-                    Button::selectable(
-                        active,
-                        egui::RichText::new(truncate_with_ellipsis(&label, 20))
-                            .size(TAB_TITLE_TEXT_SIZE)
-                            .color(slate_theme::TEXT),
-                    )
-                    .frame(false),
-                )
-                .on_hover_ui(|ui| {
-                    ui.label(&label);
-                });
+            let tab = Self::tab_title_button(&mut tab_frame.content_ui, &label, active);
             tab_frame.content_ui.add_space(TAB_TITLE_CLOSE_GAP);
 
             let close_icon = if active {
