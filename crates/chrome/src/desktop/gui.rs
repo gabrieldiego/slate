@@ -75,7 +75,7 @@ const TAB_CLOSE_ICON_SIZE: f32 = 22.0;
 const NEW_TAB_LEFT_GAP: f32 = 16.0;
 const NEW_TAB_BUTTON_SIZE: f32 = 44.0;
 const NEW_TAB_TEXT_SIZE: f32 = 28.0;
-const TOOLBAR_PANEL_MARGIN_X: i8 = 28;
+const TOOLBAR_PANEL_MARGIN_X: i8 = 18;
 const TOOLBAR_PANEL_MARGIN_Y: i8 = 9;
 const TOOLBAR_ITEM_SPACING: f32 = 18.0;
 const TOOLBAR_BUTTON_SIZE: f32 = 40.0;
@@ -1660,7 +1660,7 @@ mod tests {
         assert_eq!(HOME_SEARCH_ICON_SIZE, 32.0);
         assert_eq!(HOME_SEARCH_ICON_GAP, 24.0);
         assert_eq!(HOME_SEARCH_CORNER_RADIUS, 8);
-        assert_eq!(TOOLBAR_PANEL_MARGIN_X, 28);
+        assert_eq!(TOOLBAR_PANEL_MARGIN_X, 18);
         assert_eq!(TOOLBAR_PANEL_MARGIN_Y, 9);
         assert_eq!(TOOLBAR_ITEM_SPACING, 18.0);
         assert_eq!(TOOLBAR_BUTTON_SIZE, 40.0);
