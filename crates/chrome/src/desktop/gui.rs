@@ -334,6 +334,24 @@ fn address_bookmark_icon_color() -> egui::Color32 {
     slate_theme::MUTED
 }
 
+fn rail_icon_color(selected: bool) -> egui::Color32 {
+    if selected {
+        slate_theme::TEAL
+    } else {
+        slate_theme::TEXT
+    }
+}
+
+fn rail_button_fill(selected: bool, hovered: bool) -> egui::Color32 {
+    if selected {
+        slate_theme::TEAL_WASH
+    } else if hovered {
+        slate_theme::PANEL_HOVER
+    } else {
+        egui::Color32::TRANSPARENT
+    }
+}
+
 fn address_shadow() -> egui::Shadow {
     egui::Shadow {
         offset: ADDRESS_SHADOW_OFFSET,
@@ -1012,26 +1030,12 @@ impl Gui {
         selected: bool,
         tooltip: &str,
     ) {
-        let texture = slate_icons.texture(
-            ui.ctx(),
-            icon,
-            if selected {
-                slate_theme::TEAL
-            } else {
-                slate_theme::TEXT
-            },
-        );
+        let texture = slate_icons.texture(ui.ctx(), icon, rail_icon_color(selected));
 
         let (rect, response) =
             ui.allocate_exact_size(Vec2::splat(RAIL_BUTTON_SIZE), egui::Sense::click());
         if ui.is_rect_visible(rect) {
-            let fill = if selected {
-                slate_theme::TEAL_SOFT
-            } else if response.hovered() {
-                slate_theme::PANEL_HOVER
-            } else {
-                egui::Color32::TRANSPARENT
-            };
+            let fill = rail_button_fill(selected, response.hovered());
             if fill != egui::Color32::TRANSPARENT {
                 ui.painter().rect_filled(rect, RAIL_BUTTON_RADIUS, fill);
             }
@@ -2144,10 +2148,10 @@ mod tests {
         footer_sync_dot_radius, footer_sync_status_width, home_content_stack_height,
         home_metric_badge_width, home_metric_card_content_height, home_metric_card_content_width,
         home_metrics_layout, home_metrics_rendered_height, home_metrics_row_width,
-        home_search_rendered_height, home_search_width, home_top_space, slate_theme,
-        status_bubble_label, status_bubble_width, tab_close_icon_color, tab_content_width,
-        tab_corner_radius, tab_title_color, tab_title_width, toolbar_address_width,
-        toolbar_navigation_icon_color,
+        home_search_rendered_height, home_search_width, home_top_space, rail_button_fill,
+        rail_icon_color, slate_theme, status_bubble_label, status_bubble_width,
+        tab_close_icon_color, tab_content_width, tab_corner_radius, tab_title_color,
+        tab_title_width, toolbar_address_width, toolbar_navigation_icon_color,
     };
     use super::{
         ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH, APP_TITLE_HEIGHT,
@@ -2535,6 +2539,16 @@ mod tests {
     fn toolbar_navigation_colors_mute_disabled_controls() {
         assert_eq!(toolbar_navigation_icon_color(true), slate_theme::TEXT);
         assert_eq!(toolbar_navigation_icon_color(false), slate_theme::MUTED);
+    }
+
+    #[test]
+    fn rail_colors_keep_selected_tile_soft() {
+        assert_eq!(rail_icon_color(true), slate_theme::TEAL);
+        assert_eq!(rail_icon_color(false), slate_theme::TEXT);
+        assert_eq!(rail_button_fill(true, false), slate_theme::TEAL_WASH);
+        assert_eq!(rail_button_fill(true, true), slate_theme::TEAL_WASH);
+        assert_eq!(rail_button_fill(false, true), slate_theme::PANEL_HOVER);
+        assert_eq!(rail_button_fill(false, false), egui::Color32::TRANSPARENT);
     }
 
     #[test]
