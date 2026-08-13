@@ -356,6 +356,10 @@ fn footer_status_text_color() -> egui::Color32 {
     slate_theme::MUTED
 }
 
+fn new_tab_icon_color() -> egui::Color32 {
+    slate_theme::MUTED
+}
+
 fn address_shadow() -> egui::Shadow {
     egui::Shadow {
         offset: ADDRESS_SHADOW_OFFSET,
@@ -754,7 +758,7 @@ impl Gui {
 
             let center = rect.center();
             let half = NEW_TAB_ICON_SIZE / 2.0;
-            let stroke = egui::Stroke::new(NEW_TAB_ICON_STROKE, slate_theme::TEXT);
+            let stroke = egui::Stroke::new(NEW_TAB_ICON_STROKE, new_tab_icon_color());
             ui.painter().line_segment(
                 [
                     egui::pos2(center.x - half, center.y),
@@ -2158,10 +2162,10 @@ mod tests {
         home_content_stack_height, home_metric_badge_width, home_metric_card_content_height,
         home_metric_card_content_width, home_metrics_layout, home_metrics_rendered_height,
         home_metrics_row_width, home_search_rendered_height, home_search_width, home_top_space,
-        home_view_background_color, rail_button_fill, rail_icon_color, slate_theme,
-        status_bubble_label, status_bubble_width, tab_close_icon_color, tab_content_width,
-        tab_corner_radius, tab_title_color, tab_title_width, toolbar_address_width,
-        toolbar_navigation_icon_color,
+        home_view_background_color, new_tab_icon_color, rail_button_fill, rail_icon_color,
+        slate_theme, status_bubble_label, status_bubble_width, tab_close_icon_color,
+        tab_content_width, tab_corner_radius, tab_title_color, tab_title_width,
+        toolbar_address_width, toolbar_navigation_icon_color,
     };
     use super::{
         ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH, APP_TITLE_HEIGHT,
@@ -2355,6 +2359,7 @@ mod tests {
         assert_eq!(NEW_TAB_BUTTON_RADIUS, 8);
         assert_eq!(NEW_TAB_ICON_SIZE, 24.0);
         assert_eq!(NEW_TAB_ICON_STROKE, 2.0);
+        assert_eq!(new_tab_icon_color(), slate_theme::MUTED);
         assert_eq!(HOME_SEARCH_MIN_WIDTH, 280.0);
         assert_eq!(HOME_SEARCH_MAX_WIDTH, 880.0);
         assert_eq!(HOME_SEARCH_HORIZONTAL_PADDING, 32.0);
