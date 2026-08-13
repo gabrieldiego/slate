@@ -29,7 +29,6 @@ pub(crate) enum SlateIcon {
     HomeMetricLock,
     HomeMetricPrivacy,
     HomeMetricTime,
-    HomeSearch,
     TabCalendar,
     TabResearch,
     TabWeb,
@@ -46,6 +45,7 @@ pub(crate) enum SlateRaster {
     NavRefresh,
     NavStop,
     PageInfoSecure,
+    Search,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -127,12 +127,6 @@ impl SlateIcon {
                 height: 40,
                 mask: include_bytes!("../../assets/icons/home_metric_time.alpha"),
             },
-            Self::HomeSearch => SlateIconData {
-                name: "home-search",
-                width: 32,
-                height: 32,
-                mask: include_bytes!("../../assets/icons/home_search.alpha"),
-            },
             Self::TabCalendar => SlateIconData {
                 name: "tab-calendar",
                 width: 20,
@@ -211,6 +205,12 @@ impl SlateRaster {
                 width: 24,
                 height: 24,
                 bytes: include_bytes!("../../assets/icons/slate-ns/page-info-secure.png"),
+            },
+            Self::Search => SlateRasterData {
+                name: "search",
+                width: 17,
+                height: 17,
+                bytes: include_bytes!("../../assets/icons/slate-ns/search.png"),
             },
         }
     }
@@ -337,7 +337,6 @@ mod tests {
             SlateIcon::HomeMetricLock,
             SlateIcon::HomeMetricPrivacy,
             SlateIcon::HomeMetricTime,
-            SlateIcon::HomeSearch,
             SlateIcon::TabCalendar,
             SlateIcon::TabResearch,
             SlateIcon::TabWeb,
@@ -359,6 +358,7 @@ mod tests {
             SlateRaster::NavRefresh,
             SlateRaster::NavStop,
             SlateRaster::PageInfoSecure,
+            SlateRaster::Search,
         ] {
             let data = raster.data();
             let image = image::load_from_memory(data.bytes).unwrap().to_rgba8();

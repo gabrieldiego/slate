@@ -73,6 +73,7 @@ const ADDRESS_TRAILING_CONTROLS_WIDTH: f32 = 168.0;
 const HOME_SEARCH_MIN_WIDTH: f32 = 280.0;
 const HOME_SEARCH_MAX_WIDTH: f32 = 880.0;
 const HOME_SEARCH_HEIGHT: f32 = 58.0;
+const HOME_SEARCH_ICON_SIZE: f32 = 20.0;
 const HOME_METRIC_CARD_HEIGHT: f32 = 172.0;
 const HOME_METRIC_CARD_MIN_WIDTH: f32 = 156.0;
 const HOME_METRIC_CARD_MAX_WIDTH: f32 = 194.0;
@@ -666,12 +667,9 @@ impl Gui {
                                 ui.set_width(search_width);
                                 ui.set_min_height(HOME_SEARCH_HEIGHT);
                                 ui.horizontal_centered(|ui| {
-                                    let search_icon = slate_icons.texture(
-                                        ui.ctx(),
-                                        SlateIcon::HomeSearch,
-                                        slate_theme::MUTED,
-                                    );
-                                    ui.add(Self::icon_image(search_icon, 20.0));
+                                    let search_icon =
+                                        slate_icons.raster_texture(ui.ctx(), SlateRaster::Search);
+                                    ui.add(Self::icon_image(search_icon, HOME_SEARCH_ICON_SIZE));
                                     ui.add_space(12.0);
                                     ui.add_sized(
                                         [ui.available_width(), 34.0],
@@ -1338,8 +1336,8 @@ mod tests {
         ADDRESS_HEIGHT, APP_RAIL_WIDTH, APP_TITLE_HEIGHT, APP_TITLE_LEFT_PADDING,
         APP_TITLE_TEXT_SIZE, FOOTER_HEIGHT, FOOTER_ICON_SIZE, FOOTER_LEFT_PADDING,
         FOOTER_RIGHT_PADDING, FOOTER_SYNC_DOT_SIZE, FOOTER_TEXT_SIZE, HOME_METRIC_CARD_GAP,
-        HOME_METRIC_CARD_MAX_WIDTH, NEW_TAB_LEFT_GAP, TAB_CONTENT_HEIGHT, TAB_HEIGHT,
-        TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_HEIGHT, TOOLBAR_HEIGHT,
+        HOME_METRIC_CARD_MAX_WIDTH, HOME_SEARCH_ICON_SIZE, NEW_TAB_LEFT_GAP, TAB_CONTENT_HEIGHT,
+        TAB_HEIGHT, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_HEIGHT, TOOLBAR_HEIGHT,
         TOOLBAR_ITEM_SPACING, egui_chrome_owns_position,
     };
     use super::{
@@ -1414,6 +1412,7 @@ mod tests {
         assert_eq!(TAB_INNER_MARGIN_X, 16);
         assert_eq!(TAB_INNER_MARGIN_Y, 8);
         assert_eq!(NEW_TAB_LEFT_GAP, 16.0);
+        assert_eq!(HOME_SEARCH_ICON_SIZE, 20.0);
         assert_eq!(TOOLBAR_ITEM_SPACING, 18.0);
         assert_eq!(ADDRESS_LEADING_GAP, 48.0);
         assert_eq!(ADDRESS_TRAILING_CONTROLS_WIDTH, 168.0);
