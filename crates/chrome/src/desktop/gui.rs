@@ -358,15 +358,11 @@ fn footer_status_text_color() -> egui::Color32 {
 }
 
 fn new_tab_icon_color() -> egui::Color32 {
-    slate_theme::MUTED
+    slate_theme::TEXT
 }
 
-fn toolbar_menu_icon_color(selected: bool) -> egui::Color32 {
-    if selected {
-        slate_theme::TEXT
-    } else {
-        slate_theme::MUTED
-    }
+fn toolbar_menu_icon_color(_selected: bool) -> egui::Color32 {
+    slate_theme::TEXT
 }
 
 fn tab_strip_background_color() -> egui::Color32 {
@@ -2375,7 +2371,7 @@ mod tests {
         assert_eq!(NEW_TAB_BUTTON_RADIUS, 8);
         assert_eq!(NEW_TAB_ICON_SIZE, 24.0);
         assert_eq!(NEW_TAB_ICON_STROKE, 2.0);
-        assert_eq!(new_tab_icon_color(), slate_theme::MUTED);
+        assert_eq!(new_tab_icon_color(), slate_theme::TEXT);
         assert_eq!(HOME_SEARCH_MIN_WIDTH, 280.0);
         assert_eq!(HOME_SEARCH_MAX_WIDTH, 880.0);
         assert_eq!(HOME_SEARCH_HORIZONTAL_PADDING, 32.0);
@@ -2398,7 +2394,7 @@ mod tests {
         assert_eq!(TOOLBAR_MENU_ICON_WIDTH, 24.0);
         assert_eq!(TOOLBAR_MENU_ICON_GAP, 7.0);
         assert_eq!(TOOLBAR_MENU_ICON_STROKE, 2.0);
-        assert_eq!(toolbar_menu_icon_color(false), slate_theme::MUTED);
+        assert_eq!(toolbar_menu_icon_color(false), slate_theme::TEXT);
         assert_eq!(toolbar_menu_icon_color(true), slate_theme::TEXT);
         assert_eq!(TOOLBAR_SEPARATOR_HEIGHT, 36.0);
         assert_eq!(TAB_ICON_SIZE, 24.0);
