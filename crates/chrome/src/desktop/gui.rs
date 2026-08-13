@@ -339,7 +339,7 @@ fn rail_icon_color(selected: bool) -> egui::Color32 {
     if selected {
         slate_theme::TEAL
     } else {
-        slate_theme::MUTED
+        slate_theme::TEXT
     }
 }
 
@@ -2578,7 +2578,7 @@ mod tests {
     #[test]
     fn rail_colors_keep_selected_tile_soft() {
         assert_eq!(rail_icon_color(true), slate_theme::TEAL);
-        assert_eq!(rail_icon_color(false), slate_theme::MUTED);
+        assert_eq!(rail_icon_color(false), slate_theme::TEXT);
         assert_eq!(rail_button_fill(true, false), slate_theme::TEAL_WASH);
         assert_eq!(rail_button_fill(true, true), slate_theme::TEAL_WASH);
         assert_eq!(rail_button_fill(false, true), slate_theme::PANEL_HOVER);
