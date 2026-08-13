@@ -57,6 +57,11 @@ const FOOTER_SEPARATOR_HEIGHT: f32 = 28.0;
 const FOOTER_SYNC_DOT_SIZE: f32 = 12.0;
 const FOOTER_SETTINGS_BUTTON_SIZE: f32 = 40.0;
 const FOOTER_SETTINGS_ICON_SIZE: f32 = 28.0;
+const FOOTER_SETTINGS_GEAR_RADIUS: f32 = 9.0;
+const FOOTER_SETTINGS_GEAR_CENTER_RADIUS: f32 = 3.5;
+const FOOTER_SETTINGS_GEAR_TOOTH_INNER_RADIUS: f32 = 12.0;
+const FOOTER_SETTINGS_GEAR_TOOTH_OUTER_RADIUS: f32 = FOOTER_SETTINGS_ICON_SIZE / 2.0;
+const FOOTER_SETTINGS_GEAR_STROKE: f32 = 2.0;
 const APP_TITLE_WIDTH: f32 = 162.0;
 const APP_TITLE_HEIGHT: f32 = TAB_STRIP_HEIGHT;
 const APP_TITLE_LEFT_PADDING: f32 = 31.0;
@@ -637,15 +642,46 @@ impl Gui {
         response
     }
 
-    fn footer_button(text: &str) -> egui::Button<'_> {
-        egui::Button::new(
-            egui::RichText::new(text)
-                .size(FOOTER_SETTINGS_ICON_SIZE)
-                .color(slate_theme::TEXT),
-        )
-        .frame(false)
-        .min_size(Vec2::splat(FOOTER_SETTINGS_BUTTON_SIZE))
-        .corner_radius(6)
+    fn footer_settings_button(ui: &mut egui::Ui) -> egui::Response {
+        let (rect, response) = ui.allocate_exact_size(
+            Vec2::splat(FOOTER_SETTINGS_BUTTON_SIZE),
+            egui::Sense::click(),
+        );
+
+        if ui.is_rect_visible(rect) {
+            if response.hovered() {
+                ui.painter()
+                    .rect_filled(rect, 6.0, slate_theme::PANEL_HOVER);
+            }
+
+            let center = rect.center();
+            let stroke = egui::Stroke::new(FOOTER_SETTINGS_GEAR_STROKE, slate_theme::TEXT);
+            ui.painter()
+                .circle_stroke(center, FOOTER_SETTINGS_GEAR_RADIUS, stroke);
+            ui.painter()
+                .circle_stroke(center, FOOTER_SETTINGS_GEAR_CENTER_RADIUS, stroke);
+
+            for tooth_index in 0..8 {
+                let angle = std::f32::consts::TAU * tooth_index as f32 / 8.0;
+                let direction_x = angle.cos();
+                let direction_y = angle.sin();
+                ui.painter().line_segment(
+                    [
+                        egui::pos2(
+                            center.x + direction_x * FOOTER_SETTINGS_GEAR_TOOTH_INNER_RADIUS,
+                            center.y + direction_y * FOOTER_SETTINGS_GEAR_TOOTH_INNER_RADIUS,
+                        ),
+                        egui::pos2(
+                            center.x + direction_x * FOOTER_SETTINGS_GEAR_TOOTH_OUTER_RADIUS,
+                            center.y + direction_y * FOOTER_SETTINGS_GEAR_TOOTH_OUTER_RADIUS,
+                        ),
+                    ],
+                    stroke,
+                );
+            }
+        }
+
+        response
     }
 
     fn icon_image(texture: egui::load::SizedTexture, size: f32) -> egui::Image<'static> {
@@ -849,7 +885,13 @@ impl Gui {
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(FOOTER_RIGHT_PADDING);
-                ui.add(Gui::footer_button("⚙")).on_hover_text("Settings");
+                let settings_button = Gui::footer_settings_button(ui);
+                settings_button.widget_info(|| {
+                    let mut info = WidgetInfo::new(WidgetType::Button);
+                    info.label = Some("Settings".into());
+                    info
+                });
+                settings_button.on_hover_text("Settings");
                 Self::vertical_separator(ui, FOOTER_SEPARATOR_HEIGHT);
                 ui.label(
                     egui::RichText::new("Sync On")
@@ -1800,24 +1842,26 @@ mod tests {
         APP_TITLE_LEFT_PADDING, APP_TITLE_TEXT_SIZE, FOOTER_HEIGHT, FOOTER_ICON_SIZE,
         FOOTER_ITEM_SPACING, FOOTER_LEFT_PADDING, FOOTER_PANEL_MARGIN_X, FOOTER_PANEL_MARGIN_Y,
         FOOTER_RIGHT_PADDING, FOOTER_SEPARATOR_HEIGHT, FOOTER_SETTINGS_BUTTON_SIZE,
-        FOOTER_SETTINGS_ICON_SIZE, FOOTER_SYNC_DOT_SIZE, FOOTER_TEXT_SIZE, HOME_BOTTOM_MIN_GAP,
-        HOME_HERO_SIZE, HOME_HERO_TO_SEARCH_GAP, HOME_METRIC_BADGE_CORNER_RADIUS,
-        HOME_METRIC_BADGE_MARGIN_X, HOME_METRIC_BADGE_MARGIN_Y, HOME_METRIC_BADGE_TEXT_SIZE,
-        HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_HEIGHT, HOME_METRIC_CARD_INNER_MARGIN_X,
-        HOME_METRIC_CARD_INNER_MARGIN_Y, HOME_METRIC_CARD_MAX_WIDTH, HOME_METRIC_DETAIL_GAP,
-        HOME_METRIC_DETAIL_TEXT_SIZE, HOME_METRIC_GRID_EXTRA_HEIGHT, HOME_METRIC_ICON_LABEL_GAP,
-        HOME_METRIC_ICON_SIZE, HOME_METRIC_LABEL_TEXT_SIZE, HOME_PANEL_SHADOW_ALPHA,
-        HOME_PANEL_SHADOW_BLUR, HOME_PANEL_SHADOW_OFFSET, HOME_PANEL_SHADOW_SPREAD,
-        HOME_SEARCH_FRAME_EXTRA_HEIGHT, HOME_SEARCH_ICON_SIZE, HOME_SEARCH_INPUT_TEXT_SIZE,
-        HOME_SEARCH_TO_METRICS_GAP, HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN,
-        NEW_TAB_BUTTON_SIZE, NEW_TAB_ICON_SIZE, NEW_TAB_ICON_STROKE, NEW_TAB_LEFT_GAP,
-        TAB_CLOSE_ICON_SIZE, TAB_CONTENT_HEIGHT, TAB_CORNER_RADIUS, TAB_HEIGHT, TAB_ICON_TITLE_GAP,
-        TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT,
-        TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH, TAB_TITLE_TEXT_SIZE, TAB_WIDTH,
-        TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE, TOOLBAR_ITEM_SPACING,
-        TOOLBAR_MENU_ICON_GAP, TOOLBAR_MENU_ICON_STROKE, TOOLBAR_MENU_ICON_WIDTH,
-        TOOLBAR_PANEL_MARGIN_X, TOOLBAR_PANEL_MARGIN_Y, TOOLBAR_PRIVACY_ICON_SIZE,
-        TOOLBAR_SEPARATOR_HEIGHT, egui_chrome_owns_position,
+        FOOTER_SETTINGS_GEAR_CENTER_RADIUS, FOOTER_SETTINGS_GEAR_RADIUS,
+        FOOTER_SETTINGS_GEAR_STROKE, FOOTER_SETTINGS_GEAR_TOOTH_INNER_RADIUS,
+        FOOTER_SETTINGS_GEAR_TOOTH_OUTER_RADIUS, FOOTER_SETTINGS_ICON_SIZE, FOOTER_SYNC_DOT_SIZE,
+        FOOTER_TEXT_SIZE, HOME_BOTTOM_MIN_GAP, HOME_HERO_SIZE, HOME_HERO_TO_SEARCH_GAP,
+        HOME_METRIC_BADGE_CORNER_RADIUS, HOME_METRIC_BADGE_MARGIN_X, HOME_METRIC_BADGE_MARGIN_Y,
+        HOME_METRIC_BADGE_TEXT_SIZE, HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_HEIGHT,
+        HOME_METRIC_CARD_INNER_MARGIN_X, HOME_METRIC_CARD_INNER_MARGIN_Y,
+        HOME_METRIC_CARD_MAX_WIDTH, HOME_METRIC_DETAIL_GAP, HOME_METRIC_DETAIL_TEXT_SIZE,
+        HOME_METRIC_GRID_EXTRA_HEIGHT, HOME_METRIC_ICON_LABEL_GAP, HOME_METRIC_ICON_SIZE,
+        HOME_METRIC_LABEL_TEXT_SIZE, HOME_PANEL_SHADOW_ALPHA, HOME_PANEL_SHADOW_BLUR,
+        HOME_PANEL_SHADOW_OFFSET, HOME_PANEL_SHADOW_SPREAD, HOME_SEARCH_FRAME_EXTRA_HEIGHT,
+        HOME_SEARCH_ICON_SIZE, HOME_SEARCH_INPUT_TEXT_SIZE, HOME_SEARCH_TO_METRICS_GAP,
+        HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN, NEW_TAB_BUTTON_SIZE,
+        NEW_TAB_ICON_SIZE, NEW_TAB_ICON_STROKE, NEW_TAB_LEFT_GAP, TAB_CLOSE_ICON_SIZE,
+        TAB_CONTENT_HEIGHT, TAB_CORNER_RADIUS, TAB_HEIGHT, TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X,
+        TAB_INNER_MARGIN_Y, TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP,
+        TAB_TITLE_MIN_WIDTH, TAB_TITLE_TEXT_SIZE, TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT,
+        TOOLBAR_ICON_SIZE, TOOLBAR_ITEM_SPACING, TOOLBAR_MENU_ICON_GAP, TOOLBAR_MENU_ICON_STROKE,
+        TOOLBAR_MENU_ICON_WIDTH, TOOLBAR_PANEL_MARGIN_X, TOOLBAR_PANEL_MARGIN_Y,
+        TOOLBAR_PRIVACY_ICON_SIZE, TOOLBAR_SEPARATOR_HEIGHT, egui_chrome_owns_position,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -1932,6 +1976,11 @@ mod tests {
         assert_eq!(FOOTER_SYNC_DOT_SIZE, 12.0);
         assert_eq!(FOOTER_SETTINGS_BUTTON_SIZE, 40.0);
         assert_eq!(FOOTER_SETTINGS_ICON_SIZE, 28.0);
+        assert_eq!(FOOTER_SETTINGS_GEAR_RADIUS, 9.0);
+        assert_eq!(FOOTER_SETTINGS_GEAR_CENTER_RADIUS, 3.5);
+        assert_eq!(FOOTER_SETTINGS_GEAR_TOOTH_INNER_RADIUS, 12.0);
+        assert_eq!(FOOTER_SETTINGS_GEAR_TOOTH_OUTER_RADIUS, 14.0);
+        assert_eq!(FOOTER_SETTINGS_GEAR_STROKE, 2.0);
         assert_eq!(ADDRESS_HEIGHT, 54.0);
         assert_eq!(ADDRESS_INPUT_TEXT_SIZE, 18.0);
         assert_eq!(ADDRESS_CORNER_RADIUS, 8);
