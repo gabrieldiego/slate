@@ -47,9 +47,11 @@ const APP_RAIL_WIDTH: f32 = 104.0;
 const FOOTER_HEIGHT: f32 = 80.0;
 const FOOTER_LEFT_PADDING: f32 = 22.0;
 const FOOTER_RIGHT_PADDING: f32 = 22.0;
+const FOOTER_ITEM_SPACING: f32 = 18.0;
 const FOOTER_ICON_SIZE: f32 = 28.0;
 const FOOTER_TEXT_SIZE: f32 = 14.0;
 const FOOTER_SYNC_DOT_SIZE: f32 = 12.0;
+const FOOTER_SETTINGS_BUTTON_SIZE: f32 = 40.0;
 const APP_TITLE_WIDTH: f32 = 160.0;
 const APP_TITLE_HEIGHT: f32 = TAB_STRIP_HEIGHT;
 const APP_TITLE_LEFT_PADDING: f32 = 30.0;
@@ -420,6 +422,13 @@ impl Gui {
             .corner_radius(6)
     }
 
+    fn footer_button(text: &str) -> egui::Button<'_> {
+        egui::Button::new(text)
+            .frame(false)
+            .min_size(Vec2::splat(FOOTER_SETTINGS_BUTTON_SIZE))
+            .corner_radius(6)
+    }
+
     fn icon_image(texture: egui::load::SizedTexture, size: f32) -> egui::Image<'static> {
         egui::Image::from_texture(texture)
             .fit_to_exact_size(egui::vec2(size, size))
@@ -529,7 +538,7 @@ impl Gui {
     }
 
     fn draw_footer(ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
-        ui.spacing_mut().item_spacing = egui::vec2(12.0, 0.0);
+        ui.spacing_mut().item_spacing = egui::vec2(FOOTER_ITEM_SPACING, 0.0);
         ui.horizontal_centered(|ui| {
             ui.add_space(FOOTER_LEFT_PADDING);
             let footer_icon =
@@ -543,7 +552,7 @@ impl Gui {
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(FOOTER_RIGHT_PADDING);
-                ui.add(Gui::toolbar_button("⚙")).on_hover_text("Settings");
+                ui.add(Gui::footer_button("⚙")).on_hover_text("Settings");
                 ui.separator();
                 ui.label(
                     egui::RichText::new("Sync On")
@@ -1392,14 +1401,14 @@ mod tests {
     };
     use super::{
         ADDRESS_HEIGHT, APP_RAIL_WIDTH, APP_TITLE_HEIGHT, APP_TITLE_LEFT_PADDING,
-        APP_TITLE_TEXT_SIZE, FOOTER_HEIGHT, FOOTER_ICON_SIZE, FOOTER_LEFT_PADDING,
-        FOOTER_RIGHT_PADDING, FOOTER_SYNC_DOT_SIZE, FOOTER_TEXT_SIZE, HOME_HERO_SIZE,
-        HOME_HERO_TO_SEARCH_GAP, HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_MAX_WIDTH,
-        HOME_SEARCH_ICON_SIZE, HOME_SEARCH_TO_METRICS_GAP, HOME_TOP_SPACE_FACTOR,
-        HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN, NEW_TAB_LEFT_GAP, TAB_CONTENT_HEIGHT, TAB_HEIGHT,
-        TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_HEIGHT,
-        TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH, TAB_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_ITEM_SPACING,
-        egui_chrome_owns_position,
+        APP_TITLE_TEXT_SIZE, FOOTER_HEIGHT, FOOTER_ICON_SIZE, FOOTER_ITEM_SPACING,
+        FOOTER_LEFT_PADDING, FOOTER_RIGHT_PADDING, FOOTER_SETTINGS_BUTTON_SIZE,
+        FOOTER_SYNC_DOT_SIZE, FOOTER_TEXT_SIZE, HOME_HERO_SIZE, HOME_HERO_TO_SEARCH_GAP,
+        HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_MAX_WIDTH, HOME_SEARCH_ICON_SIZE,
+        HOME_SEARCH_TO_METRICS_GAP, HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN,
+        NEW_TAB_LEFT_GAP, TAB_CONTENT_HEIGHT, TAB_HEIGHT, TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X,
+        TAB_INNER_MARGIN_Y, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH, TAB_WIDTH,
+        TOOLBAR_HEIGHT, TOOLBAR_ITEM_SPACING, egui_chrome_owns_position,
     };
     use super::{
         RAIL_BUTTON_SIZE, RAIL_ICON_SIZE, RAIL_ITEM_GAP, RAIL_TOP_SPACE, TAB_CLOSE_BUTTON_SIZE,
@@ -1461,9 +1470,11 @@ mod tests {
         assert_eq!(FOOTER_HEIGHT, 80.0);
         assert_eq!(FOOTER_LEFT_PADDING, 22.0);
         assert_eq!(FOOTER_RIGHT_PADDING, 22.0);
+        assert_eq!(FOOTER_ITEM_SPACING, 18.0);
         assert_eq!(FOOTER_ICON_SIZE, 28.0);
         assert_eq!(FOOTER_TEXT_SIZE, 14.0);
         assert_eq!(FOOTER_SYNC_DOT_SIZE, 12.0);
+        assert_eq!(FOOTER_SETTINGS_BUTTON_SIZE, 40.0);
         assert_eq!(ADDRESS_HEIGHT, 54.0);
         assert_eq!(APP_TITLE_HEIGHT, TAB_STRIP_HEIGHT);
         assert_eq!(APP_TITLE_LEFT_PADDING, 30.0);
