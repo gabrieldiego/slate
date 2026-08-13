@@ -59,6 +59,10 @@ const TAB_HEIGHT: f32 = 58.0;
 const TAB_INNER_MARGIN_X: i8 = 16;
 const TAB_INNER_MARGIN_Y: i8 = 8;
 const TAB_CONTENT_HEIGHT: f32 = TAB_HEIGHT - (TAB_INNER_MARGIN_Y as f32 * 2.0);
+const TAB_TITLE_MIN_WIDTH: f32 = 80.0;
+const TAB_ICON_TITLE_GAP: f32 = 12.0;
+const TAB_TITLE_CLOSE_GAP: f32 = 8.0;
+const TAB_CLOSE_BUTTON_SIZE: f32 = 28.0;
 const NEW_TAB_LEFT_GAP: f32 = 16.0;
 const TOOLBAR_ITEM_SPACING: f32 = 18.0;
 const TOOLBAR_ICON_SIZE: f32 = 24.0;
@@ -192,6 +196,15 @@ fn toolbar_address_width(available_width: f32) -> f32 {
 fn home_top_space(available_height: f32) -> f32 {
     (available_height.max(0.0) * HOME_TOP_SPACE_FACTOR)
         .clamp(HOME_TOP_SPACE_MIN, HOME_TOP_SPACE_MAX)
+}
+
+fn tab_title_width(available_width: f32) -> f32 {
+    (available_width
+        - TAB_ICON_SIZE
+        - TAB_ICON_TITLE_GAP
+        - TAB_CLOSE_BUTTON_SIZE
+        - TAB_TITLE_CLOSE_GAP)
+        .max(TAB_TITLE_MIN_WIDTH)
 }
 
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
@@ -788,21 +801,30 @@ impl Gui {
             tab_frame
                 .content_ui
                 .add(Self::icon_image(icon, TAB_ICON_SIZE));
+            tab_frame.content_ui.add_space(TAB_ICON_TITLE_GAP);
 
             let tab = tab_frame
                 .content_ui
-                .add(Button::selectable(
-                    active,
-                    egui::RichText::new(truncate_with_ellipsis(&label, 20))
-                        .color(slate_theme::TEXT),
-                ))
+                .add_sized(
+                    [tab_title_width(TAB_WIDTH), TAB_CONTENT_HEIGHT],
+                    Button::selectable(
+                        active,
+                        egui::RichText::new(truncate_with_ellipsis(&label, 20))
+                            .color(slate_theme::TEXT),
+                    )
+                    .frame(false),
+                )
                 .on_hover_ui(|ui| {
                     ui.label(&label);
                 });
+            tab_frame.content_ui.add_space(TAB_TITLE_CLOSE_GAP);
 
-            let close_button = tab_frame
-                .content_ui
-                .add(egui::Button::new("×").fill(egui::Color32::TRANSPARENT));
+            let close_button = tab_frame.content_ui.add_sized(
+                [TAB_CLOSE_BUTTON_SIZE, TAB_CLOSE_BUTTON_SIZE],
+                egui::Button::new("×")
+                    .fill(egui::Color32::TRANSPARENT)
+                    .frame(false),
+            );
             close_button.widget_info(|| {
                 let mut info = WidgetInfo::new(WidgetType::Button);
                 info.label = Some("Close".into());
@@ -1366,7 +1388,7 @@ mod tests {
         ADDRESS_BOOKMARK_ICON_SIZE, ADDRESS_BOOKMARK_RESERVED_WIDTH, ADDRESS_ICON_GAP,
         ADDRESS_INNER_MARGIN_X, ADDRESS_LEADING_GAP, ADDRESS_MIN_WIDTH, ADDRESS_SECURITY_ICON_SIZE,
         ADDRESS_TRAILING_CONTROLS_WIDTH, HOME_METRIC_CARD_MIN_WIDTH, home_metrics_layout,
-        home_top_space, toolbar_address_width,
+        home_top_space, tab_title_width, toolbar_address_width,
     };
     use super::{
         ADDRESS_HEIGHT, APP_RAIL_WIDTH, APP_TITLE_HEIGHT, APP_TITLE_LEFT_PADDING,
@@ -1375,10 +1397,13 @@ mod tests {
         HOME_HERO_TO_SEARCH_GAP, HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_MAX_WIDTH,
         HOME_SEARCH_ICON_SIZE, HOME_SEARCH_TO_METRICS_GAP, HOME_TOP_SPACE_FACTOR,
         HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN, NEW_TAB_LEFT_GAP, TAB_CONTENT_HEIGHT, TAB_HEIGHT,
-        TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_HEIGHT, TOOLBAR_HEIGHT,
-        TOOLBAR_ITEM_SPACING, egui_chrome_owns_position,
+        TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_HEIGHT,
+        TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH, TAB_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_ITEM_SPACING,
+        egui_chrome_owns_position,
     };
-    use super::{RAIL_BUTTON_SIZE, RAIL_ICON_SIZE, RAIL_ITEM_GAP, RAIL_TOP_SPACE};
+    use super::{
+        RAIL_BUTTON_SIZE, RAIL_ICON_SIZE, RAIL_ITEM_GAP, RAIL_TOP_SPACE, TAB_CLOSE_BUTTON_SIZE,
+    };
 
     fn chrome_webview_origin() -> Point2D<f32, DeviceIndependentPixel> {
         Point2D::new(APP_RAIL_WIDTH, TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT)
@@ -1450,6 +1475,10 @@ mod tests {
         );
         assert_eq!(TAB_INNER_MARGIN_X, 16);
         assert_eq!(TAB_INNER_MARGIN_Y, 8);
+        assert_eq!(TAB_TITLE_MIN_WIDTH, 80.0);
+        assert_eq!(TAB_ICON_TITLE_GAP, 12.0);
+        assert_eq!(TAB_TITLE_CLOSE_GAP, 8.0);
+        assert_eq!(TAB_CLOSE_BUTTON_SIZE, 28.0);
         assert_eq!(NEW_TAB_LEFT_GAP, 16.0);
         assert_eq!(HOME_SEARCH_ICON_SIZE, 20.0);
         assert_eq!(TOOLBAR_ITEM_SPACING, 18.0);
@@ -1484,6 +1513,12 @@ mod tests {
         assert_eq!(home_top_space(120.0), HOME_TOP_SPACE_MIN);
         assert!((home_top_space(700.0) - 126.0).abs() < 0.001);
         assert_eq!(home_top_space(900.0), HOME_TOP_SPACE_MAX);
+    }
+
+    #[test]
+    fn tab_title_width_reserves_fixed_close_region() {
+        assert_eq!(tab_title_width(TAB_WIDTH), 232.0);
+        assert_eq!(tab_title_width(100.0), TAB_TITLE_MIN_WIDTH);
     }
 
     #[test]
