@@ -36,6 +36,7 @@ use winit::window::Window;
 
 use crate::desktop::event_loop::AppEvent;
 use crate::desktop::headed_window;
+use crate::desktop::protocols::slate::is_slate_home_url;
 use crate::desktop::slate_theme::{self, SlateIcon, SlateIconCache, SlateRaster};
 use crate::running_app_state::{RunningAppState, UserInterfaceCommand};
 use crate::window::ServoShellWindow;
@@ -354,17 +355,12 @@ impl Gui {
         }
     }
 
-    fn is_slate_home_url(url: &Url) -> bool {
-        url.scheme() == "slate"
-            && (url.host_str() == Some("home") || url.path().trim_start_matches('/') == "home")
-    }
-
     fn active_webview_is_home(window: &ServoShellWindow) -> bool {
         window
             .active_webview()
             .and_then(|webview| webview.url())
             .as_ref()
-            .is_some_and(Self::is_slate_home_url)
+            .is_some_and(is_slate_home_url)
     }
 
     fn rail_icon_button(
@@ -632,7 +628,7 @@ impl Gui {
         fallback_icon: egui::load::SizedTexture,
     ) {
         let label = match (webview.page_title(), webview.url()) {
-            (_, Some(url)) if Self::is_slate_home_url(&url) => "New Tab".into(),
+            (_, Some(url)) if is_slate_home_url(&url) => "New Tab".into(),
             (Some(title), _) if !title.is_empty() => title,
             (_, Some(url)) => url.to_string(),
             _ => "New Tab".into(),

@@ -50,6 +50,7 @@ use crate::desktop::dialog::Dialog;
 use crate::desktop::event_loop::AppEvent;
 use crate::desktop::gui::Gui;
 use crate::desktop::keyutils::CMD_OR_CONTROL;
+use crate::desktop::protocols::slate::is_slate_home_url;
 use crate::prefs::ServoShellPreferences;
 use crate::running_app_state::{RunningAppState, UserInterfaceCommand};
 use crate::window::{
@@ -852,6 +853,10 @@ impl PlatformWindow for HeadedWindow {
         let title = window
             .active_webview()
             .and_then(|webview| {
+                if webview.url().as_ref().is_some_and(is_slate_home_url) {
+                    return Some("Slate - New Tab".to_owned());
+                }
+
                 webview
                     .page_title()
                     .filter(|title| !title.is_empty())

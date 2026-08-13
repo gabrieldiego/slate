@@ -10,6 +10,7 @@ use std::pin::Pin;
 use servo::protocol_handler::{
     DoneChannel, FetchContext, NetworkError, ProtocolHandler, Request, Response,
 };
+use url::Url;
 
 use crate::desktop::protocols::resource::ResourceProtocolHandler;
 
@@ -32,20 +33,36 @@ impl ProtocolHandler for SlateProtocolHandler {
         context: &FetchContext,
     ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
         let url = request.current_url();
-        let is_home =
-            url.host_str() == Some("home") || url.path().trim_start_matches('/') == "home";
-
-        if is_home {
+        if is_slate_home_url(url.as_url()) {
             return ResourceProtocolHandler::response_for_path(
                 request,
                 done_chan,
                 context,
-                "/newtab.html",
+                "/slate-home.html",
             );
         }
 
         Box::pin(std::future::ready(Response::network_error(
             NetworkError::ResourceLoadError("Invalid Slate internal page".to_owned()),
         )))
+    }
+}
+
+pub(crate) fn is_slate_home_url(url: &Url) -> bool {
+    url.scheme() == "slate"
+        && (url.host_str() == Some("home") || url.path().trim_start_matches('/') == "home")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_slate_home_url;
+    use url::Url;
+
+    #[test]
+    fn slate_home_url_matches_host_and_path_forms() {
+        assert!(is_slate_home_url(&Url::parse("slate://home").unwrap()));
+        assert!(is_slate_home_url(&Url::parse("slate:home").unwrap()));
+        assert!(!is_slate_home_url(&Url::parse("slate://settings").unwrap()));
+        assert!(!is_slate_home_url(&Url::parse("https://home").unwrap()));
     }
 }
