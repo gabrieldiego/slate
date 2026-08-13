@@ -368,6 +368,10 @@ fn toolbar_menu_icon_color(selected: bool) -> egui::Color32 {
     }
 }
 
+fn tab_strip_background_color() -> egui::Color32 {
+    slate_theme::SURFACE
+}
+
 fn address_shadow() -> egui::Shadow {
     egui::Shadow {
         offset: ADDRESS_SHADOW_OFFSET,
@@ -1603,7 +1607,7 @@ impl Gui {
             // when not displaying the URL bar: https://github.com/servo/servo/issues/32443
             if winit_window.fullscreen().is_none() {
                 let tabs_frame = egui::Frame::NONE
-                    .fill(slate_theme::BG)
+                    .fill(tab_strip_background_color())
                     .inner_margin(egui::Margin::symmetric(0, 0));
                 Panel::top("tabs")
                     .exact_size(TAB_STRIP_HEIGHT)
@@ -2172,8 +2176,9 @@ mod tests {
         home_metrics_row_width, home_search_rendered_height, home_search_width, home_top_space,
         home_view_background_color, new_tab_icon_color, rail_button_fill, rail_icon_color,
         slate_theme, status_bubble_label, status_bubble_width, tab_close_icon_color,
-        tab_content_width, tab_corner_radius, tab_title_color, tab_title_width,
-        toolbar_address_width, toolbar_menu_icon_color, toolbar_navigation_icon_color,
+        tab_content_width, tab_corner_radius, tab_strip_background_color, tab_title_color,
+        tab_title_width, toolbar_address_width, toolbar_menu_icon_color,
+        toolbar_navigation_icon_color,
     };
     use super::{
         ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH, APP_TITLE_HEIGHT,
@@ -2309,6 +2314,7 @@ mod tests {
         assert_eq!(RAIL_TOP_SPACE, 24.0);
         assert_eq!(RAIL_ITEM_GAP, 16.0);
         assert_eq!(TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT, 166.0);
+        assert_eq!(tab_strip_background_color(), slate_theme::SURFACE);
         assert_eq!(TAB_STRIP_CONTENT_ALIGN, egui::Align::Max);
         assert_eq!(FOOTER_HEIGHT, 80.0);
         assert_eq!(FOOTER_PANEL_MARGIN_X, 0);
