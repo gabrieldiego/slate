@@ -197,13 +197,13 @@ pub extern "C" fn Java_org_servo_servoview_JNIServo_init<'local>(
             match parse_command_line_arguments(args.as_slice()) {
                 ArgumentParsingResult::ContentProcess(..) => {
                     unreachable!("Android does not have support for multiprocess yet.")
-                },
+                }
                 ArgumentParsingResult::ChromeProcess(opts, preferences, servoshell_preferences) => {
                     (opts, preferences, servoshell_preferences)
-                },
+                }
                 ArgumentParsingResult::Exit => {
                     std::process::exit(0);
-                },
+                }
                 ArgumentParsingResult::ErrorParsing => std::process::exit(1),
             };
 
@@ -657,7 +657,7 @@ pub extern "C" fn Java_org_servo_servoview_JNIServo_mediaSessionAction<'local>(
             _ => {
                 warn!("Ignoring unknown MediaSessionAction");
                 return Ok(());
-            },
+            }
         };
         call(env, |s| s.media_session_action(action.clone()));
         Ok(())
@@ -915,7 +915,7 @@ fn new_string_as_jvalue<'local>(
         Err(_) => {
             throw(env, jni_str!("Couldn't create Java string"));
             return Err("Couldn't create Java string");
-        },
+        }
     };
     Ok(JValueOwned::from(jstring))
 }

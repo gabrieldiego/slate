@@ -13,7 +13,7 @@ pub fn parse_url_or_filename(cwd: &Path, input: &str) -> Result<ServoUrl, ()> {
         Ok(url) => Ok(url),
         Err(url::ParseError::RelativeUrlWithoutBase) => {
             url::Url::from_file_path(&*cwd.join(input)).map(ServoUrl::from_url)
-        },
+        }
         Err(_) => Err(()),
     }
 }
@@ -41,11 +41,11 @@ pub fn get_default_url(
         match (url.scheme(), url.host(), url.to_file_path()) {
             ("file", None, Ok(ref path)) if exists(path) => {
                 new_url = cmdline_url;
-            },
+            }
             (scheme, None, Err(_)) if is_localhost(scheme) || is_domain_like(scheme) => {
                 new_url = ServoUrl::parse(&format!("http://{}:{}", scheme, url.path())).ok();
-            },
-            _ => {},
+            }
+            _ => {}
         }
     }
 
@@ -76,7 +76,7 @@ pub(crate) fn location_bar_input_to_url(request: &str, searchpage: &str) -> Opti
         match (url.scheme(), url.host(), url.to_file_path()) {
             (scheme, None, Err(_)) if is_localhost(scheme) || is_domain_like(scheme) => {
                 ServoUrl::parse(&format!("http://{}:{}", scheme, url.path())).ok()
-            },
+            }
             _ => Some(url),
         }
     } else {
@@ -108,8 +108,8 @@ fn try_as_search_page(request: &str, searchpage: &str) -> Option<ServoUrl> {
 }
 
 fn is_domain_like(s: &str) -> bool {
-    !s.starts_with('/') && s.contains('/') ||
-        (!s.contains(' ') && !s.starts_with('.') && s.split('.').count() > 1)
+    !s.starts_with('/') && s.contains('/')
+        || (!s.contains(' ') && !s.starts_with('.') && s.split('.').count() > 1)
 }
 
 fn is_localhost(s: &str) -> bool {

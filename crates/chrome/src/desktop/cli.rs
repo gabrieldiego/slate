@@ -23,13 +23,13 @@ pub fn main() {
         ArgumentParsingResult::ContentProcess(token) => return servo::run_content_process(token),
         ArgumentParsingResult::ChromeProcess(opts, preferences, servoshell_preferences) => {
             (opts, preferences, servoshell_preferences)
-        },
+        }
         ArgumentParsingResult::Exit => {
             std::process::exit(0);
-        },
+        }
         ArgumentParsingResult::ErrorParsing => {
             std::process::exit(1);
-        },
+        }
     };
 
     crate::init_tracing(servoshell_preferences.tracing_filter.as_deref());

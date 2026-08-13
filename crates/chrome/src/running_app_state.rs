@@ -398,8 +398,8 @@ impl RunningAppState {
                 return true;
             }
 
-            if let Some(focused_window) = self.focused_window() &&
-                Rc::ptr_eq(window, &focused_window)
+            if let Some(focused_window) = self.focused_window()
+                && Rc::ptr_eq(window, &focused_window)
             {
                 *self.focused_window.borrow_mut() = None;
             }
@@ -448,8 +448,8 @@ impl RunningAppState {
 
         // When no more windows are open, exit the application. Do not do this when
         // running WebDriver, which expects to keep running with no WebView open.
-        if self.servoshell_preferences.webdriver_port.get().is_none() &&
-            self.windows.borrow().is_empty()
+        if self.servoshell_preferences.webdriver_port.get().is_none()
+            && self.windows.borrow().is_empty()
         {
             self.schedule_exit()
         }
@@ -508,7 +508,7 @@ impl RunningAppState {
                 Err(error) => {
                     error!("Could not take screenshot: {error:?}");
                     return;
-                },
+                }
             };
 
             let image_format = ImageFormat::from_path(&output_path).unwrap_or(ImageFormat::Png);
@@ -603,16 +603,16 @@ impl RunningAppState {
                 // Webdriver only handles 1 script command at a time, so we can
                 // safely set a new interrupt sender and remove the previous one here.
                 self.set_script_command_interrupt_sender(Some(response_sender.clone()));
-            },
+            }
             WebDriverScriptCommand::AddLoadStatusSender(webview_id, load_status_sender) => {
                 self.set_load_status_sender(*webview_id, load_status_sender.clone());
-            },
+            }
             WebDriverScriptCommand::RemoveLoadStatusSender(webview_id) => {
                 self.remove_load_status_sender(*webview_id);
-            },
+            }
             _ => {
                 self.set_script_command_interrupt_sender(None);
-            },
+            }
         }
     }
 

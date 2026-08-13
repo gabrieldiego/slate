@@ -96,21 +96,21 @@ fn print_path(fmt: &mut fmt::Formatter<'_>, path: BytesOrWideString<'_>) -> fmt:
                 Ok(s) => {
                     fmt.write_str(s)?;
                     break;
-                },
+                }
                 Err(err) => {
                     fmt.write_char(std::char::REPLACEMENT_CHARACTER)?;
                     match err.error_len() {
                         Some(len) => bytes = &bytes[err.valid_up_to() + len..],
                         None => break,
                     }
-                },
+                }
             }
         },
         BytesOrWideString::Wide(wide) => {
             for c in std::char::decode_utf16(wide.iter().cloned()) {
                 fmt.write_char(c.unwrap_or(std::char::REPLACEMENT_CHARACTER))?
             }
-        },
+        }
     }
     Ok(())
 }

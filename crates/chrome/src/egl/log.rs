@@ -66,7 +66,7 @@ pub(crate) fn redirect_stdout_and_stderr() -> Result<(), LogRedirectError> {
                 Ok(0) => {
                     info!("Log pipe closed. Terminating log thread");
                     return;
-                },
+                }
                 Ok(bytes) => bytes + cursor,
                 Err(nix::errno::Errno::EINTR) => continue,
                 Err(e) => {
@@ -74,7 +74,7 @@ pub(crate) fn redirect_stdout_and_stderr() -> Result<(), LogRedirectError> {
                         "Failed to read from redirected stdout/stderr pipe due to {e:?}. Closing log thread"
                     );
                     return;
-                },
+                }
             };
 
             // Only modify the portion of the buffer that contains real data.

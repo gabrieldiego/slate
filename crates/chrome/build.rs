@@ -83,7 +83,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 error
             );
             println!("cargo:rustc-env=GIT_SHA=nogit");
-        },
+        }
     }
 
     // On MacOS, all dylib dependencies are shipped along with the binary

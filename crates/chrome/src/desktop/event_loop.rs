@@ -72,7 +72,7 @@ impl ServoShellEventLoop {
         match self {
             ServoShellEventLoop::Winit(event_loop) => {
                 Box::new(HeadedEventLoopWaker::new(event_loop))
-            },
+            }
             ServoShellEventLoop::Headless(data) => Box::new(HeadlessEventLoopWaker(data.clone())),
         }
     }
@@ -83,7 +83,7 @@ impl ServoShellEventLoop {
                 event_loop
                     .run_app(app)
                     .expect("Failed while running events loop");
-            },
+            }
             ServoShellEventLoop::Headless(event_loop) => event_loop.run_app(app),
         }
     }

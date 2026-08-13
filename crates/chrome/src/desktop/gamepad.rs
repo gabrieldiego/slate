@@ -41,7 +41,7 @@ impl ServoshellGamepadDelegate {
                     Err(error) => {
                         warn!("Error creating gamepad input connection ({error})");
                         return;
-                    },
+                    }
                 };
 
                 let mut connected_gamepads: Vec<GamepadId> =
@@ -95,10 +95,10 @@ impl ServoshellGamepadDelegate {
                                     request,
                                     &mut handle,
                                 );
-                            },
+                            }
                             GamepadHapticEffectRequestType::Stop => {
                                 Self::stop_haptic_effect(&mut haptic_effects, request);
-                            },
+                            }
                         }
                     }
                 }
@@ -124,7 +124,7 @@ impl ServoshellGamepadDelegate {
                     let update_type = GamepadUpdateType::Button(mapped_index, 1.0);
                     gamepad_event = Some(GamepadEvent::Updated(index, update_type));
                 }
-            },
+            }
             EventType::ButtonReleased(button, _) => {
                 let mapped_index = Self::map_gamepad_button(button);
                 // We only want to send this for a valid digital button, aka on/off only
@@ -132,7 +132,7 @@ impl ServoshellGamepadDelegate {
                     let update_type = GamepadUpdateType::Button(mapped_index, 0.0);
                     gamepad_event = Some(GamepadEvent::Updated(index, update_type));
                 }
-            },
+            }
             EventType::ButtonChanged(button, value, _) => {
                 let mapped_index = Self::map_gamepad_button(button);
                 // We only want to send this for a valid non-digital button, aka the triggers
@@ -140,7 +140,7 @@ impl ServoshellGamepadDelegate {
                     let update_type = GamepadUpdateType::Button(mapped_index, value as f64);
                     gamepad_event = Some(GamepadEvent::Updated(index, update_type));
                 }
-            },
+            }
             EventType::AxisChanged(axis, value, _) => {
                 // Map axis index and value to represent Standard Gamepad axis
                 // <https://www.w3.org/TR/gamepad/#dfn-represents-a-standard-gamepad-axis>
@@ -162,7 +162,7 @@ impl ServoshellGamepadDelegate {
                     let update_type = GamepadUpdateType::Axis(mapped_axis, axis_value as f64);
                     gamepad_event = Some(GamepadEvent::Updated(index, update_type));
                 }
-            },
+            }
             EventType::Connected => {
                 let bounds = GamepadInputBounds {
                     axis_bounds: (-1.0, 1.0),
@@ -179,11 +179,11 @@ impl ServoshellGamepadDelegate {
                     bounds,
                     supported_haptic_effects,
                 ));
-            },
+            }
             EventType::Disconnected => {
                 gamepad_event = Some(GamepadEvent::Disconnected(index));
-            },
-            _ => {},
+            }
+            _ => {}
         }
 
         if let Some(event) = gamepad_event {
@@ -289,7 +289,7 @@ impl ServoshellGamepadDelegate {
             Err(e) => {
                 debug!("Failed to stop haptic effect: {:?}", e);
                 false
-            },
+            }
         };
         haptic_effects.remove(&index);
 

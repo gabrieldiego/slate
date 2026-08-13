@@ -22,19 +22,19 @@ pub(crate) fn setup_gl_accelerated_media(device: RefMut<'_, Device>, context: Re
     let context = match device.native_context(&context) {
         NativeContext::Default(NativeContext::Default(native_context)) => {
             MediaGlContext::Egl(native_context.egl_context as usize)
-        },
+        }
         NativeContext::Default(NativeContext::Alternate(native_context)) => {
             MediaGlContext::Egl(native_context.egl_context as usize)
-        },
+        }
         NativeContext::Alternate(_) => MediaGlContext::Unknown,
     };
     let display = match device.connection().native_connection() {
         surfman::NativeConnection::Default(NativeConnection::Default(connection)) => {
             MediaNativeDisplay::Egl(connection.0 as usize)
-        },
+        }
         surfman::NativeConnection::Default(NativeConnection::Alternate(connection)) => {
             MediaNativeDisplay::X11(connection.x11_display as usize)
-        },
+        }
         surfman::NativeConnection::Alternate(_) => MediaNativeDisplay::Unknown,
     };
     Servo::initialize_gl_accelerated_media(display, api, context);
