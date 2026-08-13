@@ -425,10 +425,27 @@ fn raster_mask_rgba(raster: SlateRaster, color: Color32) -> Vec<u8> {
     debug_assert_eq!(image.height() as usize, data.height);
 
     let [red, green, blue, color_alpha] = color.to_array();
+    let has_source_alpha = image.pixels().any(|pixel| pixel.0[3] < u8::MAX);
+    let opaque_background = image
+        .pixels()
+        .map(|pixel| pixel.0[0].min(pixel.0[1]).min(pixel.0[2]))
+        .max()
+        .unwrap_or(u8::MAX)
+        .max(1);
     image
         .pixels()
         .flat_map(|pixel| {
-            let alpha = u16::from(pixel.0[3]) * u16::from(color_alpha) / 255;
+            let source_alpha = if has_source_alpha {
+                pixel.0[3]
+            } else {
+                let brightness = pixel.0[0].min(pixel.0[1]).min(pixel.0[2]);
+                let distance = opaque_background.saturating_sub(brightness);
+                u8::try_from(
+                    u16::from(distance) * u16::from(u8::MAX) / u16::from(opaque_background),
+                )
+                .unwrap_or(u8::MAX)
+            };
+            let alpha = u16::from(source_alpha) * u16::from(color_alpha) / 255;
             [red, green, blue, u8::try_from(alpha).unwrap_or(u8::MAX)]
         })
         .collect()
@@ -518,6 +535,23 @@ mod tests {
 
         assert_eq!(rgba.len(), data.width * data.height * 4);
         assert!(rgba.chunks_exact(4).any(|pixel| pixel[3] > 0));
+        assert!(
+            rgba.chunks_exact(4)
+                .filter(|pixel| pixel[3] > 0)
+                .all(|pixel| pixel[0] == red && pixel[1] == green && pixel[2] == blue)
+        );
+    }
+
+    #[test]
+    fn raster_mask_derives_alpha_for_white_backed_legacy_assets() {
+        let rgba = raster_mask_rgba(SlateRaster::TabClose, MUTED);
+        let data = SlateRaster::TabClose.data();
+        let [red, green, blue, _] = MUTED.to_array();
+        let mut alpha_values = rgba.chunks_exact(4).map(|pixel| pixel[3]);
+
+        assert_eq!(rgba.len(), data.width * data.height * 4);
+        assert_eq!(alpha_values.clone().min(), Some(0));
+        assert!(alpha_values.any(|alpha| alpha > 200));
         assert!(
             rgba.chunks_exact(4)
                 .filter(|pixel| pixel[3] > 0)
