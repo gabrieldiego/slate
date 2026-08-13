@@ -12,12 +12,14 @@ use std::time::{Duration, Instant};
 
 const MINIMIZED_WIDTH: usize = 440;
 const MINIMIZED_HEIGHT: usize = 136;
-const MAXIMIZED_WIDTH: usize = 1600;
-const MAXIMIZED_HEIGHT: usize = 900;
+const FALLBACK_MAXIMIZED_WIDTH: usize = 1600;
+const FALLBACK_MAXIMIZED_HEIGHT: usize = 900;
 const IDLE_SLEEP: Duration = Duration::from_millis(50);
 const INPUT_SLEEP: Duration = Duration::from_millis(16);
 const DRAG_SLEEP: Duration = Duration::from_millis(1);
 const VIEWPORT_REFRESH_DEBOUNCE: Duration = Duration::from_millis(140);
+const NATIVE_STATE_CONFIRMATION_TIMEOUT: Duration = Duration::from_millis(500);
+const MAX_EWMH_SUPPORTED_ATOMS: u32 = 1024;
 const KEY_REPEAT_DELAY: f32 = 0.18;
 const KEY_REPEAT_RATE: f32 = 0.025;
 
@@ -31,6 +33,21 @@ struct PointerPosition {
 struct WindowDrag {
     grab_x: isize,
     grab_y: isize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct WindowGeometry {
+    x: isize,
+    y: isize,
+    width: usize,
+    height: usize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct PendingNativeWindowState {
+    state: WindowVisualState,
+    size_at_request: (usize, usize),
+    requested_at: Instant,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -172,9 +189,36 @@ pub fn run_browser_window(mut view: ChromeView, config: WindowConfig) -> Result<
     let mut frame_dirty = true;
     let mut viewport_refresh_pending = false;
     let mut last_resize_at = None;
+    let mut pending_native_state = None;
 
     while window.is_open() {
+        if pending_native_state.is_some() {
+            window.update();
+        }
+
         let (width, height) = window.get_size();
+        if let Some(pending) = pending_native_state {
+            if native_state_request_confirmed(pending, (width, height)) {
+                pending_native_state = None;
+            } else if native_state_request_timed_out(pending.requested_at.elapsed()) {
+                window_position = current_window_position(&window, window_position);
+                window = recreate_window_for_visual_state(
+                    &config.title,
+                    pending.state,
+                    normal_size,
+                    window_position,
+                    &text_input,
+                )?;
+                pending_native_state = None;
+                previous_left_down = false;
+                drag = None;
+                cached_frame = None;
+                cached_size = (0, 0);
+                frame_dirty = true;
+                continue;
+            }
+        }
+
         if cached_size != (width, height) {
             frame_dirty = true;
             if view.update_web_viewport(width.max(1), height.max(1)) {
@@ -223,28 +267,48 @@ pub fn run_browser_window(mut view: ChromeView, config: WindowConfig) -> Result<
                             window_recreated = true;
                         }
                         WindowCommand::ToggleMaximize => {
-                            visual_state = match visual_state {
-                                WindowVisualState::Maximized => WindowVisualState::Normal,
-                                WindowVisualState::Normal | WindowVisualState::Minimized => {
-                                    WindowVisualState::Maximized
-                                }
-                            };
+                            let previous_visual_state = visual_state;
+                            visual_state = next_window_visual_state(visual_state);
 
                             view.set_window_state(visual_state);
-                            let (next_width, next_height) = match visual_state {
-                                WindowVisualState::Normal => normal_size,
-                                WindowVisualState::Minimized => (MINIMIZED_WIDTH, MINIMIZED_HEIGHT),
-                                WindowVisualState::Maximized => (MAXIMIZED_WIDTH, MAXIMIZED_HEIGHT),
-                            };
                             window_position = current_window_position(&window, window_position);
-                            window = create_window(&config.title, next_width, next_height)?;
-                            install_text_input(&mut window, &text_input);
-                            window.set_position(window_position.0, window_position.1);
-                            drag = None;
-                            cached_frame = None;
-                            cached_size = (0, 0);
-                            frame_dirty = true;
-                            window_recreated = true;
+                            let native_state_requested = previous_visual_state
+                                != WindowVisualState::Minimized
+                                && request_native_maximized(
+                                    &window,
+                                    visual_state == WindowVisualState::Maximized,
+                                );
+
+                            if native_state_requested {
+                                pending_native_state = Some(PendingNativeWindowState {
+                                    state: visual_state,
+                                    size_at_request: (width, height),
+                                    requested_at: Instant::now(),
+                                });
+                                drag = None;
+                                frame_dirty = true;
+                            } else {
+                                window = recreate_window_for_visual_state(
+                                    &config.title,
+                                    visual_state,
+                                    normal_size,
+                                    window_position,
+                                    &text_input,
+                                )?;
+                                if visual_state == WindowVisualState::Maximized {
+                                    pending_native_state = request_native_maximized(&window, true)
+                                        .then_some(PendingNativeWindowState {
+                                            state: visual_state,
+                                            size_at_request: window.get_size(),
+                                            requested_at: Instant::now(),
+                                        });
+                                }
+                                drag = None;
+                                cached_frame = None;
+                                cached_size = (0, 0);
+                                frame_dirty = true;
+                                window_recreated = true;
+                            }
                         }
                     }
                 }
@@ -366,6 +430,267 @@ fn update_window_buffer(window: &mut Window, frame: Option<&Frame>) -> Result<()
     window
         .update_with_buffer(frame.pixels(), frame.width(), frame.height())
         .map_err(|error| PlatformError(format!("failed to update Slate window: {error}")))
+}
+
+fn next_window_visual_state(state: WindowVisualState) -> WindowVisualState {
+    match state {
+        WindowVisualState::Maximized => WindowVisualState::Normal,
+        WindowVisualState::Normal | WindowVisualState::Minimized => WindowVisualState::Maximized,
+    }
+}
+
+fn fallback_window_size(state: WindowVisualState, normal_size: (usize, usize)) -> (usize, usize) {
+    match state {
+        WindowVisualState::Normal => normal_size,
+        WindowVisualState::Minimized => (MINIMIZED_WIDTH, MINIMIZED_HEIGHT),
+        WindowVisualState::Maximized => (FALLBACK_MAXIMIZED_WIDTH, FALLBACK_MAXIMIZED_HEIGHT),
+    }
+}
+
+fn recreate_window_for_visual_state(
+    title: &str,
+    state: WindowVisualState,
+    normal_size: (usize, usize),
+    position: (isize, isize),
+    text_input: &TextInputQueue,
+) -> Result<Window, PlatformError> {
+    let geometry = fallback_window_geometry(state, normal_size, position);
+    let mut window = create_window(title, geometry.width, geometry.height)?;
+    install_text_input(&mut window, text_input);
+    window.set_position(geometry.x, geometry.y);
+    Ok(window)
+}
+
+fn fallback_window_geometry(
+    state: WindowVisualState,
+    normal_size: (usize, usize),
+    position: (isize, isize),
+) -> WindowGeometry {
+    fallback_window_geometry_with_work_area(
+        state,
+        normal_size,
+        position,
+        native_window::work_area(),
+    )
+}
+
+fn fallback_window_geometry_with_work_area(
+    state: WindowVisualState,
+    normal_size: (usize, usize),
+    position: (isize, isize),
+    work_area: Option<WindowGeometry>,
+) -> WindowGeometry {
+    let (width, height) = fallback_window_size(state, normal_size);
+    match state {
+        WindowVisualState::Maximized => work_area.unwrap_or(WindowGeometry {
+            x: position.0,
+            y: position.1,
+            width,
+            height,
+        }),
+        WindowVisualState::Normal | WindowVisualState::Minimized => WindowGeometry {
+            x: position.0,
+            y: position.1,
+            width,
+            height,
+        },
+    }
+}
+
+fn native_state_request_confirmed(
+    pending: PendingNativeWindowState,
+    current_size: (usize, usize),
+) -> bool {
+    current_size != pending.size_at_request
+}
+
+fn native_state_request_timed_out(elapsed: Duration) -> bool {
+    elapsed >= NATIVE_STATE_CONFIRMATION_TIMEOUT
+}
+
+fn request_native_maximized(window: &Window, maximized: bool) -> bool {
+    native_window::request_maximized(window, maximized)
+}
+
+fn ewmh_supports_maximize(
+    supported_atoms: &[u32],
+    wm_state: u32,
+    maximized_horz: u32,
+    maximized_vert: u32,
+) -> bool {
+    supported_atoms.contains(&wm_state)
+        && supported_atoms.contains(&maximized_horz)
+        && supported_atoms.contains(&maximized_vert)
+}
+
+fn ewmh_maximize_data(maximized: bool, maximized_horz: u32, maximized_vert: u32) -> [u32; 5] {
+    let action = if maximized { 1 } else { 0 };
+    [action, maximized_horz, maximized_vert, 1, 0]
+}
+
+#[cfg(all(
+    unix,
+    not(any(target_os = "macos", target_os = "redox", target_arch = "wasm32"))
+))]
+mod native_window {
+    use super::{
+        MAX_EWMH_SUPPORTED_ATOMS, PlatformError, WindowGeometry, ewmh_maximize_data,
+        ewmh_supports_maximize,
+    };
+    use minifb::Window;
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    use x11rb::connection::Connection;
+    use x11rb::protocol::xproto::{
+        Atom, AtomEnum, ClientMessageEvent, ConnectionExt, EventMask, Window as X11Window,
+    };
+
+    pub(super) fn request_maximized(window: &Window, maximized: bool) -> bool {
+        native_window_id(window)
+            .is_some_and(|window_id| send_maximize_request(window_id, maximized).is_ok())
+    }
+
+    pub(super) fn work_area() -> Option<WindowGeometry> {
+        let (connection, screen_num) = x11rb::connect(None).ok()?;
+        let root = connection.setup().roots[screen_num].root;
+        let current_desktop = intern_atom(&connection, b"_NET_CURRENT_DESKTOP").ok()?;
+        let work_area = intern_atom(&connection, b"_NET_WORKAREA").ok()?;
+        let desktop = first_property_u32(&connection, root, current_desktop, AtomEnum::CARDINAL)
+            .ok()
+            .flatten()
+            .unwrap_or(0);
+        let offset = desktop.saturating_mul(4);
+        let reply = connection
+            .get_property(false, root, work_area, AtomEnum::CARDINAL, offset, 4)
+            .ok()?
+            .reply()
+            .ok()?;
+        let mut values = reply.value32()?;
+        let x = isize::try_from(values.next()?).ok()?;
+        let y = isize::try_from(values.next()?).ok()?;
+        let width = usize::try_from(values.next()?).ok()?.max(1);
+        let height = usize::try_from(values.next()?).ok()?.max(1);
+
+        Some(WindowGeometry {
+            x,
+            y,
+            width,
+            height,
+        })
+    }
+
+    fn native_window_id(window: &Window) -> Option<X11Window> {
+        let handle = window.window_handle().ok()?;
+        match handle.as_raw() {
+            RawWindowHandle::Xlib(handle) => u32::try_from(handle.window).ok(),
+            RawWindowHandle::Xcb(handle) => Some(handle.window.get()),
+            _ => None,
+        }
+    }
+
+    fn send_maximize_request(
+        window: X11Window,
+        maximized: bool,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let (connection, screen_num) = x11rb::connect(None)?;
+        let root = connection.setup().roots[screen_num].root;
+        let wm_state = intern_atom(&connection, b"_NET_WM_STATE")?;
+        let maximized_horz = intern_atom(&connection, b"_NET_WM_STATE_MAXIMIZED_HORZ")?;
+        let maximized_vert = intern_atom(&connection, b"_NET_WM_STATE_MAXIMIZED_VERT")?;
+        if !root_supports_ewmh_maximize(
+            &connection,
+            root,
+            wm_state,
+            maximized_horz,
+            maximized_vert,
+        )? {
+            return Err(Box::new(PlatformError(
+                "window manager does not advertise EWMH maximize support".to_string(),
+            )));
+        }
+
+        let event = ClientMessageEvent::new(
+            32,
+            window,
+            wm_state,
+            ewmh_maximize_data(maximized, maximized_horz, maximized_vert),
+        );
+
+        connection.send_event(
+            false,
+            root,
+            EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
+            event,
+        )?;
+        connection.flush()?;
+        Ok(())
+    }
+
+    fn intern_atom<C: Connection>(
+        connection: &C,
+        name: &[u8],
+    ) -> Result<Atom, Box<dyn std::error::Error>> {
+        Ok(connection.intern_atom(false, name)?.reply()?.atom)
+    }
+
+    fn first_property_u32<C: Connection>(
+        connection: &C,
+        window: X11Window,
+        property: Atom,
+        property_type: AtomEnum,
+    ) -> Result<Option<u32>, Box<dyn std::error::Error>> {
+        let reply = connection
+            .get_property(false, window, property, property_type, 0, 1)?
+            .reply()?;
+        Ok(reply.value32().and_then(|mut values| values.next()))
+    }
+
+    fn root_supports_ewmh_maximize<C: Connection>(
+        connection: &C,
+        root: X11Window,
+        wm_state: Atom,
+        maximized_horz: Atom,
+        maximized_vert: Atom,
+    ) -> Result<bool, Box<dyn std::error::Error>> {
+        let net_supported = intern_atom(connection, b"_NET_SUPPORTED")?;
+        let reply = connection
+            .get_property(
+                false,
+                root,
+                net_supported,
+                AtomEnum::ATOM,
+                0,
+                MAX_EWMH_SUPPORTED_ATOMS,
+            )?
+            .reply()?;
+        let supported_atoms = reply
+            .value32()
+            .map(|atoms| atoms.collect::<Vec<_>>())
+            .unwrap_or_default();
+
+        Ok(ewmh_supports_maximize(
+            &supported_atoms,
+            wm_state,
+            maximized_horz,
+            maximized_vert,
+        ))
+    }
+}
+
+#[cfg(not(all(
+    unix,
+    not(any(target_os = "macos", target_os = "redox", target_arch = "wasm32"))
+)))]
+mod native_window {
+    use super::WindowGeometry;
+    use minifb::Window;
+
+    pub(super) fn request_maximized(_window: &Window, _maximized: bool) -> bool {
+        false
+    }
+
+    pub(super) fn work_area() -> Option<WindowGeometry> {
+        None
+    }
 }
 
 fn update_cached_toolbar(
@@ -553,13 +878,18 @@ fn loop_sleep(dragging: bool, text_input_active: bool) -> Duration {
 #[cfg(test)]
 mod tests {
     use super::{
-        DRAG_SLEEP, EditShortcut, IDLE_SLEEP, INPUT_SLEEP, PointerPosition, TextInputEvent,
-        TextInputQueue, VIEWPORT_REFRESH_DEBOUNCE, WindowDrag, coord_to_isize,
-        dragged_window_position, edit_shortcut, key_command, loop_sleep, viewport_refresh_ready,
+        DRAG_SLEEP, EditShortcut, FALLBACK_MAXIMIZED_HEIGHT, FALLBACK_MAXIMIZED_WIDTH, IDLE_SLEEP,
+        INPUT_SLEEP, MINIMIZED_HEIGHT, MINIMIZED_WIDTH, NATIVE_STATE_CONFIRMATION_TIMEOUT,
+        PendingNativeWindowState, PointerPosition, TextInputEvent, TextInputQueue,
+        VIEWPORT_REFRESH_DEBOUNCE, WindowDrag, WindowGeometry, coord_to_isize,
+        dragged_window_position, edit_shortcut, ewmh_maximize_data, ewmh_supports_maximize,
+        fallback_window_geometry_with_work_area, fallback_window_size, key_command, loop_sleep,
+        native_state_request_confirmed, native_state_request_timed_out, next_window_visual_state,
+        viewport_refresh_ready,
     };
     use minifb::{InputCallback, Key};
-    use slate_chrome::ChromeKeyCommand;
-    use std::time::Duration;
+    use slate_chrome::{ChromeKeyCommand, WindowVisualState};
+    use std::time::{Duration, Instant};
 
     #[test]
     fn converts_finite_coordinates_for_dragging() {
@@ -588,6 +918,111 @@ mod tests {
         let pointer = PointerPosition { x: 20, y: -8 };
 
         assert_eq!(dragged_window_position((100, 80), drag, pointer), (100, 52));
+    }
+
+    #[test]
+    fn maximize_toggle_tracks_visual_state_without_fixed_size_assumption() {
+        assert_eq!(
+            next_window_visual_state(WindowVisualState::Normal),
+            WindowVisualState::Maximized
+        );
+        assert_eq!(
+            next_window_visual_state(WindowVisualState::Maximized),
+            WindowVisualState::Normal
+        );
+        assert_eq!(
+            next_window_visual_state(WindowVisualState::Minimized),
+            WindowVisualState::Maximized
+        );
+    }
+
+    #[test]
+    fn synthetic_maximize_size_is_only_a_fallback() {
+        assert_eq!(
+            fallback_window_size(WindowVisualState::Normal, (1280, 720)),
+            (1280, 720)
+        );
+        assert_eq!(
+            fallback_window_size(WindowVisualState::Minimized, (1280, 720)),
+            (MINIMIZED_WIDTH, MINIMIZED_HEIGHT)
+        );
+        assert_eq!(
+            fallback_window_size(WindowVisualState::Maximized, (1280, 720)),
+            (FALLBACK_MAXIMIZED_WIDTH, FALLBACK_MAXIMIZED_HEIGHT)
+        );
+    }
+
+    #[test]
+    fn maximize_fallback_geometry_prefers_native_work_area() {
+        let work_area = WindowGeometry {
+            x: 8,
+            y: 32,
+            width: 1912,
+            height: 1040,
+        };
+
+        assert_eq!(
+            fallback_window_geometry_with_work_area(
+                WindowVisualState::Maximized,
+                (1280, 720),
+                (100, 80),
+                Some(work_area)
+            ),
+            work_area
+        );
+    }
+
+    #[test]
+    fn maximize_fallback_geometry_uses_synthetic_size_without_work_area() {
+        assert_eq!(
+            fallback_window_geometry_with_work_area(
+                WindowVisualState::Maximized,
+                (1280, 720),
+                (100, 80),
+                None
+            ),
+            WindowGeometry {
+                x: 100,
+                y: 80,
+                width: FALLBACK_MAXIMIZED_WIDTH,
+                height: FALLBACK_MAXIMIZED_HEIGHT,
+            }
+        );
+    }
+
+    #[test]
+    fn pending_native_state_is_confirmed_by_size_change() {
+        let pending = PendingNativeWindowState {
+            state: WindowVisualState::Maximized,
+            size_at_request: (1280, 720),
+            requested_at: Instant::now(),
+        };
+
+        assert!(!native_state_request_confirmed(pending, (1280, 720)));
+        assert!(native_state_request_confirmed(pending, (1920, 1040)));
+    }
+
+    #[test]
+    fn pending_native_state_times_out_after_confirmation_window() {
+        assert!(!native_state_request_timed_out(
+            NATIVE_STATE_CONFIRMATION_TIMEOUT - Duration::from_millis(1)
+        ));
+        assert!(native_state_request_timed_out(
+            NATIVE_STATE_CONFIRMATION_TIMEOUT
+        ));
+    }
+
+    #[test]
+    fn ewmh_maximize_message_sets_and_clears_both_axes() {
+        assert_eq!(ewmh_maximize_data(true, 11, 12), [1, 11, 12, 1, 0]);
+        assert_eq!(ewmh_maximize_data(false, 11, 12), [0, 11, 12, 1, 0]);
+    }
+
+    #[test]
+    fn ewmh_maximize_requires_window_manager_support() {
+        assert!(ewmh_supports_maximize(&[10, 11, 12], 10, 11, 12));
+        assert!(!ewmh_supports_maximize(&[10, 11], 10, 11, 12));
+        assert!(!ewmh_supports_maximize(&[], 10, 11, 12));
     }
 
     #[test]

@@ -31,12 +31,14 @@ arboard = "3.6"
 # minifb's Wayland backend does not expose true top-level movement, so the
 # temporary framebuffer host uses X11/XWayland until Slate has native OS shims.
 minifb = { version = "0.28", default-features = false, features = ["x11"] }
+raw-window-handle = "0.6"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
 servo = { path = "third_party/servo/components/servo" }
 dpi = "0.1"
 headers = "0.4"
 rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs", "logging", "std", "tls12"] }
 url = "2.5"
+x11rb = "0.13"
 slate-apps = { path = "crates/apps" }
 slate-browser-core = { path = "crates/browser-core" }
 slate-chrome = { path = "crates/chrome" }

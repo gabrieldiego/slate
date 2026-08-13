@@ -7078,7 +7078,9 @@ version = "0.1.0"
 dependencies = [
  "arboard",
  "minifb",
+ "raw-window-handle",
  "slate-chrome",
+ "x11rb",
 ]
 
 [[package]]
