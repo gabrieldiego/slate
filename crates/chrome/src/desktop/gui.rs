@@ -45,6 +45,11 @@ const TAB_STRIP_HEIGHT: f32 = 76.0;
 const TOOLBAR_HEIGHT: f32 = 86.0;
 const APP_RAIL_WIDTH: f32 = 104.0;
 const FOOTER_HEIGHT: f32 = 80.0;
+const FOOTER_LEFT_PADDING: f32 = 22.0;
+const FOOTER_RIGHT_PADDING: f32 = 22.0;
+const FOOTER_ICON_SIZE: f32 = 28.0;
+const FOOTER_TEXT_SIZE: f32 = 14.0;
+const FOOTER_SYNC_DOT_SIZE: f32 = 12.0;
 const APP_TITLE_WIDTH: f32 = 160.0;
 const APP_TITLE_LEFT_PADDING: f32 = 22.0;
 const APP_TITLE_TEXT_SIZE: f32 = 24.0;
@@ -460,22 +465,34 @@ impl Gui {
     }
 
     fn draw_footer(ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
-        ui.spacing_mut().item_spacing = egui::vec2(10.0, 0.0);
+        ui.spacing_mut().item_spacing = egui::vec2(12.0, 0.0);
         ui.horizontal_centered(|ui| {
-            ui.add_space(14.0);
+            ui.add_space(FOOTER_LEFT_PADDING);
             let footer_icon =
                 slate_icons.texture(ui.ctx(), SlateIcon::HomeFooterShield, slate_theme::TEAL);
-            ui.add(Self::icon_image(footer_icon, 22.0));
-            ui.label(egui::RichText::new("Protected. Private. Yours.").color(slate_theme::TEXT));
+            ui.add(Self::icon_image(footer_icon, FOOTER_ICON_SIZE));
+            ui.label(
+                egui::RichText::new("Protected. Private. Yours.")
+                    .size(FOOTER_TEXT_SIZE)
+                    .color(slate_theme::TEXT),
+            );
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.add_space(16.0);
+                ui.add_space(FOOTER_RIGHT_PADDING);
                 ui.add(Gui::toolbar_button("⚙")).on_hover_text("Settings");
                 ui.separator();
-                ui.label(egui::RichText::new("Sync On").color(slate_theme::TEXT));
-                let (dot_rect, _) = ui.allocate_exact_size(Vec2::splat(10.0), egui::Sense::hover());
-                ui.painter()
-                    .circle_filled(dot_rect.center(), 4.0, slate_theme::TEAL);
+                ui.label(
+                    egui::RichText::new("Sync On")
+                        .size(FOOTER_TEXT_SIZE)
+                        .color(slate_theme::TEXT),
+                );
+                let (dot_rect, _) =
+                    ui.allocate_exact_size(Vec2::splat(FOOTER_SYNC_DOT_SIZE), egui::Sense::hover());
+                ui.painter().circle_filled(
+                    dot_rect.center(),
+                    FOOTER_SYNC_DOT_SIZE * 0.42,
+                    slate_theme::TEAL,
+                );
             });
         });
     }
@@ -1294,8 +1311,9 @@ mod tests {
 
     use super::{
         ADDRESS_HEIGHT, APP_RAIL_WIDTH, APP_TITLE_LEFT_PADDING, APP_TITLE_TEXT_SIZE, FOOTER_HEIGHT,
-        HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_MAX_WIDTH, TAB_STRIP_HEIGHT, TOOLBAR_HEIGHT,
-        TOOLBAR_ITEM_SPACING, egui_chrome_owns_position,
+        FOOTER_ICON_SIZE, FOOTER_LEFT_PADDING, FOOTER_RIGHT_PADDING, FOOTER_SYNC_DOT_SIZE,
+        FOOTER_TEXT_SIZE, HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_MAX_WIDTH, TAB_STRIP_HEIGHT,
+        TOOLBAR_HEIGHT, TOOLBAR_ITEM_SPACING, egui_chrome_owns_position,
     };
     use super::{
         ADDRESS_LEADING_GAP, ADDRESS_MIN_WIDTH, ADDRESS_TRAILING_CONTROLS_WIDTH,
@@ -1352,6 +1370,11 @@ mod tests {
         assert_eq!(APP_RAIL_WIDTH, 104.0);
         assert_eq!(TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT, 162.0);
         assert_eq!(FOOTER_HEIGHT, 80.0);
+        assert_eq!(FOOTER_LEFT_PADDING, 22.0);
+        assert_eq!(FOOTER_RIGHT_PADDING, 22.0);
+        assert_eq!(FOOTER_ICON_SIZE, 28.0);
+        assert_eq!(FOOTER_TEXT_SIZE, 14.0);
+        assert_eq!(FOOTER_SYNC_DOT_SIZE, 12.0);
         assert_eq!(ADDRESS_HEIGHT, 54.0);
         assert_eq!(APP_TITLE_LEFT_PADDING, 22.0);
         assert_eq!(APP_TITLE_TEXT_SIZE, 24.0);
