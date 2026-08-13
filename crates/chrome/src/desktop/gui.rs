@@ -75,6 +75,7 @@ const NEW_TAB_TEXT_SIZE: f32 = 28.0;
 const TOOLBAR_ITEM_SPACING: f32 = 18.0;
 const TOOLBAR_BUTTON_SIZE: f32 = 40.0;
 const TOOLBAR_ICON_SIZE: f32 = 24.0;
+const TOOLBAR_NAV_ICON_SIZE: f32 = 32.0;
 const TOOLBAR_MENU_TEXT_SIZE: f32 = 28.0;
 const RAIL_ICON_SIZE: f32 = 34.0;
 const RAIL_BUTTON_SIZE: f32 = 80.0;
@@ -482,6 +483,13 @@ impl Gui {
 
     fn toolbar_icon_button(texture: egui::load::SizedTexture) -> egui::Button<'static> {
         egui::Button::image(Self::icon_image(texture, TOOLBAR_ICON_SIZE))
+            .frame(false)
+            .min_size(Vec2::splat(TOOLBAR_BUTTON_SIZE))
+            .corner_radius(6)
+    }
+
+    fn toolbar_nav_icon_button(texture: egui::load::SizedTexture) -> egui::Button<'static> {
+        egui::Button::image(Self::icon_image(texture, TOOLBAR_NAV_ICON_SIZE))
             .frame(false)
             .min_size(Vec2::splat(TOOLBAR_BUTTON_SIZE))
             .corner_radius(6)
@@ -1055,7 +1063,7 @@ impl Gui {
                                 );
                                 let back_button = ui.add_enabled(
                                     self.can_go_back,
-                                    Gui::toolbar_icon_button(back_icon),
+                                    Gui::toolbar_nav_icon_button(back_icon),
                                 );
                                 back_button.widget_info(|| {
                                     let mut info = WidgetInfo::new(WidgetType::Button);
@@ -1078,7 +1086,7 @@ impl Gui {
                                 );
                                 let forward_button = ui.add_enabled(
                                     self.can_go_forward,
-                                    Gui::toolbar_icon_button(forward_icon),
+                                    Gui::toolbar_nav_icon_button(forward_icon),
                                 );
                                 forward_button.widget_info(|| {
                                     let mut info = WidgetInfo::new(WidgetType::Button);
@@ -1114,7 +1122,7 @@ impl Gui {
                                             slate_theme::TEXT,
                                         );
                                         let reload_button =
-                                            ui.add(Gui::toolbar_icon_button(reload_icon));
+                                            ui.add(Gui::toolbar_nav_icon_button(reload_icon));
                                         reload_button.widget_info(|| {
                                             let mut info = WidgetInfo::new(WidgetType::Button);
                                             info.label = Some("Reload".into());
@@ -1483,8 +1491,8 @@ mod tests {
         NEW_TAB_BUTTON_SIZE, NEW_TAB_LEFT_GAP, NEW_TAB_TEXT_SIZE, TAB_CONTENT_HEIGHT,
         TAB_CORNER_RADIUS, TAB_HEIGHT, TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y,
         TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH,
-        TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ITEM_SPACING,
-        TOOLBAR_MENU_TEXT_SIZE, egui_chrome_owns_position,
+        TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE, TOOLBAR_ITEM_SPACING,
+        TOOLBAR_MENU_TEXT_SIZE, TOOLBAR_NAV_ICON_SIZE, egui_chrome_owns_position,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -1593,6 +1601,8 @@ mod tests {
         assert_eq!(HOME_SEARCH_CORNER_RADIUS, 8);
         assert_eq!(TOOLBAR_ITEM_SPACING, 18.0);
         assert_eq!(TOOLBAR_BUTTON_SIZE, 40.0);
+        assert_eq!(TOOLBAR_ICON_SIZE, 24.0);
+        assert_eq!(TOOLBAR_NAV_ICON_SIZE, 32.0);
         assert_eq!(TOOLBAR_MENU_TEXT_SIZE, 28.0);
         assert_eq!(ADDRESS_LEADING_GAP, 26.0);
         assert_eq!(ADDRESS_INNER_MARGIN_X, 12);
