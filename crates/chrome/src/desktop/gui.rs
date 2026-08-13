@@ -75,6 +75,8 @@ const TOOLBAR_ICON_SIZE: f32 = 24.0;
 const TOOLBAR_MENU_TEXT_SIZE: f32 = 28.0;
 const RAIL_ICON_SIZE: f32 = 34.0;
 const RAIL_BUTTON_SIZE: f32 = 80.0;
+const RAIL_PANEL_MARGIN_X: i8 = 8;
+const RAIL_PANEL_MARGIN_Y: i8 = 0;
 const RAIL_TOP_SPACE: f32 = 24.0;
 const RAIL_ITEM_GAP: f32 = 16.0;
 const TAB_ICON_SIZE: f32 = 20.0;
@@ -1011,9 +1013,9 @@ impl Gui {
                         );
                     });
 
-                let rail_frame = egui::Frame::NONE
-                    .fill(slate_theme::SURFACE)
-                    .inner_margin(egui::Margin::symmetric(8, 10));
+                let rail_frame = egui::Frame::NONE.fill(slate_theme::SURFACE).inner_margin(
+                    egui::Margin::symmetric(RAIL_PANEL_MARGIN_X, RAIL_PANEL_MARGIN_Y),
+                );
                 Panel::left("app_rail")
                     .exact_size(APP_RAIL_WIDTH)
                     .frame(rail_frame)
@@ -1474,7 +1476,8 @@ mod tests {
         HOME_SEARCH_MIN_WIDTH, HOME_SEARCH_TEXT_HEIGHT,
     };
     use super::{
-        RAIL_BUTTON_SIZE, RAIL_ICON_SIZE, RAIL_ITEM_GAP, RAIL_TOP_SPACE, TAB_CLOSE_BUTTON_SIZE,
+        RAIL_BUTTON_SIZE, RAIL_ICON_SIZE, RAIL_ITEM_GAP, RAIL_PANEL_MARGIN_X, RAIL_PANEL_MARGIN_Y,
+        RAIL_TOP_SPACE, TAB_CLOSE_BUTTON_SIZE,
     };
 
     fn chrome_webview_origin() -> Point2D<f32, DeviceIndependentPixel> {
@@ -1527,6 +1530,8 @@ mod tests {
         assert_eq!(APP_RAIL_WIDTH, 104.0);
         assert_eq!(RAIL_ICON_SIZE, 34.0);
         assert_eq!(RAIL_BUTTON_SIZE, 80.0);
+        assert_eq!(RAIL_PANEL_MARGIN_X, 8);
+        assert_eq!(RAIL_PANEL_MARGIN_Y, 0);
         assert_eq!(RAIL_TOP_SPACE, 24.0);
         assert_eq!(RAIL_ITEM_GAP, 16.0);
         assert_eq!(TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT, 162.0);
