@@ -290,7 +290,6 @@ impl SlateRaster {
 #[derive(Default)]
 pub(crate) struct SlateIconCache {
     textures: HashMap<(SlateIcon, [u8; 4]), TextureHandle>,
-    raster_textures: HashMap<SlateRaster, TextureHandle>,
     raster_mask_textures: HashMap<(SlateRaster, [u8; 4]), TextureHandle>,
 }
 
@@ -307,22 +306,6 @@ impl SlateIconCache {
             .entry((icon, color_key))
             .or_insert_with(|| load_icon_texture(ctx, icon, color));
         let data = icon.data();
-        egui::load::SizedTexture::new(
-            handle.id(),
-            egui::vec2(data.width as f32, data.height as f32),
-        )
-    }
-
-    pub(crate) fn raster_texture(
-        &mut self,
-        ctx: &egui::Context,
-        raster: SlateRaster,
-    ) -> egui::load::SizedTexture {
-        let handle = self
-            .raster_textures
-            .entry(raster)
-            .or_insert_with(|| load_raster_texture(ctx, raster));
-        let data = raster.data();
         egui::load::SizedTexture::new(
             handle.id(),
             egui::vec2(data.width as f32, data.height as f32),
@@ -392,25 +375,6 @@ fn load_icon_texture(ctx: &egui::Context, icon: SlateIcon, color: Color32) -> Te
             "slate-{}-{:02x}{:02x}{:02x}{:02x}",
             data.name, red, green, blue, color_alpha
         ),
-        image,
-        TextureOptions::LINEAR,
-    )
-}
-
-fn load_raster_texture(ctx: &egui::Context, raster: SlateRaster) -> TextureHandle {
-    let data = raster.data();
-    let image = image::load_from_memory(data.bytes)
-        .expect("bundled Slate PNG asset should decode")
-        .to_rgba8();
-    debug_assert_eq!(image.width() as usize, data.width);
-    debug_assert_eq!(image.height() as usize, data.height);
-
-    let image = egui::ColorImage::from_rgba_unmultiplied(
-        [image.width() as usize, image.height() as usize],
-        image.as_raw(),
-    );
-    ctx.load_texture(
-        format!("slate-raster-{}", data.name),
         image,
         TextureOptions::LINEAR,
     )

@@ -323,6 +323,13 @@ fn address_security_icon_for_location(location: &str) -> AddressSecurityIcon {
     }
 }
 
+fn address_security_raster_color(raster: SlateRaster) -> egui::Color32 {
+    match raster {
+        SlateRaster::PageInfoInsecure | SlateRaster::PageInfoWarning => slate_theme::AMBER,
+        _ => slate_theme::MUTED,
+    }
+}
+
 fn address_bookmark_icon_color() -> egui::Color32 {
     slate_theme::MUTED
 }
@@ -1789,7 +1796,11 @@ impl Gui {
                                                         slate_icons.texture(ui.ctx(), icon, color)
                                                     }
                                                     AddressSecurityIcon::Raster(raster) => {
-                                                        slate_icons.raster_texture(ui.ctx(), raster)
+                                                        slate_icons.raster_mask_texture(
+                                                            ui.ctx(),
+                                                            raster,
+                                                            address_security_raster_color(raster),
+                                                        )
                                                     }
                                                 };
                                             ui.add(Self::icon_image(
@@ -2127,15 +2138,16 @@ mod tests {
         ADDRESS_SHADOW_ALPHA, ADDRESS_SHADOW_BLUR, ADDRESS_SHADOW_OFFSET, ADDRESS_SHADOW_SPREAD,
         ADDRESS_TRAILING_CONTROLS_WIDTH, AddressSecurityIcon, Gui, HOME_METRIC_CARD_MIN_WIDTH,
         HomeContentLayout, SlateIconCache, address_bookmark_icon_color,
-        address_security_icon_for_location, concept_screenshot_home_view_size,
-        default_opening_home_view_height, default_opening_home_view_size,
-        footer_protection_status_width, footer_settings_icon_color, footer_sync_dot_radius,
-        footer_sync_status_width, home_content_stack_height, home_metric_badge_width,
-        home_metric_card_content_height, home_metric_card_content_width, home_metrics_layout,
-        home_metrics_rendered_height, home_metrics_row_width, home_search_rendered_height,
-        home_search_width, home_top_space, slate_theme, status_bubble_label, status_bubble_width,
-        tab_close_icon_color, tab_content_width, tab_corner_radius, tab_title_color,
-        tab_title_width, toolbar_address_width, toolbar_navigation_icon_color,
+        address_security_icon_for_location, address_security_raster_color,
+        concept_screenshot_home_view_size, default_opening_home_view_height,
+        default_opening_home_view_size, footer_protection_status_width, footer_settings_icon_color,
+        footer_sync_dot_radius, footer_sync_status_width, home_content_stack_height,
+        home_metric_badge_width, home_metric_card_content_height, home_metric_card_content_width,
+        home_metrics_layout, home_metrics_rendered_height, home_metrics_row_width,
+        home_search_rendered_height, home_search_width, home_top_space, slate_theme,
+        status_bubble_label, status_bubble_width, tab_close_icon_color, tab_content_width,
+        tab_corner_radius, tab_title_color, tab_title_width, toolbar_address_width,
+        toolbar_navigation_icon_color,
     };
     use super::{
         ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH, APP_TITLE_HEIGHT,
@@ -2460,6 +2472,30 @@ mod tests {
         assert_eq!(
             address_security_icon_for_location("not a url yet"),
             AddressSecurityIcon::Raster(slate_theme::SlateRaster::PageInfoWarning)
+        );
+    }
+
+    #[test]
+    fn address_security_raster_colors_match_chrome_state() {
+        assert_eq!(
+            address_security_raster_color(slate_theme::SlateRaster::PageInfoSecure),
+            slate_theme::MUTED
+        );
+        assert_eq!(
+            address_security_raster_color(slate_theme::SlateRaster::PageInfoLocal),
+            slate_theme::MUTED
+        );
+        assert_eq!(
+            address_security_raster_color(slate_theme::SlateRaster::PageInfoInternal),
+            slate_theme::MUTED
+        );
+        assert_eq!(
+            address_security_raster_color(slate_theme::SlateRaster::PageInfoInsecure),
+            slate_theme::AMBER
+        );
+        assert_eq!(
+            address_security_raster_color(slate_theme::SlateRaster::PageInfoWarning),
+            slate_theme::AMBER
         );
     }
 
