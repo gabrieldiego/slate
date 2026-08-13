@@ -1,10 +1,5 @@
 #![forbid(unsafe_code)]
 
-use slate_browser_core::BrowserState;
-use slate_chrome::ChromeView;
-use slate_rendering::ServoBackend;
-use std::fs;
-use std::io;
 use std::path::Path;
 use std::process::{Command, ExitCode};
 
@@ -42,80 +37,42 @@ fn run(program: &str, args: &[&str]) -> ExitCode {
 }
 
 fn snapshot() -> ExitCode {
-    match write_snapshot(Path::new("target/slate-ui.ppm"), None) {
-        Ok(()) => {
-            println!("wrote target/slate-ui.ppm");
-            ExitCode::SUCCESS
-        }
-        Err(error) => {
-            eprintln!("failed to write snapshot: {error}");
-            ExitCode::from(1)
-        }
-    }
+    run_snapshot(Path::new("target/slate-ui.png"), None)
 }
 
 fn snapshot_html() -> ExitCode {
-    match write_snapshot(
-        Path::new("target/slate-ui-html.ppm"),
+    run_snapshot(
+        Path::new("target/slate-ui-html.png"),
         Some("slate://tests/hello"),
-    ) {
-        Ok(()) => {
-            println!("wrote target/slate-ui-html.ppm");
-            ExitCode::SUCCESS
-        }
-        Err(error) => {
-            eprintln!("failed to write HTML snapshot: {error}");
-            ExitCode::from(1)
-        }
-    }
+    )
 }
 
 fn snapshot_local() -> ExitCode {
-    match write_snapshot(
-        Path::new("target/slate-ui-local.ppm"),
+    run_snapshot(
+        Path::new("target/slate-ui-local.png"),
         Some("examples/local-page.html"),
-    ) {
-        Ok(()) => {
-            println!("wrote target/slate-ui-local.ppm");
-            ExitCode::SUCCESS
-        }
-        Err(error) => {
-            eprintln!("failed to write local HTML snapshot: {error}");
-            ExitCode::from(1)
-        }
-    }
+    )
 }
 
-fn write_snapshot(path: &Path, address: Option<&str>) -> io::Result<()> {
-    let mut state = BrowserState::new(&ServoBackend);
+fn run_snapshot(path: &Path, address: Option<&str>) -> ExitCode {
+    let output = path.to_string_lossy();
+    let mut args = vec![
+        "run",
+        "-p",
+        "slate",
+        "--",
+        "--headless",
+        "--exit",
+        "--output",
+        output.as_ref(),
+    ];
     if let Some(address) = address {
-        state
-            .navigate(address)
-            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+        args.push(address);
     }
 
-    let mut view = ChromeView::new(state);
-    let _ = view.update_web_viewport(1280, 720);
-    let _ = view.refresh_web_viewport();
-    let frame = view.render(1280, 720);
-    let mut data = Vec::with_capacity(
-        frame
-            .width()
-            .saturating_mul(frame.height())
-            .saturating_mul(3)
-            .saturating_add(64),
-    );
-
-    data.extend_from_slice(format!("P6\n{} {}\n255\n", frame.width(), frame.height()).as_bytes());
-    for pixel in frame.pixels() {
-        let red = u8::try_from((pixel >> 16) & 0xff).unwrap_or(0);
-        let green = u8::try_from((pixel >> 8) & 0xff).unwrap_or(0);
-        let blue = u8::try_from(pixel & 0xff).unwrap_or(0);
-        data.extend_from_slice(&[red, green, blue]);
+    let result = run("cargo", &args);
+    if result == ExitCode::SUCCESS {
+        println!("wrote {}", path.display());
     }
-
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(path, data)
+    result
 }

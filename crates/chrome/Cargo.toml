@@ -1,17 +1,110 @@
 [package]
 name = "slate-chrome"
+build = "build.rs"
 version.workspace = true
+authors = ["The Servo Project Developers", "The Slate Project Developers"]
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "Slate browser chrome built from Servo's default shell"
+
+[lib]
+name = "slate_chrome"
+path = "src/lib.rs"
+bench = false
+
+[[bin]]
+name = "slate-chrome"
+path = "src/main.rs"
+bench = false
+
+[features]
+# Keep this feature layout close to Servo's servoshell while this crate is
+# based on the copied shell code.
+default = ["default_without_allocator", "servo-allocator/use-jemalloc"]
+default_without_allocator = ["bundled", "default_web_features", "max_log_level", "js_jit"]
+default_web_features = ["servo/clipboard"]
+bundled = ["servo/bundled"]
+baked-in-resources = ["servo/baked-in-resources"]
+bundled_freetype = ["servo/bundled_freetype"]
+crown = ["servo/crown"]
+debugmozjs = ["servo/debugmozjs"]
+gamepad = ["dep:gilrs", "servo/gamepad"]
+jitspew = ["servo/jitspew"]
+js_backtrace = ["servo/js_backtrace"]
+js_jit = ["servo/js_jit"]
+max_log_level = ["log/release_max_level_info"]
+media-gstreamer = ["servo/media-gstreamer"]
+native-bluetooth = ["servo/native-bluetooth"]
+profilemozjs = ["servo/profilemozjs"]
+tracing = ["dep:tracing", "dep:tracing-subscriber", "servo/tracing"]
+tracing-hitrace = ["tracing", "dep:hitrace"]
+tracing-perfetto = ["tracing", "dep:tracing-perfetto"]
+vello = ["servo/vello"]
+webgl_backtrace = ["servo/webgl_backtrace"]
+webgpu = ["servo/webgpu"]
+webxr = ["gamepad", "servo/webxr"]
+
+[build-dependencies]
+cc = "1.2"
+
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
 
 [dependencies]
-fontdb = "0.24"
-fontdue = "0.9"
-slate-apps.workspace = true
-slate-browser-core.workspace = true
-slate-rendering.workspace = true
+accesskit = { version = "0.24.0", features = ["serde"] }
+bpaf = { version = "0.9.26", features = ["derive"] }
+cfg-if = "1.0.4"
+crossbeam-channel = "0.5"
+dpi.workspace = true
+euclid = "0.22"
+hitrace = { version = "0.2.0", features = ["api-19", "tracing-rs"], optional = true }
+image = { version = "0.25", default-features = false, features = ["bmp", "gif", "ico", "jpeg", "png", "rayon", "webp"] }
+keyboard-types = { version = "0.8.3", features = ["serde", "webdriver"] }
+libc = "0.2"
+log = "0.4.32"
+mime_guess = "2.0.5"
+raw-window-handle.workspace = true
+rustls.workspace = true
+servo = { path = "../../third_party/servo/components/servo", default-features = false, features = ["background_hang_monitor", "bluetooth", "testbinding"] }
+tokio = "1"
+tracing = { version = "0.1", optional = true }
+tracing-perfetto = { version = "0.1.4", optional = true }
+tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter"] }
+url.workspace = true
+webdriver_server = { package = "servo-webdriver-server", path = "../../third_party/servo/components/webdriver_server" }
 
-[lints]
-workspace = true
+[target.'cfg(not(any(target_os = "android", target_env = "ohos")))'.dependencies]
+backtrace = "0.3"
+dirs = "6.0"
+egui = "0.34.3"
+egui-file-dialog = "0.13.0"
+egui-winit = { version = "0.34.3", default-features = false, features = ["accesskit", "clipboard", "wayland"] }
+egui_glow = { version = "0.34.3", features = ["winit"] }
+gilrs = { version = "0.11.1", optional = true }
+glow = "0.17.0"
+headers.workspace = true
+serde_json = "1.0"
+servo-allocator = { path = "../../third_party/servo/components/allocator", optional = true }
+surfman = { version = "0.13.0", features = ["chains", "sm-raw-window-handle-06", "sm-x11"] }
+winit = "0.30.13"
+
+[target.'cfg(any(all(target_os = "linux", not(target_env = "ohos")), target_os = "macos"))'.dependencies]
+signal-hook-registry = "1.4.8"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Graphics_Gdi", "Win32_System_Console"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "NSColorSpace",
+    "NSResponder",
+    "NSView",
+    "NSWindow",
+] }
+objc2-foundation = { version = "0.3.1", default-features = false, features = ["std"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)', 'cfg(llvm_pgo)', 'cfg(servo_production)', 'cfg(servo_do_not_use_in_production)'] }

@@ -7,13 +7,6 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-arboard.workspace = true
-minifb.workspace = true
-slate-chrome.workspace = true
-
-[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "redox", target_arch = "wasm32"))))'.dependencies]
-raw-window-handle.workspace = true
-x11rb.workspace = true
 
 [lints]
 workspace = true
