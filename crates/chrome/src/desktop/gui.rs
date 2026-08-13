@@ -739,26 +739,22 @@ impl Gui {
     }
 
     fn draw_app_title(ui: &mut egui::Ui) {
-        egui::Frame::NONE
-            .fill(slate_theme::SURFACE)
-            .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
-            .corner_radius(0)
-            .inner_margin(egui::Margin::symmetric(0, 0))
-            .show(ui, |ui| {
-                ui.set_min_size(egui::vec2(APP_TITLE_WIDTH, APP_TITLE_HEIGHT));
-                ui.allocate_ui_with_layout(
-                    egui::vec2(APP_TITLE_WIDTH, APP_TITLE_HEIGHT),
-                    egui::Layout::left_to_right(egui::Align::Center),
-                    |ui| {
-                        ui.add_space(APP_TITLE_LEFT_PADDING);
-                        ui.add(Label::new(
-                            egui::RichText::new("Slate")
-                                .size(APP_TITLE_TEXT_SIZE)
-                                .color(slate_theme::TEXT),
-                        ));
-                    },
-                );
-            });
+        let (rect, _) = ui.allocate_exact_size(
+            egui::vec2(APP_TITLE_WIDTH, APP_TITLE_HEIGHT),
+            egui::Sense::hover(),
+        );
+        ui.painter().rect_filled(rect, 0.0, slate_theme::SURFACE);
+        ui.painter().line_segment(
+            [rect.right_top(), rect.right_bottom()],
+            egui::Stroke::new(1.0, slate_theme::BORDER),
+        );
+        ui.painter().text(
+            egui::pos2(rect.min.x + APP_TITLE_LEFT_PADDING, rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            "Slate",
+            egui::FontId::proportional(APP_TITLE_TEXT_SIZE),
+            slate_theme::TEXT,
+        );
     }
 
     fn draw_footer(ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
