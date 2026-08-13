@@ -39,7 +39,6 @@ pub(crate) enum SlateIcon {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum SlateRaster {
     BookmarkAdd,
-    Logo32,
     NavBack,
     NavBackDisabled,
     NavForward,
@@ -170,12 +169,6 @@ impl SlateRaster {
                 width: 17,
                 height: 17,
                 bytes: include_bytes!("../../assets/icons/slate-ns/hotlist-add.png"),
-            },
-            Self::Logo32 => SlateRasterData {
-                name: "logo-32",
-                width: 32,
-                height: 32,
-                bytes: include_bytes!("../../assets/branding/slate-logo-32.png"),
             },
             Self::NavBack => SlateRasterData {
                 name: "nav-back",
@@ -359,7 +352,6 @@ mod tests {
     fn bundled_raster_images_match_declared_dimensions() {
         for raster in [
             SlateRaster::BookmarkAdd,
-            SlateRaster::Logo32,
             SlateRaster::NavBack,
             SlateRaster::NavBackDisabled,
             SlateRaster::NavForward,

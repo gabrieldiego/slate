@@ -46,12 +46,16 @@ const TOOLBAR_HEIGHT: f32 = 86.0;
 const APP_RAIL_WIDTH: f32 = 104.0;
 const FOOTER_HEIGHT: f32 = 80.0;
 const APP_TITLE_WIDTH: f32 = 160.0;
+const APP_TITLE_LEFT_PADDING: f32 = 22.0;
+const APP_TITLE_TEXT_SIZE: f32 = 24.0;
 const TAB_WIDTH: f32 = 300.0;
 const TOOLBAR_ICON_SIZE: f32 = 24.0;
 const RAIL_ICON_SIZE: f32 = 34.0;
 const RAIL_BUTTON_SIZE: f32 = 72.0;
 const TAB_ICON_SIZE: f32 = 20.0;
 const ADDRESS_MIN_WIDTH: f32 = 260.0;
+const ADDRESS_HEIGHT: f32 = 54.0;
+const ADDRESS_TEXT_HEIGHT: f32 = 34.0;
 const HOME_SEARCH_MIN_WIDTH: f32 = 280.0;
 const HOME_SEARCH_MAX_WIDTH: f32 = 880.0;
 const HOME_SEARCH_HEIGHT: f32 = 58.0;
@@ -795,17 +799,10 @@ impl Gui {
                                     egui::vec2(APP_TITLE_WIDTH, 56.0),
                                     egui::Layout::left_to_right(egui::Align::Center),
                                     |ui| {
-                                        ui.add_space(22.0);
-                                        let logo = slate_icons
-                                            .raster_texture(ui.ctx(), SlateRaster::Logo32);
-                                        ui.add(
-                                            egui::Image::from_texture(logo)
-                                                .fit_to_exact_size(egui::vec2(22.0, 22.0)),
-                                        );
-                                        ui.add_space(8.0);
+                                        ui.add_space(APP_TITLE_LEFT_PADDING);
                                         ui.add(Label::new(
                                             egui::RichText::new("Slate")
-                                                .size(18.0)
+                                                .size(APP_TITLE_TEXT_SIZE)
                                                 .color(slate_theme::TEXT),
                                         ));
                                     },
@@ -978,7 +975,7 @@ impl Gui {
                                     .inner_margin(egui::Margin::symmetric(12, 0))
                                     .show(ui, |ui| {
                                         ui.set_width(address_width);
-                                        ui.set_min_height(38.0);
+                                        ui.set_min_height(ADDRESS_HEIGHT);
                                         ui.horizontal_centered(|ui| {
                                             let page_info_icon = slate_icons.raster_texture(
                                                 ui.ctx(),
@@ -991,7 +988,7 @@ impl Gui {
                                             let text_width =
                                                 (ui.available_width() - 36.0).max(80.0);
                                             let text_response = ui.add_sized(
-                                                [text_width, 30.0],
+                                                [text_width, ADDRESS_TEXT_HEIGHT],
                                                 egui::TextEdit::singleline(location)
                                                     .id(location_id)
                                                     .frame(egui::Frame::NONE)
@@ -1289,8 +1286,9 @@ mod tests {
     use servo::DeviceIndependentPixel;
 
     use super::{
-        APP_RAIL_WIDTH, FOOTER_HEIGHT, HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_MAX_WIDTH,
-        TAB_STRIP_HEIGHT, TOOLBAR_HEIGHT, egui_chrome_owns_position,
+        ADDRESS_HEIGHT, APP_RAIL_WIDTH, APP_TITLE_LEFT_PADDING, APP_TITLE_TEXT_SIZE, FOOTER_HEIGHT,
+        HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_MAX_WIDTH, TAB_STRIP_HEIGHT, TOOLBAR_HEIGHT,
+        egui_chrome_owns_position,
     };
     use super::{HOME_METRIC_CARD_MIN_WIDTH, home_metrics_layout};
 
@@ -1344,6 +1342,9 @@ mod tests {
         assert_eq!(APP_RAIL_WIDTH, 104.0);
         assert_eq!(TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT, 162.0);
         assert_eq!(FOOTER_HEIGHT, 80.0);
+        assert_eq!(ADDRESS_HEIGHT, 54.0);
+        assert_eq!(APP_TITLE_LEFT_PADDING, 22.0);
+        assert_eq!(APP_TITLE_TEXT_SIZE, 24.0);
     }
 
     #[test]
