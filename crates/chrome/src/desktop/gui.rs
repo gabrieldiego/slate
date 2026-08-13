@@ -97,7 +97,7 @@ const TOOLBAR_ITEM_SPACING: f32 = 20.0;
 const TOOLBAR_BUTTON_SIZE: f32 = 40.0;
 const TOOLBAR_BUTTON_RADIUS: u8 = 8;
 const TOOLBAR_ICON_SIZE: f32 = 24.0;
-const TOOLBAR_PRIVACY_ICON_SIZE: f32 = 28.0;
+const TOOLBAR_PRIVACY_ICON_SIZE: f32 = 24.0;
 const TOOLBAR_MENU_ICON_WIDTH: f32 = 24.0;
 const TOOLBAR_MENU_ICON_GAP: f32 = 7.0;
 const TOOLBAR_MENU_ICON_STROKE: f32 = 2.0;
@@ -2308,7 +2308,7 @@ mod tests {
         assert_eq!(TOOLBAR_BUTTON_SIZE, 40.0);
         assert_eq!(TOOLBAR_BUTTON_RADIUS, 8);
         assert_eq!(TOOLBAR_ICON_SIZE, 24.0);
-        assert_eq!(TOOLBAR_PRIVACY_ICON_SIZE, 28.0);
+        assert_eq!(TOOLBAR_PRIVACY_ICON_SIZE, 24.0);
         assert_eq!(TOOLBAR_MENU_ICON_WIDTH, 24.0);
         assert_eq!(TOOLBAR_MENU_ICON_GAP, 7.0);
         assert_eq!(TOOLBAR_MENU_ICON_STROKE, 2.0);
