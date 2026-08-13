@@ -94,6 +94,7 @@ const TOOLBAR_MENU_ICON_STROKE: f32 = 2.0;
 const TOOLBAR_SEPARATOR_HEIGHT: f32 = 36.0;
 const RAIL_ICON_SIZE: f32 = 34.0;
 const RAIL_BUTTON_SIZE: f32 = 80.0;
+const RAIL_BUTTON_RADIUS: u8 = 8;
 const RAIL_PANEL_MARGIN_X: i8 = 8;
 const RAIL_PANEL_MARGIN_Y: i8 = 0;
 const RAIL_TOP_SPACE: f32 = 24.0;
@@ -841,20 +842,36 @@ impl Gui {
                 slate_theme::TEXT
             },
         );
-        let button = egui::Button::image(Self::icon_image(texture, RAIL_ICON_SIZE))
-            .frame(false)
-            .min_size(Vec2::splat(RAIL_BUTTON_SIZE))
-            .corner_radius(8);
 
-        let response = if selected {
-            egui::Frame::NONE
-                .fill(slate_theme::TEAL_SOFT)
-                .corner_radius(8)
-                .show(ui, |ui| ui.add(button))
-                .inner
-        } else {
-            ui.add(button)
-        };
+        let (rect, response) =
+            ui.allocate_exact_size(Vec2::splat(RAIL_BUTTON_SIZE), egui::Sense::click());
+        if ui.is_rect_visible(rect) {
+            let fill = if selected {
+                slate_theme::TEAL_SOFT
+            } else if response.hovered() {
+                slate_theme::PANEL_HOVER
+            } else {
+                egui::Color32::TRANSPARENT
+            };
+            if fill != egui::Color32::TRANSPARENT {
+                ui.painter().rect_filled(rect, RAIL_BUTTON_RADIUS, fill);
+            }
+            let icon_rect =
+                egui::Rect::from_center_size(rect.center(), Vec2::splat(RAIL_ICON_SIZE));
+            ui.painter().image(
+                texture.id,
+                icon_rect,
+                egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
+                egui::Color32::WHITE,
+            );
+        }
+
+        response.widget_info(|| {
+            let mut info = WidgetInfo::new(WidgetType::Button);
+            info.label = Some(tooltip.into());
+            info.selected = Some(selected);
+            info
+        });
         response.on_hover_text(tooltip);
     }
 
@@ -1895,8 +1912,8 @@ mod tests {
         HOME_SEARCH_MIN_WIDTH, HOME_SEARCH_TEXT_HEIGHT,
     };
     use super::{
-        RAIL_BUTTON_SIZE, RAIL_ICON_SIZE, RAIL_ITEM_GAP, RAIL_PANEL_MARGIN_X, RAIL_PANEL_MARGIN_Y,
-        RAIL_TOP_SPACE, TAB_CLOSE_BUTTON_SIZE,
+        RAIL_BUTTON_RADIUS, RAIL_BUTTON_SIZE, RAIL_ICON_SIZE, RAIL_ITEM_GAP, RAIL_PANEL_MARGIN_X,
+        RAIL_PANEL_MARGIN_Y, RAIL_TOP_SPACE, TAB_CLOSE_BUTTON_SIZE,
     };
 
     const LAYOUT_EPSILON: f32 = 1.0;
@@ -1984,6 +2001,7 @@ mod tests {
         assert_eq!(APP_RAIL_WIDTH, 104.0);
         assert_eq!(RAIL_ICON_SIZE, 34.0);
         assert_eq!(RAIL_BUTTON_SIZE, 80.0);
+        assert_eq!(RAIL_BUTTON_RADIUS, 8);
         assert_eq!(RAIL_PANEL_MARGIN_X, 8);
         assert_eq!(RAIL_PANEL_MARGIN_Y, 0);
         assert_eq!(RAIL_TOP_SPACE, 24.0);
