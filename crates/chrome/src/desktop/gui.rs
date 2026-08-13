@@ -53,6 +53,7 @@ const FOOTER_RIGHT_PADDING: f32 = 22.0;
 const FOOTER_ITEM_SPACING: f32 = 18.0;
 const FOOTER_ICON_SIZE: f32 = 28.0;
 const FOOTER_TEXT_SIZE: f32 = 16.0;
+const FOOTER_SEPARATOR_HEIGHT: f32 = 28.0;
 const FOOTER_SYNC_DOT_SIZE: f32 = 12.0;
 const FOOTER_SETTINGS_BUTTON_SIZE: f32 = 40.0;
 const FOOTER_SETTINGS_ICON_SIZE: f32 = 28.0;
@@ -82,6 +83,7 @@ const TOOLBAR_BUTTON_SIZE: f32 = 40.0;
 const TOOLBAR_ICON_SIZE: f32 = 24.0;
 const TOOLBAR_PRIVACY_ICON_SIZE: f32 = 28.0;
 const TOOLBAR_MENU_TEXT_SIZE: f32 = 28.0;
+const TOOLBAR_SEPARATOR_HEIGHT: f32 = 36.0;
 const RAIL_ICON_SIZE: f32 = 34.0;
 const RAIL_BUTTON_SIZE: f32 = 80.0;
 const RAIL_PANEL_MARGIN_X: i8 = 8;
@@ -607,6 +609,19 @@ impl Gui {
             .bg_fill(egui::Color32::TRANSPARENT)
     }
 
+    fn vertical_separator(ui: &mut egui::Ui, height: f32) {
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(1.0, height), egui::Sense::hover());
+        if ui.is_rect_visible(rect) {
+            ui.painter().line_segment(
+                [
+                    egui::pos2(rect.center().x, rect.top()),
+                    egui::pos2(rect.center().x, rect.bottom()),
+                ],
+                egui::Stroke::new(1.0, slate_theme::BORDER),
+            );
+        }
+    }
+
     fn toolbar_hover_raster_button(
         ui: &mut egui::Ui,
         slate_icons: &mut SlateIconCache,
@@ -773,7 +788,7 @@ impl Gui {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(FOOTER_RIGHT_PADDING);
                 ui.add(Gui::footer_button("⚙")).on_hover_text("Settings");
-                ui.separator();
+                Self::vertical_separator(ui, FOOTER_SEPARATOR_HEIGHT);
                 ui.label(
                     egui::RichText::new("Sync On")
                         .size(FOOTER_TEXT_SIZE)
@@ -1455,7 +1470,7 @@ impl Gui {
                                     TOOLBAR_PRIVACY_ICON_SIZE,
                                 ))
                                 .on_hover_text("Privacy controls");
-                                ui.separator();
+                                Self::vertical_separator(ui, TOOLBAR_SEPARATOR_HEIGHT);
 
                                 let mut experimental_preferences_enabled =
                                     state.experimental_preferences_enabled();
@@ -1711,23 +1726,24 @@ mod tests {
         ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH, APP_TITLE_HEIGHT,
         APP_TITLE_LEFT_PADDING, APP_TITLE_TEXT_SIZE, FOOTER_HEIGHT, FOOTER_ICON_SIZE,
         FOOTER_ITEM_SPACING, FOOTER_LEFT_PADDING, FOOTER_PANEL_MARGIN_X, FOOTER_PANEL_MARGIN_Y,
-        FOOTER_RIGHT_PADDING, FOOTER_SETTINGS_BUTTON_SIZE, FOOTER_SETTINGS_ICON_SIZE,
-        FOOTER_SYNC_DOT_SIZE, FOOTER_TEXT_SIZE, HOME_BOTTOM_MIN_GAP, HOME_HERO_SIZE,
-        HOME_HERO_TO_SEARCH_GAP, HOME_METRIC_BADGE_CORNER_RADIUS, HOME_METRIC_BADGE_MARGIN_X,
-        HOME_METRIC_BADGE_MARGIN_Y, HOME_METRIC_BADGE_TEXT_SIZE, HOME_METRIC_CARD_GAP,
-        HOME_METRIC_CARD_HEIGHT, HOME_METRIC_CARD_INNER_MARGIN_X, HOME_METRIC_CARD_INNER_MARGIN_Y,
-        HOME_METRIC_CARD_MAX_WIDTH, HOME_METRIC_DETAIL_GAP, HOME_METRIC_DETAIL_TEXT_SIZE,
-        HOME_METRIC_GRID_EXTRA_HEIGHT, HOME_METRIC_ICON_LABEL_GAP, HOME_METRIC_ICON_SIZE,
-        HOME_METRIC_LABEL_TEXT_SIZE, HOME_PANEL_SHADOW_ALPHA, HOME_PANEL_SHADOW_BLUR,
-        HOME_PANEL_SHADOW_OFFSET, HOME_PANEL_SHADOW_SPREAD, HOME_SEARCH_FRAME_EXTRA_HEIGHT,
-        HOME_SEARCH_ICON_SIZE, HOME_SEARCH_INPUT_TEXT_SIZE, HOME_SEARCH_TO_METRICS_GAP,
-        HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN, NEW_TAB_BUTTON_SIZE,
-        NEW_TAB_LEFT_GAP, NEW_TAB_TEXT_SIZE, TAB_CLOSE_ICON_SIZE, TAB_CONTENT_HEIGHT,
-        TAB_CORNER_RADIUS, TAB_HEIGHT, TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y,
-        TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH,
-        TAB_TITLE_TEXT_SIZE, TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE,
-        TOOLBAR_ITEM_SPACING, TOOLBAR_MENU_TEXT_SIZE, TOOLBAR_PANEL_MARGIN_X,
-        TOOLBAR_PANEL_MARGIN_Y, TOOLBAR_PRIVACY_ICON_SIZE, egui_chrome_owns_position,
+        FOOTER_RIGHT_PADDING, FOOTER_SEPARATOR_HEIGHT, FOOTER_SETTINGS_BUTTON_SIZE,
+        FOOTER_SETTINGS_ICON_SIZE, FOOTER_SYNC_DOT_SIZE, FOOTER_TEXT_SIZE, HOME_BOTTOM_MIN_GAP,
+        HOME_HERO_SIZE, HOME_HERO_TO_SEARCH_GAP, HOME_METRIC_BADGE_CORNER_RADIUS,
+        HOME_METRIC_BADGE_MARGIN_X, HOME_METRIC_BADGE_MARGIN_Y, HOME_METRIC_BADGE_TEXT_SIZE,
+        HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_HEIGHT, HOME_METRIC_CARD_INNER_MARGIN_X,
+        HOME_METRIC_CARD_INNER_MARGIN_Y, HOME_METRIC_CARD_MAX_WIDTH, HOME_METRIC_DETAIL_GAP,
+        HOME_METRIC_DETAIL_TEXT_SIZE, HOME_METRIC_GRID_EXTRA_HEIGHT, HOME_METRIC_ICON_LABEL_GAP,
+        HOME_METRIC_ICON_SIZE, HOME_METRIC_LABEL_TEXT_SIZE, HOME_PANEL_SHADOW_ALPHA,
+        HOME_PANEL_SHADOW_BLUR, HOME_PANEL_SHADOW_OFFSET, HOME_PANEL_SHADOW_SPREAD,
+        HOME_SEARCH_FRAME_EXTRA_HEIGHT, HOME_SEARCH_ICON_SIZE, HOME_SEARCH_INPUT_TEXT_SIZE,
+        HOME_SEARCH_TO_METRICS_GAP, HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN,
+        NEW_TAB_BUTTON_SIZE, NEW_TAB_LEFT_GAP, NEW_TAB_TEXT_SIZE, TAB_CLOSE_ICON_SIZE,
+        TAB_CONTENT_HEIGHT, TAB_CORNER_RADIUS, TAB_HEIGHT, TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X,
+        TAB_INNER_MARGIN_Y, TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP,
+        TAB_TITLE_MIN_WIDTH, TAB_TITLE_TEXT_SIZE, TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT,
+        TOOLBAR_ICON_SIZE, TOOLBAR_ITEM_SPACING, TOOLBAR_MENU_TEXT_SIZE, TOOLBAR_PANEL_MARGIN_X,
+        TOOLBAR_PANEL_MARGIN_Y, TOOLBAR_PRIVACY_ICON_SIZE, TOOLBAR_SEPARATOR_HEIGHT,
+        egui_chrome_owns_position,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -1838,6 +1854,7 @@ mod tests {
         assert_eq!(FOOTER_ITEM_SPACING, 18.0);
         assert_eq!(FOOTER_ICON_SIZE, 28.0);
         assert_eq!(FOOTER_TEXT_SIZE, 16.0);
+        assert_eq!(FOOTER_SEPARATOR_HEIGHT, 28.0);
         assert_eq!(FOOTER_SYNC_DOT_SIZE, 12.0);
         assert_eq!(FOOTER_SETTINGS_BUTTON_SIZE, 40.0);
         assert_eq!(FOOTER_SETTINGS_ICON_SIZE, 28.0);
@@ -1883,6 +1900,7 @@ mod tests {
         assert_eq!(TOOLBAR_ICON_SIZE, 24.0);
         assert_eq!(TOOLBAR_PRIVACY_ICON_SIZE, 28.0);
         assert_eq!(TOOLBAR_MENU_TEXT_SIZE, 28.0);
+        assert_eq!(TOOLBAR_SEPARATOR_HEIGHT, 36.0);
         assert_eq!(ADDRESS_LEADING_GAP, 28.0);
         assert_eq!(ADDRESS_INNER_MARGIN_X, 12);
         assert_eq!(ADDRESS_SECURITY_ICON_SIZE, 24.0);
