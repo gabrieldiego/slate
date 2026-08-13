@@ -779,14 +779,34 @@ impl Gui {
         response
     }
 
-    fn address_icon_button_sized(
+    fn address_raster_button_sized(
+        ui: &mut egui::Ui,
         texture: egui::load::SizedTexture,
         icon_size: f32,
-    ) -> egui::Button<'static> {
-        egui::Button::image(Self::icon_image(texture, icon_size))
-            .frame(false)
-            .min_size(Vec2::splat(ADDRESS_BOOKMARK_BUTTON_SIZE))
-            .corner_radius(ADDRESS_BOOKMARK_BUTTON_RADIUS)
+    ) -> egui::Response {
+        let (rect, response) = ui.allocate_exact_size(
+            Vec2::splat(ADDRESS_BOOKMARK_BUTTON_SIZE),
+            egui::Sense::click(),
+        );
+
+        if ui.is_rect_visible(rect) {
+            if response.hovered() {
+                ui.painter().rect_filled(
+                    rect,
+                    ADDRESS_BOOKMARK_BUTTON_RADIUS,
+                    slate_theme::PANEL_HOVER,
+                );
+            }
+            let icon_rect = egui::Rect::from_center_size(rect.center(), Vec2::splat(icon_size));
+            ui.painter().image(
+                texture.id,
+                icon_rect,
+                egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
+                egui::Color32::WHITE,
+            );
+        }
+
+        response
     }
 
     fn fallback_tab_icon(index: usize) -> SlateIcon {
@@ -1527,11 +1547,17 @@ impl Gui {
                                                         "Search the web or enter an address",
                                                     ),
                                             );
-                                            ui.add(Self::address_icon_button_sized(
+                                            let bookmark_button = Self::address_raster_button_sized(
+                                                ui,
                                                 bookmark_icon,
                                                 ADDRESS_BOOKMARK_ICON_SIZE,
-                                            ))
-                                            .on_hover_text("Bookmark");
+                                            );
+                                            bookmark_button.widget_info(|| {
+                                                let mut info = WidgetInfo::new(WidgetType::Button);
+                                                info.label = Some("Bookmark".into());
+                                                info
+                                            });
+                                            bookmark_button.on_hover_text("Bookmark");
                                             text_response
                                         })
                                         .inner
