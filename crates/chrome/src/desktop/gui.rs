@@ -93,6 +93,7 @@ const TOOLBAR_PANEL_MARGIN_X: i8 = 18;
 const TOOLBAR_PANEL_MARGIN_Y: i8 = 10;
 const TOOLBAR_ITEM_SPACING: f32 = 20.0;
 const TOOLBAR_BUTTON_SIZE: f32 = 40.0;
+const TOOLBAR_BUTTON_RADIUS: u8 = 8;
 const TOOLBAR_ICON_SIZE: f32 = 24.0;
 const TOOLBAR_PRIVACY_ICON_SIZE: f32 = 28.0;
 const TOOLBAR_MENU_ICON_WIDTH: f32 = 24.0;
@@ -771,7 +772,7 @@ impl Gui {
             let hovered = enabled && response.hovered();
             if hovered {
                 ui.painter()
-                    .rect_filled(rect, 6.0, slate_theme::PANEL_HOVER);
+                    .rect_filled(rect, TOOLBAR_BUTTON_RADIUS, slate_theme::PANEL_HOVER);
             }
             let texture = if hovered {
                 slate_icons.raster_texture(ui.ctx(), hover_icon)
@@ -800,7 +801,7 @@ impl Gui {
         if ui.is_rect_visible(rect) {
             if response.hovered() {
                 ui.painter()
-                    .rect_filled(rect, 6.0, slate_theme::PANEL_HOVER);
+                    .rect_filled(rect, TOOLBAR_BUTTON_RADIUS, slate_theme::PANEL_HOVER);
             }
             let icon_rect = egui::Rect::from_center_size(rect.center(), Vec2::splat(icon_size));
             ui.painter().image(
@@ -825,7 +826,7 @@ impl Gui {
                 egui::Color32::TRANSPARENT
             };
             if fill != egui::Color32::TRANSPARENT {
-                ui.painter().rect_filled(rect, 6.0, fill);
+                ui.painter().rect_filled(rect, TOOLBAR_BUTTON_RADIUS, fill);
             }
 
             let center = rect.center();
@@ -2089,10 +2090,10 @@ mod tests {
         TAB_CLOSE_ICON_SIZE, TAB_CONTENT_HEIGHT, TAB_CORNER_RADIUS, TAB_HEIGHT, TAB_ICON_TITLE_GAP,
         TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT,
         TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH, TAB_TITLE_TEXT_SIZE, TAB_WIDTH,
-        TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE, TOOLBAR_ITEM_SPACING,
-        TOOLBAR_MENU_ICON_GAP, TOOLBAR_MENU_ICON_STROKE, TOOLBAR_MENU_ICON_WIDTH,
-        TOOLBAR_PANEL_MARGIN_X, TOOLBAR_PANEL_MARGIN_Y, TOOLBAR_PRIVACY_ICON_SIZE,
-        TOOLBAR_SEPARATOR_HEIGHT, egui_chrome_owns_position,
+        TOOLBAR_BUTTON_RADIUS, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE,
+        TOOLBAR_ITEM_SPACING, TOOLBAR_MENU_ICON_GAP, TOOLBAR_MENU_ICON_STROKE,
+        TOOLBAR_MENU_ICON_WIDTH, TOOLBAR_PANEL_MARGIN_X, TOOLBAR_PANEL_MARGIN_Y,
+        TOOLBAR_PRIVACY_ICON_SIZE, TOOLBAR_SEPARATOR_HEIGHT, egui_chrome_owns_position,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -2262,6 +2263,7 @@ mod tests {
         assert_eq!(TOOLBAR_PANEL_MARGIN_Y, 10);
         assert_eq!(TOOLBAR_ITEM_SPACING, 20.0);
         assert_eq!(TOOLBAR_BUTTON_SIZE, 40.0);
+        assert_eq!(TOOLBAR_BUTTON_RADIUS, 8);
         assert_eq!(TOOLBAR_ICON_SIZE, 24.0);
         assert_eq!(TOOLBAR_PRIVACY_ICON_SIZE, 28.0);
         assert_eq!(TOOLBAR_MENU_ICON_WIDTH, 24.0);
