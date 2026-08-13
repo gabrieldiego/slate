@@ -51,6 +51,7 @@ const FOOTER_ICON_SIZE: f32 = 28.0;
 const FOOTER_TEXT_SIZE: f32 = 14.0;
 const FOOTER_SYNC_DOT_SIZE: f32 = 12.0;
 const APP_TITLE_WIDTH: f32 = 160.0;
+const APP_TITLE_HEIGHT: f32 = 56.0;
 const APP_TITLE_LEFT_PADDING: f32 = 22.0;
 const APP_TITLE_TEXT_SIZE: f32 = 24.0;
 const TAB_WIDTH: f32 = 300.0;
@@ -464,6 +465,28 @@ impl Gui {
         });
     }
 
+    fn draw_app_title(ui: &mut egui::Ui) {
+        egui::Frame::NONE
+            .fill(slate_theme::SURFACE)
+            .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
+            .corner_radius(8)
+            .show(ui, |ui| {
+                ui.set_min_size(egui::vec2(APP_TITLE_WIDTH, APP_TITLE_HEIGHT));
+                ui.allocate_ui_with_layout(
+                    egui::vec2(APP_TITLE_WIDTH, APP_TITLE_HEIGHT),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        ui.add_space(APP_TITLE_LEFT_PADDING);
+                        ui.add(Label::new(
+                            egui::RichText::new("Slate")
+                                .size(APP_TITLE_TEXT_SIZE)
+                                .color(slate_theme::TEXT),
+                        ));
+                    },
+                );
+            });
+    }
+
     fn draw_footer(ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
         ui.spacing_mut().item_spacing = egui::vec2(12.0, 0.0);
         ui.horizontal_centered(|ui| {
@@ -823,18 +846,7 @@ impl Gui {
                             ui.available_size(),
                             egui::Layout::left_to_right(egui::Align::Center),
                             |ui| {
-                                ui.allocate_ui_with_layout(
-                                    egui::vec2(APP_TITLE_WIDTH, 56.0),
-                                    egui::Layout::left_to_right(egui::Align::Center),
-                                    |ui| {
-                                        ui.add_space(APP_TITLE_LEFT_PADDING);
-                                        ui.add(Label::new(
-                                            egui::RichText::new("Slate")
-                                                .size(APP_TITLE_TEXT_SIZE)
-                                                .color(slate_theme::TEXT),
-                                        ));
-                                    },
-                                );
+                                Self::draw_app_title(ui);
 
                                 egui::ScrollArea::horizontal()
                                     .scroll_bar_visibility(
@@ -1310,10 +1322,11 @@ mod tests {
     use servo::DeviceIndependentPixel;
 
     use super::{
-        ADDRESS_HEIGHT, APP_RAIL_WIDTH, APP_TITLE_LEFT_PADDING, APP_TITLE_TEXT_SIZE, FOOTER_HEIGHT,
-        FOOTER_ICON_SIZE, FOOTER_LEFT_PADDING, FOOTER_RIGHT_PADDING, FOOTER_SYNC_DOT_SIZE,
-        FOOTER_TEXT_SIZE, HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_MAX_WIDTH, TAB_STRIP_HEIGHT,
-        TOOLBAR_HEIGHT, TOOLBAR_ITEM_SPACING, egui_chrome_owns_position,
+        ADDRESS_HEIGHT, APP_RAIL_WIDTH, APP_TITLE_HEIGHT, APP_TITLE_LEFT_PADDING,
+        APP_TITLE_TEXT_SIZE, FOOTER_HEIGHT, FOOTER_ICON_SIZE, FOOTER_LEFT_PADDING,
+        FOOTER_RIGHT_PADDING, FOOTER_SYNC_DOT_SIZE, FOOTER_TEXT_SIZE, HOME_METRIC_CARD_GAP,
+        HOME_METRIC_CARD_MAX_WIDTH, TAB_STRIP_HEIGHT, TOOLBAR_HEIGHT, TOOLBAR_ITEM_SPACING,
+        egui_chrome_owns_position,
     };
     use super::{
         ADDRESS_LEADING_GAP, ADDRESS_MIN_WIDTH, ADDRESS_TRAILING_CONTROLS_WIDTH,
@@ -1376,6 +1389,7 @@ mod tests {
         assert_eq!(FOOTER_TEXT_SIZE, 14.0);
         assert_eq!(FOOTER_SYNC_DOT_SIZE, 12.0);
         assert_eq!(ADDRESS_HEIGHT, 54.0);
+        assert_eq!(APP_TITLE_HEIGHT, 56.0);
         assert_eq!(APP_TITLE_LEFT_PADDING, 22.0);
         assert_eq!(APP_TITLE_TEXT_SIZE, 24.0);
         assert_eq!(TOOLBAR_ITEM_SPACING, 18.0);
