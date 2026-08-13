@@ -136,7 +136,7 @@ const HOME_SEARCH_FRAME_EXTRA_HEIGHT: f32 = 8.0;
 const HOME_SEARCH_TEXT_HEIGHT: f32 = 34.0;
 const HOME_SEARCH_INPUT_TEXT_SIZE: f32 = 20.0;
 const HOME_SEARCH_INNER_MARGIN_X: i8 = 32;
-const HOME_SEARCH_ICON_SIZE: f32 = 24.0;
+const HOME_SEARCH_ICON_SIZE: f32 = 28.0;
 const HOME_SEARCH_ICON_GAP: f32 = 24.0;
 const HOME_SEARCH_CORNER_RADIUS: u8 = 8;
 const HOME_TOP_SPACE_FACTOR: f32 = 0.18;
@@ -339,7 +339,7 @@ fn rail_icon_color(selected: bool) -> egui::Color32 {
     if selected {
         slate_theme::TEAL
     } else {
-        slate_theme::TEXT
+        slate_theme::MUTED
     }
 }
 
@@ -2384,7 +2384,7 @@ mod tests {
         assert_eq!(HOME_SEARCH_TEXT_HEIGHT, 34.0);
         assert_eq!(HOME_SEARCH_INPUT_TEXT_SIZE, 20.0);
         assert_eq!(HOME_SEARCH_INNER_MARGIN_X, 32);
-        assert_eq!(HOME_SEARCH_ICON_SIZE, 24.0);
+        assert_eq!(HOME_SEARCH_ICON_SIZE, 28.0);
         assert_eq!(HOME_SEARCH_ICON_GAP, 24.0);
         assert_eq!(HOME_SEARCH_CORNER_RADIUS, 8);
         assert_eq!(TOOLBAR_PANEL_MARGIN_X, 18);
@@ -2579,7 +2579,7 @@ mod tests {
     #[test]
     fn rail_colors_keep_selected_tile_soft() {
         assert_eq!(rail_icon_color(true), slate_theme::TEAL);
-        assert_eq!(rail_icon_color(false), slate_theme::TEXT);
+        assert_eq!(rail_icon_color(false), slate_theme::MUTED);
         assert_eq!(rail_button_fill(true, false), slate_theme::TEAL_WASH);
         assert_eq!(rail_button_fill(true, true), slate_theme::TEAL_WASH);
         assert_eq!(rail_button_fill(false, true), slate_theme::PANEL_HOVER);
