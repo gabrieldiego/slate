@@ -264,7 +264,10 @@ struct HomeContentResponse {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum AddressSecurityIcon {
-    Slate(SlateIcon),
+    Slate {
+        icon: SlateIcon,
+        color: egui::Color32,
+    },
     Raster(SlateRaster),
 }
 
@@ -301,7 +304,10 @@ fn toolbar_address_width(available_width: f32) -> f32 {
 
 fn address_security_icon_for_location(location: &str) -> AddressSecurityIcon {
     match Url::parse(location) {
-        Ok(url) if is_slate_home_url(&url) => AddressSecurityIcon::Slate(SlateIcon::TopShield),
+        Ok(url) if is_slate_home_url(&url) => AddressSecurityIcon::Slate {
+            icon: SlateIcon::TopShield,
+            color: slate_theme::MUTED,
+        },
         Ok(url) => match url.scheme() {
             "https" => AddressSecurityIcon::Raster(SlateRaster::PageInfoSecure),
             "http" => AddressSecurityIcon::Raster(SlateRaster::PageInfoInsecure),
@@ -1730,8 +1736,9 @@ impl Gui {
                                         ui.horizontal_centered(|ui| {
                                             let page_info_icon =
                                                 match address_security_icon_for_location(location) {
-                                                    AddressSecurityIcon::Slate(icon) => slate_icons
-                                                        .texture(ui.ctx(), icon, slate_theme::TEAL),
+                                                    AddressSecurityIcon::Slate { icon, color } => {
+                                                        slate_icons.texture(ui.ctx(), icon, color)
+                                                    }
                                                     AddressSecurityIcon::Raster(raster) => {
                                                         slate_icons.raster_texture(ui.ctx(), raster)
                                                     }
@@ -2362,7 +2369,10 @@ mod tests {
     fn address_security_icon_uses_slate_shield_for_home() {
         assert_eq!(
             address_security_icon_for_location("slate://home"),
-            AddressSecurityIcon::Slate(slate_theme::SlateIcon::TopShield)
+            AddressSecurityIcon::Slate {
+                icon: slate_theme::SlateIcon::TopShield,
+                color: slate_theme::MUTED,
+            }
         );
     }
 
