@@ -49,13 +49,16 @@ const APP_TITLE_WIDTH: f32 = 160.0;
 const APP_TITLE_LEFT_PADDING: f32 = 22.0;
 const APP_TITLE_TEXT_SIZE: f32 = 24.0;
 const TAB_WIDTH: f32 = 300.0;
+const TOOLBAR_ITEM_SPACING: f32 = 18.0;
 const TOOLBAR_ICON_SIZE: f32 = 24.0;
 const RAIL_ICON_SIZE: f32 = 34.0;
 const RAIL_BUTTON_SIZE: f32 = 72.0;
 const TAB_ICON_SIZE: f32 = 20.0;
+const ADDRESS_LEADING_GAP: f32 = 48.0;
 const ADDRESS_MIN_WIDTH: f32 = 260.0;
 const ADDRESS_HEIGHT: f32 = 54.0;
 const ADDRESS_TEXT_HEIGHT: f32 = 34.0;
+const ADDRESS_TRAILING_CONTROLS_WIDTH: f32 = 168.0;
 const HOME_SEARCH_MIN_WIDTH: f32 = 280.0;
 const HOME_SEARCH_MAX_WIDTH: f32 = 880.0;
 const HOME_SEARCH_HEIGHT: f32 = 58.0;
@@ -151,6 +154,14 @@ fn home_metrics_layout(available_width: f32) -> HomeMetricsLayout {
         card_width,
         spacing,
     }
+}
+
+fn toolbar_address_width(available_width: f32) -> f32 {
+    let available_width = available_width.max(0.0);
+    let min_width = ADDRESS_MIN_WIDTH.min(available_width);
+    (available_width - ADDRESS_TRAILING_CONTROLS_WIDTH)
+        .max(min_width)
+        .min(available_width)
 }
 
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
@@ -875,7 +886,7 @@ impl Gui {
                     .frame(toolbar_frame)
                     .show_separator_line(true)
                     .show_inside(ctx, |ui| {
-                        ui.spacing_mut().item_spacing = egui::vec2(8.0, 0.0);
+                        ui.spacing_mut().item_spacing = egui::vec2(TOOLBAR_ITEM_SPACING, 0.0);
                         ui.allocate_ui_with_layout(
                             ui.available_size(),
                             egui::Layout::left_to_right(egui::Align::Center),
@@ -960,14 +971,10 @@ impl Gui {
                                     }
                                 }
 
+                                ui.add_space(ADDRESS_LEADING_GAP);
                                 let location_id = egui::Id::new("location_input");
                                 let available_for_address = ui.available_width().max(0.0);
-                                let trailing_controls_width =
-                                    (available_for_address * 0.28).clamp(84.0, 108.0);
-                                let address_width = (available_for_address
-                                    - trailing_controls_width)
-                                    .max(ADDRESS_MIN_WIDTH)
-                                    .min(available_for_address);
+                                let address_width = toolbar_address_width(available_for_address);
                                 let location_field = egui::Frame::NONE
                                     .fill(slate_theme::SURFACE)
                                     .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
@@ -1288,9 +1295,12 @@ mod tests {
     use super::{
         ADDRESS_HEIGHT, APP_RAIL_WIDTH, APP_TITLE_LEFT_PADDING, APP_TITLE_TEXT_SIZE, FOOTER_HEIGHT,
         HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_MAX_WIDTH, TAB_STRIP_HEIGHT, TOOLBAR_HEIGHT,
-        egui_chrome_owns_position,
+        TOOLBAR_ITEM_SPACING, egui_chrome_owns_position,
     };
-    use super::{HOME_METRIC_CARD_MIN_WIDTH, home_metrics_layout};
+    use super::{
+        ADDRESS_LEADING_GAP, ADDRESS_MIN_WIDTH, ADDRESS_TRAILING_CONTROLS_WIDTH,
+        HOME_METRIC_CARD_MIN_WIDTH, home_metrics_layout, toolbar_address_width,
+    };
 
     fn chrome_webview_origin() -> Point2D<f32, DeviceIndependentPixel> {
         Point2D::new(APP_RAIL_WIDTH, TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT)
@@ -1345,6 +1355,20 @@ mod tests {
         assert_eq!(ADDRESS_HEIGHT, 54.0);
         assert_eq!(APP_TITLE_LEFT_PADDING, 22.0);
         assert_eq!(APP_TITLE_TEXT_SIZE, 24.0);
+        assert_eq!(TOOLBAR_ITEM_SPACING, 18.0);
+        assert_eq!(ADDRESS_LEADING_GAP, 48.0);
+        assert_eq!(ADDRESS_TRAILING_CONTROLS_WIDTH, 168.0);
+    }
+
+    #[test]
+    fn wide_toolbar_address_width_leaves_room_for_trailing_controls() {
+        assert_eq!(toolbar_address_width(1348.0), 1180.0);
+    }
+
+    #[test]
+    fn narrow_toolbar_address_width_stays_within_available_width() {
+        assert_eq!(toolbar_address_width(220.0), 220.0);
+        assert!(toolbar_address_width(300.0) >= ADDRESS_MIN_WIDTH);
     }
 
     #[test]
