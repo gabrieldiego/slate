@@ -1281,8 +1281,11 @@ impl Gui {
                         egui::vec2(search_content_width, HOME_SEARCH_HEIGHT),
                         egui::Layout::left_to_right(egui::Align::Center),
                         |ui| {
-                            let search_icon =
-                                slate_icons.raster_texture(ui.ctx(), SlateRaster::Search);
+                            let search_icon = slate_icons.raster_mask_texture(
+                                ui.ctx(),
+                                SlateRaster::Search,
+                                slate_theme::MUTED,
+                            );
                             ui.add(Self::icon_image(search_icon, HOME_SEARCH_ICON_SIZE));
                             ui.add_space(HOME_SEARCH_ICON_GAP);
                             ui.add_sized(

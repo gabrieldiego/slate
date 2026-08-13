@@ -291,6 +291,7 @@ impl SlateRaster {
 pub(crate) struct SlateIconCache {
     textures: HashMap<(SlateIcon, [u8; 4]), TextureHandle>,
     raster_textures: HashMap<SlateRaster, TextureHandle>,
+    raster_mask_textures: HashMap<(SlateRaster, [u8; 4]), TextureHandle>,
 }
 
 impl SlateIconCache {
@@ -321,6 +322,24 @@ impl SlateIconCache {
             .raster_textures
             .entry(raster)
             .or_insert_with(|| load_raster_texture(ctx, raster));
+        let data = raster.data();
+        egui::load::SizedTexture::new(
+            handle.id(),
+            egui::vec2(data.width as f32, data.height as f32),
+        )
+    }
+
+    pub(crate) fn raster_mask_texture(
+        &mut self,
+        ctx: &egui::Context,
+        raster: SlateRaster,
+        color: Color32,
+    ) -> egui::load::SizedTexture {
+        let color_key = color.to_array();
+        let handle = self
+            .raster_mask_textures
+            .entry((raster, color_key))
+            .or_insert_with(|| load_raster_mask_texture(ctx, raster, color));
         let data = raster.data();
         egui::load::SizedTexture::new(
             handle.id(),
@@ -397,9 +416,46 @@ fn load_raster_texture(ctx: &egui::Context, raster: SlateRaster) -> TextureHandl
     )
 }
 
+fn raster_mask_rgba(raster: SlateRaster, color: Color32) -> Vec<u8> {
+    let data = raster.data();
+    let image = image::load_from_memory(data.bytes)
+        .expect("bundled Slate PNG asset should decode")
+        .to_rgba8();
+    debug_assert_eq!(image.width() as usize, data.width);
+    debug_assert_eq!(image.height() as usize, data.height);
+
+    let [red, green, blue, color_alpha] = color.to_array();
+    image
+        .pixels()
+        .flat_map(|pixel| {
+            let alpha = u16::from(pixel.0[3]) * u16::from(color_alpha) / 255;
+            [red, green, blue, u8::try_from(alpha).unwrap_or(u8::MAX)]
+        })
+        .collect()
+}
+
+fn load_raster_mask_texture(
+    ctx: &egui::Context,
+    raster: SlateRaster,
+    color: Color32,
+) -> TextureHandle {
+    let data = raster.data();
+    let [red, green, blue, color_alpha] = color.to_array();
+    let rgba = raster_mask_rgba(raster, color);
+    let image = egui::ColorImage::from_rgba_unmultiplied([data.width, data.height], &rgba);
+    ctx.load_texture(
+        format!(
+            "slate-raster-mask-{}-{:02x}{:02x}{:02x}{:02x}",
+            data.name, red, green, blue, color_alpha
+        ),
+        image,
+        TextureOptions::LINEAR,
+    )
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{SlateIcon, SlateRaster};
+    use super::{MUTED, SlateIcon, SlateRaster, raster_mask_rgba};
 
     #[test]
     fn bundled_alpha_masks_match_declared_dimensions() {
@@ -452,5 +508,20 @@ mod tests {
             assert_eq!(image.width() as usize, data.width);
             assert_eq!(image.height() as usize, data.height);
         }
+    }
+
+    #[test]
+    fn raster_mask_uses_source_alpha_with_requested_color() {
+        let rgba = raster_mask_rgba(SlateRaster::Search, MUTED);
+        let data = SlateRaster::Search.data();
+        let [red, green, blue, _] = MUTED.to_array();
+
+        assert_eq!(rgba.len(), data.width * data.height * 4);
+        assert!(rgba.chunks_exact(4).any(|pixel| pixel[3] > 0));
+        assert!(
+            rgba.chunks_exact(4)
+                .filter(|pixel| pixel[3] > 0)
+                .all(|pixel| pixel[0] == red && pixel[1] == green && pixel[2] == blue)
+        );
     }
 }
