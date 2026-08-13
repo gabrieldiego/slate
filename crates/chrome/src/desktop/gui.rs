@@ -134,7 +134,7 @@ const HOME_SEARCH_HORIZONTAL_PADDING: f32 = 32.0;
 const HOME_SEARCH_HEIGHT: f32 = 72.0;
 const HOME_SEARCH_FRAME_EXTRA_HEIGHT: f32 = 8.0;
 const HOME_SEARCH_TEXT_HEIGHT: f32 = 34.0;
-const HOME_SEARCH_INPUT_TEXT_SIZE: f32 = 18.0;
+const HOME_SEARCH_INPUT_TEXT_SIZE: f32 = 20.0;
 const HOME_SEARCH_INNER_MARGIN_X: i8 = 32;
 const HOME_SEARCH_ICON_SIZE: f32 = 24.0;
 const HOME_SEARCH_ICON_GAP: f32 = 24.0;
@@ -2335,7 +2335,7 @@ mod tests {
         assert_eq!(HOME_SEARCH_FRAME_EXTRA_HEIGHT, 8.0);
         assert_eq!(home_search_rendered_height(), 80.0);
         assert_eq!(HOME_SEARCH_TEXT_HEIGHT, 34.0);
-        assert_eq!(HOME_SEARCH_INPUT_TEXT_SIZE, 18.0);
+        assert_eq!(HOME_SEARCH_INPUT_TEXT_SIZE, 20.0);
         assert_eq!(HOME_SEARCH_INNER_MARGIN_X, 32);
         assert_eq!(HOME_SEARCH_ICON_SIZE, 24.0);
         assert_eq!(HOME_SEARCH_ICON_GAP, 24.0);
