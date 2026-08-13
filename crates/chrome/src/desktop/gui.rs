@@ -430,6 +430,14 @@ fn tab_title_width(available_width: f32) -> f32 {
         .max(TAB_TITLE_MIN_WIDTH)
 }
 
+fn tab_title_color(active: bool) -> egui::Color32 {
+    if active {
+        slate_theme::TEXT
+    } else {
+        slate_theme::MUTED
+    }
+}
+
 fn footer_sync_status_width() -> f32 {
     FOOTER_SYNC_DOT_SIZE + FOOTER_SYNC_DOT_LABEL_GAP + FOOTER_SYNC_LABEL_WIDTH
 }
@@ -871,7 +879,7 @@ impl Gui {
                 egui::Align2::LEFT_CENTER,
                 truncate_with_ellipsis(label, 20),
                 egui::FontId::proportional(TAB_TITLE_TEXT_SIZE),
-                slate_theme::TEXT,
+                tab_title_color(active),
             );
         }
 
@@ -2052,7 +2060,7 @@ mod tests {
         home_metric_card_content_width, home_metrics_layout, home_metrics_rendered_height,
         home_metrics_row_width, home_search_rendered_height, home_search_width, home_top_space,
         page_info_raster_for_location, slate_theme, status_bubble_label, status_bubble_width,
-        tab_corner_radius, tab_title_width, toolbar_address_width,
+        tab_corner_radius, tab_title_color, tab_title_width, toolbar_address_width,
     };
     use super::{
         ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH, APP_TITLE_HEIGHT,
@@ -2389,6 +2397,12 @@ mod tests {
     fn tab_title_width_reserves_fixed_close_region() {
         assert_eq!(tab_title_width(TAB_WIDTH), 240.0);
         assert_eq!(tab_title_width(100.0), TAB_TITLE_MIN_WIDTH);
+    }
+
+    #[test]
+    fn tab_title_color_mutes_inactive_tabs() {
+        assert_eq!(tab_title_color(true), slate_theme::TEXT);
+        assert_eq!(tab_title_color(false), slate_theme::MUTED);
     }
 
     #[test]
