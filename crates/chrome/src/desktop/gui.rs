@@ -121,6 +121,10 @@ const HOME_BOTTOM_MIN_GAP: f32 = 16.0;
 const HOME_HERO_SIZE: f32 = 64.0;
 const HOME_HERO_TO_SEARCH_GAP: f32 = 44.0;
 const HOME_SEARCH_TO_METRICS_GAP: f32 = 62.0;
+const HOME_PANEL_SHADOW_OFFSET: [i8; 2] = [0, 2];
+const HOME_PANEL_SHADOW_BLUR: u8 = 12;
+const HOME_PANEL_SHADOW_SPREAD: u8 = 0;
+const HOME_PANEL_SHADOW_ALPHA: u8 = 14;
 const HOME_METRIC_CARD_HEIGHT: f32 = 172.0;
 const HOME_METRIC_GRID_EXTRA_HEIGHT: f32 = 25.0;
 const HOME_METRIC_CARD_MIN_WIDTH: f32 = 156.0;
@@ -297,6 +301,15 @@ fn home_search_rendered_height() -> f32 {
 
 fn home_metrics_rendered_height() -> f32 {
     HOME_METRIC_CARD_HEIGHT + HOME_METRIC_GRID_EXTRA_HEIGHT
+}
+
+fn home_panel_shadow() -> egui::Shadow {
+    egui::Shadow {
+        offset: HOME_PANEL_SHADOW_OFFSET,
+        blur: HOME_PANEL_SHADOW_BLUR,
+        spread: HOME_PANEL_SHADOW_SPREAD,
+        color: egui::Color32::from_black_alpha(HOME_PANEL_SHADOW_ALPHA),
+    }
 }
 
 fn home_content_fixed_height() -> f32 {
@@ -812,6 +825,7 @@ impl Gui {
             .fill(slate_theme::SURFACE)
             .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
             .corner_radius(8)
+            .shadow(home_panel_shadow())
             .inner_margin(egui::Margin::symmetric(
                 HOME_METRIC_CARD_INNER_MARGIN_X,
                 HOME_METRIC_CARD_INNER_MARGIN_Y,
@@ -926,6 +940,7 @@ impl Gui {
                 .fill(slate_theme::SURFACE)
                 .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
                 .corner_radius(HOME_SEARCH_CORNER_RADIUS)
+                .shadow(home_panel_shadow())
                 .inner_margin(egui::Margin::symmetric(HOME_SEARCH_INNER_MARGIN_X, 0))
                 .show(ui, |ui| {
                     ui.allocate_ui_with_layout(
@@ -1707,15 +1722,16 @@ mod tests {
         HOME_METRIC_CARD_HEIGHT, HOME_METRIC_CARD_INNER_MARGIN_X, HOME_METRIC_CARD_INNER_MARGIN_Y,
         HOME_METRIC_CARD_MAX_WIDTH, HOME_METRIC_DETAIL_GAP, HOME_METRIC_DETAIL_TEXT_SIZE,
         HOME_METRIC_GRID_EXTRA_HEIGHT, HOME_METRIC_ICON_LABEL_GAP, HOME_METRIC_ICON_SIZE,
-        HOME_METRIC_LABEL_TEXT_SIZE, HOME_SEARCH_FRAME_EXTRA_HEIGHT, HOME_SEARCH_ICON_SIZE,
-        HOME_SEARCH_INPUT_TEXT_SIZE, HOME_SEARCH_TO_METRICS_GAP, HOME_TOP_SPACE_FACTOR,
-        HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN, NEW_TAB_BUTTON_SIZE, NEW_TAB_LEFT_GAP,
-        NEW_TAB_TEXT_SIZE, TAB_CLOSE_ICON_SIZE, TAB_CONTENT_HEIGHT, TAB_CORNER_RADIUS, TAB_HEIGHT,
-        TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_CONTENT_ALIGN,
-        TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH, TAB_TITLE_TEXT_SIZE, TAB_WIDTH,
-        TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE, TOOLBAR_ITEM_SPACING,
-        TOOLBAR_MENU_TEXT_SIZE, TOOLBAR_PANEL_MARGIN_X, TOOLBAR_PANEL_MARGIN_Y,
-        TOOLBAR_PRIVACY_ICON_SIZE, egui_chrome_owns_position,
+        HOME_METRIC_LABEL_TEXT_SIZE, HOME_PANEL_SHADOW_ALPHA, HOME_PANEL_SHADOW_BLUR,
+        HOME_PANEL_SHADOW_OFFSET, HOME_PANEL_SHADOW_SPREAD, HOME_SEARCH_FRAME_EXTRA_HEIGHT,
+        HOME_SEARCH_ICON_SIZE, HOME_SEARCH_INPUT_TEXT_SIZE, HOME_SEARCH_TO_METRICS_GAP,
+        HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN, NEW_TAB_BUTTON_SIZE,
+        NEW_TAB_LEFT_GAP, NEW_TAB_TEXT_SIZE, TAB_CLOSE_ICON_SIZE, TAB_CONTENT_HEIGHT,
+        TAB_CORNER_RADIUS, TAB_HEIGHT, TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y,
+        TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH,
+        TAB_TITLE_TEXT_SIZE, TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE,
+        TOOLBAR_ITEM_SPACING, TOOLBAR_MENU_TEXT_SIZE, TOOLBAR_PANEL_MARGIN_X,
+        TOOLBAR_PANEL_MARGIN_Y, TOOLBAR_PRIVACY_ICON_SIZE, egui_chrome_owns_position,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -1887,6 +1903,10 @@ mod tests {
         assert_eq!(HOME_HERO_SIZE, 64.0);
         assert_eq!(HOME_HERO_TO_SEARCH_GAP, 44.0);
         assert_eq!(HOME_SEARCH_TO_METRICS_GAP, 62.0);
+        assert_eq!(HOME_PANEL_SHADOW_OFFSET, [0, 2]);
+        assert_eq!(HOME_PANEL_SHADOW_BLUR, 12);
+        assert_eq!(HOME_PANEL_SHADOW_SPREAD, 0);
+        assert_eq!(HOME_PANEL_SHADOW_ALPHA, 14);
         assert_eq!(HOME_METRIC_CARD_HEIGHT, 172.0);
         assert_eq!(HOME_METRIC_GRID_EXTRA_HEIGHT, 25.0);
         assert_eq!(home_metrics_rendered_height(), 197.0);
