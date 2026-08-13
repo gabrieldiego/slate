@@ -513,6 +513,10 @@ fn tab_title_color(active: bool) -> egui::Color32 {
     }
 }
 
+fn tab_icon_color(_active: bool) -> egui::Color32 {
+    slate_theme::MUTED
+}
+
 fn tab_close_icon_color(active: bool) -> egui::Color32 {
     if active {
         slate_theme::TEXT
@@ -1640,15 +1644,12 @@ impl Gui {
                                                         .get(&id)
                                                         .map(|(_, favicon)| favicon)
                                                         .copied();
-                                                    let fallback_icon_color = if window
-                                                        .active_webview()
-                                                        .map(|webview| webview.id())
-                                                        == Some(id)
-                                                    {
-                                                        slate_theme::TEXT
-                                                    } else {
-                                                        slate_theme::MUTED
-                                                    };
+                                                    let fallback_icon_color = tab_icon_color(
+                                                        window
+                                                            .active_webview()
+                                                            .map(|webview| webview.id())
+                                                            == Some(id),
+                                                    );
                                                     let fallback_icon = slate_icons.texture(
                                                         ui.ctx(),
                                                         Self::fallback_tab_icon(index),
@@ -2177,8 +2178,8 @@ mod tests {
         home_metrics_row_width, home_search_rendered_height, home_search_width, home_top_space,
         home_view_background_color, new_tab_icon_color, rail_button_fill, rail_icon_color,
         slate_theme, status_bubble_label, status_bubble_width, tab_close_icon_color,
-        tab_content_width, tab_corner_radius, tab_strip_background_color, tab_title_color,
-        tab_title_width, toolbar_address_width, toolbar_menu_icon_color,
+        tab_content_width, tab_corner_radius, tab_icon_color, tab_strip_background_color,
+        tab_title_color, tab_title_width, toolbar_address_width, toolbar_menu_icon_color,
         toolbar_navigation_icon_color,
     };
     use super::{
@@ -2566,6 +2567,8 @@ mod tests {
     fn tab_chrome_colors_mute_inactive_tabs() {
         assert_eq!(tab_title_color(true), slate_theme::TEXT);
         assert_eq!(tab_title_color(false), slate_theme::MUTED);
+        assert_eq!(tab_icon_color(true), slate_theme::MUTED);
+        assert_eq!(tab_icon_color(false), slate_theme::MUTED);
         assert_eq!(tab_close_icon_color(true), slate_theme::TEXT);
         assert_eq!(tab_close_icon_color(false), slate_theme::MUTED);
     }
