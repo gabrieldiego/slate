@@ -117,6 +117,7 @@ const HOME_SEARCH_CORNER_RADIUS: u8 = 8;
 const HOME_TOP_SPACE_FACTOR: f32 = 0.18;
 const HOME_TOP_SPACE_MIN: f32 = 48.0;
 const HOME_TOP_SPACE_MAX: f32 = 132.0;
+const HOME_BOTTOM_MIN_GAP: f32 = 16.0;
 const HOME_HERO_SIZE: f32 = 64.0;
 const HOME_HERO_TO_SEARCH_GAP: f32 = 44.0;
 const HOME_SEARCH_TO_METRICS_GAP: f32 = 62.0;
@@ -240,9 +241,51 @@ fn home_search_width(available_width: f32) -> f32 {
         .max(HOME_SEARCH_MIN_WIDTH.min(available_width))
 }
 
+fn home_metric_card_content_width(card_width: f32) -> f32 {
+    (card_width - f32::from(HOME_METRIC_CARD_INNER_MARGIN_X) * 2.0).max(0.0)
+}
+
+fn home_metric_card_content_height() -> f32 {
+    (HOME_METRIC_CARD_HEIGHT - f32::from(HOME_METRIC_CARD_INNER_MARGIN_Y) * 2.0).max(0.0)
+}
+
+fn home_content_fixed_height() -> f32 {
+    HOME_HERO_SIZE
+        + HOME_HERO_TO_SEARCH_GAP
+        + HOME_SEARCH_HEIGHT
+        + HOME_SEARCH_TO_METRICS_GAP
+        + HOME_METRIC_CARD_HEIGHT
+        + HOME_BOTTOM_MIN_GAP
+}
+
+#[cfg(test)]
+fn home_metrics_row_width(layout: HomeMetricsLayout) -> f32 {
+    layout.card_width * layout.columns as f32
+        + layout.spacing * (layout.columns.saturating_sub(1) as f32)
+}
+
+#[cfg(test)]
+fn home_content_stack_height(available_height: f32) -> f32 {
+    home_top_space(available_height)
+        + HOME_HERO_SIZE
+        + HOME_HERO_TO_SEARCH_GAP
+        + HOME_SEARCH_HEIGHT
+        + HOME_SEARCH_TO_METRICS_GAP
+        + HOME_METRIC_CARD_HEIGHT
+}
+
 fn home_top_space(available_height: f32) -> f32 {
-    (available_height.max(0.0) * HOME_TOP_SPACE_FACTOR)
-        .clamp(HOME_TOP_SPACE_MIN, HOME_TOP_SPACE_MAX)
+    let available_height = available_height.max(0.0);
+    let preferred =
+        (available_height * HOME_TOP_SPACE_FACTOR).clamp(HOME_TOP_SPACE_MIN, HOME_TOP_SPACE_MAX);
+    let max_without_clipping = (available_height - home_content_fixed_height()).max(0.0);
+
+    preferred.min(max_without_clipping)
+}
+
+#[cfg(test)]
+fn default_opening_home_view_height() -> f32 {
+    740.0 - TAB_STRIP_HEIGHT - TOOLBAR_HEIGHT - FOOTER_HEIGHT
 }
 
 fn tab_title_width(available_width: f32) -> f32 {
@@ -693,8 +736,10 @@ impl Gui {
                 HOME_METRIC_CARD_INNER_MARGIN_Y,
             ))
             .show(ui, |ui| {
-                ui.set_width(width);
-                ui.set_min_height(HOME_METRIC_CARD_HEIGHT);
+                ui.set_min_size(egui::vec2(
+                    home_metric_card_content_width(width),
+                    home_metric_card_content_height(),
+                ));
                 ui.vertical_centered(|ui| {
                     let texture = slate_icons.texture(ui.ctx(), icon, slate_theme::TEAL);
                     ui.add(Self::icon_image(texture, HOME_METRIC_ICON_SIZE));
@@ -1527,27 +1572,30 @@ mod tests {
         ADDRESS_BOOKMARK_BUTTON_RADIUS, ADDRESS_BOOKMARK_BUTTON_SIZE, ADDRESS_BOOKMARK_ICON_SIZE,
         ADDRESS_BOOKMARK_RESERVED_WIDTH, ADDRESS_CORNER_RADIUS, ADDRESS_ICON_GAP,
         ADDRESS_INNER_MARGIN_X, ADDRESS_LEADING_GAP, ADDRESS_MIN_WIDTH, ADDRESS_SECURITY_ICON_SIZE,
-        ADDRESS_TRAILING_CONTROLS_WIDTH, HOME_METRIC_CARD_MIN_WIDTH, home_metrics_layout,
-        home_search_width, home_top_space, tab_corner_radius, tab_title_width,
-        toolbar_address_width,
+        ADDRESS_TRAILING_CONTROLS_WIDTH, HOME_METRIC_CARD_MIN_WIDTH,
+        default_opening_home_view_height, home_content_stack_height,
+        home_metric_card_content_height, home_metric_card_content_width, home_metrics_layout,
+        home_metrics_row_width, home_search_width, home_top_space, tab_corner_radius,
+        tab_title_width, toolbar_address_width,
     };
     use super::{
         ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH, APP_TITLE_HEIGHT,
         APP_TITLE_LEFT_PADDING, APP_TITLE_TEXT_SIZE, FOOTER_HEIGHT, FOOTER_ICON_SIZE,
         FOOTER_ITEM_SPACING, FOOTER_LEFT_PADDING, FOOTER_PANEL_MARGIN_X, FOOTER_PANEL_MARGIN_Y,
         FOOTER_RIGHT_PADDING, FOOTER_SETTINGS_BUTTON_SIZE, FOOTER_SETTINGS_ICON_SIZE,
-        FOOTER_SYNC_DOT_SIZE, FOOTER_TEXT_SIZE, HOME_HERO_SIZE, HOME_HERO_TO_SEARCH_GAP,
-        HOME_METRIC_BADGE_CORNER_RADIUS, HOME_METRIC_BADGE_MARGIN_X, HOME_METRIC_BADGE_MARGIN_Y,
-        HOME_METRIC_BADGE_TEXT_SIZE, HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_INNER_MARGIN_X,
-        HOME_METRIC_CARD_INNER_MARGIN_Y, HOME_METRIC_CARD_MAX_WIDTH, HOME_METRIC_DETAIL_GAP,
-        HOME_METRIC_DETAIL_TEXT_SIZE, HOME_METRIC_ICON_LABEL_GAP, HOME_METRIC_ICON_SIZE,
-        HOME_METRIC_LABEL_TEXT_SIZE, HOME_SEARCH_ICON_SIZE, HOME_SEARCH_INPUT_TEXT_SIZE,
-        HOME_SEARCH_TO_METRICS_GAP, HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN,
-        NEW_TAB_BUTTON_SIZE, NEW_TAB_LEFT_GAP, NEW_TAB_TEXT_SIZE, TAB_CLOSE_ICON_SIZE,
-        TAB_CONTENT_HEIGHT, TAB_CORNER_RADIUS, TAB_HEIGHT, TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X,
-        TAB_INNER_MARGIN_Y, TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP,
-        TAB_TITLE_MIN_WIDTH, TAB_TITLE_TEXT_SIZE, TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT,
-        TOOLBAR_ICON_SIZE, TOOLBAR_ITEM_SPACING, TOOLBAR_MENU_TEXT_SIZE, TOOLBAR_NAV_ICON_SIZE,
+        FOOTER_SYNC_DOT_SIZE, FOOTER_TEXT_SIZE, HOME_BOTTOM_MIN_GAP, HOME_HERO_SIZE,
+        HOME_HERO_TO_SEARCH_GAP, HOME_METRIC_BADGE_CORNER_RADIUS, HOME_METRIC_BADGE_MARGIN_X,
+        HOME_METRIC_BADGE_MARGIN_Y, HOME_METRIC_BADGE_TEXT_SIZE, HOME_METRIC_CARD_GAP,
+        HOME_METRIC_CARD_HEIGHT, HOME_METRIC_CARD_INNER_MARGIN_X, HOME_METRIC_CARD_INNER_MARGIN_Y,
+        HOME_METRIC_CARD_MAX_WIDTH, HOME_METRIC_DETAIL_GAP, HOME_METRIC_DETAIL_TEXT_SIZE,
+        HOME_METRIC_ICON_LABEL_GAP, HOME_METRIC_ICON_SIZE, HOME_METRIC_LABEL_TEXT_SIZE,
+        HOME_SEARCH_ICON_SIZE, HOME_SEARCH_INPUT_TEXT_SIZE, HOME_SEARCH_TO_METRICS_GAP,
+        HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN, NEW_TAB_BUTTON_SIZE,
+        NEW_TAB_LEFT_GAP, NEW_TAB_TEXT_SIZE, TAB_CLOSE_ICON_SIZE, TAB_CONTENT_HEIGHT,
+        TAB_CORNER_RADIUS, TAB_HEIGHT, TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y,
+        TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH,
+        TAB_TITLE_TEXT_SIZE, TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE,
+        TOOLBAR_ITEM_SPACING, TOOLBAR_MENU_TEXT_SIZE, TOOLBAR_NAV_ICON_SIZE,
         TOOLBAR_PANEL_MARGIN_X, TOOLBAR_PANEL_MARGIN_Y, TOOLBAR_PRIVACY_ICON_SIZE,
         egui_chrome_owns_position,
     };
@@ -1681,9 +1729,11 @@ mod tests {
         assert_eq!(HOME_TOP_SPACE_FACTOR, 0.18);
         assert_eq!(HOME_TOP_SPACE_MIN, 48.0);
         assert_eq!(HOME_TOP_SPACE_MAX, 132.0);
+        assert_eq!(HOME_BOTTOM_MIN_GAP, 16.0);
         assert_eq!(HOME_HERO_SIZE, 64.0);
         assert_eq!(HOME_HERO_TO_SEARCH_GAP, 44.0);
         assert_eq!(HOME_SEARCH_TO_METRICS_GAP, 62.0);
+        assert_eq!(HOME_METRIC_CARD_HEIGHT, 172.0);
         assert_eq!(HOME_METRIC_CARD_INNER_MARGIN_X, 16);
         assert_eq!(HOME_METRIC_CARD_INNER_MARGIN_Y, 28);
         assert_eq!(HOME_METRIC_ICON_SIZE, 40.0);
@@ -1710,7 +1760,11 @@ mod tests {
 
     #[test]
     fn home_top_spacing_is_responsive_with_bounds() {
-        assert_eq!(home_top_space(120.0), HOME_TOP_SPACE_MIN);
+        assert_eq!(home_top_space(120.0), 0.0);
+        assert!(
+            home_content_stack_height(default_opening_home_view_height())
+                <= default_opening_home_view_height()
+        );
         assert!((home_top_space(700.0) - 126.0).abs() < 0.001);
         assert_eq!(home_top_space(900.0), HOME_TOP_SPACE_MAX);
     }
@@ -1745,6 +1799,7 @@ mod tests {
         assert_eq!(layout.columns, 4);
         assert_eq!(layout.card_width, HOME_METRIC_CARD_MAX_WIDTH);
         assert_eq!(layout.spacing, HOME_METRIC_CARD_GAP);
+        assert!(home_metrics_row_width(layout) <= 880.0);
     }
 
     #[test]
@@ -1754,6 +1809,7 @@ mod tests {
         assert_eq!(layout.columns, 2);
         assert_eq!(layout.card_width, HOME_METRIC_CARD_MAX_WIDTH);
         assert_eq!(layout.spacing, HOME_METRIC_CARD_GAP);
+        assert!(home_metrics_row_width(layout) <= 620.0);
     }
 
     #[test]
@@ -1763,6 +1819,15 @@ mod tests {
         assert_eq!(layout.columns, 1);
         assert_eq!(layout.card_width, 130.0);
         assert!(layout.card_width <= HOME_METRIC_CARD_MIN_WIDTH);
+    }
+
+    #[test]
+    fn home_metric_card_inner_size_keeps_outer_footprint_stable() {
+        assert_eq!(
+            home_metric_card_content_width(HOME_METRIC_CARD_MAX_WIDTH),
+            162.0
+        );
+        assert_eq!(home_metric_card_content_height(), 116.0);
     }
 }
 
