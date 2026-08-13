@@ -463,6 +463,10 @@ fn footer_sync_dot_radius() -> f32 {
     FOOTER_SYNC_DOT_SIZE / 2.0
 }
 
+fn footer_settings_icon_color() -> egui::Color32 {
+    slate_theme::MUTED
+}
+
 fn footer_protection_status_width() -> f32 {
     FOOTER_ICON_SIZE + FOOTER_PROTECTION_ICON_LABEL_GAP + FOOTER_PROTECTION_LABEL_WIDTH
 }
@@ -729,7 +733,8 @@ impl Gui {
             }
 
             let center = rect.center();
-            let stroke = egui::Stroke::new(FOOTER_SETTINGS_GEAR_STROKE, slate_theme::TEXT);
+            let stroke =
+                egui::Stroke::new(FOOTER_SETTINGS_GEAR_STROKE, footer_settings_icon_color());
             ui.painter()
                 .circle_stroke(center, FOOTER_SETTINGS_GEAR_RADIUS, stroke);
             ui.painter()
@@ -2088,12 +2093,13 @@ mod tests {
         ADDRESS_TRAILING_CONTROLS_WIDTH, AddressSecurityIcon, Gui, HOME_METRIC_CARD_MIN_WIDTH,
         HomeContentLayout, SlateIconCache, address_security_icon_for_location,
         concept_screenshot_home_view_size, default_opening_home_view_height,
-        default_opening_home_view_size, footer_protection_status_width, footer_sync_dot_radius,
-        footer_sync_status_width, home_content_stack_height, home_metric_badge_width,
-        home_metric_card_content_height, home_metric_card_content_width, home_metrics_layout,
-        home_metrics_rendered_height, home_metrics_row_width, home_search_rendered_height,
-        home_search_width, home_top_space, slate_theme, status_bubble_label, status_bubble_width,
-        tab_corner_radius, tab_title_color, tab_title_width, toolbar_address_width,
+        default_opening_home_view_size, footer_protection_status_width, footer_settings_icon_color,
+        footer_sync_dot_radius, footer_sync_status_width, home_content_stack_height,
+        home_metric_badge_width, home_metric_card_content_height, home_metric_card_content_width,
+        home_metrics_layout, home_metrics_rendered_height, home_metrics_row_width,
+        home_search_rendered_height, home_search_width, home_top_space, slate_theme,
+        status_bubble_label, status_bubble_width, tab_corner_radius, tab_title_color,
+        tab_title_width, toolbar_address_width,
     };
     use super::{
         ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH, APP_TITLE_HEIGHT,
@@ -2252,6 +2258,7 @@ mod tests {
         assert_eq!(FOOTER_SETTINGS_BUTTON_SIZE, 40.0);
         assert_eq!(FOOTER_SETTINGS_BUTTON_RADIUS, 8);
         assert_eq!(FOOTER_SETTINGS_ICON_SIZE, 28.0);
+        assert_eq!(footer_settings_icon_color(), slate_theme::MUTED);
         assert_eq!(FOOTER_SETTINGS_GEAR_RADIUS, 9.0);
         assert_eq!(FOOTER_SETTINGS_GEAR_CENTER_RADIUS, 3.5);
         assert_eq!(FOOTER_SETTINGS_GEAR_TOOTH_INNER_RADIUS, 12.0);
