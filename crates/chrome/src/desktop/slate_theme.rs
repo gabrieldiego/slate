@@ -16,6 +16,7 @@ pub(crate) const MUTED: Color32 = Color32::from_rgb(111, 107, 103);
 pub(crate) const TEAL: Color32 = Color32::from_rgb(11, 107, 104);
 pub(crate) const TEAL_SOFT: Color32 = Color32::from_rgb(229, 240, 238);
 pub(crate) const AMBER: Color32 = Color32::from_rgb(217, 154, 0);
+pub(crate) const BLUE: Color32 = Color32::from_rgb(24, 126, 207);
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum SlateIcon {
