@@ -71,7 +71,7 @@ const TAB_TITLE_TEXT_SIZE: f32 = 18.0;
 const TAB_ICON_TITLE_GAP: f32 = 12.0;
 const TAB_TITLE_CLOSE_GAP: f32 = 8.0;
 const TAB_CLOSE_BUTTON_SIZE: f32 = 28.0;
-const TAB_CLOSE_ICON_SIZE: f32 = 22.0;
+const TAB_CLOSE_ICON_SIZE: f32 = 12.0;
 const NEW_TAB_LEFT_GAP: f32 = 18.0;
 const NEW_TAB_BUTTON_SIZE: f32 = 44.0;
 const NEW_TAB_TEXT_SIZE: f32 = 28.0;
@@ -966,6 +966,7 @@ impl Gui {
         webview: WebView,
         favicon_texture: Option<egui::load::SizedTexture>,
         fallback_icon: egui::load::SizedTexture,
+        close_icon: egui::load::SizedTexture,
     ) {
         let label = match (webview.page_title(), webview.url()) {
             (_, Some(url)) if is_slate_home_url(&url) => "New Tab".into(),
@@ -1039,13 +1040,9 @@ impl Gui {
 
             let close_button = tab_frame.content_ui.add_sized(
                 [TAB_CLOSE_BUTTON_SIZE, TAB_CLOSE_BUTTON_SIZE],
-                egui::Button::new(
-                    egui::RichText::new("×")
-                        .size(TAB_CLOSE_ICON_SIZE)
-                        .color(slate_theme::TEXT),
-                )
-                .fill(egui::Color32::TRANSPARENT)
-                .frame(false),
+                egui::Button::image(Self::icon_image(close_icon, TAB_CLOSE_ICON_SIZE))
+                    .fill(egui::Color32::TRANSPARENT)
+                    .frame(false),
             );
             close_button.widget_info(|| {
                 let mut info = WidgetInfo::new(WidgetType::Button);
@@ -1152,12 +1149,17 @@ impl Gui {
                                                         Self::fallback_tab_icon(index),
                                                         fallback_icon_color,
                                                     );
+                                                    let close_icon = slate_icons.raster_texture(
+                                                        ui.ctx(),
+                                                        SlateRaster::TabClose,
+                                                    );
                                                     Self::browser_tab(
                                                         ui,
                                                         window,
                                                         webview,
                                                         favicon,
                                                         fallback_icon,
+                                                        close_icon,
                                                     );
                                                 }
 
@@ -1785,7 +1787,7 @@ mod tests {
         assert_eq!(TAB_ICON_TITLE_GAP, 12.0);
         assert_eq!(TAB_TITLE_CLOSE_GAP, 8.0);
         assert_eq!(TAB_CLOSE_BUTTON_SIZE, 28.0);
-        assert_eq!(TAB_CLOSE_ICON_SIZE, 22.0);
+        assert_eq!(TAB_CLOSE_ICON_SIZE, 12.0);
         assert_eq!(NEW_TAB_LEFT_GAP, 18.0);
         assert_eq!(NEW_TAB_BUTTON_SIZE, 44.0);
         assert_eq!(NEW_TAB_TEXT_SIZE, 28.0);
