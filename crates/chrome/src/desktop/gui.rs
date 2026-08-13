@@ -1109,16 +1109,23 @@ impl Gui {
         };
 
         let inactive_bg_color = slate_theme::PANEL;
+        let inactive_hover_bg_color = slate_theme::PANEL_HOVER;
         let active_bg_color = slate_theme::SURFACE;
         let active = window.active_webview().map(|webview| webview.id()) == Some(webview.id());
+        let tab_content_bg_color = if active {
+            active_bg_color
+        } else {
+            inactive_bg_color
+        };
+        let tab_content_hover_bg_color = if active {
+            active_bg_color
+        } else {
+            inactive_hover_bg_color
+        };
 
         // Setup a tab frame that will contain the favicon, title and close button
         let mut tab_frame = egui::Frame::NONE
-            .fill(if active {
-                active_bg_color
-            } else {
-                inactive_bg_color
-            })
+            .fill(tab_content_bg_color)
             .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
             .corner_radius(tab_corner_radius())
             .inner_margin(egui::Margin::symmetric(
@@ -1136,10 +1143,10 @@ impl Gui {
             visuals.widgets.hovered.bg_stroke.width = 0.0;
             // Now we make sure the fill color is always the same, irrespective of state, that way
             // we can make sure that both the label and close button have the same background color
-            visuals.widgets.noninteractive.weak_bg_fill = inactive_bg_color;
-            visuals.widgets.inactive.weak_bg_fill = inactive_bg_color;
-            visuals.widgets.hovered.weak_bg_fill = active_bg_color;
-            visuals.widgets.active.weak_bg_fill = active_bg_color;
+            visuals.widgets.noninteractive.weak_bg_fill = tab_content_bg_color;
+            visuals.widgets.inactive.weak_bg_fill = tab_content_bg_color;
+            visuals.widgets.hovered.weak_bg_fill = tab_content_hover_bg_color;
+            visuals.widgets.active.weak_bg_fill = tab_content_hover_bg_color;
             visuals.selection.bg_fill = active_bg_color;
             visuals.selection.stroke.color = visuals.widgets.active.fg_stroke.color;
             visuals.widgets.hovered.fg_stroke.color = visuals.widgets.active.fg_stroke.color;
@@ -1196,8 +1203,10 @@ impl Gui {
         }
 
         let response = tab_frame.allocate_space(ui);
-        let fill_color = if active || response.hovered() {
+        let fill_color = if active {
             active_bg_color
+        } else if response.hovered() {
+            inactive_hover_bg_color
         } else {
             inactive_bg_color
         };
