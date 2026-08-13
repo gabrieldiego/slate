@@ -82,7 +82,9 @@ const TOOLBAR_ITEM_SPACING: f32 = 20.0;
 const TOOLBAR_BUTTON_SIZE: f32 = 40.0;
 const TOOLBAR_ICON_SIZE: f32 = 24.0;
 const TOOLBAR_PRIVACY_ICON_SIZE: f32 = 28.0;
-const TOOLBAR_MENU_TEXT_SIZE: f32 = 28.0;
+const TOOLBAR_MENU_ICON_WIDTH: f32 = 24.0;
+const TOOLBAR_MENU_ICON_GAP: f32 = 7.0;
+const TOOLBAR_MENU_ICON_STROKE: f32 = 2.0;
 const TOOLBAR_SEPARATOR_HEIGHT: f32 = 36.0;
 const RAIL_ICON_SIZE: f32 = 34.0;
 const RAIL_BUTTON_SIZE: f32 = 80.0;
@@ -690,16 +692,33 @@ impl Gui {
             .corner_radius(6)
     }
 
-    fn toolbar_menu_button(selected: bool) -> egui::Button<'static> {
-        egui::Button::selectable(
-            selected,
-            egui::RichText::new("☰")
-                .size(TOOLBAR_MENU_TEXT_SIZE)
-                .color(slate_theme::TEXT),
-        )
-        .frame(false)
-        .min_size(Vec2::splat(TOOLBAR_BUTTON_SIZE))
-        .corner_radius(6)
+    fn toolbar_menu_button(ui: &mut egui::Ui, selected: bool) -> egui::Response {
+        let (rect, response) =
+            ui.allocate_exact_size(Vec2::splat(TOOLBAR_BUTTON_SIZE), egui::Sense::click());
+        if ui.is_rect_visible(rect) {
+            let fill = if selected {
+                slate_theme::PANEL
+            } else if response.hovered() {
+                slate_theme::PANEL_HOVER
+            } else {
+                egui::Color32::TRANSPARENT
+            };
+            if fill != egui::Color32::TRANSPARENT {
+                ui.painter().rect_filled(rect, 6.0, fill);
+            }
+
+            let center = rect.center();
+            for offset in [-TOOLBAR_MENU_ICON_GAP, 0.0, TOOLBAR_MENU_ICON_GAP] {
+                ui.painter().line_segment(
+                    [
+                        egui::pos2(center.x - TOOLBAR_MENU_ICON_WIDTH / 2.0, center.y + offset),
+                        egui::pos2(center.x + TOOLBAR_MENU_ICON_WIDTH / 2.0, center.y + offset),
+                    ],
+                    egui::Stroke::new(TOOLBAR_MENU_ICON_STROKE, slate_theme::TEXT),
+                );
+            }
+        }
+        response
     }
 
     fn address_icon_button_sized(
@@ -1496,9 +1515,9 @@ impl Gui {
 
                                 let mut experimental_preferences_enabled =
                                     state.experimental_preferences_enabled();
-                                let prefs_toggle = ui
-                                    .add(Gui::toolbar_menu_button(experimental_preferences_enabled))
-                                    .on_hover_text("Enable experimental prefs");
+                                let prefs_toggle =
+                                    Gui::toolbar_menu_button(ui, experimental_preferences_enabled)
+                                        .on_hover_text("Enable experimental prefs");
                                 prefs_toggle.widget_info(|| {
                                     let mut info = WidgetInfo::new(WidgetType::Button);
                                     info.label = Some("Enable experimental preferences".into());
@@ -1764,9 +1783,9 @@ mod tests {
         TAB_CONTENT_HEIGHT, TAB_CORNER_RADIUS, TAB_HEIGHT, TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X,
         TAB_INNER_MARGIN_Y, TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP,
         TAB_TITLE_MIN_WIDTH, TAB_TITLE_TEXT_SIZE, TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT,
-        TOOLBAR_ICON_SIZE, TOOLBAR_ITEM_SPACING, TOOLBAR_MENU_TEXT_SIZE, TOOLBAR_PANEL_MARGIN_X,
-        TOOLBAR_PANEL_MARGIN_Y, TOOLBAR_PRIVACY_ICON_SIZE, TOOLBAR_SEPARATOR_HEIGHT,
-        egui_chrome_owns_position,
+        TOOLBAR_ICON_SIZE, TOOLBAR_ITEM_SPACING, TOOLBAR_MENU_ICON_GAP, TOOLBAR_MENU_ICON_STROKE,
+        TOOLBAR_MENU_ICON_WIDTH, TOOLBAR_PANEL_MARGIN_X, TOOLBAR_PANEL_MARGIN_Y,
+        TOOLBAR_PRIVACY_ICON_SIZE, TOOLBAR_SEPARATOR_HEIGHT, egui_chrome_owns_position,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -1922,7 +1941,9 @@ mod tests {
         assert_eq!(TOOLBAR_BUTTON_SIZE, 40.0);
         assert_eq!(TOOLBAR_ICON_SIZE, 24.0);
         assert_eq!(TOOLBAR_PRIVACY_ICON_SIZE, 28.0);
-        assert_eq!(TOOLBAR_MENU_TEXT_SIZE, 28.0);
+        assert_eq!(TOOLBAR_MENU_ICON_WIDTH, 24.0);
+        assert_eq!(TOOLBAR_MENU_ICON_GAP, 7.0);
+        assert_eq!(TOOLBAR_MENU_ICON_STROKE, 2.0);
         assert_eq!(TOOLBAR_SEPARATOR_HEIGHT, 36.0);
         assert_eq!(ADDRESS_LEADING_GAP, 28.0);
         assert_eq!(ADDRESS_INNER_MARGIN_X, 12);
