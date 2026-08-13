@@ -59,7 +59,7 @@ const FOOTER_SETTINGS_ICON_SIZE: f32 = 28.0;
 const APP_TITLE_WIDTH: f32 = 160.0;
 const APP_TITLE_HEIGHT: f32 = TAB_STRIP_HEIGHT;
 const APP_TITLE_LEFT_PADDING: f32 = 30.0;
-const APP_TITLE_TEXT_SIZE: f32 = 24.0;
+const APP_TITLE_TEXT_SIZE: f32 = 28.0;
 const TAB_WIDTH: f32 = 300.0;
 const TAB_HEIGHT: f32 = 58.0;
 const TAB_CORNER_RADIUS: u8 = 8;
@@ -1620,7 +1620,7 @@ mod tests {
         assert_eq!(ADDRESS_CORNER_RADIUS, 8);
         assert_eq!(APP_TITLE_HEIGHT, TAB_STRIP_HEIGHT);
         assert_eq!(APP_TITLE_LEFT_PADDING, 30.0);
-        assert_eq!(APP_TITLE_TEXT_SIZE, 24.0);
+        assert_eq!(APP_TITLE_TEXT_SIZE, 28.0);
         assert_eq!(TAB_HEIGHT, 58.0);
         assert_eq!(TAB_CORNER_RADIUS, 8);
         assert_eq!(
