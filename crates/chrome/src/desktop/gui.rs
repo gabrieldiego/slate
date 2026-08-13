@@ -371,6 +371,14 @@ fn default_opening_home_view_size() -> egui::Vec2 {
     egui::vec2(1024.0 - APP_RAIL_WIDTH, default_opening_home_view_height())
 }
 
+#[cfg(test)]
+fn concept_screenshot_home_view_size() -> egui::Vec2 {
+    egui::vec2(
+        1672.0 - APP_RAIL_WIDTH,
+        940.0 - TAB_STRIP_HEIGHT - TOOLBAR_HEIGHT - FOOTER_HEIGHT,
+    )
+}
+
 fn tab_title_width(available_width: f32) -> f32 {
     (available_width
         - TAB_ICON_SIZE
@@ -1730,10 +1738,10 @@ mod tests {
         ADDRESS_INNER_MARGIN_X, ADDRESS_LEADING_GAP, ADDRESS_MIN_WIDTH, ADDRESS_SECURITY_ICON_SIZE,
         ADDRESS_SHADOW_ALPHA, ADDRESS_SHADOW_BLUR, ADDRESS_SHADOW_OFFSET, ADDRESS_SHADOW_SPREAD,
         ADDRESS_TRAILING_CONTROLS_WIDTH, Gui, HOME_METRIC_CARD_MIN_WIDTH, HomeContentLayout,
-        SlateIconCache, default_opening_home_view_height, default_opening_home_view_size,
-        home_content_stack_height, home_metric_card_content_height, home_metric_card_content_width,
-        home_metrics_layout, home_metrics_rendered_height, home_metrics_row_width,
-        home_search_rendered_height, home_search_width, home_top_space,
+        SlateIconCache, concept_screenshot_home_view_size, default_opening_home_view_height,
+        default_opening_home_view_size, home_content_stack_height, home_metric_card_content_height,
+        home_metric_card_content_width, home_metrics_layout, home_metrics_rendered_height,
+        home_metrics_row_width, home_search_rendered_height, home_search_width, home_top_space,
         page_info_raster_for_location, slate_theme, tab_corner_radius, tab_title_width,
         toolbar_address_width,
     };
@@ -2084,6 +2092,45 @@ mod tests {
                 "expected {rect:?} to fit inside {bounds:?}"
             );
         }
+    }
+
+    #[test]
+    fn headless_home_content_tracks_concept_screenshot_geometry() {
+        let viewport_size = concept_screenshot_home_view_size();
+        let layout = render_home_content_layout(viewport_size);
+        let center_x = viewport_size.x / 2.0;
+
+        for rect in [layout.hero_rect, layout.search_rect] {
+            assert!(
+                (rect.center().x - center_x).abs() < LAYOUT_EPSILON,
+                "expected {rect:?} to stay centered in {viewport_size:?}"
+            );
+        }
+        assert!(
+            (860.0..=900.0).contains(&layout.search_rect.width()),
+            "expected search width to stay close to the screenshot max width: {:?}",
+            layout.search_rect
+        );
+        assert!(
+            (118.0..=132.0).contains(&layout.hero_rect.top()),
+            "expected hero to sit near the screenshot vertical rhythm: {:?}",
+            layout.hero_rect
+        );
+        assert!(
+            (225.0..=242.0).contains(&layout.search_rect.top()),
+            "expected search to sit near the screenshot vertical rhythm: {:?}",
+            layout.search_rect
+        );
+        assert!(
+            (365.0..=390.0).contains(&layout.metrics_rect.top()),
+            "expected metric cards to sit near the screenshot vertical rhythm: {:?}",
+            layout.metrics_rect
+        );
+        assert!(
+            (330.0..=360.0).contains(&layout.metrics_rect.left()),
+            "expected metric cards to start near the screenshot horizontal rhythm: {:?}",
+            layout.metrics_rect
+        );
     }
 
     #[test]
