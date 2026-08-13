@@ -41,9 +41,9 @@ use crate::desktop::slate_theme::{self, SlateIcon, SlateIconCache, SlateRaster};
 use crate::running_app_state::{RunningAppState, UserInterfaceCommand};
 use crate::window::ServoShellWindow;
 
-const TAB_STRIP_HEIGHT: f32 = 76.0;
+const TAB_STRIP_HEIGHT: f32 = 78.0;
 const TAB_STRIP_CONTENT_ALIGN: egui::Align = egui::Align::Max;
-const TOOLBAR_HEIGHT: f32 = 86.0;
+const TOOLBAR_HEIGHT: f32 = 88.0;
 const APP_RAIL_WIDTH: f32 = 104.0;
 const FOOTER_HEIGHT: f32 = 80.0;
 const FOOTER_PANEL_MARGIN_X: i8 = 0;
@@ -56,12 +56,12 @@ const FOOTER_TEXT_SIZE: f32 = 16.0;
 const FOOTER_SYNC_DOT_SIZE: f32 = 12.0;
 const FOOTER_SETTINGS_BUTTON_SIZE: f32 = 40.0;
 const FOOTER_SETTINGS_ICON_SIZE: f32 = 28.0;
-const APP_TITLE_WIDTH: f32 = 160.0;
+const APP_TITLE_WIDTH: f32 = 162.0;
 const APP_TITLE_HEIGHT: f32 = TAB_STRIP_HEIGHT;
-const APP_TITLE_LEFT_PADDING: f32 = 30.0;
+const APP_TITLE_LEFT_PADDING: f32 = 31.0;
 const APP_TITLE_TEXT_SIZE: f32 = 28.0;
-const TAB_WIDTH: f32 = 300.0;
-const TAB_HEIGHT: f32 = 58.0;
+const TAB_WIDTH: f32 = 308.0;
+const TAB_HEIGHT: f32 = 60.0;
 const TAB_CORNER_RADIUS: u8 = 8;
 const TAB_INNER_MARGIN_X: i8 = 16;
 const TAB_INNER_MARGIN_Y: i8 = 8;
@@ -72,11 +72,11 @@ const TAB_ICON_TITLE_GAP: f32 = 12.0;
 const TAB_TITLE_CLOSE_GAP: f32 = 8.0;
 const TAB_CLOSE_BUTTON_SIZE: f32 = 28.0;
 const TAB_CLOSE_ICON_SIZE: f32 = 22.0;
-const NEW_TAB_LEFT_GAP: f32 = 16.0;
+const NEW_TAB_LEFT_GAP: f32 = 18.0;
 const NEW_TAB_BUTTON_SIZE: f32 = 44.0;
 const NEW_TAB_TEXT_SIZE: f32 = 28.0;
 const TOOLBAR_PANEL_MARGIN_X: i8 = 18;
-const TOOLBAR_PANEL_MARGIN_Y: i8 = 9;
+const TOOLBAR_PANEL_MARGIN_Y: i8 = 10;
 const TOOLBAR_ITEM_SPACING: f32 = 18.0;
 const TOOLBAR_BUTTON_SIZE: f32 = 40.0;
 const TOOLBAR_ICON_SIZE: f32 = 24.0;
@@ -89,7 +89,7 @@ const RAIL_PANEL_MARGIN_Y: i8 = 0;
 const RAIL_TOP_SPACE: f32 = 24.0;
 const RAIL_ITEM_GAP: f32 = 16.0;
 const TAB_ICON_SIZE: f32 = 20.0;
-const ADDRESS_LEADING_GAP: f32 = 26.0;
+const ADDRESS_LEADING_GAP: f32 = 28.0;
 const ADDRESS_MIN_WIDTH: f32 = 260.0;
 const ADDRESS_HEIGHT: f32 = 54.0;
 const ADDRESS_TEXT_HEIGHT: f32 = 34.0;
@@ -1753,7 +1753,7 @@ mod tests {
         assert_eq!(RAIL_PANEL_MARGIN_Y, 0);
         assert_eq!(RAIL_TOP_SPACE, 24.0);
         assert_eq!(RAIL_ITEM_GAP, 16.0);
-        assert_eq!(TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT, 162.0);
+        assert_eq!(TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT, 166.0);
         assert_eq!(TAB_STRIP_CONTENT_ALIGN, egui::Align::Max);
         assert_eq!(FOOTER_HEIGHT, 80.0);
         assert_eq!(FOOTER_PANEL_MARGIN_X, 0);
@@ -1770,9 +1770,9 @@ mod tests {
         assert_eq!(ADDRESS_INPUT_TEXT_SIZE, 18.0);
         assert_eq!(ADDRESS_CORNER_RADIUS, 8);
         assert_eq!(APP_TITLE_HEIGHT, TAB_STRIP_HEIGHT);
-        assert_eq!(APP_TITLE_LEFT_PADDING, 30.0);
+        assert_eq!(APP_TITLE_LEFT_PADDING, 31.0);
         assert_eq!(APP_TITLE_TEXT_SIZE, 28.0);
-        assert_eq!(TAB_HEIGHT, 58.0);
+        assert_eq!(TAB_HEIGHT, 60.0);
         assert_eq!(TAB_CORNER_RADIUS, 8);
         assert_eq!(
             TAB_CONTENT_HEIGHT,
@@ -1786,7 +1786,7 @@ mod tests {
         assert_eq!(TAB_TITLE_CLOSE_GAP, 8.0);
         assert_eq!(TAB_CLOSE_BUTTON_SIZE, 28.0);
         assert_eq!(TAB_CLOSE_ICON_SIZE, 22.0);
-        assert_eq!(NEW_TAB_LEFT_GAP, 16.0);
+        assert_eq!(NEW_TAB_LEFT_GAP, 18.0);
         assert_eq!(NEW_TAB_BUTTON_SIZE, 44.0);
         assert_eq!(NEW_TAB_TEXT_SIZE, 28.0);
         assert_eq!(HOME_SEARCH_MIN_WIDTH, 280.0);
@@ -1802,13 +1802,13 @@ mod tests {
         assert_eq!(HOME_SEARCH_ICON_GAP, 22.0);
         assert_eq!(HOME_SEARCH_CORNER_RADIUS, 8);
         assert_eq!(TOOLBAR_PANEL_MARGIN_X, 18);
-        assert_eq!(TOOLBAR_PANEL_MARGIN_Y, 9);
+        assert_eq!(TOOLBAR_PANEL_MARGIN_Y, 10);
         assert_eq!(TOOLBAR_ITEM_SPACING, 18.0);
         assert_eq!(TOOLBAR_BUTTON_SIZE, 40.0);
         assert_eq!(TOOLBAR_ICON_SIZE, 24.0);
         assert_eq!(TOOLBAR_PRIVACY_ICON_SIZE, 28.0);
         assert_eq!(TOOLBAR_MENU_TEXT_SIZE, 28.0);
-        assert_eq!(ADDRESS_LEADING_GAP, 26.0);
+        assert_eq!(ADDRESS_LEADING_GAP, 28.0);
         assert_eq!(ADDRESS_INNER_MARGIN_X, 12);
         assert_eq!(ADDRESS_SECURITY_ICON_SIZE, 24.0);
         assert_eq!(ADDRESS_ICON_GAP, 8.0);
@@ -1871,7 +1871,7 @@ mod tests {
 
     #[test]
     fn tab_title_width_reserves_fixed_close_region() {
-        assert_eq!(tab_title_width(TAB_WIDTH), 232.0);
+        assert_eq!(tab_title_width(TAB_WIDTH), 240.0);
         assert_eq!(tab_title_width(100.0), TAB_TITLE_MIN_WIDTH);
     }
 
