@@ -52,7 +52,7 @@ const FOOTER_LEFT_PADDING: f32 = 22.0;
 const FOOTER_RIGHT_PADDING: f32 = 22.0;
 const FOOTER_ITEM_SPACING: f32 = 18.0;
 const FOOTER_ICON_SIZE: f32 = 28.0;
-const FOOTER_TEXT_SIZE: f32 = 14.0;
+const FOOTER_TEXT_SIZE: f32 = 16.0;
 const FOOTER_SYNC_DOT_SIZE: f32 = 12.0;
 const FOOTER_SETTINGS_BUTTON_SIZE: f32 = 40.0;
 const FOOTER_SETTINGS_ICON_SIZE: f32 = 28.0;
@@ -1611,7 +1611,7 @@ mod tests {
         assert_eq!(FOOTER_RIGHT_PADDING, 22.0);
         assert_eq!(FOOTER_ITEM_SPACING, 18.0);
         assert_eq!(FOOTER_ICON_SIZE, 28.0);
-        assert_eq!(FOOTER_TEXT_SIZE, 14.0);
+        assert_eq!(FOOTER_TEXT_SIZE, 16.0);
         assert_eq!(FOOTER_SYNC_DOT_SIZE, 12.0);
         assert_eq!(FOOTER_SETTINGS_BUTTON_SIZE, 40.0);
         assert_eq!(FOOTER_SETTINGS_ICON_SIZE, 28.0);
