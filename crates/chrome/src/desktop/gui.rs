@@ -149,7 +149,7 @@ const HOME_SEARCH_TO_METRICS_GAP: f32 = 62.0;
 const HOME_PANEL_SHADOW_OFFSET: [i8; 2] = [0, 2];
 const HOME_PANEL_SHADOW_BLUR: u8 = 12;
 const HOME_PANEL_SHADOW_SPREAD: u8 = 0;
-const HOME_PANEL_SHADOW_ALPHA: u8 = 14;
+const HOME_PANEL_SHADOW_ALPHA: u8 = 10;
 const HOME_METRIC_CARD_HEIGHT: f32 = 172.0;
 const HOME_METRIC_GRID_EXTRA_HEIGHT: f32 = 25.0;
 const HOME_METRIC_CARD_MIN_WIDTH: f32 = 156.0;
@@ -2392,7 +2392,7 @@ mod tests {
         assert_eq!(HOME_PANEL_SHADOW_OFFSET, [0, 2]);
         assert_eq!(HOME_PANEL_SHADOW_BLUR, 12);
         assert_eq!(HOME_PANEL_SHADOW_SPREAD, 0);
-        assert_eq!(HOME_PANEL_SHADOW_ALPHA, 14);
+        assert_eq!(HOME_PANEL_SHADOW_ALPHA, 10);
         assert_eq!(HOME_METRIC_CARD_HEIGHT, 172.0);
         assert_eq!(HOME_METRIC_GRID_EXTRA_HEIGHT, 25.0);
         assert_eq!(home_metrics_rendered_height(), 197.0);
