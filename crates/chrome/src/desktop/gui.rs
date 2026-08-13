@@ -742,13 +742,26 @@ impl Gui {
     }
 
     fn toolbar_icon_button_sized(
+        ui: &mut egui::Ui,
         texture: egui::load::SizedTexture,
         icon_size: f32,
-    ) -> egui::Button<'static> {
-        egui::Button::image(Self::icon_image(texture, icon_size))
-            .frame(false)
-            .min_size(Vec2::splat(TOOLBAR_BUTTON_SIZE))
-            .corner_radius(6)
+    ) -> egui::Response {
+        let (rect, response) =
+            ui.allocate_exact_size(Vec2::splat(TOOLBAR_BUTTON_SIZE), egui::Sense::click());
+        if ui.is_rect_visible(rect) {
+            if response.hovered() {
+                ui.painter()
+                    .rect_filled(rect, 6.0, slate_theme::PANEL_HOVER);
+            }
+            let icon_rect = egui::Rect::from_center_size(rect.center(), Vec2::splat(icon_size));
+            ui.painter().image(
+                texture.id,
+                icon_rect,
+                egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
+                egui::Color32::WHITE,
+            );
+        }
+        response
     }
 
     fn toolbar_menu_button(ui: &mut egui::Ui, selected: bool) -> egui::Response {
@@ -1622,11 +1635,17 @@ impl Gui {
                                     SlateIcon::TopShield,
                                     slate_theme::AMBER,
                                 );
-                                ui.add(Gui::toolbar_icon_button_sized(
+                                let privacy_button = Gui::toolbar_icon_button_sized(
+                                    ui,
                                     privacy_icon,
                                     TOOLBAR_PRIVACY_ICON_SIZE,
-                                ))
-                                .on_hover_text("Privacy controls");
+                                );
+                                privacy_button.widget_info(|| {
+                                    let mut info = WidgetInfo::new(WidgetType::Button);
+                                    info.label = Some("Privacy controls".into());
+                                    info
+                                });
+                                privacy_button.on_hover_text("Privacy controls");
                                 Self::vertical_separator(ui, TOOLBAR_SEPARATOR_HEIGHT);
 
                                 let mut experimental_preferences_enabled =
