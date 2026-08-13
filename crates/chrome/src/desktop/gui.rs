@@ -996,7 +996,8 @@ impl Gui {
         webview: WebView,
         favicon_texture: Option<egui::load::SizedTexture>,
         fallback_icon: egui::load::SizedTexture,
-        close_icon: egui::load::SizedTexture,
+        active_close_icon: egui::load::SizedTexture,
+        inactive_close_icon: egui::load::SizedTexture,
     ) {
         let label = match (webview.page_title(), webview.url()) {
             (_, Some(url)) if is_slate_home_url(&url) => "New Tab".into(),
@@ -1068,6 +1069,11 @@ impl Gui {
                 });
             tab_frame.content_ui.add_space(TAB_TITLE_CLOSE_GAP);
 
+            let close_icon = if active {
+                active_close_icon
+            } else {
+                inactive_close_icon
+            };
             let close_button = tab_frame.content_ui.add_sized(
                 [TAB_CLOSE_BUTTON_SIZE, TAB_CLOSE_BUTTON_SIZE],
                 egui::Button::image(Self::icon_image(close_icon, TAB_CLOSE_ICON_SIZE))
@@ -1183,6 +1189,11 @@ impl Gui {
                                                         ui.ctx(),
                                                         SlateRaster::TabClose,
                                                     );
+                                                    let inactive_close_icon = slate_icons
+                                                        .raster_texture(
+                                                            ui.ctx(),
+                                                            SlateRaster::TabCloseMuted,
+                                                        );
                                                     Self::browser_tab(
                                                         ui,
                                                         window,
@@ -1190,6 +1201,7 @@ impl Gui {
                                                         favicon,
                                                         fallback_icon,
                                                         close_icon,
+                                                        inactive_close_icon,
                                                     );
                                                 }
 

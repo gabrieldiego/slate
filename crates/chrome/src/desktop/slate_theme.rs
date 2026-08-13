@@ -52,6 +52,7 @@ pub(crate) enum SlateRaster {
     PageInfoSecure,
     Search,
     TabClose,
+    TabCloseMuted,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -248,6 +249,12 @@ impl SlateRaster {
                 height: 12,
                 bytes: include_bytes!("../../assets/icons/slate-ns/closetab.png"),
             },
+            Self::TabCloseMuted => SlateRasterData {
+                name: "tab-close-muted",
+                width: 12,
+                height: 12,
+                bytes: include_bytes!("../../assets/icons/slate-ns/closetab_g.png"),
+            },
         }
     }
 }
@@ -406,6 +413,7 @@ mod tests {
             SlateRaster::PageInfoSecure,
             SlateRaster::Search,
             SlateRaster::TabClose,
+            SlateRaster::TabCloseMuted,
         ] {
             let data = raster.data();
             let image = image::load_from_memory(data.bytes).unwrap().to_rgba8();
