@@ -351,6 +351,7 @@ pub(crate) fn apply(ctx: &egui::Context) {
     visuals.widgets.active.bg_stroke.color = TEAL;
     visuals.widgets.hovered.expansion = 0.0;
     visuals.widgets.active.expansion = 0.0;
+    visuals.weak_text_color = Some(MUTED);
     visuals.selection.bg_fill = TEAL_SOFT;
     visuals.selection.stroke.color = TEAL;
     ctx.set_visuals(visuals);
@@ -522,5 +523,14 @@ mod tests {
                 .filter(|pixel| pixel[3] > 0)
                 .all(|pixel| pixel[0] == red && pixel[1] == green && pixel[2] == blue)
         );
+    }
+
+    #[test]
+    fn theme_uses_muted_weak_text_for_placeholders() {
+        let ctx = egui::Context::default();
+
+        super::apply(&ctx);
+
+        assert_eq!(ctx.global_style().visuals.weak_text_color(), MUTED);
     }
 }
