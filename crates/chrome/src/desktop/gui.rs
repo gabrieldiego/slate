@@ -1210,7 +1210,7 @@ impl Gui {
                     (SlateIcon::HomeMetricPrivacy, "Privacy First", None, None),
                     (
                         SlateIcon::HomeMetricLock,
-                        "Trackers Blocked",
+                        "Tracker Blocked",
                         Some(("23", slate_theme::AMBER)),
                         None,
                     ),
