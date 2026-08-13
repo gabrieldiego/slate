@@ -67,6 +67,7 @@ const TAB_INNER_MARGIN_X: i8 = 16;
 const TAB_INNER_MARGIN_Y: i8 = 8;
 const TAB_CONTENT_HEIGHT: f32 = TAB_HEIGHT - (TAB_INNER_MARGIN_Y as f32 * 2.0);
 const TAB_TITLE_MIN_WIDTH: f32 = 80.0;
+const TAB_TITLE_TEXT_SIZE: f32 = 18.0;
 const TAB_ICON_TITLE_GAP: f32 = 12.0;
 const TAB_TITLE_CLOSE_GAP: f32 = 8.0;
 const TAB_CLOSE_BUTTON_SIZE: f32 = 28.0;
@@ -904,6 +905,7 @@ impl Gui {
                     Button::selectable(
                         active,
                         egui::RichText::new(truncate_with_ellipsis(&label, 20))
+                            .size(TAB_TITLE_TEXT_SIZE)
                             .color(slate_theme::TEXT),
                     )
                     .frame(false),
@@ -1513,9 +1515,9 @@ mod tests {
         NEW_TAB_LEFT_GAP, NEW_TAB_TEXT_SIZE, TAB_CLOSE_ICON_SIZE, TAB_CONTENT_HEIGHT,
         TAB_CORNER_RADIUS, TAB_HEIGHT, TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y,
         TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH,
-        TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE, TOOLBAR_ITEM_SPACING,
-        TOOLBAR_MENU_TEXT_SIZE, TOOLBAR_NAV_ICON_SIZE, TOOLBAR_PRIVACY_ICON_SIZE,
-        egui_chrome_owns_position,
+        TAB_TITLE_TEXT_SIZE, TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE,
+        TOOLBAR_ITEM_SPACING, TOOLBAR_MENU_TEXT_SIZE, TOOLBAR_NAV_ICON_SIZE,
+        TOOLBAR_PRIVACY_ICON_SIZE, egui_chrome_owns_position,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -1608,6 +1610,7 @@ mod tests {
         assert_eq!(TAB_INNER_MARGIN_X, 16);
         assert_eq!(TAB_INNER_MARGIN_Y, 8);
         assert_eq!(TAB_TITLE_MIN_WIDTH, 80.0);
+        assert_eq!(TAB_TITLE_TEXT_SIZE, 18.0);
         assert_eq!(TAB_ICON_TITLE_GAP, 12.0);
         assert_eq!(TAB_TITLE_CLOSE_GAP, 8.0);
         assert_eq!(TAB_CLOSE_BUTTON_SIZE, 28.0);
