@@ -75,6 +75,8 @@ const TAB_CLOSE_ICON_SIZE: f32 = 22.0;
 const NEW_TAB_LEFT_GAP: f32 = 16.0;
 const NEW_TAB_BUTTON_SIZE: f32 = 44.0;
 const NEW_TAB_TEXT_SIZE: f32 = 28.0;
+const TOOLBAR_PANEL_MARGIN_X: i8 = 28;
+const TOOLBAR_PANEL_MARGIN_Y: i8 = 9;
 const TOOLBAR_ITEM_SPACING: f32 = 18.0;
 const TOOLBAR_BUTTON_SIZE: f32 = 40.0;
 const TOOLBAR_ICON_SIZE: f32 = 24.0;
@@ -1074,9 +1076,9 @@ impl Gui {
                     .show_separator_line(true)
                     .show_inside(ctx, |ui| Self::draw_app_rail(ui, slate_icons));
 
-                let toolbar_frame = egui::Frame::NONE
-                    .fill(slate_theme::SURFACE)
-                    .inner_margin(egui::Margin::symmetric(18, 9));
+                let toolbar_frame = egui::Frame::NONE.fill(slate_theme::SURFACE).inner_margin(
+                    egui::Margin::symmetric(TOOLBAR_PANEL_MARGIN_X, TOOLBAR_PANEL_MARGIN_Y),
+                );
                 Panel::top("toolbar")
                     .exact_size(TOOLBAR_HEIGHT)
                     .frame(toolbar_frame)
@@ -1536,7 +1538,8 @@ mod tests {
         TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH,
         TAB_TITLE_TEXT_SIZE, TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE,
         TOOLBAR_ITEM_SPACING, TOOLBAR_MENU_TEXT_SIZE, TOOLBAR_NAV_ICON_SIZE,
-        TOOLBAR_PRIVACY_ICON_SIZE, egui_chrome_owns_position,
+        TOOLBAR_PANEL_MARGIN_X, TOOLBAR_PANEL_MARGIN_Y, TOOLBAR_PRIVACY_ICON_SIZE,
+        egui_chrome_owns_position,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -1648,6 +1651,8 @@ mod tests {
         assert_eq!(HOME_SEARCH_ICON_SIZE, 32.0);
         assert_eq!(HOME_SEARCH_ICON_GAP, 24.0);
         assert_eq!(HOME_SEARCH_CORNER_RADIUS, 8);
+        assert_eq!(TOOLBAR_PANEL_MARGIN_X, 28);
+        assert_eq!(TOOLBAR_PANEL_MARGIN_Y, 9);
         assert_eq!(TOOLBAR_ITEM_SPACING, 18.0);
         assert_eq!(TOOLBAR_BUTTON_SIZE, 40.0);
         assert_eq!(TOOLBAR_ICON_SIZE, 24.0);
