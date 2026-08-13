@@ -360,6 +360,14 @@ fn new_tab_icon_color() -> egui::Color32 {
     slate_theme::MUTED
 }
 
+fn toolbar_menu_icon_color(selected: bool) -> egui::Color32 {
+    if selected {
+        slate_theme::TEXT
+    } else {
+        slate_theme::MUTED
+    }
+}
+
 fn address_shadow() -> egui::Shadow {
     egui::Shadow {
         offset: ADDRESS_SHADOW_OFFSET,
@@ -930,7 +938,7 @@ impl Gui {
                         egui::pos2(center.x - TOOLBAR_MENU_ICON_WIDTH / 2.0, center.y + offset),
                         egui::pos2(center.x + TOOLBAR_MENU_ICON_WIDTH / 2.0, center.y + offset),
                     ],
-                    egui::Stroke::new(TOOLBAR_MENU_ICON_STROKE, slate_theme::TEXT),
+                    egui::Stroke::new(TOOLBAR_MENU_ICON_STROKE, toolbar_menu_icon_color(selected)),
                 );
             }
         }
@@ -2165,7 +2173,7 @@ mod tests {
         home_view_background_color, new_tab_icon_color, rail_button_fill, rail_icon_color,
         slate_theme, status_bubble_label, status_bubble_width, tab_close_icon_color,
         tab_content_width, tab_corner_radius, tab_title_color, tab_title_width,
-        toolbar_address_width, toolbar_navigation_icon_color,
+        toolbar_address_width, toolbar_menu_icon_color, toolbar_navigation_icon_color,
     };
     use super::{
         ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH, APP_TITLE_HEIGHT,
@@ -2382,6 +2390,8 @@ mod tests {
         assert_eq!(TOOLBAR_MENU_ICON_WIDTH, 24.0);
         assert_eq!(TOOLBAR_MENU_ICON_GAP, 7.0);
         assert_eq!(TOOLBAR_MENU_ICON_STROKE, 2.0);
+        assert_eq!(toolbar_menu_icon_color(false), slate_theme::MUTED);
+        assert_eq!(toolbar_menu_icon_color(true), slate_theme::TEXT);
         assert_eq!(TOOLBAR_SEPARATOR_HEIGHT, 36.0);
         assert_eq!(TAB_ICON_SIZE, 24.0);
         assert_eq!(ADDRESS_LEADING_GAP, 28.0);
