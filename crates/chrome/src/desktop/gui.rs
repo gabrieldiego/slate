@@ -333,6 +333,11 @@ fn home_metric_card_content_height() -> f32 {
     (HOME_METRIC_CARD_HEIGHT - f32::from(HOME_METRIC_CARD_INNER_MARGIN_Y) * 2.0).max(0.0)
 }
 
+fn home_metric_badge_width(text: &str) -> f32 {
+    text.chars().count() as f32 * HOME_METRIC_BADGE_TEXT_SIZE * 0.58
+        + f32::from(HOME_METRIC_BADGE_MARGIN_X) * 2.0
+}
+
 fn home_search_rendered_height() -> f32 {
     HOME_SEARCH_HEIGHT + HOME_SEARCH_FRAME_EXTRA_HEIGHT
 }
@@ -1095,21 +1100,25 @@ impl Gui {
     }
 
     fn draw_badge(ui: &mut egui::Ui, text: &str, fill: egui::Color32) {
-        egui::Frame::NONE
-            .fill(fill)
-            .corner_radius(HOME_METRIC_BADGE_CORNER_RADIUS)
-            .inner_margin(egui::Margin::symmetric(
-                HOME_METRIC_BADGE_MARGIN_X,
-                HOME_METRIC_BADGE_MARGIN_Y,
-            ))
-            .show(ui, |ui| {
-                ui.label(
-                    egui::RichText::new(text)
-                        .size(HOME_METRIC_BADGE_TEXT_SIZE)
-                        .strong()
-                        .color(slate_theme::SURFACE),
-                );
-            });
+        let width = home_metric_badge_width(text);
+        let height = HOME_METRIC_BADGE_TEXT_SIZE + f32::from(HOME_METRIC_BADGE_MARGIN_Y) * 2.0;
+        let (rect, response) =
+            ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
+
+        if ui.is_rect_visible(rect) {
+            ui.painter()
+                .rect_filled(rect, HOME_METRIC_BADGE_CORNER_RADIUS, fill);
+            ui.painter().text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                text,
+                egui::FontId::proportional(HOME_METRIC_BADGE_TEXT_SIZE),
+                slate_theme::SURFACE,
+            );
+        }
+
+        let enabled = ui.is_enabled();
+        response.widget_info(move || WidgetInfo::labeled(WidgetType::Label, enabled, text));
     }
 
     fn draw_home_metric_card(
@@ -2037,9 +2046,9 @@ mod tests {
         ADDRESS_TRAILING_CONTROLS_WIDTH, Gui, HOME_METRIC_CARD_MIN_WIDTH, HomeContentLayout,
         SlateIconCache, concept_screenshot_home_view_size, default_opening_home_view_height,
         default_opening_home_view_size, footer_protection_status_width, footer_sync_status_width,
-        home_content_stack_height, home_metric_card_content_height, home_metric_card_content_width,
-        home_metrics_layout, home_metrics_rendered_height, home_metrics_row_width,
-        home_search_rendered_height, home_search_width, home_top_space,
+        home_content_stack_height, home_metric_badge_width, home_metric_card_content_height,
+        home_metric_card_content_width, home_metrics_layout, home_metrics_rendered_height,
+        home_metrics_row_width, home_search_rendered_height, home_search_width, home_top_space,
         page_info_raster_for_location, slate_theme, status_bubble_label, status_bubble_width,
         tab_corner_radius, tab_title_width, toolbar_address_width,
     };
@@ -2286,6 +2295,8 @@ mod tests {
         assert_eq!(HOME_METRIC_BADGE_MARGIN_X, 8);
         assert_eq!(HOME_METRIC_BADGE_MARGIN_Y, 3);
         assert_eq!(HOME_METRIC_BADGE_CORNER_RADIUS, 10);
+        assert!((home_metric_badge_width("23") - 29.92).abs() < 0.001);
+        assert!((home_metric_badge_width("184") - 36.88).abs() < 0.001);
         assert_eq!(STATUS_BUBBLE_MARGIN_X, 14.0);
         assert_eq!(STATUS_BUBBLE_MARGIN_Y, 12.0);
         assert_eq!(STATUS_BUBBLE_HEIGHT, 32.0);
