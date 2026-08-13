@@ -323,6 +323,13 @@ impl Gui {
             .corner_radius(6)
     }
 
+    fn address_icon_button(texture: egui::load::SizedTexture) -> egui::Button<'static> {
+        egui::Button::image(Self::icon_image(texture, 20.0))
+            .frame(false)
+            .min_size(Vec2::splat(28.0))
+            .corner_radius(6)
+    }
+
     fn fallback_tab_icon(index: usize) -> SlateIcon {
         match index {
             1 => SlateIcon::TabResearch,
@@ -462,11 +469,18 @@ impl Gui {
     }
 
     fn draw_home_metrics(ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
-        let available_width = ui.available_width();
-        let columns: usize = if available_width < 620.0 { 2 } else { 4 };
+        let available_width = ui.available_width().max(0.0);
+        let columns: usize = if available_width < 320.0 {
+            1
+        } else if available_width < 620.0 {
+            2
+        } else {
+            4
+        };
         let total_spacing = 14.0 * (columns.saturating_sub(1) as f32);
-        let card_width = ((available_width - total_spacing) / columns as f32)
-            .clamp(HOME_METRIC_CARD_MIN_WIDTH, HOME_METRIC_CARD_MAX_WIDTH);
+        let card_width = ((available_width - total_spacing).max(0.0) / columns as f32)
+            .clamp(HOME_METRIC_CARD_MIN_WIDTH, HOME_METRIC_CARD_MAX_WIDTH)
+            .min(available_width);
 
         egui::Grid::new("slate_home_metrics")
             .num_columns(columns)
@@ -535,10 +549,10 @@ impl Gui {
                     );
                     ui.add_space(26.0);
 
-                    let search_width = ui
-                        .available_width()
+                    let available_search_width = (ui.available_width() - 32.0).max(0.0);
+                    let search_width = available_search_width
                         .min(HOME_SEARCH_MAX_WIDTH)
-                        .max(HOME_SEARCH_MIN_WIDTH);
+                        .max(HOME_SEARCH_MIN_WIDTH.min(available_search_width));
                     let home_search_id = egui::Id::new("home_search_input");
                     let search_response = egui::Frame::NONE
                         .fill(slate_theme::SURFACE)
@@ -549,12 +563,9 @@ impl Gui {
                             ui.set_width(search_width);
                             ui.set_min_height(52.0);
                             ui.horizontal_centered(|ui| {
-                                let search_icon = slate_icons.texture(
-                                    ui.ctx(),
-                                    SlateIcon::HomeSearch,
-                                    slate_theme::MUTED,
-                                );
-                                ui.add(Self::icon_image(search_icon, 24.0));
+                                let search_icon =
+                                    slate_icons.raster_texture(ui.ctx(), SlateRaster::Search);
+                                ui.add(Self::icon_image(search_icon, 20.0));
                                 ui.add_space(12.0);
                                 ui.add_sized(
                                     [ui.available_width(), 34.0],
@@ -819,13 +830,12 @@ impl Gui {
                             ui.available_size(),
                             egui::Layout::left_to_right(egui::Align::Center),
                             |ui| {
-                                let back_icon = slate_icons.texture(
+                                let back_icon = slate_icons.raster_texture(
                                     ui.ctx(),
-                                    SlateIcon::NavBack,
                                     if self.can_go_back {
-                                        slate_theme::TEXT
+                                        SlateRaster::NavBack
                                     } else {
-                                        slate_theme::DISABLED
+                                        SlateRaster::NavBackDisabled
                                     },
                                 );
                                 let back_button = ui.add_enabled(
@@ -842,13 +852,12 @@ impl Gui {
                                     window.queue_user_interface_command(UserInterfaceCommand::Back);
                                 }
 
-                                let forward_icon = slate_icons.texture(
+                                let forward_icon = slate_icons.raster_texture(
                                     ui.ctx(),
-                                    SlateIcon::NavForward,
                                     if self.can_go_forward {
-                                        slate_theme::TEXT
+                                        SlateRaster::NavForward
                                     } else {
-                                        slate_theme::DISABLED
+                                        SlateRaster::NavForwardDisabled
                                     },
                                 );
                                 let forward_button = ui.add_enabled(
@@ -869,7 +878,10 @@ impl Gui {
 
                                 match self.load_status {
                                     LoadStatus::Started | LoadStatus::HeadParsed => {
-                                        let stop_button = ui.add(Gui::toolbar_button("×"));
+                                        let stop_icon = slate_icons
+                                            .raster_texture(ui.ctx(), SlateRaster::NavStop);
+                                        let stop_button =
+                                            ui.add(Gui::toolbar_icon_button(stop_icon));
                                         stop_button.widget_info(|| {
                                             let mut info = WidgetInfo::new(WidgetType::Button);
                                             info.label = Some("Stop".into());
@@ -880,11 +892,8 @@ impl Gui {
                                         }
                                     }
                                     LoadStatus::Complete => {
-                                        let reload_icon = slate_icons.texture(
-                                            ui.ctx(),
-                                            SlateIcon::NavRefresh,
-                                            slate_theme::TEXT,
-                                        );
+                                        let reload_icon = slate_icons
+                                            .raster_texture(ui.ctx(), SlateRaster::NavRefresh);
                                         let reload_button =
                                             ui.add(Gui::toolbar_icon_button(reload_icon));
                                         reload_button.widget_info(|| {
@@ -902,8 +911,13 @@ impl Gui {
                                 }
 
                                 let location_id = egui::Id::new("location_input");
-                                let address_width =
-                                    (ui.available_width() - 104.0).max(ADDRESS_MIN_WIDTH);
+                                let available_for_address = ui.available_width().max(0.0);
+                                let trailing_controls_width =
+                                    (available_for_address * 0.28).clamp(84.0, 108.0);
+                                let address_width = (available_for_address
+                                    - trailing_controls_width)
+                                    .max(ADDRESS_MIN_WIDTH)
+                                    .min(available_for_address);
                                 let location_field = egui::Frame::NONE
                                     .fill(slate_theme::SURFACE)
                                     .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
@@ -913,21 +927,28 @@ impl Gui {
                                         ui.set_width(address_width);
                                         ui.set_min_height(38.0);
                                         ui.horizontal_centered(|ui| {
-                                            let shield_icon = slate_icons.texture(
+                                            let page_info_icon = slate_icons.raster_texture(
                                                 ui.ctx(),
-                                                SlateIcon::TopShield,
-                                                slate_theme::MUTED,
+                                                SlateRaster::PageInfoSecure,
                                             );
-                                            ui.add(Self::icon_image(shield_icon, 22.0));
-                                            ui.add_sized(
-                                                [ui.available_width(), 30.0],
+                                            ui.add(Self::icon_image(page_info_icon, 20.0));
+                                            ui.add_space(8.0);
+                                            let bookmark_icon = slate_icons
+                                                .raster_texture(ui.ctx(), SlateRaster::BookmarkAdd);
+                                            let text_width =
+                                                (ui.available_width() - 36.0).max(80.0);
+                                            let text_response = ui.add_sized(
+                                                [text_width, 30.0],
                                                 egui::TextEdit::singleline(location)
                                                     .id(location_id)
                                                     .frame(egui::Frame::NONE)
                                                     .hint_text(
                                                         "Search the web or enter an address",
                                                     ),
-                                            )
+                                            );
+                                            ui.add(Self::address_icon_button(bookmark_icon))
+                                                .on_hover_text("Bookmark");
+                                            text_response
                                         })
                                         .inner
                                     })
@@ -976,6 +997,7 @@ impl Gui {
                                 );
                                 ui.add(Gui::toolbar_icon_button(privacy_icon))
                                     .on_hover_text("Privacy controls");
+                                ui.separator();
 
                                 let mut experimental_preferences_enabled =
                                     state.experimental_preferences_enabled();

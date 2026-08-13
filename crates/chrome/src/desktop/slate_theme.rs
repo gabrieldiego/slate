@@ -13,7 +13,6 @@ pub(crate) const PANEL_HOVER: Color32 = Color32::from_rgb(239, 237, 233);
 pub(crate) const BORDER: Color32 = Color32::from_rgb(221, 217, 212);
 pub(crate) const TEXT: Color32 = Color32::from_rgb(39, 39, 39);
 pub(crate) const MUTED: Color32 = Color32::from_rgb(111, 107, 103);
-pub(crate) const DISABLED: Color32 = Color32::from_rgb(178, 174, 168);
 pub(crate) const TEAL: Color32 = Color32::from_rgb(11, 107, 104);
 pub(crate) const TEAL_SOFT: Color32 = Color32::from_rgb(229, 240, 238);
 pub(crate) const AMBER: Color32 = Color32::from_rgb(217, 154, 0);
@@ -29,10 +28,6 @@ pub(crate) enum SlateIcon {
     HomeMetricLock,
     HomeMetricPrivacy,
     HomeMetricTime,
-    HomeSearch,
-    NavBack,
-    NavForward,
-    NavRefresh,
     TabCalendar,
     TabResearch,
     TabWeb,
@@ -41,8 +36,17 @@ pub(crate) enum SlateIcon {
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum SlateRaster {
+    BookmarkAdd,
     Logo32,
     Logo128,
+    NavBack,
+    NavBackDisabled,
+    NavForward,
+    NavForwardDisabled,
+    NavRefresh,
+    NavStop,
+    PageInfoSecure,
+    Search,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -118,30 +122,6 @@ impl SlateIcon {
                 height: 40,
                 mask: include_bytes!("../../assets/icons/home_metric_time.alpha"),
             },
-            Self::HomeSearch => SlateIconData {
-                name: "home-search",
-                width: 32,
-                height: 32,
-                mask: include_bytes!("../../assets/icons/home_search.alpha"),
-            },
-            Self::NavBack => SlateIconData {
-                name: "nav-back",
-                width: 32,
-                height: 32,
-                mask: include_bytes!("../../assets/icons/nav_back.alpha"),
-            },
-            Self::NavForward => SlateIconData {
-                name: "nav-forward",
-                width: 32,
-                height: 32,
-                mask: include_bytes!("../../assets/icons/nav_forward.alpha"),
-            },
-            Self::NavRefresh => SlateIconData {
-                name: "nav-refresh",
-                width: 32,
-                height: 32,
-                mask: include_bytes!("../../assets/icons/nav_refresh.alpha"),
-            },
             Self::TabCalendar => SlateIconData {
                 name: "tab-calendar",
                 width: 20,
@@ -173,6 +153,12 @@ impl SlateIcon {
 impl SlateRaster {
     fn data(self) -> SlateRasterData {
         match self {
+            Self::BookmarkAdd => SlateRasterData {
+                name: "bookmark-add",
+                width: 17,
+                height: 17,
+                bytes: include_bytes!("../../assets/icons/slate-ns/hotlist-add.png"),
+            },
             Self::Logo32 => SlateRasterData {
                 name: "logo-32",
                 width: 32,
@@ -184,6 +170,54 @@ impl SlateRaster {
                 width: 128,
                 height: 128,
                 bytes: include_bytes!("../../assets/branding/slate-logo-128.png"),
+            },
+            Self::NavBack => SlateRasterData {
+                name: "nav-back",
+                width: 24,
+                height: 24,
+                bytes: include_bytes!("../../assets/icons/slate-ns/back.png"),
+            },
+            Self::NavBackDisabled => SlateRasterData {
+                name: "nav-back-disabled",
+                width: 24,
+                height: 24,
+                bytes: include_bytes!("../../assets/icons/slate-ns/back_g.png"),
+            },
+            Self::NavForward => SlateRasterData {
+                name: "nav-forward",
+                width: 24,
+                height: 24,
+                bytes: include_bytes!("../../assets/icons/slate-ns/forward.png"),
+            },
+            Self::NavForwardDisabled => SlateRasterData {
+                name: "nav-forward-disabled",
+                width: 24,
+                height: 24,
+                bytes: include_bytes!("../../assets/icons/slate-ns/forward_g.png"),
+            },
+            Self::NavRefresh => SlateRasterData {
+                name: "nav-refresh",
+                width: 24,
+                height: 24,
+                bytes: include_bytes!("../../assets/icons/slate-ns/reload.png"),
+            },
+            Self::NavStop => SlateRasterData {
+                name: "nav-stop",
+                width: 24,
+                height: 24,
+                bytes: include_bytes!("../../assets/icons/slate-ns/stop.png"),
+            },
+            Self::PageInfoSecure => SlateRasterData {
+                name: "page-info-secure",
+                width: 24,
+                height: 24,
+                bytes: include_bytes!("../../assets/icons/slate-ns/page-info-secure.png"),
+            },
+            Self::Search => SlateRasterData {
+                name: "search",
+                width: 17,
+                height: 17,
+                bytes: include_bytes!("../../assets/icons/slate-ns/search.png"),
             },
         }
     }
@@ -309,10 +343,6 @@ mod tests {
             SlateIcon::HomeMetricLock,
             SlateIcon::HomeMetricPrivacy,
             SlateIcon::HomeMetricTime,
-            SlateIcon::HomeSearch,
-            SlateIcon::NavBack,
-            SlateIcon::NavForward,
-            SlateIcon::NavRefresh,
             SlateIcon::TabCalendar,
             SlateIcon::TabResearch,
             SlateIcon::TabWeb,
@@ -325,7 +355,19 @@ mod tests {
 
     #[test]
     fn bundled_raster_images_match_declared_dimensions() {
-        for raster in [SlateRaster::Logo32, SlateRaster::Logo128] {
+        for raster in [
+            SlateRaster::BookmarkAdd,
+            SlateRaster::Logo32,
+            SlateRaster::Logo128,
+            SlateRaster::NavBack,
+            SlateRaster::NavBackDisabled,
+            SlateRaster::NavForward,
+            SlateRaster::NavForwardDisabled,
+            SlateRaster::NavRefresh,
+            SlateRaster::NavStop,
+            SlateRaster::PageInfoSecure,
+            SlateRaster::Search,
+        ] {
             let data = raster.data();
             let image = image::load_from_memory(data.bytes).unwrap().to_rgba8();
             assert_eq!(image.width() as usize, data.width);
