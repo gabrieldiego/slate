@@ -58,6 +58,7 @@ const APP_TITLE_LEFT_PADDING: f32 = 30.0;
 const APP_TITLE_TEXT_SIZE: f32 = 24.0;
 const TAB_WIDTH: f32 = 300.0;
 const TAB_HEIGHT: f32 = 58.0;
+const TAB_CORNER_RADIUS: u8 = 8;
 const TAB_INNER_MARGIN_X: i8 = 16;
 const TAB_INNER_MARGIN_Y: i8 = 8;
 const TAB_CONTENT_HEIGHT: f32 = TAB_HEIGHT - (TAB_INNER_MARGIN_Y as f32 * 2.0);
@@ -231,6 +232,15 @@ fn tab_title_width(available_width: f32) -> f32 {
         - TAB_CLOSE_BUTTON_SIZE
         - TAB_TITLE_CLOSE_GAP)
         .max(TAB_TITLE_MIN_WIDTH)
+}
+
+fn tab_corner_radius() -> egui::CornerRadius {
+    egui::CornerRadius {
+        nw: TAB_CORNER_RADIUS,
+        ne: TAB_CORNER_RADIUS,
+        sw: 0,
+        se: 0,
+    }
 }
 
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
@@ -820,7 +830,7 @@ impl Gui {
                 inactive_bg_color
             })
             .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
-            .corner_radius(8)
+            .corner_radius(tab_corner_radius())
             .inner_margin(egui::Margin::symmetric(
                 TAB_INNER_MARGIN_X,
                 TAB_INNER_MARGIN_Y,
@@ -1440,7 +1450,8 @@ mod tests {
         ADDRESS_BOOKMARK_ICON_SIZE, ADDRESS_BOOKMARK_RESERVED_WIDTH, ADDRESS_ICON_GAP,
         ADDRESS_INNER_MARGIN_X, ADDRESS_LEADING_GAP, ADDRESS_MIN_WIDTH, ADDRESS_SECURITY_ICON_SIZE,
         ADDRESS_TRAILING_CONTROLS_WIDTH, HOME_METRIC_CARD_MIN_WIDTH, home_metrics_layout,
-        home_search_width, home_top_space, tab_title_width, toolbar_address_width,
+        home_search_width, home_top_space, tab_corner_radius, tab_title_width,
+        toolbar_address_width,
     };
     use super::{
         ADDRESS_HEIGHT, APP_RAIL_WIDTH, APP_TITLE_HEIGHT, APP_TITLE_LEFT_PADDING,
@@ -1452,10 +1463,10 @@ mod tests {
         HOME_METRIC_CARD_MAX_WIDTH, HOME_METRIC_DETAIL_GAP, HOME_METRIC_ICON_LABEL_GAP,
         HOME_METRIC_ICON_SIZE, HOME_SEARCH_ICON_SIZE, HOME_SEARCH_TO_METRICS_GAP,
         HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN, NEW_TAB_BUTTON_SIZE,
-        NEW_TAB_LEFT_GAP, NEW_TAB_TEXT_SIZE, TAB_CONTENT_HEIGHT, TAB_HEIGHT, TAB_ICON_TITLE_GAP,
-        TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP,
-        TAB_TITLE_MIN_WIDTH, TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ITEM_SPACING,
-        TOOLBAR_MENU_TEXT_SIZE, egui_chrome_owns_position,
+        NEW_TAB_LEFT_GAP, NEW_TAB_TEXT_SIZE, TAB_CONTENT_HEIGHT, TAB_CORNER_RADIUS, TAB_HEIGHT,
+        TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_HEIGHT,
+        TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH, TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT,
+        TOOLBAR_ITEM_SPACING, TOOLBAR_MENU_TEXT_SIZE, egui_chrome_owns_position,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -1532,6 +1543,7 @@ mod tests {
         assert_eq!(APP_TITLE_LEFT_PADDING, 30.0);
         assert_eq!(APP_TITLE_TEXT_SIZE, 24.0);
         assert_eq!(TAB_HEIGHT, 58.0);
+        assert_eq!(TAB_CORNER_RADIUS, 8);
         assert_eq!(
             TAB_CONTENT_HEIGHT,
             TAB_HEIGHT - f32::from(TAB_INNER_MARGIN_Y) * 2.0
@@ -1609,6 +1621,16 @@ mod tests {
     fn tab_title_width_reserves_fixed_close_region() {
         assert_eq!(tab_title_width(TAB_WIDTH), 232.0);
         assert_eq!(tab_title_width(100.0), TAB_TITLE_MIN_WIDTH);
+    }
+
+    #[test]
+    fn tab_corner_radius_attaches_tabs_to_strip() {
+        let radius = tab_corner_radius();
+
+        assert_eq!(radius.nw, TAB_CORNER_RADIUS);
+        assert_eq!(radius.ne, TAB_CORNER_RADIUS);
+        assert_eq!(radius.sw, 0);
+        assert_eq!(radius.se, 0);
     }
 
     #[test]
