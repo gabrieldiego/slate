@@ -70,6 +70,7 @@ const TAB_TITLE_MIN_WIDTH: f32 = 80.0;
 const TAB_ICON_TITLE_GAP: f32 = 12.0;
 const TAB_TITLE_CLOSE_GAP: f32 = 8.0;
 const TAB_CLOSE_BUTTON_SIZE: f32 = 28.0;
+const TAB_CLOSE_ICON_SIZE: f32 = 22.0;
 const NEW_TAB_LEFT_GAP: f32 = 16.0;
 const NEW_TAB_BUTTON_SIZE: f32 = 44.0;
 const NEW_TAB_TEXT_SIZE: f32 = 28.0;
@@ -914,9 +915,13 @@ impl Gui {
 
             let close_button = tab_frame.content_ui.add_sized(
                 [TAB_CLOSE_BUTTON_SIZE, TAB_CLOSE_BUTTON_SIZE],
-                egui::Button::new("×")
-                    .fill(egui::Color32::TRANSPARENT)
-                    .frame(false),
+                egui::Button::new(
+                    egui::RichText::new("×")
+                        .size(TAB_CLOSE_ICON_SIZE)
+                        .color(slate_theme::TEXT),
+                )
+                .fill(egui::Color32::TRANSPARENT)
+                .frame(false),
             );
             close_button.widget_info(|| {
                 let mut info = WidgetInfo::new(WidgetType::Button);
@@ -1505,11 +1510,12 @@ mod tests {
         HOME_METRIC_CARD_MAX_WIDTH, HOME_METRIC_DETAIL_GAP, HOME_METRIC_ICON_LABEL_GAP,
         HOME_METRIC_ICON_SIZE, HOME_SEARCH_ICON_SIZE, HOME_SEARCH_TO_METRICS_GAP,
         HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN, NEW_TAB_BUTTON_SIZE,
-        NEW_TAB_LEFT_GAP, NEW_TAB_TEXT_SIZE, TAB_CONTENT_HEIGHT, TAB_CORNER_RADIUS, TAB_HEIGHT,
-        TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_CONTENT_ALIGN,
-        TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH, TAB_WIDTH, TOOLBAR_BUTTON_SIZE,
-        TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE, TOOLBAR_ITEM_SPACING, TOOLBAR_MENU_TEXT_SIZE,
-        TOOLBAR_NAV_ICON_SIZE, TOOLBAR_PRIVACY_ICON_SIZE, egui_chrome_owns_position,
+        NEW_TAB_LEFT_GAP, NEW_TAB_TEXT_SIZE, TAB_CLOSE_ICON_SIZE, TAB_CONTENT_HEIGHT,
+        TAB_CORNER_RADIUS, TAB_HEIGHT, TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y,
+        TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH,
+        TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE, TOOLBAR_ITEM_SPACING,
+        TOOLBAR_MENU_TEXT_SIZE, TOOLBAR_NAV_ICON_SIZE, TOOLBAR_PRIVACY_ICON_SIZE,
+        egui_chrome_owns_position,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -1605,6 +1611,7 @@ mod tests {
         assert_eq!(TAB_ICON_TITLE_GAP, 12.0);
         assert_eq!(TAB_TITLE_CLOSE_GAP, 8.0);
         assert_eq!(TAB_CLOSE_BUTTON_SIZE, 28.0);
+        assert_eq!(TAB_CLOSE_ICON_SIZE, 22.0);
         assert_eq!(NEW_TAB_LEFT_GAP, 16.0);
         assert_eq!(NEW_TAB_BUTTON_SIZE, 44.0);
         assert_eq!(NEW_TAB_TEXT_SIZE, 28.0);
