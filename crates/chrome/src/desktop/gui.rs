@@ -52,6 +52,9 @@ const FOOTER_LEFT_PADDING: f32 = 22.0;
 const FOOTER_RIGHT_PADDING: f32 = 22.0;
 const FOOTER_ITEM_SPACING: f32 = 18.0;
 const FOOTER_ICON_SIZE: f32 = 28.0;
+const FOOTER_PROTECTION_ICON_LABEL_GAP: f32 = 16.0;
+const FOOTER_PROTECTION_LABEL_WIDTH: f32 = 200.0;
+const FOOTER_PROTECTION_STATUS_HEIGHT: f32 = 40.0;
 const FOOTER_TEXT_SIZE: f32 = 16.0;
 const FOOTER_SEPARATOR_HEIGHT: f32 = 28.0;
 const FOOTER_SYNC_DOT_SIZE: f32 = 12.0;
@@ -423,6 +426,10 @@ fn tab_title_width(available_width: f32) -> f32 {
 
 fn footer_sync_status_width() -> f32 {
     FOOTER_SYNC_DOT_SIZE + FOOTER_SYNC_DOT_LABEL_GAP + FOOTER_SYNC_LABEL_WIDTH
+}
+
+fn footer_protection_status_width() -> f32 {
+    FOOTER_ICON_SIZE + FOOTER_PROTECTION_ICON_LABEL_GAP + FOOTER_PROTECTION_LABEL_WIDTH
 }
 
 fn tab_corner_radius() -> egui::CornerRadius {
@@ -1025,18 +1032,52 @@ impl Gui {
         response.on_hover_text("Sync On");
     }
 
+    fn draw_footer_protection_status(ui: &mut egui::Ui, texture: egui::load::SizedTexture) {
+        let (rect, response) = ui.allocate_exact_size(
+            egui::vec2(
+                footer_protection_status_width(),
+                FOOTER_PROTECTION_STATUS_HEIGHT,
+            ),
+            egui::Sense::hover(),
+        );
+
+        if ui.is_rect_visible(rect) {
+            let icon_rect = egui::Rect::from_center_size(
+                egui::pos2(rect.left() + FOOTER_ICON_SIZE / 2.0, rect.center().y),
+                Vec2::splat(FOOTER_ICON_SIZE),
+            );
+            ui.painter().image(
+                texture.id,
+                icon_rect,
+                egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
+                egui::Color32::WHITE,
+            );
+            ui.painter().text(
+                egui::pos2(
+                    icon_rect.right() + FOOTER_PROTECTION_ICON_LABEL_GAP,
+                    rect.center().y,
+                ),
+                egui::Align2::LEFT_CENTER,
+                "Protected. Private. Yours.",
+                egui::FontId::proportional(FOOTER_TEXT_SIZE),
+                slate_theme::TEXT,
+            );
+        }
+
+        let enabled = ui.is_enabled();
+        response.widget_info(move || {
+            WidgetInfo::labeled(WidgetType::Label, enabled, "Protected. Private. Yours.")
+        });
+        response.on_hover_text("Protected. Private. Yours.");
+    }
+
     fn draw_footer(ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
         ui.spacing_mut().item_spacing = egui::vec2(FOOTER_ITEM_SPACING, 0.0);
         ui.horizontal_centered(|ui| {
             ui.add_space(FOOTER_LEFT_PADDING);
             let footer_icon =
                 slate_icons.texture(ui.ctx(), SlateIcon::HomeFooterShield, slate_theme::TEAL);
-            ui.add(Self::icon_image(footer_icon, FOOTER_ICON_SIZE));
-            ui.label(
-                egui::RichText::new("Protected. Private. Yours.")
-                    .size(FOOTER_TEXT_SIZE)
-                    .color(slate_theme::TEXT),
-            );
+            Self::draw_footer_protection_status(ui, footer_icon);
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(FOOTER_RIGHT_PADDING);
@@ -1995,42 +2036,43 @@ mod tests {
         ADDRESS_SHADOW_ALPHA, ADDRESS_SHADOW_BLUR, ADDRESS_SHADOW_OFFSET, ADDRESS_SHADOW_SPREAD,
         ADDRESS_TRAILING_CONTROLS_WIDTH, Gui, HOME_METRIC_CARD_MIN_WIDTH, HomeContentLayout,
         SlateIconCache, concept_screenshot_home_view_size, default_opening_home_view_height,
-        default_opening_home_view_size, footer_sync_status_width, home_content_stack_height,
-        home_metric_card_content_height, home_metric_card_content_width, home_metrics_layout,
-        home_metrics_rendered_height, home_metrics_row_width, home_search_rendered_height,
-        home_search_width, home_top_space, page_info_raster_for_location, slate_theme,
-        status_bubble_label, status_bubble_width, tab_corner_radius, tab_title_width,
-        toolbar_address_width,
+        default_opening_home_view_size, footer_protection_status_width, footer_sync_status_width,
+        home_content_stack_height, home_metric_card_content_height, home_metric_card_content_width,
+        home_metrics_layout, home_metrics_rendered_height, home_metrics_row_width,
+        home_search_rendered_height, home_search_width, home_top_space,
+        page_info_raster_for_location, slate_theme, status_bubble_label, status_bubble_width,
+        tab_corner_radius, tab_title_width, toolbar_address_width,
     };
     use super::{
         ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH, APP_TITLE_HEIGHT,
         APP_TITLE_LEFT_PADDING, APP_TITLE_TEXT_SIZE, FOOTER_HEIGHT, FOOTER_ICON_SIZE,
         FOOTER_ITEM_SPACING, FOOTER_LEFT_PADDING, FOOTER_PANEL_MARGIN_X, FOOTER_PANEL_MARGIN_Y,
-        FOOTER_RIGHT_PADDING, FOOTER_SEPARATOR_HEIGHT, FOOTER_SETTINGS_BUTTON_SIZE,
-        FOOTER_SETTINGS_GEAR_CENTER_RADIUS, FOOTER_SETTINGS_GEAR_RADIUS,
-        FOOTER_SETTINGS_GEAR_STROKE, FOOTER_SETTINGS_GEAR_TOOTH_INNER_RADIUS,
-        FOOTER_SETTINGS_GEAR_TOOTH_OUTER_RADIUS, FOOTER_SETTINGS_ICON_SIZE,
-        FOOTER_SYNC_DOT_LABEL_GAP, FOOTER_SYNC_DOT_SIZE, FOOTER_SYNC_LABEL_WIDTH,
-        FOOTER_SYNC_STATUS_HEIGHT, FOOTER_TEXT_SIZE, HOME_BOTTOM_MIN_GAP, HOME_HERO_SIZE,
-        HOME_HERO_TO_SEARCH_GAP, HOME_METRIC_BADGE_CORNER_RADIUS, HOME_METRIC_BADGE_MARGIN_X,
-        HOME_METRIC_BADGE_MARGIN_Y, HOME_METRIC_BADGE_TEXT_SIZE, HOME_METRIC_CARD_GAP,
-        HOME_METRIC_CARD_HEIGHT, HOME_METRIC_CARD_INNER_MARGIN_X, HOME_METRIC_CARD_INNER_MARGIN_Y,
-        HOME_METRIC_CARD_MAX_WIDTH, HOME_METRIC_DETAIL_GAP, HOME_METRIC_DETAIL_TEXT_SIZE,
-        HOME_METRIC_GRID_EXTRA_HEIGHT, HOME_METRIC_ICON_LABEL_GAP, HOME_METRIC_ICON_SIZE,
-        HOME_METRIC_LABEL_TEXT_SIZE, HOME_PANEL_SHADOW_ALPHA, HOME_PANEL_SHADOW_BLUR,
-        HOME_PANEL_SHADOW_OFFSET, HOME_PANEL_SHADOW_SPREAD, HOME_SEARCH_FRAME_EXTRA_HEIGHT,
-        HOME_SEARCH_ICON_SIZE, HOME_SEARCH_INPUT_TEXT_SIZE, HOME_SEARCH_TO_METRICS_GAP,
-        HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN, NEW_TAB_BUTTON_SIZE,
-        NEW_TAB_ICON_SIZE, NEW_TAB_ICON_STROKE, NEW_TAB_LEFT_GAP, STATUS_BUBBLE_CORNER_RADIUS,
-        STATUS_BUBBLE_HEIGHT, STATUS_BUBBLE_HORIZONTAL_PADDING, STATUS_BUBBLE_MARGIN_X,
-        STATUS_BUBBLE_MARGIN_Y, STATUS_BUBBLE_MAX_WIDTH, STATUS_TEXT_SIZE, TAB_CLOSE_BUTTON_RADIUS,
-        TAB_CLOSE_ICON_SIZE, TAB_CONTENT_HEIGHT, TAB_CORNER_RADIUS, TAB_HEIGHT, TAB_ICON_TITLE_GAP,
-        TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT,
-        TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH, TAB_TITLE_TEXT_SIZE, TAB_WIDTH,
-        TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE, TOOLBAR_ITEM_SPACING,
-        TOOLBAR_MENU_ICON_GAP, TOOLBAR_MENU_ICON_STROKE, TOOLBAR_MENU_ICON_WIDTH,
-        TOOLBAR_PANEL_MARGIN_X, TOOLBAR_PANEL_MARGIN_Y, TOOLBAR_PRIVACY_ICON_SIZE,
-        TOOLBAR_SEPARATOR_HEIGHT, egui_chrome_owns_position,
+        FOOTER_PROTECTION_ICON_LABEL_GAP, FOOTER_PROTECTION_LABEL_WIDTH,
+        FOOTER_PROTECTION_STATUS_HEIGHT, FOOTER_RIGHT_PADDING, FOOTER_SEPARATOR_HEIGHT,
+        FOOTER_SETTINGS_BUTTON_SIZE, FOOTER_SETTINGS_GEAR_CENTER_RADIUS,
+        FOOTER_SETTINGS_GEAR_RADIUS, FOOTER_SETTINGS_GEAR_STROKE,
+        FOOTER_SETTINGS_GEAR_TOOTH_INNER_RADIUS, FOOTER_SETTINGS_GEAR_TOOTH_OUTER_RADIUS,
+        FOOTER_SETTINGS_ICON_SIZE, FOOTER_SYNC_DOT_LABEL_GAP, FOOTER_SYNC_DOT_SIZE,
+        FOOTER_SYNC_LABEL_WIDTH, FOOTER_SYNC_STATUS_HEIGHT, FOOTER_TEXT_SIZE, HOME_BOTTOM_MIN_GAP,
+        HOME_HERO_SIZE, HOME_HERO_TO_SEARCH_GAP, HOME_METRIC_BADGE_CORNER_RADIUS,
+        HOME_METRIC_BADGE_MARGIN_X, HOME_METRIC_BADGE_MARGIN_Y, HOME_METRIC_BADGE_TEXT_SIZE,
+        HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_HEIGHT, HOME_METRIC_CARD_INNER_MARGIN_X,
+        HOME_METRIC_CARD_INNER_MARGIN_Y, HOME_METRIC_CARD_MAX_WIDTH, HOME_METRIC_DETAIL_GAP,
+        HOME_METRIC_DETAIL_TEXT_SIZE, HOME_METRIC_GRID_EXTRA_HEIGHT, HOME_METRIC_ICON_LABEL_GAP,
+        HOME_METRIC_ICON_SIZE, HOME_METRIC_LABEL_TEXT_SIZE, HOME_PANEL_SHADOW_ALPHA,
+        HOME_PANEL_SHADOW_BLUR, HOME_PANEL_SHADOW_OFFSET, HOME_PANEL_SHADOW_SPREAD,
+        HOME_SEARCH_FRAME_EXTRA_HEIGHT, HOME_SEARCH_ICON_SIZE, HOME_SEARCH_INPUT_TEXT_SIZE,
+        HOME_SEARCH_TO_METRICS_GAP, HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN,
+        NEW_TAB_BUTTON_SIZE, NEW_TAB_ICON_SIZE, NEW_TAB_ICON_STROKE, NEW_TAB_LEFT_GAP,
+        STATUS_BUBBLE_CORNER_RADIUS, STATUS_BUBBLE_HEIGHT, STATUS_BUBBLE_HORIZONTAL_PADDING,
+        STATUS_BUBBLE_MARGIN_X, STATUS_BUBBLE_MARGIN_Y, STATUS_BUBBLE_MAX_WIDTH, STATUS_TEXT_SIZE,
+        TAB_CLOSE_BUTTON_RADIUS, TAB_CLOSE_ICON_SIZE, TAB_CONTENT_HEIGHT, TAB_CORNER_RADIUS,
+        TAB_HEIGHT, TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y,
+        TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH,
+        TAB_TITLE_TEXT_SIZE, TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE,
+        TOOLBAR_ITEM_SPACING, TOOLBAR_MENU_ICON_GAP, TOOLBAR_MENU_ICON_STROKE,
+        TOOLBAR_MENU_ICON_WIDTH, TOOLBAR_PANEL_MARGIN_X, TOOLBAR_PANEL_MARGIN_Y,
+        TOOLBAR_PRIVACY_ICON_SIZE, TOOLBAR_SEPARATOR_HEIGHT, egui_chrome_owns_position,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -2141,6 +2183,10 @@ mod tests {
         assert_eq!(FOOTER_RIGHT_PADDING, 22.0);
         assert_eq!(FOOTER_ITEM_SPACING, 18.0);
         assert_eq!(FOOTER_ICON_SIZE, 28.0);
+        assert_eq!(FOOTER_PROTECTION_ICON_LABEL_GAP, 16.0);
+        assert_eq!(FOOTER_PROTECTION_LABEL_WIDTH, 200.0);
+        assert_eq!(FOOTER_PROTECTION_STATUS_HEIGHT, 40.0);
+        assert_eq!(footer_protection_status_width(), 244.0);
         assert_eq!(FOOTER_TEXT_SIZE, 16.0);
         assert_eq!(FOOTER_SEPARATOR_HEIGHT, 28.0);
         assert_eq!(FOOTER_SYNC_DOT_SIZE, 12.0);
