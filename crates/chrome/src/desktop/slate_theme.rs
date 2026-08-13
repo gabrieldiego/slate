@@ -26,7 +26,6 @@ pub(crate) enum SlateIcon {
     AppWeb,
     HomeFooterShield,
     HomeHeroShield,
-    HomeSearch,
     HomeMetricAds,
     HomeMetricLock,
     HomeMetricPrivacy,
@@ -47,6 +46,7 @@ pub(crate) enum SlateRaster {
     NavReload,
     NavStop,
     PageInfoSecure,
+    Search,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -103,12 +103,6 @@ impl SlateIcon {
                 width: 64,
                 height: 64,
                 mask: include_bytes!("../../assets/icons/home_hero_shield.alpha"),
-            },
-            Self::HomeSearch => SlateIconData {
-                name: "home-search",
-                width: 32,
-                height: 32,
-                mask: include_bytes!("../../assets/icons/home_search.alpha"),
             },
             Self::HomeMetricAds => SlateIconData {
                 name: "home-metric-ads",
@@ -212,6 +206,12 @@ impl SlateRaster {
                 width: 24,
                 height: 24,
                 bytes: include_bytes!("../../assets/icons/slate-ns/page-info-secure.png"),
+            },
+            Self::Search => SlateRasterData {
+                name: "search",
+                width: 17,
+                height: 17,
+                bytes: include_bytes!("../../assets/icons/slate-ns/search.png"),
             },
         }
     }
@@ -334,7 +334,6 @@ mod tests {
             SlateIcon::AppWeb,
             SlateIcon::HomeFooterShield,
             SlateIcon::HomeHeroShield,
-            SlateIcon::HomeSearch,
             SlateIcon::HomeMetricAds,
             SlateIcon::HomeMetricLock,
             SlateIcon::HomeMetricPrivacy,
@@ -360,6 +359,7 @@ mod tests {
             SlateRaster::NavReload,
             SlateRaster::NavStop,
             SlateRaster::PageInfoSecure,
+            SlateRaster::Search,
         ] {
             let data = raster.data();
             let image = image::load_from_memory(data.bytes).unwrap().to_rgba8();
