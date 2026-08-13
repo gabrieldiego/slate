@@ -107,7 +107,7 @@ const RAIL_BUTTON_SIZE: f32 = 80.0;
 const RAIL_BUTTON_RADIUS: u8 = 8;
 const RAIL_PANEL_MARGIN_X: i8 = 8;
 const RAIL_PANEL_MARGIN_Y: i8 = 0;
-const RAIL_TOP_SPACE: f32 = 14.0;
+const RAIL_TOP_SPACE: f32 = 22.0;
 const RAIL_ITEM_GAP: f32 = 16.0;
 const TAB_ICON_SIZE: f32 = 24.0;
 const ADDRESS_LEADING_GAP: f32 = 28.0;
@@ -2309,7 +2309,7 @@ mod tests {
         assert_eq!(RAIL_BUTTON_RADIUS, 8);
         assert_eq!(RAIL_PANEL_MARGIN_X, 8);
         assert_eq!(RAIL_PANEL_MARGIN_Y, 0);
-        assert_eq!(RAIL_TOP_SPACE, 14.0);
+        assert_eq!(RAIL_TOP_SPACE, 22.0);
         assert_eq!(RAIL_ITEM_GAP, 16.0);
         assert_eq!(TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT, 166.0);
         assert_eq!(tab_strip_background_color(), slate_theme::SURFACE);
