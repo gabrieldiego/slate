@@ -22,6 +22,7 @@ pub struct BrowserState {
 pub struct Tab {
     pub title: String,
     pub address: String,
+    pub cached_surface: Option<RenderSurface>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -53,14 +54,17 @@ impl BrowserState {
                 Tab {
                     title: surface.title.clone(),
                     address: surface.address.clone(),
+                    cached_surface: Some(surface.clone()),
                 },
                 Tab {
                     title: "Research".to_string(),
                     address: "https://servo.org".to_string(),
+                    cached_surface: None,
                 },
                 Tab {
                     title: "Calendar".to_string(),
                     address: "slate://calendar".to_string(),
+                    cached_surface: None,
                 },
             ],
             active_tab: 0,
@@ -79,12 +83,12 @@ impl BrowserState {
     }
 
     pub fn activate_tab(&mut self, index: usize) -> bool {
-        let Some(tab) = self.tabs.get(index).cloned() else {
+        if index >= self.tabs.len() {
             return false;
-        };
+        }
 
         self.active_tab = index;
-        self.open_tab_surface(&tab);
+        self.open_active_tab_surface();
         true
     }
 
@@ -92,8 +96,7 @@ impl BrowserState {
         self.active_app = app;
         self.surface = match app {
             AppId::Web => self
-                .active_tab()
-                .map(surface_for_tab)
+                .cached_active_tab_surface()
                 .unwrap_or_else(surface_for_web_home),
             AppId::Downloads => downloads_surface(),
             AppId::Calendar => calendar_surface(),
@@ -106,16 +109,18 @@ impl BrowserState {
         self.tabs.push(Tab {
             title: format!("Tab {number}"),
             address: "slate://new".to_string(),
+            cached_surface: None,
         });
         let index = self.tabs.len().saturating_sub(1);
         let _ = self.activate_tab(index);
     }
 
     pub fn navigate(&mut self, input: &str) -> Result<(), NavigationError> {
-        let address = normalize_navigation_input(input)?;
-        let surface = surface_for_address(&address, None);
-        self.set_active_surface(surface);
-        Ok(())
+        self.navigate_with_surface_loader(
+            input,
+            RenderViewport::default(),
+            surface_for_address_with_viewport,
+        )
     }
 
     pub fn navigate_with_viewport(
@@ -123,21 +128,41 @@ impl BrowserState {
         input: &str,
         viewport: RenderViewport,
     ) -> Result<(), NavigationError> {
+        self.navigate_with_surface_loader(input, viewport, surface_for_address_with_viewport)
+    }
+
+    fn navigate_with_surface_loader(
+        &mut self,
+        input: &str,
+        viewport: RenderViewport,
+        load_surface: impl FnOnce(&str, Option<&str>, RenderViewport) -> RenderSurface,
+    ) -> Result<(), NavigationError> {
         let address = normalize_navigation_input(input)?;
-        let surface = surface_for_address_with_viewport(&address, None, viewport);
+        let surface = load_surface(&address, None, viewport);
         self.set_active_surface(surface);
         Ok(())
     }
 
     pub fn ensure_active_web_viewport(&mut self, viewport: RenderViewport) -> bool {
+        self.refresh_active_web_viewport(viewport, surface_for_address_with_viewport)
+    }
+
+    fn refresh_active_web_viewport(
+        &mut self,
+        viewport: RenderViewport,
+        load_surface: impl FnOnce(&str, Option<&str>, RenderViewport) -> RenderSurface,
+    ) -> bool {
         if !self.active_web_viewport_needs_refresh(viewport) {
             return false;
         }
 
-        let Some(tab) = self.active_tab().cloned() else {
+        let Some((address, title)) = self
+            .active_tab()
+            .map(|tab| (tab.address.clone(), tab.title.clone()))
+        else {
             return false;
         };
-        let surface = surface_for_address_with_viewport(&tab.address, Some(&tab.title), viewport);
+        let surface = load_surface(&address, Some(&title), viewport);
         self.set_active_surface(surface);
         true
     }
@@ -150,6 +175,7 @@ impl BrowserState {
         let tab = Tab {
             title: surface.title.clone(),
             address: surface.address.clone(),
+            cached_surface: Some(surface.clone()),
         };
 
         if let Some(active_tab) = self.tabs.get_mut(self.active_tab) {
@@ -163,9 +189,29 @@ impl BrowserState {
         self.surface = surface;
     }
 
-    fn open_tab_surface(&mut self, tab: &Tab) {
-        self.active_app = app_for_address(&tab.address);
-        self.surface = surface_for_tab(tab);
+    fn open_active_tab_surface(&mut self) {
+        let Some(surface) = self.cached_active_tab_surface() else {
+            return;
+        };
+
+        self.active_app = app_for_address(&surface.address);
+        self.surface = surface;
+    }
+
+    fn cached_active_tab_surface(&mut self) -> Option<RenderSurface> {
+        let tab = self.tabs.get(self.active_tab)?;
+        let surface = tab
+            .cached_surface
+            .clone()
+            .unwrap_or_else(|| surface_for_tab(tab));
+
+        if let Some(active_tab) = self.tabs.get_mut(self.active_tab) {
+            active_tab.title = surface.title.clone();
+            active_tab.address = surface.address.clone();
+            active_tab.cached_surface = Some(surface.clone());
+        }
+
+        Some(surface)
     }
 
     fn active_surface_needs_viewport(&self, viewport: RenderViewport) -> bool {
@@ -331,6 +377,9 @@ fn surface_for_address_with_viewport(
         AppId::Web => {
             let backend = ServoBackend;
             let mut surface = backend.load_address_with_viewport(address, viewport);
+            if address == "slate://new" {
+                surface.address = address.to_string();
+            }
             if let Some(fallback_title) = fallback_title
                 && surface.title.is_empty()
             {
@@ -409,7 +458,10 @@ fn app_surface<const N: usize>(
 #[cfg(test)]
 mod tests {
     use super::{BrowserState, normalize_navigation_input, percent_encode_file_path};
-    use slate_rendering::{RenderDocument, ServoBackend, ServoDocumentSource};
+    use slate_rendering::{
+        RenderDocument, RenderSurface, RenderViewport, ServoBackend, ServoDocument,
+        ServoDocumentSource, ServoDocumentStatus, ServoFrame,
+    };
     use std::io::{Read, Write};
     use std::net::TcpListener;
     use std::thread;
@@ -428,6 +480,56 @@ mod tests {
         let mut state = BrowserState::new(&ServoBackend);
         state.select_app(slate_apps::AppId::Downloads);
         assert_eq!(state.surface.address, "slate://downloads");
+    }
+
+    #[test]
+    fn selecting_web_reuses_cached_tab_surface() {
+        let mut state = BrowserState::new(&ServoBackend);
+        let cached_surface = cached_web_surface("https://cached.example", 640, 360);
+        state.surface = cached_surface.clone();
+        state.tabs[0].title = cached_surface.title.clone();
+        state.tabs[0].address = cached_surface.address.clone();
+        state.tabs[0].cached_surface = Some(cached_surface.clone());
+
+        state.select_app(slate_apps::AppId::Downloads);
+        state.select_app(slate_apps::AppId::Web);
+
+        assert_eq!(state.surface, cached_surface);
+    }
+
+    #[test]
+    fn activating_tab_reuses_cached_surface() {
+        let mut state = BrowserState::new(&ServoBackend);
+        let cached_surface = cached_web_surface("https://research.example", 800, 500);
+        state.tabs[1].title = cached_surface.title.clone();
+        state.tabs[1].address = cached_surface.address.clone();
+        state.tabs[1].cached_surface = Some(cached_surface.clone());
+
+        assert!(state.activate_tab(1));
+
+        assert_eq!(state.surface, cached_surface);
+    }
+
+    #[test]
+    fn viewport_refresh_updates_cached_tab_surface() {
+        let mut state = BrowserState::new(&ServoBackend);
+        let cached_surface = cached_web_surface("slate://tests/cache-refresh", 320, 240);
+        state.surface = cached_surface.clone();
+        state.tabs[0].title = cached_surface.title.clone();
+        state.tabs[0].address = cached_surface.address.clone();
+        state.tabs[0].cached_surface = Some(cached_surface);
+
+        assert!(state.refresh_active_web_viewport(
+            RenderViewport::new(640, 360),
+            |address, title, viewport| {
+                assert_eq!(address, "slate://tests/cache-refresh");
+                assert_eq!(title, Some("Cached Surface"));
+                cached_web_surface(address, viewport.width as usize, viewport.height as usize)
+            }
+        ));
+
+        assert_eq!(state.tabs[0].cached_surface.as_ref(), Some(&state.surface));
+        assert!(!state.active_web_viewport_needs_refresh(RenderViewport::new(640, 360)));
     }
 
     #[test]
@@ -476,10 +578,22 @@ mod tests {
     }
 
     #[test]
-    fn navigating_updates_active_tab_and_loads_html_shim() {
+    fn navigating_updates_active_tab_from_loaded_surface() {
         let mut state = BrowserState::new(&ServoBackend);
         state
-            .navigate("slate://tests/hello")
+            .navigate_with_surface_loader(
+                "slate://tests/hello",
+                RenderViewport::default(),
+                |address, _title, viewport| {
+                    let mut surface = cached_web_surface(
+                        address,
+                        viewport.width as usize,
+                        viewport.height as usize,
+                    );
+                    surface.title = "Slate Servo Test".to_string();
+                    surface
+                },
+            )
             .expect("navigation should load");
 
         assert_eq!(state.surface.address, "slate://tests/hello");
@@ -521,5 +635,25 @@ mod tests {
         };
         assert_eq!(document.source, ServoDocumentSource::Web);
         assert!(!document.frame.pixels.is_empty());
+    }
+
+    fn cached_web_surface(address: &str, width: usize, height: usize) -> RenderSurface {
+        RenderSurface {
+            title: "Cached Surface".to_string(),
+            address: address.to_string(),
+            summary: "Rendered by Servo".to_string(),
+            metrics: Vec::new(),
+            document: RenderDocument::Web(ServoDocument {
+                title: "Cached Surface".to_string(),
+                address: address.to_string(),
+                frame: ServoFrame {
+                    width,
+                    height,
+                    pixels: vec![0x00EAF4F2; width.saturating_mul(height)],
+                },
+                source: ServoDocumentSource::SlateGenerated,
+                status: ServoDocumentStatus::Rendered,
+            }),
+        }
     }
 }
