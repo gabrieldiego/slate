@@ -51,10 +51,15 @@ const FOOTER_ICON_SIZE: f32 = 28.0;
 const FOOTER_TEXT_SIZE: f32 = 14.0;
 const FOOTER_SYNC_DOT_SIZE: f32 = 12.0;
 const APP_TITLE_WIDTH: f32 = 160.0;
-const APP_TITLE_HEIGHT: f32 = 56.0;
-const APP_TITLE_LEFT_PADDING: f32 = 22.0;
+const APP_TITLE_HEIGHT: f32 = TAB_STRIP_HEIGHT;
+const APP_TITLE_LEFT_PADDING: f32 = 30.0;
 const APP_TITLE_TEXT_SIZE: f32 = 24.0;
 const TAB_WIDTH: f32 = 300.0;
+const TAB_HEIGHT: f32 = 58.0;
+const TAB_INNER_MARGIN_X: i8 = 16;
+const TAB_INNER_MARGIN_Y: i8 = 8;
+const TAB_CONTENT_HEIGHT: f32 = TAB_HEIGHT - (TAB_INNER_MARGIN_Y as f32 * 2.0);
+const NEW_TAB_LEFT_GAP: f32 = 16.0;
 const TOOLBAR_ITEM_SPACING: f32 = 18.0;
 const TOOLBAR_ICON_SIZE: f32 = 24.0;
 const RAIL_ICON_SIZE: f32 = 34.0;
@@ -469,7 +474,8 @@ impl Gui {
         egui::Frame::NONE
             .fill(slate_theme::SURFACE)
             .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
-            .corner_radius(8)
+            .corner_radius(0)
+            .inner_margin(egui::Margin::symmetric(0, 0))
             .show(ui, |ui| {
                 ui.set_min_size(egui::vec2(APP_TITLE_WIDTH, APP_TITLE_HEIGHT));
                 ui.allocate_ui_with_layout(
@@ -733,11 +739,14 @@ impl Gui {
             })
             .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
             .corner_radius(8)
-            .inner_margin(egui::Margin::symmetric(8, 6))
+            .inner_margin(egui::Margin::symmetric(
+                TAB_INNER_MARGIN_X,
+                TAB_INNER_MARGIN_Y,
+            ))
             .begin(ui);
         {
             tab_frame.content_ui.set_width(TAB_WIDTH);
-            tab_frame.content_ui.set_min_height(28.0);
+            tab_frame.content_ui.set_min_height(TAB_CONTENT_HEIGHT);
 
             let visuals = tab_frame.content_ui.visuals_mut();
             // Remove the stroke so we don't see the border between the close button and the label
@@ -836,12 +845,13 @@ impl Gui {
             if winit_window.fullscreen().is_none() {
                 let tabs_frame = egui::Frame::NONE
                     .fill(slate_theme::BG)
-                    .inner_margin(egui::Margin::symmetric(8, 5));
+                    .inner_margin(egui::Margin::symmetric(0, 0));
                 Panel::top("tabs")
                     .exact_size(TAB_STRIP_HEIGHT)
                     .frame(tabs_frame)
                     .show_separator_line(true)
                     .show_inside(ctx, |ui| {
+                        ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
                         ui.allocate_ui_with_layout(
                             ui.available_size(),
                             egui::Layout::left_to_right(egui::Align::Center),
@@ -857,6 +867,8 @@ impl Gui {
                                             ui.available_size(),
                                             egui::Layout::left_to_right(egui::Align::Center),
                                             |ui| {
+                                                ui.spacing_mut().item_spacing =
+                                                    egui::vec2(0.0, 0.0);
                                                 for (index, (id, webview)) in
                                                     window.webviews().into_iter().enumerate()
                                                 {
@@ -878,6 +890,7 @@ impl Gui {
                                                     );
                                                 }
 
+                                                ui.add_space(NEW_TAB_LEFT_GAP);
                                                 let new_tab_button =
                                                     ui.add(Gui::toolbar_button("+"));
                                                 new_tab_button.widget_info(|| {
@@ -1325,8 +1338,9 @@ mod tests {
         ADDRESS_HEIGHT, APP_RAIL_WIDTH, APP_TITLE_HEIGHT, APP_TITLE_LEFT_PADDING,
         APP_TITLE_TEXT_SIZE, FOOTER_HEIGHT, FOOTER_ICON_SIZE, FOOTER_LEFT_PADDING,
         FOOTER_RIGHT_PADDING, FOOTER_SYNC_DOT_SIZE, FOOTER_TEXT_SIZE, HOME_METRIC_CARD_GAP,
-        HOME_METRIC_CARD_MAX_WIDTH, TAB_STRIP_HEIGHT, TOOLBAR_HEIGHT, TOOLBAR_ITEM_SPACING,
-        egui_chrome_owns_position,
+        HOME_METRIC_CARD_MAX_WIDTH, NEW_TAB_LEFT_GAP, TAB_CONTENT_HEIGHT, TAB_HEIGHT,
+        TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_HEIGHT, TOOLBAR_HEIGHT,
+        TOOLBAR_ITEM_SPACING, egui_chrome_owns_position,
     };
     use super::{
         ADDRESS_LEADING_GAP, ADDRESS_MIN_WIDTH, ADDRESS_TRAILING_CONTROLS_WIDTH,
@@ -1389,9 +1403,17 @@ mod tests {
         assert_eq!(FOOTER_TEXT_SIZE, 14.0);
         assert_eq!(FOOTER_SYNC_DOT_SIZE, 12.0);
         assert_eq!(ADDRESS_HEIGHT, 54.0);
-        assert_eq!(APP_TITLE_HEIGHT, 56.0);
-        assert_eq!(APP_TITLE_LEFT_PADDING, 22.0);
+        assert_eq!(APP_TITLE_HEIGHT, TAB_STRIP_HEIGHT);
+        assert_eq!(APP_TITLE_LEFT_PADDING, 30.0);
         assert_eq!(APP_TITLE_TEXT_SIZE, 24.0);
+        assert_eq!(TAB_HEIGHT, 58.0);
+        assert_eq!(
+            TAB_CONTENT_HEIGHT,
+            TAB_HEIGHT - f32::from(TAB_INNER_MARGIN_Y) * 2.0
+        );
+        assert_eq!(TAB_INNER_MARGIN_X, 16);
+        assert_eq!(TAB_INNER_MARGIN_Y, 8);
+        assert_eq!(NEW_TAB_LEFT_GAP, 16.0);
         assert_eq!(TOOLBAR_ITEM_SPACING, 18.0);
         assert_eq!(ADDRESS_LEADING_GAP, 48.0);
         assert_eq!(ADDRESS_TRAILING_CONTROLS_WIDTH, 168.0);
