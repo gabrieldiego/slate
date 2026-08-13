@@ -136,7 +136,7 @@ const HOME_SEARCH_FRAME_EXTRA_HEIGHT: f32 = 8.0;
 const HOME_SEARCH_TEXT_HEIGHT: f32 = 34.0;
 const HOME_SEARCH_INPUT_TEXT_SIZE: f32 = 20.0;
 const HOME_SEARCH_INNER_MARGIN_X: i8 = 32;
-const HOME_SEARCH_ICON_SIZE: f32 = 28.0;
+const HOME_SEARCH_ICON_SIZE: f32 = 17.0;
 const HOME_SEARCH_ICON_GAP: f32 = 24.0;
 const HOME_SEARCH_CORNER_RADIUS: u8 = 8;
 const HOME_TOP_SPACE_FACTOR: f32 = 0.18;
@@ -1360,9 +1360,9 @@ impl Gui {
                         egui::vec2(search_content_width, HOME_SEARCH_HEIGHT),
                         egui::Layout::left_to_right(egui::Align::Center),
                         |ui| {
-                            let search_icon = slate_icons.texture(
+                            let search_icon = slate_icons.raster_mask_texture(
                                 ui.ctx(),
-                                SlateIcon::HomeSearch,
+                                SlateRaster::Search,
                                 slate_theme::MUTED,
                             );
                             ui.add(Self::icon_image(search_icon, HOME_SEARCH_ICON_SIZE));
@@ -2384,7 +2384,7 @@ mod tests {
         assert_eq!(HOME_SEARCH_TEXT_HEIGHT, 34.0);
         assert_eq!(HOME_SEARCH_INPUT_TEXT_SIZE, 20.0);
         assert_eq!(HOME_SEARCH_INNER_MARGIN_X, 32);
-        assert_eq!(HOME_SEARCH_ICON_SIZE, 28.0);
+        assert_eq!(HOME_SEARCH_ICON_SIZE, 17.0);
         assert_eq!(HOME_SEARCH_ICON_GAP, 24.0);
         assert_eq!(HOME_SEARCH_CORNER_RADIUS, 8);
         assert_eq!(TOOLBAR_PANEL_MARGIN_X, 18);

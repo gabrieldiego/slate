@@ -31,7 +31,6 @@ pub(crate) enum SlateIcon {
     HomeMetricLock,
     HomeMetricPrivacy,
     HomeMetricTime,
-    HomeSearch,
     TabCalendar,
     TabResearch,
     TabWeb,
@@ -56,6 +55,7 @@ pub(crate) enum SlateRaster {
     PageInfoLocal,
     PageInfoSecure,
     PageInfoWarning,
+    Search,
     TabClose,
     TabCloseMuted,
 }
@@ -138,12 +138,6 @@ impl SlateIcon {
                 width: 40,
                 height: 40,
                 mask: include_bytes!("../../assets/icons/home_metric_time.alpha"),
-            },
-            Self::HomeSearch => SlateIconData {
-                name: "home-search",
-                width: 32,
-                height: 32,
-                mask: include_bytes!("../../assets/icons/home_search.alpha"),
             },
             Self::TabCalendar => SlateIconData {
                 name: "tab-calendar",
@@ -271,6 +265,12 @@ impl SlateRaster {
                 width: 24,
                 height: 24,
                 bytes: include_bytes!("../../assets/icons/slate-ns/page-info-warning.png"),
+            },
+            Self::Search => SlateRasterData {
+                name: "search",
+                width: 17,
+                height: 17,
+                bytes: include_bytes!("../../assets/icons/slate-ns/search.png"),
             },
             Self::TabClose => SlateRasterData {
                 name: "tab-close",
@@ -453,7 +453,6 @@ mod tests {
             SlateIcon::HomeMetricLock,
             SlateIcon::HomeMetricPrivacy,
             SlateIcon::HomeMetricTime,
-            SlateIcon::HomeSearch,
             SlateIcon::TabCalendar,
             SlateIcon::TabResearch,
             SlateIcon::TabWeb,
@@ -483,6 +482,7 @@ mod tests {
             SlateRaster::PageInfoLocal,
             SlateRaster::PageInfoSecure,
             SlateRaster::PageInfoWarning,
+            SlateRaster::Search,
             SlateRaster::TabClose,
             SlateRaster::TabCloseMuted,
         ] {
