@@ -106,6 +106,14 @@ const HOME_METRIC_CARD_HEIGHT: f32 = 172.0;
 const HOME_METRIC_CARD_MIN_WIDTH: f32 = 156.0;
 const HOME_METRIC_CARD_MAX_WIDTH: f32 = 194.0;
 const HOME_METRIC_CARD_GAP: f32 = 34.0;
+const HOME_METRIC_CARD_INNER_MARGIN_X: i8 = 16;
+const HOME_METRIC_CARD_INNER_MARGIN_Y: i8 = 28;
+const HOME_METRIC_ICON_SIZE: f32 = 40.0;
+const HOME_METRIC_ICON_LABEL_GAP: f32 = 18.0;
+const HOME_METRIC_DETAIL_GAP: f32 = 4.0;
+const HOME_METRIC_BADGE_TEXT_SIZE: f32 = 11.0;
+const HOME_METRIC_BADGE_MARGIN_X: i8 = 6;
+const HOME_METRIC_BADGE_MARGIN_Y: i8 = 2;
 
 /// The user interface of a headed servoshell. Currently this is implemented via
 /// egui.
@@ -605,11 +613,14 @@ impl Gui {
         egui::Frame::NONE
             .fill(fill)
             .corner_radius(8)
-            .inner_margin(egui::Margin::symmetric(6, 2))
+            .inner_margin(egui::Margin::symmetric(
+                HOME_METRIC_BADGE_MARGIN_X,
+                HOME_METRIC_BADGE_MARGIN_Y,
+            ))
             .show(ui, |ui| {
                 ui.label(
                     egui::RichText::new(text)
-                        .size(11.0)
+                        .size(HOME_METRIC_BADGE_TEXT_SIZE)
                         .strong()
                         .color(slate_theme::SURFACE),
                 );
@@ -629,14 +640,17 @@ impl Gui {
             .fill(slate_theme::SURFACE)
             .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
             .corner_radius(8)
-            .inner_margin(egui::Margin::symmetric(16, 28))
+            .inner_margin(egui::Margin::symmetric(
+                HOME_METRIC_CARD_INNER_MARGIN_X,
+                HOME_METRIC_CARD_INNER_MARGIN_Y,
+            ))
             .show(ui, |ui| {
                 ui.set_width(width);
                 ui.set_min_height(HOME_METRIC_CARD_HEIGHT);
                 ui.vertical_centered(|ui| {
                     let texture = slate_icons.texture(ui.ctx(), icon, slate_theme::TEAL);
-                    ui.add(Self::icon_image(texture, 40.0));
-                    ui.add_space(18.0);
+                    ui.add(Self::icon_image(texture, HOME_METRIC_ICON_SIZE));
+                    ui.add_space(HOME_METRIC_ICON_LABEL_GAP);
                     ui.horizontal_centered(|ui| {
                         ui.label(egui::RichText::new(label).color(slate_theme::TEXT));
                         if let Some((text, fill)) = badge {
@@ -644,7 +658,7 @@ impl Gui {
                         }
                     });
                     if let Some(detail) = detail {
-                        ui.add_space(4.0);
+                        ui.add_space(HOME_METRIC_DETAIL_GAP);
                         ui.label(egui::RichText::new(detail).color(slate_theme::MUTED));
                     }
                 });
@@ -662,7 +676,7 @@ impl Gui {
                     (SlateIcon::HomeMetricPrivacy, "Privacy First", None, None),
                     (
                         SlateIcon::HomeMetricLock,
-                        "Tracker Blocked",
+                        "Trackers Blocked",
                         Some(("23", slate_theme::AMBER)),
                         None,
                     ),
@@ -1433,12 +1447,15 @@ mod tests {
         APP_TITLE_TEXT_SIZE, FOOTER_HEIGHT, FOOTER_ICON_SIZE, FOOTER_ITEM_SPACING,
         FOOTER_LEFT_PADDING, FOOTER_RIGHT_PADDING, FOOTER_SETTINGS_BUTTON_SIZE,
         FOOTER_SYNC_DOT_SIZE, FOOTER_TEXT_SIZE, HOME_HERO_SIZE, HOME_HERO_TO_SEARCH_GAP,
-        HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_MAX_WIDTH, HOME_SEARCH_ICON_SIZE,
-        HOME_SEARCH_TO_METRICS_GAP, HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN,
-        NEW_TAB_BUTTON_SIZE, NEW_TAB_LEFT_GAP, NEW_TAB_TEXT_SIZE, TAB_CONTENT_HEIGHT, TAB_HEIGHT,
-        TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_HEIGHT,
-        TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH, TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT,
-        TOOLBAR_ITEM_SPACING, TOOLBAR_MENU_TEXT_SIZE, egui_chrome_owns_position,
+        HOME_METRIC_BADGE_MARGIN_X, HOME_METRIC_BADGE_MARGIN_Y, HOME_METRIC_BADGE_TEXT_SIZE,
+        HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_INNER_MARGIN_X, HOME_METRIC_CARD_INNER_MARGIN_Y,
+        HOME_METRIC_CARD_MAX_WIDTH, HOME_METRIC_DETAIL_GAP, HOME_METRIC_ICON_LABEL_GAP,
+        HOME_METRIC_ICON_SIZE, HOME_SEARCH_ICON_SIZE, HOME_SEARCH_TO_METRICS_GAP,
+        HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN, NEW_TAB_BUTTON_SIZE,
+        NEW_TAB_LEFT_GAP, NEW_TAB_TEXT_SIZE, TAB_CONTENT_HEIGHT, TAB_HEIGHT, TAB_ICON_TITLE_GAP,
+        TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP,
+        TAB_TITLE_MIN_WIDTH, TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ITEM_SPACING,
+        TOOLBAR_MENU_TEXT_SIZE, egui_chrome_owns_position,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -1553,6 +1570,14 @@ mod tests {
         assert_eq!(HOME_HERO_SIZE, 64.0);
         assert_eq!(HOME_HERO_TO_SEARCH_GAP, 44.0);
         assert_eq!(HOME_SEARCH_TO_METRICS_GAP, 62.0);
+        assert_eq!(HOME_METRIC_CARD_INNER_MARGIN_X, 16);
+        assert_eq!(HOME_METRIC_CARD_INNER_MARGIN_Y, 28);
+        assert_eq!(HOME_METRIC_ICON_SIZE, 40.0);
+        assert_eq!(HOME_METRIC_ICON_LABEL_GAP, 18.0);
+        assert_eq!(HOME_METRIC_DETAIL_GAP, 4.0);
+        assert_eq!(HOME_METRIC_BADGE_TEXT_SIZE, 11.0);
+        assert_eq!(HOME_METRIC_BADGE_MARGIN_X, 6);
+        assert_eq!(HOME_METRIC_BADGE_MARGIN_Y, 2);
     }
 
     #[test]
