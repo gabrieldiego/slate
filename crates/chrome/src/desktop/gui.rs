@@ -79,6 +79,12 @@ const HOME_SEARCH_MIN_WIDTH: f32 = 280.0;
 const HOME_SEARCH_MAX_WIDTH: f32 = 880.0;
 const HOME_SEARCH_HEIGHT: f32 = 58.0;
 const HOME_SEARCH_ICON_SIZE: f32 = 20.0;
+const HOME_TOP_SPACE_FACTOR: f32 = 0.18;
+const HOME_TOP_SPACE_MIN: f32 = 48.0;
+const HOME_TOP_SPACE_MAX: f32 = 132.0;
+const HOME_HERO_SIZE: f32 = 64.0;
+const HOME_HERO_TO_SEARCH_GAP: f32 = 44.0;
+const HOME_SEARCH_TO_METRICS_GAP: f32 = 62.0;
 const HOME_METRIC_CARD_HEIGHT: f32 = 172.0;
 const HOME_METRIC_CARD_MIN_WIDTH: f32 = 156.0;
 const HOME_METRIC_CARD_MAX_WIDTH: f32 = 194.0;
@@ -179,6 +185,11 @@ fn toolbar_address_width(available_width: f32) -> f32 {
     (available_width - ADDRESS_TRAILING_CONTROLS_WIDTH)
         .max(min_width)
         .min(available_width)
+}
+
+fn home_top_space(available_height: f32) -> f32 {
+    (available_height.max(0.0) * HOME_TOP_SPACE_FACTOR)
+        .clamp(HOME_TOP_SPACE_MIN, HOME_TOP_SPACE_MAX)
 }
 
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
@@ -647,8 +658,7 @@ impl Gui {
                 ui.set_min_size(home_rect.size());
                 ui.painter().rect_filled(home_rect, 0.0, slate_theme::BG);
                 ui.scope_builder(egui::UiBuilder::new().max_rect(home_rect), |ui| {
-                    let top_space = (home_rect.height() * 0.14).clamp(36.0, 108.0);
-                    ui.add_space(top_space);
+                    ui.add_space(home_top_space(home_rect.height()));
                     ui.vertical_centered(|ui| {
                         let hero = slate_icons.texture(
                             ui.ctx(),
@@ -657,9 +667,9 @@ impl Gui {
                         );
                         ui.add(
                             egui::Image::from_texture(hero)
-                                .fit_to_exact_size(egui::vec2(64.0, 64.0)),
+                                .fit_to_exact_size(egui::vec2(HOME_HERO_SIZE, HOME_HERO_SIZE)),
                         );
-                        ui.add_space(26.0);
+                        ui.add_space(HOME_HERO_TO_SEARCH_GAP);
 
                         let available_search_width = (ui.available_width() - 32.0).max(0.0);
                         let search_width = available_search_width
@@ -703,7 +713,7 @@ impl Gui {
                             }
                         }
 
-                        ui.add_space(44.0);
+                        ui.add_space(HOME_SEARCH_TO_METRICS_GAP);
                         let metrics_height = ui.available_height();
                         ui.allocate_ui_with_layout(
                             egui::vec2(search_width, metrics_height),
@@ -1354,14 +1364,16 @@ mod tests {
         ADDRESS_BOOKMARK_ICON_SIZE, ADDRESS_BOOKMARK_RESERVED_WIDTH, ADDRESS_ICON_GAP,
         ADDRESS_INNER_MARGIN_X, ADDRESS_LEADING_GAP, ADDRESS_MIN_WIDTH, ADDRESS_SECURITY_ICON_SIZE,
         ADDRESS_TRAILING_CONTROLS_WIDTH, HOME_METRIC_CARD_MIN_WIDTH, home_metrics_layout,
-        toolbar_address_width,
+        home_top_space, toolbar_address_width,
     };
     use super::{
         ADDRESS_HEIGHT, APP_RAIL_WIDTH, APP_TITLE_HEIGHT, APP_TITLE_LEFT_PADDING,
         APP_TITLE_TEXT_SIZE, FOOTER_HEIGHT, FOOTER_ICON_SIZE, FOOTER_LEFT_PADDING,
-        FOOTER_RIGHT_PADDING, FOOTER_SYNC_DOT_SIZE, FOOTER_TEXT_SIZE, HOME_METRIC_CARD_GAP,
-        HOME_METRIC_CARD_MAX_WIDTH, HOME_SEARCH_ICON_SIZE, NEW_TAB_LEFT_GAP, TAB_CONTENT_HEIGHT,
-        TAB_HEIGHT, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_HEIGHT, TOOLBAR_HEIGHT,
+        FOOTER_RIGHT_PADDING, FOOTER_SYNC_DOT_SIZE, FOOTER_TEXT_SIZE, HOME_HERO_SIZE,
+        HOME_HERO_TO_SEARCH_GAP, HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_MAX_WIDTH,
+        HOME_SEARCH_ICON_SIZE, HOME_SEARCH_TO_METRICS_GAP, HOME_TOP_SPACE_FACTOR,
+        HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN, NEW_TAB_LEFT_GAP, TAB_CONTENT_HEIGHT, TAB_HEIGHT,
+        TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_HEIGHT, TOOLBAR_HEIGHT,
         TOOLBAR_ITEM_SPACING, egui_chrome_owns_position,
     };
 
@@ -1441,6 +1453,12 @@ mod tests {
         assert_eq!(ADDRESS_BOOKMARK_ICON_SIZE, 20.0);
         assert_eq!(ADDRESS_BOOKMARK_RESERVED_WIDTH, 36.0);
         assert_eq!(ADDRESS_TRAILING_CONTROLS_WIDTH, 168.0);
+        assert_eq!(HOME_TOP_SPACE_FACTOR, 0.18);
+        assert_eq!(HOME_TOP_SPACE_MIN, 48.0);
+        assert_eq!(HOME_TOP_SPACE_MAX, 132.0);
+        assert_eq!(HOME_HERO_SIZE, 64.0);
+        assert_eq!(HOME_HERO_TO_SEARCH_GAP, 44.0);
+        assert_eq!(HOME_SEARCH_TO_METRICS_GAP, 62.0);
     }
 
     #[test]
@@ -1452,6 +1470,13 @@ mod tests {
     fn narrow_toolbar_address_width_stays_within_available_width() {
         assert_eq!(toolbar_address_width(220.0), 220.0);
         assert!(toolbar_address_width(300.0) >= ADDRESS_MIN_WIDTH);
+    }
+
+    #[test]
+    fn home_top_spacing_is_responsive_with_bounds() {
+        assert_eq!(home_top_space(120.0), HOME_TOP_SPACE_MIN);
+        assert!((home_top_space(700.0) - 126.0).abs() < 0.001);
+        assert_eq!(home_top_space(900.0), HOME_TOP_SPACE_MAX);
     }
 
     #[test]
