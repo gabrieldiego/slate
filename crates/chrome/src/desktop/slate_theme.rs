@@ -31,9 +31,6 @@ pub(crate) enum SlateIcon {
     HomeMetricLock,
     HomeMetricPrivacy,
     HomeMetricTime,
-    NavBack,
-    NavForward,
-    NavRefresh,
     TabCalendar,
     TabResearch,
     TabWeb,
@@ -43,6 +40,11 @@ pub(crate) enum SlateIcon {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum SlateRaster {
     BookmarkAdd,
+    NavBack,
+    NavBackDisabled,
+    NavForward,
+    NavForwardDisabled,
+    NavReload,
     NavStop,
     PageInfoSecure,
 }
@@ -132,24 +134,6 @@ impl SlateIcon {
                 height: 40,
                 mask: include_bytes!("../../assets/icons/home_metric_time.alpha"),
             },
-            Self::NavBack => SlateIconData {
-                name: "nav-back",
-                width: 32,
-                height: 32,
-                mask: include_bytes!("../../assets/icons/nav_back.alpha"),
-            },
-            Self::NavForward => SlateIconData {
-                name: "nav-forward",
-                width: 32,
-                height: 32,
-                mask: include_bytes!("../../assets/icons/nav_forward.alpha"),
-            },
-            Self::NavRefresh => SlateIconData {
-                name: "nav-refresh",
-                width: 32,
-                height: 32,
-                mask: include_bytes!("../../assets/icons/nav_refresh.alpha"),
-            },
             Self::TabCalendar => SlateIconData {
                 name: "tab-calendar",
                 width: 20,
@@ -186,6 +170,36 @@ impl SlateRaster {
                 width: 17,
                 height: 17,
                 bytes: include_bytes!("../../assets/icons/slate-ns/hotlist-add.png"),
+            },
+            Self::NavBack => SlateRasterData {
+                name: "nav-back",
+                width: 24,
+                height: 24,
+                bytes: include_bytes!("../../assets/icons/slate-ns/back.png"),
+            },
+            Self::NavBackDisabled => SlateRasterData {
+                name: "nav-back-disabled",
+                width: 24,
+                height: 24,
+                bytes: include_bytes!("../../assets/icons/slate-ns/back_g.png"),
+            },
+            Self::NavForward => SlateRasterData {
+                name: "nav-forward",
+                width: 24,
+                height: 24,
+                bytes: include_bytes!("../../assets/icons/slate-ns/forward.png"),
+            },
+            Self::NavForwardDisabled => SlateRasterData {
+                name: "nav-forward-disabled",
+                width: 24,
+                height: 24,
+                bytes: include_bytes!("../../assets/icons/slate-ns/forward_g.png"),
+            },
+            Self::NavReload => SlateRasterData {
+                name: "nav-reload",
+                width: 24,
+                height: 24,
+                bytes: include_bytes!("../../assets/icons/slate-ns/reload.png"),
             },
             Self::NavStop => SlateRasterData {
                 name: "nav-stop",
@@ -325,9 +339,6 @@ mod tests {
             SlateIcon::HomeMetricLock,
             SlateIcon::HomeMetricPrivacy,
             SlateIcon::HomeMetricTime,
-            SlateIcon::NavBack,
-            SlateIcon::NavForward,
-            SlateIcon::NavRefresh,
             SlateIcon::TabCalendar,
             SlateIcon::TabResearch,
             SlateIcon::TabWeb,
@@ -342,6 +353,11 @@ mod tests {
     fn bundled_raster_images_match_declared_dimensions() {
         for raster in [
             SlateRaster::BookmarkAdd,
+            SlateRaster::NavBack,
+            SlateRaster::NavBackDisabled,
+            SlateRaster::NavForward,
+            SlateRaster::NavForwardDisabled,
+            SlateRaster::NavReload,
             SlateRaster::NavStop,
             SlateRaster::PageInfoSecure,
         ] {
