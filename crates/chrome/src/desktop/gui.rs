@@ -85,7 +85,7 @@ const TAB_ICON_TITLE_GAP: f32 = 12.0;
 const TAB_TITLE_CLOSE_GAP: f32 = 8.0;
 const TAB_CLOSE_BUTTON_SIZE: f32 = 28.0;
 const TAB_CLOSE_BUTTON_RADIUS: u8 = 6;
-const TAB_CLOSE_ICON_SIZE: f32 = 12.0;
+const TAB_CLOSE_ICON_SIZE: f32 = 16.0;
 const NEW_TAB_LEFT_GAP: f32 = 18.0;
 const NEW_TAB_BUTTON_SIZE: f32 = 44.0;
 const NEW_TAB_BUTTON_RADIUS: u8 = 8;
@@ -2369,7 +2369,7 @@ mod tests {
         assert_eq!(TAB_TITLE_CLOSE_GAP, 8.0);
         assert_eq!(TAB_CLOSE_BUTTON_SIZE, 28.0);
         assert_eq!(TAB_CLOSE_BUTTON_RADIUS, 6);
-        assert_eq!(TAB_CLOSE_ICON_SIZE, 12.0);
+        assert_eq!(TAB_CLOSE_ICON_SIZE, 16.0);
         assert_eq!(NEW_TAB_LEFT_GAP, 18.0);
         assert_eq!(NEW_TAB_BUTTON_SIZE, 44.0);
         assert_eq!(NEW_TAB_BUTTON_RADIUS, 8);
