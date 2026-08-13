@@ -1,5 +1,5 @@
 target/
+/slate
 *.swp
 *.swo
 /.cargo/
-

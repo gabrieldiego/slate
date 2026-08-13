@@ -6,4 +6,5 @@ repo_root=$(dirname -- "$script_dir")
 jobs=${CARGO_BUILD_JOBS:-1}
 
 cd "$repo_root"
-exec cargo run -j "$jobs" -p slate -- "$@"
+make slate-bin CARGO_BUILD_JOBS="$jobs"
+exec "$repo_root/slate" "$@"
