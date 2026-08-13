@@ -14,8 +14,8 @@ use dpi::PhysicalSize;
 use egui::text::{CCursor, CCursorRange};
 use egui::text_edit::TextEditState;
 use egui::{
-    Button, CentralPanel, FontDefinitions, Id, Key, Label, LayerId, Modifiers, Order,
-    PaintCallback, Panel, Vec2, WidgetInfo, WidgetType, pos2,
+    Button, FontDefinitions, Id, Key, Label, LayerId, Modifiers, Order, PaintCallback, Panel, Vec2,
+    WidgetInfo, WidgetType, pos2,
 };
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
 use egui::{FontData, FontFamily};
@@ -62,6 +62,7 @@ pub struct Gui {
     toolbar_height: Length<f32, DeviceIndependentPixel>,
     webview_origin: Point2D<f32, DeviceIndependentPixel>,
     webview_size: Size2D<f32, DeviceIndependentPixel>,
+    webview_contains_native_chrome: bool,
 
     location: String,
     home_search: String,
@@ -101,6 +102,15 @@ fn truncate_with_ellipsis(input: &str, max_length: usize) -> String {
     } else {
         input.to_string()
     }
+}
+
+fn egui_chrome_owns_position(
+    webview_origin: Point2D<f32, DeviceIndependentPixel>,
+    webview_size: Size2D<f32, DeviceIndependentPixel>,
+    webview_contains_native_chrome: bool,
+    position: Point2D<f32, DeviceIndependentPixel>,
+) -> bool {
+    !Rect::new(webview_origin, webview_size).contains(position) || webview_contains_native_chrome
 }
 
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
@@ -249,6 +259,7 @@ impl Gui {
             toolbar_height: Default::default(),
             webview_origin: Point2D::zero(),
             webview_size: Size2D::zero(),
+            webview_contains_native_chrome: false,
             location: initial_url.to_string(),
             home_search: String::new(),
             location_dirty: false,
@@ -299,7 +310,12 @@ impl Gui {
         &self,
         position: Point2D<f32, DeviceIndependentPixel>,
     ) -> bool {
-        !Rect::new(self.webview_origin, self.webview_size).contains(position)
+        egui_chrome_owns_position(
+            self.webview_origin,
+            self.webview_size,
+            self.webview_contains_native_chrome,
+            position,
+        )
     }
 
     /// Create a frameless button with square sizing, as used in the toolbar.
@@ -526,76 +542,81 @@ impl Gui {
             });
     }
 
-    #[allow(
-        deprecated,
-        reason = "egui's top-level CentralPanel API still takes a Context"
-    )]
     fn draw_home_view(
         ctx: &egui::Context,
+        available_rect: egui::Rect,
         slate_icons: &mut SlateIconCache,
         home_search: &mut String,
         window: &ServoShellWindow,
     ) {
-        CentralPanel::default()
-            .frame(egui::Frame::NONE.fill(slate_theme::BG))
+        egui::Area::new(Id::new("slate_home_view"))
+            .order(Order::Foreground)
+            .fixed_pos(available_rect.min)
             .show(ctx, |ui| {
-                let available_height = ui.available_height();
-                let top_space = (available_height * 0.14).clamp(36.0, 108.0);
-                ui.add_space(top_space);
-                ui.vertical_centered(|ui| {
-                    let hero = slate_icons.raster_texture(ui.ctx(), SlateRaster::Logo128);
-                    ui.add(
-                        egui::Image::from_texture(hero).fit_to_exact_size(egui::vec2(72.0, 72.0)),
-                    );
-                    ui.add_space(26.0);
+                let home_rect = egui::Rect::from_min_size(ui.min_rect().min, available_rect.size());
+                ui.set_min_size(home_rect.size());
+                ui.painter().rect_filled(home_rect, 0.0, slate_theme::BG);
+                ui.scope_builder(egui::UiBuilder::new().max_rect(home_rect), |ui| {
+                    let top_space = (home_rect.height() * 0.14).clamp(36.0, 108.0);
+                    ui.add_space(top_space);
+                    ui.vertical_centered(|ui| {
+                        let hero = slate_icons.raster_texture(ui.ctx(), SlateRaster::Logo128);
+                        ui.add(
+                            egui::Image::from_texture(hero)
+                                .fit_to_exact_size(egui::vec2(72.0, 72.0)),
+                        );
+                        ui.add_space(26.0);
 
-                    let available_search_width = (ui.available_width() - 32.0).max(0.0);
-                    let search_width = available_search_width
-                        .min(HOME_SEARCH_MAX_WIDTH)
-                        .max(HOME_SEARCH_MIN_WIDTH.min(available_search_width));
-                    let home_search_id = egui::Id::new("home_search_input");
-                    let search_response = egui::Frame::NONE
-                        .fill(slate_theme::SURFACE)
-                        .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
-                        .corner_radius(8)
-                        .inner_margin(egui::Margin::symmetric(18, 0))
-                        .show(ui, |ui| {
-                            ui.set_width(search_width);
-                            ui.set_min_height(52.0);
-                            ui.horizontal_centered(|ui| {
-                                let search_icon =
-                                    slate_icons.raster_texture(ui.ctx(), SlateRaster::Search);
-                                ui.add(Self::icon_image(search_icon, 20.0));
-                                ui.add_space(12.0);
-                                ui.add_sized(
-                                    [ui.available_width(), 34.0],
-                                    egui::TextEdit::singleline(home_search)
-                                        .id(home_search_id)
-                                        .frame(egui::Frame::NONE)
-                                        .hint_text("Search the web or enter an address"),
-                                )
+                        let available_search_width = (ui.available_width() - 32.0).max(0.0);
+                        let search_width = available_search_width
+                            .min(HOME_SEARCH_MAX_WIDTH)
+                            .max(HOME_SEARCH_MIN_WIDTH.min(available_search_width));
+                        let home_search_id = egui::Id::new("home_search_input");
+                        let search_response = egui::Frame::NONE
+                            .fill(slate_theme::SURFACE)
+                            .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
+                            .corner_radius(8)
+                            .inner_margin(egui::Margin::symmetric(18, 0))
+                            .show(ui, |ui| {
+                                ui.set_width(search_width);
+                                ui.set_min_height(52.0);
+                                ui.horizontal_centered(|ui| {
+                                    let search_icon =
+                                        slate_icons.raster_texture(ui.ctx(), SlateRaster::Search);
+                                    ui.add(Self::icon_image(search_icon, 20.0));
+                                    ui.add_space(12.0);
+                                    ui.add_sized(
+                                        [ui.available_width(), 34.0],
+                                        egui::TextEdit::singleline(home_search)
+                                            .id(home_search_id)
+                                            .frame(egui::Frame::NONE)
+                                            .hint_text("Search the web or enter an address"),
+                                    )
+                                })
+                                .inner
                             })
-                            .inner
-                        })
-                        .inner;
+                            .inner;
 
-                    if search_response.lost_focus()
-                        && ui.input(|i| i.clone().key_pressed(Key::Enter))
-                    {
-                        let request = home_search.trim().to_owned();
-                        if !request.is_empty() {
-                            window.queue_user_interface_command(UserInterfaceCommand::Go(request));
-                            home_search.clear();
+                        if search_response.lost_focus()
+                            && ui.input(|i| i.clone().key_pressed(Key::Enter))
+                        {
+                            let request = home_search.trim().to_owned();
+                            if !request.is_empty() {
+                                window.queue_user_interface_command(UserInterfaceCommand::Go(
+                                    request,
+                                ));
+                                home_search.clear();
+                            }
                         }
-                    }
 
-                    ui.add_space(44.0);
-                    let metrics_height = ui.available_height();
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(search_width, metrics_height),
-                        egui::Layout::top_down(egui::Align::Center),
-                        |ui| Self::draw_home_metrics(ui, slate_icons),
-                    );
+                        ui.add_space(44.0);
+                        let metrics_height = ui.available_height();
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(search_width, metrics_height),
+                            egui::Layout::top_down(egui::Align::Center),
+                            |ui| Self::draw_home_metrics(ui, slate_icons),
+                        );
+                    });
                 });
             });
     }
@@ -711,6 +732,7 @@ impl Gui {
             toolbar_height,
             webview_origin,
             webview_size,
+            webview_contains_native_chrome,
             location,
             home_search,
             location_dirty,
@@ -723,6 +745,8 @@ impl Gui {
         context.run(winit_window, |ctx| {
             slate_theme::apply(ctx);
             load_pending_favicons(ctx, window, favicon_textures);
+            let active_webview_is_home = Self::active_webview_is_home(window);
+            *webview_contains_native_chrome = active_webview_is_home;
 
             // TODO: While in fullscreen add some way to mitigate the increased phishing risk
             // when not displaying the URL bar: https://github.com/servo/servo/issues/32443
@@ -1068,8 +1092,8 @@ impl Gui {
                 webview.resize(PhysicalSize::new(size.width as u32, size.height as u32))
             }
 
-            if Self::active_webview_is_home(window) {
-                Self::draw_home_view(ctx, slate_icons, home_search, window);
+            if active_webview_is_home {
+                Self::draw_home_view(ctx, available_rect, slate_icons, home_search, window);
             }
 
             if let Some(status_text) = &self.status_text {
@@ -1082,20 +1106,22 @@ impl Gui {
                 .show(|ui| ui.add(Label::new(status_text.clone()).extend()));
             }
 
-            window.repaint_webviews();
+            if !active_webview_is_home {
+                window.repaint_webviews();
 
-            if let Some(render_to_parent) = rendering_context.render_to_parent_callback() {
-                ctx.layer_painter(LayerId::background()).add(PaintCallback {
-                    rect: available_rect,
-                    callback: Arc::new(CallbackFn::new(move |info, painter| {
-                        let clip = info.viewport_in_pixels();
-                        let rect_in_parent = Rect::new(
-                            Point2D::new(clip.left_px, clip.from_bottom_px),
-                            Size2D::new(clip.width_px, clip.height_px),
-                        );
-                        render_to_parent(painter.gl(), rect_in_parent)
-                    })),
-                });
+                if let Some(render_to_parent) = rendering_context.render_to_parent_callback() {
+                    ctx.layer_painter(LayerId::background()).add(PaintCallback {
+                        rect: available_rect,
+                        callback: Arc::new(CallbackFn::new(move |info, painter| {
+                            let clip = info.viewport_in_pixels();
+                            let rect_in_parent = Rect::new(
+                                Point2D::new(clip.left_px, clip.from_bottom_px),
+                                Size2D::new(clip.width_px, clip.height_px),
+                            );
+                            render_to_parent(painter.gl(), rect_in_parent)
+                        })),
+                    });
+                }
             }
         });
 
@@ -1225,6 +1251,53 @@ impl Gui {
 
     pub(crate) fn notify_accessibility_tree_update(&mut self, tree_update: accesskit::TreeUpdate) {
         self.pending_accesskit_updates.push(tree_update);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use euclid::{Point2D, Size2D};
+    use servo::DeviceIndependentPixel;
+
+    use super::egui_chrome_owns_position;
+
+    #[test]
+    fn normal_webview_area_forwards_inside_points_to_servo() {
+        let origin = Point2D::<f32, DeviceIndependentPixel>::new(64.0, 112.0);
+        let size = Size2D::<f32, DeviceIndependentPixel>::new(900.0, 500.0);
+
+        assert!(!egui_chrome_owns_position(
+            origin,
+            size,
+            false,
+            Point2D::new(100.0, 140.0),
+        ));
+    }
+
+    #[test]
+    fn native_home_area_keeps_inside_points_in_egui() {
+        let origin = Point2D::<f32, DeviceIndependentPixel>::new(64.0, 112.0);
+        let size = Size2D::<f32, DeviceIndependentPixel>::new(900.0, 500.0);
+
+        assert!(egui_chrome_owns_position(
+            origin,
+            size,
+            true,
+            Point2D::new(100.0, 140.0),
+        ));
+    }
+
+    #[test]
+    fn chrome_keeps_points_outside_the_webview() {
+        let origin = Point2D::<f32, DeviceIndependentPixel>::new(64.0, 112.0);
+        let size = Size2D::<f32, DeviceIndependentPixel>::new(900.0, 500.0);
+
+        assert!(egui_chrome_owns_position(
+            origin,
+            size,
+            false,
+            Point2D::new(30.0, 140.0),
+        ));
     }
 }
 
