@@ -123,7 +123,7 @@ const ADDRESS_SHADOW_SPREAD: u8 = 0;
 const ADDRESS_SHADOW_ALPHA: u8 = 10;
 const ADDRESS_SECURITY_ICON_SIZE: f32 = 24.0;
 const ADDRESS_ICON_GAP: f32 = 8.0;
-const ADDRESS_BOOKMARK_ICON_SIZE: f32 = 17.0;
+const ADDRESS_BOOKMARK_ICON_SIZE: f32 = 24.0;
 const ADDRESS_BOOKMARK_BUTTON_SIZE: f32 = 28.0;
 const ADDRESS_BOOKMARK_BUTTON_RADIUS: u8 = 6;
 const ADDRESS_BOOKMARK_RESERVED_WIDTH: f32 = 36.0;
@@ -2360,7 +2360,7 @@ mod tests {
         assert_eq!(ADDRESS_SHADOW_ALPHA, 10);
         assert_eq!(ADDRESS_SECURITY_ICON_SIZE, 24.0);
         assert_eq!(ADDRESS_ICON_GAP, 8.0);
-        assert_eq!(ADDRESS_BOOKMARK_ICON_SIZE, 17.0);
+        assert_eq!(ADDRESS_BOOKMARK_ICON_SIZE, 24.0);
         assert_eq!(address_bookmark_icon_color(), slate_theme::MUTED);
         assert_eq!(ADDRESS_BOOKMARK_BUTTON_SIZE, 28.0);
         assert_eq!(ADDRESS_BOOKMARK_BUTTON_RADIUS, 6);
