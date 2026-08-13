@@ -66,6 +66,8 @@ const TAB_ICON_TITLE_GAP: f32 = 12.0;
 const TAB_TITLE_CLOSE_GAP: f32 = 8.0;
 const TAB_CLOSE_BUTTON_SIZE: f32 = 28.0;
 const NEW_TAB_LEFT_GAP: f32 = 16.0;
+const NEW_TAB_BUTTON_SIZE: f32 = 44.0;
+const NEW_TAB_TEXT_SIZE: f32 = 28.0;
 const TOOLBAR_ITEM_SPACING: f32 = 18.0;
 const TOOLBAR_ICON_SIZE: f32 = 24.0;
 const RAIL_ICON_SIZE: f32 = 34.0;
@@ -414,12 +416,15 @@ impl Gui {
         )
     }
 
-    /// Create a frameless button with square sizing, as used in the toolbar.
-    fn toolbar_button(text: &str) -> egui::Button<'_> {
-        egui::Button::new(text)
-            .frame(false)
-            .min_size(Vec2 { x: 36.0, y: 36.0 })
-            .corner_radius(6)
+    fn new_tab_button() -> egui::Button<'static> {
+        egui::Button::new(
+            egui::RichText::new("+")
+                .size(NEW_TAB_TEXT_SIZE)
+                .color(slate_theme::TEXT),
+        )
+        .frame(false)
+        .min_size(Vec2::splat(NEW_TAB_BUTTON_SIZE))
+        .corner_radius(6)
     }
 
     fn footer_button(text: &str) -> egui::Button<'_> {
@@ -940,8 +945,7 @@ impl Gui {
                                                 }
 
                                                 ui.add_space(NEW_TAB_LEFT_GAP);
-                                                let new_tab_button =
-                                                    ui.add(Gui::toolbar_button("+"));
+                                                let new_tab_button = ui.add(Gui::new_tab_button());
                                                 new_tab_button.widget_info(|| {
                                                     let mut info =
                                                         WidgetInfo::new(WidgetType::Button);
@@ -1406,9 +1410,10 @@ mod tests {
         FOOTER_SYNC_DOT_SIZE, FOOTER_TEXT_SIZE, HOME_HERO_SIZE, HOME_HERO_TO_SEARCH_GAP,
         HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_MAX_WIDTH, HOME_SEARCH_ICON_SIZE,
         HOME_SEARCH_TO_METRICS_GAP, HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN,
-        NEW_TAB_LEFT_GAP, TAB_CONTENT_HEIGHT, TAB_HEIGHT, TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X,
-        TAB_INNER_MARGIN_Y, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH, TAB_WIDTH,
-        TOOLBAR_HEIGHT, TOOLBAR_ITEM_SPACING, egui_chrome_owns_position,
+        NEW_TAB_BUTTON_SIZE, NEW_TAB_LEFT_GAP, NEW_TAB_TEXT_SIZE, TAB_CONTENT_HEIGHT, TAB_HEIGHT,
+        TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_HEIGHT,
+        TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH, TAB_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_ITEM_SPACING,
+        egui_chrome_owns_position,
     };
     use super::{
         RAIL_BUTTON_SIZE, RAIL_ICON_SIZE, RAIL_ITEM_GAP, RAIL_TOP_SPACE, TAB_CLOSE_BUTTON_SIZE,
@@ -1491,6 +1496,8 @@ mod tests {
         assert_eq!(TAB_TITLE_CLOSE_GAP, 8.0);
         assert_eq!(TAB_CLOSE_BUTTON_SIZE, 28.0);
         assert_eq!(NEW_TAB_LEFT_GAP, 16.0);
+        assert_eq!(NEW_TAB_BUTTON_SIZE, 44.0);
+        assert_eq!(NEW_TAB_TEXT_SIZE, 28.0);
         assert_eq!(HOME_SEARCH_ICON_SIZE, 20.0);
         assert_eq!(TOOLBAR_ITEM_SPACING, 18.0);
         assert_eq!(ADDRESS_LEADING_GAP, 26.0);
