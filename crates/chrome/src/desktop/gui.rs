@@ -114,7 +114,7 @@ const ADDRESS_LEADING_GAP: f32 = 28.0;
 const ADDRESS_MIN_WIDTH: f32 = 260.0;
 const ADDRESS_HEIGHT: f32 = 54.0;
 const ADDRESS_TEXT_HEIGHT: f32 = 34.0;
-const ADDRESS_INPUT_TEXT_SIZE: f32 = 18.0;
+const ADDRESS_INPUT_TEXT_SIZE: f32 = 20.0;
 const ADDRESS_CORNER_RADIUS: u8 = 8;
 const ADDRESS_INNER_MARGIN_X: i8 = 12;
 const ADDRESS_SHADOW_OFFSET: [i8; 2] = [0, 1];
@@ -2301,7 +2301,7 @@ mod tests {
         assert_eq!(FOOTER_SETTINGS_GEAR_TOOTH_OUTER_RADIUS, 14.0);
         assert_eq!(FOOTER_SETTINGS_GEAR_STROKE, 2.0);
         assert_eq!(ADDRESS_HEIGHT, 54.0);
-        assert_eq!(ADDRESS_INPUT_TEXT_SIZE, 18.0);
+        assert_eq!(ADDRESS_INPUT_TEXT_SIZE, 20.0);
         assert_eq!(ADDRESS_CORNER_RADIUS, 8);
         assert_eq!(APP_TITLE_HEIGHT, TAB_STRIP_HEIGHT);
         assert_eq!(APP_TITLE_LEFT_PADDING, 31.0);
