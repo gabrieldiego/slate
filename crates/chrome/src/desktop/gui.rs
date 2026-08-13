@@ -352,6 +352,10 @@ fn rail_button_fill(selected: bool, hovered: bool) -> egui::Color32 {
     }
 }
 
+fn footer_status_text_color() -> egui::Color32 {
+    slate_theme::MUTED
+}
+
 fn address_shadow() -> egui::Shadow {
     egui::Shadow {
         offset: ADDRESS_SHADOW_OFFSET,
@@ -1108,7 +1112,7 @@ impl Gui {
                 egui::Align2::LEFT_CENTER,
                 "Sync On",
                 egui::FontId::proportional(FOOTER_TEXT_SIZE),
-                slate_theme::TEXT,
+                footer_status_text_color(),
             );
         }
 
@@ -1143,7 +1147,7 @@ impl Gui {
                 egui::Align2::LEFT_CENTER,
                 "Protected. Private. Yours.",
                 egui::FontId::proportional(FOOTER_TEXT_SIZE),
-                slate_theme::TEXT,
+                footer_status_text_color(),
             );
         }
 
@@ -2145,11 +2149,11 @@ mod tests {
         address_security_icon_for_location, address_security_raster_color,
         concept_screenshot_home_view_size, default_opening_home_view_height,
         default_opening_home_view_size, footer_protection_status_width, footer_settings_icon_color,
-        footer_sync_dot_radius, footer_sync_status_width, home_content_stack_height,
-        home_metric_badge_width, home_metric_card_content_height, home_metric_card_content_width,
-        home_metrics_layout, home_metrics_rendered_height, home_metrics_row_width,
-        home_search_rendered_height, home_search_width, home_top_space, rail_button_fill,
-        rail_icon_color, slate_theme, status_bubble_label, status_bubble_width,
+        footer_status_text_color, footer_sync_dot_radius, footer_sync_status_width,
+        home_content_stack_height, home_metric_badge_width, home_metric_card_content_height,
+        home_metric_card_content_width, home_metrics_layout, home_metrics_rendered_height,
+        home_metrics_row_width, home_search_rendered_height, home_search_width, home_top_space,
+        rail_button_fill, rail_icon_color, slate_theme, status_bubble_label, status_bubble_width,
         tab_close_icon_color, tab_content_width, tab_corner_radius, tab_title_color,
         tab_title_width, toolbar_address_width, toolbar_navigation_icon_color,
     };
@@ -2307,6 +2311,7 @@ mod tests {
         assert_eq!(FOOTER_SYNC_LABEL_WIDTH, 64.0);
         assert_eq!(FOOTER_SYNC_STATUS_HEIGHT, 40.0);
         assert_eq!(footer_sync_status_width(), 86.0);
+        assert_eq!(footer_status_text_color(), slate_theme::MUTED);
         assert_eq!(FOOTER_SETTINGS_BUTTON_SIZE, 40.0);
         assert_eq!(FOOTER_SETTINGS_BUTTON_RADIUS, 8);
         assert_eq!(FOOTER_SETTINGS_ICON_SIZE, 28.0);
