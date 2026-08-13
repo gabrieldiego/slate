@@ -556,10 +556,14 @@ impl Gui {
                     let top_space = (home_rect.height() * 0.14).clamp(36.0, 108.0);
                     ui.add_space(top_space);
                     ui.vertical_centered(|ui| {
-                        let hero = slate_icons.raster_texture(ui.ctx(), SlateRaster::Logo128);
+                        let hero = slate_icons.texture(
+                            ui.ctx(),
+                            SlateIcon::HomeHeroShield,
+                            slate_theme::TEAL,
+                        );
                         ui.add(
                             egui::Image::from_texture(hero)
-                                .fit_to_exact_size(egui::vec2(72.0, 72.0)),
+                                .fit_to_exact_size(egui::vec2(64.0, 64.0)),
                         );
                         ui.add_space(26.0);
 
@@ -577,8 +581,11 @@ impl Gui {
                                 ui.set_width(search_width);
                                 ui.set_min_height(52.0);
                                 ui.horizontal_centered(|ui| {
-                                    let search_icon =
-                                        slate_icons.raster_texture(ui.ctx(), SlateRaster::Search);
+                                    let search_icon = slate_icons.texture(
+                                        ui.ctx(),
+                                        SlateIcon::HomeSearch,
+                                        slate_theme::MUTED,
+                                    );
                                     ui.add(Self::icon_image(search_icon, 20.0));
                                     ui.add_space(12.0);
                                     ui.add_sized(

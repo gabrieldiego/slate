@@ -24,10 +24,12 @@ pub(crate) enum SlateIcon {
     AppMessaging,
     AppWeb,
     HomeFooterShield,
+    HomeHeroShield,
     HomeMetricAds,
     HomeMetricLock,
     HomeMetricPrivacy,
     HomeMetricTime,
+    HomeSearch,
     TabCalendar,
     TabResearch,
     TabWeb,
@@ -38,7 +40,6 @@ pub(crate) enum SlateIcon {
 pub(crate) enum SlateRaster {
     BookmarkAdd,
     Logo32,
-    Logo128,
     NavBack,
     NavBackDisabled,
     NavForward,
@@ -46,7 +47,6 @@ pub(crate) enum SlateRaster {
     NavRefresh,
     NavStop,
     PageInfoSecure,
-    Search,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -98,6 +98,12 @@ impl SlateIcon {
                 height: 28,
                 mask: include_bytes!("../../assets/icons/home_footer_shield.alpha"),
             },
+            Self::HomeHeroShield => SlateIconData {
+                name: "home-hero-shield",
+                width: 64,
+                height: 64,
+                mask: include_bytes!("../../assets/icons/home_hero_shield.alpha"),
+            },
             Self::HomeMetricAds => SlateIconData {
                 name: "home-metric-ads",
                 width: 40,
@@ -121,6 +127,12 @@ impl SlateIcon {
                 width: 40,
                 height: 40,
                 mask: include_bytes!("../../assets/icons/home_metric_time.alpha"),
+            },
+            Self::HomeSearch => SlateIconData {
+                name: "home-search",
+                width: 32,
+                height: 32,
+                mask: include_bytes!("../../assets/icons/home_search.alpha"),
             },
             Self::TabCalendar => SlateIconData {
                 name: "tab-calendar",
@@ -165,12 +177,6 @@ impl SlateRaster {
                 height: 32,
                 bytes: include_bytes!("../../assets/branding/slate-logo-32.png"),
             },
-            Self::Logo128 => SlateRasterData {
-                name: "logo-128",
-                width: 128,
-                height: 128,
-                bytes: include_bytes!("../../assets/branding/slate-logo-128.png"),
-            },
             Self::NavBack => SlateRasterData {
                 name: "nav-back",
                 width: 24,
@@ -212,12 +218,6 @@ impl SlateRaster {
                 width: 24,
                 height: 24,
                 bytes: include_bytes!("../../assets/icons/slate-ns/page-info-secure.png"),
-            },
-            Self::Search => SlateRasterData {
-                name: "search",
-                width: 17,
-                height: 17,
-                bytes: include_bytes!("../../assets/icons/slate-ns/search.png"),
             },
         }
     }
@@ -304,7 +304,7 @@ fn load_icon_texture(ctx: &egui::Context, icon: SlateIcon, color: Color32) -> Te
             data.name, red, green, blue, color_alpha
         ),
         image,
-        TextureOptions::NEAREST,
+        TextureOptions::LINEAR,
     )
 }
 
@@ -339,10 +339,12 @@ mod tests {
             SlateIcon::AppMessaging,
             SlateIcon::AppWeb,
             SlateIcon::HomeFooterShield,
+            SlateIcon::HomeHeroShield,
             SlateIcon::HomeMetricAds,
             SlateIcon::HomeMetricLock,
             SlateIcon::HomeMetricPrivacy,
             SlateIcon::HomeMetricTime,
+            SlateIcon::HomeSearch,
             SlateIcon::TabCalendar,
             SlateIcon::TabResearch,
             SlateIcon::TabWeb,
@@ -358,7 +360,6 @@ mod tests {
         for raster in [
             SlateRaster::BookmarkAdd,
             SlateRaster::Logo32,
-            SlateRaster::Logo128,
             SlateRaster::NavBack,
             SlateRaster::NavBackDisabled,
             SlateRaster::NavForward,
@@ -366,7 +367,6 @@ mod tests {
             SlateRaster::NavRefresh,
             SlateRaster::NavStop,
             SlateRaster::PageInfoSecure,
-            SlateRaster::Search,
         ] {
             let data = raster.data();
             let image = image::load_from_memory(data.bytes).unwrap().to_rgba8();
