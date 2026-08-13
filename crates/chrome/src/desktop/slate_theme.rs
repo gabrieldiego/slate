@@ -6,17 +6,17 @@ use std::collections::HashMap;
 
 use egui::{Color32, TextureHandle, TextureOptions};
 
-pub(crate) const BG: Color32 = Color32::from_rgb(251, 250, 248);
+pub(crate) const BG: Color32 = Color32::from_rgb(251, 251, 250);
 pub(crate) const SURFACE: Color32 = Color32::from_rgb(255, 255, 255);
-pub(crate) const PANEL: Color32 = Color32::from_rgb(244, 242, 239);
-pub(crate) const PANEL_HOVER: Color32 = Color32::from_rgb(239, 237, 233);
-pub(crate) const BORDER: Color32 = Color32::from_rgb(221, 217, 212);
-pub(crate) const TEXT: Color32 = Color32::from_rgb(39, 39, 39);
-pub(crate) const MUTED: Color32 = Color32::from_rgb(111, 107, 103);
-pub(crate) const TEAL: Color32 = Color32::from_rgb(11, 107, 104);
-pub(crate) const TEAL_SOFT: Color32 = Color32::from_rgb(229, 240, 238);
-pub(crate) const AMBER: Color32 = Color32::from_rgb(217, 154, 0);
-pub(crate) const BLUE: Color32 = Color32::from_rgb(24, 126, 207);
+pub(crate) const PANEL: Color32 = Color32::from_rgb(245, 245, 244);
+pub(crate) const PANEL_HOVER: Color32 = Color32::from_rgb(239, 240, 238);
+pub(crate) const BORDER: Color32 = Color32::from_rgb(224, 224, 222);
+pub(crate) const TEXT: Color32 = Color32::from_rgb(43, 45, 45);
+pub(crate) const MUTED: Color32 = Color32::from_rgb(111, 114, 115);
+pub(crate) const TEAL: Color32 = Color32::from_rgb(7, 112, 109);
+pub(crate) const TEAL_SOFT: Color32 = Color32::from_rgb(230, 243, 241);
+pub(crate) const AMBER: Color32 = Color32::from_rgb(220, 156, 0);
+pub(crate) const BLUE: Color32 = Color32::from_rgb(25, 118, 199);
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum SlateIcon {
@@ -272,6 +272,12 @@ pub(crate) fn apply(ctx: &egui::Context) {
     visuals.widgets.inactive.weak_bg_fill = SURFACE;
     visuals.widgets.hovered.weak_bg_fill = PANEL_HOVER;
     visuals.widgets.active.weak_bg_fill = PANEL;
+    visuals.widgets.noninteractive.bg_stroke.color = BORDER;
+    visuals.widgets.inactive.bg_stroke.color = BORDER;
+    visuals.widgets.hovered.bg_stroke.color = BORDER;
+    visuals.widgets.active.bg_stroke.color = TEAL;
+    visuals.widgets.hovered.expansion = 0.0;
+    visuals.widgets.active.expansion = 0.0;
     visuals.selection.bg_fill = TEAL_SOFT;
     visuals.selection.stroke.color = TEAL;
     ctx.set_visuals(visuals);
