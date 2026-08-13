@@ -16,8 +16,8 @@ use egui::text_edit::TextEditState;
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
 use egui::{FontData, FontFamily};
 use egui::{
-    FontDefinitions, Id, Key, Label, LayerId, Modifiers, Order, PaintCallback, Panel, Vec2,
-    WidgetInfo, WidgetType, pos2,
+    FontDefinitions, Id, Key, LayerId, Modifiers, Order, PaintCallback, Panel, Vec2, WidgetInfo,
+    WidgetType,
 };
 use egui_glow::{CallbackFn, EguiGlow};
 use egui_winit::EventResponse;
@@ -157,6 +157,13 @@ const HOME_METRIC_BADGE_TEXT_SIZE: f32 = 12.0;
 const HOME_METRIC_BADGE_MARGIN_X: i8 = 8;
 const HOME_METRIC_BADGE_MARGIN_Y: i8 = 3;
 const HOME_METRIC_BADGE_CORNER_RADIUS: u8 = 10;
+const STATUS_BUBBLE_MARGIN_X: f32 = 14.0;
+const STATUS_BUBBLE_MARGIN_Y: f32 = 12.0;
+const STATUS_BUBBLE_HEIGHT: f32 = 32.0;
+const STATUS_BUBBLE_MAX_WIDTH: f32 = 560.0;
+const STATUS_BUBBLE_HORIZONTAL_PADDING: f32 = 12.0;
+const STATUS_BUBBLE_CORNER_RADIUS: u8 = 8;
+const STATUS_TEXT_SIZE: f32 = 13.0;
 
 /// The user interface of a headed servoshell. Currently this is implemented via
 /// egui.
@@ -335,6 +342,19 @@ fn home_panel_shadow() -> egui::Shadow {
         spread: HOME_PANEL_SHADOW_SPREAD,
         color: egui::Color32::from_black_alpha(HOME_PANEL_SHADOW_ALPHA),
     }
+}
+
+fn status_bubble_width(text: &str, available_width: f32) -> f32 {
+    let max_width = STATUS_BUBBLE_MAX_WIDTH.min(available_width.max(0.0));
+    let measured_width = text.chars().count() as f32 * STATUS_TEXT_SIZE * 0.62
+        + STATUS_BUBBLE_HORIZONTAL_PADDING * 2.0;
+    measured_width.min(max_width)
+}
+
+fn status_bubble_label(text: &str, bubble_width: f32) -> String {
+    let text_width = (bubble_width - STATUS_BUBBLE_HORIZONTAL_PADDING * 2.0).max(0.0);
+    let max_chars = (text_width / (STATUS_TEXT_SIZE * 0.62)).floor().max(1.0) as usize;
+    truncate_with_ellipsis(text, max_chars)
 }
 
 fn home_content_fixed_height() -> f32 {
@@ -1234,6 +1254,46 @@ impl Gui {
             });
     }
 
+    fn draw_status_text(ctx: &egui::Context, available_rect: egui::Rect, status_text: &str) {
+        let available_width = available_rect.width() - STATUS_BUBBLE_MARGIN_X * 2.0;
+        let bubble_width = status_bubble_width(status_text, available_width);
+        if bubble_width <= 0.0 {
+            return;
+        }
+
+        let rect = egui::Rect::from_min_size(
+            egui::pos2(
+                available_rect.min.x + STATUS_BUBBLE_MARGIN_X,
+                available_rect.max.y - STATUS_BUBBLE_MARGIN_Y - STATUS_BUBBLE_HEIGHT,
+            ),
+            egui::vec2(bubble_width, STATUS_BUBBLE_HEIGHT),
+        );
+        let painter = ctx.layer_painter(LayerId::new(Order::Foreground, Id::new("status_text")));
+        let shadow_rect = rect.translate(egui::vec2(0.0, 1.0));
+        painter.rect_filled(
+            shadow_rect,
+            STATUS_BUBBLE_CORNER_RADIUS,
+            egui::Color32::from_black_alpha(12),
+        );
+        painter.rect_filled(rect, STATUS_BUBBLE_CORNER_RADIUS, slate_theme::SURFACE);
+        painter.rect_stroke(
+            rect,
+            STATUS_BUBBLE_CORNER_RADIUS,
+            egui::Stroke::new(1.0, slate_theme::BORDER),
+            egui::StrokeKind::Outside,
+        );
+        painter.text(
+            egui::pos2(
+                rect.left() + STATUS_BUBBLE_HORIZONTAL_PADDING,
+                rect.center().y,
+            ),
+            egui::Align2::LEFT_CENTER,
+            status_bubble_label(status_text, bubble_width),
+            egui::FontId::proportional(STATUS_TEXT_SIZE),
+            slate_theme::MUTED,
+        );
+    }
+
     /// Draws a browser tab, checking for clicks and queues appropriate [`UserInterfaceCommand`]s.
     fn browser_tab(
         ui: &mut egui::Ui,
@@ -1751,13 +1811,7 @@ impl Gui {
             }
 
             if let Some(status_text) = &self.status_text {
-                egui::Tooltip::always_open(
-                    ctx.clone(),
-                    LayerId::new(Order::Tooltip, Id::new("tooltip")),
-                    "tooltip layer".into(),
-                    pos2(0.0, available_rect.max.y),
-                )
-                .show(|ui| ui.add(Label::new(status_text.clone()).extend()));
+                Self::draw_status_text(ctx, available_rect, status_text);
             }
 
             if !active_webview_is_home {
@@ -1923,8 +1977,8 @@ mod tests {
         default_opening_home_view_size, home_content_stack_height, home_metric_card_content_height,
         home_metric_card_content_width, home_metrics_layout, home_metrics_rendered_height,
         home_metrics_row_width, home_search_rendered_height, home_search_width, home_top_space,
-        page_info_raster_for_location, slate_theme, tab_corner_radius, tab_title_width,
-        toolbar_address_width,
+        page_info_raster_for_location, slate_theme, status_bubble_label, status_bubble_width,
+        tab_corner_radius, tab_title_width, toolbar_address_width,
     };
     use super::{
         ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH, APP_TITLE_HEIGHT,
@@ -1944,7 +1998,9 @@ mod tests {
         HOME_PANEL_SHADOW_OFFSET, HOME_PANEL_SHADOW_SPREAD, HOME_SEARCH_FRAME_EXTRA_HEIGHT,
         HOME_SEARCH_ICON_SIZE, HOME_SEARCH_INPUT_TEXT_SIZE, HOME_SEARCH_TO_METRICS_GAP,
         HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN, NEW_TAB_BUTTON_SIZE,
-        NEW_TAB_ICON_SIZE, NEW_TAB_ICON_STROKE, NEW_TAB_LEFT_GAP, TAB_CLOSE_BUTTON_RADIUS,
+        NEW_TAB_ICON_SIZE, NEW_TAB_ICON_STROKE, NEW_TAB_LEFT_GAP, STATUS_BUBBLE_CORNER_RADIUS,
+        STATUS_BUBBLE_HEIGHT, STATUS_BUBBLE_HORIZONTAL_PADDING, STATUS_BUBBLE_MARGIN_X,
+        STATUS_BUBBLE_MARGIN_Y, STATUS_BUBBLE_MAX_WIDTH, STATUS_TEXT_SIZE, TAB_CLOSE_BUTTON_RADIUS,
         TAB_CLOSE_ICON_SIZE, TAB_CONTENT_HEIGHT, TAB_CORNER_RADIUS, TAB_HEIGHT, TAB_ICON_TITLE_GAP,
         TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT,
         TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH, TAB_TITLE_TEXT_SIZE, TAB_WIDTH,
@@ -2157,6 +2213,13 @@ mod tests {
         assert_eq!(HOME_METRIC_BADGE_MARGIN_X, 8);
         assert_eq!(HOME_METRIC_BADGE_MARGIN_Y, 3);
         assert_eq!(HOME_METRIC_BADGE_CORNER_RADIUS, 10);
+        assert_eq!(STATUS_BUBBLE_MARGIN_X, 14.0);
+        assert_eq!(STATUS_BUBBLE_MARGIN_Y, 12.0);
+        assert_eq!(STATUS_BUBBLE_HEIGHT, 32.0);
+        assert_eq!(STATUS_BUBBLE_MAX_WIDTH, 560.0);
+        assert_eq!(STATUS_BUBBLE_HORIZONTAL_PADDING, 12.0);
+        assert_eq!(STATUS_BUBBLE_CORNER_RADIUS, 8);
+        assert_eq!(STATUS_TEXT_SIZE, 13.0);
     }
 
     #[test]
@@ -2168,6 +2231,20 @@ mod tests {
     fn narrow_toolbar_address_width_stays_within_available_width() {
         assert_eq!(toolbar_address_width(220.0), 220.0);
         assert!(toolbar_address_width(300.0) >= ADDRESS_MIN_WIDTH);
+    }
+
+    #[test]
+    fn status_bubble_width_is_bounded_and_truncates_long_text() {
+        let status =
+            "https://example.com/a/very/long/path/that/should/not/stretch/across/the/browser";
+        let width = status_bubble_width(status, 1200.0);
+
+        assert_eq!(width, STATUS_BUBBLE_MAX_WIDTH);
+        assert!(status_bubble_width(status, 240.0) <= 240.0);
+
+        let label = status_bubble_label(status, 180.0);
+        assert!(label.ends_with('…'));
+        assert!(label.chars().count() < status.chars().count());
     }
 
     #[test]
