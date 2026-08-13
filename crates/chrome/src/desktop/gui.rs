@@ -580,11 +580,41 @@ impl Gui {
             .bg_fill(egui::Color32::TRANSPARENT)
     }
 
-    fn toolbar_icon_button(texture: egui::load::SizedTexture) -> egui::Button<'static> {
-        egui::Button::image(Self::icon_image(texture, TOOLBAR_ICON_SIZE))
-            .frame(false)
-            .min_size(Vec2::splat(TOOLBAR_BUTTON_SIZE))
-            .corner_radius(6)
+    fn toolbar_hover_raster_button(
+        ui: &mut egui::Ui,
+        slate_icons: &mut SlateIconCache,
+        icon: SlateRaster,
+        hover_icon: SlateRaster,
+        enabled: bool,
+    ) -> egui::Response {
+        let icon_texture = slate_icons.raster_texture(ui.ctx(), icon);
+        let sense = if enabled {
+            egui::Sense::click()
+        } else {
+            egui::Sense::hover()
+        };
+        let (rect, response) = ui.allocate_exact_size(Vec2::splat(TOOLBAR_BUTTON_SIZE), sense);
+        if ui.is_rect_visible(rect) {
+            let hovered = enabled && response.hovered();
+            if hovered {
+                ui.painter()
+                    .rect_filled(rect, 6.0, slate_theme::PANEL_HOVER);
+            }
+            let texture = if hovered {
+                slate_icons.raster_texture(ui.ctx(), hover_icon)
+            } else {
+                icon_texture
+            };
+            let icon_rect =
+                egui::Rect::from_center_size(rect.center(), Vec2::splat(TOOLBAR_ICON_SIZE));
+            ui.painter().image(
+                texture.id,
+                icon_rect,
+                egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
+                egui::Color32::WHITE,
+            );
+        }
+        response
     }
 
     fn toolbar_icon_button_sized(
@@ -1205,17 +1235,16 @@ impl Gui {
                             ui.available_size(),
                             egui::Layout::left_to_right(egui::Align::Center),
                             |ui| {
-                                let back_icon = slate_icons.raster_texture(
-                                    ui.ctx(),
+                                let back_button = Gui::toolbar_hover_raster_button(
+                                    ui,
+                                    slate_icons,
                                     if self.can_go_back {
                                         SlateRaster::NavBack
                                     } else {
                                         SlateRaster::NavBackDisabled
                                     },
-                                );
-                                let back_button = ui.add_enabled(
+                                    SlateRaster::NavBackHover,
                                     self.can_go_back,
-                                    Gui::toolbar_icon_button(back_icon),
                                 );
                                 back_button.widget_info(|| {
                                     let mut info = WidgetInfo::new(WidgetType::Button);
@@ -1227,17 +1256,16 @@ impl Gui {
                                     window.queue_user_interface_command(UserInterfaceCommand::Back);
                                 }
 
-                                let forward_icon = slate_icons.raster_texture(
-                                    ui.ctx(),
+                                let forward_button = Gui::toolbar_hover_raster_button(
+                                    ui,
+                                    slate_icons,
                                     if self.can_go_forward {
                                         SlateRaster::NavForward
                                     } else {
                                         SlateRaster::NavForwardDisabled
                                     },
-                                );
-                                let forward_button = ui.add_enabled(
+                                    SlateRaster::NavForwardHover,
                                     self.can_go_forward,
-                                    Gui::toolbar_icon_button(forward_icon),
                                 );
                                 forward_button.widget_info(|| {
                                     let mut info = WidgetInfo::new(WidgetType::Button);
@@ -1253,10 +1281,13 @@ impl Gui {
 
                                 match self.load_status {
                                     LoadStatus::Started | LoadStatus::HeadParsed => {
-                                        let stop_icon = slate_icons
-                                            .raster_texture(ui.ctx(), SlateRaster::NavStop);
-                                        let stop_button =
-                                            ui.add(Gui::toolbar_icon_button(stop_icon));
+                                        let stop_button = Gui::toolbar_hover_raster_button(
+                                            ui,
+                                            slate_icons,
+                                            SlateRaster::NavStop,
+                                            SlateRaster::NavStopHover,
+                                            true,
+                                        );
                                         stop_button.widget_info(|| {
                                             let mut info = WidgetInfo::new(WidgetType::Button);
                                             info.label = Some("Stop".into());
@@ -1267,10 +1298,13 @@ impl Gui {
                                         }
                                     }
                                     LoadStatus::Complete => {
-                                        let reload_icon = slate_icons
-                                            .raster_texture(ui.ctx(), SlateRaster::NavReload);
-                                        let reload_button =
-                                            ui.add(Gui::toolbar_icon_button(reload_icon));
+                                        let reload_button = Gui::toolbar_hover_raster_button(
+                                            ui,
+                                            slate_icons,
+                                            SlateRaster::NavReload,
+                                            SlateRaster::NavReloadHover,
+                                            true,
+                                        );
                                         reload_button.widget_info(|| {
                                             let mut info = WidgetInfo::new(WidgetType::Button);
                                             info.label = Some("Reload".into());
