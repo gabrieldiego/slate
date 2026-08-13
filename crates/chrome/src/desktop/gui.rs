@@ -442,6 +442,10 @@ fn concept_screenshot_home_view_size() -> egui::Vec2 {
     )
 }
 
+fn tab_content_width() -> f32 {
+    (TAB_WIDTH - f32::from(TAB_INNER_MARGIN_X) * 2.0).max(0.0)
+}
+
 fn tab_title_width(available_width: f32) -> f32 {
     (available_width
         - TAB_ICON_SIZE
@@ -923,7 +927,7 @@ impl Gui {
 
     fn tab_title_button(ui: &mut egui::Ui, label: &str, active: bool) -> egui::Response {
         let (rect, response) = ui.allocate_exact_size(
-            egui::vec2(tab_title_width(TAB_WIDTH), TAB_CONTENT_HEIGHT),
+            egui::vec2(tab_title_width(tab_content_width()), TAB_CONTENT_HEIGHT),
             egui::Sense::click(),
         );
 
@@ -1475,7 +1479,7 @@ impl Gui {
             ))
             .begin(ui);
         {
-            tab_frame.content_ui.set_width(TAB_WIDTH);
+            tab_frame.content_ui.set_width(tab_content_width());
             tab_frame.content_ui.set_min_height(TAB_CONTENT_HEIGHT);
 
             let visuals = tab_frame.content_ui.visuals_mut();
@@ -2130,8 +2134,8 @@ mod tests {
         home_metric_card_content_height, home_metric_card_content_width, home_metrics_layout,
         home_metrics_rendered_height, home_metrics_row_width, home_search_rendered_height,
         home_search_width, home_top_space, slate_theme, status_bubble_label, status_bubble_width,
-        tab_close_icon_color, tab_corner_radius, tab_title_color, tab_title_width,
-        toolbar_address_width, toolbar_navigation_icon_color,
+        tab_close_icon_color, tab_content_width, tab_corner_radius, tab_title_color,
+        tab_title_width, toolbar_address_width, toolbar_navigation_icon_color,
     };
     use super::{
         ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH, APP_TITLE_HEIGHT,
@@ -2302,6 +2306,8 @@ mod tests {
         assert_eq!(APP_TITLE_HEIGHT, TAB_STRIP_HEIGHT);
         assert_eq!(APP_TITLE_LEFT_PADDING, 31.0);
         assert_eq!(APP_TITLE_TEXT_SIZE, 28.0);
+        assert_eq!(TAB_WIDTH, 308.0);
+        assert_eq!(tab_content_width(), 276.0);
         assert_eq!(TAB_HEIGHT, 60.0);
         assert_eq!(TAB_CORNER_RADIUS, 8);
         assert_eq!(
@@ -2476,7 +2482,7 @@ mod tests {
 
     #[test]
     fn tab_title_width_reserves_fixed_close_region() {
-        assert_eq!(tab_title_width(TAB_WIDTH), 240.0);
+        assert_eq!(tab_title_width(tab_content_width()), 208.0);
         assert_eq!(tab_title_width(100.0), TAB_TITLE_MIN_WIDTH);
     }
 
