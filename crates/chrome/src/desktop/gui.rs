@@ -406,6 +406,10 @@ fn home_panel_shadow() -> egui::Shadow {
     }
 }
 
+fn home_view_background_color() -> egui::Color32 {
+    slate_theme::SURFACE
+}
+
 fn status_bubble_width(text: &str, available_width: f32) -> f32 {
     let max_width = STATUS_BUBBLE_MAX_WIDTH.min(available_width.max(0.0));
     let measured_width = text.chars().count() as f32 * STATUS_TEXT_SIZE * 0.62
@@ -1398,7 +1402,8 @@ impl Gui {
             .show(ctx, |ui| {
                 let home_rect = egui::Rect::from_min_size(ui.min_rect().min, available_rect.size());
                 ui.set_min_size(home_rect.size());
-                ui.painter().rect_filled(home_rect, 0.0, slate_theme::BG);
+                ui.painter()
+                    .rect_filled(home_rect, 0.0, home_view_background_color());
                 let response = ui
                     .scope_builder(egui::UiBuilder::new().max_rect(home_rect), |ui| {
                         Self::draw_home_content(ui, home_rect, slate_icons, home_search)
@@ -2153,9 +2158,10 @@ mod tests {
         home_content_stack_height, home_metric_badge_width, home_metric_card_content_height,
         home_metric_card_content_width, home_metrics_layout, home_metrics_rendered_height,
         home_metrics_row_width, home_search_rendered_height, home_search_width, home_top_space,
-        rail_button_fill, rail_icon_color, slate_theme, status_bubble_label, status_bubble_width,
-        tab_close_icon_color, tab_content_width, tab_corner_radius, tab_title_color,
-        tab_title_width, toolbar_address_width, toolbar_navigation_icon_color,
+        home_view_background_color, rail_button_fill, rail_icon_color, slate_theme,
+        status_bubble_label, status_bubble_width, tab_close_icon_color, tab_content_width,
+        tab_corner_radius, tab_title_color, tab_title_width, toolbar_address_width,
+        toolbar_navigation_icon_color,
     };
     use super::{
         ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH, APP_TITLE_HEIGHT,
@@ -2394,6 +2400,7 @@ mod tests {
         assert_eq!(HOME_HERO_SIZE, 64.0);
         assert_eq!(HOME_HERO_TO_SEARCH_GAP, 44.0);
         assert_eq!(HOME_SEARCH_TO_METRICS_GAP, 62.0);
+        assert_eq!(home_view_background_color(), slate_theme::SURFACE);
         assert_eq!(HOME_PANEL_SHADOW_OFFSET, [0, 2]);
         assert_eq!(HOME_PANEL_SHADOW_BLUR, 12);
         assert_eq!(HOME_PANEL_SHADOW_SPREAD, 0);
