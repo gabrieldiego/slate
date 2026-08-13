@@ -50,10 +50,12 @@ const RAIL_ICON_SIZE: f32 = 28.0;
 const TAB_ICON_SIZE: f32 = 18.0;
 const ADDRESS_MIN_WIDTH: f32 = 260.0;
 const HOME_SEARCH_MIN_WIDTH: f32 = 280.0;
-const HOME_SEARCH_MAX_WIDTH: f32 = 640.0;
-const HOME_METRIC_CARD_HEIGHT: f32 = 118.0;
-const HOME_METRIC_CARD_MIN_WIDTH: f32 = 118.0;
-const HOME_METRIC_CARD_MAX_WIDTH: f32 = 150.0;
+const HOME_SEARCH_MAX_WIDTH: f32 = 880.0;
+const HOME_SEARCH_HEIGHT: f32 = 58.0;
+const HOME_METRIC_CARD_HEIGHT: f32 = 172.0;
+const HOME_METRIC_CARD_MIN_WIDTH: f32 = 156.0;
+const HOME_METRIC_CARD_MAX_WIDTH: f32 = 194.0;
+const HOME_METRIC_CARD_GAP: f32 = 34.0;
 
 /// The user interface of a headed servoshell. Currently this is implemented via
 /// egui.
@@ -112,6 +114,36 @@ fn egui_chrome_owns_position(
     position: Point2D<f32, DeviceIndependentPixel>,
 ) -> bool {
     !Rect::new(webview_origin, webview_size).contains(position) || webview_contains_native_chrome
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct HomeMetricsLayout {
+    columns: usize,
+    card_width: f32,
+    spacing: f32,
+}
+
+fn home_metrics_layout(available_width: f32) -> HomeMetricsLayout {
+    let available_width = available_width.max(0.0);
+    let columns: usize = if available_width < 360.0 {
+        1
+    } else if available_width < 780.0 {
+        2
+    } else {
+        4
+    };
+    let spacing = HOME_METRIC_CARD_GAP;
+    let total_spacing = spacing * (columns.saturating_sub(1) as f32);
+    let raw_card_width = (available_width - total_spacing).max(0.0) / columns as f32;
+    let max_card_width = HOME_METRIC_CARD_MAX_WIDTH.min(available_width);
+    let min_card_width = HOME_METRIC_CARD_MIN_WIDTH.min(max_card_width);
+    let card_width = raw_card_width.clamp(min_card_width, max_card_width);
+
+    HomeMetricsLayout {
+        columns,
+        card_width,
+        spacing,
+    }
 }
 
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
@@ -458,14 +490,14 @@ impl Gui {
             .fill(slate_theme::SURFACE)
             .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
             .corner_radius(8)
-            .inner_margin(egui::Margin::symmetric(12, 14))
+            .inner_margin(egui::Margin::symmetric(16, 28))
             .show(ui, |ui| {
                 ui.set_width(width);
                 ui.set_min_height(HOME_METRIC_CARD_HEIGHT);
                 ui.vertical_centered(|ui| {
                     let texture = slate_icons.texture(ui.ctx(), icon, slate_theme::TEAL);
-                    ui.add(Self::icon_image(texture, 34.0));
-                    ui.add_space(10.0);
+                    ui.add(Self::icon_image(texture, 40.0));
+                    ui.add_space(18.0);
                     ui.horizontal_centered(|ui| {
                         ui.label(egui::RichText::new(label).color(slate_theme::TEXT));
                         if let Some((text, fill)) = badge {
@@ -481,22 +513,11 @@ impl Gui {
     }
 
     fn draw_home_metrics(ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
-        let available_width = ui.available_width().max(0.0);
-        let columns: usize = if available_width < 320.0 {
-            1
-        } else if available_width < 620.0 {
-            2
-        } else {
-            4
-        };
-        let total_spacing = 14.0 * (columns.saturating_sub(1) as f32);
-        let card_width = ((available_width - total_spacing).max(0.0) / columns as f32)
-            .clamp(HOME_METRIC_CARD_MIN_WIDTH, HOME_METRIC_CARD_MAX_WIDTH)
-            .min(available_width);
+        let layout = home_metrics_layout(ui.available_width());
 
         egui::Grid::new("slate_home_metrics")
-            .num_columns(columns)
-            .spacing(egui::vec2(14.0, 14.0))
+            .num_columns(layout.columns)
+            .spacing(egui::vec2(layout.spacing, layout.spacing))
             .show(ui, |ui| {
                 for (index, (icon, label, badge, detail)) in [
                     (SlateIcon::HomeMetricPrivacy, "Privacy First", None, None),
@@ -525,13 +546,13 @@ impl Gui {
                     Self::draw_home_metric_card(
                         ui,
                         slate_icons,
-                        card_width,
+                        layout.card_width,
                         icon,
                         label,
                         badge,
                         detail,
                     );
-                    if (index + 1) % columns == 0 {
+                    if (index + 1) % layout.columns == 0 {
                         ui.end_row();
                     }
                 }
@@ -579,7 +600,7 @@ impl Gui {
                             .inner_margin(egui::Margin::symmetric(18, 0))
                             .show(ui, |ui| {
                                 ui.set_width(search_width);
-                                ui.set_min_height(52.0);
+                                ui.set_min_height(HOME_SEARCH_HEIGHT);
                                 ui.horizontal_centered(|ui| {
                                     let search_icon = slate_icons.texture(
                                         ui.ctx(),
@@ -1262,7 +1283,8 @@ mod tests {
     use euclid::{Point2D, Size2D};
     use servo::DeviceIndependentPixel;
 
-    use super::egui_chrome_owns_position;
+    use super::{HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_MAX_WIDTH, egui_chrome_owns_position};
+    use super::{HOME_METRIC_CARD_MIN_WIDTH, home_metrics_layout};
 
     #[test]
     fn normal_webview_area_forwards_inside_points_to_servo() {
@@ -1301,6 +1323,33 @@ mod tests {
             false,
             Point2D::new(30.0, 140.0),
         ));
+    }
+
+    #[test]
+    fn wide_home_metrics_layout_matches_concept_width() {
+        let layout = home_metrics_layout(880.0);
+
+        assert_eq!(layout.columns, 4);
+        assert_eq!(layout.card_width, HOME_METRIC_CARD_MAX_WIDTH);
+        assert_eq!(layout.spacing, HOME_METRIC_CARD_GAP);
+    }
+
+    #[test]
+    fn medium_home_metrics_layout_uses_two_columns() {
+        let layout = home_metrics_layout(620.0);
+
+        assert_eq!(layout.columns, 2);
+        assert_eq!(layout.card_width, HOME_METRIC_CARD_MAX_WIDTH);
+        assert_eq!(layout.spacing, HOME_METRIC_CARD_GAP);
+    }
+
+    #[test]
+    fn narrow_home_metrics_layout_stays_within_available_width() {
+        let layout = home_metrics_layout(130.0);
+
+        assert_eq!(layout.columns, 1);
+        assert_eq!(layout.card_width, 130.0);
+        assert!(layout.card_width <= HOME_METRIC_CARD_MIN_WIDTH);
     }
 }
 
