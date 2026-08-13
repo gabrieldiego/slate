@@ -63,7 +63,9 @@ const NEW_TAB_LEFT_GAP: f32 = 16.0;
 const TOOLBAR_ITEM_SPACING: f32 = 18.0;
 const TOOLBAR_ICON_SIZE: f32 = 24.0;
 const RAIL_ICON_SIZE: f32 = 34.0;
-const RAIL_BUTTON_SIZE: f32 = 72.0;
+const RAIL_BUTTON_SIZE: f32 = 80.0;
+const RAIL_TOP_SPACE: f32 = 24.0;
+const RAIL_ITEM_GAP: f32 = 16.0;
 const TAB_ICON_SIZE: f32 = 20.0;
 const ADDRESS_LEADING_GAP: f32 = 26.0;
 const ADDRESS_MIN_WIDTH: f32 = 260.0;
@@ -479,13 +481,13 @@ impl Gui {
 
     fn draw_app_rail(ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
         ui.vertical_centered(|ui| {
-            ui.add_space(18.0);
+            ui.add_space(RAIL_TOP_SPACE);
             Self::rail_icon_button(ui, slate_icons, SlateIcon::AppWeb, true, "Web");
-            ui.add_space(16.0);
+            ui.add_space(RAIL_ITEM_GAP);
             Self::rail_icon_button(ui, slate_icons, SlateIcon::AppDownloads, false, "Downloads");
-            ui.add_space(16.0);
+            ui.add_space(RAIL_ITEM_GAP);
             Self::rail_icon_button(ui, slate_icons, SlateIcon::AppCalendar, false, "Calendar");
-            ui.add_space(16.0);
+            ui.add_space(RAIL_ITEM_GAP);
             Self::rail_icon_button(ui, slate_icons, SlateIcon::AppMessaging, false, "Messages");
         });
     }
@@ -1376,6 +1378,7 @@ mod tests {
         TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_HEIGHT, TOOLBAR_HEIGHT,
         TOOLBAR_ITEM_SPACING, egui_chrome_owns_position,
     };
+    use super::{RAIL_BUTTON_SIZE, RAIL_ICON_SIZE, RAIL_ITEM_GAP, RAIL_TOP_SPACE};
 
     fn chrome_webview_origin() -> Point2D<f32, DeviceIndependentPixel> {
         Point2D::new(APP_RAIL_WIDTH, TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT)
@@ -1425,6 +1428,10 @@ mod tests {
     #[test]
     fn static_chrome_dimensions_match_concept_offsets() {
         assert_eq!(APP_RAIL_WIDTH, 104.0);
+        assert_eq!(RAIL_ICON_SIZE, 34.0);
+        assert_eq!(RAIL_BUTTON_SIZE, 80.0);
+        assert_eq!(RAIL_TOP_SPACE, 24.0);
+        assert_eq!(RAIL_ITEM_GAP, 16.0);
         assert_eq!(TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT, 162.0);
         assert_eq!(FOOTER_HEIGHT, 80.0);
         assert_eq!(FOOTER_LEFT_PADDING, 22.0);
