@@ -323,6 +323,10 @@ fn address_security_icon_for_location(location: &str) -> AddressSecurityIcon {
     }
 }
 
+fn address_bookmark_icon_color() -> egui::Color32 {
+    slate_theme::MUTED
+}
+
 fn address_shadow() -> egui::Shadow {
     egui::Shadow {
         offset: ADDRESS_SHADOW_OFFSET,
@@ -1765,8 +1769,11 @@ impl Gui {
                                                 ADDRESS_SECURITY_ICON_SIZE,
                                             ));
                                             ui.add_space(ADDRESS_ICON_GAP);
-                                            let bookmark_icon = slate_icons
-                                                .raster_texture(ui.ctx(), SlateRaster::BookmarkAdd);
+                                            let bookmark_icon = slate_icons.raster_mask_texture(
+                                                ui.ctx(),
+                                                SlateRaster::BookmarkAdd,
+                                                address_bookmark_icon_color(),
+                                            );
                                             let text_width = (ui.available_width()
                                                 - ADDRESS_BOOKMARK_RESERVED_WIDTH)
                                                 .max(80.0);
@@ -2091,15 +2098,15 @@ mod tests {
         ADDRESS_INNER_MARGIN_X, ADDRESS_LEADING_GAP, ADDRESS_MIN_WIDTH, ADDRESS_SECURITY_ICON_SIZE,
         ADDRESS_SHADOW_ALPHA, ADDRESS_SHADOW_BLUR, ADDRESS_SHADOW_OFFSET, ADDRESS_SHADOW_SPREAD,
         ADDRESS_TRAILING_CONTROLS_WIDTH, AddressSecurityIcon, Gui, HOME_METRIC_CARD_MIN_WIDTH,
-        HomeContentLayout, SlateIconCache, address_security_icon_for_location,
-        concept_screenshot_home_view_size, default_opening_home_view_height,
-        default_opening_home_view_size, footer_protection_status_width, footer_settings_icon_color,
-        footer_sync_dot_radius, footer_sync_status_width, home_content_stack_height,
-        home_metric_badge_width, home_metric_card_content_height, home_metric_card_content_width,
-        home_metrics_layout, home_metrics_rendered_height, home_metrics_row_width,
-        home_search_rendered_height, home_search_width, home_top_space, slate_theme,
-        status_bubble_label, status_bubble_width, tab_corner_radius, tab_title_color,
-        tab_title_width, toolbar_address_width,
+        HomeContentLayout, SlateIconCache, address_bookmark_icon_color,
+        address_security_icon_for_location, concept_screenshot_home_view_size,
+        default_opening_home_view_height, default_opening_home_view_size,
+        footer_protection_status_width, footer_settings_icon_color, footer_sync_dot_radius,
+        footer_sync_status_width, home_content_stack_height, home_metric_badge_width,
+        home_metric_card_content_height, home_metric_card_content_width, home_metrics_layout,
+        home_metrics_rendered_height, home_metrics_row_width, home_search_rendered_height,
+        home_search_width, home_top_space, slate_theme, status_bubble_label, status_bubble_width,
+        tab_corner_radius, tab_title_color, tab_title_width, toolbar_address_width,
     };
     use super::{
         ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH, APP_TITLE_HEIGHT,
@@ -2322,6 +2329,7 @@ mod tests {
         assert_eq!(ADDRESS_SECURITY_ICON_SIZE, 24.0);
         assert_eq!(ADDRESS_ICON_GAP, 8.0);
         assert_eq!(ADDRESS_BOOKMARK_ICON_SIZE, 17.0);
+        assert_eq!(address_bookmark_icon_color(), slate_theme::MUTED);
         assert_eq!(ADDRESS_BOOKMARK_BUTTON_SIZE, 28.0);
         assert_eq!(ADDRESS_BOOKMARK_BUTTON_RADIUS, 6);
         assert_eq!(ADDRESS_BOOKMARK_RESERVED_WIDTH, 36.0);
