@@ -9378,18 +9378,18 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "slate"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "slate-chrome",
 ]
 
 [[package]]
 name = "slate-apps"
-version = "0.1.0"
+version = "0.0.1"
 
 [[package]]
 name = "slate-browser-core"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "slate-apps",
  "slate-rendering",
@@ -9397,7 +9397,7 @@ dependencies = [
 
 [[package]]
 name = "slate-chrome"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "accesskit",
  "backtrace",
@@ -9443,7 +9443,7 @@ dependencies = [
 
 [[package]]
 name = "slate-net"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "reqwest",
  "slate-routing",
@@ -9451,22 +9451,22 @@ dependencies = [
 
 [[package]]
 name = "slate-platform"
-version = "0.1.0"
+version = "0.0.1"
 
 [[package]]
 name = "slate-privacy"
-version = "0.1.0"
+version = "0.0.1"
 
 [[package]]
 name = "slate-protocols"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "slate-routing",
 ]
 
 [[package]]
 name = "slate-rendering"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "dpi",
  "headers",
@@ -9477,11 +9477,11 @@ dependencies = [
 
 [[package]]
 name = "slate-routing"
-version = "0.1.0"
+version = "0.0.1"
 
 [[package]]
 name = "slate-storage"
-version = "0.1.0"
+version = "0.0.1"
 
 [[package]]
 name = "slotmap"
@@ -12283,7 +12283,7 @@ checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
 name = "xtask"
-version = "0.1.0"
+version = "0.0.1"
 
 [[package]]
 name = "y4m"
