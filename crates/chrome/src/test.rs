@@ -114,6 +114,12 @@ fn test_cmdline_and_location_bar_url() {
         "data:text/html,a",
     );
     test_url(
+        "slate://home",
+        "slate://home",
+        "slate://home",
+        "slate://home",
+    );
+    test_url(
         "servo:config",
         "servo:config",
         "servo:config",
@@ -177,6 +183,12 @@ fn test_cmdline_and_location_bar_url() {
         "data:text/html,a",
         "data:text/html,a",
         "data:text/html,a",
+    );
+    test_url(
+        "slate://home",
+        "slate://home",
+        "slate://home",
+        "slate://home",
     );
     test_url(
         "servo:config",

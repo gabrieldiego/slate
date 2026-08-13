@@ -87,6 +87,8 @@ impl App {
         );
         let _ =
             protocol_registry.register("servo", protocols::servo::ServoProtocolHandler::default());
+        let _ =
+            protocol_registry.register("slate", protocols::slate::SlateProtocolHandler::default());
         let _ = protocol_registry.register(
             "resource",
             protocols::resource::ResourceProtocolHandler::default(),
@@ -203,8 +205,8 @@ impl ApplicationHandler<AppEvent> for App {
             return;
         };
 
-        if let Some(window) = state.window(ServoShellWindowId::from(u64::from(window_id))) &&
-            let Some(headed_window) = window.platform_window().as_headed_window()
+        if let Some(window) = state.window(ServoShellWindowId::from(u64::from(window_id)))
+            && let Some(headed_window) = window.platform_window().as_headed_window()
         {
             headed_window.handle_winit_window_event(state.clone(), window, window_event);
         }
@@ -225,16 +227,16 @@ impl ApplicationHandler<AppEvent> for App {
             AppEvent::Waker => (),
             AppEvent::Accessibility(ref event) => {
                 if let Some(window) =
-                    state.window(ServoShellWindowId::from(u64::from(event.window_id))) &&
-                    let Some(headed_window) = window.platform_window().as_headed_window()
+                    state.window(ServoShellWindowId::from(u64::from(event.window_id)))
+                    && let Some(headed_window) = window.platform_window().as_headed_window()
                 {
                     headed_window.handle_winit_app_event(state.clone(), app_event);
                 }
-            },
+            }
             #[cfg(feature = "gamepad")]
             AppEvent::Gamepad(event, gamepad_name, gamepad_index) => {
                 state.handle_gamepad_events(event, gamepad_name, gamepad_index);
-            },
+            }
         }
 
         if !self.pump_servo_event_loop(event_loop.into()) {

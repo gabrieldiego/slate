@@ -14,8 +14,8 @@ use dpi::PhysicalSize;
 use egui::text::{CCursor, CCursorRange};
 use egui::text_edit::TextEditState;
 use egui::{
-    Button, FontDefinitions, Id, Key, Label, LayerId, Modifiers, Order, PaintCallback, Panel, Vec2,
-    WidgetInfo, WidgetType, pos2,
+    Button, CentralPanel, FontDefinitions, Id, Key, Label, LayerId, Modifiers, Order,
+    PaintCallback, Panel, Vec2, WidgetInfo, WidgetType, pos2,
 };
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
 use egui::{FontData, FontFamily};
@@ -36,8 +36,23 @@ use winit::window::Window;
 
 use crate::desktop::event_loop::AppEvent;
 use crate::desktop::headed_window;
+use crate::desktop::slate_theme::{self, SlateIcon, SlateIconCache, SlateRaster};
 use crate::running_app_state::{RunningAppState, UserInterfaceCommand};
 use crate::window::ServoShellWindow;
+
+const TAB_STRIP_HEIGHT: f32 = 48.0;
+const TOOLBAR_HEIGHT: f32 = 64.0;
+const APP_RAIL_WIDTH: f32 = 64.0;
+const FOOTER_HEIGHT: f32 = 52.0;
+const TOOLBAR_ICON_SIZE: f32 = 24.0;
+const RAIL_ICON_SIZE: f32 = 28.0;
+const TAB_ICON_SIZE: f32 = 18.0;
+const ADDRESS_MIN_WIDTH: f32 = 260.0;
+const HOME_SEARCH_MIN_WIDTH: f32 = 280.0;
+const HOME_SEARCH_MAX_WIDTH: f32 = 640.0;
+const HOME_METRIC_CARD_HEIGHT: f32 = 118.0;
+const HOME_METRIC_CARD_MIN_WIDTH: f32 = 118.0;
+const HOME_METRIC_CARD_MAX_WIDTH: f32 = 150.0;
 
 /// The user interface of a headed servoshell. Currently this is implemented via
 /// egui.
@@ -45,8 +60,11 @@ pub struct Gui {
     rendering_context: Rc<OffscreenRenderingContext>,
     context: EguiGlow,
     toolbar_height: Length<f32, DeviceIndependentPixel>,
+    webview_origin: Point2D<f32, DeviceIndependentPixel>,
+    webview_size: Size2D<f32, DeviceIndependentPixel>,
 
     location: String,
+    home_search: String,
 
     /// Whether the location has been edited by the user without clicking Go.
     location_dirty: bool,
@@ -67,6 +85,9 @@ pub struct Gui {
     ///
     /// These need to be cached across egui draw calls.
     favicon_textures: HashMap<WebViewId, (egui::TextureHandle, egui::load::SizedTexture)>,
+
+    /// Cached GPU textures for Slate's extracted raster icon masks.
+    slate_icons: SlateIconCache,
 
     /// AccessKit tree updates pending the next egui tick.
     /// This allows us to ensure that graft nodes are sent before the subtrees they graft.
@@ -99,10 +120,10 @@ fn load_cjk_fonts(font_candidates: &[(&str, &str)]) -> FontDefinitions {
                         loaded_font_names.push(font_name.to_string());
                         info!("Loaded font: {}", font_name);
                     }
-                },
+                }
                 Err(error) => {
                     info!("Failed to read font {}: {}", font_name, error);
-                },
+                }
             }
         }
     }
@@ -205,6 +226,7 @@ impl Gui {
 
         let font_definitions = configure_fonts();
         context.egui_ctx.set_fonts(font_definitions);
+        slate_theme::apply(&context.egui_ctx);
 
         context
             .egui_winit
@@ -225,13 +247,17 @@ impl Gui {
             rendering_context,
             context,
             toolbar_height: Default::default(),
+            webview_origin: Point2D::zero(),
+            webview_size: Size2D::zero(),
             location: initial_url.to_string(),
+            home_search: String::new(),
             location_dirty: false,
             load_status: LoadStatus::Complete,
             status_text: None,
             can_go_back: false,
             can_go_forward: false,
             favicon_textures: Default::default(),
+            slate_icons: Default::default(),
             pending_accesskit_updates: vec![],
         }
     }
@@ -264,19 +290,303 @@ impl Gui {
         self.toolbar_height
     }
 
+    pub(crate) fn webview_origin(&self) -> Point2D<f32, DeviceIndependentPixel> {
+        self.webview_origin
+    }
+
     /// Return true iff the given position is over the egui toolbar.
     pub(crate) fn is_in_egui_toolbar_rect(
         &self,
         position: Point2D<f32, DeviceIndependentPixel>,
     ) -> bool {
-        position.y < self.toolbar_height.get()
+        !Rect::new(self.webview_origin, self.webview_size).contains(position)
     }
 
     /// Create a frameless button with square sizing, as used in the toolbar.
     fn toolbar_button(text: &str) -> egui::Button<'_> {
         egui::Button::new(text)
             .frame(false)
-            .min_size(Vec2 { x: 20.0, y: 20.0 })
+            .min_size(Vec2 { x: 36.0, y: 36.0 })
+            .corner_radius(6)
+    }
+
+    fn icon_image(texture: egui::load::SizedTexture, size: f32) -> egui::Image<'static> {
+        egui::Image::from_texture(texture)
+            .fit_to_exact_size(egui::vec2(size, size))
+            .bg_fill(egui::Color32::TRANSPARENT)
+    }
+
+    fn toolbar_icon_button(texture: egui::load::SizedTexture) -> egui::Button<'static> {
+        egui::Button::image(Self::icon_image(texture, TOOLBAR_ICON_SIZE))
+            .frame(false)
+            .min_size(Vec2 { x: 40.0, y: 40.0 })
+            .corner_radius(6)
+    }
+
+    fn fallback_tab_icon(index: usize) -> SlateIcon {
+        match index {
+            1 => SlateIcon::TabResearch,
+            2 => SlateIcon::TabCalendar,
+            _ => SlateIcon::TabWeb,
+        }
+    }
+
+    fn is_slate_home_url(url: &Url) -> bool {
+        url.scheme() == "slate"
+            && (url.host_str() == Some("home") || url.path().trim_start_matches('/') == "home")
+    }
+
+    fn active_webview_is_home(window: &ServoShellWindow) -> bool {
+        window
+            .active_webview()
+            .and_then(|webview| webview.url())
+            .as_ref()
+            .is_some_and(Self::is_slate_home_url)
+    }
+
+    fn rail_icon_button(
+        ui: &mut egui::Ui,
+        slate_icons: &mut SlateIconCache,
+        icon: SlateIcon,
+        selected: bool,
+        tooltip: &str,
+    ) {
+        let texture = slate_icons.texture(
+            ui.ctx(),
+            icon,
+            if selected {
+                slate_theme::TEAL
+            } else {
+                slate_theme::TEXT
+            },
+        );
+        let button = egui::Button::image(Self::icon_image(texture, RAIL_ICON_SIZE))
+            .frame(false)
+            .min_size(Vec2::splat(48.0))
+            .corner_radius(8);
+
+        let response = if selected {
+            egui::Frame::NONE
+                .fill(slate_theme::TEAL_SOFT)
+                .corner_radius(8)
+                .show(ui, |ui| ui.add(button))
+                .inner
+        } else {
+            ui.add(button)
+        };
+        response.on_hover_text(tooltip);
+    }
+
+    fn draw_app_rail(ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
+        ui.vertical_centered(|ui| {
+            ui.add_space(12.0);
+            Self::rail_icon_button(ui, slate_icons, SlateIcon::AppWeb, true, "Web");
+            ui.add_space(18.0);
+            Self::rail_icon_button(ui, slate_icons, SlateIcon::AppDownloads, false, "Downloads");
+            ui.add_space(18.0);
+            Self::rail_icon_button(ui, slate_icons, SlateIcon::AppCalendar, false, "Calendar");
+            ui.add_space(18.0);
+            Self::rail_icon_button(ui, slate_icons, SlateIcon::AppMessaging, false, "Messages");
+        });
+    }
+
+    fn draw_footer(ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
+        ui.spacing_mut().item_spacing = egui::vec2(10.0, 0.0);
+        ui.horizontal_centered(|ui| {
+            ui.add_space(14.0);
+            let footer_icon =
+                slate_icons.texture(ui.ctx(), SlateIcon::HomeFooterShield, slate_theme::TEAL);
+            ui.add(Self::icon_image(footer_icon, 22.0));
+            ui.label(egui::RichText::new("Protected. Private. Yours.").color(slate_theme::TEXT));
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.add_space(16.0);
+                ui.add(Gui::toolbar_button("⚙")).on_hover_text("Settings");
+                ui.separator();
+                ui.label(egui::RichText::new("Sync On").color(slate_theme::TEXT));
+                let (dot_rect, _) = ui.allocate_exact_size(Vec2::splat(10.0), egui::Sense::hover());
+                ui.painter()
+                    .circle_filled(dot_rect.center(), 4.0, slate_theme::TEAL);
+            });
+        });
+    }
+
+    fn draw_badge(ui: &mut egui::Ui, text: &str, fill: egui::Color32) {
+        egui::Frame::NONE
+            .fill(fill)
+            .corner_radius(8)
+            .inner_margin(egui::Margin::symmetric(6, 2))
+            .show(ui, |ui| {
+                ui.label(
+                    egui::RichText::new(text)
+                        .size(11.0)
+                        .strong()
+                        .color(slate_theme::SURFACE),
+                );
+            });
+    }
+
+    fn draw_home_metric_card(
+        ui: &mut egui::Ui,
+        slate_icons: &mut SlateIconCache,
+        width: f32,
+        icon: SlateIcon,
+        label: &str,
+        badge: Option<(&str, egui::Color32)>,
+        detail: Option<&str>,
+    ) {
+        egui::Frame::NONE
+            .fill(slate_theme::SURFACE)
+            .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
+            .corner_radius(8)
+            .inner_margin(egui::Margin::symmetric(12, 14))
+            .show(ui, |ui| {
+                ui.set_width(width);
+                ui.set_min_height(HOME_METRIC_CARD_HEIGHT);
+                ui.vertical_centered(|ui| {
+                    let texture = slate_icons.texture(ui.ctx(), icon, slate_theme::TEAL);
+                    ui.add(Self::icon_image(texture, 34.0));
+                    ui.add_space(10.0);
+                    ui.horizontal_centered(|ui| {
+                        ui.label(egui::RichText::new(label).color(slate_theme::TEXT));
+                        if let Some((text, fill)) = badge {
+                            Self::draw_badge(ui, text, fill);
+                        }
+                    });
+                    if let Some(detail) = detail {
+                        ui.add_space(4.0);
+                        ui.label(egui::RichText::new(detail).color(slate_theme::MUTED));
+                    }
+                });
+            });
+    }
+
+    fn draw_home_metrics(ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
+        let available_width = ui.available_width();
+        let columns: usize = if available_width < 620.0 { 2 } else { 4 };
+        let total_spacing = 14.0 * (columns.saturating_sub(1) as f32);
+        let card_width = ((available_width - total_spacing) / columns as f32)
+            .clamp(HOME_METRIC_CARD_MIN_WIDTH, HOME_METRIC_CARD_MAX_WIDTH);
+
+        egui::Grid::new("slate_home_metrics")
+            .num_columns(columns)
+            .spacing(egui::vec2(14.0, 14.0))
+            .show(ui, |ui| {
+                for (index, (icon, label, badge, detail)) in [
+                    (SlateIcon::HomeMetricPrivacy, "Privacy First", None, None),
+                    (
+                        SlateIcon::HomeMetricLock,
+                        "Tracker Blocked",
+                        Some(("23", slate_theme::AMBER)),
+                        None,
+                    ),
+                    (
+                        SlateIcon::HomeMetricAds,
+                        "Ads Blocked",
+                        Some(("184", egui::Color32::from_rgb(24, 126, 207))),
+                        None,
+                    ),
+                    (
+                        SlateIcon::HomeMetricTime,
+                        "Time Saved",
+                        None,
+                        Some("2h 14m"),
+                    ),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    Self::draw_home_metric_card(
+                        ui,
+                        slate_icons,
+                        card_width,
+                        icon,
+                        label,
+                        badge,
+                        detail,
+                    );
+                    if (index + 1) % columns == 0 {
+                        ui.end_row();
+                    }
+                }
+            });
+    }
+
+    #[allow(
+        deprecated,
+        reason = "egui's top-level CentralPanel API still takes a Context"
+    )]
+    fn draw_home_view(
+        ctx: &egui::Context,
+        slate_icons: &mut SlateIconCache,
+        home_search: &mut String,
+        window: &ServoShellWindow,
+    ) {
+        CentralPanel::default()
+            .frame(egui::Frame::NONE.fill(slate_theme::BG))
+            .show(ctx, |ui| {
+                let available_height = ui.available_height();
+                let top_space = (available_height * 0.14).clamp(36.0, 108.0);
+                ui.add_space(top_space);
+                ui.vertical_centered(|ui| {
+                    let hero = slate_icons.raster_texture(ui.ctx(), SlateRaster::Logo128);
+                    ui.add(
+                        egui::Image::from_texture(hero).fit_to_exact_size(egui::vec2(72.0, 72.0)),
+                    );
+                    ui.add_space(26.0);
+
+                    let search_width = ui
+                        .available_width()
+                        .min(HOME_SEARCH_MAX_WIDTH)
+                        .max(HOME_SEARCH_MIN_WIDTH);
+                    let home_search_id = egui::Id::new("home_search_input");
+                    let search_response = egui::Frame::NONE
+                        .fill(slate_theme::SURFACE)
+                        .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
+                        .corner_radius(8)
+                        .inner_margin(egui::Margin::symmetric(18, 0))
+                        .show(ui, |ui| {
+                            ui.set_width(search_width);
+                            ui.set_min_height(52.0);
+                            ui.horizontal_centered(|ui| {
+                                let search_icon = slate_icons.texture(
+                                    ui.ctx(),
+                                    SlateIcon::HomeSearch,
+                                    slate_theme::MUTED,
+                                );
+                                ui.add(Self::icon_image(search_icon, 24.0));
+                                ui.add_space(12.0);
+                                ui.add_sized(
+                                    [ui.available_width(), 34.0],
+                                    egui::TextEdit::singleline(home_search)
+                                        .id(home_search_id)
+                                        .frame(egui::Frame::NONE)
+                                        .hint_text("Search the web or enter an address"),
+                                )
+                            })
+                            .inner
+                        })
+                        .inner;
+
+                    if search_response.lost_focus()
+                        && ui.input(|i| i.clone().key_pressed(Key::Enter))
+                    {
+                        let request = home_search.trim().to_owned();
+                        if !request.is_empty() {
+                            window.queue_user_interface_command(UserInterfaceCommand::Go(request));
+                            home_search.clear();
+                        }
+                    }
+
+                    ui.add_space(44.0);
+                    let metrics_height = ui.available_height();
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(search_width, metrics_height),
+                        egui::Layout::top_down(egui::Align::Center),
+                        |ui| Self::draw_home_metrics(ui, slate_icons),
+                    );
+                });
+            });
     }
 
     /// Draws a browser tab, checking for clicks and queues appropriate [`UserInterfaceCommand`]s.
@@ -287,21 +597,32 @@ impl Gui {
         window: &ServoShellWindow,
         webview: WebView,
         favicon_texture: Option<egui::load::SizedTexture>,
+        fallback_icon: egui::load::SizedTexture,
     ) {
         let label = match (webview.page_title(), webview.url()) {
+            (_, Some(url)) if Self::is_slate_home_url(&url) => "New Tab".into(),
             (Some(title), _) if !title.is_empty() => title,
             (_, Some(url)) => url.to_string(),
             _ => "New Tab".into(),
         };
 
-        let inactive_bg_color = ui.visuals().window_fill;
-        let active_bg_color = ui.visuals().widgets.active.weak_bg_fill;
+        let inactive_bg_color = slate_theme::PANEL;
+        let active_bg_color = slate_theme::SURFACE;
         let active = window.active_webview().map(|webview| webview.id()) == Some(webview.id());
 
         // Setup a tab frame that will contain the favicon, title and close button
-        let mut tab_frame = egui::Frame::NONE.corner_radius(4).begin(ui);
+        let mut tab_frame = egui::Frame::NONE
+            .fill(if active {
+                active_bg_color
+            } else {
+                inactive_bg_color
+            })
+            .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
+            .corner_radius(8)
+            .inner_margin(egui::Margin::symmetric(8, 6))
+            .begin(ui);
         {
-            tab_frame.content_ui.add_space(5.0);
+            tab_frame.content_ui.set_min_height(28.0);
 
             let visuals = tab_frame.content_ui.visuals_mut();
             // Remove the stroke so we don't see the border between the close button and the label
@@ -321,19 +642,17 @@ impl Gui {
             visuals.widgets.active.expansion = 0.0;
             visuals.widgets.hovered.expansion = 0.0;
 
-            if let Some(favicon) = favicon_texture {
-                tab_frame.content_ui.add(
-                    egui::Image::from_texture(favicon)
-                        .fit_to_exact_size(egui::vec2(16.0, 16.0))
-                        .bg_fill(egui::Color32::TRANSPARENT),
-                );
-            }
+            let icon = favicon_texture.unwrap_or(fallback_icon);
+            tab_frame
+                .content_ui
+                .add(Self::icon_image(icon, TAB_ICON_SIZE));
 
             let tab = tab_frame
                 .content_ui
                 .add(Button::selectable(
                     active,
-                    truncate_with_ellipsis(&label, 20),
+                    egui::RichText::new(truncate_with_ellipsis(&label, 20))
+                        .color(slate_theme::TEXT),
                 ))
                 .on_hover_ui(|ui| {
                     ui.label(&label);
@@ -341,7 +660,7 @@ impl Gui {
 
             let close_button = tab_frame
                 .content_ui
-                .add(egui::Button::new("X").fill(egui::Color32::TRANSPARENT));
+                .add(egui::Button::new("×").fill(egui::Color32::TRANSPARENT));
             close_button.widget_info(|| {
                 let mut info = WidgetInfo::new(WidgetType::Button);
                 info.label = Some("Close".into());
@@ -379,203 +698,321 @@ impl Gui {
             rendering_context,
             context,
             toolbar_height,
+            webview_origin,
+            webview_size,
             location,
+            home_search,
             location_dirty,
             favicon_textures,
+            slate_icons,
             ..
         } = self;
 
         let winit_window = headed_window.winit_window();
         context.run(winit_window, |ctx| {
+            slate_theme::apply(ctx);
             load_pending_favicons(ctx, window, favicon_textures);
 
             // TODO: While in fullscreen add some way to mitigate the increased phishing risk
             // when not displaying the URL bar: https://github.com/servo/servo/issues/32443
             if winit_window.fullscreen().is_none() {
-                let frame = egui::Frame::default()
-                    .fill(ctx.style().visuals.window_fill)
-                    .inner_margin(4.0);
-                Panel::top("toolbar").frame(frame).show_inside(ctx, |ui| {
-                    ui.allocate_ui_with_layout(
-                        ui.available_size(),
-                        egui::Layout::left_to_right(egui::Align::Center),
-                        |ui| {
-                            let back_button =
-                                ui.add_enabled(self.can_go_back, Gui::toolbar_button("⏴"));
-                            back_button.widget_info(|| {
-                                let mut info = WidgetInfo::new(WidgetType::Button);
-                                info.label = Some("Back".into());
-                                info
-                            });
-                            if back_button.clicked() {
-                                *location_dirty = false;
-                                window.queue_user_interface_command(UserInterfaceCommand::Back);
-                            }
-
-                            let forward_button =
-                                ui.add_enabled(self.can_go_forward, Gui::toolbar_button("⏵"));
-                            forward_button.widget_info(|| {
-                                let mut info = WidgetInfo::new(WidgetType::Button);
-                                info.label = Some("Forward".into());
-                                info
-                            });
-                            if forward_button.clicked() {
-                                *location_dirty = false;
-                                window.queue_user_interface_command(UserInterfaceCommand::Forward);
-                            }
-
-                            match self.load_status {
-                                LoadStatus::Started | LoadStatus::HeadParsed => {
-                                    let stop_button = ui.add(Gui::toolbar_button("X"));
-                                    stop_button.widget_info(|| {
-                                        let mut info = WidgetInfo::new(WidgetType::Button);
-                                        info.label = Some("Stop".into());
-                                        info
-                                    });
-                                    if stop_button.clicked() {
-                                        warn!("Do not support stop yet.");
-                                    }
-                                },
-                                LoadStatus::Complete => {
-                                    let reload_button = ui.add(Gui::toolbar_button("↻"));
-                                    reload_button.widget_info(|| {
-                                        let mut info = WidgetInfo::new(WidgetType::Button);
-                                        info.label = Some("Reload".into());
-                                        info
-                                    });
-                                    if reload_button.clicked() {
-                                        *location_dirty = false;
-                                        window.queue_user_interface_command(
-                                            UserInterfaceCommand::Reload,
+                let tabs_frame = egui::Frame::NONE
+                    .fill(slate_theme::BG)
+                    .inner_margin(egui::Margin::symmetric(8, 5));
+                Panel::top("tabs")
+                    .exact_size(TAB_STRIP_HEIGHT)
+                    .frame(tabs_frame)
+                    .show_separator_line(true)
+                    .show_inside(ctx, |ui| {
+                        ui.allocate_ui_with_layout(
+                            ui.available_size(),
+                            egui::Layout::left_to_right(egui::Align::Center),
+                            |ui| {
+                                ui.allocate_ui_with_layout(
+                                    egui::vec2(116.0, 32.0),
+                                    egui::Layout::left_to_right(egui::Align::Center),
+                                    |ui| {
+                                        let logo = slate_icons
+                                            .raster_texture(ui.ctx(), SlateRaster::Logo32);
+                                        ui.add(
+                                            egui::Image::from_texture(logo)
+                                                .fit_to_exact_size(egui::vec2(22.0, 22.0)),
                                         );
-                                    }
-                                },
-                            }
-                            ui.add_space(2.0);
+                                        ui.add_space(8.0);
+                                        ui.add(Label::new(
+                                            egui::RichText::new("Slate")
+                                                .size(18.0)
+                                                .color(slate_theme::TEXT),
+                                        ));
+                                    },
+                                );
 
-                            ui.allocate_ui_with_layout(
-                                ui.available_size(),
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    let mut experimental_preferences_enabled =
-                                        state.experimental_preferences_enabled();
-                                    let prefs_toggle = ui
-                                        .toggle_value(&mut experimental_preferences_enabled, "☢")
-                                        .on_hover_text("Enable experimental prefs");
-                                    prefs_toggle.widget_info(|| {
-                                        let mut info = WidgetInfo::new(WidgetType::Button);
-                                        info.label = Some("Enable experimental preferences".into());
-                                        info.selected = Some(experimental_preferences_enabled);
-                                        info
+                                egui::ScrollArea::horizontal()
+                                    .scroll_bar_visibility(
+                                        egui::scroll_area::ScrollBarVisibility::AlwaysHidden,
+                                    )
+                                    .show(ui, |ui| {
+                                        ui.allocate_ui_with_layout(
+                                            ui.available_size(),
+                                            egui::Layout::left_to_right(egui::Align::Center),
+                                            |ui| {
+                                                for (index, (id, webview)) in
+                                                    window.webviews().into_iter().enumerate()
+                                                {
+                                                    let favicon = favicon_textures
+                                                        .get(&id)
+                                                        .map(|(_, favicon)| favicon)
+                                                        .copied();
+                                                    let fallback_icon = slate_icons.texture(
+                                                        ui.ctx(),
+                                                        Self::fallback_tab_icon(index),
+                                                        slate_theme::MUTED,
+                                                    );
+                                                    Self::browser_tab(
+                                                        ui,
+                                                        window,
+                                                        webview,
+                                                        favicon,
+                                                        fallback_icon,
+                                                    );
+                                                }
+
+                                                let new_tab_button =
+                                                    ui.add(Gui::toolbar_button("+"));
+                                                new_tab_button.widget_info(|| {
+                                                    let mut info =
+                                                        WidgetInfo::new(WidgetType::Button);
+                                                    info.label = Some("New tab".into());
+                                                    info
+                                                });
+                                                if new_tab_button.clicked() {
+                                                    window.queue_user_interface_command(
+                                                        UserInterfaceCommand::NewWebView,
+                                                    );
+                                                }
+                                            },
+                                        );
                                     });
-                                    if prefs_toggle.clicked() {
-                                        state.set_experimental_preferences_enabled(
-                                            experimental_preferences_enabled,
-                                        );
-                                        *location_dirty = false;
-                                        window.queue_user_interface_command(
-                                            UserInterfaceCommand::ReloadAll,
-                                        );
-                                    }
+                            },
+                        );
+                    });
 
-                                    let location_id = egui::Id::new("location_input");
-                                    let location_field = ui.add_sized(
-                                        ui.available_size(),
-                                        egui::TextEdit::singleline(location)
-                                            .id(location_id)
-                                            .hint_text("Search or enter address"),
+                let rail_frame = egui::Frame::NONE
+                    .fill(slate_theme::SURFACE)
+                    .inner_margin(egui::Margin::symmetric(8, 10));
+                Panel::left("app_rail")
+                    .exact_size(APP_RAIL_WIDTH)
+                    .frame(rail_frame)
+                    .show_separator_line(true)
+                    .show_inside(ctx, |ui| Self::draw_app_rail(ui, slate_icons));
+
+                let toolbar_frame = egui::Frame::NONE
+                    .fill(slate_theme::SURFACE)
+                    .inner_margin(egui::Margin::symmetric(18, 9));
+                Panel::top("toolbar")
+                    .exact_size(TOOLBAR_HEIGHT)
+                    .frame(toolbar_frame)
+                    .show_separator_line(true)
+                    .show_inside(ctx, |ui| {
+                        ui.spacing_mut().item_spacing = egui::vec2(8.0, 0.0);
+                        ui.allocate_ui_with_layout(
+                            ui.available_size(),
+                            egui::Layout::left_to_right(egui::Align::Center),
+                            |ui| {
+                                let back_icon = slate_icons.texture(
+                                    ui.ctx(),
+                                    SlateIcon::NavBack,
+                                    if self.can_go_back {
+                                        slate_theme::TEXT
+                                    } else {
+                                        slate_theme::DISABLED
+                                    },
+                                );
+                                let back_button = ui.add_enabled(
+                                    self.can_go_back,
+                                    Gui::toolbar_icon_button(back_icon),
+                                );
+                                back_button.widget_info(|| {
+                                    let mut info = WidgetInfo::new(WidgetType::Button);
+                                    info.label = Some("Back".into());
+                                    info
+                                });
+                                if back_button.clicked() {
+                                    *location_dirty = false;
+                                    window.queue_user_interface_command(UserInterfaceCommand::Back);
+                                }
+
+                                let forward_icon = slate_icons.texture(
+                                    ui.ctx(),
+                                    SlateIcon::NavForward,
+                                    if self.can_go_forward {
+                                        slate_theme::TEXT
+                                    } else {
+                                        slate_theme::DISABLED
+                                    },
+                                );
+                                let forward_button = ui.add_enabled(
+                                    self.can_go_forward,
+                                    Gui::toolbar_icon_button(forward_icon),
+                                );
+                                forward_button.widget_info(|| {
+                                    let mut info = WidgetInfo::new(WidgetType::Button);
+                                    info.label = Some("Forward".into());
+                                    info
+                                });
+                                if forward_button.clicked() {
+                                    *location_dirty = false;
+                                    window.queue_user_interface_command(
+                                        UserInterfaceCommand::Forward,
                                     );
+                                }
 
-                                    if location_field.changed() {
-                                        *location_dirty = true;
-                                    }
-                                    // Handle adddress bar shortcut.
-                                    if ui.input(|i| {
-                                        if cfg!(target_os = "macos") {
-                                            i.clone().consume_key(Modifiers::COMMAND, Key::L)
-                                        } else {
-                                            i.clone().consume_key(Modifiers::COMMAND, Key::L) ||
-                                                i.clone().consume_key(Modifiers::ALT, Key::D)
+                                match self.load_status {
+                                    LoadStatus::Started | LoadStatus::HeadParsed => {
+                                        let stop_button = ui.add(Gui::toolbar_button("×"));
+                                        stop_button.widget_info(|| {
+                                            let mut info = WidgetInfo::new(WidgetType::Button);
+                                            info.label = Some("Stop".into());
+                                            info
+                                        });
+                                        if stop_button.clicked() {
+                                            warn!("Do not support stop yet.");
                                         }
-                                    }) {
-                                        // The focus request immediately makes gained_focus return true.
-                                        location_field.request_focus();
                                     }
-                                    // Select address bar text when it's focused (click or shortcut).
-                                    if location_field.gained_focus() &&
-                                        let Some(mut state) =
-                                            TextEditState::load(ui.ctx(), location_id)
-                                    {
-                                        // Select the whole input.
-                                        state.cursor.set_char_range(Some(CCursorRange::two(
-                                            CCursor::new(0),
-                                            CCursor::new(location.len()),
-                                        )));
-                                        state.store(ui.ctx(), location_id);
-                                    }
-                                    // Navigate to address when enter is pressed in the address bar.
-                                    if location_field.lost_focus() &&
-                                        ui.input(|i| i.clone().key_pressed(Key::Enter))
-                                    {
-                                        window.queue_user_interface_command(
-                                            UserInterfaceCommand::Go(location.clone()),
+                                    LoadStatus::Complete => {
+                                        let reload_icon = slate_icons.texture(
+                                            ui.ctx(),
+                                            SlateIcon::NavRefresh,
+                                            slate_theme::TEXT,
                                         );
+                                        let reload_button =
+                                            ui.add(Gui::toolbar_icon_button(reload_icon));
+                                        reload_button.widget_info(|| {
+                                            let mut info = WidgetInfo::new(WidgetType::Button);
+                                            info.label = Some("Reload".into());
+                                            info
+                                        });
+                                        if reload_button.clicked() {
+                                            *location_dirty = false;
+                                            window.queue_user_interface_command(
+                                                UserInterfaceCommand::Reload,
+                                            );
+                                        }
                                     }
-                                },
-                            );
-                        },
-                    );
-                });
+                                }
 
-                // A simple Tab header strip
-                let outer = Panel::top("tabs").show_inside(ctx, |ui| {
-                    // Add scroll for overflowing tabs
-                    egui::ScrollArea::horizontal()
-                        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
-                        .show(ui, |ui| {
-                            ui.allocate_ui_with_layout(
-                                ui.available_size(),
-                                egui::Layout::left_to_right(egui::Align::Center),
-                                |ui| {
-                                    for (id, webview) in window.webviews().into_iter() {
-                                        let favicon = favicon_textures
-                                            .get(&id)
-                                            .map(|(_, favicon)| favicon)
-                                            .copied();
-                                        Self::browser_tab(ui, window, webview, favicon);
+                                let location_id = egui::Id::new("location_input");
+                                let address_width =
+                                    (ui.available_width() - 104.0).max(ADDRESS_MIN_WIDTH);
+                                let location_field = egui::Frame::NONE
+                                    .fill(slate_theme::SURFACE)
+                                    .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
+                                    .corner_radius(8)
+                                    .inner_margin(egui::Margin::symmetric(12, 0))
+                                    .show(ui, |ui| {
+                                        ui.set_width(address_width);
+                                        ui.set_min_height(38.0);
+                                        ui.horizontal_centered(|ui| {
+                                            let shield_icon = slate_icons.texture(
+                                                ui.ctx(),
+                                                SlateIcon::TopShield,
+                                                slate_theme::MUTED,
+                                            );
+                                            ui.add(Self::icon_image(shield_icon, 22.0));
+                                            ui.add_sized(
+                                                [ui.available_width(), 30.0],
+                                                egui::TextEdit::singleline(location)
+                                                    .id(location_id)
+                                                    .frame(egui::Frame::NONE)
+                                                    .hint_text(
+                                                        "Search the web or enter an address",
+                                                    ),
+                                            )
+                                        })
+                                        .inner
+                                    })
+                                    .inner;
+
+                                if location_field.changed() {
+                                    *location_dirty = true;
+                                }
+                                // Handle adddress bar shortcut.
+                                if ui.input(|i| {
+                                    if cfg!(target_os = "macos") {
+                                        i.clone().consume_key(Modifiers::COMMAND, Key::L)
+                                    } else {
+                                        i.clone().consume_key(Modifiers::COMMAND, Key::L)
+                                            || i.clone().consume_key(Modifiers::ALT, Key::D)
                                     }
+                                }) {
+                                    // The focus request immediately makes gained_focus return true.
+                                    location_field.request_focus();
+                                }
+                                // Select address bar text when it's focused (click or shortcut).
+                                if location_field.gained_focus()
+                                    && let Some(mut state) =
+                                        TextEditState::load(ui.ctx(), location_id)
+                                {
+                                    // Select the whole input.
+                                    state.cursor.set_char_range(Some(CCursorRange::two(
+                                        CCursor::new(0),
+                                        CCursor::new(location.len()),
+                                    )));
+                                    state.store(ui.ctx(), location_id);
+                                }
+                                // Navigate to address when enter is pressed in the address bar.
+                                if location_field.lost_focus()
+                                    && ui.input(|i| i.clone().key_pressed(Key::Enter))
+                                {
+                                    window.queue_user_interface_command(UserInterfaceCommand::Go(
+                                        location.clone(),
+                                    ));
+                                }
 
-                                    let new_tab_button = ui.add(Gui::toolbar_button("+"));
-                                    new_tab_button.widget_info(|| {
-                                        let mut info = WidgetInfo::new(WidgetType::Button);
-                                        info.label = Some("New tab".into());
-                                        info
-                                    });
-                                    if new_tab_button.clicked() {
-                                        window.queue_user_interface_command(
-                                            UserInterfaceCommand::NewWebView,
-                                        );
-                                    }
+                                let privacy_icon = slate_icons.texture(
+                                    ui.ctx(),
+                                    SlateIcon::TopShield,
+                                    slate_theme::AMBER,
+                                );
+                                ui.add(Gui::toolbar_icon_button(privacy_icon))
+                                    .on_hover_text("Privacy controls");
 
-                                    let new_window_button = ui.add(Gui::toolbar_button("⊞"));
-                                    new_window_button.widget_info(|| {
-                                        let mut info = WidgetInfo::new(WidgetType::Button);
-                                        info.label = Some("New window".into());
-                                        info
-                                    });
-                                    if new_window_button.clicked() {
-                                        window.queue_user_interface_command(
-                                            UserInterfaceCommand::NewWindow,
-                                        );
-                                    }
-                                },
-                            );
-                        })
-                });
+                                let mut experimental_preferences_enabled =
+                                    state.experimental_preferences_enabled();
+                                let prefs_toggle = ui
+                                    .toggle_value(&mut experimental_preferences_enabled, "☰")
+                                    .on_hover_text("Enable experimental prefs");
+                                prefs_toggle.widget_info(|| {
+                                    let mut info = WidgetInfo::new(WidgetType::Button);
+                                    info.label = Some("Enable experimental preferences".into());
+                                    info.selected = Some(experimental_preferences_enabled);
+                                    info
+                                });
+                                if prefs_toggle.clicked() {
+                                    state.set_experimental_preferences_enabled(
+                                        experimental_preferences_enabled,
+                                    );
+                                    *location_dirty = false;
+                                    window.queue_user_interface_command(
+                                        UserInterfaceCommand::ReloadAll,
+                                    );
+                                }
+                            },
+                        );
+                    });
 
-                *toolbar_height = Length::new(outer.response.rect.max.y);
+                let footer_frame = egui::Frame::NONE
+                    .fill(slate_theme::SURFACE)
+                    .inner_margin(egui::Margin::symmetric(6, 8));
+                Panel::bottom("footer")
+                    .exact_size(FOOTER_HEIGHT)
+                    .frame(footer_frame)
+                    .show_separator_line(true)
+                    .show_inside(ctx, |ui| Self::draw_footer(ui, slate_icons));
             } else {
                 *toolbar_height = Length::default();
+                *webview_origin = Point2D::zero();
+                *webview_size = Size2D::zero();
             }
 
             let scale =
@@ -586,6 +1023,9 @@ impl Gui {
             // If the top parts of the GUI changed size, then update the size of the WebView and also
             // the size of its RenderingContext.
             let available_rect = ctx.available_rect_before_wrap();
+            *toolbar_height = Length::new(available_rect.min.y);
+            *webview_origin = Point2D::new(available_rect.min.x, available_rect.min.y);
+            *webview_size = Size2D::new(available_rect.width(), available_rect.height());
 
             // Build a graft node for each WebView.
             for (webview_id, webview) in window.webviews() {
@@ -597,13 +1037,17 @@ impl Gui {
                 }
             }
             let size = Size2D::new(available_rect.width(), available_rect.height()) * scale;
-            if let Some(webview) = window.active_webview() &&
-                size != webview.size()
+            if let Some(webview) = window.active_webview()
+                && size != webview.size()
             {
                 // `rect` is sized to just the WebView viewport, which is required by
                 // `OffscreenRenderingContext` See:
                 // <https://github.com/servo/servo/issues/38369#issuecomment-3138378527>
                 webview.resize(PhysicalSize::new(size.width as u32, size.height as u32))
+            }
+
+            if Self::active_webview_is_home(window) {
+                Self::draw_home_view(ctx, slate_icons, home_search, window);
             }
 
             if let Some(status_text) = &self.status_text {
@@ -677,7 +1121,7 @@ impl Gui {
             Some(location) if location != self.location => {
                 self.location = location;
                 true
-            },
+            }
             _ => false,
         }
     }
@@ -724,10 +1168,10 @@ impl Gui {
         //       because logical OR would short-circuit if any of the functions return true.
         //       We want to ensure that all functions are called. The "bitwise OR" operator
         //       does not short-circuit.
-        self.update_load_status(window) |
-            self.update_location_in_toolbar(window) |
-            self.update_status_text(window) |
-            self.update_can_go_back_and_forward(window)
+        self.update_load_status(window)
+            | self.update_location_in_toolbar(window)
+            | self.update_status_text(window)
+            | self.update_can_go_back_and_forward(window)
     }
 
     /// Returns true if a redraw is required after handling the provided event.
@@ -739,17 +1183,17 @@ impl Gui {
             egui_winit::accesskit_winit::WindowEvent::InitialTreeRequested => {
                 self.context.egui_ctx.enable_accesskit();
                 true
-            },
+            }
             egui_winit::accesskit_winit::WindowEvent::ActionRequested(req) => {
                 self.context
                     .egui_winit
                     .on_accesskit_action_request(req.clone());
                 true
-            },
+            }
             egui_winit::accesskit_winit::WindowEvent::AccessibilityDeactivated => {
                 self.context.egui_ctx.disable_accesskit();
                 false
-            },
+            }
         }
     }
 
@@ -776,11 +1220,11 @@ fn embedder_image_to_egui_image(image: &Image) -> egui::ColorImage {
                 .flat_map(|pixel| [pixel[0], pixel[0], pixel[0], pixel[1]])
                 .collect();
             egui::ColorImage::from_rgba_unmultiplied([width, height], &data)
-        },
+        }
         PixelFormat::RGB8 => egui::ColorImage::from_rgb([width, height], image.data()),
         PixelFormat::RGBA8 => {
             egui::ColorImage::from_rgba_unmultiplied([width, height], image.data())
-        },
+        }
         PixelFormat::BGRA8 => {
             // Convert from BGRA to RGBA
             let data: Vec<u8> = image
@@ -789,7 +1233,7 @@ fn embedder_image_to_egui_image(image: &Image) -> egui::ColorImage {
                 .flat_map(|chunk| [chunk[2], chunk[1], chunk[0], chunk[3]])
                 .collect();
             egui::ColorImage::from_rgba_unmultiplied([width, height], &data)
-        },
+        }
     }
 }
 

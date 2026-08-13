@@ -57,7 +57,7 @@ use crate::window::{
     ServoShellWindowId,
 };
 
-pub(crate) const INITIAL_WINDOW_TITLE: &str = "Servo";
+pub(crate) const INITIAL_WINDOW_TITLE: &str = "Slate";
 
 pub struct HeadedWindow {
     /// The egui interface that is responsible for showing the user interface elements of
@@ -66,7 +66,7 @@ pub struct HeadedWindow {
     screen_size: Size2D<u32, DeviceIndependentPixel>,
     webview_relative_mouse_point: Cell<Point2D<f32, DevicePixel>>,
     /// The inner size of the window in physical pixels which excludes OS decorations.
-    /// It equals viewport size + (0, toolbar height).
+    /// It equals viewport size plus Slate chrome drawn around it.
     inner_size: Cell<PhysicalSize<u32>>,
     fullscreen: Cell<bool>,
     device_pixel_ratio_override: Option<f32>,
@@ -127,7 +127,7 @@ impl HeadedWindow {
 
         // Set a name so it can be pinned to taskbars in Linux.
         #[cfg(target_os = "linux")]
-        let window_attr = window_attr.with_name("org.servo.Servo", "Servo");
+        let window_attr = window_attr.with_name("org.slate.Slate", "Slate");
 
         #[allow(deprecated)]
         let winit_window = event_loop
@@ -136,7 +136,7 @@ impl HeadedWindow {
 
         #[cfg(any(target_os = "linux", target_os = "windows"))]
         {
-            let icon_bytes = include_bytes!("../../../../resources/servo_64.png");
+            let icon_bytes = include_bytes!("../../assets/branding/slate-logo-64.png");
             winit_window.set_window_icon(Some(load_icon(icon_bytes)));
         }
 
@@ -296,7 +296,9 @@ impl HeadedWindow {
     /// Helper function to handle mouse move events.
     fn handle_mouse_move_event(&self, webview: &WebView, position: PhysicalPosition<f64>) {
         let mut point = winit_position_to_euclid_point(position).to_f32();
-        point.y -= (self.toolbar_height() * self.hidpi_scale_factor()).0;
+        let origin = self.webview_origin_device();
+        point.x -= origin.x;
+        point.y -= origin.y;
 
         let previous_point = self.webview_relative_mouse_point.get();
         self.webview_relative_mouse_point.set(point);
@@ -423,9 +425,12 @@ impl HeadedWindow {
             .shortcut(CMD_OR_CONTROL, 'T', || {
                 window.create_and_activate_toplevel_webview(
                     state.clone(),
-                    Url::parse("servo:newtab")
-                        .expect("Should be able to unconditionally parse 'servo:newtab' as URL"),
+                    Url::parse("slate://home")
+                        .expect("Should be able to unconditionally parse 'slate://home' as URL"),
                 );
+            })
+            .shortcut(CMD_OR_CONTROL, 'N', || {
+                window.queue_user_interface_command(UserInterfaceCommand::NewWindow);
             })
             .shortcut(CMD_OR_CONTROL, 'Q', || state.schedule_exit())
             .otherwise(|| handled = false);
@@ -452,11 +457,12 @@ impl HeadedWindow {
         self.visible_input_method.set(Some(control_id));
 
         let position = input_method.position();
+        let origin = self.gui.borrow().webview_origin();
         self.winit_window.set_ime_allowed(true);
         self.winit_window.set_ime_cursor_area(
             LogicalPosition::new(
-                position.min.x,
-                position.min.y + (self.toolbar_height().0 as i32),
+                position.min.x + origin.x as i32,
+                position.min.y + origin.y as i32,
             ),
             LogicalSize::new(
                 position.max.x - position.min.x,
@@ -515,6 +521,15 @@ impl HeadedWindow {
         self.gui.borrow().toolbar_height()
     }
 
+    fn webview_origin_device(&self) -> Point2D<f32, DevicePixel> {
+        let origin = self.gui.borrow().webview_origin();
+        let scale = self.hidpi_scale_factor();
+        Point2D::new(
+            (Length::new(origin.x) * scale).0,
+            (Length::new(origin.y) * scale).0,
+        )
+    }
+
     pub(crate) fn handle_winit_window_event(
         &self,
         state: Rc<RunningAppState>,
@@ -524,8 +539,8 @@ impl HeadedWindow {
         // Handle resize events first, so that any subsequent redrawing draws onto a buffer of the
         // correct size.
         let mut resized = false;
-        if let WindowEvent::Resized(new_inner_size) = event &&
-            self.inner_size.get() != new_inner_size
+        if let WindowEvent::Resized(new_inner_size) = event
+            && self.inner_size.get() != new_inner_size
         {
             self.inner_size.set(new_inner_size);
             self.window_rendering_context.resize(new_inner_size);
@@ -583,7 +598,7 @@ impl HeadedWindow {
                 // Request a winit redraw event, so we can recomposite, update and paint
                 // the GUI, and present the new frame.
                 self.winit_window.request_redraw();
-            },
+            }
             WindowEvent::MouseInput {
                 state: ElementState::Pressed,
                 button: MouseButton::Forward,
@@ -591,7 +606,7 @@ impl HeadedWindow {
             } => {
                 window.queue_user_interface_command(UserInterfaceCommand::Forward);
                 consumed = true;
-            },
+            }
             WindowEvent::MouseInput {
                 state: ElementState::Pressed,
                 button: MouseButton::Back,
@@ -599,16 +614,16 @@ impl HeadedWindow {
             } => {
                 window.queue_user_interface_command(UserInterfaceCommand::Back);
                 consumed = true;
-            },
+            }
             WindowEvent::MouseWheel { .. } | WindowEvent::MouseInput { .. }
                 if !should_forward_mouse_event_to_egui() =>
             {
                 self.gui.borrow().surrender_focus();
-            },
+            }
             WindowEvent::KeyboardInput { .. } if !self.gui.borrow().has_keyboard_focus() => {
                 // Keyboard events should go to the WebView unless some other GUI
                 // component has keyboard focus.
-            },
+            }
             ref event => {
                 let response = self
                     .gui
@@ -627,8 +642,8 @@ impl HeadedWindow {
                 // forwarded to Gui (above). This is because egui needs to know when
                 // the mouse is moving in other parts of the view in order to properly
                 // hide tooltips.
-                if let WindowEvent::CursorMoved { .. } = event &&
-                    !should_forward_mouse_event_to_egui()
+                if let WindowEvent::CursorMoved { .. } = event
+                    && !should_forward_mouse_event_to_egui()
                 {
                     consumed = false;
                 } else {
@@ -636,23 +651,23 @@ impl HeadedWindow {
                     // Note that servo doesn’t yet support tabbing through links and inputs
                     consumed = response.consumed;
                 }
-            },
+            }
         }
 
         if !consumed && let Some(webview) = window.active_webview() {
             match event {
                 WindowEvent::KeyboardInput { event, .. } => {
                     self.handle_keyboard_input(state, &window, event)
-                },
+                }
                 WindowEvent::ModifiersChanged(modifiers) => {
                     self.modifiers_state.set(modifiers.state())
-                },
+                }
                 WindowEvent::MouseInput { state, button, .. } => {
                     self.handle_mouse_button_event(&webview, button, state);
-                },
+                }
                 WindowEvent::CursorMoved { position, .. } => {
                     self.handle_mouse_move_event(&webview, position);
-                },
+                }
                 WindowEvent::CursorLeft { .. } => {
                     let webview_rect: Rect<_, _> = webview.size().into();
                     if webview_rect.contains(self.webview_relative_mouse_point.get()) {
@@ -660,7 +675,7 @@ impl HeadedWindow {
                             MouseLeftViewportEvent::default(),
                         ));
                     }
-                },
+                }
                 WindowEvent::MouseWheel { delta, .. } => {
                     let (delta_x, delta_y, mode) = match delta {
                         MouseScrollDelta::LineDelta(delta_x, delta_y) => (
@@ -670,7 +685,7 @@ impl HeadedWindow {
                         ),
                         MouseScrollDelta::PixelDelta(delta) => {
                             (delta.x, delta.y, WheelMode::DeltaPixel)
-                        },
+                        }
                     };
 
                     // Create wheel event before snapping to the major axis of movement
@@ -685,30 +700,35 @@ impl HeadedWindow {
                         delta,
                         point.into(),
                     )));
-                },
+                }
                 WindowEvent::Touch(touch) => {
+                    let origin = self.webview_origin_device();
                     webview.notify_input_event(InputEvent::Touch(TouchEvent::new(
                         winit_phase_to_touch_event_type(touch.phase),
                         TouchId(touch.id as i32),
-                        DevicePoint::new(touch.location.x as f32, touch.location.y as f32).into(),
+                        DevicePoint::new(
+                            touch.location.x as f32 - origin.x,
+                            touch.location.y as f32 - origin.y,
+                        )
+                        .into(),
                         TouchPointerType::Touch,
                     )));
-                },
+                }
                 WindowEvent::PinchGesture { delta, .. } => {
                     webview.adjust_pinch_zoom(
                         delta as f32 + 1.0,
                         self.webview_relative_mouse_point.get(),
                     );
-                },
+                }
                 WindowEvent::CloseRequested => {
                     window.schedule_close();
-                },
+                }
                 WindowEvent::ThemeChanged(theme) => {
                     webview.notify_theme_change(match theme {
                         winit::window::Theme::Light => Theme::Light,
                         winit::window::Theme::Dark => Theme::Dark,
                     });
-                },
+                }
                 WindowEvent::Ime(ime) => match ime {
                     Ime::Enabled => {
                         webview.notify_input_event(InputEvent::Ime(ImeEvent::Composition(
@@ -717,7 +737,7 @@ impl HeadedWindow {
                                 data: String::new(),
                             },
                         )));
-                    },
+                    }
                     Ime::Preedit(text, _) => {
                         webview.notify_input_event(InputEvent::Ime(ImeEvent::Composition(
                             servo::CompositionEvent {
@@ -725,7 +745,7 @@ impl HeadedWindow {
                                 data: text,
                             },
                         )));
-                    },
+                    }
                     Ime::Commit(text) => {
                         webview.notify_input_event(InputEvent::Ime(ImeEvent::Composition(
                             servo::CompositionEvent {
@@ -733,7 +753,7 @@ impl HeadedWindow {
                                 data: text,
                             },
                         )));
-                    },
+                    }
                     Ime::Disabled => {
                         // There are two reasons we receive this message from winit:
                         //
@@ -747,7 +767,7 @@ impl HeadedWindow {
                         if self.visible_input_method.take().is_some() {
                             webview.notify_input_event(InputEvent::Ime(ImeEvent::Dismissed));
                         }
-                    },
+                    }
                 },
                 WindowEvent::DroppedFile(dropped_file) => {
                     if let Ok(url) = Url::from_file_path(&dropped_file) {
@@ -758,8 +778,8 @@ impl HeadedWindow {
                             dropped_file.display()
                         );
                     }
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
     }
@@ -769,15 +789,15 @@ impl HeadedWindow {
             match &event.window_event {
                 egui_winit::accesskit_winit::WindowEvent::InitialTreeRequested => {
                     state.set_accessibility_active(true);
-                },
+                }
                 egui_winit::accesskit_winit::WindowEvent::ActionRequested(req) => {
                     if req.target_tree != accesskit::TreeId::ROOT {
                         // TODO(#4344): Forward action to Servo
                     }
-                },
+                }
                 egui_winit::accesskit_winit::WindowEvent::AccessibilityDeactivated => {
                     state.set_accessibility_active(false);
-                },
+                }
             }
 
             if self
@@ -865,8 +885,8 @@ impl PlatformWindow for HeadedWindow {
         let new_outer_size =
             new_outer_size.clamp(MIN_WINDOW_INNER_SIZE + decoration_size, screen_size * 2);
 
-        if outer_size.width == new_outer_size.width as u32 &&
-            outer_size.height == new_outer_size.height as u32
+        if outer_size.width == new_outer_size.width as u32
+            && outer_size.height == new_outer_size.height as u32
         {
             return Some(new_outer_size);
         }
@@ -975,7 +995,7 @@ impl PlatformWindow for HeadedWindow {
             Cursor::None => {
                 self.winit_window.set_cursor_visible(false);
                 return;
-            },
+            }
         };
         self.winit_window.set_cursor(winit_cursor);
         self.winit_window.set_cursor_visible(true);
@@ -1074,7 +1094,7 @@ impl PlatformWindow for HeadedWindow {
                     webview_id,
                     Dialog::new_select_element_dialog(prompt, offset),
                 );
-            },
+            }
             EmbedderControl::ColorPicker(color_picker) => {
                 // FIXME: Reading the toolbar height is needed here to properly position the select dialog.
                 // But if the toolbar height changes while the dialog is open then the position won't be updated
@@ -1083,20 +1103,20 @@ impl PlatformWindow for HeadedWindow {
                     webview_id,
                     Dialog::new_color_picker_dialog(color_picker, offset),
                 );
-            },
+            }
             EmbedderControl::InputMethod(input_method_control) => {
                 self.show_ime(control_id, input_method_control);
-            },
+            }
             EmbedderControl::FilePicker(file_picker) => {
                 self.add_dialog(webview_id, Dialog::new_file_dialog(file_picker));
-            },
+            }
             EmbedderControl::SimpleDialog(simple_dialog) => {
                 self.add_dialog(webview_id, Dialog::new_simple_dialog(simple_dialog));
-            },
+            }
             EmbedderControl::ContextMenu(prompt) => {
                 let offset = self.gui.borrow().toolbar_height();
                 self.add_dialog(webview_id, Dialog::new_context_menu(prompt, offset));
-            },
+            }
         }
     }
 

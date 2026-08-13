@@ -221,8 +221,9 @@ impl ServoShellWindow {
     }
 
     pub(crate) fn update_and_request_repaint_if_necessary(&self, state: &RunningAppState) {
-        let updated_user_interface = self.needs_update.take() &&
-            self.platform_window
+        let updated_user_interface = self.needs_update.take()
+            && self
+                .platform_window
                 .update_user_interface_state(state, self);
 
         // Delegate handlers may have asked us to present or update painted WebView contents.
@@ -331,23 +332,23 @@ impl ServoShellWindow {
                     if let Some(active_webview) = self.active_webview() {
                         active_webview.load(url.into_url());
                     }
-                },
+                }
                 UserInterfaceCommand::Back => {
                     if let Some(active_webview) = self.active_webview() {
                         active_webview.go_back(1);
                     }
-                },
+                }
                 UserInterfaceCommand::Forward => {
                     if let Some(active_webview) = self.active_webview() {
                         active_webview.go_forward(1);
                     }
-                },
+                }
                 UserInterfaceCommand::Reload => {
                     self.set_needs_update();
                     if let Some(active_webview) = self.active_webview() {
                         active_webview.reload();
                     }
-                },
+                }
                 UserInterfaceCommand::ReloadAll => {
                     for window in state.windows().values() {
                         window.set_needs_update();
@@ -355,23 +356,23 @@ impl ServoShellWindow {
                             webview.reload();
                         }
                     }
-                },
+                }
                 UserInterfaceCommand::NewWebView => {
                     self.set_needs_update();
-                    let url = Url::parse("servo:newtab").expect("Should always be able to parse");
+                    let url = Url::parse("slate://home").expect("Should always be able to parse");
                     self.create_and_activate_toplevel_webview(state.clone(), url);
-                },
+                }
                 UserInterfaceCommand::CloseWebView(id) => {
                     self.set_needs_update();
                     self.close_webview(id);
-                },
+                }
                 UserInterfaceCommand::NewWindow => {
                     if let Some(create_platform_window) = create_platform_window {
-                        let url = Url::parse("servo:newtab").unwrap();
+                        let url = Url::parse("slate://home").unwrap();
                         let platform_window = create_platform_window(url.clone());
                         state.open_window(platform_window, url);
                     }
-                },
+                }
             }
         }
     }

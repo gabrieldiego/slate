@@ -4,4 +4,5 @@
 
 pub(crate) mod resource;
 pub(crate) mod servo;
+pub(crate) mod slate;
 pub(crate) mod urlinfo;

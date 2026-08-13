@@ -115,9 +115,9 @@ impl Default for ServoShellPreferences {
             clean_shutdown: false,
             device_pixel_ratio_override: None,
             headless: false,
-            homepage: "https://servo.org".into(),
+            homepage: "slate://home".into(),
             initial_window_size: Size2D::new(1024, 740),
-            no_native_titlebar: true,
+            no_native_titlebar: false,
             screen_size_override: None,
             simulate_touch_events: false,
             searchpage: "https://duckduckgo.com/html/?q=%s".into(),
@@ -248,7 +248,7 @@ impl fmt::Display for ParseResolutionError {
             ParseResolutionError::InvalidFormat => write!(f, "invalid resolution format"),
             ParseResolutionError::ZeroDimension => {
                 write!(f, "width and height must be greater than 0")
-            },
+            }
             ParseResolutionError::ParseError(e) => write!(f, "{e}"),
         }
     }
@@ -578,7 +578,7 @@ struct CmdArgs {
     zealous_gc: bool,
 
     /// The url we should load.
-    #[bpaf(positional("URL"), fallback(String::from("https://www.servo.org")))]
+    #[bpaf(positional("URL"), fallback(String::from("slate://home")))]
     url: String,
 }
 
@@ -664,7 +664,7 @@ fn parse_arguments_helper(args_without_binary: Args) -> ArgumentParsingResult {
             } else {
                 ArgumentParsingResult::ErrorParsing
             };
-        },
+        }
     };
 
     // If this is the content process, we'll receive the real options over IPC. So fill in some dummy options for now.
@@ -801,14 +801,14 @@ fn test_parse_pref(arg: &str) -> Preferences {
     match parse_command_line_arguments(args.as_slice()) {
         ArgumentParsingResult::ContentProcess(..) => {
             unreachable!("No preferences for content process")
-        },
+        }
         ArgumentParsingResult::ChromeProcess(_, preferences, _) => preferences,
         ArgumentParsingResult::Exit => {
             panic!("we supplied a --pref argument above which should be parsed")
-        },
+        }
         ArgumentParsingResult::ErrorParsing => {
             unreachable!("we supplied a --pref argument above which should be parsed")
-        },
+        }
     }
 }
 
@@ -871,13 +871,13 @@ fn test_parse(arg: &str) -> (Opts, Preferences, ServoShellPreferences) {
     match parse_command_line_arguments(args_split.as_slice()) {
         ArgumentParsingResult::ContentProcess(..) => {
             unreachable!("No preferences for content process")
-        },
+        }
         ArgumentParsingResult::ChromeProcess(opts, preferences, servoshell_preferences) => {
             (opts, preferences, servoshell_preferences)
-        },
+        }
         ArgumentParsingResult::Exit | ArgumentParsingResult::ErrorParsing => {
             unreachable!("We always have valid preference in our test cases")
-        },
+        }
     }
 }
 
