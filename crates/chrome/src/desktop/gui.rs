@@ -98,6 +98,10 @@ const ADDRESS_TEXT_HEIGHT: f32 = 34.0;
 const ADDRESS_INPUT_TEXT_SIZE: f32 = 18.0;
 const ADDRESS_CORNER_RADIUS: u8 = 8;
 const ADDRESS_INNER_MARGIN_X: i8 = 12;
+const ADDRESS_SHADOW_OFFSET: [i8; 2] = [0, 1];
+const ADDRESS_SHADOW_BLUR: u8 = 6;
+const ADDRESS_SHADOW_SPREAD: u8 = 0;
+const ADDRESS_SHADOW_ALPHA: u8 = 10;
 const ADDRESS_SECURITY_ICON_SIZE: f32 = 24.0;
 const ADDRESS_ICON_GAP: f32 = 8.0;
 const ADDRESS_BOOKMARK_ICON_SIZE: f32 = 17.0;
@@ -275,6 +279,15 @@ fn page_info_raster_for_location(location: &str) -> SlateRaster {
             _ => SlateRaster::PageInfoWarning,
         },
         Err(_) => SlateRaster::PageInfoWarning,
+    }
+}
+
+fn address_shadow() -> egui::Shadow {
+    egui::Shadow {
+        offset: ADDRESS_SHADOW_OFFSET,
+        blur: ADDRESS_SHADOW_BLUR,
+        spread: ADDRESS_SHADOW_SPREAD,
+        color: egui::Color32::from_black_alpha(ADDRESS_SHADOW_ALPHA),
     }
 }
 
@@ -1379,6 +1392,7 @@ impl Gui {
                                     .fill(slate_theme::SURFACE)
                                     .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
                                     .corner_radius(ADDRESS_CORNER_RADIUS)
+                                    .shadow(address_shadow())
                                     .inner_margin(egui::Margin::symmetric(
                                         ADDRESS_INNER_MARGIN_X,
                                         0,
@@ -1714,6 +1728,7 @@ mod tests {
         ADDRESS_BOOKMARK_BUTTON_RADIUS, ADDRESS_BOOKMARK_BUTTON_SIZE, ADDRESS_BOOKMARK_ICON_SIZE,
         ADDRESS_BOOKMARK_RESERVED_WIDTH, ADDRESS_CORNER_RADIUS, ADDRESS_ICON_GAP,
         ADDRESS_INNER_MARGIN_X, ADDRESS_LEADING_GAP, ADDRESS_MIN_WIDTH, ADDRESS_SECURITY_ICON_SIZE,
+        ADDRESS_SHADOW_ALPHA, ADDRESS_SHADOW_BLUR, ADDRESS_SHADOW_OFFSET, ADDRESS_SHADOW_SPREAD,
         ADDRESS_TRAILING_CONTROLS_WIDTH, Gui, HOME_METRIC_CARD_MIN_WIDTH, HomeContentLayout,
         SlateIconCache, default_opening_home_view_height, default_opening_home_view_size,
         home_content_stack_height, home_metric_card_content_height, home_metric_card_content_width,
@@ -1903,6 +1918,10 @@ mod tests {
         assert_eq!(TOOLBAR_SEPARATOR_HEIGHT, 36.0);
         assert_eq!(ADDRESS_LEADING_GAP, 28.0);
         assert_eq!(ADDRESS_INNER_MARGIN_X, 12);
+        assert_eq!(ADDRESS_SHADOW_OFFSET, [0, 1]);
+        assert_eq!(ADDRESS_SHADOW_BLUR, 6);
+        assert_eq!(ADDRESS_SHADOW_SPREAD, 0);
+        assert_eq!(ADDRESS_SHADOW_ALPHA, 10);
         assert_eq!(ADDRESS_SECURITY_ICON_SIZE, 24.0);
         assert_eq!(ADDRESS_ICON_GAP, 8.0);
         assert_eq!(ADDRESS_BOOKMARK_ICON_SIZE, 17.0);
