@@ -1033,10 +1033,19 @@ impl Gui {
                                                         .get(&id)
                                                         .map(|(_, favicon)| favicon)
                                                         .copied();
+                                                    let fallback_icon_color = if window
+                                                        .active_webview()
+                                                        .map(|webview| webview.id())
+                                                        == Some(id)
+                                                    {
+                                                        slate_theme::TEXT
+                                                    } else {
+                                                        slate_theme::MUTED
+                                                    };
                                                     let fallback_icon = slate_icons.texture(
                                                         ui.ctx(),
                                                         Self::fallback_tab_icon(index),
-                                                        slate_theme::MUTED,
+                                                        fallback_icon_color,
                                                     );
                                                     Self::browser_tab(
                                                         ui,
