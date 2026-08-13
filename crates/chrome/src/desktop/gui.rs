@@ -769,8 +769,11 @@ impl Gui {
                                 ui.set_width(search_width);
                                 ui.set_min_height(HOME_SEARCH_HEIGHT);
                                 ui.horizontal_centered(|ui| {
-                                    let search_icon =
-                                        slate_icons.raster_texture(ui.ctx(), SlateRaster::Search);
+                                    let search_icon = slate_icons.texture(
+                                        ui.ctx(),
+                                        SlateIcon::HomeSearch,
+                                        slate_theme::MUTED,
+                                    );
                                     ui.add(Self::icon_image(search_icon, HOME_SEARCH_ICON_SIZE));
                                     ui.add_space(HOME_SEARCH_ICON_GAP);
                                     ui.add_sized(
