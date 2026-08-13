@@ -86,10 +86,13 @@ const ADDRESS_LEADING_GAP: f32 = 26.0;
 const ADDRESS_MIN_WIDTH: f32 = 260.0;
 const ADDRESS_HEIGHT: f32 = 54.0;
 const ADDRESS_TEXT_HEIGHT: f32 = 34.0;
+const ADDRESS_CORNER_RADIUS: u8 = 8;
 const ADDRESS_INNER_MARGIN_X: i8 = 12;
 const ADDRESS_SECURITY_ICON_SIZE: f32 = 20.0;
 const ADDRESS_ICON_GAP: f32 = 8.0;
 const ADDRESS_BOOKMARK_ICON_SIZE: f32 = 20.0;
+const ADDRESS_BOOKMARK_BUTTON_SIZE: f32 = 28.0;
+const ADDRESS_BOOKMARK_BUTTON_RADIUS: u8 = 6;
 const ADDRESS_BOOKMARK_RESERVED_WIDTH: f32 = 36.0;
 const ADDRESS_TRAILING_CONTROLS_WIDTH: f32 = 168.0;
 const HOME_SEARCH_MIN_WIDTH: f32 = 280.0;
@@ -501,8 +504,8 @@ impl Gui {
     ) -> egui::Button<'static> {
         egui::Button::image(Self::icon_image(texture, icon_size))
             .frame(false)
-            .min_size(Vec2::splat(28.0))
-            .corner_radius(6)
+            .min_size(Vec2::splat(ADDRESS_BOOKMARK_BUTTON_SIZE))
+            .corner_radius(ADDRESS_BOOKMARK_BUTTON_RADIUS)
     }
 
     fn fallback_tab_icon(index: usize) -> SlateIcon {
@@ -1124,7 +1127,7 @@ impl Gui {
                                 let location_field = egui::Frame::NONE
                                     .fill(slate_theme::SURFACE)
                                     .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
-                                    .corner_radius(8)
+                                    .corner_radius(ADDRESS_CORNER_RADIUS)
                                     .inner_margin(egui::Margin::symmetric(
                                         ADDRESS_INNER_MARGIN_X,
                                         0,
@@ -1451,7 +1454,8 @@ mod tests {
     use servo::DeviceIndependentPixel;
 
     use super::{
-        ADDRESS_BOOKMARK_ICON_SIZE, ADDRESS_BOOKMARK_RESERVED_WIDTH, ADDRESS_ICON_GAP,
+        ADDRESS_BOOKMARK_BUTTON_RADIUS, ADDRESS_BOOKMARK_BUTTON_SIZE, ADDRESS_BOOKMARK_ICON_SIZE,
+        ADDRESS_BOOKMARK_RESERVED_WIDTH, ADDRESS_CORNER_RADIUS, ADDRESS_ICON_GAP,
         ADDRESS_INNER_MARGIN_X, ADDRESS_LEADING_GAP, ADDRESS_MIN_WIDTH, ADDRESS_SECURITY_ICON_SIZE,
         ADDRESS_TRAILING_CONTROLS_WIDTH, HOME_METRIC_CARD_MIN_WIDTH, home_metrics_layout,
         home_search_width, home_top_space, tab_corner_radius, tab_title_width,
@@ -1548,6 +1552,7 @@ mod tests {
         assert_eq!(FOOTER_SYNC_DOT_SIZE, 12.0);
         assert_eq!(FOOTER_SETTINGS_BUTTON_SIZE, 40.0);
         assert_eq!(ADDRESS_HEIGHT, 54.0);
+        assert_eq!(ADDRESS_CORNER_RADIUS, 8);
         assert_eq!(APP_TITLE_HEIGHT, TAB_STRIP_HEIGHT);
         assert_eq!(APP_TITLE_LEFT_PADDING, 30.0);
         assert_eq!(APP_TITLE_TEXT_SIZE, 24.0);
@@ -1583,6 +1588,8 @@ mod tests {
         assert_eq!(ADDRESS_SECURITY_ICON_SIZE, 20.0);
         assert_eq!(ADDRESS_ICON_GAP, 8.0);
         assert_eq!(ADDRESS_BOOKMARK_ICON_SIZE, 20.0);
+        assert_eq!(ADDRESS_BOOKMARK_BUTTON_SIZE, 28.0);
+        assert_eq!(ADDRESS_BOOKMARK_BUTTON_RADIUS, 6);
         assert_eq!(ADDRESS_BOOKMARK_RESERVED_WIDTH, 36.0);
         assert_eq!(ADDRESS_TRAILING_CONTROLS_WIDTH, 168.0);
         assert_eq!(HOME_TOP_SPACE_FACTOR, 0.18);
