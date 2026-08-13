@@ -69,7 +69,9 @@ const NEW_TAB_LEFT_GAP: f32 = 16.0;
 const NEW_TAB_BUTTON_SIZE: f32 = 44.0;
 const NEW_TAB_TEXT_SIZE: f32 = 28.0;
 const TOOLBAR_ITEM_SPACING: f32 = 18.0;
+const TOOLBAR_BUTTON_SIZE: f32 = 40.0;
 const TOOLBAR_ICON_SIZE: f32 = 24.0;
+const TOOLBAR_MENU_TEXT_SIZE: f32 = 28.0;
 const RAIL_ICON_SIZE: f32 = 34.0;
 const RAIL_BUTTON_SIZE: f32 = 80.0;
 const RAIL_TOP_SPACE: f32 = 24.0;
@@ -443,8 +445,20 @@ impl Gui {
     fn toolbar_icon_button(texture: egui::load::SizedTexture) -> egui::Button<'static> {
         egui::Button::image(Self::icon_image(texture, TOOLBAR_ICON_SIZE))
             .frame(false)
-            .min_size(Vec2 { x: 40.0, y: 40.0 })
+            .min_size(Vec2::splat(TOOLBAR_BUTTON_SIZE))
             .corner_radius(6)
+    }
+
+    fn toolbar_menu_button(selected: bool) -> egui::Button<'static> {
+        egui::Button::selectable(
+            selected,
+            egui::RichText::new("☰")
+                .size(TOOLBAR_MENU_TEXT_SIZE)
+                .color(slate_theme::TEXT),
+        )
+        .frame(false)
+        .min_size(Vec2::splat(TOOLBAR_BUTTON_SIZE))
+        .corner_radius(6)
     }
 
     fn address_icon_button_sized(
@@ -1164,7 +1178,7 @@ impl Gui {
                                 let mut experimental_preferences_enabled =
                                     state.experimental_preferences_enabled();
                                 let prefs_toggle = ui
-                                    .toggle_value(&mut experimental_preferences_enabled, "☰")
+                                    .add(Gui::toolbar_menu_button(experimental_preferences_enabled))
                                     .on_hover_text("Enable experimental prefs");
                                 prefs_toggle.widget_info(|| {
                                     let mut info = WidgetInfo::new(WidgetType::Button);
@@ -1173,6 +1187,8 @@ impl Gui {
                                     info
                                 });
                                 if prefs_toggle.clicked() {
+                                    experimental_preferences_enabled =
+                                        !experimental_preferences_enabled;
                                     state.set_experimental_preferences_enabled(
                                         experimental_preferences_enabled,
                                     );
@@ -1412,8 +1428,8 @@ mod tests {
         HOME_SEARCH_TO_METRICS_GAP, HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN,
         NEW_TAB_BUTTON_SIZE, NEW_TAB_LEFT_GAP, NEW_TAB_TEXT_SIZE, TAB_CONTENT_HEIGHT, TAB_HEIGHT,
         TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_HEIGHT,
-        TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH, TAB_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_ITEM_SPACING,
-        egui_chrome_owns_position,
+        TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH, TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT,
+        TOOLBAR_ITEM_SPACING, TOOLBAR_MENU_TEXT_SIZE, egui_chrome_owns_position,
     };
     use super::{
         RAIL_BUTTON_SIZE, RAIL_ICON_SIZE, RAIL_ITEM_GAP, RAIL_TOP_SPACE, TAB_CLOSE_BUTTON_SIZE,
@@ -1500,6 +1516,8 @@ mod tests {
         assert_eq!(NEW_TAB_TEXT_SIZE, 28.0);
         assert_eq!(HOME_SEARCH_ICON_SIZE, 20.0);
         assert_eq!(TOOLBAR_ITEM_SPACING, 18.0);
+        assert_eq!(TOOLBAR_BUTTON_SIZE, 40.0);
+        assert_eq!(TOOLBAR_MENU_TEXT_SIZE, 28.0);
         assert_eq!(ADDRESS_LEADING_GAP, 26.0);
         assert_eq!(ADDRESS_INNER_MARGIN_X, 12);
         assert_eq!(ADDRESS_SECURITY_ICON_SIZE, 20.0);
