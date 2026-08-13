@@ -258,6 +258,20 @@ fn toolbar_address_width(available_width: f32) -> f32 {
         .min(available_width)
 }
 
+fn page_info_raster_for_location(location: &str) -> SlateRaster {
+    match Url::parse(location) {
+        Ok(url) if is_slate_home_url(&url) => SlateRaster::PageInfoSecure,
+        Ok(url) => match url.scheme() {
+            "https" => SlateRaster::PageInfoSecure,
+            "http" => SlateRaster::PageInfoInsecure,
+            "file" => SlateRaster::PageInfoLocal,
+            "about" | "resource" | "servo" | "slate" => SlateRaster::PageInfoInternal,
+            _ => SlateRaster::PageInfoWarning,
+        },
+        Err(_) => SlateRaster::PageInfoWarning,
+    }
+}
+
 fn home_search_width(available_width: f32) -> f32 {
     let available_width = (available_width - HOME_SEARCH_HORIZONTAL_PADDING).max(0.0);
     available_width
@@ -1349,7 +1363,7 @@ impl Gui {
                                         ui.horizontal_centered(|ui| {
                                             let page_info_icon = slate_icons.raster_texture(
                                                 ui.ctx(),
-                                                SlateRaster::PageInfoSecure,
+                                                page_info_raster_for_location(location),
                                             );
                                             ui.add(Self::icon_image(
                                                 page_info_icon,
@@ -1678,8 +1692,9 @@ mod tests {
         SlateIconCache, default_opening_home_view_height, default_opening_home_view_size,
         home_content_stack_height, home_metric_card_content_height, home_metric_card_content_width,
         home_metrics_layout, home_metrics_rendered_height, home_metrics_row_width,
-        home_search_rendered_height, home_search_width, home_top_space, slate_theme,
-        tab_corner_radius, tab_title_width, toolbar_address_width,
+        home_search_rendered_height, home_search_width, home_top_space,
+        page_info_raster_for_location, slate_theme, tab_corner_radius, tab_title_width,
+        toolbar_address_width,
     };
     use super::{
         ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH, APP_TITLE_HEIGHT,
@@ -1897,6 +1912,38 @@ mod tests {
     fn narrow_toolbar_address_width_stays_within_available_width() {
         assert_eq!(toolbar_address_width(220.0), 220.0);
         assert!(toolbar_address_width(300.0) >= ADDRESS_MIN_WIDTH);
+    }
+
+    #[test]
+    fn page_info_icon_keeps_slate_home_as_secure_internal_page() {
+        assert_eq!(
+            page_info_raster_for_location("slate://home"),
+            slate_theme::SlateRaster::PageInfoSecure
+        );
+    }
+
+    #[test]
+    fn page_info_icon_reflects_common_url_schemes() {
+        assert_eq!(
+            page_info_raster_for_location("https://example.com"),
+            slate_theme::SlateRaster::PageInfoSecure
+        );
+        assert_eq!(
+            page_info_raster_for_location("http://example.com"),
+            slate_theme::SlateRaster::PageInfoInsecure
+        );
+        assert_eq!(
+            page_info_raster_for_location("file:///tmp/index.html"),
+            slate_theme::SlateRaster::PageInfoLocal
+        );
+        assert_eq!(
+            page_info_raster_for_location("resource://servo/user-agent.css"),
+            slate_theme::SlateRaster::PageInfoInternal
+        );
+        assert_eq!(
+            page_info_raster_for_location("not a url yet"),
+            slate_theme::SlateRaster::PageInfoWarning
+        );
     }
 
     #[test]
