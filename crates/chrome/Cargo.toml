@@ -13,6 +13,7 @@ description = "Slate browser chrome built from Servo's default shell"
 name = "slate_chrome"
 path = "src/lib.rs"
 bench = false
+crate-type = ["rlib", "dylib"]
 
 [[bin]]
 name = "slate-chrome"
