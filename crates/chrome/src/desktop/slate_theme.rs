@@ -15,7 +15,6 @@ pub(crate) const TEXT: Color32 = Color32::from_rgb(43, 45, 45);
 pub(crate) const MUTED: Color32 = Color32::from_rgb(111, 114, 115);
 pub(crate) const TEAL: Color32 = Color32::from_rgb(7, 112, 109);
 pub(crate) const TEAL_SOFT: Color32 = Color32::from_rgb(230, 243, 241);
-pub(crate) const TEAL_WASH: Color32 = Color32::from_rgb(241, 247, 246);
 pub(crate) const AMBER: Color32 = Color32::from_rgb(220, 156, 0);
 pub(crate) const BLUE: Color32 = Color32::from_rgb(25, 118, 199);
 

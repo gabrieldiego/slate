@@ -345,7 +345,7 @@ fn rail_icon_color(selected: bool) -> egui::Color32 {
 
 fn rail_button_fill(selected: bool, hovered: bool) -> egui::Color32 {
     if selected {
-        slate_theme::TEAL_WASH
+        slate_theme::TEAL_SOFT
     } else if hovered {
         slate_theme::PANEL_HOVER
     } else {
@@ -2579,8 +2579,8 @@ mod tests {
     fn rail_colors_keep_selected_tile_soft() {
         assert_eq!(rail_icon_color(true), slate_theme::TEAL);
         assert_eq!(rail_icon_color(false), slate_theme::TEXT);
-        assert_eq!(rail_button_fill(true, false), slate_theme::TEAL_WASH);
-        assert_eq!(rail_button_fill(true, true), slate_theme::TEAL_WASH);
+        assert_eq!(rail_button_fill(true, false), slate_theme::TEAL_SOFT);
+        assert_eq!(rail_button_fill(true, true), slate_theme::TEAL_SOFT);
         assert_eq!(rail_button_fill(false, true), slate_theme::PANEL_HOVER);
         assert_eq!(rail_button_fill(false, false), egui::Color32::TRANSPARENT);
     }
