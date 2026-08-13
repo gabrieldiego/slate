@@ -89,8 +89,13 @@ const ADDRESS_BOOKMARK_RESERVED_WIDTH: f32 = 36.0;
 const ADDRESS_TRAILING_CONTROLS_WIDTH: f32 = 168.0;
 const HOME_SEARCH_MIN_WIDTH: f32 = 280.0;
 const HOME_SEARCH_MAX_WIDTH: f32 = 880.0;
+const HOME_SEARCH_HORIZONTAL_PADDING: f32 = 32.0;
 const HOME_SEARCH_HEIGHT: f32 = 58.0;
+const HOME_SEARCH_TEXT_HEIGHT: f32 = 34.0;
+const HOME_SEARCH_INNER_MARGIN_X: i8 = 18;
 const HOME_SEARCH_ICON_SIZE: f32 = 20.0;
+const HOME_SEARCH_ICON_GAP: f32 = 12.0;
+const HOME_SEARCH_CORNER_RADIUS: u8 = 8;
 const HOME_TOP_SPACE_FACTOR: f32 = 0.18;
 const HOME_TOP_SPACE_MIN: f32 = 48.0;
 const HOME_TOP_SPACE_MAX: f32 = 132.0;
@@ -197,6 +202,13 @@ fn toolbar_address_width(available_width: f32) -> f32 {
     (available_width - ADDRESS_TRAILING_CONTROLS_WIDTH)
         .max(min_width)
         .min(available_width)
+}
+
+fn home_search_width(available_width: f32) -> f32 {
+    let available_width = (available_width - HOME_SEARCH_HORIZONTAL_PADDING).max(0.0);
+    available_width
+        .min(HOME_SEARCH_MAX_WIDTH)
+        .max(HOME_SEARCH_MIN_WIDTH.min(available_width))
 }
 
 fn home_top_space(available_height: f32) -> f32 {
@@ -714,16 +726,13 @@ impl Gui {
                         );
                         ui.add_space(HOME_HERO_TO_SEARCH_GAP);
 
-                        let available_search_width = (ui.available_width() - 32.0).max(0.0);
-                        let search_width = available_search_width
-                            .min(HOME_SEARCH_MAX_WIDTH)
-                            .max(HOME_SEARCH_MIN_WIDTH.min(available_search_width));
+                        let search_width = home_search_width(ui.available_width());
                         let home_search_id = egui::Id::new("home_search_input");
                         let search_response = egui::Frame::NONE
                             .fill(slate_theme::SURFACE)
                             .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
-                            .corner_radius(8)
-                            .inner_margin(egui::Margin::symmetric(18, 0))
+                            .corner_radius(HOME_SEARCH_CORNER_RADIUS)
+                            .inner_margin(egui::Margin::symmetric(HOME_SEARCH_INNER_MARGIN_X, 0))
                             .show(ui, |ui| {
                                 ui.set_width(search_width);
                                 ui.set_min_height(HOME_SEARCH_HEIGHT);
@@ -731,9 +740,9 @@ impl Gui {
                                     let search_icon =
                                         slate_icons.raster_texture(ui.ctx(), SlateRaster::Search);
                                     ui.add(Self::icon_image(search_icon, HOME_SEARCH_ICON_SIZE));
-                                    ui.add_space(12.0);
+                                    ui.add_space(HOME_SEARCH_ICON_GAP);
                                     ui.add_sized(
-                                        [ui.available_width(), 34.0],
+                                        [ui.available_width(), HOME_SEARCH_TEXT_HEIGHT],
                                         egui::TextEdit::singleline(home_search)
                                             .id(home_search_id)
                                             .frame(egui::Frame::NONE)
@@ -1417,7 +1426,7 @@ mod tests {
         ADDRESS_BOOKMARK_ICON_SIZE, ADDRESS_BOOKMARK_RESERVED_WIDTH, ADDRESS_ICON_GAP,
         ADDRESS_INNER_MARGIN_X, ADDRESS_LEADING_GAP, ADDRESS_MIN_WIDTH, ADDRESS_SECURITY_ICON_SIZE,
         ADDRESS_TRAILING_CONTROLS_WIDTH, HOME_METRIC_CARD_MIN_WIDTH, home_metrics_layout,
-        home_top_space, tab_title_width, toolbar_address_width,
+        home_search_width, home_top_space, tab_title_width, toolbar_address_width,
     };
     use super::{
         ADDRESS_HEIGHT, APP_RAIL_WIDTH, APP_TITLE_HEIGHT, APP_TITLE_LEFT_PADDING,
@@ -1430,6 +1439,11 @@ mod tests {
         TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_HEIGHT,
         TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH, TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT,
         TOOLBAR_ITEM_SPACING, TOOLBAR_MENU_TEXT_SIZE, egui_chrome_owns_position,
+    };
+    use super::{
+        HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
+        HOME_SEARCH_ICON_GAP, HOME_SEARCH_INNER_MARGIN_X, HOME_SEARCH_MAX_WIDTH,
+        HOME_SEARCH_MIN_WIDTH, HOME_SEARCH_TEXT_HEIGHT,
     };
     use super::{
         RAIL_BUTTON_SIZE, RAIL_ICON_SIZE, RAIL_ITEM_GAP, RAIL_TOP_SPACE, TAB_CLOSE_BUTTON_SIZE,
@@ -1514,7 +1528,15 @@ mod tests {
         assert_eq!(NEW_TAB_LEFT_GAP, 16.0);
         assert_eq!(NEW_TAB_BUTTON_SIZE, 44.0);
         assert_eq!(NEW_TAB_TEXT_SIZE, 28.0);
+        assert_eq!(HOME_SEARCH_MIN_WIDTH, 280.0);
+        assert_eq!(HOME_SEARCH_MAX_WIDTH, 880.0);
+        assert_eq!(HOME_SEARCH_HORIZONTAL_PADDING, 32.0);
+        assert_eq!(HOME_SEARCH_HEIGHT, 58.0);
+        assert_eq!(HOME_SEARCH_TEXT_HEIGHT, 34.0);
+        assert_eq!(HOME_SEARCH_INNER_MARGIN_X, 18);
         assert_eq!(HOME_SEARCH_ICON_SIZE, 20.0);
+        assert_eq!(HOME_SEARCH_ICON_GAP, 12.0);
+        assert_eq!(HOME_SEARCH_CORNER_RADIUS, 8);
         assert_eq!(TOOLBAR_ITEM_SPACING, 18.0);
         assert_eq!(TOOLBAR_BUTTON_SIZE, 40.0);
         assert_eq!(TOOLBAR_MENU_TEXT_SIZE, 28.0);
@@ -1549,6 +1571,13 @@ mod tests {
         assert_eq!(home_top_space(120.0), HOME_TOP_SPACE_MIN);
         assert!((home_top_space(700.0) - 126.0).abs() < 0.001);
         assert_eq!(home_top_space(900.0), HOME_TOP_SPACE_MAX);
+    }
+
+    #[test]
+    fn home_search_width_uses_padding_and_bounds() {
+        assert_eq!(home_search_width(1200.0), HOME_SEARCH_MAX_WIDTH);
+        assert_eq!(home_search_width(620.0), 588.0);
+        assert_eq!(home_search_width(250.0), 218.0);
     }
 
     #[test]
