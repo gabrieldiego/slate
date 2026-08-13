@@ -77,7 +77,7 @@ const NEW_TAB_BUTTON_SIZE: f32 = 44.0;
 const NEW_TAB_TEXT_SIZE: f32 = 28.0;
 const TOOLBAR_PANEL_MARGIN_X: i8 = 18;
 const TOOLBAR_PANEL_MARGIN_Y: i8 = 10;
-const TOOLBAR_ITEM_SPACING: f32 = 18.0;
+const TOOLBAR_ITEM_SPACING: f32 = 20.0;
 const TOOLBAR_BUTTON_SIZE: f32 = 40.0;
 const TOOLBAR_ICON_SIZE: f32 = 24.0;
 const TOOLBAR_PRIVACY_ICON_SIZE: f32 = 28.0;
@@ -102,7 +102,7 @@ const ADDRESS_BOOKMARK_ICON_SIZE: f32 = 17.0;
 const ADDRESS_BOOKMARK_BUTTON_SIZE: f32 = 28.0;
 const ADDRESS_BOOKMARK_BUTTON_RADIUS: u8 = 6;
 const ADDRESS_BOOKMARK_RESERVED_WIDTH: f32 = 36.0;
-const ADDRESS_TRAILING_CONTROLS_WIDTH: f32 = 168.0;
+const ADDRESS_TRAILING_CONTROLS_WIDTH: f32 = 176.0;
 const HOME_SEARCH_MIN_WIDTH: f32 = 280.0;
 const HOME_SEARCH_MAX_WIDTH: f32 = 880.0;
 const HOME_SEARCH_HORIZONTAL_PADDING: f32 = 32.0;
@@ -1882,7 +1882,7 @@ mod tests {
         assert_eq!(HOME_SEARCH_CORNER_RADIUS, 8);
         assert_eq!(TOOLBAR_PANEL_MARGIN_X, 18);
         assert_eq!(TOOLBAR_PANEL_MARGIN_Y, 10);
-        assert_eq!(TOOLBAR_ITEM_SPACING, 18.0);
+        assert_eq!(TOOLBAR_ITEM_SPACING, 20.0);
         assert_eq!(TOOLBAR_BUTTON_SIZE, 40.0);
         assert_eq!(TOOLBAR_ICON_SIZE, 24.0);
         assert_eq!(TOOLBAR_PRIVACY_ICON_SIZE, 28.0);
@@ -1895,7 +1895,7 @@ mod tests {
         assert_eq!(ADDRESS_BOOKMARK_BUTTON_SIZE, 28.0);
         assert_eq!(ADDRESS_BOOKMARK_BUTTON_RADIUS, 6);
         assert_eq!(ADDRESS_BOOKMARK_RESERVED_WIDTH, 36.0);
-        assert_eq!(ADDRESS_TRAILING_CONTROLS_WIDTH, 168.0);
+        assert_eq!(ADDRESS_TRAILING_CONTROLS_WIDTH, 176.0);
         assert_eq!(HOME_TOP_SPACE_FACTOR, 0.18);
         assert_eq!(HOME_TOP_SPACE_MIN, 48.0);
         assert_eq!(HOME_TOP_SPACE_MAX, 132.0);
@@ -1925,7 +1925,7 @@ mod tests {
 
     #[test]
     fn wide_toolbar_address_width_leaves_room_for_trailing_controls() {
-        assert_eq!(toolbar_address_width(1348.0), 1180.0);
+        assert_eq!(toolbar_address_width(1348.0), 1172.0);
     }
 
     #[test]
