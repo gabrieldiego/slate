@@ -467,6 +467,14 @@ fn tab_close_icon_color(active: bool) -> egui::Color32 {
     }
 }
 
+fn toolbar_navigation_icon_color(enabled: bool) -> egui::Color32 {
+    if enabled {
+        slate_theme::TEXT
+    } else {
+        slate_theme::MUTED
+    }
+}
+
 fn footer_sync_status_width() -> f32 {
     FOOTER_SYNC_DOT_SIZE + FOOTER_SYNC_DOT_LABEL_GAP + FOOTER_SYNC_LABEL_WIDTH
 }
@@ -801,7 +809,8 @@ impl Gui {
         hover_icon: SlateRaster,
         enabled: bool,
     ) -> egui::Response {
-        let icon_texture = slate_icons.raster_texture(ui.ctx(), icon);
+        let icon_texture =
+            slate_icons.raster_mask_texture(ui.ctx(), icon, toolbar_navigation_icon_color(enabled));
         let sense = if enabled {
             egui::Sense::click()
         } else {
@@ -815,7 +824,11 @@ impl Gui {
                     .rect_filled(rect, TOOLBAR_BUTTON_RADIUS, slate_theme::PANEL_HOVER);
             }
             let texture = if hovered {
-                slate_icons.raster_texture(ui.ctx(), hover_icon)
+                slate_icons.raster_mask_texture(
+                    ui.ctx(),
+                    hover_icon,
+                    toolbar_navigation_icon_color(true),
+                )
             } else {
                 icon_texture
             };
@@ -2118,7 +2131,7 @@ mod tests {
         home_metrics_rendered_height, home_metrics_row_width, home_search_rendered_height,
         home_search_width, home_top_space, slate_theme, status_bubble_label, status_bubble_width,
         tab_close_icon_color, tab_corner_radius, tab_title_color, tab_title_width,
-        toolbar_address_width,
+        toolbar_address_width, toolbar_navigation_icon_color,
     };
     use super::{
         ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH, APP_TITLE_HEIGHT,
@@ -2473,6 +2486,12 @@ mod tests {
         assert_eq!(tab_title_color(false), slate_theme::MUTED);
         assert_eq!(tab_close_icon_color(true), slate_theme::TEXT);
         assert_eq!(tab_close_icon_color(false), slate_theme::MUTED);
+    }
+
+    #[test]
+    fn toolbar_navigation_colors_mute_disabled_controls() {
+        assert_eq!(toolbar_navigation_icon_color(true), slate_theme::TEXT);
+        assert_eq!(toolbar_navigation_icon_color(false), slate_theme::MUTED);
     }
 
     #[test]
