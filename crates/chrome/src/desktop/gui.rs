@@ -120,7 +120,7 @@ const ADDRESS_INNER_MARGIN_X: i8 = 12;
 const ADDRESS_SHADOW_OFFSET: [i8; 2] = [0, 1];
 const ADDRESS_SHADOW_BLUR: u8 = 6;
 const ADDRESS_SHADOW_SPREAD: u8 = 0;
-const ADDRESS_SHADOW_ALPHA: u8 = 10;
+const ADDRESS_SHADOW_ALPHA: u8 = 8;
 const ADDRESS_SECURITY_ICON_SIZE: f32 = 24.0;
 const ADDRESS_ICON_GAP: f32 = 8.0;
 const ADDRESS_BOOKMARK_ICON_SIZE: f32 = 24.0;
@@ -2406,7 +2406,7 @@ mod tests {
         assert_eq!(ADDRESS_SHADOW_OFFSET, [0, 1]);
         assert_eq!(ADDRESS_SHADOW_BLUR, 6);
         assert_eq!(ADDRESS_SHADOW_SPREAD, 0);
-        assert_eq!(ADDRESS_SHADOW_ALPHA, 10);
+        assert_eq!(ADDRESS_SHADOW_ALPHA, 8);
         assert_eq!(ADDRESS_SECURITY_ICON_SIZE, 24.0);
         assert_eq!(ADDRESS_ICON_GAP, 8.0);
         assert_eq!(ADDRESS_BOOKMARK_ICON_SIZE, 24.0);
