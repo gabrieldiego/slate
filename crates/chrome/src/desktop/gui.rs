@@ -77,6 +77,7 @@ const TAB_TITLE_TEXT_SIZE: f32 = 18.0;
 const TAB_ICON_TITLE_GAP: f32 = 12.0;
 const TAB_TITLE_CLOSE_GAP: f32 = 8.0;
 const TAB_CLOSE_BUTTON_SIZE: f32 = 28.0;
+const TAB_CLOSE_BUTTON_RADIUS: u8 = 6;
 const TAB_CLOSE_ICON_SIZE: f32 = 12.0;
 const NEW_TAB_LEFT_GAP: f32 = 18.0;
 const NEW_TAB_BUTTON_SIZE: f32 = 44.0;
@@ -793,6 +794,31 @@ impl Gui {
         response
     }
 
+    fn tab_close_button(ui: &mut egui::Ui, texture: egui::load::SizedTexture) -> egui::Response {
+        let (rect, response) =
+            ui.allocate_exact_size(Vec2::splat(TAB_CLOSE_BUTTON_SIZE), egui::Sense::click());
+        if ui.is_rect_visible(rect) {
+            if response.hovered() {
+                ui.painter()
+                    .rect_filled(rect, TAB_CLOSE_BUTTON_RADIUS, slate_theme::PANEL_HOVER);
+            }
+            let icon_rect =
+                egui::Rect::from_center_size(rect.center(), Vec2::splat(TAB_CLOSE_ICON_SIZE));
+            ui.painter().image(
+                texture.id,
+                icon_rect,
+                egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
+                egui::Color32::WHITE,
+            );
+        }
+        response.widget_info(|| {
+            let mut info = WidgetInfo::new(WidgetType::Button);
+            info.label = Some("Close".into());
+            info
+        });
+        response.on_hover_text("Close")
+    }
+
     fn address_raster_button_sized(
         ui: &mut egui::Ui,
         texture: egui::load::SizedTexture,
@@ -1275,17 +1301,7 @@ impl Gui {
             } else {
                 inactive_close_icon
             };
-            let close_button = tab_frame.content_ui.add_sized(
-                [TAB_CLOSE_BUTTON_SIZE, TAB_CLOSE_BUTTON_SIZE],
-                egui::Button::image(Self::icon_image(close_icon, TAB_CLOSE_ICON_SIZE))
-                    .fill(egui::Color32::TRANSPARENT)
-                    .frame(false),
-            );
-            close_button.widget_info(|| {
-                let mut info = WidgetInfo::new(WidgetType::Button);
-                info.label = Some("Close".into());
-                info
-            });
+            let close_button = Self::tab_close_button(&mut tab_frame.content_ui, close_icon);
             if close_button.clicked() || close_button.middle_clicked() || tab.middle_clicked() {
                 window
                     .queue_user_interface_command(UserInterfaceCommand::CloseWebView(webview.id()));
@@ -1917,13 +1933,14 @@ mod tests {
         HOME_PANEL_SHADOW_OFFSET, HOME_PANEL_SHADOW_SPREAD, HOME_SEARCH_FRAME_EXTRA_HEIGHT,
         HOME_SEARCH_ICON_SIZE, HOME_SEARCH_INPUT_TEXT_SIZE, HOME_SEARCH_TO_METRICS_GAP,
         HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN, NEW_TAB_BUTTON_SIZE,
-        NEW_TAB_ICON_SIZE, NEW_TAB_ICON_STROKE, NEW_TAB_LEFT_GAP, TAB_CLOSE_ICON_SIZE,
-        TAB_CONTENT_HEIGHT, TAB_CORNER_RADIUS, TAB_HEIGHT, TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X,
-        TAB_INNER_MARGIN_Y, TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP,
-        TAB_TITLE_MIN_WIDTH, TAB_TITLE_TEXT_SIZE, TAB_WIDTH, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT,
-        TOOLBAR_ICON_SIZE, TOOLBAR_ITEM_SPACING, TOOLBAR_MENU_ICON_GAP, TOOLBAR_MENU_ICON_STROKE,
-        TOOLBAR_MENU_ICON_WIDTH, TOOLBAR_PANEL_MARGIN_X, TOOLBAR_PANEL_MARGIN_Y,
-        TOOLBAR_PRIVACY_ICON_SIZE, TOOLBAR_SEPARATOR_HEIGHT, egui_chrome_owns_position,
+        NEW_TAB_ICON_SIZE, NEW_TAB_ICON_STROKE, NEW_TAB_LEFT_GAP, TAB_CLOSE_BUTTON_RADIUS,
+        TAB_CLOSE_ICON_SIZE, TAB_CONTENT_HEIGHT, TAB_CORNER_RADIUS, TAB_HEIGHT, TAB_ICON_TITLE_GAP,
+        TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT,
+        TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH, TAB_TITLE_TEXT_SIZE, TAB_WIDTH,
+        TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE, TOOLBAR_ITEM_SPACING,
+        TOOLBAR_MENU_ICON_GAP, TOOLBAR_MENU_ICON_STROKE, TOOLBAR_MENU_ICON_WIDTH,
+        TOOLBAR_PANEL_MARGIN_X, TOOLBAR_PANEL_MARGIN_Y, TOOLBAR_PRIVACY_ICON_SIZE,
+        TOOLBAR_SEPARATOR_HEIGHT, egui_chrome_owns_position,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -2063,6 +2080,7 @@ mod tests {
         assert_eq!(TAB_ICON_TITLE_GAP, 12.0);
         assert_eq!(TAB_TITLE_CLOSE_GAP, 8.0);
         assert_eq!(TAB_CLOSE_BUTTON_SIZE, 28.0);
+        assert_eq!(TAB_CLOSE_BUTTON_RADIUS, 6);
         assert_eq!(TAB_CLOSE_ICON_SIZE, 12.0);
         assert_eq!(NEW_TAB_LEFT_GAP, 18.0);
         assert_eq!(NEW_TAB_BUTTON_SIZE, 44.0);
