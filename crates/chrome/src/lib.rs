@@ -1593,11 +1593,20 @@ impl<'a> Canvas<'a> {
     }
 
     fn rect(&mut self, x: usize, y: usize, w: usize, h: usize, color: u32) {
+        let start_x = x.min(self.frame.width);
         let end_x = x.saturating_add(w).min(self.frame.width);
+        let start_y = y.min(self.frame.height);
         let end_y = y.saturating_add(h).min(self.frame.height);
-        for py in y.min(self.frame.height)..end_y {
-            for px in x.min(self.frame.width)..end_x {
-                self.frame.set_pixel(px, py, color);
+        if start_x >= end_x || start_y >= end_y {
+            return;
+        }
+
+        for py in start_y..end_y {
+            let row_start = py.saturating_mul(self.frame.width);
+            let start = row_start.saturating_add(start_x);
+            let end = row_start.saturating_add(end_x).min(self.frame.pixels.len());
+            if let Some(row) = self.frame.pixels.get_mut(start..end) {
+                row.fill(color);
             }
         }
     }
@@ -1785,15 +1794,38 @@ impl<'a> Canvas<'a> {
         let draw_x = x + w.saturating_sub(draw_w) / 2;
         let draw_y = y + h.saturating_sub(draw_h) / 2;
 
-        for row in 0..draw_h {
+        let copy_w = draw_w.min(self.frame.width.saturating_sub(draw_x));
+        let copy_h = draw_h.min(self.frame.height.saturating_sub(draw_y));
+        if copy_w == 0 || copy_h == 0 {
+            return;
+        }
+
+        for row in 0..copy_h {
             let src_y = row.saturating_mul(frame.height) / draw_h;
-            for col in 0..draw_w {
-                let src_x = col.saturating_mul(frame.width) / draw_w;
-                let source_index = src_y.saturating_mul(frame.width).saturating_add(src_x);
-                let Some(color) = frame.pixels.get(source_index).copied() else {
-                    continue;
-                };
-                self.frame.set_pixel(draw_x + col, draw_y + row, color);
+            let source_start = src_y.saturating_mul(frame.width);
+            let source_end = source_start.saturating_add(frame.width);
+            let Some(source_row) = frame.pixels.get(source_start..source_end) else {
+                continue;
+            };
+
+            let dest_start = draw_y
+                .saturating_add(row)
+                .saturating_mul(self.frame.width)
+                .saturating_add(draw_x);
+            let dest_end = dest_start.saturating_add(copy_w);
+            let Some(dest_row) = self.frame.pixels.get_mut(dest_start..dest_end) else {
+                continue;
+            };
+
+            if frame.width == draw_w {
+                dest_row.copy_from_slice(&source_row[..copy_w]);
+            } else {
+                for (col, pixel) in dest_row.iter_mut().enumerate() {
+                    let src_x = col.saturating_mul(frame.width) / draw_w;
+                    if let Some(color) = source_row.get(src_x).copied() {
+                        *pixel = color;
+                    }
+                }
             }
         }
     }
@@ -2278,6 +2310,10 @@ mod tests {
         RenderDocument, RenderSurface, ServoBackend, ServoDocument, ServoDocumentSource,
         ServoDocumentStatus, ServoFrame,
     };
+    use std::time::{Duration, Instant};
+
+    const HEADLESS_INTERACTION_BUDGET: Duration = Duration::from_millis(1_000);
+    const HEADLESS_TOOLBAR_REPAINT_BUDGET: Duration = Duration::from_millis(500);
 
     #[test]
     fn renders_non_empty_frame() {
@@ -2380,6 +2416,106 @@ mod tests {
             1280 - RAIL_W,
             720 - TAB_H - TOOLBAR_H - FOOTER_H - 1
         ));
+    }
+
+    #[test]
+    fn headless_typing_repaints_toolbar_within_budget() {
+        let state = BrowserState::new(&ServoBackend);
+        let mut view = ChromeView::new(state);
+        let mut frame = view.render(1280, 720);
+        let before = frame.pixels().to_vec();
+
+        view.focus_address_bar();
+        let elapsed = elapsed_for(|| {
+            for ch in "slate://tests/cache".chars() {
+                assert!(view.handle_text_input(ch));
+                assert!(view.render_toolbar_update(&mut frame));
+            }
+        });
+
+        assert!(
+            elapsed <= HEADLESS_TOOLBAR_REPAINT_BUDGET,
+            "headless toolbar typing repaint took {elapsed:?}, budget {HEADLESS_TOOLBAR_REPAINT_BUDGET:?}"
+        );
+        assert!(!region_changed(
+            &before,
+            &frame,
+            RAIL_W,
+            TAB_H + TOOLBAR_H + 1,
+            1280 - RAIL_W,
+            720 - TAB_H - TOOLBAR_H - FOOTER_H - 1
+        ));
+    }
+
+    #[test]
+    fn headless_cached_app_switch_renders_within_budget() {
+        let mut view = ChromeView::new(state_with_web_frame(640, 360));
+        let elapsed = elapsed_for(|| {
+            view.handle_click(40, TAB_H + 22 + 72 + 20, 1280, 720);
+            let downloads = view.render(1280, 720);
+            assert_eq!(downloads.width(), 1280);
+            assert_eq!(downloads.height(), 720);
+
+            view.handle_click(40, TAB_H + 22 + 20, 1280, 720);
+            let web = view.render(1280, 720);
+            assert_eq!(web.width(), 1280);
+            assert_eq!(web.height(), 720);
+        });
+
+        assert!(
+            elapsed <= HEADLESS_INTERACTION_BUDGET,
+            "headless cached app switch took {elapsed:?}, budget {HEADLESS_INTERACTION_BUDGET:?}"
+        );
+        assert_eq!(view.state().surface.address, "slate://tests/stale");
+    }
+
+    #[test]
+    fn headless_cached_tab_switch_renders_within_budget() {
+        let mut state = state_with_web_frame(640, 360);
+        let cached_surface = web_surface(
+            "Cached Research",
+            "https://cached.example",
+            640,
+            360,
+            0x00E7EEF8,
+        );
+        state.tabs[1].title = cached_surface.title.clone();
+        state.tabs[1].address = cached_surface.address.clone();
+        state.tabs[1].cached_surface = Some(cached_surface);
+
+        let mut view = ChromeView::new(state);
+        let tab_w = view.tab_width(1280);
+        let elapsed = elapsed_for(|| {
+            view.handle_click(TAB_X + tab_w + 12, TAB_Y + 20, 1280, 720);
+            let frame = view.render(1280, 720);
+            assert_eq!(frame.width(), 1280);
+            assert_eq!(frame.height(), 720);
+        });
+
+        assert!(
+            elapsed <= HEADLESS_INTERACTION_BUDGET,
+            "headless cached tab switch took {elapsed:?}, budget {HEADLESS_INTERACTION_BUDGET:?}"
+        );
+        assert_eq!(view.state().surface.address, "https://cached.example");
+    }
+
+    #[test]
+    fn headless_resize_renders_stale_web_frame_within_budget() {
+        let mut view = ChromeView::new(state_with_web_frame(640, 360));
+        let elapsed = elapsed_for(|| {
+            assert!(view.update_web_viewport(1440, 900));
+            assert!(view.web_viewport_needs_refresh());
+            let frame = view.render(1440, 900);
+            assert_eq!(frame.width(), 1440);
+            assert_eq!(frame.height(), 900);
+        });
+
+        assert!(
+            elapsed <= HEADLESS_INTERACTION_BUDGET,
+            "headless resize stale-frame render took {elapsed:?}, budget {HEADLESS_INTERACTION_BUDGET:?}"
+        );
+        assert_eq!(web_frame_size(view.state()), Some((640, 360)));
+        assert!(view.web_viewport_needs_refresh());
     }
 
     #[test]
@@ -2511,28 +2647,45 @@ mod tests {
 
     fn state_with_web_frame(width: usize, height: usize) -> BrowserState {
         let mut state = BrowserState::new(&ServoBackend);
-        state.surface = RenderSurface {
-            title: "Stale Web Frame".to_string(),
-            address: "slate://tests/stale".to_string(),
+        state.surface = web_surface(
+            "Stale Web Frame",
+            "slate://tests/stale",
+            width,
+            height,
+            0x00EAF4F2,
+        );
+        if let Some(tab) = state.tabs.get_mut(0) {
+            tab.title = state.surface.title.clone();
+            tab.address = state.surface.address.clone();
+            tab.cached_surface = Some(state.surface.clone());
+        }
+        state
+    }
+
+    fn web_surface(
+        title: &str,
+        address: &str,
+        width: usize,
+        height: usize,
+        color: u32,
+    ) -> RenderSurface {
+        RenderSurface {
+            title: title.to_string(),
+            address: address.to_string(),
             summary: "Rendered by Servo".to_string(),
             metrics: Vec::new(),
             document: RenderDocument::Web(ServoDocument {
-                title: "Stale Web Frame".to_string(),
-                address: "slate://tests/stale".to_string(),
+                title: title.to_string(),
+                address: address.to_string(),
                 frame: ServoFrame {
                     width,
                     height,
-                    pixels: vec![0x00EAF4F2; width.saturating_mul(height)],
+                    pixels: vec![color; width.saturating_mul(height)],
                 },
                 source: ServoDocumentSource::SlateGenerated,
                 status: ServoDocumentStatus::Rendered,
             }),
-        };
-        if let Some(tab) = state.tabs.get_mut(0) {
-            tab.title = state.surface.title.clone();
-            tab.address = state.surface.address.clone();
         }
-        state
     }
 
     fn web_frame_size(state: &BrowserState) -> Option<(usize, usize)> {
@@ -2562,5 +2715,11 @@ mod tests {
             }
         }
         false
+    }
+
+    fn elapsed_for(operation: impl FnOnce()) -> Duration {
+        let started_at = Instant::now();
+        operation();
+        started_at.elapsed()
     }
 }
