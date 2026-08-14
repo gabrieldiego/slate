@@ -1,7 +1,8 @@
 use crate::{
     ApplicationServicePlugin, BroadwebdError, DEFAULT_PROFILE, DaemonHealth, DaemonLifecycle,
-    HttpFetchRequest, HttpFetchResponse, PluginInstallReport, PluginMetadata, PluginRegistry,
-    ProtocolInstallReport, ProtocolService, ResourceBudget, StateRoot, TransportPlugin,
+    HttpFetchRequest, HttpFetchResponse, IpfsConfig, PluginInstallReport, PluginMetadata,
+    PluginRegistry, ProtocolInstallReport, ProtocolService, ResourceBudget, StateRoot,
+    TransportPlugin,
 };
 use std::path::PathBuf;
 
@@ -37,7 +38,11 @@ impl BroadwebDaemon {
     }
 
     pub fn start_default_session() -> Result<Self, BroadwebdError> {
-        Self::start(default_session_state_root())
+        Self::start_with_registry(
+            default_session_state_root(),
+            ResourceBudget::default(),
+            PluginRegistry::with_default_http_and_ipfs_config(IpfsConfig::from_environment()?),
+        )
     }
 
     pub fn health(&self) -> DaemonHealth {

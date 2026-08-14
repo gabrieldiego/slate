@@ -1,4 +1,6 @@
-use crate::{BroadwebdError, DEFAULT_IPFS_GATEWAY};
+use crate::{
+    BroadwebdError, DEFAULT_IPFS_GATEWAY, SLATE_IPFS_GATEWAY_ENV, SLATE_IPFS_GATEWAY_SCOPE_ENV,
+};
 use url::Url;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -52,6 +54,31 @@ impl IpfsConfig {
         Self::with_local_gateway(gateway_base)
     }
 
+    pub fn from_environment() -> Result<Self, BroadwebdError> {
+        let gateway = std::env::var(SLATE_IPFS_GATEWAY_ENV).ok();
+        let scope = std::env::var(SLATE_IPFS_GATEWAY_SCOPE_ENV).ok();
+        Self::from_options(gateway.as_deref(), scope.as_deref())
+    }
+
+    pub fn from_options(
+        gateway_base: Option<&str>,
+        scope: Option<&str>,
+    ) -> Result<Self, BroadwebdError> {
+        let gateway_base = non_empty_trimmed(gateway_base);
+        let scope = parse_gateway_scope(scope)?;
+
+        match (gateway_base, scope) {
+            (Some(gateway_base), IpfsGatewayScope::Local) => Self::with_local_gateway(gateway_base),
+            (Some(gateway_base), IpfsGatewayScope::Public) => {
+                Self::with_public_gateway(gateway_base)
+            }
+            (None, IpfsGatewayScope::Local) => Self::default_local_gateway(),
+            (None, IpfsGatewayScope::Public) => Err(BroadwebdError::UnsupportedRequest(format!(
+                "{SLATE_IPFS_GATEWAY_SCOPE_ENV}=public requires {SLATE_IPFS_GATEWAY_ENV}"
+            ))),
+        }
+    }
+
     pub fn with_local_gateway(gateway_base: impl Into<String>) -> Result<Self, BroadwebdError> {
         Ok(Self {
             gateway: IpfsGatewayEndpoint::local(gateway_base)?,
@@ -89,7 +116,28 @@ impl IpfsConfig {
 
 impl Default for IpfsConfig {
     fn default() -> Self {
-        Self::new(DEFAULT_IPFS_GATEWAY).expect("default IPFS gateway should be loopback HTTP")
+        Self::default_local_gateway().expect("default IPFS gateway should be loopback HTTP")
+    }
+}
+
+fn non_empty_trimmed(input: Option<&str>) -> Option<&str> {
+    input.map(str::trim).filter(|value| !value.is_empty())
+}
+
+fn parse_gateway_scope(scope: Option<&str>) -> Result<IpfsGatewayScope, BroadwebdError> {
+    match non_empty_trimmed(scope) {
+        None => Ok(IpfsGatewayScope::Local),
+        Some(scope) if scope.eq_ignore_ascii_case("local") => Ok(IpfsGatewayScope::Local),
+        Some(scope) if scope.eq_ignore_ascii_case("public") => Ok(IpfsGatewayScope::Public),
+        Some(scope) => Err(BroadwebdError::UnsupportedRequest(format!(
+            "unsupported {SLATE_IPFS_GATEWAY_SCOPE_ENV}: {scope}; expected local or public"
+        ))),
+    }
+}
+
+impl IpfsConfig {
+    fn default_local_gateway() -> Result<Self, BroadwebdError> {
+        Self::new(DEFAULT_IPFS_GATEWAY)
     }
 }
 

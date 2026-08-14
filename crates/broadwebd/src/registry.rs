@@ -1,4 +1,4 @@
-use crate::protocols::ipfs::IpfsService;
+use crate::protocols::ipfs::{IpfsConfig, IpfsService};
 use crate::services::http_fetch::HttpFetchService;
 use crate::transports::direct_http::DirectHttpTransport;
 use crate::{
@@ -67,9 +67,13 @@ impl PluginRegistry {
     }
 
     pub fn with_default_http() -> Self {
+        Self::with_default_http_and_ipfs_config(IpfsConfig::default())
+    }
+
+    pub fn with_default_http_and_ipfs_config(ipfs_config: IpfsConfig) -> Self {
         let mut registry = Self::new();
         registry.register_transport(DirectHttpTransport);
-        registry.register_protocol_service(IpfsService::default());
+        registry.register_protocol_service(IpfsService::new(ipfs_config));
         registry.register_service(HttpFetchService);
         registry
     }

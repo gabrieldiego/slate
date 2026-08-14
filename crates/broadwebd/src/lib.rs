@@ -17,6 +17,8 @@ pub const HTTP_FETCH_PLUGIN: &str = "http-fetch";
 pub const IPFS_PROTOCOL_SERVICE: &str = "ipfs";
 pub const IPFS_GATEWAY_PLUGIN: &str = "ipfs-gateway";
 pub const DEFAULT_IPFS_GATEWAY: &str = "http://127.0.0.1:8080";
+pub const SLATE_IPFS_GATEWAY_ENV: &str = "SLATE_IPFS_GATEWAY";
+pub const SLATE_IPFS_GATEWAY_SCOPE_ENV: &str = "SLATE_IPFS_GATEWAY_SCOPE";
 
 pub use budget::ResourceBudget;
 pub use daemon::{BroadwebDaemon, default_session_state_root};
@@ -47,8 +49,8 @@ mod tests {
         BroadwebDaemon, BroadwebdError, DIRECT_HTTP_PLUGIN, FetchDisposition, HttpFetchRequest,
         HttpFetchResponse, IPFS_GATEWAY_PLUGIN, IpfsConfig, IpfsGatewayScope, IpfsGatewayTransport,
         IpfsService, PluginHealth, PluginKind, PluginMetadata, PluginRegistry, ProtocolService,
-        ResourceBudget, ResourceProfile, StateRoot, TransportHttpRequest, TransportPlugin,
-        ipfs_gateway_http_url,
+        ResourceBudget, ResourceProfile, SLATE_IPFS_GATEWAY_SCOPE_ENV, StateRoot,
+        TransportHttpRequest, TransportPlugin, ipfs_gateway_http_url,
     };
     use std::fs;
     use std::io::{Read, Write};
@@ -85,6 +87,24 @@ mod tests {
         }));
 
         let _ = fs::remove_dir_all(daemon.state_root().path());
+    }
+
+    #[test]
+    fn default_registry_can_use_explicit_ipfs_config() {
+        let registry = PluginRegistry::with_default_http_and_ipfs_config(
+            IpfsConfig::with_public_gateway("https://ipfs.io").expect("public gateway config"),
+        );
+        let statuses = registry.plugin_statuses();
+
+        assert!(statuses.iter().any(|status| {
+            status.metadata.id == "ipfs"
+                && status
+                    .metadata
+                    .capabilities
+                    .iter()
+                    .any(|capability| capability == "public-gateway")
+                && matches!(status.health, PluginHealth::Ready)
+        }));
     }
 
     #[test]
@@ -361,6 +381,40 @@ mod tests {
         assert_eq!(config.gateway_scope(), IpfsGatewayScope::Public);
         assert!(config.uses_public_gateway());
         assert!(!config.allow_public_gateway_fallback());
+    }
+
+    #[test]
+    fn ipfs_config_options_default_to_local_gateway() {
+        let config = IpfsConfig::from_options(None, None).expect("default IPFS config");
+
+        assert_eq!(config.gateway_base(), super::DEFAULT_IPFS_GATEWAY);
+        assert_eq!(config.gateway_scope(), IpfsGatewayScope::Local);
+    }
+
+    #[test]
+    fn ipfs_config_options_reject_public_gateway_without_public_scope() {
+        assert!(matches!(
+            IpfsConfig::from_options(Some("https://ipfs.io"), None),
+            Err(BroadwebdError::UnsupportedRequest(_))
+        ));
+    }
+
+    #[test]
+    fn ipfs_config_options_accept_public_gateway_with_public_scope() {
+        let config = IpfsConfig::from_options(Some("https://ipfs.io"), Some("public"))
+            .expect("public IPFS gateway config");
+
+        assert_eq!(config.gateway_base(), "https://ipfs.io");
+        assert_eq!(config.gateway_scope(), IpfsGatewayScope::Public);
+    }
+
+    #[test]
+    fn ipfs_config_options_reject_public_scope_without_gateway() {
+        assert!(matches!(
+            IpfsConfig::from_options(None, Some("public")),
+            Err(BroadwebdError::UnsupportedRequest(error))
+                if error.contains(SLATE_IPFS_GATEWAY_SCOPE_ENV)
+        ));
     }
 
     #[test]
