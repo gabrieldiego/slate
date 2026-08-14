@@ -371,7 +371,7 @@ fn toolbar_menu_icon_color(_selected: bool) -> egui::Color32 {
 }
 
 fn tab_strip_background_color() -> egui::Color32 {
-    slate_theme::SURFACE
+    slate_theme::BG
 }
 
 fn address_shadow() -> egui::Shadow {
@@ -426,7 +426,7 @@ fn home_panel_shadow() -> egui::Shadow {
 }
 
 fn home_view_background_color() -> egui::Color32 {
-    slate_theme::SURFACE
+    slate_theme::BG
 }
 
 fn status_bubble_width(text: &str, available_width: f32) -> f32 {
@@ -1106,7 +1106,8 @@ impl Gui {
             egui::vec2(APP_TITLE_WIDTH, APP_TITLE_HEIGHT),
             egui::Sense::hover(),
         );
-        ui.painter().rect_filled(rect, 0.0, slate_theme::SURFACE);
+        ui.painter()
+            .rect_filled(rect, 0.0, tab_strip_background_color());
         ui.painter().line_segment(
             [rect.right_top(), rect.right_bottom()],
             egui::Stroke::new(1.0, slate_theme::BORDER),
@@ -1700,18 +1701,26 @@ impl Gui {
                         );
                     });
 
-                let rail_frame = egui::Frame::NONE.fill(slate_theme::SURFACE).inner_margin(
-                    egui::Margin::symmetric(RAIL_PANEL_MARGIN_X, RAIL_PANEL_MARGIN_Y),
-                );
+                let rail_frame =
+                    egui::Frame::NONE
+                        .fill(slate_theme::BG)
+                        .inner_margin(egui::Margin::symmetric(
+                            RAIL_PANEL_MARGIN_X,
+                            RAIL_PANEL_MARGIN_Y,
+                        ));
                 Panel::left("app_rail")
                     .exact_size(APP_RAIL_WIDTH)
                     .frame(rail_frame)
                     .show_separator_line(true)
                     .show_inside(ctx, |ui| Self::draw_app_rail(ui, slate_icons));
 
-                let toolbar_frame = egui::Frame::NONE.fill(slate_theme::SURFACE).inner_margin(
-                    egui::Margin::symmetric(TOOLBAR_PANEL_MARGIN_X, TOOLBAR_PANEL_MARGIN_Y),
-                );
+                let toolbar_frame =
+                    egui::Frame::NONE
+                        .fill(slate_theme::BG)
+                        .inner_margin(egui::Margin::symmetric(
+                            TOOLBAR_PANEL_MARGIN_X,
+                            TOOLBAR_PANEL_MARGIN_Y,
+                        ));
                 Panel::top("toolbar")
                     .exact_size(TOOLBAR_HEIGHT)
                     .frame(toolbar_frame)
@@ -1958,9 +1967,13 @@ impl Gui {
                         );
                     });
 
-                let footer_frame = egui::Frame::NONE.fill(slate_theme::SURFACE).inner_margin(
-                    egui::Margin::symmetric(FOOTER_PANEL_MARGIN_X, FOOTER_PANEL_MARGIN_Y),
-                );
+                let footer_frame =
+                    egui::Frame::NONE
+                        .fill(slate_theme::BG)
+                        .inner_margin(egui::Margin::symmetric(
+                            FOOTER_PANEL_MARGIN_X,
+                            FOOTER_PANEL_MARGIN_Y,
+                        ));
                 Panel::bottom("footer")
                     .exact_size(FOOTER_HEIGHT)
                     .frame(footer_frame)
@@ -2318,7 +2331,7 @@ mod tests {
         assert_eq!(RAIL_TOP_SPACE, 22.0);
         assert_eq!(RAIL_ITEM_GAP, 16.0);
         assert_eq!(TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT, 166.0);
-        assert_eq!(tab_strip_background_color(), slate_theme::SURFACE);
+        assert_eq!(tab_strip_background_color(), slate_theme::BG);
         assert_eq!(TAB_STRIP_CONTENT_ALIGN, egui::Align::Max);
         assert_eq!(FOOTER_HEIGHT, 80.0);
         assert_eq!(FOOTER_PANEL_MARGIN_X, 0);
@@ -2426,7 +2439,7 @@ mod tests {
         assert_eq!(HOME_HERO_SIZE, 64.0);
         assert_eq!(HOME_HERO_TO_SEARCH_GAP, 44.0);
         assert_eq!(HOME_SEARCH_TO_METRICS_GAP, 62.0);
-        assert_eq!(home_view_background_color(), slate_theme::SURFACE);
+        assert_eq!(home_view_background_color(), slate_theme::BG);
         assert_eq!(HOME_PANEL_SHADOW_OFFSET, [0, 2]);
         assert_eq!(HOME_PANEL_SHADOW_BLUR, 12);
         assert_eq!(HOME_PANEL_SHADOW_SPREAD, 0);
