@@ -41,32 +41,41 @@ use crate::desktop::slate_theme::{self, SlateIcon, SlateIconCache, SlateRaster};
 use crate::running_app_state::{RunningAppState, UserInterfaceCommand};
 use crate::window::ServoShellWindow;
 
+pub(crate) mod headless_snapshot;
+
 const TAB_STRIP_HEIGHT: f32 = 78.0;
 const TAB_STRIP_CONTENT_ALIGN: egui::Align = egui::Align::Max;
+const TAB_CONTENT_ALIGN: egui::Align = egui::Align::Center;
+const ACTIVE_TAB_BOTTOM_JOIN_HEIGHT: f32 = 4.0;
+const ACTIVE_TAB_BOTTOM_JOIN_INSET_X: f32 = 0.0;
+const ACTIVE_TAB_FILE_CORNER_STEPS: usize = 5;
 const TOOLBAR_HEIGHT: f32 = 84.0;
 const APP_RAIL_WIDTH: f32 = 104.0;
 const FOOTER_HEIGHT: f32 = 80.0;
 const FOOTER_PANEL_MARGIN_X: i8 = 0;
-const FOOTER_PANEL_MARGIN_Y: i8 = 8;
+const FOOTER_PANEL_MARGIN_TOP: i8 = 6;
+const FOOTER_PANEL_MARGIN_BOTTOM: i8 = 10;
 const FOOTER_LEFT_PADDING: f32 = 12.0;
 const FOOTER_RIGHT_PADDING: f32 = 38.0;
 const FOOTER_ITEM_SPACING: f32 = 30.0;
 const FOOTER_ICON_SIZE: f32 = 40.0;
+const FOOTER_PROTECTION_ICON_OFFSET_X: f32 = 1.5;
 const FOOTER_PROTECTION_ICON_LABEL_GAP: f32 = 16.0;
 const FOOTER_PROTECTION_LABEL_WIDTH: f32 = 200.0;
 const FOOTER_PROTECTION_STATUS_HEIGHT: f32 = 40.0;
 const FOOTER_TEXT_SIZE: f32 = 16.0;
 const FOOTER_SEPARATOR_HEIGHT: f32 = 28.0;
-const FOOTER_SYNC_DOT_SIZE: f32 = 12.0;
+const FOOTER_SYNC_SEPARATOR_EXTRA_GAP: f32 = 6.0;
+const FOOTER_SYNC_DOT_SIZE: f32 = 14.0;
 const FOOTER_SYNC_DOT_LABEL_GAP: f32 = 10.0;
 const FOOTER_SYNC_LABEL_WIDTH: f32 = 64.0;
 const FOOTER_SYNC_STATUS_HEIGHT: f32 = 40.0;
 const FOOTER_SETTINGS_BUTTON_SIZE: f32 = 40.0;
 const FOOTER_SETTINGS_BUTTON_RADIUS: u8 = 8;
-const FOOTER_SETTINGS_ICON_SIZE: f32 = 28.0;
+const FOOTER_SETTINGS_ICON_SIZE: f32 = 24.0;
 const FOOTER_SETTINGS_GEAR_RADIUS: f32 = 9.0;
 const FOOTER_SETTINGS_GEAR_CENTER_RADIUS: f32 = 3.5;
-const FOOTER_SETTINGS_GEAR_TOOTH_INNER_RADIUS: f32 = 12.0;
+const FOOTER_SETTINGS_GEAR_TOOTH_INNER_RADIUS: f32 = 10.0;
 const FOOTER_SETTINGS_GEAR_TOOTH_OUTER_RADIUS: f32 = FOOTER_SETTINGS_ICON_SIZE / 2.0;
 const FOOTER_SETTINGS_GEAR_STROKE: f32 = 2.0;
 const APP_TITLE_WIDTH: f32 = 160.0;
@@ -74,6 +83,10 @@ const APP_TITLE_HEIGHT: f32 = TAB_STRIP_HEIGHT;
 const APP_TITLE_LEFT_PADDING: f32 = 31.0;
 const APP_TITLE_TEXT_SIZE: f32 = 28.0;
 const TAB_WIDTH: f32 = 308.0;
+const TAB_MIN_WIDTH: f32 = 196.0;
+const TAB_OPENING_PREFERRED_WIDTH: f32 = 244.0;
+const TAB_OPENING_WINDOW_WIDTH: f32 = 1024.0;
+const TAB_CONCEPT_WINDOW_WIDTH: f32 = 1672.0;
 const TAB_HEIGHT: f32 = 60.0;
 const TAB_CORNER_RADIUS: u8 = 8;
 const TAB_INNER_MARGIN_X: i8 = 16;
@@ -83,13 +96,14 @@ const TAB_TITLE_MIN_WIDTH: f32 = 80.0;
 const TAB_TITLE_TEXT_SIZE: f32 = 20.0;
 const TAB_ICON_TITLE_GAP: f32 = 12.0;
 const TAB_TITLE_CLOSE_GAP: f32 = 8.0;
-const TAB_CLOSE_BUTTON_SIZE: f32 = 28.0;
+const TAB_CLOSE_BUTTON_SIZE: f32 = 24.0;
 const TAB_CLOSE_BUTTON_RADIUS: u8 = 6;
-const TAB_CLOSE_ICON_SIZE: f32 = 16.0;
-const NEW_TAB_LEFT_GAP: f32 = 18.0;
+const TAB_CLOSE_ICON_SIZE: f32 = 12.0;
+const NEW_TAB_LEFT_GAP: f32 = 9.0;
+const NEW_TAB_SLOT_HEIGHT: f32 = TAB_HEIGHT;
 const NEW_TAB_BUTTON_SIZE: f32 = 44.0;
 const NEW_TAB_BUTTON_RADIUS: u8 = 8;
-const NEW_TAB_ICON_SIZE: f32 = 24.0;
+const NEW_TAB_ICON_SIZE: f32 = 17.0;
 const NEW_TAB_ICON_STROKE: f32 = 2.0;
 const TOOLBAR_PANEL_MARGIN_X: i8 = 18;
 const TOOLBAR_PANEL_MARGIN_Y: i8 = 10;
@@ -97,20 +111,27 @@ const TOOLBAR_ITEM_SPACING: f32 = 20.0;
 const TOOLBAR_BUTTON_SIZE: f32 = 40.0;
 const TOOLBAR_BUTTON_RADIUS: u8 = 8;
 const TOOLBAR_ICON_SIZE: f32 = 24.0;
-const TOOLBAR_PRIVACY_ICON_SIZE: f32 = 24.0;
-const TOOLBAR_MENU_ICON_WIDTH: f32 = 24.0;
-const TOOLBAR_MENU_ICON_GAP: f32 = 7.0;
+const TOOLBAR_NAV_ICON_SIZE: f32 = 28.0;
+const TOOLBAR_NAV_BACK_ICON_OFFSET_X: f32 = 8.0;
+const TOOLBAR_NAV_FORWARD_ICON_OFFSET_X: f32 = 7.0;
+const TOOLBAR_NAV_REFRESH_ICON_OFFSET_X: f32 = 6.0;
+const TOOLBAR_PRIVACY_ICON_SIZE: f32 = 40.0;
+const TOOLBAR_MENU_ICON_WIDTH: f32 = 20.0;
+const TOOLBAR_MENU_ICON_OFFSET_X: f32 = -3.0;
+const TOOLBAR_MENU_ICON_GAP: f32 = 8.5;
 const TOOLBAR_MENU_ICON_STROKE: f32 = 2.0;
-const TOOLBAR_SEPARATOR_HEIGHT: f32 = 36.0;
-const RAIL_ICON_SIZE: f32 = 34.0;
+const TOOLBAR_SEPARATOR_HEIGHT: f32 = 28.0;
+const TOOLBAR_SEPARATOR_LEADING_GAP: f32 = 18.0;
+const TOOLBAR_SEPARATOR_TRAILING_GAP: f32 = 22.0;
+const RAIL_ICON_SIZE: f32 = 40.0;
 const RAIL_BUTTON_SIZE: f32 = 80.0;
 const RAIL_BUTTON_RADIUS: u8 = 8;
 const RAIL_PANEL_MARGIN_X: i8 = 12;
 const RAIL_PANEL_MARGIN_Y: i8 = 0;
 const RAIL_TOP_SPACE: f32 = 22.0;
-const RAIL_ITEM_GAP: f32 = 16.0;
-const TAB_ICON_SIZE: f32 = 24.0;
-const ADDRESS_LEADING_GAP: f32 = 24.0;
+const RAIL_ITEM_GAP: f32 = 12.0;
+const TAB_ICON_SIZE: f32 = 32.0;
+const ADDRESS_LEADING_GAP: f32 = 20.0;
 const ADDRESS_MIN_WIDTH: f32 = 260.0;
 const ADDRESS_HEIGHT: f32 = 52.0;
 const ADDRESS_TEXT_HEIGHT: f32 = 34.0;
@@ -122,13 +143,15 @@ const ADDRESS_SHADOW_BLUR: u8 = 6;
 const ADDRESS_SHADOW_SPREAD: u8 = 0;
 const ADDRESS_SHADOW_ALPHA: u8 = 6;
 const ADDRESS_SECURITY_ICON_SIZE: f32 = 24.0;
-const ADDRESS_ICON_GAP: f32 = 12.0;
-const ADDRESS_BOOKMARK_ICON_SIZE: f32 = 24.0;
+const ADDRESS_SLATE_SECURITY_ICON_SIZE: f32 = 34.0;
+const ADDRESS_SLATE_SECURITY_ICON_OFFSET_X: f32 = -2.0;
+const ADDRESS_ICON_GAP: f32 = 14.0;
+const ADDRESS_BOOKMARK_ICON_SIZE: f32 = 22.0;
 const ADDRESS_BOOKMARK_BUTTON_SIZE: f32 = 28.0;
 const ADDRESS_BOOKMARK_BUTTON_RADIUS: u8 = 6;
-const ADDRESS_BOOKMARK_RESERVED_WIDTH: f32 = 36.0;
-const ADDRESS_TRAILING_CONTROLS_WIDTH: f32 = 180.0;
-const ADDRESS_TRAILING_GAP: f32 = 12.0;
+const ADDRESS_BOOKMARK_RESERVED_WIDTH: f32 = 28.0;
+const ADDRESS_TRAILING_CONTROLS_WIDTH: f32 = 188.0;
+const ADDRESS_TRAILING_GAP: f32 = 6.0;
 const HOME_SEARCH_MIN_WIDTH: f32 = 280.0;
 const HOME_SEARCH_MAX_WIDTH: f32 = 880.0;
 const HOME_SEARCH_WIDTH_FACTOR: f32 = 0.56;
@@ -137,17 +160,18 @@ const HOME_SEARCH_HEIGHT: f32 = 72.0;
 const HOME_SEARCH_FRAME_EXTRA_HEIGHT: f32 = 8.0;
 const HOME_SEARCH_TEXT_HEIGHT: f32 = 34.0;
 const HOME_SEARCH_INPUT_TEXT_SIZE: f32 = 20.0;
-const HOME_SEARCH_INNER_MARGIN_X: i8 = 32;
-const HOME_SEARCH_ICON_SIZE: f32 = 24.0;
-const HOME_SEARCH_ICON_GAP: f32 = 30.0;
+const HOME_SEARCH_INNER_MARGIN_X: i8 = 28;
+const HOME_SEARCH_ICON_SIZE: f32 = 40.0;
+const HOME_SEARCH_ICON_OFFSET_Y: f32 = -3.0;
+const HOME_SEARCH_ICON_GAP: f32 = 24.0;
 const HOME_SEARCH_CORNER_RADIUS: u8 = 8;
 const HOME_TOP_SPACE_FACTOR: f32 = 0.18;
 const HOME_TOP_SPACE_MIN: f32 = 48.0;
 const HOME_TOP_SPACE_MAX: f32 = 132.0;
 const HOME_BOTTOM_MIN_GAP: f32 = 16.0;
-const HOME_HERO_SIZE: f32 = 64.0;
-const HOME_HERO_TO_SEARCH_GAP: f32 = 52.0;
-const HOME_SEARCH_TO_METRICS_GAP: f32 = 62.0;
+const HOME_HERO_SIZE: f32 = 78.0;
+const HOME_HERO_TO_SEARCH_GAP: f32 = 41.0;
+const HOME_SEARCH_TO_METRICS_GAP: f32 = 57.0;
 const HOME_PANEL_SHADOW_OFFSET: [i8; 2] = [0, 2];
 const HOME_PANEL_SHADOW_BLUR: u8 = 12;
 const HOME_PANEL_SHADOW_SPREAD: u8 = 0;
@@ -156,19 +180,23 @@ const HOME_METRIC_CARD_HEIGHT: f32 = 172.0;
 const HOME_METRIC_GRID_EXTRA_HEIGHT: f32 = 25.0;
 const HOME_METRIC_CARD_MIN_WIDTH: f32 = 156.0;
 const HOME_METRIC_CARD_MAX_WIDTH: f32 = 194.0;
-const HOME_METRIC_CARD_GAP: f32 = 34.0;
+const HOME_METRIC_CARD_GAP: f32 = 33.0;
 const HOME_METRIC_CARD_INNER_MARGIN_X: i8 = 16;
 const HOME_METRIC_CARD_INNER_MARGIN_Y: i8 = 36;
-const HOME_METRIC_ICON_SIZE: f32 = 48.0;
+const HOME_METRIC_ICON_SIZE: f32 = 52.0;
 const HOME_METRIC_ICON_LABEL_GAP: f32 = 16.0;
 const HOME_METRIC_LABEL_TEXT_SIZE: f32 = 16.0;
 const HOME_METRIC_DETAIL_TEXT_SIZE: f32 = 13.0;
 const HOME_METRIC_DETAIL_GAP: f32 = 4.0;
 const HOME_METRIC_BADGE_TEXT_SIZE: f32 = 13.0;
+const HOME_METRIC_BADGE_PRIMARY_DIGIT_FACTOR: f32 = 0.58;
+const HOME_METRIC_BADGE_EXTRA_DIGIT_FACTOR: f32 = 0.31;
 const HOME_METRIC_BADGE_LABEL_GAP: f32 = 8.0;
 const HOME_METRIC_BADGE_MARGIN_X: i8 = 8;
 const HOME_METRIC_BADGE_MARGIN_Y: i8 = 3;
 const HOME_METRIC_BADGE_CORNER_RADIUS: u8 = 10;
+const HOME_CONTENT_OPTICAL_OFFSET_X: f32 = -13.0;
+const HOME_HERO_OPTICAL_OFFSET_X: f32 = -29.0;
 const STATUS_BUBBLE_MARGIN_X: f32 = 14.0;
 const STATUS_BUBBLE_MARGIN_Y: f32 = 12.0;
 const STATUS_BUBBLE_HEIGHT: f32 = 32.0;
@@ -248,6 +276,7 @@ struct HomeMetricsLayout {
 struct HomeContentLayout {
     hero_rect: egui::Rect,
     search_rect: egui::Rect,
+    search_icon_rect: egui::Rect,
     metrics_rect: egui::Rect,
 }
 
@@ -256,6 +285,7 @@ impl Default for HomeContentLayout {
         Self {
             hero_rect: egui::Rect::NOTHING,
             search_rect: egui::Rect::NOTHING,
+            search_icon_rect: egui::Rect::NOTHING,
             metrics_rect: egui::Rect::NOTHING,
         }
     }
@@ -307,6 +337,11 @@ fn toolbar_address_width(available_width: f32) -> f32 {
         .min(available_width)
 }
 
+#[cfg(test)]
+fn address_outer_width(content_width: f32) -> f32 {
+    content_width + f32::from(ADDRESS_INNER_MARGIN_X) * 2.0
+}
+
 fn address_security_icon_for_location(location: &str) -> AddressSecurityIcon {
     if location.trim().is_empty() {
         return AddressSecurityIcon::Raster(SlateRaster::Search);
@@ -315,7 +350,7 @@ fn address_security_icon_for_location(location: &str) -> AddressSecurityIcon {
     match Url::parse(location) {
         Ok(url) if is_slate_home_url(&url) => AddressSecurityIcon::Slate {
             icon: SlateIcon::TopShield,
-            color: slate_theme::MUTED,
+            color: address_passive_icon_color(),
         },
         Ok(url) => match url.scheme() {
             "https" => AddressSecurityIcon::Raster(SlateRaster::PageInfoSecure),
@@ -333,12 +368,24 @@ fn address_security_icon_for_location(location: &str) -> AddressSecurityIcon {
 fn address_security_raster_color(raster: SlateRaster) -> egui::Color32 {
     match raster {
         SlateRaster::PageInfoInsecure | SlateRaster::PageInfoWarning => slate_theme::AMBER,
-        _ => slate_theme::MUTED,
+        _ => address_passive_icon_color(),
     }
 }
 
+fn address_passive_icon_color() -> egui::Color32 {
+    egui::Color32::from_rgb(84, 84, 84)
+}
+
 fn address_bookmark_icon_color() -> egui::Color32 {
-    slate_theme::MUTED
+    address_passive_icon_color()
+}
+
+fn address_background_color() -> egui::Color32 {
+    slate_theme::FIELD_SURFACE
+}
+
+fn address_border_color() -> egui::Color32 {
+    slate_theme::FIELD_BORDER
 }
 
 fn rail_icon_color(selected: bool) -> egui::Color32 {
@@ -349,9 +396,13 @@ fn rail_icon_color(selected: bool) -> egui::Color32 {
     }
 }
 
+fn rail_selected_button_fill() -> egui::Color32 {
+    egui::Color32::from_rgb(236, 240, 239)
+}
+
 fn rail_button_fill(selected: bool, hovered: bool) -> egui::Color32 {
     if selected {
-        slate_theme::TEAL_SOFT
+        rail_selected_button_fill()
     } else if hovered {
         slate_theme::PANEL_HOVER
     } else {
@@ -360,7 +411,11 @@ fn rail_button_fill(selected: bool, hovered: bool) -> egui::Color32 {
 }
 
 fn footer_status_text_color() -> egui::Color32 {
-    slate_theme::MUTED
+    egui::Color32::from_rgb(57, 58, 55)
+}
+
+fn footer_sync_dot_color() -> egui::Color32 {
+    egui::Color32::from_rgb(11, 126, 121)
 }
 
 fn new_tab_icon_color() -> egui::Color32 {
@@ -371,12 +426,40 @@ fn toolbar_menu_icon_color(_selected: bool) -> egui::Color32 {
     slate_theme::TEXT
 }
 
+fn chrome_vertical_separator_color() -> egui::Color32 {
+    egui::Color32::from_rgb(225, 225, 225)
+}
+
+fn footer_vertical_separator_color() -> egui::Color32 {
+    egui::Color32::from_rgb(220, 219, 218)
+}
+
+fn footer_top_separator_color() -> egui::Color32 {
+    egui::Color32::from_rgb(241, 240, 239)
+}
+
+fn chrome_panel_background_color() -> egui::Color32 {
+    slate_theme::CHROME_BG
+}
+
 fn tab_strip_background_color() -> egui::Color32 {
-    slate_theme::BG
+    slate_theme::TITLE_SURFACE
+}
+
+fn tab_strip_separator_color() -> egui::Color32 {
+    slate_theme::FIELD_BORDER
+}
+
+fn toolbar_background_color() -> egui::Color32 {
+    slate_theme::FIELD_SURFACE
 }
 
 fn app_title_background_color() -> egui::Color32 {
     slate_theme::TITLE_SURFACE
+}
+
+fn app_title_text_color() -> egui::Color32 {
+    egui::Color32::from_rgb(29, 29, 26)
 }
 
 fn address_shadow() -> egui::Shadow {
@@ -386,6 +469,35 @@ fn address_shadow() -> egui::Shadow {
         spread: ADDRESS_SHADOW_SPREAD,
         color: egui::Color32::from_black_alpha(ADDRESS_SHADOW_ALPHA),
     }
+}
+
+fn address_slate_security_icon_rect(slot_rect: egui::Rect) -> egui::Rect {
+    egui::Rect::from_center_size(
+        slot_rect.center() + egui::vec2(ADDRESS_SLATE_SECURITY_ICON_OFFSET_X, 0.0),
+        egui::Vec2::splat(ADDRESS_SLATE_SECURITY_ICON_SIZE),
+    )
+}
+
+#[cfg(test)]
+fn address_slate_security_visible_rect(icon_rect: egui::Rect) -> egui::Rect {
+    egui::Rect::from_min_max(
+        egui::pos2(
+            icon_rect.left() + 7.0 / 28.0 * icon_rect.width(),
+            icon_rect.top() + 5.0 / 28.0 * icon_rect.height(),
+        ),
+        egui::pos2(
+            icon_rect.left() + 22.0 / 28.0 * icon_rect.width(),
+            icon_rect.top() + 23.0 / 28.0 * icon_rect.height(),
+        ),
+    )
+}
+
+#[cfg(test)]
+fn address_bookmark_icon_rect(button_rect: egui::Rect) -> egui::Rect {
+    egui::Rect::from_center_size(
+        button_rect.center(),
+        egui::Vec2::splat(ADDRESS_BOOKMARK_ICON_SIZE),
+    )
 }
 
 fn home_search_width(available_width: f32) -> f32 {
@@ -400,6 +512,41 @@ fn home_search_content_width(search_width: f32) -> f32 {
     (search_width - f32::from(HOME_SEARCH_INNER_MARGIN_X) * 2.0).max(0.0)
 }
 
+fn home_search_icon_rect(slot_rect: egui::Rect) -> egui::Rect {
+    egui::Rect::from_center_size(
+        slot_rect.center() + egui::vec2(0.0, HOME_SEARCH_ICON_OFFSET_Y),
+        egui::Vec2::splat(HOME_SEARCH_ICON_SIZE),
+    )
+}
+
+#[cfg(test)]
+fn home_search_icon_visible_rect(icon_rect: egui::Rect) -> egui::Rect {
+    egui::Rect::from_min_max(
+        egui::pos2(
+            icon_rect.left() + 7.0 / 32.0 * icon_rect.width(),
+            icon_rect.top() + 6.0 / 32.0 * icon_rect.height(),
+        ),
+        egui::pos2(
+            icon_rect.left() + 30.0 / 32.0 * icon_rect.width(),
+            icon_rect.top() + 28.0 / 32.0 * icon_rect.height(),
+        ),
+    )
+}
+
+#[cfg(test)]
+fn home_hero_icon_visible_rect(icon_rect: egui::Rect) -> egui::Rect {
+    egui::Rect::from_min_max(
+        egui::pos2(
+            icon_rect.left() + 8.0 / 64.0 * icon_rect.width(),
+            icon_rect.top() + 4.0 / 64.0 * icon_rect.height(),
+        ),
+        egui::pos2(
+            icon_rect.left() + 56.0 / 64.0 * icon_rect.width(),
+            icon_rect.top() + 63.0 / 64.0 * icon_rect.height(),
+        ),
+    )
+}
+
 fn home_metric_card_content_width(card_width: f32) -> f32 {
     (card_width - f32::from(HOME_METRIC_CARD_INNER_MARGIN_X) * 2.0).max(0.0)
 }
@@ -409,7 +556,13 @@ fn home_metric_card_content_height() -> f32 {
 }
 
 fn home_metric_badge_width(text: &str) -> f32 {
-    text.chars().count() as f32 * HOME_METRIC_BADGE_TEXT_SIZE * 0.58
+    let digit_count = text.chars().count();
+    let primary_digits = digit_count.min(2) as f32;
+    let extra_digits = digit_count.saturating_sub(2) as f32;
+
+    (primary_digits * HOME_METRIC_BADGE_PRIMARY_DIGIT_FACTOR
+        + extra_digits * HOME_METRIC_BADGE_EXTRA_DIGIT_FACTOR)
+        * HOME_METRIC_BADGE_TEXT_SIZE
         + f32::from(HOME_METRIC_BADGE_MARGIN_X) * 2.0
 }
 
@@ -431,7 +584,27 @@ fn home_panel_shadow() -> egui::Shadow {
 }
 
 fn home_view_background_color() -> egui::Color32 {
-    slate_theme::BG
+    slate_theme::HOME_BG
+}
+
+fn home_search_background_color() -> egui::Color32 {
+    slate_theme::FIELD_SURFACE
+}
+
+fn home_search_border_color() -> egui::Color32 {
+    slate_theme::BORDER
+}
+
+fn home_search_icon_color() -> egui::Color32 {
+    egui::Color32::from_rgb(88, 87, 89)
+}
+
+fn home_metric_card_background_color() -> egui::Color32 {
+    slate_theme::HOME_BG
+}
+
+fn home_metric_detail_color() -> egui::Color32 {
+    egui::Color32::from_rgb(145, 144, 144)
 }
 
 fn status_bubble_width(text: &str, available_width: f32) -> f32 {
@@ -461,6 +634,31 @@ fn home_metrics_row_width(layout: HomeMetricsLayout) -> f32 {
         + layout.spacing * (layout.columns.saturating_sub(1) as f32)
 }
 
+fn home_content_left_space_with_offset(
+    available_width: f32,
+    content_width: f32,
+    offset_x: f32,
+) -> f32 {
+    let available_width = available_width.max(0.0);
+    let content_width = content_width.max(0.0);
+    let max_left_space = (available_width - content_width).max(0.0);
+    let centered_left_space = max_left_space / 2.0;
+
+    (centered_left_space + offset_x).clamp(0.0, max_left_space)
+}
+
+fn home_content_left_space(available_width: f32, content_width: f32) -> f32 {
+    home_content_left_space_with_offset(
+        available_width,
+        content_width,
+        HOME_CONTENT_OPTICAL_OFFSET_X,
+    )
+}
+
+fn home_hero_left_space(available_width: f32, content_width: f32) -> f32 {
+    home_content_left_space_with_offset(available_width, content_width, HOME_HERO_OPTICAL_OFFSET_X)
+}
+
 #[cfg(test)]
 fn home_content_stack_height(available_height: f32) -> f32 {
     home_top_space(available_height)
@@ -481,6 +679,12 @@ fn home_top_space(available_height: f32) -> f32 {
 }
 
 #[cfg(test)]
+const CONCEPT_SCREENSHOT_WIDTH: f32 = 1672.0;
+
+#[cfg(test)]
+const CONCEPT_SCREENSHOT_HEIGHT: f32 = 941.0;
+
+#[cfg(test)]
 fn default_opening_home_view_height() -> f32 {
     740.0 - TAB_STRIP_HEIGHT - TOOLBAR_HEIGHT - FOOTER_HEIGHT
 }
@@ -493,13 +697,352 @@ fn default_opening_home_view_size() -> egui::Vec2 {
 #[cfg(test)]
 fn concept_screenshot_home_view_size() -> egui::Vec2 {
     egui::vec2(
-        1672.0 - APP_RAIL_WIDTH,
-        940.0 - TAB_STRIP_HEIGHT - TOOLBAR_HEIGHT - FOOTER_HEIGHT,
+        CONCEPT_SCREENSHOT_WIDTH - APP_RAIL_WIDTH,
+        CONCEPT_SCREENSHOT_HEIGHT - TAB_STRIP_HEIGHT - TOOLBAR_HEIGHT - FOOTER_HEIGHT,
     )
 }
 
-fn tab_content_width() -> f32 {
-    (TAB_WIDTH - f32::from(TAB_INNER_MARGIN_X) * 2.0).max(0.0)
+#[cfg(test)]
+#[derive(Clone, Copy, Debug)]
+struct ConceptChromeGeometry {
+    tab_strip_rect: egui::Rect,
+    app_title_rect: egui::Rect,
+    tab_rects: [egui::Rect; 3],
+    new_tab_slot_rect: egui::Rect,
+    new_tab_button_rect: egui::Rect,
+    rail_button_rects: [egui::Rect; 4],
+    app_rail_rect: egui::Rect,
+    toolbar_rect: egui::Rect,
+    toolbar_content_rect: egui::Rect,
+    webview_rect: egui::Rect,
+    footer_rect: egui::Rect,
+}
+
+#[cfg(test)]
+#[derive(Clone, Copy, Debug)]
+struct ConceptToolbarControlsGeometry {
+    nav_button_rects: [egui::Rect; 3],
+    nav_icon_rects: [egui::Rect; 3],
+    address_rect: egui::Rect,
+    address_security_slot_rect: egui::Rect,
+    address_slate_security_icon_rect: egui::Rect,
+    address_text_rect: egui::Rect,
+    address_bookmark_button_rect: egui::Rect,
+    address_bookmark_icon_rect: egui::Rect,
+    privacy_button_rect: egui::Rect,
+    separator_rect: egui::Rect,
+    menu_button_rect: egui::Rect,
+}
+
+#[cfg(test)]
+#[derive(Clone, Copy, Debug)]
+struct ConceptFooterControlsGeometry {
+    protection_status_rect: egui::Rect,
+    protection_icon_slot_rect: egui::Rect,
+    protection_icon_rect: egui::Rect,
+    protection_label_pos: egui::Pos2,
+    sync_status_rect: egui::Rect,
+    sync_dot_center: egui::Pos2,
+    separator_rect: egui::Rect,
+    settings_button_rect: egui::Rect,
+    settings_icon_rect: egui::Rect,
+}
+
+#[cfg(test)]
+fn concept_chrome_geometry() -> ConceptChromeGeometry {
+    let tab_width = tab_width_for_strip(CONCEPT_SCREENSHOT_WIDTH - APP_TITLE_WIDTH, 3);
+    let tab_top = TAB_STRIP_HEIGHT - TAB_HEIGHT;
+    let first_tab_left = APP_TITLE_WIDTH;
+    let tab_rects = [
+        egui::Rect::from_min_size(
+            egui::pos2(first_tab_left, tab_top),
+            egui::vec2(tab_width, TAB_HEIGHT),
+        ),
+        egui::Rect::from_min_size(
+            egui::pos2(first_tab_left + tab_width, tab_top),
+            egui::vec2(tab_width, TAB_HEIGHT),
+        ),
+        egui::Rect::from_min_size(
+            egui::pos2(first_tab_left + tab_width * 2.0, tab_top),
+            egui::vec2(tab_width, TAB_HEIGHT),
+        ),
+    ];
+    let new_tab_slot_rect = egui::Rect::from_min_size(
+        egui::pos2(tab_rects[2].right() + NEW_TAB_LEFT_GAP, tab_top),
+        egui::vec2(NEW_TAB_BUTTON_SIZE, NEW_TAB_SLOT_HEIGHT),
+    );
+    let new_tab_button_rect = egui::Rect::from_center_size(
+        new_tab_slot_rect.center(),
+        egui::vec2(NEW_TAB_BUTTON_SIZE, NEW_TAB_BUTTON_SIZE),
+    );
+    let central_width = CONCEPT_SCREENSHOT_WIDTH - APP_RAIL_WIDTH;
+    let toolbar_rect = egui::Rect::from_min_size(
+        egui::pos2(APP_RAIL_WIDTH, TAB_STRIP_HEIGHT),
+        egui::vec2(central_width, TOOLBAR_HEIGHT),
+    );
+    let rail_button_left = f32::from(RAIL_PANEL_MARGIN_X);
+    let first_rail_button_top = TAB_STRIP_HEIGHT + RAIL_TOP_SPACE;
+    let rail_step = RAIL_BUTTON_SIZE + RAIL_ITEM_GAP;
+    let rail_button_rects = [
+        egui::Rect::from_min_size(
+            egui::pos2(rail_button_left, first_rail_button_top),
+            egui::vec2(RAIL_BUTTON_SIZE, RAIL_BUTTON_SIZE),
+        ),
+        egui::Rect::from_min_size(
+            egui::pos2(rail_button_left, first_rail_button_top + rail_step),
+            egui::vec2(RAIL_BUTTON_SIZE, RAIL_BUTTON_SIZE),
+        ),
+        egui::Rect::from_min_size(
+            egui::pos2(rail_button_left, first_rail_button_top + rail_step * 2.0),
+            egui::vec2(RAIL_BUTTON_SIZE, RAIL_BUTTON_SIZE),
+        ),
+        egui::Rect::from_min_size(
+            egui::pos2(rail_button_left, first_rail_button_top + rail_step * 3.0),
+            egui::vec2(RAIL_BUTTON_SIZE, RAIL_BUTTON_SIZE),
+        ),
+    ];
+
+    ConceptChromeGeometry {
+        tab_strip_rect: egui::Rect::from_min_size(
+            egui::Pos2::ZERO,
+            egui::vec2(CONCEPT_SCREENSHOT_WIDTH, TAB_STRIP_HEIGHT),
+        ),
+        app_title_rect: egui::Rect::from_min_size(
+            egui::Pos2::ZERO,
+            egui::vec2(APP_TITLE_WIDTH, APP_TITLE_HEIGHT),
+        ),
+        tab_rects,
+        new_tab_slot_rect,
+        new_tab_button_rect,
+        rail_button_rects,
+        app_rail_rect: egui::Rect::from_min_size(
+            egui::pos2(0.0, TAB_STRIP_HEIGHT),
+            egui::vec2(APP_RAIL_WIDTH, CONCEPT_SCREENSHOT_HEIGHT - TAB_STRIP_HEIGHT),
+        ),
+        toolbar_rect,
+        toolbar_content_rect: toolbar_rect.shrink2(egui::vec2(
+            f32::from(TOOLBAR_PANEL_MARGIN_X),
+            f32::from(TOOLBAR_PANEL_MARGIN_Y),
+        )),
+        webview_rect: egui::Rect::from_min_size(
+            egui::pos2(APP_RAIL_WIDTH, TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT),
+            concept_screenshot_home_view_size(),
+        ),
+        footer_rect: egui::Rect::from_min_size(
+            egui::pos2(APP_RAIL_WIDTH, CONCEPT_SCREENSHOT_HEIGHT - FOOTER_HEIGHT),
+            egui::vec2(central_width, FOOTER_HEIGHT),
+        ),
+    }
+}
+
+#[cfg(test)]
+fn concept_footer_controls_geometry() -> ConceptFooterControlsGeometry {
+    let footer_rect = concept_chrome_geometry().footer_rect;
+    let margin = footer_panel_margin();
+    let footer_content_rect = egui::Rect::from_min_max(
+        egui::pos2(
+            footer_rect.left() + f32::from(margin.left),
+            footer_rect.top() + f32::from(margin.top),
+        ),
+        egui::pos2(
+            footer_rect.right() - f32::from(margin.right),
+            footer_rect.bottom() - f32::from(margin.bottom),
+        ),
+    );
+    let center_y = footer_content_rect.center().y;
+    let protection_status_rect = egui::Rect::from_min_size(
+        egui::pos2(
+            footer_content_rect.left() + FOOTER_LEFT_PADDING,
+            center_y - FOOTER_PROTECTION_STATUS_HEIGHT / 2.0,
+        ),
+        egui::vec2(
+            footer_protection_status_width(),
+            FOOTER_PROTECTION_STATUS_HEIGHT,
+        ),
+    );
+    let protection_icon_slot_rect = egui::Rect::from_center_size(
+        egui::pos2(
+            protection_status_rect.left() + FOOTER_ICON_SIZE / 2.0,
+            center_y,
+        ),
+        egui::Vec2::splat(FOOTER_ICON_SIZE),
+    );
+    let protection_icon_rect = footer_protection_icon_rect(protection_icon_slot_rect);
+    let protection_label_pos = egui::pos2(
+        protection_icon_slot_rect.right() + FOOTER_PROTECTION_ICON_LABEL_GAP,
+        center_y,
+    );
+
+    let settings_button_rect = egui::Rect::from_min_size(
+        egui::pos2(
+            footer_content_rect.right() - FOOTER_RIGHT_PADDING - FOOTER_SETTINGS_BUTTON_SIZE,
+            center_y - FOOTER_SETTINGS_BUTTON_SIZE / 2.0,
+        ),
+        egui::Vec2::splat(FOOTER_SETTINGS_BUTTON_SIZE),
+    );
+    let separator_rect = egui::Rect::from_min_size(
+        egui::pos2(
+            settings_button_rect.left() - FOOTER_ITEM_SPACING - 1.0,
+            center_y - FOOTER_SEPARATOR_HEIGHT / 2.0,
+        ),
+        egui::vec2(1.0, FOOTER_SEPARATOR_HEIGHT),
+    );
+    let sync_status_rect = egui::Rect::from_min_size(
+        egui::pos2(
+            separator_rect.left()
+                - FOOTER_ITEM_SPACING
+                - FOOTER_SYNC_SEPARATOR_EXTRA_GAP
+                - footer_sync_status_width(),
+            center_y - FOOTER_SYNC_STATUS_HEIGHT / 2.0,
+        ),
+        egui::vec2(footer_sync_status_width(), FOOTER_SYNC_STATUS_HEIGHT),
+    );
+    let sync_dot_center = egui::pos2(
+        sync_status_rect.left() + FOOTER_SYNC_DOT_SIZE / 2.0,
+        sync_status_rect.center().y,
+    );
+
+    ConceptFooterControlsGeometry {
+        protection_status_rect,
+        protection_icon_slot_rect,
+        protection_icon_rect,
+        protection_label_pos,
+        sync_status_rect,
+        sync_dot_center,
+        separator_rect,
+        settings_button_rect,
+        settings_icon_rect: footer_settings_icon_rect(settings_button_rect),
+    }
+}
+
+#[cfg(test)]
+fn concept_toolbar_controls_geometry() -> ConceptToolbarControlsGeometry {
+    let toolbar_content_rect = concept_chrome_geometry().toolbar_content_rect;
+    let center_y = toolbar_content_rect.center().y;
+    let button_top = center_y - TOOLBAR_BUTTON_SIZE / 2.0;
+    let nav_button_left = toolbar_content_rect.left();
+    let nav_step = TOOLBAR_BUTTON_SIZE + TOOLBAR_ITEM_SPACING;
+    let nav_button_rects = [
+        egui::Rect::from_min_size(
+            egui::pos2(nav_button_left, button_top),
+            egui::Vec2::splat(TOOLBAR_BUTTON_SIZE),
+        ),
+        egui::Rect::from_min_size(
+            egui::pos2(nav_button_left + nav_step, button_top),
+            egui::Vec2::splat(TOOLBAR_BUTTON_SIZE),
+        ),
+        egui::Rect::from_min_size(
+            egui::pos2(nav_button_left + nav_step * 2.0, button_top),
+            egui::Vec2::splat(TOOLBAR_BUTTON_SIZE),
+        ),
+    ];
+    let nav_icon_rects = [
+        toolbar_navigation_icon_rect(nav_button_rects[0], SlateIcon::NavBack),
+        toolbar_navigation_icon_rect(nav_button_rects[1], SlateIcon::NavForward),
+        toolbar_navigation_icon_rect(nav_button_rects[2], SlateIcon::NavRefresh),
+    ];
+    let address_left = nav_button_rects[2].right() + TOOLBAR_ITEM_SPACING + ADDRESS_LEADING_GAP;
+    let address_available_width = (toolbar_content_rect.right() - address_left).max(0.0);
+    let address_width = address_outer_width(toolbar_address_width(address_available_width));
+    let address_rect = egui::Rect::from_min_size(
+        egui::pos2(address_left, center_y - ADDRESS_HEIGHT / 2.0),
+        egui::vec2(address_width, ADDRESS_HEIGHT),
+    );
+    let address_content_left = address_rect.left() + f32::from(ADDRESS_INNER_MARGIN_X);
+    let address_content_right = address_rect.right() - f32::from(ADDRESS_INNER_MARGIN_X);
+    let address_security_slot_rect = egui::Rect::from_min_size(
+        egui::pos2(
+            address_content_left,
+            center_y - ADDRESS_SECURITY_ICON_SIZE / 2.0,
+        ),
+        egui::Vec2::splat(ADDRESS_SECURITY_ICON_SIZE),
+    );
+    let address_slate_security_icon_rect =
+        address_slate_security_icon_rect(address_security_slot_rect);
+    let address_text_left = address_security_slot_rect.right() + ADDRESS_ICON_GAP;
+    let address_text_width =
+        (address_content_right - address_text_left - ADDRESS_BOOKMARK_RESERVED_WIDTH).max(80.0);
+    let address_text_rect = egui::Rect::from_min_size(
+        egui::pos2(address_text_left, center_y - ADDRESS_TEXT_HEIGHT / 2.0),
+        egui::vec2(address_text_width, ADDRESS_TEXT_HEIGHT),
+    );
+    let address_bookmark_button_rect = egui::Rect::from_min_size(
+        egui::pos2(
+            address_text_rect.right(),
+            center_y - ADDRESS_BOOKMARK_BUTTON_SIZE / 2.0,
+        ),
+        egui::Vec2::splat(ADDRESS_BOOKMARK_BUTTON_SIZE),
+    );
+    let address_bookmark_icon_rect = address_bookmark_icon_rect(address_bookmark_button_rect);
+    let privacy_button_left = address_rect.right() + TOOLBAR_ITEM_SPACING + ADDRESS_TRAILING_GAP;
+    let privacy_button_rect = egui::Rect::from_min_size(
+        egui::pos2(privacy_button_left, button_top),
+        egui::Vec2::splat(TOOLBAR_BUTTON_SIZE),
+    );
+    let separator_left = privacy_button_rect.right() + TOOLBAR_SEPARATOR_LEADING_GAP;
+    let separator_rect = egui::Rect::from_min_size(
+        egui::pos2(separator_left, center_y - TOOLBAR_SEPARATOR_HEIGHT / 2.0),
+        egui::vec2(1.0, TOOLBAR_SEPARATOR_HEIGHT),
+    );
+    let menu_button_left = separator_rect.right() + TOOLBAR_SEPARATOR_TRAILING_GAP;
+    let menu_button_rect = egui::Rect::from_min_size(
+        egui::pos2(menu_button_left, button_top),
+        egui::Vec2::splat(TOOLBAR_BUTTON_SIZE),
+    );
+
+    ConceptToolbarControlsGeometry {
+        nav_button_rects,
+        nav_icon_rects,
+        address_rect,
+        address_security_slot_rect,
+        address_slate_security_icon_rect,
+        address_text_rect,
+        address_bookmark_button_rect,
+        address_bookmark_icon_rect,
+        privacy_button_rect,
+        separator_rect,
+        menu_button_rect,
+    }
+}
+
+fn tab_preferred_width_for_window(window_width: f32) -> f32 {
+    let interpolation = ((window_width - TAB_OPENING_WINDOW_WIDTH)
+        / (TAB_CONCEPT_WINDOW_WIDTH - TAB_OPENING_WINDOW_WIDTH))
+        .clamp(0.0, 1.0);
+
+    TAB_OPENING_PREFERRED_WIDTH + (TAB_WIDTH - TAB_OPENING_PREFERRED_WIDTH) * interpolation
+}
+
+fn tab_width_for_strip(available_width: f32, tab_count: usize) -> f32 {
+    let available_width = available_width.max(0.0);
+    let preferred = tab_preferred_width_for_window(available_width + APP_TITLE_WIDTH);
+    if tab_count == 0 {
+        return preferred;
+    }
+
+    let available_for_tabs = (available_width - NEW_TAB_LEFT_GAP - NEW_TAB_BUTTON_SIZE).max(0.0);
+    let fitting_width = available_for_tabs / tab_count as f32;
+    preferred.min(fitting_width.max(TAB_MIN_WIDTH))
+}
+
+fn tab_content_width(tab_width: f32) -> f32 {
+    (tab_width - f32::from(TAB_INNER_MARGIN_X) * 2.0).max(0.0)
+}
+
+#[cfg(test)]
+fn tab_icon_slot_rect(tab_rect: egui::Rect) -> egui::Rect {
+    egui::Rect::from_center_size(
+        egui::pos2(
+            tab_rect.left() + f32::from(TAB_INNER_MARGIN_X) + TAB_ICON_SIZE / 2.0,
+            tab_rect.center().y,
+        ),
+        egui::Vec2::splat(TAB_ICON_SIZE),
+    )
+}
+
+#[cfg(test)]
+fn tab_title_left(tab_rect: egui::Rect) -> f32 {
+    tab_icon_slot_rect(tab_rect).right() + TAB_ICON_TITLE_GAP
 }
 
 fn tab_title_width(available_width: f32) -> f32 {
@@ -511,32 +1054,98 @@ fn tab_title_width(available_width: f32) -> f32 {
         .max(TAB_TITLE_MIN_WIDTH)
 }
 
-fn tab_title_color(active: bool) -> egui::Color32 {
-    if active {
-        slate_theme::TEXT
-    } else {
-        slate_theme::MUTED
-    }
+#[cfg(test)]
+fn tab_close_button_rect(tab_rect: egui::Rect) -> egui::Rect {
+    egui::Rect::from_center_size(
+        egui::pos2(
+            tab_rect.right() - f32::from(TAB_INNER_MARGIN_X) - TAB_CLOSE_BUTTON_SIZE / 2.0,
+            tab_rect.center().y,
+        ),
+        egui::Vec2::splat(TAB_CLOSE_BUTTON_SIZE),
+    )
+}
+
+fn active_tab_background_color() -> egui::Color32 {
+    slate_theme::SURFACE
+}
+
+fn inactive_tab_background_color() -> egui::Color32 {
+    slate_theme::PANEL
+}
+
+fn inactive_tab_hover_background_color() -> egui::Color32 {
+    slate_theme::PANEL_HOVER
+}
+
+fn inactive_tab_outline_color() -> egui::Color32 {
+    slate_theme::BORDER
+}
+
+fn active_tab_outline_color() -> egui::Color32 {
+    slate_theme::BORDER
+}
+
+fn tab_title_color(_active: bool) -> egui::Color32 {
+    slate_theme::TEXT
 }
 
 fn tab_icon_color(_active: bool) -> egui::Color32 {
-    slate_theme::MUTED
+    slate_theme::TEXT
 }
 
-fn tab_close_icon_color(active: bool) -> egui::Color32 {
-    if active {
-        slate_theme::TEXT
-    } else {
-        slate_theme::MUTED
+fn tab_close_icon_color(_active: bool) -> egui::Color32 {
+    slate_theme::TEXT
+}
+
+fn tab_close_raster(_active: bool) -> SlateRaster {
+    SlateRaster::TabClose
+}
+
+fn toolbar_navigation_icon_color(_enabled: bool) -> egui::Color32 {
+    slate_theme::TEXT
+}
+
+fn toolbar_navigation_icon_offset_x(icon: SlateIcon) -> f32 {
+    match icon {
+        SlateIcon::NavBack => TOOLBAR_NAV_BACK_ICON_OFFSET_X,
+        SlateIcon::NavForward => TOOLBAR_NAV_FORWARD_ICON_OFFSET_X,
+        SlateIcon::NavRefresh => TOOLBAR_NAV_REFRESH_ICON_OFFSET_X,
+        _ => 0.0,
     }
 }
 
-fn toolbar_navigation_icon_color(enabled: bool) -> egui::Color32 {
-    if enabled {
-        slate_theme::TEXT
-    } else {
-        slate_theme::MUTED
+fn toolbar_navigation_icon_rect(button_rect: egui::Rect, icon: SlateIcon) -> egui::Rect {
+    egui::Rect::from_center_size(
+        button_rect.center() + egui::vec2(toolbar_navigation_icon_offset_x(icon), 0.0),
+        Vec2::splat(TOOLBAR_NAV_ICON_SIZE),
+    )
+}
+
+fn toolbar_navigation_raster(icon: SlateIcon, hovered: bool) -> Option<SlateRaster> {
+    match (icon, hovered) {
+        (SlateIcon::NavBack, false) => Some(SlateRaster::NavBack),
+        (SlateIcon::NavBack, true) => Some(SlateRaster::NavBackHover),
+        (SlateIcon::NavForward, false) => Some(SlateRaster::NavForward),
+        (SlateIcon::NavForward, true) => Some(SlateRaster::NavForwardHover),
+        (SlateIcon::NavRefresh, false) => Some(SlateRaster::NavReload),
+        (SlateIcon::NavRefresh, true) => Some(SlateRaster::NavReloadHover),
+        _ => None,
     }
+}
+
+fn toolbar_menu_icon_center(button_rect: egui::Rect) -> egui::Pos2 {
+    button_rect.center() + egui::vec2(TOOLBAR_MENU_ICON_OFFSET_X, 0.0)
+}
+
+#[cfg(test)]
+fn toolbar_menu_icon_rect(button_rect: egui::Rect) -> egui::Rect {
+    egui::Rect::from_center_size(
+        toolbar_menu_icon_center(button_rect),
+        egui::vec2(
+            TOOLBAR_MENU_ICON_WIDTH + TOOLBAR_MENU_ICON_STROKE,
+            TOOLBAR_MENU_ICON_GAP * 2.0 + TOOLBAR_MENU_ICON_STROKE,
+        ),
+    )
 }
 
 fn footer_sync_status_width() -> f32 {
@@ -547,12 +1156,31 @@ fn footer_sync_dot_radius() -> f32 {
     FOOTER_SYNC_DOT_SIZE / 2.0
 }
 
+fn footer_protection_icon_rect(slot_rect: egui::Rect) -> egui::Rect {
+    slot_rect.translate(egui::vec2(FOOTER_PROTECTION_ICON_OFFSET_X, 0.0))
+}
+
 fn footer_settings_icon_color() -> egui::Color32 {
-    slate_theme::MUTED
+    egui::Color32::from_rgb(72, 72, 72)
+}
+
+#[cfg(test)]
+fn footer_settings_icon_rect(button_rect: egui::Rect) -> egui::Rect {
+    let visual_size = FOOTER_SETTINGS_GEAR_TOOTH_OUTER_RADIUS * 2.0 + FOOTER_SETTINGS_GEAR_STROKE;
+    egui::Rect::from_center_size(button_rect.center(), egui::Vec2::splat(visual_size))
 }
 
 fn footer_protection_status_width() -> f32 {
     FOOTER_ICON_SIZE + FOOTER_PROTECTION_ICON_LABEL_GAP + FOOTER_PROTECTION_LABEL_WIDTH
+}
+
+fn footer_panel_margin() -> egui::Margin {
+    egui::Margin {
+        left: FOOTER_PANEL_MARGIN_X,
+        right: FOOTER_PANEL_MARGIN_X,
+        top: FOOTER_PANEL_MARGIN_TOP,
+        bottom: FOOTER_PANEL_MARGIN_BOTTOM,
+    }
 }
 
 fn tab_corner_radius() -> egui::CornerRadius {
@@ -562,6 +1190,197 @@ fn tab_corner_radius() -> egui::CornerRadius {
         sw: 0,
         se: 0,
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ActiveTabSeparatorJoin {
+    bridge_rect: egui::Rect,
+    separator_y: f32,
+    tab_left: f32,
+    tab_right: f32,
+}
+
+fn active_tab_separator_join(
+    strip_rect: egui::Rect,
+    active_tab_rect: egui::Rect,
+) -> Option<ActiveTabSeparatorJoin> {
+    let tab_left = active_tab_rect
+        .left()
+        .clamp(strip_rect.left(), strip_rect.right());
+    let tab_right = active_tab_rect
+        .right()
+        .clamp(strip_rect.left(), strip_rect.right());
+    if tab_right <= tab_left {
+        return None;
+    }
+
+    let tab_width = tab_right - tab_left;
+    let join_inset = ACTIVE_TAB_BOTTOM_JOIN_INSET_X.min(tab_width / 2.0);
+    let y = strip_rect.bottom() - 0.5;
+    Some(ActiveTabSeparatorJoin {
+        bridge_rect: egui::Rect::from_min_max(
+            egui::pos2(
+                tab_left + join_inset,
+                y - ACTIVE_TAB_BOTTOM_JOIN_HEIGHT / 2.0,
+            ),
+            egui::pos2(
+                tab_right - join_inset,
+                y + ACTIVE_TAB_BOTTOM_JOIN_HEIGHT / 2.0,
+            ),
+        ),
+        separator_y: y,
+        tab_left,
+        tab_right,
+    })
+}
+
+fn extend_active_tab_corner_points(
+    points: &mut Vec<egui::Pos2>,
+    center: egui::Pos2,
+    radius: f32,
+    start_angle: f32,
+    end_angle: f32,
+) {
+    for step in 1..=ACTIVE_TAB_FILE_CORNER_STEPS {
+        let t = step as f32 / ACTIVE_TAB_FILE_CORNER_STEPS as f32;
+        let angle = start_angle + (end_angle - start_angle) * t;
+        points.push(egui::pos2(
+            center.x + radius * angle.cos(),
+            center.y + radius * angle.sin(),
+        ));
+    }
+}
+
+fn active_tab_file_outline_points(
+    active_tab_rect: egui::Rect,
+    separator_y: f32,
+) -> Vec<egui::Pos2> {
+    let left = active_tab_rect.left();
+    let right = active_tab_rect.right();
+    let top = active_tab_rect.top();
+    let width = active_tab_rect.width().max(0.0);
+    let height = (separator_y - top).max(0.0);
+    let radius = f32::from(TAB_CORNER_RADIUS).min(width / 2.0).min(height);
+
+    if radius <= 0.0 {
+        return vec![
+            egui::pos2(left, separator_y),
+            egui::pos2(left, top),
+            egui::pos2(right, top),
+            egui::pos2(right, separator_y),
+        ];
+    }
+
+    let mut points = Vec::with_capacity(ACTIVE_TAB_FILE_CORNER_STEPS * 2 + 5);
+    points.push(egui::pos2(left, separator_y));
+    points.push(egui::pos2(left, top + radius));
+    extend_active_tab_corner_points(
+        &mut points,
+        egui::pos2(left + radius, top + radius),
+        radius,
+        std::f32::consts::PI,
+        std::f32::consts::PI + std::f32::consts::FRAC_PI_2,
+    );
+    points.push(egui::pos2(right - radius, top));
+    extend_active_tab_corner_points(
+        &mut points,
+        egui::pos2(right - radius, top + radius),
+        radius,
+        -std::f32::consts::FRAC_PI_2,
+        0.0,
+    );
+    points.push(egui::pos2(right, separator_y));
+    points
+}
+
+fn inactive_tab_outline_points(tab_rect: egui::Rect) -> Vec<egui::Pos2> {
+    active_tab_file_outline_points(tab_rect, tab_rect.bottom() - 0.5)
+}
+
+fn draw_inactive_tab_outline(ui: &egui::Ui, tab_rect: egui::Rect) {
+    if ui.is_rect_visible(tab_rect) {
+        ui.painter().line(
+            inactive_tab_outline_points(tab_rect),
+            egui::Stroke::new(1.0, inactive_tab_outline_color()),
+        );
+    }
+}
+
+fn push_separator_point(points: &mut Vec<egui::Pos2>, point: egui::Pos2) {
+    if points.last().copied() != Some(point) {
+        points.push(point);
+    }
+}
+
+fn active_tab_content_divider_points(
+    strip_rect: egui::Rect,
+    active_tab_rect: egui::Rect,
+) -> Option<(ActiveTabSeparatorJoin, Vec<egui::Pos2>)> {
+    let join = active_tab_separator_join(strip_rect, active_tab_rect)?;
+    let visible_tab_rect = egui::Rect::from_min_max(
+        egui::pos2(join.tab_left, active_tab_rect.top()),
+        egui::pos2(join.tab_right, active_tab_rect.bottom()),
+    );
+    let mut points = Vec::with_capacity(ACTIVE_TAB_FILE_CORNER_STEPS * 2 + 7);
+
+    push_separator_point(&mut points, egui::pos2(strip_rect.left(), join.separator_y));
+    push_separator_point(&mut points, egui::pos2(join.tab_left, join.separator_y));
+    for point in active_tab_file_outline_points(visible_tab_rect, join.separator_y) {
+        push_separator_point(&mut points, point);
+    }
+    push_separator_point(&mut points, egui::pos2(join.tab_right, join.separator_y));
+    push_separator_point(
+        &mut points,
+        egui::pos2(strip_rect.right(), join.separator_y),
+    );
+
+    Some((join, points))
+}
+
+fn draw_tab_strip_separator(ui: &egui::Ui, active_tab_rect: Option<egui::Rect>) {
+    let strip_rect = ui.max_rect();
+    let y = strip_rect.bottom() - 0.5;
+    let divider_stroke = egui::Stroke::new(1.0, tab_strip_separator_color());
+    let active_outline_stroke = egui::Stroke::new(1.0, active_tab_outline_color());
+
+    if let Some(active_tab_rect) = active_tab_rect
+        && let Some((join, _divider_points)) =
+            active_tab_content_divider_points(strip_rect, active_tab_rect)
+    {
+        ui.painter()
+            .rect_filled(join.bridge_rect, 0.0, slate_theme::SURFACE);
+        ui.painter().line_segment(
+            [
+                egui::pos2(strip_rect.left(), join.separator_y),
+                egui::pos2(join.tab_left, join.separator_y),
+            ],
+            divider_stroke,
+        );
+        let visible_tab_rect = egui::Rect::from_min_max(
+            egui::pos2(join.tab_left, active_tab_rect.top()),
+            egui::pos2(join.tab_right, active_tab_rect.bottom()),
+        );
+        ui.painter().line(
+            active_tab_file_outline_points(visible_tab_rect, join.separator_y),
+            active_outline_stroke,
+        );
+        ui.painter().line_segment(
+            [
+                egui::pos2(join.tab_right, join.separator_y),
+                egui::pos2(strip_rect.right(), join.separator_y),
+            ],
+            divider_stroke,
+        );
+        return;
+    }
+
+    ui.painter().line_segment(
+        [
+            egui::pos2(strip_rect.left(), y),
+            egui::pos2(strip_rect.right(), y),
+        ],
+        divider_stroke,
+    );
 }
 
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
@@ -853,7 +1672,7 @@ impl Gui {
             .bg_fill(egui::Color32::TRANSPARENT)
     }
 
-    fn vertical_separator(ui: &mut egui::Ui, height: f32) {
+    fn vertical_separator_with_color(ui: &mut egui::Ui, height: f32, color: egui::Color32) {
         let (rect, _) = ui.allocate_exact_size(egui::vec2(1.0, height), egui::Sense::hover());
         if ui.is_rect_visible(rect) {
             ui.painter().line_segment(
@@ -861,9 +1680,64 @@ impl Gui {
                     egui::pos2(rect.center().x, rect.top()),
                     egui::pos2(rect.center().x, rect.bottom()),
                 ],
-                egui::Stroke::new(1.0, slate_theme::BORDER),
+                egui::Stroke::new(1.0, color),
             );
         }
+    }
+
+    fn vertical_separator(ui: &mut egui::Ui, height: f32) {
+        Self::vertical_separator_with_color(ui, height, chrome_vertical_separator_color());
+    }
+
+    fn footer_vertical_separator(ui: &mut egui::Ui, height: f32) {
+        Self::vertical_separator_with_color(ui, height, footer_vertical_separator_color());
+    }
+
+    fn draw_footer_top_separator(ctx: &egui::Context, footer_rect: egui::Rect) {
+        let painter = ctx.layer_painter(LayerId::new(Order::Foreground, Id::new("footer_top")));
+        let y = footer_rect.top() + 0.5;
+        painter.line_segment(
+            [
+                egui::pos2(footer_rect.left(), y),
+                egui::pos2(footer_rect.right(), y),
+            ],
+            egui::Stroke::new(1.0, footer_top_separator_color()),
+        );
+    }
+
+    fn toolbar_navigation_button(
+        ui: &mut egui::Ui,
+        slate_icons: &mut SlateIconCache,
+        icon: SlateIcon,
+        enabled: bool,
+    ) -> egui::Response {
+        let sense = if enabled {
+            egui::Sense::click()
+        } else {
+            egui::Sense::hover()
+        };
+        let (rect, response) = ui.allocate_exact_size(Vec2::splat(TOOLBAR_BUTTON_SIZE), sense);
+        if ui.is_rect_visible(rect) {
+            if enabled && response.hovered() {
+                ui.painter()
+                    .rect_filled(rect, TOOLBAR_BUTTON_RADIUS, slate_theme::PANEL_HOVER);
+            }
+            let hovered = enabled && response.hovered();
+            if let Some(raster) = toolbar_navigation_raster(icon, hovered) {
+                let texture = slate_icons.raster_mask_texture(
+                    ui.ctx(),
+                    raster,
+                    toolbar_navigation_icon_color(enabled),
+                );
+                ui.painter().image(
+                    texture.id,
+                    toolbar_navigation_icon_rect(rect, icon),
+                    egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
+                    egui::Color32::WHITE,
+                );
+            }
+        }
+        response
     }
 
     fn toolbar_hover_raster_button(
@@ -946,7 +1820,7 @@ impl Gui {
                 ui.painter().rect_filled(rect, TOOLBAR_BUTTON_RADIUS, fill);
             }
 
-            let center = rect.center();
+            let center = toolbar_menu_icon_center(rect);
             for offset in [-TOOLBAR_MENU_ICON_GAP, 0.0, TOOLBAR_MENU_ICON_GAP] {
                 ui.painter().line_segment(
                     [
@@ -985,9 +1859,14 @@ impl Gui {
         response.on_hover_text("Close")
     }
 
-    fn tab_title_button(ui: &mut egui::Ui, label: &str, active: bool) -> egui::Response {
+    fn tab_title_button(
+        ui: &mut egui::Ui,
+        label: &str,
+        active: bool,
+        content_width: f32,
+    ) -> egui::Response {
         let (rect, response) = ui.allocate_exact_size(
-            egui::vec2(tab_title_width(tab_content_width()), TAB_CONTENT_HEIGHT),
+            egui::vec2(tab_title_width(content_width), TAB_CONTENT_HEIGHT),
             egui::Sense::click(),
         );
 
@@ -1122,7 +2001,7 @@ impl Gui {
             egui::Align2::LEFT_CENTER,
             "Slate",
             egui::FontId::proportional(APP_TITLE_TEXT_SIZE),
-            slate_theme::TEXT,
+            app_title_text_color(),
         );
     }
 
@@ -1134,8 +2013,11 @@ impl Gui {
 
         if ui.is_rect_visible(rect) {
             let dot_center = egui::pos2(rect.left() + FOOTER_SYNC_DOT_SIZE / 2.0, rect.center().y);
-            ui.painter()
-                .circle_filled(dot_center, footer_sync_dot_radius(), slate_theme::TEAL);
+            ui.painter().circle_filled(
+                dot_center,
+                footer_sync_dot_radius(),
+                footer_sync_dot_color(),
+            );
             ui.painter().text(
                 egui::pos2(
                     dot_center.x + FOOTER_SYNC_DOT_SIZE / 2.0 + FOOTER_SYNC_DOT_LABEL_GAP,
@@ -1161,10 +2043,11 @@ impl Gui {
         );
 
         if ui.is_rect_visible(rect) {
-            let icon_rect = egui::Rect::from_center_size(
+            let icon_slot_rect = egui::Rect::from_center_size(
                 egui::pos2(rect.left() + FOOTER_ICON_SIZE / 2.0, rect.center().y),
                 Vec2::splat(FOOTER_ICON_SIZE),
             );
+            let icon_rect = footer_protection_icon_rect(icon_slot_rect);
             ui.painter().image(
                 texture.id,
                 icon_rect,
@@ -1173,7 +2056,7 @@ impl Gui {
             );
             ui.painter().text(
                 egui::pos2(
-                    icon_rect.right() + FOOTER_PROTECTION_ICON_LABEL_GAP,
+                    icon_slot_rect.right() + FOOTER_PROTECTION_ICON_LABEL_GAP,
                     rect.center().y,
                 ),
                 egui::Align2::LEFT_CENTER,
@@ -1207,7 +2090,8 @@ impl Gui {
                     info
                 });
                 settings_button.on_hover_text("Settings");
-                Self::vertical_separator(ui, FOOTER_SEPARATOR_HEIGHT);
+                Self::footer_vertical_separator(ui, FOOTER_SEPARATOR_HEIGHT);
+                ui.add_space(FOOTER_SYNC_SEPARATOR_EXTRA_GAP);
                 Self::draw_footer_sync_status(ui);
             });
         });
@@ -1243,9 +2127,9 @@ impl Gui {
         label: &str,
         badge: Option<(&str, egui::Color32)>,
         detail: Option<&str>,
-    ) {
+    ) -> egui::Rect {
         egui::Frame::NONE
-            .fill(slate_theme::SURFACE)
+            .fill(home_metric_card_background_color())
             .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
             .corner_radius(8)
             .shadow(home_panel_shadow())
@@ -1281,61 +2165,67 @@ impl Gui {
                             ui.label(
                                 egui::RichText::new(detail)
                                     .size(HOME_METRIC_DETAIL_TEXT_SIZE)
-                                    .color(slate_theme::MUTED),
+                                    .color(home_metric_detail_color()),
                             );
                         }
                     },
                 );
-            });
+            })
+            .response
+            .rect
     }
 
     fn draw_home_metrics(ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) -> egui::Rect {
         let layout = home_metrics_layout(ui.available_width());
+        let metrics = [
+            (SlateIcon::HomeMetricPrivacy, "Privacy First", None, None),
+            (
+                SlateIcon::HomeMetricLock,
+                "Tracker Blocked",
+                Some(("23", slate_theme::AMBER)),
+                None,
+            ),
+            (
+                SlateIcon::HomeMetricAds,
+                "Ads Blocked",
+                Some(("184", slate_theme::BLUE)),
+                None,
+            ),
+            (
+                SlateIcon::HomeMetricTime,
+                "Time Saved",
+                None,
+                Some("2h 14m"),
+            ),
+        ];
+        let mut bounds = None;
+        for (row_index, row) in metrics.chunks(layout.columns).enumerate() {
+            if row_index > 0 {
+                ui.add_space(layout.spacing);
+            }
 
-        egui::Grid::new("slate_home_metrics")
-            .num_columns(layout.columns)
-            .spacing(egui::vec2(layout.spacing, layout.spacing))
-            .show(ui, |ui| {
-                for (index, (icon, label, badge, detail)) in [
-                    (SlateIcon::HomeMetricPrivacy, "Privacy First", None, None),
-                    (
-                        SlateIcon::HomeMetricLock,
-                        "Tracker Blocked",
-                        Some(("23", slate_theme::AMBER)),
-                        None,
-                    ),
-                    (
-                        SlateIcon::HomeMetricAds,
-                        "Ads Blocked",
-                        Some(("184", slate_theme::BLUE)),
-                        None,
-                    ),
-                    (
-                        SlateIcon::HomeMetricTime,
-                        "Time Saved",
-                        None,
-                        Some("2h 14m"),
-                    ),
-                ]
-                .into_iter()
-                .enumerate()
-                {
-                    Self::draw_home_metric_card(
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
+                for (column_index, (icon, label, badge, detail)) in row.iter().enumerate() {
+                    if column_index > 0 {
+                        ui.add_space(layout.spacing);
+                    }
+                    let card_rect = Self::draw_home_metric_card(
                         ui,
                         slate_icons,
                         layout.card_width,
-                        icon,
+                        *icon,
                         label,
-                        badge,
-                        detail,
+                        *badge,
+                        *detail,
                     );
-                    if (index + 1) % layout.columns == 0 {
-                        ui.end_row();
-                    }
+                    bounds =
+                        Some(bounds.map_or(card_rect, |rect: egui::Rect| rect.union(card_rect)));
                 }
-            })
-            .response
-            .rect
+            });
+        }
+
+        bounds.unwrap_or(egui::Rect::NOTHING)
     }
 
     fn draw_home_content(
@@ -1348,50 +2238,79 @@ impl Gui {
         let mut navigation_request = None;
 
         ui.add_space(home_top_space(home_rect.height()));
-        ui.vertical_centered(|ui| {
-            let hero = slate_icons.texture(ui.ctx(), SlateIcon::HomeHeroShield, slate_theme::TEAL);
-            let hero_response = ui.add(
-                egui::Image::from_texture(hero)
-                    .fit_to_exact_size(egui::vec2(HOME_HERO_SIZE, HOME_HERO_SIZE)),
-            );
-            layout.hero_rect = hero_response.rect;
+        ui.vertical(|ui| {
+            let available_width = ui.available_width();
+            ui.horizontal(|ui| {
+                ui.add_space(home_hero_left_space(available_width, HOME_HERO_SIZE));
+                let hero =
+                    slate_icons.texture(ui.ctx(), SlateIcon::HomeHeroShield, slate_theme::TEAL);
+                let hero_response = ui.add(
+                    egui::Image::from_texture(hero)
+                        .fit_to_exact_size(egui::vec2(HOME_HERO_SIZE, HOME_HERO_SIZE)),
+                );
+                layout.hero_rect = hero_response.rect;
+            });
             ui.add_space(HOME_HERO_TO_SEARCH_GAP);
 
-            let search_width = home_search_width(ui.available_width());
+            let available_width = ui.available_width();
+            let search_width = home_search_width(available_width);
             let search_content_width = home_search_content_width(search_width);
             let home_search_id = egui::Id::new("home_search_input");
-            let search_frame_response = egui::Frame::NONE
-                .fill(slate_theme::SURFACE)
-                .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
-                .corner_radius(HOME_SEARCH_CORNER_RADIUS)
-                .shadow(home_panel_shadow())
-                .inner_margin(egui::Margin::symmetric(HOME_SEARCH_INNER_MARGIN_X, 0))
-                .show(ui, |ui| {
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(search_content_width, HOME_SEARCH_HEIGHT),
-                        egui::Layout::left_to_right(egui::Align::Center),
-                        |ui| {
-                            let search_icon = slate_icons.texture(
-                                ui.ctx(),
-                                SlateIcon::HomeSearch,
-                                slate_theme::MUTED,
-                            );
-                            ui.add(Self::icon_image(search_icon, HOME_SEARCH_ICON_SIZE));
-                            ui.add_space(HOME_SEARCH_ICON_GAP);
-                            ui.add_sized(
-                                [ui.available_width(), HOME_SEARCH_TEXT_HEIGHT],
-                                egui::TextEdit::singleline(home_search)
-                                    .id(home_search_id)
-                                    .font(egui::FontId::proportional(HOME_SEARCH_INPUT_TEXT_SIZE))
-                                    .frame(egui::Frame::NONE)
-                                    .hint_text("Search the web or enter an address"),
-                            )
-                        },
-                    )
-                    .inner
-                });
-            let search_response = search_frame_response.inner;
-            layout.search_rect = search_frame_response.response.rect;
+            let mut search_response = None;
+            ui.horizontal(|ui| {
+                ui.add_space(home_content_left_space(available_width, search_width));
+                let search_frame_response = egui::Frame::NONE
+                    .fill(home_search_background_color())
+                    .stroke(egui::Stroke::new(1.0, home_search_border_color()))
+                    .corner_radius(HOME_SEARCH_CORNER_RADIUS)
+                    .shadow(home_panel_shadow())
+                    .inner_margin(egui::Margin::symmetric(HOME_SEARCH_INNER_MARGIN_X, 0))
+                    .show(ui, |ui| {
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(search_content_width, HOME_SEARCH_HEIGHT),
+                            egui::Layout::left_to_right(egui::Align::Center),
+                            |ui| {
+                                let search_icon = slate_icons.texture(
+                                    ui.ctx(),
+                                    SlateIcon::HomeSearch,
+                                    home_search_icon_color(),
+                                );
+                                let (slot_rect, _) = ui.allocate_exact_size(
+                                    egui::Vec2::splat(HOME_SEARCH_ICON_SIZE),
+                                    egui::Sense::hover(),
+                                );
+                                let icon_rect = home_search_icon_rect(slot_rect);
+                                layout.search_icon_rect = icon_rect;
+                                if ui.is_rect_visible(slot_rect) {
+                                    ui.painter().image(
+                                        search_icon.id,
+                                        icon_rect,
+                                        egui::Rect::from_min_max(
+                                            egui::Pos2::ZERO,
+                                            egui::pos2(1.0, 1.0),
+                                        ),
+                                        egui::Color32::WHITE,
+                                    );
+                                }
+                                ui.add_space(HOME_SEARCH_ICON_GAP);
+                                ui.add_sized(
+                                    [ui.available_width(), HOME_SEARCH_TEXT_HEIGHT],
+                                    egui::TextEdit::singleline(home_search)
+                                        .id(home_search_id)
+                                        .font(egui::FontId::proportional(
+                                            HOME_SEARCH_INPUT_TEXT_SIZE,
+                                        ))
+                                        .frame(egui::Frame::NONE)
+                                        .hint_text("Search the web or enter an address"),
+                                )
+                            },
+                        )
+                        .inner
+                    });
+                search_response = Some(search_frame_response.inner);
+                layout.search_rect = search_frame_response.response.rect;
+            });
+            let search_response = search_response.expect("home search should be rendered");
 
             if search_response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
                 let request = home_search.trim().to_owned();
@@ -1402,14 +2321,18 @@ impl Gui {
             }
 
             ui.add_space(HOME_SEARCH_TO_METRICS_GAP);
+            let available_width = ui.available_width();
             let metrics_height = ui.available_height().max(0.0);
             let metrics_width = home_metrics_row_width(home_metrics_layout(home_rect.width()));
-            let metrics_response = ui.allocate_ui_with_layout(
-                egui::vec2(metrics_width, metrics_height),
-                egui::Layout::top_down(egui::Align::Center),
-                |ui| Self::draw_home_metrics(ui, slate_icons),
-            );
-            layout.metrics_rect = metrics_response.inner;
+            ui.horizontal(|ui| {
+                ui.add_space(home_content_left_space(available_width, metrics_width));
+                let metrics_response = ui.allocate_ui_with_layout(
+                    egui::vec2(metrics_width, metrics_height),
+                    egui::Layout::top_down(egui::Align::Center),
+                    |ui| Self::draw_home_metrics(ui, slate_icons),
+                );
+                layout.metrics_rect = metrics_response.inner;
+            });
         });
 
         HomeContentResponse {
@@ -1494,7 +2417,8 @@ impl Gui {
         fallback_icon: egui::load::SizedTexture,
         active_close_icon: egui::load::SizedTexture,
         inactive_close_icon: egui::load::SizedTexture,
-    ) {
+        tab_width: f32,
+    ) -> egui::Rect {
         let label = match (webview.page_title(), webview.url()) {
             (_, Some(url)) if is_slate_home_url(&url) => "New Tab".into(),
             (Some(title), _) if !title.is_empty() => title,
@@ -1502,9 +2426,9 @@ impl Gui {
             _ => "New Tab".into(),
         };
 
-        let inactive_bg_color = slate_theme::PANEL;
-        let inactive_hover_bg_color = slate_theme::PANEL_HOVER;
-        let active_bg_color = slate_theme::SURFACE;
+        let inactive_bg_color = inactive_tab_background_color();
+        let inactive_hover_bg_color = inactive_tab_hover_background_color();
+        let active_bg_color = active_tab_background_color();
         let active = window.active_webview().map(|webview| webview.id()) == Some(webview.id());
         let tab_content_bg_color = if active {
             active_bg_color
@@ -1516,11 +2440,12 @@ impl Gui {
         } else {
             inactive_hover_bg_color
         };
+        let tab_content_width = tab_content_width(tab_width);
 
         // Setup a tab frame that will contain the favicon, title and close button
         let mut tab_frame = egui::Frame::NONE
             .fill(tab_content_bg_color)
-            .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
+            .stroke(egui::Stroke::NONE)
             .corner_radius(tab_corner_radius())
             .inner_margin(egui::Margin::symmetric(
                 TAB_INNER_MARGIN_X,
@@ -1528,7 +2453,7 @@ impl Gui {
             ))
             .begin(ui);
         {
-            tab_frame.content_ui.set_width(tab_content_width());
+            tab_frame.content_ui.set_width(tab_content_width);
             tab_frame.content_ui.set_min_height(TAB_CONTENT_HEIGHT);
 
             let visuals = tab_frame.content_ui.visuals_mut();
@@ -1550,24 +2475,36 @@ impl Gui {
             visuals.widgets.hovered.expansion = 0.0;
 
             let icon = favicon_texture.unwrap_or(fallback_icon);
-            tab_frame
-                .content_ui
-                .add(Self::icon_image(icon, TAB_ICON_SIZE));
-            tab_frame.content_ui.add_space(TAB_ICON_TITLE_GAP);
+            let mut should_close = false;
+            let mut should_activate = false;
+            tab_frame.content_ui.allocate_ui_with_layout(
+                egui::vec2(tab_content_width, TAB_CONTENT_HEIGHT),
+                egui::Layout::left_to_right(TAB_CONTENT_ALIGN),
+                |ui| {
+                    ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
+                    ui.add(Self::icon_image(icon, TAB_ICON_SIZE));
+                    ui.add_space(TAB_ICON_TITLE_GAP);
 
-            let tab = Self::tab_title_button(&mut tab_frame.content_ui, &label, active);
-            tab_frame.content_ui.add_space(TAB_TITLE_CLOSE_GAP);
+                    let tab = Self::tab_title_button(ui, &label, active, tab_content_width);
+                    ui.add_space(TAB_TITLE_CLOSE_GAP);
 
-            let close_icon = if active {
-                active_close_icon
-            } else {
-                inactive_close_icon
-            };
-            let close_button = Self::tab_close_button(&mut tab_frame.content_ui, close_icon);
-            if close_button.clicked() || close_button.middle_clicked() || tab.middle_clicked() {
+                    let close_icon = if active {
+                        active_close_icon
+                    } else {
+                        inactive_close_icon
+                    };
+                    let close_button = Self::tab_close_button(ui, close_icon);
+                    should_close = close_button.clicked()
+                        || close_button.middle_clicked()
+                        || tab.middle_clicked();
+                    should_activate = !active && tab.clicked();
+                },
+            );
+
+            if should_close {
                 window
                     .queue_user_interface_command(UserInterfaceCommand::CloseWebView(webview.id()));
-            } else if !active && tab.clicked() {
+            } else if should_activate {
                 window.activate_webview(webview.id());
             }
         }
@@ -1582,6 +2519,10 @@ impl Gui {
         };
         tab_frame.frame.fill = fill_color;
         tab_frame.end(ui);
+        if !active {
+            draw_inactive_tab_outline(ui, response.rect);
+        }
+        response.rect
     }
 
     /// Update the user interface, but do not paint the updated state.
@@ -1625,14 +2566,16 @@ impl Gui {
                 Panel::top("tabs")
                     .exact_size(TAB_STRIP_HEIGHT)
                     .frame(tabs_frame)
-                    .show_separator_line(true)
+                    .show_separator_line(false)
                     .show_inside(ctx, |ui| {
+                        let mut active_tab_rect = None;
                         ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
                         ui.allocate_ui_with_layout(
                             ui.available_size(),
                             egui::Layout::left_to_right(egui::Align::Center),
                             |ui| {
                                 Self::draw_app_title(ui);
+                                let tab_strip_available_width = ui.available_width();
 
                                 egui::ScrollArea::horizontal()
                                     .scroll_bar_visibility(
@@ -1645,19 +2588,24 @@ impl Gui {
                                             |ui| {
                                                 ui.spacing_mut().item_spacing =
                                                     egui::vec2(0.0, 0.0);
+                                                let webviews = window.webviews();
+                                                let tab_width = tab_width_for_strip(
+                                                    tab_strip_available_width,
+                                                    webviews.len(),
+                                                );
                                                 for (index, (id, webview)) in
-                                                    window.webviews().into_iter().enumerate()
+                                                    webviews.into_iter().enumerate()
                                                 {
                                                     let favicon = favicon_textures
                                                         .get(&id)
                                                         .map(|(_, favicon)| favicon)
                                                         .copied();
-                                                    let fallback_icon_color = tab_icon_color(
-                                                        window
-                                                            .active_webview()
-                                                            .map(|webview| webview.id())
-                                                            == Some(id),
-                                                    );
+                                                    let active = window
+                                                        .active_webview()
+                                                        .map(|webview| webview.id())
+                                                        == Some(id);
+                                                    let fallback_icon_color =
+                                                        tab_icon_color(active);
                                                     let fallback_icon = slate_icons.texture(
                                                         ui.ctx(),
                                                         Self::fallback_tab_icon(index),
@@ -1666,16 +2614,16 @@ impl Gui {
                                                     let close_icon = slate_icons
                                                         .raster_mask_texture(
                                                             ui.ctx(),
-                                                            SlateRaster::TabClose,
+                                                            tab_close_raster(true),
                                                             tab_close_icon_color(true),
                                                         );
                                                     let inactive_close_icon = slate_icons
                                                         .raster_mask_texture(
                                                             ui.ctx(),
-                                                            SlateRaster::TabCloseMuted,
+                                                            tab_close_raster(false),
                                                             tab_close_icon_color(false),
                                                         );
-                                                    Self::browser_tab(
+                                                    let tab_rect = Self::browser_tab(
                                                         ui,
                                                         window,
                                                         webview,
@@ -1683,11 +2631,26 @@ impl Gui {
                                                         fallback_icon,
                                                         close_icon,
                                                         inactive_close_icon,
+                                                        tab_width,
                                                     );
+                                                    if active {
+                                                        active_tab_rect = Some(tab_rect);
+                                                    }
                                                 }
 
                                                 ui.add_space(NEW_TAB_LEFT_GAP);
-                                                let new_tab_button = Gui::new_tab_button(ui);
+                                                let new_tab_button = ui
+                                                    .allocate_ui_with_layout(
+                                                        egui::vec2(
+                                                            NEW_TAB_BUTTON_SIZE,
+                                                            NEW_TAB_SLOT_HEIGHT,
+                                                        ),
+                                                        egui::Layout::left_to_right(
+                                                            TAB_CONTENT_ALIGN,
+                                                        ),
+                                                        Gui::new_tab_button,
+                                                    )
+                                                    .inner;
                                                 new_tab_button.widget_info(|| {
                                                     let mut info =
                                                         WidgetInfo::new(WidgetType::Button);
@@ -1704,28 +2667,27 @@ impl Gui {
                                     });
                             },
                         );
+                        draw_tab_strip_separator(ui, active_tab_rect);
                     });
 
-                let rail_frame =
-                    egui::Frame::NONE
-                        .fill(slate_theme::BG)
-                        .inner_margin(egui::Margin::symmetric(
-                            RAIL_PANEL_MARGIN_X,
-                            RAIL_PANEL_MARGIN_Y,
-                        ));
+                let rail_frame = egui::Frame::NONE
+                    .fill(chrome_panel_background_color())
+                    .inner_margin(egui::Margin::symmetric(
+                        RAIL_PANEL_MARGIN_X,
+                        RAIL_PANEL_MARGIN_Y,
+                    ));
                 Panel::left("app_rail")
                     .exact_size(APP_RAIL_WIDTH)
                     .frame(rail_frame)
                     .show_separator_line(true)
                     .show_inside(ctx, |ui| Self::draw_app_rail(ui, slate_icons));
 
-                let toolbar_frame =
-                    egui::Frame::NONE
-                        .fill(slate_theme::BG)
-                        .inner_margin(egui::Margin::symmetric(
-                            TOOLBAR_PANEL_MARGIN_X,
-                            TOOLBAR_PANEL_MARGIN_Y,
-                        ));
+                let toolbar_frame = egui::Frame::NONE
+                    .fill(toolbar_background_color())
+                    .inner_margin(egui::Margin::symmetric(
+                        TOOLBAR_PANEL_MARGIN_X,
+                        TOOLBAR_PANEL_MARGIN_Y,
+                    ));
                 Panel::top("toolbar")
                     .exact_size(TOOLBAR_HEIGHT)
                     .frame(toolbar_frame)
@@ -1736,11 +2698,10 @@ impl Gui {
                             ui.available_size(),
                             egui::Layout::left_to_right(egui::Align::Center),
                             |ui| {
-                                let back_button = Gui::toolbar_hover_raster_button(
+                                let back_button = Gui::toolbar_navigation_button(
                                     ui,
                                     slate_icons,
-                                    SlateRaster::NavBack,
-                                    SlateRaster::NavBackHover,
+                                    SlateIcon::NavBack,
                                     self.can_go_back,
                                 );
                                 back_button.widget_info(|| {
@@ -1753,11 +2714,10 @@ impl Gui {
                                     window.queue_user_interface_command(UserInterfaceCommand::Back);
                                 }
 
-                                let forward_button = Gui::toolbar_hover_raster_button(
+                                let forward_button = Gui::toolbar_navigation_button(
                                     ui,
                                     slate_icons,
-                                    SlateRaster::NavForward,
-                                    SlateRaster::NavForwardHover,
+                                    SlateIcon::NavForward,
                                     self.can_go_forward,
                                 );
                                 forward_button.widget_info(|| {
@@ -1791,11 +2751,10 @@ impl Gui {
                                         }
                                     }
                                     LoadStatus::Complete => {
-                                        let reload_button = Gui::toolbar_hover_raster_button(
+                                        let reload_button = Gui::toolbar_navigation_button(
                                             ui,
                                             slate_icons,
-                                            SlateRaster::NavReload,
-                                            SlateRaster::NavReloadHover,
+                                            SlateIcon::NavRefresh,
                                             true,
                                         );
                                         reload_button.widget_info(|| {
@@ -1817,8 +2776,8 @@ impl Gui {
                                 let available_for_address = ui.available_width().max(0.0);
                                 let address_width = toolbar_address_width(available_for_address);
                                 let location_field = egui::Frame::NONE
-                                    .fill(slate_theme::SURFACE)
-                                    .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
+                                    .fill(address_background_color())
+                                    .stroke(egui::Stroke::new(1.0, address_border_color()))
                                     .corner_radius(ADDRESS_CORNER_RADIUS)
                                     .shadow(address_shadow())
                                     .inner_margin(egui::Margin::symmetric(
@@ -1829,23 +2788,44 @@ impl Gui {
                                         ui.set_width(address_width);
                                         ui.set_min_height(ADDRESS_HEIGHT);
                                         ui.horizontal_centered(|ui| {
-                                            let page_info_icon =
-                                                match address_security_icon_for_location(location) {
-                                                    AddressSecurityIcon::Slate { icon, color } => {
-                                                        slate_icons.texture(ui.ctx(), icon, color)
+                                            ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
+                                            match address_security_icon_for_location(location) {
+                                                AddressSecurityIcon::Slate { icon, color } => {
+                                                    let page_info_icon =
+                                                        slate_icons.texture(ui.ctx(), icon, color);
+                                                    let (slot_rect, _) = ui.allocate_exact_size(
+                                                        egui::Vec2::splat(
+                                                            ADDRESS_SECURITY_ICON_SIZE,
+                                                        ),
+                                                        egui::Sense::hover(),
+                                                    );
+                                                    let icon_rect =
+                                                        address_slate_security_icon_rect(slot_rect);
+                                                    if ui.is_rect_visible(slot_rect) {
+                                                        ui.painter().image(
+                                                            page_info_icon.id,
+                                                            icon_rect,
+                                                            egui::Rect::from_min_max(
+                                                                egui::Pos2::ZERO,
+                                                                egui::pos2(1.0, 1.0),
+                                                            ),
+                                                            egui::Color32::WHITE,
+                                                        );
                                                     }
-                                                    AddressSecurityIcon::Raster(raster) => {
-                                                        slate_icons.raster_mask_texture(
+                                                }
+                                                AddressSecurityIcon::Raster(raster) => {
+                                                    let page_info_icon = slate_icons
+                                                        .raster_mask_texture(
                                                             ui.ctx(),
                                                             raster,
                                                             address_security_raster_color(raster),
-                                                        )
-                                                    }
-                                                };
-                                            ui.add(Self::icon_image(
-                                                page_info_icon,
-                                                ADDRESS_SECURITY_ICON_SIZE,
-                                            ));
+                                                        );
+                                                    ui.add(Self::icon_image(
+                                                        page_info_icon,
+                                                        ADDRESS_SECURITY_ICON_SIZE,
+                                                    ));
+                                                }
+                                            }
                                             ui.add_space(ADDRESS_ICON_GAP);
                                             let bookmark_icon = slate_icons.raster_mask_texture(
                                                 ui.ctx(),
@@ -1937,13 +2917,18 @@ impl Gui {
                                     info
                                 });
                                 privacy_button.on_hover_text("Privacy controls");
+
+                                let toolbar_item_spacing = ui.spacing().item_spacing.x;
+                                ui.spacing_mut().item_spacing.x = TOOLBAR_SEPARATOR_LEADING_GAP;
                                 Self::vertical_separator(ui, TOOLBAR_SEPARATOR_HEIGHT);
 
                                 let mut experimental_preferences_enabled =
                                     state.experimental_preferences_enabled();
+                                ui.spacing_mut().item_spacing.x = TOOLBAR_SEPARATOR_TRAILING_GAP;
                                 let prefs_toggle =
                                     Gui::toolbar_menu_button(ui, experimental_preferences_enabled)
                                         .on_hover_text("Enable experimental prefs");
+                                ui.spacing_mut().item_spacing.x = toolbar_item_spacing;
                                 prefs_toggle.widget_info(|| {
                                     let mut info = WidgetInfo::new(WidgetType::Button);
                                     info.label = Some("Enable experimental preferences".into());
@@ -1965,18 +2950,15 @@ impl Gui {
                         );
                     });
 
-                let footer_frame =
-                    egui::Frame::NONE
-                        .fill(slate_theme::BG)
-                        .inner_margin(egui::Margin::symmetric(
-                            FOOTER_PANEL_MARGIN_X,
-                            FOOTER_PANEL_MARGIN_Y,
-                        ));
-                Panel::bottom("footer")
+                let footer_frame = egui::Frame::NONE
+                    .fill(chrome_panel_background_color())
+                    .inner_margin(footer_panel_margin());
+                let footer_response = Panel::bottom("footer")
                     .exact_size(FOOTER_HEIGHT)
                     .frame(footer_frame)
-                    .show_separator_line(true)
+                    .show_separator_line(false)
                     .show_inside(ctx, |ui| Self::draw_footer(ui, slate_icons));
+                Self::draw_footer_top_separator(ctx, footer_response.response.rect);
             } else {
                 *toolbar_height = Length::default();
                 *webview_origin = Point2D::zero();
@@ -2176,57 +3158,86 @@ mod tests {
     use servo::DeviceIndependentPixel;
 
     use super::{
-        ADDRESS_BOOKMARK_BUTTON_RADIUS, ADDRESS_BOOKMARK_BUTTON_SIZE, ADDRESS_BOOKMARK_ICON_SIZE,
-        ADDRESS_BOOKMARK_RESERVED_WIDTH, ADDRESS_CORNER_RADIUS, ADDRESS_ICON_GAP,
-        ADDRESS_INNER_MARGIN_X, ADDRESS_LEADING_GAP, ADDRESS_MIN_WIDTH, ADDRESS_SECURITY_ICON_SIZE,
-        ADDRESS_SHADOW_ALPHA, ADDRESS_SHADOW_BLUR, ADDRESS_SHADOW_OFFSET, ADDRESS_SHADOW_SPREAD,
-        ADDRESS_TRAILING_CONTROLS_WIDTH, ADDRESS_TRAILING_GAP, AddressSecurityIcon, Gui,
-        HOME_METRIC_CARD_MIN_WIDTH, HomeContentLayout, SlateIconCache, address_bookmark_icon_color,
-        address_security_icon_for_location, address_security_raster_color,
-        app_title_background_color, concept_screenshot_home_view_size,
-        default_opening_home_view_height, default_opening_home_view_size,
-        footer_protection_status_width, footer_settings_icon_color, footer_status_text_color,
-        footer_sync_dot_radius, footer_sync_status_width, home_content_stack_height,
-        home_metric_badge_width, home_metric_card_content_height, home_metric_card_content_width,
-        home_metrics_layout, home_metrics_rendered_height, home_metrics_row_width,
-        home_search_rendered_height, home_search_width, home_top_space, home_view_background_color,
-        new_tab_icon_color, rail_button_fill, rail_icon_color, slate_theme, status_bubble_label,
-        status_bubble_width, tab_close_icon_color, tab_content_width, tab_corner_radius,
-        tab_icon_color, tab_strip_background_color, tab_title_color, tab_title_width,
-        toolbar_address_width, toolbar_menu_icon_color, toolbar_navigation_icon_color,
-    };
-    use super::{
-        ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH, APP_TITLE_HEIGHT,
-        APP_TITLE_LEFT_PADDING, APP_TITLE_TEXT_SIZE, APP_TITLE_WIDTH, FOOTER_HEIGHT,
-        FOOTER_ICON_SIZE, FOOTER_ITEM_SPACING, FOOTER_LEFT_PADDING, FOOTER_PANEL_MARGIN_X,
-        FOOTER_PANEL_MARGIN_Y, FOOTER_PROTECTION_ICON_LABEL_GAP, FOOTER_PROTECTION_LABEL_WIDTH,
+        ACTIVE_TAB_BOTTOM_JOIN_HEIGHT, ACTIVE_TAB_BOTTOM_JOIN_INSET_X,
+        ACTIVE_TAB_FILE_CORNER_STEPS, ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH,
+        APP_TITLE_HEIGHT, APP_TITLE_LEFT_PADDING, APP_TITLE_TEXT_SIZE, APP_TITLE_WIDTH,
+        CONCEPT_SCREENSHOT_HEIGHT, CONCEPT_SCREENSHOT_WIDTH, FOOTER_HEIGHT, FOOTER_ICON_SIZE,
+        FOOTER_ITEM_SPACING, FOOTER_LEFT_PADDING, FOOTER_PANEL_MARGIN_BOTTOM,
+        FOOTER_PANEL_MARGIN_TOP, FOOTER_PANEL_MARGIN_X, FOOTER_PROTECTION_ICON_LABEL_GAP,
+        FOOTER_PROTECTION_ICON_OFFSET_X, FOOTER_PROTECTION_LABEL_WIDTH,
         FOOTER_PROTECTION_STATUS_HEIGHT, FOOTER_RIGHT_PADDING, FOOTER_SEPARATOR_HEIGHT,
         FOOTER_SETTINGS_BUTTON_RADIUS, FOOTER_SETTINGS_BUTTON_SIZE,
         FOOTER_SETTINGS_GEAR_CENTER_RADIUS, FOOTER_SETTINGS_GEAR_RADIUS,
         FOOTER_SETTINGS_GEAR_STROKE, FOOTER_SETTINGS_GEAR_TOOTH_INNER_RADIUS,
         FOOTER_SETTINGS_GEAR_TOOTH_OUTER_RADIUS, FOOTER_SETTINGS_ICON_SIZE,
         FOOTER_SYNC_DOT_LABEL_GAP, FOOTER_SYNC_DOT_SIZE, FOOTER_SYNC_LABEL_WIDTH,
-        FOOTER_SYNC_STATUS_HEIGHT, FOOTER_TEXT_SIZE, HOME_BOTTOM_MIN_GAP, HOME_HERO_SIZE,
-        HOME_HERO_TO_SEARCH_GAP, HOME_METRIC_BADGE_CORNER_RADIUS, HOME_METRIC_BADGE_LABEL_GAP,
-        HOME_METRIC_BADGE_MARGIN_X, HOME_METRIC_BADGE_MARGIN_Y, HOME_METRIC_BADGE_TEXT_SIZE,
-        HOME_METRIC_CARD_GAP, HOME_METRIC_CARD_HEIGHT, HOME_METRIC_CARD_INNER_MARGIN_X,
-        HOME_METRIC_CARD_INNER_MARGIN_Y, HOME_METRIC_CARD_MAX_WIDTH, HOME_METRIC_DETAIL_GAP,
-        HOME_METRIC_DETAIL_TEXT_SIZE, HOME_METRIC_GRID_EXTRA_HEIGHT, HOME_METRIC_ICON_LABEL_GAP,
-        HOME_METRIC_ICON_SIZE, HOME_METRIC_LABEL_TEXT_SIZE, HOME_PANEL_SHADOW_ALPHA,
-        HOME_PANEL_SHADOW_BLUR, HOME_PANEL_SHADOW_OFFSET, HOME_PANEL_SHADOW_SPREAD,
-        HOME_SEARCH_FRAME_EXTRA_HEIGHT, HOME_SEARCH_ICON_SIZE, HOME_SEARCH_INPUT_TEXT_SIZE,
+        FOOTER_SYNC_SEPARATOR_EXTRA_GAP, FOOTER_SYNC_STATUS_HEIGHT, FOOTER_TEXT_SIZE,
+        HOME_BOTTOM_MIN_GAP, HOME_CONTENT_OPTICAL_OFFSET_X, HOME_HERO_OPTICAL_OFFSET_X,
+        HOME_HERO_SIZE, HOME_HERO_TO_SEARCH_GAP, HOME_METRIC_BADGE_CORNER_RADIUS,
+        HOME_METRIC_BADGE_EXTRA_DIGIT_FACTOR, HOME_METRIC_BADGE_LABEL_GAP,
+        HOME_METRIC_BADGE_MARGIN_X, HOME_METRIC_BADGE_MARGIN_Y,
+        HOME_METRIC_BADGE_PRIMARY_DIGIT_FACTOR, HOME_METRIC_BADGE_TEXT_SIZE, HOME_METRIC_CARD_GAP,
+        HOME_METRIC_CARD_HEIGHT, HOME_METRIC_CARD_INNER_MARGIN_X, HOME_METRIC_CARD_INNER_MARGIN_Y,
+        HOME_METRIC_CARD_MAX_WIDTH, HOME_METRIC_DETAIL_GAP, HOME_METRIC_DETAIL_TEXT_SIZE,
+        HOME_METRIC_GRID_EXTRA_HEIGHT, HOME_METRIC_ICON_LABEL_GAP, HOME_METRIC_ICON_SIZE,
+        HOME_METRIC_LABEL_TEXT_SIZE, HOME_PANEL_SHADOW_ALPHA, HOME_PANEL_SHADOW_BLUR,
+        HOME_PANEL_SHADOW_OFFSET, HOME_PANEL_SHADOW_SPREAD, HOME_SEARCH_FRAME_EXTRA_HEIGHT,
+        HOME_SEARCH_ICON_OFFSET_Y, HOME_SEARCH_ICON_SIZE, HOME_SEARCH_INPUT_TEXT_SIZE,
         HOME_SEARCH_TO_METRICS_GAP, HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN,
         NEW_TAB_BUTTON_RADIUS, NEW_TAB_BUTTON_SIZE, NEW_TAB_ICON_SIZE, NEW_TAB_ICON_STROKE,
-        NEW_TAB_LEFT_GAP, STATUS_BUBBLE_CORNER_RADIUS, STATUS_BUBBLE_HEIGHT,
+        NEW_TAB_LEFT_GAP, NEW_TAB_SLOT_HEIGHT, STATUS_BUBBLE_CORNER_RADIUS, STATUS_BUBBLE_HEIGHT,
         STATUS_BUBBLE_HORIZONTAL_PADDING, STATUS_BUBBLE_MARGIN_X, STATUS_BUBBLE_MARGIN_Y,
         STATUS_BUBBLE_MAX_WIDTH, STATUS_BUBBLE_SHADOW_ALPHA, STATUS_TEXT_SIZE,
-        TAB_CLOSE_BUTTON_RADIUS, TAB_CLOSE_ICON_SIZE, TAB_CONTENT_HEIGHT, TAB_CORNER_RADIUS,
-        TAB_HEIGHT, TAB_ICON_SIZE, TAB_ICON_TITLE_GAP, TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y,
-        TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP, TAB_TITLE_MIN_WIDTH,
-        TAB_TITLE_TEXT_SIZE, TAB_WIDTH, TOOLBAR_BUTTON_RADIUS, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT,
-        TOOLBAR_ICON_SIZE, TOOLBAR_ITEM_SPACING, TOOLBAR_MENU_ICON_GAP, TOOLBAR_MENU_ICON_STROKE,
-        TOOLBAR_MENU_ICON_WIDTH, TOOLBAR_PANEL_MARGIN_X, TOOLBAR_PANEL_MARGIN_Y,
-        TOOLBAR_PRIVACY_ICON_SIZE, TOOLBAR_SEPARATOR_HEIGHT, egui_chrome_owns_position,
+        TAB_CLOSE_BUTTON_RADIUS, TAB_CLOSE_ICON_SIZE, TAB_CONCEPT_WINDOW_WIDTH, TAB_CONTENT_ALIGN,
+        TAB_CONTENT_HEIGHT, TAB_CORNER_RADIUS, TAB_HEIGHT, TAB_ICON_SIZE, TAB_ICON_TITLE_GAP,
+        TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_MIN_WIDTH, TAB_OPENING_PREFERRED_WIDTH,
+        TAB_OPENING_WINDOW_WIDTH, TAB_STRIP_CONTENT_ALIGN, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP,
+        TAB_TITLE_MIN_WIDTH, TAB_TITLE_TEXT_SIZE, TAB_WIDTH, TOOLBAR_BUTTON_RADIUS,
+        TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE, TOOLBAR_ITEM_SPACING,
+        TOOLBAR_MENU_ICON_GAP, TOOLBAR_MENU_ICON_OFFSET_X, TOOLBAR_MENU_ICON_STROKE,
+        TOOLBAR_MENU_ICON_WIDTH, TOOLBAR_NAV_BACK_ICON_OFFSET_X, TOOLBAR_NAV_FORWARD_ICON_OFFSET_X,
+        TOOLBAR_NAV_ICON_SIZE, TOOLBAR_NAV_REFRESH_ICON_OFFSET_X, TOOLBAR_PANEL_MARGIN_X,
+        TOOLBAR_PANEL_MARGIN_Y, TOOLBAR_PRIVACY_ICON_SIZE, TOOLBAR_SEPARATOR_HEIGHT,
+        TOOLBAR_SEPARATOR_LEADING_GAP, TOOLBAR_SEPARATOR_TRAILING_GAP, egui_chrome_owns_position,
+    };
+    use super::{
+        ADDRESS_BOOKMARK_BUTTON_RADIUS, ADDRESS_BOOKMARK_BUTTON_SIZE, ADDRESS_BOOKMARK_ICON_SIZE,
+        ADDRESS_BOOKMARK_RESERVED_WIDTH, ADDRESS_CORNER_RADIUS, ADDRESS_ICON_GAP,
+        ADDRESS_INNER_MARGIN_X, ADDRESS_LEADING_GAP, ADDRESS_MIN_WIDTH, ADDRESS_SECURITY_ICON_SIZE,
+        ADDRESS_SHADOW_ALPHA, ADDRESS_SHADOW_BLUR, ADDRESS_SHADOW_OFFSET, ADDRESS_SHADOW_SPREAD,
+        ADDRESS_SLATE_SECURITY_ICON_OFFSET_X, ADDRESS_SLATE_SECURITY_ICON_SIZE,
+        ADDRESS_TEXT_HEIGHT, ADDRESS_TRAILING_CONTROLS_WIDTH, ADDRESS_TRAILING_GAP,
+        AddressSecurityIcon, Gui, HOME_METRIC_CARD_MIN_WIDTH, HomeContentLayout, SlateIconCache,
+        active_tab_background_color, active_tab_content_divider_points, active_tab_outline_color,
+        active_tab_separator_join, address_background_color, address_bookmark_icon_color,
+        address_bookmark_icon_rect, address_border_color, address_outer_width,
+        address_passive_icon_color, address_security_icon_for_location,
+        address_security_raster_color, address_slate_security_icon_rect,
+        address_slate_security_visible_rect, app_title_background_color, app_title_text_color,
+        chrome_panel_background_color, chrome_vertical_separator_color, concept_chrome_geometry,
+        concept_footer_controls_geometry, concept_screenshot_home_view_size,
+        concept_toolbar_controls_geometry, default_opening_home_view_height,
+        default_opening_home_view_size, footer_panel_margin, footer_protection_icon_rect,
+        footer_protection_status_width, footer_settings_icon_color, footer_settings_icon_rect,
+        footer_status_text_color, footer_sync_dot_color, footer_sync_dot_radius,
+        footer_sync_status_width, footer_top_separator_color, footer_vertical_separator_color,
+        home_content_left_space, home_content_stack_height, home_hero_icon_visible_rect,
+        home_hero_left_space, home_metric_badge_width, home_metric_card_background_color,
+        home_metric_card_content_height, home_metric_card_content_width, home_metric_detail_color,
+        home_metrics_layout, home_metrics_rendered_height, home_metrics_row_width,
+        home_search_background_color, home_search_border_color, home_search_icon_color,
+        home_search_icon_rect, home_search_icon_visible_rect, home_search_rendered_height,
+        home_search_width, home_top_space, home_view_background_color,
+        inactive_tab_background_color, inactive_tab_hover_background_color,
+        inactive_tab_outline_color, inactive_tab_outline_points, new_tab_icon_color,
+        rail_button_fill, rail_icon_color, rail_selected_button_fill, slate_theme,
+        status_bubble_label, status_bubble_width, tab_close_button_rect, tab_close_icon_color,
+        tab_close_raster, tab_content_width, tab_corner_radius, tab_icon_color, tab_icon_slot_rect,
+        tab_strip_background_color, tab_strip_separator_color, tab_title_color, tab_title_left,
+        tab_title_width, tab_width_for_strip, toolbar_address_width, toolbar_background_color,
+        toolbar_menu_icon_center, toolbar_menu_icon_color, toolbar_menu_icon_rect,
+        toolbar_navigation_icon_color, toolbar_navigation_icon_offset_x,
+        toolbar_navigation_icon_rect, toolbar_navigation_raster,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -2253,6 +3264,20 @@ mod tests {
             && inner.min.y >= outer.min.y - LAYOUT_EPSILON
             && inner.max.x <= outer.max.x + LAYOUT_EPSILON
             && inner.max.y <= outer.max.y + LAYOUT_EPSILON
+    }
+
+    fn assert_rect_close(actual: egui::Rect, expected: egui::Rect) {
+        assert!(
+            (actual.min.x - expected.min.x).abs() < LAYOUT_EPSILON
+                && (actual.min.y - expected.min.y).abs() < LAYOUT_EPSILON
+                && (actual.max.x - expected.max.x).abs() < LAYOUT_EPSILON
+                && (actual.max.y - expected.max.y).abs() < LAYOUT_EPSILON,
+            "expected {actual:?} to match {expected:?}"
+        );
+    }
+
+    fn points_are_close(actual: egui::Pos2, expected: egui::Pos2) -> bool {
+        (actual.x - expected.x).abs() < 0.01 && (actual.y - expected.y).abs() < 0.01
     }
 
     fn render_home_content_layout(viewport_size: egui::Vec2) -> HomeContentLayout {
@@ -2320,45 +3345,84 @@ mod tests {
 
     #[test]
     fn static_chrome_dimensions_match_concept_offsets() {
+        assert_eq!(CONCEPT_SCREENSHOT_WIDTH, 1672.0);
+        assert_eq!(CONCEPT_SCREENSHOT_HEIGHT, 941.0);
         assert_eq!(APP_RAIL_WIDTH, 104.0);
-        assert_eq!(RAIL_ICON_SIZE, 34.0);
+        assert_eq!(RAIL_ICON_SIZE, 40.0);
         assert_eq!(RAIL_BUTTON_SIZE, 80.0);
         assert_eq!(RAIL_BUTTON_RADIUS, 8);
         assert_eq!(RAIL_PANEL_MARGIN_X, 12);
         assert_eq!(RAIL_PANEL_MARGIN_Y, 0);
         assert_eq!(RAIL_TOP_SPACE, 22.0);
-        assert_eq!(RAIL_ITEM_GAP, 16.0);
+        assert_eq!(RAIL_ITEM_GAP, 12.0);
         assert_eq!(TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT, 162.0);
-        assert_eq!(tab_strip_background_color(), slate_theme::BG);
+        assert_eq!(tab_strip_background_color(), slate_theme::TITLE_SURFACE);
+        assert_eq!(tab_strip_separator_color(), slate_theme::FIELD_BORDER);
+        assert_eq!(chrome_panel_background_color(), slate_theme::CHROME_BG);
+        assert_eq!(toolbar_background_color(), slate_theme::FIELD_SURFACE);
         assert_eq!(TAB_STRIP_CONTENT_ALIGN, egui::Align::Max);
+        assert_eq!(TAB_CONTENT_ALIGN, egui::Align::Center);
+        assert_eq!(ACTIVE_TAB_BOTTOM_JOIN_HEIGHT, 4.0);
+        assert_eq!(ACTIVE_TAB_BOTTOM_JOIN_INSET_X, 0.0);
+        assert_eq!(ACTIVE_TAB_FILE_CORNER_STEPS, 5);
         assert_eq!(FOOTER_HEIGHT, 80.0);
         assert_eq!(FOOTER_PANEL_MARGIN_X, 0);
-        assert_eq!(FOOTER_PANEL_MARGIN_Y, 8);
+        assert_eq!(FOOTER_PANEL_MARGIN_TOP, 6);
+        assert_eq!(FOOTER_PANEL_MARGIN_BOTTOM, 10);
+        let footer_margin = footer_panel_margin();
+        assert_eq!(footer_margin.left, 0);
+        assert_eq!(footer_margin.right, 0);
+        assert_eq!(footer_margin.top, 6);
+        assert_eq!(footer_margin.bottom, 10);
         assert_eq!(FOOTER_LEFT_PADDING, 12.0);
         assert_eq!(FOOTER_RIGHT_PADDING, 38.0);
         assert_eq!(FOOTER_ITEM_SPACING, 30.0);
         assert_eq!(FOOTER_ICON_SIZE, 40.0);
+        assert_eq!(FOOTER_PROTECTION_ICON_OFFSET_X, 1.5);
         assert_eq!(FOOTER_PROTECTION_ICON_LABEL_GAP, 16.0);
         assert_eq!(FOOTER_PROTECTION_LABEL_WIDTH, 200.0);
         assert_eq!(FOOTER_PROTECTION_STATUS_HEIGHT, 40.0);
         assert_eq!(footer_protection_status_width(), 256.0);
         assert_eq!(FOOTER_TEXT_SIZE, 16.0);
         assert_eq!(FOOTER_SEPARATOR_HEIGHT, 28.0);
-        assert_eq!(FOOTER_SYNC_DOT_SIZE, 12.0);
-        assert_eq!(footer_sync_dot_radius(), 6.0);
+        assert_eq!(
+            chrome_vertical_separator_color(),
+            egui::Color32::from_rgb(225, 225, 225)
+        );
+        assert_eq!(
+            footer_vertical_separator_color(),
+            egui::Color32::from_rgb(220, 219, 218)
+        );
+        assert_eq!(
+            footer_top_separator_color(),
+            egui::Color32::from_rgb(241, 240, 239)
+        );
+        assert_eq!(FOOTER_SYNC_SEPARATOR_EXTRA_GAP, 6.0);
+        assert_eq!(FOOTER_SYNC_DOT_SIZE, 14.0);
+        assert_eq!(
+            footer_sync_dot_color(),
+            egui::Color32::from_rgb(11, 126, 121)
+        );
+        assert_eq!(footer_sync_dot_radius(), 7.0);
         assert_eq!(FOOTER_SYNC_DOT_LABEL_GAP, 10.0);
         assert_eq!(FOOTER_SYNC_LABEL_WIDTH, 64.0);
         assert_eq!(FOOTER_SYNC_STATUS_HEIGHT, 40.0);
-        assert_eq!(footer_sync_status_width(), 86.0);
-        assert_eq!(footer_status_text_color(), slate_theme::MUTED);
+        assert_eq!(footer_sync_status_width(), 88.0);
+        assert_eq!(
+            footer_status_text_color(),
+            egui::Color32::from_rgb(57, 58, 55)
+        );
         assert_eq!(FOOTER_SETTINGS_BUTTON_SIZE, 40.0);
         assert_eq!(FOOTER_SETTINGS_BUTTON_RADIUS, 8);
-        assert_eq!(FOOTER_SETTINGS_ICON_SIZE, 28.0);
-        assert_eq!(footer_settings_icon_color(), slate_theme::MUTED);
+        assert_eq!(FOOTER_SETTINGS_ICON_SIZE, 24.0);
+        assert_eq!(
+            footer_settings_icon_color(),
+            egui::Color32::from_rgb(72, 72, 72)
+        );
         assert_eq!(FOOTER_SETTINGS_GEAR_RADIUS, 9.0);
         assert_eq!(FOOTER_SETTINGS_GEAR_CENTER_RADIUS, 3.5);
-        assert_eq!(FOOTER_SETTINGS_GEAR_TOOTH_INNER_RADIUS, 12.0);
-        assert_eq!(FOOTER_SETTINGS_GEAR_TOOTH_OUTER_RADIUS, 14.0);
+        assert_eq!(FOOTER_SETTINGS_GEAR_TOOTH_INNER_RADIUS, 10.0);
+        assert_eq!(FOOTER_SETTINGS_GEAR_TOOTH_OUTER_RADIUS, 12.0);
         assert_eq!(FOOTER_SETTINGS_GEAR_STROKE, 2.0);
         assert_eq!(ADDRESS_HEIGHT, 52.0);
         assert_eq!(ADDRESS_INPUT_TEXT_SIZE, 20.0);
@@ -2368,8 +3432,13 @@ mod tests {
         assert_eq!(APP_TITLE_LEFT_PADDING, 31.0);
         assert_eq!(APP_TITLE_TEXT_SIZE, 28.0);
         assert_eq!(app_title_background_color(), slate_theme::TITLE_SURFACE);
+        assert_eq!(app_title_text_color(), egui::Color32::from_rgb(29, 29, 26));
         assert_eq!(TAB_WIDTH, 308.0);
-        assert_eq!(tab_content_width(), 276.0);
+        assert_eq!(TAB_MIN_WIDTH, 196.0);
+        assert_eq!(TAB_OPENING_PREFERRED_WIDTH, 244.0);
+        assert_eq!(TAB_OPENING_WINDOW_WIDTH, 1024.0);
+        assert_eq!(TAB_CONCEPT_WINDOW_WIDTH, 1672.0);
+        assert_eq!(tab_content_width(TAB_WIDTH), 276.0);
         assert_eq!(TAB_HEIGHT, 60.0);
         assert_eq!(TAB_CORNER_RADIUS, 8);
         assert_eq!(
@@ -2382,13 +3451,21 @@ mod tests {
         assert_eq!(TAB_TITLE_TEXT_SIZE, 20.0);
         assert_eq!(TAB_ICON_TITLE_GAP, 12.0);
         assert_eq!(TAB_TITLE_CLOSE_GAP, 8.0);
-        assert_eq!(TAB_CLOSE_BUTTON_SIZE, 28.0);
+        assert_eq!(active_tab_background_color(), slate_theme::SURFACE);
+        assert_eq!(active_tab_outline_color(), slate_theme::BORDER);
+        assert_eq!(inactive_tab_background_color(), slate_theme::PANEL);
+        assert_eq!(
+            inactive_tab_hover_background_color(),
+            slate_theme::PANEL_HOVER
+        );
+        assert_eq!(TAB_CLOSE_BUTTON_SIZE, 24.0);
         assert_eq!(TAB_CLOSE_BUTTON_RADIUS, 6);
-        assert_eq!(TAB_CLOSE_ICON_SIZE, 16.0);
-        assert_eq!(NEW_TAB_LEFT_GAP, 18.0);
+        assert_eq!(TAB_CLOSE_ICON_SIZE, 12.0);
+        assert_eq!(NEW_TAB_LEFT_GAP, 9.0);
+        assert_eq!(NEW_TAB_SLOT_HEIGHT, TAB_HEIGHT);
         assert_eq!(NEW_TAB_BUTTON_SIZE, 44.0);
         assert_eq!(NEW_TAB_BUTTON_RADIUS, 8);
-        assert_eq!(NEW_TAB_ICON_SIZE, 24.0);
+        assert_eq!(NEW_TAB_ICON_SIZE, 17.0);
         assert_eq!(NEW_TAB_ICON_STROKE, 2.0);
         assert_eq!(new_tab_icon_color(), slate_theme::TEXT);
         assert_eq!(HOME_SEARCH_MIN_WIDTH, 280.0);
@@ -2400,47 +3477,74 @@ mod tests {
         assert_eq!(home_search_rendered_height(), 80.0);
         assert_eq!(HOME_SEARCH_TEXT_HEIGHT, 34.0);
         assert_eq!(HOME_SEARCH_INPUT_TEXT_SIZE, 20.0);
-        assert_eq!(HOME_SEARCH_INNER_MARGIN_X, 32);
-        assert_eq!(HOME_SEARCH_ICON_SIZE, 24.0);
-        assert_eq!(HOME_SEARCH_ICON_GAP, 30.0);
+        assert_eq!(HOME_SEARCH_INNER_MARGIN_X, 28);
+        assert_eq!(HOME_SEARCH_ICON_SIZE, 40.0);
+        assert_eq!(HOME_SEARCH_ICON_OFFSET_Y, -3.0);
+        assert_eq!(
+            home_search_icon_color(),
+            egui::Color32::from_rgb(88, 87, 89)
+        );
+        assert_eq!(HOME_SEARCH_ICON_GAP, 24.0);
         assert_eq!(HOME_SEARCH_CORNER_RADIUS, 8);
+        assert_eq!(home_search_background_color(), slate_theme::FIELD_SURFACE);
+        assert_eq!(home_search_border_color(), slate_theme::BORDER);
         assert_eq!(TOOLBAR_PANEL_MARGIN_X, 18);
         assert_eq!(TOOLBAR_PANEL_MARGIN_Y, 10);
         assert_eq!(TOOLBAR_ITEM_SPACING, 20.0);
         assert_eq!(TOOLBAR_BUTTON_SIZE, 40.0);
         assert_eq!(TOOLBAR_BUTTON_RADIUS, 8);
         assert_eq!(TOOLBAR_ICON_SIZE, 24.0);
-        assert_eq!(TOOLBAR_PRIVACY_ICON_SIZE, 24.0);
-        assert_eq!(TOOLBAR_MENU_ICON_WIDTH, 24.0);
-        assert_eq!(TOOLBAR_MENU_ICON_GAP, 7.0);
+        assert_eq!(TOOLBAR_NAV_ICON_SIZE, 28.0);
+        assert_eq!(TOOLBAR_NAV_BACK_ICON_OFFSET_X, 8.0);
+        assert_eq!(TOOLBAR_NAV_FORWARD_ICON_OFFSET_X, 7.0);
+        assert_eq!(TOOLBAR_NAV_REFRESH_ICON_OFFSET_X, 6.0);
+        assert_eq!(TOOLBAR_PRIVACY_ICON_SIZE, 40.0);
+        assert_eq!(TOOLBAR_MENU_ICON_WIDTH, 20.0);
+        assert_eq!(TOOLBAR_MENU_ICON_OFFSET_X, -3.0);
+        assert_eq!(TOOLBAR_MENU_ICON_GAP, 8.5);
         assert_eq!(TOOLBAR_MENU_ICON_STROKE, 2.0);
         assert_eq!(toolbar_menu_icon_color(false), slate_theme::TEXT);
         assert_eq!(toolbar_menu_icon_color(true), slate_theme::TEXT);
-        assert_eq!(TOOLBAR_SEPARATOR_HEIGHT, 36.0);
-        assert_eq!(TAB_ICON_SIZE, 24.0);
-        assert_eq!(ADDRESS_LEADING_GAP, 24.0);
+        assert_eq!(TOOLBAR_SEPARATOR_HEIGHT, 28.0);
+        assert_eq!(
+            chrome_vertical_separator_color(),
+            egui::Color32::from_rgb(225, 225, 225)
+        );
+        assert_eq!(TOOLBAR_SEPARATOR_LEADING_GAP, 18.0);
+        assert_eq!(TOOLBAR_SEPARATOR_TRAILING_GAP, 22.0);
+        assert_eq!(TAB_ICON_SIZE, 32.0);
+        assert_eq!(ADDRESS_LEADING_GAP, 20.0);
+        assert_eq!(address_background_color(), slate_theme::FIELD_SURFACE);
+        assert_eq!(address_border_color(), slate_theme::FIELD_BORDER);
         assert_eq!(ADDRESS_INNER_MARGIN_X, 18);
         assert_eq!(ADDRESS_SHADOW_OFFSET, [0, 1]);
         assert_eq!(ADDRESS_SHADOW_BLUR, 6);
         assert_eq!(ADDRESS_SHADOW_SPREAD, 0);
         assert_eq!(ADDRESS_SHADOW_ALPHA, 6);
         assert_eq!(ADDRESS_SECURITY_ICON_SIZE, 24.0);
-        assert_eq!(ADDRESS_ICON_GAP, 12.0);
-        assert_eq!(ADDRESS_BOOKMARK_ICON_SIZE, 24.0);
-        assert_eq!(address_bookmark_icon_color(), slate_theme::MUTED);
+        assert_eq!(ADDRESS_SLATE_SECURITY_ICON_SIZE, 34.0);
+        assert_eq!(ADDRESS_SLATE_SECURITY_ICON_OFFSET_X, -2.0);
+        assert_eq!(ADDRESS_ICON_GAP, 14.0);
+        assert_eq!(ADDRESS_BOOKMARK_ICON_SIZE, 22.0);
+        assert_eq!(
+            address_passive_icon_color(),
+            egui::Color32::from_rgb(84, 84, 84)
+        );
+        assert_eq!(address_bookmark_icon_color(), address_passive_icon_color());
         assert_eq!(ADDRESS_BOOKMARK_BUTTON_SIZE, 28.0);
         assert_eq!(ADDRESS_BOOKMARK_BUTTON_RADIUS, 6);
-        assert_eq!(ADDRESS_BOOKMARK_RESERVED_WIDTH, 36.0);
-        assert_eq!(ADDRESS_TRAILING_CONTROLS_WIDTH, 180.0);
-        assert_eq!(ADDRESS_TRAILING_GAP, 12.0);
+        assert_eq!(ADDRESS_BOOKMARK_RESERVED_WIDTH, 28.0);
+        assert_eq!(ADDRESS_TRAILING_CONTROLS_WIDTH, 188.0);
+        assert_eq!(ADDRESS_TRAILING_GAP, 6.0);
         assert_eq!(HOME_TOP_SPACE_FACTOR, 0.18);
         assert_eq!(HOME_TOP_SPACE_MIN, 48.0);
         assert_eq!(HOME_TOP_SPACE_MAX, 132.0);
         assert_eq!(HOME_BOTTOM_MIN_GAP, 16.0);
-        assert_eq!(HOME_HERO_SIZE, 64.0);
-        assert_eq!(HOME_HERO_TO_SEARCH_GAP, 52.0);
-        assert_eq!(HOME_SEARCH_TO_METRICS_GAP, 62.0);
-        assert_eq!(home_view_background_color(), slate_theme::BG);
+        assert_eq!(HOME_HERO_SIZE, 78.0);
+        assert_eq!(HOME_HERO_TO_SEARCH_GAP, 41.0);
+        assert_eq!(HOME_SEARCH_TO_METRICS_GAP, 57.0);
+        assert_eq!(home_view_background_color(), slate_theme::HOME_BG);
+        assert_eq!(home_metric_card_background_color(), slate_theme::HOME_BG);
         assert_eq!(HOME_PANEL_SHADOW_OFFSET, [0, 2]);
         assert_eq!(HOME_PANEL_SHADOW_BLUR, 12);
         assert_eq!(HOME_PANEL_SHADOW_SPREAD, 0);
@@ -2448,20 +3552,30 @@ mod tests {
         assert_eq!(HOME_METRIC_CARD_HEIGHT, 172.0);
         assert_eq!(HOME_METRIC_GRID_EXTRA_HEIGHT, 25.0);
         assert_eq!(home_metrics_rendered_height(), 197.0);
+        assert_eq!(HOME_METRIC_CARD_MAX_WIDTH, 194.0);
+        assert_eq!(HOME_METRIC_CARD_GAP, 33.0);
         assert_eq!(HOME_METRIC_CARD_INNER_MARGIN_X, 16);
         assert_eq!(HOME_METRIC_CARD_INNER_MARGIN_Y, 36);
-        assert_eq!(HOME_METRIC_ICON_SIZE, 48.0);
+        assert_eq!(HOME_METRIC_ICON_SIZE, 52.0);
         assert_eq!(HOME_METRIC_ICON_LABEL_GAP, 16.0);
         assert_eq!(HOME_METRIC_LABEL_TEXT_SIZE, 16.0);
         assert_eq!(HOME_METRIC_DETAIL_TEXT_SIZE, 13.0);
+        assert_eq!(
+            home_metric_detail_color(),
+            egui::Color32::from_rgb(145, 144, 144)
+        );
         assert_eq!(HOME_METRIC_DETAIL_GAP, 4.0);
         assert_eq!(HOME_METRIC_BADGE_TEXT_SIZE, 13.0);
+        assert_eq!(HOME_METRIC_BADGE_PRIMARY_DIGIT_FACTOR, 0.58);
+        assert_eq!(HOME_METRIC_BADGE_EXTRA_DIGIT_FACTOR, 0.31);
         assert_eq!(HOME_METRIC_BADGE_LABEL_GAP, 8.0);
         assert_eq!(HOME_METRIC_BADGE_MARGIN_X, 8);
         assert_eq!(HOME_METRIC_BADGE_MARGIN_Y, 3);
         assert_eq!(HOME_METRIC_BADGE_CORNER_RADIUS, 10);
+        assert_eq!(HOME_CONTENT_OPTICAL_OFFSET_X, -13.0);
+        assert_eq!(HOME_HERO_OPTICAL_OFFSET_X, -29.0);
         assert!((home_metric_badge_width("23") - 31.08).abs() < 0.001);
-        assert!((home_metric_badge_width("184") - 38.62).abs() < 0.001);
+        assert!((home_metric_badge_width("184") - 35.11).abs() < 0.001);
         assert_eq!(STATUS_BUBBLE_MARGIN_X, 14.0);
         assert_eq!(STATUS_BUBBLE_MARGIN_Y, 12.0);
         assert_eq!(STATUS_BUBBLE_HEIGHT, 32.0);
@@ -2473,8 +3587,246 @@ mod tests {
     }
 
     #[test]
+    fn full_chrome_geometry_tracks_concept_screenshot_bands() {
+        let geometry = concept_chrome_geometry();
+
+        assert_rect_close(
+            geometry.tab_strip_rect,
+            egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(CONCEPT_SCREENSHOT_WIDTH, TAB_STRIP_HEIGHT),
+            ),
+        );
+        assert_rect_close(
+            geometry.app_title_rect,
+            egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(APP_TITLE_WIDTH, APP_TITLE_HEIGHT),
+            ),
+        );
+        assert_rect_close(
+            geometry.app_rail_rect,
+            egui::Rect::from_min_size(
+                egui::pos2(0.0, TAB_STRIP_HEIGHT),
+                egui::vec2(APP_RAIL_WIDTH, CONCEPT_SCREENSHOT_HEIGHT - TAB_STRIP_HEIGHT),
+            ),
+        );
+        assert_rect_close(
+            geometry.toolbar_rect,
+            egui::Rect::from_min_size(
+                egui::pos2(APP_RAIL_WIDTH, TAB_STRIP_HEIGHT),
+                egui::vec2(CONCEPT_SCREENSHOT_WIDTH - APP_RAIL_WIDTH, TOOLBAR_HEIGHT),
+            ),
+        );
+        assert_rect_close(
+            geometry.webview_rect,
+            egui::Rect::from_min_size(
+                egui::pos2(APP_RAIL_WIDTH, TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT),
+                egui::vec2(
+                    CONCEPT_SCREENSHOT_WIDTH - APP_RAIL_WIDTH,
+                    CONCEPT_SCREENSHOT_HEIGHT - TAB_STRIP_HEIGHT - TOOLBAR_HEIGHT - FOOTER_HEIGHT,
+                ),
+            ),
+        );
+        assert_rect_close(
+            geometry.footer_rect,
+            egui::Rect::from_min_size(
+                egui::pos2(APP_RAIL_WIDTH, CONCEPT_SCREENSHOT_HEIGHT - FOOTER_HEIGHT),
+                egui::vec2(CONCEPT_SCREENSHOT_WIDTH - APP_RAIL_WIDTH, FOOTER_HEIGHT),
+            ),
+        );
+        assert_eq!(
+            geometry.webview_rect.size(),
+            concept_screenshot_home_view_size()
+        );
+        assert_eq!(
+            geometry.toolbar_content_rect.min,
+            egui::pos2(
+                APP_RAIL_WIDTH + f32::from(TOOLBAR_PANEL_MARGIN_X),
+                TAB_STRIP_HEIGHT + f32::from(TOOLBAR_PANEL_MARGIN_Y)
+            )
+        );
+    }
+
+    #[test]
+    fn concept_rail_stack_tracks_reference_icon_spacing() {
+        let geometry = concept_chrome_geometry();
+
+        assert_rect_close(
+            geometry.rail_button_rects[0],
+            egui::Rect::from_min_size(
+                egui::pos2(12.0, 100.0),
+                egui::vec2(RAIL_BUTTON_SIZE, RAIL_BUTTON_SIZE),
+            ),
+        );
+        assert_eq!(
+            geometry.rail_button_rects[1].center().y - geometry.rail_button_rects[0].center().y,
+            92.0
+        );
+        assert_eq!(
+            geometry.rail_button_rects[3].center().y - geometry.rail_button_rects[0].center().y,
+            276.0
+        );
+        assert_eq!(RAIL_ICON_SIZE, 40.0);
+    }
+
+    #[test]
+    fn concept_tab_row_places_new_tab_control_like_reference() {
+        let geometry = concept_chrome_geometry();
+
+        assert_eq!(geometry.tab_rects[0].left(), APP_TITLE_WIDTH);
+        assert_eq!(geometry.tab_rects[0].top(), TAB_STRIP_HEIGHT - TAB_HEIGHT);
+        assert_eq!(geometry.tab_rects[0].width(), TAB_WIDTH);
+        assert_eq!(geometry.tab_rects[1].left(), APP_TITLE_WIDTH + TAB_WIDTH);
+        assert_eq!(geometry.tab_rects[2].right(), 1084.0);
+        assert_eq!(geometry.new_tab_slot_rect.left(), 1093.0);
+        assert_eq!(
+            geometry.new_tab_button_rect.center(),
+            egui::pos2(1115.0, 48.0)
+        );
+        assert_eq!(NEW_TAB_ICON_SIZE, 17.0);
+    }
+
+    #[test]
+    fn concept_toolbar_controls_track_reference_positions() {
+        let geometry = concept_toolbar_controls_geometry();
+
+        assert_rect_close(
+            geometry.nav_button_rects[0],
+            egui::Rect::from_min_size(
+                egui::pos2(122.0, 100.0),
+                egui::Vec2::splat(TOOLBAR_BUTTON_SIZE),
+            ),
+        );
+        assert_eq!(
+            geometry.nav_button_rects[1].center(),
+            egui::pos2(202.0, 120.0)
+        );
+        assert_eq!(
+            geometry.nav_button_rects[2].center(),
+            egui::pos2(262.0, 120.0)
+        );
+        assert_eq!(
+            geometry.nav_icon_rects[0].size(),
+            egui::Vec2::splat(TOOLBAR_NAV_ICON_SIZE)
+        );
+        assert_rect_close(
+            geometry.address_rect,
+            egui::Rect::from_min_size(egui::pos2(322.0, 94.0), egui::vec2(1180.0, ADDRESS_HEIGHT)),
+        );
+        assert_rect_close(
+            geometry.address_security_slot_rect,
+            egui::Rect::from_min_size(
+                egui::pos2(340.0, 108.0),
+                egui::Vec2::splat(ADDRESS_SECURITY_ICON_SIZE),
+            ),
+        );
+        assert_eq!(
+            address_slate_security_icon_rect(geometry.address_security_slot_rect),
+            geometry.address_slate_security_icon_rect
+        );
+        let address_security_visible =
+            address_slate_security_visible_rect(geometry.address_slate_security_icon_rect);
+        assert!(
+            (341.0..=343.0).contains(&address_security_visible.left()),
+            "expected address shield to start near screenshot x=342: {:?}",
+            geometry.address_slate_security_icon_rect
+        );
+        assert!(
+            (108.0..=110.0).contains(&address_security_visible.top()),
+            "expected address shield to start near screenshot y=109: {:?}",
+            geometry.address_slate_security_icon_rect
+        );
+        assert!(
+            (359.0..=361.0).contains(&address_security_visible.right()),
+            "expected address shield to end near screenshot x=360: {:?}",
+            geometry.address_slate_security_icon_rect
+        );
+        assert!(
+            (130.0..=132.0).contains(&address_security_visible.bottom()),
+            "expected address shield to end near screenshot y=131: {:?}",
+            geometry.address_slate_security_icon_rect
+        );
+        assert_rect_close(
+            geometry.address_text_rect,
+            egui::Rect::from_min_size(
+                egui::pos2(378.0, 103.0),
+                egui::vec2(1078.0, ADDRESS_TEXT_HEIGHT),
+            ),
+        );
+        assert_eq!(
+            geometry.address_bookmark_button_rect.center(),
+            egui::pos2(1470.0, 120.0)
+        );
+        assert_eq!(
+            address_bookmark_icon_rect(geometry.address_bookmark_button_rect),
+            geometry.address_bookmark_icon_rect
+        );
+        assert_eq!(geometry.address_bookmark_icon_rect.left(), 1459.0);
+        assert_eq!(geometry.address_bookmark_icon_rect.right(), 1481.0);
+        assert_eq!(
+            geometry.privacy_button_rect.center(),
+            egui::pos2(1548.0, 120.0)
+        );
+        assert_eq!(geometry.separator_rect.center().x, 1586.5);
+        assert_eq!(geometry.separator_rect.top(), 106.0);
+        assert_eq!(geometry.separator_rect.bottom(), 134.0);
+        assert_eq!(
+            geometry.menu_button_rect.center(),
+            egui::pos2(1629.0, 120.0)
+        );
+    }
+
+    #[test]
+    fn concept_footer_controls_track_reference_positions() {
+        let geometry = concept_footer_controls_geometry();
+        let projected_shield_left =
+            geometry.protection_icon_rect.left() + 6.0 / 28.0 * FOOTER_ICON_SIZE;
+        let projected_shield_right =
+            geometry.protection_icon_rect.left() + 22.0 / 28.0 * FOOTER_ICON_SIZE;
+
+        assert_rect_close(
+            geometry.protection_status_rect,
+            egui::Rect::from_min_size(
+                egui::pos2(116.0, 879.0),
+                egui::vec2(
+                    footer_protection_status_width(),
+                    FOOTER_PROTECTION_STATUS_HEIGHT,
+                ),
+            ),
+        );
+        assert_eq!(
+            footer_protection_icon_rect(geometry.protection_icon_slot_rect),
+            geometry.protection_icon_rect
+        );
+        assert!(
+            (126.0..=127.0).contains(&projected_shield_left),
+            "expected footer shield to start near screenshot x=127: {:?}",
+            geometry.protection_icon_rect
+        );
+        assert!(
+            (148.0..=149.0).contains(&projected_shield_right),
+            "expected footer shield to end near screenshot x=148: {:?}",
+            geometry.protection_icon_rect
+        );
+        assert_eq!(geometry.protection_label_pos.x, 172.0);
+        assert_eq!(geometry.protection_label_pos.y, 899.0);
+        assert_eq!(geometry.sync_status_rect.left(), 1439.0);
+        assert_eq!(geometry.sync_dot_center.x, 1446.0);
+        assert_eq!(geometry.sync_dot_center.y, 899.0);
+        assert_eq!(geometry.separator_rect.center().x, 1563.5);
+        assert_eq!(geometry.separator_rect.center().y, 899.0);
+        assert_eq!(
+            geometry.settings_button_rect.center(),
+            egui::pos2(1614.0, 899.0)
+        );
+        assert_eq!(geometry.settings_icon_rect.width(), 26.0);
+    }
+
+    #[test]
     fn wide_toolbar_address_width_leaves_room_for_trailing_controls() {
-        assert_eq!(toolbar_address_width(1348.0), 1168.0);
+        assert_eq!(toolbar_address_width(1332.0), 1144.0);
+        assert_eq!(address_outer_width(toolbar_address_width(1332.0)), 1180.0);
     }
 
     #[test]
@@ -2503,7 +3855,7 @@ mod tests {
             address_security_icon_for_location("slate://home"),
             AddressSecurityIcon::Slate {
                 icon: slate_theme::SlateIcon::TopShield,
-                color: slate_theme::MUTED,
+                color: address_passive_icon_color(),
             }
         );
     }
@@ -2540,15 +3892,15 @@ mod tests {
     fn address_security_raster_colors_match_chrome_state() {
         assert_eq!(
             address_security_raster_color(slate_theme::SlateRaster::PageInfoSecure),
-            slate_theme::MUTED
+            address_passive_icon_color()
         );
         assert_eq!(
             address_security_raster_color(slate_theme::SlateRaster::PageInfoLocal),
-            slate_theme::MUTED
+            address_passive_icon_color()
         );
         assert_eq!(
             address_security_raster_color(slate_theme::SlateRaster::PageInfoInternal),
-            slate_theme::MUTED
+            address_passive_icon_color()
         );
         assert_eq!(
             address_security_raster_color(slate_theme::SlateRaster::PageInfoInsecure),
@@ -2580,33 +3932,388 @@ mod tests {
     }
 
     #[test]
+    fn home_content_left_space_applies_concept_optical_offset() {
+        let viewport_width = concept_screenshot_home_view_size().x;
+        let search_width = home_search_width(viewport_width);
+
+        assert!((home_content_left_space(viewport_width, search_width) - 331.96).abs() < 0.01);
+        assert!((home_hero_left_space(viewport_width, HOME_HERO_SIZE) - 716.0).abs() < 0.01);
+        assert_eq!(home_content_left_space(220.0, 260.0), 0.0);
+        assert_eq!(home_hero_left_space(220.0, 260.0), 0.0);
+        assert_eq!(home_content_left_space(100.0, 100.0), 0.0);
+    }
+
+    #[test]
+    fn home_search_icon_rect_tracks_reference_glyph_offset() {
+        let slot_rect =
+            egui::Rect::from_min_size(egui::pos2(360.0, 263.8), egui::Vec2::splat(40.0));
+        let icon_rect = home_search_icon_rect(slot_rect);
+        let visible_rect = home_search_icon_visible_rect(icon_rect);
+
+        assert!((icon_rect.center().x - 380.0).abs() < 0.01);
+        assert!((icon_rect.center().y - 280.8).abs() < 0.01);
+        assert!(
+            (368.0..=370.0).contains(&visible_rect.left()),
+            "expected visible search icon to start near screenshot x=473 absolute: {visible_rect:?}"
+        );
+        assert!(
+            (267.0..=269.0).contains(&visible_rect.top()),
+            "expected visible search icon to start near screenshot y=430 absolute: {visible_rect:?}"
+        );
+    }
+
+    #[test]
     fn tab_title_width_reserves_fixed_close_region() {
-        assert_eq!(tab_title_width(tab_content_width()), 204.0);
+        assert_eq!(tab_title_width(tab_content_width(TAB_WIDTH)), 200.0);
         assert_eq!(tab_title_width(100.0), TAB_TITLE_MIN_WIDTH);
     }
 
     #[test]
-    fn tab_chrome_colors_mute_inactive_tabs() {
-        assert_eq!(tab_title_color(true), slate_theme::TEXT);
-        assert_eq!(tab_title_color(false), slate_theme::MUTED);
-        assert_eq!(tab_icon_color(true), slate_theme::MUTED);
-        assert_eq!(tab_icon_color(false), slate_theme::MUTED);
-        assert_eq!(tab_close_icon_color(true), slate_theme::TEXT);
-        assert_eq!(tab_close_icon_color(false), slate_theme::MUTED);
+    fn tab_icon_and_title_slots_match_reference_spacing() {
+        let geometry = concept_chrome_geometry();
+        let first_icon_slot = tab_icon_slot_rect(geometry.tab_rects[0]);
+        let second_icon_slot = tab_icon_slot_rect(geometry.tab_rects[1]);
+        let third_icon_slot = tab_icon_slot_rect(geometry.tab_rects[2]);
+
+        assert_eq!(first_icon_slot.size(), egui::Vec2::splat(TAB_ICON_SIZE));
+        assert_eq!(first_icon_slot.left(), 176.0);
+        assert_eq!(first_icon_slot.top(), 32.0);
+        assert_eq!(tab_title_left(geometry.tab_rects[0]), 220.0);
+        assert_eq!(tab_title_left(geometry.tab_rects[1]), 528.0);
+        assert_eq!(tab_title_left(geometry.tab_rects[2]), 836.0);
+        assert_eq!(
+            second_icon_slot.center().x - first_icon_slot.center().x,
+            TAB_WIDTH
+        );
+        assert_eq!(
+            third_icon_slot.center().x - second_icon_slot.center().x,
+            TAB_WIDTH
+        );
     }
 
     #[test]
-    fn toolbar_navigation_colors_mute_disabled_controls() {
+    fn tab_close_button_tracks_reference_right_edge_offset() {
+        let tab_rect = concept_chrome_geometry().tab_rects[0];
+        let close_rect = tab_close_button_rect(tab_rect);
+
+        assert_eq!(close_rect.size(), egui::Vec2::splat(TAB_CLOSE_BUTTON_SIZE));
+        assert_eq!(close_rect.center().x, tab_rect.right() - 28.0);
+        assert_eq!(close_rect.center().y, tab_rect.center().y);
+    }
+
+    #[test]
+    fn tab_width_tracks_window_proportions() {
+        assert_eq!(
+            tab_width_for_strip(TAB_OPENING_WINDOW_WIDTH - APP_TITLE_WIDTH, 1),
+            TAB_OPENING_PREFERRED_WIDTH
+        );
+        assert_eq!(
+            tab_width_for_strip(TAB_CONCEPT_WINDOW_WIDTH - APP_TITLE_WIDTH, 3),
+            TAB_WIDTH
+        );
+        assert_eq!(
+            tab_width_for_strip(TAB_OPENING_WINDOW_WIDTH - APP_TITLE_WIDTH, 8),
+            TAB_MIN_WIDTH
+        );
+    }
+
+    #[test]
+    fn active_tab_separator_join_breaks_divider_under_selected_tab() {
+        let strip_rect =
+            egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1672.0, TAB_STRIP_HEIGHT));
+        let active_tab_rect = egui::Rect::from_min_size(
+            egui::pos2(APP_TITLE_WIDTH, TAB_STRIP_HEIGHT - TAB_HEIGHT),
+            egui::vec2(TAB_WIDTH, TAB_HEIGHT),
+        );
+        let join = active_tab_separator_join(strip_rect, active_tab_rect)
+            .expect("active tab should create a divider join");
+        let divider_y = strip_rect.bottom() - 0.5;
+
+        assert_eq!(join.tab_left, active_tab_rect.left());
+        assert_eq!(join.tab_right, active_tab_rect.right());
+        assert_eq!(join.separator_y, divider_y);
+        assert_eq!(
+            join.bridge_rect.left(),
+            active_tab_rect.left() + ACTIVE_TAB_BOTTOM_JOIN_INSET_X
+        );
+        assert_eq!(
+            join.bridge_rect.right(),
+            active_tab_rect.right() - ACTIVE_TAB_BOTTOM_JOIN_INSET_X
+        );
+        assert!(join.bridge_rect.top() < divider_y);
+        assert!(join.bridge_rect.bottom() > divider_y);
+    }
+
+    #[test]
+    fn active_tab_separator_routes_around_selected_file_tab() {
+        let strip_rect =
+            egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1672.0, TAB_STRIP_HEIGHT));
+        let active_tab_rect = egui::Rect::from_min_size(
+            egui::pos2(APP_TITLE_WIDTH, TAB_STRIP_HEIGHT - TAB_HEIGHT),
+            egui::vec2(TAB_WIDTH, TAB_HEIGHT),
+        );
+        let (join, divider_points) = active_tab_content_divider_points(strip_rect, active_tab_rect)
+            .expect("active tab should route the content divider");
+        let topmost_y = divider_points
+            .iter()
+            .map(|point| point.y)
+            .fold(f32::INFINITY, f32::min);
+
+        assert_eq!(
+            divider_points.first().copied(),
+            Some(egui::pos2(strip_rect.left(), join.separator_y))
+        );
+        assert_eq!(
+            divider_points.last().copied(),
+            Some(egui::pos2(strip_rect.right(), join.separator_y))
+        );
+        assert!(
+            (topmost_y - active_tab_rect.top()).abs() < 0.01,
+            "expected active tab divider to reach tab top: {divider_points:?}"
+        );
+        assert!(
+            divider_points.windows(2).any(|segment| {
+                points_are_close(segment[0], egui::pos2(strip_rect.left(), join.separator_y))
+                    && points_are_close(
+                        segment[1],
+                        egui::pos2(active_tab_rect.left(), join.separator_y),
+                    )
+            }),
+            "expected divider to approach the active tab from the horizontal strip: {divider_points:?}"
+        );
+        assert!(
+            divider_points.iter().any(|point| {
+                (point.x - active_tab_rect.left()).abs() < 0.01
+                    && point.y < join.separator_y - TAB_HEIGHT / 2.0
+            }),
+            "expected separator to climb the active tab's left edge: {divider_points:?}"
+        );
+        assert!(
+            divider_points.windows(2).any(|segment| {
+                (segment[0].y - active_tab_rect.top()).abs() < 0.01
+                    && (segment[1].y - active_tab_rect.top()).abs() < 0.01
+                    && segment[1].x > segment[0].x
+            }),
+            "expected separator to run across the active tab's top label edge: {divider_points:?}"
+        );
+        assert!(
+            divider_points.iter().any(|point| {
+                (point.x - active_tab_rect.right()).abs() < 0.01
+                    && point.y < join.separator_y - TAB_HEIGHT / 2.0
+            }),
+            "expected separator to descend the active tab's right edge: {divider_points:?}"
+        );
+        assert!(
+            divider_points.windows(2).any(|segment| {
+                points_are_close(
+                    segment[0],
+                    egui::pos2(active_tab_rect.right(), join.separator_y),
+                ) && points_are_close(segment[1], egui::pos2(strip_rect.right(), join.separator_y))
+            }),
+            "expected divider to continue horizontally after the active tab: {divider_points:?}"
+        );
+    }
+
+    #[test]
+    fn active_tab_divider_uses_visible_edges_when_tab_is_clipped() {
+        let strip_rect =
+            egui::Rect::from_min_size(egui::pos2(100.0, 0.0), egui::vec2(500.0, TAB_STRIP_HEIGHT));
+        let active_tab_rect = egui::Rect::from_min_size(
+            egui::pos2(50.0, TAB_STRIP_HEIGHT - TAB_HEIGHT),
+            egui::vec2(TAB_WIDTH, TAB_HEIGHT),
+        );
+        let (join, divider_points) = active_tab_content_divider_points(strip_rect, active_tab_rect)
+            .expect("partially visible active tab should route the divider");
+
+        assert_eq!(join.tab_left, strip_rect.left());
+        assert_eq!(join.tab_right, active_tab_rect.right());
+        assert!(
+            divider_points
+                .iter()
+                .all(|point| point.x >= strip_rect.left() && point.x <= strip_rect.right()),
+            "expected divider points to stay inside visible strip: {divider_points:?}"
+        );
+        assert!(
+            divider_points.iter().any(|point| {
+                (point.x - strip_rect.left()).abs() < 0.01
+                    && point.y < join.separator_y - TAB_HEIGHT / 2.0
+            }),
+            "expected clipped active tab divider to climb from the visible edge: {divider_points:?}"
+        );
+    }
+
+    #[test]
+    fn inactive_tab_outline_uses_open_file_tab_path() {
+        let tab_rect = egui::Rect::from_min_size(
+            egui::pos2(APP_TITLE_WIDTH + TAB_WIDTH, TAB_STRIP_HEIGHT - TAB_HEIGHT),
+            egui::vec2(TAB_WIDTH, TAB_HEIGHT),
+        );
+        let outline_points = inactive_tab_outline_points(tab_rect);
+        let bottom_y = tab_rect.bottom() - 0.5;
+        let topmost_y = outline_points
+            .iter()
+            .map(|point| point.y)
+            .fold(f32::INFINITY, f32::min);
+
+        assert_eq!(inactive_tab_outline_color(), slate_theme::BORDER);
+        assert_eq!(
+            outline_points.first().copied(),
+            Some(egui::pos2(tab_rect.left(), bottom_y))
+        );
+        assert_eq!(
+            outline_points.last().copied(),
+            Some(egui::pos2(tab_rect.right(), bottom_y))
+        );
+        assert!(
+            (topmost_y - tab_rect.top()).abs() < 0.01,
+            "expected inactive tab outline to climb to tab top: {outline_points:?}"
+        );
+        assert!(
+            !outline_points.windows(2).any(|segment| {
+                (segment[0].y - bottom_y).abs() < 0.01
+                    && (segment[1].y - bottom_y).abs() < 0.01
+                    && (segment[1].x - segment[0].x).abs() > 1.0
+            }),
+            "inactive tab outline should leave the bottom edge to the shared strip divider: {outline_points:?}"
+        );
+    }
+
+    #[test]
+    fn tab_chrome_colors_keep_file_tab_content_readable() {
+        assert_eq!(active_tab_background_color(), slate_theme::SURFACE);
+        assert_eq!(active_tab_outline_color(), slate_theme::BORDER);
+        assert_eq!(inactive_tab_background_color(), slate_theme::PANEL);
+        assert_eq!(
+            inactive_tab_hover_background_color(),
+            slate_theme::PANEL_HOVER
+        );
+        assert_eq!(inactive_tab_outline_color(), slate_theme::BORDER);
+        assert_eq!(tab_title_color(true), slate_theme::TEXT);
+        assert_eq!(tab_title_color(false), slate_theme::TEXT);
+        assert_eq!(tab_icon_color(true), slate_theme::TEXT);
+        assert_eq!(tab_icon_color(false), slate_theme::TEXT);
+        assert_eq!(tab_close_icon_color(true), slate_theme::TEXT);
+        assert_eq!(tab_close_icon_color(false), slate_theme::TEXT);
+        assert_eq!(tab_close_raster(true), slate_theme::SlateRaster::TabClose);
+        assert_eq!(tab_close_raster(false), slate_theme::SlateRaster::TabClose);
+    }
+
+    #[test]
+    fn toolbar_navigation_colors_keep_reference_masks_visible_when_disabled() {
         assert_eq!(toolbar_navigation_icon_color(true), slate_theme::TEXT);
-        assert_eq!(toolbar_navigation_icon_color(false), slate_theme::MUTED);
+        assert_eq!(toolbar_navigation_icon_color(false), slate_theme::TEXT);
+    }
+
+    #[test]
+    fn toolbar_navigation_uses_concept_raster_crops() {
+        assert_eq!(
+            toolbar_navigation_raster(slate_theme::SlateIcon::NavBack, false),
+            Some(slate_theme::SlateRaster::NavBack)
+        );
+        assert_eq!(
+            toolbar_navigation_raster(slate_theme::SlateIcon::NavBack, true),
+            Some(slate_theme::SlateRaster::NavBackHover)
+        );
+        assert_eq!(
+            toolbar_navigation_raster(slate_theme::SlateIcon::NavForward, false),
+            Some(slate_theme::SlateRaster::NavForward)
+        );
+        assert_eq!(
+            toolbar_navigation_raster(slate_theme::SlateIcon::NavForward, true),
+            Some(slate_theme::SlateRaster::NavForwardHover)
+        );
+        assert_eq!(
+            toolbar_navigation_raster(slate_theme::SlateIcon::NavRefresh, false),
+            Some(slate_theme::SlateRaster::NavReload)
+        );
+        assert_eq!(
+            toolbar_navigation_raster(slate_theme::SlateIcon::NavRefresh, true),
+            Some(slate_theme::SlateRaster::NavReloadHover)
+        );
+    }
+
+    #[test]
+    fn toolbar_navigation_icon_offsets_align_reference_masks() {
+        fn projected_mask_center_x(button_center_x: f32, icon: slate_theme::SlateIcon) -> f32 {
+            let button_rect = egui::Rect::from_center_size(
+                egui::pos2(button_center_x, 120.0),
+                egui::Vec2::splat(TOOLBAR_BUTTON_SIZE),
+            );
+            toolbar_navigation_icon_rect(button_rect, icon).center().x
+        }
+
+        assert_eq!(
+            toolbar_navigation_icon_offset_x(slate_theme::SlateIcon::NavBack),
+            TOOLBAR_NAV_BACK_ICON_OFFSET_X
+        );
+        assert_eq!(
+            toolbar_navigation_icon_offset_x(slate_theme::SlateIcon::NavForward),
+            TOOLBAR_NAV_FORWARD_ICON_OFFSET_X
+        );
+        assert_eq!(
+            toolbar_navigation_icon_offset_x(slate_theme::SlateIcon::NavRefresh),
+            TOOLBAR_NAV_REFRESH_ICON_OFFSET_X
+        );
+        assert_eq!(
+            toolbar_navigation_icon_rect(
+                egui::Rect::from_center_size(
+                    egui::pos2(142.0, 120.0),
+                    egui::Vec2::splat(TOOLBAR_BUTTON_SIZE),
+                ),
+                slate_theme::SlateIcon::NavBack,
+            )
+            .size(),
+            egui::Vec2::splat(TOOLBAR_NAV_ICON_SIZE)
+        );
+        assert!(
+            (projected_mask_center_x(142.0, slate_theme::SlateIcon::NavBack) - 150.0).abs() < 0.01
+        );
+        assert!(
+            (projected_mask_center_x(202.0, slate_theme::SlateIcon::NavForward) - 209.0).abs()
+                < 0.01
+        );
+        assert!(
+            (projected_mask_center_x(262.0, slate_theme::SlateIcon::NavRefresh) - 268.0).abs()
+                < 0.01
+        );
+    }
+
+    #[test]
+    fn toolbar_menu_icon_geometry_matches_reference_glyph() {
+        let button_rect =
+            egui::Rect::from_center_size(egui::pos2(1629.0, 120.0), egui::Vec2::splat(40.0));
+        let icon_rect = toolbar_menu_icon_rect(button_rect);
+
+        assert_eq!(icon_rect.width(), 22.0);
+        assert_eq!(icon_rect.height(), 19.0);
+        assert_eq!(
+            toolbar_menu_icon_center(button_rect),
+            egui::pos2(1626.0, 120.0)
+        );
+        assert_eq!(icon_rect.center(), egui::pos2(1626.0, 120.0));
+    }
+
+    #[test]
+    fn footer_settings_icon_geometry_matches_reference_glyph() {
+        let button_rect =
+            egui::Rect::from_center_size(egui::pos2(1614.0, 899.0), egui::Vec2::splat(40.0));
+        let icon_rect = footer_settings_icon_rect(button_rect);
+
+        assert_eq!(icon_rect.width(), 26.0);
+        assert_eq!(icon_rect.height(), 26.0);
+        assert_eq!(icon_rect.center(), button_rect.center());
     }
 
     #[test]
     fn rail_colors_keep_selected_tile_soft() {
         assert_eq!(rail_icon_color(true), slate_theme::TEAL);
         assert_eq!(rail_icon_color(false), slate_theme::TEXT);
-        assert_eq!(rail_button_fill(true, false), slate_theme::TEAL_SOFT);
-        assert_eq!(rail_button_fill(true, true), slate_theme::TEAL_SOFT);
+        assert_eq!(
+            rail_selected_button_fill(),
+            egui::Color32::from_rgb(236, 240, 239)
+        );
+        assert_eq!(rail_button_fill(true, false), rail_selected_button_fill());
+        assert_eq!(rail_button_fill(true, true), rail_selected_button_fill());
         assert_eq!(rail_button_fill(false, true), slate_theme::PANEL_HOVER);
         assert_eq!(rail_button_fill(false, false), egui::Color32::TRANSPARENT);
     }
@@ -2628,6 +4335,7 @@ mod tests {
         assert_eq!(layout.columns, 4);
         assert_eq!(layout.card_width, HOME_METRIC_CARD_MAX_WIDTH);
         assert_eq!(layout.spacing, HOME_METRIC_CARD_GAP);
+        assert_eq!(home_metrics_row_width(layout), 875.0);
         assert!(home_metrics_row_width(layout) <= 880.0);
     }
 
@@ -2665,7 +4373,12 @@ mod tests {
         let bounds = egui::Rect::from_min_size(egui::Pos2::ZERO, viewport_size);
         let layout = render_home_content_layout(viewport_size);
 
-        for rect in [layout.hero_rect, layout.search_rect, layout.metrics_rect] {
+        for rect in [
+            layout.hero_rect,
+            layout.search_rect,
+            layout.search_icon_rect,
+            layout.metrics_rect,
+        ] {
             assert!(rect_has_area(rect), "expected visible rect: {rect:?}");
             assert!(
                 rect_is_inside(bounds, rect),
@@ -2678,14 +4391,40 @@ mod tests {
     fn headless_home_content_tracks_concept_screenshot_geometry() {
         let viewport_size = concept_screenshot_home_view_size();
         let layout = render_home_content_layout(viewport_size);
-        let center_x = viewport_size.x / 2.0;
+        let concept_center_x = viewport_size.x / 2.0 + HOME_CONTENT_OPTICAL_OFFSET_X;
+        let hero_center_x = viewport_size.x / 2.0 + HOME_HERO_OPTICAL_OFFSET_X;
 
-        for rect in [layout.hero_rect, layout.search_rect] {
-            assert!(
-                (rect.center().x - center_x).abs() < LAYOUT_EPSILON,
-                "expected {rect:?} to stay centered in {viewport_size:?}"
-            );
-        }
+        assert!(
+            (layout.search_rect.center().x - concept_center_x).abs() < LAYOUT_EPSILON + 0.25,
+            "expected search to track the concept optical center in {viewport_size:?}: {:?}",
+            layout.search_rect
+        );
+        assert!(
+            (layout.hero_rect.center().x - hero_center_x).abs() < LAYOUT_EPSILON + 0.25,
+            "expected hero to track its screenshot optical center in {viewport_size:?}: {:?}",
+            layout.hero_rect
+        );
+        let hero_visible_rect = home_hero_icon_visible_rect(layout.hero_rect);
+        assert!(
+            (754.0..=756.0).contains(&hero_visible_rect.center().x),
+            "expected hero shield center near screenshot x=860 absolute position: {hero_visible_rect:?}"
+        );
+        assert!(
+            (331.0..=333.0).contains(&layout.search_rect.left()),
+            "expected search field to start near the screenshot x=436 absolute position: {:?}",
+            layout.search_rect
+        );
+        let search_icon_visible_rect = home_search_icon_visible_rect(layout.search_icon_rect);
+        assert!(
+            (368.0..=370.0).contains(&search_icon_visible_rect.left()),
+            "expected search icon to start near the screenshot x=473 absolute position: {:?}",
+            search_icon_visible_rect
+        );
+        assert!(
+            (267.0..=270.0).contains(&search_icon_visible_rect.top()),
+            "expected search icon to start near the screenshot y=430 absolute position: {:?}",
+            search_icon_visible_rect
+        );
         assert!(
             (860.0..=900.0).contains(&layout.search_rect.width()),
             "expected search width to stay close to the screenshot max width: {:?}",
@@ -2702,13 +4441,18 @@ mod tests {
             layout.search_rect
         );
         assert!(
-            (365.0..=390.0).contains(&layout.metrics_rect.top()),
+            (381.0..=383.0).contains(&layout.metrics_rect.top()),
             "expected metric cards to sit near the screenshot vertical rhythm: {:?}",
             layout.metrics_rect
         );
         assert!(
-            (330.0..=360.0).contains(&layout.metrics_rect.left()),
+            (333.0..=335.0).contains(&layout.metrics_rect.left()),
             "expected metric cards to start near the screenshot horizontal rhythm: {:?}",
+            layout.metrics_rect
+        );
+        assert!(
+            (882.0..=884.0).contains(&layout.metrics_rect.width()),
+            "expected metric row response to include the screenshot card footprint plus frame shadow: {:?}",
             layout.metrics_rect
         );
     }

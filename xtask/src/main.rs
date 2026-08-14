@@ -9,12 +9,13 @@ fn main() -> ExitCode {
         Some("test") => run("cargo", &["test", "--workspace"]),
         Some("run") => run("cargo", &["run", "-p", "slate"]),
         Some("fmt") => run("cargo", &["fmt", "--all"]),
+        Some("chrome-snapshot") => chrome_snapshot(),
         Some("snapshot") => snapshot(),
         Some("snapshot-html") => snapshot_html(),
         Some("snapshot-local") => snapshot_local(),
         _ => {
             eprintln!(
-                "usage: cargo run -p xtask -- <check|test|run|fmt|snapshot|snapshot-html|snapshot-local>"
+                "usage: cargo run -p xtask -- <check|test|run|fmt|chrome-snapshot|snapshot|snapshot-html|snapshot-local>"
             );
             ExitCode::from(2)
         }
@@ -38,6 +39,29 @@ fn run(program: &str, args: &[&str]) -> ExitCode {
 
 fn snapshot() -> ExitCode {
     run_snapshot(Path::new("target/slate-ui.png"), None)
+}
+
+fn chrome_snapshot() -> ExitCode {
+    let path = Path::new("target/slate-chrome-headless.png");
+    let output = path.to_string_lossy();
+    let result = run(
+        "cargo",
+        &[
+            "run",
+            "-j",
+            "1",
+            "-p",
+            "slate-chrome",
+            "--bin",
+            "slate-chrome-snapshot",
+            "--",
+            output.as_ref(),
+        ],
+    );
+    if result == ExitCode::SUCCESS {
+        println!("wrote {}", path.display());
+    }
+    result
 }
 
 fn snapshot_html() -> ExitCode {

@@ -1,5 +1,6 @@
 target/
 /slate
+/slate-chrome-headless.png
 *.swp
 *.swo
 /.cargo/

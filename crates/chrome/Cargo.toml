@@ -20,6 +20,11 @@ name = "slate-chrome"
 path = "src/main.rs"
 bench = false
 
+[[bin]]
+name = "slate-chrome-snapshot"
+path = "src/bin/chrome_snapshot.rs"
+bench = false
+
 [features]
 # Keep this feature layout close to Servo's servoshell while this crate is
 # based on the copied shell code.

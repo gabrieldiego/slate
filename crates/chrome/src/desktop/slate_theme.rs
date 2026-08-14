@@ -6,17 +6,21 @@ use std::collections::HashMap;
 
 use egui::{Color32, TextureHandle, TextureOptions};
 
-pub(crate) const BG: Color32 = Color32::from_rgb(251, 249, 249);
+pub(crate) const BG: Color32 = Color32::from_rgb(249, 248, 247);
+pub(crate) const CHROME_BG: Color32 = BG;
+pub(crate) const HOME_BG: Color32 = Color32::from_rgb(251, 250, 250);
 pub(crate) const SURFACE: Color32 = Color32::from_rgb(255, 255, 255);
+pub(crate) const FIELD_SURFACE: Color32 = Color32::from_rgb(254, 253, 252);
 pub(crate) const TITLE_SURFACE: Color32 = Color32::from_rgb(247, 246, 245);
-pub(crate) const PANEL: Color32 = Color32::from_rgb(240, 237, 234);
+pub(crate) const PANEL: Color32 = Color32::from_rgb(238, 235, 232);
 pub(crate) const PANEL_HOVER: Color32 = Color32::from_rgb(236, 235, 233);
 pub(crate) const BORDER: Color32 = Color32::from_rgb(229, 226, 225);
+pub(crate) const FIELD_BORDER: Color32 = Color32::from_rgb(232, 232, 233);
 pub(crate) const TEXT: Color32 = Color32::from_rgb(43, 45, 45);
 pub(crate) const MUTED: Color32 = Color32::from_rgb(120, 120, 121);
 pub(crate) const TEAL: Color32 = Color32::from_rgb(11, 95, 95);
-pub(crate) const TEAL_SOFT: Color32 = Color32::from_rgb(237, 240, 239);
-pub(crate) const AMBER: Color32 = Color32::from_rgb(214, 145, 9);
+pub(crate) const TEAL_SOFT: Color32 = Color32::from_rgb(238, 243, 243);
+pub(crate) const AMBER: Color32 = Color32::from_rgb(216, 147, 12);
 pub(crate) const BLUE: Color32 = Color32::from_rgb(9, 109, 207);
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -32,6 +36,9 @@ pub(crate) enum SlateIcon {
     HomeMetricLock,
     HomeMetricPrivacy,
     HomeMetricTime,
+    NavBack,
+    NavForward,
+    NavRefresh,
     TabCalendar,
     TabResearch,
     TabWeb,
@@ -56,6 +63,7 @@ pub(crate) enum SlateRaster {
     PageInfoWarning,
     Search,
     TabClose,
+    #[allow(dead_code)]
     TabCloseMuted,
 }
 
@@ -144,6 +152,24 @@ impl SlateIcon {
                 height: 40,
                 mask: include_bytes!("../../assets/icons/home_metric_time.alpha"),
             },
+            Self::NavBack => SlateIconData {
+                name: "nav-back",
+                width: 32,
+                height: 32,
+                mask: include_bytes!("../../assets/icons/nav_back.alpha"),
+            },
+            Self::NavForward => SlateIconData {
+                name: "nav-forward",
+                width: 32,
+                height: 32,
+                mask: include_bytes!("../../assets/icons/nav_forward.alpha"),
+            },
+            Self::NavRefresh => SlateIconData {
+                name: "nav-refresh",
+                width: 32,
+                height: 32,
+                mask: include_bytes!("../../assets/icons/nav_refresh.alpha"),
+            },
             Self::TabCalendar => SlateIconData {
                 name: "tab-calendar",
                 width: 20,
@@ -183,39 +209,39 @@ impl SlateRaster {
             },
             Self::NavBack => SlateRasterData {
                 name: "nav-back",
-                width: 24,
-                height: 24,
-                bytes: include_bytes!("../../assets/icons/slate-ns/back.png"),
+                width: 28,
+                height: 28,
+                bytes: include_bytes!("../../assets/icons/concept/nav_back.png"),
             },
             Self::NavBackHover => SlateRasterData {
                 name: "nav-back-hover",
-                width: 24,
-                height: 24,
-                bytes: include_bytes!("../../assets/icons/slate-ns/back_h.png"),
+                width: 28,
+                height: 28,
+                bytes: include_bytes!("../../assets/icons/concept/nav_back.png"),
             },
             Self::NavForward => SlateRasterData {
                 name: "nav-forward",
-                width: 24,
-                height: 24,
-                bytes: include_bytes!("../../assets/icons/slate-ns/forward.png"),
+                width: 28,
+                height: 28,
+                bytes: include_bytes!("../../assets/icons/concept/nav_forward.png"),
             },
             Self::NavForwardHover => SlateRasterData {
                 name: "nav-forward-hover",
-                width: 24,
-                height: 24,
-                bytes: include_bytes!("../../assets/icons/slate-ns/forward_h.png"),
+                width: 28,
+                height: 28,
+                bytes: include_bytes!("../../assets/icons/concept/nav_forward.png"),
             },
             Self::NavReload => SlateRasterData {
                 name: "nav-reload",
-                width: 24,
-                height: 24,
-                bytes: include_bytes!("../../assets/icons/slate-ns/reload.png"),
+                width: 28,
+                height: 28,
+                bytes: include_bytes!("../../assets/icons/concept/nav_reload.png"),
             },
             Self::NavReloadHover => SlateRasterData {
                 name: "nav-reload-hover",
-                width: 24,
-                height: 24,
-                bytes: include_bytes!("../../assets/icons/slate-ns/reload_h.png"),
+                width: 28,
+                height: 28,
+                bytes: include_bytes!("../../assets/icons/concept/nav_reload.png"),
             },
             Self::NavStop => SlateRasterData {
                 name: "nav-stop",
@@ -432,8 +458,8 @@ fn load_raster_mask_texture(
 #[cfg(test)]
 mod tests {
     use super::{
-        AMBER, BG, BLUE, BORDER, MUTED, PANEL, PANEL_HOVER, SlateIcon, SlateRaster, TEAL,
-        TEAL_SOFT, TITLE_SURFACE, raster_mask_rgba,
+        AMBER, BG, BLUE, BORDER, CHROME_BG, FIELD_BORDER, FIELD_SURFACE, HOME_BG, MUTED, PANEL,
+        PANEL_HOVER, SlateIcon, SlateRaster, TEAL, TEAL_SOFT, TITLE_SURFACE, raster_mask_rgba,
     };
 
     #[test]
@@ -450,6 +476,9 @@ mod tests {
             SlateIcon::HomeMetricLock,
             SlateIcon::HomeMetricPrivacy,
             SlateIcon::HomeMetricTime,
+            SlateIcon::NavBack,
+            SlateIcon::NavForward,
+            SlateIcon::NavRefresh,
             SlateIcon::TabCalendar,
             SlateIcon::TabResearch,
             SlateIcon::TabWeb,
@@ -522,15 +551,19 @@ mod tests {
 
     #[test]
     fn palette_uses_warm_concept_layers() {
-        assert_eq!(BG, egui::Color32::from_rgb(251, 249, 249));
+        assert_eq!(BG, egui::Color32::from_rgb(249, 248, 247));
+        assert_eq!(CHROME_BG, egui::Color32::from_rgb(249, 248, 247));
+        assert_eq!(HOME_BG, egui::Color32::from_rgb(251, 250, 250));
+        assert_eq!(FIELD_SURFACE, egui::Color32::from_rgb(254, 253, 252));
         assert_eq!(TITLE_SURFACE, egui::Color32::from_rgb(247, 246, 245));
-        assert_eq!(PANEL, egui::Color32::from_rgb(240, 237, 234));
+        assert_eq!(PANEL, egui::Color32::from_rgb(238, 235, 232));
         assert_eq!(PANEL_HOVER, egui::Color32::from_rgb(236, 235, 233));
         assert_eq!(BORDER, egui::Color32::from_rgb(229, 226, 225));
+        assert_eq!(FIELD_BORDER, egui::Color32::from_rgb(232, 232, 233));
         assert_eq!(MUTED, egui::Color32::from_rgb(120, 120, 121));
         assert_eq!(TEAL, egui::Color32::from_rgb(11, 95, 95));
-        assert_eq!(TEAL_SOFT, egui::Color32::from_rgb(237, 240, 239));
-        assert_eq!(AMBER, egui::Color32::from_rgb(214, 145, 9));
+        assert_eq!(TEAL_SOFT, egui::Color32::from_rgb(238, 243, 243));
+        assert_eq!(AMBER, egui::Color32::from_rgb(216, 147, 12));
         assert_eq!(BLUE, egui::Color32::from_rgb(9, 109, 207));
     }
 

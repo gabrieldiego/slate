@@ -12,7 +12,7 @@ pub(crate) mod event_loop;
 #[cfg(feature = "gamepad")]
 pub(crate) mod gamepad;
 pub mod geometry;
-mod gui;
+pub(crate) mod gui;
 pub(crate) mod headed_window;
 mod headless_window;
 mod keyutils;
