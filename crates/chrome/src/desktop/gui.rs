@@ -374,6 +374,10 @@ fn tab_strip_background_color() -> egui::Color32 {
     slate_theme::BG
 }
 
+fn app_title_background_color() -> egui::Color32 {
+    slate_theme::TITLE_SURFACE
+}
+
 fn address_shadow() -> egui::Shadow {
     egui::Shadow {
         offset: ADDRESS_SHADOW_OFFSET,
@@ -1137,7 +1141,7 @@ impl Gui {
             egui::Sense::hover(),
         );
         ui.painter()
-            .rect_filled(rect, 0.0, tab_strip_background_color());
+            .rect_filled(rect, 0.0, app_title_background_color());
         ui.painter().line_segment(
             [rect.right_top(), rect.right_bottom()],
             egui::Stroke::new(1.0, slate_theme::BORDER),
@@ -2204,17 +2208,17 @@ mod tests {
         ADDRESS_TRAILING_CONTROLS_WIDTH, AddressSecurityIcon, Gui, HOME_METRIC_CARD_MIN_WIDTH,
         HomeContentLayout, SlateIconCache, address_bookmark_icon_color,
         address_security_icon_for_location, address_security_raster_color,
-        concept_screenshot_home_view_size, default_opening_home_view_height,
-        default_opening_home_view_size, footer_protection_status_width, footer_settings_icon_color,
-        footer_status_text_color, footer_sync_dot_radius, footer_sync_status_width,
-        home_content_stack_height, home_metric_badge_width, home_metric_card_content_height,
-        home_metric_card_content_width, home_metrics_layout, home_metrics_rendered_height,
-        home_metrics_row_width, home_search_rendered_height, home_search_width, home_top_space,
-        home_view_background_color, new_tab_icon_color, rail_button_fill, rail_icon_color,
-        slate_theme, status_bubble_label, status_bubble_width, tab_close_icon_color,
-        tab_content_width, tab_corner_radius, tab_icon_color, tab_strip_background_color,
-        tab_title_color, tab_title_width, toolbar_address_width, toolbar_menu_icon_color,
-        toolbar_navigation_icon_color,
+        app_title_background_color, concept_screenshot_home_view_size,
+        default_opening_home_view_height, default_opening_home_view_size,
+        footer_protection_status_width, footer_settings_icon_color, footer_status_text_color,
+        footer_sync_dot_radius, footer_sync_status_width, home_content_stack_height,
+        home_metric_badge_width, home_metric_card_content_height, home_metric_card_content_width,
+        home_metrics_layout, home_metrics_rendered_height, home_metrics_row_width,
+        home_search_rendered_height, home_search_width, home_top_space, home_view_background_color,
+        new_tab_icon_color, rail_button_fill, rail_icon_color, slate_theme, status_bubble_label,
+        status_bubble_width, tab_close_icon_color, tab_content_width, tab_corner_radius,
+        tab_icon_color, tab_strip_background_color, tab_title_color, tab_title_width,
+        toolbar_address_width, toolbar_menu_icon_color, toolbar_navigation_icon_color,
     };
     use super::{
         ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH, APP_TITLE_HEIGHT,
@@ -2387,6 +2391,7 @@ mod tests {
         assert_eq!(APP_TITLE_HEIGHT, TAB_STRIP_HEIGHT);
         assert_eq!(APP_TITLE_LEFT_PADDING, 31.0);
         assert_eq!(APP_TITLE_TEXT_SIZE, 28.0);
+        assert_eq!(app_title_background_color(), slate_theme::TITLE_SURFACE);
         assert_eq!(TAB_WIDTH, 308.0);
         assert_eq!(tab_content_width(), 276.0);
         assert_eq!(TAB_HEIGHT, 60.0);

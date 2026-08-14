@@ -8,6 +8,7 @@ use egui::{Color32, TextureHandle, TextureOptions};
 
 pub(crate) const BG: Color32 = Color32::from_rgb(251, 249, 249);
 pub(crate) const SURFACE: Color32 = Color32::from_rgb(255, 255, 255);
+pub(crate) const TITLE_SURFACE: Color32 = Color32::from_rgb(247, 246, 245);
 pub(crate) const PANEL: Color32 = Color32::from_rgb(240, 237, 234);
 pub(crate) const PANEL_HOVER: Color32 = Color32::from_rgb(236, 235, 233);
 pub(crate) const BORDER: Color32 = Color32::from_rgb(229, 226, 225);
@@ -411,7 +412,7 @@ fn load_raster_mask_texture(
 mod tests {
     use super::{
         AMBER, BG, BLUE, BORDER, MUTED, PANEL, PANEL_HOVER, SlateIcon, SlateRaster, TEAL,
-        TEAL_SOFT, raster_mask_rgba,
+        TEAL_SOFT, TITLE_SURFACE, raster_mask_rgba,
     };
 
     #[test]
@@ -498,6 +499,7 @@ mod tests {
     #[test]
     fn palette_uses_warm_concept_layers() {
         assert_eq!(BG, egui::Color32::from_rgb(251, 249, 249));
+        assert_eq!(TITLE_SURFACE, egui::Color32::from_rgb(247, 246, 245));
         assert_eq!(PANEL, egui::Color32::from_rgb(240, 237, 234));
         assert_eq!(PANEL_HOVER, egui::Color32::from_rgb(236, 235, 233));
         assert_eq!(BORDER, egui::Color32::from_rgb(229, 226, 225));
