@@ -125,22 +125,28 @@ adapters. This keeps the pre-alpha architecture simple, testable, and compatible
 with Slate's safe Rust policy while still forcing protocol integrations through
 clear plugin boundaries.
 
-Two plugin categories should be kept distinct:
+Three plugin categories should be kept distinct:
 
 ```text
+protocol service plugins
+  Own long-lived protocol configuration, state, health, and route planning.
+  Examples: ipfs, tor, i2p, gemini, bittorrent.
+
 transport plugins
   Own connectivity to a broadweb transport or routing environment.
-  Examples: direct-http, ipfs, ipns, tor, i2p, gemini, bittorrent.
+  Examples: direct-http, ipfs-gateway, tor-socks, i2p-http-proxy.
 
 application service plugins
   Expose an application-level capability on top of one or more transports.
   Examples: http-fetch, shared-files, calendar-sync, messaging, publishing.
 ```
 
-Transport plugins should expose capabilities, health, startup cost, supported
-routes, and privacy boundaries. They should not decide whether a navigation is
-allowed. Application service plugins should receive an approved request and use
-one or more transport plugins to produce an application-level result.
+Protocol services should own protocol configuration and choose the transport
+adapter for an approved URL or service request. Transport plugins should expose
+capabilities, health, startup cost, supported routes, and privacy boundaries.
+They should not decide whether a navigation is allowed. Application service
+plugins should receive an approved request and use one or more transport
+plugins to produce an application-level result.
 
 For the first milestone, `http-fetch` should be the only application service.
 It should be able to use a `direct-http` transport for ordinary HTTP(S) and
@@ -152,11 +158,15 @@ The registry should be explicit:
 
 ```text
 PluginRegistry
-  -> transport plugins
-      direct-http
+  -> protocol service plugins
       ipfs
       tor
       i2p
+  -> transport plugins
+      direct-http
+      ipfs-gateway
+      tor-socks
+      i2p-http-proxy
   -> application service plugins
       http-fetch
       shared-files

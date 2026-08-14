@@ -71,6 +71,20 @@ fn fetch_http(
 ) -> Result<HttpFetchResponse, BroadwebdError>;
 ```
 
+Protocol services implement `ProtocolService`:
+
+```rust
+fn metadata(&self) -> PluginMetadata;
+
+fn install_plugins(&self, registry: &mut PluginRegistry) -> Vec<PluginInstallReport>;
+
+fn http_transport_for_url(&self, url: &Url) -> Option<Result<String, BroadwebdError>>;
+```
+
+Protocol services own protocol configuration and install the concrete transport
+adapters they need. They may route an approved URL to a transport adapter, but
+they still must not decide browser policy.
+
 Application services implement `ApplicationServicePlugin`:
 
 ```rust
@@ -84,8 +98,11 @@ fn call(
 ) -> Result<ServiceResponse, BroadwebdError>;
 ```
 
-The service receives an approved request and uses the registry to select a
-transport adapter. It must not make browser policy decisions such as public
+The application service receives an approved request and uses the registry to
+select a transport adapter. If the request does not name a transport, the
+registry resolves one from the URL scheme. Ordinary `http` and `https` resolve
+to `direct-http`; `ipfs` and `ipns` resolve through the registered IPFS protocol
+service. The service must not make browser policy decisions such as public
 gateway fallback, private-window identity reuse, or DNS leak exceptions.
 
 `PluginMetadata` is the discovery contract. Every plugin should expose:
@@ -108,8 +125,10 @@ plugins:
 ```text
 BroadwebDaemon::install_transport(...)
 BroadwebDaemon::install_service(...)
+BroadwebDaemon::install_protocol_service(...)
 BroadwebDaemon::remove_transport(...)
 BroadwebDaemon::remove_service(...)
+BroadwebDaemon::remove_protocol_service(...)
 ```
 
 These methods install, replace, or remove plugins without restarting the
@@ -131,8 +150,8 @@ the daemon process.
 ## HTTP Fetch Service
 
 `http-fetch` is the first application service. It accepts an approved
-`HttpFetchRequest`, selects the requested transport adapter, and returns an
-HTTP-like `HttpFetchResponse`.
+`HttpFetchRequest`, resolves or uses the requested transport adapter, and
+returns an HTTP-like `HttpFetchResponse`.
 
 The response boundary is intentionally small:
 
@@ -156,8 +175,8 @@ Initial shape:
 ```text
 IpfsService
   owns IpfsConfig
-  owns profile-scoped state paths
-  reports local gateway health
+  exposes protocol-service metadata
+  routes ipfs:// and ipns:// to ipfs-gateway
   registers ipfs-gateway transport
 ```
 
@@ -165,6 +184,8 @@ IpfsService
 `ipfs://` and `ipns://` to an explicitly configured local gateway such as
 `http://127.0.0.1:8080`. Public gateway fallback must remain disabled unless
 browser-core policy explicitly approves it for the current profile and request.
+The current `IpfsConfig::new` accepts only loopback HTTP(S) gateways, so public
+gateway fallback cannot be enabled accidentally through default construction.
 
 Later IPFS transports can be added behind the same protocol service:
 
