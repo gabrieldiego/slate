@@ -43,7 +43,7 @@ use crate::window::ServoShellWindow;
 
 const TAB_STRIP_HEIGHT: f32 = 78.0;
 const TAB_STRIP_CONTENT_ALIGN: egui::Align = egui::Align::Max;
-const TOOLBAR_HEIGHT: f32 = 88.0;
+const TOOLBAR_HEIGHT: f32 = 84.0;
 const APP_RAIL_WIDTH: f32 = 104.0;
 const FOOTER_HEIGHT: f32 = 80.0;
 const FOOTER_PANEL_MARGIN_X: i8 = 0;
@@ -2326,7 +2326,7 @@ mod tests {
         assert_eq!(RAIL_PANEL_MARGIN_Y, 0);
         assert_eq!(RAIL_TOP_SPACE, 22.0);
         assert_eq!(RAIL_ITEM_GAP, 16.0);
-        assert_eq!(TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT, 166.0);
+        assert_eq!(TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT, 162.0);
         assert_eq!(tab_strip_background_color(), slate_theme::BG);
         assert_eq!(TAB_STRIP_CONTENT_ALIGN, egui::Align::Max);
         assert_eq!(FOOTER_HEIGHT, 80.0);
