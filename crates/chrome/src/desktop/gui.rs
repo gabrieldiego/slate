@@ -49,7 +49,7 @@ const FOOTER_HEIGHT: f32 = 80.0;
 const FOOTER_PANEL_MARGIN_X: i8 = 0;
 const FOOTER_PANEL_MARGIN_Y: i8 = 8;
 const FOOTER_LEFT_PADDING: f32 = 22.0;
-const FOOTER_RIGHT_PADDING: f32 = 22.0;
+const FOOTER_RIGHT_PADDING: f32 = 38.0;
 const FOOTER_ITEM_SPACING: f32 = 18.0;
 const FOOTER_ICON_SIZE: f32 = 28.0;
 const FOOTER_PROTECTION_ICON_LABEL_GAP: f32 = 16.0;
@@ -2333,7 +2333,7 @@ mod tests {
         assert_eq!(FOOTER_PANEL_MARGIN_X, 0);
         assert_eq!(FOOTER_PANEL_MARGIN_Y, 8);
         assert_eq!(FOOTER_LEFT_PADDING, 22.0);
-        assert_eq!(FOOTER_RIGHT_PADDING, 22.0);
+        assert_eq!(FOOTER_RIGHT_PADDING, 38.0);
         assert_eq!(FOOTER_ITEM_SPACING, 18.0);
         assert_eq!(FOOTER_ICON_SIZE, 28.0);
         assert_eq!(FOOTER_PROTECTION_ICON_LABEL_GAP, 16.0);
