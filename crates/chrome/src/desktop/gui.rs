@@ -130,6 +130,7 @@ const ADDRESS_BOOKMARK_RESERVED_WIDTH: f32 = 36.0;
 const ADDRESS_TRAILING_CONTROLS_WIDTH: f32 = 176.0;
 const HOME_SEARCH_MIN_WIDTH: f32 = 280.0;
 const HOME_SEARCH_MAX_WIDTH: f32 = 880.0;
+const HOME_SEARCH_WIDTH_FACTOR: f32 = 0.56;
 const HOME_SEARCH_HORIZONTAL_PADDING: f32 = 32.0;
 const HOME_SEARCH_HEIGHT: f32 = 72.0;
 const HOME_SEARCH_FRAME_EXTRA_HEIGHT: f32 = 8.0;
@@ -379,10 +380,11 @@ fn address_shadow() -> egui::Shadow {
 }
 
 fn home_search_width(available_width: f32) -> f32 {
-    let available_width = (available_width - HOME_SEARCH_HORIZONTAL_PADDING).max(0.0);
-    available_width
+    let padded_width = (available_width - HOME_SEARCH_HORIZONTAL_PADDING).max(0.0);
+    let proportional_width = (available_width.max(0.0) * HOME_SEARCH_WIDTH_FACTOR)
         .min(HOME_SEARCH_MAX_WIDTH)
-        .max(HOME_SEARCH_MIN_WIDTH.min(available_width))
+        .min(padded_width);
+    proportional_width.max(HOME_SEARCH_MIN_WIDTH.min(padded_width))
 }
 
 fn home_search_content_width(search_width: f32) -> f32 {
@@ -445,7 +447,6 @@ fn home_content_fixed_height() -> f32 {
         + HOME_BOTTOM_MIN_GAP
 }
 
-#[cfg(test)]
 fn home_metrics_row_width(layout: HomeMetricsLayout) -> f32 {
     layout.card_width * layout.columns as f32
         + layout.spacing * (layout.columns.saturating_sub(1) as f32)
@@ -1392,8 +1393,9 @@ impl Gui {
 
             ui.add_space(HOME_SEARCH_TO_METRICS_GAP);
             let metrics_height = ui.available_height().max(0.0);
+            let metrics_width = home_metrics_row_width(home_metrics_layout(home_rect.width()));
             let metrics_response = ui.allocate_ui_with_layout(
-                egui::vec2(search_width, metrics_height),
+                egui::vec2(metrics_width, metrics_height),
                 egui::Layout::top_down(egui::Align::Center),
                 |ui| Self::draw_home_metrics(ui, slate_icons),
             );
@@ -2214,7 +2216,7 @@ mod tests {
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
         HOME_SEARCH_ICON_GAP, HOME_SEARCH_INNER_MARGIN_X, HOME_SEARCH_MAX_WIDTH,
-        HOME_SEARCH_MIN_WIDTH, HOME_SEARCH_TEXT_HEIGHT,
+        HOME_SEARCH_MIN_WIDTH, HOME_SEARCH_TEXT_HEIGHT, HOME_SEARCH_WIDTH_FACTOR,
     };
     use super::{
         RAIL_BUTTON_RADIUS, RAIL_BUTTON_SIZE, RAIL_ICON_SIZE, RAIL_ITEM_GAP, RAIL_PANEL_MARGIN_X,
@@ -2374,6 +2376,7 @@ mod tests {
         assert_eq!(new_tab_icon_color(), slate_theme::TEXT);
         assert_eq!(HOME_SEARCH_MIN_WIDTH, 280.0);
         assert_eq!(HOME_SEARCH_MAX_WIDTH, 880.0);
+        assert_eq!(HOME_SEARCH_WIDTH_FACTOR, 0.56);
         assert_eq!(HOME_SEARCH_HORIZONTAL_PADDING, 32.0);
         assert_eq!(HOME_SEARCH_HEIGHT, 72.0);
         assert_eq!(HOME_SEARCH_FRAME_EXTRA_HEIGHT, 8.0);
@@ -2548,8 +2551,9 @@ mod tests {
 
     #[test]
     fn home_search_width_uses_padding_and_bounds() {
-        assert_eq!(home_search_width(1200.0), HOME_SEARCH_MAX_WIDTH);
-        assert_eq!(home_search_width(620.0), 588.0);
+        assert!((home_search_width(1672.0 - APP_RAIL_WIDTH) - 878.08).abs() < 0.01);
+        assert!((home_search_width(1200.0) - 672.0).abs() < 0.01);
+        assert!((home_search_width(620.0) - 347.2).abs() < 0.01);
         assert_eq!(home_search_width(250.0), 218.0);
     }
 
