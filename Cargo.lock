@@ -9388,6 +9388,14 @@ name = "slate-apps"
 version = "0.0.1"
 
 [[package]]
+name = "slate-broadwebd"
+version = "0.0.1"
+dependencies = [
+ "reqwest",
+ "url",
+]
+
+[[package]]
 name = "slate-browser-core"
 version = "0.0.1"
 dependencies = [
@@ -9472,6 +9480,7 @@ dependencies = [
  "headers",
  "rustls",
  "servo",
+ "slate-broadwebd",
  "url",
 ]
 

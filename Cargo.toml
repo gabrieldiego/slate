@@ -2,6 +2,7 @@
 members = [
     "crates/apps",
     "crates/browser-core",
+    "crates/broadwebd",
     "crates/chrome",
     "crates/net",
     "crates/platform",
@@ -36,6 +37,7 @@ rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs", 
 url = "2.5"
 slate-apps = { path = "crates/apps" }
 slate-browser-core = { path = "crates/browser-core" }
+slate-broadwebd = { path = "crates/broadwebd" }
 slate-chrome = { path = "crates/chrome" }
 slate-net = { path = "crates/net" }
 slate-platform = { path = "crates/platform" }

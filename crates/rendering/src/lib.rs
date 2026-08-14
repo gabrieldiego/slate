@@ -11,6 +11,10 @@ use servo::{
     EventLoopWaker, LoadStatus, Preferences, RenderingContext, Servo, ServoBuilder,
     SoftwareRenderingContext, WebView, WebViewBuilder, WebViewDelegate,
 };
+use slate_broadwebd::{
+    BroadwebDaemon, BroadwebdError, FetchDisposition, HttpFetchRequest, HttpFetchResponse,
+    IPFS_GATEWAY_PLUGIN,
+};
 use std::cell::RefCell;
 use std::future::Future;
 use std::pin::Pin;
@@ -264,9 +268,21 @@ impl RenderBackend for ServoBackend {
                 ServoDocumentSource::Blocked,
                 viewport,
             ),
+            address if has_ipfs_service_scheme(address) => self.render_broadwebd_fetch(
+                address,
+                HttpFetchRequest::default_profile(address).through_transport(IPFS_GATEWAY_PLUGIN),
+                ServoDocumentSource::Broadweb,
+                viewport,
+            ),
             address if has_broadweb_scheme(address) => {
                 self.render_servo_url(address, address, ServoDocumentSource::Broadweb, viewport)
             }
+            address if has_http_service_scheme(address) => self.render_broadwebd_fetch(
+                address,
+                HttpFetchRequest::default_profile(address),
+                ServoDocumentSource::Web,
+                viewport,
+            ),
             address if has_servo_supported_scheme(address) => {
                 let source = if address.starts_with("file://") {
                     ServoDocumentSource::LocalFile
@@ -285,6 +301,66 @@ impl RenderBackend for ServoBackend {
             ),
         }
     }
+}
+
+impl ServoBackend {
+    fn render_broadwebd_fetch(
+        self,
+        address: &str,
+        request: HttpFetchRequest,
+        source: ServoDocumentSource,
+        viewport: RenderViewport,
+    ) -> RenderSurface {
+        match fetch_with_default_broadwebd(request) {
+            Ok(response) => match &response.disposition {
+                FetchDisposition::RenderHtml => self.render_html_with_viewport(
+                    address,
+                    response.body_text_lossy(),
+                    source,
+                    viewport,
+                ),
+                FetchDisposition::Download { suggested_filename } => self
+                    .render_html_with_viewport(
+                        address,
+                        download_ready_html(
+                            &response.final_url,
+                            response.content_type.as_deref(),
+                            suggested_filename,
+                        ),
+                        source,
+                        viewport,
+                    ),
+            },
+            Err(error) => self.render_error_with_viewport(
+                address,
+                "Broadweb Fetch Error",
+                "Slate could not fetch this page through broadwebd",
+                &[address.to_string(), error.to_string()],
+                ServoDocumentSource::Blocked,
+                viewport,
+            ),
+        }
+    }
+}
+
+fn fetch_with_default_broadwebd(
+    request: HttpFetchRequest,
+) -> Result<HttpFetchResponse, BroadwebdError> {
+    thread_local! {
+        static BROADWEBD: RefCell<Option<BroadwebDaemon>> = RefCell::new(None);
+    }
+
+    BROADWEBD.with(|daemon| {
+        if daemon.borrow().is_none() {
+            *daemon.borrow_mut() = Some(BroadwebDaemon::start_default_session()?);
+        }
+
+        let daemon = daemon.borrow();
+        daemon
+            .as_ref()
+            .expect("broadwebd should be initialized")
+            .fetch_http(request)
+    })
 }
 
 #[derive(Clone)]
@@ -437,16 +513,20 @@ impl ServoRenderer {
             .or_else(|| webview.page_title())
             .filter(|title| !title.is_empty())
             .unwrap_or_else(|| display_address.to_string());
-        let address = match source {
-            ServoDocumentSource::SlateGenerated | ServoDocumentSource::Blocked => {
-                display_address.to_string()
+        let address = if servo_address.starts_with("data:") {
+            display_address.to_string()
+        } else {
+            match source {
+                ServoDocumentSource::SlateGenerated | ServoDocumentSource::Blocked => {
+                    display_address.to_string()
+                }
+                ServoDocumentSource::LocalFile
+                | ServoDocumentSource::Web
+                | ServoDocumentSource::Broadweb => webview
+                    .url()
+                    .map(|url| url.to_string())
+                    .unwrap_or_else(|| display_address.to_string()),
             }
-            ServoDocumentSource::LocalFile
-            | ServoDocumentSource::Web
-            | ServoDocumentSource::Broadweb => webview
-                .url()
-                .map(|url| url.to_string())
-                .unwrap_or_else(|| display_address.to_string()),
         };
 
         Ok(ServoDocument {
@@ -729,7 +809,30 @@ fn broadweb_placeholder_html(address: &str) -> String {
          <body><h1>Broadweb route pending</h1>\
          <p><code>{escaped_address}</code></p>\
          <p>Servo received this address through Slate's broadweb protocol callback.</p>\
-         <p>No IPFS, IPNS, I2P, Gemini, or magnet network request has been issued yet.</p>\
+         <p>No I2P, Gemini, magnet, or other pending adapter network request has been issued yet.</p>\
+         </body></html>"
+    )
+}
+
+fn download_ready_html(
+    address: &str,
+    content_type: Option<&str>,
+    suggested_filename: &str,
+) -> String {
+    let escaped_address = escape_html_text(address);
+    let escaped_content_type = escape_html_text(content_type.unwrap_or("unknown"));
+    let escaped_filename = escape_html_text(suggested_filename);
+    format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\">\
+         <title>Download Ready</title>\
+         <style>body{{font-family:sans-serif;margin:48px;color:#262626;background:#fbfaf8}}\
+         h1{{font-size:34px;color:#0b6b68}}p{{font-size:17px;line-height:1.5}}\
+         code{{background:#e5f0ee;padding:4px 6px;border-radius:4px}}</style></head>\
+         <body><h1>Download ready</h1>\
+         <p><code>{escaped_filename}</code></p>\
+         <p>{escaped_content_type}</p>\
+         <p>{escaped_address}</p>\
+         <p>The response was fetched through broadwebd and should be handed to Slate's download flow.</p>\
          </body></html>"
     )
 }
@@ -738,6 +841,18 @@ fn has_servo_supported_scheme(address: &str) -> bool {
     Url::parse(address)
         .ok()
         .is_some_and(|url| matches!(url.scheme(), "http" | "https" | "file" | "data" | "about"))
+}
+
+fn has_http_service_scheme(address: &str) -> bool {
+    Url::parse(address)
+        .ok()
+        .is_some_and(|url| matches!(url.scheme(), "http" | "https"))
+}
+
+fn has_ipfs_service_scheme(address: &str) -> bool {
+    Url::parse(address)
+        .ok()
+        .is_some_and(|url| matches!(url.scheme(), "ipfs" | "ipns"))
 }
 
 fn has_broadweb_scheme(address: &str) -> bool {
@@ -893,7 +1008,7 @@ mod tests {
 
     #[test]
     fn broadweb_schemes_use_servo_protocol_callback() {
-        let surface = ServoBackend.load_address("ipfs://bafybeigdyrzt");
+        let surface = ServoBackend.load_address("gemini://example.test");
 
         assert_eq!(surface.title, "Broadweb Route Pending");
         let RenderDocument::Web(document) = surface.document else {
