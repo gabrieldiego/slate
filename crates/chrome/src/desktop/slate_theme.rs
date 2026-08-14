@@ -26,6 +26,7 @@ pub(crate) enum SlateIcon {
     AppWeb,
     HomeFooterShield,
     HomeHeroShield,
+    HomeSearch,
     HomeMetricAds,
     HomeMetricLock,
     HomeMetricPrivacy,
@@ -113,6 +114,12 @@ impl SlateIcon {
                 width: 64,
                 height: 64,
                 mask: include_bytes!("../../assets/icons/home_hero_shield.alpha"),
+            },
+            Self::HomeSearch => SlateIconData {
+                name: "home-search",
+                width: 32,
+                height: 32,
+                mask: include_bytes!("../../assets/icons/home_search.alpha"),
             },
             Self::HomeMetricAds => SlateIconData {
                 name: "home-metric-ads",
@@ -448,6 +455,7 @@ mod tests {
             SlateIcon::AppWeb,
             SlateIcon::HomeFooterShield,
             SlateIcon::HomeHeroShield,
+            SlateIcon::HomeSearch,
             SlateIcon::HomeMetricAds,
             SlateIcon::HomeMetricLock,
             SlateIcon::HomeMetricPrivacy,
