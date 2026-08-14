@@ -29,6 +29,12 @@ pub trait ApplicationServicePlugin: Send + Sync {
     ) -> Result<ServiceResponse, BroadwebdError>;
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PluginInstallReport {
+    pub metadata: PluginMetadata,
+    pub replaced_existing: bool,
+}
+
 pub struct PluginRegistry {
     transports: BTreeMap<String, Box<dyn TransportPlugin>>,
     services: BTreeMap<String, Box<dyn ApplicationServicePlugin>>,
@@ -51,13 +57,55 @@ impl PluginRegistry {
     }
 
     pub fn register_transport(&mut self, plugin: impl TransportPlugin + 'static) {
+        let _ = self.install_transport(plugin);
+    }
+
+    pub fn install_transport(
+        &mut self,
+        plugin: impl TransportPlugin + 'static,
+    ) -> PluginInstallReport {
         let metadata = plugin.metadata();
-        self.transports.insert(metadata.id, Box::new(plugin));
+        let replaced_existing = self
+            .transports
+            .insert(metadata.id.clone(), Box::new(plugin))
+            .is_some();
+        PluginInstallReport {
+            metadata,
+            replaced_existing,
+        }
     }
 
     pub fn register_service(&mut self, plugin: impl ApplicationServicePlugin + 'static) {
+        let _ = self.install_service(plugin);
+    }
+
+    pub fn install_service(
+        &mut self,
+        plugin: impl ApplicationServicePlugin + 'static,
+    ) -> PluginInstallReport {
         let metadata = plugin.metadata();
-        self.services.insert(metadata.id, Box::new(plugin));
+        let replaced_existing = self
+            .services
+            .insert(metadata.id.clone(), Box::new(plugin))
+            .is_some();
+        PluginInstallReport {
+            metadata,
+            replaced_existing,
+        }
+    }
+
+    pub fn remove_transport(&mut self, id: &str) -> Result<PluginMetadata, BroadwebdError> {
+        self.transports
+            .remove(id)
+            .map(|plugin| plugin.metadata())
+            .ok_or_else(|| BroadwebdError::MissingPlugin(id.to_string()))
+    }
+
+    pub fn remove_service(&mut self, id: &str) -> Result<PluginMetadata, BroadwebdError> {
+        self.services
+            .remove(id)
+            .map(|plugin| plugin.metadata())
+            .ok_or_else(|| BroadwebdError::MissingPlugin(id.to_string()))
     }
 
     pub fn list_plugins(&self) -> Vec<PluginMetadata> {

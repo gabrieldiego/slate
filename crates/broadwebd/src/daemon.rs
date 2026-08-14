@@ -1,6 +1,7 @@
 use crate::{
-    BroadwebdError, DEFAULT_PROFILE, DaemonHealth, DaemonLifecycle, HttpFetchRequest,
-    HttpFetchResponse, PluginRegistry, ResourceBudget, StateRoot,
+    ApplicationServicePlugin, BroadwebdError, DEFAULT_PROFILE, DaemonHealth, DaemonLifecycle,
+    HttpFetchRequest, HttpFetchResponse, PluginInstallReport, PluginMetadata, PluginRegistry,
+    ResourceBudget, StateRoot, TransportPlugin,
 };
 use std::path::PathBuf;
 
@@ -52,6 +53,28 @@ impl BroadwebDaemon {
 
     pub fn registry(&self) -> &PluginRegistry {
         &self.registry
+    }
+
+    pub fn install_transport(
+        &mut self,
+        plugin: impl TransportPlugin + 'static,
+    ) -> PluginInstallReport {
+        self.registry.install_transport(plugin)
+    }
+
+    pub fn install_service(
+        &mut self,
+        plugin: impl ApplicationServicePlugin + 'static,
+    ) -> PluginInstallReport {
+        self.registry.install_service(plugin)
+    }
+
+    pub fn remove_transport(&mut self, id: &str) -> Result<PluginMetadata, BroadwebdError> {
+        self.registry.remove_transport(id)
+    }
+
+    pub fn remove_service(&mut self, id: &str) -> Result<PluginMetadata, BroadwebdError> {
+        self.registry.remove_service(id)
     }
 
     pub fn budget(&self) -> &ResourceBudget {

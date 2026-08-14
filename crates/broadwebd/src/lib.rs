@@ -29,7 +29,9 @@ pub use http::{
     ServiceResponse, TransportHttpRequest,
 };
 pub use protocols::ipfs::{IpfsGatewayTransport, ipfs_gateway_http_url};
-pub use registry::{ApplicationServicePlugin, PluginRegistry, TransportPlugin};
+pub use registry::{
+    ApplicationServicePlugin, PluginInstallReport, PluginRegistry, TransportPlugin,
+};
 pub use services::http_fetch::HttpFetchService;
 pub use state::StateRoot;
 pub use transports::direct_http::DirectHttpTransport;
@@ -37,8 +39,9 @@ pub use transports::direct_http::DirectHttpTransport;
 #[cfg(test)]
 mod tests {
     use super::{
-        BroadwebDaemon, BroadwebdError, FetchDisposition, HttpFetchRequest, PluginHealth,
-        PluginRegistry, ResourceBudget, StateRoot, TransportHttpRequest, TransportPlugin,
+        BroadwebDaemon, BroadwebdError, DIRECT_HTTP_PLUGIN, FetchDisposition, HttpFetchRequest,
+        HttpFetchResponse, PluginHealth, PluginKind, PluginMetadata, PluginRegistry,
+        ResourceBudget, ResourceProfile, StateRoot, TransportHttpRequest, TransportPlugin,
         ipfs_gateway_http_url,
     };
     use std::fs;
@@ -84,6 +87,54 @@ mod tests {
         assert!(statuses.iter().any(|status| {
             status.metadata.id == "http-fetch" && matches!(status.health, PluginHealth::Degraded(_))
         }));
+    }
+
+    #[test]
+    fn daemon_can_install_replace_and_remove_plugins_without_restart() {
+        let mut daemon = BroadwebDaemon::start_with_registry(
+            test_state_root("hot-plugins"),
+            ResourceBudget::default(),
+            PluginRegistry::new(),
+        )
+        .expect("daemon");
+
+        assert!(matches!(
+            daemon.fetch_http(HttpFetchRequest::default_profile("http://example.test/")),
+            Err(BroadwebdError::MissingPlugin(plugin)) if plugin == "http-fetch"
+        ));
+
+        let service_install = daemon.install_service(super::HttpFetchService);
+        assert_eq!(service_install.metadata.id, "http-fetch");
+        assert!(!service_install.replaced_existing);
+
+        let transport_install =
+            daemon.install_transport(FixtureTransport::new(DIRECT_HTTP_PLUGIN, "first body"));
+        assert_eq!(transport_install.metadata.id, DIRECT_HTTP_PLUGIN);
+        assert!(!transport_install.replaced_existing);
+
+        let first_response = daemon
+            .fetch_http(HttpFetchRequest::default_profile("http://example.test/"))
+            .expect("fetch with installed plugins");
+        assert!(first_response.body_text_lossy().contains("first body"));
+
+        let transport_replace =
+            daemon.install_transport(FixtureTransport::new(DIRECT_HTTP_PLUGIN, "second body"));
+        assert_eq!(transport_replace.metadata.id, DIRECT_HTTP_PLUGIN);
+        assert!(transport_replace.replaced_existing);
+
+        let second_response = daemon
+            .fetch_http(HttpFetchRequest::default_profile("http://example.test/"))
+            .expect("fetch with replaced transport");
+        assert!(second_response.body_text_lossy().contains("second body"));
+
+        let removed = daemon.remove_service("http-fetch").expect("remove service");
+        assert_eq!(removed.id, "http-fetch");
+        assert!(matches!(
+            daemon.fetch_http(HttpFetchRequest::default_profile("http://example.test/")),
+            Err(BroadwebdError::MissingPlugin(plugin)) if plugin == "http-fetch"
+        ));
+
+        let _ = fs::remove_dir_all(daemon.state_root().path());
     }
 
     #[test]
@@ -280,5 +331,39 @@ mod tests {
             "slate-broadwebd-test-{}-{name}",
             std::process::id()
         ))
+    }
+
+    struct FixtureTransport {
+        id: &'static str,
+        body: &'static str,
+    }
+
+    impl FixtureTransport {
+        fn new(id: &'static str, body: &'static str) -> Self {
+            Self { id, body }
+        }
+    }
+
+    impl TransportPlugin for FixtureTransport {
+        fn metadata(&self) -> PluginMetadata {
+            PluginMetadata::new(self.id, PluginKind::Transport)
+                .with_capabilities(&["http", "https", "http-fetch"])
+                .with_privacy_boundary("test fixture transport")
+                .with_resource_profile(ResourceProfile::Low)
+        }
+
+        fn fetch_http(
+            &self,
+            request: &TransportHttpRequest,
+            _budget: &ResourceBudget,
+        ) -> Result<HttpFetchResponse, BroadwebdError> {
+            Ok(HttpFetchResponse::new(
+                &request.url,
+                200,
+                Some("text/html; charset=utf-8".to_string()),
+                Vec::new(),
+                format!("<!doctype html><title>Fixture</title>{}", self.body).into_bytes(),
+            ))
+        }
     }
 }
