@@ -145,7 +145,7 @@ const HOME_TOP_SPACE_MIN: f32 = 48.0;
 const HOME_TOP_SPACE_MAX: f32 = 132.0;
 const HOME_BOTTOM_MIN_GAP: f32 = 16.0;
 const HOME_HERO_SIZE: f32 = 64.0;
-const HOME_HERO_TO_SEARCH_GAP: f32 = 44.0;
+const HOME_HERO_TO_SEARCH_GAP: f32 = 52.0;
 const HOME_SEARCH_TO_METRICS_GAP: f32 = 62.0;
 const HOME_PANEL_SHADOW_OFFSET: [i8; 2] = [0, 2];
 const HOME_PANEL_SHADOW_BLUR: u8 = 12;
@@ -2437,7 +2437,7 @@ mod tests {
         assert_eq!(HOME_TOP_SPACE_MAX, 132.0);
         assert_eq!(HOME_BOTTOM_MIN_GAP, 16.0);
         assert_eq!(HOME_HERO_SIZE, 64.0);
-        assert_eq!(HOME_HERO_TO_SEARCH_GAP, 44.0);
+        assert_eq!(HOME_HERO_TO_SEARCH_GAP, 52.0);
         assert_eq!(HOME_SEARCH_TO_METRICS_GAP, 62.0);
         assert_eq!(home_view_background_color(), slate_theme::BG);
         assert_eq!(HOME_PANEL_SHADOW_OFFSET, [0, 2]);
@@ -2696,7 +2696,7 @@ mod tests {
             layout.hero_rect
         );
         assert!(
-            (225.0..=242.0).contains(&layout.search_rect.top()),
+            (236.0..=248.0).contains(&layout.search_rect.top()),
             "expected search to sit near the screenshot vertical rhythm: {:?}",
             layout.search_rect
         );
