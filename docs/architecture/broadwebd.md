@@ -63,9 +63,15 @@ belongs to, whether private browsing changes the behavior, and what routing
 mode may be used. The daemon executes approved protocol work within those
 constraints.
 
-The daemon should be reachable only through a local IPC mechanism, such as a
-Unix domain socket on Linux/macOS and an equivalent local channel on other
-platforms. It should not expose a public network control API.
+The current implementation should remain in-process while the service API,
+plugin registry, fetch boundary, and tests are still taking shape. This avoids
+adding process supervision, IPC framing, authentication, and streaming failure
+modes before the browser and daemon boundary is clear.
+
+The later daemon process should be reachable only through a local IPC
+mechanism, such as a Unix domain socket on Linux/macOS and a named pipe with
+per-user access control on Windows. It should not expose a public network
+control API.
 
 ## Transport And Application Layers
 
@@ -317,8 +323,24 @@ The exact format can evolve, but the boundaries should remain clear:
 
 ## IPC Surface
 
-The first implementation can be in-process for tests, but the API should be
-designed so it can later move behind IPC without changing browser policy code.
+The first implementation can be in-process for tests and early integration, but
+the API should be designed so it can later move behind IPC without changing
+browser policy code.
+
+Slate-to-`broadwebd` control traffic should use OS-local IPC, not an exposed
+TCP service. On Linux and macOS this should be a Unix domain socket under a
+per-user runtime directory such as `$XDG_RUNTIME_DIR/slate/`. On Windows this
+should be a named pipe with an ACL limited to the current user. The IPC
+protocol should carry framed, request/response messages so long fetches,
+progress events, cancellation, and streamed bodies do not require opening
+additional public ports.
+
+If Servo cannot route subresource loading through an embedding hook, Slate may
+need a loopback HTTP proxy as a compatibility bridge for the renderer. That
+proxy should be separate from the daemon control API, bound only to loopback,
+randomized per session, token-protected, profile-scoped, and removable once a
+direct Servo network hook exists. It should not become the primary
+Slate-to-`broadwebd` API.
 
 Candidate commands:
 
@@ -358,6 +380,11 @@ BackgroundModeChanged
 Policy-bearing inputs should be explicit. The daemon should receive an approved
 plan from browser-core rather than independently deciding to use a public
 gateway, proxy, or private network.
+
+The IPC boundary should preserve the same ownership split as the in-process
+API: browser-core approves policy and profile context, while `broadwebd`
+executes approved work through registered transport and application-service
+plugins.
 
 ## IPFS Initial Shape
 
@@ -459,6 +486,12 @@ Real protocol tests should use local fixtures or mock daemons. Tests must not
 require live IPFS, Tor, I2P, public gateways, or external network availability
 unless they are explicitly marked as external/manual.
 
+Loopback network tests and external internet tests should be separate. Loopback
+tests may bind `127.0.0.1` to exercise the daemon's HTTP path without relying on
+public network availability. External tests may contact stable public endpoints,
+but they must be ignored by default and gated behind an explicit environment
+variable such as `SLATE_EXTERNAL_NETWORK_TESTS=1`.
+
 ## Implementation Slices
 
 Recommended order:
@@ -480,8 +513,10 @@ Recommended order:
 
 - What should the daemon binary be named: `broadwebd`, `slated`, or
   `slate-broadwebd`?
-- Should the first production IPC be Unix sockets, platform-native local IPC,
-  or a loopback HTTP API bound to localhost only?
+- Which Rust IPC crate or small protocol should implement framed local IPC
+  without introducing unsafe Slate-owned code?
+- What minimal loopback proxy shape is needed if Servo subresource loading
+  cannot be routed through a direct embedding hook?
 - What metadata should every plugin expose for capability, privacy, resource,
   and dependency discovery?
 - Should external plugins ever be supported, or should plugins remain built-in

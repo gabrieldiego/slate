@@ -75,7 +75,20 @@ or:
 scripts/check.sh
 ```
 
-The window opens a Slate mockup with the intended first shape: left app rail, tab strip, navigation toolbar, address bar, and a quiet home viewport. The side rail switches between Web, Downloads, Calendar, and Messaging panes; tabs can be selected; the `+` tab button creates a mock tab; and the address bar can navigate to Servo-rendered internal pages such as `slate://tests/hello`, local HTML files such as `examples/local-page.html`, HTTP(S) pages, and placeholder broadweb URLs such as `ipfs://bafy...`.
+Broadwebd has focused test targets:
+
+```bash
+make test-broadwebd
+make test-network
+make test-external-network
+```
+
+`test-broadwebd` runs the daemon and plugin unit tests. `test-network` also runs
+loopback integration coverage that binds a local fixture server. `test-external-network`
+is opt-in and enables ignored internet smoke tests with
+`SLATE_EXTERNAL_NETWORK_TESTS=1`.
+
+The window opens a Slate mockup with the intended first shape: left app rail, tab strip, navigation toolbar, address bar, and a quiet home viewport. The side rail switches between Web, Downloads, Calendar, and Messaging panes; tabs can be selected; the `+` tab button creates a mock tab; and the address bar can navigate to Servo-rendered internal pages such as `slate://tests/hello`, local HTML files such as `examples/local-page.html`, broadwebd-fetched HTTP(S) pages, IPFS/IPNS gateway routes, and placeholder broadweb URLs such as `gemini://example`.
 
 ## Servo
 
@@ -93,9 +106,9 @@ Slate crates depend on Servo through the vendored crate path:
 servo = { path = "third_party/servo/components/servo" }
 ```
 
-The current `ServoBackend` in `crates/rendering/` hands internal `data:` pages, local `file://` pages, HTTP(S) pages, and registered broadweb schemes to Servo. CSS and JavaScript behavior come from Servo and its SpiderMonkey integration. Slate does not implement local HTML, CSS, or JavaScript rendering.
+The current `ServoBackend` in `crates/rendering/` hands internal `data:` pages, local `file://` pages, broadwebd-fetched HTTP(S) pages, and registered broadweb schemes to Servo. CSS and JavaScript behavior come from Servo and its SpiderMonkey integration. Slate does not implement local HTML, CSS, or JavaScript rendering.
 
-Broadweb schemes such as `ipfs://`, `ipns://`, `i2p://`, `gemini://`, and `magnet:` currently use a Servo custom protocol handler that returns a local placeholder page. It does not contact those networks yet. `.onion` and `.i2p` hostnames stay blocked before normal web routing to avoid accidental DNS leaks until the Tor and I2P adapters exist.
+Broadwebd currently provides a safe Rust in-process daemon path with a static plugin registry, a direct HTTP transport, an HTTP fetch service, and an IPFS/IPNS local gateway transport. Top-level HTTP(S), `ipfs://`, and `ipns://` navigations use that path before Servo renders HTML. Non-HTML responses are marked for Slate's download flow. Other broadweb schemes such as `i2p://`, `gemini://`, and `magnet:` still use a Servo custom protocol handler that returns a local placeholder page. `.onion` and `.i2p` hostnames stay blocked before normal web routing to avoid accidental DNS leaks until the Tor and I2P adapters exist.
 
 GitHub deploy keys are repository-scoped. Use a dedicated key for the Servo fork, not the Slate repository key.
 
