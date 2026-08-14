@@ -12,7 +12,7 @@ pub(crate) const PANEL: Color32 = Color32::from_rgb(240, 237, 234);
 pub(crate) const PANEL_HOVER: Color32 = Color32::from_rgb(236, 235, 233);
 pub(crate) const BORDER: Color32 = Color32::from_rgb(229, 226, 225);
 pub(crate) const TEXT: Color32 = Color32::from_rgb(43, 45, 45);
-pub(crate) const MUTED: Color32 = Color32::from_rgb(111, 114, 115);
+pub(crate) const MUTED: Color32 = Color32::from_rgb(120, 120, 121);
 pub(crate) const TEAL: Color32 = Color32::from_rgb(11, 95, 95);
 pub(crate) const TEAL_SOFT: Color32 = Color32::from_rgb(237, 240, 239);
 pub(crate) const AMBER: Color32 = Color32::from_rgb(214, 145, 9);
@@ -541,6 +541,7 @@ mod tests {
         assert_eq!(PANEL, egui::Color32::from_rgb(240, 237, 234));
         assert_eq!(PANEL_HOVER, egui::Color32::from_rgb(236, 235, 233));
         assert_eq!(BORDER, egui::Color32::from_rgb(229, 226, 225));
+        assert_eq!(MUTED, egui::Color32::from_rgb(120, 120, 121));
         assert_eq!(TEAL, egui::Color32::from_rgb(11, 95, 95));
         assert_eq!(TEAL_SOFT, egui::Color32::from_rgb(237, 240, 239));
         assert_eq!(AMBER, egui::Color32::from_rgb(214, 145, 9));
