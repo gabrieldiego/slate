@@ -5,6 +5,10 @@ Status: draft
 This note collects the current design direction for `broadwebd`, Slate's
 managed local service for broadweb protocols.
 
+See `docs/architecture/broadwebd-plugin-contract.md` for the concrete internal
+plugin names, Rust interfaces, hot-loading boundary, and first IPFS service
+contract.
+
 `broadwebd` should make protocols such as IPFS, I2P, Tor, Gemini, Nostr,
 Matrix, and future broadweb adapters usable without forcing every browser
 window or mobile session to cold-start protocol state from nothing. It should
