@@ -29,7 +29,10 @@ pub use http::{
     FetchDisposition, HttpFetchRequest, HttpFetchResponse, HttpHeader, ServiceRequest,
     ServiceResponse, TransportHttpRequest,
 };
-pub use protocols::ipfs::{IpfsConfig, IpfsGatewayTransport, IpfsService, ipfs_gateway_http_url};
+pub use protocols::ipfs::{
+    IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport, IpfsService,
+    ipfs_gateway_http_url,
+};
 pub use registry::{
     ApplicationServicePlugin, PluginInstallReport, PluginRegistry, ProtocolInstallReport,
     ProtocolService, TransportPlugin,
@@ -42,9 +45,10 @@ pub use transports::direct_http::DirectHttpTransport;
 mod tests {
     use super::{
         BroadwebDaemon, BroadwebdError, DIRECT_HTTP_PLUGIN, FetchDisposition, HttpFetchRequest,
-        HttpFetchResponse, IPFS_GATEWAY_PLUGIN, IpfsConfig, IpfsService, PluginHealth, PluginKind,
-        PluginMetadata, PluginRegistry, ResourceBudget, ResourceProfile, StateRoot,
-        TransportHttpRequest, TransportPlugin, ipfs_gateway_http_url,
+        HttpFetchResponse, IPFS_GATEWAY_PLUGIN, IpfsConfig, IpfsGatewayScope, IpfsGatewayTransport,
+        IpfsService, PluginHealth, PluginKind, PluginMetadata, PluginRegistry, ProtocolService,
+        ResourceBudget, ResourceProfile, StateRoot, TransportHttpRequest, TransportPlugin,
+        ipfs_gateway_http_url,
     };
     use std::fs;
     use std::io::{Read, Write};
@@ -168,7 +172,7 @@ mod tests {
             "<!doctype html><title>IPFS Fixture</title><h1>Fetched From IPFS</h1>",
         );
         let mut registry = PluginRegistry::new();
-        registry.register_transport(super::IpfsGatewayTransport::new(&gateway));
+        registry.register_transport(IpfsGatewayTransport::local(&gateway).expect("local gateway"));
         registry.register_service(super::HttpFetchService);
         let daemon = BroadwebDaemon::start_with_registry(
             test_state_root("ipfs-html"),
@@ -224,7 +228,7 @@ mod tests {
     fn http_fetch_can_use_ipfs_gateway_transport_for_downloads() {
         let (gateway, server) = local_http_fixture("image/png", "png-ish");
         let mut registry = PluginRegistry::new();
-        registry.register_transport(super::IpfsGatewayTransport::new(&gateway));
+        registry.register_transport(IpfsGatewayTransport::local(&gateway).expect("local gateway"));
         registry.register_service(super::HttpFetchService);
         let daemon = BroadwebDaemon::start_with_registry(
             test_state_root("ipfs-download"),
@@ -346,6 +350,72 @@ mod tests {
             IpfsConfig::new("https://ipfs.io"),
             Err(BroadwebdError::UnsupportedRequest(_))
         ));
+    }
+
+    #[test]
+    fn ipfs_config_accepts_explicit_public_gateway() {
+        let config = IpfsConfig::with_public_gateway("https://ipfs.io")
+            .expect("explicit public gateway config");
+
+        assert_eq!(config.gateway_base(), "https://ipfs.io");
+        assert_eq!(config.gateway_scope(), IpfsGatewayScope::Public);
+        assert!(config.uses_public_gateway());
+        assert!(!config.allow_public_gateway_fallback());
+    }
+
+    #[test]
+    fn ipfs_public_gateway_transport_exposes_public_privacy_boundary() {
+        let transport =
+            IpfsGatewayTransport::public("https://ipfs.io").expect("public gateway transport");
+        let metadata = transport.metadata();
+
+        assert_eq!(transport.gateway_scope(), IpfsGatewayScope::Public);
+        assert!(
+            metadata
+                .capabilities
+                .iter()
+                .any(|capability| capability == "public-gateway")
+        );
+        assert!(metadata.privacy_boundary.contains("public IPFS gateway"));
+        assert_eq!(
+            ipfs_gateway_http_url("ipfs://bafybeigdyrzt/index.html", transport.gateway_base())
+                .expect("gateway url"),
+            "https://ipfs.io/ipfs/bafybeigdyrzt/index.html"
+        );
+    }
+
+    #[test]
+    fn ipfs_service_registers_public_gateway_transport_from_explicit_config() {
+        let service = IpfsService::new(
+            IpfsConfig::with_public_gateway("https://ipfs.io")
+                .expect("explicit public gateway config"),
+        );
+        let mut registry = PluginRegistry::new();
+        let installs = service.install_adapter_plugins(&mut registry);
+        let metadata = service.metadata();
+
+        assert!(service.config().uses_public_gateway());
+        assert_eq!(installs.len(), 1);
+        assert_eq!(installs[0].metadata.id, IPFS_GATEWAY_PLUGIN);
+        assert!(
+            installs[0]
+                .metadata
+                .capabilities
+                .iter()
+                .any(|capability| capability == "public-gateway")
+        );
+        assert!(
+            metadata
+                .capabilities
+                .iter()
+                .any(|capability| capability == "public-gateway")
+        );
+        assert!(
+            registry
+                .list_transports()
+                .iter()
+                .any(|metadata| metadata.id == IPFS_GATEWAY_PLUGIN)
+        );
     }
 
     #[test]

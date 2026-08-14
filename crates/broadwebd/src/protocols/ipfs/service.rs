@@ -23,23 +23,35 @@ impl IpfsService {
         &self,
         registry: &mut PluginRegistry,
     ) -> Vec<PluginInstallReport> {
-        vec![registry.install_transport(IpfsGatewayTransport::new(self.config.gateway_base()))]
+        vec![
+            registry.install_transport(IpfsGatewayTransport::from_endpoint(
+                self.config.gateway_endpoint().clone(),
+            )),
+        ]
     }
 }
 
 impl ProtocolService for IpfsService {
     fn metadata(&self) -> PluginMetadata {
-        PluginMetadata::new(IPFS_PROTOCOL_SERVICE, PluginKind::ProtocolService)
-            .with_capabilities(&[
+        let capabilities = if self.config.uses_public_gateway() {
+            [
                 "ipfs",
                 "ipns",
                 "application/http-response",
-                "local-gateway",
-            ])
+                "public-gateway",
+            ]
+        } else {
+            ["ipfs", "ipns", "application/http-response", "local-gateway"]
+        };
+        let privacy_boundary = if self.config.uses_public_gateway() {
+            "retrieves IPFS/IPNS through an explicitly configured public gateway"
+        } else {
+            "retrieves IPFS/IPNS through an explicitly configured local gateway; no public gateway fallback by default"
+        };
+        PluginMetadata::new(IPFS_PROTOCOL_SERVICE, PluginKind::ProtocolService)
+            .with_capabilities(&capabilities)
             .with_dependencies(&[IPFS_GATEWAY_PLUGIN])
-            .with_privacy_boundary(
-                "retrieves IPFS/IPNS through an explicitly configured local gateway; no public gateway fallback by default",
-            )
+            .with_privacy_boundary(privacy_boundary)
             .with_resource_profile(ResourceProfile::Medium)
     }
 
