@@ -6,15 +6,15 @@ use std::collections::HashMap;
 
 use egui::{Color32, TextureHandle, TextureOptions};
 
-pub(crate) const BG: Color32 = Color32::from_rgb(251, 251, 250);
+pub(crate) const BG: Color32 = Color32::from_rgb(251, 249, 249);
 pub(crate) const SURFACE: Color32 = Color32::from_rgb(255, 255, 255);
-pub(crate) const PANEL: Color32 = Color32::from_rgb(245, 245, 244);
-pub(crate) const PANEL_HOVER: Color32 = Color32::from_rgb(239, 240, 238);
-pub(crate) const BORDER: Color32 = Color32::from_rgb(224, 224, 222);
+pub(crate) const PANEL: Color32 = Color32::from_rgb(240, 237, 234);
+pub(crate) const PANEL_HOVER: Color32 = Color32::from_rgb(236, 235, 233);
+pub(crate) const BORDER: Color32 = Color32::from_rgb(229, 226, 225);
 pub(crate) const TEXT: Color32 = Color32::from_rgb(43, 45, 45);
 pub(crate) const MUTED: Color32 = Color32::from_rgb(111, 114, 115);
 pub(crate) const TEAL: Color32 = Color32::from_rgb(7, 112, 109);
-pub(crate) const TEAL_SOFT: Color32 = Color32::from_rgb(230, 243, 241);
+pub(crate) const TEAL_SOFT: Color32 = Color32::from_rgb(242, 246, 243);
 pub(crate) const AMBER: Color32 = Color32::from_rgb(220, 156, 0);
 pub(crate) const BLUE: Color32 = Color32::from_rgb(25, 118, 199);
 
@@ -444,7 +444,9 @@ fn load_raster_mask_texture(
 
 #[cfg(test)]
 mod tests {
-    use super::{MUTED, SlateIcon, SlateRaster, raster_mask_rgba};
+    use super::{
+        BG, BORDER, MUTED, PANEL, PANEL_HOVER, SlateIcon, SlateRaster, TEAL_SOFT, raster_mask_rgba,
+    };
 
     #[test]
     fn bundled_alpha_masks_match_declared_dimensions() {
@@ -530,6 +532,15 @@ mod tests {
                 .filter(|pixel| pixel[3] > 0)
                 .all(|pixel| pixel[0] == red && pixel[1] == green && pixel[2] == blue)
         );
+    }
+
+    #[test]
+    fn palette_uses_warm_concept_layers() {
+        assert_eq!(BG, egui::Color32::from_rgb(251, 249, 249));
+        assert_eq!(PANEL, egui::Color32::from_rgb(240, 237, 234));
+        assert_eq!(PANEL_HOVER, egui::Color32::from_rgb(236, 235, 233));
+        assert_eq!(BORDER, egui::Color32::from_rgb(229, 226, 225));
+        assert_eq!(TEAL_SOFT, egui::Color32::from_rgb(242, 246, 243));
     }
 
     #[test]
