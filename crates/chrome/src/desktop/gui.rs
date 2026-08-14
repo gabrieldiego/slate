@@ -128,6 +128,7 @@ const ADDRESS_BOOKMARK_BUTTON_SIZE: f32 = 28.0;
 const ADDRESS_BOOKMARK_BUTTON_RADIUS: u8 = 6;
 const ADDRESS_BOOKMARK_RESERVED_WIDTH: f32 = 36.0;
 const ADDRESS_TRAILING_CONTROLS_WIDTH: f32 = 180.0;
+const ADDRESS_TRAILING_GAP: f32 = 12.0;
 const HOME_SEARCH_MIN_WIDTH: f32 = 280.0;
 const HOME_SEARCH_MAX_WIDTH: f32 = 880.0;
 const HOME_SEARCH_WIDTH_FACTOR: f32 = 0.56;
@@ -1919,6 +1920,7 @@ impl Gui {
                                     ));
                                 }
 
+                                ui.add_space(ADDRESS_TRAILING_GAP);
                                 let privacy_icon = slate_icons.texture(
                                     ui.ctx(),
                                     SlateIcon::TopShield,
@@ -2178,8 +2180,8 @@ mod tests {
         ADDRESS_BOOKMARK_RESERVED_WIDTH, ADDRESS_CORNER_RADIUS, ADDRESS_ICON_GAP,
         ADDRESS_INNER_MARGIN_X, ADDRESS_LEADING_GAP, ADDRESS_MIN_WIDTH, ADDRESS_SECURITY_ICON_SIZE,
         ADDRESS_SHADOW_ALPHA, ADDRESS_SHADOW_BLUR, ADDRESS_SHADOW_OFFSET, ADDRESS_SHADOW_SPREAD,
-        ADDRESS_TRAILING_CONTROLS_WIDTH, AddressSecurityIcon, Gui, HOME_METRIC_CARD_MIN_WIDTH,
-        HomeContentLayout, SlateIconCache, address_bookmark_icon_color,
+        ADDRESS_TRAILING_CONTROLS_WIDTH, ADDRESS_TRAILING_GAP, AddressSecurityIcon, Gui,
+        HOME_METRIC_CARD_MIN_WIDTH, HomeContentLayout, SlateIconCache, address_bookmark_icon_color,
         address_security_icon_for_location, address_security_raster_color,
         app_title_background_color, concept_screenshot_home_view_size,
         default_opening_home_view_height, default_opening_home_view_size,
@@ -2430,6 +2432,7 @@ mod tests {
         assert_eq!(ADDRESS_BOOKMARK_BUTTON_RADIUS, 6);
         assert_eq!(ADDRESS_BOOKMARK_RESERVED_WIDTH, 36.0);
         assert_eq!(ADDRESS_TRAILING_CONTROLS_WIDTH, 180.0);
+        assert_eq!(ADDRESS_TRAILING_GAP, 12.0);
         assert_eq!(HOME_TOP_SPACE_FACTOR, 0.18);
         assert_eq!(HOME_TOP_SPACE_MIN, 48.0);
         assert_eq!(HOME_TOP_SPACE_MAX, 132.0);
