@@ -408,6 +408,8 @@ and `ipns://` are direct schemes and already fit Slate's protocol callback path.
 Initial IPFS mode should be retrieval-focused:
 
 - support local gateway or local RPC when configured;
+- support explicitly configured public gateway retrieval when browser policy
+  permits it;
 - support verified/trustless retrieval where practical;
 - use delegated routing before full local DHT participation;
 - persist cache and routing hints;

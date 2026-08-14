@@ -181,11 +181,19 @@ IpfsService
 ```
 
 `ipfs-gateway` remains a transport adapter used by `http-fetch`. It maps
-`ipfs://` and `ipns://` to an explicitly configured local gateway such as
-`http://127.0.0.1:8080`. Public gateway fallback must remain disabled unless
-browser-core policy explicitly approves it for the current profile and request.
-The current `IpfsConfig::new` accepts only loopback HTTP(S) gateways, so public
-gateway fallback cannot be enabled accidentally through default construction.
+`ipfs://` and `ipns://` to an explicitly configured gateway. The default and
+normal constructor use a local gateway such as `http://127.0.0.1:8080`.
+`IpfsConfig::with_public_gateway` enables public gateway retrieval only when
+browser-core policy explicitly chooses that mode for the current profile and
+request. Public gateway fallback must remain disabled by default. The current
+`IpfsConfig::new` accepts only loopback HTTP(S) gateways, so public gateway
+retrieval cannot be enabled accidentally through default construction.
+
+Public gateway mode sends requested CIDs, IPNS names, timing, and client
+network metadata to the configured gateway operator. It is useful for
+resource-constrained devices and early interoperability tests, but it is not a
+privacy-preserving substitute for a local node, delegated trustless retrieval,
+or a private protocol route.
 
 Later IPFS transports can be added behind the same protocol service:
 
