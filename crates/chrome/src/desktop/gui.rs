@@ -157,9 +157,9 @@ const HOME_METRIC_CARD_MIN_WIDTH: f32 = 156.0;
 const HOME_METRIC_CARD_MAX_WIDTH: f32 = 194.0;
 const HOME_METRIC_CARD_GAP: f32 = 34.0;
 const HOME_METRIC_CARD_INNER_MARGIN_X: i8 = 16;
-const HOME_METRIC_CARD_INNER_MARGIN_Y: i8 = 28;
+const HOME_METRIC_CARD_INNER_MARGIN_Y: i8 = 36;
 const HOME_METRIC_ICON_SIZE: f32 = 40.0;
-const HOME_METRIC_ICON_LABEL_GAP: f32 = 18.0;
+const HOME_METRIC_ICON_LABEL_GAP: f32 = 14.0;
 const HOME_METRIC_LABEL_TEXT_SIZE: f32 = 16.0;
 const HOME_METRIC_DETAIL_TEXT_SIZE: f32 = 13.0;
 const HOME_METRIC_DETAIL_GAP: f32 = 4.0;
@@ -2448,9 +2448,9 @@ mod tests {
         assert_eq!(HOME_METRIC_GRID_EXTRA_HEIGHT, 25.0);
         assert_eq!(home_metrics_rendered_height(), 197.0);
         assert_eq!(HOME_METRIC_CARD_INNER_MARGIN_X, 16);
-        assert_eq!(HOME_METRIC_CARD_INNER_MARGIN_Y, 28);
+        assert_eq!(HOME_METRIC_CARD_INNER_MARGIN_Y, 36);
         assert_eq!(HOME_METRIC_ICON_SIZE, 40.0);
-        assert_eq!(HOME_METRIC_ICON_LABEL_GAP, 18.0);
+        assert_eq!(HOME_METRIC_ICON_LABEL_GAP, 14.0);
         assert_eq!(HOME_METRIC_LABEL_TEXT_SIZE, 16.0);
         assert_eq!(HOME_METRIC_DETAIL_TEXT_SIZE, 13.0);
         assert_eq!(HOME_METRIC_DETAIL_GAP, 4.0);
@@ -2655,7 +2655,7 @@ mod tests {
             home_metric_card_content_width(HOME_METRIC_CARD_MAX_WIDTH),
             162.0
         );
-        assert_eq!(home_metric_card_content_height(), 116.0);
+        assert_eq!(home_metric_card_content_height(), 100.0);
     }
 
     #[test]
