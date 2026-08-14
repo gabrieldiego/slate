@@ -30,7 +30,11 @@ impl ApplicationServicePlugin for HttpFetchService {
     ) -> Result<ServiceResponse, BroadwebdError> {
         match request {
             ServiceRequest::HttpFetch(request) => {
-                let transport = registry.transport(&request.transport_id)?;
+                let transport_id = match request.transport_id.as_deref() {
+                    Some(transport_id) => transport_id.to_string(),
+                    None => registry.resolve_http_transport(&request.url)?,
+                };
+                let transport = registry.transport(&transport_id)?;
                 let transport_request = TransportHttpRequest {
                     profile: request.profile,
                     url: request.url,

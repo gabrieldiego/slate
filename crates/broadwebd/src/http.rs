@@ -1,4 +1,4 @@
-use crate::{BroadwebdError, DEFAULT_PROFILE, DIRECT_HTTP_PLUGIN, ResourceBudget};
+use crate::{BroadwebdError, DEFAULT_PROFILE, ResourceBudget};
 use std::time::Duration;
 use url::Url;
 
@@ -9,7 +9,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(12);
 pub struct HttpFetchRequest {
     pub profile: String,
     pub url: String,
-    pub transport_id: String,
+    pub transport_id: Option<String>,
 }
 
 impl HttpFetchRequest {
@@ -17,7 +17,7 @@ impl HttpFetchRequest {
         Self {
             profile: profile.into(),
             url: url.into(),
-            transport_id: DIRECT_HTTP_PLUGIN.to_string(),
+            transport_id: None,
         }
     }
 
@@ -26,7 +26,7 @@ impl HttpFetchRequest {
     }
 
     pub fn through_transport(mut self, transport_id: impl Into<String>) -> Self {
-        self.transport_id = transport_id.into();
+        self.transport_id = Some(transport_id.into());
         self
     }
 }

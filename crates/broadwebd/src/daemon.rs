@@ -1,7 +1,7 @@
 use crate::{
     ApplicationServicePlugin, BroadwebdError, DEFAULT_PROFILE, DaemonHealth, DaemonLifecycle,
     HttpFetchRequest, HttpFetchResponse, PluginInstallReport, PluginMetadata, PluginRegistry,
-    ResourceBudget, StateRoot, TransportPlugin,
+    ProtocolInstallReport, ProtocolService, ResourceBudget, StateRoot, TransportPlugin,
 };
 use std::path::PathBuf;
 
@@ -55,6 +55,13 @@ impl BroadwebDaemon {
         &self.registry
     }
 
+    pub fn install_protocol_service(
+        &mut self,
+        service: impl ProtocolService + 'static,
+    ) -> ProtocolInstallReport {
+        self.registry.install_protocol_service(service)
+    }
+
     pub fn install_transport(
         &mut self,
         plugin: impl TransportPlugin + 'static,
@@ -71,6 +78,10 @@ impl BroadwebDaemon {
 
     pub fn remove_transport(&mut self, id: &str) -> Result<PluginMetadata, BroadwebdError> {
         self.registry.remove_transport(id)
+    }
+
+    pub fn remove_protocol_service(&mut self, id: &str) -> Result<PluginMetadata, BroadwebdError> {
+        self.registry.remove_protocol_service(id)
     }
 
     pub fn remove_service(&mut self, id: &str) -> Result<PluginMetadata, BroadwebdError> {

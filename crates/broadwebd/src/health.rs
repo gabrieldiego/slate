@@ -9,6 +9,7 @@ pub enum DaemonLifecycle {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PluginKind {
+    ProtocolService,
     Transport,
     ApplicationService,
 }

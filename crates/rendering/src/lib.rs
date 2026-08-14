@@ -13,7 +13,6 @@ use servo::{
 };
 use slate_broadwebd::{
     BroadwebDaemon, BroadwebdError, FetchDisposition, HttpFetchRequest, HttpFetchResponse,
-    IPFS_GATEWAY_PLUGIN,
 };
 use std::cell::RefCell;
 use std::future::Future;
@@ -270,7 +269,7 @@ impl RenderBackend for ServoBackend {
             ),
             address if has_ipfs_service_scheme(address) => self.render_broadwebd_fetch(
                 address,
-                HttpFetchRequest::default_profile(address).through_transport(IPFS_GATEWAY_PLUGIN),
+                HttpFetchRequest::default_profile(address),
                 ServoDocumentSource::Broadweb,
                 viewport,
             ),

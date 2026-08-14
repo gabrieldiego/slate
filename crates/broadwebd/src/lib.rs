@@ -14,6 +14,7 @@ pub mod transports;
 pub(crate) const DEFAULT_PROFILE: &str = "default";
 pub const DIRECT_HTTP_PLUGIN: &str = "direct-http";
 pub const HTTP_FETCH_PLUGIN: &str = "http-fetch";
+pub const IPFS_PROTOCOL_SERVICE: &str = "ipfs";
 pub const IPFS_GATEWAY_PLUGIN: &str = "ipfs-gateway";
 pub const DEFAULT_IPFS_GATEWAY: &str = "http://127.0.0.1:8080";
 
@@ -30,7 +31,8 @@ pub use http::{
 };
 pub use protocols::ipfs::{IpfsConfig, IpfsGatewayTransport, IpfsService, ipfs_gateway_http_url};
 pub use registry::{
-    ApplicationServicePlugin, PluginInstallReport, PluginRegistry, TransportPlugin,
+    ApplicationServicePlugin, PluginInstallReport, PluginRegistry, ProtocolInstallReport,
+    ProtocolService, TransportPlugin,
 };
 pub use services::http_fetch::HttpFetchService;
 pub use state::StateRoot;
@@ -73,6 +75,9 @@ mod tests {
         }));
         assert!(health.plugins.iter().any(|status| {
             status.metadata.id == "http-fetch" && matches!(status.health, PluginHealth::Ready)
+        }));
+        assert!(health.plugins.iter().any(|status| {
+            status.metadata.id == "ipfs" && matches!(status.health, PluginHealth::Ready)
         }));
 
         let _ = fs::remove_dir_all(daemon.state_root().path());
@@ -186,6 +191,34 @@ mod tests {
     }
 
     #[test]
+    fn http_fetch_routes_ipfs_through_protocol_service() {
+        let (gateway, server) = local_http_fixture(
+            "text/html; charset=utf-8",
+            "<!doctype html><title>IPFS Service Fixture</title><h1>Fetched From IPFS Service</h1>",
+        );
+        let mut registry = PluginRegistry::new();
+        registry.register_protocol_service(IpfsService::new(IpfsConfig::new(&gateway)));
+        registry.register_service(super::HttpFetchService);
+        let daemon = BroadwebDaemon::start_with_registry(
+            test_state_root("ipfs-service-html"),
+            Default::default(),
+            registry,
+        )
+        .expect("daemon");
+        let response = daemon
+            .fetch_http(HttpFetchRequest::default_profile(
+                "ipfs://bafybeigdyrzt/index.html",
+            ))
+            .expect("fetch IPFS fixture");
+        server.join().expect("server");
+
+        assert_eq!(response.disposition, FetchDisposition::RenderHtml);
+        assert!(response.body_text_lossy().contains("IPFS Service Fixture"));
+
+        let _ = fs::remove_dir_all(daemon.state_root().path());
+    }
+
+    #[test]
     fn http_fetch_can_use_ipfs_gateway_transport_for_downloads() {
         let (gateway, server) = local_http_fixture("image/png", "png-ish");
         let mut registry = PluginRegistry::new();
@@ -289,7 +322,7 @@ mod tests {
     fn ipfs_service_registers_gateway_transport_from_config() {
         let service = IpfsService::new(IpfsConfig::new("http://127.0.0.1:9090"));
         let mut registry = PluginRegistry::new();
-        let installs = service.install_plugins(&mut registry);
+        let installs = service.install_adapter_plugins(&mut registry);
 
         assert!(!service.config().allow_public_gateway_fallback());
         assert_eq!(installs.len(), 1);

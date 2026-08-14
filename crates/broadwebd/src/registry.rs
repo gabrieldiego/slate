@@ -2,11 +2,20 @@ use crate::protocols::ipfs::IpfsService;
 use crate::services::http_fetch::HttpFetchService;
 use crate::transports::direct_http::DirectHttpTransport;
 use crate::{
-    BroadwebdError, HTTP_FETCH_PLUGIN, HttpFetchRequest, HttpFetchResponse, PluginHealth,
-    PluginMetadata, PluginStatus, ResourceBudget, ServiceRequest, ServiceResponse,
+    BroadwebdError, DIRECT_HTTP_PLUGIN, HTTP_FETCH_PLUGIN, HttpFetchRequest, HttpFetchResponse,
+    PluginHealth, PluginMetadata, PluginStatus, ResourceBudget, ServiceRequest, ServiceResponse,
     TransportHttpRequest,
 };
 use std::collections::BTreeMap;
+use url::Url;
+
+pub trait ProtocolService: Send + Sync {
+    fn metadata(&self) -> PluginMetadata;
+
+    fn install_plugins(&self, registry: &mut PluginRegistry) -> Vec<PluginInstallReport>;
+
+    fn http_transport_for_url(&self, url: &Url) -> Option<Result<String, BroadwebdError>>;
+}
 
 pub trait TransportPlugin: Send + Sync {
     fn metadata(&self) -> PluginMetadata;
@@ -35,7 +44,15 @@ pub struct PluginInstallReport {
     pub replaced_existing: bool,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProtocolInstallReport {
+    pub metadata: PluginMetadata,
+    pub replaced_existing: bool,
+    pub installed_plugins: Vec<PluginInstallReport>,
+}
+
 pub struct PluginRegistry {
+    protocol_services: BTreeMap<String, Box<dyn ProtocolService>>,
     transports: BTreeMap<String, Box<dyn TransportPlugin>>,
     services: BTreeMap<String, Box<dyn ApplicationServicePlugin>>,
 }
@@ -43,6 +60,7 @@ pub struct PluginRegistry {
 impl PluginRegistry {
     pub fn new() -> Self {
         Self {
+            protocol_services: BTreeMap::new(),
             transports: BTreeMap::new(),
             services: BTreeMap::new(),
         }
@@ -51,9 +69,37 @@ impl PluginRegistry {
     pub fn with_default_http() -> Self {
         let mut registry = Self::new();
         registry.register_transport(DirectHttpTransport);
-        IpfsService::default().install_plugins(&mut registry);
+        registry.register_protocol_service(IpfsService::default());
         registry.register_service(HttpFetchService);
         registry
+    }
+
+    pub fn register_protocol_service(&mut self, service: impl ProtocolService + 'static) {
+        let _ = self.install_protocol_service(service);
+    }
+
+    pub fn install_protocol_service(
+        &mut self,
+        service: impl ProtocolService + 'static,
+    ) -> ProtocolInstallReport {
+        let metadata = service.metadata();
+        let installed_plugins = service.install_plugins(self);
+        let replaced_existing = self
+            .protocol_services
+            .insert(metadata.id.clone(), Box::new(service))
+            .is_some();
+        ProtocolInstallReport {
+            metadata,
+            replaced_existing,
+            installed_plugins,
+        }
+    }
+
+    pub fn remove_protocol_service(&mut self, id: &str) -> Result<PluginMetadata, BroadwebdError> {
+        self.protocol_services
+            .remove(id)
+            .map(|service| service.metadata())
+            .ok_or_else(|| BroadwebdError::MissingPlugin(id.to_string()))
     }
 
     pub fn register_transport(&mut self, plugin: impl TransportPlugin + 'static) {
@@ -109,10 +155,18 @@ impl PluginRegistry {
     }
 
     pub fn list_plugins(&self) -> Vec<PluginMetadata> {
-        self.transports
+        self.protocol_services
             .values()
-            .map(|plugin| plugin.metadata())
+            .map(|service| service.metadata())
+            .chain(self.transports.values().map(|plugin| plugin.metadata()))
             .chain(self.services.values().map(|plugin| plugin.metadata()))
+            .collect()
+    }
+
+    pub fn list_protocol_services(&self) -> Vec<PluginMetadata> {
+        self.protocol_services
+            .values()
+            .map(|service| service.metadata())
             .collect()
     }
 
@@ -168,6 +222,25 @@ impl PluginRegistry {
             .ok_or_else(|| BroadwebdError::MissingPlugin(id.to_string()))
     }
 
+    pub(crate) fn resolve_http_transport(&self, target: &str) -> Result<String, BroadwebdError> {
+        let url =
+            Url::parse(target).map_err(|error| BroadwebdError::InvalidUrl(error.to_string()))?;
+        if matches!(url.scheme(), "http" | "https") {
+            return Ok(DIRECT_HTTP_PLUGIN.to_string());
+        }
+
+        for protocol in self.protocol_services.values() {
+            if let Some(transport) = protocol.http_transport_for_url(&url) {
+                return transport;
+            }
+        }
+
+        Err(BroadwebdError::UnsupportedRequest(format!(
+            "no HTTP transport for {}",
+            url.scheme()
+        )))
+    }
+
     fn service(&self, id: &str) -> Result<&dyn ApplicationServicePlugin, BroadwebdError> {
         self.services
             .get(id)
@@ -176,7 +249,9 @@ impl PluginRegistry {
     }
 
     fn has_plugin(&self, id: &str) -> bool {
-        self.transports.contains_key(id) || self.services.contains_key(id)
+        self.protocol_services.contains_key(id)
+            || self.transports.contains_key(id)
+            || self.services.contains_key(id)
     }
 }
 
