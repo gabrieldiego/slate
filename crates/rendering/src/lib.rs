@@ -2,13 +2,13 @@
 
 use core::fmt;
 use dpi::PhysicalSize;
-use headers::{ContentType, HeaderMapExt};
+use headers::{ContentType, HeaderMapExt, HeaderName, HeaderValue};
 use servo::protocol_handler::{
     DoneChannel, FetchContext, HttpStatus, ProtocolHandler, ProtocolRegistry, Request,
     ResourceFetchTiming, Response, ResponseBody,
 };
 use servo::{
-    EventLoopWaker, LoadStatus, Preferences, RenderingContext, Servo, ServoBuilder,
+    EventLoopWaker, LoadStatus, Preferences, RenderingContext, Servo, ServoBuilder, ServoUrl,
     SoftwareRenderingContext, WebView, WebViewBuilder, WebViewDelegate,
 };
 use slate_broadwebd::{
@@ -312,12 +312,11 @@ impl ServoBackend {
     ) -> RenderSurface {
         match fetch_with_default_broadwebd(request) {
             Ok(response) => match &response.disposition {
-                FetchDisposition::RenderHtml => self.render_html_with_viewport(
-                    address,
-                    response.body_text_lossy(),
-                    source,
-                    viewport,
-                ),
+                FetchDisposition::RenderHtml => {
+                    let html =
+                        broadweb_html_with_document_base(address, &response.body_text_lossy());
+                    self.render_html_with_viewport(address, html, source, viewport)
+                }
                 FetchDisposition::Download { suggested_filename } => self
                     .render_html_with_viewport(
                         address,
@@ -360,6 +359,67 @@ fn fetch_with_default_broadwebd(
             .expect("broadwebd should be initialized")
             .fetch_http(request)
     })
+}
+
+fn broadweb_fetch_protocol_response(url: ServoUrl, timing: ResourceFetchTiming) -> Response {
+    let address = url.to_string();
+    match fetch_with_default_broadwebd(HttpFetchRequest::default_profile(&address)) {
+        Ok(fetch_response) => broadweb_fetch_response(url, timing, fetch_response),
+        Err(error) => broadweb_error_protocol_response(url, timing, error),
+    }
+}
+
+fn broadweb_fetch_response(
+    url: ServoUrl,
+    timing: ResourceFetchTiming,
+    fetch_response: HttpFetchResponse,
+) -> Response {
+    let mut response = Response::new(url, timing);
+    response.status = http_status(fetch_response.status_code);
+    if let Some(content_type) = fetch_response.content_type.as_deref() {
+        insert_content_type(&mut response, content_type);
+    }
+    *response.body.lock() = ResponseBody::Done(fetch_response.body);
+    response
+}
+
+fn broadweb_error_protocol_response(
+    url: ServoUrl,
+    timing: ResourceFetchTiming,
+    error: BroadwebdError,
+) -> Response {
+    let address = url.to_string();
+    let mut response = Response::new(url, timing);
+    response.status = HttpStatus::new_raw(502, b"Bad Gateway".to_vec());
+    response.headers.typed_insert(ContentType::html());
+    *response.body.lock() =
+        ResponseBody::Done(broadweb_fetch_error_html(&address, &error.to_string()).into_bytes());
+    response
+}
+
+fn broadweb_placeholder_protocol_response(url: ServoUrl, timing: ResourceFetchTiming) -> Response {
+    let html = broadweb_placeholder_html(&url.to_string());
+    let mut response = Response::new(url, timing);
+    *response.body.lock() = ResponseBody::Done(html.into_bytes());
+    response.headers.typed_insert(ContentType::html());
+    response.status = HttpStatus::default();
+    response
+}
+
+fn http_status(status_code: u16) -> HttpStatus {
+    if (100..=599).contains(&status_code) {
+        HttpStatus::new_raw(status_code, Vec::new())
+    } else {
+        HttpStatus::new_error()
+    }
+}
+
+fn insert_content_type(response: &mut Response, content_type: &str) {
+    if let Ok(value) = HeaderValue::from_str(content_type) {
+        response
+            .headers
+            .insert(HeaderName::from_static("content-type"), value);
+    }
 }
 
 #[derive(Clone)]
@@ -411,11 +471,12 @@ impl ProtocolHandler for BroadwebProtocolHandler {
         _context: &FetchContext,
     ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
         let url = request.current_url();
-        let html = broadweb_placeholder_html(&url.to_string());
-        let mut response = Response::new(url, ResourceFetchTiming::new(request.timing_type()));
-        *response.body.lock() = ResponseBody::Done(html.into_bytes());
-        response.headers.typed_insert(ContentType::html());
-        response.status = HttpStatus::default();
+        let timing = ResourceFetchTiming::new(request.timing_type());
+        let response = if has_ipfs_service_scheme(url.as_url().as_str()) {
+            broadweb_fetch_protocol_response(url, timing)
+        } else {
+            broadweb_placeholder_protocol_response(url, timing)
+        };
 
         Box::pin(std::future::ready(response))
     }
@@ -813,6 +874,22 @@ fn broadweb_placeholder_html(address: &str) -> String {
     )
 }
 
+fn broadweb_fetch_error_html(address: &str, error: &str) -> String {
+    let escaped_address = escape_html_text(address);
+    let escaped_error = escape_html_text(error);
+    format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\">\
+         <title>Broadweb Fetch Error</title>\
+         <style>body{{font-family:sans-serif;margin:48px;color:#262626;background:#fbfaf8}}\
+         h1{{font-size:34px;color:#0b6b68}}p{{font-size:17px;line-height:1.5}}\
+         code{{background:#e5f0ee;padding:4px 6px;border-radius:4px}}</style></head>\
+         <body><h1>Broadweb fetch error</h1>\
+         <p><code>{escaped_address}</code></p>\
+         <p>{escaped_error}</p>\
+         </body></html>"
+    )
+}
+
 fn download_ready_html(
     address: &str,
     content_type: Option<&str>,
@@ -834,6 +911,46 @@ fn download_ready_html(
          <p>The response was fetched through broadwebd and should be handed to Slate's download flow.</p>\
          </body></html>"
     )
+}
+
+fn broadweb_html_with_document_base(address: &str, html: &str) -> String {
+    if !has_ipfs_service_scheme(address) || contains_base_tag(html) {
+        return html.to_string();
+    }
+
+    let base = format!("<base href=\"{}\">", escape_html_text(address));
+    insert_head_child(html, &base)
+}
+
+fn contains_base_tag(html: &str) -> bool {
+    html.to_ascii_lowercase().contains("<base")
+}
+
+fn insert_head_child(html: &str, child: &str) -> String {
+    if let Some(insert_at) = opening_tag_end(html, "<head") {
+        return insert_at_byte(html, insert_at, child);
+    }
+
+    let head = format!("<head>{child}</head>");
+    if let Some(insert_at) = opening_tag_end(html, "<html") {
+        return insert_at_byte(html, insert_at, &head);
+    }
+
+    format!("{head}{html}")
+}
+
+fn opening_tag_end(html: &str, tag_start: &str) -> Option<usize> {
+    let lower = html.to_ascii_lowercase();
+    let start = lower.find(tag_start)?;
+    html[start..].find('>').map(|offset| start + offset + 1)
+}
+
+fn insert_at_byte(input: &str, index: usize, value: &str) -> String {
+    let mut output = String::with_capacity(input.len() + value.len());
+    output.push_str(&input[..index]);
+    output.push_str(value);
+    output.push_str(&input[index..]);
+    output
 }
 
 fn has_servo_supported_scheme(address: &str) -> bool {
@@ -905,7 +1022,7 @@ fn escape_html_text(input: &str) -> String {
 mod tests {
     use super::{
         RenderBackend, RenderDocument, RenderViewport, ServoBackend, ServoDocumentSource,
-        ServoDocumentStatus, VENDORED_SERVO_PATH,
+        ServoDocumentStatus, VENDORED_SERVO_PATH, broadweb_html_with_document_base,
     };
     use std::fs;
 
@@ -1015,5 +1132,33 @@ mod tests {
         };
         assert_eq!(document.source, ServoDocumentSource::Broadweb);
         assert_eq!(document.status, ServoDocumentStatus::Rendered);
+    }
+
+    #[test]
+    fn broadweb_html_injects_ipfs_document_base() {
+        let html = broadweb_html_with_document_base(
+            "ipfs://bafybeigdyrzt/site/index.html",
+            "<!doctype html><html><head><title>IPFS</title></head><body></body></html>",
+        );
+
+        assert!(html.contains(
+            "<head><base href=\"ipfs://bafybeigdyrzt/site/index.html\"><title>IPFS</title>"
+        ));
+    }
+
+    #[test]
+    fn broadweb_html_preserves_existing_base() {
+        let original = "<!doctype html><html><head><base href=\"ipfs://example/\"><title>IPFS</title></head></html>";
+        let html = broadweb_html_with_document_base("ipfs://bafybeigdyrzt", original);
+
+        assert_eq!(html, original);
+    }
+
+    #[test]
+    fn broadweb_html_does_not_base_non_ipfs_documents() {
+        let original = "<!doctype html><html><head><title>HTTP</title></head></html>";
+        let html = broadweb_html_with_document_base("https://example.test", original);
+
+        assert_eq!(html, original);
     }
 }
