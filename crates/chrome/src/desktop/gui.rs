@@ -127,7 +127,7 @@ const ADDRESS_BOOKMARK_ICON_SIZE: f32 = 24.0;
 const ADDRESS_BOOKMARK_BUTTON_SIZE: f32 = 28.0;
 const ADDRESS_BOOKMARK_BUTTON_RADIUS: u8 = 6;
 const ADDRESS_BOOKMARK_RESERVED_WIDTH: f32 = 36.0;
-const ADDRESS_TRAILING_CONTROLS_WIDTH: f32 = 176.0;
+const ADDRESS_TRAILING_CONTROLS_WIDTH: f32 = 180.0;
 const HOME_SEARCH_MIN_WIDTH: f32 = 280.0;
 const HOME_SEARCH_MAX_WIDTH: f32 = 880.0;
 const HOME_SEARCH_WIDTH_FACTOR: f32 = 0.56;
@@ -2429,7 +2429,7 @@ mod tests {
         assert_eq!(ADDRESS_BOOKMARK_BUTTON_SIZE, 28.0);
         assert_eq!(ADDRESS_BOOKMARK_BUTTON_RADIUS, 6);
         assert_eq!(ADDRESS_BOOKMARK_RESERVED_WIDTH, 36.0);
-        assert_eq!(ADDRESS_TRAILING_CONTROLS_WIDTH, 176.0);
+        assert_eq!(ADDRESS_TRAILING_CONTROLS_WIDTH, 180.0);
         assert_eq!(HOME_TOP_SPACE_FACTOR, 0.18);
         assert_eq!(HOME_TOP_SPACE_MIN, 48.0);
         assert_eq!(HOME_TOP_SPACE_MAX, 132.0);
@@ -2471,7 +2471,7 @@ mod tests {
 
     #[test]
     fn wide_toolbar_address_width_leaves_room_for_trailing_controls() {
-        assert_eq!(toolbar_address_width(1348.0), 1172.0);
+        assert_eq!(toolbar_address_width(1348.0), 1168.0);
     }
 
     #[test]
