@@ -907,36 +907,6 @@ impl Gui {
         response
     }
 
-    fn toolbar_navigation_button(
-        ui: &mut egui::Ui,
-        slate_icons: &mut SlateIconCache,
-        icon: SlateIcon,
-        enabled: bool,
-    ) -> egui::Response {
-        let texture = slate_icons.texture(ui.ctx(), icon, toolbar_navigation_icon_color(enabled));
-        let sense = if enabled {
-            egui::Sense::click()
-        } else {
-            egui::Sense::hover()
-        };
-        let (rect, response) = ui.allocate_exact_size(Vec2::splat(TOOLBAR_BUTTON_SIZE), sense);
-        if ui.is_rect_visible(rect) {
-            if enabled && response.hovered() {
-                ui.painter()
-                    .rect_filled(rect, TOOLBAR_BUTTON_RADIUS, slate_theme::PANEL_HOVER);
-            }
-            let icon_rect =
-                egui::Rect::from_center_size(rect.center(), Vec2::splat(TOOLBAR_ICON_SIZE));
-            ui.painter().image(
-                texture.id,
-                icon_rect,
-                egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
-                egui::Color32::WHITE,
-            );
-        }
-        response
-    }
-
     fn toolbar_icon_button_sized(
         ui: &mut egui::Ui,
         texture: egui::load::SizedTexture,
@@ -1765,10 +1735,11 @@ impl Gui {
                             ui.available_size(),
                             egui::Layout::left_to_right(egui::Align::Center),
                             |ui| {
-                                let back_button = Gui::toolbar_navigation_button(
+                                let back_button = Gui::toolbar_hover_raster_button(
                                     ui,
                                     slate_icons,
-                                    SlateIcon::NavBack,
+                                    SlateRaster::NavBack,
+                                    SlateRaster::NavBackHover,
                                     self.can_go_back,
                                 );
                                 back_button.widget_info(|| {
@@ -1781,10 +1752,11 @@ impl Gui {
                                     window.queue_user_interface_command(UserInterfaceCommand::Back);
                                 }
 
-                                let forward_button = Gui::toolbar_navigation_button(
+                                let forward_button = Gui::toolbar_hover_raster_button(
                                     ui,
                                     slate_icons,
-                                    SlateIcon::NavForward,
+                                    SlateRaster::NavForward,
+                                    SlateRaster::NavForwardHover,
                                     self.can_go_forward,
                                 );
                                 forward_button.widget_info(|| {
@@ -1818,10 +1790,11 @@ impl Gui {
                                         }
                                     }
                                     LoadStatus::Complete => {
-                                        let reload_button = Gui::toolbar_navigation_button(
+                                        let reload_button = Gui::toolbar_hover_raster_button(
                                             ui,
                                             slate_icons,
-                                            SlateIcon::NavRefresh,
+                                            SlateRaster::NavReload,
+                                            SlateRaster::NavReloadHover,
                                             true,
                                         );
                                         reload_button.widget_info(|| {
