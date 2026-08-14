@@ -189,6 +189,12 @@ request. Public gateway fallback must remain disabled by default. The current
 `IpfsConfig::new` accepts only loopback HTTP(S) gateways, so public gateway
 retrieval cannot be enabled accidentally through default construction.
 
+`BroadwebDaemon::start_default_session` reads `SLATE_IPFS_GATEWAY` and
+`SLATE_IPFS_GATEWAY_SCOPE` to support local manual configuration while keeping
+the same policy boundary. `SLATE_IPFS_GATEWAY_SCOPE=public` is required before
+a non-loopback public gateway is accepted. A public scope without an explicit
+gateway is rejected.
+
 Public gateway mode sends requested CIDs, IPNS names, timing, and client
 network metadata to the configured gateway operator. It is useful for
 resource-constrained devices and early interoperability tests, but it is not a

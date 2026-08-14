@@ -88,6 +88,13 @@ loopback integration coverage that binds a local fixture server.
 `test-external-network` is opt-in and enables ignored internet smoke tests,
 including public IPFS gateway retrieval, with `SLATE_EXTERNAL_NETWORK_TESTS=1`.
 
+By default, IPFS/IPNS navigation uses a local gateway at
+`http://127.0.0.1:8080`. To point Slate at a different local gateway, launch it
+with `SLATE_IPFS_GATEWAY=http://127.0.0.1:<port>`. Public gateways are not used
+implicitly; for manual interoperability testing, launch with both
+`SLATE_IPFS_GATEWAY=https://ipfs.io` and
+`SLATE_IPFS_GATEWAY_SCOPE=public`.
+
 The window opens a Slate mockup with the intended first shape: left app rail, tab strip, navigation toolbar, address bar, and a quiet home viewport. The side rail switches between Web, Downloads, Calendar, and Messaging panes; tabs can be selected; the `+` tab button creates a mock tab; and the address bar can navigate to Servo-rendered internal pages such as `slate://tests/hello`, local HTML files such as `examples/local-page.html`, broadwebd-fetched HTTP(S) pages, IPFS/IPNS gateway routes, and placeholder broadweb URLs such as `gemini://example`.
 
 ## Servo

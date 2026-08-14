@@ -420,6 +420,11 @@ Initial IPFS mode should be retrieval-focused:
 Full DHT participation, pinning, providing, and publishing should be later
 capabilities with explicit resource and privacy controls.
 
+The current default session uses a local gateway at `http://127.0.0.1:8080`.
+Manual runs can override it with `SLATE_IPFS_GATEWAY`. Public gateway testing
+also requires `SLATE_IPFS_GATEWAY_SCOPE=public`; otherwise non-loopback
+gateways are rejected instead of becoming silent public fallback.
+
 ## Mobile And Paired Devices
 
 Mobile broadweb support should be designed around constrained resources. It may
