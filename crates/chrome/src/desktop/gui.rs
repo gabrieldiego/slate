@@ -110,7 +110,7 @@ const RAIL_PANEL_MARGIN_Y: i8 = 0;
 const RAIL_TOP_SPACE: f32 = 22.0;
 const RAIL_ITEM_GAP: f32 = 16.0;
 const TAB_ICON_SIZE: f32 = 24.0;
-const ADDRESS_LEADING_GAP: f32 = 28.0;
+const ADDRESS_LEADING_GAP: f32 = 24.0;
 const ADDRESS_MIN_WIDTH: f32 = 260.0;
 const ADDRESS_HEIGHT: f32 = 54.0;
 const ADDRESS_TEXT_HEIGHT: f32 = 34.0;
@@ -2442,7 +2442,7 @@ mod tests {
         assert_eq!(toolbar_menu_icon_color(true), slate_theme::TEXT);
         assert_eq!(TOOLBAR_SEPARATOR_HEIGHT, 36.0);
         assert_eq!(TAB_ICON_SIZE, 24.0);
-        assert_eq!(ADDRESS_LEADING_GAP, 28.0);
+        assert_eq!(ADDRESS_LEADING_GAP, 24.0);
         assert_eq!(ADDRESS_INNER_MARGIN_X, 18);
         assert_eq!(ADDRESS_SHADOW_OFFSET, [0, 1]);
         assert_eq!(ADDRESS_SHADOW_BLUR, 6);
