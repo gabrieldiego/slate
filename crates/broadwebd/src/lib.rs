@@ -28,7 +28,7 @@ pub use http::{
     FetchDisposition, HttpFetchRequest, HttpFetchResponse, HttpHeader, ServiceRequest,
     ServiceResponse, TransportHttpRequest,
 };
-pub use protocols::ipfs::{IpfsGatewayTransport, ipfs_gateway_http_url};
+pub use protocols::ipfs::{IpfsConfig, IpfsGatewayTransport, IpfsService, ipfs_gateway_http_url};
 pub use registry::{
     ApplicationServicePlugin, PluginInstallReport, PluginRegistry, TransportPlugin,
 };
@@ -40,9 +40,9 @@ pub use transports::direct_http::DirectHttpTransport;
 mod tests {
     use super::{
         BroadwebDaemon, BroadwebdError, DIRECT_HTTP_PLUGIN, FetchDisposition, HttpFetchRequest,
-        HttpFetchResponse, PluginHealth, PluginKind, PluginMetadata, PluginRegistry,
-        ResourceBudget, ResourceProfile, StateRoot, TransportHttpRequest, TransportPlugin,
-        ipfs_gateway_http_url,
+        HttpFetchResponse, IPFS_GATEWAY_PLUGIN, IpfsConfig, IpfsService, PluginHealth, PluginKind,
+        PluginMetadata, PluginRegistry, ResourceBudget, ResourceProfile, StateRoot,
+        TransportHttpRequest, TransportPlugin, ipfs_gateway_http_url,
     };
     use std::fs;
     use std::io::{Read, Write};
@@ -282,6 +282,24 @@ mod tests {
             ipfs_gateway_http_url("ipns://example.net/docs?a=1", "http://127.0.0.1:8080/")
                 .expect("gateway url"),
             "http://127.0.0.1:8080/ipns/example.net/docs?a=1"
+        );
+    }
+
+    #[test]
+    fn ipfs_service_registers_gateway_transport_from_config() {
+        let service = IpfsService::new(IpfsConfig::new("http://127.0.0.1:9090"));
+        let mut registry = PluginRegistry::new();
+        let installs = service.install_plugins(&mut registry);
+
+        assert!(!service.config().allow_public_gateway_fallback());
+        assert_eq!(installs.len(), 1);
+        assert_eq!(installs[0].metadata.id, IPFS_GATEWAY_PLUGIN);
+        assert!(!installs[0].replaced_existing);
+        assert!(
+            registry
+                .list_transports()
+                .iter()
+                .any(|metadata| metadata.id == IPFS_GATEWAY_PLUGIN)
         );
     }
 
