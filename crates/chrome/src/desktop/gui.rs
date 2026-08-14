@@ -112,7 +112,7 @@ const RAIL_ITEM_GAP: f32 = 16.0;
 const TAB_ICON_SIZE: f32 = 24.0;
 const ADDRESS_LEADING_GAP: f32 = 24.0;
 const ADDRESS_MIN_WIDTH: f32 = 260.0;
-const ADDRESS_HEIGHT: f32 = 54.0;
+const ADDRESS_HEIGHT: f32 = 52.0;
 const ADDRESS_TEXT_HEIGHT: f32 = 34.0;
 const ADDRESS_INPUT_TEXT_SIZE: f32 = 20.0;
 const ADDRESS_CORNER_RADIUS: u8 = 8;
@@ -2358,7 +2358,7 @@ mod tests {
         assert_eq!(FOOTER_SETTINGS_GEAR_TOOTH_INNER_RADIUS, 12.0);
         assert_eq!(FOOTER_SETTINGS_GEAR_TOOTH_OUTER_RADIUS, 14.0);
         assert_eq!(FOOTER_SETTINGS_GEAR_STROKE, 2.0);
-        assert_eq!(ADDRESS_HEIGHT, 54.0);
+        assert_eq!(ADDRESS_HEIGHT, 52.0);
         assert_eq!(ADDRESS_INPUT_TEXT_SIZE, 20.0);
         assert_eq!(ADDRESS_CORNER_RADIUS, 8);
         assert_eq!(APP_TITLE_WIDTH, 160.0);
