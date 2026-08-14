@@ -197,7 +197,9 @@ mod tests {
             "<!doctype html><title>IPFS Service Fixture</title><h1>Fetched From IPFS Service</h1>",
         );
         let mut registry = PluginRegistry::new();
-        registry.register_protocol_service(IpfsService::new(IpfsConfig::new(&gateway)));
+        registry.register_protocol_service(IpfsService::new(
+            IpfsConfig::new(&gateway).expect("local gateway config"),
+        ));
         registry.register_service(super::HttpFetchService);
         let daemon = BroadwebDaemon::start_with_registry(
             test_state_root("ipfs-service-html"),
@@ -320,7 +322,9 @@ mod tests {
 
     #[test]
     fn ipfs_service_registers_gateway_transport_from_config() {
-        let service = IpfsService::new(IpfsConfig::new("http://127.0.0.1:9090"));
+        let service = IpfsService::new(
+            IpfsConfig::new("http://127.0.0.1:9090").expect("local gateway config"),
+        );
         let mut registry = PluginRegistry::new();
         let installs = service.install_adapter_plugins(&mut registry);
 
@@ -334,6 +338,14 @@ mod tests {
                 .iter()
                 .any(|metadata| metadata.id == IPFS_GATEWAY_PLUGIN)
         );
+    }
+
+    #[test]
+    fn ipfs_config_rejects_public_gateway_without_policy() {
+        assert!(matches!(
+            IpfsConfig::new("https://ipfs.io"),
+            Err(BroadwebdError::UnsupportedRequest(_))
+        ));
     }
 
     #[test]
