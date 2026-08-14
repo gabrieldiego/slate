@@ -105,7 +105,7 @@ const TOOLBAR_SEPARATOR_HEIGHT: f32 = 36.0;
 const RAIL_ICON_SIZE: f32 = 34.0;
 const RAIL_BUTTON_SIZE: f32 = 80.0;
 const RAIL_BUTTON_RADIUS: u8 = 8;
-const RAIL_PANEL_MARGIN_X: i8 = 8;
+const RAIL_PANEL_MARGIN_X: i8 = 12;
 const RAIL_PANEL_MARGIN_Y: i8 = 0;
 const RAIL_TOP_SPACE: f32 = 22.0;
 const RAIL_ITEM_GAP: f32 = 16.0;
@@ -2349,7 +2349,7 @@ mod tests {
         assert_eq!(RAIL_ICON_SIZE, 34.0);
         assert_eq!(RAIL_BUTTON_SIZE, 80.0);
         assert_eq!(RAIL_BUTTON_RADIUS, 8);
-        assert_eq!(RAIL_PANEL_MARGIN_X, 8);
+        assert_eq!(RAIL_PANEL_MARGIN_X, 12);
         assert_eq!(RAIL_PANEL_MARGIN_Y, 0);
         assert_eq!(RAIL_TOP_SPACE, 22.0);
         assert_eq!(RAIL_ITEM_GAP, 16.0);
