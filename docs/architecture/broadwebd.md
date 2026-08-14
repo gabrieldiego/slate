@@ -16,6 +16,8 @@ It should not silently own browser policy.
 - Keep expensive protocol state warm when doing so is useful.
 - Abstract broadweb transports into application-layer services that Slate can
   consume.
+- Support a plugin-shaped architecture for protocol transports and future
+  application services.
 - Avoid turning Slate into a public server by default.
 - Keep browser policy in `browser-core`, not in the daemon.
 - Keep protocol integrations behind explicit adapter boundaries.
@@ -103,6 +105,64 @@ inside page fetch behavior. For example, file sharing, calendar sync, and
 messaging should be modeled as separate application services with their own
 permissions, storage, and privacy rules.
 
+## Protocol And App Plugins
+
+`broadwebd` should be designed around plugins, but the first implementation
+should not require dynamic native code loading.
+
+The initial plugin model should be a safe Rust registry of statically linked
+adapters. This keeps the pre-alpha architecture simple, testable, and compatible
+with Slate's safe Rust policy while still forcing protocol integrations through
+clear plugin boundaries.
+
+Two plugin categories should be kept distinct:
+
+```text
+transport plugins
+  Own connectivity to a broadweb transport or routing environment.
+  Examples: direct-http, ipfs, ipns, tor, i2p, gemini, bittorrent.
+
+application service plugins
+  Expose an application-level capability on top of one or more transports.
+  Examples: http-fetch, shared-files, calendar-sync, messaging, publishing.
+```
+
+Transport plugins should expose capabilities, health, startup cost, supported
+routes, and privacy boundaries. They should not decide whether a navigation is
+allowed. Application service plugins should receive an approved request and use
+one or more transport plugins to produce an application-level result.
+
+For the first milestone, `http-fetch` should be the only application service.
+It should be able to use a `direct-http` transport for ordinary HTTP(S) and
+later IPFS, I2P, Tor, or gateway transports for broadweb routes. This proves the
+plugability of the path before Slate adds file sharing, calendars, messaging, or
+other app surfaces.
+
+The registry should be explicit:
+
+```text
+PluginRegistry
+  -> transport plugins
+      direct-http
+      ipfs
+      tor
+      i2p
+  -> application service plugins
+      http-fetch
+      shared-files
+      calendar-sync
+```
+
+The registry should support dependency declarations. For example, `http-fetch`
+may depend on `direct-http` for normal web traffic, while a future
+`shared-files` service may depend on IPFS or BitTorrent. Missing dependencies
+must produce clear degraded health states rather than implicit fallbacks.
+
+Dynamic or external plugins can be considered later, but they should use a
+process boundary and IPC contract instead of loading untrusted native code into
+the daemon. This keeps crashes, dependency conflicts, and unsafe implementation
+details outside the core daemon process.
+
 ## Ownership Boundaries
 
 `browser-core` owns:
@@ -129,6 +189,7 @@ permissions, storage, and privacy rules.
 `broadwebd` owns:
 
 - protocol service lifecycle;
+- plugin registration and capability discovery;
 - warm peerstores, caches, and routing hints;
 - background transfer workers;
 - resource budgets;
@@ -264,10 +325,13 @@ Candidate commands:
 ```text
 Health()
 ListProtocols()
+ListPlugins()
+ListApplicationServices()
 StartProtocol(profile, protocol, mode)
 StopProtocol(profile, protocol)
 Plan(profile, navigation_target)
 Fetch(profile, approved_fetch_plan)
+CallService(profile, approved_service_request)
 Cancel(request_id)
 SubscribeEvents(profile)
 SetBudget(profile, budget)
@@ -281,6 +345,8 @@ ProtocolStarting
 ProtocolReady
 ProtocolDegraded
 ProtocolStopped
+PluginReady
+PluginDegraded
 FetchStarted
 FetchProgress
 FetchCompleted
@@ -402,11 +468,13 @@ Recommended order:
 3. Add lifecycle states: stopped, starting, ready, degraded, stopping.
 4. Add resource budget structures and budget enforcement tests.
 5. Add fake protocol adapter tests.
-6. Add an IPC-neutral client/service trait.
-7. Add IPFS gateway/delegated-retrieval adapter.
-8. Connect browser-core route policy to the daemon client.
-9. Add a real daemon binary only after the in-process service is testable.
-10. Add platform service integration for background behavior.
+6. Add static plugin registry types for transport and application services.
+7. Add an IPC-neutral client/service trait.
+8. Add `direct-http` transport and `http-fetch` application service.
+9. Add IPFS gateway/delegated-retrieval adapter.
+10. Connect browser-core route policy to the daemon client.
+11. Add a real daemon binary only after the in-process service is testable.
+12. Add platform service integration for background behavior.
 
 ## Open Questions
 
@@ -414,6 +482,10 @@ Recommended order:
   `slate-broadwebd`?
 - Should the first production IPC be Unix sockets, platform-native local IPC,
   or a loopback HTTP API bound to localhost only?
+- What metadata should every plugin expose for capability, privacy, resource,
+  and dependency discovery?
+- Should external plugins ever be supported, or should plugins remain built-in
+  until the broadweb security model is mature?
 - Should IPFS local Kubo integration come before Slate-owned verified retrieval?
 - What resource budgets should be default on desktop?
 - What reduced defaults should mobile use?
