@@ -438,6 +438,39 @@ mod tests {
         let _ = fs::remove_dir_all(daemon.state_root().path());
     }
 
+    #[test]
+    #[ignore = "external internet smoke test; run through `make test-external-network`"]
+    fn external_public_ipfs_gateway_fetches_cid() {
+        if std::env::var_os("SLATE_EXTERNAL_NETWORK_TESTS").is_none() {
+            eprintln!("set SLATE_EXTERNAL_NETWORK_TESTS=1 to run external network tests");
+            return;
+        }
+
+        let mut registry = PluginRegistry::new();
+        registry.register_protocol_service(IpfsService::new(
+            IpfsConfig::with_public_gateway("https://ipfs.io")
+                .expect("explicit public gateway config"),
+        ));
+        registry.register_service(super::HttpFetchService);
+        let daemon = BroadwebDaemon::start_with_registry(
+            test_state_root("external-public-ipfs"),
+            ResourceBudget::default(),
+            registry,
+        )
+        .expect("daemon");
+        let response = daemon
+            .fetch_http(HttpFetchRequest::default_profile(
+                "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
+            ))
+            .expect("fetch public gateway CID");
+
+        assert_eq!(response.status_code, 200);
+        assert!(!response.body.is_empty());
+        assert!(response.final_url.starts_with("https://ipfs.io/ipfs/"));
+
+        let _ = fs::remove_dir_all(daemon.state_root().path());
+    }
+
     fn local_http_fixture(
         content_type: &'static str,
         body: &'static str,

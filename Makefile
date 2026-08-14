@@ -74,7 +74,7 @@ test-network:
 	CARGO_BUILD_JOBS="$(CARGO_BUILD_JOBS)" cargo test -p slate-browser-core navigating_http_hands_page_to_servo
 
 test-external-network:
-	SLATE_EXTERNAL_NETWORK_TESTS=1 cargo test -j "$(CARGO_BUILD_JOBS)" -p slate-broadwebd external_direct_http_fetches_example_domain -- --ignored
+	SLATE_EXTERNAL_NETWORK_TESTS=1 cargo test -j "$(CARGO_BUILD_JOBS)" -p slate-broadwebd external_ -- --ignored
 
 clean-slate-bin:
 	rm -f "$(ROOT_SLATE_BIN)"

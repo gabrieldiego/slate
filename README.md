@@ -84,9 +84,9 @@ make test-external-network
 ```
 
 `test-broadwebd` runs the daemon and plugin unit tests. `test-network` also runs
-loopback integration coverage that binds a local fixture server. `test-external-network`
-is opt-in and enables ignored internet smoke tests with
-`SLATE_EXTERNAL_NETWORK_TESTS=1`.
+loopback integration coverage that binds a local fixture server.
+`test-external-network` is opt-in and enables ignored internet smoke tests,
+including public IPFS gateway retrieval, with `SLATE_EXTERNAL_NETWORK_TESTS=1`.
 
 The window opens a Slate mockup with the intended first shape: left app rail, tab strip, navigation toolbar, address bar, and a quiet home viewport. The side rail switches between Web, Downloads, Calendar, and Messaging panes; tabs can be selected; the `+` tab button creates a mock tab; and the address bar can navigate to Servo-rendered internal pages such as `slate://tests/hello`, local HTML files such as `examples/local-page.html`, broadwebd-fetched HTTP(S) pages, IPFS/IPNS gateway routes, and placeholder broadweb URLs such as `gemini://example`.
 
