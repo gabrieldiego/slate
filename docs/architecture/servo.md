@@ -18,6 +18,11 @@ Current navigation covers deterministic internal pages such as `slate://tests/he
 
 Top-level HTTP(S), `ipfs://`, and `ipns://` navigations first pass through Slate's in-process `broadwebd` service, then Servo renders HTML responses through the existing generated-document path. Fetched IPFS/IPNS HTML receives a document `<base>` pointing at the original `ipfs://` or `ipns://` address when the page did not define one, so relative page assets resolve back through broadweb routing. Servo's custom protocol registry now fetches `ipfs://` and `ipns://` subresources through `broadwebd` as well. Non-HTML responses are currently surfaced as download-ready placeholder pages until the download flow is connected. Remaining broadweb schemes such as `i2p`, `gemini`, and `magnet` still use a Servo custom protocol registry that returns a local placeholder page until real protocol adapters exist. Hostname-based private routes such as `.onion` and `.i2p` remain blocked before normal HTTP(S) routing because Servo does not allow overriding the `http` or `https` protocol handlers.
 
+Top-level broadweb fetches copy broadwebd route context into render metrics:
+profile id, selected transport id, and a short privacy-boundary label. Chrome
+and future permission UI should prefer these broadwebd-supplied values over
+guessing routing behavior from the displayed URL.
+
 This embedding layer is still early. It gives Slate a working address-bar navigation path, tab title updates, local-file loading, web tests, CSS/JS smoke tests, and rendered-page tests while full compositor integration and event forwarding are introduced behind the same boundary. The rendering crate keeps Servo-backed tests in one headless smoke test because Servo process-global options can only be initialized once per test process. IPFS and IPNS rendering coverage uses a local fake gateway through a test `broadwebd` instance, including an IPFS relative stylesheet subresource, so those tests do not depend on live IPFS, IPNS, public gateways, or external network availability.
 
 GitHub deploy keys are repository-scoped. Use the Slate deploy key for `gabrieldiego/slate` and a separate Servo deploy key for `gabrieldiego/servo`.
