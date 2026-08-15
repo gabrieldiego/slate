@@ -76,37 +76,58 @@ impl TransportPlugin for IpfsKuboRpcTransport {
         request: &TransportHttpRequest,
         budget: &ResourceBudget,
     ) -> Result<HttpFetchResponse, BroadwebdError> {
-        let cat_url = ipfs_kubo_cat_url(&request.url, self.endpoint.api_base_url())?;
-        let url = parse_http_url(&cat_url)?;
         let client = reqwest::blocking::Client::builder()
             .timeout(REQUEST_TIMEOUT)
             .user_agent(USER_AGENT)
             .build()
             .map_err(request_error)?;
-        let response = client.post(url).send().map_err(request_error)?;
-        let status_code = response.status().as_u16();
-        let headers = response_headers(response.headers());
-        let body = response.bytes().map_err(request_error)?.to_vec();
-        if body.len() > budget.max_http_response_bytes {
-            return Err(BroadwebdError::ResponseTooLarge {
-                limit: budget.max_http_response_bytes,
-                actual: body.len(),
-            });
-        }
-        let content_type = infer_content_type(&request.url, &headers, &body);
 
-        Ok(HttpFetchResponse::new(
-            request.url.clone(),
-            status_code,
-            content_type,
-            headers,
-            body,
-        ))
+        let mut last_response = None;
+        for content_path in ipfs_content_path_candidates(&request.url)? {
+            let cat_url = kubo_cat_url_for_path(&content_path, self.endpoint.api_base_url())?;
+            let url = parse_http_url(&cat_url)?;
+            let response = client.post(url).send().map_err(request_error)?;
+            let status_code = response.status().as_u16();
+            let headers = response_headers(response.headers());
+            let body = response.bytes().map_err(request_error)?.to_vec();
+            if body.len() > budget.max_http_response_bytes {
+                return Err(BroadwebdError::ResponseTooLarge {
+                    limit: budget.max_http_response_bytes,
+                    actual: body.len(),
+                });
+            }
+            let content_type = infer_content_type(&request.url, &headers, &body);
+            let fetch_response = HttpFetchResponse::new(
+                request.url.clone(),
+                status_code,
+                content_type,
+                headers,
+                body,
+            );
+            if (200..=299).contains(&fetch_response.status_code) {
+                return Ok(fetch_response);
+            }
+            last_response = Some(fetch_response);
+        }
+
+        last_response.ok_or_else(|| {
+            BroadwebdError::UnsupportedRequest(format!(
+                "no Kubo RPC content path candidates for {}",
+                request.url
+            ))
+        })
     }
 }
 
 pub fn ipfs_kubo_cat_url(source: &str, api_base_url: &str) -> Result<String, BroadwebdError> {
-    let content_path = ipfs_content_path(source)?;
+    let content_path = ipfs_content_path_candidates(source)?
+        .into_iter()
+        .next()
+        .ok_or_else(|| BroadwebdError::InvalidUrl(format!("{source} is missing a content path")))?;
+    kubo_cat_url_for_path(&content_path, api_base_url)
+}
+
+fn kubo_cat_url_for_path(content_path: &str, api_base_url: &str) -> Result<String, BroadwebdError> {
     let mut url = parse_http_url(api_base_url)?;
     let api_path = format!("{}/api/v0/cat", url.path().trim_end_matches('/'));
     url.set_path(&api_path);
@@ -115,7 +136,7 @@ pub fn ipfs_kubo_cat_url(source: &str, api_base_url: &str) -> Result<String, Bro
     Ok(url.to_string())
 }
 
-fn ipfs_content_path(source: &str) -> Result<String, BroadwebdError> {
+fn ipfs_content_path_candidates(source: &str) -> Result<Vec<String>, BroadwebdError> {
     let parsed =
         Url::parse(source).map_err(|error| BroadwebdError::InvalidUrl(error.to_string()))?;
     let namespace = match parsed.scheme() {
@@ -134,7 +155,21 @@ fn ipfs_content_path(source: &str) -> Result<String, BroadwebdError> {
     if parsed.path() != "/" {
         content_path.push_str(parsed.path());
     }
-    Ok(content_path)
+    let mut candidates = vec![content_path.clone()];
+    if should_try_directory_index(&parsed) {
+        candidates.push(format!("{}/index.html", content_path.trim_end_matches('/')));
+    }
+    Ok(candidates)
+}
+
+fn should_try_directory_index(url: &Url) -> bool {
+    let path = url.path();
+    path == "/"
+        || path.ends_with('/')
+        || path
+            .rsplit('/')
+            .next()
+            .is_some_and(|last| !last.contains('.'))
 }
 
 fn validate_kubo_rpc_url(api_base_url: &str) -> Result<(), BroadwebdError> {

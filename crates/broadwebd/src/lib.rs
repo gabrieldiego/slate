@@ -565,6 +565,93 @@ mod tests {
     }
 
     #[test]
+    fn http_fetch_routes_kubo_directory_to_index_after_failed_cat() {
+        let (rpc, server) = local_kubo_rpc_sequence_fixture(vec![
+            ("500 Internal Server Error", "text/plain", "directory"),
+            (
+                "200 OK",
+                "application/octet-stream",
+                "<!doctype html><title>Kubo Directory Fixture</title>",
+            ),
+        ]);
+        let mut registry = PluginRegistry::new();
+        registry.register_protocol_service(IpfsService::new(
+            IpfsConfig::with_kubo_rpc(&rpc).expect("Kubo RPC config"),
+        ));
+        registry.register_service(super::HttpFetchService);
+        let daemon = BroadwebDaemon::start_with_registry(
+            test_state_root("ipfs-kubo-directory"),
+            Default::default(),
+            registry,
+        )
+        .expect("daemon");
+        let response = daemon
+            .fetch_http(HttpFetchRequest::default_profile(
+                "ipfs://bafybeigdyrzt/docs/",
+            ))
+            .expect("fetch Kubo directory fixture");
+        let requests = server.join().expect("server");
+
+        assert_eq!(requests.len(), 2);
+        assert!(
+            requests[0].contains("POST /api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Fdocs%2F HTTP/1.1")
+        );
+        assert!(
+            requests[1].contains(
+                "POST /api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Fdocs%2Findex.html HTTP/1.1"
+            )
+        );
+        assert_eq!(response.status_code, 200);
+        assert_eq!(response.disposition, FetchDisposition::RenderHtml);
+        assert!(
+            response
+                .body_text_lossy()
+                .contains("Kubo Directory Fixture")
+        );
+
+        let _ = fs::remove_dir_all(daemon.state_root().path());
+    }
+
+    #[test]
+    fn http_fetch_routes_kubo_ipns_root_to_index_after_failed_cat() {
+        let (rpc, server) = local_kubo_rpc_sequence_fixture(vec![
+            ("500 Internal Server Error", "text/plain", "directory"),
+            (
+                "200 OK",
+                "application/octet-stream",
+                "<!doctype html><title>Kubo IPNS Fixture</title>",
+            ),
+        ]);
+        let mut registry = PluginRegistry::new();
+        registry.register_protocol_service(IpfsService::new(
+            IpfsConfig::with_kubo_rpc(&rpc).expect("Kubo RPC config"),
+        ));
+        registry.register_service(super::HttpFetchService);
+        let daemon = BroadwebDaemon::start_with_registry(
+            test_state_root("ipns-kubo-root"),
+            Default::default(),
+            registry,
+        )
+        .expect("daemon");
+        let response = daemon
+            .fetch_http(HttpFetchRequest::default_profile("ipns://example.net"))
+            .expect("fetch Kubo IPNS root fixture");
+        let requests = server.join().expect("server");
+
+        assert_eq!(requests.len(), 2);
+        assert!(requests[0].contains("POST /api/v0/cat?arg=%2Fipns%2Fexample.net HTTP/1.1"));
+        assert!(
+            requests[1]
+                .contains("POST /api/v0/cat?arg=%2Fipns%2Fexample.net%2Findex.html HTTP/1.1")
+        );
+        assert_eq!(response.status_code, 200);
+        assert_eq!(response.disposition, FetchDisposition::RenderHtml);
+        assert!(response.body_text_lossy().contains("Kubo IPNS Fixture"));
+
+        let _ = fs::remove_dir_all(daemon.state_root().path());
+    }
+
+    #[test]
     #[ignore = "external internet smoke test; run through `make test-external-network`"]
     fn external_direct_http_fetches_example_domain() {
         if std::env::var_os("SLATE_EXTERNAL_NETWORK_TESTS").is_none() {
@@ -642,20 +729,40 @@ mod tests {
         content_type: &'static str,
         body: &'static str,
     ) -> (String, thread::JoinHandle<String>) {
+        let (address, server) =
+            local_kubo_rpc_sequence_fixture(vec![("200 OK", content_type, body)]);
+        let server = thread::spawn(move || {
+            server
+                .join()
+                .expect("Kubo sequence fixture")
+                .into_iter()
+                .next()
+                .expect("expected one Kubo fixture request")
+        });
+        (address, server)
+    }
+
+    fn local_kubo_rpc_sequence_fixture(
+        responses: Vec<(&'static str, &'static str, &'static str)>,
+    ) -> (String, thread::JoinHandle<Vec<String>>) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind local Kubo fixture");
         let address = format!("http://{}", listener.local_addr().expect("local address"));
         let server = thread::spawn(move || {
-            let (mut stream, _) = listener.accept().expect("accept request");
-            let mut request = [0_u8; 1024];
-            let read = stream.read(&mut request).expect("read request");
-            let response = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                body.len()
-            );
-            stream
-                .write_all(response.as_bytes())
-                .expect("write response");
-            String::from_utf8_lossy(&request[..read]).into_owned()
+            let mut requests = Vec::new();
+            for (status, content_type, body) in responses {
+                let (mut stream, _) = listener.accept().expect("accept request");
+                let mut request = [0_u8; 1024];
+                let read = stream.read(&mut request).expect("read request");
+                let response = format!(
+                    "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                stream
+                    .write_all(response.as_bytes())
+                    .expect("write response");
+                requests.push(String::from_utf8_lossy(&request[..read]).into_owned());
+            }
+            requests
         });
         (address, server)
     }
