@@ -281,6 +281,47 @@ mod tests {
     }
 
     #[test]
+    fn http_fetch_infers_html_from_generic_content_type_and_body() {
+        let (address, server) = local_http_fixture(
+            "application/octet-stream",
+            "<!doctype html><title>Sniffed HTML Fixture</title><h1>Fetched</h1>",
+        );
+        let daemon = BroadwebDaemon::start(test_state_root("sniff-html-body")).expect("daemon");
+        let response = daemon
+            .fetch_http(HttpFetchRequest::default_profile(&address))
+            .expect("fetch fixture");
+        server.join().expect("server");
+
+        assert_eq!(
+            response.content_type,
+            Some("text/html; charset=utf-8".to_string())
+        );
+        assert_eq!(response.disposition, FetchDisposition::RenderHtml);
+
+        let _ = fs::remove_dir_all(daemon.state_root().path());
+    }
+
+    #[test]
+    fn http_fetch_infers_html_from_generic_content_type_and_path() {
+        let (address, server) =
+            local_http_fixture("application/octet-stream", "<h1>IPFS HTML Path</h1>");
+        let address = format!("{address}/index.html");
+        let daemon = BroadwebDaemon::start(test_state_root("sniff-html-path")).expect("daemon");
+        let response = daemon
+            .fetch_http(HttpFetchRequest::default_profile(&address))
+            .expect("fetch fixture");
+        server.join().expect("server");
+
+        assert_eq!(
+            response.content_type,
+            Some("text/html; charset=utf-8".to_string())
+        );
+        assert_eq!(response.disposition, FetchDisposition::RenderHtml);
+
+        let _ = fs::remove_dir_all(daemon.state_root().path());
+    }
+
+    #[test]
     fn non_html_http_fetch_is_marked_as_download() {
         let (address, server) = local_http_fixture("application/octet-stream", "binary-ish");
         let daemon = BroadwebDaemon::start(test_state_root("download")).expect("daemon");

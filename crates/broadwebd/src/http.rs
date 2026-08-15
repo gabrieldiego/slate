@@ -115,7 +115,7 @@ pub(crate) fn fetch_http_url(
     let response = client.get(url).send().map_err(request_error)?;
     let final_url = response.url().to_string();
     let status_code = response.status().as_u16();
-    let content_type = header_value(response.headers(), reqwest::header::CONTENT_TYPE);
+    let header_content_type = header_value(response.headers(), reqwest::header::CONTENT_TYPE);
     let headers = response_headers(response.headers());
     let body = response.bytes().map_err(request_error)?.to_vec();
     if body.len() > budget.max_http_response_bytes {
@@ -124,6 +124,7 @@ pub(crate) fn fetch_http_url(
             actual: body.len(),
         });
     }
+    let content_type = infer_content_type(&final_url, header_content_type.as_deref(), &body);
 
     Ok(HttpFetchResponse::new(
         final_url,
@@ -160,6 +161,22 @@ fn response_headers(headers: &reqwest::header::HeaderMap) -> Vec<HttpHeader> {
         .collect()
 }
 
+pub(crate) fn infer_content_type(
+    final_url: &str,
+    header_content_type: Option<&str>,
+    body: &[u8],
+) -> Option<String> {
+    let header_content_type = header_content_type
+        .map(str::trim)
+        .filter(|content_type| !content_type.is_empty());
+    header_content_type
+        .filter(|content_type| !is_generic_binary_content_type(content_type))
+        .map(str::to_string)
+        .or_else(|| content_type_from_html_body(body))
+        .or_else(|| content_type_from_path(final_url))
+        .or_else(|| header_content_type.map(str::to_string))
+}
+
 fn response_disposition(final_url: &str, content_type: Option<&str>) -> FetchDisposition {
     if is_html_content_type(content_type) {
         return FetchDisposition::RenderHtml;
@@ -174,13 +191,58 @@ fn is_html_content_type(content_type: Option<&str>) -> bool {
     let Some(content_type) = content_type else {
         return false;
     };
-    let media_type = content_type
+    matches!(
+        media_type(content_type).as_str(),
+        "text/html" | "application/xhtml+xml"
+    )
+}
+
+fn is_generic_binary_content_type(content_type: &str) -> bool {
+    matches!(
+        media_type(content_type).as_str(),
+        "application/octet-stream" | "binary/octet-stream"
+    )
+}
+
+fn media_type(content_type: &str) -> String {
+    content_type
         .split(';')
         .next()
         .unwrap_or_default()
         .trim()
+        .to_ascii_lowercase()
+}
+
+fn content_type_from_path(url: &str) -> Option<String> {
+    let path = Url::parse(url).ok()?.path().to_ascii_lowercase();
+    let content_type = match path.rsplit('.').next()? {
+        "html" | "htm" => "text/html; charset=utf-8",
+        "xhtml" => "application/xhtml+xml",
+        "css" => "text/css",
+        "js" | "mjs" => "application/javascript",
+        "json" => "application/json",
+        "svg" => "image/svg+xml",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "ico" => "image/x-icon",
+        "wasm" => "application/wasm",
+        "txt" => "text/plain; charset=utf-8",
+        _ => return None,
+    };
+    Some(content_type.to_string())
+}
+
+fn content_type_from_html_body(body: &[u8]) -> Option<String> {
+    let prefix = std::str::from_utf8(body.get(..body.len().min(256))?)
+        .ok()?
+        .trim_start()
         .to_ascii_lowercase();
-    matches!(media_type.as_str(), "text/html" | "application/xhtml+xml")
+    if prefix.starts_with("<!doctype html") || prefix.starts_with("<html") {
+        return Some("text/html; charset=utf-8".to_string());
+    }
+    None
 }
 
 fn suggested_filename(final_url: &str) -> String {

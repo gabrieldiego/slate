@@ -1,4 +1,4 @@
-use crate::http::parse_http_url;
+use crate::http::{infer_content_type, parse_http_url};
 use crate::{
     BroadwebdError, DEFAULT_IPFS_KUBO_RPC_API, HttpFetchResponse, HttpHeader, IPFS_KUBO_RPC_PLUGIN,
     PluginKind, PluginMetadata, ResourceBudget, ResourceProfile, TransportHttpRequest,
@@ -96,7 +96,14 @@ impl TransportPlugin for IpfsKuboRpcTransport {
                     actual: body.len(),
                 });
             }
-            let content_type = infer_content_type(&request.url, &headers, &body);
+            let content_type = infer_content_type(
+                &request.url,
+                headers
+                    .iter()
+                    .find(|header| header.name.eq_ignore_ascii_case("content-type"))
+                    .map(|header| header.value.as_str()),
+                &body,
+            );
             let fetch_response = HttpFetchResponse::new(
                 request.url.clone(),
                 status_code,
@@ -212,49 +219,4 @@ fn response_headers(headers: &reqwest::header::HeaderMap) -> Vec<HttpHeader> {
             })
         })
         .collect()
-}
-
-fn infer_content_type(url: &str, headers: &[HttpHeader], body: &[u8]) -> Option<String> {
-    content_type_from_path(url)
-        .or_else(|| content_type_from_html_body(body))
-        .or_else(|| content_type_from_headers(headers))
-}
-
-fn content_type_from_path(url: &str) -> Option<String> {
-    let path = Url::parse(url).ok()?.path().to_ascii_lowercase();
-    let content_type = match path.rsplit('.').next()? {
-        "html" | "htm" => "text/html; charset=utf-8",
-        "xhtml" => "application/xhtml+xml",
-        "css" => "text/css",
-        "js" | "mjs" => "application/javascript",
-        "json" => "application/json",
-        "svg" => "image/svg+xml",
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "gif" => "image/gif",
-        "webp" => "image/webp",
-        "ico" => "image/x-icon",
-        "wasm" => "application/wasm",
-        "txt" => "text/plain; charset=utf-8",
-        _ => return None,
-    };
-    Some(content_type.to_string())
-}
-
-fn content_type_from_html_body(body: &[u8]) -> Option<String> {
-    let prefix = std::str::from_utf8(body.get(..body.len().min(256))?)
-        .ok()?
-        .trim_start()
-        .to_ascii_lowercase();
-    if prefix.starts_with("<!doctype html") || prefix.starts_with("<html") {
-        return Some("text/html; charset=utf-8".to_string());
-    }
-    None
-}
-
-fn content_type_from_headers(headers: &[HttpHeader]) -> Option<String> {
-    headers
-        .iter()
-        .find(|header| header.name.eq_ignore_ascii_case("content-type"))
-        .map(|header| header.value.clone())
 }
