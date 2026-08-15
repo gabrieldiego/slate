@@ -1202,6 +1202,7 @@ mod tests {
         private_protocol_addresses_do_not_fall_through_to_web();
         broadweb_schemes_use_servo_protocol_callback();
         servo_backend_renders_ipfs_fixture_with_subresource();
+        servo_backend_renders_ipfs_kubo_fixture_with_subresource();
         servo_backend_renders_ipns_fixture();
         servo_backend_records_ipfs_download_fixture();
         servo_backend_renders_ipfs_gateway_error_fixture();
@@ -1351,6 +1352,59 @@ mod tests {
         assert!(
             !style_download_path.exists(),
             "IPFS CSS subresource should not be recorded as a user download"
+        );
+        let _ = fs::remove_dir_all(state_root);
+    }
+
+    fn servo_backend_renders_ipfs_kubo_fixture_with_subresource() {
+        let (rpc, server) = local_ipfs_kubo_rpc_fixture();
+        let state_root = test_state_root("rendering-ipfs-kubo-fixture");
+        let mut registry = PluginRegistry::new();
+        registry.register_protocol_service(IpfsService::new(
+            IpfsConfig::with_kubo_rpc(&rpc).expect("local Kubo RPC config"),
+        ));
+        registry.register_service(HttpFetchService);
+        let daemon = BroadwebDaemon::start_with_registry(&state_root, Default::default(), registry)
+            .expect("test broadwebd");
+        let surface = with_test_broadwebd(daemon, || {
+            ServoBackend.load_address_with_viewport(
+                "ipfs://bafybeigdyrzt/index.html",
+                RenderViewport::new(640, 360),
+            )
+        });
+        let requests = server.join().expect("Kubo fixture");
+        let style_download_path = state_root
+            .join("profiles")
+            .join("default")
+            .join("temporary")
+            .join("downloads")
+            .join("style.css");
+
+        assert_eq!(surface.title, "IPFS Kubo Fixture Ready");
+        assert_metric(&surface.metrics, "Profile", "default");
+        assert_metric(&surface.metrics, "Transport", "ipfs-kubo-rpc");
+        assert_metric(&surface.metrics, "Boundary", "Local Kubo RPC");
+        let RenderDocument::Web(document) = surface.document else {
+            panic!("expected Servo document");
+        };
+        assert_eq!(document.source, ServoDocumentSource::Broadweb);
+        assert_eq!(document.status, ServoDocumentStatus::Rendered);
+        assert_eq!(document.frame.width, 640);
+        assert_eq!(document.frame.height, 360);
+        assert!(
+            requests
+                .iter()
+                .any(|request| request == "/api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Findex.html")
+        );
+        assert!(
+            requests
+                .iter()
+                .any(|request| request == "/api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Fstyle.css"),
+            "expected Servo to load relative IPFS CSS through Kubo RPC, got {requests:?}"
+        );
+        assert!(
+            !style_download_path.exists(),
+            "Kubo-backed IPFS CSS subresource should not be recorded as a user download"
         );
         let _ = fs::remove_dir_all(state_root);
     }
@@ -1531,6 +1585,10 @@ mod tests {
         local_gateway_fixture(1, ipfs_error_fixture_response)
     }
 
+    fn local_ipfs_kubo_rpc_fixture() -> (String, thread::JoinHandle<Vec<String>>) {
+        local_gateway_fixture(2, ipfs_kubo_fixture_response)
+    }
+
     fn local_gateway_fixture(
         expected_requests: usize,
         response_for: fn(&str) -> (&'static str, &'static str, &'static str),
@@ -1599,6 +1657,29 @@ mod tests {
                 "404 Not Found",
                 "text/plain; charset=utf-8",
                 "missing fixture path",
+            ),
+        }
+    }
+
+    fn ipfs_kubo_fixture_response(path: &str) -> (&'static str, &'static str, &'static str) {
+        match path {
+            "/api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Findex.html" => (
+                "200 OK",
+                "text/html; charset=utf-8",
+                "<!doctype html><html><head><meta charset=\"utf-8\">\
+                 <title>IPFS Kubo Fixture</title><link rel=\"stylesheet\" href=\"style.css\">\
+                 <script>document.title='IPFS Kubo Fixture Ready';</script></head>\
+                 <body><h1>Fetched through Kubo RPC</h1></body></html>",
+            ),
+            "/api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Fstyle.css" => (
+                "200 OK",
+                "text/css",
+                "body{background:#eef8ff;color:#102a43}",
+            ),
+            _ => (
+                "500 Internal Server Error",
+                "text/plain; charset=utf-8",
+                "missing Kubo fixture path",
             ),
         }
     }
