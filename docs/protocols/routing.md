@@ -9,11 +9,13 @@ User-facing navigation stays URL-like:
 - `ipns://<name>`
 - `/ipfs/<cid>/...`
 - `/ipns/<name>/...`
+- `<cid>`
 - `slate://home`
 
 Slate normalizes path-style IPFS/IPNS inputs to canonical `ipfs://` and
-`ipns://` URLs before routing. This keeps pasted gateway-style content paths on
-the broadweb adapter path instead of treating them as local files or search
+`ipns://` URLs before routing. Bare CIDv0 and CIDv1 values are normalized to
+`ipfs://<cid>`. This keeps pasted gateway-style content paths and copied CIDs
+on the broadweb adapter path instead of treating them as local files or search
 terms.
 
 Protocol adapters convert those inputs into routing plans with explicit endpoints, for example:
