@@ -62,6 +62,7 @@ pub struct HttpHeader {
 pub enum FetchDisposition {
     RenderHtml,
     Download { suggested_filename: String },
+    ErrorPage { status_code: u16 },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -133,7 +134,7 @@ impl HttpFetchResponse {
         body: Vec<u8>,
     ) -> Self {
         let final_url = final_url.into();
-        let disposition = response_disposition(&final_url, content_type.as_deref());
+        let disposition = response_disposition(status_code, &final_url, content_type.as_deref());
         Self {
             final_url,
             status_code,
@@ -254,7 +255,15 @@ pub(crate) fn infer_content_type(
         .or_else(|| header_content_type.map(str::to_string))
 }
 
-fn response_disposition(final_url: &str, content_type: Option<&str>) -> FetchDisposition {
+fn response_disposition(
+    status_code: u16,
+    final_url: &str,
+    content_type: Option<&str>,
+) -> FetchDisposition {
+    if !(200..=299).contains(&status_code) {
+        return FetchDisposition::ErrorPage { status_code };
+    }
+
     if is_html_content_type(content_type) {
         return FetchDisposition::RenderHtml;
     }

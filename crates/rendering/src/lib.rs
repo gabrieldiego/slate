@@ -338,6 +338,16 @@ impl ServoBackend {
                     append_broadweb_route_metrics(&mut surface, response.route.as_ref());
                     surface
                 }
+                FetchDisposition::ErrorPage { status_code } => {
+                    let mut surface = self.render_html_with_viewport(
+                        address,
+                        broadweb_response_error_html(address, *status_code, &response),
+                        ServoDocumentSource::Blocked,
+                        viewport,
+                    );
+                    append_broadweb_route_metrics(&mut surface, response.route.as_ref());
+                    surface
+                }
             },
             Err(error) => self.render_error_with_viewport(
                 address,
@@ -983,6 +993,42 @@ fn broadweb_fetch_error_html(address: &str, error: &str) -> String {
     )
 }
 
+fn broadweb_response_error_html(
+    address: &str,
+    status_code: u16,
+    response: &HttpFetchResponse,
+) -> String {
+    let escaped_address = escape_html_text(address);
+    let escaped_final_url = escape_html_text(&response.final_url);
+    let escaped_content_type =
+        escape_html_text(response.content_type.as_deref().unwrap_or("unknown"));
+    let body_excerpt = response_body_excerpt(response);
+    format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\">\
+         <title>Broadweb Response Error</title>\
+         <style>body{{font-family:sans-serif;margin:48px;color:#262626;background:#fbfaf8}}\
+         h1{{font-size:34px;color:#7a2200}}p{{font-size:17px;line-height:1.5}}\
+         code{{background:#f1e8e2;padding:4px 6px;border-radius:4px}}</style></head>\
+         <body><h1>Broadweb response error</h1>\
+         <p>Status: <code>{status_code}</code></p>\
+         <p>Address: <code>{escaped_address}</code></p>\
+         <p>Final URL: <code>{escaped_final_url}</code></p>\
+         <p>Content type: <code>{escaped_content_type}</code></p>\
+         {body_excerpt}\
+         </body></html>"
+    )
+}
+
+fn response_body_excerpt(response: &HttpFetchResponse) -> String {
+    let text = response.body_text_lossy();
+    let text = text.trim();
+    if text.is_empty() {
+        return String::new();
+    }
+    let excerpt: String = text.chars().take(280).collect();
+    format!("<p>{}</p>", escape_html_text(&excerpt))
+}
+
 fn download_ready_html(
     address: &str,
     content_type: Option<&str>,
@@ -1158,6 +1204,7 @@ mod tests {
         servo_backend_renders_ipfs_fixture_with_subresource();
         servo_backend_renders_ipns_fixture();
         servo_backend_records_ipfs_download_fixture();
+        servo_backend_renders_ipfs_gateway_error_fixture();
     }
 
     fn servo_backend_renders_generated_html_with_servo() {
@@ -1385,6 +1432,52 @@ mod tests {
         let _ = fs::remove_dir_all(state_root);
     }
 
+    fn servo_backend_renders_ipfs_gateway_error_fixture() {
+        let (gateway, server) = local_ipfs_error_gateway_fixture();
+        let state_root = test_state_root("rendering-ipfs-error-fixture");
+        let mut registry = PluginRegistry::new();
+        registry.register_protocol_service(IpfsService::new(
+            IpfsConfig::new(&gateway).expect("local IPFS gateway config"),
+        ));
+        registry.register_service(HttpFetchService);
+        let daemon = BroadwebDaemon::start_with_registry(&state_root, Default::default(), registry)
+            .expect("test broadwebd");
+        let surface = with_test_broadwebd(daemon, || {
+            ServoBackend.load_address_with_viewport(
+                "ipfs://bafybeigdyrzt/missing.txt",
+                RenderViewport::new(640, 360),
+            )
+        });
+        let requests = server.join().expect("gateway fixture");
+        let download_path = state_root
+            .join("profiles")
+            .join("default")
+            .join("temporary")
+            .join("downloads")
+            .join("missing.txt");
+
+        assert_eq!(surface.title, "Broadweb Response Error");
+        assert_metric(&surface.metrics, "Profile", "default");
+        assert_metric(&surface.metrics, "Transport", "ipfs-gateway");
+        assert!(
+            !download_path.exists(),
+            "IPFS gateway error should not be recorded as a user download"
+        );
+        let RenderDocument::Web(document) = surface.document else {
+            panic!("expected Servo document");
+        };
+        assert_eq!(document.source, ServoDocumentSource::Blocked);
+        assert_eq!(document.status, ServoDocumentStatus::Rendered);
+        assert!(
+            requests
+                .iter()
+                .any(|request| request == "/ipfs/bafybeigdyrzt/missing.txt"),
+            "expected IPFS error to be fetched through broadwebd, got {requests:?}"
+        );
+
+        let _ = fs::remove_dir_all(state_root);
+    }
+
     #[test]
     fn broadweb_html_injects_ipfs_document_base() {
         let html = broadweb_html_with_document_base(
@@ -1432,6 +1525,10 @@ mod tests {
 
     fn local_ipfs_download_gateway_fixture() -> (String, thread::JoinHandle<Vec<String>>) {
         local_gateway_fixture(1, ipfs_download_fixture_response)
+    }
+
+    fn local_ipfs_error_gateway_fixture() -> (String, thread::JoinHandle<Vec<String>>) {
+        local_gateway_fixture(1, ipfs_error_fixture_response)
     }
 
     fn local_gateway_fixture(
@@ -1527,6 +1624,21 @@ mod tests {
     fn ipfs_download_fixture_response(path: &str) -> (&'static str, &'static str, &'static str) {
         match path {
             "/ipfs/bafybeigdyrzt/picture.png" => ("200 OK", "image/png", "png-ish"),
+            _ => (
+                "404 Not Found",
+                "text/plain; charset=utf-8",
+                "missing fixture path",
+            ),
+        }
+    }
+
+    fn ipfs_error_fixture_response(path: &str) -> (&'static str, &'static str, &'static str) {
+        match path {
+            "/ipfs/bafybeigdyrzt/missing.txt" => (
+                "404 Not Found",
+                "text/plain; charset=utf-8",
+                "missing IPFS content",
+            ),
             _ => (
                 "404 Not Found",
                 "text/plain; charset=utf-8",

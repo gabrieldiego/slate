@@ -391,6 +391,41 @@ mod tests {
     }
 
     #[test]
+    fn http_fetch_marks_ipfs_gateway_failures_as_error_pages() {
+        let (gateway, server) = local_http_status_fixture(
+            "404 Not Found",
+            "text/plain; charset=utf-8",
+            "missing IPFS content",
+        );
+        let mut registry = PluginRegistry::new();
+        registry.register_transport(IpfsGatewayTransport::local(&gateway).expect("local gateway"));
+        registry.register_service(super::HttpFetchService);
+        let daemon = BroadwebDaemon::start_with_registry(
+            test_state_root("ipfs-gateway-error"),
+            Default::default(),
+            registry,
+        )
+        .expect("daemon");
+        let response = daemon
+            .fetch_http(
+                HttpFetchRequest::default_profile("ipfs://bafybeigdyrzt/missing.txt")
+                    .through_transport("ipfs-gateway"),
+            )
+            .expect("fetch IPFS error fixture");
+        server.join().expect("server");
+
+        assert_eq!(response.status_code, 404);
+        assert_eq!(
+            response.disposition,
+            FetchDisposition::ErrorPage { status_code: 404 }
+        );
+        assert_eq!(response.download, None);
+        assert!(response.body_text_lossy().contains("missing IPFS content"));
+
+        let _ = fs::remove_dir_all(daemon.state_root().path());
+    }
+
+    #[test]
     fn http_fetch_infers_html_from_generic_content_type_and_body() {
         let (address, server) = local_http_fixture(
             "application/octet-stream",
@@ -1009,6 +1044,14 @@ mod tests {
         content_type: &'static str,
         body: &'static str,
     ) -> (String, thread::JoinHandle<()>) {
+        local_http_status_fixture("200 OK", content_type, body)
+    }
+
+    fn local_http_status_fixture(
+        status: &'static str,
+        content_type: &'static str,
+        body: &'static str,
+    ) -> (String, thread::JoinHandle<()>) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind local server");
         let address = format!("http://{}", listener.local_addr().expect("local address"));
         let server = thread::spawn(move || {
@@ -1016,7 +1059,7 @@ mod tests {
             let mut request = [0_u8; 1024];
             let _ = stream.read(&mut request).expect("read request");
             let response = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
                 body.len()
             );
             stream
