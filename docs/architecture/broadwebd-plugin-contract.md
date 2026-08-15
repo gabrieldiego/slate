@@ -205,9 +205,11 @@ or a private protocol route.
 service. `IpfsConfig::with_kubo_rpc` selects it, the service installs the
 `ipfs-kubo-rpc` transport, and HTTP-like retrieval maps `ipfs://` and
 `ipns://` to Kubo's local `/api/v0/cat` RPC. The endpoint must be loopback.
-This mode is useful for local-node integration and deterministic tests, but the
-gateway transport remains the default because gateway semantics handle
-directory indexes and web-style responses more completely.
+For directory-style paths, it retries `<path>/index.html` after a non-success
+`cat` response so simple IPFS/IPNS websites can load through a local node. This
+mode is useful for local-node integration and deterministic tests, but the
+gateway transport remains the default because gateway semantics still handle
+broader web-style responses more completely.
 
 Later IPFS transports can be added behind the same protocol service:
 

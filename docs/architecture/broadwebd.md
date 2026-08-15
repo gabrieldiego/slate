@@ -428,6 +428,7 @@ gateways are rejected instead of becoming silent public fallback.
 The daemon also has an opt-in `ipfs-kubo-rpc` transport for local Kubo nodes.
 It maps `ipfs://` and `ipns://` fetches to the loopback `/api/v0/cat` RPC and
 infers common web content types for HTML, CSS, JavaScript, and image assets.
+Directory-style paths retry `<path>/index.html` after a failed `cat` response.
 This is an integration point for local-node retrieval, not a public RPC mode
 and not the default browsing path.
 
