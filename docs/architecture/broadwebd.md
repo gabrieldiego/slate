@@ -425,6 +425,12 @@ Manual runs can override it with `SLATE_IPFS_GATEWAY`. Public gateway testing
 also requires `SLATE_IPFS_GATEWAY_SCOPE=public`; otherwise non-loopback
 gateways are rejected instead of becoming silent public fallback.
 
+The daemon also has an opt-in `ipfs-kubo-rpc` transport for local Kubo nodes.
+It maps `ipfs://` and `ipns://` fetches to the loopback `/api/v0/cat` RPC and
+infers common web content types for HTML, CSS, JavaScript, and image assets.
+This is an integration point for local-node retrieval, not a public RPC mode
+and not the default browsing path.
+
 ## Mobile And Paired Devices
 
 Mobile broadweb support should be designed around constrained resources. It may

@@ -176,8 +176,8 @@ Initial shape:
 IpfsService
   owns IpfsConfig
   exposes protocol-service metadata
-  routes ipfs:// and ipns:// to ipfs-gateway
-  registers ipfs-gateway transport
+  routes ipfs:// and ipns:// to the selected IPFS transport
+  registers ipfs-gateway or ipfs-kubo-rpc transport
 ```
 
 `ipfs-gateway` remains a transport adapter used by `http-fetch`. It maps
@@ -201,10 +201,17 @@ resource-constrained devices and early interoperability tests, but it is not a
 privacy-preserving substitute for a local node, delegated trustless retrieval,
 or a private protocol route.
 
+`ipfs-kubo-rpc` is an opt-in local-node transport behind the same protocol
+service. `IpfsConfig::with_kubo_rpc` selects it, the service installs the
+`ipfs-kubo-rpc` transport, and HTTP-like retrieval maps `ipfs://` and
+`ipns://` to Kubo's local `/api/v0/cat` RPC. The endpoint must be loopback.
+This mode is useful for local-node integration and deterministic tests, but the
+gateway transport remains the default because gateway semantics handle
+directory indexes and web-style responses more completely.
+
 Later IPFS transports can be added behind the same protocol service:
 
 ```text
-ipfs-kubo-rpc
 ipfs-trustless-fetch
 ipfs-delegated-routing
 ```
