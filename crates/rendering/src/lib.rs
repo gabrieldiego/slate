@@ -12,8 +12,8 @@ use servo::{
     SoftwareRenderingContext, WebView, WebViewBuilder, WebViewDelegate,
 };
 use slate_broadwebd::{
-    BroadwebDaemon, BroadwebdError, FetchDisposition, FetchRouteInfo, HttpFetchRequest,
-    HttpFetchResponse,
+    BroadwebDaemon, BroadwebdError, DownloadRecord, FetchDisposition, FetchRouteInfo,
+    HttpFetchRequest, HttpFetchResponse,
 };
 use std::cell::RefCell;
 use std::future::Future;
@@ -330,6 +330,7 @@ impl ServoBackend {
                             &response.final_url,
                             response.content_type.as_deref(),
                             suggested_filename,
+                            response.download.as_ref(),
                         ),
                         source,
                         viewport,
@@ -984,10 +985,21 @@ fn download_ready_html(
     address: &str,
     content_type: Option<&str>,
     suggested_filename: &str,
+    download: Option<&DownloadRecord>,
 ) -> String {
     let escaped_address = escape_html_text(address);
     let escaped_content_type = escape_html_text(content_type.unwrap_or("unknown"));
     let escaped_filename = escape_html_text(suggested_filename);
+    let download_details = download.map_or_else(String::new, |download| {
+        format!(
+            "<p>Saved to <code>{}</code></p>\
+             <p>Profile: <code>{}</code></p>\
+             <p>Size: {} bytes</p>",
+            escape_html_text(&download.path.to_string_lossy()),
+            escape_html_text(&download.profile),
+            download.size_bytes
+        )
+    });
     format!(
         "<!doctype html><html><head><meta charset=\"utf-8\">\
          <title>Download Ready</title>\
@@ -998,6 +1010,7 @@ fn download_ready_html(
          <p><code>{escaped_filename}</code></p>\
          <p>{escaped_content_type}</p>\
          <p>{escaped_address}</p>\
+         {download_details}\
          <p>The response was fetched through broadwebd and should be handed to Slate's download flow.</p>\
          </body></html>"
     )
@@ -1142,6 +1155,7 @@ mod tests {
         broadweb_schemes_use_servo_protocol_callback();
         servo_backend_renders_ipfs_fixture_with_subresource();
         servo_backend_renders_ipns_fixture();
+        servo_backend_records_ipfs_download_fixture();
     }
 
     fn servo_backend_renders_generated_html_with_servo() {
@@ -1318,6 +1332,47 @@ mod tests {
         );
     }
 
+    fn servo_backend_records_ipfs_download_fixture() {
+        let (gateway, server) = local_ipfs_download_gateway_fixture();
+        let state_root = test_state_root("rendering-ipfs-download-fixture");
+        let mut registry = PluginRegistry::new();
+        registry.register_protocol_service(IpfsService::new(
+            IpfsConfig::new(&gateway).expect("local IPFS gateway config"),
+        ));
+        registry.register_service(HttpFetchService);
+        let daemon = BroadwebDaemon::start_with_registry(&state_root, Default::default(), registry)
+            .expect("test broadwebd");
+        let surface = with_test_broadwebd(daemon, || {
+            ServoBackend.load_address_with_viewport(
+                "ipfs://bafybeigdyrzt/picture.png",
+                RenderViewport::new(640, 360),
+            )
+        });
+        let requests = server.join().expect("gateway fixture");
+        let download_path = state_root
+            .join("profiles")
+            .join("default")
+            .join("temporary")
+            .join("downloads")
+            .join("picture.png");
+
+        assert_eq!(surface.title, "Download Ready");
+        assert_metric(&surface.metrics, "Profile", "default");
+        assert_metric(&surface.metrics, "Transport", "ipfs-gateway");
+        assert_eq!(
+            fs::read(&download_path).expect("read recorded IPFS download"),
+            b"png-ish"
+        );
+        assert!(
+            requests
+                .iter()
+                .any(|request| request == "/ipfs/bafybeigdyrzt/picture.png"),
+            "expected IPFS download to be fetched through broadwebd, got {requests:?}"
+        );
+
+        let _ = fs::remove_dir_all(state_root);
+    }
+
     #[test]
     fn broadweb_html_injects_ipfs_document_base() {
         let html = broadweb_html_with_document_base(
@@ -1361,6 +1416,10 @@ mod tests {
 
     fn local_ipns_gateway_fixture() -> (String, thread::JoinHandle<Vec<String>>) {
         local_gateway_fixture(1, ipns_fixture_response)
+    }
+
+    fn local_ipfs_download_gateway_fixture() -> (String, thread::JoinHandle<Vec<String>>) {
+        local_gateway_fixture(1, ipfs_download_fixture_response)
     }
 
     fn local_gateway_fixture(
@@ -1445,6 +1504,17 @@ mod tests {
                  <script>document.title='IPNS Fixture Ready';</script></head>\
                  <body><h1>Fetched from IPNS through broadwebd</h1></body></html>",
             ),
+            _ => (
+                "404 Not Found",
+                "text/plain; charset=utf-8",
+                "missing fixture path",
+            ),
+        }
+    }
+
+    fn ipfs_download_fixture_response(path: &str) -> (&'static str, &'static str, &'static str) {
+        match path {
+            "/ipfs/bafybeigdyrzt/picture.png" => ("200 OK", "image/png", "png-ish"),
             _ => (
                 "404 Not Found",
                 "text/plain; charset=utf-8",
