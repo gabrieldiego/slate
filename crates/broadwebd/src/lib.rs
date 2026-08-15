@@ -302,6 +302,25 @@ mod tests {
     }
 
     #[test]
+    fn http_fetch_infers_html_fragment_from_generic_content_type() {
+        let (address, server) =
+            local_http_fixture("application/octet-stream", "<h2>Simple IPFS Fixture</h2>");
+        let daemon = BroadwebDaemon::start(test_state_root("sniff-html-fragment")).expect("daemon");
+        let response = daemon
+            .fetch_http(HttpFetchRequest::default_profile(&address))
+            .expect("fetch fixture");
+        server.join().expect("server");
+
+        assert_eq!(
+            response.content_type,
+            Some("text/html; charset=utf-8".to_string())
+        );
+        assert_eq!(response.disposition, FetchDisposition::RenderHtml);
+
+        let _ = fs::remove_dir_all(daemon.state_root().path());
+    }
+
+    #[test]
     fn http_fetch_infers_html_from_generic_content_type_and_path() {
         let (address, server) =
             local_http_fixture("application/octet-stream", "<h1>IPFS HTML Path</h1>");

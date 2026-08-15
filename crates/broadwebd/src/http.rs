@@ -239,10 +239,38 @@ fn content_type_from_html_body(body: &[u8]) -> Option<String> {
         .ok()?
         .trim_start()
         .to_ascii_lowercase();
-    if prefix.starts_with("<!doctype html") || prefix.starts_with("<html") {
+    if is_html_body_prefix(&prefix) {
         return Some("text/html; charset=utf-8".to_string());
     }
     None
+}
+
+fn is_html_body_prefix(prefix: &str) -> bool {
+    const HTML_PREFIXES: &[&str] = &[
+        "<!doctype html",
+        "<html",
+        "<head",
+        "<body",
+        "<title",
+        "<main",
+        "<section",
+        "<article",
+        "<header",
+        "<nav",
+        "<div",
+        "<p",
+        "<h1",
+        "<h2",
+        "<h3",
+        "<h4",
+        "<h5",
+        "<h6",
+        "<style",
+        "<script",
+    ];
+    HTML_PREFIXES
+        .iter()
+        .any(|html_prefix| prefix.starts_with(html_prefix))
 }
 
 fn suggested_filename(final_url: &str) -> String {
