@@ -196,23 +196,28 @@ IpfsService
 `ipfs-gateway` remains a transport adapter used by `http-fetch`. It maps
 `ipfs://` and `ipns://` to an explicitly configured gateway. The default and
 normal constructor use a local gateway such as `http://127.0.0.1:8080`.
-`IpfsConfig::with_public_gateway` enables public gateway retrieval only when
-browser-core policy explicitly chooses that mode for the current profile and
-request. Public gateway fallback must remain disabled by default. The current
-`IpfsConfig::new` accepts only loopback HTTP(S) gateways, so public gateway
-retrieval cannot be enabled accidentally through default construction.
+`IpfsConfig::new` keeps that local gateway as the first-choice endpoint, then
+adds a bounded public gateway fallback list for IPFS/IPNS requests that fail to
+retrieve through the local gateway. The selected gateway is cached after a `200`
+response and rotated on later failures, with each request limited to one pass
+through the candidate list.
+
+`IpfsConfig::with_public_gateway` makes the selected public gateway the
+first-choice endpoint and keeps the hardcoded public gateway list as fallback.
+This sends requested CIDs, IPNS names, timing, and client network metadata to
+the configured gateway operator.
 
 `BroadwebDaemon::start_default_session` reads `SLATE_IPFS_GATEWAY` and
 `SLATE_IPFS_GATEWAY_SCOPE` to support local manual configuration while keeping
 the same policy boundary. `SLATE_IPFS_GATEWAY_SCOPE=public` is required before
-a non-loopback public gateway is accepted. A public scope without an explicit
-gateway is rejected.
+a non-loopback public gateway is accepted as the first-choice gateway. A public
+scope without an explicit gateway uses the default public gateway list.
 
-Public gateway mode sends requested CIDs, IPNS names, timing, and client
-network metadata to the configured gateway operator. It is useful for
-resource-constrained devices and early interoperability tests, but it is not a
-privacy-preserving substitute for a local node, delegated trustless retrieval,
-or a private protocol route.
+Public gateway fallback is useful for resource-constrained devices and early
+interoperability tests, but it is not a privacy-preserving substitute for a
+local node, delegated trustless retrieval, or a private protocol route.
+Environment variables are temporary manual controls; profile-scoped Slate
+configuration should replace them before production use.
 
 `ipfs-kubo-rpc` is an opt-in local-node transport behind the same protocol
 service. `IpfsConfig::with_kubo_rpc` selects it, the service installs the

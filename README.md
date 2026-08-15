@@ -88,13 +88,23 @@ loopback integration coverage that binds a local fixture server.
 `test-external-network` is opt-in and enables ignored internet smoke tests,
 including public IPFS gateway retrieval, with `SLATE_EXTERNAL_NETWORK_TESTS=1`.
 
-By default, IPFS/IPNS navigation uses a local gateway at
-`http://127.0.0.1:8080`. To point Slate at a different local gateway, launch it
-with `SLATE_IPFS_GATEWAY=http://127.0.0.1:<port>`. Public gateways are not used
-implicitly; for manual interoperability testing, launch with both
-`SLATE_IPFS_GATEWAY=https://ipfs.io` and
-`SLATE_IPFS_GATEWAY_SCOPE=public`. To use a local Kubo RPC endpoint instead of
-a gateway, launch with `SLATE_IPFS_TRANSPORT=kubo-rpc`; the default endpoint is
+By default, IPFS/IPNS navigation tries a local gateway at
+`http://127.0.0.1:8080` first. If that local gateway is unavailable or cannot
+return a `200` response, broadwebd walks a hardcoded public gateway list and
+caches the first working gateway for later IPFS/IPNS requests. The cache is
+rotated on failure and reset to the original gateway after one bounded pass
+through the list. Gateways that return the known IPFS service-worker bootstrap
+page are treated as failed candidates because Slate needs direct HTTP responses
+from broadwebd at this stage.
+
+To point Slate at a different first-choice gateway, launch it with
+`SLATE_IPFS_GATEWAY=http://127.0.0.1:<port>`. To make the first choice a public
+gateway, launch with `SLATE_IPFS_GATEWAY=https://ipfs.filebase.io` and
+`SLATE_IPFS_GATEWAY_SCOPE=public`; if public scope is set without a gateway,
+Slate uses its default public gateway list. These environment variables are the
+temporary manual override path until Slate has a profile configuration file. To
+use a local Kubo RPC endpoint instead of a gateway, launch with
+`SLATE_IPFS_TRANSPORT=kubo-rpc`; the default endpoint is
 `http://127.0.0.1:5001` and can be overridden with
 `SLATE_IPFS_KUBO_RPC=http://127.0.0.1:<port>`. The address bar accepts canonical
 IPFS/IPNS URLs, common path-style forms such as `/ipfs/<cid>/...` and

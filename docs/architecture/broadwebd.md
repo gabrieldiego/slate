@@ -411,22 +411,34 @@ and `ipns://` are direct schemes and already fit Slate's protocol callback path.
 Initial IPFS mode should be retrieval-focused:
 
 - support local gateway or local RPC when configured;
-- support explicitly configured public gateway retrieval when browser policy
-  permits it;
+- support bounded public gateway fallback when local gateway retrieval is
+  unavailable or fails for an IPFS/IPNS request;
 - support verified/trustless retrieval where practical;
 - use delegated routing before full local DHT participation;
 - persist cache and routing hints;
 - avoid advertising viewed CIDs by default;
 - avoid inbound connections by default;
-- keep public gateway fallback disabled by default.
+- make public gateway fallback visible in route metadata and configurable by
+  profile policy over time.
 
 Full DHT participation, pinning, providing, and publishing should be later
 capabilities with explicit resource and privacy controls.
 
-The current default session uses a local gateway at `http://127.0.0.1:8080`.
-Manual runs can override it with `SLATE_IPFS_GATEWAY`. Public gateway testing
-also requires `SLATE_IPFS_GATEWAY_SCOPE=public`; otherwise non-loopback
-gateways are rejected instead of becoming silent public fallback.
+The current default session uses a local gateway at `http://127.0.0.1:8080` as
+the first IPFS/IPNS gateway. If that gateway is unavailable or cannot return a
+`200` response, the `ipfs-gateway` transport walks a hardcoded list of public
+gateways once, caches the first working gateway for later requests, and rotates
+again when that cached gateway fails. If every candidate fails, the cache resets
+to the original first-choice gateway before returning the final error response.
+Known IPFS service-worker gateway bootstrap pages are treated as failed
+candidates even when they return HTTP 200, because broadwebd must deliver the
+actual HTTP-like page response to Servo.
+
+Manual runs can override the first-choice gateway with `SLATE_IPFS_GATEWAY`.
+Public gateway mode can be selected with `SLATE_IPFS_GATEWAY_SCOPE=public`; if
+public scope is set without an explicit gateway, broadwebd uses its default
+public gateway list. These environment variables are temporary developer and
+manual-testing controls until Slate has profile-scoped configuration files.
 
 The daemon also has an opt-in `ipfs-kubo-rpc` transport for local Kubo nodes.
 It maps `ipfs://` and `ipns://` fetches to the loopback `/api/v0/cat` RPC and

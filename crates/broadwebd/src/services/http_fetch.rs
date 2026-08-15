@@ -45,12 +45,16 @@ impl ApplicationServicePlugin for HttpFetchService {
                 transport
                     .fetch_http(&transport_request, budget)
                     .map(|response| {
-                        response.with_route(FetchRouteInfo::new(
-                            transport_request.profile,
-                            metadata.id,
-                            metadata.privacy_boundary,
-                            purpose,
-                        ))
+                        if response.route.is_some() {
+                            response
+                        } else {
+                            response.with_route(FetchRouteInfo::new(
+                                transport_request.profile,
+                                metadata.id,
+                                metadata.privacy_boundary,
+                                purpose,
+                            ))
+                        }
                     })
                     .map(ServiceResponse::HttpFetch)
             }

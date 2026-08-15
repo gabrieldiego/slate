@@ -19,6 +19,13 @@ pub const IPFS_GATEWAY_PLUGIN: &str = "ipfs-gateway";
 pub const IPFS_KUBO_RPC_PLUGIN: &str = "ipfs-kubo-rpc";
 pub const DEFAULT_IPFS_GATEWAY: &str = "http://127.0.0.1:8080";
 pub const DEFAULT_IPFS_KUBO_RPC_API: &str = "http://127.0.0.1:5001";
+pub const DEFAULT_PUBLIC_IPFS_GATEWAY: &str = "https://ipfs.filebase.io";
+pub const DEFAULT_PUBLIC_IPFS_GATEWAYS: &[&str] = &[
+    DEFAULT_PUBLIC_IPFS_GATEWAY,
+    "https://w3s.link",
+    "https://ipfs.io",
+    "https://dweb.link",
+];
 pub const SLATE_IPFS_GATEWAY_ENV: &str = "SLATE_IPFS_GATEWAY";
 pub const SLATE_IPFS_GATEWAY_SCOPE_ENV: &str = "SLATE_IPFS_GATEWAY_SCOPE";
 pub const SLATE_IPFS_TRANSPORT_ENV: &str = "SLATE_IPFS_TRANSPORT";
@@ -52,10 +59,10 @@ mod tests {
     use super::{
         BroadwebDaemon, BroadwebdError, DEFAULT_IPFS_KUBO_RPC_API, DIRECT_HTTP_PLUGIN,
         FetchDisposition, FetchPurpose, HttpFetchRequest, HttpFetchResponse, IPFS_GATEWAY_PLUGIN,
-        IPFS_KUBO_RPC_PLUGIN, IpfsConfig, IpfsGatewayScope, IpfsGatewayTransport,
-        IpfsKuboRpcEndpoint, IpfsService, IpfsTransportKind, PluginHealth, PluginKind,
-        PluginMetadata, PluginRegistry, ProtocolService, ResourceBudget, ResourceProfile,
-        SLATE_IPFS_GATEWAY_SCOPE_ENV, SLATE_IPFS_TRANSPORT_ENV, StateRoot, TransportHttpRequest,
+        IPFS_KUBO_RPC_PLUGIN, IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope,
+        IpfsGatewayTransport, IpfsKuboRpcEndpoint, IpfsService, IpfsTransportKind, PluginHealth,
+        PluginKind, PluginMetadata, PluginRegistry, ProtocolService, ResourceBudget,
+        ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, StateRoot, TransportHttpRequest,
         TransportPlugin, ipfs_gateway_http_url, ipfs_kubo_cat_url,
     };
     use std::fs;
@@ -429,6 +436,99 @@ mod tests {
     }
 
     #[test]
+    fn ipfs_gateway_transport_falls_back_from_unavailable_local_gateway() {
+        let missing_gateway = unused_loopback_http_url();
+        let (fallback_gateway, server) = local_http_fixture(
+            "text/html; charset=utf-8",
+            "<!doctype html><title>Fallback Gateway</title>",
+        );
+        let transport = IpfsGatewayTransport::from_gateways(vec![
+            IpfsGatewayEndpoint::local(&missing_gateway).expect("missing local gateway"),
+            IpfsGatewayEndpoint::local(&fallback_gateway).expect("fallback gateway"),
+        ])
+        .expect("transport");
+        let request = TransportHttpRequest {
+            profile: "default".to_string(),
+            url: "ipfs://bafybeigdyrzt/index.html".to_string(),
+            purpose: FetchPurpose::Navigation,
+        };
+
+        let response = transport
+            .fetch_http(&request, &ResourceBudget::default())
+            .expect("fetch through fallback gateway");
+        server.join().expect("server");
+
+        assert_eq!(response.status_code, 200);
+        assert!(response.body_text_lossy().contains("Fallback Gateway"));
+        assert_eq!(transport.cached_gateway_base(), fallback_gateway);
+    }
+
+    #[test]
+    fn ipfs_gateway_transport_skips_service_worker_gateway_bootstrap() {
+        let (service_worker_gateway, service_worker_server) = local_http_fixture(
+            "text/html; charset=utf-8",
+            "<!doctype html><title>IPFS Service Worker Gateway</title><h1>Service Worker Required</h1>",
+        );
+        let (fallback_gateway, fallback_server) = local_http_fixture(
+            "text/html; charset=utf-8",
+            "<!doctype html><title>Actual IPFS Page</title>",
+        );
+        let transport = IpfsGatewayTransport::from_gateways(vec![
+            IpfsGatewayEndpoint::local(&service_worker_gateway).expect("service worker gateway"),
+            IpfsGatewayEndpoint::local(&fallback_gateway).expect("fallback gateway"),
+        ])
+        .expect("transport");
+        let request = TransportHttpRequest {
+            profile: "default".to_string(),
+            url: "ipfs://bafybeigdyrzt/index.html".to_string(),
+            purpose: FetchPurpose::Navigation,
+        };
+
+        let response = transport
+            .fetch_http(&request, &ResourceBudget::default())
+            .expect("fetch through fallback gateway");
+        service_worker_server.join().expect("service worker server");
+        fallback_server.join().expect("fallback server");
+
+        assert_eq!(response.status_code, 200);
+        assert!(response.body_text_lossy().contains("Actual IPFS Page"));
+        assert_eq!(transport.cached_gateway_base(), fallback_gateway);
+    }
+
+    #[test]
+    fn ipfs_gateway_transport_caches_success_and_resets_after_bounded_failure() {
+        let missing_gateway = unused_loopback_http_url();
+        let (fallback_gateway, server) = local_http_fixture(
+            "text/html; charset=utf-8",
+            "<!doctype html><title>Cached Gateway</title>",
+        );
+        let transport = IpfsGatewayTransport::from_gateways(vec![
+            IpfsGatewayEndpoint::local(&missing_gateway).expect("missing local gateway"),
+            IpfsGatewayEndpoint::local(&fallback_gateway).expect("fallback gateway"),
+        ])
+        .expect("transport");
+        let request = TransportHttpRequest {
+            profile: "default".to_string(),
+            url: "ipfs://bafybeigdyrzt/index.html".to_string(),
+            purpose: FetchPurpose::Navigation,
+        };
+
+        let response = transport
+            .fetch_http(&request, &ResourceBudget::default())
+            .expect("fetch through fallback gateway");
+        server.join().expect("server");
+
+        assert_eq!(response.status_code, 200);
+        assert_eq!(transport.cached_gateway_base(), fallback_gateway);
+
+        let error = transport
+            .fetch_http(&request, &ResourceBudget::default())
+            .expect_err("all gateways should be tried once and fail");
+        assert!(matches!(error, BroadwebdError::Request(_)));
+        assert_eq!(transport.cached_gateway_base(), missing_gateway);
+    }
+
+    #[test]
     fn http_fetch_infers_html_from_generic_content_type_and_body() {
         let (address, server) = local_http_fixture(
             "application/octet-stream",
@@ -579,7 +679,8 @@ mod tests {
         let mut registry = PluginRegistry::new();
         let installs = service.install_adapter_plugins(&mut registry);
 
-        assert!(!service.config().allow_public_gateway_fallback());
+        assert!(service.config().allow_public_gateway_fallback());
+        assert!(!service.config().public_gateway_fallbacks().is_empty());
         assert_eq!(installs.len(), 1);
         assert_eq!(installs[0].metadata.id, IPFS_GATEWAY_PLUGIN);
         assert!(!installs[0].replaced_existing);
@@ -607,7 +708,13 @@ mod tests {
         assert_eq!(config.gateway_base(), "https://ipfs.io");
         assert_eq!(config.gateway_scope(), IpfsGatewayScope::Public);
         assert!(config.uses_public_gateway());
-        assert!(!config.allow_public_gateway_fallback());
+        assert!(config.allow_public_gateway_fallback());
+        assert!(
+            config
+                .public_gateway_fallbacks()
+                .iter()
+                .all(|gateway| gateway.base_url() != "https://ipfs.io")
+        );
     }
 
     #[test]
@@ -636,12 +743,13 @@ mod tests {
     }
 
     #[test]
-    fn ipfs_config_options_reject_public_scope_without_gateway() {
-        assert!(matches!(
-            IpfsConfig::from_options(None, Some("public")),
-            Err(BroadwebdError::UnsupportedRequest(error))
-                if error.contains(SLATE_IPFS_GATEWAY_SCOPE_ENV)
-        ));
+    fn ipfs_config_options_use_default_public_gateway_for_public_scope_without_gateway() {
+        let config = IpfsConfig::from_options(None, Some("public"))
+            .expect("default public IPFS gateway config");
+
+        assert_eq!(config.gateway_base(), super::DEFAULT_PUBLIC_IPFS_GATEWAY);
+        assert_eq!(config.gateway_scope(), IpfsGatewayScope::Public);
+        assert!(config.uses_public_gateway());
     }
 
     #[test]
@@ -1121,6 +1229,13 @@ mod tests {
                 .expect("write response");
         });
         (address, server)
+    }
+
+    fn unused_loopback_http_url() -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind unused local port");
+        let address = format!("http://{}", listener.local_addr().expect("local address"));
+        drop(listener);
+        address
     }
 
     fn local_kubo_rpc_fixture(

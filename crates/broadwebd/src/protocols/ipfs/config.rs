@@ -1,8 +1,9 @@
 use super::IpfsKuboRpcEndpoint;
 use crate::{
-    BroadwebdError, DEFAULT_IPFS_GATEWAY, DEFAULT_IPFS_KUBO_RPC_API, IPFS_GATEWAY_PLUGIN,
-    IPFS_KUBO_RPC_PLUGIN, SLATE_IPFS_GATEWAY_ENV, SLATE_IPFS_GATEWAY_SCOPE_ENV,
-    SLATE_IPFS_KUBO_RPC_ENV, SLATE_IPFS_TRANSPORT_ENV,
+    BroadwebdError, DEFAULT_IPFS_GATEWAY, DEFAULT_IPFS_KUBO_RPC_API, DEFAULT_PUBLIC_IPFS_GATEWAY,
+    DEFAULT_PUBLIC_IPFS_GATEWAYS, IPFS_GATEWAY_PLUGIN, IPFS_KUBO_RPC_PLUGIN,
+    SLATE_IPFS_GATEWAY_ENV, SLATE_IPFS_GATEWAY_SCOPE_ENV, SLATE_IPFS_KUBO_RPC_ENV,
+    SLATE_IPFS_TRANSPORT_ENV,
 };
 use url::Url;
 
@@ -55,6 +56,7 @@ impl IpfsGatewayEndpoint {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IpfsConfig {
     gateway: IpfsGatewayEndpoint,
+    public_gateway_fallbacks: Vec<IpfsGatewayEndpoint>,
     kubo_rpc: Option<IpfsKuboRpcEndpoint>,
     transport: IpfsTransportKind,
     allow_public_gateway_fallback: bool,
@@ -113,9 +115,7 @@ impl IpfsConfig {
                 Self::with_public_gateway(gateway_base)
             }
             (None, IpfsGatewayScope::Local) => Self::default_local_gateway(),
-            (None, IpfsGatewayScope::Public) => Err(BroadwebdError::UnsupportedRequest(format!(
-                "{SLATE_IPFS_GATEWAY_SCOPE_ENV}=public requires {SLATE_IPFS_GATEWAY_ENV}"
-            ))),
+            (None, IpfsGatewayScope::Public) => Self::with_default_public_gateway(),
         }
     }
 
@@ -133,26 +133,35 @@ impl IpfsConfig {
     }
 
     pub fn with_local_gateway(gateway_base: impl Into<String>) -> Result<Self, BroadwebdError> {
+        let gateway = IpfsGatewayEndpoint::local(gateway_base)?;
         Ok(Self {
-            gateway: IpfsGatewayEndpoint::local(gateway_base)?,
+            public_gateway_fallbacks: public_gateway_fallbacks_excluding(gateway.base_url())?,
+            gateway,
             kubo_rpc: None,
             transport: IpfsTransportKind::Gateway,
-            allow_public_gateway_fallback: false,
+            allow_public_gateway_fallback: true,
         })
     }
 
     pub fn with_public_gateway(gateway_base: impl Into<String>) -> Result<Self, BroadwebdError> {
+        let gateway = IpfsGatewayEndpoint::public(gateway_base)?;
         Ok(Self {
-            gateway: IpfsGatewayEndpoint::public(gateway_base)?,
+            public_gateway_fallbacks: public_gateway_fallbacks_excluding(gateway.base_url())?,
+            gateway,
             kubo_rpc: None,
             transport: IpfsTransportKind::Gateway,
-            allow_public_gateway_fallback: false,
+            allow_public_gateway_fallback: true,
         })
+    }
+
+    pub fn with_default_public_gateway() -> Result<Self, BroadwebdError> {
+        Self::with_public_gateway(DEFAULT_PUBLIC_IPFS_GATEWAY)
     }
 
     pub fn with_kubo_rpc(api_base_url: impl Into<String>) -> Result<Self, BroadwebdError> {
         Ok(Self {
             gateway: IpfsGatewayEndpoint::local(DEFAULT_IPFS_GATEWAY)?,
+            public_gateway_fallbacks: public_gateway_fallbacks_excluding(DEFAULT_IPFS_GATEWAY)?,
             kubo_rpc: Some(IpfsKuboRpcEndpoint::local(api_base_url)?),
             transport: IpfsTransportKind::KuboRpc,
             allow_public_gateway_fallback: false,
@@ -161,6 +170,18 @@ impl IpfsConfig {
 
     pub fn gateway_endpoint(&self) -> &IpfsGatewayEndpoint {
         &self.gateway
+    }
+
+    pub fn gateway_candidates(&self) -> Vec<IpfsGatewayEndpoint> {
+        let mut candidates = vec![self.gateway.clone()];
+        if self.allow_public_gateway_fallback {
+            candidates.extend(self.public_gateway_fallbacks.iter().cloned());
+        }
+        candidates
+    }
+
+    pub fn public_gateway_fallbacks(&self) -> &[IpfsGatewayEndpoint] {
+        &self.public_gateway_fallbacks
     }
 
     pub fn gateway_base(&self) -> &str {
@@ -240,6 +261,17 @@ fn parse_transport_kind(
             "unsupported {SLATE_IPFS_TRANSPORT_ENV}: {value}; expected gateway or kubo-rpc"
         ))),
     }
+}
+
+fn public_gateway_fallbacks_excluding(
+    primary_gateway: &str,
+) -> Result<Vec<IpfsGatewayEndpoint>, BroadwebdError> {
+    DEFAULT_PUBLIC_IPFS_GATEWAYS
+        .iter()
+        .copied()
+        .filter(|gateway| !gateway.eq_ignore_ascii_case(primary_gateway))
+        .map(IpfsGatewayEndpoint::public)
+        .collect()
 }
 
 impl IpfsConfig {

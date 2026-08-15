@@ -27,9 +27,10 @@ impl IpfsService {
         match self.config.transport() {
             IpfsTransportKind::Gateway => {
                 vec![
-                    registry.install_transport(IpfsGatewayTransport::from_endpoint(
-                        self.config.gateway_endpoint().clone(),
-                    )),
+                    registry.install_transport(
+                        IpfsGatewayTransport::from_config(&self.config)
+                            .expect("validated IPFS config should provide gateway candidates"),
+                    ),
                 ]
             }
             IpfsTransportKind::KuboRpc => vec![
@@ -59,23 +60,29 @@ impl ProtocolService for IpfsService {
                 "ipns",
                 "application/http-response",
                 "public-gateway",
+                "public-gateway-fallback",
             ],
-            IpfsTransportKind::Gateway => {
-                ["ipfs", "ipns", "application/http-response", "local-gateway"]
-            }
+            IpfsTransportKind::Gateway => [
+                "ipfs",
+                "ipns",
+                "application/http-response",
+                "local-gateway",
+                "public-gateway-fallback",
+            ],
             IpfsTransportKind::KuboRpc => [
                 "ipfs",
                 "ipns",
                 "application/http-response",
                 "local-kubo-rpc",
+                "local-only",
             ],
         };
         let privacy_boundary = match self.config.transport() {
             IpfsTransportKind::Gateway if self.config.uses_public_gateway() => {
-                "retrieves IPFS/IPNS through an explicitly configured public gateway"
+                "retrieves IPFS/IPNS through an explicitly configured public gateway list"
             }
             IpfsTransportKind::Gateway => {
-                "retrieves IPFS/IPNS through an explicitly configured local gateway; no public gateway fallback by default"
+                "retrieves IPFS/IPNS through a local gateway first, with configured public gateway fallback when local retrieval fails"
             }
             IpfsTransportKind::KuboRpc => {
                 "retrieves IPFS/IPNS through an explicitly configured local Kubo RPC endpoint; no public gateway fallback by default"
