@@ -398,7 +398,10 @@ gateway, proxy, or private network.
 The IPC boundary should preserve the same ownership split as the in-process
 API: browser-core approves policy and profile context, while `broadwebd`
 executes approved work through registered transport and application-service
-plugins.
+plugins. Fetch responses should carry route context back across the boundary:
+the approved profile id, selected transport id, and selected transport privacy
+boundary. Slate can then surface local-node, public-gateway, proxy, or direct
+network behavior without guessing from URLs.
 
 ## IPFS Initial Shape
 
