@@ -1098,6 +1098,7 @@ mod tests {
         private_protocol_addresses_do_not_fall_through_to_web();
         broadweb_schemes_use_servo_protocol_callback();
         servo_backend_renders_ipfs_fixture_with_subresource();
+        servo_backend_renders_ipns_fixture();
     }
 
     fn servo_backend_renders_generated_html_with_servo() {
@@ -1235,6 +1236,39 @@ mod tests {
         );
     }
 
+    fn servo_backend_renders_ipns_fixture() {
+        let (gateway, server) = local_ipns_gateway_fixture();
+        let state_root = test_state_root("rendering-ipns-fixture");
+        let mut registry = PluginRegistry::new();
+        registry.register_protocol_service(IpfsService::new(
+            IpfsConfig::new(&gateway).expect("local IPFS gateway config"),
+        ));
+        registry.register_service(HttpFetchService);
+        let daemon = BroadwebDaemon::start_with_registry(&state_root, Default::default(), registry)
+            .expect("test broadwebd");
+        let surface = with_test_broadwebd(daemon, || {
+            ServoBackend.load_address_with_viewport(
+                "ipns://example.net/index.html",
+                RenderViewport::new(640, 360),
+            )
+        });
+        let requests = server.join().expect("gateway fixture");
+        let _ = fs::remove_dir_all(state_root);
+
+        assert_eq!(surface.title, "IPNS Fixture Ready");
+        let RenderDocument::Web(document) = surface.document else {
+            panic!("expected Servo document");
+        };
+        assert_eq!(document.source, ServoDocumentSource::Broadweb);
+        assert_eq!(document.status, ServoDocumentStatus::Rendered);
+        assert!(
+            requests
+                .iter()
+                .any(|request| request == "/ipns/example.net/index.html"),
+            "expected IPNS page to be fetched through broadwebd, got {requests:?}"
+        );
+    }
+
     #[test]
     fn broadweb_html_injects_ipfs_document_base() {
         let html = broadweb_html_with_document_base(
@@ -1264,6 +1298,17 @@ mod tests {
     }
 
     fn local_ipfs_gateway_fixture() -> (String, thread::JoinHandle<Vec<String>>) {
+        local_gateway_fixture(2, ipfs_fixture_response)
+    }
+
+    fn local_ipns_gateway_fixture() -> (String, thread::JoinHandle<Vec<String>>) {
+        local_gateway_fixture(1, ipns_fixture_response)
+    }
+
+    fn local_gateway_fixture(
+        expected_requests: usize,
+        response_for: fn(&str) -> (&'static str, &'static str, &'static str),
+    ) -> (String, thread::JoinHandle<Vec<String>>) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind IPFS gateway fixture");
         listener
             .set_nonblocking(true)
@@ -1272,14 +1317,14 @@ mod tests {
         let server = thread::spawn(move || {
             let mut requests = Vec::new();
             let deadline = Instant::now() + Duration::from_secs(5);
-            while requests.len() < 2 && Instant::now() < deadline {
+            while requests.len() < expected_requests && Instant::now() < deadline {
                 match listener.accept() {
                     Ok((mut stream, _)) => {
                         let mut request = [0_u8; 2048];
                         let read = stream.read(&mut request).expect("read fixture request");
                         let request = String::from_utf8_lossy(&request[..read]);
                         let path = request_path(&request);
-                        let (status, content_type, body) = ipfs_fixture_response(&path);
+                        let (status, content_type, body) = response_for(&path);
                         requests.push(path);
                         let response = format!(
                             "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
@@ -1323,6 +1368,24 @@ mod tests {
                 "200 OK",
                 "text/css",
                 "body{background:#eefaf7;color:#12302c}",
+            ),
+            _ => (
+                "404 Not Found",
+                "text/plain; charset=utf-8",
+                "missing fixture path",
+            ),
+        }
+    }
+
+    fn ipns_fixture_response(path: &str) -> (&'static str, &'static str, &'static str) {
+        match path {
+            "/ipns/example.net/index.html" => (
+                "200 OK",
+                "text/html; charset=utf-8",
+                "<!doctype html><html><head><meta charset=\"utf-8\">\
+                 <title>IPNS Fixture</title>\
+                 <script>document.title='IPNS Fixture Ready';</script></head>\
+                 <body><h1>Fetched from IPNS through broadwebd</h1></body></html>",
             ),
             _ => (
                 "404 Not Found",
