@@ -18,6 +18,10 @@ Slate normalizes path-style IPFS/IPNS inputs to canonical `ipfs://` and
 on the broadweb adapter path instead of treating them as local files or search
 terms.
 
+IPFS routing must preserve the raw authority casing for `ipfs://` URLs. CIDv0
+values are Base58 and case-sensitive, so adapter code must not rely on
+URL-host normalization for the content name.
+
 Protocol adapters convert those inputs into routing plans with explicit endpoints, for example:
 
 ```text
