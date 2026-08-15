@@ -241,6 +241,10 @@ pub fn normalize_navigation_input(input: &str) -> Result<String, NavigationError
         return Ok(address);
     }
 
+    if let Some(address) = normalize_bare_ipfs_cid(trimmed) {
+        return Ok(address);
+    }
+
     if looks_like_local_html_path(&lower) {
         return Ok(local_file_address(trimmed));
     }
@@ -295,6 +299,35 @@ fn normalize_ipfs_path_address(input: &str) -> Option<String> {
     }
 
     Some(format!("{scheme}://{rest}"))
+}
+
+fn normalize_bare_ipfs_cid(input: &str) -> Option<String> {
+    if is_cidv0_like(input) {
+        return Some(format!("ipfs://{input}"));
+    }
+
+    let lower = input.to_ascii_lowercase();
+    if is_cidv1_base32_like(&lower) && input.chars().all(|ch| ch.is_ascii_alphanumeric()) {
+        return Some(format!("ipfs://{lower}"));
+    }
+
+    None
+}
+
+fn is_cidv0_like(input: &str) -> bool {
+    input.len() == 46
+        && input.starts_with("Qm")
+        && input.bytes().all(|byte| {
+            b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz".contains(&byte)
+        })
+}
+
+fn is_cidv1_base32_like(input: &str) -> bool {
+    input.len() >= 32
+        && matches!(input.get(..4), Some("bafy" | "bafk"))
+        && input
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || matches!(byte, b'2'..=b'7'))
 }
 
 fn looks_like_local_html_path(lower: &str) -> bool {
@@ -598,6 +631,29 @@ mod tests {
     }
 
     #[test]
+    fn navigation_normalizes_bare_ipfs_cids() {
+        assert_eq!(
+            normalize_navigation_input("QmUKwop8CmB4ictvQyCJQru97NRVakJFVWpV74guJ89tcb")
+                .expect("CIDv0 address"),
+            "ipfs://QmUKwop8CmB4ictvQyCJQru97NRVakJFVWpV74guJ89tcb"
+        );
+        assert_eq!(
+            normalize_navigation_input(
+                "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi"
+            )
+            .expect("CIDv1 address"),
+            "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi"
+        );
+        assert_eq!(
+            normalize_navigation_input(
+                "BAFYBEIGDYRZT5SFP7UDM7HU76UH7Y26NF3EFUYLQABF3OCLGTQY55FBZDI"
+            )
+            .expect("uppercase CIDv1 address"),
+            "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi"
+        );
+    }
+
+    #[test]
     fn navigation_searches_incomplete_ipfs_paths() {
         assert_eq!(
             normalize_navigation_input("/ipfs/").expect("search"),
@@ -606,6 +662,10 @@ mod tests {
         assert_eq!(
             normalize_navigation_input("ipns/example docs").expect("search"),
             "slate://search?q=ipns%2Fexample+docs"
+        );
+        assert_eq!(
+            normalize_navigation_input("bafy short").expect("search"),
+            "slate://search?q=bafy+short"
         );
     }
 
