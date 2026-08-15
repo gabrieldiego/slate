@@ -84,8 +84,9 @@ impl TransportPlugin for IpfsKuboRpcTransport {
             .map_err(request_error)?;
 
         let mut last_response = None;
-        for content_path in ipfs_content_path_candidates(&request.url)? {
-            let cat_url = kubo_cat_url_for_path(&content_path, self.endpoint.api_base_url())?;
+        for candidate in ipfs_content_path_candidates(&request.url)? {
+            let cat_url =
+                kubo_cat_url_for_path(&candidate.content_path, self.endpoint.api_base_url())?;
             let url = parse_http_url(&cat_url)?;
             let response = client.post(url).send().map_err(request_error)?;
             let status_code = response.status().as_u16();
@@ -98,7 +99,7 @@ impl TransportPlugin for IpfsKuboRpcTransport {
                 });
             }
             let content_type = infer_content_type(
-                &request.url,
+                &candidate.document_url,
                 headers
                     .iter()
                     .find(|header| header.name.eq_ignore_ascii_case("content-type"))
@@ -106,7 +107,7 @@ impl TransportPlugin for IpfsKuboRpcTransport {
                 &body,
             );
             let fetch_response = HttpFetchResponse::new(
-                request.url.clone(),
+                candidate.document_url,
                 status_code,
                 content_type,
                 headers,
@@ -132,7 +133,7 @@ pub fn ipfs_kubo_cat_url(source: &str, api_base_url: &str) -> Result<String, Bro
         .into_iter()
         .next()
         .ok_or_else(|| BroadwebdError::InvalidUrl(format!("{source} is missing a content path")))?;
-    kubo_cat_url_for_path(&content_path, api_base_url)
+    kubo_cat_url_for_path(&content_path.content_path, api_base_url)
 }
 
 fn kubo_cat_url_for_path(content_path: &str, api_base_url: &str) -> Result<String, BroadwebdError> {
@@ -144,17 +145,56 @@ fn kubo_cat_url_for_path(content_path: &str, api_base_url: &str) -> Result<Strin
     Ok(url.to_string())
 }
 
-fn ipfs_content_path_candidates(source: &str) -> Result<Vec<String>, BroadwebdError> {
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct IpfsContentPathCandidate {
+    content_path: String,
+    document_url: String,
+}
+
+fn ipfs_content_path_candidates(
+    source: &str,
+) -> Result<Vec<IpfsContentPathCandidate>, BroadwebdError> {
     let parts = ipfs_url_parts(source)?;
     let mut content_path = format!("/{}/{}", parts.namespace, parts.name);
+    let mut document_url = format!("{}://{}", parts.namespace, parts.name);
     if parts.path != "/" {
         content_path.push_str(parts.path);
+        document_url.push_str(parts.path);
     }
-    let mut candidates = vec![content_path.clone()];
+    if let Some(query) = parts.query {
+        document_url.push('?');
+        document_url.push_str(query);
+    }
+    let mut candidates = vec![IpfsContentPathCandidate {
+        content_path: content_path.clone(),
+        document_url,
+    }];
     if should_try_directory_index(parts.path) {
-        candidates.push(format!("{}/index.html", content_path.trim_end_matches('/')));
+        let index_content_path = format!("{}/index.html", content_path.trim_end_matches('/'));
+        let mut index_document_url = format!(
+            "{}://{}{}",
+            parts.namespace,
+            parts.name,
+            index_document_path(parts.path)
+        );
+        if let Some(query) = parts.query {
+            index_document_url.push('?');
+            index_document_url.push_str(query);
+        }
+        candidates.push(IpfsContentPathCandidate {
+            content_path: index_content_path,
+            document_url: index_document_url,
+        });
     }
     Ok(candidates)
+}
+
+fn index_document_path(path: &str) -> String {
+    if path == "/" {
+        "/index.html".to_string()
+    } else {
+        format!("{}/index.html", path.trim_end_matches('/'))
+    }
 }
 
 fn should_try_directory_index(path: &str) -> bool {

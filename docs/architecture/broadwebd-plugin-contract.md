@@ -223,10 +223,12 @@ service. `IpfsConfig::with_kubo_rpc` selects it, the service installs the
 loopback endpoint is needed. Kubo RPC selection is mutually exclusive with
 gateway policy variables.
 For directory-style paths, it retries `<path>/index.html` after a non-success
-`cat` response so simple IPFS/IPNS websites can load through a local node. This
-mode is useful for local-node integration and deterministic tests, but the
-gateway transport remains the default because gateway semantics still handle
-broader web-style responses more completely.
+`cat` response so simple IPFS/IPNS websites can load through a local node. The
+fallback reports the effective `ipfs://` or `ipns://` index URL in the response
+so renderer base injection keeps relative subresources under the same
+directory. This mode is useful for local-node integration and deterministic
+tests, but the gateway transport remains the default because gateway semantics
+still handle broader web-style responses more completely.
 
 Both IPFS transports use the common HTTP response classification helper. A
 specific `Content-Type` header is preserved; generic binary responses may be

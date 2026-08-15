@@ -316,8 +316,9 @@ impl ServoBackend {
         match fetch_with_default_broadwebd(request) {
             Ok(response) => match &response.disposition {
                 FetchDisposition::RenderHtml => {
+                    let base_address = broadweb_document_base_address(address, &response);
                     let html =
-                        broadweb_html_with_document_base(address, &response.body_text_lossy());
+                        broadweb_html_with_document_base(base_address, &response.body_text_lossy());
                     let mut surface =
                         self.render_html_with_viewport(address, html, source, viewport);
                     append_broadweb_route_metrics(&mut surface, response.route.as_ref());
@@ -358,6 +359,17 @@ impl ServoBackend {
                 viewport,
             ),
         }
+    }
+}
+
+fn broadweb_document_base_address<'a>(
+    address: &'a str,
+    response: &'a HttpFetchResponse,
+) -> &'a str {
+    if has_ipfs_service_scheme(&response.final_url) {
+        &response.final_url
+    } else {
+        address
     }
 }
 
@@ -1202,7 +1214,7 @@ mod tests {
         private_protocol_addresses_do_not_fall_through_to_web();
         broadweb_schemes_use_servo_protocol_callback();
         servo_backend_renders_ipfs_fixture_with_subresource();
-        servo_backend_renders_ipfs_kubo_fixture_with_subresource();
+        servo_backend_renders_ipfs_kubo_directory_fixture_with_subresource();
         servo_backend_renders_ipns_fixture();
         servo_backend_records_ipfs_download_fixture();
         servo_backend_renders_ipfs_gateway_error_fixture();
@@ -1356,7 +1368,7 @@ mod tests {
         let _ = fs::remove_dir_all(state_root);
     }
 
-    fn servo_backend_renders_ipfs_kubo_fixture_with_subresource() {
+    fn servo_backend_renders_ipfs_kubo_directory_fixture_with_subresource() {
         let (rpc, server) = local_ipfs_kubo_rpc_fixture();
         let state_root = test_state_root("rendering-ipfs-kubo-fixture");
         let mut registry = PluginRegistry::new();
@@ -1368,7 +1380,7 @@ mod tests {
             .expect("test broadwebd");
         let surface = with_test_broadwebd(daemon, || {
             ServoBackend.load_address_with_viewport(
-                "ipfs://bafybeigdyrzt/index.html",
+                "ipfs://bafybeigdyrzt/docs",
                 RenderViewport::new(640, 360),
             )
         });
@@ -1394,12 +1406,16 @@ mod tests {
         assert!(
             requests
                 .iter()
-                .any(|request| request == "/api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Findex.html")
+                .any(|request| request == "/api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Fdocs")
         );
+        assert!(requests.iter().any(
+            |request| request == "/api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Fdocs%2Findex.html"
+        ));
         assert!(
             requests
                 .iter()
-                .any(|request| request == "/api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Fstyle.css"),
+                .any(|request| request
+                    == "/api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Fdocs%2Fstyle.css"),
             "expected Servo to load relative IPFS CSS through Kubo RPC, got {requests:?}"
         );
         assert!(
@@ -1586,7 +1602,7 @@ mod tests {
     }
 
     fn local_ipfs_kubo_rpc_fixture() -> (String, thread::JoinHandle<Vec<String>>) {
-        local_gateway_fixture(2, ipfs_kubo_fixture_response)
+        local_gateway_fixture(3, ipfs_kubo_fixture_response)
     }
 
     fn local_gateway_fixture(
@@ -1663,7 +1679,12 @@ mod tests {
 
     fn ipfs_kubo_fixture_response(path: &str) -> (&'static str, &'static str, &'static str) {
         match path {
-            "/api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Findex.html" => (
+            "/api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Fdocs" => (
+                "500 Internal Server Error",
+                "text/plain; charset=utf-8",
+                "directory",
+            ),
+            "/api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Fdocs%2Findex.html" => (
                 "200 OK",
                 "text/html; charset=utf-8",
                 "<!doctype html><html><head><meta charset=\"utf-8\">\
@@ -1671,7 +1692,7 @@ mod tests {
                  <script>document.title='IPFS Kubo Fixture Ready';</script></head>\
                  <body><h1>Fetched through Kubo RPC</h1></body></html>",
             ),
-            "/api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Fstyle.css" => (
+            "/api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Fdocs%2Fstyle.css" => (
                 "200 OK",
                 "text/css",
                 "body{background:#eef8ff;color:#102a43}",

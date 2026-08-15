@@ -990,6 +990,7 @@ mod tests {
             )
         );
         assert_eq!(response.status_code, 200);
+        assert_eq!(response.final_url, "ipfs://bafybeigdyrzt/docs/index.html");
         assert_eq!(response.disposition, FetchDisposition::RenderHtml);
         assert!(
             response
@@ -1035,6 +1036,7 @@ mod tests {
         assert_eq!(response.status_code, 200);
         assert_eq!(response.disposition, FetchDisposition::RenderHtml);
         assert!(response.body_text_lossy().contains("Kubo IPNS Fixture"));
+        assert_eq!(response.final_url, "ipns://example.net/index.html");
 
         let _ = fs::remove_dir_all(daemon.state_root().path());
     }
