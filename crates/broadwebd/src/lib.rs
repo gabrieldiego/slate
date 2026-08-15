@@ -21,6 +21,8 @@ pub const DEFAULT_IPFS_GATEWAY: &str = "http://127.0.0.1:8080";
 pub const DEFAULT_IPFS_KUBO_RPC_API: &str = "http://127.0.0.1:5001";
 pub const SLATE_IPFS_GATEWAY_ENV: &str = "SLATE_IPFS_GATEWAY";
 pub const SLATE_IPFS_GATEWAY_SCOPE_ENV: &str = "SLATE_IPFS_GATEWAY_SCOPE";
+pub const SLATE_IPFS_TRANSPORT_ENV: &str = "SLATE_IPFS_TRANSPORT";
+pub const SLATE_IPFS_KUBO_RPC_ENV: &str = "SLATE_IPFS_KUBO_RPC";
 
 pub use budget::ResourceBudget;
 pub use daemon::{BroadwebDaemon, default_session_state_root};
@@ -48,11 +50,12 @@ pub use transports::direct_http::DirectHttpTransport;
 #[cfg(test)]
 mod tests {
     use super::{
-        BroadwebDaemon, BroadwebdError, DIRECT_HTTP_PLUGIN, FetchDisposition, HttpFetchRequest,
-        HttpFetchResponse, IPFS_GATEWAY_PLUGIN, IPFS_KUBO_RPC_PLUGIN, IpfsConfig, IpfsGatewayScope,
-        IpfsGatewayTransport, IpfsKuboRpcEndpoint, IpfsService, IpfsTransportKind, PluginHealth,
-        PluginKind, PluginMetadata, PluginRegistry, ProtocolService, ResourceBudget,
-        ResourceProfile, SLATE_IPFS_GATEWAY_SCOPE_ENV, StateRoot, TransportHttpRequest,
+        BroadwebDaemon, BroadwebdError, DEFAULT_IPFS_KUBO_RPC_API, DIRECT_HTTP_PLUGIN,
+        FetchDisposition, HttpFetchRequest, HttpFetchResponse, IPFS_GATEWAY_PLUGIN,
+        IPFS_KUBO_RPC_PLUGIN, IpfsConfig, IpfsGatewayScope, IpfsGatewayTransport,
+        IpfsKuboRpcEndpoint, IpfsService, IpfsTransportKind, PluginHealth, PluginKind,
+        PluginMetadata, PluginRegistry, ProtocolService, ResourceBudget, ResourceProfile,
+        SLATE_IPFS_GATEWAY_SCOPE_ENV, SLATE_IPFS_TRANSPORT_ENV, StateRoot, TransportHttpRequest,
         TransportPlugin, ipfs_gateway_http_url, ipfs_kubo_cat_url,
     };
     use std::fs;
@@ -417,6 +420,76 @@ mod tests {
             IpfsConfig::from_options(None, Some("public")),
             Err(BroadwebdError::UnsupportedRequest(error))
                 if error.contains(SLATE_IPFS_GATEWAY_SCOPE_ENV)
+        ));
+    }
+
+    #[test]
+    fn ipfs_runtime_options_default_to_gateway_transport() {
+        let config =
+            IpfsConfig::from_runtime_options(None, None, None, None).expect("default IPFS config");
+
+        assert_eq!(config.transport(), IpfsTransportKind::Gateway);
+        assert_eq!(config.gateway_base(), super::DEFAULT_IPFS_GATEWAY);
+        assert_eq!(config.http_transport_id(), IPFS_GATEWAY_PLUGIN);
+    }
+
+    #[test]
+    fn ipfs_runtime_options_accept_explicit_kubo_transport() {
+        let config = IpfsConfig::from_runtime_options(None, None, Some("kubo-rpc"), None)
+            .expect("Kubo RPC config");
+
+        assert_eq!(config.transport(), IpfsTransportKind::KuboRpc);
+        assert_eq!(config.http_transport_id(), IPFS_KUBO_RPC_PLUGIN);
+        assert_eq!(
+            config
+                .kubo_rpc_endpoint()
+                .expect("Kubo RPC endpoint")
+                .api_base_url(),
+            DEFAULT_IPFS_KUBO_RPC_API
+        );
+    }
+
+    #[test]
+    fn ipfs_runtime_options_accept_kubo_rpc_endpoint_override() {
+        let config = IpfsConfig::from_runtime_options(
+            None,
+            None,
+            Some("local-kubo-rpc"),
+            Some("http://127.0.0.1:5050"),
+        )
+        .expect("Kubo RPC config");
+
+        assert_eq!(config.transport(), IpfsTransportKind::KuboRpc);
+        assert_eq!(
+            config
+                .kubo_rpc_endpoint()
+                .expect("Kubo RPC endpoint")
+                .api_base_url(),
+            "http://127.0.0.1:5050"
+        );
+    }
+
+    #[test]
+    fn ipfs_runtime_options_select_kubo_when_rpc_endpoint_is_set() {
+        let config =
+            IpfsConfig::from_runtime_options(None, None, None, Some("http://127.0.0.1:5050"))
+                .expect("Kubo RPC config");
+
+        assert_eq!(config.transport(), IpfsTransportKind::KuboRpc);
+        assert_eq!(config.http_transport_id(), IPFS_KUBO_RPC_PLUGIN);
+    }
+
+    #[test]
+    fn ipfs_runtime_options_reject_kubo_mixed_with_gateway_policy() {
+        assert!(matches!(
+            IpfsConfig::from_runtime_options(
+                Some("http://127.0.0.1:8080"),
+                None,
+                Some("kubo-rpc"),
+                None
+            ),
+            Err(BroadwebdError::UnsupportedRequest(error))
+                if error.contains(SLATE_IPFS_TRANSPORT_ENV)
         ));
     }
 

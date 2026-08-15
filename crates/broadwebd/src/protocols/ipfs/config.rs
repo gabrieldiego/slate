@@ -1,7 +1,8 @@
 use super::IpfsKuboRpcEndpoint;
 use crate::{
-    BroadwebdError, DEFAULT_IPFS_GATEWAY, IPFS_GATEWAY_PLUGIN, IPFS_KUBO_RPC_PLUGIN,
-    SLATE_IPFS_GATEWAY_ENV, SLATE_IPFS_GATEWAY_SCOPE_ENV,
+    BroadwebdError, DEFAULT_IPFS_GATEWAY, DEFAULT_IPFS_KUBO_RPC_API, IPFS_GATEWAY_PLUGIN,
+    IPFS_KUBO_RPC_PLUGIN, SLATE_IPFS_GATEWAY_ENV, SLATE_IPFS_GATEWAY_SCOPE_ENV,
+    SLATE_IPFS_KUBO_RPC_ENV, SLATE_IPFS_TRANSPORT_ENV,
 };
 use url::Url;
 
@@ -67,10 +68,39 @@ impl IpfsConfig {
     pub fn from_environment() -> Result<Self, BroadwebdError> {
         let gateway = std::env::var(SLATE_IPFS_GATEWAY_ENV).ok();
         let scope = std::env::var(SLATE_IPFS_GATEWAY_SCOPE_ENV).ok();
-        Self::from_options(gateway.as_deref(), scope.as_deref())
+        let transport = std::env::var(SLATE_IPFS_TRANSPORT_ENV).ok();
+        let kubo_rpc = std::env::var(SLATE_IPFS_KUBO_RPC_ENV).ok();
+        Self::from_runtime_options(
+            gateway.as_deref(),
+            scope.as_deref(),
+            transport.as_deref(),
+            kubo_rpc.as_deref(),
+        )
     }
 
     pub fn from_options(
+        gateway_base: Option<&str>,
+        scope: Option<&str>,
+    ) -> Result<Self, BroadwebdError> {
+        Self::from_gateway_options(gateway_base, scope)
+    }
+
+    pub fn from_runtime_options(
+        gateway_base: Option<&str>,
+        scope: Option<&str>,
+        transport: Option<&str>,
+        kubo_rpc_api: Option<&str>,
+    ) -> Result<Self, BroadwebdError> {
+        let transport = parse_transport_kind(transport, kubo_rpc_api)?;
+        match transport {
+            IpfsTransportKind::Gateway => Self::from_gateway_options(gateway_base, scope),
+            IpfsTransportKind::KuboRpc => {
+                Self::from_kubo_rpc_options(gateway_base, scope, non_empty_trimmed(kubo_rpc_api))
+            }
+        }
+    }
+
+    fn from_gateway_options(
         gateway_base: Option<&str>,
         scope: Option<&str>,
     ) -> Result<Self, BroadwebdError> {
@@ -87,6 +117,19 @@ impl IpfsConfig {
                 "{SLATE_IPFS_GATEWAY_SCOPE_ENV}=public requires {SLATE_IPFS_GATEWAY_ENV}"
             ))),
         }
+    }
+
+    fn from_kubo_rpc_options(
+        gateway_base: Option<&str>,
+        scope: Option<&str>,
+        kubo_rpc_api: Option<&str>,
+    ) -> Result<Self, BroadwebdError> {
+        if non_empty_trimmed(gateway_base).is_some() || non_empty_trimmed(scope).is_some() {
+            return Err(BroadwebdError::UnsupportedRequest(format!(
+                "{SLATE_IPFS_TRANSPORT_ENV}=kubo-rpc cannot be combined with {SLATE_IPFS_GATEWAY_ENV} or {SLATE_IPFS_GATEWAY_SCOPE_ENV}"
+            )));
+        }
+        Self::with_kubo_rpc(kubo_rpc_api.unwrap_or(DEFAULT_IPFS_KUBO_RPC_API))
     }
 
     pub fn with_local_gateway(gateway_base: impl Into<String>) -> Result<Self, BroadwebdError> {
@@ -174,6 +217,27 @@ fn parse_gateway_scope(scope: Option<&str>) -> Result<IpfsGatewayScope, Broadweb
         Some(scope) if scope.eq_ignore_ascii_case("public") => Ok(IpfsGatewayScope::Public),
         Some(scope) => Err(BroadwebdError::UnsupportedRequest(format!(
             "unsupported {SLATE_IPFS_GATEWAY_SCOPE_ENV}: {scope}; expected local or public"
+        ))),
+    }
+}
+
+fn parse_transport_kind(
+    transport: Option<&str>,
+    kubo_rpc_api: Option<&str>,
+) -> Result<IpfsTransportKind, BroadwebdError> {
+    match non_empty_trimmed(transport) {
+        None if non_empty_trimmed(kubo_rpc_api).is_some() => Ok(IpfsTransportKind::KuboRpc),
+        None => Ok(IpfsTransportKind::Gateway),
+        Some(value) if value.eq_ignore_ascii_case("gateway") => Ok(IpfsTransportKind::Gateway),
+        Some(value)
+            if value.eq_ignore_ascii_case("kubo-rpc")
+                || value.eq_ignore_ascii_case("kubo")
+                || value.eq_ignore_ascii_case("local-kubo-rpc") =>
+        {
+            Ok(IpfsTransportKind::KuboRpc)
+        }
+        Some(value) => Err(BroadwebdError::UnsupportedRequest(format!(
+            "unsupported {SLATE_IPFS_TRANSPORT_ENV}: {value}; expected gateway or kubo-rpc"
         ))),
     }
 }
