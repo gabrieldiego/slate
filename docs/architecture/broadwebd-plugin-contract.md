@@ -166,11 +166,13 @@ The response boundary is intentionally small:
 - headers;
 - content type;
 - body bytes;
-- disposition: render HTML or hand to download flow.
+- disposition: render HTML or hand to download flow;
+- optional download record for profile-temporary non-HTML bodies.
 
 Servo should receive only responses approved by browser-core and fetched
-through this boundary. Non-HTML bodies should become download records rather
-than rendered documents once Slate has a real download manager.
+through this boundary. Non-HTML bodies become profile-temporary download
+records under broadwebd state and are not rendered as web documents. The full
+downloads UI can later promote, rename, remove, verify, or persist those records.
 
 ## IPFS Initial Contract
 

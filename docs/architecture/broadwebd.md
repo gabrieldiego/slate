@@ -443,6 +443,12 @@ responses can still be treated as HTML when the body or path clearly identifies
 an HTML document. This keeps simple IPFS/IPNS websites renderable when a gateway
 or local node returns weak MIME metadata.
 
+When classification marks a response as a download, broadwebd writes the body to
+`profiles/<profile>/temporary/downloads/` and attaches a `DownloadRecord` to the
+response. The current renderer shows a download-ready page with the saved path
+and size; the future downloads UI should own promotion to user-selected
+persistent storage, removal, verification, and progress/history presentation.
+
 ## Mobile And Paired Devices
 
 Mobile broadweb support should be designed around constrained resources. It may
