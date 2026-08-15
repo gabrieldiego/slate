@@ -1,5 +1,7 @@
 use crate::BroadwebdError;
 use std::fs;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -30,6 +32,32 @@ impl StateRoot {
         fs::create_dir_all(root.join("temporary"))?;
         Ok(root)
     }
+
+    pub fn store_temporary_download(
+        &self,
+        profile: &str,
+        filename: &str,
+        body: &[u8],
+    ) -> Result<PathBuf, BroadwebdError> {
+        let root = self.prepare_profile(profile)?;
+        let downloads_root = root.join("temporary").join("downloads");
+        fs::create_dir_all(&downloads_root)?;
+        let filename = sanitized_filename(filename);
+        for candidate in download_filename_candidates(&filename).take(1000) {
+            let path = downloads_root.join(candidate);
+            match OpenOptions::new().write(true).create_new(true).open(&path) {
+                Ok(mut file) => {
+                    file.write_all(body)?;
+                    return Ok(path);
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
+        Err(BroadwebdError::UnsupportedRequest(format!(
+            "could not allocate a temporary download filename for {filename}"
+        )))
+    }
 }
 
 fn validate_profile_id(profile: &str) -> Result<(), BroadwebdError> {
@@ -42,4 +70,32 @@ fn validate_profile_id(profile: &str) -> Result<(), BroadwebdError> {
     }
 
     Err(BroadwebdError::InvalidProfile(profile.to_string()))
+}
+
+fn sanitized_filename(filename: &str) -> String {
+    let mut output = String::new();
+    for ch in filename.chars().take(160) {
+        if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_') {
+            output.push(ch);
+        } else {
+            output.push('_');
+        }
+    }
+    let output = output.trim_matches('.');
+    if output.is_empty() {
+        "download".to_string()
+    } else {
+        output.to_string()
+    }
+}
+
+fn download_filename_candidates(filename: &str) -> impl Iterator<Item = String> + '_ {
+    let (stem, extension) = filename
+        .rsplit_once('.')
+        .filter(|(stem, extension)| !stem.is_empty() && !extension.is_empty())
+        .map(|(stem, extension)| (stem.to_string(), format!(".{extension}")))
+        .unwrap_or_else(|| (filename.to_string(), String::new()));
+
+    std::iter::once(filename.to_string())
+        .chain((1..).map(move |suffix| format!("{stem}-{suffix}{extension}")))
 }

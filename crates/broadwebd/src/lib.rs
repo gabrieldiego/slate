@@ -32,8 +32,8 @@ pub use health::{
     ResourceProfile,
 };
 pub use http::{
-    FetchDisposition, FetchRouteInfo, HttpFetchRequest, HttpFetchResponse, HttpHeader,
-    ServiceRequest, ServiceResponse, TransportHttpRequest,
+    DownloadRecord, FetchDisposition, FetchRouteInfo, HttpFetchRequest, HttpFetchResponse,
+    HttpHeader, ServiceRequest, ServiceResponse, TransportHttpRequest,
 };
 pub use protocols::ipfs::{
     IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport, IpfsKuboRpcEndpoint,
@@ -73,6 +73,29 @@ mod tests {
         assert!(profile_root.join("protocol-state").is_dir());
         assert!(profile_root.join("temporary").is_dir());
         assert!(state.prepare_profile("../escape").is_err());
+
+        let download_path = state
+            .store_temporary_download("default", "../ipfs image?.png", b"download bytes")
+            .expect("store temporary download");
+        assert!(download_path.starts_with(profile_root.join("temporary").join("downloads")));
+        assert_eq!(
+            download_path.file_name().and_then(|name| name.to_str()),
+            Some("_ipfs_image_.png")
+        );
+        assert_eq!(
+            fs::read(&download_path).expect("read temporary download"),
+            b"download bytes"
+        );
+        let second_download_path = state
+            .store_temporary_download("default", "../ipfs image?.png", b"second")
+            .expect("store colliding temporary download");
+        assert_ne!(download_path, second_download_path);
+        assert_eq!(
+            second_download_path
+                .file_name()
+                .and_then(|name| name.to_str()),
+            Some("_ipfs_image_-1.png")
+        );
 
         let _ = fs::remove_dir_all(root);
     }
@@ -317,6 +340,12 @@ mod tests {
                 suggested_filename: "image.png".to_string()
             }
         );
+        let download = response.download.expect("download record");
+        assert_eq!(download.profile, "default");
+        assert_eq!(download.filename, "image.png");
+        assert_eq!(download.size_bytes, "png-ish".len());
+        assert_eq!(fs::read(&download.path).expect("read download"), b"png-ish");
+        assert!(download.path.ends_with("temporary/downloads/image.png"));
 
         let _ = fs::remove_dir_all(daemon.state_root().path());
     }

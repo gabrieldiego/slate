@@ -1,8 +1,8 @@
 use crate::{
     ApplicationServicePlugin, BroadwebdError, DEFAULT_PROFILE, DaemonHealth, DaemonLifecycle,
-    HttpFetchRequest, HttpFetchResponse, IpfsConfig, PluginInstallReport, PluginMetadata,
-    PluginRegistry, ProtocolInstallReport, ProtocolService, ResourceBudget, StateRoot,
-    TransportPlugin,
+    DownloadRecord, FetchDisposition, HttpFetchRequest, HttpFetchResponse, IpfsConfig,
+    PluginInstallReport, PluginMetadata, PluginRegistry, ProtocolInstallReport, ProtocolService,
+    ResourceBudget, StateRoot, TransportPlugin,
 };
 use std::path::PathBuf;
 
@@ -101,8 +101,34 @@ impl BroadwebDaemon {
         &self,
         request: HttpFetchRequest,
     ) -> Result<HttpFetchResponse, BroadwebdError> {
-        self.state_root.prepare_profile(&request.profile)?;
-        self.registry.fetch_http(request, &self.budget)
+        let profile = request.profile.clone();
+        self.state_root.prepare_profile(&profile)?;
+        let response = self.registry.fetch_http(request, &self.budget)?;
+        self.record_download(profile, response)
+    }
+
+    fn record_download(
+        &self,
+        profile: String,
+        response: HttpFetchResponse,
+    ) -> Result<HttpFetchResponse, BroadwebdError> {
+        let FetchDisposition::Download { suggested_filename } = &response.disposition else {
+            return Ok(response);
+        };
+
+        let path = self.state_root.store_temporary_download(
+            &profile,
+            suggested_filename,
+            &response.body,
+        )?;
+        let download = DownloadRecord::new(
+            profile,
+            suggested_filename,
+            path,
+            response.body.len(),
+            response.content_type.clone(),
+        );
+        Ok(response.with_download(download))
     }
 }
 

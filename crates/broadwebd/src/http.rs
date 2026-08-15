@@ -1,4 +1,5 @@
 use crate::{BroadwebdError, DEFAULT_PROFILE, ResourceBudget};
+use std::path::PathBuf;
 use std::time::Duration;
 use url::Url;
 
@@ -71,6 +72,33 @@ impl FetchRouteInfo {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DownloadRecord {
+    pub profile: String,
+    pub filename: String,
+    pub path: PathBuf,
+    pub size_bytes: usize,
+    pub content_type: Option<String>,
+}
+
+impl DownloadRecord {
+    pub fn new(
+        profile: impl Into<String>,
+        filename: impl Into<String>,
+        path: impl Into<PathBuf>,
+        size_bytes: usize,
+        content_type: Option<String>,
+    ) -> Self {
+        Self {
+            profile: profile.into(),
+            filename: filename.into(),
+            path: path.into(),
+            size_bytes,
+            content_type,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HttpFetchResponse {
     pub final_url: String,
     pub status_code: u16,
@@ -79,6 +107,7 @@ pub struct HttpFetchResponse {
     pub body: Vec<u8>,
     pub disposition: FetchDisposition,
     pub route: Option<FetchRouteInfo>,
+    pub download: Option<DownloadRecord>,
 }
 
 impl HttpFetchResponse {
@@ -99,11 +128,17 @@ impl HttpFetchResponse {
             body,
             disposition,
             route: None,
+            download: None,
         }
     }
 
     pub fn with_route(mut self, route: FetchRouteInfo) -> Self {
         self.route = Some(route);
+        self
+    }
+
+    pub fn with_download(mut self, download: DownloadRecord) -> Self {
+        self.download = Some(download);
         self
     }
 
