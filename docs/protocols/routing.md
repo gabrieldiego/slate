@@ -7,7 +7,14 @@ User-facing navigation stays URL-like:
 - `https://example.org`
 - `ipfs://<cid>`
 - `ipns://<name>`
+- `/ipfs/<cid>/...`
+- `/ipns/<name>/...`
 - `slate://home`
+
+Slate normalizes path-style IPFS/IPNS inputs to canonical `ipfs://` and
+`ipns://` URLs before routing. This keeps pasted gateway-style content paths on
+the broadweb adapter path instead of treating them as local files or search
+terms.
 
 Protocol adapters convert those inputs into routing plans with explicit endpoints, for example:
 
@@ -18,4 +25,3 @@ Protocol adapters convert those inputs into routing plans with explicit endpoint
 ```
 
 Malformed or unsupported routes must be rejected before network activity.
-
