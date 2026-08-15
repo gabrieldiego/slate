@@ -18,6 +18,8 @@ use std::cell::RefCell;
 use std::future::Future;
 use std::pin::Pin;
 use std::rc::Rc;
+#[cfg(test)]
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Once};
 use std::time::{Duration, Instant};
@@ -344,6 +346,11 @@ impl ServoBackend {
 fn fetch_with_default_broadwebd(
     request: HttpFetchRequest,
 ) -> Result<HttpFetchResponse, BroadwebdError> {
+    #[cfg(test)]
+    if let Some(daemon) = test_broadwebd_override() {
+        return daemon.fetch_http(request);
+    }
+
     thread_local! {
         static BROADWEBD: RefCell<Option<BroadwebDaemon>> = RefCell::new(None);
     }
@@ -361,12 +368,52 @@ fn fetch_with_default_broadwebd(
     })
 }
 
+#[cfg(test)]
+static TEST_BROADWEBD: Mutex<Option<Arc<BroadwebDaemon>>> = Mutex::new(None);
+
+#[cfg(test)]
+fn with_test_broadwebd<R>(daemon: BroadwebDaemon, run: impl FnOnce() -> R) -> R {
+    let daemon = Arc::new(daemon);
+    {
+        let mut slot = TEST_BROADWEBD.lock().expect("lock test broadwebd override");
+        let previous = slot.replace(daemon);
+        assert!(previous.is_none(), "test broadwebd override is already set");
+    }
+
+    let result = run();
+
+    {
+        let mut slot = TEST_BROADWEBD.lock().expect("lock test broadwebd override");
+        let installed = slot.take();
+        assert!(installed.is_some(), "test broadwebd override was removed");
+    }
+
+    result
+}
+
+#[cfg(test)]
+fn test_broadwebd_override() -> Option<Arc<BroadwebDaemon>> {
+    TEST_BROADWEBD
+        .lock()
+        .expect("lock test broadwebd override")
+        .clone()
+}
+
 fn broadweb_fetch_protocol_response(url: ServoUrl, timing: ResourceFetchTiming) -> Response {
     let address = url.to_string();
     match fetch_with_default_broadwebd(HttpFetchRequest::default_profile(&address)) {
         Ok(fetch_response) => broadweb_fetch_response(url, timing, fetch_response),
         Err(error) => broadweb_error_protocol_response(url, timing, error),
     }
+}
+
+fn broadweb_fetch_protocol_response_on_worker(
+    url: ServoUrl,
+    timing: ResourceFetchTiming,
+) -> Response {
+    std::thread::spawn(move || broadweb_fetch_protocol_response(url, timing))
+        .join()
+        .expect("broadweb protocol fetch worker panicked")
 }
 
 fn broadweb_fetch_response(
@@ -473,7 +520,7 @@ impl ProtocolHandler for BroadwebProtocolHandler {
         let url = request.current_url();
         let timing = ResourceFetchTiming::new(request.timing_type());
         let response = if has_ipfs_service_scheme(url.as_url().as_str()) {
-            broadweb_fetch_protocol_response(url, timing)
+            broadweb_fetch_protocol_response_on_worker(url, timing)
         } else {
             broadweb_placeholder_protocol_response(url, timing)
         };
@@ -1023,8 +1070,17 @@ mod tests {
     use super::{
         RenderBackend, RenderDocument, RenderViewport, ServoBackend, ServoDocumentSource,
         ServoDocumentStatus, VENDORED_SERVO_PATH, broadweb_html_with_document_base,
+        with_test_broadwebd,
+    };
+    use slate_broadwebd::{
+        BroadwebDaemon, HttpFetchService, IpfsConfig, IpfsService, PluginRegistry,
     };
     use std::fs;
+    use std::io::{ErrorKind, Read, Write};
+    use std::net::TcpListener;
+    use std::path::PathBuf;
+    use std::thread;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn servo_backend_points_at_vendored_path() {
@@ -1041,6 +1097,7 @@ mod tests {
         servo_backend_reads_local_html_file();
         private_protocol_addresses_do_not_fall_through_to_web();
         broadweb_schemes_use_servo_protocol_callback();
+        servo_backend_renders_ipfs_fixture_with_subresource();
     }
 
     fn servo_backend_renders_generated_html_with_servo() {
@@ -1138,6 +1195,46 @@ mod tests {
         assert_eq!(document.status, ServoDocumentStatus::Rendered);
     }
 
+    fn servo_backend_renders_ipfs_fixture_with_subresource() {
+        let (gateway, server) = local_ipfs_gateway_fixture();
+        let state_root = test_state_root("rendering-ipfs-fixture");
+        let mut registry = PluginRegistry::new();
+        registry.register_protocol_service(IpfsService::new(
+            IpfsConfig::new(&gateway).expect("local IPFS gateway config"),
+        ));
+        registry.register_service(HttpFetchService);
+        let daemon = BroadwebDaemon::start_with_registry(&state_root, Default::default(), registry)
+            .expect("test broadwebd");
+        let surface = with_test_broadwebd(daemon, || {
+            ServoBackend.load_address_with_viewport(
+                "ipfs://bafybeigdyrzt/index.html",
+                RenderViewport::new(640, 360),
+            )
+        });
+        let requests = server.join().expect("gateway fixture");
+        let _ = fs::remove_dir_all(state_root);
+
+        assert_eq!(surface.title, "IPFS Fixture Ready");
+        let RenderDocument::Web(document) = surface.document else {
+            panic!("expected Servo document");
+        };
+        assert_eq!(document.source, ServoDocumentSource::Broadweb);
+        assert_eq!(document.status, ServoDocumentStatus::Rendered);
+        assert_eq!(document.frame.width, 640);
+        assert_eq!(document.frame.height, 360);
+        assert!(
+            requests
+                .iter()
+                .any(|request| request == "/ipfs/bafybeigdyrzt/index.html")
+        );
+        assert!(
+            requests
+                .iter()
+                .any(|request| request == "/ipfs/bafybeigdyrzt/style.css"),
+            "expected Servo to load relative IPFS CSS through broadwebd, got {requests:?}"
+        );
+    }
+
     #[test]
     fn broadweb_html_injects_ipfs_document_base() {
         let html = broadweb_html_with_document_base(
@@ -1164,5 +1261,81 @@ mod tests {
         let html = broadweb_html_with_document_base("https://example.test", original);
 
         assert_eq!(html, original);
+    }
+
+    fn local_ipfs_gateway_fixture() -> (String, thread::JoinHandle<Vec<String>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind IPFS gateway fixture");
+        listener
+            .set_nonblocking(true)
+            .expect("set fixture listener nonblocking");
+        let address = format!("http://{}", listener.local_addr().expect("local address"));
+        let server = thread::spawn(move || {
+            let mut requests = Vec::new();
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while requests.len() < 2 && Instant::now() < deadline {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        let mut request = [0_u8; 2048];
+                        let read = stream.read(&mut request).expect("read fixture request");
+                        let request = String::from_utf8_lossy(&request[..read]);
+                        let path = request_path(&request);
+                        let (status, content_type, body) = ipfs_fixture_response(&path);
+                        requests.push(path);
+                        let response = format!(
+                            "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                            body.len()
+                        );
+                        stream
+                            .write_all(response.as_bytes())
+                            .expect("write fixture response");
+                    }
+                    Err(error) if error.kind() == ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(error) => panic!("accept fixture request: {error}"),
+                }
+            }
+            requests
+        });
+        (address, server)
+    }
+
+    fn request_path(request: &str) -> String {
+        request
+            .lines()
+            .next()
+            .and_then(|line| line.split_whitespace().nth(1))
+            .unwrap_or("/")
+            .to_string()
+    }
+
+    fn ipfs_fixture_response(path: &str) -> (&'static str, &'static str, &'static str) {
+        match path {
+            "/ipfs/bafybeigdyrzt/index.html" => (
+                "200 OK",
+                "text/html; charset=utf-8",
+                "<!doctype html><html><head><meta charset=\"utf-8\">\
+                 <title>IPFS Fixture</title><link rel=\"stylesheet\" href=\"style.css\">\
+                 <script>document.title='IPFS Fixture Ready';</script></head>\
+                 <body><h1>Fetched through broadwebd</h1></body></html>",
+            ),
+            "/ipfs/bafybeigdyrzt/style.css" => (
+                "200 OK",
+                "text/css",
+                "body{background:#eefaf7;color:#12302c}",
+            ),
+            _ => (
+                "404 Not Found",
+                "text/plain; charset=utf-8",
+                "missing fixture path",
+            ),
+        }
+    }
+
+    fn test_state_root(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "slate-rendering-test-{}-{name}",
+            std::process::id()
+        ))
     }
 }
