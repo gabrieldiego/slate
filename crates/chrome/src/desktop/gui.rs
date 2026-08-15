@@ -1852,6 +1852,55 @@ impl Gui {
         response
     }
 
+    fn draw_toolbar_menu(
+        menu_button: &egui::Response,
+        state: &RunningAppState,
+        window: &ServoShellWindow,
+        location_dirty: &mut bool,
+    ) {
+        egui::Popup::menu(menu_button)
+            .align(egui::RectAlign::BOTTOM_END)
+            .width(260.0)
+            .show(|ui| {
+                ui.set_min_width(240.0);
+
+                if ui.button("New Tab").clicked() {
+                    *location_dirty = false;
+                    window.queue_user_interface_command(UserInterfaceCommand::NewWebView);
+                    ui.close();
+                }
+
+                if ui.button("Reload Page").clicked() {
+                    *location_dirty = false;
+                    window.queue_user_interface_command(UserInterfaceCommand::Reload);
+                    ui.close();
+                }
+
+                ui.separator();
+
+                let mut experimental_preferences_enabled = state.experimental_preferences_enabled();
+                if ui
+                    .checkbox(
+                        &mut experimental_preferences_enabled,
+                        "Enable experimental prefs",
+                    )
+                    .clicked()
+                {
+                    state.set_experimental_preferences_enabled(experimental_preferences_enabled);
+                    *location_dirty = false;
+                    window.queue_user_interface_command(UserInterfaceCommand::ReloadAll);
+                    ui.close();
+                }
+
+                ui.separator();
+
+                ui.add_enabled(false, egui::Button::new("Bookmarks"));
+                ui.add_enabled(false, egui::Button::new("Downloads"));
+                ui.add_enabled(false, egui::Button::new("History"));
+                ui.add_enabled(false, egui::Button::new("Settings"));
+            });
+    }
+
     fn tab_close_button(ui: &mut egui::Ui, texture: egui::load::SizedTexture) -> egui::Response {
         let (rect, response) =
             ui.allocate_exact_size(Vec2::splat(TAB_CLOSE_BUTTON_SIZE), egui::Sense::click());
@@ -2995,30 +3044,24 @@ impl Gui {
                                 ui.spacing_mut().item_spacing.x = TOOLBAR_SEPARATOR_LEADING_GAP;
                                 Self::vertical_separator(ui, TOOLBAR_SEPARATOR_HEIGHT);
 
-                                let mut experimental_preferences_enabled =
-                                    state.experimental_preferences_enabled();
                                 ui.spacing_mut().item_spacing.x = TOOLBAR_SEPARATOR_TRAILING_GAP;
-                                let prefs_toggle =
-                                    Gui::toolbar_menu_button(ui, experimental_preferences_enabled)
-                                        .on_hover_text("Enable experimental prefs");
+                                let menu_button = Gui::toolbar_menu_button(
+                                    ui,
+                                    state.experimental_preferences_enabled(),
+                                )
+                                .on_hover_text("Menu");
                                 ui.spacing_mut().item_spacing.x = toolbar_item_spacing;
-                                prefs_toggle.widget_info(|| {
+                                menu_button.widget_info(|| {
                                     let mut info = WidgetInfo::new(WidgetType::Button);
-                                    info.label = Some("Enable experimental preferences".into());
-                                    info.selected = Some(experimental_preferences_enabled);
+                                    info.label = Some("Menu".into());
                                     info
                                 });
-                                if prefs_toggle.clicked() {
-                                    experimental_preferences_enabled =
-                                        !experimental_preferences_enabled;
-                                    state.set_experimental_preferences_enabled(
-                                        experimental_preferences_enabled,
-                                    );
-                                    *location_dirty = false;
-                                    window.queue_user_interface_command(
-                                        UserInterfaceCommand::ReloadAll,
-                                    );
-                                }
+                                Self::draw_toolbar_menu(
+                                    &menu_button,
+                                    state,
+                                    window,
+                                    location_dirty,
+                                );
                             },
                         );
                     });
