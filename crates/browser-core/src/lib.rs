@@ -237,6 +237,10 @@ pub fn normalize_navigation_input(input: &str) -> Result<String, NavigationError
         return Ok(trimmed.to_string());
     }
 
+    if let Some(address) = normalize_ipfs_path_address(trimmed) {
+        return Ok(address);
+    }
+
     if looks_like_local_html_path(&lower) {
         return Ok(local_file_address(trimmed));
     }
@@ -266,6 +270,31 @@ fn has_supported_scheme(lower: &str) -> bool {
         || lower.starts_with("gemini://")
         || lower.starts_with("magnet:")
         || lower.starts_with("file://")
+}
+
+fn normalize_ipfs_path_address(input: &str) -> Option<String> {
+    let path = input.strip_prefix('/').unwrap_or(input);
+    let lower = path.to_ascii_lowercase();
+    let (scheme, rest) = if lower.starts_with("ipfs/") {
+        ("ipfs", &path["ipfs/".len()..])
+    } else if lower.starts_with("ipns/") {
+        ("ipns", &path["ipns/".len()..])
+    } else {
+        return None;
+    };
+
+    if rest.is_empty() || rest.chars().any(char::is_whitespace) {
+        return None;
+    }
+
+    let name_end = rest
+        .find(|ch| matches!(ch, '/' | '?' | '#'))
+        .unwrap_or(rest.len());
+    if name_end == 0 {
+        return None;
+    }
+
+    Some(format!("{scheme}://{rest}"))
 }
 
 fn looks_like_local_html_path(lower: &str) -> bool {
@@ -552,6 +581,31 @@ mod tests {
         assert_eq!(
             normalize_navigation_input("localhost:8080").expect("address"),
             "http://localhost:8080"
+        );
+    }
+
+    #[test]
+    fn navigation_normalizes_ipfs_and_ipns_paths() {
+        assert_eq!(
+            normalize_navigation_input("/ipfs/bafybeigdyrzt/index.html?view=1#top")
+                .expect("IPFS address"),
+            "ipfs://bafybeigdyrzt/index.html?view=1#top"
+        );
+        assert_eq!(
+            normalize_navigation_input("ipns/example.net/docs").expect("IPNS address"),
+            "ipns://example.net/docs"
+        );
+    }
+
+    #[test]
+    fn navigation_searches_incomplete_ipfs_paths() {
+        assert_eq!(
+            normalize_navigation_input("/ipfs/").expect("search"),
+            "slate://search?q=%2Fipfs%2F"
+        );
+        assert_eq!(
+            normalize_navigation_input("ipns/example docs").expect("search"),
+            "slate://search?q=ipns%2Fexample+docs"
         );
     }
 
