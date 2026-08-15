@@ -12,7 +12,8 @@ use servo::{
     SoftwareRenderingContext, WebView, WebViewBuilder, WebViewDelegate,
 };
 use slate_broadwebd::{
-    BroadwebDaemon, BroadwebdError, FetchDisposition, HttpFetchRequest, HttpFetchResponse,
+    BroadwebDaemon, BroadwebdError, FetchDisposition, FetchRouteInfo, HttpFetchRequest,
+    HttpFetchResponse,
 };
 use std::cell::RefCell;
 use std::future::Future;
@@ -317,10 +318,13 @@ impl ServoBackend {
                 FetchDisposition::RenderHtml => {
                     let html =
                         broadweb_html_with_document_base(address, &response.body_text_lossy());
-                    self.render_html_with_viewport(address, html, source, viewport)
+                    let mut surface =
+                        self.render_html_with_viewport(address, html, source, viewport);
+                    append_broadweb_route_metrics(&mut surface, response.route.as_ref());
+                    surface
                 }
-                FetchDisposition::Download { suggested_filename } => self
-                    .render_html_with_viewport(
+                FetchDisposition::Download { suggested_filename } => {
+                    let mut surface = self.render_html_with_viewport(
                         address,
                         download_ready_html(
                             &response.final_url,
@@ -329,7 +333,10 @@ impl ServoBackend {
                         ),
                         source,
                         viewport,
-                    ),
+                    );
+                    append_broadweb_route_metrics(&mut surface, response.route.as_ref());
+                    surface
+                }
             },
             Err(error) => self.render_error_with_viewport(
                 address,
@@ -849,6 +856,42 @@ fn document_metrics(source: ServoDocumentSource, rendered: bool) -> Vec<RenderMe
     ]
 }
 
+fn append_broadweb_route_metrics(surface: &mut RenderSurface, route: Option<&FetchRouteInfo>) {
+    let Some(route) = route else {
+        return;
+    };
+
+    surface.metrics.push(RenderMetric {
+        label: "Profile".to_string(),
+        value: route.profile.clone(),
+        accent: MetricAccent::Blue,
+    });
+    surface.metrics.push(RenderMetric {
+        label: "Transport".to_string(),
+        value: route.transport_id.clone(),
+        accent: MetricAccent::Teal,
+    });
+    surface.metrics.push(RenderMetric {
+        label: "Boundary".to_string(),
+        value: route_boundary_label(&route.privacy_boundary).to_string(),
+        accent: MetricAccent::Amber,
+    });
+}
+
+fn route_boundary_label(privacy_boundary: &str) -> &'static str {
+    if privacy_boundary.contains("public IPFS gateway") {
+        "Public IPFS Gateway"
+    } else if privacy_boundary.contains("local IPFS gateway") {
+        "Local IPFS Gateway"
+    } else if privacy_boundary.contains("local Kubo RPC") {
+        "Local Kubo RPC"
+    } else if privacy_boundary.contains("direct HTTP") {
+        "Direct Web"
+    } else {
+        "Broadweb"
+    }
+}
+
 fn route_label(source: ServoDocumentSource) -> &'static str {
     match source {
         ServoDocumentSource::SlateGenerated => "Local",
@@ -1216,6 +1259,9 @@ mod tests {
         let _ = fs::remove_dir_all(state_root);
 
         assert_eq!(surface.title, "IPFS Fixture Ready");
+        assert_metric(&surface.metrics, "Profile", "default");
+        assert_metric(&surface.metrics, "Transport", "ipfs-gateway");
+        assert_metric(&surface.metrics, "Boundary", "Local IPFS Gateway");
         let RenderDocument::Web(document) = surface.document else {
             panic!("expected Servo document");
         };
@@ -1256,6 +1302,9 @@ mod tests {
         let _ = fs::remove_dir_all(state_root);
 
         assert_eq!(surface.title, "IPNS Fixture Ready");
+        assert_metric(&surface.metrics, "Profile", "default");
+        assert_metric(&surface.metrics, "Transport", "ipfs-gateway");
+        assert_metric(&surface.metrics, "Boundary", "Local IPFS Gateway");
         let RenderDocument::Web(document) = surface.document else {
             panic!("expected Servo document");
         };
@@ -1295,6 +1344,15 @@ mod tests {
         let html = broadweb_html_with_document_base("https://example.test", original);
 
         assert_eq!(html, original);
+    }
+
+    fn assert_metric(metrics: &[super::RenderMetric], label: &str, value: &str) {
+        assert!(
+            metrics
+                .iter()
+                .any(|metric| metric.label == label && metric.value == value),
+            "expected metric {label}={value}, got {metrics:?}"
+        );
     }
 
     fn local_ipfs_gateway_fixture() -> (String, thread::JoinHandle<Vec<String>>) {
