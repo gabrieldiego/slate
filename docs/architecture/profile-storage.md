@@ -1,0 +1,71 @@
+# Profile Storage
+
+Slate-owned user state lives in a local SQLite file named `slate-settings.db`.
+The filename is intentionally product-oriented instead of database-oriented so
+Slate can change implementation details later without changing the user-facing
+concept.
+
+The database stores Slate-owned:
+
+- settings
+- bookmarks
+- cookies
+- browsing history
+- small binary blobs such as favicons, thumbnails, or serialized app state
+
+## Path Resolution
+
+At startup, Slate resolves the database path in this order:
+
+1. Use the explicit CLI path from `--settings-db <path>`.
+2. If no path was specified, use `./slate-settings.db` from the launch working
+   directory when it already exists.
+3. If no launch-directory file exists, use `~/.slate/slate-settings.db` when it
+   already exists.
+4. If neither implicit file exists, create a new `./slate-settings.db` in the
+   launch working directory with default schema and settings.
+
+This means a local project or portable folder can carry its own Slate state by
+placing `slate-settings.db` next to the command invocation. Existing
+`~/.slate/slate-settings.db` remains a fallback for users who want a home-level
+profile without passing a flag.
+
+## SQLite Choice
+
+SQLite is used because it is a stable single-file embedded database with good
+support for structured browser data, indexes, transactions, and `BLOB` values.
+Slate accesses it through `rusqlite` from safe Slate-owned Rust. The unsafe FFI
+boundary remains inside the mature SQLite binding dependency, not in Slate-owned
+code.
+
+For now Slate uses SQLite rollback journal mode instead of WAL mode so the
+steady-state profile is one main database file. SQLite may create temporary
+journal files during writes.
+
+## Schema Direction
+
+The initial schema creates these tables:
+
+- `settings`: key/value Slate settings.
+- `bookmarks`: profile-scoped bookmark metadata with optional favicon blob keys.
+- `cookies`: profile-scoped cookie records.
+- `browsing_history`: profile-scoped visit records and visit counts.
+- `binary_blobs`: profile-scoped binary values keyed by caller-defined names.
+
+The storage crate exposes APIs for reading and writing these records so
+Slate-owned features can keep their state in this file instead of adding new
+sidecar files.
+
+The chrome zoom setting is currently persisted through `settings`. Browsing
+history is recorded when Servo reports history changes.
+
+## Integration Notes
+
+Bookmarks should be wired through Slate's bookmark UI once that UI becomes
+functional.
+
+Servo still owns the active HTTP cookie jar today and persists it through its
+resource-thread configuration path as `cookie_jar.json`. Moving live HTTP
+cookies into `slate-settings.db` requires a later Servo/network integration
+point so cookie reads, writes, expiry, and clearing flow through Slate storage
+without duplicating state.

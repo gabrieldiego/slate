@@ -9439,6 +9439,7 @@ dependencies = [
  "servo-webdriver-server",
  "signal-hook-registry",
  "slate-broadwebd",
+ "slate-storage",
  "surfman",
  "tokio",
  "tracing",
@@ -9492,6 +9493,10 @@ version = "0.0.1"
 [[package]]
 name = "slate-storage"
 version = "0.0.1"
+dependencies = [
+ "dirs",
+ "rusqlite",
+]
 
 [[package]]
 name = "slotmap"

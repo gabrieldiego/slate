@@ -18,6 +18,7 @@ use servo::{
     TouchEventType, TouchId, TouchPointerType, UserContentManager, WebView, WebViewId,
     WindowRenderingContext, convert_rect_to_css_pixel,
 };
+use slate_storage::SlateProfileDatabase;
 use url::Url;
 
 use crate::egl::host_trait::HostTrait;
@@ -321,12 +322,16 @@ impl App {
             .expect("Failed to parse initial URL");
 
         let user_content_manager = Rc::new(UserContentManager::new(&servo));
+        let profile_database =
+            SlateProfileDatabase::open(init.servoshell_preferences.settings_database_path.clone())
+                .expect("failed to open Slate settings database");
         let state = Rc::new(RunningAppState::new(
             servo,
             init.servoshell_preferences,
             init.event_loop_waker,
             user_content_manager,
             init.preferences,
+            profile_database,
         ));
 
         Rc::new(Self {

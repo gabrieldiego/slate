@@ -37,6 +37,7 @@ use servo::{
     WebDriverCommandMsg, WebDriverJSResult, WebDriverLoadStatus, WebDriverScriptCommand,
     WebDriverSenders, WebView, WebViewDelegate, WebViewId,
 };
+use slate_storage::SlateProfileDatabase;
 use url::Url;
 
 #[cfg(all(
@@ -197,6 +198,9 @@ pub(crate) struct RunningAppState {
     /// servoshell specific preferences created during startup of the application.
     pub(crate) servoshell_preferences: ServoShellPreferences,
 
+    /// Slate-owned profile database for settings, bookmarks, cookies, history, and blobs.
+    pub(crate) profile_database: SlateProfileDatabase,
+
     /// A handle to the Servo instance.
     pub(crate) servo: Servo,
 
@@ -238,6 +242,7 @@ impl RunningAppState {
         event_loop_waker: Box<dyn EventLoopWaker>,
         user_content_manager: Rc<UserContentManager>,
         default_preferences: Preferences,
+        profile_database: SlateProfileDatabase,
         #[cfg(all(
             feature = "gamepad",
             not(any(target_os = "android", target_env = "ohos"))
@@ -273,6 +278,7 @@ impl RunningAppState {
             pending_webdriver_events: Default::default(),
             webdriver_receiver,
             servoshell_preferences,
+            profile_database,
             servo,
             achieved_stable_image: Default::default(),
             exit_scheduled: Default::default(),
@@ -714,7 +720,17 @@ impl WebViewDelegate for RunningAppState {
         self.window_for_webview(&webview).set_needs_update();
     }
 
-    fn notify_history_changed(&self, webview: WebView, _entries: Vec<Url>, _current: usize) {
+    fn notify_history_changed(&self, webview: WebView, entries: Vec<Url>, current: usize) {
+        if let Some(url) = entries.get(current)
+            && let Err(error) =
+                self.profile_database
+                    .record_history_visit("default", url.as_str(), None)
+        {
+            warn!(
+                "failed to record browsing history for {}: {error}",
+                url.as_str()
+            );
+        }
         self.window_for_webview(&webview).set_needs_update();
     }
 

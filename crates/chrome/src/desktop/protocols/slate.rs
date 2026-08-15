@@ -9,10 +9,12 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use headers::{ContentType, HeaderMapExt};
+use log::warn;
 use servo::protocol_handler::{
     DoneChannel, FetchContext, NetworkError, ProtocolHandler, Request, ResourceFetchTiming,
     Response, ResponseBody,
 };
+use slate_storage::SlateProfileDatabase;
 use url::Url;
 
 use crate::desktop::protocols::resource::ResourceProtocolHandler;
@@ -24,11 +26,23 @@ pub(crate) const CHROME_ELEMENT_ZOOM_SETTING_MAX: f32 = 1.15;
 const CHROME_ELEMENT_ZOOM_PERCENT_DEFAULT: u32 = 90;
 const CHROME_ELEMENT_ZOOM_PERCENT_MIN: u32 = 75;
 const CHROME_ELEMENT_ZOOM_PERCENT_MAX: u32 = 115;
+const CHROME_ELEMENT_ZOOM_SETTING_KEY: &str = "chrome.zoom";
 
 static CHROME_ELEMENT_ZOOM_PERCENT: AtomicU32 = AtomicU32::new(CHROME_ELEMENT_ZOOM_PERCENT_DEFAULT);
 
 #[derive(Default)]
-pub struct SlateProtocolHandler {}
+pub struct SlateProtocolHandler {
+    database: Option<SlateProfileDatabase>,
+}
+
+impl SlateProtocolHandler {
+    pub(crate) fn new(database: SlateProfileDatabase) -> Self {
+        initialize_chrome_settings_from_database(&database);
+        Self {
+            database: Some(database),
+        }
+    }
+}
 
 impl ProtocolHandler for SlateProtocolHandler {
     fn privileged_paths(&self) -> &'static [&'static str] {
@@ -54,6 +68,7 @@ impl ProtocolHandler for SlateProtocolHandler {
             let zoom = chrome_element_zoom_setting_from_url(url.as_url())
                 .map(set_current_chrome_element_zoom_setting)
                 .unwrap_or_else(current_chrome_element_zoom_setting);
+            self.persist_chrome_element_zoom_setting(zoom);
             return chrome_zoom_json_response(request, zoom);
         }
 
@@ -78,6 +93,30 @@ impl ProtocolHandler for SlateProtocolHandler {
             NetworkError::ResourceLoadError("Invalid Slate internal page".to_owned()),
         )))
     }
+}
+
+impl SlateProtocolHandler {
+    fn persist_chrome_element_zoom_setting(&self, zoom: f32) {
+        if let Some(database) = &self.database {
+            if let Err(error) = database.set_setting_f32(CHROME_ELEMENT_ZOOM_SETTING_KEY, zoom) {
+                warn!("failed to persist chrome zoom setting: {error}");
+            }
+        }
+    }
+}
+
+pub(crate) fn initialize_chrome_settings_from_database(database: &SlateProfileDatabase) {
+    let zoom = match database.ensure_setting_f32(
+        CHROME_ELEMENT_ZOOM_SETTING_KEY,
+        CHROME_ELEMENT_ZOOM_SETTING_DEFAULT,
+    ) {
+        Ok(zoom) => zoom,
+        Err(error) => {
+            warn!("failed to load chrome zoom setting: {error}");
+            CHROME_ELEMENT_ZOOM_SETTING_DEFAULT
+        }
+    };
+    set_current_chrome_element_zoom_setting(zoom);
 }
 
 pub(crate) fn clamp_chrome_element_zoom_setting(zoom: f32) -> f32 {

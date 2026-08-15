@@ -13,6 +13,7 @@ use servo::protocol_handler::ProtocolRegistry;
 use servo::{
     EventLoopWaker, Opts, Preferences, ServoBuilder, ServoUrl, UserContentManager, UserScript,
 };
+use slate_storage::SlateProfileDatabase;
 use url::Url;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
@@ -45,6 +46,7 @@ pub struct App {
     waker: Box<dyn EventLoopWaker>,
     event_loop_proxy: Option<EventLoopProxy<AppEvent>>,
     initial_url: ServoUrl,
+    profile_database: SlateProfileDatabase,
     t_start: Instant,
     t: Instant,
     state: AppState,
@@ -63,6 +65,9 @@ impl App {
             |path| fs::metadata(path).is_ok(),
             &servo_shell_preferences,
         );
+        let profile_database =
+            SlateProfileDatabase::open(servo_shell_preferences.settings_database_path.clone())
+                .expect("failed to open Slate settings database");
 
         let t = Instant::now();
         App {
@@ -72,6 +77,7 @@ impl App {
             waker: event_loop.create_event_loop_waker(),
             event_loop_proxy: event_loop.event_loop_proxy(),
             initial_url,
+            profile_database,
             t_start: t,
             t,
             state: AppState::Initializing,
@@ -87,8 +93,10 @@ impl App {
         );
         let _ =
             protocol_registry.register("servo", protocols::servo::ServoProtocolHandler::default());
-        let _ =
-            protocol_registry.register("slate", protocols::slate::SlateProtocolHandler::default());
+        let _ = protocol_registry.register(
+            "slate",
+            protocols::slate::SlateProtocolHandler::new(self.profile_database.clone()),
+        );
         let _ = protocol_registry.register(
             "ipfs",
             protocols::broadweb::BroadwebProtocolHandler::default(),
@@ -139,6 +147,7 @@ impl App {
             self.waker.clone(),
             user_content_manager,
             self.preferences.clone(),
+            self.profile_database.clone(),
             #[cfg(feature = "gamepad")]
             self.event_loop_proxy
                 .clone()

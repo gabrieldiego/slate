@@ -95,6 +95,8 @@ pub(crate) struct ServoShellPreferences {
     pub userscripts_directory: Option<PathBuf>,
     /// A set of [`UserStylesheets`] to load for content.
     pub user_stylesheets: Vec<Rc<UserStyleSheet>>,
+    /// SQLite file used for Slate-owned settings, bookmarks, cookies, history, and blobs.
+    pub settings_database_path: Option<PathBuf>,
     /// `None` to disable WebDriver or `Some` with a port number to start a server to listen to
     /// remote WebDriver commands.
     pub webdriver_port: Cell<Option<u16>>,
@@ -127,6 +129,7 @@ impl Default for ServoShellPreferences {
             exit_after_stable_image: false,
             userscripts_directory: None,
             user_stylesheets: Default::default(),
+            settings_database_path: None,
             webdriver_port: Cell::new(None),
             #[cfg(target_env = "ohos")]
             log_filter: None,
@@ -521,6 +524,10 @@ struct CmdArgs {
     #[bpaf(short('S'), long)]
     sandbox: bool,
 
+    /// SQLite file for Slate-owned settings, bookmarks, cookies, browsing history, and blobs.
+    #[bpaf(long("settings-db"), argument("slate-settings.db"))]
+    settings_database_path: Option<PathBuf>,
+
     /// Shaders will be loaded from the specified directory instead of using the builtin ones.
     shaders: Option<PathBuf>,
 
@@ -722,6 +729,7 @@ fn parse_arguments_helper(args_without_binary: Args) -> ArgumentParsingResult {
         exit_after_stable_image: cmd_args.exit,
         userscripts_directory: cmd_args.userscripts,
         user_stylesheets: cmd_args.user_stylesheet,
+        settings_database_path: cmd_args.settings_database_path,
         experimental_preferences_enabled: cmd_args.enable_experimental_web_platform_features,
         #[cfg(target_env = "ohos")]
         log_filter: cmd_args.log_filter.or_else(|| {
@@ -920,6 +928,14 @@ fn test_servoshell_cmd() {
             .certificate_path
             .unwrap(),
         String::from("/tmp/test")
+    );
+
+    assert_eq!(
+        test_parse("--settings-db=/tmp/slate-settings.db")
+            .2
+            .settings_database_path
+            .unwrap(),
+        PathBuf::from("/tmp/slate-settings.db")
     );
 
     assert!({

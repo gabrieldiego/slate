@@ -1,6 +1,10 @@
 target/
 /slate
 /slate-chrome-headless.png
+/slate-settings.db
+/slate-settings.db-journal
+/slate-settings.db-shm
+/slate-settings.db-wal
 *.swp
 *.swo
 /.cargo/
