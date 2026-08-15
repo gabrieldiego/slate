@@ -39,6 +39,7 @@ impl ApplicationServicePlugin for HttpFetchService {
                 let transport_request = TransportHttpRequest {
                     profile: request.profile,
                     url: request.url,
+                    purpose: request.purpose,
                 };
                 transport
                     .fetch_http(&transport_request, budget)

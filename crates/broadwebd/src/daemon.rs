@@ -1,8 +1,8 @@
 use crate::{
     ApplicationServicePlugin, BroadwebdError, DEFAULT_PROFILE, DaemonHealth, DaemonLifecycle,
-    DownloadRecord, FetchDisposition, HttpFetchRequest, HttpFetchResponse, IpfsConfig,
-    PluginInstallReport, PluginMetadata, PluginRegistry, ProtocolInstallReport, ProtocolService,
-    ResourceBudget, StateRoot, TransportPlugin,
+    DownloadRecord, FetchDisposition, FetchPurpose, HttpFetchRequest, HttpFetchResponse,
+    IpfsConfig, PluginInstallReport, PluginMetadata, PluginRegistry, ProtocolInstallReport,
+    ProtocolService, ResourceBudget, StateRoot, TransportPlugin,
 };
 use std::path::PathBuf;
 
@@ -102,8 +102,12 @@ impl BroadwebDaemon {
         request: HttpFetchRequest,
     ) -> Result<HttpFetchResponse, BroadwebdError> {
         let profile = request.profile.clone();
+        let should_record_download = request.purpose == FetchPurpose::Navigation;
         self.state_root.prepare_profile(&profile)?;
         let response = self.registry.fetch_http(request, &self.budget)?;
+        if !should_record_download {
+            return Ok(response);
+        }
         self.record_download(profile, response)
     }
 

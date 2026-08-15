@@ -32,8 +32,8 @@ pub use health::{
     ResourceProfile,
 };
 pub use http::{
-    DownloadRecord, FetchDisposition, FetchRouteInfo, HttpFetchRequest, HttpFetchResponse,
-    HttpHeader, ServiceRequest, ServiceResponse, TransportHttpRequest,
+    DownloadRecord, FetchDisposition, FetchPurpose, FetchRouteInfo, HttpFetchRequest,
+    HttpFetchResponse, HttpHeader, ServiceRequest, ServiceResponse, TransportHttpRequest,
 };
 pub use protocols::ipfs::{
     IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport, IpfsKuboRpcEndpoint,
@@ -51,7 +51,7 @@ pub use transports::direct_http::DirectHttpTransport;
 mod tests {
     use super::{
         BroadwebDaemon, BroadwebdError, DEFAULT_IPFS_KUBO_RPC_API, DIRECT_HTTP_PLUGIN,
-        FetchDisposition, HttpFetchRequest, HttpFetchResponse, IPFS_GATEWAY_PLUGIN,
+        FetchDisposition, FetchPurpose, HttpFetchRequest, HttpFetchResponse, IPFS_GATEWAY_PLUGIN,
         IPFS_KUBO_RPC_PLUGIN, IpfsConfig, IpfsGatewayScope, IpfsGatewayTransport,
         IpfsKuboRpcEndpoint, IpfsService, IpfsTransportKind, PluginHealth, PluginKind,
         PluginMetadata, PluginRegistry, ProtocolService, ResourceBudget, ResourceProfile,
@@ -351,6 +351,46 @@ mod tests {
     }
 
     #[test]
+    fn http_fetch_does_not_record_subresource_downloads() {
+        let (gateway, server) = local_http_fixture("text/css", "body{color:#123}");
+        let mut registry = PluginRegistry::new();
+        registry.register_transport(IpfsGatewayTransport::local(&gateway).expect("local gateway"));
+        registry.register_service(super::HttpFetchService);
+        let daemon = BroadwebDaemon::start_with_registry(
+            test_state_root("ipfs-subresource"),
+            Default::default(),
+            registry,
+        )
+        .expect("daemon");
+        let response = daemon
+            .fetch_http(
+                HttpFetchRequest::default_profile("ipfs://bafybeigdyrzt/style.css")
+                    .for_subresource()
+                    .through_transport("ipfs-gateway"),
+            )
+            .expect("fetch IPFS subresource fixture");
+        server.join().expect("server");
+
+        assert_eq!(
+            response.disposition,
+            FetchDisposition::Download {
+                suggested_filename: "style.css".to_string()
+            }
+        );
+        assert_eq!(response.download, None);
+        assert!(
+            !daemon
+                .state_root()
+                .profile_root("default")
+                .expect("default profile root")
+                .join("temporary/downloads/style.css")
+                .exists()
+        );
+
+        let _ = fs::remove_dir_all(daemon.state_root().path());
+    }
+
+    #[test]
     fn http_fetch_infers_html_from_generic_content_type_and_body() {
         let (address, server) = local_http_fixture(
             "application/octet-stream",
@@ -458,6 +498,7 @@ mod tests {
         let request = TransportHttpRequest {
             profile: "default".to_string(),
             url: "ipfs://bafybeigdyrzt".to_string(),
+            purpose: FetchPurpose::Navigation,
         };
 
         assert!(matches!(

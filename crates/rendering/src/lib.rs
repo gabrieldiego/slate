@@ -409,7 +409,9 @@ fn test_broadwebd_override() -> Option<Arc<BroadwebDaemon>> {
 
 fn broadweb_fetch_protocol_response(url: ServoUrl, timing: ResourceFetchTiming) -> Response {
     let address = url.to_string();
-    match fetch_with_default_broadwebd(HttpFetchRequest::default_profile(&address)) {
+    match fetch_with_default_broadwebd(
+        HttpFetchRequest::default_profile(&address).for_subresource(),
+    ) {
         Ok(fetch_response) => broadweb_fetch_response(url, timing, fetch_response),
         Err(error) => broadweb_error_protocol_response(url, timing, error),
     }
@@ -1270,7 +1272,12 @@ mod tests {
             )
         });
         let requests = server.join().expect("gateway fixture");
-        let _ = fs::remove_dir_all(state_root);
+        let style_download_path = state_root
+            .join("profiles")
+            .join("default")
+            .join("temporary")
+            .join("downloads")
+            .join("style.css");
 
         assert_eq!(surface.title, "IPFS Fixture Ready");
         assert_metric(&surface.metrics, "Profile", "default");
@@ -1294,6 +1301,11 @@ mod tests {
                 .any(|request| request == "/ipfs/bafybeigdyrzt/style.css"),
             "expected Servo to load relative IPFS CSS through broadwebd, got {requests:?}"
         );
+        assert!(
+            !style_download_path.exists(),
+            "IPFS CSS subresource should not be recorded as a user download"
+        );
+        let _ = fs::remove_dir_all(state_root);
     }
 
     fn servo_backend_renders_ipns_fixture() {

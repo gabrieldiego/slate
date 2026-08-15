@@ -11,6 +11,7 @@ pub struct HttpFetchRequest {
     pub profile: String,
     pub url: String,
     pub transport_id: Option<String>,
+    pub purpose: FetchPurpose,
 }
 
 impl HttpFetchRequest {
@@ -19,6 +20,7 @@ impl HttpFetchRequest {
             profile: profile.into(),
             url: url.into(),
             transport_id: None,
+            purpose: FetchPurpose::Navigation,
         }
     }
 
@@ -30,12 +32,24 @@ impl HttpFetchRequest {
         self.transport_id = Some(transport_id.into());
         self
     }
+
+    pub fn for_subresource(mut self) -> Self {
+        self.purpose = FetchPurpose::Subresource;
+        self
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FetchPurpose {
+    Navigation,
+    Subresource,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TransportHttpRequest {
     pub profile: String,
     pub url: String,
+    pub purpose: FetchPurpose,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
