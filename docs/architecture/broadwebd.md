@@ -434,6 +434,12 @@ override the loopback endpoint with `SLATE_IPFS_KUBO_RPC`. This is an
 integration point for local-node retrieval, not a public RPC mode and not the
 default browsing path.
 
+Both gateway and Kubo retrieval share broadwebd's render-vs-download content
+classification. Specific `Content-Type` headers win, but generic binary
+responses can still be treated as HTML when the body or path clearly identifies
+an HTML document. This keeps simple IPFS/IPNS websites renderable when a gateway
+or local node returns weak MIME metadata.
+
 ## Mobile And Paired Devices
 
 Mobile broadweb support should be designed around constrained resources. It may

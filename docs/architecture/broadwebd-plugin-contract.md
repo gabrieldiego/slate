@@ -215,6 +215,11 @@ mode is useful for local-node integration and deterministic tests, but the
 gateway transport remains the default because gateway semantics still handle
 broader web-style responses more completely.
 
+Both IPFS transports use the common HTTP response classification helper. A
+specific `Content-Type` header is preserved; generic binary responses may be
+classified from the URL path or an HTML-looking body so simple websites render
+instead of being marked as downloads.
+
 Later IPFS transports can be added behind the same protocol service:
 
 ```text
