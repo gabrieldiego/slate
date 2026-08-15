@@ -71,11 +71,12 @@ fn fetch_http(
 ) -> Result<HttpFetchResponse, BroadwebdError>;
 ```
 
-`TransportHttpRequest` carries the approved profile id and target URL. The
-`http-fetch` application service annotates successful `HttpFetchResponse`
-values with `FetchRouteInfo`, including the profile id, selected transport id,
-and the selected transport's privacy boundary. Transport plugins should not
-rewrite that profile context.
+`TransportHttpRequest` carries the approved profile id, target URL, and fetch
+purpose. The purpose distinguishes top-level navigations from renderer
+subresources. The `http-fetch` application service annotates successful
+`HttpFetchResponse` values with `FetchRouteInfo`, including the profile id,
+selected transport id, and the selected transport's privacy boundary. Transport
+plugins should not rewrite that profile context.
 
 Protocol services implement `ProtocolService`:
 
@@ -170,9 +171,12 @@ The response boundary is intentionally small:
 - optional download record for profile-temporary non-HTML bodies.
 
 Servo should receive only responses approved by browser-core and fetched
-through this boundary. Non-HTML bodies become profile-temporary download
-records under broadwebd state and are not rendered as web documents. The full
-downloads UI can later promote, rename, remove, verify, or persist those records.
+through this boundary. Top-level non-HTML navigation bodies become
+profile-temporary download records under broadwebd state and are not rendered as
+web documents. Subresource bodies such as CSS, JavaScript, images, and fonts
+must stay resource responses and must not create user download records. The full
+downloads UI can later promote, rename, remove, verify, or persist top-level
+download records.
 
 ## IPFS Initial Contract
 
