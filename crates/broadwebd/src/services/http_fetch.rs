@@ -1,7 +1,7 @@
 use crate::{
-    ApplicationServicePlugin, BroadwebdError, DIRECT_HTTP_PLUGIN, HTTP_FETCH_PLUGIN, PluginKind,
-    PluginMetadata, PluginRegistry, ResourceBudget, ResourceProfile, ServiceRequest,
-    ServiceResponse, TransportHttpRequest,
+    ApplicationServicePlugin, BroadwebdError, DIRECT_HTTP_PLUGIN, FetchRouteInfo,
+    HTTP_FETCH_PLUGIN, PluginKind, PluginMetadata, PluginRegistry, ResourceBudget, ResourceProfile,
+    ServiceRequest, ServiceResponse, TransportHttpRequest,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -35,12 +35,20 @@ impl ApplicationServicePlugin for HttpFetchService {
                     None => registry.resolve_http_transport(&request.url)?,
                 };
                 let transport = registry.transport(&transport_id)?;
+                let metadata = transport.metadata();
                 let transport_request = TransportHttpRequest {
                     profile: request.profile,
                     url: request.url,
                 };
                 transport
                     .fetch_http(&transport_request, budget)
+                    .map(|response| {
+                        response.with_route(FetchRouteInfo::new(
+                            transport_request.profile,
+                            metadata.id,
+                            metadata.privacy_boundary,
+                        ))
+                    })
                     .map(ServiceResponse::HttpFetch)
             }
         }

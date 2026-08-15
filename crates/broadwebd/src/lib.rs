@@ -32,8 +32,8 @@ pub use health::{
     ResourceProfile,
 };
 pub use http::{
-    FetchDisposition, HttpFetchRequest, HttpFetchResponse, HttpHeader, ServiceRequest,
-    ServiceResponse, TransportHttpRequest,
+    FetchDisposition, FetchRouteInfo, HttpFetchRequest, HttpFetchResponse, HttpHeader,
+    ServiceRequest, ServiceResponse, TransportHttpRequest,
 };
 pub use protocols::ipfs::{
     IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport, IpfsKuboRpcEndpoint,
@@ -246,6 +246,47 @@ mod tests {
 
         assert_eq!(response.disposition, FetchDisposition::RenderHtml);
         assert!(response.body_text_lossy().contains("IPFS Service Fixture"));
+
+        let _ = fs::remove_dir_all(daemon.state_root().path());
+    }
+
+    #[test]
+    fn http_fetch_annotates_ipfs_gateway_profile_and_privacy_context() {
+        let (gateway, server) = local_http_fixture(
+            "text/html; charset=utf-8",
+            "<!doctype html><title>IPFS Profile Fixture</title>",
+        );
+        let mut registry = PluginRegistry::new();
+        registry.register_protocol_service(IpfsService::new(
+            IpfsConfig::new(&gateway).expect("local gateway config"),
+        ));
+        registry.register_service(super::HttpFetchService);
+        let daemon = BroadwebDaemon::start_with_registry(
+            test_state_root("ipfs-route-context"),
+            Default::default(),
+            registry,
+        )
+        .expect("daemon");
+        let response = daemon
+            .fetch_http(HttpFetchRequest::new(
+                "research",
+                "ipfs://bafybeigdyrzt/index.html",
+            ))
+            .expect("fetch IPFS fixture");
+        server.join().expect("server");
+
+        let route = response.route.expect("route info");
+        assert_eq!(route.profile, "research");
+        assert_eq!(route.transport_id, IPFS_GATEWAY_PLUGIN);
+        assert!(route.privacy_boundary.contains("local IPFS gateway"));
+        assert!(
+            daemon
+                .state_root()
+                .profile_root("research")
+                .expect("research profile root")
+                .join("protocol-state")
+                .is_dir()
+        );
 
         let _ = fs::remove_dir_all(daemon.state_root().path());
     }
@@ -717,6 +758,39 @@ mod tests {
             Some("text/html; charset=utf-8".to_string())
         );
         assert!(response.body_text_lossy().contains("Kubo Fixture"));
+
+        let _ = fs::remove_dir_all(daemon.state_root().path());
+    }
+
+    #[test]
+    fn http_fetch_annotates_kubo_rpc_profile_and_privacy_context() {
+        let (rpc, server) = local_kubo_rpc_fixture(
+            "text/html; charset=utf-8",
+            "<!doctype html><title>Kubo Profile Fixture</title>",
+        );
+        let mut registry = PluginRegistry::new();
+        registry.register_protocol_service(IpfsService::new(
+            IpfsConfig::with_kubo_rpc(&rpc).expect("Kubo RPC config"),
+        ));
+        registry.register_service(super::HttpFetchService);
+        let daemon = BroadwebDaemon::start_with_registry(
+            test_state_root("kubo-route-context"),
+            Default::default(),
+            registry,
+        )
+        .expect("daemon");
+        let response = daemon
+            .fetch_http(HttpFetchRequest::new(
+                "research",
+                "ipfs://bafybeigdyrzt/index.html",
+            ))
+            .expect("fetch Kubo fixture");
+        server.join().expect("server");
+
+        let route = response.route.expect("route info");
+        assert_eq!(route.profile, "research");
+        assert_eq!(route.transport_id, IPFS_KUBO_RPC_PLUGIN);
+        assert!(route.privacy_boundary.contains("local Kubo RPC"));
 
         let _ = fs::remove_dir_all(daemon.state_root().path());
     }

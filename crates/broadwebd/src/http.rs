@@ -50,6 +50,27 @@ pub enum FetchDisposition {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FetchRouteInfo {
+    pub profile: String,
+    pub transport_id: String,
+    pub privacy_boundary: String,
+}
+
+impl FetchRouteInfo {
+    pub fn new(
+        profile: impl Into<String>,
+        transport_id: impl Into<String>,
+        privacy_boundary: impl Into<String>,
+    ) -> Self {
+        Self {
+            profile: profile.into(),
+            transport_id: transport_id.into(),
+            privacy_boundary: privacy_boundary.into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HttpFetchResponse {
     pub final_url: String,
     pub status_code: u16,
@@ -57,6 +78,7 @@ pub struct HttpFetchResponse {
     pub headers: Vec<HttpHeader>,
     pub body: Vec<u8>,
     pub disposition: FetchDisposition,
+    pub route: Option<FetchRouteInfo>,
 }
 
 impl HttpFetchResponse {
@@ -76,7 +98,13 @@ impl HttpFetchResponse {
             headers,
             body,
             disposition,
+            route: None,
         }
+    }
+
+    pub fn with_route(mut self, route: FetchRouteInfo) -> Self {
+        self.route = Some(route);
+        self
     }
 
     pub fn body_text_lossy(&self) -> String {
