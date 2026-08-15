@@ -2,9 +2,9 @@ use crate::protocols::ipfs::{IpfsConfig, IpfsService};
 use crate::services::http_fetch::HttpFetchService;
 use crate::transports::direct_http::DirectHttpTransport;
 use crate::{
-    BroadwebdError, DIRECT_HTTP_PLUGIN, HTTP_FETCH_PLUGIN, HttpFetchRequest, HttpFetchResponse,
-    PluginHealth, PluginMetadata, PluginStatus, ResourceBudget, ServiceRequest, ServiceResponse,
-    TransportHttpRequest,
+    BroadwebStatusReporter, BroadwebStatusSnapshot, BroadwebdError, DIRECT_HTTP_PLUGIN,
+    HTTP_FETCH_PLUGIN, HttpFetchRequest, HttpFetchResponse, PluginHealth, PluginMetadata,
+    PluginStatus, ResourceBudget, ServiceRequest, ServiceResponse, TransportHttpRequest,
 };
 use std::collections::BTreeMap;
 use url::Url;
@@ -55,6 +55,7 @@ pub struct PluginRegistry {
     protocol_services: BTreeMap<String, Box<dyn ProtocolService>>,
     transports: BTreeMap<String, Box<dyn TransportPlugin>>,
     services: BTreeMap<String, Box<dyn ApplicationServicePlugin>>,
+    status: BroadwebStatusReporter,
 }
 
 impl PluginRegistry {
@@ -63,6 +64,16 @@ impl PluginRegistry {
             protocol_services: BTreeMap::new(),
             transports: BTreeMap::new(),
             services: BTreeMap::new(),
+            status: BroadwebStatusReporter::new(),
+        }
+    }
+
+    pub fn with_status(status: BroadwebStatusReporter) -> Self {
+        Self {
+            protocol_services: BTreeMap::new(),
+            transports: BTreeMap::new(),
+            services: BTreeMap::new(),
+            status,
         }
     }
 
@@ -71,11 +82,29 @@ impl PluginRegistry {
     }
 
     pub fn with_default_http_and_ipfs_config(ipfs_config: IpfsConfig) -> Self {
-        let mut registry = Self::new();
+        Self::with_default_http_and_ipfs_config_and_status(
+            ipfs_config,
+            BroadwebStatusReporter::new(),
+        )
+    }
+
+    pub fn with_default_http_and_ipfs_config_and_status(
+        ipfs_config: IpfsConfig,
+        status: BroadwebStatusReporter,
+    ) -> Self {
+        let mut registry = Self::with_status(status);
         registry.register_transport(DirectHttpTransport);
         registry.register_protocol_service(IpfsService::new(ipfs_config));
         registry.register_service(HttpFetchService);
         registry
+    }
+
+    pub fn status_reporter(&self) -> BroadwebStatusReporter {
+        self.status.clone()
+    }
+
+    pub fn status_snapshot(&self) -> BroadwebStatusSnapshot {
+        self.status.snapshot()
     }
 
     pub fn register_protocol_service(&mut self, service: impl ProtocolService + 'static) {

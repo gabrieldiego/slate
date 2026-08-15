@@ -8,6 +8,8 @@ use std::path::Path;
 use egui::epaint::{ImageData, Primitive, Vertex};
 use egui::{ClippedPrimitive, Color32, TextureId};
 use image::RgbaImage;
+use servo::LoadStatus;
+use slate_broadwebd::BroadwebStatusSnapshot;
 
 use super::{
     ADDRESS_BOOKMARK_ICON_SIZE, ADDRESS_BOOKMARK_RESERVED_WIDTH, ADDRESS_CORNER_RADIUS,
@@ -396,7 +398,15 @@ fn render_footer(root_ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) -> eg
         .exact_size(FOOTER_HEIGHT)
         .frame(footer_frame)
         .show_separator_line(false)
-        .show_inside(root_ui, |ui| Gui::draw_footer(ui, slate_icons))
+        .show_inside(root_ui, |ui| {
+            Gui::draw_footer(
+                ui,
+                slate_icons,
+                LoadStatus::Complete,
+                &BroadwebStatusSnapshot::idle(),
+                "slate://home",
+            )
+        })
         .response
         .rect
 }

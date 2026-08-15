@@ -1,15 +1,16 @@
 use super::{IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, address::ipfs_url_parts};
 use crate::http::{fetch_http_url, parse_http_url};
 use crate::{
-    BroadwebdError, DEFAULT_IPFS_GATEWAY, FetchRouteInfo, HttpFetchResponse, IPFS_GATEWAY_PLUGIN,
-    PluginKind, PluginMetadata, ResourceBudget, ResourceProfile, TransportHttpRequest,
-    TransportPlugin,
+    BroadwebStatusKind, BroadwebStatusReporter, BroadwebdError, DEFAULT_IPFS_GATEWAY,
+    FetchRouteInfo, HttpFetchResponse, IPFS_GATEWAY_PLUGIN, PluginKind, PluginMetadata,
+    ResourceBudget, ResourceProfile, TransportHttpRequest, TransportPlugin,
 };
 use std::sync::Mutex;
 
 pub struct IpfsGatewayTransport {
     gateways: Vec<IpfsGatewayEndpoint>,
     active_gateway: Mutex<usize>,
+    status: BroadwebStatusReporter,
 }
 
 impl IpfsGatewayTransport {
@@ -25,14 +26,29 @@ impl IpfsGatewayTransport {
         Self::from_gateways(config.gateway_candidates())
     }
 
+    pub fn from_config_with_status(
+        config: &IpfsConfig,
+        status: BroadwebStatusReporter,
+    ) -> Result<Self, BroadwebdError> {
+        Self::from_gateways_with_status(config.gateway_candidates(), status)
+    }
+
     pub fn from_endpoint(gateway: IpfsGatewayEndpoint) -> Self {
         Self {
             gateways: vec![gateway],
             active_gateway: Mutex::new(0),
+            status: BroadwebStatusReporter::new(),
         }
     }
 
     pub fn from_gateways(gateways: Vec<IpfsGatewayEndpoint>) -> Result<Self, BroadwebdError> {
+        Self::from_gateways_with_status(gateways, BroadwebStatusReporter::new())
+    }
+
+    pub fn from_gateways_with_status(
+        gateways: Vec<IpfsGatewayEndpoint>,
+        status: BroadwebStatusReporter,
+    ) -> Result<Self, BroadwebdError> {
         if gateways.is_empty() {
             return Err(BroadwebdError::UnsupportedRequest(
                 "IPFS gateway transport requires at least one gateway".to_string(),
@@ -41,6 +57,7 @@ impl IpfsGatewayTransport {
         Ok(Self {
             gateways,
             active_gateway: Mutex::new(0),
+            status,
         })
     }
 
@@ -159,24 +176,38 @@ impl TransportPlugin for IpfsGatewayTransport {
 
         for index in self.gateway_attempt_order() {
             let gateway = &self.gateways[index];
+            self.publish_gateway_attempt_status(gateway, &request.url);
             let gateway_url = ipfs_gateway_http_url(&request.url, gateway.base_url())?;
             let url = parse_http_url(&gateway_url)?;
             match fetch_http_url(url, budget) {
                 Ok(response) if is_usable_gateway_response(&response) => {
                     self.set_active_gateway_index(index);
+                    self.publish_gateway_complete_status(gateway, &request.url);
                     return Ok(response.with_route(selected_gateway_route(request, gateway)));
                 }
                 Ok(response) => {
+                    self.publish_gateway_response_failure_status(
+                        gateway,
+                        &request.url,
+                        response.status_code,
+                    );
                     last_response =
                         Some(response.with_route(selected_gateway_route(request, gateway)));
                 }
                 Err(error) => {
+                    self.publish_gateway_error_status(gateway, &request.url);
                     last_error = Some(error);
                 }
             }
         }
 
         self.set_active_gateway_index(0);
+        self.status.set(
+            BroadwebStatusKind::Error,
+            "IPFS gateways unavailable",
+            Some(request.url.clone()),
+            None,
+        );
         if let Some(response) = last_response {
             return Ok(response);
         }
@@ -184,6 +215,75 @@ impl TransportPlugin for IpfsGatewayTransport {
             BroadwebdError::UnsupportedRequest("no IPFS gateways are configured".to_string())
         }))
     }
+}
+
+impl IpfsGatewayTransport {
+    fn publish_gateway_attempt_status(&self, gateway: &IpfsGatewayEndpoint, target: &str) {
+        let active = gateway.base_url() == self.cached_gateway_base();
+        let kind = if active {
+            BroadwebStatusKind::Fetching
+        } else {
+            BroadwebStatusKind::SwitchingGateway
+        };
+        let message = if matches!(gateway.scope(), IpfsGatewayScope::Local) {
+            "Trying local IPFS gateway".to_string()
+        } else {
+            format!("Trying {}", gateway_status_label(gateway))
+        };
+        self.status.set(
+            kind,
+            message,
+            Some(target.to_string()),
+            Some(gateway.base_url().to_string()),
+        );
+    }
+
+    fn publish_gateway_complete_status(&self, gateway: &IpfsGatewayEndpoint, target: &str) {
+        self.status.set(
+            BroadwebStatusKind::Complete,
+            format!("Loaded via {}", gateway_status_label(gateway)),
+            Some(target.to_string()),
+            Some(gateway.base_url().to_string()),
+        );
+    }
+
+    fn publish_gateway_response_failure_status(
+        &self,
+        gateway: &IpfsGatewayEndpoint,
+        target: &str,
+        status_code: u16,
+    ) {
+        self.status.set(
+            BroadwebStatusKind::SwitchingGateway,
+            format!(
+                "{} returned HTTP {}",
+                gateway_status_label(gateway),
+                status_code
+            ),
+            Some(target.to_string()),
+            Some(gateway.base_url().to_string()),
+        );
+    }
+
+    fn publish_gateway_error_status(&self, gateway: &IpfsGatewayEndpoint, target: &str) {
+        self.status.set(
+            BroadwebStatusKind::SwitchingGateway,
+            format!("{} unavailable", gateway_status_label(gateway)),
+            Some(target.to_string()),
+            Some(gateway.base_url().to_string()),
+        );
+    }
+}
+
+fn gateway_status_label(gateway: &IpfsGatewayEndpoint) -> String {
+    if matches!(gateway.scope(), IpfsGatewayScope::Local) {
+        return "local IPFS gateway".to_string();
+    }
+
+    parse_http_url(gateway.base_url())
+        .ok()
+        .and_then(|url| url.host_str().map(str::to_string))
+        .unwrap_or_else(|| gateway.base_url().to_string())
 }
 
 fn is_usable_gateway_response(response: &HttpFetchResponse) -> bool {

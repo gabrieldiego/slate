@@ -9,6 +9,7 @@ pub mod protocols;
 mod registry;
 pub mod services;
 mod state;
+mod status;
 pub mod transports;
 
 pub(crate) const DEFAULT_PROFILE: &str = "default";
@@ -32,7 +33,10 @@ pub const SLATE_IPFS_TRANSPORT_ENV: &str = "SLATE_IPFS_TRANSPORT";
 pub const SLATE_IPFS_KUBO_RPC_ENV: &str = "SLATE_IPFS_KUBO_RPC";
 
 pub use budget::ResourceBudget;
-pub use daemon::{BroadwebDaemon, default_session_state_root};
+pub use daemon::{
+    BroadwebDaemon, default_session_state_root, default_session_status_reporter,
+    default_session_status_snapshot,
+};
 pub use error::BroadwebdError;
 pub use health::{
     DaemonHealth, DaemonLifecycle, PluginHealth, PluginKind, PluginMetadata, PluginStatus,
@@ -52,18 +56,19 @@ pub use registry::{
 };
 pub use services::http_fetch::HttpFetchService;
 pub use state::StateRoot;
+pub use status::{BroadwebStatusKind, BroadwebStatusReporter, BroadwebStatusSnapshot};
 pub use transports::direct_http::DirectHttpTransport;
 
 #[cfg(test)]
 mod tests {
     use super::{
-        BroadwebDaemon, BroadwebdError, DEFAULT_IPFS_KUBO_RPC_API, DIRECT_HTTP_PLUGIN,
-        FetchDisposition, FetchPurpose, HttpFetchRequest, HttpFetchResponse, IPFS_GATEWAY_PLUGIN,
-        IPFS_KUBO_RPC_PLUGIN, IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope,
-        IpfsGatewayTransport, IpfsKuboRpcEndpoint, IpfsService, IpfsTransportKind, PluginHealth,
-        PluginKind, PluginMetadata, PluginRegistry, ProtocolService, ResourceBudget,
-        ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, StateRoot, TransportHttpRequest,
-        TransportPlugin, ipfs_gateway_http_url, ipfs_kubo_cat_url,
+        BroadwebDaemon, BroadwebStatusKind, BroadwebStatusReporter, BroadwebdError,
+        DEFAULT_IPFS_KUBO_RPC_API, DIRECT_HTTP_PLUGIN, FetchDisposition, FetchPurpose,
+        HttpFetchRequest, HttpFetchResponse, IPFS_GATEWAY_PLUGIN, IPFS_KUBO_RPC_PLUGIN, IpfsConfig,
+        IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport, IpfsKuboRpcEndpoint,
+        IpfsService, IpfsTransportKind, PluginHealth, PluginKind, PluginMetadata, PluginRegistry,
+        ProtocolService, ResourceBudget, ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, StateRoot,
+        TransportHttpRequest, TransportPlugin, ipfs_gateway_http_url, ipfs_kubo_cat_url,
     };
     use std::fs;
     use std::io::{Read, Write};
@@ -461,6 +466,42 @@ mod tests {
         assert_eq!(response.status_code, 200);
         assert!(response.body_text_lossy().contains("Fallback Gateway"));
         assert_eq!(transport.cached_gateway_base(), fallback_gateway);
+    }
+
+    #[test]
+    fn ipfs_gateway_transport_reports_fallback_status() {
+        let missing_gateway = unused_loopback_http_url();
+        let (fallback_gateway, server) = local_http_fixture(
+            "text/html; charset=utf-8",
+            "<!doctype html><title>Status Gateway</title>",
+        );
+        let status = BroadwebStatusReporter::new();
+        let transport = IpfsGatewayTransport::from_gateways_with_status(
+            vec![
+                IpfsGatewayEndpoint::local(&missing_gateway).expect("missing local gateway"),
+                IpfsGatewayEndpoint::local(&fallback_gateway).expect("fallback gateway"),
+            ],
+            status.clone(),
+        )
+        .expect("transport");
+        let request = TransportHttpRequest {
+            profile: "default".to_string(),
+            url: "ipfs://bafybeigdyrzt/index.html".to_string(),
+            purpose: FetchPurpose::Navigation,
+        };
+
+        let response = transport
+            .fetch_http(&request, &ResourceBudget::default())
+            .expect("fetch through fallback gateway");
+        server.join().expect("server");
+
+        let snapshot = status.snapshot();
+        assert_eq!(response.status_code, 200);
+        assert_eq!(snapshot.kind, BroadwebStatusKind::Complete);
+        assert!(snapshot.message.contains("Loaded via"));
+        assert_eq!(snapshot.target.as_deref(), Some(request.url.as_str()));
+        assert_eq!(snapshot.gateway.as_deref(), Some(fallback_gateway.as_str()));
+        assert!(snapshot.sequence >= 3);
     }
 
     #[test]

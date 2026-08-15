@@ -9,6 +9,7 @@ use std::fs;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::time::Duration;
 
 use dpi::PhysicalSize;
 use egui::text::{CCursor, CCursorRange};
@@ -28,6 +29,9 @@ use log::warn;
 use servo::{
     DeviceIndependentPixel, DevicePixel, Image, LoadStatus, OffscreenRenderingContext, PixelFormat,
     RenderingContext, WebView, WebViewId,
+};
+use slate_broadwebd::{
+    BroadwebStatusKind, BroadwebStatusSnapshot, default_session_status_snapshot,
 };
 use url::Url;
 use winit::event::WindowEvent;
@@ -60,16 +64,14 @@ const FOOTER_RIGHT_PADDING: f32 = 38.0;
 const FOOTER_ITEM_SPACING: f32 = 30.0;
 const FOOTER_ICON_SIZE: f32 = 40.0;
 const FOOTER_PROTECTION_ICON_OFFSET_X: f32 = 1.5;
-const FOOTER_PROTECTION_ICON_LABEL_GAP: f32 = 16.0;
-const FOOTER_PROTECTION_LABEL_WIDTH: f32 = 200.0;
 const FOOTER_PROTECTION_STATUS_HEIGHT: f32 = 40.0;
 const FOOTER_TEXT_SIZE: f32 = 16.0;
 const FOOTER_SEPARATOR_HEIGHT: f32 = 28.0;
-const FOOTER_SYNC_SEPARATOR_EXTRA_GAP: f32 = 6.0;
-const FOOTER_SYNC_DOT_SIZE: f32 = 14.0;
-const FOOTER_SYNC_DOT_LABEL_GAP: f32 = 10.0;
-const FOOTER_SYNC_LABEL_WIDTH: f32 = 64.0;
-const FOOTER_SYNC_STATUS_HEIGHT: f32 = 40.0;
+const FOOTER_LOAD_STATUS_SEPARATOR_EXTRA_GAP: f32 = 6.0;
+const FOOTER_LOAD_STATUS_DOT_SIZE: f32 = 14.0;
+const FOOTER_LOAD_STATUS_DOT_LABEL_GAP: f32 = 10.0;
+const FOOTER_LOAD_STATUS_LABEL_WIDTH: f32 = 112.0;
+const FOOTER_LOAD_STATUS_HEIGHT: f32 = 40.0;
 const FOOTER_SETTINGS_BUTTON_SIZE: f32 = 40.0;
 const FOOTER_SETTINGS_BUTTON_RADIUS: u8 = 8;
 const FOOTER_SETTINGS_ICON_SIZE: f32 = 24.0;
@@ -170,6 +172,10 @@ const HOME_TOP_SPACE_MIN: f32 = 48.0;
 const HOME_TOP_SPACE_MAX: f32 = 132.0;
 const HOME_BOTTOM_MIN_GAP: f32 = 16.0;
 const HOME_HERO_SIZE: f32 = 78.0;
+const HOME_MOTTO_WIDTH: f32 = 280.0;
+const HOME_MOTTO_HEIGHT: f32 = 28.0;
+const HOME_MOTTO_TEXT_SIZE: f32 = 20.0;
+const HOME_HERO_MOTTO_GAP: f32 = 14.0;
 const HOME_HERO_TO_SEARCH_GAP: f32 = 41.0;
 const HOME_SEARCH_TO_METRICS_GAP: f32 = 57.0;
 const HOME_PANEL_SHADOW_OFFSET: [i8; 2] = [0, 2];
@@ -205,6 +211,7 @@ const STATUS_BUBBLE_HORIZONTAL_PADDING: f32 = 12.0;
 const STATUS_BUBBLE_CORNER_RADIUS: u8 = 8;
 const STATUS_BUBBLE_SHADOW_ALPHA: u8 = 8;
 const STATUS_TEXT_SIZE: f32 = 13.0;
+const SLATE_MOTTO: &str = "Protected. Private. Yours.";
 
 /// The user interface of a headed servoshell. Currently this is implemented via
 /// egui.
@@ -227,6 +234,9 @@ pub struct Gui {
 
     /// The text to display in the status bar on the bottom of the window.
     status_text: Option<String>,
+
+    /// Latest broadwebd status snapshot for protocol-backed page loads.
+    broadweb_status: BroadwebStatusSnapshot,
 
     /// Whether or not the current `WebView` can navigate backward.
     can_go_back: bool,
@@ -275,6 +285,7 @@ struct HomeMetricsLayout {
 #[derive(Clone, Copy, Debug)]
 struct HomeContentLayout {
     hero_rect: egui::Rect,
+    motto_rect: egui::Rect,
     search_rect: egui::Rect,
     search_icon_rect: egui::Rect,
     metrics_rect: egui::Rect,
@@ -284,6 +295,7 @@ impl Default for HomeContentLayout {
     fn default() -> Self {
         Self {
             hero_rect: egui::Rect::NOTHING,
+            motto_rect: egui::Rect::NOTHING,
             search_rect: egui::Rect::NOTHING,
             search_icon_rect: egui::Rect::NOTHING,
             metrics_rect: egui::Rect::NOTHING,
@@ -414,8 +426,12 @@ fn footer_status_text_color() -> egui::Color32 {
     egui::Color32::from_rgb(57, 58, 55)
 }
 
-fn footer_sync_dot_color() -> egui::Color32 {
-    egui::Color32::from_rgb(11, 126, 121)
+fn footer_load_status_indicator_color(load_status: LoadStatus) -> egui::Color32 {
+    match load_status {
+        LoadStatus::Started => egui::Color32::from_rgb(202, 132, 34),
+        LoadStatus::HeadParsed => slate_theme::BLUE,
+        LoadStatus::Complete => egui::Color32::from_rgb(11, 126, 121),
+    }
 }
 
 fn new_tab_icon_color() -> egui::Color32 {
@@ -622,6 +638,8 @@ fn status_bubble_label(text: &str, bubble_width: f32) -> String {
 
 fn home_content_fixed_height() -> f32 {
     HOME_HERO_SIZE
+        + HOME_HERO_MOTTO_GAP
+        + HOME_MOTTO_HEIGHT
         + HOME_HERO_TO_SEARCH_GAP
         + home_search_rendered_height()
         + HOME_SEARCH_TO_METRICS_GAP
@@ -659,10 +677,16 @@ fn home_hero_left_space(available_width: f32, content_width: f32) -> f32 {
     home_content_left_space_with_offset(available_width, content_width, HOME_HERO_OPTICAL_OFFSET_X)
 }
 
+fn location_has_broadweb_status(location: &str) -> bool {
+    location.starts_with("ipfs://") || location.starts_with("ipns://")
+}
+
 #[cfg(test)]
 fn home_content_stack_height(available_height: f32) -> f32 {
     home_top_space(available_height)
         + HOME_HERO_SIZE
+        + HOME_HERO_MOTTO_GAP
+        + HOME_MOTTO_HEIGHT
         + HOME_HERO_TO_SEARCH_GAP
         + home_search_rendered_height()
         + HOME_SEARCH_TO_METRICS_GAP
@@ -740,9 +764,8 @@ struct ConceptFooterControlsGeometry {
     protection_status_rect: egui::Rect,
     protection_icon_slot_rect: egui::Rect,
     protection_icon_rect: egui::Rect,
-    protection_label_pos: egui::Pos2,
-    sync_status_rect: egui::Rect,
-    sync_dot_center: egui::Pos2,
+    load_status_rect: egui::Rect,
+    load_status_dot_center: egui::Pos2,
     separator_rect: egui::Rect,
     settings_button_rect: egui::Rect,
     settings_icon_rect: egui::Rect,
@@ -868,11 +891,6 @@ fn concept_footer_controls_geometry() -> ConceptFooterControlsGeometry {
         egui::Vec2::splat(FOOTER_ICON_SIZE),
     );
     let protection_icon_rect = footer_protection_icon_rect(protection_icon_slot_rect);
-    let protection_label_pos = egui::pos2(
-        protection_icon_slot_rect.right() + FOOTER_PROTECTION_ICON_LABEL_GAP,
-        center_y,
-    );
-
     let settings_button_rect = egui::Rect::from_min_size(
         egui::pos2(
             footer_content_rect.right() - FOOTER_RIGHT_PADDING - FOOTER_SETTINGS_BUTTON_SIZE,
@@ -887,28 +905,27 @@ fn concept_footer_controls_geometry() -> ConceptFooterControlsGeometry {
         ),
         egui::vec2(1.0, FOOTER_SEPARATOR_HEIGHT),
     );
-    let sync_status_rect = egui::Rect::from_min_size(
+    let load_status_rect = egui::Rect::from_min_size(
         egui::pos2(
             separator_rect.left()
                 - FOOTER_ITEM_SPACING
-                - FOOTER_SYNC_SEPARATOR_EXTRA_GAP
-                - footer_sync_status_width(),
-            center_y - FOOTER_SYNC_STATUS_HEIGHT / 2.0,
+                - FOOTER_LOAD_STATUS_SEPARATOR_EXTRA_GAP
+                - footer_load_status_width(),
+            center_y - FOOTER_LOAD_STATUS_HEIGHT / 2.0,
         ),
-        egui::vec2(footer_sync_status_width(), FOOTER_SYNC_STATUS_HEIGHT),
+        egui::vec2(footer_load_status_width(), FOOTER_LOAD_STATUS_HEIGHT),
     );
-    let sync_dot_center = egui::pos2(
-        sync_status_rect.left() + FOOTER_SYNC_DOT_SIZE / 2.0,
-        sync_status_rect.center().y,
+    let load_status_dot_center = egui::pos2(
+        load_status_rect.left() + FOOTER_LOAD_STATUS_DOT_SIZE / 2.0,
+        load_status_rect.center().y,
     );
 
     ConceptFooterControlsGeometry {
         protection_status_rect,
         protection_icon_slot_rect,
         protection_icon_rect,
-        protection_label_pos,
-        sync_status_rect,
-        sync_dot_center,
+        load_status_rect,
+        load_status_dot_center,
         separator_rect,
         settings_button_rect,
         settings_icon_rect: footer_settings_icon_rect(settings_button_rect),
@@ -1148,12 +1165,12 @@ fn toolbar_menu_icon_rect(button_rect: egui::Rect) -> egui::Rect {
     )
 }
 
-fn footer_sync_status_width() -> f32 {
-    FOOTER_SYNC_DOT_SIZE + FOOTER_SYNC_DOT_LABEL_GAP + FOOTER_SYNC_LABEL_WIDTH
+fn footer_load_status_width() -> f32 {
+    FOOTER_LOAD_STATUS_DOT_SIZE + FOOTER_LOAD_STATUS_DOT_LABEL_GAP + FOOTER_LOAD_STATUS_LABEL_WIDTH
 }
 
-fn footer_sync_dot_radius() -> f32 {
-    FOOTER_SYNC_DOT_SIZE / 2.0
+fn footer_load_status_dot_radius() -> f32 {
+    FOOTER_LOAD_STATUS_DOT_SIZE / 2.0
 }
 
 fn footer_protection_icon_rect(slot_rect: egui::Rect) -> egui::Rect {
@@ -1171,7 +1188,7 @@ fn footer_settings_icon_rect(button_rect: egui::Rect) -> egui::Rect {
 }
 
 fn footer_protection_status_width() -> f32 {
-    FOOTER_ICON_SIZE + FOOTER_PROTECTION_ICON_LABEL_GAP + FOOTER_PROTECTION_LABEL_WIDTH
+    FOOTER_ICON_SIZE
 }
 
 fn footer_panel_margin() -> egui::Margin {
@@ -1535,6 +1552,7 @@ impl Gui {
             location_dirty: false,
             load_status: LoadStatus::Complete,
             status_text: None,
+            broadweb_status: BroadwebStatusSnapshot::idle(),
             can_go_back: false,
             can_go_forward: false,
             favicon_textures: Default::default(),
@@ -2005,32 +2023,67 @@ impl Gui {
         );
     }
 
-    fn draw_footer_sync_status(ui: &mut egui::Ui) {
+    fn footer_load_status_label(
+        load_status: LoadStatus,
+        broadweb_status: &BroadwebStatusSnapshot,
+        location: &str,
+    ) -> String {
+        if location_has_broadweb_status(location)
+            && matches!(
+                broadweb_status.kind,
+                BroadwebStatusKind::Fetching
+                    | BroadwebStatusKind::SwitchingGateway
+                    | BroadwebStatusKind::Complete
+                    | BroadwebStatusKind::Error
+            )
+        {
+            return broadweb_status.message.clone();
+        }
+
+        match load_status {
+            LoadStatus::Started => "Loading...".to_string(),
+            LoadStatus::HeadParsed => "Rendering...".to_string(),
+            LoadStatus::Complete => "Ready".to_string(),
+        }
+    }
+
+    fn draw_footer_load_status(
+        ui: &mut egui::Ui,
+        load_status: LoadStatus,
+        broadweb_status: &BroadwebStatusSnapshot,
+        location: &str,
+    ) {
         let (rect, response) = ui.allocate_exact_size(
-            egui::vec2(footer_sync_status_width(), FOOTER_SYNC_STATUS_HEIGHT),
+            egui::vec2(footer_load_status_width(), FOOTER_LOAD_STATUS_HEIGHT),
             egui::Sense::hover(),
         );
+        let label = Self::footer_load_status_label(load_status, broadweb_status, location);
 
         if ui.is_rect_visible(rect) {
-            let dot_center = egui::pos2(rect.left() + FOOTER_SYNC_DOT_SIZE / 2.0, rect.center().y);
+            let dot_center = egui::pos2(
+                rect.left() + FOOTER_LOAD_STATUS_DOT_SIZE / 2.0,
+                rect.center().y,
+            );
             ui.painter().circle_filled(
                 dot_center,
-                footer_sync_dot_radius(),
-                footer_sync_dot_color(),
+                footer_load_status_dot_radius(),
+                footer_load_status_indicator_color(load_status),
             );
             ui.painter().text(
                 egui::pos2(
-                    dot_center.x + FOOTER_SYNC_DOT_SIZE / 2.0 + FOOTER_SYNC_DOT_LABEL_GAP,
+                    dot_center.x
+                        + FOOTER_LOAD_STATUS_DOT_SIZE / 2.0
+                        + FOOTER_LOAD_STATUS_DOT_LABEL_GAP,
                     rect.center().y,
                 ),
                 egui::Align2::LEFT_CENTER,
-                "Sync On",
+                truncate_with_ellipsis(&label, 18),
                 egui::FontId::proportional(FOOTER_TEXT_SIZE),
                 footer_status_text_color(),
             );
         }
 
-        response.on_hover_text("Sync On");
+        response.on_hover_text(label);
     }
 
     fn draw_footer_protection_status(ui: &mut egui::Ui, texture: egui::load::SizedTexture) {
@@ -2054,26 +2107,20 @@ impl Gui {
                 egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
                 egui::Color32::WHITE,
             );
-            ui.painter().text(
-                egui::pos2(
-                    icon_slot_rect.right() + FOOTER_PROTECTION_ICON_LABEL_GAP,
-                    rect.center().y,
-                ),
-                egui::Align2::LEFT_CENTER,
-                "Protected. Private. Yours.",
-                egui::FontId::proportional(FOOTER_TEXT_SIZE),
-                footer_status_text_color(),
-            );
         }
 
         let enabled = ui.is_enabled();
-        response.widget_info(move || {
-            WidgetInfo::labeled(WidgetType::Label, enabled, "Protected. Private. Yours.")
-        });
-        response.on_hover_text("Protected. Private. Yours.");
+        response.widget_info(move || WidgetInfo::labeled(WidgetType::Label, enabled, "Protected"));
+        response.on_hover_text("Protected");
     }
 
-    fn draw_footer(ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
+    fn draw_footer(
+        ui: &mut egui::Ui,
+        slate_icons: &mut SlateIconCache,
+        load_status: LoadStatus,
+        broadweb_status: &BroadwebStatusSnapshot,
+        location: &str,
+    ) {
         ui.spacing_mut().item_spacing = egui::vec2(FOOTER_ITEM_SPACING, 0.0);
         ui.horizontal_centered(|ui| {
             ui.add_space(FOOTER_LEFT_PADDING);
@@ -2091,8 +2138,8 @@ impl Gui {
                 });
                 settings_button.on_hover_text("Settings");
                 Self::footer_vertical_separator(ui, FOOTER_SEPARATOR_HEIGHT);
-                ui.add_space(FOOTER_SYNC_SEPARATOR_EXTRA_GAP);
-                Self::draw_footer_sync_status(ui);
+                ui.add_space(FOOTER_LOAD_STATUS_SEPARATOR_EXTRA_GAP);
+                Self::draw_footer_load_status(ui, load_status, broadweb_status, location);
             });
         });
     }
@@ -2249,6 +2296,29 @@ impl Gui {
                         .fit_to_exact_size(egui::vec2(HOME_HERO_SIZE, HOME_HERO_SIZE)),
                 );
                 layout.hero_rect = hero_response.rect;
+            });
+            ui.add_space(HOME_HERO_MOTTO_GAP);
+            let available_width = ui.available_width();
+            ui.horizontal(|ui| {
+                ui.add_space(home_content_left_space(available_width, HOME_MOTTO_WIDTH));
+                let (motto_rect, response) = ui.allocate_exact_size(
+                    egui::vec2(HOME_MOTTO_WIDTH, HOME_MOTTO_HEIGHT),
+                    egui::Sense::hover(),
+                );
+                layout.motto_rect = motto_rect;
+                if ui.is_rect_visible(motto_rect) {
+                    ui.painter().text(
+                        motto_rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        SLATE_MOTTO,
+                        egui::FontId::proportional(HOME_MOTTO_TEXT_SIZE),
+                        slate_theme::TEXT,
+                    );
+                }
+                let enabled = ui.is_enabled();
+                response.widget_info(move || {
+                    WidgetInfo::labeled(WidgetType::Label, enabled, SLATE_MOTTO)
+                });
             });
             ui.add_space(HOME_HERO_TO_SEARCH_GAP);
 
@@ -2535,6 +2605,7 @@ impl Gui {
         self.rendering_context
             .make_current()
             .expect("Could not make RenderingContext current");
+        self.update_broadweb_status();
         let Self {
             rendering_context,
             context,
@@ -2545,6 +2616,8 @@ impl Gui {
             location,
             home_search,
             location_dirty,
+            load_status,
+            broadweb_status,
             favicon_textures,
             slate_icons,
             ..
@@ -2732,7 +2805,7 @@ impl Gui {
                                     );
                                 }
 
-                                match self.load_status {
+                                match *load_status {
                                     LoadStatus::Started | LoadStatus::HeadParsed => {
                                         let stop_button = Gui::toolbar_hover_raster_button(
                                             ui,
@@ -2957,7 +3030,9 @@ impl Gui {
                     .exact_size(FOOTER_HEIGHT)
                     .frame(footer_frame)
                     .show_separator_line(false)
-                    .show_inside(ctx, |ui| Self::draw_footer(ui, slate_icons));
+                    .show_inside(ctx, |ui| {
+                        Self::draw_footer(ui, slate_icons, *load_status, broadweb_status, location)
+                    });
                 Self::draw_footer_top_separator(ctx, footer_response.response.rect);
             } else {
                 *toolbar_height = Length::default();
@@ -3002,6 +3077,15 @@ impl Gui {
 
             if let Some(status_text) = &self.status_text {
                 Self::draw_status_text(ctx, available_rect, status_text);
+            }
+
+            if *load_status != LoadStatus::Complete
+                || matches!(
+                    broadweb_status.kind,
+                    BroadwebStatusKind::Fetching | BroadwebStatusKind::SwitchingGateway
+                )
+            {
+                ctx.request_repaint_after(Duration::from_millis(100));
             }
 
             if !active_webview_is_home {
@@ -3097,6 +3181,12 @@ impl Gui {
         old_status != self.status_text
     }
 
+    fn update_broadweb_status(&mut self) -> bool {
+        let state_status = default_session_status_snapshot();
+        let old_status = std::mem::replace(&mut self.broadweb_status, state_status);
+        old_status != self.broadweb_status
+    }
+
     fn update_can_go_back_and_forward(&mut self, window: &ServoShellWindow) -> bool {
         let (can_go_back, can_go_forward) = window
             .active_webview()
@@ -3117,6 +3207,7 @@ impl Gui {
         self.update_load_status(window)
             | self.update_location_in_toolbar(window)
             | self.update_status_text(window)
+            | self.update_broadweb_status()
             | self.update_can_go_back_and_forward(window)
     }
 
@@ -3155,37 +3246,38 @@ impl Gui {
 #[cfg(test)]
 mod tests {
     use euclid::{Point2D, Size2D};
-    use servo::DeviceIndependentPixel;
+    use servo::{DeviceIndependentPixel, LoadStatus};
+    use slate_broadwebd::{BroadwebStatusKind, BroadwebStatusSnapshot};
 
     use super::{
         ACTIVE_TAB_BOTTOM_JOIN_HEIGHT, ACTIVE_TAB_BOTTOM_JOIN_INSET_X,
         ACTIVE_TAB_FILE_CORNER_STEPS, ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH,
         APP_TITLE_HEIGHT, APP_TITLE_LEFT_PADDING, APP_TITLE_TEXT_SIZE, APP_TITLE_WIDTH,
         CONCEPT_SCREENSHOT_HEIGHT, CONCEPT_SCREENSHOT_WIDTH, FOOTER_HEIGHT, FOOTER_ICON_SIZE,
-        FOOTER_ITEM_SPACING, FOOTER_LEFT_PADDING, FOOTER_PANEL_MARGIN_BOTTOM,
-        FOOTER_PANEL_MARGIN_TOP, FOOTER_PANEL_MARGIN_X, FOOTER_PROTECTION_ICON_LABEL_GAP,
-        FOOTER_PROTECTION_ICON_OFFSET_X, FOOTER_PROTECTION_LABEL_WIDTH,
+        FOOTER_ITEM_SPACING, FOOTER_LEFT_PADDING, FOOTER_LOAD_STATUS_DOT_LABEL_GAP,
+        FOOTER_LOAD_STATUS_DOT_SIZE, FOOTER_LOAD_STATUS_HEIGHT, FOOTER_LOAD_STATUS_LABEL_WIDTH,
+        FOOTER_LOAD_STATUS_SEPARATOR_EXTRA_GAP, FOOTER_PANEL_MARGIN_BOTTOM,
+        FOOTER_PANEL_MARGIN_TOP, FOOTER_PANEL_MARGIN_X, FOOTER_PROTECTION_ICON_OFFSET_X,
         FOOTER_PROTECTION_STATUS_HEIGHT, FOOTER_RIGHT_PADDING, FOOTER_SEPARATOR_HEIGHT,
         FOOTER_SETTINGS_BUTTON_RADIUS, FOOTER_SETTINGS_BUTTON_SIZE,
         FOOTER_SETTINGS_GEAR_CENTER_RADIUS, FOOTER_SETTINGS_GEAR_RADIUS,
         FOOTER_SETTINGS_GEAR_STROKE, FOOTER_SETTINGS_GEAR_TOOTH_INNER_RADIUS,
-        FOOTER_SETTINGS_GEAR_TOOTH_OUTER_RADIUS, FOOTER_SETTINGS_ICON_SIZE,
-        FOOTER_SYNC_DOT_LABEL_GAP, FOOTER_SYNC_DOT_SIZE, FOOTER_SYNC_LABEL_WIDTH,
-        FOOTER_SYNC_SEPARATOR_EXTRA_GAP, FOOTER_SYNC_STATUS_HEIGHT, FOOTER_TEXT_SIZE,
-        HOME_BOTTOM_MIN_GAP, HOME_CONTENT_OPTICAL_OFFSET_X, HOME_HERO_OPTICAL_OFFSET_X,
-        HOME_HERO_SIZE, HOME_HERO_TO_SEARCH_GAP, HOME_METRIC_BADGE_CORNER_RADIUS,
-        HOME_METRIC_BADGE_EXTRA_DIGIT_FACTOR, HOME_METRIC_BADGE_LABEL_GAP,
-        HOME_METRIC_BADGE_MARGIN_X, HOME_METRIC_BADGE_MARGIN_Y,
+        FOOTER_SETTINGS_GEAR_TOOTH_OUTER_RADIUS, FOOTER_SETTINGS_ICON_SIZE, FOOTER_TEXT_SIZE,
+        HOME_BOTTOM_MIN_GAP, HOME_CONTENT_OPTICAL_OFFSET_X, HOME_HERO_MOTTO_GAP,
+        HOME_HERO_OPTICAL_OFFSET_X, HOME_HERO_SIZE, HOME_HERO_TO_SEARCH_GAP,
+        HOME_METRIC_BADGE_CORNER_RADIUS, HOME_METRIC_BADGE_EXTRA_DIGIT_FACTOR,
+        HOME_METRIC_BADGE_LABEL_GAP, HOME_METRIC_BADGE_MARGIN_X, HOME_METRIC_BADGE_MARGIN_Y,
         HOME_METRIC_BADGE_PRIMARY_DIGIT_FACTOR, HOME_METRIC_BADGE_TEXT_SIZE, HOME_METRIC_CARD_GAP,
         HOME_METRIC_CARD_HEIGHT, HOME_METRIC_CARD_INNER_MARGIN_X, HOME_METRIC_CARD_INNER_MARGIN_Y,
         HOME_METRIC_CARD_MAX_WIDTH, HOME_METRIC_DETAIL_GAP, HOME_METRIC_DETAIL_TEXT_SIZE,
         HOME_METRIC_GRID_EXTRA_HEIGHT, HOME_METRIC_ICON_LABEL_GAP, HOME_METRIC_ICON_SIZE,
-        HOME_METRIC_LABEL_TEXT_SIZE, HOME_PANEL_SHADOW_ALPHA, HOME_PANEL_SHADOW_BLUR,
-        HOME_PANEL_SHADOW_OFFSET, HOME_PANEL_SHADOW_SPREAD, HOME_SEARCH_FRAME_EXTRA_HEIGHT,
-        HOME_SEARCH_ICON_OFFSET_Y, HOME_SEARCH_ICON_SIZE, HOME_SEARCH_INPUT_TEXT_SIZE,
-        HOME_SEARCH_TO_METRICS_GAP, HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN,
-        NEW_TAB_BUTTON_RADIUS, NEW_TAB_BUTTON_SIZE, NEW_TAB_ICON_SIZE, NEW_TAB_ICON_STROKE,
-        NEW_TAB_LEFT_GAP, NEW_TAB_SLOT_HEIGHT, STATUS_BUBBLE_CORNER_RADIUS, STATUS_BUBBLE_HEIGHT,
+        HOME_METRIC_LABEL_TEXT_SIZE, HOME_MOTTO_HEIGHT, HOME_MOTTO_TEXT_SIZE, HOME_MOTTO_WIDTH,
+        HOME_PANEL_SHADOW_ALPHA, HOME_PANEL_SHADOW_BLUR, HOME_PANEL_SHADOW_OFFSET,
+        HOME_PANEL_SHADOW_SPREAD, HOME_SEARCH_FRAME_EXTRA_HEIGHT, HOME_SEARCH_ICON_OFFSET_Y,
+        HOME_SEARCH_ICON_SIZE, HOME_SEARCH_INPUT_TEXT_SIZE, HOME_SEARCH_TO_METRICS_GAP,
+        HOME_TOP_SPACE_FACTOR, HOME_TOP_SPACE_MAX, HOME_TOP_SPACE_MIN, NEW_TAB_BUTTON_RADIUS,
+        NEW_TAB_BUTTON_SIZE, NEW_TAB_ICON_SIZE, NEW_TAB_ICON_STROKE, NEW_TAB_LEFT_GAP,
+        NEW_TAB_SLOT_HEIGHT, STATUS_BUBBLE_CORNER_RADIUS, STATUS_BUBBLE_HEIGHT,
         STATUS_BUBBLE_HORIZONTAL_PADDING, STATUS_BUBBLE_MARGIN_X, STATUS_BUBBLE_MARGIN_Y,
         STATUS_BUBBLE_MAX_WIDTH, STATUS_BUBBLE_SHADOW_ALPHA, STATUS_TEXT_SIZE,
         TAB_CLOSE_BUTTON_RADIUS, TAB_CLOSE_ICON_SIZE, TAB_CONCEPT_WINDOW_WIDTH, TAB_CONTENT_ALIGN,
@@ -3217,24 +3309,25 @@ mod tests {
         chrome_panel_background_color, chrome_vertical_separator_color, concept_chrome_geometry,
         concept_footer_controls_geometry, concept_screenshot_home_view_size,
         concept_toolbar_controls_geometry, default_opening_home_view_height,
-        default_opening_home_view_size, footer_panel_margin, footer_protection_icon_rect,
-        footer_protection_status_width, footer_settings_icon_color, footer_settings_icon_rect,
-        footer_status_text_color, footer_sync_dot_color, footer_sync_dot_radius,
-        footer_sync_status_width, footer_top_separator_color, footer_vertical_separator_color,
-        home_content_left_space, home_content_stack_height, home_hero_icon_visible_rect,
-        home_hero_left_space, home_metric_badge_width, home_metric_card_background_color,
-        home_metric_card_content_height, home_metric_card_content_width, home_metric_detail_color,
-        home_metrics_layout, home_metrics_rendered_height, home_metrics_row_width,
-        home_search_background_color, home_search_border_color, home_search_icon_color,
-        home_search_icon_rect, home_search_icon_visible_rect, home_search_rendered_height,
-        home_search_width, home_top_space, home_view_background_color,
-        inactive_tab_background_color, inactive_tab_hover_background_color,
-        inactive_tab_outline_color, inactive_tab_outline_points, new_tab_icon_color,
-        rail_button_fill, rail_icon_color, rail_selected_button_fill, slate_theme,
-        status_bubble_label, status_bubble_width, tab_close_button_rect, tab_close_icon_color,
-        tab_close_raster, tab_content_width, tab_corner_radius, tab_icon_color, tab_icon_slot_rect,
-        tab_strip_background_color, tab_strip_separator_color, tab_title_color, tab_title_left,
-        tab_title_width, tab_width_for_strip, toolbar_address_width, toolbar_background_color,
+        default_opening_home_view_size, footer_load_status_dot_radius,
+        footer_load_status_indicator_color, footer_load_status_width, footer_panel_margin,
+        footer_protection_icon_rect, footer_protection_status_width, footer_settings_icon_color,
+        footer_settings_icon_rect, footer_status_text_color, footer_top_separator_color,
+        footer_vertical_separator_color, home_content_left_space, home_content_stack_height,
+        home_hero_icon_visible_rect, home_hero_left_space, home_metric_badge_width,
+        home_metric_card_background_color, home_metric_card_content_height,
+        home_metric_card_content_width, home_metric_detail_color, home_metrics_layout,
+        home_metrics_rendered_height, home_metrics_row_width, home_search_background_color,
+        home_search_border_color, home_search_icon_color, home_search_icon_rect,
+        home_search_icon_visible_rect, home_search_rendered_height, home_search_width,
+        home_top_space, home_view_background_color, inactive_tab_background_color,
+        inactive_tab_hover_background_color, inactive_tab_outline_color,
+        inactive_tab_outline_points, new_tab_icon_color, rail_button_fill, rail_icon_color,
+        rail_selected_button_fill, slate_theme, status_bubble_label, status_bubble_width,
+        tab_close_button_rect, tab_close_icon_color, tab_close_raster, tab_content_width,
+        tab_corner_radius, tab_icon_color, tab_icon_slot_rect, tab_strip_background_color,
+        tab_strip_separator_color, tab_title_color, tab_title_left, tab_title_width,
+        tab_width_for_strip, toolbar_address_width, toolbar_background_color,
         toolbar_menu_icon_center, toolbar_menu_icon_color, toolbar_menu_icon_rect,
         toolbar_navigation_icon_color, toolbar_navigation_icon_offset_x,
         toolbar_navigation_icon_rect, toolbar_navigation_raster,
@@ -3379,10 +3472,8 @@ mod tests {
         assert_eq!(FOOTER_ITEM_SPACING, 30.0);
         assert_eq!(FOOTER_ICON_SIZE, 40.0);
         assert_eq!(FOOTER_PROTECTION_ICON_OFFSET_X, 1.5);
-        assert_eq!(FOOTER_PROTECTION_ICON_LABEL_GAP, 16.0);
-        assert_eq!(FOOTER_PROTECTION_LABEL_WIDTH, 200.0);
         assert_eq!(FOOTER_PROTECTION_STATUS_HEIGHT, 40.0);
-        assert_eq!(footer_protection_status_width(), 256.0);
+        assert_eq!(footer_protection_status_width(), 40.0);
         assert_eq!(FOOTER_TEXT_SIZE, 16.0);
         assert_eq!(FOOTER_SEPARATOR_HEIGHT, 28.0);
         assert_eq!(
@@ -3397,17 +3488,25 @@ mod tests {
             footer_top_separator_color(),
             egui::Color32::from_rgb(241, 240, 239)
         );
-        assert_eq!(FOOTER_SYNC_SEPARATOR_EXTRA_GAP, 6.0);
-        assert_eq!(FOOTER_SYNC_DOT_SIZE, 14.0);
+        assert_eq!(FOOTER_LOAD_STATUS_SEPARATOR_EXTRA_GAP, 6.0);
+        assert_eq!(FOOTER_LOAD_STATUS_DOT_SIZE, 14.0);
         assert_eq!(
-            footer_sync_dot_color(),
+            footer_load_status_indicator_color(LoadStatus::Complete),
             egui::Color32::from_rgb(11, 126, 121)
         );
-        assert_eq!(footer_sync_dot_radius(), 7.0);
-        assert_eq!(FOOTER_SYNC_DOT_LABEL_GAP, 10.0);
-        assert_eq!(FOOTER_SYNC_LABEL_WIDTH, 64.0);
-        assert_eq!(FOOTER_SYNC_STATUS_HEIGHT, 40.0);
-        assert_eq!(footer_sync_status_width(), 88.0);
+        assert_eq!(
+            footer_load_status_indicator_color(LoadStatus::Started),
+            egui::Color32::from_rgb(202, 132, 34)
+        );
+        assert_eq!(
+            footer_load_status_indicator_color(LoadStatus::HeadParsed),
+            slate_theme::BLUE
+        );
+        assert_eq!(footer_load_status_dot_radius(), 7.0);
+        assert_eq!(FOOTER_LOAD_STATUS_DOT_LABEL_GAP, 10.0);
+        assert_eq!(FOOTER_LOAD_STATUS_LABEL_WIDTH, 112.0);
+        assert_eq!(FOOTER_LOAD_STATUS_HEIGHT, 40.0);
+        assert_eq!(footer_load_status_width(), 136.0);
         assert_eq!(
             footer_status_text_color(),
             egui::Color32::from_rgb(57, 58, 55)
@@ -3541,6 +3640,10 @@ mod tests {
         assert_eq!(HOME_TOP_SPACE_MAX, 132.0);
         assert_eq!(HOME_BOTTOM_MIN_GAP, 16.0);
         assert_eq!(HOME_HERO_SIZE, 78.0);
+        assert_eq!(HOME_MOTTO_WIDTH, 280.0);
+        assert_eq!(HOME_MOTTO_HEIGHT, 28.0);
+        assert_eq!(HOME_MOTTO_TEXT_SIZE, 20.0);
+        assert_eq!(HOME_HERO_MOTTO_GAP, 14.0);
         assert_eq!(HOME_HERO_TO_SEARCH_GAP, 41.0);
         assert_eq!(HOME_SEARCH_TO_METRICS_GAP, 57.0);
         assert_eq!(home_view_background_color(), slate_theme::HOME_BG);
@@ -3809,11 +3912,9 @@ mod tests {
             "expected footer shield to end near screenshot x=148: {:?}",
             geometry.protection_icon_rect
         );
-        assert_eq!(geometry.protection_label_pos.x, 172.0);
-        assert_eq!(geometry.protection_label_pos.y, 899.0);
-        assert_eq!(geometry.sync_status_rect.left(), 1439.0);
-        assert_eq!(geometry.sync_dot_center.x, 1446.0);
-        assert_eq!(geometry.sync_dot_center.y, 899.0);
+        assert_eq!(geometry.load_status_rect.left(), 1391.0);
+        assert_eq!(geometry.load_status_dot_center.x, 1398.0);
+        assert_eq!(geometry.load_status_dot_center.y, 899.0);
         assert_eq!(geometry.separator_rect.center().x, 1563.5);
         assert_eq!(geometry.separator_rect.center().y, 899.0);
         assert_eq!(
@@ -3847,6 +3948,42 @@ mod tests {
         let label = status_bubble_label(status, 180.0);
         assert!(label.ends_with('…'));
         assert!(label.chars().count() < status.chars().count());
+    }
+
+    #[test]
+    fn footer_load_status_prefers_broadweb_progress_for_ipfs_locations() {
+        let broadweb_status = BroadwebStatusSnapshot {
+            kind: BroadwebStatusKind::SwitchingGateway,
+            message: "Trying w3s.link".to_string(),
+            target: Some("ipfs://bafybeigdyrzt".to_string()),
+            gateway: Some("https://w3s.link".to_string()),
+            sequence: 4,
+        };
+
+        assert_eq!(
+            Gui::footer_load_status_label(
+                LoadStatus::Started,
+                &broadweb_status,
+                "ipfs://bafybeigdyrzt",
+            ),
+            "Trying w3s.link"
+        );
+        assert_eq!(
+            Gui::footer_load_status_label(
+                LoadStatus::Started,
+                &broadweb_status,
+                "ipns://example.ipns",
+            ),
+            "Trying w3s.link"
+        );
+        assert_eq!(
+            Gui::footer_load_status_label(
+                LoadStatus::Started,
+                &broadweb_status,
+                "https://example.com",
+            ),
+            "Loading..."
+        );
     }
 
     #[test]
@@ -4375,6 +4512,7 @@ mod tests {
 
         for rect in [
             layout.hero_rect,
+            layout.motto_rect,
             layout.search_rect,
             layout.search_icon_rect,
             layout.metrics_rect,
@@ -4404,6 +4542,11 @@ mod tests {
             "expected hero to track its screenshot optical center in {viewport_size:?}: {:?}",
             layout.hero_rect
         );
+        assert!(
+            (layout.motto_rect.center().x - concept_center_x).abs() < LAYOUT_EPSILON + 0.25,
+            "expected motto to track the concept optical center in {viewport_size:?}: {:?}",
+            layout.motto_rect
+        );
         let hero_visible_rect = home_hero_icon_visible_rect(layout.hero_rect);
         assert!(
             (754.0..=756.0).contains(&hero_visible_rect.center().x),
@@ -4421,8 +4564,8 @@ mod tests {
             search_icon_visible_rect
         );
         assert!(
-            (267.0..=270.0).contains(&search_icon_visible_rect.top()),
-            "expected search icon to start near the screenshot y=430 absolute position: {:?}",
+            (313.0..=316.0).contains(&search_icon_visible_rect.top()),
+            "expected search icon to track the moved home search field: {:?}",
             search_icon_visible_rect
         );
         assert!(
@@ -4436,12 +4579,17 @@ mod tests {
             layout.hero_rect
         );
         assert!(
-            (236.0..=248.0).contains(&layout.search_rect.top()),
+            (220.0..=222.0).contains(&layout.motto_rect.top()),
+            "expected motto to sit below the home shield: {:?}",
+            layout.motto_rect
+        );
+        assert!(
+            (292.0..=294.0).contains(&layout.search_rect.top()),
             "expected search to sit near the screenshot vertical rhythm: {:?}",
             layout.search_rect
         );
         assert!(
-            (381.0..=383.0).contains(&layout.metrics_rect.top()),
+            (426.0..=428.0).contains(&layout.metrics_rect.top()),
             "expected metric cards to sit near the screenshot vertical rhythm: {:?}",
             layout.metrics_rect
         );

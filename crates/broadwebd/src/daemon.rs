@@ -5,6 +5,9 @@ use crate::{
     ProtocolService, ResourceBudget, StateRoot, TransportPlugin,
 };
 use std::path::PathBuf;
+use std::sync::OnceLock;
+
+use crate::{BroadwebStatusReporter, BroadwebStatusSnapshot};
 
 pub struct BroadwebDaemon {
     state_root: StateRoot,
@@ -41,7 +44,10 @@ impl BroadwebDaemon {
         Self::start_with_registry(
             default_session_state_root(),
             ResourceBudget::default(),
-            PluginRegistry::with_default_http_and_ipfs_config(IpfsConfig::from_environment()?),
+            PluginRegistry::with_default_http_and_ipfs_config_and_status(
+                IpfsConfig::from_environment()?,
+                default_session_status_reporter(),
+            ),
         )
     }
 
@@ -58,6 +64,10 @@ impl BroadwebDaemon {
 
     pub fn registry(&self) -> &PluginRegistry {
         &self.registry
+    }
+
+    pub fn status_snapshot(&self) -> BroadwebStatusSnapshot {
+        self.registry.status_snapshot()
     }
 
     pub fn install_protocol_service(
@@ -140,4 +150,13 @@ pub fn default_session_state_root() -> PathBuf {
     std::env::temp_dir()
         .join("slate-broadwebd")
         .join(format!("process-{}", std::process::id()))
+}
+
+pub fn default_session_status_reporter() -> BroadwebStatusReporter {
+    static REPORTER: OnceLock<BroadwebStatusReporter> = OnceLock::new();
+    REPORTER.get_or_init(BroadwebStatusReporter::new).clone()
+}
+
+pub fn default_session_status_snapshot() -> BroadwebStatusSnapshot {
+    default_session_status_reporter().snapshot()
 }

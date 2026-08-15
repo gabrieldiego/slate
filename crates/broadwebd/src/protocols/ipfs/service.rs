@@ -28,8 +28,11 @@ impl IpfsService {
             IpfsTransportKind::Gateway => {
                 vec![
                     registry.install_transport(
-                        IpfsGatewayTransport::from_config(&self.config)
-                            .expect("validated IPFS config should provide gateway candidates"),
+                        IpfsGatewayTransport::from_config_with_status(
+                            &self.config,
+                            registry.status_reporter(),
+                        )
+                        .expect("validated IPFS config should provide gateway candidates"),
                     ),
                 ]
             }
