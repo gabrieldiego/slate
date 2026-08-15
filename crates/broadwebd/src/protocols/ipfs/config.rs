@@ -1,5 +1,7 @@
+use super::IpfsKuboRpcEndpoint;
 use crate::{
-    BroadwebdError, DEFAULT_IPFS_GATEWAY, SLATE_IPFS_GATEWAY_ENV, SLATE_IPFS_GATEWAY_SCOPE_ENV,
+    BroadwebdError, DEFAULT_IPFS_GATEWAY, IPFS_GATEWAY_PLUGIN, IPFS_KUBO_RPC_PLUGIN,
+    SLATE_IPFS_GATEWAY_ENV, SLATE_IPFS_GATEWAY_SCOPE_ENV,
 };
 use url::Url;
 
@@ -7,6 +9,12 @@ use url::Url;
 pub enum IpfsGatewayScope {
     Local,
     Public,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum IpfsTransportKind {
+    Gateway,
+    KuboRpc,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -46,6 +54,8 @@ impl IpfsGatewayEndpoint {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IpfsConfig {
     gateway: IpfsGatewayEndpoint,
+    kubo_rpc: Option<IpfsKuboRpcEndpoint>,
+    transport: IpfsTransportKind,
     allow_public_gateway_fallback: bool,
 }
 
@@ -82,6 +92,8 @@ impl IpfsConfig {
     pub fn with_local_gateway(gateway_base: impl Into<String>) -> Result<Self, BroadwebdError> {
         Ok(Self {
             gateway: IpfsGatewayEndpoint::local(gateway_base)?,
+            kubo_rpc: None,
+            transport: IpfsTransportKind::Gateway,
             allow_public_gateway_fallback: false,
         })
     }
@@ -89,6 +101,17 @@ impl IpfsConfig {
     pub fn with_public_gateway(gateway_base: impl Into<String>) -> Result<Self, BroadwebdError> {
         Ok(Self {
             gateway: IpfsGatewayEndpoint::public(gateway_base)?,
+            kubo_rpc: None,
+            transport: IpfsTransportKind::Gateway,
+            allow_public_gateway_fallback: false,
+        })
+    }
+
+    pub fn with_kubo_rpc(api_base_url: impl Into<String>) -> Result<Self, BroadwebdError> {
+        Ok(Self {
+            gateway: IpfsGatewayEndpoint::local(DEFAULT_IPFS_GATEWAY)?,
+            kubo_rpc: Some(IpfsKuboRpcEndpoint::local(api_base_url)?),
+            transport: IpfsTransportKind::KuboRpc,
             allow_public_gateway_fallback: false,
         })
     }
@@ -105,8 +128,28 @@ impl IpfsConfig {
         self.gateway.scope()
     }
 
+    pub fn kubo_rpc_endpoint(&self) -> Option<&IpfsKuboRpcEndpoint> {
+        self.kubo_rpc.as_ref()
+    }
+
+    pub fn transport(&self) -> IpfsTransportKind {
+        self.transport
+    }
+
+    pub fn http_transport_id(&self) -> &'static str {
+        match self.transport {
+            IpfsTransportKind::Gateway => IPFS_GATEWAY_PLUGIN,
+            IpfsTransportKind::KuboRpc => IPFS_KUBO_RPC_PLUGIN,
+        }
+    }
+
     pub fn uses_public_gateway(&self) -> bool {
-        matches!(self.gateway_scope(), IpfsGatewayScope::Public)
+        matches!(self.transport, IpfsTransportKind::Gateway)
+            && matches!(self.gateway_scope(), IpfsGatewayScope::Public)
+    }
+
+    pub fn uses_kubo_rpc(&self) -> bool {
+        matches!(self.transport, IpfsTransportKind::KuboRpc)
     }
 
     pub fn allow_public_gateway_fallback(&self) -> bool {

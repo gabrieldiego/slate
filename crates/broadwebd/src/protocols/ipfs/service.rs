@@ -1,7 +1,8 @@
-use super::{IpfsConfig, IpfsGatewayTransport};
+use super::{IpfsConfig, IpfsGatewayTransport, IpfsKuboRpcTransport, IpfsTransportKind};
 use crate::{
-    BroadwebdError, IPFS_GATEWAY_PLUGIN, IPFS_PROTOCOL_SERVICE, PluginInstallReport, PluginKind,
-    PluginMetadata, PluginRegistry, ProtocolService, ResourceProfile,
+    BroadwebdError, IPFS_GATEWAY_PLUGIN, IPFS_KUBO_RPC_PLUGIN, IPFS_PROTOCOL_SERVICE,
+    PluginInstallReport, PluginKind, PluginMetadata, PluginRegistry, ProtocolService,
+    ResourceProfile,
 };
 use url::Url;
 
@@ -23,34 +24,66 @@ impl IpfsService {
         &self,
         registry: &mut PluginRegistry,
     ) -> Vec<PluginInstallReport> {
-        vec![
-            registry.install_transport(IpfsGatewayTransport::from_endpoint(
-                self.config.gateway_endpoint().clone(),
-            )),
-        ]
+        match self.config.transport() {
+            IpfsTransportKind::Gateway => {
+                vec![
+                    registry.install_transport(IpfsGatewayTransport::from_endpoint(
+                        self.config.gateway_endpoint().clone(),
+                    )),
+                ]
+            }
+            IpfsTransportKind::KuboRpc => vec![
+                registry.install_transport(IpfsKuboRpcTransport::from_endpoint(
+                    self.config
+                        .kubo_rpc_endpoint()
+                        .expect("Kubo RPC config should include an endpoint")
+                        .clone(),
+                )),
+            ],
+        }
+    }
+
+    fn dependency(&self) -> &'static str {
+        match self.config.transport() {
+            IpfsTransportKind::Gateway => IPFS_GATEWAY_PLUGIN,
+            IpfsTransportKind::KuboRpc => IPFS_KUBO_RPC_PLUGIN,
+        }
     }
 }
 
 impl ProtocolService for IpfsService {
     fn metadata(&self) -> PluginMetadata {
-        let capabilities = if self.config.uses_public_gateway() {
-            [
+        let capabilities = match self.config.transport() {
+            IpfsTransportKind::Gateway if self.config.uses_public_gateway() => [
                 "ipfs",
                 "ipns",
                 "application/http-response",
                 "public-gateway",
-            ]
-        } else {
-            ["ipfs", "ipns", "application/http-response", "local-gateway"]
+            ],
+            IpfsTransportKind::Gateway => {
+                ["ipfs", "ipns", "application/http-response", "local-gateway"]
+            }
+            IpfsTransportKind::KuboRpc => [
+                "ipfs",
+                "ipns",
+                "application/http-response",
+                "local-kubo-rpc",
+            ],
         };
-        let privacy_boundary = if self.config.uses_public_gateway() {
-            "retrieves IPFS/IPNS through an explicitly configured public gateway"
-        } else {
-            "retrieves IPFS/IPNS through an explicitly configured local gateway; no public gateway fallback by default"
+        let privacy_boundary = match self.config.transport() {
+            IpfsTransportKind::Gateway if self.config.uses_public_gateway() => {
+                "retrieves IPFS/IPNS through an explicitly configured public gateway"
+            }
+            IpfsTransportKind::Gateway => {
+                "retrieves IPFS/IPNS through an explicitly configured local gateway; no public gateway fallback by default"
+            }
+            IpfsTransportKind::KuboRpc => {
+                "retrieves IPFS/IPNS through an explicitly configured local Kubo RPC endpoint; no public gateway fallback by default"
+            }
         };
         PluginMetadata::new(IPFS_PROTOCOL_SERVICE, PluginKind::ProtocolService)
             .with_capabilities(&capabilities)
-            .with_dependencies(&[IPFS_GATEWAY_PLUGIN])
+            .with_dependencies(&[self.dependency()])
             .with_privacy_boundary(privacy_boundary)
             .with_resource_profile(ResourceProfile::Medium)
     }
@@ -61,7 +94,7 @@ impl ProtocolService for IpfsService {
 
     fn http_transport_for_url(&self, url: &Url) -> Option<Result<String, BroadwebdError>> {
         match url.scheme() {
-            "ipfs" | "ipns" => Some(Ok(IPFS_GATEWAY_PLUGIN.to_string())),
+            "ipfs" | "ipns" => Some(Ok(self.config.http_transport_id().to_string())),
             _ => None,
         }
     }

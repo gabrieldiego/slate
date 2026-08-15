@@ -16,7 +16,9 @@ pub const DIRECT_HTTP_PLUGIN: &str = "direct-http";
 pub const HTTP_FETCH_PLUGIN: &str = "http-fetch";
 pub const IPFS_PROTOCOL_SERVICE: &str = "ipfs";
 pub const IPFS_GATEWAY_PLUGIN: &str = "ipfs-gateway";
+pub const IPFS_KUBO_RPC_PLUGIN: &str = "ipfs-kubo-rpc";
 pub const DEFAULT_IPFS_GATEWAY: &str = "http://127.0.0.1:8080";
+pub const DEFAULT_IPFS_KUBO_RPC_API: &str = "http://127.0.0.1:5001";
 pub const SLATE_IPFS_GATEWAY_ENV: &str = "SLATE_IPFS_GATEWAY";
 pub const SLATE_IPFS_GATEWAY_SCOPE_ENV: &str = "SLATE_IPFS_GATEWAY_SCOPE";
 
@@ -32,8 +34,8 @@ pub use http::{
     ServiceResponse, TransportHttpRequest,
 };
 pub use protocols::ipfs::{
-    IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport, IpfsService,
-    ipfs_gateway_http_url,
+    IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport, IpfsKuboRpcEndpoint,
+    IpfsKuboRpcTransport, IpfsService, IpfsTransportKind, ipfs_gateway_http_url, ipfs_kubo_cat_url,
 };
 pub use registry::{
     ApplicationServicePlugin, PluginInstallReport, PluginRegistry, ProtocolInstallReport,
@@ -47,10 +49,11 @@ pub use transports::direct_http::DirectHttpTransport;
 mod tests {
     use super::{
         BroadwebDaemon, BroadwebdError, DIRECT_HTTP_PLUGIN, FetchDisposition, HttpFetchRequest,
-        HttpFetchResponse, IPFS_GATEWAY_PLUGIN, IpfsConfig, IpfsGatewayScope, IpfsGatewayTransport,
-        IpfsService, PluginHealth, PluginKind, PluginMetadata, PluginRegistry, ProtocolService,
-        ResourceBudget, ResourceProfile, SLATE_IPFS_GATEWAY_SCOPE_ENV, StateRoot,
-        TransportHttpRequest, TransportPlugin, ipfs_gateway_http_url,
+        HttpFetchResponse, IPFS_GATEWAY_PLUGIN, IPFS_KUBO_RPC_PLUGIN, IpfsConfig, IpfsGatewayScope,
+        IpfsGatewayTransport, IpfsKuboRpcEndpoint, IpfsService, IpfsTransportKind, PluginHealth,
+        PluginKind, PluginMetadata, PluginRegistry, ProtocolService, ResourceBudget,
+        ResourceProfile, SLATE_IPFS_GATEWAY_SCOPE_ENV, StateRoot, TransportHttpRequest,
+        TransportPlugin, ipfs_gateway_http_url, ipfs_kubo_cat_url,
     };
     use std::fs;
     use std::io::{Read, Write};
@@ -473,6 +476,95 @@ mod tests {
     }
 
     #[test]
+    fn ipfs_kubo_urls_map_to_local_rpc_cat_endpoint() {
+        assert_eq!(
+            ipfs_kubo_cat_url(
+                "ipfs://bafybeigdyrzt/index.html?a=1",
+                "http://127.0.0.1:5001"
+            )
+            .expect("Kubo cat url"),
+            "http://127.0.0.1:5001/api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Findex.html"
+        );
+        assert_eq!(
+            ipfs_kubo_cat_url("ipns://example.net/docs/app.js", "http://127.0.0.1:5001/")
+                .expect("Kubo cat url"),
+            "http://127.0.0.1:5001/api/v0/cat?arg=%2Fipns%2Fexample.net%2Fdocs%2Fapp.js"
+        );
+    }
+
+    #[test]
+    fn ipfs_kubo_config_requires_loopback_rpc_endpoint() {
+        assert!(IpfsKuboRpcEndpoint::local("http://127.0.0.1:5001").is_ok());
+        assert!(matches!(
+            IpfsKuboRpcEndpoint::local("https://ipfs.example.test:5001"),
+            Err(BroadwebdError::UnsupportedRequest(_))
+        ));
+    }
+
+    #[test]
+    fn ipfs_service_registers_kubo_rpc_transport_from_config() {
+        let service = IpfsService::new(
+            IpfsConfig::with_kubo_rpc("http://127.0.0.1:5001").expect("Kubo RPC config"),
+        );
+        let mut registry = PluginRegistry::new();
+        let installs = service.install_adapter_plugins(&mut registry);
+        let metadata = service.metadata();
+
+        assert_eq!(service.config().transport(), IpfsTransportKind::KuboRpc);
+        assert!(service.config().uses_kubo_rpc());
+        assert_eq!(service.config().http_transport_id(), IPFS_KUBO_RPC_PLUGIN);
+        assert_eq!(installs.len(), 1);
+        assert_eq!(installs[0].metadata.id, IPFS_KUBO_RPC_PLUGIN);
+        assert!(
+            metadata
+                .capabilities
+                .iter()
+                .any(|capability| capability == "local-kubo-rpc")
+        );
+        assert_eq!(
+            metadata.dependencies,
+            vec![IPFS_KUBO_RPC_PLUGIN.to_string()]
+        );
+    }
+
+    #[test]
+    fn http_fetch_routes_ipfs_through_kubo_rpc_transport_for_html() {
+        let (rpc, server) = local_kubo_rpc_fixture(
+            "application/octet-stream",
+            "<!doctype html><title>Kubo Fixture</title><h1>Fetched From Kubo</h1>",
+        );
+        let mut registry = PluginRegistry::new();
+        registry.register_protocol_service(IpfsService::new(
+            IpfsConfig::with_kubo_rpc(&rpc).expect("Kubo RPC config"),
+        ));
+        registry.register_service(super::HttpFetchService);
+        let daemon = BroadwebDaemon::start_with_registry(
+            test_state_root("ipfs-kubo-html"),
+            Default::default(),
+            registry,
+        )
+        .expect("daemon");
+        let response = daemon
+            .fetch_http(HttpFetchRequest::default_profile(
+                "ipfs://bafybeigdyrzt/index.html",
+            ))
+            .expect("fetch Kubo fixture");
+        let request = server.join().expect("server");
+
+        assert!(
+            request.contains("POST /api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Findex.html HTTP/1.1")
+        );
+        assert_eq!(response.disposition, FetchDisposition::RenderHtml);
+        assert_eq!(
+            response.content_type,
+            Some("text/html; charset=utf-8".to_string())
+        );
+        assert!(response.body_text_lossy().contains("Kubo Fixture"));
+
+        let _ = fs::remove_dir_all(daemon.state_root().path());
+    }
+
+    #[test]
     #[ignore = "external internet smoke test; run through `make test-external-network`"]
     fn external_direct_http_fetches_example_domain() {
         if std::env::var_os("SLATE_EXTERNAL_NETWORK_TESTS").is_none() {
@@ -542,6 +634,28 @@ mod tests {
             stream
                 .write_all(response.as_bytes())
                 .expect("write response");
+        });
+        (address, server)
+    }
+
+    fn local_kubo_rpc_fixture(
+        content_type: &'static str,
+        body: &'static str,
+    ) -> (String, thread::JoinHandle<String>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind local Kubo fixture");
+        let address = format!("http://{}", listener.local_addr().expect("local address"));
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept request");
+            let mut request = [0_u8; 1024];
+            let read = stream.read(&mut request).expect("read request");
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            stream
+                .write_all(response.as_bytes())
+                .expect("write response");
+            String::from_utf8_lossy(&request[..read]).into_owned()
         });
         (address, server)
     }
