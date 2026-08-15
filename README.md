@@ -93,7 +93,10 @@ By default, IPFS/IPNS navigation uses a local gateway at
 with `SLATE_IPFS_GATEWAY=http://127.0.0.1:<port>`. Public gateways are not used
 implicitly; for manual interoperability testing, launch with both
 `SLATE_IPFS_GATEWAY=https://ipfs.io` and
-`SLATE_IPFS_GATEWAY_SCOPE=public`.
+`SLATE_IPFS_GATEWAY_SCOPE=public`. To use a local Kubo RPC endpoint instead of
+a gateway, launch with `SLATE_IPFS_TRANSPORT=kubo-rpc`; the default endpoint is
+`http://127.0.0.1:5001` and can be overridden with
+`SLATE_IPFS_KUBO_RPC=http://127.0.0.1:<port>`.
 
 The window opens a Slate mockup with the intended first shape: left app rail, tab strip, navigation toolbar, address bar, and a quiet home viewport. The side rail switches between Web, Downloads, Calendar, and Messaging panes; tabs can be selected; the `+` tab button creates a mock tab; and the address bar can navigate to Servo-rendered internal pages such as `slate://tests/hello`, local HTML files such as `examples/local-page.html`, broadwebd-fetched HTTP(S) pages, IPFS/IPNS gateway routes, and placeholder broadweb URLs such as `gemini://example`.
 
