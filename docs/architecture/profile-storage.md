@@ -59,10 +59,22 @@ sidecar files.
 The chrome zoom setting is currently persisted through `settings`. Browsing
 history is recorded when Servo reports history changes.
 
+Settings should fail independently. If a stored setting is missing, malformed,
+or temporarily unreadable during development, the caller should use that
+setting's default value without clearing unrelated settings, bookmarks,
+history, cookies, or blobs.
+
+When Slate creates a new profile database, or opens an older empty profile that
+has not recorded default bookmark seeding yet, it seeds first-run bookmarks for
+Wikipedia on IPFS and OpenStreetMap in the default profile. The home page fills
+remaining visible bookmark slots with non-persistent placeholders that encourage
+users to add their own sites. Once the seed marker is written, deleting those
+bookmarks does not make Slate recreate them on the next launch.
+
 ## Integration Notes
 
-Bookmarks should be wired through Slate's bookmark UI once that UI becomes
-functional.
+Bookmark editing should be wired through Slate's bookmark UI once that UI
+becomes functional.
 
 Servo still owns the active HTTP cookie jar today and persists it through its
 resource-thread configuration path as `cookie_jar.json`. Moving live HTTP

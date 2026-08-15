@@ -22,10 +22,11 @@ use super::{
     TOOLBAR_PANEL_MARGIN_X, TOOLBAR_PANEL_MARGIN_Y, address_background_color,
     address_bookmark_icon_color, address_border_color, address_security_icon_for_location,
     address_security_raster_color, address_slate_security_icon_rect, chrome_panel_background_color,
-    configure_fonts, draw_inactive_tab_outline, draw_tab_strip_separator, footer_panel_margin,
-    home_view_background_color, inactive_tab_background_color, inactive_tab_hover_background_color,
-    slate_theme, tab_close_icon_color, tab_close_raster, tab_content_width, tab_corner_radius,
-    tab_icon_color, tab_strip_background_color, tab_width_for_strip, toolbar_address_width,
+    configure_fonts, default_home_bookmark_cards, draw_inactive_tab_outline,
+    draw_tab_strip_separator, footer_panel_margin, home_view_background_color,
+    inactive_tab_background_color, inactive_tab_hover_background_color, slate_theme,
+    tab_close_icon_color, tab_close_raster, tab_content_width, tab_corner_radius, tab_icon_color,
+    tab_strip_background_color, tab_width_for_strip, toolbar_address_width,
     toolbar_background_color,
 };
 use crate::desktop::slate_theme::{SlateIcon, SlateIconCache, SlateRaster};
@@ -424,7 +425,13 @@ fn render_home_panel(
                 .rect_filled(home_rect, 0.0, home_view_background_color());
             let response = ui
                 .scope_builder(egui::UiBuilder::new().max_rect(home_rect), |ui| {
-                    Gui::draw_home_content(ui, home_rect, slate_icons, home_search)
+                    Gui::draw_home_content(
+                        ui,
+                        home_rect,
+                        slate_icons,
+                        home_search,
+                        &default_home_bookmark_cards(),
+                    )
                 })
                 .inner;
             let _ = response.layout;

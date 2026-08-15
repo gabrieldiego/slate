@@ -832,23 +832,23 @@ fn home_surface() -> RenderSurface {
         summary: "Home".to_string(),
         metrics: vec![
             RenderMetric {
-                label: "Privacy First".to_string(),
-                value: String::new(),
+                label: "Wikipedia on IPFS".to_string(),
+                value: "ipns://en.wikipedia-on-ipfs.org".to_string(),
                 accent: MetricAccent::Teal,
             },
             RenderMetric {
-                label: "Tracker Blocked".to_string(),
-                value: "23".to_string(),
+                label: "OpenStreetMap".to_string(),
+                value: "openstreetmap.org".to_string(),
                 accent: MetricAccent::Amber,
             },
             RenderMetric {
-                label: "Ads Blocked".to_string(),
-                value: "184".to_string(),
+                label: "Add bookmark".to_string(),
+                value: "Save a favorite site".to_string(),
                 accent: MetricAccent::Blue,
             },
             RenderMetric {
-                label: "Time Saved".to_string(),
-                value: "2h 14m".to_string(),
+                label: "Add another".to_string(),
+                value: "Pin your broadweb".to_string(),
                 accent: MetricAccent::Teal,
             },
         ],

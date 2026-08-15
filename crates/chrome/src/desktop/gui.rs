@@ -34,6 +34,9 @@ use servo::{
 use slate_broadwebd::{
     BroadwebStatusKind, BroadwebStatusSnapshot, default_session_status_snapshot,
 };
+use slate_storage::{
+    BookmarkRecord, DEFAULT_HOME_BOOKMARKS, DEFAULT_PROFILE_ID, SlateProfileDatabase,
+};
 use url::Url;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
@@ -195,6 +198,7 @@ const HOME_METRIC_BADGE_MARGIN_Y: i8 = 3;
 const HOME_METRIC_BADGE_CORNER_RADIUS: u8 = 10;
 const HOME_CONTENT_OPTICAL_OFFSET_X: f32 = -13.0;
 const HOME_HERO_OPTICAL_OFFSET_X: f32 = -29.0;
+const HOME_BOOKMARK_CARD_COUNT: usize = 4;
 const STATUS_BUBBLE_MARGIN_X: f32 = 14.0;
 const STATUS_BUBBLE_MARGIN_Y: f32 = 12.0;
 const STATUS_BUBBLE_HEIGHT: f32 = 32.0;
@@ -217,6 +221,8 @@ pub struct Gui {
 
     location: String,
     home_search: String,
+    home_bookmarks: Vec<HomeBookmarkCard>,
+    home_bookmarks_loaded: bool,
 
     /// Whether the location has been edited by the user without clicking Go.
     location_dirty: bool,
@@ -302,6 +308,14 @@ impl Default for HomeContentLayout {
             metrics_rect: egui::Rect::NOTHING,
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct HomeBookmarkCard {
+    icon: SlateIcon,
+    label: String,
+    detail: String,
+    url: Option<String>,
 }
 
 #[derive(Debug)]
@@ -684,6 +698,99 @@ fn home_metric_card_background_color() -> egui::Color32 {
 
 fn home_metric_detail_color() -> egui::Color32 {
     egui::Color32::from_rgb(145, 144, 144)
+}
+
+fn home_bookmark_placeholder_cards() -> Vec<HomeBookmarkCard> {
+    vec![
+        HomeBookmarkCard {
+            icon: SlateIcon::HomeMetricPrivacy,
+            label: "Add bookmark".to_string(),
+            detail: "Save a favorite site".to_string(),
+            url: None,
+        },
+        HomeBookmarkCard {
+            icon: SlateIcon::HomeMetricTime,
+            label: "Add another".to_string(),
+            detail: "Pin your broadweb".to_string(),
+            url: None,
+        },
+    ]
+}
+
+fn default_home_bookmark_cards() -> Vec<HomeBookmarkCard> {
+    let mut bookmarks: Vec<_> = DEFAULT_HOME_BOOKMARKS
+        .iter()
+        .map(|bookmark| HomeBookmarkCard {
+            icon: home_bookmark_icon_for_url(bookmark.url),
+            label: bookmark.title.to_string(),
+            detail: home_bookmark_detail(bookmark.url),
+            url: Some(bookmark.url.to_string()),
+        })
+        .collect();
+    fill_home_bookmark_placeholders(&mut bookmarks);
+    bookmarks
+}
+
+fn home_bookmark_cards_from_database(
+    database: &SlateProfileDatabase,
+) -> Result<Vec<HomeBookmarkCard>, slate_storage::StorageError> {
+    let mut bookmarks: Vec<_> = database
+        .bookmarks(DEFAULT_PROFILE_ID)?
+        .into_iter()
+        .take(HOME_BOOKMARK_CARD_COUNT)
+        .map(home_bookmark_card_from_record)
+        .collect();
+    fill_home_bookmark_placeholders(&mut bookmarks);
+    Ok(bookmarks)
+}
+
+fn fill_home_bookmark_placeholders(bookmarks: &mut Vec<HomeBookmarkCard>) {
+    for placeholder in home_bookmark_placeholder_cards() {
+        if bookmarks.len() >= HOME_BOOKMARK_CARD_COUNT {
+            break;
+        }
+        bookmarks.push(placeholder);
+    }
+}
+
+fn home_bookmark_card_from_record(record: BookmarkRecord) -> HomeBookmarkCard {
+    let label = record
+        .title
+        .filter(|title| !title.trim().is_empty())
+        .unwrap_or_else(|| home_bookmark_detail(&record.url));
+    HomeBookmarkCard {
+        icon: home_bookmark_icon_for_url(&record.url),
+        label,
+        detail: home_bookmark_detail(&record.url),
+        url: Some(record.url),
+    }
+}
+
+fn home_bookmark_icon_for_url(url: &str) -> SlateIcon {
+    Url::parse(url).ok().map_or(SlateIcon::TabWeb, |url| {
+        if matches!(url.scheme(), "ipfs" | "ipns") {
+            SlateIcon::HomeMetricLock
+        } else {
+            SlateIcon::TabWeb
+        }
+    })
+}
+
+fn home_bookmark_detail(url: &str) -> String {
+    Url::parse(url).ok().map_or_else(
+        || url.to_string(),
+        |parsed| match parsed.scheme() {
+            "ipfs" | "ipns" => parsed
+                .host_str()
+                .map(|host| format!("{}://{host}", parsed.scheme()))
+                .unwrap_or_else(|| url.to_string()),
+            "http" | "https" => parsed
+                .host_str()
+                .map(ToOwned::to_owned)
+                .unwrap_or_else(|| url.to_string()),
+            _ => url.to_string(),
+        },
+    )
 }
 
 fn status_bubble_width(text: &str, available_width: f32) -> f32 {
@@ -1570,6 +1677,8 @@ impl Gui {
             webview_contains_native_chrome: false,
             location: initial_url.to_string(),
             home_search: String::new(),
+            home_bookmarks: default_home_bookmark_cards(),
+            home_bookmarks_loaded: false,
             location_dirty: false,
             load_status: LoadStatus::Complete,
             status_text: None,
@@ -2136,38 +2245,13 @@ impl Gui {
         });
     }
 
-    fn draw_badge(ui: &mut egui::Ui, text: &str, fill: egui::Color32) {
-        let width = home_metric_badge_width(text);
-        let height = HOME_METRIC_BADGE_TEXT_SIZE + f32::from(HOME_METRIC_BADGE_MARGIN_Y) * 2.0;
-        let (rect, response) =
-            ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
-
-        if ui.is_rect_visible(rect) {
-            ui.painter()
-                .rect_filled(rect, HOME_METRIC_BADGE_CORNER_RADIUS, fill);
-            ui.painter().text(
-                rect.center(),
-                egui::Align2::CENTER_CENTER,
-                text,
-                egui::FontId::proportional(HOME_METRIC_BADGE_TEXT_SIZE),
-                slate_theme::SURFACE,
-            );
-        }
-
-        let enabled = ui.is_enabled();
-        response.widget_info(move || WidgetInfo::labeled(WidgetType::Label, enabled, text));
-    }
-
-    fn draw_home_metric_card(
+    fn draw_home_bookmark_card(
         ui: &mut egui::Ui,
         slate_icons: &mut SlateIconCache,
         width: f32,
-        icon: SlateIcon,
-        label: &str,
-        badge: Option<(&str, egui::Color32)>,
-        detail: Option<&str>,
-    ) -> egui::Rect {
-        egui::Frame::NONE
+        bookmark: &HomeBookmarkCard,
+    ) -> (egui::Rect, egui::Response) {
+        let frame = egui::Frame::NONE
             .fill(home_metric_card_background_color())
             .stroke(egui::Stroke::new(1.0, slate_theme::BORDER))
             .corner_radius(8)
@@ -2181,90 +2265,131 @@ impl Gui {
                     home_metric_card_content_width(width),
                     home_metric_card_content_height(),
                 );
-                ui.allocate_ui_with_layout(
-                    content_size,
-                    egui::Layout::top_down(egui::Align::Center),
-                    |ui| {
-                        let texture = slate_icons.texture(ui.ctx(), icon, slate_theme::TEAL);
-                        ui.add(Self::icon_image(texture, HOME_METRIC_ICON_SIZE));
-                        ui.add_space(HOME_METRIC_ICON_LABEL_GAP);
-                        ui.horizontal_centered(|ui| {
-                            ui.spacing_mut().item_spacing.x = HOME_METRIC_BADGE_LABEL_GAP;
-                            ui.label(
-                                egui::RichText::new(label)
-                                    .size(HOME_METRIC_LABEL_TEXT_SIZE)
-                                    .color(slate_theme::TEXT),
-                            );
-                            if let Some((text, fill)) = badge {
-                                Self::draw_badge(ui, text, fill);
-                            }
-                        });
-                        if let Some(detail) = detail {
-                            ui.add_space(HOME_METRIC_DETAIL_GAP);
-                            ui.label(
-                                egui::RichText::new(detail)
-                                    .size(HOME_METRIC_DETAIL_TEXT_SIZE)
-                                    .color(home_metric_detail_color()),
-                            );
-                        }
-                    },
-                );
-            })
-            .response
-            .rect
+                let (content_rect, _) = ui.allocate_exact_size(content_size, egui::Sense::hover());
+                if ui.is_rect_visible(content_rect) {
+                    let active = bookmark.url.is_some();
+                    let icon_color = if active {
+                        slate_theme::TEAL
+                    } else {
+                        slate_theme::MUTED
+                    };
+                    let texture = slate_icons.texture(ui.ctx(), bookmark.icon, icon_color);
+                    let icon_rect = egui::Rect::from_center_size(
+                        egui::pos2(content_rect.center().x, content_rect.top() + 26.0),
+                        egui::Vec2::splat(HOME_METRIC_ICON_SIZE),
+                    );
+                    ui.painter().image(
+                        texture.id,
+                        icon_rect,
+                        egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
+                        egui::Color32::WHITE,
+                    );
+
+                    let label = truncate_with_ellipsis(&bookmark.label, 22);
+                    ui.painter().text(
+                        egui::pos2(
+                            content_rect.center().x,
+                            icon_rect.bottom() + HOME_METRIC_ICON_LABEL_GAP + 8.0,
+                        ),
+                        egui::Align2::CENTER_CENTER,
+                        label,
+                        egui::FontId::proportional(HOME_METRIC_LABEL_TEXT_SIZE),
+                        if active {
+                            slate_theme::TEXT
+                        } else {
+                            slate_theme::MUTED
+                        },
+                    );
+
+                    let detail = truncate_with_ellipsis(&bookmark.detail, 24);
+                    ui.painter().text(
+                        egui::pos2(
+                            content_rect.center().x,
+                            icon_rect.bottom()
+                                + HOME_METRIC_ICON_LABEL_GAP
+                                + HOME_METRIC_LABEL_TEXT_SIZE
+                                + HOME_METRIC_DETAIL_GAP
+                                + 14.0,
+                        ),
+                        egui::Align2::CENTER_CENTER,
+                        detail,
+                        egui::FontId::proportional(HOME_METRIC_DETAIL_TEXT_SIZE),
+                        home_metric_detail_color(),
+                    );
+                }
+            });
+
+        let response = ui.interact(
+            frame.response.rect,
+            ui.make_persistent_id(("home_bookmark", &bookmark.label)),
+            if bookmark.url.is_some() {
+                egui::Sense::click()
+            } else {
+                egui::Sense::hover()
+            },
+        );
+
+        if ui.is_rect_visible(response.rect) && response.hovered() && bookmark.url.is_some() {
+            ui.painter().rect_stroke(
+                response.rect,
+                8,
+                egui::Stroke::new(1.0, slate_theme::TEAL),
+                egui::StrokeKind::Outside,
+            );
+        }
+
+        response.widget_info(|| {
+            let mut info = WidgetInfo::new(if bookmark.url.is_some() {
+                WidgetType::Button
+            } else {
+                WidgetType::Label
+            });
+            info.label = Some(bookmark.label.clone());
+            info
+        });
+        let response = response.on_hover_ui(|ui| {
+            ui.label(&bookmark.label);
+            if let Some(url) = &bookmark.url {
+                ui.label(url);
+            }
+        });
+
+        (frame.response.rect, response)
     }
 
-    fn draw_home_metrics(ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) -> egui::Rect {
+    fn draw_home_metrics(
+        ui: &mut egui::Ui,
+        slate_icons: &mut SlateIconCache,
+        bookmarks: &[HomeBookmarkCard],
+    ) -> (egui::Rect, Option<String>) {
         let layout = home_metrics_layout(ui.available_width());
-        let metrics = [
-            (SlateIcon::HomeMetricPrivacy, "Privacy First", None, None),
-            (
-                SlateIcon::HomeMetricLock,
-                "Tracker Blocked",
-                Some(("23", slate_theme::AMBER)),
-                None,
-            ),
-            (
-                SlateIcon::HomeMetricAds,
-                "Ads Blocked",
-                Some(("184", slate_theme::BLUE)),
-                None,
-            ),
-            (
-                SlateIcon::HomeMetricTime,
-                "Time Saved",
-                None,
-                Some("2h 14m"),
-            ),
-        ];
         let mut bounds = None;
-        for (row_index, row) in metrics.chunks(layout.columns).enumerate() {
+        let mut navigation_request = None;
+        for (row_index, row) in bookmarks.chunks(layout.columns).enumerate() {
             if row_index > 0 {
                 ui.add_space(layout.spacing);
             }
 
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
-                for (column_index, (icon, label, badge, detail)) in row.iter().enumerate() {
+                for (column_index, bookmark) in row.iter().enumerate() {
                     if column_index > 0 {
                         ui.add_space(layout.spacing);
                     }
-                    let card_rect = Self::draw_home_metric_card(
-                        ui,
-                        slate_icons,
-                        layout.card_width,
-                        *icon,
-                        label,
-                        *badge,
-                        *detail,
-                    );
+                    let (card_rect, response) =
+                        Self::draw_home_bookmark_card(ui, slate_icons, layout.card_width, bookmark);
+                    if response.clicked()
+                        && let Some(url) = &bookmark.url
+                    {
+                        navigation_request = Some(url.clone());
+                    }
                     bounds =
                         Some(bounds.map_or(card_rect, |rect: egui::Rect| rect.union(card_rect)));
                 }
             });
         }
 
-        bounds.unwrap_or(egui::Rect::NOTHING)
+        (bounds.unwrap_or(egui::Rect::NOTHING), navigation_request)
     }
 
     fn draw_home_content(
@@ -2272,6 +2397,7 @@ impl Gui {
         home_rect: egui::Rect,
         slate_icons: &mut SlateIconCache,
         home_search: &mut String,
+        home_bookmarks: &[HomeBookmarkCard],
     ) -> HomeContentResponse {
         let mut layout = HomeContentLayout::default();
         let mut navigation_request = None;
@@ -2391,9 +2517,12 @@ impl Gui {
                 let metrics_response = ui.allocate_ui_with_layout(
                     egui::vec2(metrics_width, metrics_height),
                     egui::Layout::top_down(egui::Align::Center),
-                    |ui| Self::draw_home_metrics(ui, slate_icons),
+                    |ui| Self::draw_home_metrics(ui, slate_icons, home_bookmarks),
                 );
-                layout.metrics_rect = metrics_response.inner;
+                layout.metrics_rect = metrics_response.inner.0;
+                if let Some(request) = metrics_response.inner.1 {
+                    navigation_request = Some(request);
+                }
             });
         });
 
@@ -2408,6 +2537,7 @@ impl Gui {
         available_rect: egui::Rect,
         slate_icons: &mut SlateIconCache,
         home_search: &mut String,
+        home_bookmarks: &[HomeBookmarkCard],
         window: &ServoShellWindow,
     ) {
         egui::Area::new(Id::new("slate_home_view"))
@@ -2420,7 +2550,13 @@ impl Gui {
                     .rect_filled(home_rect, 0.0, home_view_background_color());
                 let response = ui
                     .scope_builder(egui::UiBuilder::new().max_rect(home_rect), |ui| {
-                        Self::draw_home_content(ui, home_rect, slate_icons, home_search)
+                        Self::draw_home_content(
+                            ui,
+                            home_rect,
+                            slate_icons,
+                            home_search,
+                            home_bookmarks,
+                        )
                     })
                     .inner;
                 let _ = response.layout;
@@ -2599,6 +2735,7 @@ impl Gui {
             .expect("Could not make RenderingContext current");
         self.update_broadweb_status();
         self.update_chrome_element_zoom(window);
+        let _ = self.update_home_bookmarks(&state.profile_database);
         let effective_egui_zoom_factor = self.effective_egui_zoom_factor();
         let Self {
             rendering_context,
@@ -2609,6 +2746,7 @@ impl Gui {
             webview_contains_native_chrome,
             location,
             home_search,
+            home_bookmarks,
             location_dirty,
             load_status,
             broadweb_status,
@@ -3063,7 +3201,14 @@ impl Gui {
             }
 
             if active_webview_is_home {
-                Self::draw_home_view(ctx, available_rect, slate_icons, home_search, window);
+                Self::draw_home_view(
+                    ctx,
+                    available_rect,
+                    slate_icons,
+                    home_search,
+                    home_bookmarks,
+                    window,
+                );
             }
 
             if let Some(status_text) = &self.status_text {
@@ -3162,6 +3307,26 @@ impl Gui {
         }
 
         status_changed
+    }
+
+    fn update_home_bookmarks(&mut self, database: &SlateProfileDatabase) -> bool {
+        if self.home_bookmarks_loaded {
+            return false;
+        }
+        self.home_bookmarks_loaded = true;
+
+        let Ok(bookmarks) = home_bookmark_cards_from_database(database).inspect_err(|error| {
+            warn!("failed to load home bookmarks: {error}");
+        }) else {
+            return false;
+        };
+
+        if bookmarks == self.home_bookmarks {
+            return false;
+        }
+
+        self.home_bookmarks = bookmarks;
+        true
     }
 
     fn update_status_text(&mut self, window: &ServoShellWindow) -> bool {
@@ -3333,26 +3498,26 @@ mod tests {
         chrome_panel_background_color, chrome_vertical_separator_color, clamp_chrome_element_zoom,
         concept_chrome_geometry, concept_footer_controls_geometry,
         concept_screenshot_home_view_size, concept_toolbar_controls_geometry,
-        default_opening_home_view_height, default_opening_home_view_size,
-        footer_load_status_dot_radius, footer_load_status_indicator_color,
-        footer_load_status_indicator_color_at, footer_load_status_is_in_progress,
-        footer_load_status_label_max_chars, footer_load_status_pulse_target_color,
-        footer_load_status_width, footer_panel_margin, footer_status_text_color,
-        footer_top_separator_color, home_content_left_space, home_content_stack_height,
-        home_hero_icon_visible_rect, home_hero_left_space, home_metric_badge_width,
-        home_metric_card_background_color, home_metric_card_content_height,
-        home_metric_card_content_width, home_metric_detail_color, home_metrics_layout,
-        home_metrics_rendered_height, home_metrics_row_width, home_search_background_color,
-        home_search_border_color, home_search_icon_color, home_search_icon_rect,
-        home_search_icon_visible_rect, home_search_rendered_height, home_search_width,
-        home_top_space, home_view_background_color, inactive_tab_background_color,
-        inactive_tab_hover_background_color, inactive_tab_outline_color,
-        inactive_tab_outline_points, new_tab_icon_color, rail_button_fill, rail_icon_color,
-        rail_selected_button_fill, slate_theme, status_bubble_label, status_bubble_width,
-        tab_close_button_rect, tab_close_icon_color, tab_close_raster, tab_content_width,
-        tab_corner_radius, tab_icon_color, tab_icon_slot_rect, tab_strip_background_color,
-        tab_strip_separator_color, tab_title_color, tab_title_left, tab_title_width,
-        tab_width_for_strip, toolbar_address_width, toolbar_background_color,
+        default_home_bookmark_cards, default_opening_home_view_height,
+        default_opening_home_view_size, footer_load_status_dot_radius,
+        footer_load_status_indicator_color, footer_load_status_indicator_color_at,
+        footer_load_status_is_in_progress, footer_load_status_label_max_chars,
+        footer_load_status_pulse_target_color, footer_load_status_width, footer_panel_margin,
+        footer_status_text_color, footer_top_separator_color, home_content_left_space,
+        home_content_stack_height, home_hero_icon_visible_rect, home_hero_left_space,
+        home_metric_badge_width, home_metric_card_background_color,
+        home_metric_card_content_height, home_metric_card_content_width, home_metric_detail_color,
+        home_metrics_layout, home_metrics_rendered_height, home_metrics_row_width,
+        home_search_background_color, home_search_border_color, home_search_icon_color,
+        home_search_icon_rect, home_search_icon_visible_rect, home_search_rendered_height,
+        home_search_width, home_top_space, home_view_background_color,
+        inactive_tab_background_color, inactive_tab_hover_background_color,
+        inactive_tab_outline_color, inactive_tab_outline_points, new_tab_icon_color,
+        rail_button_fill, rail_icon_color, rail_selected_button_fill, slate_theme,
+        status_bubble_label, status_bubble_width, tab_close_button_rect, tab_close_icon_color,
+        tab_close_raster, tab_content_width, tab_corner_radius, tab_icon_color, tab_icon_slot_rect,
+        tab_strip_background_color, tab_strip_separator_color, tab_title_color, tab_title_left,
+        tab_title_width, tab_width_for_strip, toolbar_address_width, toolbar_background_color,
         toolbar_menu_icon_center, toolbar_menu_icon_color, toolbar_menu_icon_rect,
         toolbar_navigation_icon_color, toolbar_navigation_icon_offset_x,
         toolbar_navigation_icon_rect, toolbar_navigation_raster,
@@ -3412,8 +3577,13 @@ mod tests {
         let mut layout = None;
 
         let _ = ctx.run_ui(input, |ui| {
-            let response =
-                Gui::draw_home_content(ui, screen_rect, &mut slate_icons, &mut home_search);
+            let response = Gui::draw_home_content(
+                ui,
+                screen_rect,
+                &mut slate_icons,
+                &mut home_search,
+                &default_home_bookmark_cards(),
+            );
             layout = Some(response.layout);
         });
 
@@ -4567,6 +4737,27 @@ mod tests {
             162.0
         );
         assert_eq!(home_metric_card_content_height(), 100.0);
+    }
+
+    #[test]
+    fn default_home_bookmarks_fill_first_run_slots() {
+        let bookmarks = default_home_bookmark_cards();
+
+        assert_eq!(bookmarks.len(), 4);
+        assert_eq!(bookmarks[0].label, "Wikipedia on IPFS");
+        assert_eq!(
+            bookmarks[0].url.as_deref(),
+            Some("ipns://en.wikipedia-on-ipfs.org/wiki/")
+        );
+        assert_eq!(bookmarks[1].label, "OpenStreetMap");
+        assert_eq!(
+            bookmarks[1].url.as_deref(),
+            Some("https://www.openstreetmap.org/")
+        );
+        assert_eq!(bookmarks[2].label, "Add bookmark");
+        assert!(bookmarks[2].url.is_none());
+        assert_eq!(bookmarks[3].label, "Add another");
+        assert!(bookmarks[3].url.is_none());
     }
 
     #[test]

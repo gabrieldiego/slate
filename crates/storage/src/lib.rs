@@ -9,6 +9,20 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 pub const DEFAULT_DATABASE_FILE_NAME: &str = "slate-settings.db";
 pub const DEFAULT_HOME_DIRECTORY_NAME: &str = ".slate";
+pub const DEFAULT_PROFILE_ID: &str = "default";
+
+pub const DEFAULT_HOME_BOOKMARKS: [DefaultBookmark; 2] = [
+    DefaultBookmark {
+        title: "Wikipedia on IPFS",
+        url: "ipns://en.wikipedia-on-ipfs.org/wiki/",
+    },
+    DefaultBookmark {
+        title: "OpenStreetMap",
+        url: "https://www.openstreetmap.org/",
+    },
+];
+
+const DEFAULT_BOOKMARKS_SEEDED_SETTING_KEY: &str = "bookmarks.defaults_seeded";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProfileId(String);
@@ -55,6 +69,12 @@ pub enum DatabasePathSource {
 pub struct ResolvedDatabasePath {
     pub path: PathBuf,
     pub source: DatabasePathSource,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DefaultBookmark {
+    pub title: &'static str,
+    pub url: &'static str,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -202,6 +222,7 @@ impl SlateProfileDatabase {
             path: Arc::new(path),
         };
         database.initialize()?;
+        database.try_seed_default_bookmarks();
         Ok(database)
     }
 
@@ -244,10 +265,21 @@ impl SlateProfileDatabase {
         Ok(value.to_string())
     }
 
+    pub fn get_setting_text_or_default(&self, key: &str, value: &str) -> String {
+        self.get_setting_text(key)
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| value.to_string())
+    }
+
     pub fn get_setting_f32(&self, key: &str) -> Result<Option<f32>, StorageError> {
         Ok(self
             .get_setting_text(key)?
             .and_then(|value| value.parse::<f32>().ok()))
+    }
+
+    pub fn get_setting_f32_or_default(&self, key: &str, value: f32) -> f32 {
+        self.get_setting_f32(key).ok().flatten().unwrap_or(value)
     }
 
     pub fn set_setting_f32(&self, key: &str, value: f32) -> Result<(), StorageError> {
@@ -257,6 +289,10 @@ impl SlateProfileDatabase {
     pub fn ensure_setting_f32(&self, key: &str, value: f32) -> Result<f32, StorageError> {
         let stored = self.ensure_setting_text(key, &format!("{value:.2}"))?;
         Ok(stored.parse::<f32>().unwrap_or(value))
+    }
+
+    pub fn ensure_setting_f32_or_default(&self, key: &str, value: f32) -> f32 {
+        self.ensure_setting_f32(key, value).unwrap_or(value)
     }
 
     pub fn upsert_bookmark(&self, bookmark: &BookmarkUpdate) -> Result<(), StorageError> {
@@ -607,6 +643,37 @@ impl SlateProfileDatabase {
             .map_err(|source| self.database_error(source))
     }
 
+    fn try_seed_default_bookmarks(&self) {
+        let _ = self.seed_default_bookmarks_if_needed();
+    }
+
+    fn seed_default_bookmarks_if_needed(&self) -> Result<(), StorageError> {
+        if self.get_setting_text_or_default(DEFAULT_BOOKMARKS_SEEDED_SETTING_KEY, "false") == "true"
+        {
+            return Ok(());
+        }
+
+        if self.bookmarks(DEFAULT_PROFILE_ID)?.is_empty() {
+            self.seed_default_bookmarks()?;
+        }
+
+        self.set_setting_text(DEFAULT_BOOKMARKS_SEEDED_SETTING_KEY, "true")
+    }
+
+    fn seed_default_bookmarks(&self) -> Result<(), StorageError> {
+        for (position, bookmark) in DEFAULT_HOME_BOOKMARKS.iter().enumerate() {
+            self.upsert_bookmark(&BookmarkUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                url: bookmark.url.to_string(),
+                title: Some(bookmark.title.to_string()),
+                folder: None,
+                position: position as i64,
+                favicon_key: None,
+            })?;
+        }
+        Ok(())
+    }
+
     fn connection(&self) -> Result<Connection, StorageError> {
         Connection::open(self.path()).map_err(|source| self.database_error(source))
     }
@@ -764,6 +831,19 @@ mod tests {
         let database = SlateProfileDatabase::open_resolved(database_path.clone()).unwrap();
 
         assert!(database_path.is_file());
+        let default_bookmarks = database.bookmarks(DEFAULT_PROFILE_ID).unwrap();
+        assert_eq!(default_bookmarks.len(), DEFAULT_HOME_BOOKMARKS.len());
+        assert_eq!(
+            default_bookmarks[0].title.as_deref(),
+            Some("Wikipedia on IPFS")
+        );
+        assert_eq!(
+            default_bookmarks[0].url,
+            "ipns://en.wikipedia-on-ipfs.org/wiki/"
+        );
+        assert_eq!(default_bookmarks[1].title.as_deref(), Some("OpenStreetMap"));
+        assert_eq!(default_bookmarks[1].url, "https://www.openstreetmap.org/");
+
         assert_eq!(
             database.ensure_setting_f32("chrome.zoom", 0.9).unwrap(),
             0.9
@@ -786,7 +866,7 @@ mod tests {
 
         database
             .upsert_bookmark(&BookmarkUpdate {
-                profile: "default".into(),
+                profile: "testing".into(),
                 url: "https://example.com/".into(),
                 title: Some("Example".into()),
                 folder: Some("Research".into()),
@@ -794,7 +874,7 @@ mod tests {
                 favicon_key: Some("favicon:example".into()),
             })
             .unwrap();
-        let bookmarks = database.bookmarks("default").unwrap();
+        let bookmarks = database.bookmarks("testing").unwrap();
         assert_eq!(bookmarks.len(), 1);
         assert_eq!(bookmarks[0].url, "https://example.com/");
         assert_eq!(bookmarks[0].folder.as_deref(), Some("Research"));
@@ -848,8 +928,76 @@ mod tests {
         );
 
         database
-            .remove_bookmark("default", "https://example.com/")
+            .remove_bookmark("testing", "https://example.com/")
             .unwrap();
-        assert!(database.bookmarks("default").unwrap().is_empty());
+        assert!(database.bookmarks("testing").unwrap().is_empty());
+    }
+
+    #[test]
+    fn malformed_setting_value_falls_back_without_resetting_other_settings() {
+        let database_path = test_dir("malformed-setting").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+
+        database
+            .set_setting_text("chrome.zoom", "not-a-number")
+            .unwrap();
+        database.set_setting_text("ui.theme", "kept").unwrap();
+
+        assert_eq!(database.get_setting_f32_or_default("chrome.zoom", 0.9), 0.9);
+        assert_eq!(
+            database.ensure_setting_f32_or_default("chrome.zoom", 0.9),
+            0.9
+        );
+        assert_eq!(
+            database.get_setting_text("ui.theme").unwrap().as_deref(),
+            Some("kept")
+        );
+        assert_eq!(
+            database.get_setting_text("chrome.zoom").unwrap().as_deref(),
+            Some("not-a-number")
+        );
+    }
+
+    #[test]
+    fn unreadable_seed_marker_does_not_block_profile_open() {
+        let database_path = test_dir("unreadable-seed-marker").join(DEFAULT_DATABASE_FILE_NAME);
+        let connection = Connection::open(&database_path).unwrap();
+        connection
+            .execute_batch("CREATE TABLE settings (bad INTEGER);")
+            .unwrap();
+        drop(connection);
+
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+
+        assert_eq!(
+            database.ensure_setting_f32_or_default("chrome.zoom", 0.9),
+            0.9
+        );
+        assert_eq!(
+            database.bookmarks(DEFAULT_PROFILE_ID).unwrap().len(),
+            DEFAULT_HOME_BOOKMARKS.len()
+        );
+    }
+
+    #[test]
+    fn existing_empty_database_receives_default_bookmarks_once() {
+        let database_path = test_dir("existing-empty").join(DEFAULT_DATABASE_FILE_NAME);
+        std::fs::write(&database_path, b"").unwrap();
+
+        let database = SlateProfileDatabase::open_resolved(database_path.clone()).unwrap();
+        assert_eq!(
+            database.bookmarks(DEFAULT_PROFILE_ID).unwrap().len(),
+            DEFAULT_HOME_BOOKMARKS.len()
+        );
+
+        for bookmark in DEFAULT_HOME_BOOKMARKS {
+            database
+                .remove_bookmark(DEFAULT_PROFILE_ID, bookmark.url)
+                .unwrap();
+        }
+        assert!(database.bookmarks(DEFAULT_PROFILE_ID).unwrap().is_empty());
+
+        let reopened = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        assert!(reopened.bookmarks(DEFAULT_PROFILE_ID).unwrap().is_empty());
     }
 }
