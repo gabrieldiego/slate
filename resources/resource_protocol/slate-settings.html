@@ -107,7 +107,6 @@
         <output id="chrome-zoom-output" for="chrome-zoom">90%</output>
       </div>
       <div class="actions">
-        <button class="primary" id="apply">Apply</button>
         <button id="reset">Reset</button>
       </div>
     </section>
@@ -119,6 +118,9 @@
     const output = document.getElementById("chrome-zoom-output");
     const params = new URLSearchParams(window.location.search);
     const initial = Number.parseFloat(params.get("chrome_zoom"));
+    const fallbackImage = new Image();
+    let lastSentZoom = "";
+    let livePollId = 0;
 
     if (Number.isFinite(initial)) {
       slider.value = String(Math.round(initial * 100));
@@ -129,21 +131,91 @@
       output.textContent = `${slider.value}%`;
     }
 
-    function applyZoom(percent) {
-      const zoom = (percent / 100).toFixed(2);
-      window.location.href = `slate://settings?chrome_zoom=${zoom}`;
+    function settingUrl(path, zoom) {
+      return `slate://settings/${path}?chrome_zoom=${zoom}&nonce=${Date.now()}`;
     }
 
-    slider.addEventListener("input", updateOutput);
-    document.getElementById("apply").addEventListener("click", () => {
-      applyZoom(Number.parseInt(slider.value, 10));
-    });
+    function replaceDisplayedUrl(zoom) {
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, "", `slate://settings?chrome_zoom=${zoom}`);
+      }
+    }
+
+    function sendZoom(percent) {
+      const zoom = (percent / 100).toFixed(2);
+      if (zoom === lastSentZoom) {
+        return;
+      }
+
+      lastSentZoom = zoom;
+      replaceDisplayedUrl(zoom);
+
+      const url = settingUrl("apply", zoom);
+      if (window.fetch) {
+        window.fetch(url, { cache: "no-store" }).catch(() => {
+          fallbackImage.src = url;
+        });
+      } else {
+        fallbackImage.src = url;
+      }
+    }
+
+    function applySliderZoom() {
+      updateOutput();
+      sendZoom(Number.parseInt(slider.value, 10));
+    }
+
+    function loadNativeZoom() {
+      if (Number.isFinite(initial) || !window.fetch) {
+        applySliderZoom();
+        return;
+      }
+
+      window.fetch(`slate://settings/state?nonce=${Date.now()}`, { cache: "no-store" })
+        .then((response) => response.json())
+        .then((settings) => {
+          const zoom = Number.parseFloat(settings.chrome_zoom);
+          if (Number.isFinite(zoom)) {
+            slider.value = String(Math.round(zoom * 100));
+          }
+          applySliderZoom();
+        })
+        .catch(applySliderZoom);
+    }
+
+    function startLivePoll() {
+      applySliderZoom();
+      if (livePollId === 0) {
+        livePollId = window.setInterval(applySliderZoom, 50);
+      }
+    }
+
+    function stopLivePoll() {
+      if (livePollId !== 0) {
+        window.clearInterval(livePollId);
+        livePollId = 0;
+      }
+      applySliderZoom();
+    }
+
+    slider.addEventListener("input", applySliderZoom);
+    slider.addEventListener("change", applySliderZoom);
+    slider.addEventListener("keydown", applySliderZoom);
+    slider.addEventListener("keyup", applySliderZoom);
+    slider.addEventListener("mousedown", startLivePoll);
+    slider.addEventListener("touchstart", startLivePoll);
+    slider.addEventListener("pointerdown", startLivePoll);
+    window.addEventListener("mouseup", stopLivePoll);
+    window.addEventListener("touchend", stopLivePoll);
+    window.addEventListener("touchcancel", stopLivePoll);
+    window.addEventListener("pointerup", stopLivePoll);
+    window.addEventListener("pointercancel", stopLivePoll);
     document.getElementById("reset").addEventListener("click", () => {
       slider.value = String(DEFAULT_ZOOM);
-      updateOutput();
-      applyZoom(DEFAULT_ZOOM);
+      applySliderZoom();
     });
     updateOutput();
+    loadNativeZoom();
   </script>
 </body>
 </html>

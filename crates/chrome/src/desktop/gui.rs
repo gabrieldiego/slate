@@ -41,7 +41,10 @@ use winit::window::Window;
 
 use crate::desktop::event_loop::AppEvent;
 use crate::desktop::headed_window;
-use crate::desktop::protocols::slate::{is_slate_home_url, is_slate_settings_url};
+use crate::desktop::protocols::slate::{
+    self, current_chrome_element_zoom_setting, is_slate_home_url, is_slate_settings_url,
+    set_current_chrome_element_zoom_setting,
+};
 use crate::desktop::slate_theme::{self, SlateIcon, SlateIconCache, SlateRaster};
 use crate::running_app_state::{RunningAppState, UserInterfaceCommand};
 use crate::window::ServoShellWindow;
@@ -54,9 +57,9 @@ const TAB_CONTENT_ALIGN: egui::Align = egui::Align::Center;
 const ACTIVE_TAB_BOTTOM_JOIN_HEIGHT: f32 = 4.0;
 const ACTIVE_TAB_BOTTOM_JOIN_INSET_X: f32 = 0.0;
 const ACTIVE_TAB_FILE_CORNER_STEPS: usize = 5;
-const CHROME_ELEMENT_ZOOM: f32 = 0.9;
-const CHROME_ELEMENT_ZOOM_MIN: f32 = 0.75;
-const CHROME_ELEMENT_ZOOM_MAX: f32 = 1.15;
+const CHROME_ELEMENT_ZOOM: f32 = slate::CHROME_ELEMENT_ZOOM_SETTING_DEFAULT;
+const CHROME_ELEMENT_ZOOM_MIN: f32 = slate::CHROME_ELEMENT_ZOOM_SETTING_MIN;
+const CHROME_ELEMENT_ZOOM_MAX: f32 = slate::CHROME_ELEMENT_ZOOM_SETTING_MAX;
 const TOOLBAR_HEIGHT: f32 = 84.0 * CHROME_ELEMENT_ZOOM;
 const APP_RAIL_WIDTH: f32 = 104.0 * CHROME_ELEMENT_ZOOM;
 const FOOTER_HEIGHT: f32 = 44.0;
@@ -229,6 +232,9 @@ pub struct Gui {
 
     /// User-adjustable zoom for Slate-owned chrome elements.
     chrome_element_zoom: f32,
+
+    /// Last settings page URL whose `chrome_zoom` query was applied to the shared setting.
+    last_chrome_element_zoom_url: Option<String>,
 
     /// Platform-provided egui zoom compensation for DPI handling.
     platform_zoom_factor: Cell<f32>,
@@ -739,18 +745,11 @@ fn location_has_broadweb_status(location: &str) -> bool {
 }
 
 fn clamp_chrome_element_zoom(zoom: f32) -> f32 {
-    zoom.clamp(CHROME_ELEMENT_ZOOM_MIN, CHROME_ELEMENT_ZOOM_MAX)
+    slate::clamp_chrome_element_zoom_setting(zoom)
 }
 
 fn chrome_element_zoom_from_settings_url(url: &Url) -> Option<f32> {
-    if !is_slate_settings_url(url) {
-        return None;
-    }
-
-    url.query_pairs()
-        .find(|(name, _)| name == "chrome_zoom")
-        .and_then(|(_, value)| value.parse::<f32>().ok())
-        .map(clamp_chrome_element_zoom)
+    slate::chrome_element_zoom_setting_from_url(url)
 }
 
 fn chrome_element_zoom_factor(chrome_element_zoom: f32) -> f32 {
@@ -1576,6 +1575,7 @@ impl Gui {
             status_text: None,
             broadweb_status: BroadwebStatusSnapshot::idle(),
             chrome_element_zoom: CHROME_ELEMENT_ZOOM,
+            last_chrome_element_zoom_url: None,
             platform_zoom_factor: Cell::new(1.0),
             can_go_back: false,
             can_go_forward: false,
@@ -2598,7 +2598,7 @@ impl Gui {
             .make_current()
             .expect("Could not make RenderingContext current");
         self.update_broadweb_status();
-        self.update_chrome_element_zoom_from_location(window);
+        self.update_chrome_element_zoom(window);
         let effective_egui_zoom_factor = self.effective_egui_zoom_factor();
         let Self {
             rendering_context,
@@ -3178,16 +3178,31 @@ impl Gui {
         old_status != self.broadweb_status
     }
 
-    fn update_chrome_element_zoom_from_location(&mut self, window: &ServoShellWindow) -> bool {
-        let state_zoom = window
+    fn update_chrome_element_zoom(&mut self, window: &ServoShellWindow) -> bool {
+        let settings_url_zoom = window
             .active_webview()
             .and_then(|webview| webview.url())
-            .as_ref()
-            .and_then(chrome_element_zoom_from_settings_url);
+            .and_then(|url| {
+                let zoom = chrome_element_zoom_from_settings_url(&url)?;
+                Some((url.to_string(), zoom))
+            });
 
-        let Some(state_zoom) = state_zoom else {
-            return false;
-        };
+        match settings_url_zoom {
+            Some((url, url_zoom))
+                if self.last_chrome_element_zoom_url.as_deref() != Some(url.as_str()) =>
+            {
+                set_current_chrome_element_zoom_setting(url_zoom);
+                self.last_chrome_element_zoom_url = Some(url);
+            }
+            Some((url, _)) => {
+                self.last_chrome_element_zoom_url = Some(url);
+            }
+            None => {
+                self.last_chrome_element_zoom_url = None;
+            }
+        }
+
+        let state_zoom = current_chrome_element_zoom_setting();
         let old_zoom = std::mem::replace(&mut self.chrome_element_zoom, state_zoom);
         (old_zoom - self.chrome_element_zoom).abs() > 0.001
     }
@@ -3213,7 +3228,7 @@ impl Gui {
             | self.update_location_in_toolbar(window)
             | self.update_status_text(window)
             | self.update_broadweb_status()
-            | self.update_chrome_element_zoom_from_location(window)
+            | self.update_chrome_element_zoom(window)
             | self.update_can_go_back_and_forward(window)
     }
 
