@@ -96,7 +96,7 @@ fn render_chrome_fixture(
     render_tab_strip(root_ui, slate_icons);
     render_app_rail(root_ui, slate_icons);
     render_toolbar(root_ui, slate_icons, location);
-    let footer_rect = render_footer(root_ui, slate_icons);
+    let footer_rect = render_footer(root_ui);
 
     render_home_panel(root_ui, slate_icons, home_search);
     Gui::draw_footer_top_separator(root_ui.ctx(), footer_rect);
@@ -390,7 +390,7 @@ fn draw_snapshot_address_field(
         });
 }
 
-fn render_footer(root_ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) -> egui::Rect {
+fn render_footer(root_ui: &mut egui::Ui) -> egui::Rect {
     let footer_frame = egui::Frame::NONE
         .fill(chrome_panel_background_color())
         .inner_margin(footer_panel_margin());
@@ -401,7 +401,6 @@ fn render_footer(root_ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) -> eg
         .show_inside(root_ui, |ui| {
             Gui::draw_footer(
                 ui,
-                slate_icons,
                 LoadStatus::Complete,
                 &BroadwebStatusSnapshot::idle(),
                 "slate://home",

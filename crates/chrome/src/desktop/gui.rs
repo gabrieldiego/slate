@@ -2,6 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+use std::cell::Cell;
 use std::collections::HashMap;
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
 use std::fs;
@@ -40,7 +41,7 @@ use winit::window::Window;
 
 use crate::desktop::event_loop::AppEvent;
 use crate::desktop::headed_window;
-use crate::desktop::protocols::slate::is_slate_home_url;
+use crate::desktop::protocols::slate::{is_slate_home_url, is_slate_settings_url};
 use crate::desktop::slate_theme::{self, SlateIcon, SlateIconCache, SlateRaster};
 use crate::running_app_state::{RunningAppState, UserInterfaceCommand};
 use crate::window::ServoShellWindow;
@@ -53,33 +54,21 @@ const TAB_CONTENT_ALIGN: egui::Align = egui::Align::Center;
 const ACTIVE_TAB_BOTTOM_JOIN_HEIGHT: f32 = 4.0;
 const ACTIVE_TAB_BOTTOM_JOIN_INSET_X: f32 = 0.0;
 const ACTIVE_TAB_FILE_CORNER_STEPS: usize = 5;
-const TOOLBAR_HEIGHT: f32 = 84.0;
-const APP_RAIL_WIDTH: f32 = 104.0;
-const FOOTER_HEIGHT: f32 = 80.0;
+const CHROME_ELEMENT_ZOOM: f32 = 0.9;
+const CHROME_ELEMENT_ZOOM_MIN: f32 = 0.75;
+const CHROME_ELEMENT_ZOOM_MAX: f32 = 1.15;
+const TOOLBAR_HEIGHT: f32 = 84.0 * CHROME_ELEMENT_ZOOM;
+const APP_RAIL_WIDTH: f32 = 104.0 * CHROME_ELEMENT_ZOOM;
+const FOOTER_HEIGHT: f32 = 44.0;
 const FOOTER_PANEL_MARGIN_X: i8 = 0;
-const FOOTER_PANEL_MARGIN_TOP: i8 = 6;
-const FOOTER_PANEL_MARGIN_BOTTOM: i8 = 10;
-const FOOTER_LEFT_PADDING: f32 = 12.0;
-const FOOTER_RIGHT_PADDING: f32 = 38.0;
-const FOOTER_ITEM_SPACING: f32 = 30.0;
-const FOOTER_ICON_SIZE: f32 = 40.0;
-const FOOTER_PROTECTION_ICON_OFFSET_X: f32 = 1.5;
-const FOOTER_PROTECTION_STATUS_HEIGHT: f32 = 40.0;
-const FOOTER_TEXT_SIZE: f32 = 16.0;
-const FOOTER_SEPARATOR_HEIGHT: f32 = 28.0;
-const FOOTER_LOAD_STATUS_SEPARATOR_EXTRA_GAP: f32 = 6.0;
-const FOOTER_LOAD_STATUS_DOT_SIZE: f32 = 14.0;
-const FOOTER_LOAD_STATUS_DOT_LABEL_GAP: f32 = 10.0;
-const FOOTER_LOAD_STATUS_LABEL_WIDTH: f32 = 112.0;
-const FOOTER_LOAD_STATUS_HEIGHT: f32 = 40.0;
-const FOOTER_SETTINGS_BUTTON_SIZE: f32 = 40.0;
-const FOOTER_SETTINGS_BUTTON_RADIUS: u8 = 8;
-const FOOTER_SETTINGS_ICON_SIZE: f32 = 24.0;
-const FOOTER_SETTINGS_GEAR_RADIUS: f32 = 9.0;
-const FOOTER_SETTINGS_GEAR_CENTER_RADIUS: f32 = 3.5;
-const FOOTER_SETTINGS_GEAR_TOOTH_INNER_RADIUS: f32 = 10.0;
-const FOOTER_SETTINGS_GEAR_TOOTH_OUTER_RADIUS: f32 = FOOTER_SETTINGS_ICON_SIZE / 2.0;
-const FOOTER_SETTINGS_GEAR_STROKE: f32 = 2.0;
+const FOOTER_PANEL_MARGIN_TOP: i8 = 4;
+const FOOTER_PANEL_MARGIN_BOTTOM: i8 = 4;
+const FOOTER_LEFT_PADDING: f32 = 16.0;
+const FOOTER_RIGHT_PADDING: f32 = 12.0;
+const FOOTER_TEXT_SIZE: f32 = 13.0;
+const FOOTER_LOAD_STATUS_DOT_SIZE: f32 = 10.0;
+const FOOTER_LOAD_STATUS_DOT_LABEL_GAP: f32 = 8.0;
+const FOOTER_LOAD_STATUS_HEIGHT: f32 = 28.0;
 const APP_TITLE_WIDTH: f32 = 160.0;
 const APP_TITLE_HEIGHT: f32 = TAB_STRIP_HEIGHT;
 const APP_TITLE_LEFT_PADDING: f32 = 31.0;
@@ -109,51 +98,51 @@ const NEW_TAB_ICON_SIZE: f32 = 17.0;
 const NEW_TAB_ICON_STROKE: f32 = 2.0;
 const TOOLBAR_PANEL_MARGIN_X: i8 = 18;
 const TOOLBAR_PANEL_MARGIN_Y: i8 = 10;
-const TOOLBAR_ITEM_SPACING: f32 = 20.0;
-const TOOLBAR_BUTTON_SIZE: f32 = 40.0;
+const TOOLBAR_ITEM_SPACING: f32 = 20.0 * CHROME_ELEMENT_ZOOM;
+const TOOLBAR_BUTTON_SIZE: f32 = 40.0 * CHROME_ELEMENT_ZOOM;
 const TOOLBAR_BUTTON_RADIUS: u8 = 8;
-const TOOLBAR_ICON_SIZE: f32 = 24.0;
-const TOOLBAR_NAV_ICON_SIZE: f32 = 28.0;
-const TOOLBAR_NAV_BACK_ICON_OFFSET_X: f32 = 8.0;
-const TOOLBAR_NAV_FORWARD_ICON_OFFSET_X: f32 = 7.0;
-const TOOLBAR_NAV_REFRESH_ICON_OFFSET_X: f32 = 6.0;
-const TOOLBAR_PRIVACY_ICON_SIZE: f32 = 40.0;
-const TOOLBAR_MENU_ICON_WIDTH: f32 = 20.0;
-const TOOLBAR_MENU_ICON_OFFSET_X: f32 = -3.0;
-const TOOLBAR_MENU_ICON_GAP: f32 = 8.5;
-const TOOLBAR_MENU_ICON_STROKE: f32 = 2.0;
-const TOOLBAR_SEPARATOR_HEIGHT: f32 = 28.0;
-const TOOLBAR_SEPARATOR_LEADING_GAP: f32 = 18.0;
-const TOOLBAR_SEPARATOR_TRAILING_GAP: f32 = 22.0;
-const RAIL_ICON_SIZE: f32 = 40.0;
-const RAIL_BUTTON_SIZE: f32 = 80.0;
+const TOOLBAR_ICON_SIZE: f32 = 24.0 * CHROME_ELEMENT_ZOOM;
+const TOOLBAR_NAV_ICON_SIZE: f32 = 28.0 * CHROME_ELEMENT_ZOOM;
+const TOOLBAR_NAV_BACK_ICON_OFFSET_X: f32 = 8.0 * CHROME_ELEMENT_ZOOM;
+const TOOLBAR_NAV_FORWARD_ICON_OFFSET_X: f32 = 7.0 * CHROME_ELEMENT_ZOOM;
+const TOOLBAR_NAV_REFRESH_ICON_OFFSET_X: f32 = 6.0 * CHROME_ELEMENT_ZOOM;
+const TOOLBAR_PRIVACY_ICON_SIZE: f32 = 40.0 * CHROME_ELEMENT_ZOOM;
+const TOOLBAR_MENU_ICON_WIDTH: f32 = 20.0 * CHROME_ELEMENT_ZOOM;
+const TOOLBAR_MENU_ICON_OFFSET_X: f32 = -3.0 * CHROME_ELEMENT_ZOOM;
+const TOOLBAR_MENU_ICON_GAP: f32 = 8.5 * CHROME_ELEMENT_ZOOM;
+const TOOLBAR_MENU_ICON_STROKE: f32 = 2.0 * CHROME_ELEMENT_ZOOM;
+const TOOLBAR_SEPARATOR_HEIGHT: f32 = 28.0 * CHROME_ELEMENT_ZOOM;
+const TOOLBAR_SEPARATOR_LEADING_GAP: f32 = 18.0 * CHROME_ELEMENT_ZOOM;
+const TOOLBAR_SEPARATOR_TRAILING_GAP: f32 = 22.0 * CHROME_ELEMENT_ZOOM;
+const RAIL_ICON_SIZE: f32 = 40.0 * CHROME_ELEMENT_ZOOM;
+const RAIL_BUTTON_SIZE: f32 = 80.0 * CHROME_ELEMENT_ZOOM;
 const RAIL_BUTTON_RADIUS: u8 = 8;
 const RAIL_PANEL_MARGIN_X: i8 = 12;
 const RAIL_PANEL_MARGIN_Y: i8 = 0;
-const RAIL_TOP_SPACE: f32 = 22.0;
-const RAIL_ITEM_GAP: f32 = 12.0;
+const RAIL_TOP_SPACE: f32 = 22.0 * CHROME_ELEMENT_ZOOM;
+const RAIL_ITEM_GAP: f32 = 12.0 * CHROME_ELEMENT_ZOOM;
 const TAB_ICON_SIZE: f32 = 32.0;
-const ADDRESS_LEADING_GAP: f32 = 20.0;
+const ADDRESS_LEADING_GAP: f32 = 20.0 * CHROME_ELEMENT_ZOOM;
 const ADDRESS_MIN_WIDTH: f32 = 260.0;
-const ADDRESS_HEIGHT: f32 = 52.0;
-const ADDRESS_TEXT_HEIGHT: f32 = 34.0;
-const ADDRESS_INPUT_TEXT_SIZE: f32 = 20.0;
+const ADDRESS_HEIGHT: f32 = 52.0 * CHROME_ELEMENT_ZOOM;
+const ADDRESS_TEXT_HEIGHT: f32 = 34.0 * CHROME_ELEMENT_ZOOM;
+const ADDRESS_INPUT_TEXT_SIZE: f32 = 20.0 * CHROME_ELEMENT_ZOOM;
 const ADDRESS_CORNER_RADIUS: u8 = 8;
 const ADDRESS_INNER_MARGIN_X: i8 = 18;
 const ADDRESS_SHADOW_OFFSET: [i8; 2] = [0, 1];
 const ADDRESS_SHADOW_BLUR: u8 = 6;
 const ADDRESS_SHADOW_SPREAD: u8 = 0;
 const ADDRESS_SHADOW_ALPHA: u8 = 6;
-const ADDRESS_SECURITY_ICON_SIZE: f32 = 24.0;
-const ADDRESS_SLATE_SECURITY_ICON_SIZE: f32 = 34.0;
-const ADDRESS_SLATE_SECURITY_ICON_OFFSET_X: f32 = -2.0;
-const ADDRESS_ICON_GAP: f32 = 14.0;
-const ADDRESS_BOOKMARK_ICON_SIZE: f32 = 22.0;
-const ADDRESS_BOOKMARK_BUTTON_SIZE: f32 = 28.0;
+const ADDRESS_SECURITY_ICON_SIZE: f32 = 24.0 * CHROME_ELEMENT_ZOOM;
+const ADDRESS_SLATE_SECURITY_ICON_SIZE: f32 = 34.0 * CHROME_ELEMENT_ZOOM;
+const ADDRESS_SLATE_SECURITY_ICON_OFFSET_X: f32 = -2.0 * CHROME_ELEMENT_ZOOM;
+const ADDRESS_ICON_GAP: f32 = 14.0 * CHROME_ELEMENT_ZOOM;
+const ADDRESS_BOOKMARK_ICON_SIZE: f32 = 22.0 * CHROME_ELEMENT_ZOOM;
+const ADDRESS_BOOKMARK_BUTTON_SIZE: f32 = 28.0 * CHROME_ELEMENT_ZOOM;
 const ADDRESS_BOOKMARK_BUTTON_RADIUS: u8 = 6;
-const ADDRESS_BOOKMARK_RESERVED_WIDTH: f32 = 28.0;
-const ADDRESS_TRAILING_CONTROLS_WIDTH: f32 = 188.0;
-const ADDRESS_TRAILING_GAP: f32 = 6.0;
+const ADDRESS_BOOKMARK_RESERVED_WIDTH: f32 = 28.0 * CHROME_ELEMENT_ZOOM;
+const ADDRESS_TRAILING_CONTROLS_WIDTH: f32 = 188.0 * CHROME_ELEMENT_ZOOM;
+const ADDRESS_TRAILING_GAP: f32 = 6.0 * CHROME_ELEMENT_ZOOM;
 const HOME_SEARCH_MIN_WIDTH: f32 = 280.0;
 const HOME_SEARCH_MAX_WIDTH: f32 = 880.0;
 const HOME_SEARCH_WIDTH_FACTOR: f32 = 0.56;
@@ -237,6 +226,12 @@ pub struct Gui {
 
     /// Latest broadwebd status snapshot for protocol-backed page loads.
     broadweb_status: BroadwebStatusSnapshot,
+
+    /// User-adjustable zoom for Slate-owned chrome elements.
+    chrome_element_zoom: f32,
+
+    /// Platform-provided egui zoom compensation for DPI handling.
+    platform_zoom_factor: Cell<f32>,
 
     /// Whether or not the current `WebView` can navigate backward.
     can_go_back: bool,
@@ -360,10 +355,12 @@ fn address_security_icon_for_location(location: &str) -> AddressSecurityIcon {
     }
 
     match Url::parse(location) {
-        Ok(url) if is_slate_home_url(&url) => AddressSecurityIcon::Slate {
-            icon: SlateIcon::TopShield,
-            color: address_passive_icon_color(),
-        },
+        Ok(url) if is_slate_home_url(&url) || is_slate_settings_url(&url) => {
+            AddressSecurityIcon::Slate {
+                icon: SlateIcon::TopShield,
+                color: address_passive_icon_color(),
+            }
+        }
         Ok(url) => match url.scheme() {
             "https" => AddressSecurityIcon::Raster(SlateRaster::PageInfoSecure),
             "http" => AddressSecurityIcon::Raster(SlateRaster::PageInfoInsecure),
@@ -434,6 +431,70 @@ fn footer_load_status_indicator_color(load_status: LoadStatus) -> egui::Color32 
     }
 }
 
+fn footer_load_status_pulse_target_color() -> egui::Color32 {
+    egui::Color32::from_rgb(172, 172, 168)
+}
+
+fn footer_load_status_is_in_progress(
+    load_status: LoadStatus,
+    broadweb_status: &BroadwebStatusSnapshot,
+) -> bool {
+    matches!(load_status, LoadStatus::Started | LoadStatus::HeadParsed)
+        || matches!(
+            broadweb_status.kind,
+            BroadwebStatusKind::Fetching | BroadwebStatusKind::SwitchingGateway
+        )
+}
+
+fn footer_load_status_base_indicator_color(
+    load_status: LoadStatus,
+    broadweb_status: &BroadwebStatusSnapshot,
+) -> egui::Color32 {
+    if matches!(
+        broadweb_status.kind,
+        BroadwebStatusKind::Fetching | BroadwebStatusKind::SwitchingGateway
+    ) && matches!(load_status, LoadStatus::Complete)
+    {
+        return footer_load_status_indicator_color(LoadStatus::Started);
+    }
+
+    footer_load_status_indicator_color(load_status)
+}
+
+fn mix_color(from: egui::Color32, to: egui::Color32, amount: f32) -> egui::Color32 {
+    let amount = amount.clamp(0.0, 1.0);
+    let [from_r, from_g, from_b, from_a] = from.to_array();
+    let [to_r, to_g, to_b, to_a] = to.to_array();
+    let mix_channel =
+        |start: u8, end: u8| f32::from(start) + (f32::from(end) - f32::from(start)) * amount;
+
+    egui::Color32::from_rgba_unmultiplied(
+        mix_channel(from_r, to_r).round() as u8,
+        mix_channel(from_g, to_g).round() as u8,
+        mix_channel(from_b, to_b).round() as u8,
+        mix_channel(from_a, to_a).round() as u8,
+    )
+}
+
+fn footer_load_status_indicator_color_at(
+    load_status: LoadStatus,
+    broadweb_status: &BroadwebStatusSnapshot,
+    time_seconds: f64,
+) -> egui::Color32 {
+    let base_color = footer_load_status_base_indicator_color(load_status, broadweb_status);
+    if !footer_load_status_is_in_progress(load_status, broadweb_status) {
+        return base_color;
+    }
+
+    let phase = 1.0 - (time_seconds as f32 * std::f32::consts::TAU * 0.8).cos();
+    let fade_to_grey = phase / 2.0;
+    mix_color(
+        base_color,
+        footer_load_status_pulse_target_color(),
+        fade_to_grey,
+    )
+}
+
 fn new_tab_icon_color() -> egui::Color32 {
     slate_theme::TEXT
 }
@@ -444,10 +505,6 @@ fn toolbar_menu_icon_color(_selected: bool) -> egui::Color32 {
 
 fn chrome_vertical_separator_color() -> egui::Color32 {
     egui::Color32::from_rgb(225, 225, 225)
-}
-
-fn footer_vertical_separator_color() -> egui::Color32 {
-    egui::Color32::from_rgb(220, 219, 218)
 }
 
 fn footer_top_separator_color() -> egui::Color32 {
@@ -681,6 +738,25 @@ fn location_has_broadweb_status(location: &str) -> bool {
     location.starts_with("ipfs://") || location.starts_with("ipns://")
 }
 
+fn clamp_chrome_element_zoom(zoom: f32) -> f32 {
+    zoom.clamp(CHROME_ELEMENT_ZOOM_MIN, CHROME_ELEMENT_ZOOM_MAX)
+}
+
+fn chrome_element_zoom_from_settings_url(url: &Url) -> Option<f32> {
+    if !is_slate_settings_url(url) {
+        return None;
+    }
+
+    url.query_pairs()
+        .find(|(name, _)| name == "chrome_zoom")
+        .and_then(|(_, value)| value.parse::<f32>().ok())
+        .map(clamp_chrome_element_zoom)
+}
+
+fn chrome_element_zoom_factor(chrome_element_zoom: f32) -> f32 {
+    clamp_chrome_element_zoom(chrome_element_zoom) / CHROME_ELEMENT_ZOOM
+}
+
 #[cfg(test)]
 fn home_content_stack_height(available_height: f32) -> f32 {
     home_top_space(available_height)
@@ -761,14 +837,8 @@ struct ConceptToolbarControlsGeometry {
 #[cfg(test)]
 #[derive(Clone, Copy, Debug)]
 struct ConceptFooterControlsGeometry {
-    protection_status_rect: egui::Rect,
-    protection_icon_slot_rect: egui::Rect,
-    protection_icon_rect: egui::Rect,
     load_status_rect: egui::Rect,
     load_status_dot_center: egui::Pos2,
-    separator_rect: egui::Rect,
-    settings_button_rect: egui::Rect,
-    settings_icon_rect: egui::Rect,
 }
 
 #[cfg(test)]
@@ -873,47 +943,17 @@ fn concept_footer_controls_geometry() -> ConceptFooterControlsGeometry {
         ),
     );
     let center_y = footer_content_rect.center().y;
-    let protection_status_rect = egui::Rect::from_min_size(
-        egui::pos2(
-            footer_content_rect.left() + FOOTER_LEFT_PADDING,
-            center_y - FOOTER_PROTECTION_STATUS_HEIGHT / 2.0,
-        ),
-        egui::vec2(
-            footer_protection_status_width(),
-            FOOTER_PROTECTION_STATUS_HEIGHT,
-        ),
-    );
-    let protection_icon_slot_rect = egui::Rect::from_center_size(
-        egui::pos2(
-            protection_status_rect.left() + FOOTER_ICON_SIZE / 2.0,
-            center_y,
-        ),
-        egui::Vec2::splat(FOOTER_ICON_SIZE),
-    );
-    let protection_icon_rect = footer_protection_icon_rect(protection_icon_slot_rect);
-    let settings_button_rect = egui::Rect::from_min_size(
-        egui::pos2(
-            footer_content_rect.right() - FOOTER_RIGHT_PADDING - FOOTER_SETTINGS_BUTTON_SIZE,
-            center_y - FOOTER_SETTINGS_BUTTON_SIZE / 2.0,
-        ),
-        egui::Vec2::splat(FOOTER_SETTINGS_BUTTON_SIZE),
-    );
-    let separator_rect = egui::Rect::from_min_size(
-        egui::pos2(
-            settings_button_rect.left() - FOOTER_ITEM_SPACING - 1.0,
-            center_y - FOOTER_SEPARATOR_HEIGHT / 2.0,
-        ),
-        egui::vec2(1.0, FOOTER_SEPARATOR_HEIGHT),
-    );
+    let load_status_width =
+        footer_content_rect.width() - FOOTER_LEFT_PADDING - FOOTER_RIGHT_PADDING;
     let load_status_rect = egui::Rect::from_min_size(
         egui::pos2(
-            separator_rect.left()
-                - FOOTER_ITEM_SPACING
-                - FOOTER_LOAD_STATUS_SEPARATOR_EXTRA_GAP
-                - footer_load_status_width(),
+            footer_content_rect.left() + FOOTER_LEFT_PADDING,
             center_y - FOOTER_LOAD_STATUS_HEIGHT / 2.0,
         ),
-        egui::vec2(footer_load_status_width(), FOOTER_LOAD_STATUS_HEIGHT),
+        egui::vec2(
+            footer_load_status_width(load_status_width),
+            FOOTER_LOAD_STATUS_HEIGHT,
+        ),
     );
     let load_status_dot_center = egui::pos2(
         load_status_rect.left() + FOOTER_LOAD_STATUS_DOT_SIZE / 2.0,
@@ -921,14 +961,8 @@ fn concept_footer_controls_geometry() -> ConceptFooterControlsGeometry {
     );
 
     ConceptFooterControlsGeometry {
-        protection_status_rect,
-        protection_icon_slot_rect,
-        protection_icon_rect,
         load_status_rect,
         load_status_dot_center,
-        separator_rect,
-        settings_button_rect,
-        settings_icon_rect: footer_settings_icon_rect(settings_button_rect),
     }
 }
 
@@ -1165,30 +1199,18 @@ fn toolbar_menu_icon_rect(button_rect: egui::Rect) -> egui::Rect {
     )
 }
 
-fn footer_load_status_width() -> f32 {
-    FOOTER_LOAD_STATUS_DOT_SIZE + FOOTER_LOAD_STATUS_DOT_LABEL_GAP + FOOTER_LOAD_STATUS_LABEL_WIDTH
+fn footer_load_status_width(available_width: f32) -> f32 {
+    available_width.max(0.0)
 }
 
 fn footer_load_status_dot_radius() -> f32 {
     FOOTER_LOAD_STATUS_DOT_SIZE / 2.0
 }
 
-fn footer_protection_icon_rect(slot_rect: egui::Rect) -> egui::Rect {
-    slot_rect.translate(egui::vec2(FOOTER_PROTECTION_ICON_OFFSET_X, 0.0))
-}
-
-fn footer_settings_icon_color() -> egui::Color32 {
-    egui::Color32::from_rgb(72, 72, 72)
-}
-
-#[cfg(test)]
-fn footer_settings_icon_rect(button_rect: egui::Rect) -> egui::Rect {
-    let visual_size = FOOTER_SETTINGS_GEAR_TOOTH_OUTER_RADIUS * 2.0 + FOOTER_SETTINGS_GEAR_STROKE;
-    egui::Rect::from_center_size(button_rect.center(), egui::Vec2::splat(visual_size))
-}
-
-fn footer_protection_status_width() -> f32 {
-    FOOTER_ICON_SIZE
+fn footer_load_status_label_max_chars(status_width: f32) -> usize {
+    let label_width =
+        (status_width - FOOTER_LOAD_STATUS_DOT_SIZE - FOOTER_LOAD_STATUS_DOT_LABEL_GAP).max(0.0);
+    (label_width / (FOOTER_TEXT_SIZE * 0.62)).floor().max(1.0) as usize
 }
 
 fn footer_panel_margin() -> egui::Margin {
@@ -1553,6 +1575,8 @@ impl Gui {
             load_status: LoadStatus::Complete,
             status_text: None,
             broadweb_status: BroadwebStatusSnapshot::idle(),
+            chrome_element_zoom: CHROME_ELEMENT_ZOOM,
+            platform_zoom_factor: Cell::new(1.0),
             can_go_back: false,
             can_go_forward: false,
             favicon_textures: Default::default(),
@@ -1638,52 +1662,6 @@ impl Gui {
         response
     }
 
-    fn footer_settings_button(ui: &mut egui::Ui) -> egui::Response {
-        let (rect, response) = ui.allocate_exact_size(
-            Vec2::splat(FOOTER_SETTINGS_BUTTON_SIZE),
-            egui::Sense::click(),
-        );
-
-        if ui.is_rect_visible(rect) {
-            if response.hovered() {
-                ui.painter().rect_filled(
-                    rect,
-                    FOOTER_SETTINGS_BUTTON_RADIUS,
-                    slate_theme::PANEL_HOVER,
-                );
-            }
-
-            let center = rect.center();
-            let stroke =
-                egui::Stroke::new(FOOTER_SETTINGS_GEAR_STROKE, footer_settings_icon_color());
-            ui.painter()
-                .circle_stroke(center, FOOTER_SETTINGS_GEAR_RADIUS, stroke);
-            ui.painter()
-                .circle_stroke(center, FOOTER_SETTINGS_GEAR_CENTER_RADIUS, stroke);
-
-            for tooth_index in 0..8 {
-                let angle = std::f32::consts::TAU * tooth_index as f32 / 8.0;
-                let direction_x = angle.cos();
-                let direction_y = angle.sin();
-                ui.painter().line_segment(
-                    [
-                        egui::pos2(
-                            center.x + direction_x * FOOTER_SETTINGS_GEAR_TOOTH_INNER_RADIUS,
-                            center.y + direction_y * FOOTER_SETTINGS_GEAR_TOOTH_INNER_RADIUS,
-                        ),
-                        egui::pos2(
-                            center.x + direction_x * FOOTER_SETTINGS_GEAR_TOOTH_OUTER_RADIUS,
-                            center.y + direction_y * FOOTER_SETTINGS_GEAR_TOOTH_OUTER_RADIUS,
-                        ),
-                    ],
-                    stroke,
-                );
-            }
-        }
-
-        response
-    }
-
     fn icon_image(texture: egui::load::SizedTexture, size: f32) -> egui::Image<'static> {
         egui::Image::from_texture(texture)
             .fit_to_exact_size(egui::vec2(size, size))
@@ -1705,10 +1683,6 @@ impl Gui {
 
     fn vertical_separator(ui: &mut egui::Ui, height: f32) {
         Self::vertical_separator_with_color(ui, height, chrome_vertical_separator_color());
-    }
-
-    fn footer_vertical_separator(ui: &mut egui::Ui, height: f32) {
-        Self::vertical_separator_with_color(ui, height, footer_vertical_separator_color());
     }
 
     fn draw_footer_top_separator(ctx: &egui::Context, footer_rect: egui::Rect) {
@@ -1857,6 +1831,7 @@ impl Gui {
         state: &RunningAppState,
         window: &ServoShellWindow,
         location_dirty: &mut bool,
+        chrome_element_zoom: f32,
     ) {
         egui::Popup::menu(menu_button)
             .align(egui::RectAlign::BOTTOM_END)
@@ -1897,7 +1872,14 @@ impl Gui {
                 ui.add_enabled(false, egui::Button::new("Bookmarks"));
                 ui.add_enabled(false, egui::Button::new("Downloads"));
                 ui.add_enabled(false, egui::Button::new("History"));
-                ui.add_enabled(false, egui::Button::new("Settings"));
+                if ui.button("Settings").clicked() {
+                    *location_dirty = false;
+                    window.queue_user_interface_command(UserInterfaceCommand::Go(format!(
+                        "slate://settings?chrome_zoom={:.2}",
+                        clamp_chrome_element_zoom(chrome_element_zoom)
+                    )));
+                    ui.close();
+                }
             });
     }
 
@@ -2098,15 +2080,20 @@ impl Gui {
 
     fn draw_footer_load_status(
         ui: &mut egui::Ui,
+        status_width: f32,
         load_status: LoadStatus,
         broadweb_status: &BroadwebStatusSnapshot,
         location: &str,
     ) {
         let (rect, response) = ui.allocate_exact_size(
-            egui::vec2(footer_load_status_width(), FOOTER_LOAD_STATUS_HEIGHT),
+            egui::vec2(
+                footer_load_status_width(status_width),
+                FOOTER_LOAD_STATUS_HEIGHT,
+            ),
             egui::Sense::hover(),
         );
         let label = Self::footer_load_status_label(load_status, broadweb_status, location);
+        let time_seconds = ui.input(|input| input.time);
 
         if ui.is_rect_visible(rect) {
             let dot_center = egui::pos2(
@@ -2116,7 +2103,7 @@ impl Gui {
             ui.painter().circle_filled(
                 dot_center,
                 footer_load_status_dot_radius(),
-                footer_load_status_indicator_color(load_status),
+                footer_load_status_indicator_color_at(load_status, broadweb_status, time_seconds),
             );
             ui.painter().text(
                 egui::pos2(
@@ -2126,7 +2113,7 @@ impl Gui {
                     rect.center().y,
                 ),
                 egui::Align2::LEFT_CENTER,
-                truncate_with_ellipsis(&label, 18),
+                truncate_with_ellipsis(&label, footer_load_status_label_max_chars(rect.width())),
                 egui::FontId::proportional(FOOTER_TEXT_SIZE),
                 footer_status_text_color(),
             );
@@ -2135,61 +2122,17 @@ impl Gui {
         response.on_hover_text(label);
     }
 
-    fn draw_footer_protection_status(ui: &mut egui::Ui, texture: egui::load::SizedTexture) {
-        let (rect, response) = ui.allocate_exact_size(
-            egui::vec2(
-                footer_protection_status_width(),
-                FOOTER_PROTECTION_STATUS_HEIGHT,
-            ),
-            egui::Sense::hover(),
-        );
-
-        if ui.is_rect_visible(rect) {
-            let icon_slot_rect = egui::Rect::from_center_size(
-                egui::pos2(rect.left() + FOOTER_ICON_SIZE / 2.0, rect.center().y),
-                Vec2::splat(FOOTER_ICON_SIZE),
-            );
-            let icon_rect = footer_protection_icon_rect(icon_slot_rect);
-            ui.painter().image(
-                texture.id,
-                icon_rect,
-                egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
-                egui::Color32::WHITE,
-            );
-        }
-
-        let enabled = ui.is_enabled();
-        response.widget_info(move || WidgetInfo::labeled(WidgetType::Label, enabled, "Protected"));
-        response.on_hover_text("Protected");
-    }
-
     fn draw_footer(
         ui: &mut egui::Ui,
-        slate_icons: &mut SlateIconCache,
         load_status: LoadStatus,
         broadweb_status: &BroadwebStatusSnapshot,
         location: &str,
     ) {
-        ui.spacing_mut().item_spacing = egui::vec2(FOOTER_ITEM_SPACING, 0.0);
+        ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
         ui.horizontal_centered(|ui| {
             ui.add_space(FOOTER_LEFT_PADDING);
-            let footer_icon =
-                slate_icons.texture(ui.ctx(), SlateIcon::HomeFooterShield, slate_theme::TEAL);
-            Self::draw_footer_protection_status(ui, footer_icon);
-
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.add_space(FOOTER_RIGHT_PADDING);
-                let settings_button = Gui::footer_settings_button(ui);
-                settings_button.widget_info(|| {
-                    let mut info = WidgetInfo::new(WidgetType::Button);
-                    info.label = Some("Settings".into());
-                    info
-                });
-                settings_button.on_hover_text("Settings");
-                Self::footer_vertical_separator(ui, FOOTER_SEPARATOR_HEIGHT);
-                ui.add_space(FOOTER_LOAD_STATUS_SEPARATOR_EXTRA_GAP);
-                Self::draw_footer_load_status(ui, load_status, broadweb_status, location);
-            });
+            let status_width = (ui.available_width() - FOOTER_RIGHT_PADDING).max(0.0);
+            Self::draw_footer_load_status(ui, status_width, load_status, broadweb_status, location);
         });
     }
 
@@ -2655,6 +2598,8 @@ impl Gui {
             .make_current()
             .expect("Could not make RenderingContext current");
         self.update_broadweb_status();
+        self.update_chrome_element_zoom_from_location(window);
+        let effective_egui_zoom_factor = self.effective_egui_zoom_factor();
         let Self {
             rendering_context,
             context,
@@ -2667,6 +2612,7 @@ impl Gui {
             location_dirty,
             load_status,
             broadweb_status,
+            chrome_element_zoom,
             favicon_textures,
             slate_icons,
             ..
@@ -2675,6 +2621,7 @@ impl Gui {
         let winit_window = headed_window.winit_window();
         context.run(winit_window, |ctx| {
             slate_theme::apply(ctx);
+            ctx.set_zoom_factor(effective_egui_zoom_factor);
             load_pending_favicons(ctx, window, favicon_textures);
             let active_webview_is_home = Self::active_webview_is_home(window);
             *webview_contains_native_chrome = active_webview_is_home;
@@ -3061,6 +3008,7 @@ impl Gui {
                                     state,
                                     window,
                                     location_dirty,
+                                    *chrome_element_zoom,
                                 );
                             },
                         );
@@ -3074,7 +3022,7 @@ impl Gui {
                     .frame(footer_frame)
                     .show_separator_line(false)
                     .show_inside(ctx, |ui| {
-                        Self::draw_footer(ui, slate_icons, *load_status, broadweb_status, location)
+                        Self::draw_footer(ui, *load_status, broadweb_status, location)
                     });
                 Self::draw_footer_top_separator(ctx, footer_response.response.rect);
             } else {
@@ -3230,6 +3178,20 @@ impl Gui {
         old_status != self.broadweb_status
     }
 
+    fn update_chrome_element_zoom_from_location(&mut self, window: &ServoShellWindow) -> bool {
+        let state_zoom = window
+            .active_webview()
+            .and_then(|webview| webview.url())
+            .as_ref()
+            .and_then(chrome_element_zoom_from_settings_url);
+
+        let Some(state_zoom) = state_zoom else {
+            return false;
+        };
+        let old_zoom = std::mem::replace(&mut self.chrome_element_zoom, state_zoom);
+        (old_zoom - self.chrome_element_zoom).abs() > 0.001
+    }
+
     fn update_can_go_back_and_forward(&mut self, window: &ServoShellWindow) -> bool {
         let (can_go_back, can_go_forward) = window
             .active_webview()
@@ -3251,6 +3213,7 @@ impl Gui {
             | self.update_location_in_toolbar(window)
             | self.update_status_text(window)
             | self.update_broadweb_status()
+            | self.update_chrome_element_zoom_from_location(window)
             | self.update_can_go_back_and_forward(window)
     }
 
@@ -3277,8 +3240,15 @@ impl Gui {
         }
     }
 
+    fn effective_egui_zoom_factor(&self) -> f32 {
+        self.platform_zoom_factor.get() * chrome_element_zoom_factor(self.chrome_element_zoom)
+    }
+
     pub(crate) fn set_zoom_factor(&self, factor: f32) {
-        self.context.egui_ctx.set_zoom_factor(factor);
+        self.platform_zoom_factor.set(factor);
+        self.context
+            .egui_ctx
+            .set_zoom_factor(self.effective_egui_zoom_factor());
     }
 
     pub(crate) fn notify_accessibility_tree_update(&mut self, tree_update: accesskit::TreeUpdate) {
@@ -3291,23 +3261,18 @@ mod tests {
     use euclid::{Point2D, Size2D};
     use servo::{DeviceIndependentPixel, LoadStatus};
     use slate_broadwebd::{BroadwebStatusKind, BroadwebStatusSnapshot};
+    use url::Url;
 
     use super::{
         ACTIVE_TAB_BOTTOM_JOIN_HEIGHT, ACTIVE_TAB_BOTTOM_JOIN_INSET_X,
         ACTIVE_TAB_FILE_CORNER_STEPS, ADDRESS_HEIGHT, ADDRESS_INPUT_TEXT_SIZE, APP_RAIL_WIDTH,
         APP_TITLE_HEIGHT, APP_TITLE_LEFT_PADDING, APP_TITLE_TEXT_SIZE, APP_TITLE_WIDTH,
-        CONCEPT_SCREENSHOT_HEIGHT, CONCEPT_SCREENSHOT_WIDTH, FOOTER_HEIGHT, FOOTER_ICON_SIZE,
-        FOOTER_ITEM_SPACING, FOOTER_LEFT_PADDING, FOOTER_LOAD_STATUS_DOT_LABEL_GAP,
-        FOOTER_LOAD_STATUS_DOT_SIZE, FOOTER_LOAD_STATUS_HEIGHT, FOOTER_LOAD_STATUS_LABEL_WIDTH,
-        FOOTER_LOAD_STATUS_SEPARATOR_EXTRA_GAP, FOOTER_PANEL_MARGIN_BOTTOM,
-        FOOTER_PANEL_MARGIN_TOP, FOOTER_PANEL_MARGIN_X, FOOTER_PROTECTION_ICON_OFFSET_X,
-        FOOTER_PROTECTION_STATUS_HEIGHT, FOOTER_RIGHT_PADDING, FOOTER_SEPARATOR_HEIGHT,
-        FOOTER_SETTINGS_BUTTON_RADIUS, FOOTER_SETTINGS_BUTTON_SIZE,
-        FOOTER_SETTINGS_GEAR_CENTER_RADIUS, FOOTER_SETTINGS_GEAR_RADIUS,
-        FOOTER_SETTINGS_GEAR_STROKE, FOOTER_SETTINGS_GEAR_TOOTH_INNER_RADIUS,
-        FOOTER_SETTINGS_GEAR_TOOTH_OUTER_RADIUS, FOOTER_SETTINGS_ICON_SIZE, FOOTER_TEXT_SIZE,
-        HOME_BOTTOM_MIN_GAP, HOME_CONTENT_OPTICAL_OFFSET_X, HOME_HERO_MOTTO_GAP,
-        HOME_HERO_OPTICAL_OFFSET_X, HOME_HERO_SIZE, HOME_HERO_TO_SEARCH_GAP,
+        CHROME_ELEMENT_ZOOM, CHROME_ELEMENT_ZOOM_MAX, CHROME_ELEMENT_ZOOM_MIN,
+        CONCEPT_SCREENSHOT_HEIGHT, CONCEPT_SCREENSHOT_WIDTH, FOOTER_HEIGHT, FOOTER_LEFT_PADDING,
+        FOOTER_LOAD_STATUS_DOT_LABEL_GAP, FOOTER_LOAD_STATUS_DOT_SIZE, FOOTER_LOAD_STATUS_HEIGHT,
+        FOOTER_PANEL_MARGIN_BOTTOM, FOOTER_PANEL_MARGIN_TOP, FOOTER_PANEL_MARGIN_X,
+        FOOTER_RIGHT_PADDING, FOOTER_TEXT_SIZE, HOME_BOTTOM_MIN_GAP, HOME_CONTENT_OPTICAL_OFFSET_X,
+        HOME_HERO_MOTTO_GAP, HOME_HERO_OPTICAL_OFFSET_X, HOME_HERO_SIZE, HOME_HERO_TO_SEARCH_GAP,
         HOME_METRIC_BADGE_CORNER_RADIUS, HOME_METRIC_BADGE_EXTRA_DIGIT_FACTOR,
         HOME_METRIC_BADGE_LABEL_GAP, HOME_METRIC_BADGE_MARGIN_X, HOME_METRIC_BADGE_MARGIN_Y,
         HOME_METRIC_BADGE_PRIMARY_DIGIT_FACTOR, HOME_METRIC_BADGE_TEXT_SIZE, HOME_METRIC_CARD_GAP,
@@ -3349,14 +3314,16 @@ mod tests {
         address_passive_icon_color, address_security_icon_for_location,
         address_security_raster_color, address_slate_security_icon_rect,
         address_slate_security_visible_rect, app_title_background_color, app_title_text_color,
-        chrome_panel_background_color, chrome_vertical_separator_color, concept_chrome_geometry,
-        concept_footer_controls_geometry, concept_screenshot_home_view_size,
-        concept_toolbar_controls_geometry, default_opening_home_view_height,
-        default_opening_home_view_size, footer_load_status_dot_radius,
-        footer_load_status_indicator_color, footer_load_status_width, footer_panel_margin,
-        footer_protection_icon_rect, footer_protection_status_width, footer_settings_icon_color,
-        footer_settings_icon_rect, footer_status_text_color, footer_top_separator_color,
-        footer_vertical_separator_color, home_content_left_space, home_content_stack_height,
+        chrome_element_zoom_factor, chrome_element_zoom_from_settings_url,
+        chrome_panel_background_color, chrome_vertical_separator_color, clamp_chrome_element_zoom,
+        concept_chrome_geometry, concept_footer_controls_geometry,
+        concept_screenshot_home_view_size, concept_toolbar_controls_geometry,
+        default_opening_home_view_height, default_opening_home_view_size,
+        footer_load_status_dot_radius, footer_load_status_indicator_color,
+        footer_load_status_indicator_color_at, footer_load_status_is_in_progress,
+        footer_load_status_label_max_chars, footer_load_status_pulse_target_color,
+        footer_load_status_width, footer_panel_margin, footer_status_text_color,
+        footer_top_separator_color, home_content_left_space, home_content_stack_height,
         home_hero_icon_visible_rect, home_hero_left_space, home_metric_badge_width,
         home_metric_card_background_color, home_metric_card_content_height,
         home_metric_card_content_width, home_metric_detail_color, home_metrics_layout,
@@ -3483,15 +3450,16 @@ mod tests {
     fn static_chrome_dimensions_match_concept_offsets() {
         assert_eq!(CONCEPT_SCREENSHOT_WIDTH, 1672.0);
         assert_eq!(CONCEPT_SCREENSHOT_HEIGHT, 941.0);
-        assert_eq!(APP_RAIL_WIDTH, 104.0);
-        assert_eq!(RAIL_ICON_SIZE, 40.0);
-        assert_eq!(RAIL_BUTTON_SIZE, 80.0);
+        assert_eq!(CHROME_ELEMENT_ZOOM, 0.9);
+        assert!((APP_RAIL_WIDTH - 93.6).abs() < 0.001);
+        assert!((RAIL_ICON_SIZE - 36.0).abs() < 0.001);
+        assert!((RAIL_BUTTON_SIZE - 72.0).abs() < 0.001);
         assert_eq!(RAIL_BUTTON_RADIUS, 8);
         assert_eq!(RAIL_PANEL_MARGIN_X, 12);
         assert_eq!(RAIL_PANEL_MARGIN_Y, 0);
-        assert_eq!(RAIL_TOP_SPACE, 22.0);
-        assert_eq!(RAIL_ITEM_GAP, 12.0);
-        assert_eq!(TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT, 162.0);
+        assert!((RAIL_TOP_SPACE - 19.8).abs() < 0.001);
+        assert!((RAIL_ITEM_GAP - 10.8).abs() < 0.001);
+        assert!((TAB_STRIP_HEIGHT + TOOLBAR_HEIGHT - 153.6).abs() < 0.001);
         assert_eq!(tab_strip_background_color(), slate_theme::TITLE_SURFACE);
         assert_eq!(tab_strip_separator_color(), slate_theme::FIELD_BORDER);
         assert_eq!(chrome_panel_background_color(), slate_theme::CHROME_BG);
@@ -3501,38 +3469,27 @@ mod tests {
         assert_eq!(ACTIVE_TAB_BOTTOM_JOIN_HEIGHT, 4.0);
         assert_eq!(ACTIVE_TAB_BOTTOM_JOIN_INSET_X, 0.0);
         assert_eq!(ACTIVE_TAB_FILE_CORNER_STEPS, 5);
-        assert_eq!(FOOTER_HEIGHT, 80.0);
+        assert_eq!(FOOTER_HEIGHT, 44.0);
         assert_eq!(FOOTER_PANEL_MARGIN_X, 0);
-        assert_eq!(FOOTER_PANEL_MARGIN_TOP, 6);
-        assert_eq!(FOOTER_PANEL_MARGIN_BOTTOM, 10);
+        assert_eq!(FOOTER_PANEL_MARGIN_TOP, 4);
+        assert_eq!(FOOTER_PANEL_MARGIN_BOTTOM, 4);
         let footer_margin = footer_panel_margin();
         assert_eq!(footer_margin.left, 0);
         assert_eq!(footer_margin.right, 0);
-        assert_eq!(footer_margin.top, 6);
-        assert_eq!(footer_margin.bottom, 10);
-        assert_eq!(FOOTER_LEFT_PADDING, 12.0);
-        assert_eq!(FOOTER_RIGHT_PADDING, 38.0);
-        assert_eq!(FOOTER_ITEM_SPACING, 30.0);
-        assert_eq!(FOOTER_ICON_SIZE, 40.0);
-        assert_eq!(FOOTER_PROTECTION_ICON_OFFSET_X, 1.5);
-        assert_eq!(FOOTER_PROTECTION_STATUS_HEIGHT, 40.0);
-        assert_eq!(footer_protection_status_width(), 40.0);
-        assert_eq!(FOOTER_TEXT_SIZE, 16.0);
-        assert_eq!(FOOTER_SEPARATOR_HEIGHT, 28.0);
+        assert_eq!(footer_margin.top, 4);
+        assert_eq!(footer_margin.bottom, 4);
+        assert_eq!(FOOTER_LEFT_PADDING, 16.0);
+        assert_eq!(FOOTER_RIGHT_PADDING, 12.0);
+        assert_eq!(FOOTER_TEXT_SIZE, 13.0);
         assert_eq!(
             chrome_vertical_separator_color(),
             egui::Color32::from_rgb(225, 225, 225)
         );
         assert_eq!(
-            footer_vertical_separator_color(),
-            egui::Color32::from_rgb(220, 219, 218)
-        );
-        assert_eq!(
             footer_top_separator_color(),
             egui::Color32::from_rgb(241, 240, 239)
         );
-        assert_eq!(FOOTER_LOAD_STATUS_SEPARATOR_EXTRA_GAP, 6.0);
-        assert_eq!(FOOTER_LOAD_STATUS_DOT_SIZE, 14.0);
+        assert_eq!(FOOTER_LOAD_STATUS_DOT_SIZE, 10.0);
         assert_eq!(
             footer_load_status_indicator_color(LoadStatus::Complete),
             egui::Color32::from_rgb(11, 126, 121)
@@ -3545,29 +3502,21 @@ mod tests {
             footer_load_status_indicator_color(LoadStatus::HeadParsed),
             slate_theme::BLUE
         );
-        assert_eq!(footer_load_status_dot_radius(), 7.0);
-        assert_eq!(FOOTER_LOAD_STATUS_DOT_LABEL_GAP, 10.0);
-        assert_eq!(FOOTER_LOAD_STATUS_LABEL_WIDTH, 112.0);
-        assert_eq!(FOOTER_LOAD_STATUS_HEIGHT, 40.0);
-        assert_eq!(footer_load_status_width(), 136.0);
+        assert_eq!(
+            footer_load_status_pulse_target_color(),
+            egui::Color32::from_rgb(172, 172, 168)
+        );
+        assert_eq!(footer_load_status_dot_radius(), 5.0);
+        assert_eq!(FOOTER_LOAD_STATUS_DOT_LABEL_GAP, 8.0);
+        assert_eq!(FOOTER_LOAD_STATUS_HEIGHT, 28.0);
+        assert_eq!(footer_load_status_width(320.0), 320.0);
+        assert_eq!(footer_load_status_label_max_chars(320.0), 37);
         assert_eq!(
             footer_status_text_color(),
             egui::Color32::from_rgb(57, 58, 55)
         );
-        assert_eq!(FOOTER_SETTINGS_BUTTON_SIZE, 40.0);
-        assert_eq!(FOOTER_SETTINGS_BUTTON_RADIUS, 8);
-        assert_eq!(FOOTER_SETTINGS_ICON_SIZE, 24.0);
-        assert_eq!(
-            footer_settings_icon_color(),
-            egui::Color32::from_rgb(72, 72, 72)
-        );
-        assert_eq!(FOOTER_SETTINGS_GEAR_RADIUS, 9.0);
-        assert_eq!(FOOTER_SETTINGS_GEAR_CENTER_RADIUS, 3.5);
-        assert_eq!(FOOTER_SETTINGS_GEAR_TOOTH_INNER_RADIUS, 10.0);
-        assert_eq!(FOOTER_SETTINGS_GEAR_TOOTH_OUTER_RADIUS, 12.0);
-        assert_eq!(FOOTER_SETTINGS_GEAR_STROKE, 2.0);
-        assert_eq!(ADDRESS_HEIGHT, 52.0);
-        assert_eq!(ADDRESS_INPUT_TEXT_SIZE, 20.0);
+        assert!((ADDRESS_HEIGHT - 46.8).abs() < 0.001);
+        assert!((ADDRESS_INPUT_TEXT_SIZE - 18.0).abs() < 0.001);
         assert_eq!(ADDRESS_CORNER_RADIUS, 8);
         assert_eq!(APP_TITLE_WIDTH, 160.0);
         assert_eq!(APP_TITLE_HEIGHT, TAB_STRIP_HEIGHT);
@@ -3632,30 +3581,30 @@ mod tests {
         assert_eq!(home_search_border_color(), slate_theme::BORDER);
         assert_eq!(TOOLBAR_PANEL_MARGIN_X, 18);
         assert_eq!(TOOLBAR_PANEL_MARGIN_Y, 10);
-        assert_eq!(TOOLBAR_ITEM_SPACING, 20.0);
-        assert_eq!(TOOLBAR_BUTTON_SIZE, 40.0);
+        assert!((TOOLBAR_ITEM_SPACING - 18.0).abs() < 0.001);
+        assert!((TOOLBAR_BUTTON_SIZE - 36.0).abs() < 0.001);
         assert_eq!(TOOLBAR_BUTTON_RADIUS, 8);
-        assert_eq!(TOOLBAR_ICON_SIZE, 24.0);
-        assert_eq!(TOOLBAR_NAV_ICON_SIZE, 28.0);
-        assert_eq!(TOOLBAR_NAV_BACK_ICON_OFFSET_X, 8.0);
-        assert_eq!(TOOLBAR_NAV_FORWARD_ICON_OFFSET_X, 7.0);
-        assert_eq!(TOOLBAR_NAV_REFRESH_ICON_OFFSET_X, 6.0);
-        assert_eq!(TOOLBAR_PRIVACY_ICON_SIZE, 40.0);
-        assert_eq!(TOOLBAR_MENU_ICON_WIDTH, 20.0);
-        assert_eq!(TOOLBAR_MENU_ICON_OFFSET_X, -3.0);
-        assert_eq!(TOOLBAR_MENU_ICON_GAP, 8.5);
-        assert_eq!(TOOLBAR_MENU_ICON_STROKE, 2.0);
+        assert!((TOOLBAR_ICON_SIZE - 21.6).abs() < 0.001);
+        assert!((TOOLBAR_NAV_ICON_SIZE - 25.2).abs() < 0.001);
+        assert!((TOOLBAR_NAV_BACK_ICON_OFFSET_X - 7.2).abs() < 0.001);
+        assert!((TOOLBAR_NAV_FORWARD_ICON_OFFSET_X - 6.3).abs() < 0.001);
+        assert!((TOOLBAR_NAV_REFRESH_ICON_OFFSET_X - 5.4).abs() < 0.001);
+        assert!((TOOLBAR_PRIVACY_ICON_SIZE - 36.0).abs() < 0.001);
+        assert!((TOOLBAR_MENU_ICON_WIDTH - 18.0).abs() < 0.001);
+        assert!((TOOLBAR_MENU_ICON_OFFSET_X + 2.7).abs() < 0.001);
+        assert!((TOOLBAR_MENU_ICON_GAP - 7.65).abs() < 0.001);
+        assert!((TOOLBAR_MENU_ICON_STROKE - 1.8).abs() < 0.001);
         assert_eq!(toolbar_menu_icon_color(false), slate_theme::TEXT);
         assert_eq!(toolbar_menu_icon_color(true), slate_theme::TEXT);
-        assert_eq!(TOOLBAR_SEPARATOR_HEIGHT, 28.0);
+        assert!((TOOLBAR_SEPARATOR_HEIGHT - 25.2).abs() < 0.001);
         assert_eq!(
             chrome_vertical_separator_color(),
             egui::Color32::from_rgb(225, 225, 225)
         );
-        assert_eq!(TOOLBAR_SEPARATOR_LEADING_GAP, 18.0);
-        assert_eq!(TOOLBAR_SEPARATOR_TRAILING_GAP, 22.0);
+        assert!((TOOLBAR_SEPARATOR_LEADING_GAP - 16.2).abs() < 0.001);
+        assert!((TOOLBAR_SEPARATOR_TRAILING_GAP - 19.8).abs() < 0.001);
         assert_eq!(TAB_ICON_SIZE, 32.0);
-        assert_eq!(ADDRESS_LEADING_GAP, 20.0);
+        assert!((ADDRESS_LEADING_GAP - 18.0).abs() < 0.001);
         assert_eq!(address_background_color(), slate_theme::FIELD_SURFACE);
         assert_eq!(address_border_color(), slate_theme::FIELD_BORDER);
         assert_eq!(ADDRESS_INNER_MARGIN_X, 18);
@@ -3663,21 +3612,21 @@ mod tests {
         assert_eq!(ADDRESS_SHADOW_BLUR, 6);
         assert_eq!(ADDRESS_SHADOW_SPREAD, 0);
         assert_eq!(ADDRESS_SHADOW_ALPHA, 6);
-        assert_eq!(ADDRESS_SECURITY_ICON_SIZE, 24.0);
-        assert_eq!(ADDRESS_SLATE_SECURITY_ICON_SIZE, 34.0);
-        assert_eq!(ADDRESS_SLATE_SECURITY_ICON_OFFSET_X, -2.0);
-        assert_eq!(ADDRESS_ICON_GAP, 14.0);
-        assert_eq!(ADDRESS_BOOKMARK_ICON_SIZE, 22.0);
+        assert!((ADDRESS_SECURITY_ICON_SIZE - 21.6).abs() < 0.001);
+        assert!((ADDRESS_SLATE_SECURITY_ICON_SIZE - 30.6).abs() < 0.001);
+        assert!((ADDRESS_SLATE_SECURITY_ICON_OFFSET_X + 1.8).abs() < 0.001);
+        assert!((ADDRESS_ICON_GAP - 12.6).abs() < 0.001);
+        assert!((ADDRESS_BOOKMARK_ICON_SIZE - 19.8).abs() < 0.001);
         assert_eq!(
             address_passive_icon_color(),
             egui::Color32::from_rgb(84, 84, 84)
         );
         assert_eq!(address_bookmark_icon_color(), address_passive_icon_color());
-        assert_eq!(ADDRESS_BOOKMARK_BUTTON_SIZE, 28.0);
+        assert!((ADDRESS_BOOKMARK_BUTTON_SIZE - 25.2).abs() < 0.001);
         assert_eq!(ADDRESS_BOOKMARK_BUTTON_RADIUS, 6);
-        assert_eq!(ADDRESS_BOOKMARK_RESERVED_WIDTH, 28.0);
-        assert_eq!(ADDRESS_TRAILING_CONTROLS_WIDTH, 188.0);
-        assert_eq!(ADDRESS_TRAILING_GAP, 6.0);
+        assert!((ADDRESS_BOOKMARK_RESERVED_WIDTH - 25.2).abs() < 0.001);
+        assert!((ADDRESS_TRAILING_CONTROLS_WIDTH - 169.2).abs() < 0.001);
+        assert!((ADDRESS_TRAILING_GAP - 5.4).abs() < 0.001);
         assert_eq!(HOME_TOP_SPACE_FACTOR, 0.18);
         assert_eq!(HOME_TOP_SPACE_MIN, 48.0);
         assert_eq!(HOME_TOP_SPACE_MAX, 132.0);
@@ -3730,6 +3679,48 @@ mod tests {
         assert_eq!(STATUS_BUBBLE_CORNER_RADIUS, 8);
         assert_eq!(STATUS_BUBBLE_SHADOW_ALPHA, 8);
         assert_eq!(STATUS_TEXT_SIZE, 13.0);
+    }
+
+    #[test]
+    fn chrome_element_zoom_is_read_from_internal_settings_url() {
+        assert_eq!(
+            chrome_element_zoom_from_settings_url(
+                &Url::parse("slate://settings?chrome_zoom=0.82").unwrap()
+            ),
+            Some(0.82)
+        );
+        assert_eq!(
+            chrome_element_zoom_from_settings_url(
+                &Url::parse("slate://settings?chrome_zoom=0.10").unwrap()
+            ),
+            Some(CHROME_ELEMENT_ZOOM_MIN)
+        );
+        assert_eq!(
+            chrome_element_zoom_from_settings_url(
+                &Url::parse("slate://settings?chrome_zoom=2.00").unwrap()
+            ),
+            Some(CHROME_ELEMENT_ZOOM_MAX)
+        );
+        assert_eq!(
+            chrome_element_zoom_from_settings_url(
+                &Url::parse("slate://settings?other=0.82").unwrap()
+            ),
+            None
+        );
+        assert_eq!(
+            chrome_element_zoom_from_settings_url(
+                &Url::parse("slate://home?chrome_zoom=0.82").unwrap()
+            ),
+            None
+        );
+        assert!((clamp_chrome_element_zoom(0.9) - 0.9).abs() < 0.001);
+        assert!((chrome_element_zoom_factor(CHROME_ELEMENT_ZOOM) - 1.0).abs() < 0.001);
+        assert!(
+            (chrome_element_zoom_factor(CHROME_ELEMENT_ZOOM_MAX)
+                - CHROME_ELEMENT_ZOOM_MAX / CHROME_ELEMENT_ZOOM)
+                .abs()
+                < 0.001
+        );
     }
 
     #[test]
@@ -3801,19 +3792,25 @@ mod tests {
         assert_rect_close(
             geometry.rail_button_rects[0],
             egui::Rect::from_min_size(
-                egui::pos2(12.0, 100.0),
+                egui::pos2(12.0, 97.8),
                 egui::vec2(RAIL_BUTTON_SIZE, RAIL_BUTTON_SIZE),
             ),
         );
-        assert_eq!(
-            geometry.rail_button_rects[1].center().y - geometry.rail_button_rects[0].center().y,
-            92.0
+        assert!(
+            (geometry.rail_button_rects[1].center().y
+                - geometry.rail_button_rects[0].center().y
+                - 82.8)
+                .abs()
+                < 0.01
         );
-        assert_eq!(
-            geometry.rail_button_rects[3].center().y - geometry.rail_button_rects[0].center().y,
-            276.0
+        assert!(
+            (geometry.rail_button_rects[3].center().y
+                - geometry.rail_button_rects[0].center().y
+                - 248.4)
+                .abs()
+                < 0.01
         );
-        assert_eq!(RAIL_ICON_SIZE, 40.0);
+        assert_eq!(RAIL_ICON_SIZE, 36.0);
     }
 
     #[test]
@@ -3840,30 +3837,30 @@ mod tests {
         assert_rect_close(
             geometry.nav_button_rects[0],
             egui::Rect::from_min_size(
-                egui::pos2(122.0, 100.0),
+                egui::pos2(111.6, 97.8),
                 egui::Vec2::splat(TOOLBAR_BUTTON_SIZE),
             ),
         );
-        assert_eq!(
+        assert!(points_are_close(
             geometry.nav_button_rects[1].center(),
-            egui::pos2(202.0, 120.0)
-        );
-        assert_eq!(
+            egui::pos2(183.6, 115.8)
+        ));
+        assert!(points_are_close(
             geometry.nav_button_rects[2].center(),
-            egui::pos2(262.0, 120.0)
-        );
-        assert_eq!(
-            geometry.nav_icon_rects[0].size(),
-            egui::Vec2::splat(TOOLBAR_NAV_ICON_SIZE)
+            egui::pos2(237.6, 115.8)
+        ));
+        assert!(
+            (geometry.nav_icon_rects[0].size().x - TOOLBAR_NAV_ICON_SIZE).abs() < 0.01
+                && (geometry.nav_icon_rects[0].size().y - TOOLBAR_NAV_ICON_SIZE).abs() < 0.01
         );
         assert_rect_close(
             geometry.address_rect,
-            egui::Rect::from_min_size(egui::pos2(322.0, 94.0), egui::vec2(1180.0, ADDRESS_HEIGHT)),
+            egui::Rect::from_min_size(egui::pos2(291.6, 92.4), egui::vec2(1229.2, ADDRESS_HEIGHT)),
         );
         assert_rect_close(
             geometry.address_security_slot_rect,
             egui::Rect::from_min_size(
-                egui::pos2(340.0, 108.0),
+                egui::pos2(309.6, 105.0),
                 egui::Vec2::splat(ADDRESS_SECURITY_ICON_SIZE),
             ),
         );
@@ -3874,103 +3871,74 @@ mod tests {
         let address_security_visible =
             address_slate_security_visible_rect(geometry.address_slate_security_icon_rect);
         assert!(
-            (341.0..=343.0).contains(&address_security_visible.left()),
-            "expected address shield to start near screenshot x=342: {:?}",
+            (310.0..=312.0).contains(&address_security_visible.left()),
+            "expected address shield to track the compact address field: {:?}",
             geometry.address_slate_security_icon_rect
         );
         assert!(
-            (108.0..=110.0).contains(&address_security_visible.top()),
-            "expected address shield to start near screenshot y=109: {:?}",
+            (105.0..=107.0).contains(&address_security_visible.top()),
+            "expected address shield to track the compact address field: {:?}",
             geometry.address_slate_security_icon_rect
         );
         assert!(
-            (359.0..=361.0).contains(&address_security_visible.right()),
-            "expected address shield to end near screenshot x=360: {:?}",
+            (326.0..=328.0).contains(&address_security_visible.right()),
+            "expected address shield to track the compact address field: {:?}",
             geometry.address_slate_security_icon_rect
         );
         assert!(
-            (130.0..=132.0).contains(&address_security_visible.bottom()),
-            "expected address shield to end near screenshot y=131: {:?}",
+            (125.0..=127.0).contains(&address_security_visible.bottom()),
+            "expected address shield to track the compact address field: {:?}",
             geometry.address_slate_security_icon_rect
         );
         assert_rect_close(
             geometry.address_text_rect,
             egui::Rect::from_min_size(
-                egui::pos2(378.0, 103.0),
-                egui::vec2(1078.0, ADDRESS_TEXT_HEIGHT),
+                egui::pos2(343.8, 100.5),
+                egui::vec2(1133.8, ADDRESS_TEXT_HEIGHT),
             ),
         );
-        assert_eq!(
+        assert!(points_are_close(
             geometry.address_bookmark_button_rect.center(),
-            egui::pos2(1470.0, 120.0)
-        );
+            egui::pos2(1490.2, 115.8)
+        ));
         assert_eq!(
             address_bookmark_icon_rect(geometry.address_bookmark_button_rect),
             geometry.address_bookmark_icon_rect
         );
-        assert_eq!(geometry.address_bookmark_icon_rect.left(), 1459.0);
-        assert_eq!(geometry.address_bookmark_icon_rect.right(), 1481.0);
-        assert_eq!(
+        assert!((geometry.address_bookmark_icon_rect.left() - 1480.3).abs() < 0.01);
+        assert!((geometry.address_bookmark_icon_rect.right() - 1500.1).abs() < 0.01);
+        assert!(points_are_close(
             geometry.privacy_button_rect.center(),
-            egui::pos2(1548.0, 120.0)
-        );
-        assert_eq!(geometry.separator_rect.center().x, 1586.5);
-        assert_eq!(geometry.separator_rect.top(), 106.0);
-        assert_eq!(geometry.separator_rect.bottom(), 134.0);
-        assert_eq!(
+            egui::pos2(1562.2, 115.8)
+        ));
+        assert!((geometry.separator_rect.center().x - 1596.9).abs() < 0.01);
+        assert!((geometry.separator_rect.top() - 103.2).abs() < 0.01);
+        assert!((geometry.separator_rect.bottom() - 128.4).abs() < 0.01);
+        assert!(points_are_close(
             geometry.menu_button_rect.center(),
-            egui::pos2(1629.0, 120.0)
-        );
+            egui::pos2(1635.2, 115.8)
+        ));
     }
 
     #[test]
     fn concept_footer_controls_track_reference_positions() {
         let geometry = concept_footer_controls_geometry();
-        let projected_shield_left =
-            geometry.protection_icon_rect.left() + 6.0 / 28.0 * FOOTER_ICON_SIZE;
-        let projected_shield_right =
-            geometry.protection_icon_rect.left() + 22.0 / 28.0 * FOOTER_ICON_SIZE;
 
         assert_rect_close(
-            geometry.protection_status_rect,
+            geometry.load_status_rect,
             egui::Rect::from_min_size(
-                egui::pos2(116.0, 879.0),
-                egui::vec2(
-                    footer_protection_status_width(),
-                    FOOTER_PROTECTION_STATUS_HEIGHT,
-                ),
+                egui::pos2(109.6, 905.0),
+                egui::vec2(1550.4, FOOTER_LOAD_STATUS_HEIGHT),
             ),
         );
-        assert_eq!(
-            footer_protection_icon_rect(geometry.protection_icon_slot_rect),
-            geometry.protection_icon_rect
-        );
-        assert!(
-            (126.0..=127.0).contains(&projected_shield_left),
-            "expected footer shield to start near screenshot x=127: {:?}",
-            geometry.protection_icon_rect
-        );
-        assert!(
-            (148.0..=149.0).contains(&projected_shield_right),
-            "expected footer shield to end near screenshot x=148: {:?}",
-            geometry.protection_icon_rect
-        );
-        assert_eq!(geometry.load_status_rect.left(), 1391.0);
-        assert_eq!(geometry.load_status_dot_center.x, 1398.0);
-        assert_eq!(geometry.load_status_dot_center.y, 899.0);
-        assert_eq!(geometry.separator_rect.center().x, 1563.5);
-        assert_eq!(geometry.separator_rect.center().y, 899.0);
-        assert_eq!(
-            geometry.settings_button_rect.center(),
-            egui::pos2(1614.0, 899.0)
-        );
-        assert_eq!(geometry.settings_icon_rect.width(), 26.0);
+        assert!((geometry.load_status_dot_center.x - 114.6).abs() < 0.01);
+        assert!((geometry.load_status_dot_center.y - 919.0).abs() < 0.01);
     }
 
     #[test]
     fn wide_toolbar_address_width_leaves_room_for_trailing_controls() {
-        assert_eq!(toolbar_address_width(1332.0), 1144.0);
-        assert_eq!(address_outer_width(toolbar_address_width(1332.0)), 1180.0);
+        assert!((toolbar_address_width(1332.0) - 1162.8).abs() < 0.01);
+        assert!((address_outer_width(toolbar_address_width(1332.0)) - 1198.8).abs() < 0.01);
     }
 
     #[test]
@@ -4030,9 +3998,57 @@ mod tests {
     }
 
     #[test]
+    fn footer_load_status_indicator_pulses_only_while_progress_is_active() {
+        let idle_status = BroadwebStatusSnapshot::idle();
+        let fetching_status = BroadwebStatusSnapshot {
+            kind: BroadwebStatusKind::Fetching,
+            message: "Fetching IPFS content".to_string(),
+            target: Some("ipfs://bafybeigdyrzt".to_string()),
+            gateway: Some("https://w3s.link".to_string()),
+            sequence: 2,
+        };
+
+        assert!(!footer_load_status_is_in_progress(
+            LoadStatus::Complete,
+            &idle_status
+        ));
+        assert!(footer_load_status_is_in_progress(
+            LoadStatus::Started,
+            &idle_status
+        ));
+        assert!(footer_load_status_is_in_progress(
+            LoadStatus::Complete,
+            &fetching_status
+        ));
+        assert_eq!(
+            footer_load_status_indicator_color_at(LoadStatus::Complete, &idle_status, 0.625),
+            footer_load_status_indicator_color(LoadStatus::Complete)
+        );
+        assert_eq!(
+            footer_load_status_indicator_color_at(LoadStatus::Started, &idle_status, 0.0),
+            footer_load_status_indicator_color(LoadStatus::Started)
+        );
+        assert_eq!(
+            footer_load_status_indicator_color_at(LoadStatus::Started, &idle_status, 0.625),
+            footer_load_status_pulse_target_color()
+        );
+        assert_eq!(
+            footer_load_status_indicator_color_at(LoadStatus::Complete, &fetching_status, 0.0),
+            footer_load_status_indicator_color(LoadStatus::Started)
+        );
+    }
+
+    #[test]
     fn address_security_icon_uses_slate_shield_for_home() {
         assert_eq!(
             address_security_icon_for_location("slate://home"),
+            AddressSecurityIcon::Slate {
+                icon: slate_theme::SlateIcon::TopShield,
+                color: address_passive_icon_color(),
+            }
+        );
+        assert_eq!(
+            address_security_icon_for_location("slate://settings"),
             AddressSecurityIcon::Slate {
                 icon: slate_theme::SlateIcon::TopShield,
                 color: address_passive_icon_color(),
@@ -4105,7 +4121,7 @@ mod tests {
 
     #[test]
     fn home_search_width_uses_padding_and_bounds() {
-        assert!((home_search_width(1672.0 - APP_RAIL_WIDTH) - 878.08).abs() < 0.01);
+        assert!((home_search_width(1672.0 - APP_RAIL_WIDTH) - 880.0).abs() < 0.01);
         assert!((home_search_width(1200.0) - 672.0).abs() < 0.01);
         assert!((home_search_width(620.0) - 347.2).abs() < 0.01);
         assert_eq!(home_search_width(250.0), 218.0);
@@ -4116,8 +4132,8 @@ mod tests {
         let viewport_width = concept_screenshot_home_view_size().x;
         let search_width = home_search_width(viewport_width);
 
-        assert!((home_content_left_space(viewport_width, search_width) - 331.96).abs() < 0.01);
-        assert!((home_hero_left_space(viewport_width, HOME_HERO_SIZE) - 716.0).abs() < 0.01);
+        assert!((home_content_left_space(viewport_width, search_width) - 336.2).abs() < 0.01);
+        assert!((home_hero_left_space(viewport_width, HOME_HERO_SIZE) - 721.2).abs() < 0.01);
         assert_eq!(home_content_left_space(220.0, 260.0), 0.0);
         assert_eq!(home_hero_left_space(220.0, 260.0), 0.0);
         assert_eq!(home_content_left_space(100.0, 100.0), 0.0);
@@ -4434,26 +4450,25 @@ mod tests {
             toolbar_navigation_icon_offset_x(slate_theme::SlateIcon::NavRefresh),
             TOOLBAR_NAV_REFRESH_ICON_OFFSET_X
         );
-        assert_eq!(
-            toolbar_navigation_icon_rect(
-                egui::Rect::from_center_size(
-                    egui::pos2(142.0, 120.0),
-                    egui::Vec2::splat(TOOLBAR_BUTTON_SIZE),
-                ),
-                slate_theme::SlateIcon::NavBack,
-            )
-            .size(),
-            egui::Vec2::splat(TOOLBAR_NAV_ICON_SIZE)
+        let nav_icon_size = toolbar_navigation_icon_rect(
+            egui::Rect::from_center_size(
+                egui::pos2(142.0, 120.0),
+                egui::Vec2::splat(TOOLBAR_BUTTON_SIZE),
+            ),
+            slate_theme::SlateIcon::NavBack,
+        )
+        .size();
+        assert!((nav_icon_size.x - TOOLBAR_NAV_ICON_SIZE).abs() < 0.01);
+        assert!((nav_icon_size.y - TOOLBAR_NAV_ICON_SIZE).abs() < 0.01);
+        assert!(
+            (projected_mask_center_x(129.6, slate_theme::SlateIcon::NavBack) - 136.8).abs() < 0.01
         );
         assert!(
-            (projected_mask_center_x(142.0, slate_theme::SlateIcon::NavBack) - 150.0).abs() < 0.01
-        );
-        assert!(
-            (projected_mask_center_x(202.0, slate_theme::SlateIcon::NavForward) - 209.0).abs()
+            (projected_mask_center_x(183.6, slate_theme::SlateIcon::NavForward) - 189.9).abs()
                 < 0.01
         );
         assert!(
-            (projected_mask_center_x(262.0, slate_theme::SlateIcon::NavRefresh) - 268.0).abs()
+            (projected_mask_center_x(237.6, slate_theme::SlateIcon::NavRefresh) - 243.0).abs()
                 < 0.01
         );
     }
@@ -4461,27 +4476,19 @@ mod tests {
     #[test]
     fn toolbar_menu_icon_geometry_matches_reference_glyph() {
         let button_rect =
-            egui::Rect::from_center_size(egui::pos2(1629.0, 120.0), egui::Vec2::splat(40.0));
+            egui::Rect::from_center_size(egui::pos2(1635.2, 115.8), egui::Vec2::splat(40.0));
         let icon_rect = toolbar_menu_icon_rect(button_rect);
 
-        assert_eq!(icon_rect.width(), 22.0);
-        assert_eq!(icon_rect.height(), 19.0);
-        assert_eq!(
+        assert!((icon_rect.width() - 19.8).abs() < 0.01);
+        assert!((icon_rect.height() - 17.1).abs() < 0.01);
+        assert!(points_are_close(
             toolbar_menu_icon_center(button_rect),
-            egui::pos2(1626.0, 120.0)
-        );
-        assert_eq!(icon_rect.center(), egui::pos2(1626.0, 120.0));
-    }
-
-    #[test]
-    fn footer_settings_icon_geometry_matches_reference_glyph() {
-        let button_rect =
-            egui::Rect::from_center_size(egui::pos2(1614.0, 899.0), egui::Vec2::splat(40.0));
-        let icon_rect = footer_settings_icon_rect(button_rect);
-
-        assert_eq!(icon_rect.width(), 26.0);
-        assert_eq!(icon_rect.height(), 26.0);
-        assert_eq!(icon_rect.center(), button_rect.center());
+            egui::pos2(1632.5, 115.8)
+        ));
+        assert!(points_are_close(
+            icon_rect.center(),
+            egui::pos2(1632.5, 115.8)
+        ));
     }
 
     #[test]
@@ -4592,22 +4599,22 @@ mod tests {
         );
         let hero_visible_rect = home_hero_icon_visible_rect(layout.hero_rect);
         assert!(
-            (754.0..=756.0).contains(&hero_visible_rect.center().x),
+            (759.0..=761.0).contains(&hero_visible_rect.center().x),
             "expected hero shield center near screenshot x=860 absolute position: {hero_visible_rect:?}"
         );
         assert!(
-            (331.0..=333.0).contains(&layout.search_rect.left()),
+            (335.0..=337.0).contains(&layout.search_rect.left()),
             "expected search field to start near the screenshot x=436 absolute position: {:?}",
             layout.search_rect
         );
         let search_icon_visible_rect = home_search_icon_visible_rect(layout.search_icon_rect);
         assert!(
-            (368.0..=370.0).contains(&search_icon_visible_rect.left()),
+            (372.0..=374.0).contains(&search_icon_visible_rect.left()),
             "expected search icon to start near the screenshot x=473 absolute position: {:?}",
             search_icon_visible_rect
         );
         assert!(
-            (313.0..=316.0).contains(&search_icon_visible_rect.top()),
+            (319.0..=322.0).contains(&search_icon_visible_rect.top()),
             "expected search icon to track the moved home search field: {:?}",
             search_icon_visible_rect
         );
@@ -4622,22 +4629,22 @@ mod tests {
             layout.hero_rect
         );
         assert!(
-            (220.0..=222.0).contains(&layout.motto_rect.top()),
+            (226.0..=228.0).contains(&layout.motto_rect.top()),
             "expected motto to sit below the home shield: {:?}",
             layout.motto_rect
         );
         assert!(
-            (292.0..=294.0).contains(&layout.search_rect.top()),
+            (299.0..=301.0).contains(&layout.search_rect.top()),
             "expected search to sit near the screenshot vertical rhythm: {:?}",
             layout.search_rect
         );
         assert!(
-            (426.0..=428.0).contains(&layout.metrics_rect.top()),
+            (432.0..=434.0).contains(&layout.metrics_rect.top()),
             "expected metric cards to sit near the screenshot vertical rhythm: {:?}",
             layout.metrics_rect
         );
         assert!(
-            (333.0..=335.0).contains(&layout.metrics_rect.left()),
+            (338.0..=340.0).contains(&layout.metrics_rect.left()),
             "expected metric cards to start near the screenshot horizontal rhythm: {:?}",
             layout.metrics_rect
         );
