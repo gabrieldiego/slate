@@ -167,16 +167,17 @@ The response boundary is intentionally small:
 - headers;
 - content type;
 - body bytes;
-- disposition: render HTML or hand to download flow;
+- disposition: render HTML, hand to download flow, or show an error page;
 - optional download record for profile-temporary non-HTML bodies.
 
 Servo should receive only responses approved by browser-core and fetched
-through this boundary. Top-level non-HTML navigation bodies become
-profile-temporary download records under broadwebd state and are not rendered as
-web documents. Subresource bodies such as CSS, JavaScript, images, and fonts
-must stay resource responses and must not create user download records. The full
-downloads UI can later promote, rename, remove, verify, or persist top-level
-download records.
+through this boundary. Non-2xx responses are response-error pages, not
+downloads, even when the body is plain text or binary. Top-level successful
+non-HTML navigation bodies become profile-temporary download records under
+broadwebd state and are not rendered as web documents. Subresource bodies such
+as CSS, JavaScript, images, and fonts must stay resource responses and must not
+create user download records. The full downloads UI can later promote, rename,
+remove, verify, or persist top-level download records.
 
 ## IPFS Initial Contract
 
