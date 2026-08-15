@@ -9438,6 +9438,7 @@ dependencies = [
  "servo-allocator",
  "servo-webdriver-server",
  "signal-hook-registry",
+ "slate-broadwebd",
  "surfman",
  "tokio",
  "tracing",

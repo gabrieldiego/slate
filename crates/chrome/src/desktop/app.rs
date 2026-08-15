@@ -90,6 +90,14 @@ impl App {
         let _ =
             protocol_registry.register("slate", protocols::slate::SlateProtocolHandler::default());
         let _ = protocol_registry.register(
+            "ipfs",
+            protocols::broadweb::BroadwebProtocolHandler::default(),
+        );
+        let _ = protocol_registry.register(
+            "ipns",
+            protocols::broadweb::BroadwebProtocolHandler::default(),
+        );
+        let _ = protocol_registry.register(
             "resource",
             protocols::resource::ResourceProtocolHandler::default(),
         );
