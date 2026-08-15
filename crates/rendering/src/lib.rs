@@ -1034,6 +1034,15 @@ mod tests {
     }
 
     #[test]
+    fn servo_backend_headless_rendering_smoke_tests() {
+        servo_backend_renders_generated_html_with_servo();
+        servo_backend_executes_css_and_javascript();
+        servo_backend_renders_requested_viewport_size();
+        servo_backend_reads_local_html_file();
+        private_protocol_addresses_do_not_fall_through_to_web();
+        broadweb_schemes_use_servo_protocol_callback();
+    }
+
     fn servo_backend_renders_generated_html_with_servo() {
         let surface = ServoBackend.load_address("slate://tests/hello");
 
@@ -1046,7 +1055,6 @@ mod tests {
         assert!(!document.frame.pixels.is_empty());
     }
 
-    #[test]
     fn servo_backend_executes_css_and_javascript() {
         let surface = ServoBackend.render_html(
             "slate://tests/css-js",
@@ -1066,7 +1074,6 @@ mod tests {
         assert!(!document.frame.pixels.is_empty());
     }
 
-    #[test]
     fn servo_backend_renders_requested_viewport_size() {
         let viewport = RenderViewport::new(640, 360);
         let surface = ServoBackend.render_html_with_viewport(
@@ -1083,7 +1090,6 @@ mod tests {
         assert_eq!(document.frame.height, 360);
     }
 
-    #[test]
     fn servo_backend_reads_local_html_file() {
         let path =
             std::env::temp_dir().join(format!("slate local html {}.html", std::process::id()));
@@ -1110,7 +1116,6 @@ mod tests {
         assert_eq!(document.status, ServoDocumentStatus::Rendered);
     }
 
-    #[test]
     fn private_protocol_addresses_do_not_fall_through_to_web() {
         let surface = ServoBackend.load_address("http://example.onion");
 
@@ -1122,7 +1127,6 @@ mod tests {
         assert_eq!(document.status, ServoDocumentStatus::Rendered);
     }
 
-    #[test]
     fn broadweb_schemes_use_servo_protocol_callback() {
         let surface = ServoBackend.load_address("gemini://example.test");
 
