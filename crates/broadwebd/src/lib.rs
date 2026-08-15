@@ -302,6 +302,7 @@ mod tests {
         assert_eq!(route.profile, "research");
         assert_eq!(route.transport_id, IPFS_GATEWAY_PLUGIN);
         assert!(route.privacy_boundary.contains("local IPFS gateway"));
+        assert_eq!(route.purpose, FetchPurpose::Navigation);
         assert!(
             daemon
                 .state_root()
@@ -378,6 +379,8 @@ mod tests {
             }
         );
         assert_eq!(response.download, None);
+        let route = response.route.expect("route info");
+        assert_eq!(route.purpose, FetchPurpose::Subresource);
         assert!(
             !daemon
                 .state_root()
@@ -896,6 +899,55 @@ mod tests {
         assert_eq!(route.profile, "research");
         assert_eq!(route.transport_id, IPFS_KUBO_RPC_PLUGIN);
         assert!(route.privacy_boundary.contains("local Kubo RPC"));
+        assert_eq!(route.purpose, FetchPurpose::Navigation);
+
+        let _ = fs::remove_dir_all(daemon.state_root().path());
+    }
+
+    #[test]
+    fn http_fetch_does_not_record_kubo_rpc_subresource_downloads() {
+        let (rpc, server) = local_kubo_rpc_fixture("text/css", "body{color:#123}");
+        let mut registry = PluginRegistry::new();
+        registry.register_protocol_service(IpfsService::new(
+            IpfsConfig::with_kubo_rpc(&rpc).expect("Kubo RPC config"),
+        ));
+        registry.register_service(super::HttpFetchService);
+        let daemon = BroadwebDaemon::start_with_registry(
+            test_state_root("kubo-subresource"),
+            Default::default(),
+            registry,
+        )
+        .expect("daemon");
+        let response = daemon
+            .fetch_http(
+                HttpFetchRequest::default_profile("ipfs://bafybeigdyrzt/style.css")
+                    .for_subresource(),
+            )
+            .expect("fetch Kubo subresource fixture");
+        let request = server.join().expect("server");
+
+        assert!(
+            request.contains("POST /api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Fstyle.css HTTP/1.1")
+        );
+        assert_eq!(
+            response.disposition,
+            FetchDisposition::Download {
+                suggested_filename: "style.css".to_string()
+            }
+        );
+        assert_eq!(response.download, None);
+        let route = response.route.expect("route info");
+        assert_eq!(route.profile, "default");
+        assert_eq!(route.transport_id, IPFS_KUBO_RPC_PLUGIN);
+        assert_eq!(route.purpose, FetchPurpose::Subresource);
+        assert!(
+            !daemon
+                .state_root()
+                .profile_root("default")
+                .expect("default profile root")
+                .join("temporary/downloads/style.css")
+                .exists()
+        );
 
         let _ = fs::remove_dir_all(daemon.state_root().path());
     }

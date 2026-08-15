@@ -75,8 +75,8 @@ fn fetch_http(
 purpose. The purpose distinguishes top-level navigations from renderer
 subresources. The `http-fetch` application service annotates successful
 `HttpFetchResponse` values with `FetchRouteInfo`, including the profile id,
-selected transport id, and the selected transport's privacy boundary. Transport
-plugins should not rewrite that profile context.
+selected transport id, selected transport's privacy boundary, and fetch purpose.
+Transport plugins should not rewrite that profile context.
 
 Protocol services implement `ProtocolService`:
 

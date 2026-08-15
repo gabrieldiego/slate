@@ -41,6 +41,7 @@ impl ApplicationServicePlugin for HttpFetchService {
                     url: request.url,
                     purpose: request.purpose,
                 };
+                let purpose = transport_request.purpose;
                 transport
                     .fetch_http(&transport_request, budget)
                     .map(|response| {
@@ -48,6 +49,7 @@ impl ApplicationServicePlugin for HttpFetchService {
                             transport_request.profile,
                             metadata.id,
                             metadata.privacy_boundary,
+                            purpose,
                         ))
                     })
                     .map(ServiceResponse::HttpFetch)

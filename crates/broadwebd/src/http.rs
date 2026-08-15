@@ -70,6 +70,7 @@ pub struct FetchRouteInfo {
     pub profile: String,
     pub transport_id: String,
     pub privacy_boundary: String,
+    pub purpose: FetchPurpose,
 }
 
 impl FetchRouteInfo {
@@ -77,11 +78,13 @@ impl FetchRouteInfo {
         profile: impl Into<String>,
         transport_id: impl Into<String>,
         privacy_boundary: impl Into<String>,
+        purpose: FetchPurpose,
     ) -> Self {
         Self {
             profile: profile.into(),
             transport_id: transport_id.into(),
             privacy_boundary: privacy_boundary.into(),
+            purpose,
         }
     }
 }
