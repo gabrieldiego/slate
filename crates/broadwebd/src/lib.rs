@@ -411,6 +411,18 @@ mod tests {
     }
 
     #[test]
+    fn ipfs_gateway_urls_preserve_cidv0_case() {
+        assert_eq!(
+            ipfs_gateway_http_url(
+                "ipfs://QmUKwop8CmB4ictvQyCJQru97NRVakJFVWpV74guJ89tcb/index.html?filename=Index.html#top",
+                "http://127.0.0.1:8080",
+            )
+            .expect("CIDv0 gateway URL"),
+            "http://127.0.0.1:8080/ipfs/QmUKwop8CmB4ictvQyCJQru97NRVakJFVWpV74guJ89tcb/index.html?filename=Index.html"
+        );
+    }
+
+    #[test]
     fn ipfs_service_registers_gateway_transport_from_config() {
         let service = IpfsService::new(
             IpfsConfig::new("http://127.0.0.1:9090").expect("local gateway config"),
@@ -622,6 +634,18 @@ mod tests {
             ipfs_kubo_cat_url("ipns://example.net/docs/app.js", "http://127.0.0.1:5001/")
                 .expect("Kubo cat url"),
             "http://127.0.0.1:5001/api/v0/cat?arg=%2Fipns%2Fexample.net%2Fdocs%2Fapp.js"
+        );
+    }
+
+    #[test]
+    fn ipfs_kubo_urls_preserve_cidv0_case() {
+        assert_eq!(
+            ipfs_kubo_cat_url(
+                "ipfs://QmUKwop8CmB4ictvQyCJQru97NRVakJFVWpV74guJ89tcb/index.html?a=1",
+                "http://127.0.0.1:5001",
+            )
+            .expect("CIDv0 Kubo cat URL"),
+            "http://127.0.0.1:5001/api/v0/cat?arg=%2Fipfs%2FQmUKwop8CmB4ictvQyCJQru97NRVakJFVWpV74guJ89tcb%2Findex.html"
         );
     }
 

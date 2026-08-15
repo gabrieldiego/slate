@@ -1,10 +1,9 @@
-use super::{IpfsGatewayEndpoint, IpfsGatewayScope};
+use super::{IpfsGatewayEndpoint, IpfsGatewayScope, address::ipfs_url_parts};
 use crate::http::{fetch_http_url, parse_http_url};
 use crate::{
     BroadwebdError, DEFAULT_IPFS_GATEWAY, HttpFetchResponse, IPFS_GATEWAY_PLUGIN, PluginKind,
     PluginMetadata, ResourceBudget, ResourceProfile, TransportHttpRequest, TransportPlugin,
 };
-use url::Url;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IpfsGatewayTransport {
@@ -79,30 +78,17 @@ impl TransportPlugin for IpfsGatewayTransport {
 }
 
 pub fn ipfs_gateway_http_url(source: &str, gateway_base: &str) -> Result<String, BroadwebdError> {
-    let parsed =
-        Url::parse(source).map_err(|error| BroadwebdError::InvalidUrl(error.to_string()))?;
-    let namespace = match parsed.scheme() {
-        "ipfs" => "ipfs",
-        "ipns" => "ipns",
-        scheme => {
-            return Err(BroadwebdError::UnsupportedRequest(format!(
-                "unsupported IPFS gateway scheme: {scheme}"
-            )));
-        }
-    };
-    let name = parsed
-        .host_str()
-        .ok_or_else(|| BroadwebdError::InvalidUrl(format!("{source} is missing a content name")))?;
+    let parts = ipfs_url_parts(source)?;
     let mut output = format!(
         "{}/{}/{}",
         gateway_base.trim_end_matches('/'),
-        namespace,
-        name
+        parts.namespace,
+        parts.name
     );
-    if parsed.path() != "/" {
-        output.push_str(parsed.path());
+    if parts.path != "/" {
+        output.push_str(parts.path);
     }
-    if let Some(query) = parsed.query() {
+    if let Some(query) = parts.query {
         output.push('?');
         output.push_str(query);
     }

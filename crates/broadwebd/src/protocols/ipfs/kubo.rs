@@ -1,3 +1,4 @@
+use super::address::ipfs_url_parts;
 use crate::http::{infer_content_type, parse_http_url};
 use crate::{
     BroadwebdError, DEFAULT_IPFS_KUBO_RPC_API, HttpFetchResponse, HttpHeader, IPFS_KUBO_RPC_PLUGIN,
@@ -144,33 +145,19 @@ fn kubo_cat_url_for_path(content_path: &str, api_base_url: &str) -> Result<Strin
 }
 
 fn ipfs_content_path_candidates(source: &str) -> Result<Vec<String>, BroadwebdError> {
-    let parsed =
-        Url::parse(source).map_err(|error| BroadwebdError::InvalidUrl(error.to_string()))?;
-    let namespace = match parsed.scheme() {
-        "ipfs" => "ipfs",
-        "ipns" => "ipns",
-        scheme => {
-            return Err(BroadwebdError::UnsupportedRequest(format!(
-                "unsupported Kubo RPC scheme: {scheme}"
-            )));
-        }
-    };
-    let name = parsed
-        .host_str()
-        .ok_or_else(|| BroadwebdError::InvalidUrl(format!("{source} is missing a content name")))?;
-    let mut content_path = format!("/{namespace}/{name}");
-    if parsed.path() != "/" {
-        content_path.push_str(parsed.path());
+    let parts = ipfs_url_parts(source)?;
+    let mut content_path = format!("/{}/{}", parts.namespace, parts.name);
+    if parts.path != "/" {
+        content_path.push_str(parts.path);
     }
     let mut candidates = vec![content_path.clone()];
-    if should_try_directory_index(&parsed) {
+    if should_try_directory_index(parts.path) {
         candidates.push(format!("{}/index.html", content_path.trim_end_matches('/')));
     }
     Ok(candidates)
 }
 
-fn should_try_directory_index(url: &Url) -> bool {
-    let path = url.path();
+fn should_try_directory_index(path: &str) -> bool {
     path == "/"
         || path.ends_with('/')
         || path
