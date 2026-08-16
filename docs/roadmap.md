@@ -6,6 +6,19 @@
   before replacing the temporary raster and alpha-mask assets. Once the rendering
   failure is understood and documented, revisit rail and toolbar icons in vector
   format so they scale cleanly on high-resolution displays.
+- Before replacing raster UI icons with vector equivalents, build an efficient
+  automated chrome rendering loop that can render the real browser chrome
+  headlessly, save screenshots, and compare vector UI elements against the
+  current raster assets.
+- The verification loop should combine deterministic checks where practical
+  (pixel bounds, color distribution, stable icon identity, alignment, and
+  sizing) with visual inspection or image-recognition review for artifacts that
+  are hard to express as exact pixel assertions.
+- Keep current icon problems as regression artifacts for that loop instead of
+  fixing them ad hoc first. Known artifacts include the Home house icon looking
+  visually inconsistent with the raster icon theme, and Settings, Web, and Home
+  tabs sometimes showing different tab-label icons because of an apparent icon
+  selection bug.
 
 ## Developer Environment
 
