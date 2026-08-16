@@ -5,6 +5,14 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TemporaryDownloadRecord {
+    pub profile: String,
+    pub filename: String,
+    pub path: PathBuf,
+    pub size_bytes: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StateRoot {
     path: PathBuf,
 }
@@ -57,6 +65,47 @@ impl StateRoot {
         Err(BroadwebdError::UnsupportedRequest(format!(
             "could not allocate a temporary download filename for {filename}"
         )))
+    }
+
+    pub fn temporary_downloads(
+        &self,
+        profile: &str,
+    ) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+        let root = self.profile_root(profile)?;
+        let downloads_root = root.join("temporary").join("downloads");
+        let entries = match fs::read_dir(downloads_root) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) => return Err(error.into()),
+        };
+
+        let mut downloads = Vec::new();
+        for entry in entries {
+            let entry = entry?;
+            let metadata = entry.metadata()?;
+            if !metadata.is_file() {
+                continue;
+            }
+
+            let path = entry.path();
+            let Some(filename) = path
+                .file_name()
+                .and_then(|filename| filename.to_str())
+                .map(ToOwned::to_owned)
+            else {
+                continue;
+            };
+
+            downloads.push(TemporaryDownloadRecord {
+                profile: profile.to_string(),
+                filename,
+                path,
+                size_bytes: metadata.len(),
+            });
+        }
+
+        downloads.sort_by(|first, second| first.filename.cmp(&second.filename));
+        Ok(downloads)
     }
 }
 

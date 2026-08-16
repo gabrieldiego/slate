@@ -55,7 +55,7 @@ pub use registry::{
     ProtocolService, TransportPlugin,
 };
 pub use services::http_fetch::HttpFetchService;
-pub use state::StateRoot;
+pub use state::{StateRoot, TemporaryDownloadRecord};
 pub use status::{BroadwebStatusKind, BroadwebStatusReporter, BroadwebStatusSnapshot};
 pub use transports::direct_http::DirectHttpTransport;
 
@@ -109,7 +109,37 @@ mod tests {
             Some("_ipfs_image_-1.png")
         );
 
+        let downloads = state
+            .temporary_downloads("default")
+            .expect("list temporary downloads");
+        assert_eq!(downloads.len(), 2);
+        assert_eq!(
+            downloads
+                .iter()
+                .find(|download| download.filename == "_ipfs_image_.png")
+                .map(|download| download.size_bytes),
+            Some("download bytes".len() as u64)
+        );
+        assert_eq!(
+            downloads
+                .iter()
+                .find(|download| download.filename == "_ipfs_image_-1.png")
+                .map(|download| download.size_bytes),
+            Some("second".len() as u64)
+        );
+        assert!(state.temporary_downloads("../escape").is_err());
+
+        let empty_root = test_state_root("empty-downloads");
+        let empty_state = StateRoot::prepare(&empty_root).expect("prepare empty state root");
+        assert!(
+            empty_state
+                .temporary_downloads("default")
+                .expect("list empty temporary downloads")
+                .is_empty()
+        );
+
         let _ = fs::remove_dir_all(root);
+        let _ = fs::remove_dir_all(empty_root);
     }
 
     #[test]

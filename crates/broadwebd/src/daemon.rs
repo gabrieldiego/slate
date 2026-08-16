@@ -2,7 +2,7 @@ use crate::{
     ApplicationServicePlugin, BroadwebdError, DEFAULT_PROFILE, DaemonHealth, DaemonLifecycle,
     DownloadRecord, FetchDisposition, FetchPurpose, HttpFetchRequest, HttpFetchResponse,
     IpfsConfig, PluginInstallReport, PluginMetadata, PluginRegistry, ProtocolInstallReport,
-    ProtocolService, ResourceBudget, StateRoot, TransportPlugin,
+    ProtocolService, ResourceBudget, StateRoot, TemporaryDownloadRecord, TransportPlugin,
 };
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -119,6 +119,13 @@ impl BroadwebDaemon {
             return Ok(response);
         }
         self.record_download(profile, response)
+    }
+
+    pub fn temporary_downloads(
+        &self,
+        profile: &str,
+    ) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+        self.state_root.temporary_downloads(profile)
     }
 
     fn record_download(
