@@ -2075,7 +2075,6 @@ impl Gui {
         window: &ServoShellWindow,
         location_dirty: &mut bool,
         toolbar_menu_popup_id: &mut Option<egui::Id>,
-        chrome_element_zoom: f32,
     ) {
         *toolbar_menu_popup_id = Some(egui::Popup::default_response_id(menu_button));
         egui::Popup::menu(menu_button)
@@ -2125,10 +2124,9 @@ impl Gui {
                 ui.add_enabled(false, egui::Button::new("History"));
                 if ui.button("Settings").clicked() {
                     *location_dirty = false;
-                    window.queue_user_interface_command(UserInterfaceCommand::Go(format!(
-                        "slate://settings?chrome_zoom={:.2}",
-                        clamp_chrome_element_zoom(chrome_element_zoom)
-                    )));
+                    window.queue_user_interface_command(UserInterfaceCommand::Go(
+                        "slate://settings".to_string(),
+                    ));
                     ui.close();
                 }
             });
@@ -2967,7 +2965,6 @@ impl Gui {
             location_dirty,
             load_status,
             broadweb_status,
-            chrome_element_zoom,
             favicon_textures,
             slate_icons,
             ..
@@ -3401,7 +3398,6 @@ impl Gui {
                                     window,
                                     location_dirty,
                                     toolbar_menu_popup_id,
-                                    *chrome_element_zoom,
                                 );
                             },
                         );

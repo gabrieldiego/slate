@@ -67,6 +67,25 @@ pub(crate) struct ServoShellWindow {
     pending_commands: RefCell<Vec<UserInterfaceCommand>>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SingletonInternalPage {
+    Downloads,
+    Settings,
+}
+
+fn singleton_internal_page(url: &Url) -> Option<SingletonInternalPage> {
+    if url.scheme() != "slate" {
+        return None;
+    }
+
+    let path = url.path().trim_matches('/');
+    match (url.host_str(), path) {
+        (Some("downloads"), "") | (None, "downloads") => Some(SingletonInternalPage::Downloads),
+        (Some("settings"), "") | (None, "settings") => Some(SingletonInternalPage::Settings),
+        _ => None,
+    }
+}
+
 impl ServoShellWindow {
     pub(crate) fn new(platform_window: Rc<dyn PlatformWindow>) -> Self {
         Self {
@@ -279,6 +298,39 @@ impl ServoShellWindow {
             .cloned()
     }
 
+    fn open_singleton_internal_page(
+        self: &Rc<Self>,
+        state: &Rc<RunningAppState>,
+        url: Url,
+    ) -> bool {
+        let Some(page) = singleton_internal_page(&url) else {
+            return false;
+        };
+
+        let matching_ids = self
+            .webviews()
+            .into_iter()
+            .filter_map(|(id, webview)| {
+                let url = webview.url()?;
+                (singleton_internal_page(&url) == Some(page)).then_some(id)
+            })
+            .collect::<Vec<_>>();
+
+        if let Some(target_id) = matching_ids.last().copied() {
+            for duplicate_id in matching_ids
+                .into_iter()
+                .filter(|webview_id| *webview_id != target_id)
+            {
+                self.close_webview(duplicate_id);
+            }
+            self.activate_webview(target_id);
+        } else {
+            self.create_and_activate_toplevel_webview(state.clone(), url);
+        }
+
+        true
+    }
+
     /// Return a list of all webviews that have favicons that have not yet been loaded by egui.
     #[cfg_attr(any(target_os = "android", target_env = "ohos"), expect(dead_code))]
     pub(crate) fn take_pending_favicon_loads(&self) -> Vec<WebViewId> {
@@ -329,8 +381,12 @@ impl ServoShellWindow {
                         warn!("failed to parse location");
                         break;
                     };
+                    let url = url.into_url();
+                    if self.open_singleton_internal_page(state, url.clone()) {
+                        continue;
+                    }
                     if let Some(active_webview) = self.active_webview() {
-                        active_webview.load(url.into_url());
+                        active_webview.load(url);
                     }
                 }
                 UserInterfaceCommand::Back => {
@@ -463,4 +519,42 @@ pub(crate) trait PlatformWindow {
     }
 
     fn notify_accessibility_tree_update(&self, _: WebView, _: accesskit::TreeUpdate) {}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SingletonInternalPage, singleton_internal_page};
+    use url::Url;
+
+    #[test]
+    fn singleton_internal_page_recognizes_main_settings_and_downloads() {
+        assert_eq!(
+            singleton_internal_page(&Url::parse("slate://downloads").unwrap()),
+            Some(SingletonInternalPage::Downloads)
+        );
+        assert_eq!(
+            singleton_internal_page(&Url::parse("slate:downloads").unwrap()),
+            Some(SingletonInternalPage::Downloads)
+        );
+        assert_eq!(
+            singleton_internal_page(&Url::parse("slate://settings?chrome_zoom=0.82").unwrap()),
+            Some(SingletonInternalPage::Settings)
+        );
+        assert_eq!(
+            singleton_internal_page(&Url::parse("slate:settings").unwrap()),
+            Some(SingletonInternalPage::Settings)
+        );
+        assert_eq!(
+            singleton_internal_page(&Url::parse("slate://downloads/state").unwrap()),
+            None
+        );
+        assert_eq!(
+            singleton_internal_page(&Url::parse("slate://settings/state").unwrap()),
+            None
+        );
+        assert_eq!(
+            singleton_internal_page(&Url::parse("https://example.com").unwrap()),
+            None
+        );
+    }
 }
