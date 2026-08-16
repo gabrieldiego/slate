@@ -103,6 +103,45 @@ pub struct HeadedWindow {
     last_mouse_position: Cell<Option<Point2D<f32, DeviceIndependentPixel>>>,
 }
 
+fn chrome_to_device_scale(
+    pixels_per_point: f32,
+) -> Scale<f32, DeviceIndependentPixel, DevicePixel> {
+    Scale::new(pixels_per_point)
+}
+
+fn chrome_point_to_device_pixel(
+    point: Point2D<f32, DeviceIndependentPixel>,
+    pixels_per_point: f32,
+) -> Point2D<f32, DevicePixel> {
+    point * chrome_to_device_scale(pixels_per_point)
+}
+
+fn chrome_length_to_device_pixel(
+    length: Length<f32, DeviceIndependentPixel>,
+    pixels_per_point: f32,
+) -> Length<f32, DevicePixel> {
+    length * chrome_to_device_scale(pixels_per_point)
+}
+
+fn window_position_to_chrome_point(
+    position: PhysicalPosition<f64>,
+    pixels_per_point: f32,
+) -> Point2D<f32, DeviceIndependentPixel> {
+    winit_position_to_euclid_point(position).to_f32() / chrome_to_device_scale(pixels_per_point)
+}
+
+fn window_position_to_webview_device_point(
+    position: PhysicalPosition<f64>,
+    webview_origin: Point2D<f32, DeviceIndependentPixel>,
+    pixels_per_point: f32,
+) -> Point2D<f32, DevicePixel> {
+    let mut point = winit_position_to_euclid_point(position).to_f32();
+    let origin = chrome_point_to_device_pixel(webview_origin, pixels_per_point);
+    point.x -= origin.x;
+    point.y -= origin.y;
+    point
+}
+
 impl HeadedWindow {
     #[servo::servo_tracing::instrument(level = "debug", name = "HeadedWindow::new", skip_all)]
     pub(crate) fn new(
@@ -296,10 +335,11 @@ impl HeadedWindow {
 
     /// Helper function to handle mouse move events.
     fn handle_mouse_move_event(&self, webview: &WebView, position: PhysicalPosition<f64>) {
-        let mut point = winit_position_to_euclid_point(position).to_f32();
-        let origin = self.webview_origin_device();
-        point.x -= origin.x;
-        point.y -= origin.y;
+        let point = window_position_to_webview_device_point(
+            position,
+            self.gui.borrow().webview_origin(),
+            self.chrome_pixels_per_point(),
+        );
 
         let previous_point = self.webview_relative_mouse_point.get();
         self.webview_relative_mouse_point.set(point);
@@ -522,13 +562,13 @@ impl HeadedWindow {
         self.gui.borrow().toolbar_height()
     }
 
+    fn chrome_pixels_per_point(&self) -> f32 {
+        self.gui.borrow().pixels_per_point()
+    }
+
     fn webview_origin_device(&self) -> Point2D<f32, DevicePixel> {
-        let origin = self.gui.borrow().webview_origin();
-        let scale = self.hidpi_scale_factor();
-        Point2D::new(
-            (Length::new(origin.x) * scale).0,
-            (Length::new(origin.y) * scale).0,
-        )
+        let gui = self.gui.borrow();
+        chrome_point_to_device_pixel(gui.webview_origin(), gui.pixels_per_point())
     }
 
     pub(crate) fn handle_winit_window_event(
@@ -557,9 +597,11 @@ impl HeadedWindow {
         }
 
         if let WindowEvent::CursorMoved { position, .. } = event {
-            self.last_mouse_position.set(Some(
-                winit_position_to_euclid_point(position).to_f32() / self.hidpi_scale_factor(),
-            ));
+            self.last_mouse_position
+                .set(Some(window_position_to_chrome_point(
+                    position,
+                    self.chrome_pixels_per_point(),
+                )));
         }
         let should_forward_mouse_event_to_egui = || {
             // If a dialog is showing, it always captures all mouse events.
@@ -819,7 +861,10 @@ impl PlatformWindow for HeadedWindow {
 
     fn screen_geometry(&self) -> ScreenGeometry {
         let hidpi_factor = self.hidpi_scale_factor();
-        let toolbar_size = Size2D::new(0.0, (self.toolbar_height() * self.hidpi_scale_factor()).0);
+        let toolbar_size = Size2D::new(
+            0.0,
+            chrome_length_to_device_pixel(self.toolbar_height(), self.chrome_pixels_per_point()).0,
+        );
         let screen_size = self.screen_size.to_f32() * hidpi_factor;
 
         // FIXME: In reality, this should subtract screen space used by the system interface
@@ -1372,5 +1417,53 @@ impl TouchEventSimulator {
             TouchPointerType::Touch,
         )));
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const EPSILON: f32 = 0.01;
+
+    fn assert_point_close<Unit>(actual: Point2D<f32, Unit>, expected_x: f32, expected_y: f32) {
+        assert!(
+            (actual.x - expected_x).abs() < EPSILON && (actual.y - expected_y).abs() < EPSILON,
+            "expected ({}, {}) to be close to ({expected_x}, {expected_y})",
+            actual.x,
+            actual.y
+        );
+    }
+
+    #[test]
+    fn window_positions_for_chrome_hit_testing_use_current_egui_zoom() {
+        let webview_origin = Point2D::<f32, DeviceIndependentPixel>::new(93.6, 153.6);
+        let chrome_pixels_per_point = 0.7 / 0.9;
+        let visual_origin = chrome_point_to_device_pixel(webview_origin, chrome_pixels_per_point);
+
+        let hit_test_position = window_position_to_chrome_point(
+            PhysicalPosition::new(visual_origin.x as f64, visual_origin.y as f64),
+            chrome_pixels_per_point,
+        );
+
+        assert_point_close(hit_test_position, webview_origin.x, webview_origin.y);
+    }
+
+    #[test]
+    fn webview_mouse_points_track_visual_origin_when_chrome_zoom_changes() {
+        let webview_origin = Point2D::<f32, DeviceIndependentPixel>::new(93.6, 153.6);
+        let chrome_pixels_per_point = 0.7 / 0.9;
+        let visual_origin = chrome_point_to_device_pixel(webview_origin, chrome_pixels_per_point);
+
+        let webview_point = window_position_to_webview_device_point(
+            PhysicalPosition::new(
+                (visual_origin.x + 12.0) as f64,
+                (visual_origin.y + 24.0) as f64,
+            ),
+            webview_origin,
+            chrome_pixels_per_point,
+        );
+
+        assert_point_close(webview_point, 12.0, 24.0);
     }
 }

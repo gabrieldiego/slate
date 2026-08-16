@@ -1850,6 +1850,10 @@ impl Gui {
         self.webview_origin
     }
 
+    pub(crate) fn pixels_per_point(&self) -> f32 {
+        self.context.egui_ctx.pixels_per_point()
+    }
+
     /// Return true if the given position should be handled by egui chrome.
     pub(crate) fn is_in_egui_toolbar_rect(
         &self,
