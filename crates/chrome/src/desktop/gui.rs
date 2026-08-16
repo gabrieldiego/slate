@@ -236,6 +236,7 @@ pub struct Gui {
     home_favicon_failures: HashSet<String>,
     home_favicon_tx: Sender<HomeFaviconFetchResult>,
     home_favicon_rx: Receiver<HomeFaviconFetchResult>,
+    toolbar_menu_popup_id: Option<egui::Id>,
 
     /// Whether the location has been edited by the user without clicking Go.
     location_dirty: bool,
@@ -293,6 +294,22 @@ fn egui_chrome_owns_position(
     position: Point2D<f32, DeviceIndependentPixel>,
 ) -> bool {
     !Rect::new(webview_origin, webview_size).contains(position) || webview_contains_native_chrome
+}
+
+fn egui_chrome_captures_mouse_position(
+    webview_origin: Point2D<f32, DeviceIndependentPixel>,
+    webview_size: Size2D<f32, DeviceIndependentPixel>,
+    webview_contains_native_chrome: bool,
+    chrome_popup_open: bool,
+    position: Point2D<f32, DeviceIndependentPixel>,
+) -> bool {
+    chrome_popup_open
+        || egui_chrome_owns_position(
+            webview_origin,
+            webview_size,
+            webview_contains_native_chrome,
+            position,
+        )
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -1777,6 +1794,7 @@ impl Gui {
             home_favicon_failures: Default::default(),
             home_favicon_tx,
             home_favicon_rx,
+            toolbar_menu_popup_id: None,
             location_dirty: false,
             load_status: LoadStatus::Complete,
             status_text: None,
@@ -1824,17 +1842,23 @@ impl Gui {
         self.webview_origin
     }
 
-    /// Return true iff the given position is over the egui toolbar.
+    /// Return true if the given position should be handled by egui chrome.
     pub(crate) fn is_in_egui_toolbar_rect(
         &self,
         position: Point2D<f32, DeviceIndependentPixel>,
     ) -> bool {
-        egui_chrome_owns_position(
+        egui_chrome_captures_mouse_position(
             self.webview_origin,
             self.webview_size,
             self.webview_contains_native_chrome,
+            self.is_chrome_popup_open(),
             position,
         )
+    }
+
+    fn is_chrome_popup_open(&self) -> bool {
+        self.toolbar_menu_popup_id
+            .is_some_and(|id| egui::Popup::is_id_open(&self.context.egui_ctx, id))
     }
 
     fn new_tab_button(ui: &mut egui::Ui) -> egui::Response {
@@ -2038,8 +2062,10 @@ impl Gui {
         state: &RunningAppState,
         window: &ServoShellWindow,
         location_dirty: &mut bool,
+        toolbar_menu_popup_id: &mut Option<egui::Id>,
         chrome_element_zoom: f32,
     ) {
+        *toolbar_menu_popup_id = Some(egui::Popup::default_response_id(menu_button));
         egui::Popup::menu(menu_button)
             .align(egui::RectAlign::BOTTOM_END)
             .width(260.0)
@@ -2872,6 +2898,7 @@ impl Gui {
             home_favicon_failures,
             home_favicon_tx,
             home_favicon_rx,
+            toolbar_menu_popup_id,
             location_dirty,
             load_status,
             broadweb_status,
@@ -3300,6 +3327,7 @@ impl Gui {
                                     state,
                                     window,
                                     location_dirty,
+                                    toolbar_menu_popup_id,
                                     *chrome_element_zoom,
                                 );
                             },
@@ -3765,7 +3793,8 @@ mod tests {
         TOOLBAR_MENU_ICON_WIDTH, TOOLBAR_NAV_BACK_ICON_OFFSET_X, TOOLBAR_NAV_FORWARD_ICON_OFFSET_X,
         TOOLBAR_NAV_ICON_SIZE, TOOLBAR_NAV_REFRESH_ICON_OFFSET_X, TOOLBAR_PANEL_MARGIN_X,
         TOOLBAR_PANEL_MARGIN_Y, TOOLBAR_PRIVACY_ICON_SIZE, TOOLBAR_SEPARATOR_HEIGHT,
-        TOOLBAR_SEPARATOR_LEADING_GAP, TOOLBAR_SEPARATOR_TRAILING_GAP, egui_chrome_owns_position,
+        TOOLBAR_SEPARATOR_LEADING_GAP, TOOLBAR_SEPARATOR_TRAILING_GAP,
+        egui_chrome_captures_mouse_position, egui_chrome_owns_position,
     };
     use super::{
         ADDRESS_BOOKMARK_BUTTON_RADIUS, ADDRESS_BOOKMARK_BUTTON_SIZE, ADDRESS_BOOKMARK_ICON_SIZE,
@@ -3931,6 +3960,28 @@ mod tests {
             size,
             false,
             Point2D::new(30.0, origin.y + 36.0),
+        ));
+    }
+
+    #[test]
+    fn open_chrome_popup_captures_mouse_inside_webview_area() {
+        let origin = chrome_webview_origin();
+        let size = Size2D::<f32, DeviceIndependentPixel>::new(900.0, 500.0);
+        let inside_webview = Point2D::new(origin.x + 36.0, origin.y + 36.0);
+
+        assert!(!egui_chrome_captures_mouse_position(
+            origin,
+            size,
+            false,
+            false,
+            inside_webview,
+        ));
+        assert!(egui_chrome_captures_mouse_position(
+            origin,
+            size,
+            false,
+            true,
+            inside_webview,
         ));
     }
 
