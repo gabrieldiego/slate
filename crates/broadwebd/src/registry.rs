@@ -1,4 +1,7 @@
-use crate::protocols::ipfs::{IpfsConfig, IpfsService};
+use crate::protocols::{
+    ipfs::{IpfsConfig, IpfsService},
+    tor::TorService,
+};
 use crate::services::http_fetch::HttpFetchService;
 use crate::transports::direct_http::DirectHttpTransport;
 use crate::{
@@ -95,6 +98,7 @@ impl PluginRegistry {
         let mut registry = Self::with_status(status);
         registry.register_transport(DirectHttpTransport);
         registry.register_protocol_service(IpfsService::new(ipfs_config));
+        registry.register_protocol_service(TorService);
         registry.register_service(HttpFetchService);
         registry
     }
@@ -258,14 +262,15 @@ impl PluginRegistry {
     pub(crate) fn resolve_http_transport(&self, target: &str) -> Result<String, BroadwebdError> {
         let url =
             Url::parse(target).map_err(|error| BroadwebdError::InvalidUrl(error.to_string()))?;
-        if matches!(url.scheme(), "http" | "https") {
-            return Ok(DIRECT_HTTP_PLUGIN.to_string());
-        }
 
         for protocol in self.protocol_services.values() {
             if let Some(transport) = protocol.http_transport_for_url(&url) {
                 return transport;
             }
+        }
+
+        if matches!(url.scheme(), "http" | "https") {
+            return Ok(DIRECT_HTTP_PLUGIN.to_string());
         }
 
         Err(BroadwebdError::UnsupportedRequest(format!(

@@ -18,6 +18,8 @@ pub const HTTP_FETCH_PLUGIN: &str = "http-fetch";
 pub const IPFS_PROTOCOL_SERVICE: &str = "ipfs";
 pub const IPFS_GATEWAY_PLUGIN: &str = "ipfs-gateway";
 pub const IPFS_KUBO_RPC_PLUGIN: &str = "ipfs-kubo-rpc";
+pub const TOR_PROTOCOL_SERVICE: &str = "tor";
+pub const TOR_ARTI_HTTP_PLUGIN: &str = "tor-arti-http";
 pub const DEFAULT_IPFS_GATEWAY: &str = "http://127.0.0.1:8080";
 pub const DEFAULT_IPFS_KUBO_RPC_API: &str = "http://127.0.0.1:5001";
 pub const DEFAULT_PUBLIC_IPFS_GATEWAY: &str = "https://ipfs.filebase.io";
@@ -50,6 +52,11 @@ pub use protocols::ipfs::{
     IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport, IpfsKuboRpcEndpoint,
     IpfsKuboRpcTransport, IpfsService, IpfsTransportKind, ipfs_gateway_http_url, ipfs_kubo_cat_url,
 };
+pub use protocols::tor::{
+    TOR_HTTP_SCHEME, TOR_HTTPS_SCHEME, TorArtiHttpTransport, TorHttpTarget, TorNetworkScheme,
+    TorService, http_response_from_bytes, is_onion_host, is_onion_url, is_tor_http_scheme,
+    normalize_tor_navigation_url, tor_http_target, tor_url_from_http_url,
+};
 pub use registry::{
     ApplicationServicePlugin, PluginInstallReport, PluginRegistry, ProtocolInstallReport,
     ProtocolService, TransportPlugin,
@@ -68,13 +75,16 @@ mod tests {
         IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport, IpfsKuboRpcEndpoint,
         IpfsService, IpfsTransportKind, PluginHealth, PluginKind, PluginMetadata, PluginRegistry,
         ProtocolService, ResourceBudget, ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, StateRoot,
-        TransportHttpRequest, TransportPlugin, ipfs_gateway_http_url, ipfs_kubo_cat_url,
+        TOR_ARTI_HTTP_PLUGIN, TOR_PROTOCOL_SERVICE, TorService, TransportHttpRequest,
+        TransportPlugin, ipfs_gateway_http_url, ipfs_kubo_cat_url, tor_http_target,
+        tor_url_from_http_url,
     };
     use std::fs;
     use std::io::{Read, Write};
     use std::net::TcpListener;
     use std::path::PathBuf;
     use std::thread;
+    use url::Url;
 
     #[test]
     fn state_root_prepares_profile_directories() {
@@ -857,6 +867,66 @@ mod tests {
             transport.fetch_http(&request, &ResourceBudget::default()),
             Err(BroadwebdError::UnsupportedRequest(_))
         ));
+    }
+
+    #[test]
+    fn default_registry_routes_onion_hosts_to_tor_before_direct_http() {
+        let registry = PluginRegistry::with_default_http();
+
+        assert_eq!(
+            registry
+                .resolve_http_transport("http://example.onion/")
+                .expect("resolve onion HTTP"),
+            TOR_ARTI_HTTP_PLUGIN
+        );
+        assert_eq!(
+            registry
+                .resolve_http_transport("tor+http://example.onion/")
+                .expect("resolve Tor HTTP"),
+            TOR_ARTI_HTTP_PLUGIN
+        );
+        assert_eq!(
+            registry
+                .resolve_http_transport("https://example.com/")
+                .expect("resolve ordinary HTTPS"),
+            DIRECT_HTTP_PLUGIN
+        );
+    }
+
+    #[test]
+    fn tor_service_registers_arti_transport() {
+        let service = TorService;
+        let mut registry = PluginRegistry::new();
+        let installs = service.install_adapter_plugins(&mut registry);
+        let metadata = service.metadata();
+
+        assert_eq!(installs.len(), 1);
+        assert_eq!(installs[0].metadata.id, TOR_ARTI_HTTP_PLUGIN);
+        assert_eq!(metadata.id, TOR_PROTOCOL_SERVICE);
+        assert_eq!(
+            metadata.dependencies,
+            vec![TOR_ARTI_HTTP_PLUGIN.to_string()]
+        );
+        assert!(
+            metadata
+                .capabilities
+                .iter()
+                .any(|capability| capability == "onion")
+        );
+    }
+
+    #[test]
+    fn tor_http_urls_are_normalized_without_direct_dns() {
+        let url = Url::parse("http://Example.Onion/docs?a=1#client-only").unwrap();
+        assert_eq!(
+            tor_url_from_http_url(&url).expect("normalize onion URL"),
+            Some("tor+http://example.onion/docs?a=1".to_string())
+        );
+
+        let target = tor_http_target("tor+http://example.onion/docs?a=1").expect("Tor target");
+        assert_eq!(target.host, "example.onion");
+        assert_eq!(target.port, 80);
+        assert_eq!(target.path_and_query, "/docs?a=1");
     }
 
     #[test]
