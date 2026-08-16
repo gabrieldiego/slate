@@ -9,7 +9,7 @@ Current layers:
 - `crates/rendering/`: Slate-owned boundary into Servo rendering.
 - `crates/slate/`: binary composition root.
 
-The first screen should keep the core Slate shape visible: left app rail, top browser tabs, navigation controls, address bar, and a home viewport. Native OS shims may replace or extend platform-specific behavior later, but browser state should remain outside platform code.
+The first screen should keep the core Slate shape visible: left app rail, top browser tabs, navigation controls, address bar, and a home viewport. Home is the user's static personal start page, Web is a singleton broadweb front page for local discovery and history-driven exploration, and blank tabs are transient browsing surfaces created by the `+` control. Native OS shims may replace or extend platform-specific behavior later, but browser state should remain outside platform code.
 
 Headless GUI rendering is a focus feature for Slate. The chrome should be renderable without opening a desktop window so layout, visual regressions, interaction timing, and eventually page rendering can be tested repeatably in automation. Headless output should reuse the same Slate-owned chrome drawing path as the headed UI wherever practical, rather than maintaining a separate mock UI just for tests.
 

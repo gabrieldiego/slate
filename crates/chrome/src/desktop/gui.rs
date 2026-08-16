@@ -38,7 +38,7 @@ use slate_broadwebd::{
     default_session_status_snapshot,
 };
 use slate_storage::{
-    BookmarkRecord, BookmarkUpdate, DEFAULT_HOME_BOOKMARKS, DEFAULT_PROFILE_ID,
+    BookmarkRecord, BookmarkUpdate, DEFAULT_HOME_BOOKMARKS, DEFAULT_PROFILE_ID, HistoryVisitRecord,
     SlateProfileDatabase, StorageError,
 };
 use url::Url;
@@ -49,8 +49,9 @@ use winit::window::Window;
 use crate::desktop::event_loop::AppEvent;
 use crate::desktop::headed_window;
 use crate::desktop::protocols::slate::{
-    self, current_chrome_element_zoom_setting, is_slate_downloads_url, is_slate_home_url,
-    is_slate_settings_url, set_current_chrome_element_zoom_setting,
+    self, current_chrome_element_zoom_setting, is_slate_blank_url, is_slate_downloads_url,
+    is_slate_home_url, is_slate_settings_url, is_slate_web_url,
+    set_current_chrome_element_zoom_setting,
 };
 use crate::desktop::slate_theme::{self, SlateIcon, SlateIconCache, SlateRaster};
 use crate::running_app_state::{RunningAppState, UserInterfaceCommand};
@@ -125,6 +126,8 @@ const TOOLBAR_SEPARATOR_HEIGHT: f32 = 28.0 * CHROME_ELEMENT_ZOOM;
 const TOOLBAR_SEPARATOR_LEADING_GAP: f32 = 18.0 * CHROME_ELEMENT_ZOOM;
 const TOOLBAR_SEPARATOR_TRAILING_GAP: f32 = 22.0 * CHROME_ELEMENT_ZOOM;
 const RAIL_ICON_SIZE: f32 = 40.0 * CHROME_ELEMENT_ZOOM;
+const RAIL_LABEL_TEXT_SIZE: f32 = 12.0 * CHROME_ELEMENT_ZOOM;
+const RAIL_ICON_LABEL_GAP: f32 = 6.0 * CHROME_ELEMENT_ZOOM;
 const RAIL_BUTTON_SIZE: f32 = 80.0 * CHROME_ELEMENT_ZOOM;
 const RAIL_BUTTON_RADIUS: u8 = 8;
 const RAIL_PANEL_MARGIN_X: i8 = 12;
@@ -231,6 +234,7 @@ pub struct Gui {
     home_search: String,
     home_bookmarks: Vec<HomeBookmarkCard>,
     home_bookmarks_loaded: bool,
+    web_history_cards: Vec<HomeBookmarkCard>,
     home_favicon_textures: HashMap<String, (egui::TextureHandle, egui::load::SizedTexture)>,
     home_favicon_fetches: HashSet<String>,
     home_favicon_failures: HashSet<String>,
@@ -376,6 +380,19 @@ enum AddressSecurityIcon {
     Raster(SlateRaster),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum NativeChromePage {
+    Home,
+    Web,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RailPage {
+    Home,
+    Web,
+    Downloads,
+}
+
 fn home_metrics_layout(available_width: f32) -> HomeMetricsLayout {
     let available_width = available_width.max(0.0);
     let columns: usize = if available_width < 360.0 {
@@ -418,7 +435,9 @@ fn address_security_icon_for_location(location: &str) -> AddressSecurityIcon {
     }
 
     match Url::parse(location) {
-        Ok(url) if is_slate_home_url(&url) || is_slate_settings_url(&url) => {
+        Ok(url)
+            if is_slate_home_url(&url) || is_slate_web_url(&url) || is_slate_settings_url(&url) =>
+        {
             AddressSecurityIcon::Slate {
                 icon: SlateIcon::TopShield,
                 color: address_passive_icon_color(),
@@ -762,6 +781,39 @@ fn home_bookmark_placeholder_cards() -> Vec<HomeBookmarkCard> {
     ]
 }
 
+fn web_history_placeholder_cards() -> Vec<HomeBookmarkCard> {
+    vec![
+        HomeBookmarkCard {
+            label: "No history yet".to_string(),
+            detail: "Visit a website".to_string(),
+            url: None,
+            favicon_key: None,
+            favicon_url: None,
+        },
+        HomeBookmarkCard {
+            label: "Recent sites".to_string(),
+            detail: "Stored locally".to_string(),
+            url: None,
+            favicon_key: None,
+            favicon_url: None,
+        },
+        HomeBookmarkCard {
+            label: "Broadweb".to_string(),
+            detail: "HTTP, IPFS, IPNS".to_string(),
+            url: None,
+            favicon_key: None,
+            favicon_url: None,
+        },
+        HomeBookmarkCard {
+            label: "Refresh later".to_string(),
+            detail: "Manual discovery".to_string(),
+            url: None,
+            favicon_key: None,
+            favicon_url: None,
+        },
+    ]
+}
+
 fn default_home_bookmark_cards() -> Vec<HomeBookmarkCard> {
     let mut bookmarks: Vec<_> = DEFAULT_HOME_BOOKMARKS
         .iter()
@@ -769,6 +821,12 @@ fn default_home_bookmark_cards() -> Vec<HomeBookmarkCard> {
         .collect();
     fill_home_bookmark_placeholders(&mut bookmarks);
     bookmarks
+}
+
+fn default_web_history_cards() -> Vec<HomeBookmarkCard> {
+    let mut history = Vec::new();
+    fill_web_history_placeholders(&mut history);
+    history
 }
 
 fn home_bookmark_cards_from_database(
@@ -780,6 +838,24 @@ fn home_bookmark_cards_from_database(
         .collect();
     fill_home_bookmark_placeholders(&mut bookmarks);
     Ok(bookmarks)
+}
+
+fn web_history_cards_from_database(
+    database: &SlateProfileDatabase,
+) -> Result<Vec<HomeBookmarkCard>, slate_storage::StorageError> {
+    Ok(web_history_cards_from_records(
+        database.recent_history(DEFAULT_PROFILE_ID, 16)?,
+    ))
+}
+
+fn web_history_cards_from_records(records: Vec<HistoryVisitRecord>) -> Vec<HomeBookmarkCard> {
+    let mut history: Vec<_> = records
+        .into_iter()
+        .filter_map(web_history_card_from_record)
+        .take(HOME_BOOKMARK_CARD_COUNT)
+        .collect();
+    fill_web_history_placeholders(&mut history);
+    history
 }
 
 fn home_bookmark_records_from_database(
@@ -801,6 +877,15 @@ fn fill_home_bookmark_placeholders(bookmarks: &mut Vec<HomeBookmarkCard>) {
     }
 }
 
+fn fill_web_history_placeholders(history: &mut Vec<HomeBookmarkCard>) {
+    for placeholder in web_history_placeholder_cards() {
+        if history.len() >= HOME_BOOKMARK_CARD_COUNT {
+            break;
+        }
+        history.push(placeholder);
+    }
+}
+
 fn home_bookmark_card_from_record(record: BookmarkRecord) -> HomeBookmarkCard {
     let label = record
         .title
@@ -814,6 +899,20 @@ fn home_bookmark_card_from_record(record: BookmarkRecord) -> HomeBookmarkCard {
             .or_else(|| Some(home_bookmark_favicon_key(url)))
     });
     card
+}
+
+fn web_history_card_from_record(record: HistoryVisitRecord) -> Option<HomeBookmarkCard> {
+    if !is_home_bookmarkable_url(&record.url) {
+        return None;
+    }
+
+    Some(home_bookmark_card(
+        record
+            .title
+            .filter(|title| !title.trim().is_empty())
+            .unwrap_or_else(|| home_bookmark_detail(&record.url)),
+        record.url,
+    ))
 }
 
 fn home_bookmark_card(label: String, url: String) -> HomeBookmarkCard {
@@ -893,7 +992,7 @@ fn is_home_bookmarkable_url(url: &str) -> bool {
     Url::parse(url).ok().is_some_and(|url| {
         !matches!(
             url.scheme(),
-            "about" | "data" | "file" | "javascript" | "slate"
+            "about" | "data" | "file" | "javascript" | "resource" | "servo" | "slate"
         )
     })
 }
@@ -964,8 +1063,24 @@ fn location_matches_slate_url(location: &str, predicate: fn(&Url) -> bool) -> bo
     Url::parse(location).ok().is_some_and(|url| predicate(&url))
 }
 
+fn location_is_home(location: &str) -> bool {
+    location_matches_slate_url(location, is_slate_home_url)
+}
+
+fn location_is_web(location: &str) -> bool {
+    location_matches_slate_url(location, is_slate_web_url)
+}
+
 fn location_is_downloads(location: &str) -> bool {
     location_matches_slate_url(location, is_slate_downloads_url)
+}
+
+fn location_for_toolbar(url: &Url) -> String {
+    if is_slate_blank_url(url) {
+        String::new()
+    } else {
+        url.to_string()
+    }
 }
 
 fn clamp_chrome_element_zoom(zoom: f32) -> f32 {
@@ -1033,7 +1148,7 @@ struct ConceptChromeGeometry {
     tab_rects: [egui::Rect; 3],
     new_tab_slot_rect: egui::Rect,
     new_tab_button_rect: egui::Rect,
-    rail_button_rects: [egui::Rect; 4],
+    rail_button_rects: [egui::Rect; 5],
     app_rail_rect: egui::Rect,
     toolbar_rect: egui::Rect,
     toolbar_content_rect: egui::Rect,
@@ -1114,6 +1229,10 @@ fn concept_chrome_geometry() -> ConceptChromeGeometry {
         ),
         egui::Rect::from_min_size(
             egui::pos2(rail_button_left, first_rail_button_top + rail_step * 3.0),
+            egui::vec2(RAIL_BUTTON_SIZE, RAIL_BUTTON_SIZE),
+        ),
+        egui::Rect::from_min_size(
+            egui::pos2(rail_button_left, first_rail_button_top + rail_step * 4.0),
             egui::vec2(RAIL_BUTTON_SIZE, RAIL_BUTTON_SIZE),
         ),
     ];
@@ -1797,6 +1916,7 @@ impl Gui {
             home_search: String::new(),
             home_bookmarks: default_home_bookmark_cards(),
             home_bookmarks_loaded: false,
+            web_history_cards: default_web_history_cards(),
             home_favicon_textures: Default::default(),
             home_favicon_fetches: Default::default(),
             home_favicon_failures: Default::default(),
@@ -2227,12 +2347,30 @@ impl Gui {
         }
     }
 
-    fn active_webview_is_home(window: &ServoShellWindow) -> bool {
+    fn native_chrome_page_for_url(url: &Url) -> Option<NativeChromePage> {
+        if is_slate_home_url(url) {
+            Some(NativeChromePage::Home)
+        } else if is_slate_web_url(url) {
+            Some(NativeChromePage::Web)
+        } else {
+            None
+        }
+    }
+
+    fn active_native_chrome_page(window: &ServoShellWindow) -> Option<NativeChromePage> {
         window
             .active_webview()
             .and_then(|webview| webview.url())
             .as_ref()
-            .is_some_and(is_slate_home_url)
+            .and_then(Self::native_chrome_page_for_url)
+    }
+
+    fn active_webview_is_blank(window: &ServoShellWindow) -> bool {
+        window
+            .active_webview()
+            .and_then(|webview| webview.url())
+            .as_ref()
+            .is_some_and(is_slate_blank_url)
     }
 
     fn rail_icon_button(
@@ -2240,7 +2378,7 @@ impl Gui {
         slate_icons: &mut SlateIconCache,
         icon: SlateIcon,
         selected: bool,
-        tooltip: &str,
+        label: &str,
     ) -> egui::Response {
         let texture = slate_icons.texture(ui.ctx(), icon, rail_icon_color(selected));
 
@@ -2251,39 +2389,64 @@ impl Gui {
             if fill != egui::Color32::TRANSPARENT {
                 ui.painter().rect_filled(rect, RAIL_BUTTON_RADIUS, fill);
             }
-            let icon_rect =
-                egui::Rect::from_center_size(rect.center(), Vec2::splat(RAIL_ICON_SIZE));
+            let icon_center = egui::pos2(
+                rect.center().x,
+                rect.center().y - (RAIL_LABEL_TEXT_SIZE + RAIL_ICON_LABEL_GAP) / 2.0,
+            );
+            let icon_rect = egui::Rect::from_center_size(icon_center, Vec2::splat(RAIL_ICON_SIZE));
             ui.painter().image(
                 texture.id,
                 icon_rect,
                 egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
                 egui::Color32::WHITE,
             );
+            ui.painter().text(
+                egui::pos2(
+                    rect.center().x,
+                    icon_rect.bottom() + RAIL_ICON_LABEL_GAP + RAIL_LABEL_TEXT_SIZE / 2.0,
+                ),
+                egui::Align2::CENTER_CENTER,
+                label,
+                egui::FontId::proportional(RAIL_LABEL_TEXT_SIZE),
+                rail_icon_color(selected),
+            );
         }
 
         response.widget_info(|| {
             let mut info = WidgetInfo::new(WidgetType::Button);
-            info.label = Some(tooltip.into());
+            info.label = Some(label.into());
             info.selected = Some(selected);
             info
         });
-        response.on_hover_text(tooltip)
+        response.on_hover_text(label)
     }
 
     fn draw_app_rail(
         ui: &mut egui::Ui,
         slate_icons: &mut SlateIconCache,
-        downloads_active: bool,
-    ) -> (bool, bool) {
+        active_page: Option<RailPage>,
+    ) -> (bool, bool, bool) {
+        let mut home_clicked = false;
         let mut web_clicked = false;
         let mut downloads_clicked = false;
         ui.vertical_centered(|ui| {
             ui.add_space(RAIL_TOP_SPACE);
+            let home_button = Self::rail_icon_button(
+                ui,
+                slate_icons,
+                SlateIcon::AppHome,
+                active_page == Some(RailPage::Home),
+                "Home",
+            );
+            if home_button.clicked() {
+                home_clicked = true;
+            }
+            ui.add_space(RAIL_ITEM_GAP);
             let web_button = Self::rail_icon_button(
                 ui,
                 slate_icons,
                 SlateIcon::AppWeb,
-                !downloads_active,
+                active_page == Some(RailPage::Web),
                 "Web",
             );
             if web_button.clicked() {
@@ -2294,7 +2457,7 @@ impl Gui {
                 ui,
                 slate_icons,
                 SlateIcon::AppDownloads,
-                downloads_active,
+                active_page == Some(RailPage::Downloads),
                 "Downloads",
             );
             if downloads_button.clicked() {
@@ -2305,7 +2468,7 @@ impl Gui {
             ui.add_space(RAIL_ITEM_GAP);
             Self::rail_icon_button(ui, slate_icons, SlateIcon::AppMessaging, false, "Messages");
         });
-        (web_clicked, downloads_clicked)
+        (home_clicked, web_clicked, downloads_clicked)
     }
 
     fn draw_interactive_app_rail(
@@ -2315,12 +2478,26 @@ impl Gui {
         location_dirty: &mut bool,
         location: &str,
     ) {
-        let (web_clicked, downloads_clicked) =
-            Self::draw_app_rail(ui, slate_icons, location_is_downloads(location));
-        if web_clicked {
+        let active_page = if location_is_home(location) {
+            Some(RailPage::Home)
+        } else if location_is_web(location) {
+            Some(RailPage::Web)
+        } else if location_is_downloads(location) {
+            Some(RailPage::Downloads)
+        } else {
+            None
+        };
+        let (home_clicked, web_clicked, downloads_clicked) =
+            Self::draw_app_rail(ui, slate_icons, active_page);
+        if home_clicked {
             *location_dirty = false;
             window
                 .queue_user_interface_command(UserInterfaceCommand::Go("slate://home".to_string()));
+        }
+        if web_clicked {
+            *location_dirty = false;
+            window
+                .queue_user_interface_command(UserInterfaceCommand::Go("slate://web".to_string()));
         }
         if downloads_clicked {
             *location_dirty = false;
@@ -2827,7 +3004,9 @@ impl Gui {
         tab_width: f32,
     ) -> egui::Rect {
         let label = match (webview.page_title(), webview.url()) {
-            (_, Some(url)) if is_slate_home_url(&url) => "New Tab".into(),
+            (_, Some(url)) if is_slate_home_url(&url) => "Home".into(),
+            (_, Some(url)) if is_slate_web_url(&url) => "Web".into(),
+            (_, Some(url)) if is_slate_blank_url(&url) => "New Tab".into(),
             (Some(title), _) if !title.is_empty() => title,
             (_, Some(url)) => url.to_string(),
             _ => "New Tab".into(),
@@ -2944,7 +3123,12 @@ impl Gui {
             .expect("Could not make RenderingContext current");
         self.update_broadweb_status();
         self.update_chrome_element_zoom(window);
+        let active_native_chrome_page = Self::active_native_chrome_page(window);
+        let active_webview_is_blank = Self::active_webview_is_blank(window);
         let _ = self.update_home_bookmarks(&state.profile_database);
+        if active_native_chrome_page == Some(NativeChromePage::Web) {
+            let _ = self.update_web_history(&state.profile_database);
+        }
         let effective_egui_zoom_factor = self.effective_egui_zoom_factor();
         let Self {
             rendering_context,
@@ -2956,6 +3140,7 @@ impl Gui {
             location,
             home_search,
             home_bookmarks,
+            web_history_cards,
             home_favicon_textures,
             home_favicon_fetches,
             home_favicon_failures,
@@ -2975,20 +3160,21 @@ impl Gui {
             slate_theme::apply(ctx);
             ctx.set_zoom_factor(effective_egui_zoom_factor);
             load_pending_favicons(ctx, window, favicon_textures);
-            let active_webview_is_home = Self::active_webview_is_home(window);
-            *webview_contains_native_chrome = active_webview_is_home;
-            if active_webview_is_home
-                && Self::update_home_bookmark_favicons(
-                    ctx,
-                    &state.profile_database,
-                    home_bookmarks,
-                    home_favicon_textures,
-                    home_favicon_fetches,
-                    home_favicon_failures,
-                    home_favicon_rx,
-                    home_favicon_tx,
-                )
-            {
+            *webview_contains_native_chrome = active_native_chrome_page.is_some();
+            if let Some(active_cards) = match active_native_chrome_page {
+                Some(NativeChromePage::Home) => Some(home_bookmarks.as_slice()),
+                Some(NativeChromePage::Web) => Some(web_history_cards.as_slice()),
+                None => None,
+            } && Self::update_home_bookmark_favicons(
+                ctx,
+                &state.profile_database,
+                active_cards,
+                home_favicon_textures,
+                home_favicon_fetches,
+                home_favicon_failures,
+                home_favicon_rx,
+                home_favicon_tx,
+            ) {
                 ctx.request_repaint();
             }
 
@@ -3322,6 +3508,12 @@ impl Gui {
                                     })
                                     .inner;
 
+                                if active_webview_is_blank
+                                    && !*location_dirty
+                                    && !location_field.has_focus()
+                                {
+                                    location_field.request_focus();
+                                }
                                 if location_field.changed() {
                                     *location_dirty = true;
                                 }
@@ -3451,14 +3643,18 @@ impl Gui {
                 webview.resize(PhysicalSize::new(size.width as u32, size.height as u32))
             }
 
-            if active_webview_is_home {
+            if let Some(active_cards) = match active_native_chrome_page {
+                Some(NativeChromePage::Home) => Some(home_bookmarks.as_slice()),
+                Some(NativeChromePage::Web) => Some(web_history_cards.as_slice()),
+                None => None,
+            } {
                 Self::draw_home_view(
                     ctx,
                     available_rect,
                     slate_icons,
                     home_favicon_textures,
                     home_search,
-                    home_bookmarks,
+                    active_cards,
                     window,
                 );
             }
@@ -3476,7 +3672,7 @@ impl Gui {
                 ctx.request_repaint_after(Duration::from_millis(100));
             }
 
-            if !active_webview_is_home {
+            if active_native_chrome_page.is_none() {
                 window.repaint_webviews();
 
                 if let Some(render_to_parent) = rendering_context.render_to_parent_callback() {
@@ -3534,7 +3730,7 @@ impl Gui {
 
         let current_url_string = window
             .active_webview()
-            .and_then(|webview| Some(webview.url()?.to_string()));
+            .and_then(|webview| Some(location_for_toolbar(&webview.url()?)));
         match current_url_string {
             Some(location) if location != self.location => {
                 self.location = location;
@@ -3711,6 +3907,21 @@ impl Gui {
         true
     }
 
+    fn update_web_history(&mut self, database: &SlateProfileDatabase) -> bool {
+        let Ok(history) = web_history_cards_from_database(database).inspect_err(|error| {
+            warn!("failed to load web history: {error}");
+        }) else {
+            return false;
+        };
+
+        if history == self.web_history_cards {
+            return false;
+        }
+
+        self.web_history_cards = history;
+        true
+    }
+
     fn update_status_text(&mut self, window: &ServoShellWindow) -> bool {
         let state_status = window
             .active_webview()
@@ -3823,7 +4034,9 @@ mod tests {
     use euclid::{Point2D, Size2D};
     use servo::{DeviceIndependentPixel, LoadStatus};
     use slate_broadwebd::{BroadwebStatusKind, BroadwebStatusSnapshot};
-    use slate_storage::{BookmarkRecord, DEFAULT_HOME_BOOKMARKS, DEFAULT_PROFILE_ID};
+    use slate_storage::{
+        BookmarkRecord, DEFAULT_HOME_BOOKMARKS, DEFAULT_PROFILE_ID, HistoryVisitRecord,
+    };
     use url::Url;
 
     use super::{
@@ -3899,15 +4112,16 @@ mod tests {
         home_search_icon_visible_rect, home_search_rendered_height, home_search_width,
         home_top_space, home_view_background_color, inactive_tab_background_color,
         inactive_tab_hover_background_color, inactive_tab_outline_color,
-        inactive_tab_outline_points, is_home_bookmarkable_url, location_is_downloads,
-        new_tab_icon_color, rail_button_fill, rail_icon_color, rail_selected_button_fill,
-        slate_theme, status_bubble_label, status_bubble_width, tab_close_button_rect,
-        tab_close_icon_color, tab_close_raster, tab_content_width, tab_corner_radius,
-        tab_icon_color, tab_icon_slot_rect, tab_strip_background_color, tab_strip_separator_color,
-        tab_title_color, tab_title_left, tab_title_width, tab_width_for_strip,
-        toolbar_address_width, toolbar_background_color, toolbar_menu_icon_center,
-        toolbar_menu_icon_color, toolbar_menu_icon_rect, toolbar_navigation_icon_color,
-        toolbar_navigation_icon_offset_x, toolbar_navigation_icon_rect, toolbar_navigation_raster,
+        inactive_tab_outline_points, is_home_bookmarkable_url, location_for_toolbar,
+        location_is_downloads, location_is_home, location_is_web, new_tab_icon_color,
+        rail_button_fill, rail_icon_color, rail_selected_button_fill, slate_theme,
+        status_bubble_label, status_bubble_width, tab_close_button_rect, tab_close_icon_color,
+        tab_close_raster, tab_content_width, tab_corner_radius, tab_icon_color, tab_icon_slot_rect,
+        tab_strip_background_color, tab_strip_separator_color, tab_title_color, tab_title_left,
+        tab_title_width, tab_width_for_strip, toolbar_address_width, toolbar_background_color,
+        toolbar_menu_icon_center, toolbar_menu_icon_color, toolbar_menu_icon_rect,
+        toolbar_navigation_icon_color, toolbar_navigation_icon_offset_x,
+        toolbar_navigation_icon_rect, toolbar_navigation_raster, web_history_cards_from_records,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -3935,6 +4149,17 @@ mod tests {
             favicon_key: None,
             created_at: 1,
             updated_at: 1,
+        }
+    }
+
+    fn history_record(url: &str, title: Option<&str>, last_visited_at: i64) -> HistoryVisitRecord {
+        HistoryVisitRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            url: url.to_string(),
+            title: title.map(ToOwned::to_owned),
+            first_visited_at: 0,
+            last_visited_at,
+            visit_count: 1,
         }
     }
 
@@ -4060,6 +4285,53 @@ mod tests {
         assert!(location_is_downloads("slate:downloads"));
         assert!(!location_is_downloads("slate://home"));
         assert!(!location_is_downloads("https://example.com"));
+    }
+
+    #[test]
+    fn rail_page_selection_matches_home_and_web_internal_pages() {
+        assert!(location_is_home("slate://home"));
+        assert!(location_is_home("slate:home"));
+        assert!(!location_is_home("slate://web"));
+
+        assert!(location_is_web("slate://web"));
+        assert!(location_is_web("slate:web"));
+        assert!(!location_is_web("slate://home"));
+    }
+
+    #[test]
+    fn blank_internal_url_displays_empty_location() {
+        assert_eq!(
+            location_for_toolbar(&Url::parse("slate://blank").unwrap()),
+            ""
+        );
+        assert_eq!(
+            location_for_toolbar(&Url::parse("slate://home").unwrap()),
+            "slate://home"
+        );
+    }
+
+    #[test]
+    fn web_history_cards_use_recent_external_history() {
+        let cards = web_history_cards_from_records(vec![
+            history_record("slate://settings", Some("Settings"), 5),
+            history_record("https://example.com/", Some("Example"), 4),
+            history_record("ipfs://bafybeigdyrzt/readme.txt", None, 3),
+            history_record("file:///tmp/local.html", Some("Local"), 2),
+            history_record("https://servo.org/", Some("Servo"), 1),
+        ]);
+
+        assert_eq!(cards.len(), 4);
+        assert_eq!(cards[0].label, "Example");
+        assert_eq!(cards[0].url.as_deref(), Some("https://example.com/"));
+        assert_eq!(cards[1].label, "ipfs://bafybeigdyrzt");
+        assert_eq!(
+            cards[1].url.as_deref(),
+            Some("ipfs://bafybeigdyrzt/readme.txt")
+        );
+        assert_eq!(cards[2].label, "Servo");
+        assert_eq!(cards[2].url.as_deref(), Some("https://servo.org/"));
+        assert_eq!(cards[3].label, "No history yet");
+        assert!(cards[3].url.is_none());
     }
 
     #[test]
@@ -4658,6 +4930,13 @@ mod tests {
     fn address_security_icon_uses_slate_shield_for_home() {
         assert_eq!(
             address_security_icon_for_location("slate://home"),
+            AddressSecurityIcon::Slate {
+                icon: slate_theme::SlateIcon::TopShield,
+                color: address_passive_icon_color(),
+            }
+        );
+        assert_eq!(
+            address_security_icon_for_location("slate://web"),
             AddressSecurityIcon::Slate {
                 icon: slate_theme::SlateIcon::TopShield,
                 color: address_passive_icon_color(),
@@ -5267,6 +5546,8 @@ mod tests {
         assert!(is_home_bookmarkable_url("gemini://example.com/"));
         assert!(!is_home_bookmarkable_url("slate://home"));
         assert!(!is_home_bookmarkable_url("file:///tmp/index.html"));
+        assert!(!is_home_bookmarkable_url("resource://servo/user-agent.css"));
+        assert!(!is_home_bookmarkable_url("servo://resources/prefs"));
     }
 
     #[test]

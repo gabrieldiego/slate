@@ -70,13 +70,14 @@ pub(crate) struct ServoShellWindow {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ReusableInternalPage {
     Home,
+    Web,
     Downloads,
     Settings,
 }
 
 impl ReusableInternalPage {
     fn closes_duplicates(self) -> bool {
-        matches!(self, Self::Downloads | Self::Settings)
+        true
     }
 
     fn existing_target_index(self, matching_count: usize) -> Option<usize> {
@@ -85,8 +86,7 @@ impl ReusableInternalPage {
         }
 
         match self {
-            Self::Home => Some(0),
-            Self::Downloads | Self::Settings => Some(matching_count - 1),
+            Self::Home | Self::Web | Self::Downloads | Self::Settings => Some(matching_count - 1),
         }
     }
 }
@@ -99,6 +99,7 @@ fn reusable_internal_page(url: &Url) -> Option<ReusableInternalPage> {
     let path = url.path().trim_matches('/');
     match (url.host_str(), path) {
         (Some("home"), "") | (None, "home") => Some(ReusableInternalPage::Home),
+        (Some("web"), "") | (None, "web") => Some(ReusableInternalPage::Web),
         (Some("downloads"), "") | (None, "downloads") => Some(ReusableInternalPage::Downloads),
         (Some("settings"), "") | (None, "settings") => Some(ReusableInternalPage::Settings),
         _ => None,
@@ -435,7 +436,7 @@ impl ServoShellWindow {
                 }
                 UserInterfaceCommand::NewWebView => {
                     self.set_needs_update();
-                    let url = Url::parse("slate://home").expect("Should always be able to parse");
+                    let url = Url::parse("slate://blank").expect("Should always be able to parse");
                     self.create_and_activate_toplevel_webview(state.clone(), url);
                 }
                 UserInterfaceCommand::CloseWebView(id) => {
@@ -557,6 +558,14 @@ mod tests {
             Some(ReusableInternalPage::Home)
         );
         assert_eq!(
+            reusable_internal_page(&Url::parse("slate://web").unwrap()),
+            Some(ReusableInternalPage::Web)
+        );
+        assert_eq!(
+            reusable_internal_page(&Url::parse("slate:web").unwrap()),
+            Some(ReusableInternalPage::Web)
+        );
+        assert_eq!(
             reusable_internal_page(&Url::parse("slate://downloads").unwrap()),
             Some(ReusableInternalPage::Downloads)
         );
@@ -577,6 +586,14 @@ mod tests {
             None
         );
         assert_eq!(
+            reusable_internal_page(&Url::parse("slate://web/state").unwrap()),
+            None
+        );
+        assert_eq!(
+            reusable_internal_page(&Url::parse("slate://blank").unwrap()),
+            None
+        );
+        assert_eq!(
             reusable_internal_page(&Url::parse("slate://downloads/state").unwrap()),
             None
         );
@@ -591,16 +608,18 @@ mod tests {
     }
 
     #[test]
-    fn reusable_internal_page_only_deduplicates_singleton_apps() {
-        assert!(!ReusableInternalPage::Home.closes_duplicates());
+    fn reusable_internal_page_deduplicates_app_pages() {
+        assert!(ReusableInternalPage::Home.closes_duplicates());
+        assert!(ReusableInternalPage::Web.closes_duplicates());
         assert!(ReusableInternalPage::Downloads.closes_duplicates());
         assert!(ReusableInternalPage::Settings.closes_duplicates());
     }
 
     #[test]
-    fn reusable_internal_page_focuses_leftmost_home_tab() {
+    fn reusable_internal_page_focuses_newest_existing_app_page() {
         assert_eq!(ReusableInternalPage::Home.existing_target_index(0), None);
-        assert_eq!(ReusableInternalPage::Home.existing_target_index(3), Some(0));
+        assert_eq!(ReusableInternalPage::Home.existing_target_index(3), Some(2));
+        assert_eq!(ReusableInternalPage::Web.existing_target_index(3), Some(2));
         assert_eq!(
             ReusableInternalPage::Downloads.existing_target_index(3),
             Some(2)

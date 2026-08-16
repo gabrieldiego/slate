@@ -55,7 +55,9 @@ impl SlateProtocolHandler {
 impl ProtocolHandler for SlateProtocolHandler {
     fn privileged_paths(&self) -> &'static [&'static str] {
         &[
+            "blank",
             "home",
+            "web",
             "settings",
             "settings/state",
             "settings/preview",
@@ -105,8 +107,12 @@ impl ProtocolHandler for SlateProtocolHandler {
             return chrome_zoom_json_response(request, zoom);
         }
 
-        let resource_path = if is_slate_home_url(url.as_url()) {
+        let resource_path = if is_slate_blank_url(url.as_url()) {
+            Some("/slate-blank.html")
+        } else if is_slate_home_url(url.as_url()) {
             Some("/slate-home.html")
+        } else if is_slate_web_url(url.as_url()) {
+            Some("/slate-web.html")
         } else if is_slate_downloads_url(url.as_url()) {
             Some("/slate-downloads.html")
         } else if is_slate_settings_url(url.as_url()) {
@@ -405,9 +411,19 @@ fn is_supported_download_target(url: &Url) -> bool {
     matches!(url.scheme(), "http" | "https" | "ipfs" | "ipns")
 }
 
+pub(crate) fn is_slate_blank_url(url: &Url) -> bool {
+    url.scheme() == "slate"
+        && (url.host_str() == Some("blank") || url.path().trim_start_matches('/') == "blank")
+}
+
 pub(crate) fn is_slate_home_url(url: &Url) -> bool {
     url.scheme() == "slate"
         && (url.host_str() == Some("home") || url.path().trim_start_matches('/') == "home")
+}
+
+pub(crate) fn is_slate_web_url(url: &Url) -> bool {
+    url.scheme() == "slate"
+        && (url.host_str() == Some("web") || url.path().trim_start_matches('/') == "web")
 }
 
 pub(crate) fn is_slate_downloads_url(url: &Url) -> bool {
@@ -460,10 +476,11 @@ fn is_slate_settings_apply_url(url: &Url) -> bool {
 mod tests {
     use super::{
         CHROME_ELEMENT_ZOOM_SETTING_MAX, CHROME_ELEMENT_ZOOM_SETTING_MIN,
-        chrome_element_zoom_setting_from_url, download_request_from_url,
+        chrome_element_zoom_setting_from_url, download_request_from_url, is_slate_blank_url,
         is_slate_download_request_url, is_slate_downloads_state_url, is_slate_downloads_url,
         is_slate_home_url, is_slate_settings_apply_url, is_slate_settings_preview_url,
-        is_slate_settings_save_url, is_slate_settings_url, slate_download_error_html,
+        is_slate_settings_save_url, is_slate_settings_url, is_slate_web_url,
+        slate_download_error_html,
     };
     use slate_broadwebd::FetchPurpose;
     use slate_broadwebd::TemporaryDownloadRecord;
@@ -476,6 +493,22 @@ mod tests {
         assert!(is_slate_home_url(&Url::parse("slate:home").unwrap()));
         assert!(!is_slate_home_url(&Url::parse("slate://settings").unwrap()));
         assert!(!is_slate_home_url(&Url::parse("https://home").unwrap()));
+    }
+
+    #[test]
+    fn slate_blank_url_matches_host_and_path_forms() {
+        assert!(is_slate_blank_url(&Url::parse("slate://blank").unwrap()));
+        assert!(is_slate_blank_url(&Url::parse("slate:blank").unwrap()));
+        assert!(!is_slate_blank_url(&Url::parse("slate://home").unwrap()));
+        assert!(!is_slate_blank_url(&Url::parse("https://blank").unwrap()));
+    }
+
+    #[test]
+    fn slate_web_url_matches_host_and_path_forms() {
+        assert!(is_slate_web_url(&Url::parse("slate://web").unwrap()));
+        assert!(is_slate_web_url(&Url::parse("slate:web").unwrap()));
+        assert!(!is_slate_web_url(&Url::parse("slate://home").unwrap()));
+        assert!(!is_slate_web_url(&Url::parse("https://web").unwrap()));
     }
 
     #[test]
@@ -638,7 +671,9 @@ mod tests {
     fn slate_internal_page_resources_exist() {
         let resource_dir = crate::resources::resource_protocol_dir_path();
 
+        assert!(resource_dir.join("slate-blank.html").is_file());
         assert!(resource_dir.join("slate-home.html").is_file());
+        assert!(resource_dir.join("slate-web.html").is_file());
         assert!(resource_dir.join("slate-settings.html").is_file());
         assert!(resource_dir.join("slate-downloads.html").is_file());
     }

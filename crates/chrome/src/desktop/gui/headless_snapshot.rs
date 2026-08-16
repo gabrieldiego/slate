@@ -266,7 +266,7 @@ fn render_app_rail(root_ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
         .frame(rail_frame)
         .show_separator_line(true)
         .show_inside(root_ui, |ui| {
-            let _ = Gui::draw_app_rail(ui, slate_icons, false);
+            let _ = Gui::draw_app_rail(ui, slate_icons, None);
         });
 }
 

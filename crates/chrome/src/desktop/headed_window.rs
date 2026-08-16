@@ -50,7 +50,7 @@ use crate::desktop::dialog::Dialog;
 use crate::desktop::event_loop::AppEvent;
 use crate::desktop::gui::Gui;
 use crate::desktop::keyutils::CMD_OR_CONTROL;
-use crate::desktop::protocols::slate::is_slate_home_url;
+use crate::desktop::protocols::slate::{is_slate_blank_url, is_slate_home_url, is_slate_web_url};
 use crate::prefs::ServoShellPreferences;
 use crate::running_app_state::{RunningAppState, UserInterfaceCommand};
 use crate::window::{
@@ -466,8 +466,8 @@ impl HeadedWindow {
             .shortcut(CMD_OR_CONTROL, 'T', || {
                 window.create_and_activate_toplevel_webview(
                     state.clone(),
-                    Url::parse("slate://home")
-                        .expect("Should be able to unconditionally parse 'slate://home' as URL"),
+                    Url::parse("slate://blank")
+                        .expect("Should be able to unconditionally parse 'slate://blank' as URL"),
                 );
             })
             .shortcut(CMD_OR_CONTROL, 'N', || {
@@ -899,6 +899,12 @@ impl PlatformWindow for HeadedWindow {
             .active_webview()
             .and_then(|webview| {
                 if webview.url().as_ref().is_some_and(is_slate_home_url) {
+                    return Some("Slate - Home".to_owned());
+                }
+                if webview.url().as_ref().is_some_and(is_slate_web_url) {
+                    return Some("Slate - Web".to_owned());
+                }
+                if webview.url().as_ref().is_some_and(is_slate_blank_url) {
                     return Some("Slate - New Tab".to_owned());
                 }
 

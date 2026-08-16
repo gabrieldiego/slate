@@ -27,6 +27,7 @@ pub(crate) const BLUE: Color32 = Color32::from_rgb(9, 109, 207);
 pub(crate) enum SlateIcon {
     AppCalendar,
     AppDownloads,
+    AppHome,
     AppMessaging,
     AppWeb,
     HomeFooterShield,
@@ -97,6 +98,12 @@ impl SlateIcon {
                 width: 34,
                 height: 34,
                 mask: include_bytes!("../../assets/icons/downloads.alpha"),
+            },
+            Self::AppHome => SlateIconData {
+                name: "app-home",
+                width: 34,
+                height: 34,
+                mask: include_bytes!("../../assets/icons/home.alpha"),
             },
             Self::AppMessaging => SlateIconData {
                 name: "app-messaging",
@@ -467,6 +474,7 @@ mod tests {
         for icon in [
             SlateIcon::AppCalendar,
             SlateIcon::AppDownloads,
+            SlateIcon::AppHome,
             SlateIcon::AppMessaging,
             SlateIcon::AppWeb,
             SlateIcon::HomeFooterShield,
