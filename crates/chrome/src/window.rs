@@ -68,20 +68,39 @@ pub(crate) struct ServoShellWindow {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum SingletonInternalPage {
+enum ReusableInternalPage {
+    Home,
     Downloads,
     Settings,
 }
 
-fn singleton_internal_page(url: &Url) -> Option<SingletonInternalPage> {
+impl ReusableInternalPage {
+    fn closes_duplicates(self) -> bool {
+        matches!(self, Self::Downloads | Self::Settings)
+    }
+
+    fn existing_target_index(self, matching_count: usize) -> Option<usize> {
+        if matching_count == 0 {
+            return None;
+        }
+
+        match self {
+            Self::Home => Some(0),
+            Self::Downloads | Self::Settings => Some(matching_count - 1),
+        }
+    }
+}
+
+fn reusable_internal_page(url: &Url) -> Option<ReusableInternalPage> {
     if url.scheme() != "slate" {
         return None;
     }
 
     let path = url.path().trim_matches('/');
     match (url.host_str(), path) {
-        (Some("downloads"), "") | (None, "downloads") => Some(SingletonInternalPage::Downloads),
-        (Some("settings"), "") | (None, "settings") => Some(SingletonInternalPage::Settings),
+        (Some("home"), "") | (None, "home") => Some(ReusableInternalPage::Home),
+        (Some("downloads"), "") | (None, "downloads") => Some(ReusableInternalPage::Downloads),
+        (Some("settings"), "") | (None, "settings") => Some(ReusableInternalPage::Settings),
         _ => None,
     }
 }
@@ -298,12 +317,8 @@ impl ServoShellWindow {
             .cloned()
     }
 
-    fn open_singleton_internal_page(
-        self: &Rc<Self>,
-        state: &Rc<RunningAppState>,
-        url: Url,
-    ) -> bool {
-        let Some(page) = singleton_internal_page(&url) else {
+    fn open_reusable_internal_page(self: &Rc<Self>, state: &Rc<RunningAppState>, url: Url) -> bool {
+        let Some(page) = reusable_internal_page(&url) else {
             return false;
         };
 
@@ -312,16 +327,21 @@ impl ServoShellWindow {
             .into_iter()
             .filter_map(|(id, webview)| {
                 let url = webview.url()?;
-                (singleton_internal_page(&url) == Some(page)).then_some(id)
+                (reusable_internal_page(&url) == Some(page)).then_some(id)
             })
             .collect::<Vec<_>>();
 
-        if let Some(target_id) = matching_ids.last().copied() {
-            for duplicate_id in matching_ids
-                .into_iter()
-                .filter(|webview_id| *webview_id != target_id)
-            {
-                self.close_webview(duplicate_id);
+        if let Some(target_id) = page
+            .existing_target_index(matching_ids.len())
+            .and_then(|index| matching_ids.get(index).copied())
+        {
+            if page.closes_duplicates() {
+                for duplicate_id in matching_ids
+                    .into_iter()
+                    .filter(|webview_id| *webview_id != target_id)
+                {
+                    self.close_webview(duplicate_id);
+                }
             }
             self.activate_webview(target_id);
         } else {
@@ -382,7 +402,7 @@ impl ServoShellWindow {
                         break;
                     };
                     let url = url.into_url();
-                    if self.open_singleton_internal_page(state, url.clone()) {
+                    if self.open_reusable_internal_page(state, url.clone()) {
                         continue;
                     }
                     if let Some(active_webview) = self.active_webview() {
@@ -523,38 +543,71 @@ pub(crate) trait PlatformWindow {
 
 #[cfg(test)]
 mod tests {
-    use super::{SingletonInternalPage, singleton_internal_page};
+    use super::{ReusableInternalPage, reusable_internal_page};
     use url::Url;
 
     #[test]
-    fn singleton_internal_page_recognizes_main_settings_and_downloads() {
+    fn reusable_internal_page_recognizes_main_internal_pages() {
         assert_eq!(
-            singleton_internal_page(&Url::parse("slate://downloads").unwrap()),
-            Some(SingletonInternalPage::Downloads)
+            reusable_internal_page(&Url::parse("slate://home").unwrap()),
+            Some(ReusableInternalPage::Home)
         );
         assert_eq!(
-            singleton_internal_page(&Url::parse("slate:downloads").unwrap()),
-            Some(SingletonInternalPage::Downloads)
+            reusable_internal_page(&Url::parse("slate:home").unwrap()),
+            Some(ReusableInternalPage::Home)
         );
         assert_eq!(
-            singleton_internal_page(&Url::parse("slate://settings?chrome_zoom=0.82").unwrap()),
-            Some(SingletonInternalPage::Settings)
+            reusable_internal_page(&Url::parse("slate://downloads").unwrap()),
+            Some(ReusableInternalPage::Downloads)
         );
         assert_eq!(
-            singleton_internal_page(&Url::parse("slate:settings").unwrap()),
-            Some(SingletonInternalPage::Settings)
+            reusable_internal_page(&Url::parse("slate:downloads").unwrap()),
+            Some(ReusableInternalPage::Downloads)
         );
         assert_eq!(
-            singleton_internal_page(&Url::parse("slate://downloads/state").unwrap()),
+            reusable_internal_page(&Url::parse("slate://settings?chrome_zoom=0.82").unwrap()),
+            Some(ReusableInternalPage::Settings)
+        );
+        assert_eq!(
+            reusable_internal_page(&Url::parse("slate:settings").unwrap()),
+            Some(ReusableInternalPage::Settings)
+        );
+        assert_eq!(
+            reusable_internal_page(&Url::parse("slate://home/state").unwrap()),
             None
         );
         assert_eq!(
-            singleton_internal_page(&Url::parse("slate://settings/state").unwrap()),
+            reusable_internal_page(&Url::parse("slate://downloads/state").unwrap()),
             None
         );
         assert_eq!(
-            singleton_internal_page(&Url::parse("https://example.com").unwrap()),
+            reusable_internal_page(&Url::parse("slate://settings/state").unwrap()),
             None
+        );
+        assert_eq!(
+            reusable_internal_page(&Url::parse("https://example.com").unwrap()),
+            None
+        );
+    }
+
+    #[test]
+    fn reusable_internal_page_only_deduplicates_singleton_apps() {
+        assert!(!ReusableInternalPage::Home.closes_duplicates());
+        assert!(ReusableInternalPage::Downloads.closes_duplicates());
+        assert!(ReusableInternalPage::Settings.closes_duplicates());
+    }
+
+    #[test]
+    fn reusable_internal_page_focuses_leftmost_home_tab() {
+        assert_eq!(ReusableInternalPage::Home.existing_target_index(0), None);
+        assert_eq!(ReusableInternalPage::Home.existing_target_index(3), Some(0));
+        assert_eq!(
+            ReusableInternalPage::Downloads.existing_target_index(3),
+            Some(2)
+        );
+        assert_eq!(
+            ReusableInternalPage::Settings.existing_target_index(3),
+            Some(2)
         );
     }
 }
