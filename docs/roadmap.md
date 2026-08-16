@@ -6,3 +6,99 @@
   before replacing the temporary raster and alpha-mask assets. Once the rendering
   failure is understood and documented, revisit rail and toolbar icons in vector
   format so they scale cleanly on high-resolution displays.
+
+## Developer Environment
+
+- Add a Makefile setup target that prepares the local development environment
+  without changing the rest of the machine. It should install or verify the
+  pinned Rust toolchain under `./.rustup` and use `./.cargo` for project-local
+  Cargo state.
+- Make the main build targets consistently use the local Rust environment when
+  it exists, so `make shared-release` does not fall back to `~/.rustup` on a
+  small root filesystem.
+- Add a check target for required host tools and libraries. Missing tools should
+  be reported with install guidance, while setup actions that download or
+  install software should stay explicit.
+- Keep memory-heavy browser builds conservative by default. Shared release
+  builds should continue to prefer one Cargo job unless a developer opts into
+  more parallelism.
+
+## Profile State
+
+Persist Slate-owned user state in `slate-settings.db` whenever it is small,
+structured, profile-specific, and useful across restarts.
+
+Already covered:
+
+- Settings, including chrome zoom and configurable key bindings.
+- First-run bookmarks and the visible home bookmark slots.
+- Home bookmark favicons and other small binary blobs.
+- Browsing history URL/title/visit metadata from Servo history callbacks.
+- Cookie schema, though live HTTP cookies are still owned by Servo today.
+
+Backlog:
+
+- Downloads: source URL, final routed URL, protocol or transport, filename,
+  saved path, size, MIME type, status, timestamps, failure reason, and later
+  integrity metadata. Download files should remain normal files; the database
+  should store their records.
+- Session restore: open windows, tab order, active tab, singleton internal tabs,
+  last URL/title per tab, and eventually back/forward history when the rendering
+  boundary exposes enough state.
+- Protocol configuration: enabled adapters, IPFS gateway policy and last working
+  gateway, Kubo endpoint, Tor/Arti configuration, per-protocol budgets, and
+  public-gateway consent.
+- Protocol health metadata: recent failures, selected transport, last checked
+  time, and user-visible status. Heavy protocol caches and Tor/IPFS node state
+  should stay outside SQLite with only indexes or configuration in the profile
+  database.
+- Permissions and site settings: clipboard, downloads, storage, cookies,
+  pop-ups, public gateway routing, Tor routing, and future protocol prompts.
+- Privacy identity state: normal/private profile separation, containers,
+  routing mode preferences, DNS leak policy, and fingerprinting controls.
+- Full cookie integration: replace Servo's current `cookie_jar.json` path only
+  after reads, writes, expiry, clearing, and private-mode behavior can flow
+  through Slate storage without duplicated state.
+- Browser preferences beyond zoom: startup behavior, home page choice, sidebar
+  visibility/order, bookmark display policy, search engine choice, suggestions
+  policy, and theme once multiple themes exist.
+- Bookmark management beyond home slots: folders, ordering, tags or notes,
+  deletion state, and migration behavior for default bookmarks.
+- Security exceptions: certificate exceptions, mixed-content exceptions, and
+  similar high-risk state only after a dedicated privacy/security design.
+
+Priority order:
+
+1. Downloads table and UI wiring.
+2. Session restore.
+3. Protocol configuration and consent.
+4. Permissions and site settings.
+5. Cookie integration.
+
+## Protocol Testing
+
+- Add `.onion` normalization tests for direct address-bar input, explicit
+  `http://` and `https://` onion URLs, and download URLs. Normalized routes
+  should become `tor+http://` or `tor+https://` before Servo can attempt normal
+  DNS resolution.
+- Add broadwebd Tor tests around adapter selection, route metadata, error
+  reporting, disabled/unavailable Tor behavior, and DNS-leak prevention. These
+  should use mock transports by default.
+- Add ignored/manual external tests for Arti-backed Tor retrieval so real
+  network behavior can be checked without making the normal test suite depend
+  on Tor bootstrap, live onion services, or internet availability.
+- Add tests for `.onion` subresources and downloads once the corresponding
+  browser paths are implemented.
+
+## Interaction Testing
+
+- Add text-selection tests for injected page-selection script registration,
+  drag selection, selected-text context menu behavior, Copy, Select All, and
+  Clear Selection.
+- Verify editing controls are not regressed by page-selection handling. Native
+  text inputs should keep normal copy, paste, cut, select-all, and context-menu
+  behavior.
+- Add zoom-aware pointer tests so chrome zoom does not offset page hit testing,
+  hover detection, link activation, or text selection.
+- Add shortcut tests for configurable copy, cut, paste, select-all, new tab,
+  close tab, next tab, and previous tab.
