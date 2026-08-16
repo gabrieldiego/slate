@@ -17,6 +17,7 @@ pub(crate) mod headed_window;
 mod headless_window;
 mod key_bindings;
 mod keyutils;
+mod page_scripts;
 mod protocols;
 mod slate_theme;
 mod tracing;

@@ -24,6 +24,7 @@ use super::event_loop::AppEvent;
 use crate::desktop::event_loop::ServoShellEventLoop;
 use crate::desktop::headed_window::HeadedWindow;
 use crate::desktop::headless_window::HeadlessWindow;
+use crate::desktop::page_scripts::SLATE_TEXT_SELECTION_SCRIPT;
 use crate::desktop::protocols;
 use crate::desktop::tracing::trace_winit_event;
 use crate::parser::get_default_url;
@@ -249,6 +250,7 @@ impl App {
 
         let user_content_manager = Rc::new(UserContentManager::new(&servo));
         user_content_manager.add_script(Rc::new(UserScript::from(SLATE_DOWNLOAD_LINK_SCRIPT)));
+        user_content_manager.add_script(Rc::new(UserScript::from(SLATE_TEXT_SELECTION_SCRIPT)));
         for script in load_userscripts(self.servoshell_preferences.userscripts_directory.as_deref())
             .expect("Loading userscripts failed")
         {

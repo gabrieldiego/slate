@@ -12,11 +12,15 @@ use url::Url;
 
 use super::keyutils::CMD_OR_CONTROL;
 
-const KEY_BINDING_ACTIONS: [KeyBindingAction; 4] = [
+const KEY_BINDING_ACTIONS: [KeyBindingAction; 8] = [
     KeyBindingAction::NewTab,
     KeyBindingAction::CloseTab,
     KeyBindingAction::NextTab,
     KeyBindingAction::PreviousTab,
+    KeyBindingAction::Cut,
+    KeyBindingAction::Copy,
+    KeyBindingAction::Paste,
+    KeyBindingAction::SelectAll,
 ];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -25,6 +29,10 @@ pub(crate) enum KeyBindingAction {
     CloseTab,
     NextTab,
     PreviousTab,
+    Cut,
+    Copy,
+    Paste,
+    SelectAll,
 }
 
 impl KeyBindingAction {
@@ -34,6 +42,10 @@ impl KeyBindingAction {
             Self::CloseTab => "close_tab",
             Self::NextTab => "next_tab",
             Self::PreviousTab => "previous_tab",
+            Self::Cut => "cut",
+            Self::Copy => "copy",
+            Self::Paste => "paste",
+            Self::SelectAll => "select_all",
         }
     }
 
@@ -43,6 +55,10 @@ impl KeyBindingAction {
             Self::CloseTab => "Close tab",
             Self::NextTab => "Next tab",
             Self::PreviousTab => "Previous tab",
+            Self::Cut => "Cut",
+            Self::Copy => "Copy",
+            Self::Paste => "Paste",
+            Self::SelectAll => "Select all",
         }
     }
 
@@ -52,6 +68,10 @@ impl KeyBindingAction {
             Self::CloseTab => "keybindings.close_tab",
             Self::NextTab => "keybindings.next_tab",
             Self::PreviousTab => "keybindings.previous_tab",
+            Self::Cut => "keybindings.cut",
+            Self::Copy => "keybindings.copy",
+            Self::Paste => "keybindings.paste",
+            Self::SelectAll => "keybindings.select_all",
         }
     }
 
@@ -61,6 +81,10 @@ impl KeyBindingAction {
             Self::CloseTab => "key_close_tab",
             Self::NextTab => "key_next_tab",
             Self::PreviousTab => "key_previous_tab",
+            Self::Cut => "key_cut",
+            Self::Copy => "key_copy",
+            Self::Paste => "key_paste",
+            Self::SelectAll => "key_select_all",
         }
     }
 
@@ -70,6 +94,10 @@ impl KeyBindingAction {
             Self::CloseTab => "Primary+W",
             Self::NextTab => "Ctrl+PageDown",
             Self::PreviousTab => "Ctrl+PageUp",
+            Self::Cut => "Primary+X",
+            Self::Copy => "Primary+C",
+            Self::Paste => "Primary+V",
+            Self::SelectAll => "Primary+A",
         }
     }
 }
@@ -80,6 +108,10 @@ pub(crate) struct SlateKeyBindings {
     close_tab: KeyBinding,
     next_tab: KeyBinding,
     previous_tab: KeyBinding,
+    cut: KeyBinding,
+    copy: KeyBinding,
+    paste: KeyBinding,
+    select_all: KeyBinding,
 }
 
 impl Default for SlateKeyBindings {
@@ -89,6 +121,10 @@ impl Default for SlateKeyBindings {
             close_tab: default_key_binding(KeyBindingAction::CloseTab),
             next_tab: default_key_binding(KeyBindingAction::NextTab),
             previous_tab: default_key_binding(KeyBindingAction::PreviousTab),
+            cut: default_key_binding(KeyBindingAction::Cut),
+            copy: default_key_binding(KeyBindingAction::Copy),
+            paste: default_key_binding(KeyBindingAction::Paste),
+            select_all: default_key_binding(KeyBindingAction::SelectAll),
         }
     }
 }
@@ -100,6 +136,10 @@ impl SlateKeyBindings {
             KeyBindingAction::CloseTab => &self.close_tab,
             KeyBindingAction::NextTab => &self.next_tab,
             KeyBindingAction::PreviousTab => &self.previous_tab,
+            KeyBindingAction::Cut => &self.cut,
+            KeyBindingAction::Copy => &self.copy,
+            KeyBindingAction::Paste => &self.paste,
+            KeyBindingAction::SelectAll => &self.select_all,
         }
     }
 
@@ -109,6 +149,10 @@ impl SlateKeyBindings {
             KeyBindingAction::CloseTab => self.close_tab = binding,
             KeyBindingAction::NextTab => self.next_tab = binding,
             KeyBindingAction::PreviousTab => self.previous_tab = binding,
+            KeyBindingAction::Cut => self.cut = binding,
+            KeyBindingAction::Copy => self.copy = binding,
+            KeyBindingAction::Paste => self.paste = binding,
+            KeyBindingAction::SelectAll => self.select_all = binding,
         }
     }
 
@@ -411,6 +455,10 @@ fn default_key_binding(action: KeyBindingAction) -> KeyBinding {
         KeyBindingAction::CloseTab => KeyBinding::character(CMD_OR_CONTROL, 'W'),
         KeyBindingAction::NextTab => KeyBinding::named(Modifiers::CONTROL, NamedKey::PageDown),
         KeyBindingAction::PreviousTab => KeyBinding::named(Modifiers::CONTROL, NamedKey::PageUp),
+        KeyBindingAction::Cut => KeyBinding::character(CMD_OR_CONTROL, 'X'),
+        KeyBindingAction::Copy => KeyBinding::character(CMD_OR_CONTROL, 'C'),
+        KeyBindingAction::Paste => KeyBinding::character(CMD_OR_CONTROL, 'V'),
+        KeyBindingAction::SelectAll => KeyBinding::character(CMD_OR_CONTROL, 'A'),
     }
 }
 
@@ -578,6 +626,22 @@ mod tests {
                 .action_for_event(&key_event(Key::Named(NamedKey::PageUp), Modifiers::CONTROL,)),
             Some(KeyBindingAction::PreviousTab)
         );
+        assert_eq!(
+            bindings.action_for_event(&key_event(Key::Character("x".into()), CMD_OR_CONTROL)),
+            Some(KeyBindingAction::Cut)
+        );
+        assert_eq!(
+            bindings.action_for_event(&key_event(Key::Character("c".into()), CMD_OR_CONTROL)),
+            Some(KeyBindingAction::Copy)
+        );
+        assert_eq!(
+            bindings.action_for_event(&key_event(Key::Character("v".into()), CMD_OR_CONTROL)),
+            Some(KeyBindingAction::Paste)
+        );
+        assert_eq!(
+            bindings.action_for_event(&key_event(Key::Character("a".into()), CMD_OR_CONTROL)),
+            Some(KeyBindingAction::SelectAll)
+        );
     }
 
     #[test]
@@ -621,11 +685,21 @@ mod tests {
         let value = bindings.json_value();
         let entries = value.as_array().expect("shortcuts should be an array");
 
-        assert_eq!(entries.len(), 4);
+        assert_eq!(entries.len(), 8);
         assert_eq!(entries[0]["id"], "new_tab");
         assert_eq!(entries[0]["label"], "New tab");
         assert_eq!(entries[0]["default_value"], "Primary+T");
         assert!(entries.iter().any(|entry| entry["id"] == "previous_tab"));
+        assert!(entries.iter().any(|entry| {
+            entry["id"] == "copy"
+                && entry["query"] == "key_copy"
+                && entry["default_value"] == "Primary+C"
+        }));
+        assert!(entries.iter().any(|entry| {
+            entry["id"] == "select_all"
+                && entry["query"] == "key_select_all"
+                && entry["default_value"] == "Primary+A"
+        }));
     }
 
     #[test]

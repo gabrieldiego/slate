@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use euclid::{Angle, Length, Point2D, Rect, Rotation3D, Scale, Size2D, UnknownUnit, Vector3D};
-use keyboard_types::ShortcutMatcher;
+use keyboard_types::{Code, Location, ShortcutMatcher};
 use log::{debug, info};
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawWindowHandle};
 use servo::{
@@ -141,6 +141,13 @@ fn window_position_to_webview_device_point(
     point.x -= origin.x;
     point.y -= origin.y;
     point
+}
+
+fn primary_a_key_event() -> KeyboardEvent {
+    let mut event = KeyboardEvent::key_down(Key::Character("a".to_string()), Code::KeyA);
+    event.location = Location::Standard;
+    event.modifiers = CMD_OR_CONTROL;
+    event
 }
 
 impl HeadedWindow {
@@ -379,7 +386,7 @@ impl HeadedWindow {
             return false;
         };
 
-        if self.handle_configured_tab_key_binding(
+        if self.handle_configured_browser_key_binding(
             state.clone(),
             window,
             active_webview.clone(),
@@ -390,19 +397,6 @@ impl HeadedWindow {
 
         let mut handled = true;
         ShortcutMatcher::from_event(key_event.event.clone())
-            .shortcut(CMD_OR_CONTROL, 'X', || {
-                active_webview
-                    .notify_input_event(InputEvent::EditingAction(servo::EditingActionEvent::Cut));
-            })
-            .shortcut(CMD_OR_CONTROL, 'C', || {
-                active_webview
-                    .notify_input_event(InputEvent::EditingAction(servo::EditingActionEvent::Copy));
-            })
-            .shortcut(CMD_OR_CONTROL, 'V', || {
-                active_webview.notify_input_event(InputEvent::EditingAction(
-                    servo::EditingActionEvent::Paste,
-                ));
-            })
             .shortcut(Modifiers::CONTROL, Key::Named(NamedKey::F9), || {
                 active_webview.capture_webrender();
             })
@@ -467,7 +461,7 @@ impl HeadedWindow {
         handled
     }
 
-    fn handle_configured_tab_key_binding(
+    fn handle_configured_browser_key_binding(
         &self,
         state: Rc<RunningAppState>,
         window: &Rc<ServoShellWindow>,
@@ -508,6 +502,22 @@ impl HeadedWindow {
                         window.activate_webview_by_index((index + len - 1) % len);
                     }
                 }
+            }
+            KeyBindingAction::Cut => {
+                active_webview
+                    .notify_input_event(InputEvent::EditingAction(servo::EditingActionEvent::Cut));
+            }
+            KeyBindingAction::Copy => {
+                active_webview
+                    .notify_input_event(InputEvent::EditingAction(servo::EditingActionEvent::Copy));
+            }
+            KeyBindingAction::Paste => {
+                active_webview.notify_input_event(InputEvent::EditingAction(
+                    servo::EditingActionEvent::Paste,
+                ));
+            }
+            KeyBindingAction::SelectAll => {
+                active_webview.notify_input_event(InputEvent::Keyboard(primary_a_key_event()));
             }
         }
 
@@ -1507,5 +1517,15 @@ mod tests {
         );
 
         assert_point_close(webview_point, 12.0, 24.0);
+    }
+
+    #[test]
+    fn select_all_synthetic_key_event_uses_primary_a() {
+        let event = primary_a_key_event();
+
+        assert_eq!(event.key, Key::Character("a".to_string()));
+        assert_eq!(event.code, Code::KeyA);
+        assert_eq!(event.location, Location::Standard);
+        assert!(event.modifiers.contains(CMD_OR_CONTROL));
     }
 }
