@@ -51,16 +51,29 @@ xtask/
 
 ## Running
 
-Install Rust 1.97.1 or newer, plus the platform libraries needed by `minifb` and Servo on your OS, then run:
+Install Rust 1.97.1 or newer, plus the platform libraries needed by `minifb` and Servo on your OS.
+For a repository-local toolchain and Cargo cache, run:
+
+```bash
+make setup-local-rust
+make check-tools
+```
+
+The Makefile build and test targets use `./.rustup` and `./.cargo` by default
+so large Rust toolchains and crate caches stay with the checkout instead of
+filling a small home or root filesystem.
+
+Then run through the Makefile:
+
+```bash
+make run
+```
+
+Direct Cargo commands still work when your shell already has the pinned Rust
+toolchain active:
 
 ```bash
 cargo run -p slate
-```
-
-or:
-
-```bash
-scripts/run.sh
 ```
 
 Check the workspace with:
