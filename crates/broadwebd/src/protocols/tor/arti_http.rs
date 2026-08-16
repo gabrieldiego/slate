@@ -516,4 +516,23 @@ mod tests {
         assert_eq!(metadata.id, TOR_ARTI_HTTP_PLUGIN);
         assert!(metadata.capabilities.iter().any(|item| item == "arti"));
     }
+
+    #[test]
+    #[ignore = "requires live Tor bootstrap and SLATE_TEST_ONION_URL pointing to a reachable legal onion HTTP page"]
+    fn manual_arti_fetch_can_retrieve_onion_http_page() {
+        let url = std::env::var("SLATE_TEST_ONION_URL")
+            .expect("set SLATE_TEST_ONION_URL to a tor+http:// or http:// .onion URL");
+        let request = TransportHttpRequest {
+            profile: "manual".to_string(),
+            url,
+            purpose: FetchPurpose::Navigation,
+        };
+        let response = TorArtiHttpTransport::new()
+            .expect("create Tor transport")
+            .fetch_http(&request, &ResourceBudget::default())
+            .expect("fetch onion page through Arti");
+
+        assert!(response.status_code < 500);
+        assert!(!response.body.is_empty());
+    }
 }

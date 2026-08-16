@@ -887,6 +887,18 @@ mod tests {
         );
         assert_eq!(
             registry
+                .resolve_http_transport("https://example.onion/")
+                .expect("resolve onion HTTPS"),
+            TOR_ARTI_HTTP_PLUGIN
+        );
+        assert_eq!(
+            registry
+                .resolve_http_transport("tor+https://example.onion/")
+                .expect("resolve Tor HTTPS"),
+            TOR_ARTI_HTTP_PLUGIN
+        );
+        assert_eq!(
+            registry
                 .resolve_http_transport("https://example.com/")
                 .expect("resolve ordinary HTTPS"),
             DIRECT_HTTP_PLUGIN
@@ -927,6 +939,81 @@ mod tests {
         assert_eq!(target.host, "example.onion");
         assert_eq!(target.port, 80);
         assert_eq!(target.path_and_query, "/docs?a=1");
+    }
+
+    #[test]
+    fn http_fetch_annotates_tor_route_metadata_without_live_tor() {
+        let mut registry = PluginRegistry::new();
+        registry.register_protocol_service(TorService);
+        registry.register_transport(FixtureTransport::new(TOR_ARTI_HTTP_PLUGIN, "Tor fixture"));
+        registry.register_service(super::HttpFetchService);
+        let daemon = BroadwebDaemon::start_with_registry(
+            test_state_root("tor-route-context"),
+            Default::default(),
+            registry,
+        )
+        .expect("daemon");
+
+        let response = daemon
+            .fetch_http(
+                HttpFetchRequest::new("research", "http://example.onion/docs")
+                    .download_as("docs.html"),
+            )
+            .expect("fetch Tor fixture");
+
+        assert_eq!(
+            response.disposition,
+            FetchDisposition::Download {
+                suggested_filename: "docs.html".to_string()
+            }
+        );
+        assert!(response.body_text_lossy().contains("Tor fixture"));
+        let route = response.route.expect("route info");
+        assert_eq!(route.profile, "research");
+        assert_eq!(route.transport_id, TOR_ARTI_HTTP_PLUGIN);
+        assert_eq!(route.privacy_boundary, "test fixture transport");
+        assert_eq!(route.purpose, FetchPurpose::Navigation);
+
+        let _ = fs::remove_dir_all(daemon.state_root().path());
+    }
+
+    #[test]
+    fn http_fetch_fails_closed_when_tor_transport_is_unavailable() {
+        let mut registry = PluginRegistry::new();
+        registry.register_transport(super::DirectHttpTransport);
+        registry.register_protocol_service(TorService);
+        registry
+            .remove_transport(TOR_ARTI_HTTP_PLUGIN)
+            .expect("remove Tor transport");
+        registry.register_service(super::HttpFetchService);
+
+        assert_eq!(
+            registry
+                .resolve_http_transport("https://example.onion/")
+                .expect("resolve onion HTTPS"),
+            TOR_ARTI_HTTP_PLUGIN
+        );
+        assert!(registry.plugin_statuses().iter().any(|status| {
+            status.metadata.id == TOR_PROTOCOL_SERVICE
+                && matches!(status.health, PluginHealth::Degraded(_))
+        }));
+
+        let daemon = BroadwebDaemon::start_with_registry(
+            test_state_root("tor-fail-closed"),
+            Default::default(),
+            registry,
+        )
+        .expect("daemon");
+        let error = daemon
+            .fetch_http(HttpFetchRequest::default_profile("http://example.onion/"))
+            .expect_err("missing Tor transport should fail closed");
+
+        assert!(matches!(
+            error,
+            BroadwebdError::MissingPlugin(plugin) if plugin == TOR_ARTI_HTTP_PLUGIN
+        ));
+
+        let _ = fs::remove_dir_all(daemon.state_root().path());
     }
 
     #[test]
