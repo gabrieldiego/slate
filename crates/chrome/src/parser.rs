@@ -80,10 +80,86 @@ pub(crate) fn location_bar_input_to_url(request: &str, searchpage: &str) -> Opti
             _ => Some(url),
         }
     } else {
-        try_as_file(request)
+        try_as_ipfs_address(request)
+            .or_else(|| try_as_file(request))
             .or_else(|| try_as_domain(request))
             .or_else(|| try_as_search_page(request, searchpage))
     }
+}
+
+fn try_as_ipfs_address(request: &str) -> Option<ServoUrl> {
+    normalize_ipfs_path_address(request)
+        .or_else(|| normalize_bare_ipfs_cid(request))
+        .and_then(|address| ServoUrl::parse(&address).ok())
+}
+
+fn normalize_ipfs_path_address(input: &str) -> Option<String> {
+    let path = input.strip_prefix('/').unwrap_or(input);
+    let lower = path.to_ascii_lowercase();
+    let (scheme, rest) = if lower.starts_with("ipfs/") {
+        ("ipfs", &path["ipfs/".len()..])
+    } else if lower.starts_with("ipns/") {
+        ("ipns", &path["ipns/".len()..])
+    } else {
+        return None;
+    };
+
+    if rest.is_empty() || rest.chars().any(char::is_whitespace) {
+        return None;
+    }
+
+    let name_end = rest
+        .find(|ch| matches!(ch, '/' | '?' | '#'))
+        .unwrap_or(rest.len());
+    if name_end == 0 {
+        return None;
+    }
+
+    Some(format!("{scheme}://{rest}"))
+}
+
+fn normalize_bare_ipfs_cid(input: &str) -> Option<String> {
+    let (name, rest) = split_address_name(input);
+    if rest.is_some_and(|suffix| suffix.chars().any(char::is_whitespace)) {
+        return None;
+    }
+
+    if is_cidv0_like(name) {
+        return Some(format!("ipfs://{input}"));
+    }
+
+    let lower = name.to_ascii_lowercase();
+    if is_cidv1_base32_like(&lower) && name.chars().all(|ch| ch.is_ascii_alphanumeric()) {
+        let suffix = rest.unwrap_or_default();
+        return Some(format!("ipfs://{lower}{suffix}"));
+    }
+
+    None
+}
+
+fn split_address_name(input: &str) -> (&str, Option<&str>) {
+    let name_end = input
+        .find(|ch| matches!(ch, '/' | '?' | '#'))
+        .unwrap_or(input.len());
+    let name = &input[..name_end];
+    let rest = (name_end < input.len()).then_some(&input[name_end..]);
+    (name, rest)
+}
+
+fn is_cidv0_like(input: &str) -> bool {
+    input.len() == 46
+        && input.starts_with("Qm")
+        && input.bytes().all(|byte| {
+            b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz".contains(&byte)
+        })
+}
+
+fn is_cidv1_base32_like(input: &str) -> bool {
+    input.len() >= 32
+        && matches!(input.get(..4), Some("bafy" | "bafk"))
+        && input
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || matches!(byte, b'2'..=b'7'))
 }
 
 fn try_as_file(request: &str) -> Option<ServoUrl> {

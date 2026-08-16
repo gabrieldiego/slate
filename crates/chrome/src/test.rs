@@ -104,6 +104,12 @@ fn test_url(input: &str, location: &str, cmdline_if_exists: &str, cmdline_otherw
     );
 }
 
+fn location_bar_url(input: &str) -> String {
+    location_bar_input_to_url(input, "https://duckduckgo.com/html/?q=%s")
+        .unwrap()
+        .into_string()
+}
+
 #[test]
 #[cfg(not(target_os = "windows"))]
 fn test_cmdline_and_location_bar_url() {
@@ -254,6 +260,38 @@ fn test_cmd_and_location_bar_url() {
         "file:///dev/null",
         "file:///dev/null",
         "file:///dev/null",
+    );
+}
+
+#[test]
+fn test_location_bar_ipfs_heuristics() {
+    let cidv0 = "QmT5NvUtoM5nWFfrQdVrFtvGfKFmG7AHE8P34isapyhCxX";
+    assert_eq!(location_bar_url(cidv0), format!("ipfs://{cidv0}"));
+    assert_eq!(
+        location_bar_url(&format!("  {cidv0}\n")),
+        format!("ipfs://{cidv0}")
+    );
+    assert_eq!(
+        location_bar_url(&format!("{cidv0}/index.html?view=1#top")),
+        format!("ipfs://{cidv0}/index.html?view=1#top")
+    );
+
+    assert_eq!(
+        location_bar_url("/ipfs/bafybeigdyrzt/index.html?view=1#top"),
+        "ipfs://bafybeigdyrzt/index.html?view=1#top"
+    );
+    assert_eq!(
+        location_bar_url("ipns/example.net/docs"),
+        "ipns://example.net/docs"
+    );
+
+    assert_eq!(
+        location_bar_url("BAFYBEIGDYRZT5SFP7UDM7HU76UH7Y26NF3EFUYLQABF3OCLGTQY55FBZDI"),
+        "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi"
+    );
+    assert_eq!(
+        location_bar_url("bafy short"),
+        "https://duckduckgo.com/html/?q=bafy%20short"
     );
 }
 
