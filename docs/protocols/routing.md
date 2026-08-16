@@ -7,6 +7,9 @@ User-facing navigation stays URL-like:
 - `https://example.org`
 - `ipfs://<cid>`
 - `ipns://<name>`
+- `example.onion`
+- `http://example.onion`
+- `tor+http://example.onion`
 - `/ipfs/<cid>/...`
 - `/ipns/<name>/...`
 - `<cid>`
@@ -21,6 +24,12 @@ terms.
 IPFS routing must preserve the raw authority casing for `ipfs://` URLs. CIDv0
 values are Base58 and case-sensitive, so adapter code must not rely on
 URL-host normalization for the content name.
+
+Slate normalizes bare `.onion` hosts and explicit `http://*.onion` URLs to
+`tor+http://` before routing. Explicit `https://*.onion` URLs normalize to
+`tor+https://`, but that scheme must fail closed until Slate implements TLS
+over the embedded Arti stream. `.onion` names must never fall through to normal
+DNS or the direct HTTP transport.
 
 Protocol adapters convert those inputs into routing plans with explicit endpoints, for example:
 

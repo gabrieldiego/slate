@@ -470,6 +470,28 @@ current-session temporary downloads from broadwebd state. A later downloads UI
 should own promotion to user-selected persistent storage, removal, verification,
 and progress/history presentation.
 
+## Tor Initial Shape
+
+Tor is represented as a protocol service and an Arti-backed transport:
+
+```text
+TorService
+  exposes protocol-service metadata
+  routes tor+http://, tor+https://, and http(s)://*.onion to tor-arti-http
+  registers the tor-arti-http transport
+```
+
+The registry asks protocol services before falling back to `direct-http`, so a
+plain `http://example.onion/` request reaching broadwebd is still claimed by
+the Tor service instead of using normal DNS. The browser chrome normalizes
+typed `.onion` addresses to `tor+http://` or `tor+https://` because Servo's
+embedding protocol registry cannot override ordinary `http` and `https`
+fetches.
+
+The initial transport supports plain HTTP over an embedded Arti client. Onion
+HTTPS is routed to the Tor adapter but rejected until TLS over Arti streams is
+implemented. This is intentional fail-closed behavior.
+
 ## Mobile And Paired Devices
 
 Mobile broadweb support should be designed around constrained resources. It may

@@ -251,6 +251,23 @@ Pinning, publishing, providing, and reproviding are not part of the initial
 fetch contract. They require separate permissions, budget controls, and user
 visibility.
 
+## Tor Initial Contract
+
+Tor is a protocol service, not a direct HTTP option:
+
+```text
+TorService
+  exposes protocol-service metadata
+  routes tor+http://, tor+https://, and http(s)://*.onion to tor-arti-http
+  registers tor-arti-http
+```
+
+`tor-arti-http` embeds Arti and produces HTTP-like responses for onion
+documents. The registry must ask protocol services before defaulting to
+`direct-http`; otherwise `http://*.onion` could leak to ordinary DNS. The
+current implementation supports `tor+http://` only. `tor+https://` is reserved
+and must fail closed until Slate adds TLS over Arti streams.
+
 ## IPC Mapping
 
 The in-process API should map cleanly to future local IPC:
