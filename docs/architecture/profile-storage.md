@@ -71,6 +71,11 @@ remaining visible bookmark slots with non-persistent placeholders that encourage
 users to add their own sites. Once the seed marker is written, deleting those
 bookmarks does not make Slate recreate them on the next launch.
 
+The address-bar bookmark button saves the active page into the first two home
+bookmark slots only. User-added bookmarks replace the seeded suggestions first;
+after both visible slots are user-owned, adding another bookmark updates an
+existing matching slot or replaces the second slot.
+
 ## Integration Notes
 
 Bookmark editing should be wired through Slate's bookmark UI once that UI

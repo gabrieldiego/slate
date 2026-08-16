@@ -323,6 +323,55 @@ impl SlateProfileDatabase {
         Ok(())
     }
 
+    pub fn set_bookmark_slot(
+        &self,
+        bookmark: &BookmarkUpdate,
+        replaced_url: Option<&str>,
+    ) -> Result<(), StorageError> {
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let now = unix_time_seconds()?;
+        transaction
+            .execute(
+                "DELETE FROM bookmarks
+                 WHERE profile = ?1
+                   AND (
+                     position = ?2
+                     OR url = ?3
+                     OR (?4 IS NOT NULL AND url = ?4)
+                   )",
+                params![
+                    bookmark.profile.as_str(),
+                    bookmark.position,
+                    bookmark.url.as_str(),
+                    replaced_url
+                ],
+            )
+            .map_err(|source| self.database_error(source))?;
+        transaction
+            .execute(
+                "INSERT INTO bookmarks
+                   (profile, url, title, folder, position, favicon_key, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
+                params![
+                    bookmark.profile.as_str(),
+                    bookmark.url.as_str(),
+                    bookmark.title.as_deref(),
+                    bookmark.folder.as_deref(),
+                    bookmark.position,
+                    bookmark.favicon_key.as_deref(),
+                    now
+                ],
+            )
+            .map_err(|source| self.database_error(source))?;
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(())
+    }
+
     pub fn bookmarks(&self, profile: &str) -> Result<Vec<BookmarkRecord>, StorageError> {
         let connection = self.connection()?;
         let mut statement = connection
@@ -956,6 +1005,52 @@ mod tests {
             database.get_setting_text("chrome.zoom").unwrap().as_deref(),
             Some("not-a-number")
         );
+    }
+
+    #[test]
+    fn bookmark_slot_replacement_keeps_home_slots_bounded() {
+        let database_path = test_dir("bookmark-slot").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+
+        database
+            .set_bookmark_slot(
+                &BookmarkUpdate {
+                    profile: DEFAULT_PROFILE_ID.into(),
+                    url: "https://example.com/".into(),
+                    title: Some("Example".into()),
+                    folder: None,
+                    position: 0,
+                    favicon_key: None,
+                },
+                Some(DEFAULT_HOME_BOOKMARKS[0].url),
+            )
+            .unwrap();
+
+        let bookmarks = database.bookmarks(DEFAULT_PROFILE_ID).unwrap();
+        assert_eq!(bookmarks.len(), DEFAULT_HOME_BOOKMARKS.len());
+        assert_eq!(bookmarks[0].url, "https://example.com/");
+        assert_eq!(bookmarks[0].position, 0);
+        assert_eq!(bookmarks[1].url, DEFAULT_HOME_BOOKMARKS[1].url);
+
+        database
+            .set_bookmark_slot(
+                &BookmarkUpdate {
+                    profile: DEFAULT_PROFILE_ID.into(),
+                    url: "https://example.com/".into(),
+                    title: Some("Example moved".into()),
+                    folder: None,
+                    position: 1,
+                    favicon_key: None,
+                },
+                Some(DEFAULT_HOME_BOOKMARKS[1].url),
+            )
+            .unwrap();
+
+        let bookmarks = database.bookmarks(DEFAULT_PROFILE_ID).unwrap();
+        assert_eq!(bookmarks.len(), 1);
+        assert_eq!(bookmarks[0].url, "https://example.com/");
+        assert_eq!(bookmarks[0].title.as_deref(), Some("Example moved"));
+        assert_eq!(bookmarks[0].position, 1);
     }
 
     #[test]
