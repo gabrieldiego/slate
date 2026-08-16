@@ -51,7 +51,7 @@ xtask/
 
 ## Running
 
-Install Rust 1.95 or newer, plus the platform libraries needed by `minifb` and Servo on your OS, then run:
+Install Rust 1.97.1 or newer, plus the platform libraries needed by `minifb` and Servo on your OS, then run:
 
 ```bash
 cargo run -p slate
