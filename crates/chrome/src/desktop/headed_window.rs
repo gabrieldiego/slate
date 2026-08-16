@@ -144,10 +144,15 @@ fn window_position_to_webview_device_point(
 }
 
 fn primary_a_key_event() -> KeyboardEvent {
-    let mut event = KeyboardEvent::key_down(Key::Character("a".to_string()), Code::KeyA);
-    event.location = Location::Standard;
-    event.modifiers = CMD_OR_CONTROL;
-    event
+    KeyboardEvent::new_without_event(
+        KeyState::Down,
+        Key::Character("a".to_string()),
+        Code::KeyA,
+        Location::Standard,
+        CMD_OR_CONTROL,
+        false,
+        false,
+    )
 }
 
 impl HeadedWindow {

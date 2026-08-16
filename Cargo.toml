@@ -48,3 +48,9 @@ slate-protocols = { path = "crates/protocols" }
 slate-rendering = { path = "crates/rendering" }
 slate-routing = { path = "crates/routing" }
 slate-storage = { path = "crates/storage" }
+
+[patch.crates-io]
+# WebRender 0.70.0 uses a const pattern for RenderTaskId::INVALID that current
+# Rust rejects. Keep this local patch narrow until Servo/WebRender publishes a
+# compatible dependency.
+webrender = { path = "vendor/webrender-0.70.0" }
