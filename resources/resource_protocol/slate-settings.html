@@ -60,9 +60,48 @@
       margin-top: 18px;
     }
 
-    input[type="range"] {
-      width: 100%;
-      accent-color: #0b7e79;
+    .slider {
+      position: relative;
+      height: 34px;
+      cursor: pointer;
+      touch-action: none;
+      user-select: none;
+    }
+
+    .slider-track {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      height: 6px;
+      transform: translateY(-50%);
+      border-radius: 999px;
+      background: #dedbd5;
+    }
+
+    .slider-fill {
+      width: 0;
+      height: 100%;
+      border-radius: inherit;
+      background: #0b7e79;
+    }
+
+    .slider-thumb {
+      position: absolute;
+      left: 0;
+      top: 50%;
+      width: 20px;
+      height: 20px;
+      margin: -10px 0 0 -10px;
+      border: 2px solid #0b7e79;
+      border-radius: 50%;
+      background: #fffefa;
+      box-shadow: 0 2px 8px rgba(24, 24, 20, 0.14);
+    }
+
+    .slider:focus-visible .slider-thumb {
+      outline: 3px solid rgba(11, 126, 121, 0.22);
+      outline-offset: 3px;
     }
 
     output {
@@ -101,73 +140,182 @@
     <p>Adjust browser chrome density. This affects Slate-owned toolbar, address, and side rail controls.</p>
 
     <section>
-      <label for="chrome-zoom">Chrome element zoom</label>
+      <label id="chrome-zoom-label" for="chrome-zoom">Chrome element zoom</label>
       <div class="control-row">
-        <input id="chrome-zoom" type="range" min="75" max="115" step="1" value="90">
+        <div
+          id="chrome-zoom"
+          class="slider"
+          role="slider"
+          tabindex="0"
+          aria-labelledby="chrome-zoom-label"
+          aria-valuemin="75"
+          aria-valuemax="115"
+          aria-valuenow="90"
+        >
+          <div class="slider-track">
+            <div id="chrome-zoom-fill" class="slider-fill"></div>
+          </div>
+          <div id="chrome-zoom-thumb" class="slider-thumb"></div>
+        </div>
         <output id="chrome-zoom-output" for="chrome-zoom">90%</output>
       </div>
       <div class="actions">
+        <button id="save" class="primary">Save</button>
         <button id="reset">Reset</button>
       </div>
     </section>
   </main>
 
   <script>
+    const MIN_ZOOM = 75;
+    const MAX_ZOOM = 115;
     const DEFAULT_ZOOM = 90;
     const slider = document.getElementById("chrome-zoom");
+    const fill = document.getElementById("chrome-zoom-fill");
+    const thumb = document.getElementById("chrome-zoom-thumb");
     const output = document.getElementById("chrome-zoom-output");
+    const saveButton = document.getElementById("save");
     const params = new URLSearchParams(window.location.search);
     const initial = Number.parseFloat(params.get("chrome_zoom"));
     const fallbackImage = new Image();
-    let lastSentZoom = "";
-    let livePollId = 0;
+    let sliderValue = DEFAULT_ZOOM;
+    let lastPreviewZoom = "";
+    let dragging = false;
 
-    if (Number.isFinite(initial)) {
-      slider.value = String(Math.round(initial * 100));
+    function clampPercent(value) {
+      if (!Number.isFinite(value)) {
+        return DEFAULT_ZOOM;
+      }
+      return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(value)));
     }
 
-    function updateOutput() {
-      output.value = `${slider.value}%`;
-      output.textContent = `${slider.value}%`;
+    function zoomString(percent) {
+      return (percent / 100).toFixed(2);
     }
 
-    function settingUrl(path, zoom) {
-      return `slate://settings/${path}?chrome_zoom=${zoom}&nonce=${Date.now()}`;
+    function updateSlider() {
+      sliderValue = clampPercent(sliderValue);
+      const fraction = (sliderValue - MIN_ZOOM) / (MAX_ZOOM - MIN_ZOOM);
+      const position = `${fraction * 100}%`;
+      fill.style.width = position;
+      thumb.style.left = position;
+      output.value = `${sliderValue}%`;
+      output.textContent = `${sliderValue}%`;
+      slider.setAttribute("aria-valuenow", String(sliderValue));
+      slider.setAttribute("aria-valuetext", `${sliderValue}%`);
     }
 
-    function replaceDisplayedUrl(zoom) {
-      if (window.history && window.history.replaceState) {
-        window.history.replaceState(null, "", `slate://settings?chrome_zoom=${zoom}`);
+    function settingUrl(path, percent) {
+      return `slate://settings/${path}?chrome_zoom=${zoomString(percent)}&nonce=${Date.now()}`;
+    }
+
+    function sendSetting(path, percent) {
+      const url = settingUrl(path, percent);
+      try {
+        if (window.fetch) {
+          const request = window.fetch(url, { cache: "no-store" });
+          if (request && request.catch) {
+            request.catch(() => {
+              fallbackImage.src = url;
+            });
+          }
+          return;
+        }
+      } catch (error) {}
+      fallbackImage.src = url;
+    }
+
+    function previewZoom() {
+      const zoom = zoomString(sliderValue);
+      if (zoom === lastPreviewZoom) {
+        return;
+      }
+      lastPreviewZoom = zoom;
+      sendSetting("preview", sliderValue);
+      saveButton.textContent = "Save";
+    }
+
+    function setSliderValue(percent, preview) {
+      sliderValue = clampPercent(percent);
+      updateSlider();
+      if (preview) {
+        previewZoom();
       }
     }
 
-    function sendZoom(percent) {
-      const zoom = (percent / 100).toFixed(2);
-      if (zoom === lastSentZoom) {
+    function clientXFromEvent(event) {
+      if (event.touches && event.touches.length > 0) {
+        return event.touches[0].clientX;
+      }
+      if (event.changedTouches && event.changedTouches.length > 0) {
+        return event.changedTouches[0].clientX;
+      }
+      return event.clientX;
+    }
+
+    function valueFromPointer(event) {
+      const rect = slider.getBoundingClientRect();
+      const width = Math.max(1, rect.width);
+      const fraction = (clientXFromEvent(event) - rect.left) / width;
+      return MIN_ZOOM + Math.min(1, Math.max(0, fraction)) * (MAX_ZOOM - MIN_ZOOM);
+    }
+
+    function updateFromPointer(event) {
+      setSliderValue(valueFromPointer(event), true);
+      if (event.cancelable) {
+        event.preventDefault();
+      }
+    }
+
+    function startDrag(event) {
+      dragging = true;
+      slider.focus();
+      updateFromPointer(event);
+    }
+
+    function moveDrag(event) {
+      if (dragging) {
+        updateFromPointer(event);
+      }
+    }
+
+    function stopDrag(event) {
+      if (dragging) {
+        updateFromPointer(event);
+        dragging = false;
+      }
+    }
+
+    function stepSlider(event) {
+      let next = sliderValue;
+      if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+        next -= 1;
+      } else if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+        next += 1;
+      } else if (event.key === "PageDown") {
+        next -= 5;
+      } else if (event.key === "PageUp") {
+        next += 5;
+      } else if (event.key === "Home") {
+        next = MIN_ZOOM;
+      } else if (event.key === "End") {
+        next = MAX_ZOOM;
+      } else {
         return;
       }
 
-      lastSentZoom = zoom;
-      replaceDisplayedUrl(zoom);
-
-      const url = settingUrl("apply", zoom);
-      if (window.fetch) {
-        window.fetch(url, { cache: "no-store" }).catch(() => {
-          fallbackImage.src = url;
-        });
-      } else {
-        fallbackImage.src = url;
-      }
-    }
-
-    function applySliderZoom() {
-      updateOutput();
-      sendZoom(Number.parseInt(slider.value, 10));
+      event.preventDefault();
+      setSliderValue(next, true);
     }
 
     function loadNativeZoom() {
-      if (Number.isFinite(initial) || !window.fetch) {
-        applySliderZoom();
+      if (Number.isFinite(initial)) {
+        setSliderValue(Math.round(initial * 100), true);
+        return;
+      }
+
+      if (!window.fetch) {
+        updateSlider();
         return;
       }
 
@@ -175,46 +323,31 @@
         .then((response) => response.json())
         .then((settings) => {
           const zoom = Number.parseFloat(settings.chrome_zoom);
-          if (Number.isFinite(zoom)) {
-            slider.value = String(Math.round(zoom * 100));
-          }
-          applySliderZoom();
+          setSliderValue(Number.isFinite(zoom) ? Math.round(zoom * 100) : DEFAULT_ZOOM, false);
         })
-        .catch(applySliderZoom);
+        .catch(() => {
+          updateSlider();
+        });
     }
 
-    function startLivePoll() {
-      applySliderZoom();
-      if (livePollId === 0) {
-        livePollId = window.setInterval(applySliderZoom, 50);
-      }
-    }
-
-    function stopLivePoll() {
-      if (livePollId !== 0) {
-        window.clearInterval(livePollId);
-        livePollId = 0;
-      }
-      applySliderZoom();
-    }
-
-    slider.addEventListener("input", applySliderZoom);
-    slider.addEventListener("change", applySliderZoom);
-    slider.addEventListener("keydown", applySliderZoom);
-    slider.addEventListener("keyup", applySliderZoom);
-    slider.addEventListener("mousedown", startLivePoll);
-    slider.addEventListener("touchstart", startLivePoll);
-    slider.addEventListener("pointerdown", startLivePoll);
-    window.addEventListener("mouseup", stopLivePoll);
-    window.addEventListener("touchend", stopLivePoll);
-    window.addEventListener("touchcancel", stopLivePoll);
-    window.addEventListener("pointerup", stopLivePoll);
-    window.addEventListener("pointercancel", stopLivePoll);
-    document.getElementById("reset").addEventListener("click", () => {
-      slider.value = String(DEFAULT_ZOOM);
-      applySliderZoom();
+    slider.addEventListener("mousedown", startDrag);
+    window.addEventListener("mousemove", moveDrag);
+    window.addEventListener("mouseup", stopDrag);
+    slider.addEventListener("touchstart", startDrag);
+    window.addEventListener("touchmove", moveDrag);
+    window.addEventListener("touchend", stopDrag);
+    window.addEventListener("touchcancel", () => {
+      dragging = false;
     });
-    updateOutput();
+    slider.addEventListener("keydown", stepSlider);
+    saveButton.addEventListener("click", () => {
+      sendSetting("save", sliderValue);
+      saveButton.textContent = "Saved";
+    });
+    document.getElementById("reset").addEventListener("click", () => {
+      setSliderValue(DEFAULT_ZOOM, true);
+    });
+    updateSlider();
     loadNativeZoom();
   </script>
 </body>

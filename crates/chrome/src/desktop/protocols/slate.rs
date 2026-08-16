@@ -46,7 +46,14 @@ impl SlateProtocolHandler {
 
 impl ProtocolHandler for SlateProtocolHandler {
     fn privileged_paths(&self) -> &'static [&'static str] {
-        &["home", "settings", "settings/state", "settings/apply"]
+        &[
+            "home",
+            "settings",
+            "settings/state",
+            "settings/preview",
+            "settings/save",
+            "settings/apply",
+        ]
     }
 
     fn is_fetchable(&self) -> bool {
@@ -64,7 +71,14 @@ impl ProtocolHandler for SlateProtocolHandler {
             return chrome_zoom_json_response(request, current_chrome_element_zoom_setting());
         }
 
-        if is_slate_settings_apply_url(url.as_url()) {
+        if is_slate_settings_preview_url(url.as_url()) {
+            let zoom = chrome_element_zoom_setting_from_url(url.as_url())
+                .map(set_current_chrome_element_zoom_setting)
+                .unwrap_or_else(current_chrome_element_zoom_setting);
+            return chrome_zoom_json_response(request, zoom);
+        }
+
+        if is_slate_settings_save_url(url.as_url()) || is_slate_settings_apply_url(url.as_url()) {
             let zoom = chrome_element_zoom_setting_from_url(url.as_url())
                 .map(set_current_chrome_element_zoom_setting)
                 .unwrap_or_else(current_chrome_element_zoom_setting);
@@ -195,6 +209,18 @@ fn is_slate_settings_state_url(url: &Url) -> bool {
         && url.path().trim_start_matches('/') == "state"
 }
 
+fn is_slate_settings_preview_url(url: &Url) -> bool {
+    url.scheme() == "slate"
+        && url.host_str() == Some("settings")
+        && url.path().trim_start_matches('/') == "preview"
+}
+
+fn is_slate_settings_save_url(url: &Url) -> bool {
+    url.scheme() == "slate"
+        && url.host_str() == Some("settings")
+        && url.path().trim_start_matches('/') == "save"
+}
+
 fn is_slate_settings_apply_url(url: &Url) -> bool {
     url.scheme() == "slate"
         && url.host_str() == Some("settings")
@@ -205,7 +231,8 @@ fn is_slate_settings_apply_url(url: &Url) -> bool {
 mod tests {
     use super::{
         CHROME_ELEMENT_ZOOM_SETTING_MAX, CHROME_ELEMENT_ZOOM_SETTING_MIN,
-        chrome_element_zoom_setting_from_url, is_slate_home_url, is_slate_settings_url,
+        chrome_element_zoom_setting_from_url, is_slate_home_url, is_slate_settings_apply_url,
+        is_slate_settings_preview_url, is_slate_settings_save_url, is_slate_settings_url,
     };
     use url::Url;
 
@@ -256,10 +283,41 @@ mod tests {
         );
         assert_eq!(
             chrome_element_zoom_setting_from_url(
+                &Url::parse("slate://settings/preview?chrome_zoom=0.86").unwrap()
+            ),
+            Some(0.86)
+        );
+        assert_eq!(
+            chrome_element_zoom_setting_from_url(
+                &Url::parse("slate://settings/save?chrome_zoom=1.03").unwrap()
+            ),
+            Some(1.03)
+        );
+        assert_eq!(
+            chrome_element_zoom_setting_from_url(
                 &Url::parse("slate://home?chrome_zoom=0.82").unwrap()
             ),
             None
         );
+    }
+
+    #[test]
+    fn slate_settings_zoom_action_urls_are_distinct() {
+        assert!(is_slate_settings_preview_url(
+            &Url::parse("slate://settings/preview?chrome_zoom=0.82").unwrap()
+        ));
+        assert!(is_slate_settings_save_url(
+            &Url::parse("slate://settings/save?chrome_zoom=0.82").unwrap()
+        ));
+        assert!(is_slate_settings_apply_url(
+            &Url::parse("slate://settings/apply?chrome_zoom=0.82").unwrap()
+        ));
+        assert!(!is_slate_settings_preview_url(
+            &Url::parse("slate://settings/save?chrome_zoom=0.82").unwrap()
+        ));
+        assert!(!is_slate_settings_save_url(
+            &Url::parse("slate://settings/preview?chrome_zoom=0.82").unwrap()
+        ));
     }
 
     #[test]
@@ -268,5 +326,20 @@ mod tests {
 
         assert!(resource_dir.join("slate-home.html").is_file());
         assert!(resource_dir.join("slate-settings.html").is_file());
+    }
+
+    #[test]
+    fn slate_settings_page_previews_zoom_and_saves_explicitly() {
+        let resource_dir = crate::resources::resource_protocol_dir_path();
+        let settings_page =
+            std::fs::read_to_string(resource_dir.join("slate-settings.html")).unwrap();
+        let save_index = settings_page.find("id=\"save\"").unwrap();
+        let reset_index = settings_page.find("id=\"reset\"").unwrap();
+
+        assert!(save_index < reset_index);
+        assert!(settings_page.contains("sendSetting(\"preview\""));
+        assert!(settings_page.contains("sendSetting(\"save\""));
+        assert!(!settings_page.contains("replaceState"));
+        assert!(!settings_page.contains("type=\"range\""));
     }
 }
