@@ -19,6 +19,27 @@
   visually inconsistent with the raster icon theme, and Settings, Web, and Home
   tabs sometimes showing different tab-label icons because of an apparent icon
   selection bug.
+- Treat the intentional teal accent color as design direction, not as a visual
+  regression. The verification process should focus on theme consistency,
+  alignment, icon identity, and geometry unless a color change is explicitly
+  called out as unintended.
+- Keep the current tab-strip defects as visual-regression fixtures: the first
+  tab has a vertical divider glued to its left edge that makes the boundary
+  between the Slate label area and the tab strip look like a weld mark; long tab
+  titles overwrite the close button instead of clipping with an ellipsis; and
+  the tab close button appears to come from Servo's default theme rather than
+  matching the raster navigation-button theme below it.
+- Build the chrome visual verification process around repeatable captures:
+  render canonical states headlessly, save full screenshots, crop stable regions
+  for the app label, first tab, tab close button, tab strip, rail buttons, and
+  navigation toolbar, then compare those crops against approved reference images
+  or raster asset templates. The checks should flag unexpected divider lines,
+  title text entering reserved close-button bounds, incorrect tab icon identity,
+  mismatched close-button artwork, and inconsistent icon weight or alignment.
+- Keep a manual/image-recognition review step for issues that are visible to a
+  human but hard to capture with exact thresholds. The automated loop should
+  produce the crops and metadata needed for review instead of relying only on
+  full-window screenshots.
 
 ## Developer Environment
 
