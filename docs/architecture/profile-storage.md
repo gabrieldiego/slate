@@ -76,6 +76,13 @@ bookmark slots only. User-added bookmarks replace the seeded suggestions first;
 after both visible slots are user-owned, adding another bookmark updates an
 existing matching slot or replaces the second slot.
 
+Home bookmark favicons are cached in `binary_blobs` using deterministic keys
+based on the root favicon URL when one can be derived, falling back to the
+bookmark URL otherwise. While an icon is absent, being fetched, failed, or
+unsupported by the current raster image decoder, the home card shows a muted
+Slate icon. Favicon fetches use the same broadwebd route as subresource loads
+and are only started for the active home view.
+
 ## Integration Notes
 
 Bookmark editing should be wired through Slate's bookmark UI once that UI

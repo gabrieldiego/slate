@@ -3,13 +3,15 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 use std::cell::Cell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
 use std::fs;
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
+use std::thread;
 use std::time::Duration;
 
 use dpi::PhysicalSize;
@@ -32,7 +34,8 @@ use servo::{
     RenderingContext, WebView, WebViewId,
 };
 use slate_broadwebd::{
-    BroadwebStatusKind, BroadwebStatusSnapshot, default_session_status_snapshot,
+    BroadwebDaemon, BroadwebStatusKind, BroadwebStatusSnapshot, FetchDisposition, HttpFetchRequest,
+    default_session_status_snapshot,
 };
 use slate_storage::{
     BookmarkRecord, BookmarkUpdate, DEFAULT_HOME_BOOKMARKS, DEFAULT_PROFILE_ID,
@@ -201,6 +204,9 @@ const HOME_CONTENT_OPTICAL_OFFSET_X: f32 = -13.0;
 const HOME_HERO_OPTICAL_OFFSET_X: f32 = -29.0;
 const HOME_BOOKMARK_SLOT_COUNT: usize = 2;
 const HOME_BOOKMARK_CARD_COUNT: usize = 4;
+const HOME_FAVICON_MAX_BYTES: usize = 256 * 1024;
+const HOME_FAVICON_MAX_SIDE: u32 = 64;
+const HOME_FAVICON_FETCH_REPAINT_INTERVAL: Duration = Duration::from_millis(250);
 const STATUS_BUBBLE_MARGIN_X: f32 = 14.0;
 const STATUS_BUBBLE_MARGIN_Y: f32 = 12.0;
 const STATUS_BUBBLE_HEIGHT: f32 = 32.0;
@@ -225,6 +231,11 @@ pub struct Gui {
     home_search: String,
     home_bookmarks: Vec<HomeBookmarkCard>,
     home_bookmarks_loaded: bool,
+    home_favicon_textures: HashMap<String, (egui::TextureHandle, egui::load::SizedTexture)>,
+    home_favicon_fetches: HashSet<String>,
+    home_favicon_failures: HashSet<String>,
+    home_favicon_tx: Sender<HomeFaviconFetchResult>,
+    home_favicon_rx: Receiver<HomeFaviconFetchResult>,
 
     /// Whether the location has been edited by the user without clicking Go.
     location_dirty: bool,
@@ -314,16 +325,29 @@ impl Default for HomeContentLayout {
 
 #[derive(Clone, Debug, PartialEq)]
 struct HomeBookmarkCard {
-    icon: SlateIcon,
     label: String,
     detail: String,
     url: Option<String>,
+    favicon_key: Option<String>,
+    favicon_url: Option<String>,
 }
 
 #[derive(Debug)]
 struct HomeContentResponse {
     navigation_request: Option<String>,
     layout: HomeContentLayout,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct HomeFaviconBytes {
+    media_type: Option<String>,
+    bytes: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct HomeFaviconFetchResult {
+    key: String,
+    result: Result<HomeFaviconBytes, String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -705,16 +729,18 @@ fn home_metric_detail_color() -> egui::Color32 {
 fn home_bookmark_placeholder_cards() -> Vec<HomeBookmarkCard> {
     vec![
         HomeBookmarkCard {
-            icon: SlateIcon::HomeMetricPrivacy,
             label: "Add bookmark".to_string(),
             detail: "Save a favorite site".to_string(),
             url: None,
+            favicon_key: None,
+            favicon_url: None,
         },
         HomeBookmarkCard {
-            icon: SlateIcon::HomeMetricTime,
             label: "Add another".to_string(),
             detail: "Pin your broadweb".to_string(),
             url: None,
+            favicon_key: None,
+            favicon_url: None,
         },
     ]
 }
@@ -722,12 +748,7 @@ fn home_bookmark_placeholder_cards() -> Vec<HomeBookmarkCard> {
 fn default_home_bookmark_cards() -> Vec<HomeBookmarkCard> {
     let mut bookmarks: Vec<_> = DEFAULT_HOME_BOOKMARKS
         .iter()
-        .map(|bookmark| HomeBookmarkCard {
-            icon: home_bookmark_icon_for_url(bookmark.url),
-            label: bookmark.title.to_string(),
-            detail: home_bookmark_detail(bookmark.url),
-            url: Some(bookmark.url.to_string()),
-        })
+        .map(|bookmark| home_bookmark_card(bookmark.title.to_string(), bookmark.url.to_string()))
         .collect();
     fill_home_bookmark_placeholders(&mut bookmarks);
     bookmarks
@@ -768,22 +789,24 @@ fn home_bookmark_card_from_record(record: BookmarkRecord) -> HomeBookmarkCard {
         .title
         .filter(|title| !title.trim().is_empty())
         .unwrap_or_else(|| home_bookmark_detail(&record.url));
-    HomeBookmarkCard {
-        icon: home_bookmark_icon_for_url(&record.url),
-        label,
-        detail: home_bookmark_detail(&record.url),
-        url: Some(record.url),
-    }
+    let mut card = home_bookmark_card(label, record.url);
+    card.favicon_key = card.url.as_deref().and_then(|url| {
+        record
+            .favicon_key
+            .filter(|key| !key.trim().is_empty())
+            .or_else(|| Some(home_bookmark_favicon_key(url)))
+    });
+    card
 }
 
-fn home_bookmark_icon_for_url(url: &str) -> SlateIcon {
-    Url::parse(url).ok().map_or(SlateIcon::TabWeb, |url| {
-        if matches!(url.scheme(), "ipfs" | "ipns") {
-            SlateIcon::HomeMetricLock
-        } else {
-            SlateIcon::TabWeb
-        }
-    })
+fn home_bookmark_card(label: String, url: String) -> HomeBookmarkCard {
+    HomeBookmarkCard {
+        label,
+        detail: home_bookmark_detail(&url),
+        favicon_key: Some(home_bookmark_favicon_key(&url)),
+        favicon_url: home_bookmark_favicon_url(&url),
+        url: Some(url),
+    }
 }
 
 fn home_bookmark_detail(url: &str) -> String {
@@ -801,6 +824,23 @@ fn home_bookmark_detail(url: &str) -> String {
             _ => url.to_string(),
         },
     )
+}
+
+fn home_bookmark_favicon_key(url: &str) -> String {
+    let cache_url = home_bookmark_favicon_url(url).unwrap_or_else(|| url.to_string());
+    format!("favicon:{cache_url}")
+}
+
+fn home_bookmark_favicon_url(url: &str) -> Option<String> {
+    let mut parsed = Url::parse(url).ok()?;
+    if !home_bookmark_scheme_can_fetch_favicon(parsed.scheme()) {
+        return None;
+    }
+
+    parsed.set_path("/favicon.ico");
+    parsed.set_query(None);
+    parsed.set_fragment(None);
+    Some(parsed.to_string())
 }
 
 fn is_default_home_bookmark_url(url: &str) -> bool {
@@ -839,6 +879,10 @@ fn is_home_bookmarkable_url(url: &str) -> bool {
             "about" | "data" | "file" | "javascript" | "slate"
         )
     })
+}
+
+fn home_bookmark_scheme_can_fetch_favicon(scheme: &str) -> bool {
+    matches!(scheme, "http" | "https" | "ipfs" | "ipns")
 }
 
 fn status_bubble_width(text: &str, available_width: f32) -> f32 {
@@ -1716,6 +1760,7 @@ impl Gui {
             options.fallback_theme = egui::Theme::Light;
         });
 
+        let (home_favicon_tx, home_favicon_rx) = mpsc::channel();
         Self {
             rendering_context,
             context,
@@ -1727,6 +1772,11 @@ impl Gui {
             home_search: String::new(),
             home_bookmarks: default_home_bookmark_cards(),
             home_bookmarks_loaded: false,
+            home_favicon_textures: Default::default(),
+            home_favicon_fetches: Default::default(),
+            home_favicon_failures: Default::default(),
+            home_favicon_tx,
+            home_favicon_rx,
             location_dirty: false,
             load_status: LoadStatus::Complete,
             status_text: None,
@@ -2296,6 +2346,7 @@ impl Gui {
     fn draw_home_bookmark_card(
         ui: &mut egui::Ui,
         slate_icons: &mut SlateIconCache,
+        favicon_textures: &HashMap<String, (egui::TextureHandle, egui::load::SizedTexture)>,
         width: f32,
         bookmark: &HomeBookmarkCard,
     ) -> (egui::Rect, egui::Response) {
@@ -2316,22 +2367,34 @@ impl Gui {
                 let (content_rect, _) = ui.allocate_exact_size(content_size, egui::Sense::hover());
                 if ui.is_rect_visible(content_rect) {
                     let active = bookmark.url.is_some();
-                    let icon_color = if active {
-                        slate_theme::TEAL
-                    } else {
-                        slate_theme::MUTED
-                    };
-                    let texture = slate_icons.texture(ui.ctx(), bookmark.icon, icon_color);
                     let icon_rect = egui::Rect::from_center_size(
                         egui::pos2(content_rect.center().x, content_rect.top() + 26.0),
                         egui::Vec2::splat(HOME_METRIC_ICON_SIZE),
                     );
-                    ui.painter().image(
-                        texture.id,
-                        icon_rect,
-                        egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
-                        egui::Color32::WHITE,
-                    );
+                    if let Some((_, texture)) = bookmark
+                        .favicon_key
+                        .as_ref()
+                        .and_then(|key| favicon_textures.get(key))
+                    {
+                        ui.painter().image(
+                            texture.id,
+                            icon_rect,
+                            egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
+                            egui::Color32::WHITE,
+                        );
+                    } else {
+                        let texture = slate_icons.texture(
+                            ui.ctx(),
+                            SlateIcon::HomeHeroShield,
+                            slate_theme::MUTED,
+                        );
+                        ui.painter().image(
+                            texture.id,
+                            icon_rect,
+                            egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
+                            egui::Color32::WHITE,
+                        );
+                    }
 
                     let label = truncate_with_ellipsis(&bookmark.label, 22);
                     ui.painter().text(
@@ -2408,6 +2471,7 @@ impl Gui {
     fn draw_home_metrics(
         ui: &mut egui::Ui,
         slate_icons: &mut SlateIconCache,
+        favicon_textures: &HashMap<String, (egui::TextureHandle, egui::load::SizedTexture)>,
         bookmarks: &[HomeBookmarkCard],
     ) -> (egui::Rect, Option<String>) {
         let layout = home_metrics_layout(ui.available_width());
@@ -2424,8 +2488,13 @@ impl Gui {
                     if column_index > 0 {
                         ui.add_space(layout.spacing);
                     }
-                    let (card_rect, response) =
-                        Self::draw_home_bookmark_card(ui, slate_icons, layout.card_width, bookmark);
+                    let (card_rect, response) = Self::draw_home_bookmark_card(
+                        ui,
+                        slate_icons,
+                        favicon_textures,
+                        layout.card_width,
+                        bookmark,
+                    );
                     if response.clicked()
                         && let Some(url) = &bookmark.url
                     {
@@ -2444,6 +2513,7 @@ impl Gui {
         ui: &mut egui::Ui,
         home_rect: egui::Rect,
         slate_icons: &mut SlateIconCache,
+        favicon_textures: &HashMap<String, (egui::TextureHandle, egui::load::SizedTexture)>,
         home_search: &mut String,
         home_bookmarks: &[HomeBookmarkCard],
     ) -> HomeContentResponse {
@@ -2565,7 +2635,7 @@ impl Gui {
                 let metrics_response = ui.allocate_ui_with_layout(
                     egui::vec2(metrics_width, metrics_height),
                     egui::Layout::top_down(egui::Align::Center),
-                    |ui| Self::draw_home_metrics(ui, slate_icons, home_bookmarks),
+                    |ui| Self::draw_home_metrics(ui, slate_icons, favicon_textures, home_bookmarks),
                 );
                 layout.metrics_rect = metrics_response.inner.0;
                 if let Some(request) = metrics_response.inner.1 {
@@ -2584,6 +2654,7 @@ impl Gui {
         ctx: &egui::Context,
         available_rect: egui::Rect,
         slate_icons: &mut SlateIconCache,
+        favicon_textures: &HashMap<String, (egui::TextureHandle, egui::load::SizedTexture)>,
         home_search: &mut String,
         home_bookmarks: &[HomeBookmarkCard],
         window: &ServoShellWindow,
@@ -2602,6 +2673,7 @@ impl Gui {
                             ui,
                             home_rect,
                             slate_icons,
+                            favicon_textures,
                             home_search,
                             home_bookmarks,
                         )
@@ -2795,6 +2867,11 @@ impl Gui {
             location,
             home_search,
             home_bookmarks,
+            home_favicon_textures,
+            home_favicon_fetches,
+            home_favicon_failures,
+            home_favicon_tx,
+            home_favicon_rx,
             location_dirty,
             load_status,
             broadweb_status,
@@ -2811,6 +2888,20 @@ impl Gui {
             load_pending_favicons(ctx, window, favicon_textures);
             let active_webview_is_home = Self::active_webview_is_home(window);
             *webview_contains_native_chrome = active_webview_is_home;
+            if active_webview_is_home
+                && Self::update_home_bookmark_favicons(
+                    ctx,
+                    &state.profile_database,
+                    home_bookmarks,
+                    home_favicon_textures,
+                    home_favicon_fetches,
+                    home_favicon_failures,
+                    home_favicon_rx,
+                    home_favicon_tx,
+                )
+            {
+                ctx.request_repaint();
+            }
 
             // TODO: While in fullscreen add some way to mitigate the increased phishing risk
             // when not displaying the URL bar: https://github.com/servo/servo/issues/32443
@@ -3268,6 +3359,7 @@ impl Gui {
                     ctx,
                     available_rect,
                     slate_icons,
+                    home_favicon_textures,
                     home_search,
                     home_bookmarks,
                     window,
@@ -3396,12 +3488,110 @@ impl Gui {
                 title: Some(home_bookmark_title(webview.page_title(), &url)),
                 folder: None,
                 position: slot as i64,
-                favicon_key: None,
+                favicon_key: Some(home_bookmark_favicon_key(&url)),
             },
             replaced_url,
         )?;
 
         home_bookmark_cards_from_database(database).map(Some)
+    }
+
+    fn update_home_bookmark_favicons(
+        ctx: &egui::Context,
+        database: &SlateProfileDatabase,
+        bookmarks: &[HomeBookmarkCard],
+        textures: &mut HashMap<String, (egui::TextureHandle, egui::load::SizedTexture)>,
+        pending: &mut HashSet<String>,
+        failed: &mut HashSet<String>,
+        receiver: &Receiver<HomeFaviconFetchResult>,
+        sender: &Sender<HomeFaviconFetchResult>,
+    ) -> bool {
+        let mut changed =
+            Self::drain_home_favicon_results(ctx, database, textures, pending, failed, receiver);
+
+        for bookmark in bookmarks.iter().take(HOME_BOOKMARK_SLOT_COUNT) {
+            let Some(key) = bookmark.favicon_key.as_deref() else {
+                continue;
+            };
+            let Some(favicon_url) = bookmark.favicon_url.as_deref() else {
+                continue;
+            };
+            if textures.contains_key(key) || pending.contains(key) || failed.contains(key) {
+                continue;
+            }
+
+            match database.get_blob(DEFAULT_PROFILE_ID, key) {
+                Ok(Some(blob)) => {
+                    if let Some(texture) = load_home_favicon_texture(ctx, key, &blob.data) {
+                        textures.insert(key.to_string(), texture);
+                        changed = true;
+                        continue;
+                    }
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    warn!("failed to load cached bookmark favicon {key}: {error}");
+                }
+            }
+
+            pending.insert(key.to_string());
+            spawn_home_favicon_fetch(sender.clone(), key.to_string(), favicon_url.to_string());
+        }
+
+        if !pending.is_empty() {
+            ctx.request_repaint_after(HOME_FAVICON_FETCH_REPAINT_INTERVAL);
+        }
+
+        changed
+    }
+
+    fn drain_home_favicon_results(
+        ctx: &egui::Context,
+        database: &SlateProfileDatabase,
+        textures: &mut HashMap<String, (egui::TextureHandle, egui::load::SizedTexture)>,
+        pending: &mut HashSet<String>,
+        failed: &mut HashSet<String>,
+        receiver: &Receiver<HomeFaviconFetchResult>,
+    ) -> bool {
+        let mut changed = false;
+        loop {
+            match receiver.try_recv() {
+                Ok(result) => {
+                    pending.remove(&result.key);
+                    match result.result {
+                        Ok(favicon) => {
+                            if let Some(texture) =
+                                load_home_favicon_texture(ctx, &result.key, &favicon.bytes)
+                            {
+                                if let Err(error) = database.set_blob(
+                                    DEFAULT_PROFILE_ID,
+                                    &result.key,
+                                    favicon.media_type.as_deref(),
+                                    &favicon.bytes,
+                                ) {
+                                    warn!(
+                                        "failed to cache bookmark favicon {}: {error}",
+                                        result.key
+                                    );
+                                }
+                                failed.remove(&result.key);
+                                textures.insert(result.key, texture);
+                                changed = true;
+                            } else {
+                                warn!("failed to decode bookmark favicon {}", result.key);
+                                failed.insert(result.key);
+                            }
+                        }
+                        Err(error) => {
+                            warn!("failed to fetch bookmark favicon {}: {error}", result.key);
+                            failed.insert(result.key);
+                        }
+                    }
+                }
+                Err(TryRecvError::Empty) => return changed,
+                Err(TryRecvError::Disconnected) => return changed,
+            }
+        }
     }
 
     fn update_home_bookmarks(&mut self, database: &SlateProfileDatabase) -> bool {
@@ -3548,9 +3738,10 @@ mod tests {
         FOOTER_LOAD_STATUS_DOT_LABEL_GAP, FOOTER_LOAD_STATUS_DOT_SIZE, FOOTER_LOAD_STATUS_HEIGHT,
         FOOTER_PANEL_MARGIN_BOTTOM, FOOTER_PANEL_MARGIN_TOP, FOOTER_PANEL_MARGIN_X,
         FOOTER_RIGHT_PADDING, FOOTER_TEXT_SIZE, HOME_BOTTOM_MIN_GAP, HOME_CONTENT_OPTICAL_OFFSET_X,
-        HOME_HERO_MOTTO_GAP, HOME_HERO_OPTICAL_OFFSET_X, HOME_HERO_SIZE, HOME_HERO_TO_SEARCH_GAP,
-        HOME_METRIC_BADGE_CORNER_RADIUS, HOME_METRIC_BADGE_EXTRA_DIGIT_FACTOR,
-        HOME_METRIC_BADGE_LABEL_GAP, HOME_METRIC_BADGE_MARGIN_X, HOME_METRIC_BADGE_MARGIN_Y,
+        HOME_FAVICON_MAX_BYTES, HOME_HERO_MOTTO_GAP, HOME_HERO_OPTICAL_OFFSET_X, HOME_HERO_SIZE,
+        HOME_HERO_TO_SEARCH_GAP, HOME_METRIC_BADGE_CORNER_RADIUS,
+        HOME_METRIC_BADGE_EXTRA_DIGIT_FACTOR, HOME_METRIC_BADGE_LABEL_GAP,
+        HOME_METRIC_BADGE_MARGIN_X, HOME_METRIC_BADGE_MARGIN_Y,
         HOME_METRIC_BADGE_PRIMARY_DIGIT_FACTOR, HOME_METRIC_BADGE_TEXT_SIZE, HOME_METRIC_CARD_GAP,
         HOME_METRIC_CARD_HEIGHT, HOME_METRIC_CARD_INNER_MARGIN_X, HOME_METRIC_CARD_INNER_MARGIN_Y,
         HOME_METRIC_CARD_MAX_WIDTH, HOME_METRIC_DETAIL_GAP, HOME_METRIC_DETAIL_TEXT_SIZE,
@@ -3599,8 +3790,9 @@ mod tests {
         footer_load_status_indicator_color, footer_load_status_indicator_color_at,
         footer_load_status_is_in_progress, footer_load_status_label_max_chars,
         footer_load_status_pulse_target_color, footer_load_status_width, footer_panel_margin,
-        footer_status_text_color, footer_top_separator_color, home_bookmark_slot_for_url,
-        home_bookmark_title, home_content_left_space, home_content_stack_height,
+        footer_status_text_color, footer_top_separator_color, home_bookmark_favicon_key,
+        home_bookmark_favicon_url, home_bookmark_slot_for_url, home_bookmark_title,
+        home_content_left_space, home_content_stack_height, home_favicon_color_image,
         home_hero_icon_visible_rect, home_hero_left_space, home_metric_badge_width,
         home_metric_card_background_color, home_metric_card_content_height,
         home_metric_card_content_width, home_metric_detail_color, home_metrics_layout,
@@ -3691,6 +3883,7 @@ mod tests {
                 ui,
                 screen_rect,
                 &mut slate_icons,
+                &std::collections::HashMap::new(),
                 &mut home_search,
                 &default_home_bookmark_cards(),
             );
@@ -4859,15 +5052,35 @@ mod tests {
             bookmarks[0].url.as_deref(),
             Some("ipns://en.wikipedia-on-ipfs.org/wiki/")
         );
+        assert_eq!(
+            bookmarks[0].favicon_key.as_deref(),
+            Some("favicon:ipns://en.wikipedia-on-ipfs.org/favicon.ico")
+        );
+        assert_eq!(
+            bookmarks[0].favicon_url.as_deref(),
+            Some("ipns://en.wikipedia-on-ipfs.org/favicon.ico")
+        );
         assert_eq!(bookmarks[1].label, "OpenStreetMap");
         assert_eq!(
             bookmarks[1].url.as_deref(),
             Some("https://www.openstreetmap.org/")
         );
+        assert_eq!(
+            bookmarks[1].favicon_key.as_deref(),
+            Some("favicon:https://www.openstreetmap.org/favicon.ico")
+        );
+        assert_eq!(
+            bookmarks[1].favicon_url.as_deref(),
+            Some("https://www.openstreetmap.org/favicon.ico")
+        );
         assert_eq!(bookmarks[2].label, "Add bookmark");
         assert!(bookmarks[2].url.is_none());
+        assert!(bookmarks[2].favicon_key.is_none());
+        assert!(bookmarks[2].favicon_url.is_none());
         assert_eq!(bookmarks[3].label, "Add another");
         assert!(bookmarks[3].url.is_none());
+        assert!(bookmarks[3].favicon_key.is_none());
+        assert!(bookmarks[3].favicon_url.is_none());
     }
 
     #[test]
@@ -4923,8 +5136,38 @@ mod tests {
 
         assert!(is_home_bookmarkable_url("https://example.com/"));
         assert!(is_home_bookmarkable_url("ipfs://bafybeigdyrzt/"));
+        assert!(is_home_bookmarkable_url("gemini://example.com/"));
         assert!(!is_home_bookmarkable_url("slate://home"));
         assert!(!is_home_bookmarkable_url("file:///tmp/index.html"));
+    }
+
+    #[test]
+    fn home_bookmark_favicon_cache_key_and_url_are_deterministic() {
+        assert_eq!(
+            home_bookmark_favicon_key("https://example.com/path/page.html"),
+            "favicon:https://example.com/favicon.ico"
+        );
+        assert_eq!(
+            home_bookmark_favicon_url("https://example.com/path/page.html").as_deref(),
+            Some("https://example.com/favicon.ico")
+        );
+        assert_eq!(
+            home_bookmark_favicon_url("ipfs://bafybeigdyrzt/site/index.html").as_deref(),
+            Some("ipfs://bafybeigdyrzt/favicon.ico")
+        );
+        assert_eq!(home_bookmark_favicon_url("gemini://example.com/"), None);
+        assert_eq!(home_bookmark_favicon_url("slate://home"), None);
+    }
+
+    #[test]
+    fn home_favicon_decoder_accepts_small_raster_icons_and_rejects_bad_input() {
+        let image = home_favicon_color_image(include_bytes!(
+            "../../assets/icons/slate-ns/hotlist-add.png"
+        ))
+        .expect("decode png favicon");
+        assert_eq!(image.size, [17, 17]);
+        assert!(home_favicon_color_image(&[]).is_none());
+        assert!(home_favicon_color_image(&vec![0; HOME_FAVICON_MAX_BYTES + 1]).is_none());
     }
 
     #[test]
@@ -5071,6 +5314,86 @@ fn embedder_image_to_egui_image(image: &Image) -> egui::ColorImage {
             egui::ColorImage::from_rgba_unmultiplied([width, height], &data)
         }
     }
+}
+
+fn load_home_favicon_texture(
+    ctx: &egui::Context,
+    key: &str,
+    bytes: &[u8],
+) -> Option<(egui::TextureHandle, egui::load::SizedTexture)> {
+    let image = home_favicon_color_image(bytes)?;
+    let size = egui::vec2(image.size[0] as f32, image.size[1] as f32);
+    let handle = ctx.load_texture(format!("home-{key}"), image, egui::TextureOptions::LINEAR);
+    let texture = egui::load::SizedTexture::new(handle.id(), size);
+    Some((handle, texture))
+}
+
+fn home_favicon_color_image(bytes: &[u8]) -> Option<egui::ColorImage> {
+    if bytes.is_empty() || bytes.len() > HOME_FAVICON_MAX_BYTES {
+        return None;
+    }
+
+    let decoded = image::load_from_memory(bytes).ok()?;
+    let decoded =
+        if decoded.width() > HOME_FAVICON_MAX_SIDE || decoded.height() > HOME_FAVICON_MAX_SIDE {
+            decoded.thumbnail(HOME_FAVICON_MAX_SIDE, HOME_FAVICON_MAX_SIDE)
+        } else {
+            decoded
+        };
+    let rgba = decoded.to_rgba8();
+    let width = rgba.width() as usize;
+    let height = rgba.height() as usize;
+    if width == 0 || height == 0 {
+        return None;
+    }
+
+    Some(egui::ColorImage::from_rgba_unmultiplied(
+        [width, height],
+        rgba.as_raw(),
+    ))
+}
+
+fn spawn_home_favicon_fetch(sender: Sender<HomeFaviconFetchResult>, key: String, url: String) {
+    let failure_sender = sender.clone();
+    let failure_key = key.clone();
+    if let Err(error) = thread::Builder::new()
+        .name("slate-home-favicon".to_string())
+        .spawn(move || {
+            let result = fetch_home_favicon(&url);
+            let _ = sender.send(HomeFaviconFetchResult { key, result });
+        })
+    {
+        let _ = failure_sender.send(HomeFaviconFetchResult {
+            key: failure_key,
+            result: Err(error.to_string()),
+        });
+    }
+}
+
+fn fetch_home_favicon(url: &str) -> Result<HomeFaviconBytes, String> {
+    let response = BroadwebDaemon::start_default_session()
+        .and_then(|daemon| {
+            daemon.fetch_http(HttpFetchRequest::default_profile(url).for_subresource())
+        })
+        .map_err(|error| error.to_string())?;
+
+    if !(200..=299).contains(&response.status_code) {
+        return Err(format!("unexpected HTTP status {}", response.status_code));
+    }
+    if matches!(&response.disposition, FetchDisposition::ErrorPage { .. }) {
+        return Err("favicon response was an error page".to_string());
+    }
+    if response.body.len() > HOME_FAVICON_MAX_BYTES {
+        return Err(format!(
+            "favicon response exceeded {} bytes",
+            HOME_FAVICON_MAX_BYTES
+        ));
+    }
+
+    Ok(HomeFaviconBytes {
+        media_type: response.content_type,
+        bytes: response.body,
+    })
 }
 
 /// Uploads all favicons that have not yet been processed to the GPU.

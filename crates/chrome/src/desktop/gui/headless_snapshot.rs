@@ -429,6 +429,7 @@ fn render_home_panel(
                         ui,
                         home_rect,
                         slate_icons,
+                        &std::collections::HashMap::new(),
                         home_search,
                         &default_home_bookmark_cards(),
                     )
