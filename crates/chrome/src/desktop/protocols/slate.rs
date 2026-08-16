@@ -224,7 +224,7 @@ fn current_downloads_json() -> String {
 }
 
 fn current_downloads() -> Result<Vec<TemporaryDownloadRecord>, slate_broadwebd::BroadwebdError> {
-    StateRoot::prepare(default_session_state_root())?.temporary_downloads(DEFAULT_PROFILE_ID)
+    StateRoot::prepare(default_session_state_root())?.downloads(DEFAULT_PROFILE_ID)
 }
 
 fn downloads_json(downloads: &[TemporaryDownloadRecord]) -> String {

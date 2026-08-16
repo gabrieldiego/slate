@@ -143,6 +143,71 @@ mod tests {
     }
 
     #[test]
+    fn state_root_stores_indexed_downloads_in_configured_download_root() {
+        let root = test_state_root("indexed-downloads");
+        let download_root = test_download_root("indexed-downloads");
+        let state = StateRoot::prepare_with_download_root(&root, &download_root)
+            .expect("prepare state root");
+
+        let download_path = state
+            .store_download("default", "../ipfs image?.png", b"download bytes")
+            .expect("store indexed download");
+        assert!(download_path.starts_with(&download_root));
+        assert_eq!(
+            download_path.file_name().and_then(|name| name.to_str()),
+            Some("_ipfs_image_.png")
+        );
+        assert_eq!(
+            fs::read(&download_path).expect("read indexed download"),
+            b"download bytes"
+        );
+
+        let second_download_path = state
+            .store_download("default", "../ipfs image?.png", b"second")
+            .expect("store colliding indexed download");
+        assert_eq!(
+            second_download_path
+                .file_name()
+                .and_then(|name| name.to_str()),
+            Some("_ipfs_image_-1.png")
+        );
+
+        let downloads = state.downloads("default").expect("list indexed downloads");
+        assert_eq!(downloads.len(), 2);
+        assert_eq!(
+            downloads
+                .iter()
+                .find(|download| download.filename == "_ipfs_image_.png")
+                .map(|download| download.path.as_path()),
+            Some(download_path.as_path())
+        );
+        assert_eq!(
+            downloads
+                .iter()
+                .find(|download| download.filename == "_ipfs_image_-1.png")
+                .map(|download| download.size_bytes),
+            Some("second".len() as u64)
+        );
+        assert!(state.downloads("../escape").is_err());
+
+        let empty_root = test_state_root("empty-indexed-downloads");
+        let empty_download_root = test_download_root("empty-indexed-downloads");
+        let empty_state = StateRoot::prepare_with_download_root(&empty_root, &empty_download_root)
+            .expect("prepare empty state root");
+        assert!(
+            empty_state
+                .downloads("default")
+                .expect("list empty indexed downloads")
+                .is_empty()
+        );
+
+        let _ = fs::remove_dir_all(root);
+        let _ = fs::remove_dir_all(download_root);
+        let _ = fs::remove_dir_all(empty_root);
+        let _ = fs::remove_dir_all(empty_download_root);
+    }
+
+    #[test]
     fn default_registry_reports_ready_http_plugins() {
         let daemon = BroadwebDaemon::start(test_state_root("ready-plugins")).expect("daemon");
         let health = daemon.health();
@@ -363,8 +428,11 @@ mod tests {
         let mut registry = PluginRegistry::new();
         registry.register_transport(IpfsGatewayTransport::local(&gateway).expect("local gateway"));
         registry.register_service(super::HttpFetchService);
-        let daemon = BroadwebDaemon::start_with_registry(
-            test_state_root("ipfs-download"),
+        let state_root = test_state_root("ipfs-download");
+        let download_root = test_download_root("ipfs-download");
+        let daemon = BroadwebDaemon::start_with_registry_and_download_root(
+            &state_root,
+            &download_root,
             Default::default(),
             registry,
         )
@@ -388,9 +456,10 @@ mod tests {
         assert_eq!(download.filename, "image.png");
         assert_eq!(download.size_bytes, "png-ish".len());
         assert_eq!(fs::read(&download.path).expect("read download"), b"png-ish");
-        assert!(download.path.ends_with("temporary/downloads/image.png"));
+        assert_eq!(download.path, download_root.join("image.png"));
 
-        let _ = fs::remove_dir_all(daemon.state_root().path());
+        let _ = fs::remove_dir_all(state_root);
+        let _ = fs::remove_dir_all(download_root);
     }
 
     #[test]
@@ -662,7 +731,10 @@ mod tests {
     #[test]
     fn non_html_http_fetch_is_marked_as_download() {
         let (address, server) = local_http_fixture("application/octet-stream", "binary-ish");
-        let daemon = BroadwebDaemon::start(test_state_root("download")).expect("daemon");
+        let state_root = test_state_root("download");
+        let download_root = test_download_root("download");
+        let daemon =
+            BroadwebDaemon::start_with_download_root(&state_root, &download_root).expect("daemon");
         let response = daemon
             .fetch_http(HttpFetchRequest::default_profile(&address))
             .expect("fetch fixture");
@@ -674,8 +746,15 @@ mod tests {
                 suggested_filename: "download".to_string()
             }
         );
+        let download = response.download.expect("download record");
+        assert_eq!(download.path, download_root.join("download"));
+        assert_eq!(
+            fs::read(&download.path).expect("read download"),
+            b"binary-ish"
+        );
 
-        let _ = fs::remove_dir_all(daemon.state_root().path());
+        let _ = fs::remove_dir_all(state_root);
+        let _ = fs::remove_dir_all(download_root);
     }
 
     #[test]
@@ -1354,6 +1433,13 @@ mod tests {
     fn test_state_root(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
             "slate-broadwebd-test-{}-{name}",
+            std::process::id()
+        ))
+    }
+
+    fn test_download_root(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "slate-broadwebd-downloads-{}-{name}",
             std::process::id()
         ))
     }

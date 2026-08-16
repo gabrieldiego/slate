@@ -9392,6 +9392,8 @@ name = "slate-broadwebd"
 version = "0.0.1"
 dependencies = [
  "reqwest",
+ "serde",
+ "serde_json",
  "url",
 ]
 

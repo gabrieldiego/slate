@@ -30,7 +30,33 @@ impl BroadwebDaemon {
         budget: ResourceBudget,
         registry: PluginRegistry,
     ) -> Result<Self, BroadwebdError> {
-        let state_root = StateRoot::prepare(state_root)?;
+        Self::start_with_registry_and_download_root(
+            state_root,
+            std::env::current_dir()?,
+            budget,
+            registry,
+        )
+    }
+
+    pub fn start_with_download_root(
+        state_root: impl Into<PathBuf>,
+        downloads_root: impl Into<PathBuf>,
+    ) -> Result<Self, BroadwebdError> {
+        Self::start_with_registry_and_download_root(
+            state_root,
+            downloads_root,
+            ResourceBudget::default(),
+            PluginRegistry::with_default_http(),
+        )
+    }
+
+    pub fn start_with_registry_and_download_root(
+        state_root: impl Into<PathBuf>,
+        downloads_root: impl Into<PathBuf>,
+        budget: ResourceBudget,
+        registry: PluginRegistry,
+    ) -> Result<Self, BroadwebdError> {
+        let state_root = StateRoot::prepare_with_download_root(state_root, downloads_root)?;
         state_root.prepare_profile(DEFAULT_PROFILE)?;
         Ok(Self {
             state_root,
@@ -128,6 +154,10 @@ impl BroadwebDaemon {
         self.state_root.temporary_downloads(profile)
     }
 
+    pub fn downloads(&self, profile: &str) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+        self.state_root.downloads(profile)
+    }
+
     fn record_download(
         &self,
         profile: String,
@@ -137,14 +167,17 @@ impl BroadwebDaemon {
             return Ok(response);
         };
 
-        let path = self.state_root.store_temporary_download(
-            &profile,
-            suggested_filename,
-            &response.body,
-        )?;
+        let path = self
+            .state_root
+            .store_download(&profile, suggested_filename, &response.body)?;
+        let filename = path
+            .file_name()
+            .and_then(|filename| filename.to_str())
+            .unwrap_or(suggested_filename)
+            .to_string();
         let download = DownloadRecord::new(
             profile,
-            suggested_filename,
+            filename,
             path,
             response.body.len(),
             response.content_type.clone(),

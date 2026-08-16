@@ -1,4 +1,5 @@
 use crate::BroadwebdError;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -15,18 +16,33 @@ pub struct TemporaryDownloadRecord {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StateRoot {
     path: PathBuf,
+    downloads_root: PathBuf,
 }
 
 impl StateRoot {
     pub fn prepare(path: impl Into<PathBuf>) -> Result<Self, BroadwebdError> {
+        Self::prepare_with_download_root(path, std::env::current_dir()?)
+    }
+
+    pub fn prepare_with_download_root(
+        path: impl Into<PathBuf>,
+        downloads_root: impl Into<PathBuf>,
+    ) -> Result<Self, BroadwebdError> {
         let path = path.into();
         fs::create_dir_all(path.join("profiles"))?;
         fs::create_dir_all(path.join("volatile"))?;
-        Ok(Self { path })
+        Ok(Self {
+            path,
+            downloads_root: downloads_root.into(),
+        })
     }
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    pub fn downloads_root(&self) -> &Path {
+        &self.downloads_root
     }
 
     pub fn profile_root(&self, profile: &str) -> Result<PathBuf, BroadwebdError> {
@@ -39,6 +55,64 @@ impl StateRoot {
         fs::create_dir_all(root.join("protocol-state"))?;
         fs::create_dir_all(root.join("temporary"))?;
         Ok(root)
+    }
+
+    pub fn store_download(
+        &self,
+        profile: &str,
+        filename: &str,
+        body: &[u8],
+    ) -> Result<PathBuf, BroadwebdError> {
+        self.prepare_profile(profile)?;
+        fs::create_dir_all(&self.downloads_root)?;
+        let filename = sanitized_filename(filename);
+        for candidate in download_filename_candidates(&filename).take(1000) {
+            let path = self.downloads_root.join(candidate);
+            match OpenOptions::new().write(true).create_new(true).open(&path) {
+                Ok(mut file) => {
+                    file.write_all(body)?;
+                    self.append_download_record(profile, &path, body.len() as u64)?;
+                    return Ok(path);
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
+        Err(BroadwebdError::UnsupportedRequest(format!(
+            "could not allocate a download filename for {filename}"
+        )))
+    }
+
+    pub fn downloads(&self, profile: &str) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+        let _ = self.profile_root(profile)?;
+        let index_path = self.download_index_path(profile)?;
+        let index = match fs::read_to_string(index_path) {
+            Ok(index) => index,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) => return Err(error.into()),
+        };
+
+        let mut downloads = Vec::new();
+        for line in index.lines().filter(|line| !line.trim().is_empty()) {
+            let record: DownloadIndexRecord = serde_json::from_str(line)
+                .map_err(|error| BroadwebdError::Io(error.to_string()))?;
+            let path = PathBuf::from(&record.path);
+            let metadata = match fs::metadata(&path) {
+                Ok(metadata) if metadata.is_file() => metadata,
+                Ok(_) => continue,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => return Err(error.into()),
+            };
+            downloads.push(TemporaryDownloadRecord {
+                profile: profile.to_string(),
+                filename: record.filename,
+                path,
+                size_bytes: metadata.len(),
+            });
+        }
+
+        downloads.sort_by(|first, second| first.filename.cmp(&second.filename));
+        Ok(downloads)
     }
 
     pub fn store_temporary_download(
@@ -107,6 +181,44 @@ impl StateRoot {
         downloads.sort_by(|first, second| first.filename.cmp(&second.filename));
         Ok(downloads)
     }
+
+    fn append_download_record(
+        &self,
+        profile: &str,
+        path: &Path,
+        size_bytes: u64,
+    ) -> Result<(), BroadwebdError> {
+        let filename = path
+            .file_name()
+            .and_then(|filename| filename.to_str())
+            .unwrap_or("download")
+            .to_string();
+        let record = DownloadIndexRecord {
+            filename,
+            path: path.to_string_lossy().into_owned(),
+            size_bytes,
+        };
+        let index_path = self.download_index_path(profile)?;
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(index_path)?;
+        serde_json::to_writer(&mut file, &record)
+            .map_err(|error| BroadwebdError::Io(error.to_string()))?;
+        file.write_all(b"\n")?;
+        Ok(())
+    }
+
+    fn download_index_path(&self, profile: &str) -> Result<PathBuf, BroadwebdError> {
+        Ok(self.prepare_profile(profile)?.join("downloads.jsonl"))
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct DownloadIndexRecord {
+    filename: String,
+    path: String,
+    size_bytes: u64,
 }
 
 fn validate_profile_id(profile: &str) -> Result<(), BroadwebdError> {
