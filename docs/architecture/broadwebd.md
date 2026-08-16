@@ -465,9 +465,10 @@ download, broadwebd writes the body to
 `profiles/<profile>/temporary/downloads/` and attaches a `DownloadRecord` to the
 response. Renderer subresources such as CSS, JavaScript, images, and fonts
 remain resource responses and must not create user download records. The current
-renderer shows a download-ready page with the saved path and size for top-level
-downloads; the future downloads UI should own promotion to user-selected
-persistent storage, removal, verification, and progress/history presentation.
+download manager at `slate://downloads` lists the default profile's
+current-session temporary downloads from broadwebd state. A later downloads UI
+should own promotion to user-selected persistent storage, removal, verification,
+and progress/history presentation.
 
 ## Mobile And Paired Devices
 

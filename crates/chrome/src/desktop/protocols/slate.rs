@@ -14,7 +14,8 @@ use servo::protocol_handler::{
     DoneChannel, FetchContext, NetworkError, ProtocolHandler, Request, ResourceFetchTiming,
     Response, ResponseBody,
 };
-use slate_storage::SlateProfileDatabase;
+use slate_broadwebd::{StateRoot, TemporaryDownloadRecord, default_session_state_root};
+use slate_storage::{DEFAULT_PROFILE_ID, SlateProfileDatabase};
 use url::Url;
 
 use crate::desktop::protocols::resource::ResourceProtocolHandler;
@@ -53,6 +54,8 @@ impl ProtocolHandler for SlateProtocolHandler {
             "settings/preview",
             "settings/save",
             "settings/apply",
+            "downloads",
+            "downloads/state",
         ]
     }
 
@@ -69,6 +72,10 @@ impl ProtocolHandler for SlateProtocolHandler {
         let url = request.current_url();
         if is_slate_settings_state_url(url.as_url()) {
             return chrome_zoom_json_response(request, current_chrome_element_zoom_setting());
+        }
+
+        if is_slate_downloads_state_url(url.as_url()) {
+            return downloads_json_response(request);
         }
 
         if is_slate_settings_preview_url(url.as_url()) {
@@ -88,6 +95,8 @@ impl ProtocolHandler for SlateProtocolHandler {
 
         let resource_path = if is_slate_home_url(url.as_url()) {
             Some("/slate-home.html")
+        } else if is_slate_downloads_url(url.as_url()) {
+            Some("/slate-downloads.html")
         } else if is_slate_settings_url(url.as_url()) {
             Some("/slate-settings.html")
         } else {
@@ -193,14 +202,71 @@ fn chrome_zoom_json_response(
     Box::pin(std::future::ready(response))
 }
 
+fn downloads_json_response(request: &Request) -> Pin<Box<dyn Future<Output = Response> + Send>> {
+    let mut response = Response::new(
+        request.current_url(),
+        ResourceFetchTiming::new(request.timing_type()),
+    );
+    response.headers.typed_insert(ContentType::json());
+    *response.body.lock() = ResponseBody::Done(current_downloads_json().into());
+    Box::pin(std::future::ready(response))
+}
+
+fn current_downloads_json() -> String {
+    match current_downloads() {
+        Ok(downloads) => downloads_json(&downloads),
+        Err(error) => serde_json::json!({
+            "downloads": [],
+            "error": error.to_string(),
+        })
+        .to_string(),
+    }
+}
+
+fn current_downloads() -> Result<Vec<TemporaryDownloadRecord>, slate_broadwebd::BroadwebdError> {
+    StateRoot::prepare(default_session_state_root())?.temporary_downloads(DEFAULT_PROFILE_ID)
+}
+
+fn downloads_json(downloads: &[TemporaryDownloadRecord]) -> String {
+    serde_json::json!({
+        "downloads": downloads
+            .iter()
+            .map(download_json)
+            .collect::<Vec<serde_json::Value>>()
+    })
+    .to_string()
+}
+
+fn download_json(download: &TemporaryDownloadRecord) -> serde_json::Value {
+    serde_json::json!({
+        "profile": download.profile,
+        "filename": download.filename,
+        "path": download.path.to_string_lossy(),
+        "file_url": Url::from_file_path(&download.path).ok().map(|url| url.to_string()),
+        "size_bytes": download.size_bytes,
+    })
+}
+
 pub(crate) fn is_slate_home_url(url: &Url) -> bool {
     url.scheme() == "slate"
         && (url.host_str() == Some("home") || url.path().trim_start_matches('/') == "home")
 }
 
+pub(crate) fn is_slate_downloads_url(url: &Url) -> bool {
+    url.scheme() == "slate"
+        && (url.host_str() == Some("downloads")
+            || url.path().trim_start_matches('/') == "downloads")
+}
+
 pub(crate) fn is_slate_settings_url(url: &Url) -> bool {
     url.scheme() == "slate"
         && (url.host_str() == Some("settings") || url.path().trim_start_matches('/') == "settings")
+}
+
+fn is_slate_downloads_state_url(url: &Url) -> bool {
+    url.scheme() == "slate"
+        && url.host_str() == Some("downloads")
+        && url.path().trim_start_matches('/') == "state"
 }
 
 fn is_slate_settings_state_url(url: &Url) -> bool {
@@ -231,9 +297,12 @@ fn is_slate_settings_apply_url(url: &Url) -> bool {
 mod tests {
     use super::{
         CHROME_ELEMENT_ZOOM_SETTING_MAX, CHROME_ELEMENT_ZOOM_SETTING_MIN,
-        chrome_element_zoom_setting_from_url, is_slate_home_url, is_slate_settings_apply_url,
-        is_slate_settings_preview_url, is_slate_settings_save_url, is_slate_settings_url,
+        chrome_element_zoom_setting_from_url, is_slate_downloads_state_url, is_slate_downloads_url,
+        is_slate_home_url, is_slate_settings_apply_url, is_slate_settings_preview_url,
+        is_slate_settings_save_url, is_slate_settings_url,
     };
+    use slate_broadwebd::TemporaryDownloadRecord;
+    use std::path::PathBuf;
     use url::Url;
 
     #[test]
@@ -242,6 +311,22 @@ mod tests {
         assert!(is_slate_home_url(&Url::parse("slate:home").unwrap()));
         assert!(!is_slate_home_url(&Url::parse("slate://settings").unwrap()));
         assert!(!is_slate_home_url(&Url::parse("https://home").unwrap()));
+    }
+
+    #[test]
+    fn slate_downloads_url_matches_host_and_path_forms() {
+        assert!(is_slate_downloads_url(
+            &Url::parse("slate://downloads").unwrap()
+        ));
+        assert!(is_slate_downloads_url(
+            &Url::parse("slate:downloads").unwrap()
+        ));
+        assert!(!is_slate_downloads_url(
+            &Url::parse("slate://settings").unwrap()
+        ));
+        assert!(is_slate_downloads_state_url(
+            &Url::parse("slate://downloads/state").unwrap()
+        ));
     }
 
     #[test]
@@ -326,6 +411,25 @@ mod tests {
 
         assert!(resource_dir.join("slate-home.html").is_file());
         assert!(resource_dir.join("slate-settings.html").is_file());
+        assert!(resource_dir.join("slate-downloads.html").is_file());
+    }
+
+    #[test]
+    fn slate_downloads_json_escapes_file_metadata() {
+        let json = super::downloads_json(&[TemporaryDownloadRecord {
+            profile: "default".to_string(),
+            filename: "report \"final\".txt".to_string(),
+            path: PathBuf::from("/tmp/report \"final\".txt"),
+            size_bytes: 12,
+        }]);
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let download = &parsed["downloads"][0];
+
+        assert_eq!(download["profile"], "default");
+        assert_eq!(download["filename"], "report \"final\".txt");
+        assert_eq!(download["path"], "/tmp/report \"final\".txt");
+        assert_eq!(download["size_bytes"], 12);
+        assert_eq!(download["file_url"], "file:///tmp/report%20%22final%22.txt");
     }
 
     #[test]

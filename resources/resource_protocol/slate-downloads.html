@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Slate Downloads</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f7f5f1;
+      color: #242421;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #f7f5f1;
+    }
+
+    main {
+      box-sizing: border-box;
+      width: min(1040px, calc(100vw - 48px));
+      margin: 0 auto;
+      padding: 42px 0;
+    }
+
+    header {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 26px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 30px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0;
+      color: #696966;
+      line-height: 1.45;
+    }
+
+    button,
+    a.action {
+      border: 1px solid #c8c5bd;
+      border-radius: 6px;
+      background: #f3f0ea;
+      color: #242421;
+      padding: 8px 12px;
+      font: inherit;
+      text-decoration: none;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    button.primary,
+    a.action.primary {
+      border-color: #0b7e79;
+      background: #0b7e79;
+      color: #fffefa;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      padding: 18px;
+      border: 1px solid #dedbd5;
+      border-radius: 8px;
+      background: #fffefa;
+    }
+
+    .metric span {
+      display: block;
+      color: #696966;
+      font-size: 13px;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 24px;
+      font-weight: 650;
+    }
+
+    section {
+      border: 1px solid #dedbd5;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fffefa;
+    }
+
+    .list-header,
+    .download {
+      display: grid;
+      grid-template-columns: minmax(180px, 1.2fr) 120px minmax(240px, 1fr) 92px;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .list-header {
+      padding: 12px 18px;
+      border-bottom: 1px solid #e8e4dd;
+      color: #696966;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .download {
+      padding: 16px 18px;
+      border-bottom: 1px solid #eeeae3;
+    }
+
+    .download:last-child {
+      border-bottom: 0;
+    }
+
+    .filename {
+      min-width: 0;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .meta,
+    .path {
+      min-width: 0;
+      color: #696966;
+      font-size: 13px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .empty,
+    .error {
+      padding: 42px 18px;
+      text-align: center;
+      color: #696966;
+    }
+
+    .error {
+      color: #8a4b15;
+    }
+
+    @media (max-width: 760px) {
+      header {
+        display: block;
+      }
+
+      header button {
+        margin-top: 16px;
+      }
+
+      .summary {
+        grid-template-columns: 1fr;
+      }
+
+      .list-header {
+        display: none;
+      }
+
+      .download {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Downloads</h1>
+        <p>Current-session broadweb downloads saved by Slate.</p>
+      </div>
+      <button id="refresh" class="primary">Refresh</button>
+    </header>
+
+    <div class="summary">
+      <div class="metric">
+        <span>Files</span>
+        <strong id="file-count">0</strong>
+      </div>
+      <div class="metric">
+        <span>Total Size</span>
+        <strong id="total-size">0 B</strong>
+      </div>
+      <div class="metric">
+        <span>Profile</span>
+        <strong id="profile-name">default</strong>
+      </div>
+    </div>
+
+    <section>
+      <div class="list-header">
+        <div>Name</div>
+        <div>Size</div>
+        <div>Location</div>
+        <div>Action</div>
+      </div>
+      <div id="downloads">
+        <div class="empty">No downloads yet.</div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const list = document.getElementById("downloads");
+    const fileCount = document.getElementById("file-count");
+    const totalSize = document.getElementById("total-size");
+    const profileName = document.getElementById("profile-name");
+    const refreshButton = document.getElementById("refresh");
+
+    function formatBytes(bytes) {
+      if (!Number.isFinite(bytes) || bytes <= 0) {
+        return "0 B";
+      }
+      const units = ["B", "KiB", "MiB", "GiB"];
+      let value = bytes;
+      let unit = 0;
+      while (value >= 1024 && unit < units.length - 1) {
+        value /= 1024;
+        unit += 1;
+      }
+      const precision = unit === 0 || value >= 10 ? 0 : 1;
+      return `${value.toFixed(precision)} ${units[unit]}`;
+    }
+
+    function clearList() {
+      while (list.firstChild) {
+        list.removeChild(list.firstChild);
+      }
+    }
+
+    function textElement(className, value) {
+      const element = document.createElement("div");
+      element.className = className;
+      element.textContent = value;
+      return element;
+    }
+
+    function renderEmpty(message, className) {
+      clearList();
+      const element = document.createElement("div");
+      element.className = className;
+      element.textContent = message;
+      list.appendChild(element);
+    }
+
+    function renderDownloads(downloads) {
+      clearList();
+      const total = downloads.reduce((sum, download) => sum + Number(download.size_bytes || 0), 0);
+      fileCount.textContent = String(downloads.length);
+      totalSize.textContent = formatBytes(total);
+      profileName.textContent = downloads[0] ? downloads[0].profile : "default";
+
+      if (downloads.length === 0) {
+        renderEmpty("No downloads yet.", "empty");
+        return;
+      }
+
+      for (const download of downloads) {
+        const row = document.createElement("div");
+        row.className = "download";
+        row.appendChild(textElement("filename", download.filename || "download"));
+        row.appendChild(textElement("meta", formatBytes(Number(download.size_bytes || 0))));
+        row.appendChild(textElement("path", download.path || ""));
+
+        const action = document.createElement("div");
+        if (download.file_url) {
+          const open = document.createElement("a");
+          open.className = "action";
+          open.href = download.file_url;
+          open.textContent = "Open";
+          action.appendChild(open);
+        }
+        row.appendChild(action);
+        list.appendChild(row);
+      }
+    }
+
+    function loadDownloads() {
+      refreshButton.disabled = true;
+      if (!window.fetch) {
+        renderEmpty("Downloads are unavailable in this renderer.", "error");
+        refreshButton.disabled = false;
+        return;
+      }
+
+      window.fetch(`slate://downloads/state?nonce=${Date.now()}`, { cache: "no-store" })
+        .then((response) => response.json())
+        .then((state) => {
+          if (state.error) {
+            renderEmpty(state.error, "error");
+            return;
+          }
+          renderDownloads(Array.isArray(state.downloads) ? state.downloads : []);
+        })
+        .catch((error) => {
+          renderEmpty(String(error), "error");
+        })
+        .then(() => {
+          refreshButton.disabled = false;
+        });
+    }
+
+    refreshButton.addEventListener("click", loadDownloads);
+    loadDownloads();
+  </script>
+</body>
+</html>
