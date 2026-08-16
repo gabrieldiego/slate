@@ -49,8 +49,8 @@ use winit::window::Window;
 use crate::desktop::event_loop::AppEvent;
 use crate::desktop::headed_window;
 use crate::desktop::protocols::slate::{
-    self, current_chrome_element_zoom_setting, is_slate_home_url, is_slate_settings_url,
-    set_current_chrome_element_zoom_setting,
+    self, current_chrome_element_zoom_setting, is_slate_downloads_url, is_slate_home_url,
+    is_slate_settings_url, set_current_chrome_element_zoom_setting,
 };
 use crate::desktop::slate_theme::{self, SlateIcon, SlateIconCache, SlateRaster};
 use crate::running_app_state::{RunningAppState, UserInterfaceCommand};
@@ -958,6 +958,14 @@ fn home_hero_left_space(available_width: f32, content_width: f32) -> f32 {
 
 fn location_has_broadweb_status(location: &str) -> bool {
     location.starts_with("ipfs://") || location.starts_with("ipns://")
+}
+
+fn location_matches_slate_url(location: &str, predicate: fn(&Url) -> bool) -> bool {
+    Url::parse(location).ok().is_some_and(|url| predicate(&url))
+}
+
+fn location_is_downloads(location: &str) -> bool {
+    location_matches_slate_url(location, is_slate_downloads_url)
 }
 
 fn clamp_chrome_element_zoom(zoom: f32) -> f32 {
@@ -2103,7 +2111,13 @@ impl Gui {
                 ui.separator();
 
                 ui.add_enabled(false, egui::Button::new("Bookmarks"));
-                ui.add_enabled(false, egui::Button::new("Downloads"));
+                if ui.button("Downloads").clicked() {
+                    *location_dirty = false;
+                    window.queue_user_interface_command(UserInterfaceCommand::Go(
+                        "slate://downloads".to_string(),
+                    ));
+                    ui.close();
+                }
                 ui.add_enabled(false, egui::Button::new("History"));
                 if ui.button("Settings").clicked() {
                     *location_dirty = false;
@@ -2225,7 +2239,7 @@ impl Gui {
         icon: SlateIcon,
         selected: bool,
         tooltip: &str,
-    ) {
+    ) -> egui::Response {
         let texture = slate_icons.texture(ui.ctx(), icon, rail_icon_color(selected));
 
         let (rect, response) =
@@ -2251,20 +2265,67 @@ impl Gui {
             info.selected = Some(selected);
             info
         });
-        response.on_hover_text(tooltip);
+        response.on_hover_text(tooltip)
     }
 
-    fn draw_app_rail(ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
+    fn draw_app_rail(
+        ui: &mut egui::Ui,
+        slate_icons: &mut SlateIconCache,
+        downloads_active: bool,
+    ) -> (bool, bool) {
+        let mut web_clicked = false;
+        let mut downloads_clicked = false;
         ui.vertical_centered(|ui| {
             ui.add_space(RAIL_TOP_SPACE);
-            Self::rail_icon_button(ui, slate_icons, SlateIcon::AppWeb, true, "Web");
+            let web_button = Self::rail_icon_button(
+                ui,
+                slate_icons,
+                SlateIcon::AppWeb,
+                !downloads_active,
+                "Web",
+            );
+            if web_button.clicked() {
+                web_clicked = true;
+            }
             ui.add_space(RAIL_ITEM_GAP);
-            Self::rail_icon_button(ui, slate_icons, SlateIcon::AppDownloads, false, "Downloads");
+            let downloads_button = Self::rail_icon_button(
+                ui,
+                slate_icons,
+                SlateIcon::AppDownloads,
+                downloads_active,
+                "Downloads",
+            );
+            if downloads_button.clicked() {
+                downloads_clicked = true;
+            }
             ui.add_space(RAIL_ITEM_GAP);
             Self::rail_icon_button(ui, slate_icons, SlateIcon::AppCalendar, false, "Calendar");
             ui.add_space(RAIL_ITEM_GAP);
             Self::rail_icon_button(ui, slate_icons, SlateIcon::AppMessaging, false, "Messages");
         });
+        (web_clicked, downloads_clicked)
+    }
+
+    fn draw_interactive_app_rail(
+        ui: &mut egui::Ui,
+        slate_icons: &mut SlateIconCache,
+        window: &ServoShellWindow,
+        location_dirty: &mut bool,
+        location: &str,
+    ) {
+        let (web_clicked, downloads_clicked) =
+            Self::draw_app_rail(ui, slate_icons, location_is_downloads(location));
+        if web_clicked {
+            *location_dirty = false;
+            window
+                .queue_user_interface_command(UserInterfaceCommand::Go("slate://home".to_string()));
+        }
+        if downloads_clicked {
+            *location_dirty = false;
+            window.queue_user_interface_command(UserInterfaceCommand::Go(
+                "slate://downloads".to_string(),
+            ));
+        }
     }
 
     fn draw_app_title(ui: &mut egui::Ui) {
@@ -3053,7 +3114,15 @@ impl Gui {
                     .exact_size(APP_RAIL_WIDTH)
                     .frame(rail_frame)
                     .show_separator_line(true)
-                    .show_inside(ctx, |ui| Self::draw_app_rail(ui, slate_icons));
+                    .show_inside(ctx, |ui| {
+                        Self::draw_interactive_app_rail(
+                            ui,
+                            slate_icons,
+                            window,
+                            location_dirty,
+                            location,
+                        )
+                    });
 
                 let toolbar_frame = egui::Frame::NONE
                     .fill(toolbar_background_color())
@@ -3830,15 +3899,15 @@ mod tests {
         home_search_icon_visible_rect, home_search_rendered_height, home_search_width,
         home_top_space, home_view_background_color, inactive_tab_background_color,
         inactive_tab_hover_background_color, inactive_tab_outline_color,
-        inactive_tab_outline_points, is_home_bookmarkable_url, new_tab_icon_color,
-        rail_button_fill, rail_icon_color, rail_selected_button_fill, slate_theme,
-        status_bubble_label, status_bubble_width, tab_close_button_rect, tab_close_icon_color,
-        tab_close_raster, tab_content_width, tab_corner_radius, tab_icon_color, tab_icon_slot_rect,
-        tab_strip_background_color, tab_strip_separator_color, tab_title_color, tab_title_left,
-        tab_title_width, tab_width_for_strip, toolbar_address_width, toolbar_background_color,
-        toolbar_menu_icon_center, toolbar_menu_icon_color, toolbar_menu_icon_rect,
-        toolbar_navigation_icon_color, toolbar_navigation_icon_offset_x,
-        toolbar_navigation_icon_rect, toolbar_navigation_raster,
+        inactive_tab_outline_points, is_home_bookmarkable_url, location_is_downloads,
+        new_tab_icon_color, rail_button_fill, rail_icon_color, rail_selected_button_fill,
+        slate_theme, status_bubble_label, status_bubble_width, tab_close_button_rect,
+        tab_close_icon_color, tab_close_raster, tab_content_width, tab_corner_radius,
+        tab_icon_color, tab_icon_slot_rect, tab_strip_background_color, tab_strip_separator_color,
+        tab_title_color, tab_title_left, tab_title_width, tab_width_for_strip,
+        toolbar_address_width, toolbar_background_color, toolbar_menu_icon_center,
+        toolbar_menu_icon_color, toolbar_menu_icon_rect, toolbar_navigation_icon_color,
+        toolbar_navigation_icon_offset_x, toolbar_navigation_icon_rect, toolbar_navigation_raster,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -3983,6 +4052,14 @@ mod tests {
             true,
             inside_webview,
         ));
+    }
+
+    #[test]
+    fn rail_downloads_selection_matches_downloads_internal_page() {
+        assert!(location_is_downloads("slate://downloads"));
+        assert!(location_is_downloads("slate:downloads"));
+        assert!(!location_is_downloads("slate://home"));
+        assert!(!location_is_downloads("https://example.com"));
     }
 
     #[test]

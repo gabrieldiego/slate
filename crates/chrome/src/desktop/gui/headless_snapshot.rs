@@ -265,7 +265,9 @@ fn render_app_rail(root_ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
         .exact_size(APP_RAIL_WIDTH)
         .frame(rail_frame)
         .show_separator_line(true)
-        .show_inside(root_ui, |ui| Gui::draw_app_rail(ui, slate_icons));
+        .show_inside(root_ui, |ui| {
+            let _ = Gui::draw_app_rail(ui, slate_icons, false);
+        });
 }
 
 fn render_toolbar(root_ui: &mut egui::Ui, slate_icons: &mut SlateIconCache, location: &mut String) {
