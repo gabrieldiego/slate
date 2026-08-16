@@ -233,6 +233,14 @@ pub fn normalize_navigation_input(input: &str) -> Result<String, NavigationError
     }
 
     let lower = trimmed.to_ascii_lowercase();
+    if let Some(address) = normalize_http_onion_url(trimmed) {
+        return Ok(address);
+    }
+
+    if is_http_url_with_onion_hint(&lower) {
+        return Ok(format!("slate://search?q={}", encode_query(trimmed)));
+    }
+
     if has_supported_scheme(&lower) {
         return Ok(trimmed.to_string());
     }
@@ -245,6 +253,10 @@ pub fn normalize_navigation_input(input: &str) -> Result<String, NavigationError
         return Ok(address);
     }
 
+    if let Some(address) = normalize_onion_address(trimmed) {
+        return Ok(address);
+    }
+
     if looks_like_local_html_path(&lower) {
         return Ok(local_file_address(trimmed));
     }
@@ -254,7 +266,7 @@ pub fn normalize_navigation_input(input: &str) -> Result<String, NavigationError
     }
 
     if looks_like_host(trimmed) {
-        if lower.starts_with("localhost") || lower.contains(".onion") || lower.contains(".i2p") {
+        if lower.starts_with("localhost") || lower.contains(".i2p") {
             Ok(format!("http://{trimmed}"))
         } else {
             Ok(format!("https://{trimmed}"))
@@ -268,12 +280,18 @@ fn has_supported_scheme(lower: &str) -> bool {
     lower.starts_with("slate://")
         || lower.starts_with("https://")
         || lower.starts_with("http://")
+        || lower.starts_with("tor+http://")
+        || lower.starts_with("tor+https://")
         || lower.starts_with("ipfs://")
         || lower.starts_with("ipns://")
         || lower.starts_with("i2p://")
         || lower.starts_with("gemini://")
         || lower.starts_with("magnet:")
         || lower.starts_with("file://")
+}
+
+fn is_http_url_with_onion_hint(lower: &str) -> bool {
+    (lower.starts_with("http://") || lower.starts_with("https://")) && lower.contains(".onion")
 }
 
 fn normalize_ipfs_path_address(input: &str) -> Option<String> {
@@ -312,6 +330,100 @@ fn normalize_bare_ipfs_cid(input: &str) -> Option<String> {
     }
 
     None
+}
+
+fn normalize_onion_address(input: &str) -> Option<String> {
+    if input.chars().any(char::is_whitespace) {
+        return None;
+    }
+    let name_end = input
+        .find(|ch| matches!(ch, '/' | '?' | '#'))
+        .unwrap_or(input.len());
+    let name = &input[..name_end];
+    if !is_onion_host(name) {
+        return None;
+    }
+
+    let mut address = format!(
+        "tor+http://{}",
+        name.trim_end_matches('.').to_ascii_lowercase()
+    );
+    let rest = (name_end < input.len()).then_some(&input[name_end..]);
+    match rest {
+        Some(rest) if rest.starts_with('?') => {
+            address.push('/');
+            address.push_str(rest);
+        }
+        Some(rest) => address.push_str(rest),
+        None => address.push('/'),
+    }
+    Some(address)
+}
+
+fn normalize_http_onion_url(input: &str) -> Option<String> {
+    let lower = input.to_ascii_lowercase();
+    let (source_scheme, rest) = if lower.starts_with("http://") {
+        ("http", &input["http://".len()..])
+    } else if lower.starts_with("https://") {
+        ("https", &input["https://".len()..])
+    } else {
+        return None;
+    };
+    let authority_end = rest
+        .find(|ch| matches!(ch, '/' | '?' | '#'))
+        .unwrap_or(rest.len());
+    let authority = &rest[..authority_end];
+    if authority.is_empty() || authority.contains('@') {
+        return None;
+    }
+
+    let (host, port) = authority
+        .split_once(':')
+        .map_or((authority, ""), |(host, port)| (host, port));
+    if !is_onion_host(host) {
+        return None;
+    }
+    if !port.is_empty() && !port.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+
+    let mut address = format!(
+        "tor+{source_scheme}://{}{}",
+        host.trim_end_matches('.').to_ascii_lowercase(),
+        if port.is_empty() {
+            String::new()
+        } else {
+            format!(":{port}")
+        }
+    );
+    let suffix = rest[authority_end..]
+        .split_once('#')
+        .map_or(&rest[authority_end..], |(without_fragment, _)| {
+            without_fragment
+        });
+    match suffix {
+        "" => address.push('/'),
+        suffix if suffix.starts_with('?') => {
+            address.push('/');
+            address.push_str(suffix);
+        }
+        suffix => address.push_str(suffix),
+    }
+    Some(address)
+}
+
+fn is_onion_host(host: &str) -> bool {
+    let host = host.trim_end_matches('.').to_ascii_lowercase();
+    let Some(name) = host.strip_suffix(".onion") else {
+        return false;
+    };
+    !name.is_empty()
+        && name.split('.').all(|label| {
+            !label.is_empty()
+                && label
+                    .bytes()
+                    .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+        })
 }
 
 fn is_cidv0_like(input: &str) -> bool {
@@ -614,6 +726,31 @@ mod tests {
         assert_eq!(
             normalize_navigation_input("localhost:8080").expect("address"),
             "http://localhost:8080"
+        );
+    }
+
+    #[test]
+    fn navigation_normalizes_onion_hosts_to_tor_schemes() {
+        assert_eq!(
+            normalize_navigation_input("example.onion").expect("onion host"),
+            "tor+http://example.onion/"
+        );
+        assert_eq!(
+            normalize_navigation_input("example.onion/docs?a=1").expect("onion path"),
+            "tor+http://example.onion/docs?a=1"
+        );
+        assert_eq!(
+            normalize_navigation_input("http://Example.Onion:8080/docs#client")
+                .expect("onion HTTP URL"),
+            "tor+http://example.onion:8080/docs"
+        );
+        assert_eq!(
+            normalize_navigation_input("https://example.onion/secure").expect("onion HTTPS URL"),
+            "tor+https://example.onion/secure"
+        );
+        assert_eq!(
+            normalize_navigation_input("http://user@example.onion/").expect("malformed onion URL"),
+            "slate://search?q=http%3A%2F%2Fuser%40example.onion%2F"
         );
     }
 

@@ -6,6 +6,7 @@
 use std::path::{Path, PathBuf};
 
 use servo::{ServoUrl, is_reg_domain};
+use slate_broadwebd::{TOR_HTTP_SCHEME, TOR_HTTPS_SCHEME, is_onion_host, tor_url_from_http_url};
 
 #[cfg(not(any(target_os = "android", target_env = "ohos")))]
 pub fn parse_url_or_filename(cwd: &Path, input: &str) -> Result<ServoUrl, ()> {
@@ -77,10 +78,17 @@ pub(crate) fn location_bar_input_to_url(request: &str, searchpage: &str) -> Opti
             (scheme, None, Err(_)) if is_localhost(scheme) || is_domain_like(scheme) => {
                 ServoUrl::parse(&format!("http://{}:{}", scheme, url.path())).ok()
             }
+            ("http" | "https", _, _) => match tor_url_from_http_url(url.as_url()) {
+                Ok(Some(address)) => ServoUrl::parse(&address).ok(),
+                Ok(None) => Some(url),
+                Err(_) => try_as_search_page(request, searchpage),
+            },
+            ("tor+http" | "tor+https", _, _) => Some(url),
             _ => Some(url),
         }
     } else {
         try_as_ipfs_address(request)
+            .or_else(|| try_as_onion_address(request))
             .or_else(|| try_as_file(request))
             .or_else(|| try_as_domain(request))
             .or_else(|| try_as_search_page(request, searchpage))
@@ -144,6 +152,30 @@ fn split_address_name(input: &str) -> (&str, Option<&str>) {
     let name = &input[..name_end];
     let rest = (name_end < input.len()).then_some(&input[name_end..]);
     (name, rest)
+}
+
+fn try_as_onion_address(request: &str) -> Option<ServoUrl> {
+    if request.chars().any(char::is_whitespace) {
+        return None;
+    }
+    let (name, rest) = split_address_name(request);
+    if !is_onion_host(name) {
+        return None;
+    }
+
+    let mut address = format!(
+        "{TOR_HTTP_SCHEME}://{}",
+        name.trim_end_matches('.').to_ascii_lowercase()
+    );
+    match rest {
+        Some(rest) if rest.starts_with('?') => {
+            address.push('/');
+            address.push_str(rest);
+        }
+        Some(rest) => address.push_str(rest),
+        None => address.push('/'),
+    }
+    ServoUrl::parse(&address).ok()
 }
 
 fn is_cidv0_like(input: &str) -> bool {

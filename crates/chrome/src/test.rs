@@ -295,6 +295,30 @@ fn test_location_bar_ipfs_heuristics() {
     );
 }
 
+#[test]
+fn test_location_bar_onion_heuristics() {
+    assert_eq!(
+        location_bar_url("example.onion"),
+        "tor+http://example.onion/"
+    );
+    assert_eq!(
+        location_bar_url("Example.Onion/docs?a=1"),
+        "tor+http://example.onion/docs?a=1"
+    );
+    assert_eq!(
+        location_bar_url("http://Example.Onion:8080/docs#client"),
+        "tor+http://example.onion:8080/docs"
+    );
+    assert_eq!(
+        location_bar_url("https://example.onion/secure"),
+        "tor+https://example.onion/secure"
+    );
+    assert_eq!(
+        location_bar_url("http://user@example.onion/"),
+        "https://duckduckgo.com/html/?q=http://user@example.onion/"
+    );
+}
+
 /// Like [test_url] but will produce test for Windows or non Windows using `#[cfg(target_os)]` internally.
 #[cfg(not(target_os = "windows"))]
 fn test_url_any_os(

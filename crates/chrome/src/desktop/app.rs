@@ -41,7 +41,7 @@ pub(crate) enum AppState {
 
 const SLATE_DOWNLOAD_LINK_SCRIPT: &str = r#"
 (() => {
-  const supportedSchemes = new Set(["http:", "https:", "ipfs:", "ipns:"]);
+  const supportedSchemes = new Set(["http:", "https:", "ipfs:", "ipns:", "tor+http:", "tor+https:"]);
   const downloadExtensions = new Set([
     "7z", "apk", "bin", "bz2", "csv", "deb", "dmg", "doc", "docx", "exe",
     "gz", "iso", "json", "m4a", "mkv", "mov", "mp3", "mp4", "msi", "odp",
@@ -88,6 +88,19 @@ const SLATE_DOWNLOAD_LINK_SCRIPT: &str = r#"
     return downloadExtensions.has(extensionFromPath(url.pathname));
   }
 
+  function isPlainOnionUrl(url) {
+    const protocol = url.protocol.toLowerCase();
+    const hostname = url.hostname.toLowerCase();
+    return (protocol === "http:" || protocol === "https:") && hostname.endsWith(".onion");
+  }
+
+  function routedHref(url) {
+    if (isPlainOnionUrl(url)) {
+      return `tor+${url.href}`;
+    }
+    return url.href;
+  }
+
   function filenameFromLink(anchor, url) {
     const requested = anchor.getAttribute("download");
     if (requested && requested.trim()) {
@@ -111,12 +124,19 @@ const SLATE_DOWNLOAD_LINK_SCRIPT: &str = r#"
     }
 
     const url = targetUrl(anchor);
-    if (!url || !supportedSchemes.has(url.protocol) || !shouldDownload(anchor, url)) {
+    if (!url || !supportedSchemes.has(url.protocol) && !isPlainOnionUrl(url)) {
+      return;
+    }
+    if (!shouldDownload(anchor, url)) {
+      if (isPlainOnionUrl(url)) {
+        event.preventDefault();
+        window.location.href = routedHref(url);
+      }
       return;
     }
 
     const params = new URLSearchParams();
-    params.set("url", url.href);
+    params.set("url", routedHref(url));
     const filename = filenameFromLink(anchor, url);
     if (filename) {
       params.set("filename", filename);
@@ -192,6 +212,14 @@ impl App {
         );
         let _ = protocol_registry.register(
             "ipns",
+            protocols::broadweb::BroadwebProtocolHandler::default(),
+        );
+        let _ = protocol_registry.register(
+            "tor+http",
+            protocols::broadweb::BroadwebProtocolHandler::default(),
+        );
+        let _ = protocol_registry.register(
+            "tor+https",
             protocols::broadweb::BroadwebProtocolHandler::default(),
         );
         let _ = protocol_registry.register(

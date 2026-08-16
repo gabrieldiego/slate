@@ -432,7 +432,10 @@ fn suggested_download_filename(url: &Url) -> String {
 }
 
 fn is_supported_download_target(url: &Url) -> bool {
-    matches!(url.scheme(), "http" | "https" | "ipfs" | "ipns")
+    matches!(
+        url.scheme(),
+        "http" | "https" | "ipfs" | "ipns" | "tor+http" | "tor+https"
+    )
 }
 
 pub(crate) fn is_slate_blank_url(url: &Url) -> bool {
@@ -602,6 +605,21 @@ mod tests {
         assert_eq!(
             request.suggested_download_filename.as_deref(),
             Some("image.png")
+        );
+    }
+
+    #[test]
+    fn slate_download_request_supports_tor_http() {
+        let request = download_request_from_url(
+            &Url::parse("slate://download?url=tor%2Bhttp%3A%2F%2Fexample.onion%2Ffile.zip")
+                .unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(request.url, "tor+http://example.onion/file.zip");
+        assert_eq!(
+            request.suggested_download_filename.as_deref(),
+            Some("file.zip")
         );
     }
 

@@ -929,7 +929,7 @@ fn home_bookmark_detail(url: &str) -> String {
     Url::parse(url).ok().map_or_else(
         || url.to_string(),
         |parsed| match parsed.scheme() {
-            "ipfs" | "ipns" => parsed
+            "ipfs" | "ipns" | "tor+http" | "tor+https" => parsed
                 .host_str()
                 .map(|host| format!("{}://{host}", parsed.scheme()))
                 .unwrap_or_else(|| url.to_string()),
@@ -1056,7 +1056,10 @@ fn home_hero_left_space(available_width: f32, content_width: f32) -> f32 {
 }
 
 fn location_has_broadweb_status(location: &str) -> bool {
-    location.starts_with("ipfs://") || location.starts_with("ipns://")
+    location.starts_with("ipfs://")
+        || location.starts_with("ipns://")
+        || location.starts_with("tor+http://")
+        || location.starts_with("tor+https://")
 }
 
 fn location_matches_slate_url(location: &str, predicate: fn(&Url) -> bool) -> bool {
@@ -4874,6 +4877,20 @@ mod tests {
                 "ipns://example.ipns",
             ),
             "Trying w3s.link"
+        );
+        assert_eq!(
+            Gui::footer_load_status_label(
+                LoadStatus::Started,
+                &BroadwebStatusSnapshot {
+                    kind: BroadwebStatusKind::Fetching,
+                    message: "Opening Tor circuit".to_string(),
+                    target: Some("tor+http://example.onion/".to_string()),
+                    gateway: Some("example.onion".to_string()),
+                    sequence: 5,
+                },
+                "tor+http://example.onion/",
+            ),
+            "Opening Tor circuit"
         );
         assert_eq!(
             Gui::footer_load_status_label(

@@ -257,6 +257,12 @@ impl RenderBackend for ServoBackend {
                 ServoDocumentSource::SlateGenerated,
                 viewport,
             ),
+            address if has_broadwebd_service_scheme(address) => self.render_broadwebd_fetch(
+                address,
+                HttpFetchRequest::default_profile(address),
+                ServoDocumentSource::Broadweb,
+                viewport,
+            ),
             address if requires_private_network_host_adapter(address) => self
                 .render_error_with_viewport(
                 address,
@@ -268,12 +274,6 @@ impl RenderBackend for ServoBackend {
                         .to_string(),
                 ],
                 ServoDocumentSource::Blocked,
-                viewport,
-            ),
-            address if has_ipfs_service_scheme(address) => self.render_broadwebd_fetch(
-                address,
-                HttpFetchRequest::default_profile(address),
-                ServoDocumentSource::Broadweb,
                 viewport,
             ),
             address if has_broadweb_scheme(address) => {
@@ -366,7 +366,7 @@ fn broadweb_document_base_address<'a>(
     address: &'a str,
     response: &'a HttpFetchResponse,
 ) -> &'a str {
-    if has_ipfs_service_scheme(&response.final_url) {
+    if has_broadwebd_service_scheme(&response.final_url) {
         &response.final_url
     } else {
         address
@@ -551,7 +551,7 @@ impl ProtocolHandler for BroadwebProtocolHandler {
     ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
         let url = request.current_url();
         let timing = ResourceFetchTiming::new(request.timing_type());
-        let response = if has_ipfs_service_scheme(url.as_url().as_str()) {
+        let response = if has_broadwebd_service_scheme(url.as_url().as_str()) {
             broadweb_fetch_protocol_response_on_worker(url, timing)
         } else {
             broadweb_placeholder_protocol_response(url, timing)
@@ -730,7 +730,15 @@ fn init_servo_crypto() {
 
 fn broadweb_protocol_registry() -> ProtocolRegistry {
     let mut registry = ProtocolRegistry::with_internal_protocols();
-    for scheme in ["ipfs", "ipns", "i2p", "gemini", "magnet"] {
+    for scheme in [
+        "ipfs",
+        "ipns",
+        "tor+http",
+        "tor+https",
+        "i2p",
+        "gemini",
+        "magnet",
+    ] {
         let _ = registry.register(scheme, BroadwebProtocolHandler);
     }
     registry
@@ -1077,7 +1085,7 @@ fn download_ready_html(
 }
 
 fn broadweb_html_with_document_base(address: &str, html: &str) -> String {
-    if !has_ipfs_service_scheme(address) || contains_base_tag(html) {
+    if !has_broadwebd_service_scheme(address) || contains_base_tag(html) {
         return html.to_string();
     }
 
@@ -1128,16 +1136,19 @@ fn has_http_service_scheme(address: &str) -> bool {
         .is_some_and(|url| matches!(url.scheme(), "http" | "https"))
 }
 
-fn has_ipfs_service_scheme(address: &str) -> bool {
+fn has_broadwebd_service_scheme(address: &str) -> bool {
     Url::parse(address)
         .ok()
-        .is_some_and(|url| matches!(url.scheme(), "ipfs" | "ipns"))
+        .is_some_and(|url| matches!(url.scheme(), "ipfs" | "ipns" | "tor+http" | "tor+https"))
 }
 
 fn has_broadweb_scheme(address: &str) -> bool {
-    Url::parse(address)
-        .ok()
-        .is_some_and(|url| matches!(url.scheme(), "ipfs" | "ipns" | "i2p" | "gemini" | "magnet"))
+    Url::parse(address).ok().is_some_and(|url| {
+        matches!(
+            url.scheme(),
+            "ipfs" | "ipns" | "tor+http" | "tor+https" | "i2p" | "gemini" | "magnet"
+        )
+    })
 }
 
 fn requires_private_network_host_adapter(address: &str) -> bool {
