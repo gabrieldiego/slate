@@ -12,6 +12,7 @@ pub struct HttpFetchRequest {
     pub url: String,
     pub transport_id: Option<String>,
     pub purpose: FetchPurpose,
+    pub suggested_download_filename: Option<String>,
 }
 
 impl HttpFetchRequest {
@@ -21,6 +22,7 @@ impl HttpFetchRequest {
             url: url.into(),
             transport_id: None,
             purpose: FetchPurpose::Navigation,
+            suggested_download_filename: None,
         }
     }
 
@@ -35,6 +37,11 @@ impl HttpFetchRequest {
 
     pub fn for_subresource(mut self) -> Self {
         self.purpose = FetchPurpose::Subresource;
+        self
+    }
+
+    pub fn download_as(mut self, filename: impl Into<String>) -> Self {
+        self.suggested_download_filename = Some(filename.into());
         self
     }
 }
@@ -137,7 +144,8 @@ impl HttpFetchResponse {
         body: Vec<u8>,
     ) -> Self {
         let final_url = final_url.into();
-        let disposition = response_disposition(status_code, &final_url, content_type.as_deref());
+        let disposition =
+            response_disposition(status_code, &final_url, content_type.as_deref(), &headers);
         Self {
             final_url,
             status_code,
@@ -157,6 +165,13 @@ impl HttpFetchResponse {
 
     pub fn with_download(mut self, download: DownloadRecord) -> Self {
         self.download = Some(download);
+        self
+    }
+
+    pub fn with_download_disposition(mut self, suggested_filename: impl Into<String>) -> Self {
+        self.disposition = FetchDisposition::Download {
+            suggested_filename: suggested_filename.into(),
+        };
         self
     }
 
@@ -262,9 +277,17 @@ fn response_disposition(
     status_code: u16,
     final_url: &str,
     content_type: Option<&str>,
+    headers: &[HttpHeader],
 ) -> FetchDisposition {
     if !(200..=299).contains(&status_code) {
         return FetchDisposition::ErrorPage { status_code };
+    }
+
+    if is_attachment_response(headers) {
+        return FetchDisposition::Download {
+            suggested_filename: content_disposition_filename(headers)
+                .unwrap_or_else(|| suggested_filename(final_url)),
+        };
     }
 
     if is_html_content_type(content_type) {
@@ -274,6 +297,52 @@ fn response_disposition(
     FetchDisposition::Download {
         suggested_filename: suggested_filename(final_url),
     }
+}
+
+fn is_attachment_response(headers: &[HttpHeader]) -> bool {
+    headers
+        .iter()
+        .find(|header| header.name.eq_ignore_ascii_case("content-disposition"))
+        .is_some_and(|header| {
+            header
+                .value
+                .split(';')
+                .next()
+                .unwrap_or_default()
+                .trim()
+                .eq_ignore_ascii_case("attachment")
+        })
+}
+
+fn content_disposition_filename(headers: &[HttpHeader]) -> Option<String> {
+    let value = headers
+        .iter()
+        .find(|header| header.name.eq_ignore_ascii_case("content-disposition"))?
+        .value
+        .as_str();
+    value
+        .split(';')
+        .skip(1)
+        .filter_map(|parameter| parameter.split_once('='))
+        .find_map(|(name, value)| {
+            if name.trim().eq_ignore_ascii_case("filename") {
+                let filename = unquote_header_value(value.trim());
+                if filename.is_empty() {
+                    None
+                } else {
+                    Some(filename.to_string())
+                }
+            } else {
+                None
+            }
+        })
+}
+
+fn unquote_header_value(value: &str) -> &str {
+    value
+        .strip_prefix('"')
+        .and_then(|value| value.strip_suffix('"'))
+        .unwrap_or(value)
 }
 
 fn is_html_content_type(content_type: Option<&str>) -> bool {

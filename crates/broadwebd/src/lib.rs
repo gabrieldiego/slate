@@ -758,6 +758,70 @@ mod tests {
     }
 
     #[test]
+    fn content_disposition_attachment_sets_download_filename() {
+        let (address, server) = local_http_fixture_with_headers(
+            "text/html; charset=utf-8",
+            &[r#"Content-Disposition: attachment; filename="report.html""#],
+            "<!doctype html><title>Attachment</title>",
+        );
+        let state_root = test_state_root("attachment-download");
+        let download_root = test_download_root("attachment-download");
+        let daemon =
+            BroadwebDaemon::start_with_download_root(&state_root, &download_root).expect("daemon");
+        let response = daemon
+            .fetch_http(HttpFetchRequest::default_profile(&address))
+            .expect("fetch attachment fixture");
+        server.join().expect("server");
+
+        assert_eq!(
+            response.disposition,
+            FetchDisposition::Download {
+                suggested_filename: "report.html".to_string()
+            }
+        );
+        let download = response.download.expect("download record");
+        assert_eq!(download.filename, "report.html");
+        assert_eq!(download.path, download_root.join("report.html"));
+
+        let _ = fs::remove_dir_all(state_root);
+        let _ = fs::remove_dir_all(download_root);
+    }
+
+    #[test]
+    fn explicit_download_request_saves_html_with_requested_filename() {
+        let (address, server) = local_http_fixture(
+            "text/html; charset=utf-8",
+            "<!doctype html><title>Download Me</title>",
+        );
+        let state_root = test_state_root("explicit-download");
+        let download_root = test_download_root("explicit-download");
+        let daemon =
+            BroadwebDaemon::start_with_download_root(&state_root, &download_root).expect("daemon");
+        let response = daemon
+            .fetch_http(HttpFetchRequest::default_profile(&address).download_as("page.html"))
+            .expect("fetch explicit download fixture");
+        server.join().expect("server");
+
+        assert_eq!(
+            response.disposition,
+            FetchDisposition::Download {
+                suggested_filename: "page.html".to_string()
+            }
+        );
+        let download = response.download.expect("download record");
+        assert_eq!(download.filename, "page.html");
+        assert_eq!(download.path, download_root.join("page.html"));
+        assert!(
+            fs::read_to_string(&download.path)
+                .expect("read explicit download")
+                .contains("Download Me")
+        );
+
+        let _ = fs::remove_dir_all(state_root);
+        let _ = fs::remove_dir_all(download_root);
+    }
+
+    #[test]
     fn response_size_budget_is_enforced() {
         let (address, server) = local_http_fixture("text/html", "0123456789");
         let mut registry = PluginRegistry::new();
@@ -1359,9 +1423,26 @@ mod tests {
         local_http_status_fixture("200 OK", content_type, body)
     }
 
+    fn local_http_fixture_with_headers(
+        content_type: &'static str,
+        extra_headers: &'static [&'static str],
+        body: &'static str,
+    ) -> (String, thread::JoinHandle<()>) {
+        local_http_status_fixture_with_headers("200 OK", content_type, extra_headers, body)
+    }
+
     fn local_http_status_fixture(
         status: &'static str,
         content_type: &'static str,
+        body: &'static str,
+    ) -> (String, thread::JoinHandle<()>) {
+        local_http_status_fixture_with_headers(status, content_type, &[], body)
+    }
+
+    fn local_http_status_fixture_with_headers(
+        status: &'static str,
+        content_type: &'static str,
+        extra_headers: &'static [&'static str],
         body: &'static str,
     ) -> (String, thread::JoinHandle<()>) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind local server");
@@ -1370,8 +1451,13 @@ mod tests {
             let (mut stream, _) = listener.accept().expect("accept request");
             let mut request = [0_u8; 1024];
             let _ = stream.read(&mut request).expect("read request");
+            let extra_headers = if extra_headers.is_empty() {
+                String::new()
+            } else {
+                format!("{}\r\n", extra_headers.join("\r\n"))
+            };
             let response = format!(
-                "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\n{extra_headers}Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
                 body.len()
             );
             stream

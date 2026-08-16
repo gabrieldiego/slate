@@ -139,8 +139,14 @@ impl BroadwebDaemon {
     ) -> Result<HttpFetchResponse, BroadwebdError> {
         let profile = request.profile.clone();
         let should_record_download = request.purpose == FetchPurpose::Navigation;
+        let requested_download_filename = request.suggested_download_filename.clone();
         self.state_root.prepare_profile(&profile)?;
-        let response = self.registry.fetch_http(request, &self.budget)?;
+        let mut response = self.registry.fetch_http(request, &self.budget)?;
+        if let Some(filename) = requested_download_filename
+            && (200..=299).contains(&response.status_code)
+        {
+            response = response.with_download_disposition(filename);
+        }
         if !should_record_download {
             return Ok(response);
         }
