@@ -39,6 +39,95 @@ pub(crate) enum AppState {
     ShuttingDown,
 }
 
+const SLATE_DOWNLOAD_LINK_SCRIPT: &str = r#"
+(() => {
+  const supportedSchemes = new Set(["http:", "https:", "ipfs:", "ipns:"]);
+  const downloadExtensions = new Set([
+    "7z", "apk", "bin", "bz2", "csv", "deb", "dmg", "doc", "docx", "exe",
+    "gz", "iso", "json", "m4a", "mkv", "mov", "mp3", "mp4", "msi", "odp",
+    "ods", "odt", "pdf", "ppt", "pptx", "rar", "rpm", "tar", "tgz", "txt",
+    "wasm", "webm", "xls", "xlsx", "xz", "zip"
+  ]);
+
+  function closestAnchor(node) {
+    let current = node && node.nodeType === Node.ELEMENT_NODE ? node : node && node.parentElement;
+    while (current) {
+      if (current.localName === "a" && current.href) {
+        return current;
+      }
+      current = current.parentElement;
+    }
+    return null;
+  }
+
+  function targetUrl(anchor) {
+    try {
+      return new URL(anchor.href, document.baseURI);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function hasPrimaryPlainClick(event) {
+    return event.button === 0 && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+  }
+
+  function extensionFromPath(pathname) {
+    const lastSegment = pathname.split("/").filter(Boolean).pop() || "";
+    const dot = lastSegment.lastIndexOf(".");
+    if (dot <= 0 || dot === lastSegment.length - 1) {
+      return "";
+    }
+    return lastSegment.slice(dot + 1).toLowerCase();
+  }
+
+  function shouldDownload(anchor, url) {
+    if (anchor.hasAttribute("download")) {
+      return true;
+    }
+    return downloadExtensions.has(extensionFromPath(url.pathname));
+  }
+
+  function filenameFromLink(anchor, url) {
+    const requested = anchor.getAttribute("download");
+    if (requested && requested.trim()) {
+      return requested.trim();
+    }
+    try {
+      return decodeURIComponent(url.pathname.split("/").filter(Boolean).pop() || "");
+    } catch (_) {
+      return url.pathname.split("/").filter(Boolean).pop() || "";
+    }
+  }
+
+  document.addEventListener("click", (event) => {
+    if (event.defaultPrevented || !hasPrimaryPlainClick(event)) {
+      return;
+    }
+
+    const anchor = closestAnchor(event.target);
+    if (!anchor || (anchor.target && anchor.target !== "_self")) {
+      return;
+    }
+
+    const url = targetUrl(anchor);
+    if (!url || !supportedSchemes.has(url.protocol) || !shouldDownload(anchor, url)) {
+      return;
+    }
+
+    const params = new URLSearchParams();
+    params.set("url", url.href);
+    const filename = filenameFromLink(anchor, url);
+    if (filename) {
+      params.set("filename", filename);
+    }
+
+    event.preventDefault();
+    window.location.href = `slate://download?${params.toString()}`;
+  }, true);
+})();
+"#;
+
 pub struct App {
     opts: Opts,
     preferences: Preferences,
@@ -131,6 +220,7 @@ impl App {
         servo.setup_logging();
 
         let user_content_manager = Rc::new(UserContentManager::new(&servo));
+        user_content_manager.add_script(Rc::new(UserScript::from(SLATE_DOWNLOAD_LINK_SCRIPT)));
         for script in load_userscripts(self.servoshell_preferences.userscripts_directory.as_deref())
             .expect("Loading userscripts failed")
         {

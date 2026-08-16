@@ -10,14 +10,21 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use headers::{ContentType, HeaderMapExt};
 use log::warn;
+use servo::ServoUrl;
 use servo::protocol_handler::{
-    DoneChannel, FetchContext, NetworkError, ProtocolHandler, Request, ResourceFetchTiming,
-    Response, ResponseBody,
+    DoneChannel, FetchContext, HttpStatus, NetworkError, ProtocolHandler, Request,
+    ResourceFetchTiming, Response, ResponseBody,
 };
-use slate_broadwebd::{StateRoot, TemporaryDownloadRecord, default_session_state_root};
+use slate_broadwebd::{
+    FetchDisposition, HttpFetchRequest, StateRoot, TemporaryDownloadRecord,
+    default_session_state_root,
+};
 use slate_storage::{DEFAULT_PROFILE_ID, SlateProfileDatabase};
 use url::Url;
 
+use crate::desktop::protocols::broadweb::{
+    broadweb_download_ready_html, escape_html_text, fetch_with_default_broadwebd,
+};
 use crate::desktop::protocols::resource::ResourceProtocolHandler;
 
 pub(crate) const CHROME_ELEMENT_ZOOM_SETTING_DEFAULT: f32 = 0.9;
@@ -56,6 +63,7 @@ impl ProtocolHandler for SlateProtocolHandler {
             "settings/apply",
             "downloads",
             "downloads/state",
+            "download",
         ]
     }
 
@@ -76,6 +84,10 @@ impl ProtocolHandler for SlateProtocolHandler {
 
         if is_slate_downloads_state_url(url.as_url()) {
             return downloads_json_response(request);
+        }
+
+        if is_slate_download_request_url(url.as_url()) {
+            return download_url_response(request);
         }
 
         if is_slate_settings_preview_url(url.as_url()) {
@@ -212,6 +224,102 @@ fn downloads_json_response(request: &Request) -> Pin<Box<dyn Future<Output = Res
     Box::pin(std::future::ready(response))
 }
 
+fn download_url_response(request: &Request) -> Pin<Box<dyn Future<Output = Response> + Send>> {
+    let request_url = request.current_url();
+    let timing = ResourceFetchTiming::new(request.timing_type());
+    let response = match download_request_from_url(request_url.as_url()) {
+        Ok(fetch_request) => match fetch_with_default_broadwebd(fetch_request) {
+            Ok(fetch_response) => download_fetch_response(request_url, timing, fetch_response),
+            Err(error) => slate_download_error_response(
+                request_url,
+                timing,
+                "Download Failed",
+                &error.to_string(),
+                502,
+            ),
+        },
+        Err(error) => slate_download_error_response(
+            request_url,
+            timing,
+            "Invalid Download Request",
+            &error,
+            400,
+        ),
+    };
+    Box::pin(std::future::ready(response))
+}
+
+fn download_fetch_response(
+    request_url: ServoUrl,
+    timing: ResourceFetchTiming,
+    fetch_response: slate_broadwebd::HttpFetchResponse,
+) -> Response {
+    let mut response = Response::new(request_url, timing);
+    response.headers.typed_insert(ContentType::html());
+
+    let (status_code, body) = if matches!(
+        &fetch_response.disposition,
+        FetchDisposition::Download { .. }
+    ) && fetch_response.download.is_some()
+    {
+        (200, broadweb_download_ready_html(&fetch_response))
+    } else if let FetchDisposition::ErrorPage { status_code } = &fetch_response.disposition {
+        (
+            *status_code,
+            slate_download_error_html(
+                "Download Failed",
+                &format!("HTTP status {status_code} for {}", fetch_response.final_url),
+            ),
+        )
+    } else {
+        (
+            502,
+            slate_download_error_html(
+                "Download Not Saved",
+                "Slate fetched the requested URL, but broadwebd did not classify it as a download.",
+            ),
+        )
+    };
+
+    response.status = slate_http_status(status_code);
+    *response.body.lock() = ResponseBody::Done(body.into_bytes());
+    response
+}
+
+fn slate_download_error_response(
+    request_url: ServoUrl,
+    timing: ResourceFetchTiming,
+    title: &str,
+    message: &str,
+    status_code: u16,
+) -> Response {
+    let mut response = Response::new(request_url, timing);
+    response.status = slate_http_status(status_code);
+    response.headers.typed_insert(ContentType::html());
+    *response.body.lock() = ResponseBody::Done(slate_download_error_html(title, message).into());
+    response
+}
+
+fn slate_http_status(status_code: u16) -> HttpStatus {
+    if (100..=599).contains(&status_code) {
+        HttpStatus::new_raw(status_code, Vec::new())
+    } else {
+        HttpStatus::new_error()
+    }
+}
+
+fn slate_download_error_html(title: &str, message: &str) -> String {
+    format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\">\
+         <title>{}</title></head>\
+         <body><h1>{}</h1><pre>{}</pre>\
+         <p><a href=\"slate://downloads\">Open Downloads</a></p></body></html>",
+        escape_html_text(title),
+        escape_html_text(title),
+        escape_html_text(message)
+    )
+}
+
 fn current_downloads_json() -> String {
     match current_downloads() {
         Ok(downloads) => downloads_json(&downloads),
@@ -247,6 +355,56 @@ fn download_json(download: &TemporaryDownloadRecord) -> serde_json::Value {
     })
 }
 
+fn download_request_from_url(url: &Url) -> Result<HttpFetchRequest, String> {
+    if !is_slate_download_request_url(url) {
+        return Err("not a Slate download request".to_string());
+    }
+
+    let target = url
+        .query_pairs()
+        .find(|(name, _)| name == "url")
+        .map(|(_, value)| value.into_owned())
+        .ok_or_else(|| "missing url query parameter".to_string())?;
+    let target_url =
+        Url::parse(&target).map_err(|error| format!("invalid download URL: {error}"))?;
+    if !is_supported_download_target(&target_url) {
+        return Err(format!(
+            "unsupported download scheme: {}",
+            target_url.scheme()
+        ));
+    }
+
+    let filename = url
+        .query_pairs()
+        .find(|(name, _)| name == "filename")
+        .and_then(|(_, value)| non_empty_download_filename(&value))
+        .unwrap_or_else(|| suggested_download_filename(&target_url));
+
+    Ok(HttpFetchRequest::default_profile(target).download_as(filename))
+}
+
+fn non_empty_download_filename(value: &str) -> Option<String> {
+    let value = value.trim();
+    (!value.is_empty()).then(|| value.to_string())
+}
+
+fn suggested_download_filename(url: &Url) -> String {
+    url.path_segments()
+        .and_then(|segments| {
+            segments
+                .rev()
+                .find(|segment| !segment.is_empty())
+                .map(str::to_string)
+        })
+        .or_else(|| url.host_str().map(str::to_string))
+        .filter(|filename| !filename.is_empty())
+        .unwrap_or_else(|| "download".to_string())
+}
+
+fn is_supported_download_target(url: &Url) -> bool {
+    matches!(url.scheme(), "http" | "https" | "ipfs" | "ipns")
+}
+
 pub(crate) fn is_slate_home_url(url: &Url) -> bool {
     url.scheme() == "slate"
         && (url.host_str() == Some("home") || url.path().trim_start_matches('/') == "home")
@@ -267,6 +425,11 @@ fn is_slate_downloads_state_url(url: &Url) -> bool {
     url.scheme() == "slate"
         && url.host_str() == Some("downloads")
         && url.path().trim_start_matches('/') == "state"
+}
+
+fn is_slate_download_request_url(url: &Url) -> bool {
+    url.scheme() == "slate"
+        && (url.host_str() == Some("download") || url.path().trim_start_matches('/') == "download")
 }
 
 fn is_slate_settings_state_url(url: &Url) -> bool {
@@ -297,10 +460,12 @@ fn is_slate_settings_apply_url(url: &Url) -> bool {
 mod tests {
     use super::{
         CHROME_ELEMENT_ZOOM_SETTING_MAX, CHROME_ELEMENT_ZOOM_SETTING_MIN,
-        chrome_element_zoom_setting_from_url, is_slate_downloads_state_url, is_slate_downloads_url,
+        chrome_element_zoom_setting_from_url, download_request_from_url,
+        is_slate_download_request_url, is_slate_downloads_state_url, is_slate_downloads_url,
         is_slate_home_url, is_slate_settings_apply_url, is_slate_settings_preview_url,
-        is_slate_settings_save_url, is_slate_settings_url,
+        is_slate_settings_save_url, is_slate_settings_url, slate_download_error_html,
     };
+    use slate_broadwebd::FetchPurpose;
     use slate_broadwebd::TemporaryDownloadRecord;
     use std::path::PathBuf;
     use url::Url;
@@ -327,6 +492,70 @@ mod tests {
         assert!(is_slate_downloads_state_url(
             &Url::parse("slate://downloads/state").unwrap()
         ));
+    }
+
+    #[test]
+    fn slate_download_request_url_matches_host_and_path_forms() {
+        assert!(is_slate_download_request_url(
+            &Url::parse("slate://download?url=https%3A%2F%2Fexample.com%2Ffile.zip").unwrap()
+        ));
+        assert!(is_slate_download_request_url(
+            &Url::parse("slate:download?url=https%3A%2F%2Fexample.com%2Ffile.zip").unwrap()
+        ));
+        assert!(!is_slate_download_request_url(
+            &Url::parse("slate://downloads").unwrap()
+        ));
+        assert!(!is_slate_download_request_url(
+            &Url::parse("https://example.com/file.zip").unwrap()
+        ));
+    }
+
+    #[test]
+    fn slate_download_request_builds_broadweb_request() {
+        let request = download_request_from_url(
+            &Url::parse(
+                "slate://download?url=https%3A%2F%2Fexample.com%2Freleases%2Fslate.tar.gz&filename=Slate.tar.gz",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(request.url, "https://example.com/releases/slate.tar.gz");
+        assert_eq!(request.purpose, FetchPurpose::Navigation);
+        assert_eq!(
+            request.suggested_download_filename.as_deref(),
+            Some("Slate.tar.gz")
+        );
+    }
+
+    #[test]
+    fn slate_download_request_supports_ipfs_and_suggests_path_filename() {
+        let request = download_request_from_url(
+            &Url::parse(
+                "slate://download?url=ipfs%3A%2F%2FQmT5NvUtoM5nWFfrQdVrFtvGfKFmG7AHE8P34isapyhCxX%2Fimage.png",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            request.url,
+            "ipfs://QmT5NvUtoM5nWFfrQdVrFtvGfKFmG7AHE8P34isapyhCxX/image.png"
+        );
+        assert_eq!(
+            request.suggested_download_filename.as_deref(),
+            Some("image.png")
+        );
+    }
+
+    #[test]
+    fn slate_download_request_rejects_unsupported_targets() {
+        let error = download_request_from_url(
+            &Url::parse("slate://download?url=file%3A%2F%2F%2Ftmp%2Fsecret.txt").unwrap(),
+        )
+        .unwrap_err();
+
+        assert_eq!(error, "unsupported download scheme: file");
     }
 
     #[test]
@@ -430,6 +659,15 @@ mod tests {
         assert_eq!(download["path"], "/tmp/report \"final\".txt");
         assert_eq!(download["size_bytes"], 12);
         assert_eq!(download["file_url"], "file:///tmp/report%20%22final%22.txt");
+    }
+
+    #[test]
+    fn slate_download_error_html_escapes_message() {
+        let html = slate_download_error_html("Download <Failed>", "bad <url>");
+
+        assert!(html.contains("Download &lt;Failed&gt;"));
+        assert!(html.contains("bad &lt;url&gt;"));
+        assert!(html.contains("slate://downloads"));
     }
 
     #[test]
