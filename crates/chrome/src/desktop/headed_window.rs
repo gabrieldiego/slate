@@ -49,6 +49,7 @@ use crate::desktop::accelerated_gl_media::setup_gl_accelerated_media;
 use crate::desktop::dialog::Dialog;
 use crate::desktop::event_loop::AppEvent;
 use crate::desktop::gui::Gui;
+use crate::desktop::key_bindings::{KeyBindingAction, key_binding_action_for_event};
 use crate::desktop::keyutils::CMD_OR_CONTROL;
 use crate::desktop::protocols::slate::{is_slate_blank_url, is_slate_home_url, is_slate_web_url};
 use crate::prefs::ServoShellPreferences;
@@ -378,11 +379,17 @@ impl HeadedWindow {
             return false;
         };
 
+        if self.handle_configured_tab_key_binding(
+            state.clone(),
+            window,
+            active_webview.clone(),
+            key_event,
+        ) {
+            return true;
+        }
+
         let mut handled = true;
         ShortcutMatcher::from_event(key_event.event.clone())
-            .shortcut(CMD_OR_CONTROL, 'W', || {
-                window.close_webview(active_webview.id());
-            })
             .shortcut(CMD_OR_CONTROL, 'X', || {
                 active_webview
                     .notify_input_event(InputEvent::EditingAction(servo::EditingActionEvent::Cut));
@@ -452,30 +459,59 @@ impl HeadedWindow {
                     window.activate_webview_by_index(len - 1)
                 }
             })
-            .shortcut(Modifiers::CONTROL, Key::Named(NamedKey::PageDown), || {
-                if let Some(index) = window.get_active_webview_index() {
-                    window.activate_webview_by_index((index + 1) % window.webviews().len())
-                }
-            })
-            .shortcut(Modifiers::CONTROL, Key::Named(NamedKey::PageUp), || {
-                if let Some(index) = window.get_active_webview_index() {
-                    let len = window.webviews().len();
-                    window.activate_webview_by_index((index + len - 1) % len);
-                }
-            })
-            .shortcut(CMD_OR_CONTROL, 'T', || {
-                window.create_and_activate_toplevel_webview(
-                    state.clone(),
-                    Url::parse("slate://blank")
-                        .expect("Should be able to unconditionally parse 'slate://blank' as URL"),
-                );
-            })
             .shortcut(CMD_OR_CONTROL, 'N', || {
                 window.queue_user_interface_command(UserInterfaceCommand::NewWindow);
             })
             .shortcut(CMD_OR_CONTROL, 'Q', || state.schedule_exit())
             .otherwise(|| handled = false);
         handled
+    }
+
+    fn handle_configured_tab_key_binding(
+        &self,
+        state: Rc<RunningAppState>,
+        window: &Rc<ServoShellWindow>,
+        active_webview: WebView,
+        key_event: &KeyboardEvent,
+    ) -> bool {
+        let Some(action) = key_binding_action_for_event(&key_event.event) else {
+            return false;
+        };
+
+        if !key_event.event.state.is_down() {
+            return true;
+        }
+
+        match action {
+            KeyBindingAction::NewTab => {
+                window.create_and_activate_toplevel_webview(
+                    state,
+                    Url::parse("slate://blank")
+                        .expect("Should be able to unconditionally parse 'slate://blank' as URL"),
+                );
+            }
+            KeyBindingAction::CloseTab => {
+                window.close_webview(active_webview.id());
+            }
+            KeyBindingAction::NextTab => {
+                if let Some(index) = window.get_active_webview_index() {
+                    let len = window.webviews().len();
+                    if len > 0 {
+                        window.activate_webview_by_index((index + 1) % len);
+                    }
+                }
+            }
+            KeyBindingAction::PreviousTab => {
+                if let Some(index) = window.get_active_webview_index() {
+                    let len = window.webviews().len();
+                    if len > 0 {
+                        window.activate_webview_by_index((index + len - 1) % len);
+                    }
+                }
+            }
+        }
+
+        true
     }
 
     #[cfg_attr(not(target_os = "macos"), expect(unused_variables))]

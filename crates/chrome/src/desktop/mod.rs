@@ -15,6 +15,7 @@ pub mod geometry;
 pub(crate) mod gui;
 pub(crate) mod headed_window;
 mod headless_window;
+mod key_bindings;
 mod keyutils;
 mod protocols;
 mod slate_theme;

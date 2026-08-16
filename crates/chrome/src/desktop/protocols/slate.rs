@@ -22,6 +22,10 @@ use slate_broadwebd::{
 use slate_storage::{DEFAULT_PROFILE_ID, SlateProfileDatabase};
 use url::Url;
 
+use crate::desktop::key_bindings::{
+    SlateKeyBindings, current_key_bindings_json_value, initialize_key_bindings_from_database,
+    key_bindings_from_settings_url, persist_key_bindings_to_database, set_current_key_bindings,
+};
 use crate::desktop::protocols::broadweb::{
     broadweb_download_ready_html, escape_html_text, fetch_with_default_broadwebd,
 };
@@ -81,7 +85,7 @@ impl ProtocolHandler for SlateProtocolHandler {
     ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
         let url = request.current_url();
         if is_slate_settings_state_url(url.as_url()) {
-            return chrome_zoom_json_response(request, current_chrome_element_zoom_setting());
+            return settings_json_response(request, current_chrome_element_zoom_setting());
         }
 
         if is_slate_downloads_state_url(url.as_url()) {
@@ -96,7 +100,7 @@ impl ProtocolHandler for SlateProtocolHandler {
             let zoom = chrome_element_zoom_setting_from_url(url.as_url())
                 .map(set_current_chrome_element_zoom_setting)
                 .unwrap_or_else(current_chrome_element_zoom_setting);
-            return chrome_zoom_json_response(request, zoom);
+            return settings_json_response(request, zoom);
         }
 
         if is_slate_settings_save_url(url.as_url()) || is_slate_settings_apply_url(url.as_url()) {
@@ -104,7 +108,11 @@ impl ProtocolHandler for SlateProtocolHandler {
                 .map(set_current_chrome_element_zoom_setting)
                 .unwrap_or_else(current_chrome_element_zoom_setting);
             self.persist_chrome_element_zoom_setting(zoom);
-            return chrome_zoom_json_response(request, zoom);
+            if let Some(key_bindings) = key_bindings_from_settings_url(url.as_url()) {
+                set_current_key_bindings(key_bindings.clone());
+                self.persist_key_bindings(&key_bindings);
+            }
+            return settings_json_response(request, zoom);
         }
 
         let resource_path = if is_slate_blank_url(url.as_url()) {
@@ -144,9 +152,16 @@ impl SlateProtocolHandler {
             }
         }
     }
+
+    fn persist_key_bindings(&self, key_bindings: &SlateKeyBindings) {
+        if let Some(database) = &self.database {
+            persist_key_bindings_to_database(database, key_bindings);
+        }
+    }
 }
 
 pub(crate) fn initialize_chrome_settings_from_database(database: &SlateProfileDatabase) {
+    initialize_key_bindings_from_database(database);
     let zoom = match database.ensure_setting_f32(
         CHROME_ELEMENT_ZOOM_SETTING_KEY,
         CHROME_ELEMENT_ZOOM_SETTING_DEFAULT,
@@ -207,7 +222,16 @@ fn chrome_element_zoom_from_percent(percent: u32) -> f32 {
         / 100.0
 }
 
-fn chrome_zoom_json_response(
+fn settings_state_json(zoom: f32) -> String {
+    let rounded_zoom = ((zoom as f64) * 100.0).round() / 100.0;
+    serde_json::json!({
+        "chrome_zoom": rounded_zoom,
+        "key_bindings": current_key_bindings_json_value(),
+    })
+    .to_string()
+}
+
+fn settings_json_response(
     request: &Request,
     zoom: f32,
 ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
@@ -216,7 +240,7 @@ fn chrome_zoom_json_response(
         ResourceFetchTiming::new(request.timing_type()),
     );
     response.headers.typed_insert(ContentType::json());
-    *response.body.lock() = ResponseBody::Done(format!("{{\"chrome_zoom\":{zoom:.2}}}").into());
+    *response.body.lock() = ResponseBody::Done(settings_state_json(zoom).into());
     Box::pin(std::future::ready(response))
 }
 
@@ -668,6 +692,19 @@ mod tests {
     }
 
     #[test]
+    fn slate_settings_state_json_includes_key_bindings() {
+        let parsed: serde_json::Value =
+            serde_json::from_str(&super::settings_state_json(0.92)).unwrap();
+
+        assert_eq!(parsed["chrome_zoom"], 0.92);
+        assert_eq!(parsed["key_bindings"][0]["id"], "new_tab");
+        assert_eq!(parsed["key_bindings"][0]["query"], "key_new_tab");
+        assert_eq!(parsed["key_bindings"][1]["id"], "close_tab");
+        assert_eq!(parsed["key_bindings"][2]["id"], "next_tab");
+        assert_eq!(parsed["key_bindings"][3]["id"], "previous_tab");
+    }
+
+    #[test]
     fn slate_internal_page_resources_exist() {
         let resource_dir = crate::resources::resource_protocol_dir_path();
 
@@ -716,6 +753,10 @@ mod tests {
         assert!(save_index < reset_index);
         assert!(settings_page.contains("sendSetting(\"preview\""));
         assert!(settings_page.contains("sendSetting(\"save\""));
+        assert!(settings_page.contains("Keyboard shortcuts"));
+        assert!(settings_page.contains("id=\"save-shortcuts\""));
+        assert!(settings_page.contains("key_new_tab"));
+        assert!(settings_page.contains("key_previous_tab"));
         assert!(!settings_page.contains("replaceState"));
         assert!(!settings_page.contains("type=\"range\""));
     }

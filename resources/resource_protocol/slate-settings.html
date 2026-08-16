@@ -32,6 +32,13 @@
       letter-spacing: 0;
     }
 
+    h2 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
     p {
       margin: 0;
       color: #696966;
@@ -132,6 +139,48 @@
       background: #0b7e79;
       color: #fffefa;
     }
+
+    .keybinding-list {
+      display: grid;
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .keybinding-row {
+      display: grid;
+      grid-template-columns: minmax(140px, 1fr) minmax(160px, 220px);
+      gap: 18px;
+      align-items: center;
+    }
+
+    .keybinding-row label {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .keybinding-row input {
+      box-sizing: border-box;
+      width: 100%;
+      border: 1px solid #c8c5bd;
+      border-radius: 6px;
+      background: #fffefa;
+      color: #242421;
+      padding: 8px 10px;
+      font: inherit;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .keybinding-row input:focus {
+      border-color: #0b7e79;
+      outline: 3px solid rgba(11, 126, 121, 0.18);
+    }
+
+    @media (max-width: 560px) {
+      .keybinding-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -164,6 +213,15 @@
         <button id="reset">Reset</button>
       </div>
     </section>
+
+    <section>
+      <h2>Keyboard shortcuts</h2>
+      <div id="key-bindings" class="keybinding-list"></div>
+      <div class="actions">
+        <button id="save-shortcuts" class="primary">Save</button>
+        <button id="reset-shortcuts">Reset shortcuts</button>
+      </div>
+    </section>
   </main>
 
   <script>
@@ -175,12 +233,45 @@
     const thumb = document.getElementById("chrome-zoom-thumb");
     const output = document.getElementById("chrome-zoom-output");
     const saveButton = document.getElementById("save");
+    const saveShortcutsButton = document.getElementById("save-shortcuts");
+    const keyBindings = document.getElementById("key-bindings");
+    const resetShortcutsButton = document.getElementById("reset-shortcuts");
     const params = new URLSearchParams(window.location.search);
     const initial = Number.parseFloat(params.get("chrome_zoom"));
     const fallbackImage = new Image();
     let sliderValue = DEFAULT_ZOOM;
     let lastPreviewZoom = "";
     let dragging = false;
+    const DEFAULT_KEY_BINDINGS = [
+      {
+        id: "new_tab",
+        label: "New tab",
+        query: "key_new_tab",
+        value: "Primary+T",
+        default_value: "Primary+T"
+      },
+      {
+        id: "close_tab",
+        label: "Close tab",
+        query: "key_close_tab",
+        value: "Primary+W",
+        default_value: "Primary+W"
+      },
+      {
+        id: "next_tab",
+        label: "Next tab",
+        query: "key_next_tab",
+        value: "Ctrl+PageDown",
+        default_value: "Ctrl+PageDown"
+      },
+      {
+        id: "previous_tab",
+        label: "Previous tab",
+        query: "key_previous_tab",
+        value: "Ctrl+PageUp",
+        default_value: "Ctrl+PageUp"
+      }
+    ];
 
     function clampPercent(value) {
       if (!Number.isFinite(value)) {
@@ -191,6 +282,11 @@
 
     function zoomString(percent) {
       return (percent / 100).toFixed(2);
+    }
+
+    function setSaveButtons(text) {
+      saveButton.textContent = text;
+      saveShortcutsButton.textContent = text;
     }
 
     function updateSlider() {
@@ -205,19 +301,44 @@
       slider.setAttribute("aria-valuetext", `${sliderValue}%`);
     }
 
-    function settingUrl(path, percent) {
-      return `slate://settings/${path}?chrome_zoom=${zoomString(percent)}&nonce=${Date.now()}`;
+    function shortcutFields() {
+      return Array.from(document.querySelectorAll(".keybinding-input"));
     }
 
-    function sendSetting(path, percent) {
-      const url = settingUrl(path, percent);
+    function settingUrl(path, percent, includeKeyBindings) {
+      const query = new URLSearchParams();
+      query.set("chrome_zoom", zoomString(percent));
+      if (includeKeyBindings) {
+        shortcutFields().forEach((field) => {
+          if (field.dataset.query) {
+            query.set(field.dataset.query, field.value.trim());
+          }
+        });
+      }
+      query.set("nonce", String(Date.now()));
+      return `slate://settings/${path}?${query.toString()}`;
+    }
+
+    function sendSetting(path, percent, includeKeyBindings, applyResponse) {
+      const url = settingUrl(path, percent, includeKeyBindings);
       try {
         if (window.fetch) {
           const request = window.fetch(url, { cache: "no-store" });
           if (request && request.catch) {
-            request.catch(() => {
-              fallbackImage.src = url;
-            });
+            if (applyResponse) {
+              request
+                .then((response) => response.json())
+                .then((settings) => {
+                  applySettings(settings, true);
+                })
+                .catch(() => {
+                  fallbackImage.src = url;
+                });
+            } else {
+              request.catch(() => {
+                fallbackImage.src = url;
+              });
+            }
           }
           return;
         }
@@ -231,8 +352,8 @@
         return;
       }
       lastPreviewZoom = zoom;
-      sendSetting("preview", sliderValue);
-      saveButton.textContent = "Save";
+      sendSetting("preview", sliderValue, false, false);
+      setSaveButtons("Save");
     }
 
     function setSliderValue(percent, preview) {
@@ -308,26 +429,80 @@
       setSliderValue(next, true);
     }
 
-    function loadNativeZoom() {
+    function renderKeyBindings(bindings) {
+      const rows = Array.isArray(bindings) && bindings.length > 0 ? bindings : DEFAULT_KEY_BINDINGS;
+      keyBindings.textContent = "";
+      rows.forEach((binding) => {
+        const row = document.createElement("div");
+        row.className = "keybinding-row";
+
+        const label = document.createElement("label");
+        const inputId = `keybinding-${binding.id}`;
+        label.htmlFor = inputId;
+        label.textContent = binding.label;
+
+        const input = document.createElement("input");
+        input.id = inputId;
+        input.className = "keybinding-input";
+        input.autocomplete = "off";
+        input.spellcheck = false;
+        input.value = binding.value || binding.display || binding.default_value || "";
+        input.dataset.query = binding.query;
+        input.dataset.defaultValue = binding.default_value || binding.value || "";
+        input.addEventListener("input", () => {
+          setSaveButtons("Save");
+        });
+
+        row.appendChild(label);
+        row.appendChild(input);
+        keyBindings.appendChild(row);
+      });
+    }
+
+    function resetKeyBindings() {
+      shortcutFields().forEach((field) => {
+        field.value = field.dataset.defaultValue || "";
+      });
+      setSaveButtons("Save");
+    }
+
+    function applySettings(settings, updateZoom) {
+      if (updateZoom) {
+        const zoom = Number.parseFloat(settings.chrome_zoom);
+        setSliderValue(Number.isFinite(zoom) ? Math.round(zoom * 100) : DEFAULT_ZOOM, false);
+      }
+      renderKeyBindings(settings.key_bindings);
+    }
+
+    function loadNativeSettings() {
       if (Number.isFinite(initial)) {
         setSliderValue(Math.round(initial * 100), true);
-        return;
       }
 
       if (!window.fetch) {
-        updateSlider();
+        if (!Number.isFinite(initial)) {
+          updateSlider();
+        }
+        renderKeyBindings(DEFAULT_KEY_BINDINGS);
         return;
       }
 
       window.fetch(`slate://settings/state?nonce=${Date.now()}`, { cache: "no-store" })
         .then((response) => response.json())
         .then((settings) => {
-          const zoom = Number.parseFloat(settings.chrome_zoom);
-          setSliderValue(Number.isFinite(zoom) ? Math.round(zoom * 100) : DEFAULT_ZOOM, false);
+          applySettings(settings, !Number.isFinite(initial));
         })
         .catch(() => {
-          updateSlider();
+          if (!Number.isFinite(initial)) {
+            updateSlider();
+          }
+          renderKeyBindings(DEFAULT_KEY_BINDINGS);
         });
+    }
+
+    function saveSettings() {
+      sendSetting("save", sliderValue, true, true);
+      setSaveButtons("Saved");
     }
 
     slider.addEventListener("mousedown", startDrag);
@@ -340,15 +515,15 @@
       dragging = false;
     });
     slider.addEventListener("keydown", stepSlider);
-    saveButton.addEventListener("click", () => {
-      sendSetting("save", sliderValue);
-      saveButton.textContent = "Saved";
-    });
+    saveButton.addEventListener("click", saveSettings);
+    saveShortcutsButton.addEventListener("click", saveSettings);
     document.getElementById("reset").addEventListener("click", () => {
       setSliderValue(DEFAULT_ZOOM, true);
     });
+    resetShortcutsButton.addEventListener("click", resetKeyBindings);
     updateSlider();
-    loadNativeZoom();
+    renderKeyBindings(DEFAULT_KEY_BINDINGS);
+    loadNativeSettings();
   </script>
 </body>
 </html>

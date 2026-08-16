@@ -56,10 +56,11 @@ The storage crate exposes APIs for reading and writing these records so
 Slate-owned features can keep their state in this file instead of adding new
 sidecar files.
 
-The chrome zoom setting is persisted through `settings`. The internal settings
-page previews slider changes in memory immediately, but writes the selected
-zoom to `slate-settings.db` only when the user activates Save. Browsing history
-is recorded when Servo reports history changes.
+The chrome zoom setting and configurable tab-navigation key bindings are
+persisted through `settings`. The internal settings page previews slider
+changes in memory immediately, but writes the selected zoom and shortcut values
+to `slate-settings.db` only when the user activates Save. Browsing history is
+recorded when Servo reports history changes.
 
 Settings should fail independently. If a stored setting is missing, malformed,
 or temporarily unreadable during development, the caller should use that
