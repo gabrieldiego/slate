@@ -37,7 +37,7 @@ use servo::{
     WebDriverCommandMsg, WebDriverJSResult, WebDriverLoadStatus, WebDriverScriptCommand,
     WebDriverSenders, WebView, WebViewDelegate, WebViewId,
 };
-use slate_storage::SlateProfileDatabase;
+use slate_storage::{DEFAULT_PROFILE_ID, SlateProfileDatabase};
 use url::Url;
 
 #[cfg(all(
@@ -167,6 +167,13 @@ pub(crate) enum UserInterfaceCommand {
     NewWebView,
     CloseWebView(WebViewId),
     NewWindow,
+}
+
+fn should_record_browsing_history(url: &Url) -> bool {
+    !matches!(
+        url.scheme(),
+        "about" | "data" | "file" | "javascript" | "resource" | "servo" | "slate"
+    )
 }
 
 pub(crate) struct RunningAppState {
@@ -722,9 +729,10 @@ impl WebViewDelegate for RunningAppState {
 
     fn notify_history_changed(&self, webview: WebView, entries: Vec<Url>, current: usize) {
         if let Some(url) = entries.get(current)
+            && should_record_browsing_history(url)
             && let Err(error) =
                 self.profile_database
-                    .record_history_visit("default", url.as_str(), None)
+                    .record_history_visit(DEFAULT_PROFILE_ID, url.as_str(), None)
         {
             warn!(
                 "failed to record browsing history for {}: {error}",
@@ -734,7 +742,20 @@ impl WebViewDelegate for RunningAppState {
         self.window_for_webview(&webview).set_needs_update();
     }
 
-    fn notify_page_title_changed(&self, webview: WebView, _: Option<String>) {
+    fn notify_page_title_changed(&self, webview: WebView, title: Option<String>) {
+        if let Some(url) = webview.url()
+            && should_record_browsing_history(&url)
+            && let Err(error) = self.profile_database.update_history_title(
+                DEFAULT_PROFILE_ID,
+                url.as_str(),
+                title.as_deref(),
+            )
+        {
+            warn!(
+                "failed to update browsing history title for {}: {error}",
+                url.as_str()
+            );
+        }
         self.window_for_webview(&webview).set_needs_update();
     }
 
@@ -935,5 +956,30 @@ impl ServoDelegate for ServoShellServoDelegate {
         #[cfg(not(any(target_os = "android", target_env = "ohos")))]
         println!("{message}");
         log::log!(level.into(), "{message}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_record_browsing_history;
+    use url::Url;
+
+    #[test]
+    fn browsing_history_skips_internal_and_local_urls() {
+        assert!(should_record_browsing_history(
+            &Url::parse("https://example.com/").unwrap()
+        ));
+        assert!(should_record_browsing_history(
+            &Url::parse("ipfs://bafybeigdyrzt/").unwrap()
+        ));
+        assert!(!should_record_browsing_history(
+            &Url::parse("slate://settings").unwrap()
+        ));
+        assert!(!should_record_browsing_history(
+            &Url::parse("file:///tmp/local.html").unwrap()
+        ));
+        assert!(!should_record_browsing_history(
+            &Url::parse("about:blank").unwrap()
+        ));
     }
 }

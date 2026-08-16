@@ -529,6 +529,31 @@ impl SlateProfileDatabase {
         Ok(())
     }
 
+    pub fn update_history_title(
+        &self,
+        profile: &str,
+        url: &str,
+        title: Option<&str>,
+    ) -> Result<(), StorageError> {
+        let Some(title) = title.filter(|title| !title.trim().is_empty()) else {
+            return Ok(());
+        };
+
+        let connection = self.connection()?;
+        let now = unix_time_seconds()?;
+        connection
+            .execute(
+                "INSERT INTO browsing_history
+                   (profile, url, title, first_visited_at, last_visited_at, visit_count)
+                 VALUES (?1, ?2, ?3, ?4, ?4, 1)
+                 ON CONFLICT(profile, url) DO UPDATE SET
+                   title = excluded.title",
+                params![profile, url, title, now],
+            )
+            .map_err(|source| self.database_error(source))?;
+        Ok(())
+    }
+
     pub fn recent_history(
         &self,
         profile: &str,
@@ -911,6 +936,13 @@ mod tests {
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].url, "https://example.com/");
         assert_eq!(history[0].title.as_deref(), Some("Example"));
+        assert_eq!(history[0].visit_count, 2);
+
+        database
+            .update_history_title("default", "https://example.com/", Some("Example Updated"))
+            .unwrap();
+        let history = database.recent_history("default", 10).unwrap();
+        assert_eq!(history[0].title.as_deref(), Some("Example Updated"));
         assert_eq!(history[0].visit_count, 2);
 
         database
