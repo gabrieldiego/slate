@@ -1638,6 +1638,7 @@ fn extend_active_tab_corner_points(
 fn active_tab_file_outline_points(
     active_tab_rect: egui::Rect,
     separator_y: f32,
+    show_leading_edge: bool,
 ) -> Vec<egui::Pos2> {
     let left = active_tab_rect.left();
     let right = active_tab_rect.right();
@@ -1647,17 +1648,21 @@ fn active_tab_file_outline_points(
     let radius = f32::from(TAB_CORNER_RADIUS).min(width / 2.0).min(height);
 
     if radius <= 0.0 {
-        return vec![
-            egui::pos2(left, separator_y),
-            egui::pos2(left, top),
-            egui::pos2(right, top),
-            egui::pos2(right, separator_y),
-        ];
+        let mut points = Vec::with_capacity(4);
+        if show_leading_edge {
+            points.push(egui::pos2(left, separator_y));
+        }
+        points.push(egui::pos2(left, top));
+        points.push(egui::pos2(right, top));
+        points.push(egui::pos2(right, separator_y));
+        return points;
     }
 
     let mut points = Vec::with_capacity(ACTIVE_TAB_FILE_CORNER_STEPS * 2 + 5);
-    points.push(egui::pos2(left, separator_y));
-    points.push(egui::pos2(left, top + radius));
+    if show_leading_edge {
+        points.push(egui::pos2(left, separator_y));
+        points.push(egui::pos2(left, top + radius));
+    }
     extend_active_tab_corner_points(
         &mut points,
         egui::pos2(left + radius, top + radius),
@@ -1677,17 +1682,32 @@ fn active_tab_file_outline_points(
     points
 }
 
-fn inactive_tab_outline_points(tab_rect: egui::Rect) -> Vec<egui::Pos2> {
-    active_tab_file_outline_points(tab_rect, tab_rect.bottom() - 0.5)
+fn inactive_tab_outline_points_with_leading_edge(
+    tab_rect: egui::Rect,
+    show_leading_edge: bool,
+) -> Vec<egui::Pos2> {
+    active_tab_file_outline_points(tab_rect, tab_rect.bottom() - 0.5, show_leading_edge)
 }
 
-fn draw_inactive_tab_outline(ui: &egui::Ui, tab_rect: egui::Rect) {
+fn inactive_tab_outline_points(tab_rect: egui::Rect) -> Vec<egui::Pos2> {
+    inactive_tab_outline_points_with_leading_edge(tab_rect, true)
+}
+
+fn draw_inactive_tab_outline_with_leading_edge(
+    ui: &egui::Ui,
+    tab_rect: egui::Rect,
+    show_leading_edge: bool,
+) {
     if ui.is_rect_visible(tab_rect) {
         ui.painter().line(
-            inactive_tab_outline_points(tab_rect),
+            inactive_tab_outline_points_with_leading_edge(tab_rect, show_leading_edge),
             egui::Stroke::new(1.0, inactive_tab_outline_color()),
         );
     }
+}
+
+fn draw_inactive_tab_outline(ui: &egui::Ui, tab_rect: egui::Rect) {
+    draw_inactive_tab_outline_with_leading_edge(ui, tab_rect, true);
 }
 
 fn push_separator_point(points: &mut Vec<egui::Pos2>, point: egui::Pos2) {
@@ -1699,6 +1719,7 @@ fn push_separator_point(points: &mut Vec<egui::Pos2>, point: egui::Pos2) {
 fn active_tab_content_divider_points(
     strip_rect: egui::Rect,
     active_tab_rect: egui::Rect,
+    show_leading_edge: bool,
 ) -> Option<(ActiveTabSeparatorJoin, Vec<egui::Pos2>)> {
     let join = active_tab_separator_join(strip_rect, active_tab_rect)?;
     let visible_tab_rect = egui::Rect::from_min_max(
@@ -1709,7 +1730,9 @@ fn active_tab_content_divider_points(
 
     push_separator_point(&mut points, egui::pos2(strip_rect.left(), join.separator_y));
     push_separator_point(&mut points, egui::pos2(join.tab_left, join.separator_y));
-    for point in active_tab_file_outline_points(visible_tab_rect, join.separator_y) {
+    for point in
+        active_tab_file_outline_points(visible_tab_rect, join.separator_y, show_leading_edge)
+    {
         push_separator_point(&mut points, point);
     }
     push_separator_point(&mut points, egui::pos2(join.tab_right, join.separator_y));
@@ -1721,15 +1744,18 @@ fn active_tab_content_divider_points(
     Some((join, points))
 }
 
-fn draw_tab_strip_separator(ui: &egui::Ui, active_tab_rect: Option<egui::Rect>) {
+fn draw_tab_strip_separator_with_leading_edge(
+    ui: &egui::Ui,
+    active_tab_rect: Option<(egui::Rect, bool)>,
+) {
     let strip_rect = ui.max_rect();
     let y = strip_rect.bottom() - 0.5;
     let divider_stroke = egui::Stroke::new(1.0, tab_strip_separator_color());
     let active_outline_stroke = egui::Stroke::new(1.0, active_tab_outline_color());
 
-    if let Some(active_tab_rect) = active_tab_rect
+    if let Some((active_tab_rect, show_leading_edge)) = active_tab_rect
         && let Some((join, _divider_points)) =
-            active_tab_content_divider_points(strip_rect, active_tab_rect)
+            active_tab_content_divider_points(strip_rect, active_tab_rect, show_leading_edge)
     {
         ui.painter()
             .rect_filled(join.bridge_rect, 0.0, slate_theme::SURFACE);
@@ -1745,7 +1771,7 @@ fn draw_tab_strip_separator(ui: &egui::Ui, active_tab_rect: Option<egui::Rect>) 
             egui::pos2(join.tab_right, active_tab_rect.bottom()),
         );
         ui.painter().line(
-            active_tab_file_outline_points(visible_tab_rect, join.separator_y),
+            active_tab_file_outline_points(visible_tab_rect, join.separator_y, show_leading_edge),
             active_outline_stroke,
         );
         ui.painter().line_segment(
@@ -1765,6 +1791,10 @@ fn draw_tab_strip_separator(ui: &egui::Ui, active_tab_rect: Option<egui::Rect>) 
         ],
         divider_stroke,
     );
+}
+
+fn draw_tab_strip_separator(ui: &egui::Ui, active_tab_rect: Option<egui::Rect>) {
+    draw_tab_strip_separator_with_leading_edge(ui, active_tab_rect.map(|rect| (rect, true)));
 }
 
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "freebsd"))]
@@ -2517,10 +2547,6 @@ impl Gui {
         );
         ui.painter()
             .rect_filled(rect, 0.0, app_title_background_color());
-        ui.painter().line_segment(
-            [rect.right_top(), rect.right_bottom()],
-            egui::Stroke::new(1.0, slate_theme::BORDER),
-        );
         ui.painter().text(
             egui::pos2(rect.min.x + APP_TITLE_LEFT_PADDING, rect.center().y),
             egui::Align2::LEFT_CENTER,
@@ -3005,6 +3031,7 @@ impl Gui {
         active_close_icon: egui::load::SizedTexture,
         inactive_close_icon: egui::load::SizedTexture,
         tab_width: f32,
+        show_leading_edge: bool,
     ) -> egui::Rect {
         let label = match (webview.page_title(), webview.url()) {
             (_, Some(url)) if is_slate_home_url(&url) => "Home".into(),
@@ -3109,7 +3136,7 @@ impl Gui {
         tab_frame.frame.fill = fill_color;
         tab_frame.end(ui);
         if !active {
-            draw_inactive_tab_outline(ui, response.rect);
+            draw_inactive_tab_outline_with_leading_edge(ui, response.rect, show_leading_edge);
         }
         response.rect
     }
@@ -3256,9 +3283,11 @@ impl Gui {
                                                         close_icon,
                                                         inactive_close_icon,
                                                         tab_width,
+                                                        index != 0,
                                                     );
                                                     if active {
-                                                        active_tab_rect = Some(tab_rect);
+                                                        active_tab_rect =
+                                                            Some((tab_rect, index != 0));
                                                     }
                                                 }
 
@@ -3291,7 +3320,7 @@ impl Gui {
                                     });
                             },
                         );
-                        draw_tab_strip_separator(ui, active_tab_rect);
+                        draw_tab_strip_separator_with_leading_edge(ui, active_tab_rect);
                     });
 
                 let rail_frame = egui::Frame::NONE
@@ -4115,13 +4144,14 @@ mod tests {
         home_search_icon_visible_rect, home_search_rendered_height, home_search_width,
         home_top_space, home_view_background_color, inactive_tab_background_color,
         inactive_tab_hover_background_color, inactive_tab_outline_color,
-        inactive_tab_outline_points, is_home_bookmarkable_url, location_for_toolbar,
-        location_is_downloads, location_is_home, location_is_web, new_tab_icon_color,
-        rail_button_fill, rail_icon_color, rail_selected_button_fill, slate_theme,
-        status_bubble_label, status_bubble_width, tab_close_button_rect, tab_close_icon_color,
-        tab_close_raster, tab_content_width, tab_corner_radius, tab_icon_color, tab_icon_slot_rect,
-        tab_strip_background_color, tab_strip_separator_color, tab_title_color, tab_title_left,
-        tab_title_width, tab_width_for_strip, toolbar_address_width, toolbar_background_color,
+        inactive_tab_outline_points, inactive_tab_outline_points_with_leading_edge,
+        is_home_bookmarkable_url, location_for_toolbar, location_is_downloads, location_is_home,
+        location_is_web, new_tab_icon_color, rail_button_fill, rail_icon_color,
+        rail_selected_button_fill, slate_theme, status_bubble_label, status_bubble_width,
+        tab_close_button_rect, tab_close_icon_color, tab_close_raster, tab_content_width,
+        tab_corner_radius, tab_icon_color, tab_icon_slot_rect, tab_strip_background_color,
+        tab_strip_separator_color, tab_title_color, tab_title_left, tab_title_width,
+        tab_width_for_strip, toolbar_address_width, toolbar_background_color,
         toolbar_menu_icon_center, toolbar_menu_icon_color, toolbar_menu_icon_rect,
         toolbar_navigation_icon_color, toolbar_navigation_icon_offset_x,
         toolbar_navigation_icon_rect, toolbar_navigation_raster, web_history_cards_from_records,
@@ -5160,8 +5190,9 @@ mod tests {
             egui::pos2(APP_TITLE_WIDTH, TAB_STRIP_HEIGHT - TAB_HEIGHT),
             egui::vec2(TAB_WIDTH, TAB_HEIGHT),
         );
-        let (join, divider_points) = active_tab_content_divider_points(strip_rect, active_tab_rect)
-            .expect("active tab should route the content divider");
+        let (join, divider_points) =
+            active_tab_content_divider_points(strip_rect, active_tab_rect, true)
+                .expect("active tab should route the content divider");
         let topmost_y = divider_points
             .iter()
             .map(|point| point.y)
@@ -5230,8 +5261,9 @@ mod tests {
             egui::pos2(50.0, TAB_STRIP_HEIGHT - TAB_HEIGHT),
             egui::vec2(TAB_WIDTH, TAB_HEIGHT),
         );
-        let (join, divider_points) = active_tab_content_divider_points(strip_rect, active_tab_rect)
-            .expect("partially visible active tab should route the divider");
+        let (join, divider_points) =
+            active_tab_content_divider_points(strip_rect, active_tab_rect, true)
+                .expect("partially visible active tab should route the divider");
 
         assert_eq!(join.tab_left, strip_rect.left());
         assert_eq!(join.tab_right, active_tab_rect.right());
@@ -5284,6 +5316,30 @@ mod tests {
             }),
             "inactive tab outline should leave the bottom edge to the shared strip divider: {outline_points:?}"
         );
+    }
+
+    #[test]
+    fn first_tab_outline_omits_banner_join_edge() {
+        let strip_rect =
+            egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1672.0, TAB_STRIP_HEIGHT));
+        let first_tab_rect = egui::Rect::from_min_size(
+            egui::pos2(APP_TITLE_WIDTH, TAB_STRIP_HEIGHT - TAB_HEIGHT),
+            egui::vec2(TAB_WIDTH, TAB_HEIGHT),
+        );
+        let (join, divider_points) =
+            active_tab_content_divider_points(strip_rect, first_tab_rect, false)
+                .expect("active first tab should route the content divider");
+        let outline_points = inactive_tab_outline_points_with_leading_edge(first_tab_rect, false);
+        let has_vertical_join_edge = |points: &[egui::Pos2]| {
+            points.windows(2).any(|segment| {
+                (segment[0].x - first_tab_rect.left()).abs() < 0.01
+                    && (segment[1].x - first_tab_rect.left()).abs() < 0.01
+                    && (segment[0].y.min(segment[1].y) - join.separator_y).abs() > 0.01
+            })
+        };
+
+        assert!(!has_vertical_join_edge(&divider_points));
+        assert!(!has_vertical_join_edge(&outline_points));
     }
 
     #[test]
