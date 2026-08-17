@@ -75,12 +75,16 @@ slate-release-bin: ensure-local-rust
 
 slate-shared-bin: ensure-local-rust
 	RUSTFLAGS='$(SLATE_SHARED_DEBUG_RUSTFLAGS)' CARGO_TARGET_DIR="$(SLATE_SHARED_TARGET_DIR)" $(SLATE_CARGO) build -j "$(CARGO_BUILD_JOBS)" -p slate
+	rust_target_libdir="$$( $(SLATE_RUSTUP) run "$(SLATE_RUST_TOOLCHAIN)" rustc --print target-libdir )"; \
+		cp "$$rust_target_libdir"/libstd-*.so "$(SLATE_SHARED_TARGET_DIR)/debug/"
 	cp "$(SLATE_SHARED_DEBUG_BIN)" "$(ROOT_SLATE_BIN_TMP)"
 	chmod +x "$(ROOT_SLATE_BIN_TMP)"
 	mv -f "$(ROOT_SLATE_BIN_TMP)" "$(ROOT_SLATE_BIN)"
 
 slate-shared-release-bin: ensure-local-rust
 	RUSTFLAGS='$(SLATE_SHARED_RELEASE_RUSTFLAGS)' CARGO_TARGET_DIR="$(SLATE_SHARED_TARGET_DIR)" $(SLATE_CARGO) build --release -j "$(CARGO_BUILD_JOBS)" -p slate
+	rust_target_libdir="$$( $(SLATE_RUSTUP) run "$(SLATE_RUST_TOOLCHAIN)" rustc --print target-libdir )"; \
+		cp "$$rust_target_libdir"/libstd-*.so "$(SLATE_SHARED_TARGET_DIR)/release/"
 	cp "$(SLATE_SHARED_RELEASE_BIN)" "$(ROOT_SLATE_BIN_TMP)"
 	chmod +x "$(ROOT_SLATE_BIN_TMP)"
 	mv -f "$(ROOT_SLATE_BIN_TMP)" "$(ROOT_SLATE_BIN)"
