@@ -114,9 +114,9 @@ const TOOLBAR_BUTTON_SIZE: f32 = 40.0 * CHROME_ELEMENT_ZOOM;
 const TOOLBAR_BUTTON_RADIUS: u8 = 8;
 const TOOLBAR_ICON_SIZE: f32 = 24.0 * CHROME_ELEMENT_ZOOM;
 const TOOLBAR_NAV_ICON_SIZE: f32 = 28.0 * CHROME_ELEMENT_ZOOM;
-const TOOLBAR_NAV_BACK_ICON_OFFSET_X: f32 = 8.0 * CHROME_ELEMENT_ZOOM;
-const TOOLBAR_NAV_FORWARD_ICON_OFFSET_X: f32 = 7.0 * CHROME_ELEMENT_ZOOM;
-const TOOLBAR_NAV_REFRESH_ICON_OFFSET_X: f32 = 6.0 * CHROME_ELEMENT_ZOOM;
+const TOOLBAR_NAV_BACK_ICON_OFFSET_X: f32 = 0.0;
+const TOOLBAR_NAV_FORWARD_ICON_OFFSET_X: f32 = 0.0;
+const TOOLBAR_NAV_REFRESH_ICON_OFFSET_X: f32 = 0.0;
 const TOOLBAR_PRIVACY_ICON_SIZE: f32 = 40.0 * CHROME_ELEMENT_ZOOM;
 const TOOLBAR_MENU_ICON_WIDTH: f32 = 20.0 * CHROME_ELEMENT_ZOOM;
 const TOOLBAR_MENU_ICON_OFFSET_X: f32 = -3.0 * CHROME_ELEMENT_ZOOM;
@@ -4637,9 +4637,9 @@ mod tests {
         assert_eq!(TOOLBAR_BUTTON_RADIUS, 8);
         assert!((TOOLBAR_ICON_SIZE - 21.6).abs() < 0.001);
         assert!((TOOLBAR_NAV_ICON_SIZE - 25.2).abs() < 0.001);
-        assert!((TOOLBAR_NAV_BACK_ICON_OFFSET_X - 7.2).abs() < 0.001);
-        assert!((TOOLBAR_NAV_FORWARD_ICON_OFFSET_X - 6.3).abs() < 0.001);
-        assert!((TOOLBAR_NAV_REFRESH_ICON_OFFSET_X - 5.4).abs() < 0.001);
+        assert_eq!(TOOLBAR_NAV_BACK_ICON_OFFSET_X, 0.0);
+        assert_eq!(TOOLBAR_NAV_FORWARD_ICON_OFFSET_X, 0.0);
+        assert_eq!(TOOLBAR_NAV_REFRESH_ICON_OFFSET_X, 0.0);
         assert!((TOOLBAR_PRIVACY_ICON_SIZE - 36.0).abs() < 0.001);
         assert!((TOOLBAR_MENU_ICON_WIDTH - 18.0).abs() < 0.001);
         assert!((TOOLBAR_MENU_ICON_OFFSET_X + 2.7).abs() < 0.001);
@@ -5623,14 +5623,14 @@ mod tests {
         assert!((nav_icon_size.x - TOOLBAR_NAV_ICON_SIZE).abs() < 0.01);
         assert!((nav_icon_size.y - TOOLBAR_NAV_ICON_SIZE).abs() < 0.01);
         assert!(
-            (projected_mask_center_x(129.6, slate_theme::SlateIcon::NavBack) - 136.8).abs() < 0.01
+            (projected_mask_center_x(129.6, slate_theme::SlateIcon::NavBack) - 129.6).abs() < 0.01
         );
         assert!(
-            (projected_mask_center_x(183.6, slate_theme::SlateIcon::NavForward) - 189.9).abs()
+            (projected_mask_center_x(183.6, slate_theme::SlateIcon::NavForward) - 183.6).abs()
                 < 0.01
         );
         assert!(
-            (projected_mask_center_x(237.6, slate_theme::SlateIcon::NavRefresh) - 243.0).abs()
+            (projected_mask_center_x(237.6, slate_theme::SlateIcon::NavRefresh) - 237.6).abs()
                 < 0.01
         );
     }

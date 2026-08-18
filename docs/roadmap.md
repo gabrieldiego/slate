@@ -2,37 +2,42 @@
 
 ## Browser Chrome
 
+The browser chrome now has a deterministic headless verification loop through
+`make chrome-verify`. It renders canonical browser states, saves full-window
+screenshots and stable element crops, and writes `report.json` with crop metrics,
+monitor pass/warn/fail status, and automated-review findings. Keep this loop
+small enough to run with constrained build memory and one Cargo job.
+
+Already covered:
+
+- Full, loading, and toolbar-hover chrome states are rendered headlessly from the
+  real egui chrome path.
+- Stable crops cover the app title, tab strip, active tab title/close regions,
+  fallback tab icons, rail buttons and icons, toolbar navigation icons, address
+  field controls, toolbar menu, privacy shield, and footer status.
+- Deterministic checks cover pixel bounds, detail/dark-pixel presence, separator
+  artifacts, selected-rail edge affordance, and toolbar-control density. Manual
+  review notes remain attached where visual judgment is still required.
+- Previously fixed defects stay represented in the fixture: the Home rail icon,
+  selected rail edge affordance, fallback tab icon identity, app-title divider
+  join, tab title clipping before the close-button reservation, tab close art,
+  Reload/Stop raster identity, and Back/Reload hover-button alignment.
+
+Next:
+
 - Diagnose why vector-rendered icons break in the current UI rendering path
   before replacing the temporary raster and alpha-mask assets. Once the rendering
   failure is understood and documented, revisit rail and toolbar icons in vector
   format so they scale cleanly on high-resolution displays.
-- Before replacing raster UI icons with vector equivalents, build an efficient
-  automated chrome rendering loop that can render the real browser chrome
-  headlessly, save screenshots, and compare vector UI elements against the
-  current raster assets.
-- The verification loop should combine deterministic checks where practical
-  (pixel bounds, color distribution, stable icon identity, alignment, and
-  sizing) with visual inspection or image-recognition review for artifacts that
-  are hard to express as exact pixel assertions.
-- Keep previously fixed icon problems as regression coverage for that loop. The
-  Home rail icon, fallback tab icon identity, and toolbar raster masks should
-  stay covered by stable crops while the vector rendering path is investigated.
+- Add approved reference-image comparison for the stable crops after the current
+  raster theme settles enough that intentional polish changes are less frequent.
+- Extend automated review where metrics can stay robust, especially for hover
+  shade/glyph centering, control contrast, text clipping, and divider-like
+  artifacts.
 - Treat the intentional teal accent color as design direction, not as a visual
   regression. The verification process should focus on theme consistency,
   alignment, icon identity, and geometry unless a color change is explicitly
   called out as unintended.
-- Keep previously fixed tab-strip defects as visual-regression fixtures: the
-  app-title join should not regrow a left divider, long tab titles should clip
-  before the close-button reservation, and the tab close artwork should keep
-  matching the raster navigation-button theme below it.
-- Build the chrome visual verification process around repeatable captures:
-  render canonical states headlessly, save full screenshots, crop stable regions
-  for the app label, first tab, tab close button, tab strip, rail buttons, and
-  navigation toolbar, then compare those crops against approved reference images
-  or raster asset templates. The checks should flag unexpected divider lines,
-  title text entering reserved close-button bounds, incorrect tab icon identity,
-  mismatched close-button artwork, inconsistent icon weight or alignment, and
-  drift between the Reload and loading-state Stop controls.
 - Keep a manual/image-recognition review step for issues that are visible to a
   human but hard to capture with exact thresholds. The automated loop should
   produce the crops and metadata needed for review instead of relying only on

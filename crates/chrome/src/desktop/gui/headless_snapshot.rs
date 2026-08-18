@@ -75,6 +75,40 @@ pub(crate) fn write_default_verification_report(directory: &Path) -> Result<(), 
     loading_image
         .save(&loading_full_path)
         .map_err(|error| format!("failed to encode {}: {error}", loading_full_path.display()))?;
+    let chrome = snapshot_chrome_geometry();
+    let toolbar = snapshot_toolbar_controls_geometry(chrome);
+    let hover_back_image = render_snapshot_with_interaction(
+        [DEFAULT_SNAPSHOT_WIDTH, DEFAULT_SNAPSHOT_HEIGHT],
+        LoadStatus::Complete,
+        Some(toolbar.nav_button_rects[0].center()),
+        true,
+    )?;
+    let hover_back_full_name = "hover-nav-back-full.png";
+    let hover_back_full_path = directory.join(hover_back_full_name);
+    hover_back_image
+        .save(&hover_back_full_path)
+        .map_err(|error| {
+            format!(
+                "failed to encode {}: {error}",
+                hover_back_full_path.display()
+            )
+        })?;
+    let hover_reload_image = render_snapshot_with_interaction(
+        [DEFAULT_SNAPSHOT_WIDTH, DEFAULT_SNAPSHOT_HEIGHT],
+        LoadStatus::Complete,
+        Some(toolbar.nav_button_rects[2].center()),
+        false,
+    )?;
+    let hover_reload_full_name = "hover-nav-reload-full.png";
+    let hover_reload_full_path = directory.join(hover_reload_full_name);
+    hover_reload_image
+        .save(&hover_reload_full_path)
+        .map_err(|error| {
+            format!(
+                "failed to encode {}: {error}",
+                hover_reload_full_path.display()
+            )
+        })?;
 
     let mut summary = VerificationSummary::default();
     let mut region_captures = HashMap::new();
@@ -83,6 +117,8 @@ pub(crate) fn write_default_verification_report(directory: &Path) -> Result<(), 
         let source_image = match region.source {
             VerificationSource::Complete => &image,
             VerificationSource::Loading => &loading_image,
+            VerificationSource::HoverNavBack => &hover_back_image,
+            VerificationSource::HoverNavReload => &hover_reload_image,
         };
         let crop_rect = PixelRect::from_point_rect(
             region.rect,
@@ -134,6 +170,8 @@ pub(crate) fn write_default_verification_report(directory: &Path) -> Result<(), 
         "state_images": {
             "complete": full_name,
             "loading": loading_full_name,
+            "hover_nav_back": hover_back_full_name,
+            "hover_nav_reload": hover_reload_full_name,
         },
         "summary": verification_summary_json(summary),
         "regions": region_reports,
@@ -167,6 +205,15 @@ fn render_snapshot_with_load_status(
     size: [u32; 2],
     load_status: LoadStatus,
 ) -> Result<RgbaImage, String> {
+    render_snapshot_with_interaction(size, load_status, None, false)
+}
+
+fn render_snapshot_with_interaction(
+    size: [u32; 2],
+    load_status: LoadStatus,
+    hover_pos: Option<egui::Pos2>,
+    can_go_back: bool,
+) -> Result<RgbaImage, String> {
     let ctx = egui::Context::default();
     ctx.set_fonts(configure_fonts());
     ctx.options_mut(|options| {
@@ -175,38 +222,79 @@ fn render_snapshot_with_load_status(
     });
     slate_theme::apply(&ctx);
 
-    let screen_rect =
-        egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(size[0] as f32, size[1] as f32));
-    let mut input = egui::RawInput {
-        screen_rect: Some(screen_rect),
-        focused: true,
-        time: Some(0.0),
-        ..Default::default()
-    };
-    if let Some(viewport) = input.viewports.get_mut(&egui::ViewportId::ROOT) {
-        viewport.native_pixels_per_point = Some(1.0);
-        viewport.inner_rect = Some(screen_rect);
-    }
-
     let mut slate_icons = SlateIconCache::default();
     let mut location = "slate://home".to_owned();
     let mut home_search = String::new();
-    let output = ctx.run_ui(input, |ui| {
-        render_chrome_fixture(
-            ui,
+    let mut renderer = SoftwareRenderer::new(size);
+    if hover_pos.is_some() {
+        let warmup_output = render_snapshot_frame(
+            &ctx,
+            size,
+            0.0,
+            hover_pos,
+            load_status,
+            can_go_back,
             &mut slate_icons,
             &mut location,
             &mut home_search,
-            load_status,
         );
-    });
-
-    let mut renderer = SoftwareRenderer::new(size);
+        renderer.apply_textures_delta(&warmup_output.textures_delta)?;
+    }
+    let output = render_snapshot_frame(
+        &ctx,
+        size,
+        1.0 / 60.0,
+        hover_pos,
+        load_status,
+        can_go_back,
+        &mut slate_icons,
+        &mut location,
+        &mut home_search,
+    );
     renderer.apply_textures_delta(&output.textures_delta)?;
     let pixels_per_point = output.pixels_per_point;
     let clipped_primitives = ctx.tessellate(output.shapes, pixels_per_point);
     renderer.paint(&clipped_primitives, pixels_per_point)?;
     Ok(renderer.into_image())
+}
+
+fn render_snapshot_frame(
+    ctx: &egui::Context,
+    size: [u32; 2],
+    time: f64,
+    hover_pos: Option<egui::Pos2>,
+    load_status: LoadStatus,
+    can_go_back: bool,
+    slate_icons: &mut SlateIconCache,
+    location: &mut String,
+    home_search: &mut String,
+) -> egui::FullOutput {
+    let screen_rect =
+        egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(size[0] as f32, size[1] as f32));
+    let mut input = egui::RawInput {
+        screen_rect: Some(screen_rect),
+        focused: true,
+        time: Some(time),
+        ..Default::default()
+    };
+    if let Some(hover_pos) = hover_pos {
+        input.events.push(egui::Event::PointerMoved(hover_pos));
+    }
+    if let Some(viewport) = input.viewports.get_mut(&egui::ViewportId::ROOT) {
+        viewport.native_pixels_per_point = Some(1.0);
+        viewport.inner_rect = Some(screen_rect);
+    }
+
+    ctx.run_ui(input, |ui| {
+        render_chrome_fixture(
+            ui,
+            slate_icons,
+            location,
+            home_search,
+            load_status,
+            can_go_back,
+        );
+    })
 }
 
 fn render_chrome_fixture(
@@ -215,10 +303,11 @@ fn render_chrome_fixture(
     location: &mut String,
     home_search: &mut String,
     load_status: LoadStatus,
+    can_go_back: bool,
 ) {
     render_tab_strip(root_ui, slate_icons);
     render_app_rail(root_ui, slate_icons);
-    render_toolbar(root_ui, slate_icons, location, load_status);
+    render_toolbar(root_ui, slate_icons, location, load_status, can_go_back);
     let footer_rect = render_footer(root_ui, load_status);
 
     render_home_panel(root_ui, slate_icons, home_search);
@@ -397,6 +486,7 @@ fn render_toolbar(
     slate_icons: &mut SlateIconCache,
     location: &mut String,
     load_status: LoadStatus,
+    can_go_back: bool,
 ) {
     let toolbar_frame = egui::Frame::NONE
         .fill(toolbar_background_color())
@@ -414,8 +504,12 @@ fn render_toolbar(
                 ui.available_size(),
                 egui::Layout::left_to_right(egui::Align::Center),
                 |ui| {
-                    let _ =
-                        Gui::toolbar_navigation_button(ui, slate_icons, SlateIcon::NavBack, false);
+                    let _ = Gui::toolbar_navigation_button(
+                        ui,
+                        slate_icons,
+                        SlateIcon::NavBack,
+                        can_go_back,
+                    );
                     let _ = Gui::toolbar_navigation_button(
                         ui,
                         slate_icons,
@@ -596,6 +690,7 @@ struct SnapshotChromeGeometry {
 
 #[derive(Clone, Copy, Debug)]
 struct SnapshotToolbarControlsGeometry {
+    nav_button_rects: [egui::Rect; 3],
     nav_icon_rects: [egui::Rect; 3],
     nav_stop_icon_rect: egui::Rect,
     address_rect: egui::Rect,
@@ -610,6 +705,8 @@ struct SnapshotToolbarControlsGeometry {
 enum VerificationSource {
     Complete,
     Loading,
+    HoverNavBack,
+    HoverNavReload,
 }
 
 impl VerificationSource {
@@ -617,6 +714,8 @@ impl VerificationSource {
         match self {
             Self::Complete => "complete",
             Self::Loading => "loading",
+            Self::HoverNavBack => "hover-nav-back",
+            Self::HoverNavReload => "hover-nav-reload",
         }
     }
 }
@@ -800,6 +899,13 @@ fn verification_regions() -> Vec<VerificationRegion> {
             toolbar.nav_icon_rects[0].expand(4.0),
             "back navigation raster mask crop",
         ),
+        verification_region_from_source(
+            VerificationSource::HoverNavBack,
+            "nav-back-hover-button",
+            "nav-back-hover-button.png",
+            toolbar.nav_button_rects[0].expand(4.0),
+            "back navigation hover shade and raster mask alignment",
+        ),
         verification_region(
             "nav-forward-icon",
             "nav-forward-icon.png",
@@ -811,6 +917,13 @@ fn verification_regions() -> Vec<VerificationRegion> {
             "nav-reload-icon.png",
             toolbar.nav_icon_rects[2].expand(4.0),
             "reload navigation raster mask crop",
+        ),
+        verification_region_from_source(
+            VerificationSource::HoverNavReload,
+            "nav-reload-hover-button",
+            "nav-reload-hover-button.png",
+            toolbar.nav_button_rects[2].expand(4.0),
+            "reload navigation hover shade and raster mask alignment",
         ),
         verification_region_from_source(
             VerificationSource::Loading,
@@ -968,6 +1081,8 @@ fn monitor_for_region(name: &'static str) -> RegionMonitor {
             ])
         }
         "toolbar" => RegionMonitor::new(64, 20, 8),
+        "nav-back-hover-button" | "nav-reload-hover-button" => RegionMonitor::new(64, 18, 18)
+            .with_manual_review(&["confirm hover shade is centered behind the navigation glyph"]),
         "address-field" => RegionMonitor::new(64, 20, 8),
         "footer-status" => RegionMonitor::new(24, 8, 5),
         "toolbar-separator" => RegionMonitor::new(8, 1, 12).with_vertical_detail(Some(1), Some(3)),
@@ -1240,6 +1355,7 @@ fn snapshot_toolbar_controls_geometry(
     );
 
     SnapshotToolbarControlsGeometry {
+        nav_button_rects,
         nav_icon_rects,
         nav_stop_icon_rect,
         address_rect,
@@ -1464,6 +1580,8 @@ fn automated_review_json(regions: &HashMap<&'static str, RegionCapture>) -> serd
         }
     }
 
+    findings.extend(nav_hover_alignment_findings(regions));
+
     let warning_count = findings
         .iter()
         .filter(|finding| {
@@ -1493,10 +1611,42 @@ fn automated_review_json(regions: &HashMap<&'static str, RegionCapture>) -> serd
         "rules": [
             "selected rail buttons should expose a measurable edge affordance",
             "large idle chrome bands should contain enough visible detail to justify their footprint",
-            "secondary toolbar controls should not become much quieter than primary navigation controls"
+            "secondary toolbar controls should not become much quieter than primary navigation controls",
+            "navigation hover shades should stay centered under their glyphs"
         ],
         "findings": findings,
     })
+}
+
+fn nav_hover_alignment_findings(
+    regions: &HashMap<&'static str, RegionCapture>,
+) -> Vec<serde_json::Value> {
+    [
+        ("nav-back-icon", "nav-back-hover-button", "Back"),
+        ("nav-reload-icon", "nav-reload-hover-button", "Reload"),
+    ]
+    .into_iter()
+    .filter_map(|(icon_region, button_region, label)| {
+        let icon = regions.get(icon_region)?;
+        let button = regions.get(button_region)?;
+        let delta_x = pixel_rect_center_x(icon.rect) - pixel_rect_center_x(button.rect);
+        if delta_x.abs() <= 1.5 {
+            return None;
+        }
+
+        Some(review_finding_json(
+            "warning",
+            button_region,
+            "navigation hover shade is offset from glyph",
+            serde_json::json!({
+                "control": label,
+                "center_delta_x": rounded_ratio(delta_x),
+                "maximum_abs_delta_x": 1.5,
+            }),
+            "Center the navigation glyph in the hover button rect so hover feedback and the click target read as one control.",
+        ))
+    })
+    .collect()
 }
 
 fn review_finding_json(
@@ -1524,6 +1674,10 @@ fn detail_density(metrics: CropMetrics) -> f32 {
 
 fn rounded_ratio(value: f32) -> f64 {
     (f64::from(value) * 10_000.0).round() / 10_000.0
+}
+
+fn pixel_rect_center_x(rect: PixelRect) -> f32 {
+    (rect.min_x as f32 + rect.max_x as f32) / 2.0
 }
 
 fn toolbar_control_density(regions: &HashMap<&'static str, RegionCapture>) -> Option<(f32, f32)> {
@@ -1988,7 +2142,8 @@ mod tests {
     use super::{
         CropMetrics, DEFAULT_SNAPSHOT_HEIGHT, DEFAULT_SNAPSHOT_WIDTH, MonitorStatus, PixelRect,
         RegionCapture, RegionMonitor, automated_review_json, crop_metrics, evaluate_region_monitor,
-        render_snapshot, verification_regions, write_default_verification_report,
+        nav_hover_alignment_findings, render_snapshot, verification_regions,
+        write_default_verification_report,
     };
     use std::collections::HashMap;
     use std::fs;
@@ -2138,6 +2293,40 @@ mod tests {
     }
 
     #[test]
+    fn headless_automated_review_flags_offset_navigation_hover_shade() {
+        let mut regions = HashMap::new();
+        regions.insert(
+            "nav-back-icon",
+            RegionCapture {
+                rect: PixelRect {
+                    min_x: 38,
+                    min_y: 4,
+                    max_x: 70,
+                    max_y: 36,
+                },
+                metrics: CropMetrics::default(),
+            },
+        );
+        regions.insert(
+            "nav-back-hover-button",
+            RegionCapture {
+                rect: PixelRect {
+                    min_x: 0,
+                    min_y: 0,
+                    max_x: 44,
+                    max_y: 44,
+                },
+                metrics: CropMetrics::default(),
+            },
+        );
+
+        let findings = nav_hover_alignment_findings(&regions);
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0]["region"], "nav-back-hover-button");
+    }
+
+    #[test]
     fn headless_region_monitor_flags_blank_ui_regions() {
         let monitor = RegionMonitor::new(4, 2, 2);
         let metrics = CropMetrics {
@@ -2225,9 +2414,13 @@ mod tests {
         assert!(report.contains("slate.chrome.automated-review.v1"));
         assert!(report.contains("\"rail-web-button\""));
         assert!(report.contains("\"active-tab-close\""));
+        assert!(report.contains("\"nav-back-hover-button\""));
+        assert!(report.contains("\"nav-reload-hover-button\""));
         assert!(report.contains("\"nav-stop-icon\""));
         assert!(output_dir.join("full.png").is_file());
         assert!(output_dir.join("loading-full.png").is_file());
+        assert!(output_dir.join("hover-nav-back-full.png").is_file());
+        assert!(output_dir.join("hover-nav-reload-full.png").is_file());
 
         let close_crop = image::open(output_dir.join("active-tab-close.png"))
             .expect("active tab close crop should be a PNG")
