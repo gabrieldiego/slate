@@ -13,10 +13,15 @@ SLATE_RUSTUP := $(SLATE_LOCAL_RUSTUP_ENV) "$(RUSTUP_BIN)"
 
 SLATE_LAUNCH_TARGET_DIR ?= target/slate-launch
 SLATE_SHARED_TARGET_DIR ?= target/slate-shared
+SLATE_CHROME_VERIFICATION_DIR ?= target/slate-chrome-verification
 CARGO_BUILD_JOBS ?= 1
+SLATE_BUILD_MEMORY_LIMIT_MB ?= 6144
+SLATE_TEST_THREADS ?= 1
 SLATE_SHARED_COMMON_RUSTFLAGS ?= -C prefer-dynamic -C rpath
 SLATE_SHARED_DEBUG_RUSTFLAGS ?= $(SLATE_SHARED_COMMON_RUSTFLAGS) -C link-arg=-Wl,-rpath,$$ORIGIN/$(SLATE_SHARED_TARGET_DIR)/debug -C link-arg=-Wl,-rpath,$$ORIGIN/$(SLATE_SHARED_TARGET_DIR)/debug/deps
 SLATE_SHARED_RELEASE_RUSTFLAGS ?= $(SLATE_SHARED_COMMON_RUSTFLAGS) -C link-arg=-Wl,-rpath,$$ORIGIN/$(SLATE_SHARED_TARGET_DIR)/release -C link-arg=-Wl,-rpath,$$ORIGIN/$(SLATE_SHARED_TARGET_DIR)/release/deps
+SLATE_BUILD_LIMITS := SLATE_BUILD_MEMORY_LIMIT_MB="$(SLATE_BUILD_MEMORY_LIMIT_MB)" "$(CURDIR)/scripts/with-build-limits.sh"
+SLATE_LIMITED_CARGO := $(SLATE_LOCAL_RUST_ENV) $(SLATE_BUILD_LIMITS) "$(CARGO_BIN)"
 
 ROOT_SLATE_BIN := slate
 ROOT_SLATE_BIN_TMP := $(ROOT_SLATE_BIN).tmp
@@ -27,7 +32,13 @@ SLATE_SHARED_RELEASE_BIN := $(SLATE_SHARED_TARGET_DIR)/release/slate
 SLATE_SHARED_DEBUG_LIB_PATH := $(SLATE_SHARED_TARGET_DIR)/debug/deps:$(SLATE_SHARED_TARGET_DIR)/debug
 SLATE_SHARED_RELEASE_LIB_PATH := $(SLATE_SHARED_TARGET_DIR)/release/deps:$(SLATE_SHARED_TARGET_DIR)/release
 
-.PHONY: check-tools setup-local-rust ensure-local-rust slate-bin slate-release-bin slate-shared-bin slate-shared-release-bin release shared share shared-release share-release run run-release run-shared run-share run-shared-release run-share-release test-broadwebd test-network test-external-network clean-slate-bin clean-object-data
+.PHONY: check chrome-verify check-tools setup-local-rust ensure-local-rust slate-bin slate-release-bin slate-shared-bin slate-shared-release-bin release shared share shared-release share-release run run-release run-shared run-share run-shared-release run-share-release test-broadwebd test-network test-external-network clean-slate-bin clean-object-data
+
+check: ensure-local-rust
+	$(SLATE_LIMITED_CARGO) check --workspace -j "$(CARGO_BUILD_JOBS)"
+
+chrome-verify: ensure-local-rust
+	$(SLATE_LIMITED_CARGO) run -p slate-chrome --bin slate-chrome-snapshot -j "$(CARGO_BUILD_JOBS)" -- --verify "$(SLATE_CHROME_VERIFICATION_DIR)"
 
 check-tools:
 	@set -eu; \
@@ -62,19 +73,19 @@ ensure-local-rust:
 	}
 
 slate-bin: ensure-local-rust
-	CARGO_TARGET_DIR="$(SLATE_LAUNCH_TARGET_DIR)" $(SLATE_CARGO) build -j "$(CARGO_BUILD_JOBS)" -p slate
+	CARGO_TARGET_DIR="$(SLATE_LAUNCH_TARGET_DIR)" $(SLATE_LIMITED_CARGO) build -j "$(CARGO_BUILD_JOBS)" -p slate
 	cp "$(SLATE_LAUNCH_DEBUG_BIN)" "$(ROOT_SLATE_BIN_TMP)"
 	chmod +x "$(ROOT_SLATE_BIN_TMP)"
 	mv -f "$(ROOT_SLATE_BIN_TMP)" "$(ROOT_SLATE_BIN)"
 
 slate-release-bin: ensure-local-rust
-	CARGO_TARGET_DIR="$(SLATE_LAUNCH_TARGET_DIR)" $(SLATE_CARGO) build --release -j "$(CARGO_BUILD_JOBS)" -p slate
+	CARGO_TARGET_DIR="$(SLATE_LAUNCH_TARGET_DIR)" $(SLATE_LIMITED_CARGO) build --release -j "$(CARGO_BUILD_JOBS)" -p slate
 	cp "$(SLATE_LAUNCH_RELEASE_BIN)" "$(ROOT_SLATE_BIN_TMP)"
 	chmod +x "$(ROOT_SLATE_BIN_TMP)"
 	mv -f "$(ROOT_SLATE_BIN_TMP)" "$(ROOT_SLATE_BIN)"
 
 slate-shared-bin: ensure-local-rust
-	RUSTFLAGS='$(SLATE_SHARED_DEBUG_RUSTFLAGS)' CARGO_TARGET_DIR="$(SLATE_SHARED_TARGET_DIR)" $(SLATE_CARGO) build -j "$(CARGO_BUILD_JOBS)" -p slate
+	RUSTFLAGS='$(SLATE_SHARED_DEBUG_RUSTFLAGS)' CARGO_TARGET_DIR="$(SLATE_SHARED_TARGET_DIR)" $(SLATE_LIMITED_CARGO) build -j "$(CARGO_BUILD_JOBS)" -p slate
 	rust_target_libdir="$$( $(SLATE_RUSTUP) run "$(SLATE_RUST_TOOLCHAIN)" rustc --print target-libdir )"; \
 		cp "$$rust_target_libdir"/libstd-*.so "$(SLATE_SHARED_TARGET_DIR)/debug/"
 	cp "$(SLATE_SHARED_DEBUG_BIN)" "$(ROOT_SLATE_BIN_TMP)"
@@ -82,7 +93,7 @@ slate-shared-bin: ensure-local-rust
 	mv -f "$(ROOT_SLATE_BIN_TMP)" "$(ROOT_SLATE_BIN)"
 
 slate-shared-release-bin: ensure-local-rust
-	RUSTFLAGS='$(SLATE_SHARED_RELEASE_RUSTFLAGS)' CARGO_TARGET_DIR="$(SLATE_SHARED_TARGET_DIR)" $(SLATE_CARGO) build --release -j "$(CARGO_BUILD_JOBS)" -p slate
+	RUSTFLAGS='$(SLATE_SHARED_RELEASE_RUSTFLAGS)' CARGO_TARGET_DIR="$(SLATE_SHARED_TARGET_DIR)" $(SLATE_LIMITED_CARGO) build --release -j "$(CARGO_BUILD_JOBS)" -p slate
 	rust_target_libdir="$$( $(SLATE_RUSTUP) run "$(SLATE_RUST_TOOLCHAIN)" rustc --print target-libdir )"; \
 		cp "$$rust_target_libdir"/libstd-*.so "$(SLATE_SHARED_TARGET_DIR)/release/"
 	cp "$(SLATE_SHARED_RELEASE_BIN)" "$(ROOT_SLATE_BIN_TMP)"
@@ -116,14 +127,14 @@ run-shared-release: slate-shared-release-bin
 run-share-release: run-shared-release
 
 test-broadwebd: ensure-local-rust
-	$(SLATE_CARGO) test -j "$(CARGO_BUILD_JOBS)" -p slate-broadwebd
+	$(SLATE_LIMITED_CARGO) test -j "$(CARGO_BUILD_JOBS)" -p slate-broadwebd -- --test-threads="$(SLATE_TEST_THREADS)"
 
 test-network: ensure-local-rust
-	$(SLATE_CARGO) test -j "$(CARGO_BUILD_JOBS)" -p slate-broadwebd
-	CARGO_BUILD_JOBS="$(CARGO_BUILD_JOBS)" $(SLATE_CARGO) test -p slate-browser-core navigating_http_hands_page_to_servo
+	$(SLATE_LIMITED_CARGO) test -j "$(CARGO_BUILD_JOBS)" -p slate-broadwebd -- --test-threads="$(SLATE_TEST_THREADS)"
+	CARGO_BUILD_JOBS="$(CARGO_BUILD_JOBS)" $(SLATE_LIMITED_CARGO) test -j "$(CARGO_BUILD_JOBS)" -p slate-browser-core navigating_http_hands_page_to_servo -- --test-threads="$(SLATE_TEST_THREADS)"
 
 test-external-network: ensure-local-rust
-	SLATE_EXTERNAL_NETWORK_TESTS=1 $(SLATE_CARGO) test -j "$(CARGO_BUILD_JOBS)" -p slate-broadwebd external_ -- --ignored
+	SLATE_EXTERNAL_NETWORK_TESTS=1 $(SLATE_LIMITED_CARGO) test -j "$(CARGO_BUILD_JOBS)" -p slate-broadwebd external_ -- --ignored --test-threads="$(SLATE_TEST_THREADS)"
 
 clean-slate-bin:
 	rm -f "$(ROOT_SLATE_BIN)"

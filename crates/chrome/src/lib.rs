@@ -54,6 +54,11 @@ pub fn write_headless_chrome_snapshot_with_size(
     desktop::gui::headless_snapshot::write_snapshot(path, size)
 }
 
+#[cfg(not(any(target_os = "android", target_env = "ohos")))]
+pub fn write_headless_chrome_verification_report(path: &std::path::Path) -> Result<(), String> {
+    desktop::gui::headless_snapshot::write_default_verification_report(path)
+}
+
 pub fn init_crypto() {
     rustls::crypto::aws_lc_rs::default_provider()
         .install_default()

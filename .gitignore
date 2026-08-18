@@ -7,5 +7,6 @@ target/
 /slate-settings.db-wal
 *.swp
 *.swo
-/.cargo/
+/.cargo/*
+!/.cargo/config.toml
 /.rustup/

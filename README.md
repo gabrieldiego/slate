@@ -63,6 +63,19 @@ The Makefile build and test targets use `./.rustup` and `./.cargo` by default
 so large Rust toolchains and crate caches stay with the checkout instead of
 filling a small home or root filesystem.
 
+Servo's Rust and native dependency graph is memory-heavy. Slate's checked-in
+defaults keep build pressure conservative: Cargo builds use one job, test
+harnesses use one thread, and Makefile/xtask Cargo invocations run through
+`scripts/with-build-limits.sh` with a 6144 MiB address-space cap. Override those
+knobs only on machines with enough RAM:
+
+```bash
+CARGO_BUILD_JOBS=2 SLATE_TEST_THREADS=2 SLATE_BUILD_MEMORY_LIMIT_MB=8192 make test-network
+```
+
+Set `SLATE_BUILD_MEMORY_LIMIT_MB=0` to disable the wrapper limit for a single
+command.
+
 Then run through the Makefile:
 
 ```bash
@@ -79,7 +92,7 @@ cargo run -p slate
 Check the workspace with:
 
 ```bash
-cargo check --workspace
+make check
 ```
 
 or:

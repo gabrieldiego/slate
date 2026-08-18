@@ -1,0 +1,8 @@
+# Slate vendors Servo, whose Rust and native dependency graph can exhaust memory
+# when Cargo fans out across all cores. Override with CARGO_BUILD_JOBS=N or
+# `cargo -j N` on machines with enough RAM.
+[build]
+jobs = 1
+
+[env]
+RUST_TEST_THREADS = { value = "1", force = false }

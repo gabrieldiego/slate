@@ -54,3 +54,11 @@ slate-storage = { path = "crates/storage" }
 # Rust rejects. Keep this local patch narrow until Servo/WebRender publishes a
 # compatible dependency.
 webrender = { path = "vendor/webrender-0.70.0" }
+
+[profile.dev]
+# Servo and SpiderMonkey produce very large debug artifacts. Keep line tables for
+# useful local backtraces without forcing full DWARF into every default build.
+debug = "line-tables-only"
+
+[profile.test]
+debug = "line-tables-only"
