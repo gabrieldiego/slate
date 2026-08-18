@@ -1528,9 +1528,9 @@ mod tests {
     fn select_all_synthetic_key_event_uses_primary_a() {
         let event = primary_a_key_event();
 
-        assert_eq!(event.key, Key::Character("a".to_string()));
-        assert_eq!(event.code, Code::KeyA);
-        assert_eq!(event.location, Location::Standard);
-        assert!(event.modifiers.contains(CMD_OR_CONTROL));
+        assert_eq!(event.event.key, Key::Character("a".to_string()));
+        assert_eq!(event.event.code, Code::KeyA);
+        assert_eq!(event.event.location, Location::Standard);
+        assert!(event.event.modifiers.contains(CMD_OR_CONTROL));
     }
 }
