@@ -21,7 +21,7 @@ Already covered:
 - Previously fixed defects stay represented in the fixture: the Home rail icon,
   selected rail edge affordance, fallback tab icon identity, app-title divider
   join, tab title clipping before the close-button reservation, tab close art,
-  Reload/Stop raster identity, and Back/Reload hover-button alignment.
+  toolbar vector-icon smoke coverage, and Back/Reload hover-button alignment.
 
 Next:
 

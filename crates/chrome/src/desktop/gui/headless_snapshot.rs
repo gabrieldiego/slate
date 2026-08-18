@@ -185,7 +185,7 @@ pub(crate) fn write_default_verification_report(directory: &Path) -> Result<(), 
             ],
             "metrics": [
                 "detail_pixel bounds track glyph presence and gross alignment",
-                "dark_pixel counts catch missing or washed-out raster/vector masks",
+                "dark_pixel counts catch missing or washed-out raster/vector glyphs",
                 "vertical_detail_columns highlight unexpected divider-like artifacts"
             ]
         }
@@ -504,35 +504,14 @@ fn render_toolbar(
                 ui.available_size(),
                 egui::Layout::left_to_right(egui::Align::Center),
                 |ui| {
-                    let _ = Gui::toolbar_navigation_button(
-                        ui,
-                        slate_icons,
-                        SlateIcon::NavBack,
-                        can_go_back,
-                    );
-                    let _ = Gui::toolbar_navigation_button(
-                        ui,
-                        slate_icons,
-                        SlateIcon::NavForward,
-                        false,
-                    );
+                    let _ = Gui::toolbar_navigation_button(ui, SlateIcon::NavBack, can_go_back);
+                    let _ = Gui::toolbar_navigation_button(ui, SlateIcon::NavForward, false);
                     match load_status {
                         LoadStatus::Started | LoadStatus::HeadParsed => {
-                            let _ = Gui::toolbar_hover_raster_button(
-                                ui,
-                                slate_icons,
-                                SlateRaster::NavStop,
-                                SlateRaster::NavStopHover,
-                                true,
-                            );
+                            let _ = Gui::toolbar_stop_button(ui, true);
                         }
                         LoadStatus::Complete => {
-                            let _ = Gui::toolbar_navigation_button(
-                                ui,
-                                slate_icons,
-                                SlateIcon::NavRefresh,
-                                true,
-                            );
+                            let _ = Gui::toolbar_navigation_button(ui, SlateIcon::NavRefresh, true);
                         }
                     }
 
@@ -897,40 +876,40 @@ fn verification_regions() -> Vec<VerificationRegion> {
             "nav-back-icon",
             "nav-back-icon.png",
             toolbar.nav_icon_rects[0].expand(4.0),
-            "back navigation raster mask crop",
+            "back navigation vector primitive crop",
         ),
         verification_region_from_source(
             VerificationSource::HoverNavBack,
             "nav-back-hover-button",
             "nav-back-hover-button.png",
             toolbar.nav_button_rects[0].expand(4.0),
-            "back navigation hover shade and raster mask alignment",
+            "back navigation hover shade and vector primitive alignment",
         ),
         verification_region(
             "nav-forward-icon",
             "nav-forward-icon.png",
             toolbar.nav_icon_rects[1].expand(4.0),
-            "forward navigation raster mask crop",
+            "forward navigation vector primitive crop",
         ),
         verification_region(
             "nav-reload-icon",
             "nav-reload-icon.png",
             toolbar.nav_icon_rects[2].expand(4.0),
-            "reload navigation raster mask crop",
+            "reload navigation vector primitive crop",
         ),
         verification_region_from_source(
             VerificationSource::HoverNavReload,
             "nav-reload-hover-button",
             "nav-reload-hover-button.png",
             toolbar.nav_button_rects[2].expand(4.0),
-            "reload navigation hover shade and raster mask alignment",
+            "reload navigation hover shade and vector primitive alignment",
         ),
         verification_region_from_source(
             VerificationSource::Loading,
             "nav-stop-icon",
             "nav-stop-icon.png",
             toolbar.nav_stop_icon_rect.expand(4.0),
-            "loading-state Stop navigation raster mask crop",
+            "loading-state Stop navigation vector primitive crop",
         ),
         verification_region(
             "address-field",

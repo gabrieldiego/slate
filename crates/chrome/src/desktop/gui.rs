@@ -114,6 +114,10 @@ const TOOLBAR_BUTTON_SIZE: f32 = 40.0 * CHROME_ELEMENT_ZOOM;
 const TOOLBAR_BUTTON_RADIUS: u8 = 8;
 const TOOLBAR_ICON_SIZE: f32 = 24.0 * CHROME_ELEMENT_ZOOM;
 const TOOLBAR_NAV_ICON_SIZE: f32 = 28.0 * CHROME_ELEMENT_ZOOM;
+const TOOLBAR_NAV_ICON_STROKE: f32 = 2.25 * CHROME_ELEMENT_ZOOM;
+const TOOLBAR_NAV_ARROW_TIP_OFFSET_X: f32 = 8.0 * CHROME_ELEMENT_ZOOM;
+const TOOLBAR_NAV_ARROW_HEAD_SIZE: f32 = 7.5 * CHROME_ELEMENT_ZOOM;
+const TOOLBAR_NAV_REFRESH_RADIUS: f32 = 8.7 * CHROME_ELEMENT_ZOOM;
 const TOOLBAR_NAV_BACK_ICON_OFFSET_X: f32 = 0.0;
 const TOOLBAR_NAV_FORWARD_ICON_OFFSET_X: f32 = 0.0;
 const TOOLBAR_NAV_REFRESH_ICON_OFFSET_X: f32 = 0.0;
@@ -1575,15 +1579,95 @@ fn toolbar_navigation_icon_rect(button_rect: egui::Rect, icon: SlateIcon) -> egu
     )
 }
 
-fn toolbar_navigation_raster(icon: SlateIcon, hovered: bool) -> Option<SlateRaster> {
-    match (icon, hovered) {
-        (SlateIcon::NavBack, false) => Some(SlateRaster::NavBack),
-        (SlateIcon::NavBack, true) => Some(SlateRaster::NavBackHover),
-        (SlateIcon::NavForward, false) => Some(SlateRaster::NavForward),
-        (SlateIcon::NavForward, true) => Some(SlateRaster::NavForwardHover),
-        (SlateIcon::NavRefresh, false) => Some(SlateRaster::NavReload),
-        (SlateIcon::NavRefresh, true) => Some(SlateRaster::NavReloadHover),
-        _ => None,
+fn toolbar_stop_icon_rect(button_rect: egui::Rect) -> egui::Rect {
+    egui::Rect::from_center_size(button_rect.center(), Vec2::splat(TOOLBAR_ICON_SIZE * 0.58))
+}
+
+fn toolbar_vector_stroke(color: egui::Color32) -> egui::Stroke {
+    egui::Stroke::new(TOOLBAR_NAV_ICON_STROKE, color)
+}
+
+fn toolbar_refresh_arc_points(icon_rect: egui::Rect) -> [egui::Pos2; 18] {
+    let center = icon_rect.center();
+    let start_angle = std::f32::consts::PI * 0.18;
+    let end_angle = std::f32::consts::PI * 1.88;
+    let step = (end_angle - start_angle) / 17.0;
+
+    std::array::from_fn(|index| {
+        let angle = start_angle + step * index as f32;
+        egui::pos2(
+            center.x + angle.cos() * TOOLBAR_NAV_REFRESH_RADIUS,
+            center.y + angle.sin() * TOOLBAR_NAV_REFRESH_RADIUS,
+        )
+    })
+}
+
+fn paint_toolbar_arrow_icon(
+    painter: &egui::Painter,
+    icon_rect: egui::Rect,
+    direction: f32,
+    color: egui::Color32,
+) {
+    let center = icon_rect.center();
+    let tip = center + egui::vec2(direction * TOOLBAR_NAV_ARROW_TIP_OFFSET_X, 0.0);
+    let tail = center - egui::vec2(direction * TOOLBAR_NAV_ARROW_TIP_OFFSET_X, 0.0);
+    let head_anchor = tip - egui::vec2(direction * TOOLBAR_NAV_ARROW_HEAD_SIZE, 0.0);
+    let stroke = toolbar_vector_stroke(color);
+
+    painter.line_segment([tail, tip], stroke);
+    painter.line_segment(
+        [
+            tip,
+            head_anchor + egui::vec2(0.0, -TOOLBAR_NAV_ARROW_HEAD_SIZE),
+        ],
+        stroke,
+    );
+    painter.line_segment(
+        [
+            tip,
+            head_anchor + egui::vec2(0.0, TOOLBAR_NAV_ARROW_HEAD_SIZE),
+        ],
+        stroke,
+    );
+}
+
+fn paint_toolbar_refresh_icon(
+    painter: &egui::Painter,
+    icon_rect: egui::Rect,
+    color: egui::Color32,
+) {
+    let points = toolbar_refresh_arc_points(icon_rect);
+    let stroke = toolbar_vector_stroke(color);
+    painter.add(egui::Shape::line(points.to_vec(), stroke));
+
+    let tip = points[points.len() - 1];
+    let previous = points[points.len() - 2];
+    let tangent = (tip - previous).normalized();
+    let normal = egui::vec2(-tangent.y, tangent.x);
+    let head_length = TOOLBAR_NAV_ARROW_HEAD_SIZE * 0.86;
+    let head_width = TOOLBAR_NAV_ARROW_HEAD_SIZE * 0.58;
+    painter.line_segment(
+        [tip, tip - tangent * head_length + normal * head_width],
+        stroke,
+    );
+    painter.line_segment(
+        [tip, tip - tangent * head_length - normal * head_width],
+        stroke,
+    );
+}
+
+fn paint_toolbar_navigation_icon(
+    painter: &egui::Painter,
+    button_rect: egui::Rect,
+    icon: SlateIcon,
+    color: egui::Color32,
+) {
+    let icon_rect = toolbar_navigation_icon_rect(button_rect, icon);
+    match icon {
+        SlateIcon::NavBack => paint_toolbar_arrow_icon(painter, icon_rect, -1.0, color),
+        SlateIcon::NavForward => paint_toolbar_arrow_icon(painter, icon_rect, 1.0, color),
+        SlateIcon::NavRefresh => paint_toolbar_refresh_icon(painter, icon_rect, color),
+        _ => {}
     }
 }
 
@@ -2153,7 +2237,6 @@ impl Gui {
 
     fn toolbar_navigation_button(
         ui: &mut egui::Ui,
-        slate_icons: &mut SlateIconCache,
         icon: SlateIcon,
         enabled: bool,
     ) -> egui::Response {
@@ -2168,33 +2251,17 @@ impl Gui {
                 ui.painter()
                     .rect_filled(rect, TOOLBAR_BUTTON_RADIUS, slate_theme::PANEL_HOVER);
             }
-            let hovered = enabled && response.hovered();
-            if let Some(raster) = toolbar_navigation_raster(icon, hovered) {
-                let texture = slate_icons.raster_mask_texture(
-                    ui.ctx(),
-                    raster,
-                    toolbar_navigation_icon_color(enabled),
-                );
-                ui.painter().image(
-                    texture.id,
-                    toolbar_navigation_icon_rect(rect, icon),
-                    egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
-                    egui::Color32::WHITE,
-                );
-            }
+            paint_toolbar_navigation_icon(
+                ui.painter(),
+                rect,
+                icon,
+                toolbar_navigation_icon_color(enabled),
+            );
         }
         response
     }
 
-    fn toolbar_hover_raster_button(
-        ui: &mut egui::Ui,
-        slate_icons: &mut SlateIconCache,
-        icon: SlateRaster,
-        hover_icon: SlateRaster,
-        enabled: bool,
-    ) -> egui::Response {
-        let icon_texture =
-            slate_icons.raster_mask_texture(ui.ctx(), icon, toolbar_navigation_icon_color(enabled));
+    fn toolbar_stop_button(ui: &mut egui::Ui, enabled: bool) -> egui::Response {
         let sense = if enabled {
             egui::Sense::click()
         } else {
@@ -2207,22 +2274,10 @@ impl Gui {
                 ui.painter()
                     .rect_filled(rect, TOOLBAR_BUTTON_RADIUS, slate_theme::PANEL_HOVER);
             }
-            let texture = if hovered {
-                slate_icons.raster_mask_texture(
-                    ui.ctx(),
-                    hover_icon,
-                    toolbar_navigation_icon_color(true),
-                )
-            } else {
-                icon_texture
-            };
-            let icon_rect =
-                egui::Rect::from_center_size(rect.center(), Vec2::splat(TOOLBAR_ICON_SIZE));
-            ui.painter().image(
-                texture.id,
-                icon_rect,
-                egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
-                egui::Color32::WHITE,
+            ui.painter().rect_filled(
+                toolbar_stop_icon_rect(rect),
+                1.5,
+                toolbar_navigation_icon_color(enabled),
             );
         }
         response
@@ -3484,7 +3539,6 @@ impl Gui {
                             |ui| {
                                 let back_button = Gui::toolbar_navigation_button(
                                     ui,
-                                    slate_icons,
                                     SlateIcon::NavBack,
                                     self.can_go_back,
                                 );
@@ -3500,7 +3554,6 @@ impl Gui {
 
                                 let forward_button = Gui::toolbar_navigation_button(
                                     ui,
-                                    slate_icons,
                                     SlateIcon::NavForward,
                                     self.can_go_forward,
                                 );
@@ -3518,13 +3571,7 @@ impl Gui {
 
                                 match *load_status {
                                     LoadStatus::Started | LoadStatus::HeadParsed => {
-                                        let stop_button = Gui::toolbar_hover_raster_button(
-                                            ui,
-                                            slate_icons,
-                                            SlateRaster::NavStop,
-                                            SlateRaster::NavStopHover,
-                                            true,
-                                        );
+                                        let stop_button = Gui::toolbar_stop_button(ui, true);
                                         stop_button.widget_info(|| {
                                             let mut info = WidgetInfo::new(WidgetType::Button);
                                             info.label = Some("Stop".into());
@@ -3537,7 +3584,6 @@ impl Gui {
                                     LoadStatus::Complete => {
                                         let reload_button = Gui::toolbar_navigation_button(
                                             ui,
-                                            slate_icons,
                                             SlateIcon::NavRefresh,
                                             true,
                                         );
@@ -4277,8 +4323,8 @@ mod tests {
         tab_title_color, tab_title_left, tab_title_width, tab_width_for_strip, text_width,
         toolbar_address_width, toolbar_background_color, toolbar_menu_icon_center,
         toolbar_menu_icon_color, toolbar_menu_icon_rect, toolbar_navigation_icon_color,
-        toolbar_navigation_icon_offset_x, toolbar_navigation_icon_rect, toolbar_navigation_raster,
-        truncate_to_width, web_history_cards_from_records,
+        toolbar_navigation_icon_offset_x, toolbar_navigation_icon_rect, toolbar_refresh_arc_points,
+        toolbar_stop_icon_rect, truncate_to_width, web_history_cards_from_records,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -5557,41 +5603,49 @@ mod tests {
     }
 
     #[test]
-    fn toolbar_navigation_colors_keep_reference_masks_visible_when_disabled() {
+    fn toolbar_navigation_colors_keep_vector_icons_visible_when_disabled() {
         assert_eq!(toolbar_navigation_icon_color(true), slate_theme::TEXT);
         assert_eq!(toolbar_navigation_icon_color(false), slate_theme::TEXT);
     }
 
     #[test]
-    fn toolbar_navigation_uses_concept_raster_crops() {
-        assert_eq!(
-            toolbar_navigation_raster(slate_theme::SlateIcon::NavBack, false),
-            Some(slate_theme::SlateRaster::NavBack)
+    fn toolbar_navigation_uses_vector_icon_geometry() {
+        for icon in [
+            slate_theme::SlateIcon::NavBack,
+            slate_theme::SlateIcon::NavForward,
+            slate_theme::SlateIcon::NavRefresh,
+        ] {
+            let button_rect = egui::Rect::from_center_size(
+                egui::pos2(120.0, 120.0),
+                egui::Vec2::splat(TOOLBAR_BUTTON_SIZE),
+            );
+            assert_eq!(
+                toolbar_navigation_icon_rect(button_rect, icon).center(),
+                button_rect.center()
+            );
+        }
+
+        let button_rect = egui::Rect::from_center_size(
+            egui::pos2(120.0, 120.0),
+            egui::Vec2::splat(TOOLBAR_BUTTON_SIZE),
         );
-        assert_eq!(
-            toolbar_navigation_raster(slate_theme::SlateIcon::NavBack, true),
-            Some(slate_theme::SlateRaster::NavBackHover)
-        );
-        assert_eq!(
-            toolbar_navigation_raster(slate_theme::SlateIcon::NavForward, false),
-            Some(slate_theme::SlateRaster::NavForward)
-        );
-        assert_eq!(
-            toolbar_navigation_raster(slate_theme::SlateIcon::NavForward, true),
-            Some(slate_theme::SlateRaster::NavForwardHover)
-        );
-        assert_eq!(
-            toolbar_navigation_raster(slate_theme::SlateIcon::NavRefresh, false),
-            Some(slate_theme::SlateRaster::NavReload)
-        );
-        assert_eq!(
-            toolbar_navigation_raster(slate_theme::SlateIcon::NavRefresh, true),
-            Some(slate_theme::SlateRaster::NavReloadHover)
-        );
+        let stop_rect = toolbar_stop_icon_rect(button_rect);
+        assert_eq!(stop_rect.center(), button_rect.center());
+        let expected_stop_size = egui::Vec2::splat(TOOLBAR_ICON_SIZE * 0.58);
+        assert!((stop_rect.width() - expected_stop_size.x).abs() < 0.01);
+        assert!((stop_rect.height() - expected_stop_size.y).abs() < 0.01);
+
+        let refresh_rect =
+            toolbar_navigation_icon_rect(button_rect, slate_theme::SlateIcon::NavRefresh);
+        let refresh_points = toolbar_refresh_arc_points(refresh_rect);
+        assert_eq!(refresh_points.len(), 18);
+        for point in refresh_points {
+            assert!(refresh_rect.expand(0.01).contains(point));
+        }
     }
 
     #[test]
-    fn toolbar_navigation_icon_offsets_align_reference_masks() {
+    fn toolbar_navigation_icon_offsets_align_vector_glyphs() {
         fn projected_mask_center_x(button_center_x: f32, icon: slate_theme::SlateIcon) -> f32 {
             let button_rect = egui::Rect::from_center_size(
                 egui::pos2(button_center_x, 120.0),
