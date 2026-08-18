@@ -291,6 +291,43 @@ fn truncate_with_ellipsis(input: &str, max_length: usize) -> String {
     }
 }
 
+fn text_width(ui: &egui::Ui, text: &str, font_id: &egui::FontId) -> f32 {
+    ui.fonts_mut(|fonts| {
+        fonts
+            .layout_no_wrap(text.to_owned(), font_id.clone(), egui::Color32::WHITE)
+            .size()
+            .x
+    })
+}
+
+fn truncate_to_width(ui: &egui::Ui, input: &str, max_width: f32, font_id: &egui::FontId) -> String {
+    if text_width(ui, input, font_id) <= max_width {
+        return input.to_string();
+    }
+
+    let ellipsis = "…";
+    let ellipsis_width = text_width(ui, ellipsis, font_id);
+    if max_width <= ellipsis_width {
+        return ellipsis.to_string();
+    }
+
+    let mut lower = 0;
+    let mut upper = input.chars().count();
+    while lower < upper {
+        let middle = (lower + upper + 1) / 2;
+        let prefix: String = input.chars().take(middle).collect();
+        let candidate = format!("{prefix}{ellipsis}");
+        if text_width(ui, &candidate, font_id) <= max_width {
+            lower = middle;
+        } else {
+            upper = middle - 1;
+        }
+    }
+
+    let truncated: String = input.chars().take(lower).collect();
+    format!("{truncated}{ellipsis}")
+}
+
 fn egui_chrome_owns_position(
     webview_origin: Point2D<f32, DeviceIndependentPixel>,
     webview_size: Size2D<f32, DeviceIndependentPixel>,
@@ -2322,11 +2359,13 @@ impl Gui {
         );
 
         if ui.is_rect_visible(rect) {
-            ui.painter().text(
+            let font_id = egui::FontId::proportional(TAB_TITLE_TEXT_SIZE);
+            let title = truncate_to_width(ui, label, rect.width(), &font_id);
+            ui.painter().with_clip_rect(rect).text(
                 egui::pos2(rect.left(), rect.center().y),
                 egui::Align2::LEFT_CENTER,
-                truncate_with_ellipsis(label, 20),
-                egui::FontId::proportional(TAB_TITLE_TEXT_SIZE),
+                title,
+                font_id,
                 tab_title_color(active),
             );
         }
@@ -4207,10 +4246,11 @@ mod tests {
         tab_close_button_rect, tab_close_icon_color, tab_close_raster, tab_content_width,
         tab_corner_radius, tab_icon_color, tab_icon_slot_rect, tab_strip_background_color,
         tab_strip_separator_color, tab_title_color, tab_title_left, tab_title_width,
-        tab_width_for_strip, toolbar_address_width, toolbar_background_color,
+        tab_width_for_strip, text_width, toolbar_address_width, toolbar_background_color,
         toolbar_menu_icon_center, toolbar_menu_icon_color, toolbar_menu_icon_rect,
         toolbar_navigation_icon_color, toolbar_navigation_icon_offset_x,
-        toolbar_navigation_icon_rect, toolbar_navigation_raster, web_history_cards_from_records,
+        toolbar_navigation_icon_rect, toolbar_navigation_raster, truncate_to_width,
+        web_history_cards_from_records,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -5160,6 +5200,37 @@ mod tests {
     fn tab_title_width_reserves_fixed_close_region() {
         assert_eq!(tab_title_width(tab_content_width(TAB_WIDTH)), 200.0);
         assert_eq!(tab_title_width(100.0), TAB_TITLE_MIN_WIDTH);
+    }
+
+    #[test]
+    fn tab_title_truncation_preserves_ellipsis_within_allocated_width() {
+        let ctx = egui::Context::default();
+        slate_theme::apply(&ctx);
+
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(320.0, 80.0),
+            )),
+            ..Default::default()
+        };
+        let long_title = "Slate privacy settings and broadweb routing diagnostics";
+        let max_width = 96.0;
+        let mut truncated_title = String::new();
+        let mut truncated_width = 0.0;
+
+        let _ = ctx.run_ui(input, |ui| {
+            let font_id = egui::FontId::proportional(TAB_TITLE_TEXT_SIZE);
+            truncated_title = truncate_to_width(ui, long_title, max_width, &font_id);
+            truncated_width = text_width(ui, &truncated_title, &font_id);
+        });
+
+        assert!(truncated_title.ends_with('…'));
+        assert!(truncated_title.chars().count() < long_title.chars().count());
+        assert!(
+            truncated_width <= max_width + 0.5,
+            "expected {truncated_title:?} width {truncated_width} to fit {max_width}"
+        );
     }
 
     #[test]
