@@ -2380,6 +2380,38 @@ impl Gui {
         }
     }
 
+    fn fallback_tab_icon_for_page(page_title: Option<&str>, url: Option<&Url>) -> SlateIcon {
+        if let Some(url) = url {
+            if is_slate_home_url(url) || is_slate_web_url(url) || is_slate_blank_url(url) {
+                return SlateIcon::TabWeb;
+            }
+            if is_slate_settings_url(url) {
+                return SlateIcon::TabResearch;
+            }
+
+            let route = format!(
+                "{}{}",
+                url.host_str().unwrap_or_default(),
+                url.path().trim_start_matches('/')
+            );
+            if route.contains("calendar") {
+                return SlateIcon::TabCalendar;
+            }
+        }
+
+        let page_title = page_title.unwrap_or_default().to_ascii_lowercase();
+        if page_title.contains("calendar") {
+            SlateIcon::TabCalendar
+        } else if page_title.contains("privacy")
+            || page_title.contains("research")
+            || page_title.contains("settings")
+        {
+            SlateIcon::TabResearch
+        } else {
+            SlateIcon::TabWeb
+        }
+    }
+
     fn native_chrome_page_for_url(url: &Url) -> Option<NativeChromePage> {
         if is_slate_home_url(url) {
             Some(NativeChromePage::Home)
@@ -3276,9 +3308,14 @@ impl Gui {
                                                         == Some(id);
                                                     let fallback_icon_color =
                                                         tab_icon_color(active);
+                                                    let page_title = webview.page_title();
+                                                    let page_url = webview.url();
                                                     let fallback_icon = slate_icons.texture(
                                                         ui.ctx(),
-                                                        Self::fallback_tab_icon(index),
+                                                        Self::fallback_tab_icon_for_page(
+                                                            page_title.as_deref(),
+                                                            page_url.as_ref(),
+                                                        ),
                                                         fallback_icon_color,
                                                     );
                                                     let close_icon = slate_icons
@@ -5145,6 +5182,39 @@ mod tests {
         assert_eq!(
             third_icon_slot.center().x - second_icon_slot.center().x,
             TAB_WIDTH
+        );
+    }
+
+    #[test]
+    fn fallback_tab_icon_tracks_page_identity() {
+        let home_url = Url::parse("slate://home").unwrap();
+        let web_url = Url::parse("slate://web").unwrap();
+        let settings_url = Url::parse("slate://settings").unwrap();
+        let blank_url = Url::parse("slate://blank").unwrap();
+
+        assert_eq!(
+            Gui::fallback_tab_icon_for_page(Some("Home"), Some(&home_url)),
+            slate_theme::SlateIcon::TabWeb
+        );
+        assert_eq!(
+            Gui::fallback_tab_icon_for_page(Some("Web"), Some(&web_url)),
+            slate_theme::SlateIcon::TabWeb
+        );
+        assert_eq!(
+            Gui::fallback_tab_icon_for_page(Some("Settings"), Some(&settings_url)),
+            slate_theme::SlateIcon::TabResearch
+        );
+        assert_eq!(
+            Gui::fallback_tab_icon_for_page(Some("New Tab"), Some(&blank_url)),
+            slate_theme::SlateIcon::TabWeb
+        );
+        assert_eq!(
+            Gui::fallback_tab_icon_for_page(Some("Calendar"), None),
+            slate_theme::SlateIcon::TabCalendar
+        );
+        assert_eq!(
+            Gui::fallback_tab_icon_for_page(Some("Privacy Dashboard"), None),
+            slate_theme::SlateIcon::TabResearch
         );
     }
 
