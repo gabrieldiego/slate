@@ -130,6 +130,10 @@ const RAIL_LABEL_TEXT_SIZE: f32 = 12.0 * CHROME_ELEMENT_ZOOM;
 const RAIL_ICON_LABEL_GAP: f32 = 6.0 * CHROME_ELEMENT_ZOOM;
 const RAIL_BUTTON_SIZE: f32 = 80.0 * CHROME_ELEMENT_ZOOM;
 const RAIL_BUTTON_RADIUS: u8 = 8;
+const RAIL_SELECTED_INDICATOR_WIDTH: f32 = 4.0 * CHROME_ELEMENT_ZOOM;
+const RAIL_SELECTED_INDICATOR_HEIGHT: f32 = 36.0 * CHROME_ELEMENT_ZOOM;
+const RAIL_SELECTED_INDICATOR_LEFT_INSET: f32 = 6.0 * CHROME_ELEMENT_ZOOM;
+const RAIL_SELECTED_INDICATOR_RADIUS: u8 = 3;
 const RAIL_PANEL_MARGIN_X: i8 = 12;
 const RAIL_PANEL_MARGIN_Y: i8 = 0;
 const RAIL_TOP_SPACE: f32 = 22.0 * CHROME_ELEMENT_ZOOM;
@@ -528,6 +532,10 @@ fn rail_selected_button_fill() -> egui::Color32 {
     egui::Color32::from_rgb(236, 240, 239)
 }
 
+fn rail_selected_indicator_color() -> egui::Color32 {
+    slate_theme::TEAL
+}
+
 fn rail_button_fill(selected: bool, hovered: bool) -> egui::Color32 {
     if selected {
         rail_selected_button_fill()
@@ -536,6 +544,19 @@ fn rail_button_fill(selected: bool, hovered: bool) -> egui::Color32 {
     } else {
         egui::Color32::TRANSPARENT
     }
+}
+
+fn rail_selected_indicator_rect(button_rect: egui::Rect) -> egui::Rect {
+    egui::Rect::from_min_size(
+        egui::pos2(
+            button_rect.left() + RAIL_SELECTED_INDICATOR_LEFT_INSET,
+            button_rect.center().y - RAIL_SELECTED_INDICATOR_HEIGHT / 2.0,
+        ),
+        egui::vec2(
+            RAIL_SELECTED_INDICATOR_WIDTH,
+            RAIL_SELECTED_INDICATOR_HEIGHT,
+        ),
+    )
 }
 
 fn footer_status_text_color() -> egui::Color32 {
@@ -2512,6 +2533,13 @@ impl Gui {
             if fill != egui::Color32::TRANSPARENT {
                 ui.painter().rect_filled(rect, RAIL_BUTTON_RADIUS, fill);
             }
+            if selected {
+                ui.painter().rect_filled(
+                    rail_selected_indicator_rect(rect),
+                    RAIL_SELECTED_INDICATOR_RADIUS,
+                    rail_selected_indicator_color(),
+                );
+            }
             let icon_center = egui::pos2(
                 rect.center().x,
                 rect.center().y - (RAIL_LABEL_TEXT_SIZE + RAIL_ICON_LABEL_GAP) / 2.0,
@@ -4242,15 +4270,15 @@ mod tests {
         inactive_tab_outline_points, inactive_tab_outline_points_with_leading_edge,
         is_home_bookmarkable_url, location_for_toolbar, location_is_downloads, location_is_home,
         location_is_web, new_tab_icon_color, rail_button_fill, rail_icon_color,
-        rail_selected_button_fill, slate_theme, status_bubble_label, status_bubble_width,
-        tab_close_button_rect, tab_close_icon_color, tab_close_raster, tab_content_width,
-        tab_corner_radius, tab_icon_color, tab_icon_slot_rect, tab_strip_background_color,
-        tab_strip_separator_color, tab_title_color, tab_title_left, tab_title_width,
-        tab_width_for_strip, text_width, toolbar_address_width, toolbar_background_color,
-        toolbar_menu_icon_center, toolbar_menu_icon_color, toolbar_menu_icon_rect,
-        toolbar_navigation_icon_color, toolbar_navigation_icon_offset_x,
-        toolbar_navigation_icon_rect, toolbar_navigation_raster, truncate_to_width,
-        web_history_cards_from_records,
+        rail_selected_button_fill, rail_selected_indicator_color, rail_selected_indicator_rect,
+        slate_theme, status_bubble_label, status_bubble_width, tab_close_button_rect,
+        tab_close_icon_color, tab_close_raster, tab_content_width, tab_corner_radius,
+        tab_icon_color, tab_icon_slot_rect, tab_strip_background_color, tab_strip_separator_color,
+        tab_title_color, tab_title_left, tab_title_width, tab_width_for_strip, text_width,
+        toolbar_address_width, toolbar_background_color, toolbar_menu_icon_center,
+        toolbar_menu_icon_color, toolbar_menu_icon_rect, toolbar_navigation_icon_color,
+        toolbar_navigation_icon_offset_x, toolbar_navigation_icon_rect, toolbar_navigation_raster,
+        truncate_to_width, web_history_cards_from_records,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -4259,7 +4287,9 @@ mod tests {
     };
     use super::{
         RAIL_BUTTON_RADIUS, RAIL_BUTTON_SIZE, RAIL_ICON_SIZE, RAIL_ITEM_GAP, RAIL_PANEL_MARGIN_X,
-        RAIL_PANEL_MARGIN_Y, RAIL_TOP_SPACE, TAB_CLOSE_BUTTON_SIZE,
+        RAIL_PANEL_MARGIN_Y, RAIL_SELECTED_INDICATOR_HEIGHT, RAIL_SELECTED_INDICATOR_LEFT_INSET,
+        RAIL_SELECTED_INDICATOR_RADIUS, RAIL_SELECTED_INDICATOR_WIDTH, RAIL_TOP_SPACE,
+        TAB_CLOSE_BUTTON_SIZE,
     };
 
     const LAYOUT_EPSILON: f32 = 1.0;
@@ -4472,6 +4502,10 @@ mod tests {
         assert!((RAIL_ICON_SIZE - 36.0).abs() < 0.001);
         assert!((RAIL_BUTTON_SIZE - 72.0).abs() < 0.001);
         assert_eq!(RAIL_BUTTON_RADIUS, 8);
+        assert!((RAIL_SELECTED_INDICATOR_WIDTH - 3.6).abs() < 0.001);
+        assert!((RAIL_SELECTED_INDICATOR_HEIGHT - 32.4).abs() < 0.001);
+        assert!((RAIL_SELECTED_INDICATOR_LEFT_INSET - 5.4).abs() < 0.001);
+        assert_eq!(RAIL_SELECTED_INDICATOR_RADIUS, 3);
         assert_eq!(RAIL_PANEL_MARGIN_X, 12);
         assert_eq!(RAIL_PANEL_MARGIN_Y, 0);
         assert!((RAIL_TOP_SPACE - 19.8).abs() < 0.001);
@@ -5623,6 +5657,7 @@ mod tests {
     fn rail_colors_keep_selected_tile_soft() {
         assert_eq!(rail_icon_color(true), slate_theme::TEAL);
         assert_eq!(rail_icon_color(false), slate_theme::TEXT);
+        assert_eq!(rail_selected_indicator_color(), slate_theme::TEAL);
         assert_eq!(
             rail_selected_button_fill(),
             egui::Color32::from_rgb(236, 240, 239)
@@ -5631,6 +5666,19 @@ mod tests {
         assert_eq!(rail_button_fill(true, true), rail_selected_button_fill());
         assert_eq!(rail_button_fill(false, true), slate_theme::PANEL_HOVER);
         assert_eq!(rail_button_fill(false, false), egui::Color32::TRANSPARENT);
+    }
+
+    #[test]
+    fn rail_selected_indicator_sits_inside_left_edge_of_tile() {
+        let button_rect =
+            egui::Rect::from_min_size(egui::pos2(12.0, 97.0), egui::Vec2::splat(RAIL_BUTTON_SIZE));
+        let indicator_rect = rail_selected_indicator_rect(button_rect);
+
+        assert!(indicator_rect.left() > button_rect.left());
+        assert!(indicator_rect.right() < button_rect.left() + 10.0);
+        assert!(indicator_rect.top() > button_rect.top());
+        assert!(indicator_rect.bottom() < button_rect.bottom());
+        assert!((indicator_rect.center().y - button_rect.center().y).abs() < 0.001);
     }
 
     #[test]

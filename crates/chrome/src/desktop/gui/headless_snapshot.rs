@@ -19,7 +19,7 @@ use super::{
     ADDRESS_TRAILING_GAP, APP_RAIL_WIDTH, APP_TITLE_HEIGHT, APP_TITLE_WIDTH, AddressSecurityIcon,
     FOOTER_HEIGHT, Gui, NEW_TAB_BUTTON_SIZE, NEW_TAB_LEFT_GAP, NEW_TAB_SLOT_HEIGHT,
     RAIL_BUTTON_SIZE, RAIL_ICON_LABEL_GAP, RAIL_ICON_SIZE, RAIL_ITEM_GAP, RAIL_LABEL_TEXT_SIZE,
-    RAIL_PANEL_MARGIN_X, RAIL_PANEL_MARGIN_Y, RAIL_TOP_SPACE, TAB_CLOSE_BUTTON_SIZE,
+    RAIL_PANEL_MARGIN_X, RAIL_PANEL_MARGIN_Y, RAIL_TOP_SPACE, RailPage, TAB_CLOSE_BUTTON_SIZE,
     TAB_CONTENT_ALIGN, TAB_CONTENT_HEIGHT, TAB_HEIGHT, TAB_ICON_SIZE, TAB_ICON_TITLE_GAP,
     TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP,
     TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE, TOOLBAR_ITEM_SPACING,
@@ -388,7 +388,7 @@ fn render_app_rail(root_ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
         .frame(rail_frame)
         .show_separator_line(true)
         .show_inside(root_ui, |ui| {
-            let _ = Gui::draw_app_rail(ui, slate_icons, None);
+            let _ = Gui::draw_app_rail(ui, slate_icons, Some(RailPage::Home));
         });
 }
 
