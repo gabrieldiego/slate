@@ -2414,7 +2414,26 @@ impl Gui {
         label: &str,
     ) -> egui::Response {
         let texture = slate_icons.texture(ui.ctx(), icon, rail_icon_color(selected));
+        Self::rail_texture_button(ui, texture, selected, label)
+    }
 
+    fn rail_raster_icon_button(
+        ui: &mut egui::Ui,
+        slate_icons: &mut SlateIconCache,
+        icon: SlateRaster,
+        selected: bool,
+        label: &str,
+    ) -> egui::Response {
+        let texture = slate_icons.raster_mask_texture(ui.ctx(), icon, rail_icon_color(selected));
+        Self::rail_texture_button(ui, texture, selected, label)
+    }
+
+    fn rail_texture_button(
+        ui: &mut egui::Ui,
+        texture: egui::load::SizedTexture,
+        selected: bool,
+        label: &str,
+    ) -> egui::Response {
         let (rect, response) =
             ui.allocate_exact_size(Vec2::splat(RAIL_BUTTON_SIZE), egui::Sense::click());
         if ui.is_rect_visible(rect) {
@@ -2464,10 +2483,10 @@ impl Gui {
         let mut downloads_clicked = false;
         ui.vertical_centered(|ui| {
             ui.add_space(RAIL_TOP_SPACE);
-            let home_button = Self::rail_icon_button(
+            let home_button = Self::rail_raster_icon_button(
                 ui,
                 slate_icons,
-                SlateIcon::AppHome,
+                SlateRaster::AppHome,
                 active_page == Some(RailPage::Home),
                 "Home",
             );
