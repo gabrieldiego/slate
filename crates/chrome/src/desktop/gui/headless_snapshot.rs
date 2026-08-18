@@ -77,6 +77,7 @@ pub(crate) fn write_default_verification_report(directory: &Path) -> Result<(), 
         .map_err(|error| format!("failed to encode {}: {error}", loading_full_path.display()))?;
 
     let mut summary = VerificationSummary::default();
+    let mut region_captures = HashMap::new();
     let mut region_reports = Vec::new();
     for region in verification_regions() {
         let source_image = match region.source {
@@ -103,6 +104,13 @@ pub(crate) fn write_default_verification_report(directory: &Path) -> Result<(), 
         let metrics = crop_metrics(&crop);
         let monitor = evaluate_region_monitor(region.monitor, crop_rect, metrics);
         summary.record(&monitor, region.monitor);
+        region_captures.insert(
+            region.name,
+            RegionCapture {
+                rect: crop_rect,
+                metrics,
+            },
+        );
 
         region_reports.push(serde_json::json!({
             "name": region.name,
@@ -129,6 +137,7 @@ pub(crate) fn write_default_verification_report(directory: &Path) -> Result<(), 
         },
         "summary": verification_summary_json(summary),
         "regions": region_reports,
+        "automated_review": automated_review_json(&region_captures),
         "checks": {
             "manual_review_required": true,
             "review_focus": [
@@ -656,6 +665,12 @@ struct VerificationSummary {
     manual_review_regions: u32,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct RegionCapture {
+    rect: PixelRect,
+    metrics: CropMetrics,
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 struct CropMetrics {
     total_pixels: u64,
@@ -663,6 +678,7 @@ struct CropMetrics {
     transparent_pixels: u64,
     detail_pixels: u64,
     dark_pixels: u64,
+    left_edge_dark_pixels: u64,
     vertical_detail_columns: u32,
     average_rgb: [u8; 3],
     detail_bounds: Option<PixelRect>,
@@ -735,6 +751,12 @@ fn verification_regions() -> Vec<VerificationRegion> {
             "rail-home-button.png",
             chrome.rail_button_rects[0],
             "selected Home rail tile fill, label, and raster icon",
+        ),
+        verification_region(
+            "rail-web-button",
+            "rail-web-button.png",
+            chrome.rail_button_rects[1],
+            "unselected Web rail tile fill, label, and vector icon",
         ),
         verification_region(
             "rail-home-icon",
@@ -940,9 +962,11 @@ fn monitor_for_region(name: &'static str) -> RegionMonitor {
         "active-tab-close" => RegionMonitor::new(8, 4, 4)
             .with_dark_pixels(1)
             .with_manual_review(&["compare close-button art against Slate raster controls"]),
-        "rail-home-button" => RegionMonitor::new(40, 8, 8).with_manual_review(&[
-            "confirm selected rail tile fill, label, and icon remain aligned",
-        ]),
+        "rail-home-button" | "rail-web-button" => {
+            RegionMonitor::new(40, 8, 8).with_manual_review(&[
+                "confirm selected rail tile fill, label, and icon remain aligned",
+            ])
+        }
         "toolbar" => RegionMonitor::new(64, 20, 8),
         "address-field" => RegionMonitor::new(64, 20, 8),
         "footer-status" => RegionMonitor::new(24, 8, 5),
@@ -1302,6 +1326,9 @@ fn crop_metrics(crop: &RgbaImage) -> CropMetrics {
 
         if alpha > 180 && u16::from(red) + u16::from(green) + u16::from(blue) < 330 {
             metrics.dark_pixels += 1;
+            if x < 8 {
+                metrics.left_edge_dark_pixels += 1;
+            }
         }
 
         if alpha > 32 && color_distance(pixel.0, background) > 24 {
@@ -1378,10 +1405,148 @@ fn crop_metrics_json(metrics: CropMetrics) -> serde_json::Value {
         "transparent_pixels": metrics.transparent_pixels,
         "detail_pixels": metrics.detail_pixels,
         "dark_pixels": metrics.dark_pixels,
+        "left_edge_dark_pixels": metrics.left_edge_dark_pixels,
         "vertical_detail_columns": metrics.vertical_detail_columns,
         "average_rgb": metrics.average_rgb,
         "detail_bounds": metrics.detail_bounds.map(pixel_rect_json),
     })
+}
+
+fn automated_review_json(regions: &HashMap<&'static str, RegionCapture>) -> serde_json::Value {
+    let mut findings = Vec::new();
+
+    if let Some(selected_rail) = regions.get("rail-home-button") {
+        if selected_rail.metrics.left_edge_dark_pixels < 24 {
+            findings.push(review_finding_json(
+                "warning",
+                "rail-home-button",
+                "selected rail state has no strong edge affordance",
+                serde_json::json!({
+                    "left_edge_dark_pixels": selected_rail.metrics.left_edge_dark_pixels,
+                    "minimum": 24,
+                }),
+                "Add a compact accent mark or stronger selected fill so the active app is visible during scanning.",
+            ));
+        }
+    }
+
+    if let Some(footer) = regions.get("footer-status") {
+        let density = detail_density(footer.metrics);
+        if density < 0.012 {
+            findings.push(review_finding_json(
+                "info",
+                "footer-status",
+                "idle footer has sparse content for its footprint",
+                serde_json::json!({
+                    "detail_density": rounded_ratio(density),
+                    "pixels": {
+                        "width": footer.rect.width(),
+                        "height": footer.rect.height(),
+                    },
+                }),
+                "Consider collapsing the idle footer or reserving the band for loading, broadweb routing, hover previews, and warnings.",
+            ));
+        }
+    }
+
+    if let Some((nav_density, right_density)) = toolbar_control_density(regions) {
+        if right_density < nav_density * 0.7 {
+            findings.push(review_finding_json(
+                "info",
+                "toolbar",
+                "right toolbar controls are visually quieter than navigation controls",
+                serde_json::json!({
+                    "navigation_detail_density": rounded_ratio(nav_density),
+                    "right_control_detail_density": rounded_ratio(right_density),
+                }),
+                "Increase contrast or tighten spacing for bookmark, privacy, and menu controls after the primary navigation cluster is stable.",
+            ));
+        }
+    }
+
+    let warning_count = findings
+        .iter()
+        .filter(|finding| {
+            finding
+                .get("severity")
+                .and_then(|severity| severity.as_str())
+                == Some("warning")
+        })
+        .count();
+    let info_count = findings
+        .iter()
+        .filter(|finding| {
+            finding
+                .get("severity")
+                .and_then(|severity| severity.as_str())
+                == Some("info")
+        })
+        .count();
+
+    serde_json::json!({
+        "schema": "slate.chrome.automated-review.v1",
+        "summary": {
+            "findings": findings.len(),
+            "warnings": warning_count,
+            "info": info_count,
+        },
+        "rules": [
+            "selected rail buttons should expose a measurable edge affordance",
+            "large idle chrome bands should contain enough visible detail to justify their footprint",
+            "secondary toolbar controls should not become much quieter than primary navigation controls"
+        ],
+        "findings": findings,
+    })
+}
+
+fn review_finding_json(
+    severity: &'static str,
+    region: &'static str,
+    title: &'static str,
+    evidence: serde_json::Value,
+    recommendation: &'static str,
+) -> serde_json::Value {
+    serde_json::json!({
+        "severity": severity,
+        "region": region,
+        "title": title,
+        "evidence": evidence,
+        "recommendation": recommendation,
+    })
+}
+
+fn detail_density(metrics: CropMetrics) -> f32 {
+    if metrics.total_pixels == 0 {
+        return 0.0;
+    }
+    metrics.detail_pixels as f32 / metrics.total_pixels as f32
+}
+
+fn rounded_ratio(value: f32) -> f64 {
+    (f64::from(value) * 10_000.0).round() / 10_000.0
+}
+
+fn toolbar_control_density(regions: &HashMap<&'static str, RegionCapture>) -> Option<(f32, f32)> {
+    let nav_density = average_region_density(
+        regions,
+        &["nav-back-icon", "nav-forward-icon", "nav-reload-icon"],
+    )?;
+    let right_density = average_region_density(
+        regions,
+        &["address-bookmark-icon", "privacy-shield", "toolbar-menu"],
+    )?;
+    Some((nav_density, right_density))
+}
+
+fn average_region_density(
+    regions: &HashMap<&'static str, RegionCapture>,
+    names: &[&'static str],
+) -> Option<f32> {
+    let mut total = 0.0;
+    for name in names {
+        total += detail_density(regions.get(name)?.metrics);
+    }
+    Some(total / names.len() as f32)
 }
 
 fn region_monitor_json(
@@ -1822,9 +1987,10 @@ fn edge(start: egui::Pos2, end: egui::Pos2, point: egui::Pos2) -> f32 {
 mod tests {
     use super::{
         CropMetrics, DEFAULT_SNAPSHOT_HEIGHT, DEFAULT_SNAPSHOT_WIDTH, MonitorStatus, PixelRect,
-        RegionMonitor, crop_metrics, evaluate_region_monitor, render_snapshot,
-        verification_regions, write_default_verification_report,
+        RegionCapture, RegionMonitor, automated_review_json, crop_metrics, evaluate_region_monitor,
+        render_snapshot, verification_regions, write_default_verification_report,
     };
+    use std::collections::HashMap;
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1870,6 +2036,8 @@ mod tests {
         for expected in [
             "active-tab-icon",
             "active-tab-close",
+            "rail-home-button",
+            "rail-web-button",
             "rail-home-icon",
             "rail-web-icon",
             "nav-back-icon",
@@ -1911,6 +2079,10 @@ mod tests {
         assert_eq!(metrics.opaque_pixels, 24 * 24);
         assert!(metrics.detail_pixels > 20);
         assert!(metrics.dark_pixels > 20);
+        assert!(
+            metrics.left_edge_dark_pixels < 24,
+            "ordinary glyph detail should stay below the selected-edge affordance threshold"
+        );
         assert_eq!(metrics.vertical_detail_columns, 1);
         assert_eq!(
             metrics
@@ -1919,6 +2091,50 @@ mod tests {
                 .min_x,
             6
         );
+    }
+
+    #[test]
+    fn headless_verification_metrics_track_left_edge_affordance() {
+        let mut crop = image::RgbaImage::from_pixel(24, 24, image::Rgba([250, 250, 250, u8::MAX]));
+        for y in 4..20 {
+            for x in 0..4 {
+                crop.put_pixel(x, y, image::Rgba([20, 120, 116, u8::MAX]));
+            }
+        }
+
+        let metrics = crop_metrics(&crop);
+
+        assert_eq!(metrics.left_edge_dark_pixels, 64);
+        assert!(metrics.detail_pixels >= 64);
+    }
+
+    #[test]
+    fn headless_automated_review_flags_weak_selected_rail_affordance() {
+        let mut regions = HashMap::new();
+        regions.insert(
+            "rail-home-button",
+            RegionCapture {
+                rect: PixelRect {
+                    min_x: 0,
+                    min_y: 0,
+                    max_x: 72,
+                    max_y: 73,
+                },
+                metrics: CropMetrics {
+                    total_pixels: 72 * 73,
+                    opaque_pixels: 72 * 73,
+                    detail_pixels: 120,
+                    dark_pixels: 20,
+                    left_edge_dark_pixels: 0,
+                    ..Default::default()
+                },
+            },
+        );
+
+        let review = automated_review_json(&regions);
+
+        assert_eq!(review["summary"]["warnings"], 1);
+        assert_eq!(review["findings"][0]["region"], "rail-home-button");
     }
 
     #[test]
@@ -2006,6 +2222,8 @@ mod tests {
         let report = fs::read_to_string(output_dir.join("report.json"))
             .expect("verification report should be readable");
         assert!(report.contains("slate.chrome.visual-verification.v1"));
+        assert!(report.contains("slate.chrome.automated-review.v1"));
+        assert!(report.contains("\"rail-web-button\""));
         assert!(report.contains("\"active-tab-close\""));
         assert!(report.contains("\"nav-stop-icon\""));
         assert!(output_dir.join("full.png").is_file());
