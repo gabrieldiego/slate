@@ -320,12 +320,72 @@ pub(crate) const SLATE_TEXT_SELECTION_SCRIPT: &str = r##"
 mod tests {
     use super::SLATE_TEXT_SELECTION_SCRIPT;
 
+    fn assert_script_contains_all(needles: &[&str]) {
+        for needle in needles {
+            assert!(
+                SLATE_TEXT_SELECTION_SCRIPT.contains(needle),
+                "text selection script should contain {needle:?}"
+            );
+        }
+    }
+
     #[test]
     fn text_selection_script_handles_selection_copy_and_context_menu() {
-        assert!(SLATE_TEXT_SELECTION_SCRIPT.contains("setBaseAndExtent"));
-        assert!(SLATE_TEXT_SELECTION_SCRIPT.contains("getClientRects"));
-        assert!(SLATE_TEXT_SELECTION_SCRIPT.contains("navigator.clipboard.writeText"));
-        assert!(SLATE_TEXT_SELECTION_SCRIPT.contains("contextmenu"));
-        assert!(SLATE_TEXT_SELECTION_SCRIPT.contains("selectAllPageText"));
+        assert_script_contains_all(&[
+            "setBaseAndExtent",
+            "getClientRects",
+            "navigator.clipboard.writeText",
+            "contextmenu",
+            "selectAllPageText",
+        ]);
+    }
+
+    #[test]
+    fn text_selection_script_installs_once_and_uses_capture_handlers() {
+        assert_script_contains_all(&[
+            "window.__slateTextSelectionInstalled",
+            "document.addEventListener(\"mousedown\"",
+            "document.addEventListener(\"mousemove\"",
+            "document.addEventListener(\"mouseup\"",
+            "document.addEventListener(\"keydown\"",
+            "document.addEventListener(\"copy\"",
+            "document.addEventListener(\"contextmenu\"",
+            "document.addEventListener(\"scroll\", removeContextMenu, true)",
+        ]);
+    }
+
+    #[test]
+    fn text_selection_script_drags_text_without_editable_interception() {
+        assert_script_contains_all(&[
+            "event.button !== 0 || isEditable(event.target)",
+            "event.buttons !== 1",
+            "DRAG_THRESHOLD",
+            "textPositionFromPoint(event.clientX, event.clientY)",
+            "applySelection(anchorPosition, focusPosition)",
+            "event.preventDefault()",
+        ]);
+    }
+
+    #[test]
+    fn text_selection_script_preserves_native_editable_controls() {
+        assert_script_contains_all(&[
+            "input, textarea, select, option",
+            "[contenteditable=\\\"\\\"]",
+            "[contenteditable=\\\"true\\\"]",
+            "!isEditable(event.target)",
+            "isEditable(event.target) || !selectedText()",
+        ]);
+    }
+
+    #[test]
+    fn text_selection_script_exposes_copy_select_all_and_clear_actions() {
+        assert_script_contains_all(&[
+            "event.clipboardData.setData(\"text/plain\", text)",
+            "addItem(\"Copy\", copySelectedText)",
+            "addItem(\"Select All\", selectAllPageText)",
+            "addItem(\"Clear Selection\"",
+            "selection.removeAllRanges()",
+            "selection.selectAllChildren(document.body)",
+        ]);
     }
 }
