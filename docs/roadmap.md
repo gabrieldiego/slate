@@ -57,6 +57,48 @@
   builds should continue to prefer one Cargo job unless a developer opts into
   more parallelism.
 
+## Trust And Name Resolution
+
+Slate should treat name resolution, certificate validation, and routing as one
+coherent trust decision rather than separate incidental library calls. The goal
+is not to claim perfect zero trust, but to avoid trusting any resolver, proxy,
+exit relay, gateway, operating-system path, or certificate store more than the
+selected browsing mode requires.
+
+- Define a Slate-owned trust policy layer that records which roots are trusted
+  for HTTPS, where they came from, how they are updated, and whether Servo page
+  loads and Slate-owned `reqwest` fetches use the same policy. Today these paths
+  can differ between platform roots and WebPKI/Mozilla roots, so production
+  readiness requires a deliberate, auditable choice.
+- Make DNS resolution part of the routing plan. A route should explicitly choose
+  `SystemDnsAllowed`, `EncryptedDnsStrict`, `ObliviousDnsStrict`,
+  `TorExitRemoteDns`, `TorDoH`, `DistributedLocalNameNode`, or `NoDns` instead
+  of allowing library defaults or the OS resolver to decide silently.
+- Add a strict DNS-leak policy: no local DNS fallback for private routes, Tor
+  routes, distributed protocol names, `.onion`, or any mode whose user-facing
+  promise depends on hiding lookup metadata from the local network.
+- Investigate local DNSSEC validation for signed conventional DNS zones. DNS
+  answers may arrive through an untrusted resolver, cache, Tor circuit, ODoH
+  target, or distributed mirror, but Slate should be able to reject tampered
+  signed records by validating the chain from a pinned root trust anchor.
+- Preserve practical usability by making validation failures explainable and
+  recoverable only through explicit user action. Strict private modes should
+  fail closed; normal browsing may offer compatibility fallbacks only when the
+  privacy and authenticity consequences are visible.
+- Support Tor-style privacy boundaries without depending on Tor exits for all
+  trust. For clearnet Tor browsing, prefer hostname-aware proxying or DoH over
+  Tor so local DNS is never used; use HTTPS, HTTPS-Only behavior, ECH where
+  available, and certificate validation to protect the endpoint.
+- Treat self-authenticating and distributed names as first-class routing cases.
+  `.onion` names should use onion-service authentication instead of DNS, IPFS
+  CIDs should use content identity instead of DNS identity, and systems such as
+  Namecoin, Handshake, ENS, or IPNS should be integrated only through explicit
+  adapters with documented trust, privacy, update, and failure behavior.
+- Add tests that prove resolver policy is enforced: no OS DNS calls in strict
+  private routes, no fallback from Tor or ODoH to system DNS, DNSSEC-bogus
+  answers rejected in strict modes, and HTTPS certificate errors never bypassed
+  except through a visible site-specific exception.
+
 ## Profile State
 
 Persist Slate-owned user state in `slate-settings.db` whenever it is small,
