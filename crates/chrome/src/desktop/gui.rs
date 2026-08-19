@@ -113,6 +113,7 @@ const RAIL_ITEM_GAP: f32 = 12.0 * CHROME_ELEMENT_ZOOM;
 const RAIL_SELECTED_WITH_TABS_HEIGHT: f32 = 176.0 * CHROME_ELEMENT_ZOOM;
 const RAIL_COLLAPSED_WITH_TABS_HEIGHT: f32 = 106.0 * CHROME_ELEMENT_ZOOM;
 const RAIL_TAB_PREVIEW_MAX_ROWS: usize = 3;
+const RAIL_WEB_SELECTED_TAB_MAX_ROWS: usize = 7;
 const RAIL_TAB_AREA_TOP_GAP: f32 = 2.0 * CHROME_ELEMENT_ZOOM;
 const RAIL_TAB_ROW_WIDTH: f32 = 66.0 * CHROME_ELEMENT_ZOOM;
 const RAIL_TAB_ROW_HEIGHT: f32 = 18.0 * CHROME_ELEMENT_ZOOM;
@@ -310,6 +311,14 @@ struct RailWebTabPreview {
     label: String,
     icon: egui::load::SizedTexture,
     active: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct RailWebTabScrollState {
+    tab_count: usize,
+    active_index: Option<usize>,
+    start_index: usize,
+    drag_delta_y: f32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -826,7 +835,7 @@ fn rail_selected_tab_stack_height(row_count: usize, button_width: f32) -> f32 {
 }
 
 fn rail_web_tab_stack_row_count(tab_count: usize) -> usize {
-    tab_count.min(RAIL_TAB_PREVIEW_MAX_ROWS) + 1
+    tab_count.min(RAIL_WEB_SELECTED_TAB_MAX_ROWS) + 1
 }
 
 fn rail_web_item_height(selected: bool, tab_count: usize, button_width: f32) -> f32 {
@@ -882,8 +891,12 @@ fn rail_selected_indicator_rect(button_rect: egui::Rect) -> egui::Rect {
     )
 }
 
-fn rail_tab_preview_indices(tab_count: usize, active_index: Option<usize>) -> Vec<usize> {
-    let visible_count = tab_count.min(RAIL_TAB_PREVIEW_MAX_ROWS);
+fn rail_tab_preview_indices(
+    tab_count: usize,
+    active_index: Option<usize>,
+    max_rows: usize,
+) -> Vec<usize> {
+    let visible_count = tab_count.min(max_rows);
     let mut indices = (0..visible_count).collect::<Vec<_>>();
     if let Some(active_index) = active_index {
         if active_index < tab_count && !indices.contains(&active_index) {
@@ -893,6 +906,68 @@ fn rail_tab_preview_indices(tab_count: usize, active_index: Option<usize>) -> Ve
         }
     }
     indices
+}
+
+fn rail_tab_max_scroll_start(tab_count: usize, max_rows: usize) -> usize {
+    tab_count.saturating_sub(tab_count.min(max_rows))
+}
+
+fn rail_tab_default_scroll_start(
+    tab_count: usize,
+    active_index: Option<usize>,
+    max_rows: usize,
+) -> usize {
+    let visible_count = tab_count.min(max_rows);
+    if visible_count == 0 {
+        return 0;
+    }
+
+    active_index
+        .filter(|active_index| *active_index < tab_count)
+        .map(|active_index| active_index.saturating_add(1).saturating_sub(visible_count))
+        .unwrap_or(0)
+        .min(rail_tab_max_scroll_start(tab_count, max_rows))
+}
+
+fn rail_tab_indices_from_start(
+    tab_count: usize,
+    max_rows: usize,
+    start_index: usize,
+) -> Vec<usize> {
+    let visible_count = tab_count.min(max_rows);
+    if visible_count == 0 {
+        return Vec::new();
+    }
+
+    let start_index = start_index.min(rail_tab_max_scroll_start(tab_count, max_rows));
+    (start_index..start_index + visible_count).collect()
+}
+
+fn rail_tab_scroll_start_after_delta(
+    tab_count: usize,
+    max_rows: usize,
+    start_index: usize,
+    scroll_delta_y: f32,
+    row_stride: f32,
+) -> usize {
+    if tab_count <= max_rows || scroll_delta_y == 0.0 || row_stride <= 0.0 {
+        return start_index.min(rail_tab_max_scroll_start(tab_count, max_rows));
+    }
+
+    let row_delta = (-scroll_delta_y / row_stride).round() as isize;
+    let row_delta = if row_delta == 0 {
+        if scroll_delta_y < 0.0 { 1 } else { -1 }
+    } else {
+        row_delta
+    };
+    let max_start = rail_tab_max_scroll_start(tab_count, max_rows);
+    if row_delta.is_positive() {
+        start_index
+            .saturating_add(row_delta as usize)
+            .min(max_start)
+    } else {
+        start_index.saturating_sub(row_delta.unsigned_abs())
+    }
 }
 
 fn rail_tab_area_top(button_rect: egui::Rect) -> f32 {
@@ -2605,14 +2680,84 @@ impl Gui {
         }
 
         let active_index = tabs.iter().position(|tab| tab.active);
-        let visible_indices = rail_tab_preview_indices(tabs.len(), active_index);
         if !selected {
+            let visible_indices =
+                rail_tab_preview_indices(tabs.len(), active_index, RAIL_TAB_PREVIEW_MAX_ROWS);
             for (row_index, tab_index) in visible_indices.into_iter().enumerate() {
                 let tab = &tabs[tab_index];
                 Self::draw_rail_collapsed_tab_line(ui, button_rect, row_index, None, tab.active);
             }
             return (None, None, false);
         }
+
+        let scroll_id = ui.make_persistent_id("rail_web_tab_scroll_state");
+        let default_scroll_start =
+            rail_tab_default_scroll_start(tabs.len(), active_index, RAIL_WEB_SELECTED_TAB_MAX_ROWS);
+        let mut scroll_state = ui
+            .ctx()
+            .data(|data| data.get_temp::<RailWebTabScrollState>(scroll_id))
+            .filter(|state| state.tab_count == tabs.len() && state.active_index == active_index)
+            .unwrap_or(RailWebTabScrollState {
+                tab_count: tabs.len(),
+                active_index,
+                start_index: default_scroll_start,
+                drag_delta_y: 0.0,
+            });
+        scroll_state.start_index = scroll_state.start_index.min(rail_tab_max_scroll_start(
+            tabs.len(),
+            RAIL_WEB_SELECTED_TAB_MAX_ROWS,
+        ));
+
+        if tabs.len() > RAIL_WEB_SELECTED_TAB_MAX_ROWS {
+            let last_visible_row = RAIL_WEB_SELECTED_TAB_MAX_ROWS - 1;
+            let scroll_rect = egui::Rect::from_min_max(
+                rail_tab_row_rect(button_rect, 0).min,
+                rail_tab_row_rect(button_rect, last_visible_row).max,
+            );
+            let drag_response = ui.interact(
+                scroll_rect,
+                ui.make_persistent_id("rail_web_tab_scroll_drag"),
+                egui::Sense::drag(),
+            );
+            if ui.rect_contains_pointer(scroll_rect) {
+                let scroll_delta_y = ui.input(|input| input.smooth_scroll_delta().y);
+                if scroll_delta_y != 0.0 {
+                    scroll_state.start_index = rail_tab_scroll_start_after_delta(
+                        tabs.len(),
+                        RAIL_WEB_SELECTED_TAB_MAX_ROWS,
+                        scroll_state.start_index,
+                        scroll_delta_y,
+                        rail_tab_row_height(button_rect) + rail_tab_row_gap(button_rect),
+                    );
+                    ui.input_mut(|input| {
+                        input.smooth_scroll_delta.y = 0.0;
+                    });
+                }
+            }
+            if drag_response.dragged() {
+                let drag_delta_y = drag_response.drag_delta().y;
+                let drag_step_y = drag_delta_y - scroll_state.drag_delta_y;
+                if drag_step_y != 0.0 {
+                    scroll_state.start_index = rail_tab_scroll_start_after_delta(
+                        tabs.len(),
+                        RAIL_WEB_SELECTED_TAB_MAX_ROWS,
+                        scroll_state.start_index,
+                        drag_step_y,
+                        rail_tab_row_height(button_rect) + rail_tab_row_gap(button_rect),
+                    );
+                }
+                scroll_state.drag_delta_y = drag_delta_y;
+            } else {
+                scroll_state.drag_delta_y = 0.0;
+            }
+        }
+        ui.ctx()
+            .data_mut(|data| data.insert_temp(scroll_id, scroll_state));
+        let visible_indices = rail_tab_indices_from_start(
+            tabs.len(),
+            RAIL_WEB_SELECTED_TAB_MAX_ROWS,
+            scroll_state.start_index,
+        );
 
         let mut activated_webview = None;
         let mut closed_webview = None;
@@ -4494,10 +4639,11 @@ mod tests {
         rail_collapsed_tab_line_width, rail_expansion_for_button_width, rail_icon_color,
         rail_item_height, rail_new_tab_icon_size, rail_new_tab_row_rect, rail_selected_button_fill,
         rail_selected_indicator_color, rail_selected_indicator_rect, rail_svg_icon_rect,
-        rail_tab_close_button_rect, rail_tab_close_button_size, rail_tab_preview_indices,
-        rail_tab_row_height, rail_tab_row_icon_size, rail_tab_row_rect, rail_tab_row_text_size,
-        rail_tab_row_width, rail_web_item_height, rail_web_tab_stack_row_count, slate_theme,
-        status_bubble_label, status_bubble_width, tab_favicon_site_scope,
+        rail_tab_close_button_rect, rail_tab_close_button_size, rail_tab_default_scroll_start,
+        rail_tab_indices_from_start, rail_tab_preview_indices, rail_tab_row_height,
+        rail_tab_row_icon_size, rail_tab_row_rect, rail_tab_row_text_size, rail_tab_row_width,
+        rail_tab_scroll_start_after_delta, rail_web_item_height, rail_web_tab_stack_row_count,
+        slate_theme, status_bubble_label, status_bubble_width, tab_favicon_site_scope,
         tab_favicon_site_scope_matches, toolbar_address_width, toolbar_background_color,
         toolbar_menu_icon_center, toolbar_menu_icon_color, toolbar_menu_icon_rect,
         toolbar_navigation_icon_color, toolbar_navigation_icon_offset_x,
@@ -4549,10 +4695,10 @@ mod tests {
         RAIL_SELECTED_INDICATOR_RADIUS, RAIL_SELECTED_INDICATOR_WIDTH,
         RAIL_SELECTED_TAB_STACK_BOTTOM_PADDING, RAIL_SELECTED_WITH_TABS_HEIGHT, RAIL_SVG_ICON_SIZE,
         RAIL_TAB_CLOSE_BUTTON_SIZE, RAIL_TAB_CLOSE_BUTTON_SIZE_EXPANDED,
-        RAIL_TAB_CLOSE_RIGHT_INSET, RAIL_TAB_PREVIEW_MAX_ROWS, RAIL_TAB_ROW_HEIGHT,
-        RAIL_TAB_ROW_HEIGHT_EXPANDED, RAIL_TAB_ROW_ICON_SIZE, RAIL_TAB_ROW_ICON_SIZE_EXPANDED,
-        RAIL_TAB_ROW_TEXT_SIZE, RAIL_TAB_ROW_TEXT_SIZE_EXPANDED, RAIL_TAB_ROW_WIDTH,
-        RAIL_TOP_SPACE,
+        RAIL_TAB_CLOSE_RIGHT_INSET, RAIL_TAB_PREVIEW_MAX_ROWS, RAIL_TAB_ROW_GAP,
+        RAIL_TAB_ROW_HEIGHT, RAIL_TAB_ROW_HEIGHT_EXPANDED, RAIL_TAB_ROW_ICON_SIZE,
+        RAIL_TAB_ROW_ICON_SIZE_EXPANDED, RAIL_TAB_ROW_TEXT_SIZE, RAIL_TAB_ROW_TEXT_SIZE_EXPANDED,
+        RAIL_TAB_ROW_WIDTH, RAIL_TOP_SPACE, RAIL_WEB_SELECTED_TAB_MAX_ROWS,
     };
 
     const LAYOUT_EPSILON: f32 = 1.0;
@@ -5108,9 +5254,78 @@ mod tests {
     #[test]
     fn rail_tab_preview_indices_keep_active_tab_visible() {
         assert_eq!(RAIL_TAB_PREVIEW_MAX_ROWS, 3);
-        assert_eq!(rail_tab_preview_indices(2, Some(1)), vec![0, 1]);
-        assert_eq!(rail_tab_preview_indices(5, Some(4)), vec![0, 1, 4]);
-        assert_eq!(rail_tab_preview_indices(5, None), vec![0, 1, 2]);
+        assert_eq!(
+            rail_tab_preview_indices(2, Some(1), RAIL_TAB_PREVIEW_MAX_ROWS),
+            vec![0, 1]
+        );
+        assert_eq!(
+            rail_tab_preview_indices(5, Some(4), RAIL_TAB_PREVIEW_MAX_ROWS),
+            vec![0, 1, 4]
+        );
+        assert_eq!(
+            rail_tab_preview_indices(5, None, RAIL_TAB_PREVIEW_MAX_ROWS),
+            vec![0, 1, 2]
+        );
+    }
+
+    #[test]
+    fn selected_web_rail_expands_to_seven_tabs_before_scrolling() {
+        assert_eq!(RAIL_WEB_SELECTED_TAB_MAX_ROWS, 7);
+        assert_eq!(rail_web_tab_stack_row_count(0), 1);
+        assert_eq!(rail_web_tab_stack_row_count(6), 7);
+        assert_eq!(rail_web_tab_stack_row_count(7), 8);
+        assert_eq!(rail_web_tab_stack_row_count(9), 8);
+        assert_eq!(
+            rail_tab_indices_from_start(7, RAIL_WEB_SELECTED_TAB_MAX_ROWS, 0),
+            vec![0, 1, 2, 3, 4, 5, 6]
+        );
+        assert_eq!(
+            rail_tab_indices_from_start(9, RAIL_WEB_SELECTED_TAB_MAX_ROWS, 2),
+            vec![2, 3, 4, 5, 6, 7, 8]
+        );
+    }
+
+    #[test]
+    fn selected_web_rail_scroll_start_tracks_active_then_scrolls() {
+        let row_stride = RAIL_TAB_ROW_HEIGHT + RAIL_TAB_ROW_GAP;
+        assert_eq!(
+            rail_tab_default_scroll_start(9, Some(8), RAIL_WEB_SELECTED_TAB_MAX_ROWS),
+            2
+        );
+        assert_eq!(
+            rail_tab_default_scroll_start(9, None, RAIL_WEB_SELECTED_TAB_MAX_ROWS),
+            0
+        );
+        assert_eq!(
+            rail_tab_scroll_start_after_delta(
+                9,
+                RAIL_WEB_SELECTED_TAB_MAX_ROWS,
+                0,
+                -row_stride,
+                row_stride,
+            ),
+            1
+        );
+        assert_eq!(
+            rail_tab_scroll_start_after_delta(
+                9,
+                RAIL_WEB_SELECTED_TAB_MAX_ROWS,
+                1,
+                row_stride,
+                row_stride,
+            ),
+            0
+        );
+        assert_eq!(
+            rail_tab_scroll_start_after_delta(
+                9,
+                RAIL_WEB_SELECTED_TAB_MAX_ROWS,
+                1,
+                -row_stride * 10.0,
+                row_stride,
+            ),
+            2
+        );
     }
 
     #[test]
@@ -5141,7 +5356,7 @@ mod tests {
 
     #[test]
     fn selected_web_rail_keeps_new_tab_row_at_stack_bottom() {
-        for tab_count in 0..=5 {
+        for tab_count in 0..=9 {
             let row_count = rail_web_tab_stack_row_count(tab_count);
             let button_rect = egui::Rect::from_min_size(
                 egui::Pos2::ZERO,
@@ -5152,7 +5367,7 @@ mod tests {
             );
             let new_tab_row = rail_new_tab_row_rect(button_rect, row_count - 1);
 
-            assert_eq!(row_count, tab_count.min(RAIL_TAB_PREVIEW_MAX_ROWS) + 1);
+            assert_eq!(row_count, tab_count.min(RAIL_WEB_SELECTED_TAB_MAX_ROWS) + 1);
             assert!(rect_is_inside(button_rect, new_tab_row));
             assert!(
                 (button_rect.bottom()
@@ -5170,9 +5385,13 @@ mod tests {
                 < 0.01
         );
         assert!(
-            (rail_web_item_height(true, RAIL_TAB_PREVIEW_MAX_ROWS + 2, RAIL_BUTTON_SIZE)
-                - RAIL_SELECTED_WITH_TABS_HEIGHT)
-                .abs()
+            rail_web_item_height(true, RAIL_WEB_SELECTED_TAB_MAX_ROWS, RAIL_BUTTON_SIZE)
+                > RAIL_SELECTED_WITH_TABS_HEIGHT
+        );
+        assert!(
+            (rail_web_item_height(true, RAIL_WEB_SELECTED_TAB_MAX_ROWS + 2, RAIL_BUTTON_SIZE,)
+                - rail_web_item_height(true, RAIL_WEB_SELECTED_TAB_MAX_ROWS, RAIL_BUTTON_SIZE))
+            .abs()
                 < 0.01
         );
     }
