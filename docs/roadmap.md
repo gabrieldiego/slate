@@ -12,16 +12,23 @@ Already covered:
 
 - Full, loading, and toolbar-hover chrome states are rendered headlessly from the
   real egui chrome path.
-- Stable crops cover the app title, tab strip, active tab title/close regions,
-  fallback tab icons, rail buttons and icons, toolbar navigation icons, address
-  field controls, toolbar menu, privacy shield, and footer status.
+- Stable crops cover the rail buttons and icons, Web rail tab title/close
+  regions, fallback tab icons, toolbar navigation icons, address field controls,
+  toolbar menu, privacy shield, and footer status.
 - Deterministic checks cover pixel bounds, detail/dark-pixel presence, separator
   artifacts, selected-rail edge affordance, and toolbar-control density. Manual
   review notes remain attached where visual judgment is still required.
-- Previously fixed defects stay represented in the fixture: the Home rail icon,
-  selected rail edge affordance, fallback tab icon identity, app-title divider
-  join, tab title clipping before the close-button reservation, tab close art,
-  toolbar vector-icon smoke coverage, and Back/Reload hover-button alignment.
+- Previously fixed defects stay represented in the fixture where their UI still
+  exists: the Home rail icon, selected rail edge affordance, fallback tab icon
+  identity, tab title clipping before the close-button reservation, tab close
+  art, toolbar vector-icon smoke coverage, and Back/Reload hover-button
+  alignment. The old app-title divider issue was retired with the top banner.
+- Rail apps render their page bodies as internal HTML under `slate://`. Calendar
+  now has an initial `slate://calendar` mock page and is selected from the rail
+  as a singleton app page, outside the Web tab preview list.
+- Browser-core no longer emits hardcoded app page bodies for rail apps; it maps
+  app selection to internal `slate://` addresses and lets the renderer path load
+  the page.
 
 Next:
 

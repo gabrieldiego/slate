@@ -72,6 +72,7 @@ enum ReusableInternalPage {
     Home,
     Web,
     Downloads,
+    Calendar,
     Settings,
 }
 
@@ -86,7 +87,9 @@ impl ReusableInternalPage {
         }
 
         match self {
-            Self::Home | Self::Web | Self::Downloads | Self::Settings => Some(matching_count - 1),
+            Self::Home | Self::Web | Self::Downloads | Self::Calendar | Self::Settings => {
+                Some(matching_count - 1)
+            }
         }
     }
 }
@@ -101,6 +104,7 @@ fn reusable_internal_page(url: &Url) -> Option<ReusableInternalPage> {
         (Some("home"), "") | (None, "home") => Some(ReusableInternalPage::Home),
         (Some("web"), "") | (None, "web") => Some(ReusableInternalPage::Web),
         (Some("downloads"), "") | (None, "downloads") => Some(ReusableInternalPage::Downloads),
+        (Some("calendar"), "") | (None, "calendar") => Some(ReusableInternalPage::Calendar),
         (Some("settings"), "") | (None, "settings") => Some(ReusableInternalPage::Settings),
         _ => None,
     }
@@ -574,6 +578,14 @@ mod tests {
             Some(ReusableInternalPage::Downloads)
         );
         assert_eq!(
+            reusable_internal_page(&Url::parse("slate://calendar").unwrap()),
+            Some(ReusableInternalPage::Calendar)
+        );
+        assert_eq!(
+            reusable_internal_page(&Url::parse("slate:calendar").unwrap()),
+            Some(ReusableInternalPage::Calendar)
+        );
+        assert_eq!(
             reusable_internal_page(&Url::parse("slate://settings?chrome_zoom=0.82").unwrap()),
             Some(ReusableInternalPage::Settings)
         );
@@ -598,6 +610,10 @@ mod tests {
             None
         );
         assert_eq!(
+            reusable_internal_page(&Url::parse("slate://calendar/state").unwrap()),
+            None
+        );
+        assert_eq!(
             reusable_internal_page(&Url::parse("slate://settings/state").unwrap()),
             None
         );
@@ -612,6 +628,7 @@ mod tests {
         assert!(ReusableInternalPage::Home.closes_duplicates());
         assert!(ReusableInternalPage::Web.closes_duplicates());
         assert!(ReusableInternalPage::Downloads.closes_duplicates());
+        assert!(ReusableInternalPage::Calendar.closes_duplicates());
         assert!(ReusableInternalPage::Settings.closes_duplicates());
     }
 
@@ -622,6 +639,10 @@ mod tests {
         assert_eq!(ReusableInternalPage::Web.existing_target_index(3), Some(2));
         assert_eq!(
             ReusableInternalPage::Downloads.existing_target_index(3),
+            Some(2)
+        );
+        assert_eq!(
+            ReusableInternalPage::Calendar.existing_target_index(3),
             Some(2)
         );
         assert_eq!(

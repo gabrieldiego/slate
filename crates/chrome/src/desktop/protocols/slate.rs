@@ -62,6 +62,7 @@ impl ProtocolHandler for SlateProtocolHandler {
             "blank",
             "home",
             "web",
+            "calendar",
             "settings",
             "settings/state",
             "settings/preview",
@@ -121,6 +122,8 @@ impl ProtocolHandler for SlateProtocolHandler {
             Some("/slate-home.html")
         } else if is_slate_web_url(url.as_url()) {
             Some("/slate-web.html")
+        } else if is_slate_calendar_url(url.as_url()) {
+            Some("/slate-calendar.html")
         } else if is_slate_downloads_url(url.as_url()) {
             Some("/slate-downloads.html")
         } else if is_slate_settings_url(url.as_url()) {
@@ -459,6 +462,11 @@ pub(crate) fn is_slate_downloads_url(url: &Url) -> bool {
             || url.path().trim_start_matches('/') == "downloads")
 }
 
+pub(crate) fn is_slate_calendar_url(url: &Url) -> bool {
+    url.scheme() == "slate"
+        && (url.host_str() == Some("calendar") || url.path().trim_start_matches('/') == "calendar")
+}
+
 pub(crate) fn is_slate_settings_url(url: &Url) -> bool {
     url.scheme() == "slate"
         && (url.host_str() == Some("settings") || url.path().trim_start_matches('/') == "settings")
@@ -504,10 +512,10 @@ mod tests {
     use super::{
         CHROME_ELEMENT_ZOOM_SETTING_MAX, CHROME_ELEMENT_ZOOM_SETTING_MIN,
         chrome_element_zoom_setting_from_url, download_request_from_url, is_slate_blank_url,
-        is_slate_download_request_url, is_slate_downloads_state_url, is_slate_downloads_url,
-        is_slate_home_url, is_slate_settings_apply_url, is_slate_settings_preview_url,
-        is_slate_settings_save_url, is_slate_settings_url, is_slate_web_url,
-        slate_download_error_html,
+        is_slate_calendar_url, is_slate_download_request_url, is_slate_downloads_state_url,
+        is_slate_downloads_url, is_slate_home_url, is_slate_settings_apply_url,
+        is_slate_settings_preview_url, is_slate_settings_save_url, is_slate_settings_url,
+        is_slate_web_url, slate_download_error_html,
     };
     use slate_broadwebd::FetchPurpose;
     use slate_broadwebd::TemporaryDownloadRecord;
@@ -551,6 +559,22 @@ mod tests {
         ));
         assert!(is_slate_downloads_state_url(
             &Url::parse("slate://downloads/state").unwrap()
+        ));
+    }
+
+    #[test]
+    fn slate_calendar_url_matches_host_and_path_forms() {
+        assert!(is_slate_calendar_url(
+            &Url::parse("slate://calendar").unwrap()
+        ));
+        assert!(is_slate_calendar_url(
+            &Url::parse("slate:calendar").unwrap()
+        ));
+        assert!(!is_slate_calendar_url(
+            &Url::parse("slate://downloads").unwrap()
+        ));
+        assert!(!is_slate_calendar_url(
+            &Url::parse("https://calendar").unwrap()
         ));
     }
 
@@ -734,8 +758,23 @@ mod tests {
         assert!(resource_dir.join("slate-blank.html").is_file());
         assert!(resource_dir.join("slate-home.html").is_file());
         assert!(resource_dir.join("slate-web.html").is_file());
+        assert!(resource_dir.join("slate-calendar.html").is_file());
         assert!(resource_dir.join("slate-settings.html").is_file());
         assert!(resource_dir.join("slate-downloads.html").is_file());
+    }
+
+    #[test]
+    fn slate_calendar_page_is_static_local_mock() {
+        let resource_dir = crate::resources::resource_protocol_dir_path();
+        let calendar_page =
+            std::fs::read_to_string(resource_dir.join("slate-calendar.html")).unwrap();
+
+        assert!(calendar_page.contains("<title>Slate Calendar</title>"));
+        assert!(calendar_page.contains("<h1>Calendar</h1>"));
+        assert!(calendar_page.contains("August 2026"));
+        assert!(!calendar_page.contains("<script"));
+        assert!(!calendar_page.contains("http://"));
+        assert!(!calendar_page.contains("https://"));
     }
 
     #[test]

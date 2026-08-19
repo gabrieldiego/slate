@@ -49,8 +49,8 @@ use winit::window::Window;
 use crate::desktop::event_loop::AppEvent;
 use crate::desktop::headed_window;
 use crate::desktop::protocols::slate::{
-    self, current_chrome_element_zoom_setting, is_slate_blank_url, is_slate_downloads_url,
-    is_slate_home_url, is_slate_settings_url, is_slate_web_url,
+    self, current_chrome_element_zoom_setting, is_slate_blank_url, is_slate_calendar_url,
+    is_slate_downloads_url, is_slate_home_url, is_slate_settings_url, is_slate_web_url,
     set_current_chrome_element_zoom_setting,
 };
 use crate::desktop::slate_theme::{self, SlateIcon, SlateIconCache, SlateRaster, SlateSvg};
@@ -333,6 +333,7 @@ struct RailInteraction {
     home_clicked: bool,
     web_clicked: bool,
     downloads_clicked: bool,
+    calendar_clicked: bool,
     new_web_tab_clicked: bool,
     activated_webview: Option<WebViewId>,
     closed_webview: Option<WebViewId>,
@@ -520,6 +521,7 @@ enum RailPage {
     Home,
     Web,
     Downloads,
+    Calendar,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -571,7 +573,10 @@ fn address_security_icon_for_location(location: &str) -> AddressSecurityIcon {
 
     match Url::parse(location) {
         Ok(url)
-            if is_slate_home_url(&url) || is_slate_web_url(&url) || is_slate_settings_url(&url) =>
+            if is_slate_home_url(&url)
+                || is_slate_web_url(&url)
+                || is_slate_calendar_url(&url)
+                || is_slate_settings_url(&url) =>
         {
             AddressSecurityIcon::Slate {
                 icon: SlateIcon::TopShield,
@@ -1619,6 +1624,11 @@ fn location_is_web(location: &str) -> bool {
 }
 
 #[cfg(test)]
+fn location_is_calendar(location: &str) -> bool {
+    location_matches_slate_url(location, is_slate_calendar_url)
+}
+
+#[cfg(test)]
 fn location_is_downloads(location: &str) -> bool {
     location_matches_slate_url(location, is_slate_downloads_url)
 }
@@ -1945,6 +1955,7 @@ fn browser_tab_label(page_title: Option<&str>, url: Option<&Url>) -> String {
     match (page_title, url) {
         (_, Some(url)) if is_slate_home_url(url) => "Home".into(),
         (_, Some(url)) if is_slate_web_url(url) => "Web".into(),
+        (_, Some(url)) if is_slate_calendar_url(url) => "Calendar".into(),
         (_, Some(url)) if is_slate_blank_url(url) => "New Tab".into(),
         (Some(title), _) if !title.is_empty() => title.to_string(),
         (_, Some(url)) => url.to_string(),
@@ -1956,6 +1967,7 @@ fn is_web_rail_tab_url(url: Option<&Url>) -> bool {
     url.is_some_and(|url| {
         !is_slate_home_url(url)
             && !is_slate_web_url(url)
+            && !is_slate_calendar_url(url)
             && !is_slate_downloads_url(url)
             && !is_slate_settings_url(url)
     })
@@ -2553,6 +2565,9 @@ impl Gui {
             if is_slate_home_url(url) || is_slate_web_url(url) || is_slate_blank_url(url) {
                 return SlateIcon::TabWeb;
             }
+            if is_slate_calendar_url(url) {
+                return SlateIcon::TabCalendar;
+            }
             if is_slate_settings_url(url) {
                 return SlateIcon::TabResearch;
             }
@@ -2614,6 +2629,8 @@ impl Gui {
             Some(RailPage::Home)
         } else if is_slate_downloads_url(url) {
             Some(RailPage::Downloads)
+        } else if is_slate_calendar_url(url) {
+            Some(RailPage::Calendar)
         } else if is_slate_settings_url(url) {
             None
         } else {
@@ -3358,15 +3375,19 @@ impl Gui {
             );
             ui.set_clip_rect(previous_clip_rect);
             ui.add_space(RAIL_ITEM_GAP);
-            Self::rail_svg_icon_button_with_size(
+            let calendar_selected = active_page == Some(RailPage::Calendar);
+            let calendar_button = Self::rail_svg_icon_button_with_size(
                 ui,
                 slate_icons,
                 SlateSvg::RailCalendar,
-                false,
+                calendar_selected,
                 "Calendar",
                 button_width,
                 RAIL_BUTTON_SIZE,
             );
+            if calendar_button.clicked() {
+                interaction.calendar_clicked = true;
+            }
             ui.add_space(RAIL_ITEM_GAP);
             Self::rail_svg_icon_button_with_size(
                 ui,
@@ -3513,6 +3534,11 @@ impl Gui {
             *location_dirty = false;
             window.queue_user_interface_command(UserInterfaceCommand::Go(
                 "slate://downloads".to_string(),
+            ));
+        } else if interaction.calendar_clicked {
+            *location_dirty = false;
+            window.queue_user_interface_command(UserInterfaceCommand::Go(
+                "slate://calendar".to_string(),
             ));
         }
     }
@@ -4831,18 +4857,19 @@ mod tests {
         home_search_border_color, home_search_icon_color, home_search_icon_rect,
         home_search_icon_visible_rect, home_search_rendered_height, home_search_width,
         home_top_space, home_view_background_color, is_home_bookmarkable_url,
-        is_web_app_webview_url, is_web_rail_tab_url, location_for_toolbar, location_is_downloads,
-        location_is_home, location_is_web, rail_button_fill, rail_button_header_rect,
-        rail_button_width, rail_collapsed_line_height, rail_collapsed_tab_line_rect,
-        rail_collapsed_tab_line_width, rail_expansion_for_button_width, rail_icon_color,
-        rail_item_height, rail_item_height_at_expansion, rail_new_tab_icon_size,
-        rail_new_tab_row_rect, rail_selected_button_fill, rail_selected_indicator_color,
-        rail_selected_indicator_rect, rail_svg_icon_rect, rail_tab_close_button_rect,
-        rail_tab_close_button_size, rail_tab_default_scroll_start, rail_tab_indices_from_start,
-        rail_tab_preview_indices, rail_tab_row_height, rail_tab_row_icon_size, rail_tab_row_rect,
-        rail_tab_row_text_size, rail_tab_row_width, rail_tab_scroll_start_after_delta,
-        rail_web_item_height, rail_web_item_height_at_expansion, rail_web_tab_stack_row_count,
-        slate_theme, status_bubble_label, status_bubble_width, tab_favicon_site_scope,
+        is_web_app_webview_url, is_web_rail_tab_url, location_for_toolbar, location_is_calendar,
+        location_is_downloads, location_is_home, location_is_web, rail_button_fill,
+        rail_button_header_rect, rail_button_width, rail_collapsed_line_height,
+        rail_collapsed_tab_line_rect, rail_collapsed_tab_line_width,
+        rail_expansion_for_button_width, rail_icon_color, rail_item_height,
+        rail_item_height_at_expansion, rail_new_tab_icon_size, rail_new_tab_row_rect,
+        rail_selected_button_fill, rail_selected_indicator_color, rail_selected_indicator_rect,
+        rail_svg_icon_rect, rail_tab_close_button_rect, rail_tab_close_button_size,
+        rail_tab_default_scroll_start, rail_tab_indices_from_start, rail_tab_preview_indices,
+        rail_tab_row_height, rail_tab_row_icon_size, rail_tab_row_rect, rail_tab_row_text_size,
+        rail_tab_row_width, rail_tab_scroll_start_after_delta, rail_web_item_height,
+        rail_web_item_height_at_expansion, rail_web_tab_stack_row_count, slate_theme,
+        status_bubble_label, status_bubble_width, tab_favicon_site_scope,
         tab_favicon_site_scope_matches, toolbar_address_width, toolbar_background_color,
         toolbar_menu_icon_center, toolbar_menu_icon_color, toolbar_menu_icon_rect,
         toolbar_navigation_icon_color, toolbar_navigation_icon_offset_x,
@@ -5052,6 +5079,14 @@ mod tests {
         assert!(location_is_downloads("slate:downloads"));
         assert!(!location_is_downloads("slate://home"));
         assert!(!location_is_downloads("https://example.com"));
+    }
+
+    #[test]
+    fn rail_calendar_selection_matches_calendar_internal_page() {
+        assert!(location_is_calendar("slate://calendar"));
+        assert!(location_is_calendar("slate:calendar"));
+        assert!(!location_is_calendar("slate://downloads"));
+        assert!(!location_is_calendar("https://calendar"));
     }
 
     #[test]
@@ -5636,6 +5671,10 @@ mod tests {
             Some(RailPage::Downloads)
         );
         assert_eq!(
+            Gui::rail_page_for_url(&Url::parse("slate://calendar").unwrap()),
+            Some(RailPage::Calendar)
+        );
+        assert_eq!(
             Gui::rail_page_for_url(&Url::parse("slate://settings").unwrap()),
             None
         );
@@ -5679,6 +5718,9 @@ mod tests {
             &Url::parse("slate://downloads").unwrap()
         )));
         assert!(!is_web_rail_tab_url(Some(
+            &Url::parse("slate://calendar").unwrap()
+        )));
+        assert!(!is_web_rail_tab_url(Some(
             &Url::parse("slate://settings").unwrap()
         )));
     }
@@ -5711,6 +5753,9 @@ mod tests {
             &Url::parse("slate://downloads").unwrap()
         )));
         assert!(!is_web_app_webview_url(Some(
+            &Url::parse("slate://calendar").unwrap()
+        )));
+        assert!(!is_web_app_webview_url(Some(
             &Url::parse("slate://settings").unwrap()
         )));
     }
@@ -5723,6 +5768,10 @@ mod tests {
         );
         assert_eq!(
             web_rail_click_target(Some(RailPage::Downloads), true),
+            WebRailClickTarget::LastWebSurface
+        );
+        assert_eq!(
+            web_rail_click_target(Some(RailPage::Calendar), true),
             WebRailClickTarget::LastWebSurface
         );
         assert_eq!(
@@ -5837,6 +5886,10 @@ mod tests {
         assert_eq!(
             browser_tab_label(None, Some(&Url::parse("slate://home").unwrap())),
             "Home"
+        );
+        assert_eq!(
+            browser_tab_label(None, Some(&Url::parse("slate://calendar").unwrap())),
+            "Calendar"
         );
         assert_eq!(
             browser_tab_label(
@@ -6091,6 +6144,13 @@ mod tests {
             }
         );
         assert_eq!(
+            address_security_icon_for_location("slate://calendar"),
+            AddressSecurityIcon::Slate {
+                icon: slate_theme::SlateIcon::TopShield,
+                color: address_passive_icon_color(),
+            }
+        );
+        assert_eq!(
             address_security_icon_for_location("slate://settings"),
             AddressSecurityIcon::Slate {
                 icon: slate_theme::SlateIcon::TopShield,
@@ -6206,6 +6266,7 @@ mod tests {
         let home_url = Url::parse("slate://home").unwrap();
         let web_url = Url::parse("slate://web").unwrap();
         let settings_url = Url::parse("slate://settings").unwrap();
+        let calendar_url = Url::parse("slate://calendar").unwrap();
         let blank_url = Url::parse("slate://blank").unwrap();
 
         assert_eq!(
@@ -6226,6 +6287,10 @@ mod tests {
         );
         assert_eq!(
             Gui::fallback_tab_icon_for_page(Some("Calendar"), None),
+            slate_theme::SlateIcon::TabCalendar
+        );
+        assert_eq!(
+            Gui::fallback_tab_icon_for_page(Some(""), Some(&calendar_url)),
             slate_theme::SlateIcon::TabCalendar
         );
         assert_eq!(

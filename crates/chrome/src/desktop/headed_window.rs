@@ -51,7 +51,9 @@ use crate::desktop::event_loop::AppEvent;
 use crate::desktop::gui::Gui;
 use crate::desktop::key_bindings::{KeyBindingAction, key_binding_action_for_event};
 use crate::desktop::keyutils::CMD_OR_CONTROL;
-use crate::desktop::protocols::slate::{is_slate_blank_url, is_slate_home_url, is_slate_web_url};
+use crate::desktop::protocols::slate::{
+    is_slate_blank_url, is_slate_calendar_url, is_slate_home_url, is_slate_web_url,
+};
 use crate::prefs::ServoShellPreferences;
 use crate::running_app_state::{RunningAppState, UserInterfaceCommand};
 use crate::window::{
@@ -954,6 +956,9 @@ impl PlatformWindow for HeadedWindow {
                 }
                 if webview.url().as_ref().is_some_and(is_slate_web_url) {
                     return Some("Slate - Web".to_owned());
+                }
+                if webview.url().as_ref().is_some_and(is_slate_calendar_url) {
+                    return Some("Slate - Calendar".to_owned());
                 }
                 if webview.url().as_ref().is_some_and(is_slate_blank_url) {
                     return Some("Slate - New Tab".to_owned());

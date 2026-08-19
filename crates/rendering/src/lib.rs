@@ -46,7 +46,6 @@ pub struct RenderSurface {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RenderDocument {
-    App,
     Home,
     Web(ServoDocument),
 }

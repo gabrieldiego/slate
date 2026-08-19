@@ -137,7 +137,18 @@ IPFS/IPNS URLs, common path-style forms such as `/ipfs/<cid>/...` and
 `ipns/<name>/...`, and bare CIDv0/CIDv1 values. Slate normalizes those to
 `ipfs://` or `ipns://` before fetching them through broadwebd.
 
-The window opens a Slate shell with the intended first shape: left app rail, tab strip, navigation toolbar, address bar, and a quiet home viewport. The side rail keeps Home first, Web second, then Downloads, Calendar, and Messaging. `slate://home` is the static personal start page, `slate://web` is a singleton broadweb front page currently backed by local browsing history, and the `+` tab button opens `slate://blank` with the address bar ready for input. The address bar can navigate to Servo-rendered internal pages such as `slate://tests/hello`, local HTML files such as `examples/local-page.html`, broadwebd-fetched HTTP(S) pages, IPFS/IPNS gateway routes, and placeholder broadweb URLs such as `gemini://example`.
+The window opens a Slate shell with the intended first shape: left app rail,
+navigation toolbar, address bar, Web tab previews under the rail, and a quiet
+home viewport. The rail keeps Home first, Web second, then Downloads, Calendar,
+and Messaging. Rail apps are ordinary internal HTML pages under `slate://`:
+`slate://home` is the static personal start page, `slate://web` is a singleton
+broadweb front page currently backed by local browsing history,
+`slate://downloads` is the download queue mock, and `slate://calendar` is the
+initial calendar mock. The `+` Web row opens `slate://blank` with the address
+bar ready for input. The address bar can navigate to Servo-rendered internal
+pages such as `slate://tests/hello`, local HTML files such as
+`examples/local-page.html`, broadwebd-fetched HTTP(S) pages, IPFS/IPNS gateway
+routes, and placeholder broadweb URLs such as `gemini://example`.
 
 ## Servo
 

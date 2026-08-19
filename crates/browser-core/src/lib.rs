@@ -3,8 +3,7 @@
 use core::fmt;
 use slate_apps::AppId;
 use slate_rendering::{
-    MetricAccent, RenderBackend, RenderDocument, RenderMetric, RenderSurface, RenderViewport,
-    ServoBackend, ServoDocumentStatus,
+    RenderBackend, RenderDocument, RenderSurface, RenderViewport, ServoBackend, ServoDocumentStatus,
 };
 use std::path::{Path, PathBuf};
 
@@ -61,11 +60,6 @@ impl BrowserState {
                     address: "https://servo.org".to_string(),
                     cached_surface: None,
                 },
-                Tab {
-                    title: "Calendar".to_string(),
-                    address: "slate://calendar".to_string(),
-                    cached_surface: None,
-                },
             ],
             active_tab: 0,
             active_app: AppId::Web,
@@ -93,14 +87,22 @@ impl BrowserState {
     }
 
     pub fn select_app(&mut self, app: AppId) {
+        self.select_app_with_surface_loader(app, surface_for_address);
+    }
+
+    fn select_app_with_surface_loader(
+        &mut self,
+        app: AppId,
+        load_surface: impl FnOnce(&str, Option<&str>) -> RenderSurface,
+    ) {
         self.active_app = app;
         self.surface = match app {
             AppId::Web => self
                 .cached_active_tab_surface()
                 .unwrap_or_else(surface_for_web_home),
-            AppId::Downloads => downloads_surface(),
-            AppId::Calendar => calendar_surface(),
-            AppId::Messaging => messaging_surface(),
+            AppId::Downloads | AppId::Calendar | AppId::Messaging => {
+                load_surface(app_internal_address(app), None)
+            }
         };
     }
 
@@ -531,6 +533,15 @@ fn app_for_address(address: &str) -> AppId {
     }
 }
 
+fn app_internal_address(app: AppId) -> &'static str {
+    match app {
+        AppId::Web => "slate://web",
+        AppId::Downloads => "slate://downloads",
+        AppId::Calendar => "slate://calendar",
+        AppId::Messaging => "slate://messages",
+    }
+}
+
 fn surface_for_tab(tab: &Tab) -> RenderSurface {
     surface_for_address(&tab.address, Some(&tab.title))
 }
@@ -544,89 +555,21 @@ fn surface_for_address_with_viewport(
     fallback_title: Option<&str>,
     viewport: RenderViewport,
 ) -> RenderSurface {
-    match app_for_address(address) {
-        AppId::Downloads => downloads_surface(),
-        AppId::Calendar => calendar_surface(),
-        AppId::Messaging => messaging_surface(),
-        AppId::Web => {
-            let backend = ServoBackend;
-            let mut surface = backend.load_address_with_viewport(address, viewport);
-            if address == "slate://new" {
-                surface.address = address.to_string();
-            }
-            if let Some(fallback_title) = fallback_title
-                && surface.title.is_empty()
-            {
-                surface.title = fallback_title.to_string();
-            }
-            surface
-        }
+    let backend = ServoBackend;
+    let mut surface = backend.load_address_with_viewport(address, viewport);
+    if address == "slate://new" {
+        surface.address = address.to_string();
     }
+    if let Some(fallback_title) = fallback_title
+        && surface.title.is_empty()
+    {
+        surface.title = fallback_title.to_string();
+    }
+    surface
 }
 
 fn surface_for_web_home() -> RenderSurface {
     ServoBackend.load_home()
-}
-
-fn downloads_surface() -> RenderSurface {
-    app_surface(
-        "Downloads",
-        "slate://downloads",
-        "Download queue and saved broadweb files.",
-        [
-            ("Active", "0", MetricAccent::Teal),
-            ("Pinned", "3", MetricAccent::Blue),
-            ("Verified", "On", MetricAccent::Amber),
-        ],
-    )
-}
-
-fn calendar_surface() -> RenderSurface {
-    app_surface(
-        "Calendar",
-        "slate://calendar",
-        "Local-first calendar surface.",
-        [
-            ("Today", "11", MetricAccent::Teal),
-            ("Events", "4", MetricAccent::Blue),
-            ("Private", "On", MetricAccent::Amber),
-        ],
-    )
-}
-
-fn messaging_surface() -> RenderSurface {
-    app_surface(
-        "Messaging",
-        "slate://messages",
-        "Private messaging surface.",
-        [
-            ("Inbox", "2", MetricAccent::Teal),
-            ("Muted", "1", MetricAccent::Amber),
-            ("Routes", "Tor", MetricAccent::Blue),
-        ],
-    )
-}
-
-fn app_surface<const N: usize>(
-    title: &str,
-    address: &str,
-    summary: &str,
-    metrics: [(&str, &str, MetricAccent); N],
-) -> RenderSurface {
-    RenderSurface {
-        title: title.to_string(),
-        address: address.to_string(),
-        summary: summary.to_string(),
-        metrics: metrics
-            .into_iter()
-            .map(|(label, value, accent)| RenderMetric {
-                label: label.to_string(),
-                value: value.to_string(),
-                accent,
-            })
-            .collect(),
-        document: RenderDocument::App,
-    }
 }
 
 #[cfg(test)]
@@ -652,8 +595,13 @@ mod tests {
     #[test]
     fn selecting_apps_changes_surface() {
         let mut state = BrowserState::new(&ServoBackend);
-        state.select_app(slate_apps::AppId::Downloads);
+        state.select_app_with_surface_loader(slate_apps::AppId::Downloads, |address, _title| {
+            cached_web_surface(address, 640, 360)
+        });
+
+        assert_eq!(state.active_app, slate_apps::AppId::Downloads);
         assert_eq!(state.surface.address, "slate://downloads");
+        assert!(matches!(state.surface.document, RenderDocument::Web(_)));
     }
 
     #[test]
@@ -665,7 +613,9 @@ mod tests {
         state.tabs[0].address = cached_surface.address.clone();
         state.tabs[0].cached_surface = Some(cached_surface.clone());
 
-        state.select_app(slate_apps::AppId::Downloads);
+        state.select_app_with_surface_loader(slate_apps::AppId::Downloads, |address, _title| {
+            cached_web_surface(address, 640, 360)
+        });
         state.select_app(slate_apps::AppId::Web);
 
         assert_eq!(state.surface, cached_surface);
@@ -710,11 +660,29 @@ mod tests {
     fn adding_tab_activates_it() {
         let mut state = BrowserState::new(&ServoBackend);
         state.add_mock_tab();
-        assert_eq!(state.active_tab, 3);
+        assert_eq!(state.active_tab, 2);
         assert_eq!(
             state.active_tab().map(|tab| tab.address.as_str()),
             Some("slate://new")
         );
+    }
+
+    #[test]
+    fn navigating_to_internal_app_pages_selects_their_rail_app() {
+        let mut state = BrowserState::new(&ServoBackend);
+        state
+            .navigate_with_surface_loader(
+                "slate://calendar",
+                RenderViewport::default(),
+                |address, _title, viewport| {
+                    cached_web_surface(address, viewport.width as usize, viewport.height as usize)
+                },
+            )
+            .expect("calendar navigation should load");
+
+        assert_eq!(state.active_app, slate_apps::AppId::Calendar);
+        assert_eq!(state.surface.address, "slate://calendar");
+        assert!(matches!(state.surface.document, RenderDocument::Web(_)));
     }
 
     #[test]
