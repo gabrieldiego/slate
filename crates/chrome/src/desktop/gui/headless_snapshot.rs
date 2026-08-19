@@ -16,23 +16,18 @@ use super::{
     ADDRESS_BOOKMARK_BUTTON_SIZE, ADDRESS_BOOKMARK_ICON_SIZE, ADDRESS_BOOKMARK_RESERVED_WIDTH,
     ADDRESS_CORNER_RADIUS, ADDRESS_HEIGHT, ADDRESS_ICON_GAP, ADDRESS_INNER_MARGIN_X,
     ADDRESS_INPUT_TEXT_SIZE, ADDRESS_LEADING_GAP, ADDRESS_SECURITY_ICON_SIZE, ADDRESS_TEXT_HEIGHT,
-    ADDRESS_TRAILING_GAP, APP_RAIL_WIDTH, APP_TITLE_HEIGHT, APP_TITLE_WIDTH, AddressSecurityIcon,
-    FOOTER_HEIGHT, Gui, NEW_TAB_BUTTON_SIZE, NEW_TAB_LEFT_GAP, NEW_TAB_SLOT_HEIGHT,
-    RAIL_BUTTON_SIZE, RAIL_ICON_LABEL_GAP, RAIL_ICON_SIZE, RAIL_ITEM_GAP, RAIL_LABEL_TEXT_SIZE,
-    RAIL_PANEL_MARGIN_X, RAIL_PANEL_MARGIN_Y, RAIL_TOP_SPACE, RailPage, TAB_CLOSE_BUTTON_SIZE,
-    TAB_CONTENT_ALIGN, TAB_CONTENT_HEIGHT, TAB_HEIGHT, TAB_ICON_SIZE, TAB_ICON_TITLE_GAP,
-    TAB_INNER_MARGIN_X, TAB_INNER_MARGIN_Y, TAB_STRIP_HEIGHT, TAB_TITLE_CLOSE_GAP,
-    TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT, TOOLBAR_ICON_SIZE, TOOLBAR_ITEM_SPACING,
-    TOOLBAR_PANEL_MARGIN_X, TOOLBAR_PANEL_MARGIN_Y, TOOLBAR_SEPARATOR_HEIGHT,
-    TOOLBAR_SEPARATOR_LEADING_GAP, TOOLBAR_SEPARATOR_TRAILING_GAP, address_background_color,
-    address_bookmark_icon_color, address_border_color, address_security_icon_for_location,
-    address_security_raster_color, address_slate_security_icon_rect, chrome_panel_background_color,
-    configure_fonts, default_home_bookmark_cards, draw_inactive_tab_outline,
-    draw_tab_strip_separator, footer_panel_margin, home_view_background_color,
-    inactive_tab_background_color, inactive_tab_hover_background_color, slate_theme,
-    tab_close_icon_color, tab_close_raster, tab_content_width, tab_corner_radius, tab_icon_color,
-    tab_strip_background_color, tab_width_for_strip, toolbar_address_width,
-    toolbar_background_color, toolbar_navigation_icon_rect,
+    ADDRESS_TRAILING_GAP, APP_RAIL_MAX_WIDTH, APP_RAIL_WIDTH, AddressSecurityIcon, FOOTER_HEIGHT,
+    Gui, RAIL_BUTTON_SIZE, RAIL_ITEM_GAP, RAIL_PANEL_MARGIN_X, RAIL_PANEL_MARGIN_Y, RAIL_TOP_SPACE,
+    RailDownloadTabPreview, RailPage, RailWebTabPreview, TOOLBAR_BUTTON_SIZE, TOOLBAR_HEIGHT,
+    TOOLBAR_ICON_SIZE, TOOLBAR_ITEM_SPACING, TOOLBAR_PANEL_MARGIN_X, TOOLBAR_PANEL_MARGIN_Y,
+    TOOLBAR_SEPARATOR_HEIGHT, TOOLBAR_SEPARATOR_LEADING_GAP, TOOLBAR_SEPARATOR_TRAILING_GAP,
+    address_background_color, address_bookmark_icon_color, address_border_color,
+    address_security_icon_for_location, address_security_raster_color,
+    address_slate_security_icon_rect, chrome_panel_background_color, configure_fonts,
+    default_home_bookmark_cards, footer_panel_margin, home_view_background_color,
+    rail_button_width, rail_collapsed_tab_line_rect, rail_icon_slot_rect, rail_item_height,
+    rail_tab_close_button_rect, rail_tab_row_rect, slate_theme, tab_icon_color,
+    toolbar_address_width, toolbar_background_color, toolbar_navigation_icon_rect,
 };
 use crate::desktop::slate_theme::{SlateIcon, SlateIconCache, SlateRaster};
 
@@ -125,6 +120,20 @@ pub(crate) fn write_default_verification_report(directory: &Path) -> Result<(), 
                 hover_menu_full_path.display()
             )
         })?;
+    let expanded_rail_image = render_snapshot_with_rail_width(
+        [DEFAULT_SNAPSHOT_WIDTH, DEFAULT_SNAPSHOT_HEIGHT],
+        APP_RAIL_MAX_WIDTH,
+    )?;
+    let expanded_rail_full_name = "expanded-rail-full.png";
+    let expanded_rail_full_path = directory.join(expanded_rail_full_name);
+    expanded_rail_image
+        .save(&expanded_rail_full_path)
+        .map_err(|error| {
+            format!(
+                "failed to encode {}: {error}",
+                expanded_rail_full_path.display()
+            )
+        })?;
 
     let mut summary = VerificationSummary::default();
     let mut region_captures = HashMap::new();
@@ -136,6 +145,7 @@ pub(crate) fn write_default_verification_report(directory: &Path) -> Result<(), 
             VerificationSource::HoverNavBack => &hover_back_image,
             VerificationSource::HoverNavReload => &hover_reload_image,
             VerificationSource::HoverMenu => &hover_menu_image,
+            VerificationSource::ExpandedRail => &expanded_rail_image,
         };
         let crop_rect = PixelRect::from_point_rect(
             region.rect,
@@ -190,6 +200,7 @@ pub(crate) fn write_default_verification_report(directory: &Path) -> Result<(), 
             "hover_nav_back": hover_back_full_name,
             "hover_nav_reload": hover_reload_full_name,
             "hover_menu": hover_menu_full_name,
+            "expanded_rail": expanded_rail_full_name,
         },
         "summary": verification_summary_json(summary),
         "regions": region_reports,
@@ -197,6 +208,8 @@ pub(crate) fn write_default_verification_report(directory: &Path) -> Result<(), 
         "checks": {
             "manual_review_required": true,
             "review_focus": [
+                "compact left rail tab rows stay grouped under their owning app icons and expose close affordances",
+                "default-width rail rendering remains stable while production rail resizing can reveal wider tab titles",
                 "previously fixed Home, tab icon, tab clipping, divider, and close artwork issues stay covered by stable crops",
                 "Reload and loading-state Stop artwork are rendered from separate canonical states",
                 "manual review covers theme consistency and alignment qualities that threshold metrics cannot fully judge"
@@ -219,6 +232,16 @@ fn render_snapshot(size: [u32; 2]) -> Result<RgbaImage, String> {
     render_snapshot_with_load_status(size, LoadStatus::Complete)
 }
 
+fn render_snapshot_with_rail_width(size: [u32; 2], rail_width: f32) -> Result<RgbaImage, String> {
+    render_snapshot_with_interaction_and_rail_width(
+        size,
+        LoadStatus::Complete,
+        None,
+        false,
+        rail_width,
+    )
+}
+
 fn render_snapshot_with_load_status(
     size: [u32; 2],
     load_status: LoadStatus,
@@ -231,6 +254,22 @@ fn render_snapshot_with_interaction(
     load_status: LoadStatus,
     hover_pos: Option<egui::Pos2>,
     can_go_back: bool,
+) -> Result<RgbaImage, String> {
+    render_snapshot_with_interaction_and_rail_width(
+        size,
+        load_status,
+        hover_pos,
+        can_go_back,
+        APP_RAIL_WIDTH,
+    )
+}
+
+fn render_snapshot_with_interaction_and_rail_width(
+    size: [u32; 2],
+    load_status: LoadStatus,
+    hover_pos: Option<egui::Pos2>,
+    can_go_back: bool,
+    rail_width: f32,
 ) -> Result<RgbaImage, String> {
     let ctx = egui::Context::default();
     ctx.set_fonts(configure_fonts());
@@ -255,6 +294,7 @@ fn render_snapshot_with_interaction(
             &mut slate_icons,
             &mut location,
             &mut home_search,
+            rail_width,
         );
         renderer.apply_textures_delta(&warmup_output.textures_delta)?;
     }
@@ -268,6 +308,7 @@ fn render_snapshot_with_interaction(
         &mut slate_icons,
         &mut location,
         &mut home_search,
+        rail_width,
     );
     renderer.apply_textures_delta(&output.textures_delta)?;
     let pixels_per_point = output.pixels_per_point;
@@ -286,6 +327,7 @@ fn render_snapshot_frame(
     slate_icons: &mut SlateIconCache,
     location: &mut String,
     home_search: &mut String,
+    rail_width: f32,
 ) -> egui::FullOutput {
     let screen_rect =
         egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(size[0] as f32, size[1] as f32));
@@ -311,6 +353,7 @@ fn render_snapshot_frame(
             home_search,
             load_status,
             can_go_back,
+            rail_width,
         );
     })
 }
@@ -322,9 +365,9 @@ fn render_chrome_fixture(
     home_search: &mut String,
     load_status: LoadStatus,
     can_go_back: bool,
+    rail_width: f32,
 ) {
-    render_tab_strip(root_ui, slate_icons);
-    render_app_rail(root_ui, slate_icons);
+    render_app_rail(root_ui, slate_icons, rail_width);
     render_toolbar(root_ui, slate_icons, location, load_status, can_go_back);
     let footer_rect = render_footer(root_ui, load_status);
 
@@ -332,156 +375,7 @@ fn render_chrome_fixture(
     Gui::draw_footer_top_separator(root_ui.ctx(), footer_rect);
 }
 
-fn render_tab_strip(root_ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
-    let tabs_frame = egui::Frame::NONE
-        .fill(tab_strip_background_color())
-        .inner_margin(egui::Margin::symmetric(0, 0));
-    egui::Panel::top("headless_tabs")
-        .exact_size(TAB_STRIP_HEIGHT)
-        .frame(tabs_frame)
-        .show_separator_line(false)
-        .show_inside(root_ui, |ui| {
-            let mut active_tab_rect = None;
-            ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
-            ui.allocate_ui_with_layout(
-                ui.available_size(),
-                egui::Layout::left_to_right(egui::Align::Center),
-                |ui| {
-                    Gui::draw_app_title(ui);
-                    let tab_strip_available_width = ui.available_width();
-                    egui::ScrollArea::horizontal()
-                        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
-                        .show(ui, |ui| {
-                            ui.allocate_ui_with_layout(
-                                ui.available_size(),
-                                egui::Layout::left_to_right(super::TAB_STRIP_CONTENT_ALIGN),
-                                |ui| {
-                                    ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
-                                    let tabs = [
-                                        ("New Tab", true),
-                                        ("Privacy Dashboard", false),
-                                        ("Calendar", false),
-                                    ];
-                                    let tab_width =
-                                        tab_width_for_strip(tab_strip_available_width, tabs.len());
-                                    for (label, active) in tabs {
-                                        let tab_rect = draw_snapshot_tab(
-                                            ui,
-                                            slate_icons,
-                                            label,
-                                            active,
-                                            tab_width,
-                                        );
-                                        if active {
-                                            active_tab_rect = Some(tab_rect);
-                                        }
-                                    }
-
-                                    ui.add_space(NEW_TAB_LEFT_GAP);
-                                    let _ = ui
-                                        .allocate_ui_with_layout(
-                                            egui::vec2(NEW_TAB_BUTTON_SIZE, NEW_TAB_SLOT_HEIGHT),
-                                            egui::Layout::left_to_right(TAB_CONTENT_ALIGN),
-                                            Gui::new_tab_button,
-                                        )
-                                        .inner;
-                                },
-                            );
-                        });
-                },
-            );
-            draw_tab_strip_separator(ui, active_tab_rect);
-        });
-}
-
-fn draw_snapshot_tab(
-    ui: &mut egui::Ui,
-    slate_icons: &mut SlateIconCache,
-    label: &str,
-    active: bool,
-    tab_width: f32,
-) -> egui::Rect {
-    let inactive_bg_color = inactive_tab_background_color();
-    let inactive_hover_bg_color = inactive_tab_hover_background_color();
-    let active_bg_color = super::active_tab_background_color();
-    let tab_content_bg_color = if active {
-        active_bg_color
-    } else {
-        inactive_bg_color
-    };
-    let tab_content_hover_bg_color = if active {
-        active_bg_color
-    } else {
-        inactive_hover_bg_color
-    };
-    let tab_content_width = tab_content_width(tab_width);
-    let fallback_icon = slate_icons.texture(
-        ui.ctx(),
-        Gui::fallback_tab_icon_for_page(Some(label), None),
-        tab_icon_color(active),
-    );
-    let close_icon = slate_icons.raster_mask_texture(
-        ui.ctx(),
-        tab_close_raster(active),
-        tab_close_icon_color(active),
-    );
-
-    let mut tab_frame = egui::Frame::NONE
-        .fill(tab_content_bg_color)
-        .stroke(egui::Stroke::NONE)
-        .corner_radius(tab_corner_radius())
-        .inner_margin(egui::Margin::symmetric(
-            TAB_INNER_MARGIN_X,
-            TAB_INNER_MARGIN_Y,
-        ))
-        .begin(ui);
-    {
-        tab_frame.content_ui.set_width(tab_content_width);
-        tab_frame.content_ui.set_min_height(TAB_CONTENT_HEIGHT);
-
-        let visuals = tab_frame.content_ui.visuals_mut();
-        visuals.widgets.active.bg_stroke.width = 0.0;
-        visuals.widgets.hovered.bg_stroke.width = 0.0;
-        visuals.widgets.noninteractive.weak_bg_fill = tab_content_bg_color;
-        visuals.widgets.inactive.weak_bg_fill = tab_content_bg_color;
-        visuals.widgets.hovered.weak_bg_fill = tab_content_hover_bg_color;
-        visuals.widgets.active.weak_bg_fill = tab_content_hover_bg_color;
-        visuals.selection.bg_fill = active_bg_color;
-        visuals.selection.stroke.color = visuals.widgets.active.fg_stroke.color;
-        visuals.widgets.hovered.fg_stroke.color = visuals.widgets.active.fg_stroke.color;
-        visuals.widgets.active.expansion = 0.0;
-        visuals.widgets.hovered.expansion = 0.0;
-
-        tab_frame.content_ui.allocate_ui_with_layout(
-            egui::vec2(tab_content_width, TAB_CONTENT_HEIGHT),
-            egui::Layout::left_to_right(TAB_CONTENT_ALIGN),
-            |ui| {
-                ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
-                ui.add(Gui::icon_image(fallback_icon, TAB_ICON_SIZE));
-                ui.add_space(TAB_ICON_TITLE_GAP);
-                let _ = Gui::tab_title_button(ui, label, active, tab_content_width);
-                ui.add_space(TAB_TITLE_CLOSE_GAP);
-                let _ = Gui::tab_close_button(ui, close_icon);
-            },
-        );
-    }
-
-    let response = tab_frame.allocate_space(ui);
-    tab_frame.frame.fill = if active {
-        active_bg_color
-    } else if response.hovered() {
-        inactive_hover_bg_color
-    } else {
-        inactive_bg_color
-    };
-    tab_frame.end(ui);
-    if !active {
-        draw_inactive_tab_outline(ui, response.rect);
-    }
-    response.rect
-}
-
-fn render_app_rail(root_ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
+fn render_app_rail(root_ui: &mut egui::Ui, slate_icons: &mut SlateIconCache, rail_width: f32) {
     let rail_frame = egui::Frame::NONE
         .fill(chrome_panel_background_color())
         .inner_margin(egui::Margin::symmetric(
@@ -489,12 +383,56 @@ fn render_app_rail(root_ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
             RAIL_PANEL_MARGIN_Y,
         ));
     egui::Panel::left("headless_app_rail")
-        .exact_size(APP_RAIL_WIDTH)
+        .exact_size(rail_width)
         .frame(rail_frame)
         .show_separator_line(true)
         .show_inside(root_ui, |ui| {
-            let _ = Gui::draw_app_rail(ui, slate_icons, Some(RailPage::Home));
+            let web_tabs = snapshot_rail_web_tab_previews(ui, slate_icons);
+            let download_tabs = snapshot_rail_download_tab_previews();
+            let _ = Gui::draw_app_rail(
+                ui,
+                slate_icons,
+                Some(RailPage::Web),
+                &web_tabs,
+                &download_tabs,
+            );
         });
+}
+
+fn snapshot_rail_web_tab_previews(
+    ui: &egui::Ui,
+    slate_icons: &mut SlateIconCache,
+) -> Vec<RailWebTabPreview> {
+    [
+        ("New Tab", true),
+        ("Privacy Dashboard", false),
+        ("Calendar", false),
+    ]
+    .into_iter()
+    .map(|(label, active)| RailWebTabPreview {
+        webview_id: None,
+        label: label.to_string(),
+        icon: slate_icons.texture(
+            ui.ctx(),
+            Gui::fallback_tab_icon_for_page(Some(label), None),
+            tab_icon_color(active),
+        ),
+        active,
+    })
+    .collect()
+}
+
+fn snapshot_rail_download_tab_previews() -> Vec<RailDownloadTabPreview> {
+    vec![
+        RailDownloadTabPreview {
+            label: "servo-book.pdf".to_string(),
+            progress: Some(0.42),
+        },
+        RailDownloadTabPreview {
+            label: "site-archive.car".to_string(),
+            progress: Some(1.0),
+        },
+    ]
 }
 
 fn render_toolbar(
@@ -688,11 +626,11 @@ fn render_home_panel(
 
 #[derive(Clone, Copy, Debug)]
 struct SnapshotChromeGeometry {
-    tab_strip_rect: egui::Rect,
-    app_title_rect: egui::Rect,
-    tab_rects: [egui::Rect; 3],
-    new_tab_button_rect: egui::Rect,
     rail_button_rects: [egui::Rect; 5],
+    rail_web_tab_row_rects: [egui::Rect; 3],
+    rail_web_close_button_rects: [egui::Rect; 3],
+    rail_web_new_tab_row_rect: egui::Rect,
+    rail_download_progress_rects: [egui::Rect; 2],
     toolbar_rect: egui::Rect,
     toolbar_content_rect: egui::Rect,
     footer_rect: egui::Rect,
@@ -718,6 +656,7 @@ enum VerificationSource {
     HoverNavBack,
     HoverNavReload,
     HoverMenu,
+    ExpandedRail,
 }
 
 impl VerificationSource {
@@ -728,6 +667,7 @@ impl VerificationSource {
             Self::HoverNavBack => "hover-nav-back",
             Self::HoverNavReload => "hover-nav-reload",
             Self::HoverMenu => "hover-menu",
+            Self::ExpandedRail => "expanded-rail",
         }
     }
 }
@@ -797,77 +737,95 @@ struct CropMetrics {
 
 fn verification_regions() -> Vec<VerificationRegion> {
     let chrome = snapshot_chrome_geometry();
+    let expanded_chrome = snapshot_chrome_geometry_with_rail_width(APP_RAIL_MAX_WIDTH);
     let toolbar = snapshot_toolbar_controls_geometry(chrome);
-    let tab0 = chrome.tab_rects[0];
-    let tab1 = chrome.tab_rects[1];
-    let tab2 = chrome.tab_rects[2];
 
     vec![
-        verification_region(
-            "tab-strip",
-            "tab-strip.png",
-            chrome.tab_strip_rect,
-            "full tab strip, including app-title join and tab icon identity",
-        ),
-        verification_region(
-            "app-title",
-            "app-title.png",
-            chrome.app_title_rect,
-            "Slate title lockup and top-left chrome alignment",
-        ),
-        verification_region(
-            "active-tab",
-            "active-tab.png",
-            tab0,
-            "active tab background, title reservation, and close control",
-        ),
-        verification_region(
-            "active-tab-icon",
-            "active-tab-icon.png",
-            snapshot_tab_icon_slot_rect(tab0).expand(3.0),
-            "fallback Web tab icon shape and weight",
-        ),
-        verification_region(
-            "active-tab-title",
-            "active-tab-title.png",
-            snapshot_tab_title_rect(tab0),
-            "tab text region before the fixed close-button reservation",
-        ),
-        verification_region(
-            "active-tab-close",
-            "active-tab-close.png",
-            snapshot_tab_close_button_rect(tab0).expand(4.0),
-            "close button raster art and alignment",
-        ),
-        verification_region(
-            "second-tab-icon",
-            "second-tab-icon.png",
-            snapshot_tab_icon_slot_rect(tab1).expand(3.0),
-            "Privacy Dashboard shield fallback tab icon identity",
-        ),
-        verification_region(
-            "third-tab-icon",
-            "third-tab-icon.png",
-            snapshot_tab_icon_slot_rect(tab2).expand(3.0),
-            "third fallback tab icon identity",
-        ),
-        verification_region(
-            "new-tab-button",
-            "new-tab-button.png",
-            chrome.new_tab_button_rect.expand(4.0),
-            "new-tab button geometry and icon stroke",
-        ),
         verification_region(
             "rail-home-button",
             "rail-home-button.png",
             chrome.rail_button_rects[0],
-            "selected Home rail tile fill, label, and raster icon",
+            "tabless Home rail tile fill, label, and icon",
         ),
         verification_region(
             "rail-web-button",
             "rail-web-button.png",
             chrome.rail_button_rects[1],
-            "unselected Web rail tile fill, label, and vector icon",
+            "selected Web rail tile fill, label, icon, and tiny tab rows",
+        ),
+        verification_region(
+            "rail-web-tab-previews",
+            "rail-web-tab-previews.png",
+            egui::Rect::from_min_max(
+                egui::pos2(
+                    chrome.rail_button_rects[1].left(),
+                    chrome.rail_web_tab_row_rects[0].top() - 2.0,
+                ),
+                egui::pos2(
+                    chrome.rail_button_rects[1].right(),
+                    chrome.rail_web_new_tab_row_rect.bottom() + 2.0,
+                ),
+            ),
+            "selected Web app's favicon and tiny title tab rows",
+        ),
+        verification_region(
+            "rail-web-tab-close-buttons",
+            "rail-web-tab-close-buttons.png",
+            egui::Rect::from_min_max(
+                egui::pos2(
+                    chrome.rail_web_close_button_rects[0].left() - 2.0,
+                    chrome.rail_web_close_button_rects[0].top() - 2.0,
+                ),
+                egui::pos2(
+                    chrome.rail_web_close_button_rects[2].right() + 2.0,
+                    chrome.rail_web_close_button_rects[2].bottom() + 2.0,
+                ),
+            ),
+            "right-edge close buttons in selected Web rail tab rows",
+        ),
+        verification_region_from_source(
+            VerificationSource::ExpandedRail,
+            "expanded-rail-web-button",
+            "expanded-rail-web-button.png",
+            expanded_chrome.rail_button_rects[1],
+            "selected Web rail tile at maximum resized width",
+        ),
+        verification_region_from_source(
+            VerificationSource::ExpandedRail,
+            "expanded-rail-web-tab-previews",
+            "expanded-rail-web-tab-previews.png",
+            egui::Rect::from_min_max(
+                egui::pos2(
+                    expanded_chrome.rail_button_rects[1].left(),
+                    expanded_chrome.rail_web_tab_row_rects[0].top() - 2.0,
+                ),
+                egui::pos2(
+                    expanded_chrome.rail_button_rects[1].right(),
+                    expanded_chrome.rail_web_new_tab_row_rect.bottom() + 2.0,
+                ),
+            ),
+            "expanded Web rail tab rows with scaled height, icons, and font",
+        ),
+        verification_region(
+            "rail-downloads-button",
+            "rail-downloads-button.png",
+            chrome.rail_button_rects[2],
+            "unselected Downloads rail tile with collapsed progress-only tab lines",
+        ),
+        verification_region(
+            "rail-download-progress-lines",
+            "rail-download-progress-lines.png",
+            egui::Rect::from_min_max(
+                egui::pos2(
+                    chrome.rail_button_rects[2].left(),
+                    chrome.rail_download_progress_rects[0].top() - 2.0,
+                ),
+                egui::pos2(
+                    chrome.rail_button_rects[2].right(),
+                    chrome.rail_download_progress_rects[1].bottom() + 2.0,
+                ),
+            ),
+            "collapsed Downloads tab progress slivers without titles",
         ),
         verification_region(
             "rail-home-icon",
@@ -1035,6 +993,7 @@ impl RegionMonitor {
         }
     }
 
+    #[cfg(test)]
     fn with_dark_pixels(mut self, min_dark_pixels: u64) -> Self {
         self.min_dark_pixels = min_dark_pixels;
         self
@@ -1082,40 +1041,40 @@ impl VerificationSummary {
 
 fn monitor_for_region(name: &'static str) -> RegionMonitor {
     match name {
-        "tab-strip" => RegionMonitor::new(64, 20, 8).with_manual_review(&[
-            "confirm the app-title join stays clean",
-            "compare tab icon identity across visible tabs",
+        "rail-home-button" => RegionMonitor::new(40, 8, 8)
+            .with_manual_review(&["confirm Home remains a tabless singleton rail target"]),
+        "rail-web-button" => RegionMonitor::new(40, 8, 8)
+            .with_manual_review(&["confirm selected Web tile shows tiny favicon/title tab rows"]),
+        "rail-web-tab-previews" => RegionMonitor::new(16, 8, 8).with_manual_review(&[
+            "confirm selected Web tab titles stay readable without crowding the rail",
         ]),
-        "app-title" => RegionMonitor::new(24, 6, 6),
-        "active-tab" => RegionMonitor::new(48, 20, 8)
-            .with_manual_review(&["watch title reservation and close-button alignment"]),
-        "active-tab-title" => RegionMonitor::new(24, 8, 5)
-            .with_manual_review(&["confirm tab text remains clipped before the close-button crop"]),
-        "active-tab-close" => RegionMonitor::new(8, 4, 4)
-            .with_dark_pixels(1)
-            .with_manual_review(&["compare close-button art against Slate raster controls"]),
-        "rail-home-button" | "rail-web-button" => {
-            RegionMonitor::new(40, 8, 8).with_manual_review(&[
-                "confirm selected rail tile fill, label, and icon remain aligned",
-            ])
-        }
+        "rail-web-tab-close-buttons" => RegionMonitor::new(8, 4, 12).with_manual_review(&[
+            "confirm mini tab close buttons are visible but do not overpower the tiny labels",
+        ]),
+        "expanded-rail-web-button" => RegionMonitor::new(80, 24, 24).with_manual_review(&[
+            "confirm maximum rail width still reads as one selected Web app group",
+        ]),
+        "expanded-rail-web-tab-previews" => RegionMonitor::new(32, 24, 12).with_manual_review(&[
+            "confirm resized rail increases mini-tab row height, icon size, and font without clipping",
+        ]),
+        "rail-downloads-button" => RegionMonitor::new(32, 8, 8).with_manual_review(&[
+            "confirm unselected Downloads keeps progress-only collapsed tab lines",
+        ]),
+        "rail-download-progress-lines" => RegionMonitor::new(4, 20, 1).with_manual_review(&[
+            "confirm collapsed Downloads rows show progress without file titles",
+        ]),
         "toolbar" => RegionMonitor::new(64, 20, 8),
         "nav-back-hover-button" | "nav-reload-hover-button" => RegionMonitor::new(64, 18, 18)
             .with_manual_review(&["confirm hover shade is centered behind the navigation glyph"]),
         "address-field" => RegionMonitor::new(64, 20, 8),
         "footer-status" => RegionMonitor::new(24, 8, 5),
         "toolbar-separator" => RegionMonitor::new(8, 1, 12).with_vertical_detail(Some(1), Some(3)),
-        "active-tab-icon" | "second-tab-icon" | "third-tab-icon" => RegionMonitor::new(8, 4, 4)
-            .with_manual_review(&[
-                "compare fallback tab icon identity against the expected Web icon",
-            ]),
         "rail-home-icon" => RegionMonitor::new(8, 4, 4)
             .with_manual_review(&["compare Home raster weight against the navigation theme"]),
         "rail-web-icon"
         | "rail-downloads-icon"
         | "rail-calendar-icon"
         | "rail-messages-icon"
-        | "new-tab-button"
         | "nav-back-icon"
         | "nav-forward-icon"
         | "nav-reload-icon"
@@ -1211,83 +1170,82 @@ fn evaluate_region_monitor(
 }
 
 fn snapshot_chrome_geometry() -> SnapshotChromeGeometry {
+    snapshot_chrome_geometry_with_rail_width(APP_RAIL_WIDTH)
+}
+
+fn snapshot_chrome_geometry_with_rail_width(rail_width: f32) -> SnapshotChromeGeometry {
     let viewport_width = DEFAULT_SNAPSHOT_WIDTH as f32;
     let viewport_height = DEFAULT_SNAPSHOT_HEIGHT as f32;
-    let tab_width = tab_width_for_strip(viewport_width - APP_TITLE_WIDTH, 3);
-    let tab_top = TAB_STRIP_HEIGHT - TAB_HEIGHT;
-    let first_tab_left = APP_TITLE_WIDTH;
-    let tab_rects = [
-        egui::Rect::from_min_size(
-            egui::pos2(first_tab_left, tab_top),
-            egui::vec2(tab_width, TAB_HEIGHT),
-        ),
-        egui::Rect::from_min_size(
-            egui::pos2(first_tab_left + tab_width, tab_top),
-            egui::vec2(tab_width, TAB_HEIGHT),
-        ),
-        egui::Rect::from_min_size(
-            egui::pos2(first_tab_left + tab_width * 2.0, tab_top),
-            egui::vec2(tab_width, TAB_HEIGHT),
-        ),
-    ];
-    let new_tab_slot_rect = egui::Rect::from_min_size(
-        egui::pos2(tab_rects[2].right() + NEW_TAB_LEFT_GAP, tab_top),
-        egui::vec2(NEW_TAB_BUTTON_SIZE, NEW_TAB_SLOT_HEIGHT),
-    );
-    let new_tab_button_rect = egui::Rect::from_center_size(
-        new_tab_slot_rect.center(),
-        egui::vec2(NEW_TAB_BUTTON_SIZE, NEW_TAB_BUTTON_SIZE),
-    );
-    let central_width = viewport_width - APP_RAIL_WIDTH;
+    let central_width = viewport_width - rail_width;
     let toolbar_rect = egui::Rect::from_min_size(
-        egui::pos2(APP_RAIL_WIDTH, TAB_STRIP_HEIGHT),
+        egui::pos2(rail_width, 0.0),
         egui::vec2(central_width, TOOLBAR_HEIGHT),
     );
     let rail_button_left = f32::from(RAIL_PANEL_MARGIN_X);
-    let first_rail_button_top = TAB_STRIP_HEIGHT + RAIL_TOP_SPACE;
-    let rail_step = RAIL_BUTTON_SIZE + RAIL_ITEM_GAP;
+    let first_rail_button_top = RAIL_TOP_SPACE;
+    let rail_button_w = rail_button_width(rail_width - f32::from(RAIL_PANEL_MARGIN_X) * 2.0);
+    let home_button_rect = egui::Rect::from_min_size(
+        egui::pos2(rail_button_left, first_rail_button_top),
+        egui::vec2(rail_button_w, RAIL_BUTTON_SIZE),
+    );
+    let web_button_rect = egui::Rect::from_min_size(
+        egui::pos2(rail_button_left, home_button_rect.bottom() + RAIL_ITEM_GAP),
+        egui::vec2(rail_button_w, rail_item_height(true, 3, rail_button_w)),
+    );
+    let downloads_button_rect = egui::Rect::from_min_size(
+        egui::pos2(rail_button_left, web_button_rect.bottom() + RAIL_ITEM_GAP),
+        egui::vec2(rail_button_w, rail_item_height(false, 2, rail_button_w)),
+    );
+    let calendar_button_rect = egui::Rect::from_min_size(
+        egui::pos2(
+            rail_button_left,
+            downloads_button_rect.bottom() + RAIL_ITEM_GAP,
+        ),
+        egui::vec2(rail_button_w, RAIL_BUTTON_SIZE),
+    );
+    let messages_button_rect = egui::Rect::from_min_size(
+        egui::pos2(
+            rail_button_left,
+            calendar_button_rect.bottom() + RAIL_ITEM_GAP,
+        ),
+        egui::vec2(rail_button_w, RAIL_BUTTON_SIZE),
+    );
     let rail_button_rects = [
-        egui::Rect::from_min_size(
-            egui::pos2(rail_button_left, first_rail_button_top),
-            egui::vec2(RAIL_BUTTON_SIZE, RAIL_BUTTON_SIZE),
-        ),
-        egui::Rect::from_min_size(
-            egui::pos2(rail_button_left, first_rail_button_top + rail_step),
-            egui::vec2(RAIL_BUTTON_SIZE, RAIL_BUTTON_SIZE),
-        ),
-        egui::Rect::from_min_size(
-            egui::pos2(rail_button_left, first_rail_button_top + rail_step * 2.0),
-            egui::vec2(RAIL_BUTTON_SIZE, RAIL_BUTTON_SIZE),
-        ),
-        egui::Rect::from_min_size(
-            egui::pos2(rail_button_left, first_rail_button_top + rail_step * 3.0),
-            egui::vec2(RAIL_BUTTON_SIZE, RAIL_BUTTON_SIZE),
-        ),
-        egui::Rect::from_min_size(
-            egui::pos2(rail_button_left, first_rail_button_top + rail_step * 4.0),
-            egui::vec2(RAIL_BUTTON_SIZE, RAIL_BUTTON_SIZE),
-        ),
+        home_button_rect,
+        web_button_rect,
+        downloads_button_rect,
+        calendar_button_rect,
+        messages_button_rect,
+    ];
+    let rail_web_tab_row_rects = [
+        rail_tab_row_rect(web_button_rect, 0),
+        rail_tab_row_rect(web_button_rect, 1),
+        rail_tab_row_rect(web_button_rect, 2),
+    ];
+    let rail_web_close_button_rects = [
+        rail_tab_close_button_rect(rail_web_tab_row_rects[0]),
+        rail_tab_close_button_rect(rail_web_tab_row_rects[1]),
+        rail_tab_close_button_rect(rail_web_tab_row_rects[2]),
+    ];
+    let rail_web_new_tab_row_rect = rail_tab_row_rect(web_button_rect, 3);
+    let rail_download_progress_rects = [
+        rail_collapsed_tab_line_rect(downloads_button_rect, 0),
+        rail_collapsed_tab_line_rect(downloads_button_rect, 1),
     ];
 
     SnapshotChromeGeometry {
-        tab_strip_rect: egui::Rect::from_min_size(
-            egui::Pos2::ZERO,
-            egui::vec2(viewport_width, TAB_STRIP_HEIGHT),
-        ),
-        app_title_rect: egui::Rect::from_min_size(
-            egui::Pos2::ZERO,
-            egui::vec2(APP_TITLE_WIDTH, APP_TITLE_HEIGHT),
-        ),
-        tab_rects,
-        new_tab_button_rect,
         rail_button_rects,
+        rail_web_tab_row_rects,
+        rail_web_close_button_rects,
+        rail_web_new_tab_row_rect,
+        rail_download_progress_rects,
         toolbar_rect,
         toolbar_content_rect: toolbar_rect.shrink2(egui::vec2(
             f32::from(TOOLBAR_PANEL_MARGIN_X),
             f32::from(TOOLBAR_PANEL_MARGIN_Y),
         )),
         footer_rect: egui::Rect::from_min_size(
-            egui::pos2(APP_RAIL_WIDTH, viewport_height - FOOTER_HEIGHT),
+            egui::pos2(rail_width, viewport_height - FOOTER_HEIGHT),
             egui::vec2(central_width, FOOTER_HEIGHT),
         ),
     }
@@ -1389,44 +1347,8 @@ fn snapshot_toolbar_controls_geometry(
     }
 }
 
-fn snapshot_tab_icon_slot_rect(tab_rect: egui::Rect) -> egui::Rect {
-    egui::Rect::from_center_size(
-        egui::pos2(
-            tab_rect.left() + f32::from(TAB_INNER_MARGIN_X) + TAB_ICON_SIZE / 2.0,
-            tab_rect.center().y,
-        ),
-        egui::Vec2::splat(TAB_ICON_SIZE),
-    )
-}
-
-fn snapshot_tab_title_rect(tab_rect: egui::Rect) -> egui::Rect {
-    let icon_rect = snapshot_tab_icon_slot_rect(tab_rect);
-    let close_rect = snapshot_tab_close_button_rect(tab_rect);
-    let left = icon_rect.right() + TAB_ICON_TITLE_GAP;
-    let right = close_rect.left() - TAB_TITLE_CLOSE_GAP;
-
-    egui::Rect::from_min_size(
-        egui::pos2(left, tab_rect.center().y - TAB_CONTENT_HEIGHT / 2.0),
-        egui::vec2((right - left).max(0.0), TAB_CONTENT_HEIGHT),
-    )
-}
-
-fn snapshot_tab_close_button_rect(tab_rect: egui::Rect) -> egui::Rect {
-    egui::Rect::from_center_size(
-        egui::pos2(
-            tab_rect.right() - f32::from(TAB_INNER_MARGIN_X) - TAB_CLOSE_BUTTON_SIZE / 2.0,
-            tab_rect.center().y,
-        ),
-        egui::Vec2::splat(TAB_CLOSE_BUTTON_SIZE),
-    )
-}
-
 fn snapshot_rail_icon_rect(button_rect: egui::Rect) -> egui::Rect {
-    let icon_center = egui::pos2(
-        button_rect.center().x,
-        button_rect.center().y - (RAIL_LABEL_TEXT_SIZE + RAIL_ICON_LABEL_GAP) / 2.0,
-    );
-    egui::Rect::from_center_size(icon_center, egui::Vec2::splat(RAIL_ICON_SIZE))
+    rail_icon_slot_rect(button_rect)
 }
 
 fn crop_metrics(crop: &RgbaImage) -> CropMetrics {
@@ -1550,11 +1472,11 @@ fn crop_metrics_json(metrics: CropMetrics) -> serde_json::Value {
 fn automated_review_json(regions: &HashMap<&'static str, RegionCapture>) -> serde_json::Value {
     let mut findings = Vec::new();
 
-    if let Some(selected_rail) = regions.get("rail-home-button") {
+    if let Some(selected_rail) = regions.get("rail-web-button") {
         if selected_rail.metrics.left_edge_dark_pixels < 24 {
             findings.push(review_finding_json(
                 "warning",
-                "rail-home-button",
+                "rail-web-button",
                 "selected rail state has no strong edge affordance",
                 serde_json::json!({
                     "left_edge_dark_pixels": selected_rail.metrics.left_edge_dark_pixels,
@@ -2208,10 +2130,12 @@ mod tests {
         let names = regions.iter().map(|region| region.name).collect::<Vec<_>>();
 
         for expected in [
-            "active-tab-icon",
-            "active-tab-close",
             "rail-home-button",
             "rail-web-button",
+            "rail-web-tab-previews",
+            "rail-web-tab-close-buttons",
+            "expanded-rail-web-button",
+            "expanded-rail-web-tab-previews",
             "rail-home-icon",
             "rail-web-icon",
             "nav-back-icon",
@@ -2286,7 +2210,7 @@ mod tests {
     fn headless_automated_review_flags_weak_selected_rail_affordance() {
         let mut regions = HashMap::new();
         regions.insert(
-            "rail-home-button",
+            "rail-web-button",
             RegionCapture {
                 rect: PixelRect {
                     min_x: 0,
@@ -2308,7 +2232,7 @@ mod tests {
         let review = automated_review_json(&regions);
 
         assert_eq!(review["summary"]["warnings"], 1);
-        assert_eq!(review["findings"][0]["region"], "rail-home-button");
+        assert_eq!(review["findings"][0]["region"], "rail-web-button");
     }
 
     #[test]
@@ -2432,7 +2356,6 @@ mod tests {
         assert!(report.contains("slate.chrome.visual-verification.v1"));
         assert!(report.contains("slate.chrome.automated-review.v1"));
         assert!(report.contains("\"rail-web-button\""));
-        assert!(report.contains("\"active-tab-close\""));
         assert!(report.contains("\"nav-back-hover-button\""));
         assert!(report.contains("\"nav-reload-hover-button\""));
         assert!(report.contains("\"nav-stop-icon\""));
@@ -2441,17 +2364,6 @@ mod tests {
         assert!(output_dir.join("hover-nav-back-full.png").is_file());
         assert!(output_dir.join("hover-nav-reload-full.png").is_file());
 
-        let close_crop = image::open(output_dir.join("active-tab-close.png"))
-            .expect("active tab close crop should be a PNG")
-            .into_rgba8();
-        assert!(close_crop.width() >= 24);
-        assert!(close_crop.height() >= 24);
-        assert!(
-            close_crop
-                .pixels()
-                .any(|pixel| pixel.0[0] < 245 || pixel.0[1] < 245 || pixel.0[2] < 245),
-            "close crop should contain visible raster detail"
-        );
         let stop_crop = image::open(output_dir.join("nav-stop-icon.png"))
             .expect("Stop navigation crop should be a PNG")
             .into_rgba8();

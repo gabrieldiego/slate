@@ -11,7 +11,6 @@ pub(crate) const CHROME_BG: Color32 = BG;
 pub(crate) const HOME_BG: Color32 = Color32::from_rgb(251, 250, 250);
 pub(crate) const SURFACE: Color32 = Color32::from_rgb(255, 255, 255);
 pub(crate) const FIELD_SURFACE: Color32 = Color32::from_rgb(254, 253, 252);
-pub(crate) const TITLE_SURFACE: Color32 = Color32::from_rgb(247, 246, 245);
 pub(crate) const PANEL: Color32 = Color32::from_rgb(238, 235, 232);
 pub(crate) const PANEL_HOVER: Color32 = Color32::from_rgb(236, 235, 233);
 pub(crate) const BORDER: Color32 = Color32::from_rgb(229, 226, 225);
@@ -50,9 +49,6 @@ pub(crate) enum SlateRaster {
     PageInfoSecure,
     PageInfoWarning,
     Search,
-    TabClose,
-    #[allow(dead_code)]
-    TabCloseMuted,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -235,18 +231,6 @@ impl SlateRaster {
                 width: 17,
                 height: 17,
                 bytes: include_bytes!("../../assets/icons/slate-ns/search.png"),
-            },
-            Self::TabClose => SlateRasterData {
-                name: "tab-close",
-                width: 12,
-                height: 12,
-                bytes: include_bytes!("../../assets/icons/slate-ns/closetab.png"),
-            },
-            Self::TabCloseMuted => SlateRasterData {
-                name: "tab-close-muted",
-                width: 12,
-                height: 12,
-                bytes: include_bytes!("../../assets/icons/slate-ns/closetab_g.png"),
             },
         }
     }
@@ -547,8 +531,8 @@ fn load_svg_mask_texture(
 mod tests {
     use super::{
         AMBER, BG, BLUE, BORDER, CHROME_BG, FIELD_BORDER, FIELD_SURFACE, HOME_BG, MUTED, PANEL,
-        PANEL_HOVER, SlateIcon, SlateRaster, SlateSvg, TEAL, TEAL_SOFT, TITLE_SURFACE,
-        raster_mask_rgba, svg_mask_rgba, svg_raster_size,
+        PANEL_HOVER, SlateIcon, SlateRaster, SlateSvg, TEAL, TEAL_SOFT, raster_mask_rgba,
+        svg_mask_rgba, svg_raster_size,
     };
 
     #[test]
@@ -584,8 +568,6 @@ mod tests {
             SlateRaster::PageInfoSecure,
             SlateRaster::PageInfoWarning,
             SlateRaster::Search,
-            SlateRaster::TabClose,
-            SlateRaster::TabCloseMuted,
         ] {
             let data = raster.data();
             let image = image::load_from_memory(data.bytes).unwrap().to_rgba8();
@@ -644,29 +626,11 @@ mod tests {
     }
 
     #[test]
-    fn raster_mask_derives_alpha_for_white_backed_legacy_assets() {
-        let rgba = raster_mask_rgba(SlateRaster::TabClose, MUTED);
-        let data = SlateRaster::TabClose.data();
-        let [red, green, blue, _] = MUTED.to_array();
-        let mut alpha_values = rgba.chunks_exact(4).map(|pixel| pixel[3]);
-
-        assert_eq!(rgba.len(), data.width * data.height * 4);
-        assert_eq!(alpha_values.clone().min(), Some(0));
-        assert!(alpha_values.any(|alpha| alpha > 200));
-        assert!(
-            rgba.chunks_exact(4)
-                .filter(|pixel| pixel[3] > 0)
-                .all(|pixel| pixel[0] == red && pixel[1] == green && pixel[2] == blue)
-        );
-    }
-
-    #[test]
     fn palette_uses_warm_concept_layers() {
         assert_eq!(BG, egui::Color32::from_rgb(249, 248, 247));
         assert_eq!(CHROME_BG, egui::Color32::from_rgb(249, 248, 247));
         assert_eq!(HOME_BG, egui::Color32::from_rgb(251, 250, 250));
         assert_eq!(FIELD_SURFACE, egui::Color32::from_rgb(254, 253, 252));
-        assert_eq!(TITLE_SURFACE, egui::Color32::from_rgb(247, 246, 245));
         assert_eq!(PANEL, egui::Color32::from_rgb(238, 235, 232));
         assert_eq!(PANEL_HOVER, egui::Color32::from_rgb(236, 235, 233));
         assert_eq!(BORDER, egui::Color32::from_rgb(229, 226, 225));
