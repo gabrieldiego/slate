@@ -100,7 +100,7 @@ impl BrowserState {
             AppId::Web => self
                 .cached_active_tab_surface()
                 .unwrap_or_else(surface_for_web_home),
-            AppId::Downloads | AppId::Calendar | AppId::Messaging => {
+            AppId::Downloads | AppId::Calendar | AppId::Chat => {
                 load_surface(app_internal_address(app), None)
             }
         };
@@ -526,8 +526,8 @@ fn app_for_address(address: &str) -> AppId {
         AppId::Calendar
     } else if address.starts_with("slate://downloads") {
         AppId::Downloads
-    } else if address.starts_with("slate://messages") {
-        AppId::Messaging
+    } else if address.starts_with("slate://chat") || address.starts_with("slate://messages") {
+        AppId::Chat
     } else {
         AppId::Web
     }
@@ -538,7 +538,7 @@ fn app_internal_address(app: AppId) -> &'static str {
         AppId::Web => "slate://web",
         AppId::Downloads => "slate://downloads",
         AppId::Calendar => "slate://calendar",
-        AppId::Messaging => "slate://messages",
+        AppId::Chat => "slate://chat",
     }
 }
 
@@ -682,6 +682,21 @@ mod tests {
 
         assert_eq!(state.active_app, slate_apps::AppId::Calendar);
         assert_eq!(state.surface.address, "slate://calendar");
+        assert!(matches!(state.surface.document, RenderDocument::Web(_)));
+
+        let mut state = BrowserState::new(&ServoBackend);
+        state
+            .navigate_with_surface_loader(
+                "slate://chat",
+                RenderViewport::default(),
+                |address, _title, viewport| {
+                    cached_web_surface(address, viewport.width as usize, viewport.height as usize)
+                },
+            )
+            .expect("chat navigation should load");
+
+        assert_eq!(state.active_app, slate_apps::AppId::Chat);
+        assert_eq!(state.surface.address, "slate://chat");
         assert!(matches!(state.surface.document, RenderDocument::Web(_)));
     }
 

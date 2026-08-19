@@ -852,10 +852,10 @@ fn verification_regions() -> Vec<VerificationRegion> {
             "Calendar rail vector icon crop",
         ),
         verification_region(
-            "rail-messages-icon",
-            "rail-messages-icon.png",
+            "rail-chat-icon",
+            "rail-chat-icon.png",
             snapshot_rail_icon_rect(chrome.rail_button_rects[4]).expand(4.0),
-            "Messages rail vector icon crop",
+            "Chat rail vector icon crop",
         ),
         verification_region(
             "toolbar",
@@ -1074,7 +1074,7 @@ fn monitor_for_region(name: &'static str) -> RegionMonitor {
         "rail-web-icon"
         | "rail-downloads-icon"
         | "rail-calendar-icon"
-        | "rail-messages-icon"
+        | "rail-chat-icon"
         | "nav-back-icon"
         | "nav-forward-icon"
         | "nav-reload-icon"
@@ -1203,7 +1203,7 @@ fn snapshot_chrome_geometry_with_rail_width(rail_width: f32) -> SnapshotChromeGe
         ),
         egui::vec2(rail_button_w, RAIL_BUTTON_SIZE),
     );
-    let messages_button_rect = egui::Rect::from_min_size(
+    let chat_button_rect = egui::Rect::from_min_size(
         egui::pos2(
             rail_button_left,
             calendar_button_rect.bottom() + RAIL_ITEM_GAP,
@@ -1215,7 +1215,7 @@ fn snapshot_chrome_geometry_with_rail_width(rail_width: f32) -> SnapshotChromeGe
         web_button_rect,
         downloads_button_rect,
         calendar_button_rect,
-        messages_button_rect,
+        chat_button_rect,
     ];
     let rail_web_tab_row_rects = [
         rail_tab_row_rect(web_button_rect, 0),

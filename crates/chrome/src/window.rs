@@ -73,6 +73,7 @@ enum ReusableInternalPage {
     Web,
     Downloads,
     Calendar,
+    Chat,
     Settings,
 }
 
@@ -87,9 +88,12 @@ impl ReusableInternalPage {
         }
 
         match self {
-            Self::Home | Self::Web | Self::Downloads | Self::Calendar | Self::Settings => {
-                Some(matching_count - 1)
-            }
+            Self::Home
+            | Self::Web
+            | Self::Downloads
+            | Self::Calendar
+            | Self::Chat
+            | Self::Settings => Some(matching_count - 1),
         }
     }
 }
@@ -105,6 +109,9 @@ fn reusable_internal_page(url: &Url) -> Option<ReusableInternalPage> {
         (Some("web"), "") | (None, "web") => Some(ReusableInternalPage::Web),
         (Some("downloads"), "") | (None, "downloads") => Some(ReusableInternalPage::Downloads),
         (Some("calendar"), "") | (None, "calendar") => Some(ReusableInternalPage::Calendar),
+        (Some("chat"), "") | (None, "chat") | (Some("messages"), "") | (None, "messages") => {
+            Some(ReusableInternalPage::Chat)
+        }
         (Some("settings"), "") | (None, "settings") => Some(ReusableInternalPage::Settings),
         _ => None,
     }
@@ -586,6 +593,22 @@ mod tests {
             Some(ReusableInternalPage::Calendar)
         );
         assert_eq!(
+            reusable_internal_page(&Url::parse("slate://chat").unwrap()),
+            Some(ReusableInternalPage::Chat)
+        );
+        assert_eq!(
+            reusable_internal_page(&Url::parse("slate:chat").unwrap()),
+            Some(ReusableInternalPage::Chat)
+        );
+        assert_eq!(
+            reusable_internal_page(&Url::parse("slate://messages").unwrap()),
+            Some(ReusableInternalPage::Chat)
+        );
+        assert_eq!(
+            reusable_internal_page(&Url::parse("slate:messages").unwrap()),
+            Some(ReusableInternalPage::Chat)
+        );
+        assert_eq!(
             reusable_internal_page(&Url::parse("slate://settings?chrome_zoom=0.82").unwrap()),
             Some(ReusableInternalPage::Settings)
         );
@@ -614,6 +637,14 @@ mod tests {
             None
         );
         assert_eq!(
+            reusable_internal_page(&Url::parse("slate://chat/state").unwrap()),
+            None
+        );
+        assert_eq!(
+            reusable_internal_page(&Url::parse("slate://messages/state").unwrap()),
+            None
+        );
+        assert_eq!(
             reusable_internal_page(&Url::parse("slate://settings/state").unwrap()),
             None
         );
@@ -629,6 +660,7 @@ mod tests {
         assert!(ReusableInternalPage::Web.closes_duplicates());
         assert!(ReusableInternalPage::Downloads.closes_duplicates());
         assert!(ReusableInternalPage::Calendar.closes_duplicates());
+        assert!(ReusableInternalPage::Chat.closes_duplicates());
         assert!(ReusableInternalPage::Settings.closes_duplicates());
     }
 
@@ -645,6 +677,7 @@ mod tests {
             ReusableInternalPage::Calendar.existing_target_index(3),
             Some(2)
         );
+        assert_eq!(ReusableInternalPage::Chat.existing_target_index(3), Some(2));
         assert_eq!(
             ReusableInternalPage::Settings.existing_target_index(3),
             Some(2)

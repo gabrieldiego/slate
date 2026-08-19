@@ -50,8 +50,8 @@ use crate::desktop::event_loop::AppEvent;
 use crate::desktop::headed_window;
 use crate::desktop::protocols::slate::{
     self, current_chrome_element_zoom_setting, is_slate_blank_url, is_slate_calendar_url,
-    is_slate_downloads_url, is_slate_home_url, is_slate_settings_url, is_slate_web_url,
-    set_current_chrome_element_zoom_setting,
+    is_slate_chat_url, is_slate_downloads_url, is_slate_home_url, is_slate_settings_url,
+    is_slate_web_url, set_current_chrome_element_zoom_setting,
 };
 use crate::desktop::slate_theme::{self, SlateIcon, SlateIconCache, SlateRaster, SlateSvg};
 use crate::running_app_state::{RunningAppState, UserInterfaceCommand};
@@ -334,6 +334,7 @@ struct RailInteraction {
     web_clicked: bool,
     downloads_clicked: bool,
     calendar_clicked: bool,
+    chat_clicked: bool,
     new_web_tab_clicked: bool,
     activated_webview: Option<WebViewId>,
     closed_webview: Option<WebViewId>,
@@ -522,6 +523,7 @@ enum RailPage {
     Web,
     Downloads,
     Calendar,
+    Chat,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -576,6 +578,7 @@ fn address_security_icon_for_location(location: &str) -> AddressSecurityIcon {
             if is_slate_home_url(&url)
                 || is_slate_web_url(&url)
                 || is_slate_calendar_url(&url)
+                || is_slate_chat_url(&url)
                 || is_slate_settings_url(&url) =>
         {
             AddressSecurityIcon::Slate {
@@ -1629,6 +1632,11 @@ fn location_is_calendar(location: &str) -> bool {
 }
 
 #[cfg(test)]
+fn location_is_chat(location: &str) -> bool {
+    location_matches_slate_url(location, is_slate_chat_url)
+}
+
+#[cfg(test)]
 fn location_is_downloads(location: &str) -> bool {
     location_matches_slate_url(location, is_slate_downloads_url)
 }
@@ -1769,7 +1777,7 @@ fn concept_chrome_geometry() -> ConceptChromeGeometry {
         ),
         egui::vec2(RAIL_BUTTON_SIZE, RAIL_BUTTON_SIZE),
     );
-    let messages_button_rect = egui::Rect::from_min_size(
+    let chat_button_rect = egui::Rect::from_min_size(
         egui::pos2(
             rail_button_left,
             calendar_button_rect.bottom() + RAIL_ITEM_GAP,
@@ -1781,7 +1789,7 @@ fn concept_chrome_geometry() -> ConceptChromeGeometry {
         web_button_rect,
         downloads_button_rect,
         calendar_button_rect,
-        messages_button_rect,
+        chat_button_rect,
     ];
     let rail_web_tab_row_rects = [
         rail_tab_row_rect(web_button_rect, 0),
@@ -1956,6 +1964,7 @@ fn browser_tab_label(page_title: Option<&str>, url: Option<&Url>) -> String {
         (_, Some(url)) if is_slate_home_url(url) => "Home".into(),
         (_, Some(url)) if is_slate_web_url(url) => "Web".into(),
         (_, Some(url)) if is_slate_calendar_url(url) => "Calendar".into(),
+        (_, Some(url)) if is_slate_chat_url(url) => "Chat".into(),
         (_, Some(url)) if is_slate_blank_url(url) => "New Tab".into(),
         (Some(title), _) if !title.is_empty() => title.to_string(),
         (_, Some(url)) => url.to_string(),
@@ -1968,6 +1977,7 @@ fn is_web_rail_tab_url(url: Option<&Url>) -> bool {
         !is_slate_home_url(url)
             && !is_slate_web_url(url)
             && !is_slate_calendar_url(url)
+            && !is_slate_chat_url(url)
             && !is_slate_downloads_url(url)
             && !is_slate_settings_url(url)
     })
@@ -2631,6 +2641,8 @@ impl Gui {
             Some(RailPage::Downloads)
         } else if is_slate_calendar_url(url) {
             Some(RailPage::Calendar)
+        } else if is_slate_chat_url(url) {
+            Some(RailPage::Chat)
         } else if is_slate_settings_url(url) {
             None
         } else {
@@ -3389,15 +3401,19 @@ impl Gui {
                 interaction.calendar_clicked = true;
             }
             ui.add_space(RAIL_ITEM_GAP);
-            Self::rail_svg_icon_button_with_size(
+            let chat_selected = active_page == Some(RailPage::Chat);
+            let chat_button = Self::rail_svg_icon_button_with_size(
                 ui,
                 slate_icons,
-                SlateSvg::RailMessages,
-                false,
-                "Messages",
+                SlateSvg::RailChat,
+                chat_selected,
+                "Chat",
                 button_width,
                 RAIL_BUTTON_SIZE,
             );
+            if chat_button.clicked() {
+                interaction.chat_clicked = true;
+            }
         });
         ui.spacing_mut().item_spacing = previous_item_spacing;
         interaction
@@ -3540,6 +3556,10 @@ impl Gui {
             window.queue_user_interface_command(UserInterfaceCommand::Go(
                 "slate://calendar".to_string(),
             ));
+        } else if interaction.chat_clicked {
+            *location_dirty = false;
+            window
+                .queue_user_interface_command(UserInterfaceCommand::Go("slate://chat".to_string()));
         }
     }
 
@@ -4858,8 +4878,8 @@ mod tests {
         home_search_icon_visible_rect, home_search_rendered_height, home_search_width,
         home_top_space, home_view_background_color, is_home_bookmarkable_url,
         is_web_app_webview_url, is_web_rail_tab_url, location_for_toolbar, location_is_calendar,
-        location_is_downloads, location_is_home, location_is_web, rail_button_fill,
-        rail_button_header_rect, rail_button_width, rail_collapsed_line_height,
+        location_is_chat, location_is_downloads, location_is_home, location_is_web,
+        rail_button_fill, rail_button_header_rect, rail_button_width, rail_collapsed_line_height,
         rail_collapsed_tab_line_rect, rail_collapsed_tab_line_width,
         rail_expansion_for_button_width, rail_icon_color, rail_item_height,
         rail_item_height_at_expansion, rail_new_tab_icon_size, rail_new_tab_row_rect,
@@ -5087,6 +5107,16 @@ mod tests {
         assert!(location_is_calendar("slate:calendar"));
         assert!(!location_is_calendar("slate://downloads"));
         assert!(!location_is_calendar("https://calendar"));
+    }
+
+    #[test]
+    fn rail_chat_selection_matches_chat_internal_page() {
+        assert!(location_is_chat("slate://chat"));
+        assert!(location_is_chat("slate:chat"));
+        assert!(location_is_chat("slate://messages"));
+        assert!(location_is_chat("slate:messages"));
+        assert!(!location_is_chat("slate://calendar"));
+        assert!(!location_is_chat("https://chat"));
     }
 
     #[test]
@@ -5675,6 +5705,14 @@ mod tests {
             Some(RailPage::Calendar)
         );
         assert_eq!(
+            Gui::rail_page_for_url(&Url::parse("slate://chat").unwrap()),
+            Some(RailPage::Chat)
+        );
+        assert_eq!(
+            Gui::rail_page_for_url(&Url::parse("slate://messages").unwrap()),
+            Some(RailPage::Chat)
+        );
+        assert_eq!(
             Gui::rail_page_for_url(&Url::parse("slate://settings").unwrap()),
             None
         );
@@ -5721,6 +5759,12 @@ mod tests {
             &Url::parse("slate://calendar").unwrap()
         )));
         assert!(!is_web_rail_tab_url(Some(
+            &Url::parse("slate://chat").unwrap()
+        )));
+        assert!(!is_web_rail_tab_url(Some(
+            &Url::parse("slate://messages").unwrap()
+        )));
+        assert!(!is_web_rail_tab_url(Some(
             &Url::parse("slate://settings").unwrap()
         )));
     }
@@ -5756,6 +5800,12 @@ mod tests {
             &Url::parse("slate://calendar").unwrap()
         )));
         assert!(!is_web_app_webview_url(Some(
+            &Url::parse("slate://chat").unwrap()
+        )));
+        assert!(!is_web_app_webview_url(Some(
+            &Url::parse("slate://messages").unwrap()
+        )));
+        assert!(!is_web_app_webview_url(Some(
             &Url::parse("slate://settings").unwrap()
         )));
     }
@@ -5772,6 +5822,10 @@ mod tests {
         );
         assert_eq!(
             web_rail_click_target(Some(RailPage::Calendar), true),
+            WebRailClickTarget::LastWebSurface
+        );
+        assert_eq!(
+            web_rail_click_target(Some(RailPage::Chat), true),
             WebRailClickTarget::LastWebSurface
         );
         assert_eq!(
@@ -5890,6 +5944,14 @@ mod tests {
         assert_eq!(
             browser_tab_label(None, Some(&Url::parse("slate://calendar").unwrap())),
             "Calendar"
+        );
+        assert_eq!(
+            browser_tab_label(None, Some(&Url::parse("slate://chat").unwrap())),
+            "Chat"
+        );
+        assert_eq!(
+            browser_tab_label(None, Some(&Url::parse("slate://messages").unwrap())),
+            "Chat"
         );
         assert_eq!(
             browser_tab_label(
@@ -6145,6 +6207,20 @@ mod tests {
         );
         assert_eq!(
             address_security_icon_for_location("slate://calendar"),
+            AddressSecurityIcon::Slate {
+                icon: slate_theme::SlateIcon::TopShield,
+                color: address_passive_icon_color(),
+            }
+        );
+        assert_eq!(
+            address_security_icon_for_location("slate://chat"),
+            AddressSecurityIcon::Slate {
+                icon: slate_theme::SlateIcon::TopShield,
+                color: address_passive_icon_color(),
+            }
+        );
+        assert_eq!(
+            address_security_icon_for_location("slate://messages"),
             AddressSecurityIcon::Slate {
                 icon: slate_theme::SlateIcon::TopShield,
                 color: address_passive_icon_color(),

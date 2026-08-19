@@ -26,6 +26,9 @@ Already covered:
 - Rail apps render their page bodies as internal HTML under `slate://`. Calendar
   now has an initial `slate://calendar` mock page and is selected from the rail
   as a singleton app page, outside the Web tab preview list.
+- Chat now has an initial `slate://chat` aggregator mock for SMS, WhatsApp, and
+  future provider adapters. The older `slate://messages` route remains an alias
+  while product terminology moves to Chat.
 - Browser-core no longer emits hardcoded app page bodies for rail apps; it maps
   app selection to internal `slate://` addresses and lets the renderer path load
   the page.

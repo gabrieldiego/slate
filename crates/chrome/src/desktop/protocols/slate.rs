@@ -63,6 +63,8 @@ impl ProtocolHandler for SlateProtocolHandler {
             "home",
             "web",
             "calendar",
+            "chat",
+            "messages",
             "settings",
             "settings/state",
             "settings/preview",
@@ -124,6 +126,8 @@ impl ProtocolHandler for SlateProtocolHandler {
             Some("/slate-web.html")
         } else if is_slate_calendar_url(url.as_url()) {
             Some("/slate-calendar.html")
+        } else if is_slate_chat_url(url.as_url()) {
+            Some("/slate-chat.html")
         } else if is_slate_downloads_url(url.as_url()) {
             Some("/slate-downloads.html")
         } else if is_slate_settings_url(url.as_url()) {
@@ -467,6 +471,12 @@ pub(crate) fn is_slate_calendar_url(url: &Url) -> bool {
         && (url.host_str() == Some("calendar") || url.path().trim_start_matches('/') == "calendar")
 }
 
+pub(crate) fn is_slate_chat_url(url: &Url) -> bool {
+    url.scheme() == "slate"
+        && (matches!(url.host_str(), Some("chat" | "messages"))
+            || matches!(url.path().trim_start_matches('/'), "chat" | "messages"))
+}
+
 pub(crate) fn is_slate_settings_url(url: &Url) -> bool {
     url.scheme() == "slate"
         && (url.host_str() == Some("settings") || url.path().trim_start_matches('/') == "settings")
@@ -512,10 +522,10 @@ mod tests {
     use super::{
         CHROME_ELEMENT_ZOOM_SETTING_MAX, CHROME_ELEMENT_ZOOM_SETTING_MIN,
         chrome_element_zoom_setting_from_url, download_request_from_url, is_slate_blank_url,
-        is_slate_calendar_url, is_slate_download_request_url, is_slate_downloads_state_url,
-        is_slate_downloads_url, is_slate_home_url, is_slate_settings_apply_url,
-        is_slate_settings_preview_url, is_slate_settings_save_url, is_slate_settings_url,
-        is_slate_web_url, slate_download_error_html,
+        is_slate_calendar_url, is_slate_chat_url, is_slate_download_request_url,
+        is_slate_downloads_state_url, is_slate_downloads_url, is_slate_home_url,
+        is_slate_settings_apply_url, is_slate_settings_preview_url, is_slate_settings_save_url,
+        is_slate_settings_url, is_slate_web_url, slate_download_error_html,
     };
     use slate_broadwebd::FetchPurpose;
     use slate_broadwebd::TemporaryDownloadRecord;
@@ -576,6 +586,16 @@ mod tests {
         assert!(!is_slate_calendar_url(
             &Url::parse("https://calendar").unwrap()
         ));
+    }
+
+    #[test]
+    fn slate_chat_url_matches_primary_and_messages_aliases() {
+        assert!(is_slate_chat_url(&Url::parse("slate://chat").unwrap()));
+        assert!(is_slate_chat_url(&Url::parse("slate:chat").unwrap()));
+        assert!(is_slate_chat_url(&Url::parse("slate://messages").unwrap()));
+        assert!(is_slate_chat_url(&Url::parse("slate:messages").unwrap()));
+        assert!(!is_slate_chat_url(&Url::parse("slate://calendar").unwrap()));
+        assert!(!is_slate_chat_url(&Url::parse("https://chat").unwrap()));
     }
 
     #[test]
@@ -759,6 +779,7 @@ mod tests {
         assert!(resource_dir.join("slate-home.html").is_file());
         assert!(resource_dir.join("slate-web.html").is_file());
         assert!(resource_dir.join("slate-calendar.html").is_file());
+        assert!(resource_dir.join("slate-chat.html").is_file());
         assert!(resource_dir.join("slate-settings.html").is_file());
         assert!(resource_dir.join("slate-downloads.html").is_file());
     }
@@ -775,6 +796,21 @@ mod tests {
         assert!(!calendar_page.contains("<script"));
         assert!(!calendar_page.contains("http://"));
         assert!(!calendar_page.contains("https://"));
+    }
+
+    #[test]
+    fn slate_chat_page_is_static_local_mock() {
+        let resource_dir = crate::resources::resource_protocol_dir_path();
+        let chat_page = std::fs::read_to_string(resource_dir.join("slate-chat.html")).unwrap();
+
+        assert!(chat_page.contains("<title>Slate Chat</title>"));
+        assert!(chat_page.contains("<h1>Chat</h1>"));
+        assert!(chat_page.contains("SMS"));
+        assert!(chat_page.contains("WhatsApp"));
+        assert!(chat_page.contains("Future Providers"));
+        assert!(!chat_page.contains("<script"));
+        assert!(!chat_page.contains("http://"));
+        assert!(!chat_page.contains("https://"));
     }
 
     #[test]

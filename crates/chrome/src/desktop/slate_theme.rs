@@ -58,9 +58,9 @@ pub(crate) enum SlateSvg {
     NavReload,
     NavStop,
     RailCalendar,
+    RailChat,
     RailDownloads,
     RailHome,
-    RailMessages,
     RailWeb,
 }
 
@@ -281,8 +281,8 @@ impl SlateSvg {
                 height: 32,
                 bytes: include_bytes!("../../assets/icons/sidebar/home.svg"),
             },
-            Self::RailMessages => SlateSvgData {
-                name: "rail-messages",
+            Self::RailChat => SlateSvgData {
+                name: "rail-chat",
                 width: 32,
                 height: 32,
                 bytes: include_bytes!("../../assets/icons/sidebar/messages.svg"),
@@ -586,7 +586,7 @@ mod tests {
             SlateSvg::RailCalendar,
             SlateSvg::RailDownloads,
             SlateSvg::RailHome,
-            SlateSvg::RailMessages,
+            SlateSvg::RailChat,
             SlateSvg::RailWeb,
         ] {
             let data = svg.data();

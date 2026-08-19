@@ -5,7 +5,7 @@ pub enum AppId {
     Web,
     Downloads,
     Calendar,
-    Messaging,
+    Chat,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -13,7 +13,7 @@ pub enum AppIcon {
     Globe,
     Download,
     Calendar,
-    Message,
+    Chat,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -40,9 +40,9 @@ pub const DEFAULT_APPS: [AppDescriptor; 4] = [
         icon: AppIcon::Calendar,
     },
     AppDescriptor {
-        id: AppId::Messaging,
-        label: "Messaging",
-        icon: AppIcon::Message,
+        id: AppId::Chat,
+        label: "Chat",
+        icon: AppIcon::Chat,
     },
 ];
 
@@ -52,10 +52,21 @@ pub fn default_apps() -> &'static [AppDescriptor] {
 
 #[cfg(test)]
 mod tests {
-    use super::{AppId, default_apps};
+    use super::{AppIcon, AppId, default_apps};
 
     #[test]
     fn default_apps_start_with_web() {
         assert_eq!(default_apps()[0].id, AppId::Web);
+    }
+
+    #[test]
+    fn default_apps_include_chat() {
+        let chat = default_apps()
+            .iter()
+            .find(|app| app.id == AppId::Chat)
+            .expect("chat app should be registered");
+
+        assert_eq!(chat.label, "Chat");
+        assert_eq!(chat.icon, AppIcon::Chat);
     }
 }

@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Slate Chat</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f7f5f1;
+      color: #242421;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #f7f5f1;
+    }
+
+    main {
+      width: min(1160px, calc(100vw - 48px));
+      margin: 0 auto;
+      padding: 38px 0;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 20px;
+      align-items: end;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0 0 7px;
+      font-size: 30px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0;
+      color: #696966;
+      line-height: 1.45;
+    }
+
+    button {
+      border: 1px solid #c8c5bd;
+      border-radius: 6px;
+      background: #f3f0ea;
+      color: #242421;
+      padding: 8px 12px;
+      font: inherit;
+      cursor: default;
+      white-space: nowrap;
+    }
+
+    button.primary {
+      border-color: #0b7e79;
+      background: #0b7e79;
+      color: #fffefa;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      padding: 16px;
+      border: 1px solid #dedbd5;
+      border-radius: 8px;
+      background: #fffefa;
+    }
+
+    .metric span {
+      display: block;
+      color: #696966;
+      font-size: 13px;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 7px;
+      font-size: 22px;
+      font-weight: 650;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(260px, 0.86fr) minmax(0, 1.38fr) minmax(250px, 0.76fr);
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .panel {
+      min-width: 0;
+      border: 1px solid #dedbd5;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fffefa;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 56px;
+      padding: 15px 18px;
+      border-bottom: 1px solid #e8e4dd;
+      background: #fbfaf8;
+    }
+
+    .provider,
+    .conversation,
+    .message,
+    .policy {
+      min-width: 0;
+      padding: 14px 18px;
+      border-bottom: 1px solid #eeeae3;
+    }
+
+    .provider:last-child,
+    .conversation:last-child,
+    .message:last-child,
+    .policy:last-child {
+      border-bottom: 0;
+    }
+
+    .provider {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr);
+      gap: 12px;
+      align-items: center;
+    }
+
+    .provider-icon {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      border-radius: 8px;
+      background: #eaf4f2;
+      color: #0b6b68;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .provider.whatsapp .provider-icon {
+      background: #ecf5ea;
+      color: #2d6c3d;
+    }
+
+    .provider.future .provider-icon {
+      background: #eef0f6;
+      color: #315e95;
+    }
+
+    .meta {
+      min-width: 0;
+      margin-top: 3px;
+      color: #696966;
+      font-size: 13px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 6px;
+      color: #696966;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .status::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #bdb8ae;
+    }
+
+    .status.ready::before {
+      background: #0b7e79;
+    }
+
+    .status.pending::before {
+      background: #d8930c;
+    }
+
+    .conversation {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .conversation.active {
+      background: #eef6f5;
+    }
+
+    .preview,
+    .time,
+    .tag {
+      color: #696966;
+      font-size: 13px;
+    }
+
+    .preview {
+      min-width: 0;
+      margin-top: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .time {
+      white-space: nowrap;
+    }
+
+    .tag {
+      display: inline-flex;
+      width: fit-content;
+      margin-top: 8px;
+      padding: 3px 7px;
+      border: 1px solid #d8d4cc;
+      border-radius: 999px;
+      background: #f7f4ef;
+      color: #55534d;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .thread {
+      display: grid;
+      grid-template-rows: auto minmax(260px, 1fr) auto;
+      min-height: 540px;
+    }
+
+    .thread-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 15px 18px;
+      border-bottom: 1px solid #e8e4dd;
+      background: #fbfaf8;
+    }
+
+    .thread-title {
+      min-width: 0;
+    }
+
+    .thread-title p {
+      margin-top: 3px;
+      font-size: 13px;
+    }
+
+    .messages {
+      padding: 18px;
+      background:
+        linear-gradient(180deg, rgba(238, 246, 245, 0.54), rgba(255, 254, 250, 0)),
+        #fffefa;
+    }
+
+    .message {
+      width: min(78%, 560px);
+      margin-bottom: 12px;
+      border: 1px solid #e1ded7;
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    .message.outgoing {
+      margin-left: auto;
+      border-color: #c5dad8;
+      background: #edf8f7;
+    }
+
+    .message p {
+      color: #242421;
+    }
+
+    .message .meta {
+      margin-top: 7px;
+      white-space: normal;
+    }
+
+    .composer {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      padding: 14px 18px;
+      border-top: 1px solid #e8e4dd;
+      background: #fbfaf8;
+    }
+
+    .composer .input {
+      min-height: 38px;
+      padding: 9px 11px;
+      border: 1px solid #d6d2ca;
+      border-radius: 6px;
+      background: #fffefa;
+      color: #89867e;
+    }
+
+    .policy strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 14px;
+      font-weight: 650;
+    }
+
+    .policy p {
+      font-size: 13px;
+    }
+
+    @media (max-width: 960px) {
+      header,
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .toolbar {
+        justify-content: flex-start;
+      }
+
+      .summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 560px) {
+      main {
+        width: min(100vw - 28px, 1160px);
+        padding: 24px 0;
+      }
+
+      .summary {
+        grid-template-columns: 1fr;
+      }
+
+      .thread {
+        min-height: 460px;
+      }
+
+      .message {
+        width: 100%;
+      }
+
+      .composer {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Chat</h1>
+        <p>Unified inbox mock for SMS, WhatsApp, and future private messaging adapters.</p>
+      </div>
+      <div class="toolbar">
+        <button>Filter</button>
+        <button class="primary">New Chat</button>
+      </div>
+    </header>
+
+    <div class="summary">
+      <div class="metric">
+        <span>Providers</span>
+        <strong>3</strong>
+      </div>
+      <div class="metric">
+        <span>Unread</span>
+        <strong>5</strong>
+      </div>
+      <div class="metric">
+        <span>Local Profile</span>
+        <strong>default</strong>
+      </div>
+      <div class="metric">
+        <span>Network Access</span>
+        <strong>Off</strong>
+      </div>
+    </div>
+
+    <div class="layout">
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Providers</h2>
+        </div>
+        <div class="provider">
+          <div class="provider-icon">SMS</div>
+          <div>
+            <h3>SMS</h3>
+            <div class="meta">Phone bridge adapter planned</div>
+            <div class="status pending">Permission required</div>
+          </div>
+        </div>
+        <div class="provider whatsapp">
+          <div class="provider-icon">WA</div>
+          <div>
+            <h3>WhatsApp</h3>
+            <div class="meta">Account connector adapter planned</div>
+            <div class="status pending">Not connected</div>
+          </div>
+        </div>
+        <div class="provider future">
+          <div class="provider-icon">+</div>
+          <div>
+            <h3>Future Providers</h3>
+            <div class="meta">Matrix, Signal, IRC, email, or local protocols</div>
+            <div class="status ready">Adapter slots reserved</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Inbox</h2>
+        </div>
+        <div class="conversation active">
+          <div>
+            <h3>Family Group</h3>
+            <div class="preview">Dinner moved to 7:30. I added it to Calendar.</div>
+            <span class="tag">SMS</span>
+          </div>
+          <div class="time">10:42</div>
+        </div>
+        <div class="conversation">
+          <div>
+            <h3>Project Room</h3>
+            <div class="preview">The broadweb routing note is ready for review.</div>
+            <span class="tag">WhatsApp</span>
+          </div>
+          <div class="time">09:18</div>
+        </div>
+        <div class="conversation">
+          <div>
+            <h3>Delivery Updates</h3>
+            <div class="preview">Package held until the download verification completes.</div>
+            <span class="tag">SMS</span>
+          </div>
+          <div class="time">Yesterday</div>
+        </div>
+      </section>
+
+      <section class="panel thread">
+        <div class="thread-header">
+          <div class="thread-title">
+            <h2>Family Group</h2>
+            <p>SMS bridge placeholder, local profile only</p>
+          </div>
+          <button>Details</button>
+        </div>
+        <div class="messages">
+          <div class="message">
+            <p>Are we still meeting near the market?</p>
+            <div class="meta">SMS mock, received 10:36</div>
+          </div>
+          <div class="message outgoing">
+            <p>Yes. I can leave after the Calendar sync check.</p>
+            <div class="meta">Draft from Slate, not sent</div>
+          </div>
+          <div class="message">
+            <p>Dinner moved to 7:30. I added it to Calendar.</p>
+            <div class="meta">SMS mock, received 10:42</div>
+          </div>
+        </div>
+        <div class="composer">
+          <div class="input">Message composer disabled until providers are connected.</div>
+          <button class="primary">Send</button>
+        </div>
+      </section>
+    </div>
+
+    <section class="panel" style="margin-top: 18px;">
+      <div class="panel-header">
+        <h2>Adapter Boundaries</h2>
+      </div>
+      <div class="policy">
+        <strong>SMS</strong>
+        <p>Requires an explicit local phone bridge or OS message entitlement before Slate can read or send messages.</p>
+      </div>
+      <div class="policy">
+        <strong>WhatsApp</strong>
+        <p>Requires an account connector with visible session state, storage boundaries, and a revocation surface.</p>
+      </div>
+      <div class="policy">
+        <strong>Future integrations</strong>
+        <p>Each provider should enter through an adapter that documents network routing, identity scope, and local storage behavior.</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
