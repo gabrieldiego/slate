@@ -26,8 +26,8 @@ use super::{
     address_slate_security_icon_rect, chrome_panel_background_color, configure_fonts,
     default_home_bookmark_cards, footer_panel_margin, home_view_background_color,
     rail_button_width, rail_collapsed_tab_line_rect, rail_icon_slot_rect, rail_item_height,
-    rail_tab_close_button_rect, rail_tab_row_rect, slate_theme, tab_icon_color,
-    toolbar_address_width, toolbar_background_color, toolbar_navigation_icon_rect,
+    rail_tab_close_button_rect, rail_tab_row_rect, rail_web_item_height, slate_theme,
+    tab_icon_color, toolbar_address_width, toolbar_background_color, toolbar_navigation_icon_rect,
 };
 use crate::desktop::slate_theme::{SlateIcon, SlateIconCache, SlateRaster};
 
@@ -1190,7 +1190,7 @@ fn snapshot_chrome_geometry_with_rail_width(rail_width: f32) -> SnapshotChromeGe
     );
     let web_button_rect = egui::Rect::from_min_size(
         egui::pos2(rail_button_left, home_button_rect.bottom() + RAIL_ITEM_GAP),
-        egui::vec2(rail_button_w, rail_item_height(true, 3, rail_button_w)),
+        egui::vec2(rail_button_w, rail_web_item_height(true, 3, rail_button_w)),
     );
     let downloads_button_rect = egui::Rect::from_min_size(
         egui::pos2(rail_button_left, web_button_rect.bottom() + RAIL_ITEM_GAP),

@@ -142,6 +142,7 @@ const RAIL_NEW_TAB_ICON_SIZE_EXPANDED: f32 = 9.5 * CHROME_ELEMENT_ZOOM;
 const RAIL_NEW_TAB_ICON_STROKE_EXPANDED: f32 = 1.1 * CHROME_ELEMENT_ZOOM;
 const RAIL_COLLAPSED_LINE_HEIGHT_EXPANDED: f32 = 3.0 * CHROME_ELEMENT_ZOOM;
 const RAIL_COLLAPSED_LINE_GAP_EXPANDED: f32 = 11.0 * CHROME_ELEMENT_ZOOM;
+const RAIL_SELECTED_TAB_STACK_BOTTOM_PADDING: f32 = 7.0 * CHROME_ELEMENT_ZOOM;
 const ADDRESS_LEADING_GAP: f32 = 20.0 * CHROME_ELEMENT_ZOOM;
 const ADDRESS_MIN_WIDTH: f32 = 260.0;
 const ADDRESS_HEIGHT: f32 = 52.0 * CHROME_ELEMENT_ZOOM;
@@ -804,6 +805,35 @@ fn rail_item_height(selected: bool, tab_count: usize, button_width: f32) -> f32 
                 RAIL_COLLAPSED_LINE_GAP_EXPANDED,
             ) - RAIL_COLLAPSED_LINE_GAP)
                 * (RAIL_TAB_PREVIEW_MAX_ROWS.saturating_sub(1)) as f32
+    }
+}
+
+fn rail_selected_tab_stack_height(row_count: usize, button_width: f32) -> f32 {
+    if row_count == 0 {
+        return RAIL_BUTTON_SIZE;
+    }
+
+    let row_height = rail_tab_row_height(egui::Rect::from_min_size(
+        egui::Pos2::ZERO,
+        egui::vec2(button_width, RAIL_BUTTON_SIZE),
+    ));
+    let row_gap = rail_expanded_value(button_width, RAIL_TAB_ROW_GAP, RAIL_TAB_ROW_GAP_EXPANDED);
+    RAIL_BUTTON_SIZE
+        + RAIL_TAB_AREA_TOP_GAP
+        + row_height * row_count as f32
+        + row_gap * row_count.saturating_sub(1) as f32
+        + RAIL_SELECTED_TAB_STACK_BOTTOM_PADDING
+}
+
+fn rail_web_tab_stack_row_count(tab_count: usize) -> usize {
+    tab_count.min(RAIL_TAB_PREVIEW_MAX_ROWS) + 1
+}
+
+fn rail_web_item_height(selected: bool, tab_count: usize, button_width: f32) -> f32 {
+    if selected {
+        rail_selected_tab_stack_height(rail_web_tab_stack_row_count(tab_count), button_width)
+    } else {
+        rail_item_height(false, tab_count, button_width)
     }
 }
 
@@ -1595,7 +1625,7 @@ fn concept_chrome_geometry() -> ConceptChromeGeometry {
         egui::pos2(rail_button_left, home_button_rect.bottom() + RAIL_ITEM_GAP),
         egui::vec2(
             RAIL_BUTTON_SIZE,
-            rail_item_height(true, 3, RAIL_BUTTON_SIZE),
+            rail_web_item_height(true, 3, RAIL_BUTTON_SIZE),
         ),
     );
     let downloads_button_rect = egui::Rect::from_min_size(
@@ -2570,7 +2600,7 @@ impl Gui {
         selected: bool,
         tabs: &[RailWebTabPreview],
     ) -> (Option<WebViewId>, Option<WebViewId>, bool) {
-        if tabs.is_empty() {
+        if tabs.is_empty() && !selected {
             return (None, None, false);
         }
 
@@ -2954,7 +2984,7 @@ impl Gui {
                 web_selected,
                 "Web",
                 button_width,
-                rail_item_height(web_selected, web_tabs.len(), button_width),
+                rail_web_item_height(web_selected, web_tabs.len(), button_width),
             );
             if web_button.clicked() {
                 interaction.web_clicked = true;
@@ -4466,10 +4496,11 @@ mod tests {
         rail_selected_indicator_color, rail_selected_indicator_rect, rail_svg_icon_rect,
         rail_tab_close_button_rect, rail_tab_close_button_size, rail_tab_preview_indices,
         rail_tab_row_height, rail_tab_row_icon_size, rail_tab_row_rect, rail_tab_row_text_size,
-        rail_tab_row_width, slate_theme, status_bubble_label, status_bubble_width,
-        tab_favicon_site_scope, tab_favicon_site_scope_matches, toolbar_address_width,
-        toolbar_background_color, toolbar_menu_icon_center, toolbar_menu_icon_color,
-        toolbar_menu_icon_rect, toolbar_navigation_icon_color, toolbar_navigation_icon_offset_x,
+        rail_tab_row_width, rail_web_item_height, rail_web_tab_stack_row_count, slate_theme,
+        status_bubble_label, status_bubble_width, tab_favicon_site_scope,
+        tab_favicon_site_scope_matches, toolbar_address_width, toolbar_background_color,
+        toolbar_menu_icon_center, toolbar_menu_icon_color, toolbar_menu_icon_rect,
+        toolbar_navigation_icon_color, toolbar_navigation_icon_offset_x,
         toolbar_navigation_icon_rect, toolbar_navigation_svg, toolbar_stop_icon_rect,
         web_history_cards_from_records, web_rail_click_target,
     };
@@ -4516,11 +4547,12 @@ mod tests {
         RAIL_NEW_TAB_ICON_SIZE_EXPANDED, RAIL_PANEL_MARGIN_X, RAIL_PANEL_MARGIN_Y,
         RAIL_SELECTED_INDICATOR_HEIGHT, RAIL_SELECTED_INDICATOR_LEFT_INSET,
         RAIL_SELECTED_INDICATOR_RADIUS, RAIL_SELECTED_INDICATOR_WIDTH,
-        RAIL_SELECTED_WITH_TABS_HEIGHT, RAIL_SVG_ICON_SIZE, RAIL_TAB_CLOSE_BUTTON_SIZE,
-        RAIL_TAB_CLOSE_BUTTON_SIZE_EXPANDED, RAIL_TAB_CLOSE_RIGHT_INSET, RAIL_TAB_PREVIEW_MAX_ROWS,
-        RAIL_TAB_ROW_HEIGHT, RAIL_TAB_ROW_HEIGHT_EXPANDED, RAIL_TAB_ROW_ICON_SIZE,
-        RAIL_TAB_ROW_ICON_SIZE_EXPANDED, RAIL_TAB_ROW_TEXT_SIZE, RAIL_TAB_ROW_TEXT_SIZE_EXPANDED,
-        RAIL_TAB_ROW_WIDTH, RAIL_TOP_SPACE,
+        RAIL_SELECTED_TAB_STACK_BOTTOM_PADDING, RAIL_SELECTED_WITH_TABS_HEIGHT, RAIL_SVG_ICON_SIZE,
+        RAIL_TAB_CLOSE_BUTTON_SIZE, RAIL_TAB_CLOSE_BUTTON_SIZE_EXPANDED,
+        RAIL_TAB_CLOSE_RIGHT_INSET, RAIL_TAB_PREVIEW_MAX_ROWS, RAIL_TAB_ROW_HEIGHT,
+        RAIL_TAB_ROW_HEIGHT_EXPANDED, RAIL_TAB_ROW_ICON_SIZE, RAIL_TAB_ROW_ICON_SIZE_EXPANDED,
+        RAIL_TAB_ROW_TEXT_SIZE, RAIL_TAB_ROW_TEXT_SIZE_EXPANDED, RAIL_TAB_ROW_WIDTH,
+        RAIL_TOP_SPACE,
     };
 
     const LAYOUT_EPSILON: f32 = 1.0;
@@ -5079,6 +5111,70 @@ mod tests {
         assert_eq!(rail_tab_preview_indices(2, Some(1)), vec![0, 1]);
         assert_eq!(rail_tab_preview_indices(5, Some(4)), vec![0, 1, 4]);
         assert_eq!(rail_tab_preview_indices(5, None), vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn selected_web_rail_reserves_new_tab_row_when_empty() {
+        assert_eq!(rail_web_tab_stack_row_count(0), 1);
+        assert_eq!(
+            rail_web_item_height(false, 0, RAIL_BUTTON_SIZE),
+            RAIL_BUTTON_SIZE
+        );
+
+        let button_rect = egui::Rect::from_min_size(
+            egui::Pos2::ZERO,
+            egui::vec2(
+                RAIL_BUTTON_SIZE,
+                rail_web_item_height(true, 0, RAIL_BUTTON_SIZE),
+            ),
+        );
+        let new_tab_row = rail_new_tab_row_rect(button_rect, 0);
+
+        assert!(button_rect.height() > RAIL_BUTTON_SIZE);
+        assert!(rect_is_inside(button_rect, new_tab_row));
+        assert!(
+            (button_rect.bottom() - new_tab_row.bottom() - RAIL_SELECTED_TAB_STACK_BOTTOM_PADDING)
+                .abs()
+                < 0.01
+        );
+    }
+
+    #[test]
+    fn selected_web_rail_keeps_new_tab_row_at_stack_bottom() {
+        for tab_count in 0..=5 {
+            let row_count = rail_web_tab_stack_row_count(tab_count);
+            let button_rect = egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(
+                    RAIL_BUTTON_SIZE,
+                    rail_web_item_height(true, tab_count, RAIL_BUTTON_SIZE),
+                ),
+            );
+            let new_tab_row = rail_new_tab_row_rect(button_rect, row_count - 1);
+
+            assert_eq!(row_count, tab_count.min(RAIL_TAB_PREVIEW_MAX_ROWS) + 1);
+            assert!(rect_is_inside(button_rect, new_tab_row));
+            assert!(
+                (button_rect.bottom()
+                    - new_tab_row.bottom()
+                    - RAIL_SELECTED_TAB_STACK_BOTTOM_PADDING)
+                    .abs()
+                    < 0.01
+            );
+        }
+
+        assert!(
+            (rail_web_item_height(true, RAIL_TAB_PREVIEW_MAX_ROWS, RAIL_BUTTON_SIZE)
+                - RAIL_SELECTED_WITH_TABS_HEIGHT)
+                .abs()
+                < 0.01
+        );
+        assert!(
+            (rail_web_item_height(true, RAIL_TAB_PREVIEW_MAX_ROWS + 2, RAIL_BUTTON_SIZE)
+                - RAIL_SELECTED_WITH_TABS_HEIGHT)
+                .abs()
+                < 0.01
+        );
     }
 
     #[test]
