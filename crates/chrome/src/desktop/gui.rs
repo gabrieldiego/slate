@@ -1836,7 +1836,7 @@ fn browser_tab_label(page_title: Option<&str>, url: Option<&Url>) -> String {
 }
 
 fn is_web_rail_tab_url(url: Option<&Url>) -> bool {
-    url.is_none_or(|url| {
+    url.is_some_and(|url| {
         !is_slate_home_url(url)
             && !is_slate_web_url(url)
             && !is_slate_downloads_url(url)
@@ -5211,7 +5211,7 @@ mod tests {
 
     #[test]
     fn web_rail_tabs_exclude_singleton_internal_pages() {
-        assert!(is_web_rail_tab_url(None));
+        assert!(!is_web_rail_tab_url(None));
         assert!(is_web_rail_tab_url(Some(
             &Url::parse("slate://blank").unwrap()
         )));
@@ -5233,6 +5233,12 @@ mod tests {
         assert!(!is_web_rail_tab_url(Some(
             &Url::parse("slate://settings").unwrap()
         )));
+    }
+
+    #[test]
+    fn transient_web_app_surface_does_not_render_as_new_tab_preview() {
+        assert!(!is_web_rail_tab_url(None));
+        assert!(is_web_app_webview_url(None));
     }
 
     #[test]
