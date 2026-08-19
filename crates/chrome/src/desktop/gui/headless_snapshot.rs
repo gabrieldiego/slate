@@ -364,16 +364,15 @@ fn render_tab_strip(root_ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
                                     ];
                                     let tab_width =
                                         tab_width_for_strip(tab_strip_available_width, tabs.len());
-                                    for (index, (label, active)) in tabs.iter().enumerate() {
+                                    for (label, active) in tabs {
                                         let tab_rect = draw_snapshot_tab(
                                             ui,
                                             slate_icons,
-                                            index,
                                             label,
-                                            *active,
+                                            active,
                                             tab_width,
                                         );
-                                        if *active {
+                                        if active {
                                             active_tab_rect = Some(tab_rect);
                                         }
                                     }
@@ -398,7 +397,6 @@ fn render_tab_strip(root_ui: &mut egui::Ui, slate_icons: &mut SlateIconCache) {
 fn draw_snapshot_tab(
     ui: &mut egui::Ui,
     slate_icons: &mut SlateIconCache,
-    index: usize,
     label: &str,
     active: bool,
     tab_width: f32,
@@ -419,7 +417,7 @@ fn draw_snapshot_tab(
     let tab_content_width = tab_content_width(tab_width);
     let fallback_icon = slate_icons.texture(
         ui.ctx(),
-        Gui::fallback_tab_icon(index),
+        Gui::fallback_tab_icon_for_page(Some(label), None),
         tab_icon_color(active),
     );
     let close_icon = slate_icons.raster_mask_texture(
@@ -845,7 +843,7 @@ fn verification_regions() -> Vec<VerificationRegion> {
             "second-tab-icon",
             "second-tab-icon.png",
             snapshot_tab_icon_slot_rect(tab1).expand(3.0),
-            "second fallback tab icon identity",
+            "Privacy Dashboard shield fallback tab icon identity",
         ),
         verification_region(
             "third-tab-icon",

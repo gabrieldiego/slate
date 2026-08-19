@@ -277,7 +277,7 @@ pub struct Gui {
     /// Handle to the GPU texture of the favicon.
     ///
     /// These need to be cached across egui draw calls.
-    favicon_textures: HashMap<WebViewId, (egui::TextureHandle, egui::load::SizedTexture)>,
+    favicon_textures: HashMap<WebViewId, TabFaviconTexture>,
 
     /// Cached GPU textures for Slate's extracted raster icon masks.
     slate_icons: SlateIconCache,
@@ -285,6 +285,48 @@ pub struct Gui {
     /// AccessKit tree updates pending the next egui tick.
     /// This allows us to ensure that graft nodes are sent before the subtrees they graft.
     pending_accesskit_updates: Vec<accesskit::TreeUpdate>,
+}
+
+struct TabFaviconTexture {
+    site_scope: Option<String>,
+    texture: egui::load::SizedTexture,
+    _handle: egui::TextureHandle,
+}
+
+impl TabFaviconTexture {
+    fn texture_for_url(&mut self, current_url: Option<&Url>) -> Option<egui::load::SizedTexture> {
+        if self.site_scope.is_none() {
+            self.site_scope = current_url.map(tab_favicon_site_scope);
+        }
+        tab_favicon_site_scope_matches(self.site_scope.as_deref(), current_url)
+            .then_some(self.texture)
+    }
+}
+
+fn tab_favicon_site_scope(url: &Url) -> String {
+    let Some(host) = url.host_str() else {
+        return url.as_str().to_string();
+    };
+
+    let mut scope = format!("{}://{}", url.scheme(), host);
+    if let Some(port) = url.port() {
+        scope.push(':');
+        scope.push_str(&port.to_string());
+    }
+    scope
+}
+
+fn tab_favicon_site_scope_matches(
+    cached_site_scope: Option<&str>,
+    current_url: Option<&Url>,
+) -> bool {
+    match (cached_site_scope, current_url) {
+        (Some(cached_site_scope), Some(current_url)) => {
+            cached_site_scope == tab_favicon_site_scope(current_url)
+        }
+        (Some(_), None) => false,
+        (None, _) => true,
+    }
 }
 
 fn truncate_with_ellipsis(input: &str, max_length: usize) -> String {
@@ -1556,6 +1598,19 @@ fn tab_close_raster(_active: bool) -> SlateRaster {
     SlateRaster::TabClose
 }
 
+fn fallback_tab_icon_for_title(page_title: &str) -> Option<SlateIcon> {
+    let page_title = page_title.to_ascii_lowercase();
+    if page_title.contains("calendar") {
+        Some(SlateIcon::TabCalendar)
+    } else if page_title.contains("privacy") {
+        Some(SlateIcon::TopShield)
+    } else if page_title.contains("research") || page_title.contains("settings") {
+        Some(SlateIcon::TabResearch)
+    } else {
+        None
+    }
+}
+
 fn toolbar_navigation_icon_color(enabled: bool) -> egui::Color32 {
     if enabled {
         slate_theme::TEXT
@@ -2431,15 +2486,11 @@ impl Gui {
         response
     }
 
-    fn fallback_tab_icon(index: usize) -> SlateIcon {
-        match index {
-            1 => SlateIcon::TabResearch,
-            2 => SlateIcon::TabCalendar,
-            _ => SlateIcon::TabWeb,
-        }
-    }
-
     fn fallback_tab_icon_for_page(page_title: Option<&str>, url: Option<&Url>) -> SlateIcon {
+        if let Some(icon) = page_title.and_then(fallback_tab_icon_for_title) {
+            return icon;
+        }
+
         if let Some(url) = url {
             if is_slate_home_url(url) || is_slate_web_url(url) || is_slate_blank_url(url) {
                 return SlateIcon::TabWeb;
@@ -2458,17 +2509,7 @@ impl Gui {
             }
         }
 
-        let page_title = page_title.unwrap_or_default().to_ascii_lowercase();
-        if page_title.contains("calendar") {
-            SlateIcon::TabCalendar
-        } else if page_title.contains("privacy")
-            || page_title.contains("research")
-            || page_title.contains("settings")
-        {
-            SlateIcon::TabResearch
-        } else {
-            SlateIcon::TabWeb
-        }
+        SlateIcon::TabWeb
     }
 
     fn native_chrome_page_for_url(url: &Url) -> Option<NativeChromePage> {
@@ -3364,10 +3405,6 @@ impl Gui {
                                                 for (index, (id, webview)) in
                                                     webviews.into_iter().enumerate()
                                                 {
-                                                    let favicon = favicon_textures
-                                                        .get(&id)
-                                                        .map(|(_, favicon)| favicon)
-                                                        .copied();
                                                     let active = window
                                                         .active_webview()
                                                         .map(|webview| webview.id())
@@ -3376,6 +3413,12 @@ impl Gui {
                                                         tab_icon_color(active);
                                                     let page_title = webview.page_title();
                                                     let page_url = webview.url();
+                                                    let favicon = favicon_textures
+                                                        .get_mut(&id)
+                                                        .and_then(|favicon| {
+                                                            favicon
+                                                                .texture_for_url(page_url.as_ref())
+                                                        });
                                                     let fallback_icon = slate_icons.texture(
                                                         ui.ctx(),
                                                         Self::fallback_tab_icon_for_page(
@@ -4267,12 +4310,13 @@ mod tests {
         rail_selected_button_fill, rail_selected_indicator_color, rail_selected_indicator_rect,
         slate_theme, status_bubble_label, status_bubble_width, tab_close_button_rect,
         tab_close_icon_color, tab_close_raster, tab_content_width, tab_corner_radius,
-        tab_icon_color, tab_icon_slot_rect, tab_strip_background_color, tab_strip_separator_color,
-        tab_title_color, tab_title_left, tab_title_width, tab_width_for_strip, text_width,
-        toolbar_address_width, toolbar_background_color, toolbar_menu_icon_center,
-        toolbar_menu_icon_color, toolbar_menu_icon_rect, toolbar_navigation_icon_color,
-        toolbar_navigation_icon_offset_x, toolbar_navigation_icon_rect, toolbar_navigation_svg,
-        toolbar_stop_icon_rect, truncate_to_width, web_history_cards_from_records,
+        tab_favicon_site_scope, tab_favicon_site_scope_matches, tab_icon_color, tab_icon_slot_rect,
+        tab_strip_background_color, tab_strip_separator_color, tab_title_color, tab_title_left,
+        tab_title_width, tab_width_for_strip, text_width, toolbar_address_width,
+        toolbar_background_color, toolbar_menu_icon_center, toolbar_menu_icon_color,
+        toolbar_menu_icon_rect, toolbar_navigation_icon_color, toolbar_navigation_icon_offset_x,
+        toolbar_navigation_icon_rect, toolbar_navigation_svg, toolbar_stop_icon_rect,
+        truncate_to_width, web_history_cards_from_records,
     };
     use super::{
         HOME_SEARCH_CORNER_RADIUS, HOME_SEARCH_HEIGHT, HOME_SEARCH_HORIZONTAL_PADDING,
@@ -5315,8 +5359,46 @@ mod tests {
         );
         assert_eq!(
             Gui::fallback_tab_icon_for_page(Some("Privacy Dashboard"), None),
-            slate_theme::SlateIcon::TabResearch
+            slate_theme::SlateIcon::TopShield
         );
+        assert_eq!(
+            Gui::fallback_tab_icon_for_page(Some("Privacy Dashboard"), Some(&home_url)),
+            slate_theme::SlateIcon::TopShield
+        );
+        assert_eq!(
+            Gui::fallback_tab_icon_for_page(Some("Calendar"), Some(&blank_url)),
+            slate_theme::SlateIcon::TabCalendar
+        );
+    }
+
+    #[test]
+    fn tab_favicon_cache_matches_site_scope() {
+        let original_url = Url::parse("https://example.com/with-favicon").unwrap();
+        let same_site_url = Url::parse("https://example.com/no-favicon").unwrap();
+        let other_site_url = Url::parse("https://example.net/no-favicon").unwrap();
+        let scoped_port_url = Url::parse("https://example.com:8443/path").unwrap();
+        let original_scope = tab_favicon_site_scope(&original_url);
+
+        assert_eq!(original_scope, "https://example.com");
+        assert_eq!(
+            tab_favicon_site_scope(&scoped_port_url),
+            "https://example.com:8443"
+        );
+        assert!(tab_favicon_site_scope_matches(
+            Some(&original_scope),
+            Some(&original_url)
+        ));
+        assert!(tab_favicon_site_scope_matches(
+            Some(&original_scope),
+            Some(&same_site_url)
+        ));
+        assert!(!tab_favicon_site_scope_matches(
+            Some(&original_scope),
+            Some(&other_site_url)
+        ));
+        assert!(!tab_favicon_site_scope_matches(Some(&original_scope), None));
+        assert!(tab_favicon_site_scope_matches(None, Some(&other_site_url)));
+        assert!(tab_favicon_site_scope_matches(None, None));
     }
 
     #[test]
@@ -6100,25 +6182,41 @@ fn fetch_home_favicon(url: &str) -> Result<HomeFaviconBytes, String> {
 fn load_pending_favicons(
     ctx: &egui::Context,
     window: &ServoShellWindow,
-    texture_cache: &mut HashMap<WebViewId, (egui::TextureHandle, egui::load::SizedTexture)>,
+    texture_cache: &mut HashMap<WebViewId, TabFaviconTexture>,
 ) {
     for id in window.take_pending_favicon_loads() {
-        let Some(webview) = window.webview_by_id(id) else {
-            continue;
-        };
-        let Some(favicon) = webview.favicon() else {
-            continue;
-        };
-
-        let egui_image = embedder_image_to_egui_image(&favicon);
-        let handle = ctx.load_texture(format!("favicon-{id:?}"), egui_image, Default::default());
-        let texture = egui::load::SizedTexture::new(
-            handle.id(),
-            egui::vec2(favicon.width as f32, favicon.height as f32),
-        );
-
-        // We don't need the handle anymore but we can't drop it either since that would cause
-        // the texture to be freed.
-        texture_cache.insert(id, (handle, texture));
+        load_pending_favicon(ctx, window, texture_cache, id);
     }
+}
+
+fn load_pending_favicon(
+    ctx: &egui::Context,
+    window: &ServoShellWindow,
+    texture_cache: &mut HashMap<WebViewId, TabFaviconTexture>,
+    id: WebViewId,
+) {
+    let Some(webview) = window.webview_by_id(id) else {
+        return;
+    };
+    let site_scope = webview.url().map(|url| tab_favicon_site_scope(&url));
+    let Some(favicon) = webview.favicon() else {
+        texture_cache.remove(&id);
+        return;
+    };
+
+    let egui_image = embedder_image_to_egui_image(&favicon);
+    let handle = ctx.load_texture(format!("favicon-{id:?}"), egui_image, Default::default());
+    let texture = egui::load::SizedTexture::new(
+        handle.id(),
+        egui::vec2(favicon.width as f32, favicon.height as f32),
+    );
+
+    texture_cache.insert(
+        id,
+        TabFaviconTexture {
+            site_scope,
+            texture,
+            _handle: handle,
+        },
+    );
 }
