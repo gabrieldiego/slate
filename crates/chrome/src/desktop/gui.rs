@@ -110,6 +110,7 @@ const RAIL_PANEL_MARGIN_X: i8 = 12;
 const RAIL_PANEL_MARGIN_Y: i8 = 0;
 const RAIL_TOP_SPACE: f32 = 22.0 * CHROME_ELEMENT_ZOOM;
 const RAIL_ITEM_GAP: f32 = 12.0 * CHROME_ELEMENT_ZOOM;
+const RAIL_APP_EXPANSION_ANIMATION_SECONDS: f32 = 0.16;
 const RAIL_SELECTED_WITH_TABS_HEIGHT: f32 = 176.0 * CHROME_ELEMENT_ZOOM;
 const RAIL_COLLAPSED_WITH_TABS_HEIGHT: f32 = 106.0 * CHROME_ELEMENT_ZOOM;
 const RAIL_TAB_PREVIEW_MAX_ROWS: usize = 3;
@@ -639,6 +640,18 @@ fn rail_button_fill(selected: bool, hovered: bool) -> egui::Color32 {
     }
 }
 
+fn rail_alpha(alpha: f32) -> f32 {
+    alpha.clamp(0.0, 1.0)
+}
+
+fn rail_faded_color(color: egui::Color32, alpha: f32) -> egui::Color32 {
+    color.gamma_multiply(rail_alpha(alpha))
+}
+
+fn rail_faded_stroke(stroke: egui::Stroke, alpha: f32) -> egui::Stroke {
+    egui::Stroke::new(stroke.width, rail_faded_color(stroke.color, alpha))
+}
+
 fn rail_tab_row_fill(active: bool) -> egui::Color32 {
     if active {
         slate_theme::SURFACE
@@ -817,6 +830,10 @@ fn rail_item_height(selected: bool, tab_count: usize, button_width: f32) -> f32 
     }
 }
 
+fn rail_interpolated_height(collapsed_height: f32, expanded_height: f32, expansion: f32) -> f32 {
+    collapsed_height + (expanded_height - collapsed_height) * rail_alpha(expansion)
+}
+
 fn rail_selected_tab_stack_height(row_count: usize, button_width: f32) -> f32 {
     if row_count == 0 {
         return RAIL_BUTTON_SIZE;
@@ -844,6 +861,22 @@ fn rail_web_item_height(selected: bool, tab_count: usize, button_width: f32) -> 
     } else {
         rail_item_height(false, tab_count, button_width)
     }
+}
+
+fn rail_item_height_at_expansion(tab_count: usize, button_width: f32, expansion: f32) -> f32 {
+    rail_interpolated_height(
+        rail_item_height(false, tab_count, button_width),
+        rail_item_height(true, tab_count, button_width),
+        expansion,
+    )
+}
+
+fn rail_web_item_height_at_expansion(tab_count: usize, button_width: f32, expansion: f32) -> f32 {
+    rail_interpolated_height(
+        rail_web_item_height(false, tab_count, button_width),
+        rail_web_item_height(true, tab_count, button_width),
+        expansion,
+    )
 }
 
 fn rail_button_header_rect(button_rect: egui::Rect) -> egui::Rect {
@@ -968,6 +1001,15 @@ fn rail_tab_scroll_start_after_delta(
     } else {
         start_index.saturating_sub(row_delta.unsigned_abs())
     }
+}
+
+fn rail_app_expansion_factor(ui: &egui::Ui, id: impl std::hash::Hash, expanded: bool) -> f32 {
+    ui.ctx().animate_bool_with_time_and_easing(
+        ui.make_persistent_id(id),
+        expanded,
+        RAIL_APP_EXPANSION_ANIMATION_SECONDS,
+        egui::emath::easing::cubic_out,
+    )
 }
 
 fn rail_tab_area_top(button_rect: egui::Rect) -> f32 {
@@ -2619,13 +2661,50 @@ impl Gui {
             rail_icon_color(selected),
             egui::Vec2::splat(RAIL_SVG_ICON_SIZE),
         );
-        Self::rail_texture_button(ui, texture, selected, label, width, height)
+        let selected_visual_factor = if selected { 1.0 } else { 0.0 };
+        Self::rail_texture_button(
+            ui,
+            texture,
+            selected,
+            selected_visual_factor,
+            label,
+            width,
+            height,
+        )
+    }
+
+    fn rail_svg_icon_button_with_size_at_selection(
+        ui: &mut egui::Ui,
+        slate_icons: &mut SlateIconCache,
+        icon: SlateSvg,
+        selected: bool,
+        selected_visual_factor: f32,
+        label: &str,
+        width: f32,
+        height: f32,
+    ) -> egui::Response {
+        let texture = slate_icons.svg_mask_texture(
+            ui.ctx(),
+            icon,
+            rail_icon_color(selected),
+            egui::Vec2::splat(RAIL_SVG_ICON_SIZE),
+        );
+        Self::rail_texture_button(
+            ui,
+            texture,
+            selected,
+            selected_visual_factor,
+            label,
+            width,
+            height,
+        )
     }
 
     fn rail_texture_button(
         ui: &mut egui::Ui,
         texture: egui::load::SizedTexture,
         selected: bool,
+        selected_visual_factor: f32,
         label: &str,
         width: f32,
         height: f32,
@@ -2633,15 +2712,31 @@ impl Gui {
         let (rect, response) =
             ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click());
         if ui.is_rect_visible(rect) {
-            let fill = rail_button_fill(selected, response.hovered());
-            if fill != egui::Color32::TRANSPARENT {
-                ui.painter().rect_filled(rect, RAIL_BUTTON_RADIUS, fill);
+            let selected_visual_factor = rail_alpha(selected_visual_factor);
+            if selected_visual_factor == 0.0 || selected_visual_factor == 1.0 {
+                let fill = rail_button_fill(selected_visual_factor == 1.0, response.hovered());
+                if fill != egui::Color32::TRANSPARENT {
+                    ui.painter().rect_filled(rect, RAIL_BUTTON_RADIUS, fill);
+                }
+            } else {
+                if response.hovered() {
+                    ui.painter().rect_filled(
+                        rect,
+                        RAIL_BUTTON_RADIUS,
+                        rail_faded_color(slate_theme::PANEL_HOVER, 1.0 - selected_visual_factor),
+                    );
+                }
+                ui.painter().rect_filled(
+                    rect,
+                    RAIL_BUTTON_RADIUS,
+                    rail_faded_color(rail_selected_button_fill(), selected_visual_factor),
+                );
             }
-            if selected {
+            if selected_visual_factor > 0.0 {
                 ui.painter().rect_filled(
                     rail_selected_indicator_rect(rect),
                     RAIL_SELECTED_INDICATOR_RADIUS,
-                    rail_selected_indicator_color(),
+                    rail_faded_color(rail_selected_indicator_color(), selected_visual_factor),
                 );
             }
             let icon_rect = rail_svg_icon_rect(rect);
@@ -2673,20 +2768,34 @@ impl Gui {
         ui: &mut egui::Ui,
         button_rect: egui::Rect,
         selected: bool,
+        expansion_factor: f32,
         tabs: &[RailWebTabPreview],
     ) -> (Option<WebViewId>, Option<WebViewId>, bool) {
-        if tabs.is_empty() && !selected {
+        let expanded_alpha = rail_alpha(expansion_factor);
+        let collapsed_alpha = 1.0 - expanded_alpha;
+
+        if tabs.is_empty() && !selected && expanded_alpha == 0.0 {
             return (None, None, false);
         }
 
         let active_index = tabs.iter().position(|tab| tab.active);
-        if !selected {
+        if collapsed_alpha > 0.0 && !tabs.is_empty() {
             let visible_indices =
                 rail_tab_preview_indices(tabs.len(), active_index, RAIL_TAB_PREVIEW_MAX_ROWS);
             for (row_index, tab_index) in visible_indices.into_iter().enumerate() {
                 let tab = &tabs[tab_index];
-                Self::draw_rail_collapsed_tab_line(ui, button_rect, row_index, None, tab.active);
+                Self::draw_rail_collapsed_tab_line(
+                    ui,
+                    button_rect,
+                    row_index,
+                    None,
+                    tab.active,
+                    collapsed_alpha,
+                );
             }
+        }
+
+        if expanded_alpha == 0.0 {
             return (None, None, false);
         }
 
@@ -2708,7 +2817,7 @@ impl Gui {
             RAIL_WEB_SELECTED_TAB_MAX_ROWS,
         ));
 
-        if tabs.len() > RAIL_WEB_SELECTED_TAB_MAX_ROWS {
+        if selected && tabs.len() > RAIL_WEB_SELECTED_TAB_MAX_ROWS {
             let last_visible_row = RAIL_WEB_SELECTED_TAB_MAX_ROWS - 1;
             let scroll_rect = egui::Rect::from_min_max(
                 rail_tab_row_rect(button_rect, 0).min,
@@ -2764,40 +2873,61 @@ impl Gui {
         for (row_index, tab_index) in visible_indices.iter().copied().enumerate() {
             let tab = &tabs[tab_index];
             let row_rect = rail_tab_row_rect(button_rect, row_index);
-            let row_response = ui
-                .interact(
-                    row_rect,
+            let interaction_rect = row_rect.intersect(button_rect);
+            let row_response = (selected && interaction_rect.is_positive()).then(|| {
+                ui.interact(
+                    interaction_rect,
                     ui.make_persistent_id(("rail_web_tab", row_index)),
                     egui::Sense::click(),
                 )
-                .on_hover_text(&tab.label);
+                .on_hover_text(&tab.label)
+            });
             let close_rect = rail_tab_close_button_rect(row_rect);
-            let close_response = ui
-                .interact(
-                    close_rect,
+            let close_interaction_rect = close_rect.intersect(button_rect);
+            let close_response = (selected && close_interaction_rect.is_positive()).then(|| {
+                ui.interact(
+                    close_interaction_rect,
                     ui.make_persistent_id(("rail_web_tab_close", row_index)),
                     egui::Sense::click(),
                 )
-                .on_hover_text("Close tab");
-            if close_response.clicked()
-                || close_response.middle_clicked()
-                || row_response.middle_clicked()
+                .on_hover_text("Close tab")
+            });
+            if close_response
+                .as_ref()
+                .is_some_and(|response| response.clicked() || response.middle_clicked())
+                || row_response
+                    .as_ref()
+                    .is_some_and(|response| response.middle_clicked())
             {
                 closed_webview = tab.webview_id;
-            } else if row_response.clicked() {
+            } else if row_response
+                .as_ref()
+                .is_some_and(|response| response.clicked())
+            {
                 activated_webview = tab.webview_id;
             }
             Self::draw_rail_web_tab_row(
                 ui,
                 row_rect,
                 tab,
-                row_response.hovered(),
-                close_response.hovered(),
+                row_response
+                    .as_ref()
+                    .is_some_and(|response| response.hovered()),
+                close_response
+                    .as_ref()
+                    .is_some_and(|response| response.hovered()),
+                expanded_alpha,
             );
         }
 
         let new_tab_row_index = visible_indices.len();
-        let new_web_tab_clicked = Self::draw_rail_new_tab_row(ui, button_rect, new_tab_row_index);
+        let new_web_tab_clicked = Self::draw_rail_new_tab_row(
+            ui,
+            button_rect,
+            new_tab_row_index,
+            selected,
+            expanded_alpha,
+        );
         (activated_webview, closed_webview, new_web_tab_clicked)
     }
 
@@ -2807,11 +2937,13 @@ impl Gui {
         tab: &RailWebTabPreview,
         hovered: bool,
         close_hovered: bool,
+        alpha: f32,
     ) {
         if !ui.is_rect_visible(row_rect) {
             return;
         }
 
+        let alpha = rail_alpha(alpha);
         let fill = if hovered && !tab.active {
             slate_theme::PANEL_HOVER
         } else {
@@ -2820,8 +2952,8 @@ impl Gui {
         ui.painter().rect(
             row_rect,
             RAIL_TAB_ROW_RADIUS,
-            fill,
-            rail_tab_row_stroke(tab.active),
+            rail_faded_color(fill, alpha),
+            rail_faded_stroke(rail_tab_row_stroke(tab.active), alpha),
             egui::StrokeKind::Inside,
         );
 
@@ -2837,7 +2969,7 @@ impl Gui {
             tab.icon.id,
             icon_rect,
             egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
-            egui::Color32::WHITE,
+            rail_faded_color(egui::Color32::WHITE, alpha),
         );
 
         let text_left = icon_rect.right() + RAIL_TAB_ROW_ICON_TEXT_GAP;
@@ -2850,7 +2982,7 @@ impl Gui {
             egui::Align2::LEFT_CENTER,
             label,
             font_id,
-            rail_tab_text_color(tab.active),
+            rail_faded_color(rail_tab_text_color(tab.active), alpha),
         );
 
         Self::draw_rail_tab_close_button(
@@ -2858,6 +2990,7 @@ impl Gui {
             close_rect,
             rail_tab_close_icon_size(row_rect),
             close_hovered,
+            alpha,
         );
     }
 
@@ -2866,18 +2999,20 @@ impl Gui {
         close_rect: egui::Rect,
         close_icon_size: f32,
         hovered: bool,
+        alpha: f32,
     ) {
+        let alpha = rail_alpha(alpha);
         if hovered {
             ui.painter().circle_filled(
                 close_rect.center(),
                 close_rect.width() / 2.0,
-                slate_theme::PANEL_HOVER,
+                rail_faded_color(slate_theme::PANEL_HOVER, alpha),
             );
         }
         let half = close_icon_size / 2.0;
         let stroke = egui::Stroke::new(
             0.9 * CHROME_ELEMENT_ZOOM,
-            rail_tab_close_icon_color(hovered),
+            rail_faded_color(rail_tab_close_icon_color(hovered), alpha),
         );
         ui.painter().line_segment(
             [
@@ -2895,19 +3030,31 @@ impl Gui {
         );
     }
 
-    fn draw_rail_new_tab_row(ui: &mut egui::Ui, button_rect: egui::Rect, row_index: usize) -> bool {
+    fn draw_rail_new_tab_row(
+        ui: &mut egui::Ui,
+        button_rect: egui::Rect,
+        row_index: usize,
+        interactive: bool,
+        alpha: f32,
+    ) -> bool {
         let row_rect = rail_new_tab_row_rect(button_rect, row_index);
-        let response = ui
-            .interact(
-                row_rect,
+        let interaction_rect = row_rect.intersect(button_rect);
+        let response = (interactive && interaction_rect.is_positive()).then(|| {
+            ui.interact(
+                interaction_rect,
                 ui.make_persistent_id(("rail_web_tab", "new")),
                 egui::Sense::click(),
             )
-            .on_hover_text("New web tab");
+            .on_hover_text("New web tab")
+        });
         if ui.is_rect_visible(row_rect) {
-            if response.hovered() {
-                ui.painter()
-                    .rect_filled(row_rect, RAIL_TAB_ROW_RADIUS, slate_theme::PANEL_HOVER);
+            let alpha = rail_alpha(alpha);
+            if response.as_ref().is_some_and(|response| response.hovered()) {
+                ui.painter().rect_filled(
+                    row_rect,
+                    RAIL_TAB_ROW_RADIUS,
+                    rail_faded_color(slate_theme::PANEL_HOVER, alpha),
+                );
             }
 
             let new_tab_icon_size = rail_new_tab_icon_size(row_rect);
@@ -2916,11 +3063,17 @@ impl Gui {
                 row_rect.center().y,
             );
             let half = new_tab_icon_size / 2.0;
-            let stroke = egui::Stroke::new(rail_new_tab_icon_stroke(row_rect), slate_theme::MUTED);
+            let stroke = egui::Stroke::new(
+                rail_new_tab_icon_stroke(row_rect),
+                rail_faded_color(slate_theme::MUTED, alpha),
+            );
             ui.painter().circle_stroke(
                 center,
                 (new_tab_icon_size + 2.0 * CHROME_ELEMENT_ZOOM) / 2.0,
-                egui::Stroke::new(rail_new_tab_icon_stroke(row_rect), slate_theme::BORDER),
+                egui::Stroke::new(
+                    rail_new_tab_icon_stroke(row_rect),
+                    rail_faded_color(slate_theme::BORDER, alpha),
+                ),
             );
             ui.painter().line_segment(
                 [
@@ -2944,23 +3097,27 @@ impl Gui {
                 egui::Align2::LEFT_CENTER,
                 "New",
                 font_id,
-                slate_theme::MUTED,
+                rail_faded_color(slate_theme::MUTED, alpha),
             );
         }
-        response.clicked()
+        response.as_ref().is_some_and(|response| response.clicked())
     }
 
     fn draw_rail_download_tab_previews(
         ui: &mut egui::Ui,
         button_rect: egui::Rect,
         selected: bool,
+        expansion_factor: f32,
         downloads: &[RailDownloadTabPreview],
     ) {
         if downloads.is_empty() {
             return;
         }
 
-        if !selected {
+        let expanded_alpha = rail_alpha(expansion_factor);
+        let collapsed_alpha = 1.0 - expanded_alpha;
+
+        if collapsed_alpha > 0.0 {
             for (row_index, download) in
                 downloads.iter().take(RAIL_TAB_PREVIEW_MAX_ROWS).enumerate()
             {
@@ -2970,21 +3127,35 @@ impl Gui {
                     row_index,
                     download.progress,
                     true,
+                    collapsed_alpha,
                 );
             }
+        }
+
+        if expanded_alpha == 0.0 {
             return;
         }
 
         for (row_index, download) in downloads.iter().take(RAIL_TAB_PREVIEW_MAX_ROWS).enumerate() {
             let row_rect = rail_tab_row_rect(button_rect, row_index);
-            let row_response = ui
-                .interact(
-                    row_rect,
+            let interaction_rect = row_rect.intersect(button_rect);
+            let row_response = (selected && interaction_rect.is_positive()).then(|| {
+                ui.interact(
+                    interaction_rect,
                     ui.make_persistent_id(("rail_download_tab", row_index)),
                     egui::Sense::click(),
                 )
-                .on_hover_text(&download.label);
-            Self::draw_rail_download_tab_row(ui, row_rect, download, row_response.hovered());
+                .on_hover_text(&download.label)
+            });
+            Self::draw_rail_download_tab_row(
+                ui,
+                row_rect,
+                download,
+                row_response
+                    .as_ref()
+                    .is_some_and(|response| response.hovered()),
+                expanded_alpha,
+            );
         }
     }
 
@@ -2993,18 +3164,20 @@ impl Gui {
         row_rect: egui::Rect,
         download: &RailDownloadTabPreview,
         hovered: bool,
+        alpha: f32,
     ) {
         if !ui.is_rect_visible(row_rect) {
             return;
         }
 
+        let alpha = rail_alpha(alpha);
         let fill = if hovered {
             slate_theme::PANEL_HOVER
         } else {
             egui::Color32::from_rgb(245, 244, 242)
         };
         ui.painter()
-            .rect_filled(row_rect, RAIL_TAB_ROW_RADIUS, fill);
+            .rect_filled(row_rect, RAIL_TAB_ROW_RADIUS, rail_faded_color(fill, alpha));
         let icon_size = rail_tab_row_icon_size(row_rect);
         let icon_center = egui::pos2(
             row_rect.left() + RAIL_TAB_ROW_INNER_MARGIN_X + icon_size / 2.0,
@@ -3015,11 +3188,11 @@ impl Gui {
             1.0 * CHROME_ELEMENT_ZOOM,
             1.2 * CHROME_ELEMENT_ZOOM,
         );
-        let stroke = egui::Stroke::new(stroke_width, slate_theme::TEXT);
+        let stroke = egui::Stroke::new(stroke_width, rail_faded_color(slate_theme::TEXT, alpha));
         ui.painter().circle_stroke(
             icon_center,
             icon_size / 2.0,
-            egui::Stroke::new(stroke_width, slate_theme::BORDER),
+            egui::Stroke::new(stroke_width, rail_faded_color(slate_theme::BORDER, alpha)),
         );
         ui.painter().line_segment(
             [
@@ -3057,7 +3230,7 @@ impl Gui {
             egui::Align2::LEFT_CENTER,
             label,
             font_id,
-            slate_theme::TEXT,
+            rail_faded_color(slate_theme::TEXT, alpha),
         );
     }
 
@@ -3067,17 +3240,19 @@ impl Gui {
         row_index: usize,
         progress: Option<f32>,
         active: bool,
+        alpha: f32,
     ) {
         let track_rect = rail_collapsed_tab_line_rect(button_rect, row_index);
         if !ui.is_rect_visible(track_rect) {
             return;
         }
 
+        let alpha = rail_alpha(alpha);
         let line_height = rail_collapsed_line_height(button_rect);
         ui.painter().rect_filled(
             track_rect,
             line_height / 2.0,
-            rail_collapsed_tab_track_color(),
+            rail_faded_color(rail_collapsed_tab_track_color(), alpha),
         );
         let fill_fraction = progress
             .unwrap_or(if active { 1.0 } else { 0.68 })
@@ -3090,7 +3265,7 @@ impl Gui {
             ui.painter().rect_filled(
                 fill_rect,
                 line_height / 2.0,
-                rail_collapsed_tab_fill_color(active),
+                rail_faded_color(rail_collapsed_tab_fill_color(active), alpha),
             );
         }
     }
@@ -3122,43 +3297,66 @@ impl Gui {
             }
             ui.add_space(RAIL_ITEM_GAP);
             let web_selected = active_page == Some(RailPage::Web);
-            let web_button = Self::rail_svg_icon_button_with_size(
+            let web_expansion =
+                rail_app_expansion_factor(ui, "rail_web_app_expansion", web_selected);
+            let web_button = Self::rail_svg_icon_button_with_size_at_selection(
                 ui,
                 slate_icons,
                 SlateSvg::RailWeb,
                 web_selected,
+                web_expansion,
                 "Web",
                 button_width,
-                rail_web_item_height(web_selected, web_tabs.len(), button_width),
+                rail_web_item_height_at_expansion(web_tabs.len(), button_width, web_expansion),
             );
             if web_button.clicked() {
                 interaction.web_clicked = true;
             }
+            let previous_clip_rect = ui.clip_rect();
+            ui.shrink_clip_rect(web_button.rect);
             let (activated_webview, closed_webview, new_web_tab_clicked) =
-                Self::draw_rail_web_tab_previews(ui, web_button.rect, web_selected, web_tabs);
+                Self::draw_rail_web_tab_previews(
+                    ui,
+                    web_button.rect,
+                    web_selected,
+                    web_expansion,
+                    web_tabs,
+                );
+            ui.set_clip_rect(previous_clip_rect);
             interaction.activated_webview = activated_webview;
             interaction.closed_webview = closed_webview;
             interaction.new_web_tab_clicked = new_web_tab_clicked;
             ui.add_space(RAIL_ITEM_GAP);
             let downloads_selected = active_page == Some(RailPage::Downloads);
-            let downloads_button = Self::rail_svg_icon_button_with_size(
+            let downloads_expansion =
+                rail_app_expansion_factor(ui, "rail_downloads_app_expansion", downloads_selected);
+            let downloads_button = Self::rail_svg_icon_button_with_size_at_selection(
                 ui,
                 slate_icons,
                 SlateSvg::RailDownloads,
                 downloads_selected,
+                downloads_expansion,
                 "Downloads",
                 button_width,
-                rail_item_height(downloads_selected, download_tabs.len(), button_width),
+                rail_item_height_at_expansion(
+                    download_tabs.len(),
+                    button_width,
+                    downloads_expansion,
+                ),
             );
             if downloads_button.clicked() {
                 interaction.downloads_clicked = true;
             }
+            let previous_clip_rect = ui.clip_rect();
+            ui.shrink_clip_rect(downloads_button.rect);
             Self::draw_rail_download_tab_previews(
                 ui,
                 downloads_button.rect,
                 downloads_selected,
+                downloads_expansion,
                 download_tabs,
             );
+            ui.set_clip_rect(previous_clip_rect);
             ui.add_space(RAIL_ITEM_GAP);
             Self::rail_svg_icon_button_with_size(
                 ui,
@@ -4637,12 +4835,13 @@ mod tests {
         location_is_home, location_is_web, rail_button_fill, rail_button_header_rect,
         rail_button_width, rail_collapsed_line_height, rail_collapsed_tab_line_rect,
         rail_collapsed_tab_line_width, rail_expansion_for_button_width, rail_icon_color,
-        rail_item_height, rail_new_tab_icon_size, rail_new_tab_row_rect, rail_selected_button_fill,
-        rail_selected_indicator_color, rail_selected_indicator_rect, rail_svg_icon_rect,
-        rail_tab_close_button_rect, rail_tab_close_button_size, rail_tab_default_scroll_start,
-        rail_tab_indices_from_start, rail_tab_preview_indices, rail_tab_row_height,
-        rail_tab_row_icon_size, rail_tab_row_rect, rail_tab_row_text_size, rail_tab_row_width,
-        rail_tab_scroll_start_after_delta, rail_web_item_height, rail_web_tab_stack_row_count,
+        rail_item_height, rail_item_height_at_expansion, rail_new_tab_icon_size,
+        rail_new_tab_row_rect, rail_selected_button_fill, rail_selected_indicator_color,
+        rail_selected_indicator_rect, rail_svg_icon_rect, rail_tab_close_button_rect,
+        rail_tab_close_button_size, rail_tab_default_scroll_start, rail_tab_indices_from_start,
+        rail_tab_preview_indices, rail_tab_row_height, rail_tab_row_icon_size, rail_tab_row_rect,
+        rail_tab_row_text_size, rail_tab_row_width, rail_tab_scroll_start_after_delta,
+        rail_web_item_height, rail_web_item_height_at_expansion, rail_web_tab_stack_row_count,
         slate_theme, status_bubble_label, status_bubble_width, tab_favicon_site_scope,
         tab_favicon_site_scope_matches, toolbar_address_width, toolbar_background_color,
         toolbar_menu_icon_center, toolbar_menu_icon_color, toolbar_menu_icon_rect,
@@ -4687,8 +4886,8 @@ mod tests {
         HOME_SEARCH_MIN_WIDTH, HOME_SEARCH_TEXT_HEIGHT, HOME_SEARCH_WIDTH_FACTOR,
     };
     use super::{
-        RAIL_BUTTON_RADIUS, RAIL_BUTTON_SIZE, RAIL_COLLAPSED_LINE_HEIGHT,
-        RAIL_COLLAPSED_LINE_HEIGHT_EXPANDED, RAIL_COLLAPSED_LINE_WIDTH,
+        RAIL_APP_EXPANSION_ANIMATION_SECONDS, RAIL_BUTTON_RADIUS, RAIL_BUTTON_SIZE,
+        RAIL_COLLAPSED_LINE_HEIGHT, RAIL_COLLAPSED_LINE_HEIGHT_EXPANDED, RAIL_COLLAPSED_LINE_WIDTH,
         RAIL_COLLAPSED_WITH_TABS_HEIGHT, RAIL_ICON_SIZE, RAIL_ITEM_GAP, RAIL_NEW_TAB_ICON_SIZE,
         RAIL_NEW_TAB_ICON_SIZE_EXPANDED, RAIL_PANEL_MARGIN_X, RAIL_PANEL_MARGIN_Y,
         RAIL_SELECTED_INDICATOR_HEIGHT, RAIL_SELECTED_INDICATOR_LEFT_INSET,
@@ -5325,6 +5524,36 @@ mod tests {
                 row_stride,
             ),
             2
+        );
+    }
+
+    #[test]
+    fn rail_app_expansion_heights_interpolate_without_jumping() {
+        assert_eq!(RAIL_APP_EXPANSION_ANIMATION_SECONDS, 0.16);
+
+        let web_collapsed = rail_web_item_height(false, 7, RAIL_BUTTON_SIZE);
+        let web_expanded = rail_web_item_height(true, 7, RAIL_BUTTON_SIZE);
+        assert_eq!(
+            rail_web_item_height_at_expansion(7, RAIL_BUTTON_SIZE, 0.0),
+            web_collapsed
+        );
+        assert_eq!(
+            rail_web_item_height_at_expansion(7, RAIL_BUTTON_SIZE, 1.0),
+            web_expanded
+        );
+        let web_mid = rail_web_item_height_at_expansion(7, RAIL_BUTTON_SIZE, 0.5);
+        assert!(web_mid > web_collapsed);
+        assert!(web_mid < web_expanded);
+
+        let downloads_collapsed = rail_item_height(false, 3, RAIL_BUTTON_SIZE);
+        let downloads_expanded = rail_item_height(true, 3, RAIL_BUTTON_SIZE);
+        assert_eq!(
+            rail_item_height_at_expansion(3, RAIL_BUTTON_SIZE, -1.0),
+            downloads_collapsed
+        );
+        assert_eq!(
+            rail_item_height_at_expansion(3, RAIL_BUTTON_SIZE, 2.0),
+            downloads_expanded
         );
     }
 
