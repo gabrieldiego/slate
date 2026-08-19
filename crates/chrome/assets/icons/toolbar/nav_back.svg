@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28" color="#303333">
+  <g fill="none" stroke="currentColor" stroke-width="2.1" shape-rendering="geometricPrecision">
+    <path d="M2.35 14.55H25.72" stroke-linecap="butt"/>
+    <path d="M12.5 4.2 2.35 14.55 12.5 24.9" stroke-linecap="square" stroke-linejoin="round"/>
+  </g>
+</svg>

@@ -25,10 +25,6 @@ pub(crate) const BLUE: Color32 = Color32::from_rgb(9, 109, 207);
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum SlateIcon {
-    AppCalendar,
-    AppDownloads,
-    AppMessaging,
-    AppWeb,
     HomeFooterShield,
     HomeHeroShield,
     HomeSearch,
@@ -47,7 +43,6 @@ pub(crate) enum SlateIcon {
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum SlateRaster {
-    AppHome,
     BookmarkAdd,
     PageInfoInsecure,
     PageInfoInternal,
@@ -58,6 +53,19 @@ pub(crate) enum SlateRaster {
     TabClose,
     #[allow(dead_code)]
     TabCloseMuted,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) enum SlateSvg {
+    NavBack,
+    NavForward,
+    NavReload,
+    NavStop,
+    RailCalendar,
+    RailDownloads,
+    RailHome,
+    RailMessages,
+    RailWeb,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -76,33 +84,25 @@ struct SlateRasterData {
     bytes: &'static [u8],
 }
 
+#[derive(Clone, Copy, Debug)]
+struct SlateSvgData {
+    name: &'static str,
+    width: usize,
+    height: usize,
+    bytes: &'static [u8],
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct SlateSvgMaskKey {
+    svg: SlateSvg,
+    color: [u8; 4],
+    width_px: usize,
+    height_px: usize,
+}
+
 impl SlateIcon {
     fn data(self) -> SlateIconData {
         match self {
-            Self::AppCalendar => SlateIconData {
-                name: "app-calendar",
-                width: 34,
-                height: 34,
-                mask: include_bytes!("../../assets/icons/calendar.alpha"),
-            },
-            Self::AppDownloads => SlateIconData {
-                name: "app-downloads",
-                width: 34,
-                height: 34,
-                mask: include_bytes!("../../assets/icons/downloads.alpha"),
-            },
-            Self::AppMessaging => SlateIconData {
-                name: "app-messaging",
-                width: 34,
-                height: 34,
-                mask: include_bytes!("../../assets/icons/messaging.alpha"),
-            },
-            Self::AppWeb => SlateIconData {
-                name: "app-web",
-                width: 34,
-                height: 34,
-                mask: include_bytes!("../../assets/icons/web.alpha"),
-            },
             Self::HomeFooterShield => SlateIconData {
                 name: "home-footer-shield",
                 width: 28,
@@ -194,12 +194,6 @@ impl SlateIcon {
 impl SlateRaster {
     fn data(self) -> SlateRasterData {
         match self {
-            Self::AppHome => SlateRasterData {
-                name: "app-home",
-                width: 34,
-                height: 34,
-                bytes: include_bytes!("../../assets/icons/slate-ns/home.png"),
-            },
             Self::BookmarkAdd => SlateRasterData {
                 name: "bookmark-add",
                 width: 17,
@@ -258,10 +252,72 @@ impl SlateRaster {
     }
 }
 
+impl SlateSvg {
+    fn data(self) -> SlateSvgData {
+        match self {
+            Self::NavBack => SlateSvgData {
+                name: "nav-back",
+                width: 28,
+                height: 28,
+                bytes: include_bytes!("../../assets/icons/toolbar/nav_back.svg"),
+            },
+            Self::NavForward => SlateSvgData {
+                name: "nav-forward",
+                width: 28,
+                height: 28,
+                bytes: include_bytes!("../../assets/icons/toolbar/nav_forward.svg"),
+            },
+            Self::NavReload => SlateSvgData {
+                name: "nav-reload",
+                width: 28,
+                height: 28,
+                bytes: include_bytes!("../../assets/icons/toolbar/nav_reload.svg"),
+            },
+            Self::NavStop => SlateSvgData {
+                name: "nav-stop",
+                width: 24,
+                height: 24,
+                bytes: include_bytes!("../../assets/icons/toolbar/nav_stop.svg"),
+            },
+            Self::RailCalendar => SlateSvgData {
+                name: "rail-calendar",
+                width: 32,
+                height: 32,
+                bytes: include_bytes!("../../assets/icons/sidebar/calendar.svg"),
+            },
+            Self::RailDownloads => SlateSvgData {
+                name: "rail-downloads",
+                width: 32,
+                height: 32,
+                bytes: include_bytes!("../../assets/icons/sidebar/downloads.svg"),
+            },
+            Self::RailHome => SlateSvgData {
+                name: "rail-home",
+                width: 32,
+                height: 32,
+                bytes: include_bytes!("../../assets/icons/sidebar/home.svg"),
+            },
+            Self::RailMessages => SlateSvgData {
+                name: "rail-messages",
+                width: 32,
+                height: 32,
+                bytes: include_bytes!("../../assets/icons/sidebar/messages.svg"),
+            },
+            Self::RailWeb => SlateSvgData {
+                name: "rail-web",
+                width: 32,
+                height: 32,
+                bytes: include_bytes!("../../assets/icons/sidebar/web.svg"),
+            },
+        }
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct SlateIconCache {
     textures: HashMap<(SlateIcon, [u8; 4]), TextureHandle>,
     raster_mask_textures: HashMap<(SlateRaster, [u8; 4]), TextureHandle>,
+    svg_mask_textures: HashMap<SlateSvgMaskKey, TextureHandle>,
 }
 
 impl SlateIconCache {
@@ -299,6 +355,27 @@ impl SlateIconCache {
             handle.id(),
             egui::vec2(data.width as f32, data.height as f32),
         )
+    }
+
+    pub(crate) fn svg_mask_texture(
+        &mut self,
+        ctx: &egui::Context,
+        svg: SlateSvg,
+        color: Color32,
+        size_points: egui::Vec2,
+    ) -> egui::load::SizedTexture {
+        let [width_px, height_px] = svg_raster_size(size_points, ctx.pixels_per_point());
+        let key = SlateSvgMaskKey {
+            svg,
+            color: color.to_array(),
+            width_px,
+            height_px,
+        };
+        let handle = self
+            .svg_mask_textures
+            .entry(key)
+            .or_insert_with(|| load_svg_mask_texture(ctx, svg, color, [width_px, height_px]));
+        egui::load::SizedTexture::new(handle.id(), size_points)
     }
 }
 
@@ -406,20 +483,77 @@ fn load_raster_mask_texture(
     )
 }
 
+fn svg_dimension_to_pixels(points: f32, pixels_per_point: f32) -> usize {
+    let pixels_per_point = if pixels_per_point.is_finite() {
+        pixels_per_point.max(0.1)
+    } else {
+        1.0
+    };
+    let pixels = points.max(1.0) * pixels_per_point;
+    pixels.ceil().min(u32::MAX as f32) as usize
+}
+
+fn svg_raster_size(size_points: egui::Vec2, pixels_per_point: f32) -> [usize; 2] {
+    [
+        svg_dimension_to_pixels(size_points.x, pixels_per_point),
+        svg_dimension_to_pixels(size_points.y, pixels_per_point),
+    ]
+}
+
+fn svg_mask_rgba(svg: SlateSvg, color: Color32, raster_size: [usize; 2]) -> Vec<u8> {
+    let data = svg.data();
+    let tree = resvg::usvg::Tree::from_data(data.bytes, &resvg::usvg::Options::default())
+        .expect("bundled Slate SVG asset should parse");
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(raster_size[0] as u32, raster_size[1] as u32)
+        .expect("bundled Slate SVG asset should have nonzero dimensions");
+    let transform = resvg::tiny_skia::Transform::from_scale(
+        raster_size[0] as f32 / data.width as f32,
+        raster_size[1] as f32 / data.height as f32,
+    );
+    resvg::render(&tree, transform, &mut pixmap.as_mut());
+
+    let [red, green, blue, color_alpha] = color.to_array();
+    pixmap
+        .data()
+        .chunks_exact(4)
+        .flat_map(|pixel| {
+            let alpha = u16::from(pixel[3]) * u16::from(color_alpha) / 255;
+            [red, green, blue, u8::try_from(alpha).unwrap_or(u8::MAX)]
+        })
+        .collect()
+}
+
+fn load_svg_mask_texture(
+    ctx: &egui::Context,
+    svg: SlateSvg,
+    color: Color32,
+    raster_size: [usize; 2],
+) -> TextureHandle {
+    let data = svg.data();
+    let [red, green, blue, color_alpha] = color.to_array();
+    let rgba = svg_mask_rgba(svg, color, raster_size);
+    let image = egui::ColorImage::from_rgba_unmultiplied(raster_size, &rgba);
+    ctx.load_texture(
+        format!(
+            "slate-svg-mask-{}-{}x{}-{:02x}{:02x}{:02x}{:02x}",
+            data.name, raster_size[0], raster_size[1], red, green, blue, color_alpha
+        ),
+        image,
+        TextureOptions::LINEAR,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         AMBER, BG, BLUE, BORDER, CHROME_BG, FIELD_BORDER, FIELD_SURFACE, HOME_BG, MUTED, PANEL,
-        PANEL_HOVER, SlateIcon, SlateRaster, TEAL, TEAL_SOFT, TITLE_SURFACE, raster_mask_rgba,
+        PANEL_HOVER, SlateIcon, SlateRaster, SlateSvg, TEAL, TEAL_SOFT, TITLE_SURFACE,
+        raster_mask_rgba, svg_mask_rgba, svg_raster_size,
     };
 
     #[test]
     fn bundled_alpha_masks_match_declared_dimensions() {
         for icon in [
-            SlateIcon::AppCalendar,
-            SlateIcon::AppDownloads,
-            SlateIcon::AppMessaging,
-            SlateIcon::AppWeb,
             SlateIcon::HomeFooterShield,
             SlateIcon::HomeHeroShield,
             SlateIcon::HomeSearch,
@@ -444,7 +578,6 @@ mod tests {
     fn bundled_raster_images_match_declared_dimensions() {
         for raster in [
             SlateRaster::BookmarkAdd,
-            SlateRaster::AppHome,
             SlateRaster::PageInfoInsecure,
             SlateRaster::PageInfoInternal,
             SlateRaster::PageInfoLocal,
@@ -459,6 +592,40 @@ mod tests {
             assert_eq!(image.width() as usize, data.width);
             assert_eq!(image.height() as usize, data.height);
         }
+    }
+
+    #[test]
+    fn bundled_svg_icons_rasterize_to_declared_dimensions() {
+        for svg in [
+            SlateSvg::NavBack,
+            SlateSvg::NavForward,
+            SlateSvg::NavReload,
+            SlateSvg::NavStop,
+            SlateSvg::RailCalendar,
+            SlateSvg::RailDownloads,
+            SlateSvg::RailHome,
+            SlateSvg::RailMessages,
+            SlateSvg::RailWeb,
+        ] {
+            let data = svg.data();
+            let rgba = svg_mask_rgba(svg, MUTED, [data.width, data.height]);
+            let [red, green, blue, _] = MUTED.to_array();
+
+            assert_eq!(rgba.len(), data.width * data.height * 4);
+            assert!(rgba.chunks_exact(4).any(|pixel| pixel[3] > 0));
+            assert!(
+                rgba.chunks_exact(4)
+                    .filter(|pixel| pixel[3] > 0)
+                    .all(|pixel| pixel[0] == red && pixel[1] == green && pixel[2] == blue)
+            );
+        }
+    }
+
+    #[test]
+    fn svg_raster_size_tracks_target_points_and_pixels_per_point() {
+        assert_eq!(svg_raster_size(egui::vec2(25.2, 25.2), 1.0), [26, 26]);
+        assert_eq!(svg_raster_size(egui::vec2(25.2, 25.2), 2.0), [51, 51]);
+        assert_eq!(svg_raster_size(egui::Vec2::ZERO, 1.0), [1, 1]);
     }
 
     #[test]

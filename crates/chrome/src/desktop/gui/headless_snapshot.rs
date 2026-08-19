@@ -109,6 +109,22 @@ pub(crate) fn write_default_verification_report(directory: &Path) -> Result<(), 
                 hover_reload_full_path.display()
             )
         })?;
+    let hover_menu_image = render_snapshot_with_interaction(
+        [DEFAULT_SNAPSHOT_WIDTH, DEFAULT_SNAPSHOT_HEIGHT],
+        LoadStatus::Complete,
+        Some(toolbar.menu_button_rect.center()),
+        false,
+    )?;
+    let hover_menu_full_name = "hover-menu-full.png";
+    let hover_menu_full_path = directory.join(hover_menu_full_name);
+    hover_menu_image
+        .save(&hover_menu_full_path)
+        .map_err(|error| {
+            format!(
+                "failed to encode {}: {error}",
+                hover_menu_full_path.display()
+            )
+        })?;
 
     let mut summary = VerificationSummary::default();
     let mut region_captures = HashMap::new();
@@ -119,6 +135,7 @@ pub(crate) fn write_default_verification_report(directory: &Path) -> Result<(), 
             VerificationSource::Loading => &loading_image,
             VerificationSource::HoverNavBack => &hover_back_image,
             VerificationSource::HoverNavReload => &hover_reload_image,
+            VerificationSource::HoverMenu => &hover_menu_image,
         };
         let crop_rect = PixelRect::from_point_rect(
             region.rect,
@@ -172,6 +189,7 @@ pub(crate) fn write_default_verification_report(directory: &Path) -> Result<(), 
             "loading": loading_full_name,
             "hover_nav_back": hover_back_full_name,
             "hover_nav_reload": hover_reload_full_name,
+            "hover_menu": hover_menu_full_name,
         },
         "summary": verification_summary_json(summary),
         "regions": region_reports,
@@ -504,14 +522,29 @@ fn render_toolbar(
                 ui.available_size(),
                 egui::Layout::left_to_right(egui::Align::Center),
                 |ui| {
-                    let _ = Gui::toolbar_navigation_button(ui, SlateIcon::NavBack, can_go_back);
-                    let _ = Gui::toolbar_navigation_button(ui, SlateIcon::NavForward, false);
+                    let _ = Gui::toolbar_navigation_button(
+                        ui,
+                        slate_icons,
+                        SlateIcon::NavBack,
+                        can_go_back,
+                    );
+                    let _ = Gui::toolbar_navigation_button(
+                        ui,
+                        slate_icons,
+                        SlateIcon::NavForward,
+                        false,
+                    );
                     match load_status {
                         LoadStatus::Started | LoadStatus::HeadParsed => {
-                            let _ = Gui::toolbar_stop_button(ui, true);
+                            let _ = Gui::toolbar_stop_button(ui, slate_icons, true);
                         }
                         LoadStatus::Complete => {
-                            let _ = Gui::toolbar_navigation_button(ui, SlateIcon::NavRefresh, true);
+                            let _ = Gui::toolbar_navigation_button(
+                                ui,
+                                slate_icons,
+                                SlateIcon::NavRefresh,
+                                true,
+                            );
                         }
                     }
 
@@ -686,6 +719,7 @@ enum VerificationSource {
     Loading,
     HoverNavBack,
     HoverNavReload,
+    HoverMenu,
 }
 
 impl VerificationSource {
@@ -695,6 +729,7 @@ impl VerificationSource {
             Self::Loading => "loading",
             Self::HoverNavBack => "hover-nav-back",
             Self::HoverNavReload => "hover-nav-reload",
+            Self::HoverMenu => "hover-menu",
         }
     }
 }
@@ -946,6 +981,13 @@ fn verification_regions() -> Vec<VerificationRegion> {
             "toolbar-menu.png",
             toolbar.menu_button_rect.expand(4.0),
             "three-line toolbar menu crop",
+        ),
+        verification_region_from_source(
+            VerificationSource::HoverMenu,
+            "toolbar-menu-hover-button",
+            "toolbar-menu-hover-button.png",
+            toolbar.menu_button_rect.expand(4.0),
+            "toolbar menu hover shade and hamburger glyph alignment",
         ),
         verification_region(
             "footer-status",
