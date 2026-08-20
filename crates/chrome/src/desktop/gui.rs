@@ -37,6 +37,7 @@ use slate_broadwebd::{
     BroadwebDaemon, BroadwebStatusKind, BroadwebStatusSnapshot, FetchDisposition, HttpFetchRequest,
     default_session_status_snapshot,
 };
+use slate_browser_core::normalize_navigation_input;
 use slate_storage::{
     BookmarkRecord, BookmarkUpdate, DEFAULT_HOME_BOOKMARKS, DEFAULT_PROFILE_ID, HistoryVisitRecord,
     SlateProfileDatabase, StorageError,
@@ -224,8 +225,8 @@ const HOME_METRIC_BADGE_MARGIN_Y: i8 = 3;
 const HOME_METRIC_BADGE_CORNER_RADIUS: u8 = 10;
 const HOME_CONTENT_OPTICAL_OFFSET_X: f32 = -13.0;
 const HOME_HERO_OPTICAL_OFFSET_X: f32 = -29.0;
-const HOME_BOOKMARK_SLOT_COUNT: usize = 2;
 const HOME_BOOKMARK_CARD_COUNT: usize = 4;
+const HOME_BOOKMARK_SLOT_COUNT: usize = HOME_BOOKMARK_CARD_COUNT;
 const HOME_FAVICON_MAX_BYTES: usize = 256 * 1024;
 const HOME_FAVICON_MAX_SIDE: u32 = 64;
 const HOME_FAVICON_FETCH_REPAINT_INTERVAL: Duration = Duration::from_millis(250);
@@ -252,6 +253,7 @@ pub struct Gui {
     location: String,
     home_search: String,
     home_bookmarks: Vec<HomeBookmarkCard>,
+    home_bookmark_editor: Option<HomeBookmarkEditor>,
     home_bookmarks_loaded: bool,
     web_history_cards: Vec<HomeBookmarkCard>,
     home_favicon_textures: HashMap<String, (egui::TextureHandle, egui::load::SizedTexture)>,
@@ -479,6 +481,7 @@ impl Default for HomeContentLayout {
 
 #[derive(Clone, Debug, PartialEq)]
 struct HomeBookmarkCard {
+    slot: usize,
     label: String,
     detail: String,
     url: Option<String>,
@@ -486,9 +489,32 @@ struct HomeBookmarkCard {
     favicon_url: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+struct HomeBookmarkEditor {
+    slot: usize,
+    title: String,
+    address: String,
+    error: Option<String>,
+    focus_address: bool,
+}
+
+impl HomeBookmarkEditor {
+    fn new(slot: usize, window: &ServoShellWindow) -> Self {
+        let (title, address) = active_webview_bookmark_prefill(window);
+        Self {
+            slot: slot.min(HOME_BOOKMARK_SLOT_COUNT.saturating_sub(1)),
+            title,
+            address,
+            error: None,
+            focus_address: true,
+        }
+    }
+}
+
 #[derive(Debug)]
 struct HomeContentResponse {
     navigation_request: Option<String>,
+    add_bookmark_slot: Option<usize>,
     layout: HomeContentLayout,
 }
 
@@ -1313,28 +1339,33 @@ fn home_metric_detail_color() -> egui::Color32 {
     egui::Color32::from_rgb(145, 144, 144)
 }
 
-fn home_bookmark_placeholder_cards() -> Vec<HomeBookmarkCard> {
-    vec![
-        HomeBookmarkCard {
-            label: "Add bookmark".to_string(),
-            detail: "Save a favorite site".to_string(),
-            url: None,
-            favicon_key: None,
-            favicon_url: None,
+fn home_bookmark_placeholder_card(slot: usize) -> HomeBookmarkCard {
+    let first_open_slot = DEFAULT_HOME_BOOKMARKS
+        .len()
+        .min(HOME_BOOKMARK_CARD_COUNT.saturating_sub(1));
+    let is_primary_add_slot = slot == 0 || slot == first_open_slot;
+    HomeBookmarkCard {
+        slot,
+        label: if is_primary_add_slot {
+            "Add bookmark".to_string()
+        } else {
+            "Add another".to_string()
         },
-        HomeBookmarkCard {
-            label: "Add another".to_string(),
-            detail: "Pin your broadweb".to_string(),
-            url: None,
-            favicon_key: None,
-            favicon_url: None,
+        detail: if is_primary_add_slot {
+            "Save a favorite site".to_string()
+        } else {
+            "Pin your broadweb".to_string()
         },
-    ]
+        url: None,
+        favicon_key: None,
+        favicon_url: None,
+    }
 }
 
 fn web_history_placeholder_cards() -> Vec<HomeBookmarkCard> {
     vec![
         HomeBookmarkCard {
+            slot: 0,
             label: "No history yet".to_string(),
             detail: "Visit a website".to_string(),
             url: None,
@@ -1342,6 +1373,7 @@ fn web_history_placeholder_cards() -> Vec<HomeBookmarkCard> {
             favicon_url: None,
         },
         HomeBookmarkCard {
+            slot: 1,
             label: "Recent sites".to_string(),
             detail: "Stored locally".to_string(),
             url: None,
@@ -1349,6 +1381,7 @@ fn web_history_placeholder_cards() -> Vec<HomeBookmarkCard> {
             favicon_url: None,
         },
         HomeBookmarkCard {
+            slot: 2,
             label: "Broadweb".to_string(),
             detail: "HTTP, IPFS, IPNS".to_string(),
             url: None,
@@ -1356,6 +1389,7 @@ fn web_history_placeholder_cards() -> Vec<HomeBookmarkCard> {
             favicon_url: None,
         },
         HomeBookmarkCard {
+            slot: 3,
             label: "Refresh later".to_string(),
             detail: "Manual discovery".to_string(),
             url: None,
@@ -1368,7 +1402,10 @@ fn web_history_placeholder_cards() -> Vec<HomeBookmarkCard> {
 fn default_home_bookmark_cards() -> Vec<HomeBookmarkCard> {
     let mut bookmarks: Vec<_> = DEFAULT_HOME_BOOKMARKS
         .iter()
-        .map(|bookmark| home_bookmark_card(bookmark.title.to_string(), bookmark.url.to_string()))
+        .enumerate()
+        .map(|(slot, bookmark)| {
+            home_bookmark_card(slot, bookmark.title.to_string(), bookmark.url.to_string())
+        })
         .collect();
     fill_home_bookmark_placeholders(&mut bookmarks);
     bookmarks
@@ -1400,11 +1437,17 @@ fn web_history_cards_from_database(
 }
 
 fn web_history_cards_from_records(records: Vec<HistoryVisitRecord>) -> Vec<HomeBookmarkCard> {
-    let mut history: Vec<_> = records
-        .into_iter()
-        .filter_map(web_history_card_from_record)
-        .take(HOME_BOOKMARK_CARD_COUNT)
-        .collect();
+    let mut history = Vec::new();
+    for record in records {
+        let Some(mut card) = web_history_card_from_record(record) else {
+            continue;
+        };
+        card.slot = history.len();
+        history.push(card);
+        if history.len() >= HOME_BOOKMARK_CARD_COUNT {
+            break;
+        }
+    }
     fill_web_history_placeholders(&mut history);
     history
 }
@@ -1415,21 +1458,28 @@ fn home_bookmark_records_from_database(
     Ok(database
         .bookmarks(DEFAULT_PROFILE_ID)?
         .into_iter()
+        .filter(|bookmark| home_bookmark_record_slot(bookmark).is_some())
         .take(HOME_BOOKMARK_SLOT_COUNT)
         .collect())
 }
 
 fn fill_home_bookmark_placeholders(bookmarks: &mut Vec<HomeBookmarkCard>) {
-    for placeholder in home_bookmark_placeholder_cards() {
-        if bookmarks.len() >= HOME_BOOKMARK_CARD_COUNT {
-            break;
+    bookmarks.retain(|bookmark| bookmark.slot < HOME_BOOKMARK_CARD_COUNT);
+    let occupied_slots: HashSet<_> = bookmarks.iter().map(|bookmark| bookmark.slot).collect();
+    for slot in 0..HOME_BOOKMARK_CARD_COUNT {
+        if !occupied_slots.contains(&slot) {
+            bookmarks.push(home_bookmark_placeholder_card(slot));
         }
-        bookmarks.push(placeholder);
     }
+    bookmarks.sort_by_key(|bookmark| bookmark.slot);
+    bookmarks.truncate(HOME_BOOKMARK_CARD_COUNT);
 }
 
 fn fill_web_history_placeholders(history: &mut Vec<HomeBookmarkCard>) {
-    for placeholder in web_history_placeholder_cards() {
+    for placeholder in web_history_placeholder_cards()
+        .into_iter()
+        .skip(history.len())
+    {
         if history.len() >= HOME_BOOKMARK_CARD_COUNT {
             break;
         }
@@ -1442,7 +1492,9 @@ fn home_bookmark_card_from_record(record: BookmarkRecord) -> HomeBookmarkCard {
         .title
         .filter(|title| !title.trim().is_empty())
         .unwrap_or_else(|| home_bookmark_detail(&record.url));
-    let mut card = home_bookmark_card(label, record.url);
+    let slot = home_bookmark_slot_from_position(record.position)
+        .unwrap_or_else(|| HOME_BOOKMARK_SLOT_COUNT.saturating_sub(1));
+    let mut card = home_bookmark_card(slot, label, record.url);
     card.favicon_key = card.url.as_deref().and_then(|url| {
         record
             .favicon_key
@@ -1458,6 +1510,7 @@ fn web_history_card_from_record(record: HistoryVisitRecord) -> Option<HomeBookma
     }
 
     Some(home_bookmark_card(
+        0,
         record
             .title
             .filter(|title| !title.trim().is_empty())
@@ -1466,8 +1519,9 @@ fn web_history_card_from_record(record: HistoryVisitRecord) -> Option<HomeBookma
     ))
 }
 
-fn home_bookmark_card(label: String, url: String) -> HomeBookmarkCard {
+fn home_bookmark_card(slot: usize, label: String, url: String) -> HomeBookmarkCard {
     HomeBookmarkCard {
+        slot,
         label,
         detail: home_bookmark_detail(&url),
         favicon_key: Some(home_bookmark_favicon_key(&url)),
@@ -1516,21 +1570,54 @@ fn is_default_home_bookmark_url(url: &str) -> bool {
         .any(|bookmark| bookmark.url == url)
 }
 
-fn home_bookmark_slot_for_url(bookmarks: &[BookmarkRecord], url: &str) -> usize {
-    if let Some(index) = bookmarks.iter().position(|bookmark| bookmark.url == url) {
-        return index.min(HOME_BOOKMARK_SLOT_COUNT.saturating_sub(1));
-    }
+fn home_bookmark_slot_from_position(position: i64) -> Option<usize> {
+    usize::try_from(position)
+        .ok()
+        .filter(|slot| *slot < HOME_BOOKMARK_SLOT_COUNT)
+}
 
-    if let Some(index) = bookmarks
-        .iter()
-        .position(|bookmark| is_default_home_bookmark_url(&bookmark.url))
-    {
-        return index.min(HOME_BOOKMARK_SLOT_COUNT.saturating_sub(1));
-    }
+fn home_bookmark_record_slot(record: &BookmarkRecord) -> Option<usize> {
+    home_bookmark_slot_from_position(record.position)
+}
 
+fn home_bookmark_replaced_url_for_slot<'a>(
+    bookmarks: &'a [BookmarkRecord],
+    slot: usize,
+) -> Option<&'a str> {
     bookmarks
-        .len()
-        .min(HOME_BOOKMARK_SLOT_COUNT.saturating_sub(1))
+        .iter()
+        .find(|bookmark| home_bookmark_record_slot(bookmark) == Some(slot))
+        .map(|bookmark| bookmark.url.as_str())
+}
+
+fn home_bookmark_slot_for_url(bookmarks: &[BookmarkRecord], url: &str) -> usize {
+    if let Some(existing_slot) = bookmarks
+        .iter()
+        .find(|bookmark| bookmark.url == url)
+        .and_then(home_bookmark_record_slot)
+    {
+        return existing_slot;
+    }
+
+    let occupied_slots: HashSet<_> = bookmarks
+        .iter()
+        .filter_map(home_bookmark_record_slot)
+        .collect();
+    if let Some(empty_slot) =
+        (0..HOME_BOOKMARK_SLOT_COUNT).find(|slot| !occupied_slots.contains(slot))
+    {
+        return empty_slot;
+    }
+
+    if let Some(default_slot) = bookmarks
+        .iter()
+        .find(|bookmark| is_default_home_bookmark_url(&bookmark.url))
+        .and_then(home_bookmark_record_slot)
+    {
+        return default_slot;
+    }
+
+    HOME_BOOKMARK_SLOT_COUNT.saturating_sub(1)
 }
 
 fn home_bookmark_title(page_title: Option<String>, url: &str) -> String {
@@ -1546,6 +1633,30 @@ fn is_home_bookmarkable_url(url: &str) -> bool {
             "about" | "data" | "file" | "javascript" | "resource" | "servo" | "slate"
         )
     })
+}
+
+fn normalize_home_bookmark_address(input: &str) -> Result<String, String> {
+    let address = normalize_navigation_input(input)
+        .map_err(|_| "Enter a URL or host name for this bookmark.".to_string())?;
+    if is_home_bookmarkable_url(&address) {
+        Ok(address)
+    } else {
+        Err("Bookmarks must point to a browsable web or broadweb address.".to_string())
+    }
+}
+
+fn active_webview_bookmark_prefill(window: &ServoShellWindow) -> (String, String) {
+    let Some(webview) = window.active_webview() else {
+        return (String::new(), String::new());
+    };
+    let Some(url) = webview.url().map(|url| url.to_string()) else {
+        return (String::new(), String::new());
+    };
+    if !is_home_bookmarkable_url(&url) {
+        return (String::new(), String::new());
+    }
+
+    (home_bookmark_title(webview.page_title(), &url), url)
 }
 
 fn home_bookmark_scheme_can_fetch_favicon(scheme: &str) -> bool {
@@ -2239,6 +2350,7 @@ impl Gui {
             location: initial_url.to_string(),
             home_search: String::new(),
             home_bookmarks: default_home_bookmark_cards(),
+            home_bookmark_editor: None,
             home_bookmarks_loaded: false,
             web_history_cards: default_web_history_cards(),
             home_favicon_textures: Default::default(),
@@ -3653,6 +3765,7 @@ impl Gui {
         favicon_textures: &HashMap<String, (egui::TextureHandle, egui::load::SizedTexture)>,
         width: f32,
         bookmark: &HomeBookmarkCard,
+        allow_empty_bookmark_slots: bool,
     ) -> (egui::Rect, egui::Response) {
         let frame = egui::Frame::NONE
             .fill(home_metric_card_background_color())
@@ -3732,15 +3845,18 @@ impl Gui {
 
         let response = ui.interact(
             frame.response.rect,
-            ui.make_persistent_id(("home_bookmark", &bookmark.label)),
-            if bookmark.url.is_some() {
+            ui.make_persistent_id(("home_bookmark", bookmark.slot, &bookmark.label)),
+            if bookmark.url.is_some() || allow_empty_bookmark_slots {
                 egui::Sense::click()
             } else {
                 egui::Sense::hover()
             },
         );
 
-        if ui.is_rect_visible(response.rect) && response.hovered() && bookmark.url.is_some() {
+        if ui.is_rect_visible(response.rect)
+            && response.hovered()
+            && (bookmark.url.is_some() || allow_empty_bookmark_slots)
+        {
             ui.painter().rect_stroke(
                 response.rect,
                 8,
@@ -3750,11 +3866,12 @@ impl Gui {
         }
 
         response.widget_info(|| {
-            let mut info = WidgetInfo::new(if bookmark.url.is_some() {
-                WidgetType::Button
-            } else {
-                WidgetType::Label
-            });
+            let mut info =
+                WidgetInfo::new(if bookmark.url.is_some() || allow_empty_bookmark_slots {
+                    WidgetType::Button
+                } else {
+                    WidgetType::Label
+                });
             info.label = Some(bookmark.label.clone());
             info
         });
@@ -3773,10 +3890,12 @@ impl Gui {
         slate_icons: &mut SlateIconCache,
         favicon_textures: &HashMap<String, (egui::TextureHandle, egui::load::SizedTexture)>,
         bookmarks: &[HomeBookmarkCard],
-    ) -> (egui::Rect, Option<String>) {
+        allow_empty_bookmark_slots: bool,
+    ) -> (egui::Rect, Option<String>, Option<usize>) {
         let layout = home_metrics_layout(ui.available_width());
         let mut bounds = None;
         let mut navigation_request = None;
+        let mut add_bookmark_slot = None;
         for (row_index, row) in bookmarks.chunks(layout.columns).enumerate() {
             if row_index > 0 {
                 ui.add_space(layout.spacing);
@@ -3794,11 +3913,14 @@ impl Gui {
                         favicon_textures,
                         layout.card_width,
                         bookmark,
+                        allow_empty_bookmark_slots,
                     );
-                    if response.clicked()
-                        && let Some(url) = &bookmark.url
-                    {
-                        navigation_request = Some(url.clone());
+                    if response.clicked() {
+                        if let Some(url) = &bookmark.url {
+                            navigation_request = Some(url.clone());
+                        } else if allow_empty_bookmark_slots {
+                            add_bookmark_slot = Some(bookmark.slot);
+                        }
                     }
                     bounds =
                         Some(bounds.map_or(card_rect, |rect: egui::Rect| rect.union(card_rect)));
@@ -3806,7 +3928,11 @@ impl Gui {
             });
         }
 
-        (bounds.unwrap_or(egui::Rect::NOTHING), navigation_request)
+        (
+            bounds.unwrap_or(egui::Rect::NOTHING),
+            navigation_request,
+            add_bookmark_slot,
+        )
     }
 
     fn draw_home_content(
@@ -3816,9 +3942,11 @@ impl Gui {
         favicon_textures: &HashMap<String, (egui::TextureHandle, egui::load::SizedTexture)>,
         home_search: &mut String,
         home_bookmarks: &[HomeBookmarkCard],
+        allow_empty_bookmark_slots: bool,
     ) -> HomeContentResponse {
         let mut layout = HomeContentLayout::default();
         let mut navigation_request = None;
+        let mut add_bookmark_slot = None;
 
         ui.add_space(home_top_space(home_rect.height()));
         ui.vertical(|ui| {
@@ -3934,17 +4062,27 @@ impl Gui {
                 let metrics_response = ui.allocate_ui_with_layout(
                     egui::vec2(metrics_width, metrics_height),
                     egui::Layout::top_down(egui::Align::Center),
-                    |ui| Self::draw_home_metrics(ui, slate_icons, favicon_textures, home_bookmarks),
+                    |ui| {
+                        Self::draw_home_metrics(
+                            ui,
+                            slate_icons,
+                            favicon_textures,
+                            home_bookmarks,
+                            allow_empty_bookmark_slots,
+                        )
+                    },
                 );
                 layout.metrics_rect = metrics_response.inner.0;
                 if let Some(request) = metrics_response.inner.1 {
                     navigation_request = Some(request);
                 }
+                add_bookmark_slot = metrics_response.inner.2;
             });
         });
 
         HomeContentResponse {
             navigation_request,
+            add_bookmark_slot,
             layout,
         }
     }
@@ -3956,6 +4094,8 @@ impl Gui {
         favicon_textures: &HashMap<String, (egui::TextureHandle, egui::load::SizedTexture)>,
         home_search: &mut String,
         home_bookmarks: &[HomeBookmarkCard],
+        home_bookmark_editor: &mut Option<HomeBookmarkEditor>,
+        allow_empty_bookmark_slots: bool,
         window: &ServoShellWindow,
     ) {
         egui::Area::new(Id::new("slate_home_view"))
@@ -3975,14 +4115,118 @@ impl Gui {
                             favicon_textures,
                             home_search,
                             home_bookmarks,
+                            allow_empty_bookmark_slots,
                         )
                     })
                     .inner;
                 let _ = response.layout;
+                if let Some(slot) = response.add_bookmark_slot {
+                    *home_bookmark_editor = Some(HomeBookmarkEditor::new(slot, window));
+                }
                 if let Some(request) = response.navigation_request {
                     window.queue_user_interface_command(UserInterfaceCommand::Go(request));
                 }
             });
+    }
+
+    fn draw_home_bookmark_editor(
+        ctx: &egui::Context,
+        database: &SlateProfileDatabase,
+        home_bookmarks: &mut Vec<HomeBookmarkCard>,
+        editor: &mut Option<HomeBookmarkEditor>,
+    ) {
+        if editor.is_none() {
+            return;
+        }
+
+        #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+        enum EditorAction {
+            None,
+            Save,
+            Cancel,
+        }
+
+        let mut action = EditorAction::None;
+        {
+            let Some(editor_state) = editor.as_mut() else {
+                return;
+            };
+            egui::Modal::new("home_bookmark_editor".into()).show(ctx, |ui| {
+                ui.set_min_width(360.0);
+                ui.vertical(|ui| {
+                    ui.heading("Add bookmark");
+                    ui.add_space(8.0);
+
+                    ui.label("Title");
+                    let title_response = ui.add(
+                        egui::TextEdit::singleline(&mut editor_state.title)
+                            .hint_text("Optional title"),
+                    );
+
+                    ui.add_space(6.0);
+                    ui.label("Address");
+                    let address_response = ui.add(
+                        egui::TextEdit::singleline(&mut editor_state.address)
+                            .hint_text("https://example.com"),
+                    );
+                    if editor_state.focus_address {
+                        address_response.request_focus();
+                        editor_state.focus_address = false;
+                    }
+
+                    if let Some(error) = &editor_state.error {
+                        ui.add_space(8.0);
+                        ui.colored_label(slate_theme::AMBER, error);
+                    }
+
+                    ui.add_space(14.0);
+                    ui.horizontal(|ui| {
+                        if ui.button("Cancel").clicked() {
+                            action = EditorAction::Cancel;
+                        }
+                        if ui.button("Save").clicked() {
+                            action = EditorAction::Save;
+                        }
+                    });
+
+                    let pressed_enter = ui.input(|input| input.key_pressed(Key::Enter));
+                    if pressed_enter && (title_response.has_focus() || address_response.has_focus())
+                    {
+                        action = EditorAction::Save;
+                    }
+                    if ui.input(|input| input.key_pressed(Key::Escape)) {
+                        action = EditorAction::Cancel;
+                    }
+                });
+            });
+        }
+
+        match action {
+            EditorAction::None => {}
+            EditorAction::Cancel => {
+                *editor = None;
+            }
+            EditorAction::Save => {
+                let Some(editor_state) = editor.as_mut() else {
+                    return;
+                };
+                match Self::save_home_bookmark_slot(
+                    database,
+                    editor_state.slot,
+                    &editor_state.title,
+                    &editor_state.address,
+                ) {
+                    Ok(bookmarks) => {
+                        *home_bookmarks = bookmarks;
+                        *editor = None;
+                        ctx.request_repaint();
+                    }
+                    Err(error) => {
+                        editor_state.error = Some(error);
+                    }
+                }
+            }
+        }
     }
 
     fn draw_status_text(ctx: &egui::Context, available_rect: egui::Rect, status_text: &str) {
@@ -4054,6 +4298,7 @@ impl Gui {
             location,
             home_search,
             home_bookmarks,
+            home_bookmark_editor,
             web_history_cards,
             home_favicon_textures,
             home_favicon_fetches,
@@ -4446,11 +4691,13 @@ impl Gui {
                 webview.resize(PhysicalSize::new(size.width as u32, size.height as u32))
             }
 
-            if let Some(active_cards) = match active_native_chrome_page {
-                Some(NativeChromePage::Home) => Some(home_bookmarks.as_slice()),
-                Some(NativeChromePage::Web) => Some(web_history_cards.as_slice()),
-                None => None,
-            } {
+            if let Some((active_cards, allow_empty_bookmark_slots)) =
+                match active_native_chrome_page {
+                    Some(NativeChromePage::Home) => Some((home_bookmarks.as_slice(), true)),
+                    Some(NativeChromePage::Web) => Some((web_history_cards.as_slice(), false)),
+                    None => None,
+                }
+            {
                 Self::draw_home_view(
                     ctx,
                     available_rect,
@@ -4458,9 +4705,17 @@ impl Gui {
                     home_favicon_textures,
                     home_search,
                     active_cards,
+                    home_bookmark_editor,
+                    allow_empty_bookmark_slots,
                     window,
                 );
             }
+            Self::draw_home_bookmark_editor(
+                ctx,
+                &state.profile_database,
+                home_bookmarks,
+                home_bookmark_editor,
+            );
 
             if let Some(status_text) = &self.status_text {
                 Self::draw_status_text(ctx, available_rect, status_text);
@@ -4576,7 +4831,7 @@ impl Gui {
 
         let records = home_bookmark_records_from_database(database)?;
         let slot = home_bookmark_slot_for_url(&records, &url);
-        let replaced_url = records.get(slot).map(|bookmark| bookmark.url.as_str());
+        let replaced_url = home_bookmark_replaced_url_for_slot(&records, slot);
         database.set_bookmark_slot(
             &BookmarkUpdate {
                 profile: DEFAULT_PROFILE_ID.to_string(),
@@ -4590,6 +4845,46 @@ impl Gui {
         )?;
 
         home_bookmark_cards_from_database(database).map(Some)
+    }
+
+    fn save_home_bookmark_slot(
+        database: &SlateProfileDatabase,
+        slot: usize,
+        title: &str,
+        address: &str,
+    ) -> Result<Vec<HomeBookmarkCard>, String> {
+        let url = normalize_home_bookmark_address(address)?;
+        let slot = slot.min(HOME_BOOKMARK_SLOT_COUNT.saturating_sub(1));
+        let records = home_bookmark_records_from_database(database).map_err(|error| {
+            format!("Could not load existing bookmarks from the settings database: {error}")
+        })?;
+        let replaced_url = home_bookmark_replaced_url_for_slot(&records, slot);
+        let title = title.split_whitespace().collect::<Vec<_>>().join(" ");
+        let title = if title.is_empty() {
+            home_bookmark_title(None, &url)
+        } else {
+            title
+        };
+
+        database
+            .set_bookmark_slot(
+                &BookmarkUpdate {
+                    profile: DEFAULT_PROFILE_ID.to_string(),
+                    url: url.clone(),
+                    title: Some(title),
+                    folder: None,
+                    position: slot as i64,
+                    favicon_key: Some(home_bookmark_favicon_key(&url)),
+                },
+                replaced_url,
+            )
+            .map_err(|error| {
+                format!("Could not save bookmark to the settings database: {error}")
+            })?;
+
+        home_bookmark_cards_from_database(database).map_err(|error| {
+            format!("Could not reload bookmarks from the settings database: {error}")
+        })
     }
 
     fn update_home_bookmark_favicons(
@@ -4838,8 +5133,11 @@ mod tests {
     use servo::{DeviceIndependentPixel, LoadStatus};
     use slate_broadwebd::{BroadwebStatusKind, BroadwebStatusSnapshot};
     use slate_storage::{
-        BookmarkRecord, DEFAULT_HOME_BOOKMARKS, DEFAULT_PROFILE_ID, HistoryVisitRecord,
+        BookmarkRecord, DEFAULT_DATABASE_FILE_NAME, DEFAULT_HOME_BOOKMARKS, DEFAULT_PROFILE_ID,
+        HistoryVisitRecord, SlateProfileDatabase,
     };
+    use std::process;
+    use std::time::{SystemTime, UNIX_EPOCH};
     use url::Url;
 
     use super::{
@@ -4876,17 +5174,17 @@ mod tests {
         home_top_space, home_view_background_color, is_home_bookmarkable_url,
         is_web_app_webview_url, is_web_rail_tab_url, location_for_toolbar, location_is_calendar,
         location_is_chat, location_is_downloads, location_is_home, location_is_web,
-        rail_button_fill, rail_button_header_rect, rail_button_width, rail_collapsed_line_height,
-        rail_collapsed_tab_line_rect, rail_collapsed_tab_line_width,
-        rail_expansion_for_button_width, rail_icon_color, rail_item_height,
-        rail_item_height_at_expansion, rail_new_tab_icon_size, rail_new_tab_row_rect,
-        rail_selected_button_fill, rail_selected_indicator_color, rail_selected_indicator_rect,
-        rail_svg_icon_rect, rail_tab_close_button_rect, rail_tab_close_button_size,
-        rail_tab_default_scroll_start, rail_tab_indices_from_start, rail_tab_preview_indices,
-        rail_tab_row_height, rail_tab_row_icon_size, rail_tab_row_rect, rail_tab_row_text_size,
-        rail_tab_row_width, rail_tab_scroll_start_after_delta, rail_web_item_height,
-        rail_web_item_height_at_expansion, rail_web_tab_stack_row_count, slate_theme,
-        status_bubble_label, status_bubble_width, tab_favicon_site_scope,
+        normalize_home_bookmark_address, rail_button_fill, rail_button_header_rect,
+        rail_button_width, rail_collapsed_line_height, rail_collapsed_tab_line_rect,
+        rail_collapsed_tab_line_width, rail_expansion_for_button_width, rail_icon_color,
+        rail_item_height, rail_item_height_at_expansion, rail_new_tab_icon_size,
+        rail_new_tab_row_rect, rail_selected_button_fill, rail_selected_indicator_color,
+        rail_selected_indicator_rect, rail_svg_icon_rect, rail_tab_close_button_rect,
+        rail_tab_close_button_size, rail_tab_default_scroll_start, rail_tab_indices_from_start,
+        rail_tab_preview_indices, rail_tab_row_height, rail_tab_row_icon_size, rail_tab_row_rect,
+        rail_tab_row_text_size, rail_tab_row_width, rail_tab_scroll_start_after_delta,
+        rail_web_item_height, rail_web_item_height_at_expansion, rail_web_tab_stack_row_count,
+        slate_theme, status_bubble_label, status_bubble_width, tab_favicon_site_scope,
         tab_favicon_site_scope_matches, toolbar_address_width, toolbar_background_color,
         toolbar_menu_icon_center, toolbar_menu_icon_color, toolbar_menu_icon_rect,
         toolbar_navigation_icon_color, toolbar_navigation_icon_offset_x,
@@ -4974,6 +5272,14 @@ mod tests {
         }
     }
 
+    fn test_dir(name: &str) -> std::path::PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("slate-chrome-{name}-{}-{nanos}", process::id()))
+    }
+
     fn rect_has_area(rect: egui::Rect) -> bool {
         rect.width() > 0.0 && rect.height() > 0.0
     }
@@ -5020,6 +5326,7 @@ mod tests {
                 &std::collections::HashMap::new(),
                 &mut home_search,
                 &default_home_bookmark_cards(),
+                false,
             );
             layout = Some(response.layout);
         });
@@ -6593,6 +6900,7 @@ mod tests {
         let bookmarks = default_home_bookmark_cards();
 
         assert_eq!(bookmarks.len(), 4);
+        assert_eq!(bookmarks[0].slot, 0);
         assert_eq!(bookmarks[0].label, "Wikipedia on IPFS");
         assert_eq!(
             bookmarks[0].url.as_deref(),
@@ -6606,6 +6914,7 @@ mod tests {
             bookmarks[0].favicon_url.as_deref(),
             Some("ipns://en.wikipedia-on-ipfs.org/favicon.ico")
         );
+        assert_eq!(bookmarks[1].slot, 1);
         assert_eq!(bookmarks[1].label, "OpenStreetMap");
         assert_eq!(
             bookmarks[1].url.as_deref(),
@@ -6619,10 +6928,12 @@ mod tests {
             bookmarks[1].favicon_url.as_deref(),
             Some("https://www.openstreetmap.org/favicon.ico")
         );
+        assert_eq!(bookmarks[2].slot, 2);
         assert_eq!(bookmarks[2].label, "Add bookmark");
         assert!(bookmarks[2].url.is_none());
         assert!(bookmarks[2].favicon_key.is_none());
         assert!(bookmarks[2].favicon_url.is_none());
+        assert_eq!(bookmarks[3].slot, 3);
         assert_eq!(bookmarks[3].label, "Add another");
         assert!(bookmarks[3].url.is_none());
         assert!(bookmarks[3].favicon_key.is_none());
@@ -6630,7 +6941,7 @@ mod tests {
     }
 
     #[test]
-    fn home_bookmark_slot_replaces_default_suggestions_before_user_bookmarks() {
+    fn home_bookmark_slot_uses_empty_slots_before_replacing_defaults() {
         let bookmarks = vec![
             bookmark_record(DEFAULT_HOME_BOOKMARKS[0].url, 0),
             bookmark_record(DEFAULT_HOME_BOOKMARKS[1].url, 1),
@@ -6638,25 +6949,28 @@ mod tests {
 
         assert_eq!(
             home_bookmark_slot_for_url(&bookmarks, "https://example.com/"),
-            0
+            2
         );
 
         let bookmarks = vec![
-            bookmark_record("https://example.com/", 0),
+            bookmark_record(DEFAULT_HOME_BOOKMARKS[0].url, 0),
             bookmark_record(DEFAULT_HOME_BOOKMARKS[1].url, 1),
+            bookmark_record("https://example.com/", 2),
         ];
 
         assert_eq!(
             home_bookmark_slot_for_url(&bookmarks, "https://servo.org/"),
-            1
+            3
         );
     }
 
     #[test]
-    fn home_bookmark_slot_updates_existing_or_replaces_second_user_slot() {
+    fn home_bookmark_slot_updates_existing_or_replaces_last_user_slot() {
         let bookmarks = vec![
             bookmark_record("https://example.com/", 0),
             bookmark_record("https://servo.org/", 1),
+            bookmark_record("https://rust-lang.org/", 2),
+            bookmark_record("https://crates.io/", 3),
         ];
 
         assert_eq!(
@@ -6664,9 +6978,46 @@ mod tests {
             0
         );
         assert_eq!(
-            home_bookmark_slot_for_url(&bookmarks, "https://rust-lang.org/"),
-            1
+            home_bookmark_slot_for_url(&bookmarks, "https://docs.rs/"),
+            3
         );
+    }
+
+    #[test]
+    fn home_bookmark_address_normalization_accepts_hosts_and_rejects_internal_pages() {
+        assert_eq!(
+            normalize_home_bookmark_address("example.com").as_deref(),
+            Ok("https://example.com")
+        );
+        assert_eq!(
+            normalize_home_bookmark_address("localhost:8080").as_deref(),
+            Ok("http://localhost:8080")
+        );
+        assert!(normalize_home_bookmark_address("slate://home").is_err());
+        assert!(normalize_home_bookmark_address("search words").is_err());
+    }
+
+    #[test]
+    fn home_bookmark_slot_save_persists_to_settings_database() {
+        let database_path = test_dir("bookmark-editor").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+
+        let cards = Gui::save_home_bookmark_slot(&database, 2, "", "example.com").unwrap();
+        let records = database.bookmarks(DEFAULT_PROFILE_ID).unwrap();
+        let saved = records
+            .iter()
+            .find(|record| record.position == 2)
+            .expect("bookmark should be saved into requested slot");
+
+        assert_eq!(saved.url, "https://example.com");
+        assert_eq!(saved.title.as_deref(), Some("example.com"));
+        assert_eq!(
+            saved.favicon_key.as_deref(),
+            Some("favicon:https://example.com/favicon.ico")
+        );
+        assert_eq!(cards[2].url.as_deref(), Some("https://example.com"));
+        assert_eq!(cards[2].label, "example.com");
+        assert!(cards[3].url.is_none());
     }
 
     #[test]

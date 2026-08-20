@@ -10915,6 +10915,7 @@ dependencies = [
  "servo-webdriver-server",
  "signal-hook-registry",
  "slate-broadwebd",
+ "slate-browser-core",
  "slate-storage",
  "surfman",
  "tokio",
