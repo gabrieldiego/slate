@@ -13,7 +13,8 @@ methods.
 Use three names consistently:
 
 - Application service: an application-level capability exposed by broadwebd.
-  Examples: `http-fetch`, future `shared-files`, future `calendar-sync`.
+  Examples: `http-fetch`, `profile-sync`, future `shared-files`, future
+  `calendar-sync`.
 - Protocol service: a long-lived protocol driver that owns protocol config,
   state, health, and resource policy. Examples: `ipfs`, future `tor`, future
   `i2p`.
@@ -39,12 +40,15 @@ crates/broadwebd/src/
 
   services/
     http_fetch.rs
+    profile_sync.rs
 
   protocols/
     ipfs/
       config.rs
       service.rs
       gateway.rs
+      ipns.rs
+      pinning.rs
       types.rs
 
   transports/
@@ -179,6 +183,50 @@ as CSS, JavaScript, images, and fonts must stay resource responses and must not
 create user download records. The full downloads UI can later promote, rename,
 remove, verify, or persist top-level download records.
 
+## Profile Sync Service
+
+`profile-sync` is the application service for synchronized profile state. It
+receives already approved, already encrypted profile sync objects from storage
+code and uses broadweb backends to discover peers, transfer objects, retain
+objects, publish mutable roots, and resolve those roots.
+
+The initial service contract should cover:
+
+- `PutEncryptedObject`: store opaque encrypted bytes and return a backend object
+  id.
+- `GetEncryptedObject`: read opaque encrypted bytes by backend object id.
+- `RetainObject`: retain a profile sync object according to backend policy.
+- `ReleaseObject`: release a retained object when retention allows it.
+- `ListRetainedObjects`: list objects retained by the profile sync service.
+- `VerifyRetainedObject`: verify local or provider availability.
+- `PublishRoot`: publish the current manifest object id to an approved mutable
+  root.
+- `ResolveRoot`: resolve a profile mutable root to a manifest object id.
+- `DiscoverProviders`: find approved devices or providers that may have profile
+  sync objects.
+- `OpenTransferSession`: establish a direct, relayed, local, or private-network
+  transfer session.
+- `WatchHealth`: report backend, transfer, retention, and publish status.
+
+Storage and browser-core own profile semantics, merge policy, encryption, and
+signatures. broadwebd owns transport policy and protocol mechanics. The service
+must not accept plaintext settings or raw SQLite files.
+
+The first concrete IPFS/IPNS backend is `ipfs-kubo-rpc` on loopback. Future
+backends can include embedded IPFS, trustless retrieval, delegated routing,
+Iroh, Syncthing-style device providers, Tor-reachable home daemons, Tahoe-LAFS
+style storage, or another non-IPFS transport, but they must satisfy the same
+profile-sync application contract.
+
+Policy requirements:
+
+- Sync writes do not use public gateways.
+- Kubo RPC endpoints are loopback-only by default.
+- Remote pinning and provider behavior require visible user policy.
+- Discovery and relay providers require visible policy because they can learn
+  device identifiers, timing, object sizes, or traffic volume.
+- Tests can use a fake in-memory backend without external network access.
+
 ## IPFS Initial Contract
 
 IPFS should be represented as a protocol service, not just as a URL rewrite.
@@ -243,13 +291,16 @@ instead of being marked as downloads.
 Later IPFS transports can be added behind the same protocol service:
 
 ```text
+ipfs-kubo-sync
 ipfs-trustless-fetch
 ipfs-delegated-routing
 ```
 
 Pinning, publishing, providing, and reproviding are not part of the initial
-fetch contract. They require separate permissions, budget controls, and user
-visibility.
+fetch contract. Pinning and publishing enter through `profile-sync` as explicit
+capabilities because they change network visibility and storage persistence.
+Providing and reproviding still require separate permissions, budget controls,
+and user visibility.
 
 ## Tor Initial Contract
 
@@ -297,6 +348,7 @@ Required coverage:
 - resource-budget failures;
 - fixture-backed fetch success;
 - download-vs-render disposition.
+- fake profile-sync publish, pin, resolve, and backend failure behavior.
 
 External network tests must stay ignored by default and be gated by
 `SLATE_EXTERNAL_NETWORK_TESTS=1`.

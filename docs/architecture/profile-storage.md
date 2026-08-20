@@ -87,6 +87,74 @@ unsupported by the current raster image decoder, the home card shows a muted
 Slate icon. Favicon fetches use the same broadwebd route as subresource loads
 and are only started for the active home view.
 
+## Syncable State Direction
+
+The settings database should become a local materialized view over typed profile
+state, not the raw object replicated between devices. Broadweb profile sync
+should publish signed and encrypted manifests, snapshots, and changes through
+approved backends, then let each device apply validated updates into its local
+SQLite database.
+
+Planned sync tables:
+
+- `settings_values`: current local values by settings domain and key.
+- `settings_changes`: append-only local and remote change records.
+- `settings_snapshots`: compacted sync snapshots and their backend object ids.
+- `settings_revisions`: monotonic revision rows for runtime watchers.
+- `sync_state`: device frontiers, mutable roots, publish state, and retention
+  metadata.
+- `app_sync_domains`: registered first-party app domains, schema versions,
+  enabled/paused state, and privacy classification.
+
+Runtime code should observe `settings_revisions` or an equivalent typed event
+stream. It should not watch raw WAL pages or accept direct replacement of the
+database file as a live update mechanism. Applying synced changes should go
+through the same chrome, routing, privacy, and protocol configuration paths as
+local settings edits.
+
+The first synced domains should be low-risk and useful:
+
+- UI preferences.
+- Rail app order and enabled app list.
+- Bookmarks.
+- Protocol adapter configuration that has no embedded secret.
+
+The minimum implementation should start here, without requiring IPFS, Iroh,
+Kubo, relays, or any other network backend. Local writes should create typed
+change records, bump a revision, update the materialized values, and be
+observable by runtime code. Once that works, broadwebd can publish the same
+typed changes and snapshots through selected broadweb backends.
+
+First-party apps should register their sync domains before syncing replicated
+state:
+
+- `calendar`: events, reminders, recurrence metadata, and provider mapping.
+- `contacts`: contact cards, identities, groups, local aliases, and provider
+  mapping.
+- `chat`: provider configuration, local conversation metadata, and aggregation
+  preferences.
+- `files`: directory manifests, selected sync sets, file metadata, content
+  object references, and retention policy.
+- `downloads`: persistent download records, source routing metadata, integrity
+  metadata, and user-promoted files.
+- `storage`: provider configuration, pinning leases, quotas, object health, and
+  repair metadata.
+
+Do not sync cookies, passwords, private browsing state, site storage, bearer
+tokens, or protocol private keys until separate privacy and key-storage designs
+exist for those domains.
+
+Profile sync uses broadwebd's `profile-sync` service for encrypted object
+transfer, retention, provider discovery, and mutable-root publishing. Logged-in
+devices should retain the current root and recent tail objects by default.
+Remote pinning, provider behavior, relays, discovery services, and public
+gateway reads require explicit user policy.
+
+Compaction should be ack-aware with a timeout. Keep deltas needed by recently
+seen devices and all changes newer than the retention window, then squash older
+state into an encrypted snapshot. Devices that miss the window rejoin from the
+newest snapshot and rebase any local unsynced changes.
+
 ## Integration Notes
 
 Bookmark editing should be wired through Slate's bookmark UI once that UI

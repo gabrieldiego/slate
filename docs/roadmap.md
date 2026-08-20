@@ -163,6 +163,112 @@ Priority order:
 4. Permissions and site settings.
 5. Cookie integration.
 
+## Profile Sync
+
+_Current focus: safe broadweb sync between Slate devices logged into the same
+account._
+
+Architecture note:
+
+- [Profile Sync Over Broadweb Protocols](architecture/profile-sync.md)
+
+Current baseline:
+
+- broadwebd can retrieve `ipfs://` and `ipns://` resources through the local
+  IPFS gateway and an opt-in Kubo RPC fetch path.
+- Slate stores local settings and bookmarks in profile-owned SQLite state.
+- Runtime settings are currently local-first and are not yet modeled as a sync
+  change stream.
+- IPFS/IPNS is the first concrete backend under consideration, but the product
+  goal is protocol-neutral: approved Slate devices should find each other, move
+  encrypted sync objects, and optionally use approved providers to keep those
+  objects available.
+- The account model must not depend on a root server, a root node, or one
+  always-hot device. Authorized logged-in devices should have equal profile
+  control; hot devices and contracted providers only improve encrypted object
+  availability.
+
+Next:
+
+- Add a protocol-neutral `profile-sync` application service to broadwebd with a
+  fake backend and explicit policy checks.
+- Split sync backends into discovery, connectivity, transfer, availability, and
+  mutable-root roles so different broadweb protocols can be combined.
+- Define the equal-control account authority model: signed device heads,
+  membership epochs, enrollment records, and availability providers with no
+  profile write authority.
+- Add Kubo RPC-backed operations for encrypted object add, pin, unpin, pin
+  verification, IPNS publish, and IPNS resolve as the first IPFS/IPNS backend.
+- Redesign the settings database as a materialized local view over typed change
+  records, snapshots, device state, and revision notifications.
+- Add a settings watcher so externally synced changes are applied through normal
+  runtime update paths instead of raw database replacement.
+- Define the Slate Sync Secret hierarchy for manifest signing, mutable-root
+  publishing, content encryption epochs, and device enrollment.
+- Publish encrypted profile manifests and snapshots through the selected
+  backend, then point the profile mutable root at the newest manifest.
+- Implement retention and compaction: keep deltas for active devices and recent
+  changes, then squash older state into encrypted snapshots.
+- Add device enrollment, revocation, and key rotation before syncing sensitive
+  profile domains.
+- Start implementation with the local syncable settings database as the minimum
+  requirement. It should work without any network backend at first, but its
+  schema should already model typed changes, revisions, app domains, and future
+  sync object metadata.
+
+Backlog:
+
+- Add ignored/manual loopback Kubo integration tests for add, pin, publish, and
+  resolve.
+- Add leak tests proving profile sync does not use OS DNS, public gateways, or
+  non-local RPC endpoints by default.
+- Add UI surfaces for sync health, pinning status, degraded availability, device
+  enrollment, and remote pinning policy.
+- Keep other transports possible behind the same `profile-sync` service
+  boundary once IPFS/IPNS works.
+- Add policy surfaces that show when discovery, relays, public gateways,
+  contracted pinning, Tor, or other broadweb providers may learn device
+  identifiers, timing, object sizes, or traffic volume.
+- Add account governance policy for QR enrollment, recovery files, device
+  revocation, and future M-of-N approval for high-risk account changes.
+- Add first-party app sync domains for Files, Contacts, Calendar, Chat,
+  Downloads, Storage, and future rail apps. Each app should define typed change
+  records, merge behavior, privacy notes, and whether it syncs content bytes,
+  metadata, or both.
+
+Future protocol candidates:
+
+- Iroh / `iroh-blobs`: Rust-native verified blob transfer with BLAKE3
+  content-addressing. Consider it as the main alternate backend for private
+  device-to-device object transfer.
+- Syncthing BEP: mature folder sync protocol with device IDs, TLS-authenticated
+  peers, block indexes, discovery, and relay support. Consider it as a reference
+  design or optional external provider for user file/folder sync.
+- Hypercore / Hyperdrive: append-only signed logs and live replication. Consider
+  it for device-head logs or append-only profile change streams if the Rust
+  integration story becomes practical.
+- Tahoe-LAFS: encrypted capability-based distributed storage with erasure-coded
+  shares. Consider it later for Storage, backup, or durability-oriented sync
+  rather than the first lightweight settings sync path.
+- Raw libp2p service: custom Slate protocol over libp2p transports, discovery,
+  relay, and request/response streams. Consider only after the sync semantics
+  are stable enough to justify owning more protocol surface.
+
+Priority order:
+
+1. Local syncable settings database: typed changes, snapshots, revisions,
+   device state, app domains, and local-only application of updates.
+2. Runtime settings watcher that applies local typed changes through normal
+   browser-core/chrome/routing paths.
+3. broadwebd protocol-neutral `profile-sync` service contract and fake backend.
+4. Backend role model for discovery, connectivity, transfer, availability, and
+   mutable roots.
+5. Equal-control account authority model with signed device heads and membership
+   epochs.
+6. Encrypted signed manifest/snapshot/change encoding.
+7. Kubo RPC add/pin/IPNS implementation with loopback-only validation.
+8. Two-device local sync flow and retention compaction.
+
 ## Protocol Testing
 
 - Add `.onion` normalization tests for direct address-bar input, explicit

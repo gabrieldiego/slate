@@ -115,6 +115,10 @@ inside page fetch behavior. For example, file sharing, calendar sync, and
 messaging should be modeled as separate application services with their own
 permissions, storage, and privacy rules.
 
+Profile sync should follow the same pattern. Storage code owns profile
+semantics and merge policy, while broadwebd owns broadweb discovery,
+connectivity, transfer, retention, publishing, and backend health reporting.
+
 ## Protocol And App Plugins
 
 `broadwebd` should be designed around plugins, but the first implementation
@@ -148,11 +152,12 @@ They should not decide whether a navigation is allowed. Application service
 plugins should receive an approved request and use one or more transport
 plugins to produce an application-level result.
 
-For the first milestone, `http-fetch` should be the only application service.
-It should be able to use a `direct-http` transport for ordinary HTTP(S) and
-later IPFS, I2P, Tor, or gateway transports for broadweb routes. This proves the
-plugability of the path before Slate adds file sharing, calendars, messaging, or
-other app surfaces.
+For the browsing milestone, `http-fetch` is the first application service. It
+uses a `direct-http` transport for ordinary HTTP(S) and IPFS, I2P, Tor, or
+gateway transports for broadweb routes. The next non-HTTP service should be
+`profile-sync`, so Slate can use broadweb protocols for encrypted profile state
+before adding larger app surfaces such as shared files, calendars, and
+messaging.
 
 The registry should be explicit:
 
@@ -169,6 +174,7 @@ PluginRegistry
       i2p-http-proxy
   -> application service plugins
       http-fetch
+      profile-sync
       shared-files
       calendar-sync
 ```
@@ -311,6 +317,12 @@ state-root/
           blockstore/
           routing-cache/
           pins/
+          sync/
+            manifests/
+            snapshots/
+            changes/
+            pins/
+            ipns/
         i2p/
           config.json
           proxy-state/
@@ -470,6 +482,43 @@ current-session temporary downloads from broadwebd state. A later downloads UI
 should own promotion to user-selected persistent storage, removal, verification,
 and progress/history presentation.
 
+## Broadweb Sync Capabilities
+
+The sync-oriented broadweb work adds discovery, connectivity, transfer,
+availability, publishing, and persistence operations for encrypted profile
+state. The browser should call these operations through a broadwebd
+`profile-sync` application service rather than through protocol internals.
+
+Required profile sync roles:
+
+- Discovery: find approved devices or providers that may be online.
+- Connectivity: establish direct, relayed, local, or private-network sessions.
+- Transfer: push or fetch encrypted profile objects.
+- Availability: retain encrypted objects on logged-in devices, a home daemon, or
+  contracted/self-hosted providers.
+- Mutable root: publish and resolve the current signed sync manifest.
+- Health: report backend health, retain failures, publish failures, and stale
+  roots.
+
+The first IPFS/IPNS backend can use Kubo RPC on loopback because Kubo already
+exposes add, pin, and name APIs. broadwebd must treat Kubo RPC as an
+administrative API: local by default, never exposed to the public internet by
+Slate, and never used for sync writes unless the endpoint passes policy checks.
+
+Profile sync should not publish raw SQLite files. Storage should produce signed
+and encrypted manifests, snapshots, and change objects; broadwebd only stores,
+retains, transfers, and publishes those opaque objects. Public gateway fallback
+is not acceptable for sync writes and should require an explicit policy before
+being used for sync reads.
+
+Other protocols can back different roles under the same profile-sync service.
+Iroh may improve online trusted-device discovery and transfer, Syncthing-style
+providers may inform folder sync, Tor onion services may make a home daemon
+privately reachable, and contracted pinning/storage providers may improve
+availability without being trusted to validate profile state. IPFS/IPNS remains
+the first concrete implementation because it gives Slate immutable content CIDs
+plus mutable IPNS roots.
+
 ## Tor Initial Shape
 
 Tor is represented as a protocol service and an Arti-backed transport:
@@ -593,9 +642,15 @@ Recommended order:
 7. Add an IPC-neutral client/service trait.
 8. Add `direct-http` transport and `http-fetch` application service.
 9. Add IPFS gateway/delegated-retrieval adapter.
-10. Connect browser-core route policy to the daemon client.
-11. Add a real daemon binary only after the in-process service is testable.
-12. Add platform service integration for background behavior.
+10. Add a `profile-sync` application service with a fake backend and explicit
+    policy checks.
+11. Add Kubo-backed encrypted object add, pin, unpin, verify, IPNS publish, and
+    IPNS resolve operations for loopback endpoints.
+12. Expose the profile-sync client to storage/browser-core without leaking IPFS
+    backend details into profile semantics.
+13. Connect browser-core route policy to the daemon client.
+14. Add a real daemon binary only after the in-process service is testable.
+15. Add platform service integration for background behavior.
 
 ## Open Questions
 
@@ -610,6 +665,13 @@ Recommended order:
 - Should external plugins ever be supported, or should plugins remain built-in
   until the broadweb security model is mature?
 - Should IPFS local Kubo integration come before Slate-owned verified retrieval?
+- Should devices share one mutable-root publishing key at first, or should Slate
+  start with delegated per-device publish authority even if the implementation
+  takes longer?
+- What default retention window should profile sync use before squashing old
+  deltas into encrypted snapshots?
+- How should Slate explain degraded sync availability when no logged-in device
+  is currently pinning the newest profile root?
 - What resource budgets should be default on desktop?
 - What reduced defaults should mobile use?
 - How should private windows interact with warm daemon state?
