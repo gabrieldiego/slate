@@ -100,9 +100,12 @@ impl BrowserState {
             AppId::Web => self
                 .cached_active_tab_surface()
                 .unwrap_or_else(surface_for_web_home),
-            AppId::Downloads | AppId::Calendar | AppId::Chat => {
-                load_surface(app_internal_address(app), None)
-            }
+            AppId::Downloads
+            | AppId::Calendar
+            | AppId::Chat
+            | AppId::Contacts
+            | AppId::Files
+            | AppId::Settings => load_surface(app_internal_address(app), None),
         };
     }
 
@@ -522,15 +525,37 @@ fn percent_encode_file_path(input: &str) -> String {
 }
 
 fn app_for_address(address: &str) -> AppId {
-    if address.starts_with("slate://calendar") {
+    if slate_address_matches(address, &["calendar"]) {
         AppId::Calendar
-    } else if address.starts_with("slate://downloads") {
+    } else if slate_address_matches(address, &["downloads"]) {
         AppId::Downloads
-    } else if address.starts_with("slate://chat") || address.starts_with("slate://messages") {
+    } else if slate_address_matches(address, &["chat", "messages"]) {
         AppId::Chat
+    } else if slate_address_matches(address, &["contacts"]) {
+        AppId::Contacts
+    } else if slate_address_matches(address, &["files"]) {
+        AppId::Files
+    } else if slate_address_matches(address, &["settings"]) {
+        AppId::Settings
     } else {
         AppId::Web
     }
+}
+
+fn slate_address_matches(address: &str, names: &[&str]) -> bool {
+    let Some(route) = address
+        .strip_prefix("slate://")
+        .or_else(|| address.strip_prefix("slate:"))
+    else {
+        return false;
+    };
+    let route = route
+        .split(['?', '#'])
+        .next()
+        .unwrap_or(route)
+        .trim_start_matches('/');
+    let first_segment = route.split('/').next().unwrap_or(route);
+    names.contains(&first_segment)
 }
 
 fn app_internal_address(app: AppId) -> &'static str {
@@ -539,6 +564,9 @@ fn app_internal_address(app: AppId) -> &'static str {
         AppId::Downloads => "slate://downloads",
         AppId::Calendar => "slate://calendar",
         AppId::Chat => "slate://chat",
+        AppId::Contacts => "slate://contacts",
+        AppId::Files => "slate://files",
+        AppId::Settings => "slate://settings",
     }
 }
 
@@ -698,6 +726,34 @@ mod tests {
         assert_eq!(state.active_app, slate_apps::AppId::Chat);
         assert_eq!(state.surface.address, "slate://chat");
         assert!(matches!(state.surface.document, RenderDocument::Web(_)));
+
+        for (address, expected_app) in [
+            ("slate://contacts", slate_apps::AppId::Contacts),
+            ("slate://files", slate_apps::AppId::Files),
+            ("slate://settings", slate_apps::AppId::Settings),
+            ("slate:contacts", slate_apps::AppId::Contacts),
+            ("slate:files", slate_apps::AppId::Files),
+            ("slate:settings", slate_apps::AppId::Settings),
+        ] {
+            let mut state = BrowserState::new(&ServoBackend);
+            state
+                .navigate_with_surface_loader(
+                    address,
+                    RenderViewport::default(),
+                    |address, _title, viewport| {
+                        cached_web_surface(
+                            address,
+                            viewport.width as usize,
+                            viewport.height as usize,
+                        )
+                    },
+                )
+                .expect("mock app navigation should load");
+
+            assert_eq!(state.active_app, expected_app);
+            assert_eq!(state.surface.address, address);
+            assert!(matches!(state.surface.document, RenderDocument::Web(_)));
+        }
     }
 
     #[test]

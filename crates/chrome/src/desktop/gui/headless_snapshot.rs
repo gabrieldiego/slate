@@ -627,7 +627,7 @@ fn render_home_panel(
 
 #[derive(Clone, Copy, Debug)]
 struct SnapshotChromeGeometry {
-    rail_button_rects: [egui::Rect; 5],
+    rail_button_rects: [egui::Rect; 8],
     rail_web_tab_row_rects: [egui::Rect; 3],
     rail_web_close_button_rects: [egui::Rect; 3],
     rail_web_new_tab_row_rect: egui::Rect,
@@ -859,6 +859,30 @@ fn verification_regions() -> Vec<VerificationRegion> {
             "Chat rail vector icon crop",
         ),
         verification_region(
+            "rail-contacts-icon",
+            "rail-contacts-icon.png",
+            snapshot_rail_icon_rect(chrome.rail_button_rects[5]).expand(4.0),
+            "Contacts rail vector icon crop",
+        ),
+        verification_region(
+            "rail-files-icon",
+            "rail-files-icon.png",
+            snapshot_rail_icon_rect(chrome.rail_button_rects[6]).expand(4.0),
+            "Files rail vector icon crop",
+        ),
+        verification_region(
+            "rail-settings-button",
+            "rail-settings-button.png",
+            chrome.rail_button_rects[7],
+            "bottom-anchored Settings rail cogwheel tile",
+        ),
+        verification_region(
+            "rail-settings-icon",
+            "rail-settings-icon.png",
+            snapshot_rail_icon_rect(chrome.rail_button_rects[7]).expand(4.0),
+            "Settings rail vector cogwheel crop",
+        ),
+        verification_region(
             "toolbar",
             "toolbar.png",
             chrome.toolbar_rect,
@@ -1064,6 +1088,8 @@ fn monitor_for_region(name: &'static str) -> RegionMonitor {
         "rail-download-progress-lines" => RegionMonitor::new(4, 20, 1).with_manual_review(&[
             "confirm collapsed Downloads rows show progress without file titles",
         ]),
+        "rail-settings-button" => RegionMonitor::new(32, 8, 8)
+            .with_manual_review(&["confirm Settings remains anchored at the rail bottom"]),
         "toolbar" => RegionMonitor::new(64, 20, 8),
         "nav-back-hover-button" | "nav-reload-hover-button" => RegionMonitor::new(64, 18, 18)
             .with_manual_review(&["confirm hover shade is centered behind the navigation glyph"]),
@@ -1076,6 +1102,9 @@ fn monitor_for_region(name: &'static str) -> RegionMonitor {
         | "rail-downloads-icon"
         | "rail-calendar-icon"
         | "rail-chat-icon"
+        | "rail-contacts-icon"
+        | "rail-files-icon"
+        | "rail-settings-icon"
         | "nav-back-icon"
         | "nav-forward-icon"
         | "nav-reload-icon"
@@ -1211,12 +1240,33 @@ fn snapshot_chrome_geometry_with_rail_width(rail_width: f32) -> SnapshotChromeGe
         ),
         egui::vec2(rail_button_w, RAIL_BUTTON_SIZE),
     );
+    let contacts_button_rect = egui::Rect::from_min_size(
+        egui::pos2(rail_button_left, chat_button_rect.bottom() + RAIL_ITEM_GAP),
+        egui::vec2(rail_button_w, RAIL_BUTTON_SIZE),
+    );
+    let files_button_rect = egui::Rect::from_min_size(
+        egui::pos2(
+            rail_button_left,
+            contacts_button_rect.bottom() + RAIL_ITEM_GAP,
+        ),
+        egui::vec2(rail_button_w, RAIL_BUTTON_SIZE),
+    );
+    let settings_button_rect = egui::Rect::from_min_size(
+        egui::pos2(
+            rail_button_left,
+            viewport_height - f32::from(RAIL_PANEL_MARGIN_Y) - RAIL_BUTTON_SIZE,
+        ),
+        egui::vec2(rail_button_w, RAIL_BUTTON_SIZE),
+    );
     let rail_button_rects = [
         home_button_rect,
         web_button_rect,
         downloads_button_rect,
         calendar_button_rect,
         chat_button_rect,
+        contacts_button_rect,
+        files_button_rect,
+        settings_button_rect,
     ];
     let rail_web_tab_row_rects = [
         rail_tab_row_rect(web_button_rect, 0),
@@ -2139,6 +2189,13 @@ mod tests {
             "expanded-rail-web-tab-previews",
             "rail-home-icon",
             "rail-web-icon",
+            "rail-downloads-icon",
+            "rail-calendar-icon",
+            "rail-chat-icon",
+            "rail-contacts-icon",
+            "rail-files-icon",
+            "rail-settings-button",
+            "rail-settings-icon",
             "nav-back-icon",
             "nav-reload-icon",
             "nav-stop-icon",

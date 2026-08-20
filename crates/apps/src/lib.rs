@@ -6,6 +6,9 @@ pub enum AppId {
     Downloads,
     Calendar,
     Chat,
+    Contacts,
+    Files,
+    Settings,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -14,6 +17,9 @@ pub enum AppIcon {
     Download,
     Calendar,
     Chat,
+    Contacts,
+    Files,
+    Settings,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -23,7 +29,7 @@ pub struct AppDescriptor {
     pub icon: AppIcon,
 }
 
-pub const DEFAULT_APPS: [AppDescriptor; 4] = [
+pub const DEFAULT_APPS: [AppDescriptor; 7] = [
     AppDescriptor {
         id: AppId::Web,
         label: "Web",
@@ -43,6 +49,21 @@ pub const DEFAULT_APPS: [AppDescriptor; 4] = [
         id: AppId::Chat,
         label: "Chat",
         icon: AppIcon::Chat,
+    },
+    AppDescriptor {
+        id: AppId::Contacts,
+        label: "Contacts",
+        icon: AppIcon::Contacts,
+    },
+    AppDescriptor {
+        id: AppId::Files,
+        label: "Files",
+        icon: AppIcon::Files,
+    },
+    AppDescriptor {
+        id: AppId::Settings,
+        label: "Settings",
+        icon: AppIcon::Settings,
     },
 ];
 
@@ -68,5 +89,20 @@ mod tests {
 
         assert_eq!(chat.label, "Chat");
         assert_eq!(chat.icon, AppIcon::Chat);
+    }
+
+    #[test]
+    fn default_apps_include_next_mock_apps() {
+        let apps = default_apps();
+
+        assert!(apps.iter().any(|app| app.id == AppId::Contacts
+            && app.label == "Contacts"
+            && app.icon == AppIcon::Contacts));
+        assert!(apps.iter().any(|app| app.id == AppId::Files
+            && app.label == "Files"
+            && app.icon == AppIcon::Files));
+        assert!(apps.iter().any(|app| app.id == AppId::Settings
+            && app.label == "Settings"
+            && app.icon == AppIcon::Settings));
     }
 }

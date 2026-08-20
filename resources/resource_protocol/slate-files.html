@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Slate Files</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f7f5f1;
+      color: #242421;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #f7f5f1;
+    }
+
+    main {
+      width: min(1140px, calc(100vw - 48px));
+      margin: 0 auto;
+      padding: 38px 0;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 20px;
+      align-items: end;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0 0 7px;
+      font-size: 30px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0;
+      color: #696966;
+      line-height: 1.45;
+    }
+
+    button {
+      border: 1px solid #c8c5bd;
+      border-radius: 6px;
+      background: #f3f0ea;
+      color: #242421;
+      padding: 8px 12px;
+      font: inherit;
+      cursor: default;
+      white-space: nowrap;
+    }
+
+    button.primary {
+      border-color: #0b7e79;
+      background: #0b7e79;
+      color: #fffefa;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .metric,
+    .panel {
+      border: 1px solid #dedbd5;
+      border-radius: 8px;
+      background: #fffefa;
+    }
+
+    .metric {
+      padding: 16px;
+    }
+
+    .metric span {
+      display: block;
+      color: #696966;
+      font-size: 13px;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 7px;
+      font-size: 22px;
+      font-weight: 650;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(230px, 0.68fr) minmax(0, 1.32fr);
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .panel {
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      min-height: 54px;
+      padding: 15px 18px;
+      border-bottom: 1px solid #e8e4dd;
+      background: #fbfaf8;
+    }
+
+    .folder {
+      padding: 12px 18px;
+      border-top: 1px solid #eeeae4;
+      color: #454441;
+    }
+
+    .folder:first-of-type {
+      border-top: 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      padding: 13px 16px;
+      border-bottom: 1px solid #eeeae4;
+      text-align: left;
+      font-size: 14px;
+    }
+
+    th {
+      color: #696966;
+      font-size: 12px;
+      font-weight: 650;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      background: #fbfaf8;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .status {
+      color: #0b5f5f;
+      font-weight: 650;
+    }
+
+    @media (max-width: 760px) {
+      header,
+      .summary,
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .toolbar {
+        justify-content: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Files</h1>
+        <p>Storage mockup for downloads, saved broadweb content, and local profile data.</p>
+      </div>
+      <div class="toolbar">
+        <button>Reveal Folder</button>
+        <button class="primary">Import File</button>
+      </div>
+    </header>
+
+    <section class="summary">
+      <div class="metric"><span>Storage</span><strong>4.8 GB</strong></div>
+      <div class="metric"><span>Downloads</span><strong>18</strong></div>
+      <div class="metric"><span>Saved CARs</span><strong>3</strong></div>
+      <div class="metric"><span>Profiles</span><strong>1</strong></div>
+    </section>
+
+    <section class="layout">
+      <aside class="panel">
+        <div class="panel-header">
+          <h2>Locations</h2>
+        </div>
+        <div class="folder">Downloads</div>
+        <div class="folder">Saved Pages</div>
+        <div class="folder">IPFS Cache</div>
+        <div class="folder">Profile Data</div>
+        <div class="folder">Temporary Files</div>
+      </aside>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Recent files</h2>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Size</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>servo-book.pdf</td>
+              <td>Download</td>
+              <td>12.4 MB</td>
+              <td class="status">Saved</td>
+            </tr>
+            <tr>
+              <td>site-archive.car</td>
+              <td>Broadweb archive</td>
+              <td>842 MB</td>
+              <td class="status">Pinned</td>
+            </tr>
+            <tr>
+              <td>profile-bookmarks.json</td>
+              <td>Export</td>
+              <td>48 KB</td>
+              <td class="status">Local</td>
+            </tr>
+            <tr>
+              <td>media-cache</td>
+              <td>Cache group</td>
+              <td>1.9 GB</td>
+              <td class="status">Managed</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

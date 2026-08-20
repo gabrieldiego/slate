@@ -51,8 +51,9 @@ use crate::desktop::event_loop::AppEvent;
 use crate::desktop::headed_window;
 use crate::desktop::protocols::slate::{
     self, current_chrome_element_zoom_setting, is_slate_blank_url, is_slate_calendar_url,
-    is_slate_chat_url, is_slate_downloads_url, is_slate_home_url, is_slate_settings_url,
-    is_slate_web_url, set_current_chrome_element_zoom_setting,
+    is_slate_chat_url, is_slate_contacts_url, is_slate_downloads_url, is_slate_files_url,
+    is_slate_home_url, is_slate_settings_url, is_slate_web_url,
+    set_current_chrome_element_zoom_setting,
 };
 use crate::desktop::slate_theme::{
     self, SlateBrand, SlateIcon, SlateIconCache, SlateRaster, SlateSvg,
@@ -339,6 +340,9 @@ struct RailInteraction {
     downloads_clicked: bool,
     calendar_clicked: bool,
     chat_clicked: bool,
+    contacts_clicked: bool,
+    files_clicked: bool,
+    settings_clicked: bool,
     new_web_tab_clicked: bool,
     activated_webview: Option<WebViewId>,
     closed_webview: Option<WebViewId>,
@@ -552,6 +556,9 @@ enum RailPage {
     Downloads,
     Calendar,
     Chat,
+    Contacts,
+    Files,
+    Settings,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -607,6 +614,8 @@ fn address_security_icon_for_location(location: &str) -> AddressSecurityIcon {
                 || is_slate_web_url(&url)
                 || is_slate_calendar_url(&url)
                 || is_slate_chat_url(&url)
+                || is_slate_contacts_url(&url)
+                || is_slate_files_url(&url)
                 || is_slate_settings_url(&url) =>
         {
             AddressSecurityIcon::Slate {
@@ -1822,7 +1831,7 @@ fn concept_screenshot_home_view_size() -> egui::Vec2 {
 #[cfg(test)]
 #[derive(Clone, Copy, Debug)]
 struct ConceptChromeGeometry {
-    rail_button_rects: [egui::Rect; 5],
+    rail_button_rects: [egui::Rect; 8],
     rail_web_tab_row_rects: [egui::Rect; 3],
     rail_web_new_tab_row_rect: egui::Rect,
     rail_download_progress_rects: [egui::Rect; 2],
@@ -1897,12 +1906,33 @@ fn concept_chrome_geometry() -> ConceptChromeGeometry {
         ),
         egui::vec2(RAIL_BUTTON_SIZE, RAIL_BUTTON_SIZE),
     );
+    let contacts_button_rect = egui::Rect::from_min_size(
+        egui::pos2(rail_button_left, chat_button_rect.bottom() + RAIL_ITEM_GAP),
+        egui::vec2(RAIL_BUTTON_SIZE, RAIL_BUTTON_SIZE),
+    );
+    let files_button_rect = egui::Rect::from_min_size(
+        egui::pos2(
+            rail_button_left,
+            contacts_button_rect.bottom() + RAIL_ITEM_GAP,
+        ),
+        egui::vec2(RAIL_BUTTON_SIZE, RAIL_BUTTON_SIZE),
+    );
+    let settings_button_rect = egui::Rect::from_min_size(
+        egui::pos2(
+            rail_button_left,
+            CONCEPT_SCREENSHOT_HEIGHT - f32::from(RAIL_PANEL_MARGIN_Y) - RAIL_BUTTON_SIZE,
+        ),
+        egui::vec2(RAIL_BUTTON_SIZE, RAIL_BUTTON_SIZE),
+    );
     let rail_button_rects = [
         home_button_rect,
         web_button_rect,
         downloads_button_rect,
         calendar_button_rect,
         chat_button_rect,
+        contacts_button_rect,
+        files_button_rect,
+        settings_button_rect,
     ];
     let rail_web_tab_row_rects = [
         rail_tab_row_rect(web_button_rect, 0),
@@ -2078,6 +2108,9 @@ fn browser_tab_label(page_title: Option<&str>, url: Option<&Url>) -> String {
         (_, Some(url)) if is_slate_web_url(url) => "Web".into(),
         (_, Some(url)) if is_slate_calendar_url(url) => "Calendar".into(),
         (_, Some(url)) if is_slate_chat_url(url) => "Chat".into(),
+        (_, Some(url)) if is_slate_contacts_url(url) => "Contacts".into(),
+        (_, Some(url)) if is_slate_files_url(url) => "Files".into(),
+        (_, Some(url)) if is_slate_settings_url(url) => "Settings".into(),
         (_, Some(url)) if is_slate_blank_url(url) => "New Tab".into(),
         (Some(title), _) if !title.is_empty() => title.to_string(),
         (_, Some(url)) => url.to_string(),
@@ -2091,6 +2124,8 @@ fn is_web_rail_tab_url(url: Option<&Url>) -> bool {
             && !is_slate_web_url(url)
             && !is_slate_calendar_url(url)
             && !is_slate_chat_url(url)
+            && !is_slate_contacts_url(url)
+            && !is_slate_files_url(url)
             && !is_slate_downloads_url(url)
             && !is_slate_settings_url(url)
     })
@@ -2757,8 +2792,12 @@ impl Gui {
             Some(RailPage::Calendar)
         } else if is_slate_chat_url(url) {
             Some(RailPage::Chat)
+        } else if is_slate_contacts_url(url) {
+            Some(RailPage::Contacts)
+        } else if is_slate_files_url(url) {
+            Some(RailPage::Files)
         } else if is_slate_settings_url(url) {
-            None
+            Some(RailPage::Settings)
         } else {
             Some(RailPage::Web)
         }
@@ -3528,6 +3567,49 @@ impl Gui {
             if chat_button.clicked() {
                 interaction.chat_clicked = true;
             }
+            ui.add_space(RAIL_ITEM_GAP);
+            let contacts_selected = active_page == Some(RailPage::Contacts);
+            let contacts_button = Self::rail_svg_icon_button_with_size(
+                ui,
+                slate_icons,
+                SlateSvg::RailContacts,
+                contacts_selected,
+                "Contacts",
+                button_width,
+                RAIL_BUTTON_SIZE,
+            );
+            if contacts_button.clicked() {
+                interaction.contacts_clicked = true;
+            }
+            ui.add_space(RAIL_ITEM_GAP);
+            let files_selected = active_page == Some(RailPage::Files);
+            let files_button = Self::rail_svg_icon_button_with_size(
+                ui,
+                slate_icons,
+                SlateSvg::RailFiles,
+                files_selected,
+                "Files",
+                button_width,
+                RAIL_BUTTON_SIZE,
+            );
+            if files_button.clicked() {
+                interaction.files_clicked = true;
+            }
+            let settings_gap = (ui.available_height() - RAIL_BUTTON_SIZE).max(RAIL_ITEM_GAP);
+            ui.add_space(settings_gap);
+            let settings_selected = active_page == Some(RailPage::Settings);
+            let settings_button = Self::rail_svg_icon_button_with_size(
+                ui,
+                slate_icons,
+                SlateSvg::RailSettings,
+                settings_selected,
+                "Settings",
+                button_width,
+                RAIL_BUTTON_SIZE,
+            );
+            if settings_button.clicked() {
+                interaction.settings_clicked = true;
+            }
         });
         ui.spacing_mut().item_spacing = previous_item_spacing;
         interaction
@@ -3674,6 +3756,21 @@ impl Gui {
             *location_dirty = false;
             window
                 .queue_user_interface_command(UserInterfaceCommand::Go("slate://chat".to_string()));
+        } else if interaction.contacts_clicked {
+            *location_dirty = false;
+            window.queue_user_interface_command(UserInterfaceCommand::Go(
+                "slate://contacts".to_string(),
+            ));
+        } else if interaction.files_clicked {
+            *location_dirty = false;
+            window.queue_user_interface_command(UserInterfaceCommand::Go(
+                "slate://files".to_string(),
+            ));
+        } else if interaction.settings_clicked {
+            *location_dirty = false;
+            window.queue_user_interface_command(UserInterfaceCommand::Go(
+                "slate://settings".to_string(),
+            ));
         }
     }
 
@@ -5777,6 +5874,17 @@ mod tests {
             geometry.rail_button_rects[2].top(),
             geometry.rail_button_rects[1].bottom() + RAIL_ITEM_GAP
         );
+        for index in 3..=6 {
+            assert_eq!(
+                geometry.rail_button_rects[index].top(),
+                geometry.rail_button_rects[index - 1].bottom() + RAIL_ITEM_GAP
+            );
+        }
+        assert!(geometry.rail_button_rects[7].top() > geometry.rail_button_rects[6].bottom());
+        assert_eq!(
+            geometry.rail_button_rects[7].bottom(),
+            CONCEPT_SCREENSHOT_HEIGHT - f32::from(RAIL_PANEL_MARGIN_Y)
+        );
         assert_eq!(
             rail_item_height(false, 0, RAIL_BUTTON_SIZE),
             RAIL_BUTTON_SIZE
@@ -6017,8 +6125,16 @@ mod tests {
             Some(RailPage::Chat)
         );
         assert_eq!(
+            Gui::rail_page_for_url(&Url::parse("slate://contacts").unwrap()),
+            Some(RailPage::Contacts)
+        );
+        assert_eq!(
+            Gui::rail_page_for_url(&Url::parse("slate://files").unwrap()),
+            Some(RailPage::Files)
+        );
+        assert_eq!(
             Gui::rail_page_for_url(&Url::parse("slate://settings").unwrap()),
-            None
+            Some(RailPage::Settings)
         );
         assert_eq!(
             Gui::rail_page_for_url(&Url::parse("slate://blank").unwrap()),
@@ -6069,6 +6185,12 @@ mod tests {
             &Url::parse("slate://messages").unwrap()
         )));
         assert!(!is_web_rail_tab_url(Some(
+            &Url::parse("slate://contacts").unwrap()
+        )));
+        assert!(!is_web_rail_tab_url(Some(
+            &Url::parse("slate://files").unwrap()
+        )));
+        assert!(!is_web_rail_tab_url(Some(
             &Url::parse("slate://settings").unwrap()
         )));
     }
@@ -6110,6 +6232,12 @@ mod tests {
             &Url::parse("slate://messages").unwrap()
         )));
         assert!(!is_web_app_webview_url(Some(
+            &Url::parse("slate://contacts").unwrap()
+        )));
+        assert!(!is_web_app_webview_url(Some(
+            &Url::parse("slate://files").unwrap()
+        )));
+        assert!(!is_web_app_webview_url(Some(
             &Url::parse("slate://settings").unwrap()
         )));
     }
@@ -6130,6 +6258,18 @@ mod tests {
         );
         assert_eq!(
             web_rail_click_target(Some(RailPage::Chat), true),
+            WebRailClickTarget::LastWebSurface
+        );
+        assert_eq!(
+            web_rail_click_target(Some(RailPage::Contacts), true),
+            WebRailClickTarget::LastWebSurface
+        );
+        assert_eq!(
+            web_rail_click_target(Some(RailPage::Files), true),
+            WebRailClickTarget::LastWebSurface
+        );
+        assert_eq!(
+            web_rail_click_target(Some(RailPage::Settings), true),
             WebRailClickTarget::LastWebSurface
         );
         assert_eq!(
@@ -6256,6 +6396,18 @@ mod tests {
         assert_eq!(
             browser_tab_label(None, Some(&Url::parse("slate://messages").unwrap())),
             "Chat"
+        );
+        assert_eq!(
+            browser_tab_label(None, Some(&Url::parse("slate://contacts").unwrap())),
+            "Contacts"
+        );
+        assert_eq!(
+            browser_tab_label(None, Some(&Url::parse("slate://files").unwrap())),
+            "Files"
+        );
+        assert_eq!(
+            browser_tab_label(None, Some(&Url::parse("slate://settings").unwrap())),
+            "Settings"
         );
         assert_eq!(
             browser_tab_label(
@@ -6525,6 +6677,20 @@ mod tests {
         );
         assert_eq!(
             address_security_icon_for_location("slate://messages"),
+            AddressSecurityIcon::Slate {
+                icon: slate_theme::SlateIcon::TopShield,
+                color: address_passive_icon_color(),
+            }
+        );
+        assert_eq!(
+            address_security_icon_for_location("slate://contacts"),
+            AddressSecurityIcon::Slate {
+                icon: slate_theme::SlateIcon::TopShield,
+                color: address_passive_icon_color(),
+            }
+        );
+        assert_eq!(
+            address_security_icon_for_location("slate://files"),
             AddressSecurityIcon::Slate {
                 icon: slate_theme::SlateIcon::TopShield,
                 color: address_passive_icon_color(),

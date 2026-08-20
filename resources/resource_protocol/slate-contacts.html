@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Slate Contacts</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f7f5f1;
+      color: #242421;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #f7f5f1;
+    }
+
+    main {
+      width: min(1120px, calc(100vw - 48px));
+      margin: 0 auto;
+      padding: 38px 0;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 20px;
+      align-items: end;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0 0 7px;
+      font-size: 30px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0;
+      color: #696966;
+      line-height: 1.45;
+    }
+
+    button {
+      border: 1px solid #c8c5bd;
+      border-radius: 6px;
+      background: #f3f0ea;
+      color: #242421;
+      padding: 8px 12px;
+      font: inherit;
+      cursor: default;
+      white-space: nowrap;
+    }
+
+    button.primary {
+      border-color: #0b7e79;
+      background: #0b7e79;
+      color: #fffefa;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(250px, 0.72fr) minmax(0, 1.28fr);
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .panel {
+      min-width: 0;
+      border: 1px solid #dedbd5;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fffefa;
+    }
+
+    .panel-header {
+      min-height: 54px;
+      padding: 15px 18px;
+      border-bottom: 1px solid #e8e4dd;
+      background: #fbfaf8;
+    }
+
+    .search {
+      display: flex;
+      align-items: center;
+      height: 44px;
+      margin: 16px;
+      padding: 0 14px;
+      border: 1px solid #dedbd5;
+      border-radius: 7px;
+      color: #807e79;
+      background: #f7f5f1;
+    }
+
+    .contact {
+      display: grid;
+      grid-template-columns: 38px minmax(0, 1fr);
+      gap: 12px;
+      align-items: center;
+      padding: 12px 16px;
+      border-top: 1px solid #eeeae4;
+    }
+
+    .contact:first-of-type {
+      border-top: 0;
+    }
+
+    .avatar {
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 19px;
+      background: #e7f0ef;
+      color: #0b5f5f;
+      font-weight: 700;
+    }
+
+    .contact strong,
+    .detail strong {
+      display: block;
+      font-weight: 650;
+    }
+
+    .contact span,
+    .detail span {
+      display: block;
+      margin-top: 3px;
+      color: #696966;
+      font-size: 13px;
+    }
+
+    .detail {
+      padding: 20px;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .card {
+      min-height: 110px;
+      padding: 15px;
+      border: 1px solid #e4e0d9;
+      border-radius: 8px;
+      background: #fbfaf8;
+    }
+
+    .pill {
+      display: inline-block;
+      margin-bottom: 10px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: #eef4f4;
+      color: #0b5f5f;
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    @media (max-width: 760px) {
+      header,
+      .layout,
+      .cards {
+        grid-template-columns: 1fr;
+      }
+
+      .toolbar {
+        justify-content: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Contacts</h1>
+        <p>Local address book mockup for browser identities, providers, and private notes.</p>
+      </div>
+      <div class="toolbar">
+        <button>Import</button>
+        <button class="primary">New Contact</button>
+      </div>
+    </header>
+
+    <section class="layout">
+      <aside class="panel">
+        <div class="panel-header">
+          <h2>Local address book</h2>
+        </div>
+        <div class="search">Search contacts</div>
+        <div class="contact">
+          <div class="avatar">AN</div>
+          <div><strong>Alex Norton</strong><span>Work profile</span></div>
+        </div>
+        <div class="contact">
+          <div class="avatar">MR</div>
+          <div><strong>Mira Rao</strong><span>WhatsApp, SMS</span></div>
+        </div>
+        <div class="contact">
+          <div class="avatar">JP</div>
+          <div><strong>Jordan Park</strong><span>Private note attached</span></div>
+        </div>
+      </aside>
+
+      <section class="panel detail">
+        <span class="pill">Mock app</span>
+        <strong>Mira Rao</strong>
+        <span>Preferred route: personal profile</span>
+        <div class="cards">
+          <div class="card">
+            <strong>Channels</strong>
+            <span>SMS, WhatsApp, future providers</span>
+          </div>
+          <div class="card">
+            <strong>Identity boundary</strong>
+            <span>Profile-specific contacts and notes</span>
+          </div>
+          <div class="card">
+            <strong>Recent context</strong>
+            <span>Last chat preview will appear here</span>
+          </div>
+          <div class="card">
+            <strong>Privacy</strong>
+            <span>No sync or remote lookup by default</span>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

@@ -52,8 +52,9 @@ use crate::desktop::gui::Gui;
 use crate::desktop::key_bindings::{KeyBindingAction, key_binding_action_for_event};
 use crate::desktop::keyutils::CMD_OR_CONTROL;
 use crate::desktop::protocols::slate::{
-    is_slate_blank_url, is_slate_calendar_url, is_slate_chat_url, is_slate_downloads_url,
-    is_slate_home_url, is_slate_web_url,
+    is_slate_blank_url, is_slate_calendar_url, is_slate_chat_url, is_slate_contacts_url,
+    is_slate_downloads_url, is_slate_files_url, is_slate_home_url, is_slate_settings_url,
+    is_slate_web_url,
 };
 use crate::prefs::ServoShellPreferences;
 use crate::running_app_state::{RunningAppState, UserInterfaceCommand};
@@ -164,12 +165,15 @@ enum RailAppNavigationDirection {
     Previous,
 }
 
-const RAIL_APP_URLS: [&str; 5] = [
+const RAIL_APP_URLS: [&str; 8] = [
     "slate://home",
     "slate://web",
     "slate://downloads",
     "slate://calendar",
     "slate://chat",
+    "slate://contacts",
+    "slate://files",
+    "slate://settings",
 ];
 
 fn rail_app_index_for_url(url: Option<&Url>) -> usize {
@@ -185,6 +189,12 @@ fn rail_app_index_for_url(url: Option<&Url>) -> usize {
         3
     } else if is_slate_chat_url(url) {
         4
+    } else if is_slate_contacts_url(url) {
+        5
+    } else if is_slate_files_url(url) {
+        6
+    } else if is_slate_settings_url(url) {
+        7
     } else {
         1
     }
@@ -1024,6 +1034,15 @@ impl PlatformWindow for HeadedWindow {
                 if webview.url().as_ref().is_some_and(is_slate_chat_url) {
                     return Some("Slate - Chat".to_owned());
                 }
+                if webview.url().as_ref().is_some_and(is_slate_contacts_url) {
+                    return Some("Slate - Contacts".to_owned());
+                }
+                if webview.url().as_ref().is_some_and(is_slate_files_url) {
+                    return Some("Slate - Files".to_owned());
+                }
+                if webview.url().as_ref().is_some_and(is_slate_settings_url) {
+                    return Some("Slate - Settings".to_owned());
+                }
                 if webview.url().as_ref().is_some_and(is_slate_blank_url) {
                     return Some("Slate - New Tab".to_owned());
                 }
@@ -1624,6 +1643,13 @@ mod tests {
                 Some(&Url::parse("slate://chat").unwrap()),
                 RailAppNavigationDirection::Next,
             ),
+            "slate://contacts"
+        );
+        assert_eq!(
+            rail_app_navigation_target(
+                Some(&Url::parse("slate://settings").unwrap()),
+                RailAppNavigationDirection::Next,
+            ),
             "slate://home"
         );
         assert_eq!(
@@ -1631,7 +1657,7 @@ mod tests {
                 Some(&Url::parse("slate://home").unwrap()),
                 RailAppNavigationDirection::Previous,
             ),
-            "slate://chat"
+            "slate://settings"
         );
         assert_eq!(
             rail_app_navigation_target(

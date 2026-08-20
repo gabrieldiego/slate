@@ -74,6 +74,8 @@ enum ReusableInternalPage {
     Downloads,
     Calendar,
     Chat,
+    Contacts,
+    Files,
     Settings,
 }
 
@@ -93,6 +95,8 @@ impl ReusableInternalPage {
             | Self::Downloads
             | Self::Calendar
             | Self::Chat
+            | Self::Contacts
+            | Self::Files
             | Self::Settings => Some(matching_count - 1),
         }
     }
@@ -112,6 +116,8 @@ fn reusable_internal_page(url: &Url) -> Option<ReusableInternalPage> {
         (Some("chat"), "") | (None, "chat") | (Some("messages"), "") | (None, "messages") => {
             Some(ReusableInternalPage::Chat)
         }
+        (Some("contacts"), "") | (None, "contacts") => Some(ReusableInternalPage::Contacts),
+        (Some("files"), "") | (None, "files") => Some(ReusableInternalPage::Files),
         (Some("settings"), "") | (None, "settings") => Some(ReusableInternalPage::Settings),
         _ => None,
     }
@@ -609,6 +615,22 @@ mod tests {
             Some(ReusableInternalPage::Chat)
         );
         assert_eq!(
+            reusable_internal_page(&Url::parse("slate://contacts").unwrap()),
+            Some(ReusableInternalPage::Contacts)
+        );
+        assert_eq!(
+            reusable_internal_page(&Url::parse("slate:contacts").unwrap()),
+            Some(ReusableInternalPage::Contacts)
+        );
+        assert_eq!(
+            reusable_internal_page(&Url::parse("slate://files").unwrap()),
+            Some(ReusableInternalPage::Files)
+        );
+        assert_eq!(
+            reusable_internal_page(&Url::parse("slate:files").unwrap()),
+            Some(ReusableInternalPage::Files)
+        );
+        assert_eq!(
             reusable_internal_page(&Url::parse("slate://settings?chrome_zoom=0.82").unwrap()),
             Some(ReusableInternalPage::Settings)
         );
@@ -645,6 +667,14 @@ mod tests {
             None
         );
         assert_eq!(
+            reusable_internal_page(&Url::parse("slate://contacts/state").unwrap()),
+            None
+        );
+        assert_eq!(
+            reusable_internal_page(&Url::parse("slate://files/state").unwrap()),
+            None
+        );
+        assert_eq!(
             reusable_internal_page(&Url::parse("slate://settings/state").unwrap()),
             None
         );
@@ -661,6 +691,8 @@ mod tests {
         assert!(ReusableInternalPage::Downloads.closes_duplicates());
         assert!(ReusableInternalPage::Calendar.closes_duplicates());
         assert!(ReusableInternalPage::Chat.closes_duplicates());
+        assert!(ReusableInternalPage::Contacts.closes_duplicates());
+        assert!(ReusableInternalPage::Files.closes_duplicates());
         assert!(ReusableInternalPage::Settings.closes_duplicates());
     }
 
@@ -678,6 +710,14 @@ mod tests {
             Some(2)
         );
         assert_eq!(ReusableInternalPage::Chat.existing_target_index(3), Some(2));
+        assert_eq!(
+            ReusableInternalPage::Contacts.existing_target_index(3),
+            Some(2)
+        );
+        assert_eq!(
+            ReusableInternalPage::Files.existing_target_index(3),
+            Some(2)
+        );
         assert_eq!(
             ReusableInternalPage::Settings.existing_target_index(3),
             Some(2)
