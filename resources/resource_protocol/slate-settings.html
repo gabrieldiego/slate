@@ -175,8 +175,38 @@
       outline: 3px solid rgba(11, 126, 121, 0.18);
     }
 
+    .shortcut-inventory {
+      display: grid;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .shortcut-row {
+      display: grid;
+      grid-template-columns: minmax(140px, 1fr) minmax(180px, 260px);
+      gap: 18px;
+      align-items: baseline;
+      padding: 10px 0;
+      border-bottom: 1px solid #eeeae3;
+    }
+
+    .shortcut-row:last-child {
+      border-bottom: 0;
+    }
+
+    .shortcut-row strong {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .shortcut-row span {
+      color: #393a37;
+      font-variant-numeric: tabular-nums;
+    }
+
     @media (max-width: 560px) {
-      .keybinding-row {
+      .keybinding-row,
+      .shortcut-row {
         grid-template-columns: 1fr;
         gap: 8px;
       }
@@ -222,6 +252,72 @@
         <button id="reset-shortcuts">Reset shortcuts</button>
       </div>
     </section>
+
+    <section>
+      <h2>Built-in shortcuts</h2>
+      <div class="shortcut-inventory">
+        <div class="shortcut-row">
+          <strong>Back</strong>
+          <span>Primary/Alt+ArrowLeft, Primary+[ on non-Windows</span>
+        </div>
+        <div class="shortcut-row">
+          <strong>Forward</strong>
+          <span>Primary/Alt+ArrowRight, Primary+] on non-Windows</span>
+        </div>
+        <div class="shortcut-row">
+          <strong>Select tab 1-8</strong>
+          <span>Primary+1 ... Primary+8</span>
+        </div>
+        <div class="shortcut-row">
+          <strong>Select last tab</strong>
+          <span>Primary+9</span>
+        </div>
+        <div class="shortcut-row">
+          <strong>New window</strong>
+          <span>Primary+N</span>
+        </div>
+        <div class="shortcut-row">
+          <strong>Quit</strong>
+          <span>Primary+Q</span>
+        </div>
+        <div class="shortcut-row">
+          <strong>Page zoom in</strong>
+          <span>Primary+=, Primary++</span>
+        </div>
+        <div class="shortcut-row">
+          <strong>Page zoom out</strong>
+          <span>Primary+-</span>
+        </div>
+        <div class="shortcut-row">
+          <strong>Reset page zoom</strong>
+          <span>Primary+0</span>
+        </div>
+        <div class="shortcut-row">
+          <strong>Reload</strong>
+          <span>Primary+R, F5</span>
+        </div>
+        <div class="shortcut-row">
+          <strong>Exit fullscreen</strong>
+          <span>Escape</span>
+        </div>
+        <div class="shortcut-row">
+          <strong>Capture WebRender</strong>
+          <span>Ctrl+F9</span>
+        </div>
+        <div class="shortcut-row">
+          <strong>WebRender render targets</strong>
+          <span>Ctrl+F10</span>
+        </div>
+        <div class="shortcut-row">
+          <strong>WebRender texture cache</strong>
+          <span>Ctrl+F11</span>
+        </div>
+        <div class="shortcut-row">
+          <strong>WebRender profiler</strong>
+          <span>Ctrl+F12</span>
+        </div>
+      </div>
+    </section>
   </main>
 
   <script>
@@ -261,15 +357,29 @@
         id: "next_tab",
         label: "Next tab",
         query: "key_next_tab",
-        value: "Ctrl+PageDown",
-        default_value: "Ctrl+PageDown"
+        value: "Ctrl+Tab",
+        default_value: "Ctrl+Tab"
       },
       {
         id: "previous_tab",
         label: "Previous tab",
         query: "key_previous_tab",
-        value: "Ctrl+PageUp",
-        default_value: "Ctrl+PageUp"
+        value: "Ctrl+Shift+Tab",
+        default_value: "Ctrl+Shift+Tab"
+      },
+      {
+        id: "next_app",
+        label: "Next app",
+        query: "key_next_app",
+        value: "Ctrl+'",
+        default_value: "Ctrl+'"
+      },
+      {
+        id: "previous_app",
+        label: "Previous app",
+        query: "key_previous_app",
+        value: "Ctrl+Shift+'",
+        default_value: "Ctrl+Shift+'"
       },
       {
         id: "cut",

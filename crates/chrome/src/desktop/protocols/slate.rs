@@ -764,11 +764,15 @@ mod tests {
         assert_eq!(parsed["key_bindings"][1]["id"], "close_tab");
         assert_eq!(parsed["key_bindings"][2]["id"], "next_tab");
         assert_eq!(parsed["key_bindings"][3]["id"], "previous_tab");
-        assert_eq!(parsed["key_bindings"][4]["id"], "cut");
-        assert_eq!(parsed["key_bindings"][5]["id"], "copy");
-        assert_eq!(parsed["key_bindings"][5]["query"], "key_copy");
-        assert_eq!(parsed["key_bindings"][6]["id"], "paste");
-        assert_eq!(parsed["key_bindings"][7]["id"], "select_all");
+        assert_eq!(parsed["key_bindings"][4]["id"], "next_app");
+        assert_eq!(parsed["key_bindings"][4]["query"], "key_next_app");
+        assert_eq!(parsed["key_bindings"][5]["id"], "previous_app");
+        assert_eq!(parsed["key_bindings"][5]["query"], "key_previous_app");
+        assert_eq!(parsed["key_bindings"][6]["id"], "cut");
+        assert_eq!(parsed["key_bindings"][7]["id"], "copy");
+        assert_eq!(parsed["key_bindings"][7]["query"], "key_copy");
+        assert_eq!(parsed["key_bindings"][8]["id"], "paste");
+        assert_eq!(parsed["key_bindings"][9]["id"], "select_all");
     }
 
     #[test]
@@ -854,9 +858,16 @@ mod tests {
         assert!(settings_page.contains("Keyboard shortcuts"));
         assert!(settings_page.contains("id=\"save-shortcuts\""));
         assert!(settings_page.contains("key_new_tab"));
+        assert!(settings_page.contains("key_next_tab"));
         assert!(settings_page.contains("key_previous_tab"));
+        assert!(settings_page.contains("key_next_app"));
+        assert!(settings_page.contains("key_previous_app"));
         assert!(settings_page.contains("key_copy"));
         assert!(settings_page.contains("key_select_all"));
+        assert!(settings_page.contains("Built-in shortcuts"));
+        assert!(settings_page.contains("Primary+1 ... Primary+8"));
+        assert!(settings_page.contains("Primary+R, F5"));
+        assert!(settings_page.contains("Ctrl+F12"));
         assert!(!settings_page.contains("replaceState"));
         assert!(!settings_page.contains("type=\"range\""));
     }

@@ -52,8 +52,8 @@ use crate::desktop::gui::Gui;
 use crate::desktop::key_bindings::{KeyBindingAction, key_binding_action_for_event};
 use crate::desktop::keyutils::CMD_OR_CONTROL;
 use crate::desktop::protocols::slate::{
-    is_slate_blank_url, is_slate_calendar_url, is_slate_chat_url, is_slate_home_url,
-    is_slate_web_url,
+    is_slate_blank_url, is_slate_calendar_url, is_slate_chat_url, is_slate_downloads_url,
+    is_slate_home_url, is_slate_web_url,
 };
 use crate::prefs::ServoShellPreferences;
 use crate::running_app_state::{RunningAppState, UserInterfaceCommand};
@@ -156,6 +156,52 @@ fn primary_a_key_event() -> KeyboardEvent {
         false,
         false,
     )
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RailAppNavigationDirection {
+    Next,
+    Previous,
+}
+
+const RAIL_APP_URLS: [&str; 5] = [
+    "slate://home",
+    "slate://web",
+    "slate://downloads",
+    "slate://calendar",
+    "slate://chat",
+];
+
+fn rail_app_index_for_url(url: Option<&Url>) -> usize {
+    let Some(url) = url else {
+        return 1;
+    };
+
+    if is_slate_home_url(url) {
+        0
+    } else if is_slate_downloads_url(url) {
+        2
+    } else if is_slate_calendar_url(url) {
+        3
+    } else if is_slate_chat_url(url) {
+        4
+    } else {
+        1
+    }
+}
+
+fn rail_app_navigation_target(
+    url: Option<&Url>,
+    direction: RailAppNavigationDirection,
+) -> &'static str {
+    let index = rail_app_index_for_url(url);
+    let target_index = match direction {
+        RailAppNavigationDirection::Next => (index + 1) % RAIL_APP_URLS.len(),
+        RailAppNavigationDirection::Previous => {
+            (index + RAIL_APP_URLS.len() - 1) % RAIL_APP_URLS.len()
+        }
+    };
+    RAIL_APP_URLS[target_index]
 }
 
 impl HeadedWindow {
@@ -510,6 +556,20 @@ impl HeadedWindow {
                         window.activate_webview_by_index((index + len - 1) % len);
                     }
                 }
+            }
+            KeyBindingAction::NextApp => {
+                let target = rail_app_navigation_target(
+                    active_webview.url().as_ref(),
+                    RailAppNavigationDirection::Next,
+                );
+                window.queue_user_interface_command(UserInterfaceCommand::Go(target.to_string()));
+            }
+            KeyBindingAction::PreviousApp => {
+                let target = rail_app_navigation_target(
+                    active_webview.url().as_ref(),
+                    RailAppNavigationDirection::Previous,
+                );
+                window.queue_user_interface_command(UserInterfaceCommand::Go(target.to_string()));
             }
             KeyBindingAction::Cut => {
                 active_webview
@@ -1541,5 +1601,44 @@ mod tests {
         assert_eq!(event.event.code, Code::KeyA);
         assert_eq!(event.event.location, Location::Standard);
         assert!(event.event.modifiers.contains(CMD_OR_CONTROL));
+    }
+
+    #[test]
+    fn rail_app_navigation_cycles_through_singleton_apps() {
+        assert_eq!(
+            rail_app_navigation_target(
+                Some(&Url::parse("slate://home").unwrap()),
+                RailAppNavigationDirection::Next,
+            ),
+            "slate://web"
+        );
+        assert_eq!(
+            rail_app_navigation_target(
+                Some(&Url::parse("slate://web").unwrap()),
+                RailAppNavigationDirection::Next,
+            ),
+            "slate://downloads"
+        );
+        assert_eq!(
+            rail_app_navigation_target(
+                Some(&Url::parse("slate://chat").unwrap()),
+                RailAppNavigationDirection::Next,
+            ),
+            "slate://home"
+        );
+        assert_eq!(
+            rail_app_navigation_target(
+                Some(&Url::parse("slate://home").unwrap()),
+                RailAppNavigationDirection::Previous,
+            ),
+            "slate://chat"
+        );
+        assert_eq!(
+            rail_app_navigation_target(
+                Some(&Url::parse("https://example.com").unwrap()),
+                RailAppNavigationDirection::Previous,
+            ),
+            "slate://home"
+        );
     }
 }

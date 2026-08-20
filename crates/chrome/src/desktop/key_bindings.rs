@@ -4,7 +4,7 @@
 
 use std::sync::{OnceLock, RwLock};
 
-use keyboard_types::{Key, KeyboardEvent, Modifiers, NamedKey};
+use keyboard_types::{Code, Key, KeyboardEvent, Modifiers, NamedKey};
 use log::warn;
 use serde_json::json;
 use slate_storage::SlateProfileDatabase;
@@ -12,11 +12,13 @@ use url::Url;
 
 use super::keyutils::CMD_OR_CONTROL;
 
-const KEY_BINDING_ACTIONS: [KeyBindingAction; 8] = [
+const KEY_BINDING_ACTIONS: [KeyBindingAction; 10] = [
     KeyBindingAction::NewTab,
     KeyBindingAction::CloseTab,
     KeyBindingAction::NextTab,
     KeyBindingAction::PreviousTab,
+    KeyBindingAction::NextApp,
+    KeyBindingAction::PreviousApp,
     KeyBindingAction::Cut,
     KeyBindingAction::Copy,
     KeyBindingAction::Paste,
@@ -29,6 +31,8 @@ pub(crate) enum KeyBindingAction {
     CloseTab,
     NextTab,
     PreviousTab,
+    NextApp,
+    PreviousApp,
     Cut,
     Copy,
     Paste,
@@ -42,6 +46,8 @@ impl KeyBindingAction {
             Self::CloseTab => "close_tab",
             Self::NextTab => "next_tab",
             Self::PreviousTab => "previous_tab",
+            Self::NextApp => "next_app",
+            Self::PreviousApp => "previous_app",
             Self::Cut => "cut",
             Self::Copy => "copy",
             Self::Paste => "paste",
@@ -55,6 +61,8 @@ impl KeyBindingAction {
             Self::CloseTab => "Close tab",
             Self::NextTab => "Next tab",
             Self::PreviousTab => "Previous tab",
+            Self::NextApp => "Next app",
+            Self::PreviousApp => "Previous app",
             Self::Cut => "Cut",
             Self::Copy => "Copy",
             Self::Paste => "Paste",
@@ -68,6 +76,8 @@ impl KeyBindingAction {
             Self::CloseTab => "keybindings.close_tab",
             Self::NextTab => "keybindings.next_tab",
             Self::PreviousTab => "keybindings.previous_tab",
+            Self::NextApp => "keybindings.next_app",
+            Self::PreviousApp => "keybindings.previous_app",
             Self::Cut => "keybindings.cut",
             Self::Copy => "keybindings.copy",
             Self::Paste => "keybindings.paste",
@@ -81,6 +91,8 @@ impl KeyBindingAction {
             Self::CloseTab => "key_close_tab",
             Self::NextTab => "key_next_tab",
             Self::PreviousTab => "key_previous_tab",
+            Self::NextApp => "key_next_app",
+            Self::PreviousApp => "key_previous_app",
             Self::Cut => "key_cut",
             Self::Copy => "key_copy",
             Self::Paste => "key_paste",
@@ -92,8 +104,10 @@ impl KeyBindingAction {
         match self {
             Self::NewTab => "Primary+T",
             Self::CloseTab => "Primary+W",
-            Self::NextTab => "Ctrl+PageDown",
-            Self::PreviousTab => "Ctrl+PageUp",
+            Self::NextTab => "Ctrl+Tab",
+            Self::PreviousTab => "Ctrl+Shift+Tab",
+            Self::NextApp => "Ctrl+'",
+            Self::PreviousApp => "Ctrl+Shift+'",
             Self::Cut => "Primary+X",
             Self::Copy => "Primary+C",
             Self::Paste => "Primary+V",
@@ -108,6 +122,8 @@ pub(crate) struct SlateKeyBindings {
     close_tab: KeyBinding,
     next_tab: KeyBinding,
     previous_tab: KeyBinding,
+    next_app: KeyBinding,
+    previous_app: KeyBinding,
     cut: KeyBinding,
     copy: KeyBinding,
     paste: KeyBinding,
@@ -121,6 +137,8 @@ impl Default for SlateKeyBindings {
             close_tab: default_key_binding(KeyBindingAction::CloseTab),
             next_tab: default_key_binding(KeyBindingAction::NextTab),
             previous_tab: default_key_binding(KeyBindingAction::PreviousTab),
+            next_app: default_key_binding(KeyBindingAction::NextApp),
+            previous_app: default_key_binding(KeyBindingAction::PreviousApp),
             cut: default_key_binding(KeyBindingAction::Cut),
             copy: default_key_binding(KeyBindingAction::Copy),
             paste: default_key_binding(KeyBindingAction::Paste),
@@ -136,6 +154,8 @@ impl SlateKeyBindings {
             KeyBindingAction::CloseTab => &self.close_tab,
             KeyBindingAction::NextTab => &self.next_tab,
             KeyBindingAction::PreviousTab => &self.previous_tab,
+            KeyBindingAction::NextApp => &self.next_app,
+            KeyBindingAction::PreviousApp => &self.previous_app,
             KeyBindingAction::Cut => &self.cut,
             KeyBindingAction::Copy => &self.copy,
             KeyBindingAction::Paste => &self.paste,
@@ -149,6 +169,8 @@ impl SlateKeyBindings {
             KeyBindingAction::CloseTab => self.close_tab = binding,
             KeyBindingAction::NextTab => self.next_tab = binding,
             KeyBindingAction::PreviousTab => self.previous_tab = binding,
+            KeyBindingAction::NextApp => self.next_app = binding,
+            KeyBindingAction::PreviousApp => self.previous_app = binding,
             KeyBindingAction::Cut => self.cut = binding,
             KeyBindingAction::Copy => self.copy = binding,
             KeyBindingAction::Paste => self.paste = binding,
@@ -233,7 +255,7 @@ impl KeyBinding {
 
     fn matches_event(&self, event: &KeyboardEvent) -> bool {
         let modifiers = event.modifiers & modifier_mask();
-        modifiers == self.modifiers && self.key.matches_key(&event.key)
+        modifiers == self.modifiers && self.key.matches_event(event)
     }
 
     fn setting_value(&self) -> String {
@@ -266,15 +288,20 @@ enum BindingKey {
 }
 
 impl BindingKey {
-    fn matches_key(&self, key: &Key) -> bool {
-        match (self, key) {
+    fn matches_event(&self, event: &KeyboardEvent) -> bool {
+        match (self, &event.key) {
             (Self::Character(expected), Key::Character(actual)) => {
                 let mut buffer = [0; 4];
                 actual.eq_ignore_ascii_case(expected.encode_utf8(&mut buffer))
+                    || self.matches_physical_code(event)
             }
             (Self::Named(expected), Key::Named(actual)) => expected == actual,
-            _ => false,
+            _ => self.matches_physical_code(event),
         }
+    }
+
+    fn matches_physical_code(&self, event: &KeyboardEvent) -> bool {
+        matches!(self, Self::Character('\'')) && event.code == Code::Quote
     }
 
     fn label(&self) -> String {
@@ -453,8 +480,14 @@ fn default_key_binding(action: KeyBindingAction) -> KeyBinding {
     match action {
         KeyBindingAction::NewTab => KeyBinding::character(CMD_OR_CONTROL, 'T'),
         KeyBindingAction::CloseTab => KeyBinding::character(CMD_OR_CONTROL, 'W'),
-        KeyBindingAction::NextTab => KeyBinding::named(Modifiers::CONTROL, NamedKey::PageDown),
-        KeyBindingAction::PreviousTab => KeyBinding::named(Modifiers::CONTROL, NamedKey::PageUp),
+        KeyBindingAction::NextTab => KeyBinding::named(Modifiers::CONTROL, NamedKey::Tab),
+        KeyBindingAction::PreviousTab => {
+            KeyBinding::named(Modifiers::CONTROL | Modifiers::SHIFT, NamedKey::Tab)
+        }
+        KeyBindingAction::NextApp => KeyBinding::character(Modifiers::CONTROL, '\''),
+        KeyBindingAction::PreviousApp => {
+            KeyBinding::character(Modifiers::CONTROL | Modifiers::SHIFT, '\'')
+        }
         KeyBindingAction::Cut => KeyBinding::character(CMD_OR_CONTROL, 'X'),
         KeyBindingAction::Copy => KeyBinding::character(CMD_OR_CONTROL, 'C'),
         KeyBindingAction::Paste => KeyBinding::character(CMD_OR_CONTROL, 'V'),
@@ -551,6 +584,19 @@ fn load_key_binding_from_database(
             }
         };
 
+    if legacy_default_setting_value(action).is_some_and(|legacy| stored == legacy) {
+        let default = default_key_binding(action);
+        if let Err(error) =
+            database.set_setting_text(action.setting_key(), action.default_setting_value())
+        {
+            warn!(
+                "failed to migrate default {} key binding: {error}",
+                action.label().to_ascii_lowercase()
+            );
+        }
+        return default;
+    }
+
     if let Some(binding) = KeyBinding::parse(&stored) {
         return binding;
     }
@@ -571,6 +617,14 @@ fn load_key_binding_from_database(
     default
 }
 
+fn legacy_default_setting_value(action: KeyBindingAction) -> Option<&'static str> {
+    match action {
+        KeyBindingAction::NextTab => Some("Ctrl+PageDown"),
+        KeyBindingAction::PreviousTab => Some("Ctrl+PageUp"),
+        _ => None,
+    }
+}
+
 fn query_value(url: &Url, key: &str) -> Option<String> {
     url.query_pairs()
         .find(|(name, _)| name == key)
@@ -582,7 +636,7 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
 
-    use keyboard_types::{Code, Location};
+    use keyboard_types::Location;
 
     use super::*;
 
@@ -615,16 +669,36 @@ mod tests {
             Some(KeyBindingAction::CloseTab)
         );
         assert_eq!(
-            bindings.action_for_event(&key_event(
-                Key::Named(NamedKey::PageDown),
-                Modifiers::CONTROL,
-            )),
+            bindings.action_for_event(&key_event(Key::Named(NamedKey::Tab), Modifiers::CONTROL,)),
             Some(KeyBindingAction::NextTab)
         );
         assert_eq!(
-            bindings
-                .action_for_event(&key_event(Key::Named(NamedKey::PageUp), Modifiers::CONTROL,)),
+            bindings.action_for_event(&key_event(
+                Key::Named(NamedKey::Tab),
+                Modifiers::CONTROL | Modifiers::SHIFT,
+            )),
             Some(KeyBindingAction::PreviousTab)
+        );
+        assert_eq!(
+            bindings.action_for_event(&key_event(Key::Character("'".into()), Modifiers::CONTROL)),
+            Some(KeyBindingAction::NextApp)
+        );
+        assert_eq!(
+            bindings.action_for_event(&key_event(
+                Key::Character("\"".into()),
+                Modifiers::CONTROL | Modifiers::SHIFT,
+            )),
+            None
+        );
+
+        let mut shifted_quote = key_event(
+            Key::Character("\"".into()),
+            Modifiers::CONTROL | Modifiers::SHIFT,
+        );
+        shifted_quote.code = keyboard_types::Code::Quote;
+        assert_eq!(
+            bindings.action_for_event(&shifted_quote),
+            Some(KeyBindingAction::PreviousApp)
         );
         assert_eq!(
             bindings.action_for_event(&key_event(Key::Character("x".into()), CMD_OR_CONTROL)),
@@ -658,6 +732,14 @@ mod tests {
             KeyBinding::parse("Ctrl+Page Down").map(|binding| binding.setting_value()),
             Some("Ctrl+PageDown".to_string())
         );
+        assert_eq!(
+            KeyBinding::parse("Ctrl+Tab").map(|binding| binding.setting_value()),
+            Some("Ctrl+Tab".to_string())
+        );
+        assert_eq!(
+            KeyBinding::parse("Ctrl+Shift+'").map(|binding| binding.setting_value()),
+            Some("Ctrl+Shift+'".to_string())
+        );
         assert!(KeyBinding::parse("Ctrl+PageDown+T").is_none());
     }
 
@@ -685,11 +767,26 @@ mod tests {
         let value = bindings.json_value();
         let entries = value.as_array().expect("shortcuts should be an array");
 
-        assert_eq!(entries.len(), 8);
+        assert_eq!(entries.len(), 10);
         assert_eq!(entries[0]["id"], "new_tab");
         assert_eq!(entries[0]["label"], "New tab");
         assert_eq!(entries[0]["default_value"], "Primary+T");
+        assert!(entries.iter().any(|entry| {
+            entry["id"] == "next_tab"
+                && entry["query"] == "key_next_tab"
+                && entry["default_value"] == "Ctrl+Tab"
+        }));
         assert!(entries.iter().any(|entry| entry["id"] == "previous_tab"));
+        assert!(entries.iter().any(|entry| {
+            entry["id"] == "next_app"
+                && entry["query"] == "key_next_app"
+                && entry["default_value"] == "Ctrl+'"
+        }));
+        assert!(entries.iter().any(|entry| {
+            entry["id"] == "previous_app"
+                && entry["query"] == "key_previous_app"
+                && entry["default_value"] == "Ctrl+Shift+'"
+        }));
         assert!(entries.iter().any(|entry| {
             entry["id"] == "copy"
                 && entry["query"] == "key_copy"
@@ -725,6 +822,38 @@ mod tests {
                 .unwrap()
                 .as_deref(),
             Some(KeyBindingAction::CloseTab.default_setting_value())
+        );
+
+        drop(database);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn database_initialization_migrates_old_tab_navigation_defaults() {
+        let path = unique_database_path("legacy-tab-defaults");
+        let database = SlateProfileDatabase::open_resolved(path.clone()).unwrap();
+        database
+            .set_setting_text(KeyBindingAction::NextTab.setting_key(), "Ctrl+PageDown")
+            .unwrap();
+        database
+            .set_setting_text(KeyBindingAction::PreviousTab.setting_key(), "Ctrl+PageUp")
+            .unwrap();
+
+        initialize_key_bindings_from_database(&database);
+
+        assert_eq!(
+            database
+                .get_setting_text(KeyBindingAction::NextTab.setting_key())
+                .unwrap()
+                .as_deref(),
+            Some("Ctrl+Tab")
+        );
+        assert_eq!(
+            database
+                .get_setting_text(KeyBindingAction::PreviousTab.setting_key())
+                .unwrap()
+                .as_deref(),
+            Some("Ctrl+Shift+Tab")
         );
 
         drop(database);
