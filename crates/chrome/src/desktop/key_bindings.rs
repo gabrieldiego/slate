@@ -621,6 +621,7 @@ fn legacy_default_setting_value(action: KeyBindingAction) -> Option<&'static str
     match action {
         KeyBindingAction::NextTab => Some("Ctrl+PageDown"),
         KeyBindingAction::PreviousTab => Some("Ctrl+PageUp"),
+        KeyBindingAction::PreviousApp => Some("Ctrl+Shift+\""),
         _ => None,
     }
 }
@@ -829,7 +830,7 @@ mod tests {
     }
 
     #[test]
-    fn database_initialization_migrates_old_tab_navigation_defaults() {
+    fn database_initialization_migrates_old_shortcut_defaults() {
         let path = unique_database_path("legacy-tab-defaults");
         let database = SlateProfileDatabase::open_resolved(path.clone()).unwrap();
         database
@@ -837,6 +838,9 @@ mod tests {
             .unwrap();
         database
             .set_setting_text(KeyBindingAction::PreviousTab.setting_key(), "Ctrl+PageUp")
+            .unwrap();
+        database
+            .set_setting_text(KeyBindingAction::PreviousApp.setting_key(), "Ctrl+Shift+\"")
             .unwrap();
 
         initialize_key_bindings_from_database(&database);
@@ -854,6 +858,13 @@ mod tests {
                 .unwrap()
                 .as_deref(),
             Some("Ctrl+Shift+Tab")
+        );
+        assert_eq!(
+            database
+                .get_setting_text(KeyBindingAction::PreviousApp.setting_key())
+                .unwrap()
+                .as_deref(),
+            Some("Ctrl+Shift+'")
         );
 
         drop(database);

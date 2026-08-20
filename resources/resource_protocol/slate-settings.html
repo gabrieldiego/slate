@@ -567,6 +567,110 @@
       setSliderValue(next, true);
     }
 
+    const PHYSICAL_SHORTCUT_LABELS = {
+      Backquote: "`",
+      Backslash: "\\",
+      BracketLeft: "[",
+      BracketRight: "]",
+      Comma: ",",
+      Equal: "=",
+      Minus: "-",
+      Period: ".",
+      Quote: "'",
+      Semicolon: ";",
+      Slash: "/"
+    };
+
+    const NAMED_SHORTCUT_LABELS = {
+      ArrowDown: "ArrowDown",
+      ArrowLeft: "ArrowLeft",
+      ArrowRight: "ArrowRight",
+      ArrowUp: "ArrowUp",
+      Backspace: "Backspace",
+      Delete: "Delete",
+      End: "End",
+      Enter: "Enter",
+      Escape: "Escape",
+      Home: "Home",
+      Insert: "Insert",
+      PageDown: "PageDown",
+      PageUp: "PageUp",
+      Tab: "Tab"
+    };
+
+    function isModifierKey(event) {
+      return event.key === "Alt" ||
+        event.key === "Control" ||
+        event.key === "Meta" ||
+        event.key === "Shift";
+    }
+
+    function shortcutKeyLabel(event) {
+      if (event.code && PHYSICAL_SHORTCUT_LABELS[event.code]) {
+        return PHYSICAL_SHORTCUT_LABELS[event.code];
+      }
+      if (event.code && /^Key[A-Z]$/.test(event.code)) {
+        return event.code.substring(3);
+      }
+      if (event.code && /^Digit[0-9]$/.test(event.code)) {
+        return event.code.substring(5);
+      }
+      if (event.code && /^F([1-9]|1[0-9]|2[0-4])$/.test(event.code)) {
+        return event.code;
+      }
+      if (event.key && NAMED_SHORTCUT_LABELS[event.key]) {
+        return NAMED_SHORTCUT_LABELS[event.key];
+      }
+      if (event.key && event.key.length === 1) {
+        return event.key.toUpperCase();
+      }
+      return "";
+    }
+
+    function addShortcutCapture(input) {
+      input.addEventListener("keydown", (event) => {
+        if (event.isComposing) {
+          return;
+        }
+        if (isModifierKey(event)) {
+          event.preventDefault();
+          return;
+        }
+        if ((event.key === "Backspace" || event.key === "Delete") &&
+          !event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey) {
+          event.preventDefault();
+          input.value = "";
+          setSaveButtons("Save");
+          return;
+        }
+
+        const key = shortcutKeyLabel(event);
+        if (!key ||
+          (key === "Tab" && !event.ctrlKey && !event.altKey && !event.metaKey)) {
+          return;
+        }
+
+        const tokens = [];
+        if (event.ctrlKey) {
+          tokens.push("Ctrl");
+        }
+        if (event.shiftKey) {
+          tokens.push("Shift");
+        }
+        if (event.altKey) {
+          tokens.push("Alt");
+        }
+        if (event.metaKey) {
+          tokens.push("Meta");
+        }
+        tokens.push(key);
+
+        event.preventDefault();
+        input.value = tokens.join("+");
+        setSaveButtons("Save");
+      });
+    }
+
     function renderKeyBindings(bindings) {
       const rows = Array.isArray(bindings) && bindings.length > 0 ? bindings : DEFAULT_KEY_BINDINGS;
       keyBindings.textContent = "";
@@ -590,6 +694,7 @@
         input.addEventListener("input", () => {
           setSaveButtons("Save");
         });
+        addShortcutCapture(input);
 
         row.appendChild(label);
         row.appendChild(input);

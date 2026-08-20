@@ -940,6 +940,8 @@ mod tests {
         assert!(settings_page.contains("key_previous_app"));
         assert!(settings_page.contains("key_copy"));
         assert!(settings_page.contains("key_select_all"));
+        assert!(settings_page.contains("addShortcutCapture(input)"));
+        assert!(settings_page.contains("Quote: \"'\""));
         assert!(settings_page.contains("Built-in shortcuts"));
         assert!(settings_page.contains("Primary+1 ... Primary+8"));
         assert!(settings_page.contains("Primary+R, F5"));
