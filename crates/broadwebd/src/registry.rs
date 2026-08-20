@@ -3,11 +3,13 @@ use crate::protocols::{
     tor::TorService,
 };
 use crate::services::http_fetch::HttpFetchService;
+use crate::services::profile_sync::ProfileSyncService;
 use crate::transports::direct_http::DirectHttpTransport;
 use crate::{
     BroadwebStatusReporter, BroadwebStatusSnapshot, BroadwebdError, DIRECT_HTTP_PLUGIN,
-    HTTP_FETCH_PLUGIN, HttpFetchRequest, HttpFetchResponse, PluginHealth, PluginMetadata,
-    PluginStatus, ResourceBudget, ServiceRequest, ServiceResponse, TransportHttpRequest,
+    HTTP_FETCH_PLUGIN, HttpFetchRequest, HttpFetchResponse, PROFILE_SYNC_PLUGIN, PluginHealth,
+    PluginMetadata, PluginStatus, ProfileSyncRequest, ProfileSyncResponse, ResourceBudget,
+    ServiceRequest, ServiceResponse, TransportHttpRequest,
 };
 use std::collections::BTreeMap;
 use url::Url;
@@ -100,6 +102,7 @@ impl PluginRegistry {
         registry.register_protocol_service(IpfsService::new(ipfs_config));
         registry.register_protocol_service(TorService);
         registry.register_service(HttpFetchService);
+        registry.register_service(ProfileSyncService::new());
         registry
     }
 
@@ -249,7 +252,36 @@ impl PluginRegistry {
         let service = self.service(HTTP_FETCH_PLUGIN)?;
         match service.call(ServiceRequest::HttpFetch(request), self, budget)? {
             ServiceResponse::HttpFetch(response) => Ok(response),
+            ServiceResponse::ProfileSync(_) => Err(BroadwebdError::UnsupportedRequest(
+                "http-fetch returned a profile-sync response".to_string(),
+            )),
         }
+    }
+
+    pub fn profile_sync(
+        &self,
+        request: ProfileSyncRequest,
+        budget: &ResourceBudget,
+    ) -> Result<ProfileSyncResponse, BroadwebdError> {
+        match self.call_service(
+            PROFILE_SYNC_PLUGIN,
+            ServiceRequest::ProfileSync(request),
+            budget,
+        )? {
+            ServiceResponse::ProfileSync(response) => Ok(response),
+            ServiceResponse::HttpFetch(_) => Err(BroadwebdError::UnsupportedRequest(
+                "profile-sync returned an HTTP response".to_string(),
+            )),
+        }
+    }
+
+    pub fn call_service(
+        &self,
+        service_id: &str,
+        request: ServiceRequest,
+        budget: &ResourceBudget,
+    ) -> Result<ServiceResponse, BroadwebdError> {
+        self.service(service_id)?.call(request, self, budget)
     }
 
     pub(crate) fn transport(&self, id: &str) -> Result<&dyn TransportPlugin, BroadwebdError> {

@@ -20,6 +20,7 @@ pub const IPFS_GATEWAY_PLUGIN: &str = "ipfs-gateway";
 pub const IPFS_KUBO_RPC_PLUGIN: &str = "ipfs-kubo-rpc";
 pub const TOR_PROTOCOL_SERVICE: &str = "tor";
 pub const TOR_ARTI_HTTP_PLUGIN: &str = "tor-arti-http";
+pub const PROFILE_SYNC_PLUGIN: &str = "profile-sync";
 pub const DEFAULT_IPFS_GATEWAY: &str = "http://127.0.0.1:8080";
 pub const DEFAULT_IPFS_KUBO_RPC_API: &str = "http://127.0.0.1:5001";
 pub const DEFAULT_PUBLIC_IPFS_GATEWAY: &str = "https://ipfs.filebase.io";
@@ -46,7 +47,10 @@ pub use health::{
 };
 pub use http::{
     DownloadRecord, FetchDisposition, FetchPurpose, FetchRouteInfo, HttpFetchRequest,
-    HttpFetchResponse, HttpHeader, ServiceRequest, ServiceResponse, TransportHttpRequest,
+    HttpFetchResponse, HttpHeader, ProfileSyncObjectRequest, ProfileSyncProfileRequest,
+    ProfileSyncProviderRecord, ProfileSyncPutObjectRequest, ProfileSyncRequest,
+    ProfileSyncResponse, ProfileSyncRootRequest, ProfileSyncRootUpdate, ServiceRequest,
+    ServiceResponse, TransportHttpRequest,
 };
 pub use protocols::ipfs::{
     IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport, IpfsKuboRpcEndpoint,
@@ -61,7 +65,7 @@ pub use registry::{
     ApplicationServicePlugin, PluginInstallReport, PluginRegistry, ProtocolInstallReport,
     ProtocolService, TransportPlugin,
 };
-pub use services::http_fetch::HttpFetchService;
+pub use services::{http_fetch::HttpFetchService, profile_sync::ProfileSyncService};
 pub use state::{StateRoot, TemporaryDownloadRecord};
 pub use status::{BroadwebStatusKind, BroadwebStatusReporter, BroadwebStatusSnapshot};
 pub use transports::direct_http::DirectHttpTransport;
@@ -73,11 +77,13 @@ mod tests {
         DEFAULT_IPFS_KUBO_RPC_API, DIRECT_HTTP_PLUGIN, FetchDisposition, FetchPurpose,
         HttpFetchRequest, HttpFetchResponse, IPFS_GATEWAY_PLUGIN, IPFS_KUBO_RPC_PLUGIN, IpfsConfig,
         IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport, IpfsKuboRpcEndpoint,
-        IpfsService, IpfsTransportKind, PluginHealth, PluginKind, PluginMetadata, PluginRegistry,
-        ProtocolService, ResourceBudget, ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, StateRoot,
-        TOR_ARTI_HTTP_PLUGIN, TOR_PROTOCOL_SERVICE, TorService, TransportHttpRequest,
-        TransportPlugin, ipfs_gateway_http_url, ipfs_kubo_cat_url, tor_http_target,
-        tor_url_from_http_url,
+        IpfsService, IpfsTransportKind, PROFILE_SYNC_PLUGIN, PluginHealth, PluginKind,
+        PluginMetadata, PluginRegistry, ProfileSyncObjectRequest, ProfileSyncProfileRequest,
+        ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse,
+        ProfileSyncRootRequest, ProfileSyncRootUpdate, ProtocolService, ResourceBudget,
+        ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, StateRoot, TOR_ARTI_HTTP_PLUGIN,
+        TOR_PROTOCOL_SERVICE, TorService, TransportHttpRequest, TransportPlugin,
+        ipfs_gateway_http_url, ipfs_kubo_cat_url, tor_http_target, tor_url_from_http_url,
     };
     use std::fs;
     use std::io::{Read, Write};
@@ -231,6 +237,104 @@ mod tests {
         assert!(health.plugins.iter().any(|status| {
             status.metadata.id == "ipfs" && matches!(status.health, PluginHealth::Ready)
         }));
+        assert!(health.plugins.iter().any(|status| {
+            status.metadata.id == PROFILE_SYNC_PLUGIN
+                && matches!(status.health, PluginHealth::Ready)
+        }));
+
+        let _ = fs::remove_dir_all(daemon.state_root().path());
+    }
+
+    #[test]
+    fn fake_profile_sync_service_stores_retains_and_resolves_local_objects() {
+        let daemon = BroadwebDaemon::start(test_state_root("profile-sync")).expect("daemon");
+        let put = daemon
+            .profile_sync(ProfileSyncRequest::PutEncryptedObject(
+                ProfileSyncPutObjectRequest::new("default", b"encrypted manifest".to_vec()),
+            ))
+            .expect("put profile sync object");
+        let ProfileSyncResponse::PutEncryptedObject { object_id } = put else {
+            panic!("unexpected put response");
+        };
+
+        let fetched = daemon
+            .profile_sync(ProfileSyncRequest::GetEncryptedObject(
+                ProfileSyncObjectRequest::new("default", object_id.clone()),
+            ))
+            .expect("fetch profile sync object");
+        assert_eq!(
+            fetched,
+            ProfileSyncResponse::GetEncryptedObject {
+                object_id: object_id.clone(),
+                bytes: b"encrypted manifest".to_vec()
+            }
+        );
+
+        let retained = daemon
+            .profile_sync(ProfileSyncRequest::RetainObject(
+                ProfileSyncObjectRequest::new("default", object_id.clone()),
+            ))
+            .expect("retain profile sync object");
+        assert_eq!(
+            retained,
+            ProfileSyncResponse::RetainObject {
+                object_id: object_id.clone(),
+                retained: true
+            }
+        );
+
+        let published = daemon
+            .profile_sync(ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+                "default",
+                "profile-root",
+                object_id.clone(),
+            )))
+            .expect("publish profile root");
+        assert_eq!(
+            published,
+            ProfileSyncResponse::Root {
+                root_id: "profile-root".to_string(),
+                object_id: Some(object_id.clone())
+            }
+        );
+
+        let resolved = daemon
+            .profile_sync(ProfileSyncRequest::ResolveRoot(
+                ProfileSyncRootRequest::new("default", "profile-root"),
+            ))
+            .expect("resolve profile root");
+        assert_eq!(
+            resolved,
+            ProfileSyncResponse::Root {
+                root_id: "profile-root".to_string(),
+                object_id: Some(object_id.clone())
+            }
+        );
+
+        let providers = daemon
+            .profile_sync(ProfileSyncRequest::DiscoverProviders(
+                ProfileSyncProfileRequest::new("default"),
+            ))
+            .expect("discover providers");
+        let ProfileSyncResponse::Providers { providers } = providers else {
+            panic!("unexpected providers response");
+        };
+        assert_eq!(providers.len(), 1);
+        assert_eq!(providers[0].provider_kind, "local-fake");
+        assert_eq!(providers[0].retained_objects, 1);
+
+        let released = daemon
+            .profile_sync(ProfileSyncRequest::ReleaseObject(
+                ProfileSyncObjectRequest::new("default", object_id.clone()),
+            ))
+            .expect("release profile sync object");
+        assert_eq!(
+            released,
+            ProfileSyncResponse::ReleaseObject {
+                object_id,
+                retained: false
+            }
+        );
 
         let _ = fs::remove_dir_all(daemon.state_root().path());
     }

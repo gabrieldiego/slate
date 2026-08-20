@@ -187,11 +187,137 @@ impl HttpFetchResponse {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ServiceRequest {
     HttpFetch(HttpFetchRequest),
+    ProfileSync(ProfileSyncRequest),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ServiceResponse {
     HttpFetch(HttpFetchResponse),
+    ProfileSync(ProfileSyncResponse),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ProfileSyncRequest {
+    PutEncryptedObject(ProfileSyncPutObjectRequest),
+    GetEncryptedObject(ProfileSyncObjectRequest),
+    RetainObject(ProfileSyncObjectRequest),
+    ReleaseObject(ProfileSyncObjectRequest),
+    PublishRoot(ProfileSyncRootUpdate),
+    ResolveRoot(ProfileSyncRootRequest),
+    DiscoverProviders(ProfileSyncProfileRequest),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncPutObjectRequest {
+    pub profile: String,
+    pub bytes: Vec<u8>,
+}
+
+impl ProfileSyncPutObjectRequest {
+    pub fn new(profile: impl Into<String>, bytes: impl Into<Vec<u8>>) -> Self {
+        Self {
+            profile: profile.into(),
+            bytes: bytes.into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncObjectRequest {
+    pub profile: String,
+    pub object_id: String,
+}
+
+impl ProfileSyncObjectRequest {
+    pub fn new(profile: impl Into<String>, object_id: impl Into<String>) -> Self {
+        Self {
+            profile: profile.into(),
+            object_id: object_id.into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncRootRequest {
+    pub profile: String,
+    pub root_id: String,
+}
+
+impl ProfileSyncRootRequest {
+    pub fn new(profile: impl Into<String>, root_id: impl Into<String>) -> Self {
+        Self {
+            profile: profile.into(),
+            root_id: root_id.into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncRootUpdate {
+    pub profile: String,
+    pub root_id: String,
+    pub object_id: String,
+}
+
+impl ProfileSyncRootUpdate {
+    pub fn new(
+        profile: impl Into<String>,
+        root_id: impl Into<String>,
+        object_id: impl Into<String>,
+    ) -> Self {
+        Self {
+            profile: profile.into(),
+            root_id: root_id.into(),
+            object_id: object_id.into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncProfileRequest {
+    pub profile: String,
+}
+
+impl ProfileSyncProfileRequest {
+    pub fn new(profile: impl Into<String>) -> Self {
+        Self {
+            profile: profile.into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ProfileSyncResponse {
+    PutEncryptedObject {
+        object_id: String,
+    },
+    GetEncryptedObject {
+        object_id: String,
+        bytes: Vec<u8>,
+    },
+    RetainObject {
+        object_id: String,
+        retained: bool,
+    },
+    ReleaseObject {
+        object_id: String,
+        retained: bool,
+    },
+    Root {
+        root_id: String,
+        object_id: Option<String>,
+    },
+    Providers {
+        providers: Vec<ProfileSyncProviderRecord>,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncProviderRecord {
+    pub provider_id: String,
+    pub provider_kind: String,
+    pub privacy_boundary: String,
+    pub retained_objects: usize,
 }
 
 pub(crate) fn parse_http_url(input: &str) -> Result<Url, BroadwebdError> {

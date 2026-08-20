@@ -58,6 +58,9 @@ impl ApplicationServicePlugin for HttpFetchService {
                     })
                     .map(ServiceResponse::HttpFetch)
             }
+            ServiceRequest::ProfileSync(_) => Err(BroadwebdError::UnsupportedRequest(
+                "http-fetch cannot handle profile-sync requests".to_string(),
+            )),
         }
     }
 }
