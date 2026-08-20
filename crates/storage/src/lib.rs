@@ -10,6 +10,15 @@ use rusqlite::{Connection, OptionalExtension, params};
 pub const DEFAULT_DATABASE_FILE_NAME: &str = "slate-settings.db";
 pub const DEFAULT_HOME_DIRECTORY_NAME: &str = ".slate";
 pub const DEFAULT_PROFILE_ID: &str = "default";
+pub const DEFAULT_SYNC_DEVICE_ID: &str = "local-device";
+pub const SYNC_DOMAIN_BOOKMARKS: &str = "bookmarks";
+pub const SYNC_DOMAIN_CALENDAR: &str = "calendar";
+pub const SYNC_DOMAIN_CHAT: &str = "chat";
+pub const SYNC_DOMAIN_CONTACTS: &str = "contacts";
+pub const SYNC_DOMAIN_DOWNLOADS: &str = "downloads";
+pub const SYNC_DOMAIN_FILES: &str = "files";
+pub const SYNC_DOMAIN_SETTINGS: &str = "settings";
+pub const SYNC_DOMAIN_STORAGE: &str = "storage";
 
 pub const DEFAULT_HOME_BOOKMARKS: [DefaultBookmark; 2] = [
     DefaultBookmark {
@@ -23,6 +32,57 @@ pub const DEFAULT_HOME_BOOKMARKS: [DefaultBookmark; 2] = [
 ];
 
 const DEFAULT_BOOKMARKS_SEEDED_SETTING_KEY: &str = "bookmarks.defaults_seeded";
+
+const DEFAULT_APP_SYNC_DOMAINS: [DefaultAppSyncDomain; 8] = [
+    DefaultAppSyncDomain {
+        domain: SYNC_DOMAIN_SETTINGS,
+        schema_version: 1,
+        privacy_classification: "low-risk",
+        sync_content: false,
+    },
+    DefaultAppSyncDomain {
+        domain: SYNC_DOMAIN_BOOKMARKS,
+        schema_version: 1,
+        privacy_classification: "low-risk",
+        sync_content: false,
+    },
+    DefaultAppSyncDomain {
+        domain: SYNC_DOMAIN_CALENDAR,
+        schema_version: 1,
+        privacy_classification: "sensitive",
+        sync_content: false,
+    },
+    DefaultAppSyncDomain {
+        domain: SYNC_DOMAIN_CONTACTS,
+        schema_version: 1,
+        privacy_classification: "sensitive",
+        sync_content: false,
+    },
+    DefaultAppSyncDomain {
+        domain: SYNC_DOMAIN_CHAT,
+        schema_version: 1,
+        privacy_classification: "sensitive",
+        sync_content: false,
+    },
+    DefaultAppSyncDomain {
+        domain: SYNC_DOMAIN_FILES,
+        schema_version: 1,
+        privacy_classification: "content",
+        sync_content: true,
+    },
+    DefaultAppSyncDomain {
+        domain: SYNC_DOMAIN_DOWNLOADS,
+        schema_version: 1,
+        privacy_classification: "metadata",
+        sync_content: false,
+    },
+    DefaultAppSyncDomain {
+        domain: SYNC_DOMAIN_STORAGE,
+        schema_version: 1,
+        privacy_classification: "sensitive",
+        sync_content: false,
+    },
+];
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProfileId(String);
@@ -75,6 +135,14 @@ pub struct ResolvedDatabasePath {
 pub struct DefaultBookmark {
     pub title: &'static str,
     pub url: &'static str,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DefaultAppSyncDomain {
+    pub domain: &'static str,
+    pub schema_version: i64,
+    pub privacy_classification: &'static str,
+    pub sync_content: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -145,6 +213,83 @@ pub struct BinaryBlobRecord {
     pub data: Vec<u8>,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AppSyncDomainRegistration {
+    pub profile: String,
+    pub domain: String,
+    pub schema_version: i64,
+    pub enabled: bool,
+    pub privacy_classification: String,
+    pub sync_content: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AppSyncDomainRecord {
+    pub profile: String,
+    pub domain: String,
+    pub schema_version: i64,
+    pub enabled: bool,
+    pub privacy_classification: String,
+    pub sync_content: bool,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SyncDeviceRegistration {
+    pub profile: String,
+    pub device_id: String,
+    pub label: Option<String>,
+    pub membership_epoch: i64,
+    pub provider_authority: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SyncDeviceRecord {
+    pub profile: String,
+    pub device_id: String,
+    pub label: Option<String>,
+    pub membership_epoch: i64,
+    pub provider_authority: bool,
+    pub created_at: i64,
+    pub last_seen_at: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SyncSettingValueRecord {
+    pub profile: String,
+    pub domain: String,
+    pub key: String,
+    pub value: String,
+    pub value_kind: String,
+    pub revision: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SyncChangeRecord {
+    pub id: i64,
+    pub profile: String,
+    pub domain: String,
+    pub entity_key: String,
+    pub operation: String,
+    pub payload: String,
+    pub device_id: String,
+    pub device_sequence: i64,
+    pub logical_clock: i64,
+    pub created_at: i64,
+    pub applied_at: Option<i64>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SyncRevisionRecord {
+    pub revision: i64,
+    pub profile: String,
+    pub domain: String,
+    pub change_id: i64,
+    pub created_at: i64,
 }
 
 #[derive(Debug)]
@@ -222,6 +367,7 @@ impl SlateProfileDatabase {
             path: Arc::new(path),
         };
         database.initialize()?;
+        database.try_seed_default_sync_state();
         database.try_seed_default_bookmarks();
         Ok(database)
     }
@@ -241,9 +387,12 @@ impl SlateProfileDatabase {
     }
 
     pub fn set_setting_text(&self, key: &str, value: &str) -> Result<(), StorageError> {
-        let connection = self.connection()?;
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
         let now = unix_time_seconds()?;
-        connection
+        transaction
             .execute(
                 "INSERT INTO settings (key, value, updated_at)
                  VALUES (?1, ?2, ?3)
@@ -252,6 +401,19 @@ impl SlateProfileDatabase {
                    updated_at = excluded.updated_at",
                 params![key, value, now],
             )
+            .map_err(|source| self.database_error(source))?;
+        record_sync_setting_text_in_transaction(
+            &transaction,
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            key,
+            value,
+            DEFAULT_SYNC_DEVICE_ID,
+            now,
+        )
+        .map_err(|source| self.database_error(source))?;
+        transaction
+            .commit()
             .map_err(|source| self.database_error(source))?;
         Ok(())
     }
@@ -639,6 +801,280 @@ impl SlateProfileDatabase {
             .map_err(|source| self.database_error(source))
     }
 
+    pub fn register_app_sync_domain(
+        &self,
+        domain: &AppSyncDomainRegistration,
+    ) -> Result<(), StorageError> {
+        let connection = self.connection()?;
+        let now = unix_time_seconds()?;
+        connection
+            .execute(
+                "INSERT INTO app_sync_domains
+                   (profile, domain, schema_version, enabled, privacy_classification,
+                    sync_content, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)
+                 ON CONFLICT(profile, domain) DO UPDATE SET
+                   schema_version = excluded.schema_version,
+                   enabled = excluded.enabled,
+                   privacy_classification = excluded.privacy_classification,
+                   sync_content = excluded.sync_content,
+                   updated_at = excluded.updated_at",
+                params![
+                    domain.profile.as_str(),
+                    domain.domain.as_str(),
+                    domain.schema_version,
+                    bool_to_integer(domain.enabled),
+                    domain.privacy_classification.as_str(),
+                    bool_to_integer(domain.sync_content),
+                    now
+                ],
+            )
+            .map_err(|source| self.database_error(source))?;
+        Ok(())
+    }
+
+    pub fn app_sync_domains(
+        &self,
+        profile: &str,
+    ) -> Result<Vec<AppSyncDomainRecord>, StorageError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT profile, domain, schema_version, enabled, privacy_classification,
+                        sync_content, created_at, updated_at
+                 FROM app_sync_domains
+                 WHERE profile = ?1
+                 ORDER BY domain",
+            )
+            .map_err(|source| self.database_error(source))?;
+        let records = statement
+            .query_map([profile], |row| {
+                Ok(AppSyncDomainRecord {
+                    profile: row.get(0)?,
+                    domain: row.get(1)?,
+                    schema_version: row.get(2)?,
+                    enabled: integer_to_bool(row.get(3)?),
+                    privacy_classification: row.get(4)?,
+                    sync_content: integer_to_bool(row.get(5)?),
+                    created_at: row.get(6)?,
+                    updated_at: row.get(7)?,
+                })
+            })
+            .map_err(|source| self.database_error(source))?;
+
+        let mut domains = Vec::new();
+        for record in records {
+            domains.push(record.map_err(|source| self.database_error(source))?);
+        }
+        Ok(domains)
+    }
+
+    pub fn register_sync_device(
+        &self,
+        device: &SyncDeviceRegistration,
+    ) -> Result<(), StorageError> {
+        let connection = self.connection()?;
+        let now = unix_time_seconds()?;
+        connection
+            .execute(
+                "INSERT INTO sync_devices
+                   (profile, device_id, label, membership_epoch, provider_authority,
+                    created_at, last_seen_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)
+                 ON CONFLICT(profile, device_id) DO UPDATE SET
+                   label = excluded.label,
+                   membership_epoch = excluded.membership_epoch,
+                   provider_authority = excluded.provider_authority,
+                   last_seen_at = excluded.last_seen_at",
+                params![
+                    device.profile.as_str(),
+                    device.device_id.as_str(),
+                    device.label.as_deref(),
+                    device.membership_epoch,
+                    bool_to_integer(device.provider_authority),
+                    now
+                ],
+            )
+            .map_err(|source| self.database_error(source))?;
+        Ok(())
+    }
+
+    pub fn sync_devices(&self, profile: &str) -> Result<Vec<SyncDeviceRecord>, StorageError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT profile, device_id, label, membership_epoch, provider_authority,
+                        created_at, last_seen_at
+                 FROM sync_devices
+                 WHERE profile = ?1
+                 ORDER BY device_id",
+            )
+            .map_err(|source| self.database_error(source))?;
+        let records = statement
+            .query_map([profile], |row| {
+                Ok(SyncDeviceRecord {
+                    profile: row.get(0)?,
+                    device_id: row.get(1)?,
+                    label: row.get(2)?,
+                    membership_epoch: row.get(3)?,
+                    provider_authority: integer_to_bool(row.get(4)?),
+                    created_at: row.get(5)?,
+                    last_seen_at: row.get(6)?,
+                })
+            })
+            .map_err(|source| self.database_error(source))?;
+
+        let mut devices = Vec::new();
+        for record in records {
+            devices.push(record.map_err(|source| self.database_error(source))?);
+        }
+        Ok(devices)
+    }
+
+    pub fn set_sync_setting_text(
+        &self,
+        profile: &str,
+        domain: &str,
+        key: &str,
+        value: &str,
+    ) -> Result<SyncChangeRecord, StorageError> {
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let now = unix_time_seconds()?;
+        if profile == DEFAULT_PROFILE_ID && domain == SYNC_DOMAIN_SETTINGS {
+            transaction
+                .execute(
+                    "INSERT INTO settings (key, value, updated_at)
+                     VALUES (?1, ?2, ?3)
+                     ON CONFLICT(key) DO UPDATE SET
+                       value = excluded.value,
+                       updated_at = excluded.updated_at",
+                    params![key, value, now],
+                )
+                .map_err(|source| self.database_error(source))?;
+        }
+        let change = record_sync_setting_text_in_transaction(
+            &transaction,
+            profile,
+            domain,
+            key,
+            value,
+            DEFAULT_SYNC_DEVICE_ID,
+            now,
+        )
+        .map_err(|source| self.database_error(source))?;
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(change)
+    }
+
+    pub fn get_sync_setting_text(
+        &self,
+        profile: &str,
+        domain: &str,
+        key: &str,
+    ) -> Result<Option<SyncSettingValueRecord>, StorageError> {
+        let connection = self.connection()?;
+        connection
+            .query_row(
+                "SELECT profile, domain, key, value, value_kind, revision, updated_at
+                 FROM settings_values
+                 WHERE profile = ?1 AND domain = ?2 AND key = ?3",
+                params![profile, domain, key],
+                |row| {
+                    Ok(SyncSettingValueRecord {
+                        profile: row.get(0)?,
+                        domain: row.get(1)?,
+                        key: row.get(2)?,
+                        value: row.get(3)?,
+                        value_kind: row.get(4)?,
+                        revision: row.get(5)?,
+                        updated_at: row.get(6)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(|source| self.database_error(source))
+    }
+
+    pub fn sync_changes_after(
+        &self,
+        profile: &str,
+        after_change_id: i64,
+        limit: u32,
+    ) -> Result<Vec<SyncChangeRecord>, StorageError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT id, profile, domain, entity_key, operation, payload, device_id,
+                        device_sequence, logical_clock, created_at, applied_at
+                 FROM settings_changes
+                 WHERE profile = ?1 AND id > ?2
+                 ORDER BY id
+                 LIMIT ?3",
+            )
+            .map_err(|source| self.database_error(source))?;
+        let records = statement
+            .query_map(params![profile, after_change_id, i64::from(limit)], |row| {
+                Ok(SyncChangeRecord {
+                    id: row.get(0)?,
+                    profile: row.get(1)?,
+                    domain: row.get(2)?,
+                    entity_key: row.get(3)?,
+                    operation: row.get(4)?,
+                    payload: row.get(5)?,
+                    device_id: row.get(6)?,
+                    device_sequence: row.get(7)?,
+                    logical_clock: row.get(8)?,
+                    created_at: row.get(9)?,
+                    applied_at: row.get(10)?,
+                })
+            })
+            .map_err(|source| self.database_error(source))?;
+
+        let mut changes = Vec::new();
+        for record in records {
+            changes.push(record.map_err(|source| self.database_error(source))?);
+        }
+        Ok(changes)
+    }
+
+    pub fn sync_revisions_after(
+        &self,
+        profile: &str,
+        after_revision: i64,
+    ) -> Result<Vec<SyncRevisionRecord>, StorageError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT revision, profile, domain, change_id, created_at
+                 FROM settings_revisions
+                 WHERE profile = ?1 AND revision > ?2
+                 ORDER BY revision",
+            )
+            .map_err(|source| self.database_error(source))?;
+        let records = statement
+            .query_map(params![profile, after_revision], |row| {
+                Ok(SyncRevisionRecord {
+                    revision: row.get(0)?,
+                    profile: row.get(1)?,
+                    domain: row.get(2)?,
+                    change_id: row.get(3)?,
+                    created_at: row.get(4)?,
+                })
+            })
+            .map_err(|source| self.database_error(source))?;
+
+        let mut revisions = Vec::new();
+        for record in records {
+            revisions.push(record.map_err(|source| self.database_error(source))?);
+        }
+        Ok(revisions)
+    }
+
     fn initialize(&self) -> Result<(), StorageError> {
         let connection = self.connection()?;
         connection
@@ -710,11 +1146,123 @@ impl SlateProfileDatabase {
                     PRIMARY KEY(profile, key)
                 );
 
+                CREATE TABLE IF NOT EXISTS app_sync_domains (
+                    profile TEXT NOT NULL,
+                    domain TEXT NOT NULL,
+                    schema_version INTEGER NOT NULL,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    privacy_classification TEXT NOT NULL,
+                    sync_content INTEGER NOT NULL DEFAULT 0,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    PRIMARY KEY(profile, domain)
+                );
+
+                CREATE TABLE IF NOT EXISTS sync_devices (
+                    profile TEXT NOT NULL,
+                    device_id TEXT NOT NULL,
+                    label TEXT,
+                    membership_epoch INTEGER NOT NULL DEFAULT 1,
+                    provider_authority INTEGER NOT NULL DEFAULT 0,
+                    created_at INTEGER NOT NULL,
+                    last_seen_at INTEGER NOT NULL,
+                    PRIMARY KEY(profile, device_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS settings_changes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    profile TEXT NOT NULL,
+                    domain TEXT NOT NULL,
+                    entity_key TEXT NOT NULL,
+                    operation TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    device_id TEXT NOT NULL,
+                    device_sequence INTEGER NOT NULL,
+                    logical_clock INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    applied_at INTEGER,
+                    UNIQUE(profile, device_id, device_sequence)
+                );
+
+                CREATE INDEX IF NOT EXISTS settings_changes_profile_id
+                    ON settings_changes(profile, id);
+
+                CREATE INDEX IF NOT EXISTS settings_changes_domain_clock
+                    ON settings_changes(profile, domain, logical_clock);
+
+                CREATE TABLE IF NOT EXISTS settings_revisions (
+                    revision INTEGER PRIMARY KEY AUTOINCREMENT,
+                    profile TEXT NOT NULL,
+                    domain TEXT NOT NULL,
+                    change_id INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS settings_revisions_profile_revision
+                    ON settings_revisions(profile, revision);
+
+                CREATE TABLE IF NOT EXISTS settings_values (
+                    profile TEXT NOT NULL,
+                    domain TEXT NOT NULL,
+                    key TEXT NOT NULL,
+                    value TEXT NOT NULL,
+                    value_kind TEXT NOT NULL DEFAULT 'text',
+                    revision INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    PRIMARY KEY(profile, domain, key)
+                );
+
+                CREATE TABLE IF NOT EXISTS settings_snapshots (
+                    profile TEXT NOT NULL,
+                    snapshot_id TEXT NOT NULL,
+                    backend_object_id TEXT,
+                    covers_revision INTEGER NOT NULL,
+                    included_domains TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    PRIMARY KEY(profile, snapshot_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS sync_state (
+                    profile TEXT NOT NULL,
+                    key TEXT NOT NULL,
+                    value TEXT NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    PRIMARY KEY(profile, key)
+                );
+
                 INSERT OR IGNORE INTO schema_migrations(version, applied_at)
                     VALUES (1, CAST(strftime('%s', 'now') AS INTEGER));
+                INSERT OR IGNORE INTO schema_migrations(version, applied_at)
+                    VALUES (2, CAST(strftime('%s', 'now') AS INTEGER));
                 ",
             )
             .map_err(|source| self.database_error(source))
+    }
+
+    fn try_seed_default_sync_state(&self) {
+        let _ = self.seed_default_sync_state();
+    }
+
+    fn seed_default_sync_state(&self) -> Result<(), StorageError> {
+        self.register_sync_device(&SyncDeviceRegistration {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            device_id: DEFAULT_SYNC_DEVICE_ID.to_string(),
+            label: Some("Local Device".to_string()),
+            membership_epoch: 1,
+            provider_authority: false,
+        })?;
+
+        for domain in DEFAULT_APP_SYNC_DOMAINS {
+            self.register_app_sync_domain(&AppSyncDomainRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                domain: domain.domain.to_string(),
+                schema_version: domain.schema_version,
+                enabled: true,
+                privacy_classification: domain.privacy_classification.to_string(),
+                sync_content: domain.sync_content,
+            })?;
+        }
+        Ok(())
     }
 
     fn try_seed_default_bookmarks(&self) {
@@ -811,6 +1359,80 @@ fn bool_to_integer(value: bool) -> i64 {
 
 fn integer_to_bool(value: i64) -> bool {
     value != 0
+}
+
+fn record_sync_setting_text_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    domain: &str,
+    key: &str,
+    value: &str,
+    device_id: &str,
+    now: i64,
+) -> Result<SyncChangeRecord, rusqlite::Error> {
+    let device_sequence = transaction.query_row(
+        "SELECT COALESCE(MAX(device_sequence), 0) + 1
+         FROM settings_changes
+         WHERE profile = ?1 AND device_id = ?2",
+        params![profile, device_id],
+        |row| row.get::<_, i64>(0),
+    )?;
+    let logical_clock = transaction.query_row(
+        "SELECT COALESCE(MAX(logical_clock), 0) + 1
+         FROM settings_changes
+         WHERE profile = ?1",
+        [profile],
+        |row| row.get::<_, i64>(0),
+    )?;
+
+    transaction.execute(
+        "INSERT INTO settings_changes
+           (profile, domain, entity_key, operation, payload, device_id, device_sequence,
+            logical_clock, created_at, applied_at)
+         VALUES (?1, ?2, ?3, 'set_text', ?4, ?5, ?6, ?7, ?8, ?8)",
+        params![
+            profile,
+            domain,
+            key,
+            value,
+            device_id,
+            device_sequence,
+            logical_clock,
+            now
+        ],
+    )?;
+    let change_id = transaction.last_insert_rowid();
+    transaction.execute(
+        "INSERT INTO settings_revisions (profile, domain, change_id, created_at)
+         VALUES (?1, ?2, ?3, ?4)",
+        params![profile, domain, change_id, now],
+    )?;
+    let revision = transaction.last_insert_rowid();
+    transaction.execute(
+        "INSERT INTO settings_values
+           (profile, domain, key, value, value_kind, revision, updated_at)
+         VALUES (?1, ?2, ?3, ?4, 'text', ?5, ?6)
+         ON CONFLICT(profile, domain, key) DO UPDATE SET
+           value = excluded.value,
+           value_kind = excluded.value_kind,
+           revision = excluded.revision,
+           updated_at = excluded.updated_at",
+        params![profile, domain, key, value, revision, now],
+    )?;
+
+    Ok(SyncChangeRecord {
+        id: change_id,
+        profile: profile.to_string(),
+        domain: domain.to_string(),
+        entity_key: key.to_string(),
+        operation: "set_text".to_string(),
+        payload: value.to_string(),
+        device_id: device_id.to_string(),
+        device_sequence,
+        logical_clock,
+        created_at: now,
+        applied_at: Some(now),
+    })
 }
 
 #[cfg(test)]
@@ -1012,6 +1634,124 @@ mod tests {
             .remove_bookmark("testing", "https://example.com/")
             .unwrap();
         assert!(database.bookmarks("testing").unwrap().is_empty());
+    }
+
+    #[test]
+    fn database_initialization_registers_sync_domains_and_local_device() {
+        let database_path = test_dir("sync-domains").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+
+        let domains = database.app_sync_domains(DEFAULT_PROFILE_ID).unwrap();
+        assert_eq!(domains.len(), DEFAULT_APP_SYNC_DOMAINS.len());
+        assert!(domains.iter().any(|domain| {
+            domain.domain == SYNC_DOMAIN_SETTINGS
+                && domain.enabled
+                && domain.privacy_classification == "low-risk"
+        }));
+        assert!(domains.iter().any(|domain| {
+            domain.domain == SYNC_DOMAIN_FILES
+                && domain.enabled
+                && domain.privacy_classification == "content"
+                && domain.sync_content
+        }));
+        assert!(domains.iter().any(|domain| {
+            domain.domain == SYNC_DOMAIN_CONTACTS
+                && domain.enabled
+                && domain.privacy_classification == "sensitive"
+                && !domain.sync_content
+        }));
+
+        let devices = database.sync_devices(DEFAULT_PROFILE_ID).unwrap();
+        assert_eq!(devices.len(), 1);
+        assert_eq!(devices[0].device_id, DEFAULT_SYNC_DEVICE_ID);
+        assert_eq!(devices[0].membership_epoch, 1);
+        assert!(!devices[0].provider_authority);
+    }
+
+    #[test]
+    fn setting_text_writes_materialized_sync_change_and_revision() {
+        let database_path = test_dir("sync-setting").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let baseline_revision = database
+            .sync_revisions_after(DEFAULT_PROFILE_ID, 0)
+            .unwrap()
+            .last()
+            .map(|revision| revision.revision)
+            .unwrap_or(0);
+        let baseline_change = database
+            .sync_changes_after(DEFAULT_PROFILE_ID, 0, 100)
+            .unwrap()
+            .last()
+            .map(|change| change.id)
+            .unwrap_or(0);
+
+        database.set_setting_text("ui.theme", "slate").unwrap();
+
+        let value = database
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme")
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, "slate");
+        assert_eq!(value.value_kind, "text");
+        assert!(value.revision > baseline_revision);
+
+        let changes = database
+            .sync_changes_after(DEFAULT_PROFILE_ID, baseline_change, 10)
+            .unwrap();
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].domain, SYNC_DOMAIN_SETTINGS);
+        assert_eq!(changes[0].entity_key, "ui.theme");
+        assert_eq!(changes[0].operation, "set_text");
+        assert_eq!(changes[0].payload, "slate");
+        assert_eq!(changes[0].device_id, DEFAULT_SYNC_DEVICE_ID);
+
+        let revisions = database
+            .sync_revisions_after(DEFAULT_PROFILE_ID, baseline_revision)
+            .unwrap();
+        assert_eq!(revisions.len(), 1);
+        assert_eq!(revisions[0].domain, SYNC_DOMAIN_SETTINGS);
+        assert_eq!(revisions[0].change_id, changes[0].id);
+    }
+
+    #[test]
+    fn app_domain_setting_changes_do_not_touch_legacy_settings_table() {
+        let database_path = test_dir("sync-app-domain").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+
+        let change = database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                "default_view",
+                "month",
+            )
+            .unwrap();
+
+        assert_eq!(change.domain, SYNC_DOMAIN_CALENDAR);
+        assert_eq!(change.entity_key, "default_view");
+        assert_eq!(change.device_sequence, 2);
+        assert_eq!(
+            database
+                .get_setting_text("default_view")
+                .unwrap()
+                .as_deref(),
+            None
+        );
+
+        let value = database
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CALENDAR, "default_view")
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, "month");
+        assert!(
+            database
+                .sync_revisions_after(DEFAULT_PROFILE_ID, 0)
+                .unwrap()
+                .iter()
+                .any(|revision| {
+                    revision.revision == value.revision && revision.change_id == change.id
+                })
+        );
     }
 
     #[test]
