@@ -53,7 +53,9 @@ use crate::desktop::protocols::slate::{
     is_slate_chat_url, is_slate_downloads_url, is_slate_home_url, is_slate_settings_url,
     is_slate_web_url, set_current_chrome_element_zoom_setting,
 };
-use crate::desktop::slate_theme::{self, SlateIcon, SlateIconCache, SlateRaster, SlateSvg};
+use crate::desktop::slate_theme::{
+    self, SlateBrand, SlateIcon, SlateIconCache, SlateRaster, SlateSvg,
+};
 use crate::running_app_state::{RunningAppState, UserInterfaceCommand};
 use crate::window::ServoShellWindow;
 
@@ -3685,11 +3687,7 @@ impl Gui {
                             egui::Color32::WHITE,
                         );
                     } else {
-                        let texture = slate_icons.texture(
-                            ui.ctx(),
-                            SlateIcon::HomeHeroShield,
-                            slate_theme::MUTED,
-                        );
+                        let texture = slate_icons.brand_texture(ui.ctx(), SlateBrand::LogoCutout);
                         ui.painter().image(
                             texture.id,
                             icon_rect,
@@ -3827,8 +3825,7 @@ impl Gui {
             let available_width = ui.available_width();
             ui.horizontal(|ui| {
                 ui.add_space(home_hero_left_space(available_width, HOME_HERO_SIZE));
-                let hero =
-                    slate_icons.texture(ui.ctx(), SlateIcon::HomeHeroShield, slate_theme::TEAL);
+                let hero = slate_icons.brand_texture(ui.ctx(), SlateBrand::LogoCutout);
                 let hero_response = ui.add(
                     egui::Image::from_texture(hero)
                         .fit_to_exact_size(egui::vec2(HOME_HERO_SIZE, HOME_HERO_SIZE)),
@@ -6767,7 +6764,7 @@ mod tests {
         let hero_visible_rect = home_hero_icon_visible_rect(layout.hero_rect);
         assert!(
             (759.0..=761.0).contains(&hero_visible_rect.center().x),
-            "expected hero shield center near screenshot x=860 absolute position: {hero_visible_rect:?}"
+            "expected hero brand center near screenshot x=860 absolute position: {hero_visible_rect:?}"
         );
         assert!(
             (335.0..=337.0).contains(&layout.search_rect.left()),
@@ -6797,7 +6794,7 @@ mod tests {
         );
         assert!(
             (226.0..=228.0).contains(&layout.motto_rect.top()),
-            "expected motto to sit below the home shield: {:?}",
+            "expected motto to sit below the home brand mark: {:?}",
             layout.motto_rect
         );
         assert!(

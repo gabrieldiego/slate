@@ -24,8 +24,6 @@ pub(crate) const BLUE: Color32 = Color32::from_rgb(9, 109, 207);
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum SlateIcon {
-    HomeFooterShield,
-    HomeHeroShield,
     HomeSearch,
     HomeMetricAds,
     HomeMetricLock,
@@ -49,6 +47,11 @@ pub(crate) enum SlateRaster {
     PageInfoSecure,
     PageInfoWarning,
     Search,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) enum SlateBrand {
+    LogoCutout,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -81,6 +84,14 @@ struct SlateRasterData {
 }
 
 #[derive(Clone, Copy, Debug)]
+struct SlateBrandData {
+    name: &'static str,
+    width: usize,
+    height: usize,
+    bytes: &'static [u8],
+}
+
+#[derive(Clone, Copy, Debug)]
 struct SlateSvgData {
     name: &'static str,
     width: usize,
@@ -99,18 +110,6 @@ struct SlateSvgMaskKey {
 impl SlateIcon {
     fn data(self) -> SlateIconData {
         match self {
-            Self::HomeFooterShield => SlateIconData {
-                name: "home-footer-shield",
-                width: 28,
-                height: 28,
-                mask: include_bytes!("../../assets/icons/home_footer_shield.alpha"),
-            },
-            Self::HomeHeroShield => SlateIconData {
-                name: "home-hero-shield",
-                width: 64,
-                height: 64,
-                mask: include_bytes!("../../assets/icons/home_hero_shield.alpha"),
-            },
             Self::HomeSearch => SlateIconData {
                 name: "home-search",
                 width: 32,
@@ -236,6 +235,19 @@ impl SlateRaster {
     }
 }
 
+impl SlateBrand {
+    fn data(self) -> SlateBrandData {
+        match self {
+            Self::LogoCutout => SlateBrandData {
+                name: "logo-cutout",
+                width: 256,
+                height: 256,
+                bytes: include_bytes!("../../assets/branding/slate-logo-cutout-256.png"),
+            },
+        }
+    }
+}
+
 impl SlateSvg {
     fn data(self) -> SlateSvgData {
         match self {
@@ -301,6 +313,7 @@ impl SlateSvg {
 pub(crate) struct SlateIconCache {
     textures: HashMap<(SlateIcon, [u8; 4]), TextureHandle>,
     raster_mask_textures: HashMap<(SlateRaster, [u8; 4]), TextureHandle>,
+    brand_textures: HashMap<SlateBrand, TextureHandle>,
     svg_mask_textures: HashMap<SlateSvgMaskKey, TextureHandle>,
 }
 
@@ -335,6 +348,22 @@ impl SlateIconCache {
             .entry((raster, color_key))
             .or_insert_with(|| load_raster_mask_texture(ctx, raster, color));
         let data = raster.data();
+        egui::load::SizedTexture::new(
+            handle.id(),
+            egui::vec2(data.width as f32, data.height as f32),
+        )
+    }
+
+    pub(crate) fn brand_texture(
+        &mut self,
+        ctx: &egui::Context,
+        brand: SlateBrand,
+    ) -> egui::load::SizedTexture {
+        let handle = self
+            .brand_textures
+            .entry(brand)
+            .or_insert_with(|| load_brand_texture(ctx, brand));
+        let data = brand.data();
         egui::load::SizedTexture::new(
             handle.id(),
             egui::vec2(data.width as f32, data.height as f32),
@@ -467,6 +496,25 @@ fn load_raster_mask_texture(
     )
 }
 
+fn brand_color_image(brand: SlateBrand) -> egui::ColorImage {
+    let data = brand.data();
+    let image = image::load_from_memory(data.bytes)
+        .expect("bundled Slate brand asset should decode")
+        .to_rgba8();
+    debug_assert_eq!(image.width() as usize, data.width);
+    debug_assert_eq!(image.height() as usize, data.height);
+    egui::ColorImage::from_rgba_unmultiplied([data.width, data.height], image.as_raw())
+}
+
+fn load_brand_texture(ctx: &egui::Context, brand: SlateBrand) -> TextureHandle {
+    let data = brand.data();
+    ctx.load_texture(
+        format!("slate-brand-{}", data.name),
+        brand_color_image(brand),
+        TextureOptions::LINEAR,
+    )
+}
+
 fn svg_dimension_to_pixels(points: f32, pixels_per_point: f32) -> usize {
     let pixels_per_point = if pixels_per_point.is_finite() {
         pixels_per_point.max(0.1)
@@ -531,15 +579,13 @@ fn load_svg_mask_texture(
 mod tests {
     use super::{
         AMBER, BG, BLUE, BORDER, CHROME_BG, FIELD_BORDER, FIELD_SURFACE, HOME_BG, MUTED, PANEL,
-        PANEL_HOVER, SlateIcon, SlateRaster, SlateSvg, TEAL, TEAL_SOFT, raster_mask_rgba,
-        svg_mask_rgba, svg_raster_size,
+        PANEL_HOVER, SlateBrand, SlateIcon, SlateRaster, SlateSvg, TEAL, TEAL_SOFT,
+        brand_color_image, raster_mask_rgba, svg_mask_rgba, svg_raster_size,
     };
 
     #[test]
     fn bundled_alpha_masks_match_declared_dimensions() {
         for icon in [
-            SlateIcon::HomeFooterShield,
-            SlateIcon::HomeHeroShield,
             SlateIcon::HomeSearch,
             SlateIcon::HomeMetricAds,
             SlateIcon::HomeMetricLock,
@@ -573,6 +619,16 @@ mod tests {
             let image = image::load_from_memory(data.bytes).unwrap().to_rgba8();
             assert_eq!(image.width() as usize, data.width);
             assert_eq!(image.height() as usize, data.height);
+        }
+    }
+
+    #[test]
+    fn bundled_brand_images_match_declared_dimensions() {
+        for brand in [SlateBrand::LogoCutout] {
+            let data = brand.data();
+            let image = brand_color_image(brand);
+            assert_eq!(image.size, [data.width, data.height]);
+            assert!(image.pixels.iter().any(|pixel| pixel.a() > 0));
         }
     }
 

@@ -786,6 +786,27 @@ mod tests {
         assert!(resource_dir.join("slate-chat.html").is_file());
         assert!(resource_dir.join("slate-settings.html").is_file());
         assert!(resource_dir.join("slate-downloads.html").is_file());
+        assert!(
+            resource_dir
+                .join("branding/slate-logo-cutout-256.png")
+                .is_file()
+        );
+    }
+
+    #[test]
+    fn slate_home_and_web_pages_use_local_brand_asset() {
+        let resource_dir = crate::resources::resource_protocol_dir_path();
+        let home_page = std::fs::read_to_string(resource_dir.join("slate-home.html")).unwrap();
+        let web_page = std::fs::read_to_string(resource_dir.join("slate-web.html")).unwrap();
+
+        for page in [&home_page, &web_page] {
+            assert!(page.contains("resource:///branding/slate-logo-cutout-256.png"));
+            assert!(!page.contains("http://"));
+            assert!(!page.contains("https://"));
+        }
+
+        assert!(home_page.contains("<title>Slate Home</title>"));
+        assert!(web_page.contains("<title>Slate Web</title>"));
     }
 
     #[test]

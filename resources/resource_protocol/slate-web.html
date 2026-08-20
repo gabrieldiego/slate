@@ -1,23 +1,133 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Slate - Web</title>
-    <style>
-      html,
-      body {
-        height: 100%;
-        padding: 0;
-        margin: 0;
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Slate Web</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f7f5f1;
+      color: #242421;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #f7f5f1;
+    }
+
+    main {
+      width: min(980px, calc(100vw - 48px));
+      margin: 0 auto;
+      padding: 44px 0;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 18px;
+      align-items: center;
+      margin-bottom: 26px;
+    }
+
+    .brand-mark {
+      display: block;
+      width: 68px;
+      height: 68px;
+      object-fit: contain;
+    }
+
+    h1 {
+      margin: 0 0 7px;
+      font-size: 30px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0;
+      color: #696966;
+      line-height: 1.45;
+    }
+
+    .routes {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .route {
+      min-width: 0;
+      padding: 16px;
+      border: 1px solid #dedbd5;
+      border-radius: 8px;
+      background: #fffefa;
+    }
+
+    .route span {
+      display: block;
+      color: #696966;
+      font-size: 13px;
+    }
+
+    .route strong {
+      display: block;
+      margin-top: 8px;
+      overflow: hidden;
+      color: #242421;
+      font-size: 17px;
+      font-weight: 650;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 760px) {
+      header,
+      .routes {
+        grid-template-columns: 1fr;
       }
 
-      body {
-        background: #fbfaf8;
-        color: #272727;
-        font-family: sans-serif;
+      .brand-mark {
+        width: 76px;
+        height: 76px;
       }
-    </style>
-  </head>
-  <body></body>
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <img class="brand-mark" src="resource:///branding/slate-logo-cutout-256.png" alt="" aria-hidden="true">
+      <div>
+        <h1>Web</h1>
+        <p>Broadweb browsing with explicit routing boundaries.</p>
+      </div>
+    </header>
+
+    <div class="routes">
+      <div class="route">
+        <span>Direct</span>
+        <strong>HTTP and HTTPS</strong>
+      </div>
+      <div class="route">
+        <span>Distributed</span>
+        <strong>IPFS and IPNS</strong>
+      </div>
+      <div class="route">
+        <span>Private</span>
+        <strong>Onion routes</strong>
+      </div>
+      <div class="route">
+        <span>Local</span>
+        <strong>I2P services</strong>
+      </div>
+    </div>
+  </main>
+</body>
 </html>
