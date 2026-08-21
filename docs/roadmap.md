@@ -199,6 +199,9 @@ Current baseline:
   encrypted backend object ids, covered revisions, included domains, and latest
   snapshot lookup. This is metadata only; snapshot payloads stay in encrypted
   sync objects.
+- `sync_state` now has typed profile sync root APIs so storage can persist the
+  last verified manifest object id for roots such as `settings/latest` without
+  exposing raw key/value state to callers.
 - IPFS/IPNS is the first concrete backend under consideration, but the product
   goal is protocol-neutral: approved Slate devices should find each other, move
   encrypted sync objects, and optionally use approved providers to keep those
