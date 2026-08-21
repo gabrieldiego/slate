@@ -613,9 +613,11 @@ selected providers, and returns the health/retention result. A second tick path
 accepts provider-id/daemon handles and filters them against preflight's
 discovered retention-capable providers before retaining objects, so scheduler
 tests can model provider selection through `InProcessBroadwebNetwork` without
-loopback sockets or external discovery. Cadence, platform key-store loading,
-enrollment flow, and real provider materialization remain separate runtime
-layers.
+loopback sockets or external discovery. That selector is also exposed as a
+read-only scheduler plan: it runs preflight, reports selected, undiscovered,
+and duplicate handles, and does not publish, pull, retain, or mutate sync
+roots. Cadence, platform key-store loading, enrollment flow, and real provider
+materialization remain separate runtime layers.
 Object bytes are also provider-held: fetches require at least one online
 provider with the object, and retaining an object copies the bytes into the
 retaining provider's in-process store. Tests can pause object transfer from one

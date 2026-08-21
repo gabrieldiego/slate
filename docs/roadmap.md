@@ -327,7 +327,9 @@ Current baseline:
   provider-id/daemon handles and filter them against preflight's discovered
   retention-capable providers, letting fixture scheduler tests model provider
   selection entirely inside `InProcessBroadwebNetwork` without loopback ports or
-  external discovery.
+  external discovery. The same selection logic is available as a read-only
+  scheduler plan that reports selected, undiscovered, and duplicate handles
+  before any publish, pull, retain, or root mutation occurs.
 - The local profile-sync fixture can now mark simulated devices offline and
   online, allowing tests to verify unavailable devices fail closed without
   touching sockets, DNS, Tor, IPFS, or external relays.
