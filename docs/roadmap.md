@@ -278,6 +278,10 @@ Current baseline:
   publishes, resolves, lists candidates, fetches encrypted object bytes, and
   releases retention without pulling browser rendering into the sync-only build
   path.
+- The same runtime bridge can publish a retained root object with retained
+  encrypted dependency objects first, matching the snapshot/tail-then-manifest
+  order needed by settings sync while keeping object signing and encryption in
+  storage.
 - `slate-settings.db` can now pull and apply a signed settings manifest in one
   storage call once runtime provides an object source and content key bytes. The
   active trusted helper reads the content-key id and profile-scoped device

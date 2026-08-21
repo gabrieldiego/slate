@@ -30,6 +30,14 @@ pub struct BroadwebdProfileSyncRetentionStatus {
     pub available: bool,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BroadwebdProfileSyncRootPublication {
+    pub profile: String,
+    pub root_id: String,
+    pub root_object_id: String,
+    pub dependency_object_ids: Vec<String>,
+}
+
 impl<'a> BroadwebdProfileSyncObjectSource<'a> {
     pub fn new(daemon: &'a BroadwebDaemon) -> Self {
         Self { daemon }
@@ -156,6 +164,26 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
         let object_id = self.put_retained_object(profile, bytes)?;
         self.publish_root(profile, root_id, object_id.as_str())?;
         Ok(object_id)
+    }
+
+    pub fn put_retained_root_with_dependencies(
+        &self,
+        profile: &str,
+        root_id: &str,
+        dependency_objects: impl IntoIterator<Item = Vec<u8>>,
+        root_bytes: impl Into<Vec<u8>>,
+    ) -> Result<BroadwebdProfileSyncRootPublication, BroadwebdError> {
+        let dependency_object_ids = dependency_objects
+            .into_iter()
+            .map(|bytes| self.put_retained_object(profile, bytes))
+            .collect::<Result<Vec<_>, _>>()?;
+        let root_object_id = self.put_retained_root(profile, root_id, root_bytes)?;
+        Ok(BroadwebdProfileSyncRootPublication {
+            profile: profile.to_string(),
+            root_id: root_id.to_string(),
+            root_object_id,
+            dependency_object_ids,
+        })
     }
 }
 
@@ -290,6 +318,66 @@ mod tests {
         assert!(released.available);
 
         let _ = std::fs::remove_dir_all(state_root);
+    }
+
+    #[test]
+    fn broadwebd_publisher_retains_dependencies_before_publishing_root() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut registry = PluginRegistry::new();
+        registry.register_service(fixture.service_for_device("runtime-b"));
+        let state_root = test_state_root("broadwebd-batch-publish");
+        let daemon =
+            BroadwebDaemon::start_with_registry(&state_root, ResourceBudget::default(), registry)
+                .expect("start local profile-sync daemon");
+        let publisher = BroadwebdProfileSyncPublisher::new(&daemon);
+        let source = BroadwebdProfileSyncObjectSource::new(&daemon);
+
+        let publication = publisher
+            .put_retained_root_with_dependencies(
+                "default",
+                "settings/latest",
+                vec![
+                    b"encrypted dependency a".to_vec(),
+                    b"encrypted dependency b".to_vec(),
+                ],
+                b"encrypted manifest root".to_vec(),
+            )
+            .expect("publish retained root object set");
+
+        assert_eq!(publication.profile, "default");
+        assert_eq!(publication.root_id, "settings/latest");
+        assert_eq!(publication.dependency_object_ids.len(), 2);
+        assert_eq!(
+            source
+                .resolve_profile_sync_root("default", "settings/latest")
+                .expect("resolve published root")
+                .as_deref(),
+            Some(publication.root_object_id.as_str())
+        );
+
+        let root_object = source
+            .get_profile_sync_object("default", publication.root_object_id.as_str())
+            .expect("fetch published root object");
+        assert_eq!(root_object.bytes, b"encrypted manifest root".to_vec());
+        assert_retained(&publisher, &publication.root_object_id);
+        for object_id in &publication.dependency_object_ids {
+            assert_retained(&publisher, object_id);
+            let object = source
+                .get_profile_sync_object("default", object_id)
+                .expect("fetch dependency object");
+            assert!(object.bytes.starts_with(b"encrypted dependency "));
+        }
+
+        let _ = std::fs::remove_dir_all(state_root);
+    }
+
+    fn assert_retained(publisher: &BroadwebdProfileSyncPublisher<'_>, object_id: &str) {
+        let status = publisher
+            .verify_retained_object("default", object_id)
+            .expect("verify retained object");
+        assert_eq!(status.object_id, object_id);
+        assert!(status.retained);
+        assert!(status.available);
     }
 
     fn test_state_root(name: &str) -> std::path::PathBuf {
