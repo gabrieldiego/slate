@@ -1965,6 +1965,7 @@ pub struct SyncDevicePublicKeyRecord {
     pub profile: String,
     pub public_key: ProfileSyncDevicePublicKey,
     pub membership_epoch: i64,
+    pub trusted: bool,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -4141,11 +4142,13 @@ impl SlateProfileDatabase {
         connection
             .execute(
                 "INSERT INTO sync_device_public_keys
-                   (profile, device_id, public_key, membership_epoch, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?5)
+                   (profile, device_id, public_key, membership_epoch, trusted, created_at,
+                    updated_at)
+                 VALUES (?1, ?2, ?3, ?4, 1, ?5, ?5)
                  ON CONFLICT(profile, device_id) DO UPDATE SET
                    public_key = excluded.public_key,
                    membership_epoch = excluded.membership_epoch,
+                   trusted = 1,
                    updated_at = excluded.updated_at",
                 params![
                     registration.profile.as_str(),
@@ -4164,6 +4167,32 @@ impl SlateProfileDatabase {
         .ok_or_else(|| self.database_error(rusqlite::Error::QueryReturnedNoRows))
     }
 
+    pub fn set_sync_device_public_key_trusted(
+        &self,
+        profile: &str,
+        device_id: &str,
+        trusted: bool,
+    ) -> Result<Option<SyncDevicePublicKeyRecord>, StorageError> {
+        if !is_valid_sync_identifier(device_id) {
+            return Err(StorageError::InvalidSyncDeviceId(device_id.to_string()));
+        }
+
+        let connection = self.connection()?;
+        let now = unix_time_seconds()?;
+        let updated = connection
+            .execute(
+                "UPDATE sync_device_public_keys
+                 SET trusted = ?3, updated_at = ?4
+                 WHERE profile = ?1 AND device_id = ?2",
+                params![profile, device_id, bool_to_integer(trusted), now],
+            )
+            .map_err(|source| self.database_error(source))?;
+        if updated == 0 {
+            return Ok(None);
+        }
+        self.sync_device_public_key(profile, device_id)
+    }
+
     pub fn sync_device_public_key(
         &self,
         profile: &str,
@@ -4176,7 +4205,8 @@ impl SlateProfileDatabase {
         let connection = self.connection()?;
         connection
             .query_row(
-                "SELECT profile, device_id, public_key, membership_epoch, created_at, updated_at
+                "SELECT profile, device_id, public_key, membership_epoch, trusted, created_at,
+                        updated_at
                  FROM sync_device_public_keys
                  WHERE profile = ?1 AND device_id = ?2",
                 params![profile, device_id],
@@ -4193,7 +4223,8 @@ impl SlateProfileDatabase {
         let connection = self.connection()?;
         let mut statement = connection
             .prepare(
-                "SELECT profile, device_id, public_key, membership_epoch, created_at, updated_at
+                "SELECT profile, device_id, public_key, membership_epoch, trusted, created_at,
+                        updated_at
                  FROM sync_device_public_keys
                  WHERE profile = ?1
                  ORDER BY device_id",
@@ -5826,6 +5857,12 @@ impl SlateProfileDatabase {
                 device_id: signed_object.device_id.clone(),
             });
         };
+        if !record.trusted {
+            return Err(ProfileSyncTrustedOpenError::UntrustedDevice {
+                profile: profile.to_string(),
+                device_id: signed_object.device_id.clone(),
+            });
+        }
         Ok(record)
     }
 
@@ -6179,6 +6216,7 @@ impl SlateProfileDatabase {
                     device_id TEXT NOT NULL,
                     public_key BLOB NOT NULL,
                     membership_epoch INTEGER NOT NULL DEFAULT 1,
+                    trusted INTEGER NOT NULL DEFAULT 1,
                     created_at INTEGER NOT NULL,
                     updated_at INTEGER NOT NULL,
                     PRIMARY KEY(profile, device_id)
@@ -6269,7 +6307,34 @@ impl SlateProfileDatabase {
                     VALUES (2, CAST(strftime('%s', 'now') AS INTEGER));
                 ",
             )
-            .map_err(|source| self.database_error(source))
+            .map_err(|source| self.database_error(source))?;
+        self.ensure_sync_device_public_keys_trusted_column(&connection)?;
+        Ok(())
+    }
+
+    fn ensure_sync_device_public_keys_trusted_column(
+        &self,
+        connection: &Connection,
+    ) -> Result<(), StorageError> {
+        let has_trusted = table_has_column(connection, "sync_device_public_keys", "trusted")
+            .map_err(|source| self.database_error(source))?;
+        if !has_trusted {
+            connection
+                .execute(
+                    "ALTER TABLE sync_device_public_keys
+                     ADD COLUMN trusted INTEGER NOT NULL DEFAULT 1",
+                    [],
+                )
+                .map_err(|source| self.database_error(source))?;
+        }
+        connection
+            .execute(
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at)
+                 VALUES (3, CAST(strftime('%s', 'now') AS INTEGER))",
+                [],
+            )
+            .map_err(|source| self.database_error(source))?;
+        Ok(())
     }
 
     fn try_seed_default_sync_state(&self) {
@@ -8431,9 +8496,25 @@ fn sync_device_public_key_record_from_row(
             bytes: row.get(2)?,
         },
         membership_epoch: row.get(3)?,
-        created_at: row.get(4)?,
-        updated_at: row.get(5)?,
+        trusted: integer_to_bool(row.get(4)?),
+        created_at: row.get(5)?,
+        updated_at: row.get(6)?,
     })
+}
+
+fn table_has_column(
+    connection: &Connection,
+    table: &str,
+    column: &str,
+) -> Result<bool, rusqlite::Error> {
+    let mut statement = connection.prepare(&format!("PRAGMA table_info({table})"))?;
+    let columns = statement.query_map([], |row| row.get::<_, String>(1))?;
+    for existing_column in columns {
+        if existing_column? == column {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn record_sync_setting_text_in_transaction(
@@ -9463,6 +9544,20 @@ mod tests {
                 .unwrap(),
             device_head
         );
+        trusted_database
+            .set_sync_device_public_key_trusted(DEFAULT_PROFILE_ID, "device-a", false)
+            .unwrap()
+            .expect("revoked trusted device key");
+        assert!(matches!(
+            trusted_database.open_trusted_signed_profile_sync_device_head(
+                signed_bytes.as_slice(),
+                &content_key,
+                DEFAULT_PROFILE_ID,
+                key_id,
+            ),
+            Err(ProfileSyncTrustedOpenError::UntrustedDevice { profile, device_id })
+                if profile == DEFAULT_PROFILE_ID && device_id == "device-a"
+        ));
 
         let late_path = test_dir("sync-trusted-device-head-late").join(DEFAULT_DATABASE_FILE_NAME);
         let late_database =
@@ -11756,6 +11851,7 @@ mod tests {
         assert_eq!(first_record.profile, DEFAULT_PROFILE_ID);
         assert_eq!(first_record.public_key, first_key);
         assert_eq!(first_record.membership_epoch, 1);
+        assert!(first_record.trusted);
         assert_eq!(
             database
                 .sync_device_public_key(DEFAULT_PROFILE_ID, "device-a")
@@ -11785,6 +11881,7 @@ mod tests {
 
         assert_eq!(second_record.public_key, second_key);
         assert_eq!(second_record.membership_epoch, 2);
+        assert!(second_record.trusted);
         assert_eq!(second_record.created_at, first_record.created_at);
         assert!(second_record.updated_at >= first_record.updated_at);
         assert_eq!(
@@ -11793,6 +11890,80 @@ mod tests {
                 .unwrap()
                 .len(),
             1
+        );
+
+        let revoked = database
+            .set_sync_device_public_key_trusted(DEFAULT_PROFILE_ID, "device-a", false)
+            .unwrap()
+            .expect("revoked device key");
+        assert!(!revoked.trusted);
+        assert_eq!(revoked.public_key, second_key);
+        assert_eq!(
+            database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "device-a")
+                .unwrap()
+                .expect("revoked trusted device key")
+                .trusted,
+            false
+        );
+        let restored = database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: second_key,
+                membership_epoch: 3,
+            })
+            .unwrap();
+        assert!(restored.trusted);
+        assert_eq!(restored.membership_epoch, 3);
+        assert!(
+            database
+                .set_sync_device_public_key_trusted(DEFAULT_PROFILE_ID, "missing-device", false)
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn sync_device_public_key_trust_column_is_added_to_existing_databases() {
+        let database_path =
+            test_dir("sync-device-public-key-migration").join(DEFAULT_DATABASE_FILE_NAME);
+        {
+            let connection = Connection::open(&database_path).unwrap();
+            connection
+                .execute_batch(
+                    "
+                    CREATE TABLE sync_device_public_keys (
+                        profile TEXT NOT NULL,
+                        device_id TEXT NOT NULL,
+                        public_key BLOB NOT NULL,
+                        membership_epoch INTEGER NOT NULL DEFAULT 1,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        PRIMARY KEY(profile, device_id)
+                    );
+                    INSERT INTO sync_device_public_keys
+                        (profile, device_id, public_key, membership_epoch, created_at, updated_at)
+                    VALUES ('default', 'device-a', X'010203', 1, 10, 10);
+                    ",
+                )
+                .unwrap();
+        }
+
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let migrated = database
+            .sync_device_public_key(DEFAULT_PROFILE_ID, "device-a")
+            .unwrap()
+            .expect("migrated trusted device key");
+
+        assert!(migrated.trusted);
+        assert_eq!(migrated.created_at, 10);
+        assert_eq!(
+            database
+                .set_sync_device_public_key_trusted(DEFAULT_PROFILE_ID, "device-a", false)
+                .unwrap()
+                .expect("revoked migrated key")
+                .trusted,
+            false
         );
     }
 

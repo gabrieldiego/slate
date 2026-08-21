@@ -239,6 +239,13 @@ store raw content encryption keys. Key bytes should come from a keychain entry,
 recovery-secret derivation, or an enrollment flow before being passed into the
 decrypt/apply path.
 
+The local trust store can also mark a stored device signing key as distrusted.
+Runtime trusted-device enumeration skips distrusted remote keys, trusted object
+opening rejects signed payloads from distrusted devices, and local credential
+preflight refuses to publish with a distrusted local signer. This is a local
+revocation guard for current fixtures and scheduler policy; full account-level
+revocation still needs signed membership records and epoch transition rules.
+
 The active-key pull path also exposes an idempotent root-status helper for sync
 polling. It resolves the published root first and reports missing roots,
 unchanged already-verified roots, or applied manifests separately. If the

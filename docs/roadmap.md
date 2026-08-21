@@ -551,14 +551,18 @@ Current baseline:
   applies valid manifests through the existing validation path, and surfaces
   manifest or trust failures without advancing the stored root.
 - `slate-settings.db` now has a trusted sync device public-key table and APIs
-  to register, update, fetch, and list profile-scoped device signing keys. This
-  gives the future runtime sync loop a local trust store instead of relying on
-  ad hoc public keys passed in by fixtures.
+  to register, update, fetch, list, and locally distrust profile-scoped device
+  signing keys. This gives the future runtime sync loop a local trust store
+  instead of relying on ad hoc public keys passed in by fixtures.
 - `slate-settings.db` can now pull and apply settings sync objects through that
   local trust store: each signed manifest, snapshot, and tail object is parsed,
   matched to a stored trusted device key, signature-verified, decrypted, and
   only then applied. Unknown devices and stale or mismatched stored keys fail
   before the stored root advances.
+- Runtime profile-sync preflight ignores distrusted remote device keys, and
+  local credential preflight refuses to publish with a local signer whose
+  stored key was distrusted. This is only a local revocation primitive; signed
+  account membership revocation and enrollment policy are still future work.
 - Trusted signed settings pulls now also check the stored device-key membership
   epoch against the manifest membership epoch. A key first trusted after the
   manifest epoch cannot authorize that manifest, snapshot, or tail object set.

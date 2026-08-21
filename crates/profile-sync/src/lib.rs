@@ -2923,6 +2923,12 @@ pub fn validate_settings_sync_cycle_credentials(
             device_id: public_key.device_id,
         });
     };
+    if !trusted_key.trusted {
+        return Err(ProfileSyncCredentialError::UntrustedLocalDevice {
+            profile: profile.to_string(),
+            device_id: public_key.device_id,
+        });
+    }
     if trusted_key.public_key != public_key {
         return Err(ProfileSyncCredentialError::LocalDevicePublicKeyMismatch {
             profile: profile.to_string(),
@@ -2958,7 +2964,9 @@ fn trusted_remote_device_public_keys(
     let trusted_devices = database
         .sync_device_public_keys(profile)?
         .into_iter()
-        .filter(|record| record.public_key.device_id != database.local_sync_device_id())
+        .filter(|record| {
+            record.trusted && record.public_key.device_id != database.local_sync_device_id()
+        })
         .collect::<Vec<_>>();
     if trusted_devices.len() > max_devices as usize {
         return Err(ProfileSyncReceiveError::TrustedDeviceLimitExceeded {
@@ -6121,6 +6129,65 @@ mod tests {
     }
 
     #[test]
+    fn broadwebd_settings_sync_policy_rejects_revoked_local_device_key() {
+        let network = InProcessBroadwebNetwork::new();
+        let state_root = test_state_root("cycle-local-key-revoked");
+        let db_root = test_state_root("cycle-local-key-revoked-db");
+        let daemon = network
+            .daemon_for_device(
+                &state_root,
+                ResourceBudget::default(),
+                "runtime-revoked-local-key",
+            )
+            .expect("start in-process profile-sync daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-revoked-local-key",
+        )
+        .expect("open local settings database");
+        let profile = "revokedlocalkeyprofile";
+        let content_key = ProfileSyncContentKey::from_bytes([68; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-revoked-local-key")
+            .expect("generate revoked local key signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register local trusted public key");
+        database
+            .set_sync_device_public_key_trusted(profile, signer.device_id(), false)
+            .expect("revoke local public key")
+            .expect("revoked local public key");
+
+        let error = BroadwebdSettingsSyncRunner::new(&daemon)
+            .run_settings_sync_cycle_with_active_key_policy(
+                &database,
+                profile,
+                "settings/latest",
+                &content_key,
+                &signer,
+                &SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 1),
+            )
+            .expect_err("revoked local device key should fail credential preflight");
+        assert!(matches!(
+            error,
+            ProfileSyncCycleWithHealthError::Cycle(ProfileSyncCycleError::Credentials(
+                ProfileSyncCredentialError::UntrustedLocalDevice {
+                    profile,
+                    device_id
+                }
+            )) if profile == "revokedlocalkeyprofile"
+                && device_id == "runtime-revoked-local-key"
+        ));
+
+        let _ = std::fs::remove_dir_all(state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
     fn broadwebd_settings_sync_preflight_reports_runtime_inputs_without_publishing() {
         let network = InProcessBroadwebNetwork::new();
         let state_root = test_state_root("cycle-preflight");
@@ -6224,6 +6291,21 @@ mod tests {
                 .expect("read local device-head root")
                 .is_none()
         );
+
+        database
+            .set_sync_device_public_key_trusted(profile, remote_signer.device_id(), false)
+            .expect("revoke remote public key")
+            .expect("revoked remote public key");
+        let revoked_preflight = BroadwebdSettingsSyncRunner::new(&daemon)
+            .settings_sync_cycle_preflight_with_active_key_policy(
+                &database,
+                profile,
+                settings_root_id,
+                &signer,
+                &SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 1),
+            )
+            .expect("settings sync preflight after remote key revocation");
+        assert_eq!(revoked_preflight.trusted_remote_device_count, 0);
 
         let _ = std::fs::remove_dir_all(state_root);
         let _ = std::fs::remove_dir_all(provider_state_root);
