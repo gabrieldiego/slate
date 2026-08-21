@@ -24,10 +24,17 @@ pub struct ProfileSyncService {
 struct ProfileSyncStore {
     objects: BTreeMap<(String, String, String), Vec<u8>>,
     retained: BTreeSet<(String, String, String)>,
-    roots: BTreeMap<(String, String), String>,
+    roots: BTreeMap<(String, String), ProfileSyncRootState>,
     providers: BTreeMap<String, ProfileSyncProviderState>,
     offline_providers: BTreeSet<String>,
     delayed_transfers: BTreeSet<(String, String)>,
+    delayed_roots: BTreeSet<(String, String, String, String)>,
+}
+
+#[derive(Clone, Debug)]
+struct ProfileSyncRootState {
+    object_id: String,
+    publisher_provider_id: String,
 }
 
 #[derive(Clone, Debug)]
@@ -271,7 +278,10 @@ impl ProfileSyncService {
         }
         store.roots.insert(
             (request.profile, request.root_id.clone()),
-            request.object_id.clone(),
+            ProfileSyncRootState {
+                object_id: request.object_id.clone(),
+                publisher_provider_id: self.provider_id.clone(),
+            },
         );
         Ok(ProfileSyncResponse::Root {
             root_id: request.root_id,
@@ -285,12 +295,22 @@ impl ProfileSyncService {
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
         let store = self.store()?;
+        let object_id = store
+            .roots
+            .get(&(request.profile.clone(), request.root_id.clone()))
+            .filter(|root| {
+                root_available(
+                    &store,
+                    root.publisher_provider_id.as_str(),
+                    self.provider_id.as_str(),
+                    request.profile.as_str(),
+                    request.root_id.as_str(),
+                )
+            })
+            .map(|root| root.object_id.clone());
         Ok(ProfileSyncResponse::Root {
             root_id: request.root_id.clone(),
-            object_id: store
-                .roots
-                .get(&(request.profile, request.root_id))
-                .cloned(),
+            object_id,
         })
     }
 
@@ -390,6 +410,36 @@ impl LocalProfileSyncFixture {
             store.delayed_transfers.remove(&link);
         } else {
             store.delayed_transfers.insert(link);
+        }
+        Ok(())
+    }
+
+    pub fn set_device_root_available(
+        &self,
+        source_device_id: impl AsRef<str>,
+        target_device_id: impl AsRef<str>,
+        profile: impl AsRef<str>,
+        root_id: impl AsRef<str>,
+        available: bool,
+    ) -> Result<(), BroadwebdError> {
+        let profile = profile.as_ref();
+        validate_profile(profile)?;
+        let source_provider_id = local_fixture_provider_id(source_device_id);
+        let target_provider_id = local_fixture_provider_id(target_device_id);
+        let link = (
+            source_provider_id,
+            target_provider_id,
+            profile.to_string(),
+            root_id.as_ref().to_string(),
+        );
+        let mut store = self
+            .store
+            .lock()
+            .map_err(|_| BroadwebdError::Request("profile sync store lock poisoned".to_string()))?;
+        if available {
+            store.delayed_roots.remove(&link);
+        } else {
+            store.delayed_roots.insert(link);
         }
         Ok(())
     }
@@ -529,6 +579,22 @@ fn transfer_available(
         ))
 }
 
+fn root_available(
+    store: &ProfileSyncStore,
+    source_provider_id: &str,
+    requester_provider_id: &str,
+    profile: &str,
+    root_id: &str,
+) -> bool {
+    source_provider_id == requester_provider_id
+        || !store.delayed_roots.contains(&(
+            source_provider_id.to_string(),
+            requester_provider_id.to_string(),
+            profile.to_string(),
+            root_id.to_string(),
+        ))
+}
+
 fn local_fixture_provider_id(device_id: impl AsRef<str>) -> String {
     format!("local-fixture-device-{}", device_id.as_ref())
 }
@@ -633,6 +699,112 @@ mod tests {
             panic!("unexpected get response");
         };
         assert_eq!(bytes, b"encrypted manifest from device a");
+    }
+
+    #[test]
+    fn local_fixture_can_delay_mutable_root_propagation_between_devices() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut device_a = PluginRegistry::new();
+        let mut device_b = PluginRegistry::new();
+        let budget = ResourceBudget::default();
+
+        device_a.register_service(fixture.service_for_device("a"));
+        device_b.register_service(fixture.service_for_device("b"));
+
+        let put = device_a
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"encrypted root target from device a".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("device a can put root target object into fixture");
+        let ProfileSyncResponse::PutEncryptedObject { object_id } = put else {
+            panic!("unexpected put response");
+        };
+        fixture
+            .set_device_root_available("a", "b", "default", "profile-root", false)
+            .expect("delay root propagation from device a to device b");
+        device_a
+            .profile_sync(
+                ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+                    "default",
+                    "profile-root",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("device a can publish fixture root while propagation is delayed");
+
+        let unresolved = device_b
+            .profile_sync(
+                ProfileSyncRequest::ResolveRoot(ProfileSyncRootRequest::new(
+                    "default",
+                    "profile-root",
+                )),
+                &budget,
+            )
+            .expect("device b can resolve delayed fixture root");
+        assert_eq!(
+            unresolved,
+            ProfileSyncResponse::Root {
+                root_id: "profile-root".to_string(),
+                object_id: None,
+            }
+        );
+        let source_resolved = device_a
+            .profile_sync(
+                ProfileSyncRequest::ResolveRoot(ProfileSyncRootRequest::new(
+                    "default",
+                    "profile-root",
+                )),
+                &budget,
+            )
+            .expect("device a can resolve its own delayed fixture root");
+        assert_eq!(
+            source_resolved,
+            ProfileSyncResponse::Root {
+                root_id: "profile-root".to_string(),
+                object_id: Some(object_id.clone()),
+            }
+        );
+        let direct_fetch = device_b
+            .profile_sync(
+                ProfileSyncRequest::GetEncryptedObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("root delay does not imply object transfer delay");
+        assert_eq!(
+            direct_fetch,
+            ProfileSyncResponse::GetEncryptedObject {
+                object_id: object_id.clone(),
+                bytes: b"encrypted root target from device a".to_vec(),
+            }
+        );
+
+        fixture
+            .set_device_root_available("a", "b", "default", "profile-root", true)
+            .expect("release root propagation from device a to device b");
+        let resolved = device_b
+            .profile_sync(
+                ProfileSyncRequest::ResolveRoot(ProfileSyncRootRequest::new(
+                    "default",
+                    "profile-root",
+                )),
+                &budget,
+            )
+            .expect("device b can resolve root after propagation release");
+        assert_eq!(
+            resolved,
+            ProfileSyncResponse::Root {
+                root_id: "profile-root".to_string(),
+                object_id: Some(object_id),
+            }
+        );
     }
 
     #[test]

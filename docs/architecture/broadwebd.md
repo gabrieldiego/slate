@@ -625,10 +625,10 @@ The first daemon tests should use fake adapters before real IPFS/Tor/I2P:
 
 Profile sync fixtures should model distributed-web protocol behavior locally:
 peer discovery, mutable root records, encrypted object transfer,
-pinning/availability, offline devices, delayed sync, and conflicts. These
-fixtures should run entirely inside the local test process by default and must
-not contact the real internet, Tor, public IPFS/IPNS, external relays, or
-loopback sockets.
+pinning/availability, offline devices, delayed object transfer, delayed
+mutable-root propagation, and conflicts. These fixtures should run entirely
+inside the local test process by default and must not contact the real internet,
+Tor, public IPFS/IPNS, external relays, or loopback sockets.
 
 Broadweb HTTP-style fixtures should use broadwebd's `test-fixtures` feature and
 the `InProcessBroadwebNetwork` layer when downstream crate tests need simulated

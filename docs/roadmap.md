@@ -212,6 +212,10 @@ Current baseline:
   simulated devices. Delayed transfers stay inside the process and make the
   target device treat the source provider's encrypted bytes as unavailable
   until the fixture releases the link.
+- The fixture can also delay mutable-root propagation between two simulated
+  devices. Root delay is independent from object transfer, so tests can model a
+  device that can fetch a known encrypted object but has not seen the newest
+  root record yet.
 - The local profile-sync fixture now distinguishes logged-in device providers
   from availability-only providers. Availability providers can retain and serve
   encrypted bytes, and discovery reports that they cannot publish mutable roots.

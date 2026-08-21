@@ -397,9 +397,12 @@ provider with the object, and retaining an object copies the bytes into the
 retaining provider's in-process store. Tests can pause object transfer from one
 simulated device provider to another; while paused, the target treats the
 source-held encrypted bytes as unavailable without sleeping, binding sockets, or
-contacting any external network. The fixture also models availability-only
-providers: they may retain and serve encrypted bytes, but their provider policy
-denies mutable-root publishing and discovery reports that boundary.
+contacting any external network. Tests can also pause mutable-root propagation
+from one simulated publishing device to another independently from object
+transfer, so root freshness and encrypted-object availability can fail in
+separate ways. The fixture also models availability-only providers: they may
+retain and serve encrypted bytes, but their provider policy denies mutable-root
+publishing and discovery reports that boundary.
 
 ## Privacy Boundaries
 
