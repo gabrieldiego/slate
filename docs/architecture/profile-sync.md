@@ -736,6 +736,9 @@ discovery reports that boundary.
 - App-owned sync watchers should persist profile/domain-scoped cursors in
   `slate-settings.db` after applying a batch, and cursor advancement should be
   monotonic so duplicate or stale fixture deliveries cannot rewind app state.
+  The storage cursor-backed poll helper initializes missing cursors at the
+  domain head, then leaves advancement to the caller after app-owned state is
+  updated.
 - Kubo integration tests are ignored or environment-gated and run against
   loopback only.
 - Leak tests assert that sync never falls through to DNS, public gateways,

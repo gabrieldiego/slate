@@ -2728,6 +2728,34 @@ impl SlateProfileDatabase {
         })
     }
 
+    pub fn poll_sync_setting_text_events_for_app_domain(
+        &self,
+        profile: &str,
+        domain: &str,
+        limit: u32,
+    ) -> Result<SyncSettingTextDomainPoll, StorageError> {
+        let previous_revision = match self.app_sync_domain_cursor(profile, domain)? {
+            Some(cursor) => cursor.latest_revision,
+            None => {
+                let revision = self.latest_sync_revision_for_domain(profile, domain)?;
+                self.record_app_sync_domain_cursor(profile, domain, revision)?;
+                revision
+            }
+        };
+        self.poll_sync_setting_text_events_for_domain(profile, domain, previous_revision, limit)
+    }
+
+    pub fn record_app_sync_domain_poll_cursor(
+        &self,
+        poll: &SyncSettingTextDomainPoll,
+    ) -> Result<AppSyncDomainCursorRecord, StorageError> {
+        self.record_app_sync_domain_cursor(
+            poll.profile.as_str(),
+            poll.domain.as_str(),
+            poll.latest_revision,
+        )
+    }
+
     pub fn register_sync_device(
         &self,
         device: &SyncDeviceRegistration,
@@ -9481,6 +9509,119 @@ mod tests {
             database.latest_sync_revision(DEFAULT_PROFILE_ID).unwrap(),
             downloads_change.id
         );
+    }
+
+    #[test]
+    fn app_sync_domain_poll_initializes_missing_cursor_at_domain_head() {
+        let database_path =
+            test_dir("app-sync-domain-poll-initial").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                "default_view",
+                "month",
+            )
+            .unwrap();
+        database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CALENDAR, "timezone", "UTC")
+            .unwrap();
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_DOWNLOADS,
+                "last_filter",
+                "active",
+            )
+            .unwrap();
+        let calendar_head_revision = database
+            .latest_sync_revision_for_domain(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CALENDAR)
+            .unwrap();
+        let global_head_revision = database.latest_sync_revision(DEFAULT_PROFILE_ID).unwrap();
+        assert!(calendar_head_revision < global_head_revision);
+
+        let poll = database
+            .poll_sync_setting_text_events_for_app_domain(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                8,
+            )
+            .unwrap();
+        assert_eq!(poll.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(poll.domain, SYNC_DOMAIN_CALENDAR);
+        assert_eq!(poll.previous_revision, calendar_head_revision);
+        assert_eq!(poll.latest_revision, calendar_head_revision);
+        assert!(poll.events.is_empty());
+        assert_eq!(
+            database
+                .app_sync_domain_cursor(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CALENDAR)
+                .unwrap()
+                .map(|cursor| cursor.latest_revision),
+            Some(calendar_head_revision)
+        );
+        assert_eq!(
+            database.latest_sync_revision(DEFAULT_PROFILE_ID).unwrap(),
+            global_head_revision
+        );
+    }
+
+    #[test]
+    fn app_sync_domain_poll_resumes_from_persisted_cursor_after_partial_batch() {
+        let database_path =
+            test_dir("app-sync-domain-poll-resume").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+
+        let first_calendar_change = database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                "default_view",
+                "month",
+            )
+            .unwrap();
+        let second_calendar_change = database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CALENDAR, "timezone", "UTC")
+            .unwrap();
+        let calendar_events = database
+            .sync_setting_text_events_after_for_domain(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                0,
+                8,
+            )
+            .unwrap();
+        assert_eq!(calendar_events.len(), 2);
+        assert_eq!(calendar_events[0].change, first_calendar_change);
+        assert_eq!(calendar_events[1].change, second_calendar_change);
+        let first_revision = calendar_events[0].revision.revision;
+        let second_revision = calendar_events[1].revision.revision;
+        database
+            .record_app_sync_domain_cursor(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CALENDAR, first_revision)
+            .unwrap();
+
+        let poll = database
+            .poll_sync_setting_text_events_for_app_domain(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                1,
+            )
+            .unwrap();
+        assert_eq!(poll.previous_revision, first_revision);
+        assert_eq!(poll.latest_revision, second_revision);
+        assert_eq!(poll.events.len(), 1);
+        assert_eq!(poll.events[0].change, calendar_events[1].change);
+        assert_eq!(
+            database
+                .app_sync_domain_cursor(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CALENDAR)
+                .unwrap()
+                .map(|cursor| cursor.latest_revision),
+            Some(first_revision)
+        );
+
+        let cursor = database.record_app_sync_domain_poll_cursor(&poll).unwrap();
+        assert_eq!(cursor.latest_revision, second_revision);
     }
 
     #[test]

@@ -222,6 +222,9 @@ Current baseline:
 - `slate-settings.db` can now persist app-domain watcher cursors in
   profile-scoped `sync_state` rows. Cursor writes are monotonic, so stale or
   duplicate watcher batches cannot move a rail app's sync cursor backward.
+  Storage also exposes a cursor-backed app-domain settings poll helper that
+  initializes missing cursors at the domain head and lets callers advance the
+  cursor only after they apply a returned batch.
 - The profile-sync bridge can now publish post-snapshot local settings updates
   by reusing the latest retained `slate-settings.db` snapshot object, publishing
   only the new tail changes, moving the settings root, and publishing a fresh
