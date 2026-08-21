@@ -420,6 +420,10 @@ pub enum SyncObjectError {
     Decrypt,
     Verify,
     UnsupportedVersion(u8),
+    UnsupportedSchema {
+        object_kind: String,
+        schema_version: u8,
+    },
     InvalidDeviceId(String),
     DeviceKeyMismatch {
         expected_device_id: String,
@@ -459,6 +463,13 @@ impl fmt::Display for SyncObjectError {
             Self::UnsupportedVersion(version) => {
                 write!(formatter, "unsupported sync object version: {version}")
             }
+            Self::UnsupportedSchema {
+                object_kind,
+                schema_version,
+            } => write!(
+                formatter,
+                "unsupported {object_kind} sync object schema version: {schema_version}"
+            ),
             Self::InvalidDeviceId(device_id) => {
                 write!(formatter, "invalid sync object device id: {device_id}")
             }
@@ -504,6 +515,7 @@ impl std::error::Error for SyncObjectError {
             | Self::Decrypt
             | Self::Verify
             | Self::UnsupportedVersion(_)
+            | Self::UnsupportedSchema { .. }
             | Self::InvalidDeviceId(_)
             | Self::DeviceKeyMismatch { .. }
             | Self::InvalidNonceLength { .. }
@@ -711,6 +723,12 @@ pub fn open_signed_profile_sync_device_head(
     )?;
     let device_head: ProfileSyncDeviceHead =
         serde_json::from_slice(payload.as_slice()).map_err(SyncObjectError::Decode)?;
+    if device_head.schema_version != PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION {
+        return Err(SyncObjectError::UnsupportedSchema {
+            object_kind: PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND.to_string(),
+            schema_version: device_head.schema_version,
+        });
+    }
     if device_head.profile != profile {
         return Err(SyncObjectError::UnexpectedProfile {
             expected: profile.to_string(),
@@ -4961,6 +4979,37 @@ mod tests {
                 expected_device_id,
                 actual_device_id
             }) if expected_device_id == "device-a" && actual_device_id == "device-b"
+        ));
+
+        let unsupported_schema_payload = ProfileSyncDeviceHead {
+            schema_version: PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION + 1,
+            ..mismatched_payload
+        };
+        let unsupported_schema_signed_bytes = sign_test_sync_object(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
+            "content-key-epoch-1",
+            serde_json::to_vec(&unsupported_schema_payload)
+                .unwrap()
+                .as_slice(),
+            &content_key,
+            &signer,
+            26,
+        );
+        assert!(matches!(
+            open_signed_profile_sync_device_head(
+                unsupported_schema_signed_bytes.as_slice(),
+                &content_key,
+                &trusted_public_key,
+                DEFAULT_PROFILE_ID,
+                "content-key-epoch-1",
+            ),
+            Err(SyncObjectError::UnsupportedSchema {
+                object_kind,
+                schema_version
+            }) if object_kind == PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND
+                && schema_version == PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION + 1
         ));
     }
 

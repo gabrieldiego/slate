@@ -263,7 +263,8 @@ Current baseline:
   heads identify a profile, device, per-device root, latest manifest object,
   optional latest change object, membership epoch, sequence, and logical clock;
   trusted opening uses the stored device public-key table and rejects device
-  keys introduced after the head membership epoch.
+  keys introduced after the head membership epoch. Unsupported device-head
+  schema versions are rejected before runtime merge logic can consume them.
 - Storage can now pull a signed encrypted device-head object through the common
   profile-sync object source abstraction. Both explicit-key and trusted-key
   helpers resolve a per-device head root, fetch the object, verify/decrypt it,
