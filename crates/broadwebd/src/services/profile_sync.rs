@@ -72,8 +72,10 @@ impl ProfileSyncService {
     fn put_object(
         &self,
         request: ProfileSyncPutObjectRequest,
+        budget: &ResourceBudget,
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
+        validate_object_budget(request.bytes.len(), budget)?;
         let object_id = local_object_id(&request.bytes);
         let mut store = self.store()?;
         store
@@ -85,22 +87,24 @@ impl ProfileSyncService {
     fn get_object(
         &self,
         request: ProfileSyncObjectRequest,
+        budget: &ResourceBudget,
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
         let store = self.store()?;
+        let object_id = request.object_id;
         let bytes = store
             .objects
-            .get(&(request.profile, request.object_id.clone()))
-            .cloned()
+            .get(&(request.profile, object_id.clone()))
             .ok_or_else(|| {
                 BroadwebdError::UnsupportedRequest(format!(
                     "profile sync object not found: {}",
-                    request.object_id
+                    object_id
                 ))
             })?;
+        validate_object_budget(bytes.len(), budget)?;
         Ok(ProfileSyncResponse::GetEncryptedObject {
-            object_id: request.object_id,
-            bytes,
+            object_id,
+            bytes: bytes.clone(),
         })
     }
 
@@ -288,7 +292,7 @@ impl ApplicationServicePlugin for ProfileSyncService {
         &self,
         request: ServiceRequest,
         _registry: &PluginRegistry,
-        _budget: &ResourceBudget,
+        budget: &ResourceBudget,
     ) -> Result<ServiceResponse, BroadwebdError> {
         let ServiceRequest::ProfileSync(request) = request else {
             return Err(BroadwebdError::UnsupportedRequest(
@@ -299,8 +303,8 @@ impl ApplicationServicePlugin for ProfileSyncService {
         self.ensure_online()?;
 
         let response = match request {
-            ProfileSyncRequest::PutEncryptedObject(request) => self.put_object(request)?,
-            ProfileSyncRequest::GetEncryptedObject(request) => self.get_object(request)?,
+            ProfileSyncRequest::PutEncryptedObject(request) => self.put_object(request, budget)?,
+            ProfileSyncRequest::GetEncryptedObject(request) => self.get_object(request, budget)?,
             ProfileSyncRequest::RetainObject(request) => self.retain_object(request)?,
             ProfileSyncRequest::ReleaseObject(request) => self.release_object(request)?,
             ProfileSyncRequest::ListRetainedObjects(request) => {
@@ -326,6 +330,17 @@ fn validate_profile(profile: &str) -> Result<(), BroadwebdError> {
         Ok(())
     } else {
         Err(BroadwebdError::InvalidProfile(profile.to_string()))
+    }
+}
+
+fn validate_object_budget(size: usize, budget: &ResourceBudget) -> Result<(), BroadwebdError> {
+    if size > budget.max_profile_sync_object_bytes {
+        Err(BroadwebdError::ResponseTooLarge {
+            limit: budget.max_profile_sync_object_bytes,
+            actual: size,
+        })
+    } else {
+        Ok(())
     }
 }
 
@@ -429,6 +444,67 @@ mod tests {
             panic!("unexpected get response");
         };
         assert_eq!(bytes, b"encrypted manifest from device a");
+    }
+
+    #[test]
+    fn local_fixture_enforces_profile_sync_object_budget() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut device_a = PluginRegistry::new();
+        let mut device_b = PluginRegistry::new();
+        let budget = ResourceBudget::default();
+        let constrained_budget = ResourceBudget {
+            max_profile_sync_object_bytes: 4,
+            ..ResourceBudget::default()
+        };
+
+        device_a.register_service(fixture.service_for_device("a"));
+        device_b.register_service(fixture.service_for_device("b"));
+
+        let put_error = device_a
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"12345".to_vec(),
+                )),
+                &constrained_budget,
+            )
+            .expect_err("oversized fixture object should be rejected on put");
+        assert_eq!(
+            put_error,
+            BroadwebdError::ResponseTooLarge {
+                limit: 4,
+                actual: 5
+            }
+        );
+
+        let put = device_a
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"12345".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("device a can put object with default budget");
+        let ProfileSyncResponse::PutEncryptedObject { object_id } = put else {
+            panic!("unexpected put response");
+        };
+
+        let get_error = device_b
+            .profile_sync(
+                ProfileSyncRequest::GetEncryptedObject(ProfileSyncObjectRequest::new(
+                    "default", object_id,
+                )),
+                &constrained_budget,
+            )
+            .expect_err("oversized fixture object should be rejected on get");
+        assert_eq!(
+            get_error,
+            BroadwebdError::ResponseTooLarge {
+                limit: 4,
+                actual: 5
+            }
+        );
     }
 
     #[test]

@@ -1,4 +1,5 @@
 const DEFAULT_MAX_HTTP_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
+const DEFAULT_MAX_PROFILE_SYNC_OBJECT_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ResourceBudget {
@@ -13,6 +14,7 @@ pub struct ResourceBudget {
     pub allow_reprovide: bool,
     pub allow_public_gateway_fallback: bool,
     pub max_http_response_bytes: usize,
+    pub max_profile_sync_object_bytes: usize,
 }
 
 impl Default for ResourceBudget {
@@ -29,6 +31,7 @@ impl Default for ResourceBudget {
             allow_reprovide: false,
             allow_public_gateway_fallback: false,
             max_http_response_bytes: DEFAULT_MAX_HTTP_RESPONSE_BYTES,
+            max_profile_sync_object_bytes: DEFAULT_MAX_PROFILE_SYNC_OBJECT_BYTES,
         }
     }
 }
