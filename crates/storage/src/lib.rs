@@ -724,6 +724,16 @@ pub struct SyncSnapshotRecord {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SyncCompactionTarget {
+    pub profile: String,
+    pub previous_snapshot_covers_revision: i64,
+    pub covers_revision: i64,
+    pub covers_change_id: i64,
+    pub covered_change_count: usize,
+    pub retained_tail_change_count: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProfileSyncRootRecord {
     pub profile: String,
     pub root_id: String,
@@ -1787,6 +1797,38 @@ impl SlateProfileDatabase {
             .map_err(|source| self.database_error(source))
     }
 
+    pub fn settings_sync_compaction_target(
+        &self,
+        profile: &str,
+        retention_policy: &ProfileSyncRetentionPolicy,
+        now: i64,
+    ) -> Result<Option<SyncCompactionTarget>, StorageError> {
+        let previous_snapshot_covers_revision = self
+            .latest_sync_snapshot(profile)?
+            .map(|snapshot| snapshot.covers_revision)
+            .unwrap_or(0);
+        let events = self.sync_setting_text_events_after(
+            profile,
+            previous_snapshot_covers_revision,
+            u32::MAX,
+        )?;
+        let Some(target_index) =
+            compaction_target_event_index(events.as_slice(), retention_policy, now)
+        else {
+            return Ok(None);
+        };
+        let target = &events[target_index];
+
+        Ok(Some(SyncCompactionTarget {
+            profile: profile.to_string(),
+            previous_snapshot_covers_revision,
+            covers_revision: target.revision.revision,
+            covers_change_id: target.change.id,
+            covered_change_count: target_index + 1,
+            retained_tail_change_count: events.len() - target_index - 1,
+        }))
+    }
+
     pub fn sync_snapshot(
         &self,
         profile: &str,
@@ -2201,6 +2243,27 @@ fn sync_snapshot_record_from_row(
         included_domains,
         created_at: row.get(5)?,
     })
+}
+
+fn compaction_target_event_index(
+    events: &[SyncSettingTextEvent],
+    retention_policy: &ProfileSyncRetentionPolicy,
+    now: i64,
+) -> Option<usize> {
+    let min_tail_change_count =
+        usize::try_from(retention_policy.min_tail_change_count).unwrap_or(usize::MAX);
+    if events.len() <= min_tail_change_count {
+        return None;
+    }
+
+    let retention_seconds = retention_policy.change_retention_seconds.max(0);
+    let retention_cutoff = now.saturating_sub(retention_seconds);
+    let newest_old_enough = events
+        .iter()
+        .rposition(|event| event.change.created_at <= retention_cutoff)?;
+    let newest_allowed_by_tail = events.len() - min_tail_change_count - 1;
+
+    Some(newest_old_enough.min(newest_allowed_by_tail))
 }
 
 fn profile_sync_root_key(root_id: &str) -> String {
@@ -3414,6 +3477,71 @@ mod tests {
             .unwrap()
             .expect("snapshot-1");
         assert_eq!(snapshot, updated_first);
+    }
+
+    #[test]
+    fn settings_sync_compaction_target_uses_retention_policy_and_latest_snapshot() {
+        let database_path = test_dir("sync-compaction-target").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let baseline_revision = database.latest_sync_revision(DEFAULT_PROFILE_ID).unwrap();
+        if baseline_revision > 0 {
+            database
+                .record_sync_snapshot(&SyncSnapshotRegistration {
+                    profile: DEFAULT_PROFILE_ID.to_string(),
+                    snapshot_id: "snapshot-baseline".to_string(),
+                    backend_object_id: Some("snapshot-object-baseline".to_string()),
+                    covers_revision: baseline_revision,
+                    included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+                })
+                .unwrap();
+        }
+
+        for index in 0..5 {
+            database
+                .set_sync_setting_text(
+                    DEFAULT_PROFILE_ID,
+                    SYNC_DOMAIN_SETTINGS,
+                    &format!("setting.{index}"),
+                    &format!("value-{index}"),
+                )
+                .unwrap();
+        }
+
+        let policy = ProfileSyncRetentionPolicy {
+            min_tail_change_count: 2,
+            change_retention_seconds: 0,
+            inactive_device_grace_seconds: DEFAULT_PROFILE_SYNC_INACTIVE_DEVICE_GRACE_SECONDS,
+        };
+        let events = database
+            .sync_setting_text_events_after(DEFAULT_PROFILE_ID, baseline_revision, 10)
+            .unwrap();
+        assert_eq!(events.len(), 5);
+
+        let target = database
+            .settings_sync_compaction_target(DEFAULT_PROFILE_ID, &policy, i64::MAX)
+            .unwrap()
+            .expect("compaction target");
+        assert_eq!(target.previous_snapshot_covers_revision, baseline_revision);
+        assert_eq!(target.covers_revision, events[2].revision.revision);
+        assert_eq!(target.covers_change_id, events[2].change.id);
+        assert_eq!(target.covered_change_count, 3);
+        assert_eq!(target.retained_tail_change_count, 2);
+
+        database
+            .record_sync_snapshot(&SyncSnapshotRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                snapshot_id: "snapshot-compacted".to_string(),
+                backend_object_id: Some("snapshot-object-compacted".to_string()),
+                covers_revision: target.covers_revision,
+                included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            })
+            .unwrap();
+        assert_eq!(
+            database
+                .settings_sync_compaction_target(DEFAULT_PROFILE_ID, &policy, i64::MAX)
+                .unwrap(),
+            None
+        );
     }
 
     #[test]
