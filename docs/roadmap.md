@@ -202,6 +202,11 @@ Current baseline:
 - `sync_state` now has typed profile sync root APIs so storage can persist the
   last verified manifest object id for roots such as `settings/latest` without
   exposing raw key/value state to callers.
+- Storage now has a serializable `ProfileSyncManifest` payload with optional
+  snapshot object id, tail change object ids, included domains, and device
+  frontiers. The local two-device fixture now publishes `settings/latest` to a
+  signed encrypted manifest object, then fetches and applies the signed
+  encrypted tail setting-change object named by that manifest.
 - IPFS/IPNS is the first concrete backend under consideration, but the product
   goal is protocol-neutral: approved Slate devices should find each other, move
   encrypted sync objects, and optionally use approved providers to keep those
