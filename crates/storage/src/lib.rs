@@ -1432,30 +1432,53 @@ impl SlateProfileDatabase {
             return Ok(existing);
         }
 
-        if change.profile == DEFAULT_PROFILE_ID && change.domain == SYNC_DOMAIN_SETTINGS {
-            transaction
-                .execute(
-                    "INSERT INTO settings (key, value, updated_at)
-                     VALUES (?1, ?2, ?3)
-                     ON CONFLICT(key) DO UPDATE SET
-                       value = excluded.value,
-                       updated_at = excluded.updated_at",
-                    params![change.key.as_str(), change.value.as_str(), now],
-                )
-                .map_err(|source| self.database_error(source))?;
-        }
-
-        let applied = insert_sync_setting_text_change_in_transaction(
+        let existing_winner = sync_setting_winner_in_transaction(
             &transaction,
             change.profile.as_str(),
             change.domain.as_str(),
             change.key.as_str(),
-            change.value.as_str(),
-            change.device_id.as_str(),
-            change.device_sequence,
-            change.logical_clock,
-            now,
         )
+        .map_err(|source| self.database_error(source))?;
+        let should_apply = setting_change_wins(change, existing_winner.as_ref());
+
+        let applied = if should_apply {
+            if change.profile == DEFAULT_PROFILE_ID && change.domain == SYNC_DOMAIN_SETTINGS {
+                transaction
+                    .execute(
+                        "INSERT INTO settings (key, value, updated_at)
+                         VALUES (?1, ?2, ?3)
+                         ON CONFLICT(key) DO UPDATE SET
+                           value = excluded.value,
+                           updated_at = excluded.updated_at",
+                        params![change.key.as_str(), change.value.as_str(), now],
+                    )
+                    .map_err(|source| self.database_error(source))?;
+            }
+            insert_sync_setting_text_change_in_transaction(
+                &transaction,
+                change.profile.as_str(),
+                change.domain.as_str(),
+                change.key.as_str(),
+                change.value.as_str(),
+                change.device_id.as_str(),
+                change.device_sequence,
+                change.logical_clock,
+                now,
+            )
+        } else {
+            insert_sync_setting_text_change_record_in_transaction(
+                &transaction,
+                change.profile.as_str(),
+                change.domain.as_str(),
+                change.key.as_str(),
+                change.value.as_str(),
+                change.device_id.as_str(),
+                change.device_sequence,
+                change.logical_clock,
+                now,
+                None,
+            )
+        }
         .map_err(|source| self.database_error(source))?;
         transaction
             .commit()
@@ -2182,6 +2205,49 @@ fn sync_change_by_device_sequence_in_transaction(
         .optional()
 }
 
+fn sync_setting_winner_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    domain: &str,
+    key: &str,
+) -> Result<Option<SyncChangeRecord>, rusqlite::Error> {
+    transaction
+        .query_row(
+            "SELECT id, profile, domain, entity_key, operation, payload, device_id,
+                    device_sequence, logical_clock, created_at, applied_at
+             FROM settings_changes
+             WHERE profile = ?1
+               AND domain = ?2
+               AND entity_key = ?3
+               AND operation = 'set_text'
+               AND applied_at IS NOT NULL
+             ORDER BY logical_clock DESC, device_id DESC, device_sequence DESC, id DESC
+             LIMIT 1",
+            params![profile, domain, key],
+            sync_change_record_from_row,
+        )
+        .optional()
+}
+
+fn setting_change_wins(
+    incoming: &IncomingSyncSettingText,
+    existing: Option<&SyncChangeRecord>,
+) -> bool {
+    let Some(existing) = existing else {
+        return true;
+    };
+
+    (
+        incoming.logical_clock,
+        incoming.device_id.as_str(),
+        incoming.device_sequence,
+    ) > (
+        existing.logical_clock,
+        existing.device_id.as_str(),
+        existing.device_sequence,
+    )
+}
+
 fn sync_change_record_from_row(
     row: &rusqlite::Row<'_>,
 ) -> Result<SyncChangeRecord, rusqlite::Error> {
@@ -2248,23 +2314,19 @@ fn insert_sync_setting_text_change_in_transaction(
     logical_clock: i64,
     now: i64,
 ) -> Result<SyncChangeRecord, rusqlite::Error> {
-    transaction.execute(
-        "INSERT INTO settings_changes
-           (profile, domain, entity_key, operation, payload, device_id, device_sequence,
-            logical_clock, created_at, applied_at)
-         VALUES (?1, ?2, ?3, 'set_text', ?4, ?5, ?6, ?7, ?8, ?8)",
-        params![
-            profile,
-            domain,
-            key,
-            value,
-            device_id,
-            device_sequence,
-            logical_clock,
-            now
-        ],
+    let change = insert_sync_setting_text_change_record_in_transaction(
+        transaction,
+        profile,
+        domain,
+        key,
+        value,
+        device_id,
+        device_sequence,
+        logical_clock,
+        now,
+        Some(now),
     )?;
-    let change_id = transaction.last_insert_rowid();
+    let change_id = change.id;
     transaction.execute(
         "INSERT INTO settings_revisions (profile, domain, change_id, created_at)
          VALUES (?1, ?2, ?3, ?4)",
@@ -2283,6 +2345,40 @@ fn insert_sync_setting_text_change_in_transaction(
         params![profile, domain, key, value, revision, now],
     )?;
 
+    Ok(change)
+}
+
+fn insert_sync_setting_text_change_record_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    domain: &str,
+    key: &str,
+    value: &str,
+    device_id: &str,
+    device_sequence: i64,
+    logical_clock: i64,
+    now: i64,
+    applied_at: Option<i64>,
+) -> Result<SyncChangeRecord, rusqlite::Error> {
+    transaction.execute(
+        "INSERT INTO settings_changes
+           (profile, domain, entity_key, operation, payload, device_id, device_sequence,
+            logical_clock, created_at, applied_at)
+         VALUES (?1, ?2, ?3, 'set_text', ?4, ?5, ?6, ?7, ?8, ?9)",
+        params![
+            profile,
+            domain,
+            key,
+            value,
+            device_id,
+            device_sequence,
+            logical_clock,
+            now,
+            applied_at
+        ],
+    )?;
+    let change_id = transaction.last_insert_rowid();
+
     Ok(SyncChangeRecord {
         id: change_id,
         profile: profile.to_string(),
@@ -2294,7 +2390,7 @@ fn insert_sync_setting_text_change_in_transaction(
         device_sequence,
         logical_clock,
         created_at: now,
-        applied_at: Some(now),
+        applied_at,
     })
 }
 
@@ -2928,6 +3024,80 @@ mod tests {
 
         let devices = database.sync_devices(DEFAULT_PROFILE_ID).unwrap();
         assert!(devices.iter().any(|device| device.device_id == "device-b"));
+    }
+
+    #[test]
+    fn incoming_setting_conflicts_use_logical_clock_and_device_tiebreak() {
+        let database_path = test_dir("incoming-sync-conflict").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+
+        let local = database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "ui.theme",
+                "local",
+            )
+            .unwrap();
+        let value = database
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme")
+            .unwrap()
+            .unwrap();
+
+        let older = IncomingSyncSettingText::new(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            "ui.theme",
+            "older",
+            "device-b",
+            1,
+            local.logical_clock - 1,
+        );
+        let losing_change = database.apply_sync_setting_text(&older).unwrap();
+        assert_eq!(losing_change.payload, "older");
+        assert_eq!(losing_change.applied_at, None);
+        assert_eq!(
+            database.get_setting_text("ui.theme").unwrap().as_deref(),
+            Some("local")
+        );
+        assert_eq!(
+            database
+                .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme")
+                .unwrap()
+                .unwrap(),
+            value
+        );
+        assert_eq!(
+            database
+                .sync_revisions_after(DEFAULT_PROFILE_ID, value.revision)
+                .unwrap(),
+            Vec::<SyncRevisionRecord>::new()
+        );
+
+        let tied_higher_device = IncomingSyncSettingText::new(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            "ui.theme",
+            "remote",
+            "zz-device",
+            1,
+            local.logical_clock,
+        );
+        let winning_change = database
+            .apply_sync_setting_text(&tied_higher_device)
+            .unwrap();
+        assert_eq!(winning_change.payload, "remote");
+        assert!(winning_change.applied_at.is_some());
+        assert_eq!(
+            database.get_setting_text("ui.theme").unwrap().as_deref(),
+            Some("remote")
+        );
+        let remote_value = database
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme")
+            .unwrap()
+            .unwrap();
+        assert_eq!(remote_value.value, "remote");
+        assert!(remote_value.revision > value.revision);
     }
 
     #[test]
