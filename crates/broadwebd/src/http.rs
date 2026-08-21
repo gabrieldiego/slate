@@ -1,9 +1,9 @@
 use crate::{BroadwebdError, DEFAULT_PROFILE, ResourceBudget};
+use slate_net::BROWSER_USER_AGENT;
 use std::path::PathBuf;
 use std::time::Duration;
 use url::Url;
 
-const USER_AGENT: &str = "Slate/0.0.1";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(12);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -338,9 +338,14 @@ pub(crate) fn fetch_http_url(
     url: Url,
     budget: &ResourceBudget,
 ) -> Result<HttpFetchResponse, BroadwebdError> {
+    #[cfg(test)]
+    if is_internal_fixture_http_url(&url) {
+        return fetch_internal_fixture_http_url(&url, budget);
+    }
+
     let client = reqwest::blocking::Client::builder()
         .timeout(REQUEST_TIMEOUT)
-        .user_agent(USER_AGENT)
+        .user_agent(BROWSER_USER_AGENT)
         .redirect(reqwest::redirect::Policy::limited(6))
         .build()
         .map_err(request_error)?;
@@ -391,6 +396,105 @@ fn response_headers(headers: &reqwest::header::HeaderMap) -> Vec<HttpHeader> {
             })
         })
         .collect()
+}
+
+#[cfg(test)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct InternalFixtureHttpResponse {
+    pub status_code: u16,
+    pub content_type: Option<String>,
+    pub headers: Vec<HttpHeader>,
+    pub body: Vec<u8>,
+}
+
+#[cfg(test)]
+pub(crate) fn register_internal_fixture_http_response(
+    response: InternalFixtureHttpResponse,
+) -> String {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static NEXT_FIXTURE_ID: AtomicUsize = AtomicUsize::new(1);
+
+    let id = NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed);
+    let base_url = format!("http://127.0.0.1/slate-test-fixture-{id}/");
+    internal_fixture_http_responses()
+        .lock()
+        .expect("internal HTTP fixture registry should not be poisoned")
+        .insert(base_url.clone(), response);
+    base_url
+}
+
+#[cfg(test)]
+pub(crate) fn unregistered_internal_fixture_http_url() -> String {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static NEXT_MISSING_FIXTURE_ID: AtomicUsize = AtomicUsize::new(1);
+
+    let id = NEXT_MISSING_FIXTURE_ID.fetch_add(1, Ordering::Relaxed);
+    format!("http://127.0.0.1/slate-test-missing-{id}")
+}
+
+#[cfg(test)]
+fn is_internal_fixture_http_url(url: &Url) -> bool {
+    matches!(url.host_str(), Some("127.0.0.1"))
+        && (url.path().starts_with("/slate-test-fixture-")
+            || url.path().starts_with("/slate-test-missing-"))
+}
+
+#[cfg(test)]
+fn fetch_internal_fixture_http_url(
+    url: &Url,
+    budget: &ResourceBudget,
+) -> Result<HttpFetchResponse, BroadwebdError> {
+    let url_text = url.as_str();
+    let mut fixtures = internal_fixture_http_responses()
+        .lock()
+        .expect("internal HTTP fixture registry should not be poisoned");
+    let Some(base_url) = fixtures
+        .iter()
+        .filter(|(base_url, _)| url_text.starts_with(base_url.as_str()))
+        .max_by_key(|(base_url, _)| base_url.len())
+        .map(|(base_url, _)| base_url.clone())
+    else {
+        return Err(BroadwebdError::Request(format!(
+            "internal HTTP fixture has no response for {url_text}"
+        )));
+    };
+    let response = fixtures
+        .remove(base_url.as_str())
+        .expect("matched internal HTTP fixture should exist");
+
+    if response.body.len() > budget.max_http_response_bytes {
+        return Err(BroadwebdError::ResponseTooLarge {
+            limit: budget.max_http_response_bytes,
+            actual: response.body.len(),
+        });
+    }
+
+    let content_type = infer_content_type(
+        url_text,
+        response.content_type.as_deref(),
+        response.body.as_slice(),
+    );
+    Ok(HttpFetchResponse::new(
+        url_text,
+        response.status_code,
+        content_type,
+        response.headers.clone(),
+        response.body.clone(),
+    ))
+}
+
+#[cfg(test)]
+fn internal_fixture_http_responses()
+-> &'static std::sync::Mutex<std::collections::BTreeMap<String, InternalFixtureHttpResponse>> {
+    use std::collections::BTreeMap;
+    use std::sync::{Mutex, OnceLock};
+
+    static RESPONSES: OnceLock<Mutex<BTreeMap<String, InternalFixtureHttpResponse>>> =
+        OnceLock::new();
+
+    RESPONSES.get_or_init(|| Mutex::new(BTreeMap::new()))
 }
 
 pub(crate) fn infer_content_type(

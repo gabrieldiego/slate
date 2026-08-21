@@ -88,6 +88,18 @@ impl TransportPlugin for IpfsKuboRpcTransport {
             let cat_url =
                 kubo_cat_url_for_path(&candidate.content_path, self.endpoint.api_base_url())?;
             let url = parse_http_url(&cat_url)?;
+
+            #[cfg(test)]
+            if is_internal_kubo_rpc_fixture_url(&url) {
+                let fetch_response =
+                    fetch_internal_kubo_rpc_fixture(&url, &candidate.document_url, budget)?;
+                if (200..=299).contains(&fetch_response.status_code) {
+                    return Ok(fetch_response);
+                }
+                last_response = Some(fetch_response);
+                continue;
+            }
+
             let response = client.post(url).send().map_err(request_error)?;
             let status_code = response.status().as_u16();
             let headers = response_headers(response.headers());
@@ -246,4 +258,132 @@ fn response_headers(headers: &reqwest::header::HeaderMap) -> Vec<HttpHeader> {
             })
         })
         .collect()
+}
+
+#[cfg(test)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct InternalKuboRpcResponse {
+    pub status_code: u16,
+    pub content_type: String,
+    pub body: Vec<u8>,
+}
+
+#[cfg(test)]
+pub(crate) fn register_internal_kubo_rpc_fixture(
+    responses: Vec<InternalKuboRpcResponse>,
+) -> String {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static NEXT_FIXTURE_ID: AtomicUsize = AtomicUsize::new(1);
+
+    let id = NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed);
+    let base_url = format!("http://127.0.0.1/slate-test-kubo-{id}");
+    internal_kubo_rpc_fixtures()
+        .lock()
+        .expect("internal Kubo fixture registry should not be poisoned")
+        .insert(
+            base_url.clone(),
+            InternalKuboRpcFixture {
+                responses: responses.into(),
+                requests: Vec::new(),
+            },
+        );
+    base_url
+}
+
+#[cfg(test)]
+pub(crate) fn take_internal_kubo_rpc_fixture_requests(base_url: &str) -> Vec<String> {
+    internal_kubo_rpc_fixtures()
+        .lock()
+        .expect("internal Kubo fixture registry should not be poisoned")
+        .remove(base_url)
+        .map(|fixture| fixture.requests)
+        .unwrap_or_default()
+}
+
+#[cfg(test)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct InternalKuboRpcFixture {
+    responses: std::collections::VecDeque<InternalKuboRpcResponse>,
+    requests: Vec<String>,
+}
+
+#[cfg(test)]
+fn is_internal_kubo_rpc_fixture_url(url: &Url) -> bool {
+    matches!(url.host_str(), Some("127.0.0.1")) && url.path().starts_with("/slate-test-kubo-")
+}
+
+#[cfg(test)]
+fn fetch_internal_kubo_rpc_fixture(
+    url: &Url,
+    document_url: &str,
+    budget: &ResourceBudget,
+) -> Result<HttpFetchResponse, BroadwebdError> {
+    let base_url = internal_kubo_rpc_base_url(url)?;
+    let request_target = match url.query() {
+        Some(query) => format!("POST /api/v0/cat?{query} HTTP/1.1"),
+        None => "POST /api/v0/cat HTTP/1.1".to_string(),
+    };
+
+    let mut fixtures = internal_kubo_rpc_fixtures()
+        .lock()
+        .expect("internal Kubo fixture registry should not be poisoned");
+    let fixture = fixtures.get_mut(base_url.as_str()).ok_or_else(|| {
+        BroadwebdError::Request(format!("missing internal Kubo fixture {base_url}"))
+    })?;
+    fixture.requests.push(request_target);
+    let response = fixture.responses.pop_front().ok_or_else(|| {
+        BroadwebdError::Request(format!("internal Kubo fixture {base_url} has no response"))
+    })?;
+
+    if response.body.len() > budget.max_http_response_bytes {
+        return Err(BroadwebdError::ResponseTooLarge {
+            limit: budget.max_http_response_bytes,
+            actual: response.body.len(),
+        });
+    }
+
+    let headers = vec![HttpHeader {
+        name: "content-type".to_string(),
+        value: response.content_type.clone(),
+    }];
+    let content_type = infer_content_type(
+        document_url,
+        Some(response.content_type.as_str()),
+        response.body.as_slice(),
+    );
+    Ok(HttpFetchResponse::new(
+        document_url.to_string(),
+        response.status_code,
+        content_type,
+        headers,
+        response.body,
+    ))
+}
+
+#[cfg(test)]
+fn internal_kubo_rpc_base_url(url: &Url) -> Result<String, BroadwebdError> {
+    let fixture_segment = url
+        .path_segments()
+        .and_then(|mut segments| segments.next().map(str::to_string))
+        .ok_or_else(|| {
+            BroadwebdError::InvalidUrl(format!("invalid internal Kubo fixture URL: {url}"))
+        })?;
+    Ok(format!(
+        "{}://{}/{}",
+        url.scheme(),
+        url.host_str().unwrap_or_default(),
+        fixture_segment
+    ))
+}
+
+#[cfg(test)]
+fn internal_kubo_rpc_fixtures()
+-> &'static std::sync::Mutex<std::collections::BTreeMap<String, InternalKuboRpcFixture>> {
+    use std::collections::BTreeMap;
+    use std::sync::{Mutex, OnceLock};
+
+    static FIXTURES: OnceLock<Mutex<BTreeMap<String, InternalKuboRpcFixture>>> = OnceLock::new();
+
+    FIXTURES.get_or_init(|| Mutex::new(BTreeMap::new()))
 }

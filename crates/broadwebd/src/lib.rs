@@ -75,6 +75,14 @@ pub use transports::direct_http::DirectHttpTransport;
 
 #[cfg(test)]
 mod tests {
+    use super::http::{
+        InternalFixtureHttpResponse, register_internal_fixture_http_response,
+        unregistered_internal_fixture_http_url,
+    };
+    use super::protocols::ipfs::{
+        InternalKuboRpcResponse, register_internal_kubo_rpc_fixture,
+        take_internal_kubo_rpc_fixture_requests,
+    };
     use super::{
         BroadwebDaemon, BroadwebStatusKind, BroadwebStatusReporter, BroadwebdError,
         DEFAULT_IPFS_KUBO_RPC_API, DIRECT_HTTP_PLUGIN, FetchDisposition, FetchPurpose,
@@ -89,10 +97,7 @@ mod tests {
         ipfs_gateway_http_url, ipfs_kubo_cat_url, tor_http_target, tor_url_from_http_url,
     };
     use std::fs;
-    use std::io::{Read, Write};
-    use std::net::TcpListener;
     use std::path::PathBuf;
-    use std::thread;
     use url::Url;
 
     #[test]
@@ -1723,7 +1728,7 @@ mod tests {
     fn local_http_fixture(
         content_type: &'static str,
         body: &'static str,
-    ) -> (String, thread::JoinHandle<()>) {
+    ) -> (String, InternalHttpFixtureHandle) {
         local_http_status_fixture("200 OK", content_type, body)
     }
 
@@ -1731,7 +1736,7 @@ mod tests {
         content_type: &'static str,
         extra_headers: &'static [&'static str],
         body: &'static str,
-    ) -> (String, thread::JoinHandle<()>) {
+    ) -> (String, InternalHttpFixtureHandle) {
         local_http_status_fixture_with_headers("200 OK", content_type, extra_headers, body)
     }
 
@@ -1739,7 +1744,7 @@ mod tests {
         status: &'static str,
         content_type: &'static str,
         body: &'static str,
-    ) -> (String, thread::JoinHandle<()>) {
+    ) -> (String, InternalHttpFixtureHandle) {
         local_http_status_fixture_with_headers(status, content_type, &[], body)
     }
 
@@ -1748,76 +1753,106 @@ mod tests {
         content_type: &'static str,
         extra_headers: &'static [&'static str],
         body: &'static str,
-    ) -> (String, thread::JoinHandle<()>) {
-        let listener = TcpListener::bind("127.0.0.1:0").expect("bind local server");
-        let address = format!("http://{}", listener.local_addr().expect("local address"));
-        let server = thread::spawn(move || {
-            let (mut stream, _) = listener.accept().expect("accept request");
-            let mut request = [0_u8; 1024];
-            let _ = stream.read(&mut request).expect("read request");
-            let extra_headers = if extra_headers.is_empty() {
-                String::new()
-            } else {
-                format!("{}\r\n", extra_headers.join("\r\n"))
-            };
-            let response = format!(
-                "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\n{extra_headers}Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                body.len()
-            );
-            stream
-                .write_all(response.as_bytes())
-                .expect("write response");
+    ) -> (String, InternalHttpFixtureHandle) {
+        let mut headers = vec![super::HttpHeader {
+            name: "content-type".to_string(),
+            value: content_type.to_string(),
+        }];
+        headers.extend(extra_headers.iter().map(|header| {
+            let (name, value) = header
+                .split_once(':')
+                .expect("fixture header should use name: value syntax");
+            super::HttpHeader {
+                name: name.trim().to_string(),
+                value: value.trim().to_string(),
+            }
+        }));
+        let address = register_internal_fixture_http_response(InternalFixtureHttpResponse {
+            status_code: status_code(status),
+            content_type: Some(content_type.to_string()),
+            headers,
+            body: body.as_bytes().to_vec(),
         });
-        (address, server)
+        (address, InternalHttpFixtureHandle)
     }
 
     fn unused_loopback_http_url() -> String {
-        let listener = TcpListener::bind("127.0.0.1:0").expect("bind unused local port");
-        let address = format!("http://{}", listener.local_addr().expect("local address"));
-        drop(listener);
-        address
+        unregistered_internal_fixture_http_url()
     }
 
     fn local_kubo_rpc_fixture(
         content_type: &'static str,
         body: &'static str,
-    ) -> (String, thread::JoinHandle<String>) {
+    ) -> (String, InternalKuboRpcSingleFixtureHandle) {
         let (address, server) =
             local_kubo_rpc_sequence_fixture(vec![("200 OK", content_type, body)]);
-        let server = thread::spawn(move || {
-            server
-                .join()
-                .expect("Kubo sequence fixture")
-                .into_iter()
-                .next()
-                .expect("expected one Kubo fixture request")
-        });
-        (address, server)
+        (
+            address,
+            InternalKuboRpcSingleFixtureHandle {
+                inner: server.address,
+            },
+        )
     }
 
     fn local_kubo_rpc_sequence_fixture(
         responses: Vec<(&'static str, &'static str, &'static str)>,
-    ) -> (String, thread::JoinHandle<Vec<String>>) {
-        let listener = TcpListener::bind("127.0.0.1:0").expect("bind local Kubo fixture");
-        let address = format!("http://{}", listener.local_addr().expect("local address"));
-        let server = thread::spawn(move || {
-            let mut requests = Vec::new();
-            for (status, content_type, body) in responses {
-                let (mut stream, _) = listener.accept().expect("accept request");
-                let mut request = [0_u8; 1024];
-                let read = stream.read(&mut request).expect("read request");
-                let response = format!(
-                    "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                    body.len()
-                );
-                stream
-                    .write_all(response.as_bytes())
-                    .expect("write response");
-                requests.push(String::from_utf8_lossy(&request[..read]).into_owned());
-            }
-            requests
-        });
+    ) -> (String, InternalKuboRpcSequenceFixtureHandle) {
+        let address = register_internal_kubo_rpc_fixture(
+            responses
+                .into_iter()
+                .map(|(status, content_type, body)| InternalKuboRpcResponse {
+                    status_code: status_code(status),
+                    content_type: content_type.to_string(),
+                    body: body.as_bytes().to_vec(),
+                })
+                .collect(),
+        );
+        let server = InternalKuboRpcSequenceFixtureHandle {
+            address: address.clone(),
+        };
         (address, server)
+    }
+
+    fn status_code(status: &str) -> u16 {
+        status
+            .split_whitespace()
+            .next()
+            .expect("fixture status should include numeric code")
+            .parse()
+            .expect("fixture status code should be numeric")
+    }
+
+    struct InternalHttpFixtureHandle;
+
+    impl InternalHttpFixtureHandle {
+        fn join(self) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    struct InternalKuboRpcSingleFixtureHandle {
+        inner: String,
+    }
+
+    impl InternalKuboRpcSingleFixtureHandle {
+        fn join(self) -> Result<String, String> {
+            Ok(take_internal_kubo_rpc_fixture_requests(self.inner.as_str())
+                .into_iter()
+                .next()
+                .expect("expected one Kubo fixture request"))
+        }
+    }
+
+    struct InternalKuboRpcSequenceFixtureHandle {
+        address: String,
+    }
+
+    impl InternalKuboRpcSequenceFixtureHandle {
+        fn join(self) -> Result<Vec<String>, String> {
+            Ok(take_internal_kubo_rpc_fixture_requests(
+                self.address.as_str(),
+            ))
+        }
     }
 
     fn test_state_root(name: &str) -> PathBuf {

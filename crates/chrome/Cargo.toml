@@ -76,6 +76,7 @@ rustls.workspace = true
 servo = { path = "../../third_party/servo/components/servo", default-features = false, features = ["background_hang_monitor", "bluetooth", "testbinding"] }
 slate-browser-core.workspace = true
 slate-broadwebd.workspace = true
+slate-net.workspace = true
 slate-storage.workspace = true
 tokio = "1"
 tracing = { version = "0.1", optional = true }

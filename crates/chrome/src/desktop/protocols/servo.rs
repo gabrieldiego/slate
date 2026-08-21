@@ -14,11 +14,11 @@ use std::future::Future;
 use std::pin::Pin;
 
 use headers::{ContentType, HeaderMapExt};
-use servo::UserAgentPlatform;
 use servo::protocol_handler::{
     DoneChannel, FetchContext, NetworkError, ProtocolHandler, Request, ResourceFetchTiming,
     Response, ResponseBody,
 };
+use slate_net::BROWSER_USER_AGENT;
 
 use crate::desktop::protocols::resource::ResourceProtocolHandler;
 use crate::prefs::EXPERIMENTAL_PREFS;
@@ -80,10 +80,7 @@ impl ProtocolHandler for ServoProtocolHandler {
                 json_response(request, format!("[{pref_list}]"))
             }
 
-            "default-user-agent" => {
-                let user_agent = UserAgentPlatform::default().to_user_agent_string();
-                json_response(request, format!("\"{user_agent}\""))
-            }
+            "default-user-agent" => json_response(request, format!("\"{BROWSER_USER_AGENT}\"")),
 
             _ => Box::pin(std::future::ready(Response::network_error(
                 NetworkError::ResourceLoadError("Invalid shortcut".to_owned()),

@@ -8,6 +8,7 @@ use crate::{
     TransportHttpRequest, TransportPlugin,
 };
 use arti_client::{TorClient, TorClientConfig};
+use slate_net::BROWSER_USER_AGENT;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -19,7 +20,6 @@ const MAX_HEADER_BYTES: usize = 64 * 1024;
 const MAX_REDIRECTS: usize = 6;
 const TOR_BOOTSTRAP_TIMEOUT: Duration = Duration::from_secs(90);
 const TOR_REQUEST_TIMEOUT: Duration = Duration::from_secs(45);
-const USER_AGENT: &str = "Slate/0.0.1";
 
 pub struct TorArtiHttpTransport {
     state: Mutex<Option<TorRuntimeState>>,
@@ -257,7 +257,7 @@ async fn fetch_plain_http_over_tor(
         .map_err(tor_error)?;
     let request = format!(
         "GET {} HTTP/1.1\r\nHost: {}\r\nUser-Agent: {}\r\nAccept: */*\r\nConnection: close\r\n\r\n",
-        target.path_and_query, target.host_header, USER_AGENT
+        target.path_and_query, target.host_header, BROWSER_USER_AGENT
     );
     stream
         .write_all(request.as_bytes())

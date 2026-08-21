@@ -20,8 +20,9 @@ use serde_json::Value;
 use servo::user_contents::UserStyleSheet;
 use servo::{
     DeviceIndependentPixel, DiagnosticsLogging, DiagnosticsLoggingOption, Opts, OutputOptions,
-    PrefValue, Preferences,
+    PrefValue, Preferences, UserAgentPlatform,
 };
+use slate_net::BROWSER_USER_AGENT;
 use url::Url;
 
 use crate::VERSION;
@@ -639,6 +640,13 @@ fn update_preferences_from_command_line_arguments(
     }
 }
 
+fn apply_slate_default_user_agent(preferences: &mut Preferences) {
+    let servo_default_user_agent = UserAgentPlatform::default().to_user_agent_string();
+    if preferences.user_agent.is_empty() || preferences.user_agent == servo_default_user_agent {
+        preferences.user_agent = BROWSER_USER_AGENT.to_string();
+    }
+}
+
 /// Parse Commandline arguments
 ///
 /// Please note that e.g. `env::args` traditionally includes the binary name as the first
@@ -697,6 +705,7 @@ fn parse_arguments_helper(args_without_binary: Args) -> ArgumentParsingResult {
 
     let mut preferences = get_preferences(&cmd_args.prefs_file, &config_dir);
 
+    apply_slate_default_user_agent(&mut preferences);
     update_preferences_from_command_line_arguments(&mut preferences, &cmd_args);
 
     // FIXME: enable JIT compilation on 32-bit Android after the startup crash issue (#31134) is fixed.
@@ -942,4 +951,21 @@ fn test_servoshell_cmd() {
         let p = test_parse("--zealous-gc").1;
         p.js_mem_gc_zeal_level == 2 && p.js_mem_gc_zeal_frequency == 1
     });
+}
+
+#[test]
+fn slate_default_user_agent_uses_browser_compat_string() {
+    let preferences = test_parse("").1;
+
+    assert_eq!(preferences.user_agent, BROWSER_USER_AGENT);
+    assert!(preferences.user_agent.contains("rv:154.0"));
+    assert!(preferences.user_agent.contains("Firefox/154.0"));
+    assert!(!preferences.user_agent.contains("Slate/"));
+}
+
+#[test]
+fn explicit_user_agent_override_wins() {
+    let preferences = test_parse("--user-agent CustomBrowser/1.0").1;
+
+    assert_eq!(preferences.user_agent, "CustomBrowser/1.0");
 }
