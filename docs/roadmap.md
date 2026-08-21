@@ -187,6 +187,9 @@ Current baseline:
   privacy classifications. Low-risk and metadata domains are enabled by
   default; sensitive and content-bearing app domains are present but opt-in,
   and default seeding preserves a user's stored enable/disable choice.
+- The rail app registry now maps visible apps to distinct sync domains:
+  Web owns the Bookmarks domain and Settings owns the Settings domain. Storage
+  remains a seeded future domain until its rail app surface exists.
 - Local settings/app-domain publishing now filters outgoing snapshots and tail
   manifests through the enabled app sync-domain table. Disabled domains can
   still be used as local typed state, but they are not published to broadweb

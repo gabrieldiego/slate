@@ -375,6 +375,10 @@ Planned domains:
 - Future apps such as Player, Notes, Tasks, Mail, or Media Library should define
   their own sync domain before storing replicated state.
 
+Visible rail app sync-domain ownership should remain one-to-one. Web owns
+`bookmarks`; Settings owns `settings`; seeded future domains such as `storage`
+must not shadow a visible rail app until their UI surface exists.
+
 `slate-settings.db` seeds these domains with privacy metadata so the sync UI can
 show what each app would share before the app has its full schema. Settings,
 bookmarks, and downloads metadata are enabled by default because they are

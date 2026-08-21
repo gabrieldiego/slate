@@ -63,7 +63,7 @@ pub const DEFAULT_APPS: [AppDescriptor; 7] = [
         label: "Web",
         icon: AppIcon::Globe,
         sync: AppSyncDescriptor {
-            domain: "settings",
+            domain: "bookmarks",
             privacy_classification: SyncPrivacyClass::LowRisk,
             sync_content: false,
             default_enabled: true,
@@ -137,20 +137,12 @@ pub const DEFAULT_APPS: [AppDescriptor; 7] = [
     },
 ];
 
-pub const FUTURE_SYNC_DOMAINS: [AppSyncDescriptor; 2] = [
-    AppSyncDescriptor {
-        domain: "bookmarks",
-        privacy_classification: SyncPrivacyClass::LowRisk,
-        sync_content: false,
-        default_enabled: true,
-    },
-    AppSyncDescriptor {
-        domain: "storage",
-        privacy_classification: SyncPrivacyClass::Sensitive,
-        sync_content: false,
-        default_enabled: false,
-    },
-];
+pub const FUTURE_SYNC_DOMAINS: [AppSyncDescriptor; 1] = [AppSyncDescriptor {
+    domain: "storage",
+    privacy_classification: SyncPrivacyClass::Sensitive,
+    sync_content: false,
+    default_enabled: false,
+}];
 
 pub fn default_apps() -> &'static [AppDescriptor] {
     &DEFAULT_APPS
@@ -162,7 +154,11 @@ pub fn app_for_sync_domain(domain: &str) -> Option<&'static AppDescriptor> {
 
 #[cfg(test)]
 mod tests {
-    use super::{AppIcon, AppId, SyncPrivacyClass, app_for_sync_domain, default_apps};
+    use std::collections::BTreeSet;
+
+    use super::{
+        AppIcon, AppId, FUTURE_SYNC_DOMAINS, SyncPrivacyClass, app_for_sync_domain, default_apps,
+    };
 
     #[test]
     fn default_apps_start_with_web() {
@@ -216,8 +212,37 @@ mod tests {
             Some(true)
         );
         assert_eq!(
-            app_for_sync_domain("settings").map(|app| app.sync.default_enabled),
-            Some(true)
+            app_for_sync_domain("bookmarks").map(|app| app.id),
+            Some(AppId::Web)
         );
+        assert_eq!(
+            app_for_sync_domain("settings").map(|app| app.id),
+            Some(AppId::Settings)
+        );
+    }
+
+    #[test]
+    fn visible_rail_apps_own_distinct_sync_domains() {
+        let mut domains = BTreeSet::new();
+        for app in default_apps() {
+            assert!(
+                domains.insert(app.sync.domain),
+                "duplicate visible rail app sync domain: {}",
+                app.sync.domain
+            );
+        }
+    }
+
+    #[test]
+    fn future_sync_domains_do_not_shadow_visible_rail_apps() {
+        let rail_domains = default_apps()
+            .iter()
+            .map(|app| app.sync.domain)
+            .collect::<BTreeSet<_>>();
+
+        for domain in FUTURE_SYNC_DOMAINS {
+            assert!(!rail_domains.contains(domain.domain));
+        }
+        assert_eq!(app_for_sync_domain("storage"), None);
     }
 }
