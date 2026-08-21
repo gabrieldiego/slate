@@ -779,6 +779,10 @@ Current baseline:
 - Membership-aware runner and scheduler runs now reject oversized local
   membership history from that preview before pulling remote membership,
   publishing settings objects, or advancing any profile-sync roots.
+- `slate-settings.db` now enforces the first membership epoch-ordering rule:
+  after a newer membership operation for a target device has applied, a
+  different older-epoch operation for that device is rejected and not stored.
+  Exact replay of an already-applied record remains idempotent.
 
 Next:
 

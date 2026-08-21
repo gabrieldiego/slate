@@ -256,8 +256,10 @@ opening rejects signed payloads from distrusted devices, and local credential
 preflight refuses to publish with a distrusted local signer. This is a local
 revocation guard for current fixtures and scheduler policy. The local
 membership apply helper can now distrust a target device key from a signed
-revocation record, while full account-level revocation still needs richer epoch
-transition and multi-approval policy.
+revocation record, and it rejects a different older-epoch membership operation
+for that target device once a newer operation has already applied. Exact record
+replay remains idempotent. Full account-level revocation still needs richer
+epoch transition and multi-approval policy.
 
 The active-key pull path also exposes an idempotent root-status helper for sync
 polling. It resolves the published root first and reports missing roots,
