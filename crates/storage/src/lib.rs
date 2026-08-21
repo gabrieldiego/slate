@@ -5442,6 +5442,104 @@ fn setting_change_wins(
     )
 }
 
+fn apply_sync_setting_materialized_view_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    change: &IncomingSyncSettingText,
+    now: i64,
+) -> Result<(), rusqlite::Error> {
+    if change.profile == DEFAULT_PROFILE_ID && change.domain == SYNC_DOMAIN_SETTINGS {
+        transaction.execute(
+            "INSERT INTO settings (key, value, updated_at)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(key) DO UPDATE SET
+               value = excluded.value,
+               updated_at = excluded.updated_at",
+            params![change.key.as_str(), change.value.as_str(), now],
+        )?;
+    }
+
+    if change.domain == SYNC_DOMAIN_BOOKMARKS
+        && change
+            .key
+            .as_str()
+            .starts_with(BOOKMARK_HOME_SLOT_SYNC_KEY_PREFIX)
+    {
+        let payload = bookmark_home_slot_sync_payload_from_text(change.value.as_str())?;
+        let expected_key = bookmark_home_slot_sync_key(payload.position);
+        if change.key != expected_key {
+            return Err(invalid_bookmark_slot_sync_payload_error(format!(
+                "bookmark slot sync key {} does not match payload position {}",
+                change.key, payload.position
+            )));
+        }
+        apply_bookmark_slot_sync_payload_in_transaction(
+            transaction,
+            change.profile.as_str(),
+            &payload,
+            now,
+        )?;
+    }
+
+    Ok(())
+}
+
+fn bookmark_home_slot_sync_payload_from_text(
+    value: &str,
+) -> Result<BookmarkSlotSyncPayload, rusqlite::Error> {
+    serde_json::from_str(value).map_err(|source| {
+        rusqlite::Error::FromSqlConversionFailure(3, Type::Text, Box::new(source))
+    })
+}
+
+fn invalid_bookmark_slot_sync_payload_error(message: String) -> rusqlite::Error {
+    rusqlite::Error::FromSqlConversionFailure(
+        3,
+        Type::Text,
+        Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            message,
+        )),
+    )
+}
+
+fn apply_bookmark_slot_sync_payload_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    payload: &BookmarkSlotSyncPayload,
+    now: i64,
+) -> Result<(), rusqlite::Error> {
+    transaction.execute(
+        "DELETE FROM bookmarks
+         WHERE profile = ?1
+           AND (
+             position = ?2
+             OR url = ?3
+             OR (?4 IS NOT NULL AND url = ?4)
+           )",
+        params![
+            profile,
+            payload.position,
+            payload.url.as_str(),
+            payload.replaced_url.as_deref()
+        ],
+    )?;
+    transaction.execute(
+        "INSERT INTO bookmarks
+           (profile, url, title, folder, position, favicon_key, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
+        params![
+            profile,
+            payload.url.as_str(),
+            payload.title.as_deref(),
+            payload.folder.as_deref(),
+            payload.position,
+            payload.favicon_key.as_deref(),
+            now
+        ],
+    )?;
+    Ok(())
+}
+
 fn apply_sync_setting_text_in_transaction(
     transaction: &rusqlite::Transaction<'_>,
     change: &IncomingSyncSettingText,
@@ -5472,16 +5570,7 @@ fn apply_sync_setting_text_in_transaction(
     let should_apply = setting_change_wins(change, existing_winner.as_ref());
 
     if should_apply {
-        if change.profile == DEFAULT_PROFILE_ID && change.domain == SYNC_DOMAIN_SETTINGS {
-            transaction.execute(
-                "INSERT INTO settings (key, value, updated_at)
-                 VALUES (?1, ?2, ?3)
-                 ON CONFLICT(key) DO UPDATE SET
-                   value = excluded.value,
-                   updated_at = excluded.updated_at",
-                params![change.key.as_str(), change.value.as_str(), now],
-            )?;
-        }
+        apply_sync_setting_materialized_view_in_transaction(transaction, change, now)?;
         insert_sync_setting_text_change_in_transaction(
             transaction,
             change.profile.as_str(),
@@ -9148,6 +9237,112 @@ mod tests {
 
         let devices = database.sync_devices(DEFAULT_PROFILE_ID).unwrap();
         assert!(devices.iter().any(|device| device.device_id == "device-b"));
+    }
+
+    #[test]
+    fn incoming_bookmark_slot_change_updates_bookmark_rows() {
+        let database_path = test_dir("incoming-bookmark-slot").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let payload = BookmarkSlotSyncPayload {
+            url: "https://example.com/".to_string(),
+            title: Some("Example".to_string()),
+            folder: None,
+            position: 0,
+            favicon_key: Some("favicon:https://example.com/".to_string()),
+            replaced_url: Some(DEFAULT_HOME_BOOKMARKS[0].url.to_string()),
+        };
+        let incoming = IncomingSyncSettingText::new(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_BOOKMARKS,
+            bookmark_home_slot_sync_key(payload.position),
+            serde_json::to_string(&payload).unwrap(),
+            "device-b",
+            1,
+            20,
+        );
+
+        let applied = database.apply_sync_setting_text(&incoming).unwrap();
+
+        assert_eq!(applied.domain, SYNC_DOMAIN_BOOKMARKS);
+        assert_eq!(applied.entity_key, "home.slot.0");
+        assert!(applied.applied_at.is_some());
+        let bookmarks = database.bookmarks(DEFAULT_PROFILE_ID).unwrap();
+        assert_eq!(bookmarks.len(), DEFAULT_HOME_BOOKMARKS.len());
+        assert_eq!(bookmarks[0].url, "https://example.com/");
+        assert_eq!(bookmarks[0].title.as_deref(), Some("Example"));
+        assert_eq!(bookmarks[0].position, 0);
+        assert_eq!(
+            bookmarks[0].favicon_key.as_deref(),
+            Some("favicon:https://example.com/")
+        );
+        assert_eq!(bookmarks[1].url, DEFAULT_HOME_BOOKMARKS[1].url);
+        let value = database
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_BOOKMARKS, "home.slot.0")
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, applied.payload);
+    }
+
+    #[test]
+    fn incoming_losing_bookmark_slot_change_does_not_replace_winner() {
+        let database_path =
+            test_dir("incoming-bookmark-slot-conflict").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let winning_payload = BookmarkSlotSyncPayload {
+            url: "https://winner.example/".to_string(),
+            title: Some("Winner".to_string()),
+            folder: None,
+            position: 1,
+            favicon_key: None,
+            replaced_url: Some(DEFAULT_HOME_BOOKMARKS[1].url.to_string()),
+        };
+        let losing_payload = BookmarkSlotSyncPayload {
+            url: "https://loser.example/".to_string(),
+            title: Some("Loser".to_string()),
+            folder: None,
+            position: 1,
+            favicon_key: None,
+            replaced_url: Some(DEFAULT_HOME_BOOKMARKS[1].url.to_string()),
+        };
+        let winning = database
+            .apply_sync_setting_text(&IncomingSyncSettingText::new(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_BOOKMARKS,
+                bookmark_home_slot_sync_key(1),
+                serde_json::to_string(&winning_payload).unwrap(),
+                "device-b",
+                2,
+                40,
+            ))
+            .unwrap();
+
+        let losing = database
+            .apply_sync_setting_text(&IncomingSyncSettingText::new(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_BOOKMARKS,
+                bookmark_home_slot_sync_key(1),
+                serde_json::to_string(&losing_payload).unwrap(),
+                "device-c",
+                1,
+                30,
+            ))
+            .unwrap();
+
+        assert!(winning.applied_at.is_some());
+        assert_eq!(losing.applied_at, None);
+        let bookmarks = database.bookmarks(DEFAULT_PROFILE_ID).unwrap();
+        assert_eq!(bookmarks.len(), DEFAULT_HOME_BOOKMARKS.len());
+        let winner = bookmarks
+            .iter()
+            .find(|bookmark| bookmark.position == 1)
+            .expect("winner bookmark slot");
+        assert_eq!(winner.url, "https://winner.example/");
+        assert_eq!(winner.title.as_deref(), Some("Winner"));
+        let value = database
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_BOOKMARKS, "home.slot.1")
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, winning.payload);
     }
 
     #[test]

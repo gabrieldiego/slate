@@ -193,7 +193,8 @@ Current baseline:
 - Home bookmark slot saves now append structured JSON text changes in the
   Bookmarks sync domain. First-run default bookmark seeding still updates only
   local bookmark rows, so new profiles do not publish seed noise as user
-  bookmark changes.
+  bookmark changes. Trusted incoming bookmark-slot changes now materialize into
+  the local bookmark rows during profile-sync apply.
 - Local settings/app-domain publishing now filters outgoing snapshots and tail
   manifests through the enabled app sync-domain table. Disabled domains can
   still be used as local typed state, but they are not published to broadweb

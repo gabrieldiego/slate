@@ -6355,6 +6355,14 @@ mod tests {
             Some("favicon:https://example.com/")
         );
         assert_eq!(bookmark_payload.replaced_url, None);
+        let bookmarks = receiver_database
+            .bookmarks(DEFAULT_PROFILE_ID)
+            .expect("read receiver bookmarks");
+        assert!(bookmarks.iter().any(|bookmark| {
+            bookmark.url == "https://example.com/"
+                && bookmark.title.as_deref() == Some("Example")
+                && bookmark.position == 2
+        }));
 
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
