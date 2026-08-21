@@ -403,6 +403,10 @@ Current baseline:
   the runtime scheduler reject a provider set that has enough fresh peers to
   meet quorum but still contains stale online peers the selected policy does
   not want to tolerate.
+- Settings sync cycle policy can now also cap offline providers. This lets the
+  runtime scheduler reject a provider graph where enough fresh providers remain
+  to meet quorum but too many known devices or availability providers are
+  currently unreachable.
 - Policy-gated settings sync cycles now also check root health after the bounded
   publish/pull attempt. Missing roots can still recover during an initial
   healthy-provider cycle, but the runtime path reports a policy error if the

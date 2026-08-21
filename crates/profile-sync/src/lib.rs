@@ -898,6 +898,7 @@ pub struct SettingsSyncCyclePolicy {
     pub minimum_mutable_root_providers: usize,
     pub minimum_online_retaining_providers: usize,
     pub maximum_stale_online_providers: Option<usize>,
+    pub maximum_offline_providers: Option<usize>,
     pub require_healthy_providers: bool,
     pub require_healthy_roots_after_cycle: bool,
     pub require_healthy_settings_root_after_cycle: bool,
@@ -921,6 +922,7 @@ impl SettingsSyncCyclePolicy {
             minimum_mutable_root_providers: 1,
             minimum_online_retaining_providers,
             maximum_stale_online_providers: None,
+            maximum_offline_providers: None,
             require_healthy_providers: true,
             require_healthy_roots_after_cycle: true,
             require_healthy_settings_root_after_cycle: true,
@@ -950,6 +952,11 @@ impl SettingsSyncCyclePolicy {
 
     pub fn with_maximum_stale_online_providers(mut self, maximum: usize) -> Self {
         self.maximum_stale_online_providers = Some(maximum);
+        self
+    }
+
+    pub fn with_maximum_offline_providers(mut self, maximum: usize) -> Self {
+        self.maximum_offline_providers = Some(maximum);
         self
     }
 
@@ -1023,6 +1030,14 @@ impl SettingsSyncCyclePolicy {
                 "stale online providers",
                 maximum,
                 health.provider_health.stale_online_providers,
+                health,
+            )?;
+        }
+        if let Some(maximum) = self.maximum_offline_providers {
+            self.check_provider_maximum(
+                "offline providers",
+                maximum,
+                health.provider_health.offline_providers,
                 health,
             )?;
         }
@@ -4975,6 +4990,113 @@ mod tests {
         let _ = std::fs::remove_dir_all(first_state_root);
         let _ = std::fs::remove_dir_all(second_state_root);
         let _ = std::fs::remove_dir_all(stale_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_policy_can_reject_offline_providers() {
+        let network = InProcessBroadwebNetwork::new();
+        let fixture = network.profile_sync();
+        let first_state_root = test_state_root("cycle-policy-offline-first");
+        let second_state_root = test_state_root("cycle-policy-offline-second");
+        let offline_state_root = test_state_root("cycle-policy-offline-third");
+        let db_root = test_state_root("cycle-policy-offline-db");
+        let first_daemon = network
+            .daemon_for_device(
+                &first_state_root,
+                ResourceBudget::default(),
+                "runtime-offline-a",
+            )
+            .expect("start first in-process profile-sync daemon");
+        let _second_daemon = network
+            .daemon_for_device(
+                &second_state_root,
+                ResourceBudget::default(),
+                "runtime-offline-b",
+            )
+            .expect("start second in-process profile-sync daemon");
+        let _offline_daemon = network
+            .daemon_for_device(
+                &offline_state_root,
+                ResourceBudget::default(),
+                "runtime-offline-c",
+            )
+            .expect("start offline in-process profile-sync daemon");
+        fixture
+            .set_device_online("runtime-offline-c", false)
+            .expect("mark third provider offline");
+
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-offline-a",
+        )
+        .expect("open local settings database");
+        let profile = "offlineproviderprofile";
+        let signer =
+            ProfileSyncDeviceSigner::generate("runtime-offline-a").expect("generate local signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register local trusted public key");
+        let policy = SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 1)
+            .with_minimum_fresh_online_providers(2)
+            .with_maximum_offline_providers(0);
+
+        let error = BroadwebdSettingsSyncRunner::new(&first_daemon)
+            .settings_sync_cycle_preflight_with_active_key_policy(
+                &database,
+                profile,
+                "settings/latest",
+                &signer,
+                &policy,
+            )
+            .expect_err("strict offline-provider policy should reject offline provider");
+        let ProfileSyncCycleWithHealthError::Policy(
+            ProfileSyncPolicyError::ProviderMaximumExceeded {
+                provider_role,
+                maximum,
+                actual,
+                health,
+            },
+        ) = error
+        else {
+            panic!("expected offline provider policy error, got {error:?}");
+        };
+        assert_eq!(provider_role, "offline providers");
+        assert_eq!(maximum, 0);
+        assert_eq!(actual, 1);
+        assert!(!health.provider_health.degraded);
+        assert_eq!(health.provider_health.fresh_online_providers, 2);
+        assert_eq!(health.provider_health.offline_providers, 1);
+
+        fixture
+            .set_device_online("runtime-offline-c", true)
+            .expect("bring third provider online");
+        let preflight = BroadwebdSettingsSyncRunner::new(&first_daemon)
+            .settings_sync_cycle_preflight_with_active_key_policy(
+                &database,
+                profile,
+                "settings/latest",
+                &signer,
+                &policy,
+            )
+            .expect("online providers satisfy strict offline-provider policy");
+        assert_eq!(
+            preflight
+                .before_health
+                .provider_health
+                .fresh_online_providers,
+            3
+        );
+        assert_eq!(preflight.before_health.provider_health.offline_providers, 0);
+
+        let _ = std::fs::remove_dir_all(first_state_root);
+        let _ = std::fs::remove_dir_all(second_state_root);
+        let _ = std::fs::remove_dir_all(offline_state_root);
         let _ = std::fs::remove_dir_all(db_root);
     }
 

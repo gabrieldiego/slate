@@ -661,9 +661,9 @@ loading credentials or attempting mutable-root writes, while still allowing
 missing settings roots to recover during an initial healthy-provider publish.
 The same policy can require minimum fresh online, object-transfer,
 availability, and mutable-root provider counts, and it can cap stale online
-providers when the scheduler wants stricter freshness. These thresholds are
-Slate scheduler decisions over broadwebd's reported health; broadwebd stays a
-protocol-neutral reporter and fixture host.
+or offline providers when the scheduler wants stricter freshness and
+availability. These thresholds are Slate scheduler decisions over broadwebd's
+reported health; broadwebd stays a protocol-neutral reporter and fixture host.
 After the bounded cycle runs, the policy-gated path checks whether the settings
 root and the local device-head root satisfy the configured online
 retaining-provider quorum. This lets a first publish recover from missing roots
