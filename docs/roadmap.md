@@ -243,6 +243,11 @@ Current baseline:
   observes no per-device-head updates, applies competing `settings/latest`
   candidates through broadwebd, and reports that shared-root candidate work in
   the cycle result.
+- Verified settings manifest application now preserves the manifest, snapshot,
+  and tail object ids it consumed. The shared-root cycle exposes those received
+  candidate object ids so an availability provider can retain the verified
+  objects after a merge and improve shared-root quorum without gaining profile
+  write authority.
 - The settings sync cycle now validates caller-supplied credentials against
   `slate-settings.db` before touching broadwebd: the requested content-key id
   must be the active key epoch, the active epoch must use the supported content

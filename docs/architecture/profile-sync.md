@@ -493,6 +493,11 @@ shared roots were merged" without adding another transport or polling loop. A
 receive-only candidate merge can recover the shared settings root while still
 leaving the local device-head root missing; strict after-cycle local-head
 health remains a separate policy choice.
+Settings manifest application reports the verified sync object ids it consumed:
+manifest, optional snapshot, and tail changes. The shared-root cycle exposes
+those received candidate object ids, allowing a scheduler to ask availability
+providers to retain merged roots and their dependencies after receive-side
+verification while keeping those providers outside mutable-root authority.
 Before the cycle touches broadwebd it validates the caller-supplied credentials
 against local profile state: `key_id` must match the active content-key epoch in
 `slate-settings.db`, that epoch must use the supported content encryption

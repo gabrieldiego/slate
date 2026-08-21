@@ -789,6 +789,23 @@ impl SettingsSyncCycleWithSharedRootCandidatesRun {
             | ProfileSyncSettingsCandidatePullApplyStatus::Unchanged { .. } => 0,
         }
     }
+
+    pub fn shared_root_candidate_object_ids(&self) -> Vec<String> {
+        let mut object_ids = Vec::new();
+        let mut seen = BTreeSet::new();
+        if let ProfileSyncSettingsCandidatePullApplyStatus::Applied(applications) =
+            &self.shared_root_candidates
+        {
+            for application in applications {
+                extend_unique_object_ids(
+                    &mut object_ids,
+                    &mut seen,
+                    application.application.sync_object_ids.clone(),
+                );
+            }
+        }
+        object_ids
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1596,7 +1613,7 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
         })
     }
 
-    pub fn retain_published_objects(
+    pub fn retain_profile_sync_objects(
         &self,
         profile: &str,
         object_ids: &[String],
@@ -1609,12 +1626,20 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
         Ok(statuses)
     }
 
+    pub fn retain_published_objects(
+        &self,
+        profile: &str,
+        object_ids: &[String],
+    ) -> Result<Vec<BroadwebdProfileSyncRetentionStatus>, BroadwebdError> {
+        self.retain_profile_sync_objects(profile, object_ids)
+    }
+
     pub fn retain_settings_sync_cycle_objects(
         &self,
         cycle: &SettingsSyncCycleRun,
     ) -> Result<Vec<BroadwebdProfileSyncRetentionStatus>, BroadwebdError> {
         let object_ids = cycle.published_object_ids();
-        self.retain_published_objects(cycle.profile.as_str(), object_ids.as_slice())
+        self.retain_profile_sync_objects(cycle.profile.as_str(), object_ids.as_slice())
     }
 
     pub fn publish_root(
@@ -3594,6 +3619,7 @@ mod tests {
         let first_state_root = test_state_root("cycle-candidate-first");
         let second_state_root = test_state_root("cycle-candidate-second");
         let receiver_state_root = test_state_root("cycle-candidate-receiver");
+        let provider_state_root = test_state_root("cycle-candidate-provider");
         let first_db_root = test_state_root("cycle-candidate-first-db");
         let second_db_root = test_state_root("cycle-candidate-second-db");
         let receiver_db_root = test_state_root("cycle-candidate-receiver-db");
@@ -3618,6 +3644,13 @@ mod tests {
                 "runtime-cycle-candidate-c",
             )
             .expect("start candidate receiver daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "runtime-cycle-candidate-pinner",
+            )
+            .expect("start candidate availability provider daemon");
         let first_database = SlateProfileDatabase::open_resolved_with_device_id(
             first_db_root.join(DEFAULT_DATABASE_FILE_NAME),
             "runtime-cycle-candidate-a",
@@ -3720,6 +3753,16 @@ mod tests {
                 second_publication.manifest_object_id.as_str(),
             ]
         );
+        let shared_object_ids = run.shared_root_candidate_object_ids();
+        assert_eq!(
+            shared_object_ids,
+            vec![
+                first_publication.manifest_object_id.clone(),
+                first_publication.tail_change_object_ids[0].clone(),
+                second_publication.manifest_object_id.clone(),
+                second_publication.tail_change_object_ids[0].clone(),
+            ]
+        );
         assert!(!run.after_health.settings_root_health.degraded);
         assert!(run.after_health.local_device_head_root_health.degraded);
         assert_eq!(
@@ -3738,6 +3781,17 @@ mod tests {
                 .object_id,
             second_publication.manifest_object_id.as_str()
         );
+        let retained = BroadwebdProfileSyncPublisher::new(&provider_daemon)
+            .retain_profile_sync_objects(profile, shared_object_ids.as_slice())
+            .expect("availability provider retains received candidate objects");
+        assert_eq!(retained.len(), shared_object_ids.len());
+        assert!(retained.iter().all(|status| status.retained));
+        assert!(retained.iter().all(|status| status.available));
+        let retained_shared_root_health = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
+            .profile_sync_root_health(profile, settings_root_id, 2)
+            .expect("read retained shared-root health");
+        assert!(!retained_shared_root_health.degraded);
+        assert_eq!(retained_shared_root_health.online_retaining_providers, 2);
 
         let unchanged = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
             .run_settings_sync_cycle_with_active_key_policy_and_shared_root_candidates(
@@ -3762,6 +3816,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(first_state_root);
         let _ = std::fs::remove_dir_all(second_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
         let _ = std::fs::remove_dir_all(first_db_root);
         let _ = std::fs::remove_dir_all(second_db_root);
         let _ = std::fs::remove_dir_all(receiver_db_root);

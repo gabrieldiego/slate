@@ -1852,6 +1852,7 @@ pub struct ProfileSyncSettingsManifestApplication {
     pub profile: String,
     pub root_id: String,
     pub manifest_object_id: String,
+    pub sync_object_ids: Vec<String>,
     pub snapshot: Option<SyncSnapshotRecord>,
     pub snapshot_changes: Vec<SyncChangeRecord>,
     pub tail_changes: Vec<SyncChangeRecord>,
@@ -3307,6 +3308,18 @@ impl SlateProfileDatabase {
     ) -> Result<ProfileSyncSettingsManifestApplication, StorageError> {
         validate_settings_manifest_application(manifest, snapshot, tail_changes)?;
 
+        let mut sync_object_ids =
+            Vec::with_capacity(1 + snapshot.iter().count() + tail_changes.len());
+        sync_object_ids.push(manifest_object_id.to_string());
+        if let Some(snapshot) = snapshot {
+            sync_object_ids.push(snapshot.object_id.clone());
+        }
+        sync_object_ids.extend(
+            tail_changes
+                .iter()
+                .map(|tail_change| tail_change.object_id.clone()),
+        );
+
         let mut snapshot_record = None;
         let mut snapshot_changes = Vec::new();
         if let Some(snapshot) = snapshot {
@@ -3335,6 +3348,7 @@ impl SlateProfileDatabase {
             profile: manifest.profile.clone(),
             root_id: manifest.root_id.clone(),
             manifest_object_id: manifest_object_id.to_string(),
+            sync_object_ids,
             snapshot: snapshot_record,
             snapshot_changes,
             tail_changes: applied_tail_changes,
@@ -9221,6 +9235,14 @@ mod tests {
         assert_eq!(applied.profile, DEFAULT_PROFILE_ID);
         assert_eq!(applied.root_id, "settings/latest");
         assert_eq!(applied.manifest_object_id, "manifest-object-1");
+        assert_eq!(
+            applied.sync_object_ids,
+            vec![
+                "manifest-object-1".to_string(),
+                "snapshot-object-1".to_string(),
+                "tail-object-1".to_string(),
+            ]
+        );
         assert_eq!(
             applied
                 .snapshot
