@@ -1615,6 +1615,16 @@ pub struct SettingsSyncStoredRetentionProviderPlan {
 pub struct SettingsSyncStoredRetentionProviderEndpoint {
     pub provider_id: String,
     pub endpoint_ref: Option<String>,
+    pub endpoint_status: SettingsSyncStoredProviderEndpointStatus,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SettingsSyncStoredProviderEndpointStatus {
+    Missing,
+    InProcessFixture,
+    Multiaddr,
+    DeferredProtocol,
+    Unsupported,
 }
 
 impl SettingsSyncStoredRetentionProviderPlan {
@@ -1660,6 +1670,29 @@ impl SettingsSyncStoredRetentionProviderPlan {
 
     pub fn degraded_before(&self) -> bool {
         self.cycle.degraded_before()
+    }
+
+    pub fn in_process_fixture_endpoint_provider_ids(&self) -> Vec<String> {
+        self.endpoint_provider_ids_with_status(
+            SettingsSyncStoredProviderEndpointStatus::InProcessFixture,
+        )
+    }
+
+    pub fn unsupported_endpoint_provider_ids(&self) -> Vec<String> {
+        self.endpoint_provider_ids_with_status(
+            SettingsSyncStoredProviderEndpointStatus::Unsupported,
+        )
+    }
+
+    fn endpoint_provider_ids_with_status(
+        &self,
+        endpoint_status: SettingsSyncStoredProviderEndpointStatus,
+    ) -> Vec<String> {
+        self.enabled_retention_provider_endpoints
+            .iter()
+            .filter(|endpoint| endpoint.endpoint_status == endpoint_status)
+            .map(|endpoint| endpoint.provider_id.clone())
+            .collect()
     }
 }
 
@@ -1910,6 +1943,10 @@ fn select_stored_retention_provider_ids(
         }
         enabled_retention_provider_endpoints.push(SettingsSyncStoredRetentionProviderEndpoint {
             provider_id: provider.provider_id.clone(),
+            endpoint_status: classify_stored_provider_endpoint(
+                provider.provider_id.as_str(),
+                provider.endpoint_ref.as_deref(),
+            ),
             endpoint_ref: provider.endpoint_ref,
         });
         enabled_retention_provider_ids.push(provider.provider_id);
@@ -1989,6 +2026,64 @@ fn stored_provider_endpoint_matches_handle(
         return true;
     };
     handle_endpoint_ref == Some(stored_endpoint_ref)
+}
+
+fn classify_stored_provider_endpoint(
+    provider_id: &str,
+    endpoint_ref: Option<&str>,
+) -> SettingsSyncStoredProviderEndpointStatus {
+    let Some(endpoint_ref) = endpoint_ref
+        .map(str::trim)
+        .filter(|endpoint| !endpoint.is_empty())
+    else {
+        return SettingsSyncStoredProviderEndpointStatus::Missing;
+    };
+
+    if endpoint_ref.strip_prefix("fixture:") == Some(provider_id) {
+        return SettingsSyncStoredProviderEndpointStatus::InProcessFixture;
+    }
+    if endpoint_ref.starts_with("fixture:") {
+        return SettingsSyncStoredProviderEndpointStatus::Unsupported;
+    }
+    if is_multiaddr_like_endpoint(endpoint_ref) {
+        return SettingsSyncStoredProviderEndpointStatus::Multiaddr;
+    }
+    if is_deferred_protocol_endpoint(endpoint_ref) {
+        return SettingsSyncStoredProviderEndpointStatus::DeferredProtocol;
+    }
+
+    SettingsSyncStoredProviderEndpointStatus::Unsupported
+}
+
+fn is_deferred_protocol_endpoint(endpoint_ref: &str) -> bool {
+    ["provider:", "iroh-node:"].iter().any(|prefix| {
+        endpoint_ref
+            .strip_prefix(prefix)
+            .is_some_and(is_endpoint_token)
+    })
+}
+
+fn is_multiaddr_like_endpoint(endpoint_ref: &str) -> bool {
+    if !endpoint_ref.starts_with('/') {
+        return false;
+    }
+    let mut segment_count = 0usize;
+    for segment in endpoint_ref.split('/').skip(1) {
+        if !is_endpoint_token(segment) {
+            return false;
+        }
+        segment_count += 1;
+    }
+    segment_count >= 2
+}
+
+fn is_endpoint_token(token: &str) -> bool {
+    !token.is_empty()
+        && token.len() <= 512
+        && token.chars().all(|character| {
+            character.is_ascii_alphanumeric()
+                || matches!(character, '-' | '_' | '.' | ':' | '~' | '%' | '+' | '=')
+        })
 }
 
 #[derive(Clone, Copy)]
@@ -4773,7 +4868,8 @@ mod tests {
         ProfileSyncMembershipLogPublicationPlanStatus, ProfileSyncMembershipLogPullStatus,
         ProfileSyncMembershipRecordPullStatus, ProfileSyncPolicyError, ProfileSyncPublishError,
         ProfileSyncReceiveError, SettingsSyncCyclePolicy, SettingsSyncRetentionProviderHandle,
-        SettingsSyncRuntimeSecrets, SettingsSyncSchedulerConfig, settings_device_head_root_id,
+        SettingsSyncRuntimeSecrets, SettingsSyncSchedulerConfig,
+        SettingsSyncStoredProviderEndpointStatus, settings_device_head_root_id,
         sync_membership_record_root_id,
     };
     use slate_broadwebd::{
@@ -4861,6 +4957,48 @@ mod tests {
             pinning_policy: Some("auto".to_string()),
             enabled,
         }
+    }
+
+    #[test]
+    fn stored_provider_endpoint_classification_keeps_fixtures_socketless() {
+        assert_eq!(
+            super::classify_stored_provider_endpoint("provider-a", Some("fixture:provider-a")),
+            SettingsSyncStoredProviderEndpointStatus::InProcessFixture
+        );
+        assert_eq!(
+            super::classify_stored_provider_endpoint("provider-a", Some("fixture:provider-b")),
+            SettingsSyncStoredProviderEndpointStatus::Unsupported
+        );
+        assert_eq!(
+            super::classify_stored_provider_endpoint("provider-a", Some("http://127.0.0.1:5001")),
+            SettingsSyncStoredProviderEndpointStatus::Unsupported
+        );
+        assert_eq!(
+            super::classify_stored_provider_endpoint("provider-a", Some("https://localhost:5001")),
+            SettingsSyncStoredProviderEndpointStatus::Unsupported
+        );
+        assert_eq!(
+            super::classify_stored_provider_endpoint(
+                "provider-a",
+                Some("/dnsaddr/home.example.test/p2p/provider-a")
+            ),
+            SettingsSyncStoredProviderEndpointStatus::Multiaddr
+        );
+        assert_eq!(
+            super::classify_stored_provider_endpoint("provider-a", Some("iroh-node:provider-a")),
+            SettingsSyncStoredProviderEndpointStatus::DeferredProtocol
+        );
+        assert_eq!(
+            super::classify_stored_provider_endpoint(
+                "provider-a",
+                Some("provider:contracted-pinning")
+            ),
+            SettingsSyncStoredProviderEndpointStatus::DeferredProtocol
+        );
+        assert_eq!(
+            super::classify_stored_provider_endpoint("provider-a", None),
+            SettingsSyncStoredProviderEndpointStatus::Missing
+        );
     }
 
     #[test]
@@ -9380,6 +9518,21 @@ mod tests {
         assert_eq!(plan.stored_provider_count, 7);
         assert_eq!(plan.retention_candidate_count(), 2);
         assert_eq!(plan.enabled_retention_provider_count(), 5);
+        let mut fixture_endpoint_provider_ids = plan.in_process_fixture_endpoint_provider_ids();
+        fixture_endpoint_provider_ids.sort();
+        let mut expected_fixture_endpoint_provider_ids = vec![
+            selected_provider_id.to_string(),
+            stale_provider_id.to_string(),
+            offline_provider_id.to_string(),
+            no_transfer_provider_id.to_string(),
+            "stored-provider-undiscovered".to_string(),
+        ];
+        expected_fixture_endpoint_provider_ids.sort();
+        assert_eq!(
+            fixture_endpoint_provider_ids,
+            expected_fixture_endpoint_provider_ids
+        );
+        assert!(plan.unsupported_endpoint_provider_ids().is_empty());
         assert_eq!(
             plan.cycle.selected_retention_provider_ids,
             vec![selected_provider_id.to_string()]

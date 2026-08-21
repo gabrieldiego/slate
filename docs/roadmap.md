@@ -483,6 +483,11 @@ Current baseline:
   mismatches are excluded from the materialized provider quorum, preventing a
   provider-id match from silently using the wrong local fixture or future
   protocol endpoint.
+- Stored-provider plans now classify endpoint refs before runtime
+  materialization. Matching `fixture:<provider-id>` refs are marked as
+  in-process fixture endpoints, multiaddr and deferred protocol refs are
+  tracked separately, and loopback-shaped `http://` or `https://` refs are
+  unsupported so fixture tests cannot silently open sockets or rely on DNS.
 - The membership-aware scheduler now has the same stored-provider path. Its
   read-only plan keeps the existing no-mutation boundary and will not pull
   membership records to satisfy credentials, while the runtime path pulls the
