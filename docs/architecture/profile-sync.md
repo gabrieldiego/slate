@@ -595,6 +595,9 @@ membership-unaware for now because pulling membership mutates
 The receive fixture also covers a tampered index entry that points at a
 different signed record object. That path fails before `slate-settings.db`
 stores the membership-log root or writes any trusted device key.
+Membership logs are capped at a fixed record count before entry fetch or apply,
+so oversized indexes fail before they can force unbounded fixture object reads
+or database mutations.
 The broadwebd source bridge can also run the receive side for one trusted
 device head: resolve and verify the head, record the verified head root in
 `slate-settings.db`, apply the referenced settings manifest when the head is

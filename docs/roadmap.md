@@ -764,6 +764,8 @@ Current baseline:
   membership-unaware until membership discovery has a non-mutating preview mode.
 - Membership-log receive fixtures now reject mismatched index entries before
   advancing the stored log root or writing trusted device keys.
+- Membership logs now have a fixed record-count cap enforced before entry
+  fetch or apply, with socketless fixture coverage for oversized indexes.
 
 Next:
 

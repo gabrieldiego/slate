@@ -39,6 +39,7 @@ use std::collections::BTreeSet;
 
 pub const PROFILE_SYNC_MEMBERSHIP_LOG_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID: &str = "account/membership/log";
+pub const PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS: usize = 512;
 
 #[derive(Clone, Copy)]
 pub struct BroadwebdProfileSyncObjectSource<'a> {
@@ -3743,6 +3744,13 @@ fn validate_profile_sync_membership_log(
             log.profile
         )));
     }
+    if log.records.len() > PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS {
+        return Err(ProfileSyncReceiveError::InvalidMembershipLog(format!(
+            "too many records: max {}, got {}",
+            PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS,
+            log.records.len()
+        )));
+    }
 
     let mut seen_record_ids = BTreeSet::new();
     let mut previous_key: Option<(i64, String)> = None;
@@ -4818,6 +4826,80 @@ mod tests {
             receiver_database
                 .profile_sync_root(DEFAULT_PROFILE_ID, PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID)
                 .expect("read membership log root")
+                .is_none()
+        );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_membership_log_rejects_oversized_indexes_without_loopback() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("membership-log-oversized-publisher");
+        let receiver_state_root = test_state_root("membership-log-oversized-receiver");
+        let receiver_db_root = test_state_root("membership-log-oversized-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "membership-log-oversized-publisher",
+            )
+            .expect("start in-process oversized membership log publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "membership-log-oversized-receiver",
+            )
+            .expect("start in-process oversized membership log receiver daemon");
+        let receiver_database =
+            SlateProfileDatabase::open_resolved(receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME))
+                .expect("open oversized membership log receiver database");
+        let records = (0..=super::PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS)
+            .map(|index| {
+                let record_id = format!("epoch-1-enroll-oversized-{index}");
+                ProfileSyncMembershipLogEntry {
+                    record_id: record_id.clone(),
+                    root_id: sync_membership_record_root_id(record_id.as_str()),
+                    object_id: format!("missing-membership-object-{index}"),
+                    membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                    record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+                    device_id: format!("oversized-device-{index}"),
+                    signer_device_id: "oversized-signer".to_string(),
+                }
+            })
+            .collect::<Vec<_>>();
+        let log = ProfileSyncMembershipLog {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            schema_version: super::PROFILE_SYNC_MEMBERSHIP_LOG_SCHEMA_VERSION,
+            records,
+        };
+        BroadwebdProfileSyncPublisher::new(&publisher_daemon)
+            .put_retained_root(
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                serde_json::to_vec(&log).expect("encode oversized membership log"),
+            )
+            .expect("publish oversized membership log");
+
+        let error = BroadwebdProfileSyncObjectSource::new(&receiver_daemon)
+            .pull_and_apply_sync_account_membership_log_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            )
+            .expect_err("oversized membership log should be rejected");
+        assert!(matches!(
+            error,
+            ProfileSyncReceiveError::InvalidMembershipLog(reason)
+                if reason.contains("too many records")
+        ));
+        assert!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID)
+                .expect("read oversized membership log root")
                 .is_none()
         );
 
