@@ -198,6 +198,11 @@ Current baseline:
 - The local profile-sync fixture can now mark simulated devices offline and
   online, allowing tests to verify unavailable devices fail closed without
   touching sockets, DNS, Tor, IPFS, or external relays.
+- broadwebd's local profile-sync fixture now registers simulated providers and
+  tracks retained encrypted objects per provider. Provider discovery reports
+  online in-process providers with their own retained-object counts, so tests
+  can model availability loss without implying that one device retaining bytes
+  makes every device a pinning provider.
 - Storage now provides `EncryptedSyncObject` envelopes using ChaCha20-Poly1305
   AEAD through `ring`, and the local two-device fixture moves encrypted setting
   change payloads through broadwebd instead of plaintext JSON.

@@ -22,9 +22,16 @@ pub struct ProfileSyncService {
 #[derive(Clone, Debug, Default)]
 struct ProfileSyncStore {
     objects: BTreeMap<(String, String), Vec<u8>>,
-    retained: BTreeSet<(String, String)>,
+    retained: BTreeSet<(String, String, String)>,
     roots: BTreeMap<(String, String), String>,
+    providers: BTreeMap<String, ProfileSyncProviderState>,
     offline_providers: BTreeSet<String>,
+}
+
+#[derive(Clone, Debug)]
+struct ProfileSyncProviderState {
+    provider_kind: String,
+    privacy_boundary: String,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -49,11 +56,23 @@ impl ProfileSyncService {
     }
 
     fn local_fixture(store: Arc<Mutex<ProfileSyncStore>>, provider_id: impl Into<String>) -> Self {
+        let provider_id = provider_id.into();
+        let provider_kind = "local-fixture".to_string();
+        let privacy_boundary = LOCAL_PRIVACY_BOUNDARY.to_string();
+        if let Ok(mut store) = store.lock() {
+            store.providers.insert(
+                provider_id.clone(),
+                ProfileSyncProviderState {
+                    provider_kind: provider_kind.clone(),
+                    privacy_boundary: privacy_boundary.clone(),
+                },
+            );
+        }
         Self {
             store,
-            provider_id: provider_id.into(),
-            provider_kind: "local-fixture".to_string(),
-            privacy_boundary: LOCAL_PRIVACY_BOUNDARY.to_string(),
+            provider_id,
+            provider_kind,
+            privacy_boundary,
         }
     }
 
@@ -123,9 +142,11 @@ impl ProfileSyncService {
                 request.object_id
             )));
         }
-        store
-            .retained
-            .insert((request.profile, request.object_id.clone()));
+        store.retained.insert((
+            self.provider_id.clone(),
+            request.profile,
+            request.object_id.clone(),
+        ));
         Ok(ProfileSyncResponse::RetainObject {
             object_id: request.object_id,
             retained: true,
@@ -138,9 +159,11 @@ impl ProfileSyncService {
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
         let mut store = self.store()?;
-        store
-            .retained
-            .remove(&(request.profile, request.object_id.clone()));
+        store.retained.remove(&(
+            self.provider_id.clone(),
+            request.profile,
+            request.object_id.clone(),
+        ));
         Ok(ProfileSyncResponse::ReleaseObject {
             object_id: request.object_id,
             retained: false,
@@ -156,8 +179,10 @@ impl ProfileSyncService {
         let object_ids = store
             .retained
             .iter()
-            .filter(|(profile, _)| profile == &request.profile)
-            .map(|(_, object_id)| object_id.clone())
+            .filter(|(provider_id, profile, _)| {
+                provider_id == &self.provider_id && profile == &request.profile
+            })
+            .map(|(_, _, object_id)| object_id.clone())
             .collect();
         Ok(ProfileSyncResponse::RetainedObjects { object_ids })
     }
@@ -168,9 +193,14 @@ impl ProfileSyncService {
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
         let store = self.store()?;
-        let key = (request.profile, request.object_id.clone());
-        let retained = store.retained.contains(&key);
-        let available = store.objects.contains_key(&key);
+        let object_key = (request.profile.clone(), request.object_id.clone());
+        let retained_key = (
+            self.provider_id.clone(),
+            request.profile,
+            request.object_id.clone(),
+        );
+        let retained = store.retained.contains(&retained_key);
+        let available = store.objects.contains_key(&object_key);
         Ok(ProfileSyncResponse::RetainedObjectStatus {
             object_id: request.object_id,
             retained,
@@ -224,19 +254,31 @@ impl ProfileSyncService {
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
         let store = self.store()?;
-        let retained_objects = store
-            .retained
-            .iter()
-            .filter(|(profile, _)| profile == &request.profile)
-            .count();
-        Ok(ProfileSyncResponse::Providers {
-            providers: vec![ProfileSyncProviderRecord {
+        let providers = if store.providers.is_empty() {
+            vec![ProfileSyncProviderRecord {
                 provider_id: self.provider_id.clone(),
                 provider_kind: self.provider_kind.clone(),
                 privacy_boundary: self.privacy_boundary.clone(),
-                retained_objects,
-            }],
-        })
+                retained_objects: retained_object_count(
+                    &store,
+                    &self.provider_id,
+                    &request.profile,
+                ),
+            }]
+        } else {
+            store
+                .providers
+                .iter()
+                .filter(|(provider_id, _)| !store.offline_providers.contains(provider_id.as_str()))
+                .map(|(provider_id, state)| ProfileSyncProviderRecord {
+                    provider_id: provider_id.clone(),
+                    provider_kind: state.provider_kind.clone(),
+                    privacy_boundary: state.privacy_boundary.clone(),
+                    retained_objects: retained_object_count(&store, provider_id, &request.profile),
+                })
+                .collect()
+        };
+        Ok(ProfileSyncResponse::Providers { providers })
     }
 
     fn store(&self) -> Result<std::sync::MutexGuard<'_, ProfileSyncStore>, BroadwebdError> {
@@ -344,6 +386,16 @@ fn validate_object_budget(size: usize, budget: &ResourceBudget) -> Result<(), Br
     }
 }
 
+fn retained_object_count(store: &ProfileSyncStore, provider_id: &str, profile: &str) -> usize {
+    store
+        .retained
+        .iter()
+        .filter(|(retained_provider_id, retained_profile, _)| {
+            retained_provider_id == provider_id && retained_profile == profile
+        })
+        .count()
+}
+
 fn local_fixture_provider_id(device_id: impl AsRef<str>) -> String {
     format!("local-fixture-device-{}", device_id.as_ref())
 }
@@ -361,9 +413,9 @@ fn local_object_id(bytes: &[u8]) -> String {
 mod tests {
     use super::{LocalProfileSyncFixture, local_object_id};
     use crate::{
-        BroadwebdError, PluginRegistry, ProfileSyncObjectRequest, ProfileSyncPutObjectRequest,
-        ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootRequest, ProfileSyncRootUpdate,
-        ResourceBudget,
+        BroadwebdError, PluginRegistry, ProfileSyncObjectRequest, ProfileSyncProfileRequest,
+        ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse,
+        ProfileSyncRootRequest, ProfileSyncRootUpdate, ResourceBudget,
     };
 
     #[test]
@@ -444,6 +496,120 @@ mod tests {
             panic!("unexpected get response");
         };
         assert_eq!(bytes, b"encrypted manifest from device a");
+    }
+
+    #[test]
+    fn local_fixture_discovers_online_providers_and_scopes_retention() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut device_a = PluginRegistry::new();
+        let mut device_b = PluginRegistry::new();
+        let mut device_c = PluginRegistry::new();
+        let budget = ResourceBudget::default();
+
+        device_a.register_service(fixture.service_for_device("a"));
+        device_b.register_service(fixture.service_for_device("b"));
+        device_c.register_service(fixture.service_for_device("c"));
+
+        let put = device_a
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"encrypted profile object".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("device a can put object into fixture");
+        let ProfileSyncResponse::PutEncryptedObject { object_id } = put else {
+            panic!("unexpected put response");
+        };
+
+        device_a
+            .profile_sync(
+                ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("device a can retain fixture object");
+
+        let verified_from_b = device_b
+            .profile_sync(
+                ProfileSyncRequest::VerifyRetainedObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("device b can verify fixture object availability");
+        assert_eq!(
+            verified_from_b,
+            ProfileSyncResponse::RetainedObjectStatus {
+                object_id: object_id.clone(),
+                retained: false,
+                available: true,
+            }
+        );
+
+        let retained_by_b = device_b
+            .profile_sync(
+                ProfileSyncRequest::ListRetainedObjects(ProfileSyncProfileRequest::new("default")),
+                &budget,
+            )
+            .expect("device b can list retained objects");
+        assert_eq!(
+            retained_by_b,
+            ProfileSyncResponse::RetainedObjects {
+                object_ids: Vec::new(),
+            }
+        );
+
+        let providers = device_b
+            .profile_sync(
+                ProfileSyncRequest::DiscoverProviders(ProfileSyncProfileRequest::new("default")),
+                &budget,
+            )
+            .expect("device b can discover local fixture providers");
+        let ProfileSyncResponse::Providers { providers } = providers else {
+            panic!("unexpected providers response");
+        };
+        let provider_statuses = providers
+            .iter()
+            .map(|provider| (provider.provider_id.as_str(), provider.retained_objects))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            provider_statuses,
+            vec![
+                ("local-fixture-device-a", 1),
+                ("local-fixture-device-b", 0),
+                ("local-fixture-device-c", 0),
+            ]
+        );
+        assert!(providers.iter().all(|provider| {
+            provider.provider_kind == "local-fixture"
+                && provider.privacy_boundary.contains("no sockets")
+        }));
+
+        fixture
+            .set_device_online("c", false)
+            .expect("mark fixture device c offline");
+        let providers = device_b
+            .profile_sync(
+                ProfileSyncRequest::DiscoverProviders(ProfileSyncProfileRequest::new("default")),
+                &budget,
+            )
+            .expect("device b can rediscover local fixture providers");
+        let ProfileSyncResponse::Providers { providers } = providers else {
+            panic!("unexpected providers response");
+        };
+        let provider_ids = providers
+            .iter()
+            .map(|provider| provider.provider_id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            provider_ids,
+            vec!["local-fixture-device-a", "local-fixture-device-b"]
+        );
     }
 
     #[test]

@@ -357,6 +357,12 @@ Syncthing-like device providers, Tahoe-LAFS-style storage, Tor-reachable home
 daemons, and non-IPFS backends should fit behind the same application service
 contract when they prove useful.
 
+The local fake backend must model provider availability inside the test process.
+Each simulated device registers as a provider, retained objects are scoped to
+that provider, and discovery only reports providers that the fixture currently
+marks online. This lets tests exercise pinning and availability policy without
+loopback sockets, OS DNS, public gateways, Tor, IPFS/IPNS, or external relays.
+
 ## Privacy Boundaries
 
 - Sync must be opt-in per profile.
