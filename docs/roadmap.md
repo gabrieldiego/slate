@@ -228,6 +228,10 @@ Current baseline:
   that uses the latest snapshot and applied settings revisions to identify how
   far a future encrypted snapshot can squash while preserving the configured
   unsquashed tail.
+- Storage now also has a typed `ProfileSyncSettingsSnapshot` payload builder
+  that materializes applied settings values at a target revision with
+  deterministic domain and key ordering, ready to be sealed into encrypted sync
+  objects.
 - IPFS/IPNS is the first concrete backend under consideration, but the product
   goal is protocol-neutral: approved Slate devices should find each other, move
   encrypted sync objects, and optionally use approved providers to keep those
@@ -248,8 +252,9 @@ Next:
   availability providers with no profile write authority.
 - Add Kubo RPC-backed operations for encrypted object add, pin, unpin, pin
   verification, IPNS publish, and IPNS resolve as the first IPFS/IPNS backend.
-- Extend snapshot payloads, sync object metadata, conflict handling, and merge
-  policy beyond the initial settings text merge model.
+- Wire typed settings snapshot payloads into the local profile-sync fixture,
+  then extend snapshot payloads, sync object metadata, conflict handling, and
+  merge policy beyond the initial settings text model.
 - Replace opportunistic chrome polling with a runtime watcher that applies
   externally synced changes through normal browser-core, chrome, routing, and
   privacy update paths instead of raw database replacement.
