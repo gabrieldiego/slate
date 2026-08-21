@@ -273,9 +273,11 @@ Current baseline:
   source-based pull path.
 - `slate-profile-sync` now provides the first reusable runtime bridge from a
   `BroadwebDaemon` to storage's protocol-neutral `ProfileSyncObjectSource`
-  trait. Its local fixture test resolves roots, lists candidates, and fetches
-  encrypted object bytes without pulling browser rendering into the sync-only
-  build path.
+  trait, plus a small publisher for putting encrypted objects, retaining them,
+  publishing mutable roots, and checking retention state. Its local fixture test
+  publishes, resolves, lists candidates, fetches encrypted object bytes, and
+  releases retention without pulling browser rendering into the sync-only build
+  path.
 - `slate-settings.db` can now pull and apply a signed settings manifest in one
   storage call once runtime provides an object source and content key bytes. The
   active trusted helper reads the content-key id and profile-scoped device

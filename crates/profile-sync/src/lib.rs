@@ -2,9 +2,11 @@
 
 use slate_broadwebd::{
     BroadwebDaemon, BroadwebdError, ProfileSyncObjectRequest as BroadwebdProfileSyncObjectRequest,
+    ProfileSyncPutObjectRequest as BroadwebdProfileSyncPutObjectRequest,
     ProfileSyncRequest as BroadwebdProfileSyncRequest,
     ProfileSyncResponse as BroadwebdProfileSyncResponse,
     ProfileSyncRootRequest as BroadwebdProfileSyncRootRequest,
+    ProfileSyncRootUpdate as BroadwebdProfileSyncRootUpdate,
 };
 use slate_storage::{
     ProfileSyncObjectBytes, ProfileSyncObjectSource,
@@ -16,9 +18,144 @@ pub struct BroadwebdProfileSyncObjectSource<'a> {
     daemon: &'a BroadwebDaemon,
 }
 
+#[derive(Clone, Copy)]
+pub struct BroadwebdProfileSyncPublisher<'a> {
+    daemon: &'a BroadwebDaemon,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BroadwebdProfileSyncRetentionStatus {
+    pub object_id: String,
+    pub retained: bool,
+    pub available: bool,
+}
+
 impl<'a> BroadwebdProfileSyncObjectSource<'a> {
     pub fn new(daemon: &'a BroadwebDaemon) -> Self {
         Self { daemon }
+    }
+}
+
+impl<'a> BroadwebdProfileSyncPublisher<'a> {
+    pub fn new(daemon: &'a BroadwebDaemon) -> Self {
+        Self { daemon }
+    }
+
+    pub fn put_encrypted_object(
+        &self,
+        profile: &str,
+        bytes: impl Into<Vec<u8>>,
+    ) -> Result<String, BroadwebdError> {
+        let response =
+            self.daemon
+                .profile_sync(BroadwebdProfileSyncRequest::PutEncryptedObject(
+                    BroadwebdProfileSyncPutObjectRequest::new(profile, bytes),
+                ))?;
+        let BroadwebdProfileSyncResponse::PutEncryptedObject { object_id } = response else {
+            return Err(BroadwebdError::UnsupportedRequest(
+                "profile-sync put object returned a non-put response".to_string(),
+            ));
+        };
+        Ok(object_id)
+    }
+
+    pub fn retain_object(&self, profile: &str, object_id: &str) -> Result<bool, BroadwebdError> {
+        let response = self
+            .daemon
+            .profile_sync(BroadwebdProfileSyncRequest::RetainObject(
+                BroadwebdProfileSyncObjectRequest::new(profile, object_id),
+            ))?;
+        let BroadwebdProfileSyncResponse::RetainObject { retained, .. } = response else {
+            return Err(BroadwebdError::UnsupportedRequest(
+                "profile-sync retain object returned a non-retain response".to_string(),
+            ));
+        };
+        Ok(retained)
+    }
+
+    pub fn release_object(&self, profile: &str, object_id: &str) -> Result<bool, BroadwebdError> {
+        let response = self
+            .daemon
+            .profile_sync(BroadwebdProfileSyncRequest::ReleaseObject(
+                BroadwebdProfileSyncObjectRequest::new(profile, object_id),
+            ))?;
+        let BroadwebdProfileSyncResponse::ReleaseObject { retained, .. } = response else {
+            return Err(BroadwebdError::UnsupportedRequest(
+                "profile-sync release object returned a non-release response".to_string(),
+            ));
+        };
+        Ok(retained)
+    }
+
+    pub fn verify_retained_object(
+        &self,
+        profile: &str,
+        object_id: &str,
+    ) -> Result<BroadwebdProfileSyncRetentionStatus, BroadwebdError> {
+        let response =
+            self.daemon
+                .profile_sync(BroadwebdProfileSyncRequest::VerifyRetainedObject(
+                    BroadwebdProfileSyncObjectRequest::new(profile, object_id),
+                ))?;
+        let BroadwebdProfileSyncResponse::RetainedObjectStatus {
+            object_id,
+            retained,
+            available,
+        } = response
+        else {
+            return Err(BroadwebdError::UnsupportedRequest(
+                "profile-sync verify retained object returned a non-status response".to_string(),
+            ));
+        };
+        Ok(BroadwebdProfileSyncRetentionStatus {
+            object_id,
+            retained,
+            available,
+        })
+    }
+
+    pub fn publish_root(
+        &self,
+        profile: &str,
+        root_id: &str,
+        object_id: &str,
+    ) -> Result<String, BroadwebdError> {
+        let response = self
+            .daemon
+            .profile_sync(BroadwebdProfileSyncRequest::PublishRoot(
+                BroadwebdProfileSyncRootUpdate::new(profile, root_id, object_id),
+            ))?;
+        let BroadwebdProfileSyncResponse::Root {
+            object_id: Some(published_object_id),
+            ..
+        } = response
+        else {
+            return Err(BroadwebdError::UnsupportedRequest(
+                "profile-sync publish root returned a non-root response".to_string(),
+            ));
+        };
+        Ok(published_object_id)
+    }
+
+    pub fn put_retained_object(
+        &self,
+        profile: &str,
+        bytes: impl Into<Vec<u8>>,
+    ) -> Result<String, BroadwebdError> {
+        let object_id = self.put_encrypted_object(profile, bytes)?;
+        self.retain_object(profile, object_id.as_str())?;
+        Ok(object_id)
+    }
+
+    pub fn put_retained_root(
+        &self,
+        profile: &str,
+        root_id: &str,
+        bytes: impl Into<Vec<u8>>,
+    ) -> Result<String, BroadwebdError> {
+        let object_id = self.put_retained_object(profile, bytes)?;
+        self.publish_root(profile, root_id, object_id.as_str())?;
+        Ok(object_id)
     }
 }
 
@@ -91,16 +228,14 @@ impl ProfileSyncObjectSource for BroadwebdProfileSyncObjectSource<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::BroadwebdProfileSyncObjectSource;
+    use super::{BroadwebdProfileSyncObjectSource, BroadwebdProfileSyncPublisher};
     use slate_broadwebd::{
-        BroadwebDaemon, LocalProfileSyncFixture, PluginRegistry, ProfileSyncObjectRequest,
-        ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse,
-        ProfileSyncRootUpdate, ResourceBudget,
+        BroadwebDaemon, LocalProfileSyncFixture, PluginRegistry, ResourceBudget,
     };
     use slate_storage::ProfileSyncObjectSource;
 
     #[test]
-    fn broadwebd_source_reads_fixture_roots_candidates_and_objects() {
+    fn broadwebd_bridge_publishes_and_reads_fixture_objects() {
         let fixture = LocalProfileSyncFixture::new();
         let mut registry = PluginRegistry::new();
         registry.register_service(fixture.service_for_device("runtime-a"));
@@ -109,26 +244,16 @@ mod tests {
             BroadwebDaemon::start_with_registry(&state_root, ResourceBudget::default(), registry)
                 .expect("start local profile-sync daemon");
         let object_bytes = b"encrypted runtime object".to_vec();
-        let put = daemon
-            .profile_sync(ProfileSyncRequest::PutEncryptedObject(
-                ProfileSyncPutObjectRequest::new("default", object_bytes.clone()),
-            ))
-            .expect("put local profile-sync object");
-        let ProfileSyncResponse::PutEncryptedObject { object_id } = put else {
-            panic!("unexpected put response");
-        };
-        daemon
-            .profile_sync(ProfileSyncRequest::RetainObject(
-                ProfileSyncObjectRequest::new("default", object_id.clone()),
-            ))
-            .expect("retain local profile-sync object");
-        daemon
-            .profile_sync(ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
-                "default",
-                "settings/latest",
-                object_id.clone(),
-            )))
-            .expect("publish local profile-sync root");
+        let publisher = BroadwebdProfileSyncPublisher::new(&daemon);
+        let object_id = publisher
+            .put_retained_root("default", "settings/latest", object_bytes.clone())
+            .expect("put, retain, and publish local profile-sync root");
+        let retained = publisher
+            .verify_retained_object("default", object_id.as_str())
+            .expect("verify retained local profile-sync object");
+        assert_eq!(retained.object_id, object_id);
+        assert!(retained.retained);
+        assert!(retained.available);
 
         let source = BroadwebdProfileSyncObjectSource::new(&daemon);
         assert_eq!(
@@ -151,6 +276,18 @@ mod tests {
             .expect("fetch object");
         assert_eq!(fetched.object_id, candidates[0].object_id);
         assert_eq!(fetched.bytes, object_bytes);
+
+        assert!(
+            !publisher
+                .release_object("default", candidates[0].object_id.as_str())
+                .expect("release local profile-sync object")
+        );
+        let released = publisher
+            .verify_retained_object("default", candidates[0].object_id.as_str())
+            .expect("verify released local profile-sync object");
+        assert_eq!(released.object_id, candidates[0].object_id);
+        assert!(!released.retained);
+        assert!(released.available);
 
         let _ = std::fs::remove_dir_all(state_root);
     }

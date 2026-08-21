@@ -405,11 +405,12 @@ daemons, and non-IPFS backends should fit behind the same application service
 contract when they prove useful.
 
 The `slate-profile-sync` crate owns runtime-facing sync glue that depends on
-both broadwebd and storage. Its first adapter implements storage's
-`ProfileSyncObjectSource` trait for a `BroadwebDaemon`, keeping storage
-protocol-neutral and keeping broadwebd independent from storage's encrypted
-object semantics. Sync-only tests should target this crate when possible so
-they do not compile the renderer.
+both broadwebd and storage. Its first adapters implement storage's
+`ProfileSyncObjectSource` trait for a `BroadwebDaemon` and provide a small
+publisher for putting encrypted objects, retaining objects, publishing mutable
+roots, and checking retention state. Storage stays protocol-neutral, broadwebd
+stays independent from storage's encrypted object semantics, and sync-only tests
+should target this crate when possible so they do not compile the renderer.
 
 The local fake backend must model provider availability inside the test process.
 Each simulated device registers as a provider, retained objects are scoped to
