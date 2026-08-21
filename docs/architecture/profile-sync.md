@@ -433,6 +433,11 @@ published snapshot object id back into storage.
 For per-device heads, the bridge signs and publishes storage-owned
 `ProfileSyncDeviceHead` payloads while keeping the head schema and trust checks
 in storage.
+The broadwebd source bridge can also run the receive side for one trusted
+device head: resolve and verify the head, record the verified head root in
+`slate-settings.db`, apply the referenced settings manifest when the head is
+new, and return an unchanged status when the stored head root is already
+current.
 
 The local fake backend must model provider availability inside the test process.
 Each simulated device registers as a provider, retained objects are scoped to

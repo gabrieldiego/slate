@@ -348,6 +348,10 @@ Current baseline:
   manifest membership epoch must match the head epoch, and the manifest must
   include a matching frontier for the head device, sequence, and latest change
   object before it can be consumed.
+- `slate-profile-sync` can now run the broadwebd-backed trusted device-head
+  receive step: resolve and verify a per-device head, record the verified head
+  root in `slate-settings.db`, apply the referenced settings manifest when the
+  head changed, and report unchanged heads without reapplying.
 - The local two-device broadwebd fixture now publishes and pulls a trusted
   signed encrypted device head through an in-process per-device root. The test
   retains the head object on the receiving provider before the publishing
