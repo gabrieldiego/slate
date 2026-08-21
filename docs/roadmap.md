@@ -323,7 +323,11 @@ Current baseline:
   signer secret material, the selected broadwebd daemon, and explicit retention
   provider daemons; it then runs the active-key shared-root candidate cycle,
   hands verified object ids to providers, and returns the same health and
-  retention report used by fixture tests.
+  retention report used by fixture tests. The facade can now also accept
+  provider-id/daemon handles and filter them against preflight's discovered
+  retention-capable providers, letting fixture scheduler tests model provider
+  selection entirely inside `InProcessBroadwebNetwork` without loopback ports or
+  external discovery.
 - The local profile-sync fixture can now mark simulated devices offline and
   online, allowing tests to verify unavailable devices fail closed without
   touching sockets, DNS, Tor, IPFS, or external relays.

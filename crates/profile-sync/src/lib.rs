@@ -860,6 +860,21 @@ fn shared_root_candidate_object_ids(
     object_ids
 }
 
+#[derive(Clone, Copy)]
+pub struct SettingsSyncRetentionProviderHandle<'a> {
+    pub provider_id: &'a str,
+    pub daemon: &'a BroadwebDaemon,
+}
+
+impl<'a> SettingsSyncRetentionProviderHandle<'a> {
+    pub fn new(provider_id: &'a str, daemon: &'a BroadwebDaemon) -> Self {
+        Self {
+            provider_id,
+            daemon,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettingsSyncCyclePreflight {
     pub profile: String,
@@ -1089,6 +1104,31 @@ impl SettingsSyncSchedulerConfig {
             settings_root_id: settings_root_id.into(),
             policy,
         }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncScheduledCycleRun {
+    pub preflight: SettingsSyncCyclePreflight,
+    pub selected_retention_provider_ids: Vec<String>,
+    pub cycle: SettingsSyncCycleWithSharedRootRetentionRun,
+}
+
+impl SettingsSyncScheduledCycleRun {
+    pub fn selected_retention_provider_count(&self) -> usize {
+        self.selected_retention_provider_ids.len()
+    }
+
+    pub fn retained_provider_count(&self) -> usize {
+        self.cycle.retained_provider_count()
+    }
+
+    pub fn degraded_before(&self) -> bool {
+        self.cycle.degraded_before()
+    }
+
+    pub fn degraded_after(&self) -> bool {
+        self.cycle.degraded_after()
     }
 }
 
@@ -1730,6 +1770,56 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
 impl<'a> BroadwebdSettingsSyncScheduler<'a> {
     pub fn new(daemon: &'a BroadwebDaemon) -> Self {
         Self { daemon }
+    }
+
+    pub fn run_once_selecting_retention_providers(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        secrets: SettingsSyncRuntimeSecrets<'_>,
+        retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'_>],
+    ) -> Result<SettingsSyncScheduledCycleRun, ProfileSyncCycleWithHealthError> {
+        let runner = BroadwebdSettingsSyncRunner::new(self.daemon);
+        let preflight = runner.settings_sync_cycle_preflight_with_active_key_policy(
+            database,
+            config.profile.as_str(),
+            config.settings_root_id.as_str(),
+            secrets.signer,
+            &config.policy,
+        )?;
+        let candidate_provider_ids = preflight
+            .retention_provider_candidates
+            .iter()
+            .map(|provider| provider.provider_id.as_str())
+            .collect::<BTreeSet<_>>();
+        let mut seen_selected_provider_ids = BTreeSet::new();
+        let mut selected_retention_provider_ids = Vec::new();
+        let mut selected_retention_provider_daemons = Vec::new();
+        for handle in retention_provider_handles {
+            if !candidate_provider_ids.contains(handle.provider_id)
+                || !seen_selected_provider_ids.insert(handle.provider_id)
+            {
+                continue;
+            }
+            selected_retention_provider_ids.push(handle.provider_id.to_string());
+            selected_retention_provider_daemons.push(handle.daemon);
+        }
+        let cycle = runner
+            .run_settings_sync_cycle_with_active_key_policy_shared_root_candidates_and_retention_providers(
+                database,
+                config.profile.as_str(),
+                config.settings_root_id.as_str(),
+                secrets.content_key,
+                secrets.signer,
+                &config.policy,
+                selected_retention_provider_daemons.as_slice(),
+            )?;
+
+        Ok(SettingsSyncScheduledCycleRun {
+            preflight,
+            selected_retention_provider_ids,
+            cycle,
+        })
     }
 
     pub fn run_once(
@@ -2902,7 +2992,8 @@ mod tests {
         BroadwebdTrustedDeviceHeadSyncStatus, LocalSettingsHeadPublishStatus,
         ProfileSyncCredentialError, ProfileSyncCycleError, ProfileSyncCycleWithHealthError,
         ProfileSyncPolicyError, ProfileSyncReceiveError, SettingsSyncCyclePolicy,
-        SettingsSyncRuntimeSecrets, SettingsSyncSchedulerConfig, settings_device_head_root_id,
+        SettingsSyncRetentionProviderHandle, SettingsSyncRuntimeSecrets,
+        SettingsSyncSchedulerConfig, settings_device_head_root_id,
     };
     use slate_broadwebd::{ResourceBudget, test_fixtures::InProcessBroadwebNetwork};
     use slate_storage::{
@@ -5031,6 +5122,120 @@ mod tests {
         );
         assert_eq!(
             run.after_health
+                .local_device_head_root_health
+                .online_retaining_providers,
+            2
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_scheduler_selects_retention_provider_handles() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("scheduler-select-device");
+        let provider_state_root = test_state_root("scheduler-select-provider");
+        let db_root = test_state_root("scheduler-select-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-select-a",
+            )
+            .expect("start in-process profile-sync scheduler device daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-select-pinner",
+            )
+            .expect("start in-process scheduler availability provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-scheduler-select-a",
+        )
+        .expect("open scheduler local settings database");
+        let profile = "schedulerselectprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([65; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-scheduler-select-a")
+            .expect("generate scheduler local device signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register scheduler local trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write scheduler local setting");
+
+        let config = SettingsSyncSchedulerConfig::new(
+            profile,
+            settings_root_id,
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
+        );
+        let selected_provider_id = "local-fixture-availability-runtime-scheduler-select-pinner";
+        let run = BroadwebdSettingsSyncScheduler::new(&device_daemon)
+            .run_once_selecting_retention_providers(
+                &database,
+                &config,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                &[
+                    SettingsSyncRetentionProviderHandle::new(
+                        "not-a-discovered-provider",
+                        &provider_daemon,
+                    ),
+                    SettingsSyncRetentionProviderHandle::new(
+                        selected_provider_id,
+                        &provider_daemon,
+                    ),
+                    SettingsSyncRetentionProviderHandle::new(
+                        selected_provider_id,
+                        &provider_daemon,
+                    ),
+                ],
+            )
+            .expect("scheduler tick selects discovered retention provider handles");
+
+        assert!(
+            run.preflight
+                .retention_provider_candidates
+                .iter()
+                .any(|provider| {
+                    provider.provider_id == "local-fixture-device-runtime-scheduler-select-a"
+                })
+        );
+        assert!(
+            run.preflight
+                .retention_provider_candidates
+                .iter()
+                .any(|provider| provider.provider_id == selected_provider_id)
+        );
+        assert_eq!(
+            run.selected_retention_provider_ids,
+            vec![selected_provider_id.to_string()]
+        );
+        assert_eq!(run.selected_retention_provider_count(), 1);
+        assert!(run.degraded_before());
+        assert_eq!(run.cycle.cycle.published_step_count(), 1);
+        assert_eq!(run.cycle.retention.len(), 1);
+        assert_eq!(run.retained_provider_count(), 1);
+        assert!(!run.degraded_after());
+        assert_eq!(
+            run.cycle
+                .after_health
+                .settings_root_health
+                .online_retaining_providers,
+            2
+        );
+        assert_eq!(
+            run.cycle
+                .after_health
                 .local_device_head_root_health
                 .online_retaining_providers,
             2

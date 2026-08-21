@@ -609,9 +609,13 @@ The first scheduler facade is deliberately explicit: one caller-triggered tick
 combines a profile/root config, caller-held content key and signer, the local
 broadwebd daemon, and selected retention-provider daemons. It runs the
 active-key shared-root candidate cycle, hands the verified object-id set to the
-selected providers, and returns the health/retention result. Cadence, platform
-key-store loading, enrollment flow, and real provider selection remain separate
-runtime layers.
+selected providers, and returns the health/retention result. A second tick path
+accepts provider-id/daemon handles and filters them against preflight's
+discovered retention-capable providers before retaining objects, so scheduler
+tests can model provider selection through `InProcessBroadwebNetwork` without
+loopback sockets or external discovery. Cadence, platform key-store loading,
+enrollment flow, and real provider materialization remain separate runtime
+layers.
 Object bytes are also provider-held: fetches require at least one online
 provider with the object, and retaining an object copies the bytes into the
 retaining provider's in-process store. Tests can pause object transfer from one
