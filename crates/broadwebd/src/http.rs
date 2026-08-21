@@ -211,7 +211,7 @@ pub enum ProfileSyncRequest {
     ListRootCandidates(ProfileSyncRootRequest),
     DiscoverProviders(ProfileSyncProfileRequest),
     ProviderHealth(ProfileSyncProfileRequest),
-    RootHealth(ProfileSyncRootRequest),
+    RootHealth(ProfileSyncRootHealthRequest),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -276,6 +276,31 @@ impl ProfileSyncRootUpdate {
             profile: profile.into(),
             root_id: root_id.into(),
             object_id: object_id.into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncRootHealthRequest {
+    pub profile: String,
+    pub root_id: String,
+    pub minimum_online_retaining_providers: usize,
+}
+
+impl ProfileSyncRootHealthRequest {
+    pub fn new(profile: impl Into<String>, root_id: impl Into<String>) -> Self {
+        Self::with_minimum_online_retaining_providers(profile, root_id, 1)
+    }
+
+    pub fn with_minimum_online_retaining_providers(
+        profile: impl Into<String>,
+        root_id: impl Into<String>,
+        minimum_online_retaining_providers: usize,
+    ) -> Self {
+        Self {
+            profile: profile.into(),
+            root_id: root_id.into(),
+            minimum_online_retaining_providers,
         }
     }
 }
@@ -376,6 +401,7 @@ pub struct ProfileSyncRootHealth {
     pub latest_object_id: Option<String>,
     pub latest_object_available: bool,
     pub online_retaining_providers: usize,
+    pub minimum_online_retaining_providers: usize,
     pub degraded: bool,
     pub message: String,
 }

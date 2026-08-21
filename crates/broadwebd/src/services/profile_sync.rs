@@ -3,8 +3,8 @@ use crate::{
     PluginRegistry, ProfileSyncObjectRequest, ProfileSyncProfileRequest, ProfileSyncProviderHealth,
     ProfileSyncProviderRecord, ProfileSyncProviderRoles, ProfileSyncPutObjectRequest,
     ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootCandidate, ProfileSyncRootHealth,
-    ProfileSyncRootRequest, ProfileSyncRootUpdate, ResourceBudget, ResourceProfile, ServiceRequest,
-    ServiceResponse,
+    ProfileSyncRootHealthRequest, ProfileSyncRootRequest, ProfileSyncRootUpdate, ResourceBudget,
+    ResourceProfile, ServiceRequest, ServiceResponse,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
@@ -362,7 +362,7 @@ impl ProfileSyncService {
 
     fn root_health(
         &self,
-        request: ProfileSyncRootRequest,
+        request: ProfileSyncRootHealthRequest,
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
         validate_profile_sync_root_id(&request.root_id)?;
@@ -396,6 +396,7 @@ impl ProfileSyncService {
             candidates.len(),
             latest_object_available,
             online_retaining_providers,
+            request.minimum_online_retaining_providers,
         );
 
         Ok(ProfileSyncResponse::RootHealth {
@@ -406,6 +407,7 @@ impl ProfileSyncService {
                 latest_object_id,
                 latest_object_available,
                 online_retaining_providers,
+                minimum_online_retaining_providers: request.minimum_online_retaining_providers,
                 degraded,
                 message,
             },
@@ -846,6 +848,7 @@ fn profile_sync_root_health_message(
     visible_candidates: usize,
     latest_object_available: bool,
     online_retaining_providers: usize,
+    minimum_online_retaining_providers: usize,
 ) -> (bool, String) {
     if visible_candidates == 0 {
         (
@@ -863,6 +866,13 @@ fn profile_sync_root_health_message(
             true,
             "profile sync root object is not retained by an online provider in the local fixture"
                 .to_string(),
+        )
+    } else if online_retaining_providers < minimum_online_retaining_providers {
+        (
+            true,
+            format!(
+                "profile sync root has {online_retaining_providers} online retaining providers, below the requested quorum of {minimum_online_retaining_providers}"
+            ),
         )
     } else {
         (
@@ -1021,7 +1031,8 @@ mod tests {
     use crate::{
         BroadwebdError, PluginRegistry, ProfileSyncObjectRequest, ProfileSyncProfileRequest,
         ProfileSyncProviderRoles, ProfileSyncPutObjectRequest, ProfileSyncRequest,
-        ProfileSyncResponse, ProfileSyncRootRequest, ProfileSyncRootUpdate, ResourceBudget,
+        ProfileSyncResponse, ProfileSyncRootHealthRequest, ProfileSyncRootRequest,
+        ProfileSyncRootUpdate, ResourceBudget,
     };
 
     #[test]
@@ -1917,7 +1928,7 @@ mod tests {
 
         let missing = device_a
             .profile_sync(
-                ProfileSyncRequest::RootHealth(ProfileSyncRootRequest::new(
+                ProfileSyncRequest::RootHealth(ProfileSyncRootHealthRequest::new(
                     "default",
                     "settings/latest",
                 )),
@@ -1969,7 +1980,7 @@ mod tests {
 
         let healthy = device_a
             .profile_sync(
-                ProfileSyncRequest::RootHealth(ProfileSyncRootRequest::new(
+                ProfileSyncRequest::RootHealth(ProfileSyncRootHealthRequest::new(
                     "default",
                     "settings/latest",
                 )),
@@ -1985,7 +1996,28 @@ mod tests {
         assert_eq!(health.latest_object_id.as_deref(), Some(object_id.as_str()));
         assert!(health.latest_object_available);
         assert_eq!(health.online_retaining_providers, 1);
+        assert_eq!(health.minimum_online_retaining_providers, 1);
         assert!(!health.degraded);
+
+        let quorum_degraded = device_a
+            .profile_sync(
+                ProfileSyncRequest::RootHealth(
+                    ProfileSyncRootHealthRequest::with_minimum_online_retaining_providers(
+                        "default",
+                        "settings/latest",
+                        2,
+                    ),
+                ),
+                &budget,
+            )
+            .expect("retained root health can apply a local quorum policy");
+        let ProfileSyncResponse::RootHealth { health } = quorum_degraded else {
+            panic!("unexpected root health response");
+        };
+        assert_eq!(health.online_retaining_providers, 1);
+        assert_eq!(health.minimum_online_retaining_providers, 2);
+        assert!(health.degraded);
+        assert!(health.message.contains("requested quorum"));
 
         availability_provider
             .profile_sync(
@@ -1998,7 +2030,7 @@ mod tests {
             .expect("availability provider can release root object");
         let unretained = device_a
             .profile_sync(
-                ProfileSyncRequest::RootHealth(ProfileSyncRootRequest::new(
+                ProfileSyncRequest::RootHealth(ProfileSyncRootHealthRequest::new(
                     "default",
                     "settings/latest",
                 )),
