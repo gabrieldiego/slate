@@ -330,6 +330,7 @@ pub struct ProfileSyncProviderRecord {
     pub provider_kind: String,
     pub privacy_boundary: String,
     pub retained_objects: usize,
+    pub can_publish_roots: bool,
 }
 
 pub(crate) fn parse_http_url(input: &str) -> Result<Url, BroadwebdError> {

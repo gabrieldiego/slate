@@ -17,6 +17,7 @@ pub struct ProfileSyncService {
     provider_id: String,
     provider_kind: String,
     privacy_boundary: String,
+    can_publish_roots: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -32,6 +33,7 @@ struct ProfileSyncStore {
 struct ProfileSyncProviderState {
     provider_kind: String,
     privacy_boundary: String,
+    can_publish_roots: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -46,6 +48,7 @@ impl Default for ProfileSyncService {
             provider_id: LOCAL_PROVIDER_ID.to_string(),
             provider_kind: LOCAL_PROVIDER_KIND.to_string(),
             privacy_boundary: LOCAL_PRIVACY_BOUNDARY.to_string(),
+            can_publish_roots: true,
         }
     }
 }
@@ -56,8 +59,24 @@ impl ProfileSyncService {
     }
 
     fn local_fixture(store: Arc<Mutex<ProfileSyncStore>>, provider_id: impl Into<String>) -> Self {
+        Self::local_fixture_provider(store, provider_id, "local-fixture", true)
+    }
+
+    fn local_fixture_availability_provider(
+        store: Arc<Mutex<ProfileSyncStore>>,
+        provider_id: impl Into<String>,
+    ) -> Self {
+        Self::local_fixture_provider(store, provider_id, "local-fixture-availability", false)
+    }
+
+    fn local_fixture_provider(
+        store: Arc<Mutex<ProfileSyncStore>>,
+        provider_id: impl Into<String>,
+        provider_kind: impl Into<String>,
+        can_publish_roots: bool,
+    ) -> Self {
         let provider_id = provider_id.into();
-        let provider_kind = "local-fixture".to_string();
+        let provider_kind = provider_kind.into();
         let privacy_boundary = LOCAL_PRIVACY_BOUNDARY.to_string();
         if let Ok(mut store) = store.lock() {
             store.providers.insert(
@@ -65,6 +84,7 @@ impl ProfileSyncService {
                 ProfileSyncProviderState {
                     provider_kind: provider_kind.clone(),
                     privacy_boundary: privacy_boundary.clone(),
+                    can_publish_roots,
                 },
             );
         }
@@ -73,6 +93,7 @@ impl ProfileSyncService {
             provider_id,
             provider_kind,
             privacy_boundary,
+            can_publish_roots,
         }
     }
 
@@ -216,6 +237,13 @@ impl ProfileSyncService {
         request: ProfileSyncRootUpdate,
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
+        if !self.can_publish_roots {
+            return Err(BroadwebdError::UnsupportedRequest(format!(
+                "profile sync provider cannot publish mutable roots: {}",
+                self.provider_id
+            )));
+        }
+
         let mut store = self.store()?;
         if !provider_has_object(
             &store,
@@ -269,6 +297,7 @@ impl ProfileSyncService {
                     &self.provider_id,
                     &request.profile,
                 ),
+                can_publish_roots: self.can_publish_roots,
             }]
         } else {
             store
@@ -280,6 +309,7 @@ impl ProfileSyncService {
                     provider_kind: state.provider_kind.clone(),
                     privacy_boundary: state.privacy_boundary.clone(),
                     retained_objects: retained_object_count(&store, provider_id, &request.profile),
+                    can_publish_roots: state.can_publish_roots,
                 })
                 .collect()
         };
@@ -300,6 +330,16 @@ impl LocalProfileSyncFixture {
 
     pub fn service_for_device(&self, device_id: impl AsRef<str>) -> ProfileSyncService {
         ProfileSyncService::local_fixture(self.store.clone(), local_fixture_provider_id(device_id))
+    }
+
+    pub fn service_for_availability_provider(
+        &self,
+        provider_id: impl AsRef<str>,
+    ) -> ProfileSyncService {
+        ProfileSyncService::local_fixture_availability_provider(
+            self.store.clone(),
+            local_fixture_availability_provider_id(provider_id),
+        )
     }
 
     pub fn set_device_online(
@@ -323,14 +363,25 @@ impl LocalProfileSyncFixture {
 
 impl ApplicationServicePlugin for ProfileSyncService {
     fn metadata(&self) -> PluginMetadata {
-        PluginMetadata::new(PROFILE_SYNC_PLUGIN, PluginKind::ApplicationService)
-            .with_capabilities(&[
+        let capabilities: &[&str] = if self.can_publish_roots {
+            &[
                 "profile-sync/fake",
                 "profile-sync/object-transfer",
                 "profile-sync/local-retention",
                 "profile-sync/mutable-root",
                 "profile-sync/provider-discovery",
-            ])
+            ]
+        } else {
+            &[
+                "profile-sync/fake",
+                "profile-sync/object-transfer",
+                "profile-sync/local-retention",
+                "profile-sync/availability-provider",
+                "profile-sync/provider-discovery",
+            ]
+        };
+        PluginMetadata::new(PROFILE_SYNC_PLUGIN, PluginKind::ApplicationService)
+            .with_capabilities(capabilities)
             .with_privacy_boundary("local in-memory fake profile-sync backend for tests")
             .with_resource_profile(ResourceProfile::Low)
     }
@@ -432,6 +483,10 @@ fn find_online_object<'a>(
 
 fn local_fixture_provider_id(device_id: impl AsRef<str>) -> String {
     format!("local-fixture-device-{}", device_id.as_ref())
+}
+
+fn local_fixture_availability_provider_id(provider_id: impl AsRef<str>) -> String {
+    format!("local-fixture-availability-{}", provider_id.as_ref())
 }
 
 fn local_object_id(bytes: &[u8]) -> String {
@@ -622,6 +677,7 @@ mod tests {
         assert!(providers.iter().all(|provider| {
             provider.provider_kind == "local-fixture"
                 && provider.privacy_boundary.contains("no sockets")
+                && provider.can_publish_roots
         }));
 
         fixture
@@ -643,6 +699,101 @@ mod tests {
         assert_eq!(
             provider_ids,
             vec!["local-fixture-device-a", "local-fixture-device-b"]
+        );
+    }
+
+    #[test]
+    fn local_fixture_availability_provider_cannot_publish_roots() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut device_a = PluginRegistry::new();
+        let mut availability_provider = PluginRegistry::new();
+        let budget = ResourceBudget::default();
+
+        device_a.register_service(fixture.service_for_device("a"));
+        availability_provider.register_service(fixture.service_for_availability_provider("pin-1"));
+
+        let put = device_a
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"encrypted object for availability provider".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("device a can put object into fixture");
+        let ProfileSyncResponse::PutEncryptedObject { object_id } = put else {
+            panic!("unexpected put response");
+        };
+
+        availability_provider
+            .profile_sync(
+                ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("availability provider can retain encrypted bytes");
+
+        let publish_error = availability_provider
+            .profile_sync(
+                ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+                    "default",
+                    "settings/latest",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect_err("availability provider must not publish mutable roots");
+        assert!(matches!(
+            publish_error,
+            BroadwebdError::UnsupportedRequest(message)
+                if message.contains("cannot publish mutable roots")
+                    && message.contains("local-fixture-availability-pin-1")
+        ));
+
+        let providers = device_a
+            .profile_sync(
+                ProfileSyncRequest::DiscoverProviders(ProfileSyncProfileRequest::new("default")),
+                &budget,
+            )
+            .expect("device a can discover availability provider policy");
+        let ProfileSyncResponse::Providers { providers } = providers else {
+            panic!("unexpected providers response");
+        };
+        let provider = providers
+            .iter()
+            .find(|provider| provider.provider_id == "local-fixture-availability-pin-1")
+            .expect("availability provider is discoverable");
+        assert_eq!(provider.provider_kind, "local-fixture-availability");
+        assert_eq!(provider.retained_objects, 1);
+        assert!(!provider.can_publish_roots);
+
+        device_a
+            .profile_sync(
+                ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+                    "default",
+                    "settings/latest",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("logged-in device can still publish mutable root");
+        let resolved = availability_provider
+            .profile_sync(
+                ProfileSyncRequest::ResolveRoot(ProfileSyncRootRequest::new(
+                    "default",
+                    "settings/latest",
+                )),
+                &budget,
+            )
+            .expect("availability provider can resolve mutable root");
+        assert_eq!(
+            resolved,
+            ProfileSyncResponse::Root {
+                root_id: "settings/latest".to_string(),
+                object_id: Some(object_id),
+            }
         );
     }
 

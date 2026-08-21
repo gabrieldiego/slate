@@ -208,6 +208,9 @@ Current baseline:
   only while at least one provider holding them is online, and retaining an
   object copies it into the retaining provider's in-process store. This lets
   tests model simple handoff and availability loss without any sockets.
+- The local profile-sync fixture now distinguishes logged-in device providers
+  from availability-only providers. Availability providers can retain and serve
+  encrypted bytes, and discovery reports that they cannot publish mutable roots.
 - Storage now provides `EncryptedSyncObject` envelopes using ChaCha20-Poly1305
   AEAD through `ring`, and the local two-device fixture moves encrypted setting
   change payloads through broadwebd instead of plaintext JSON.

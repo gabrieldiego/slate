@@ -500,6 +500,10 @@ Required profile sync roles:
 - Health: report backend health, retain failures, publish failures, and stale
   roots.
 
+Availability providers must not imply account authority. They can improve object
+availability by retaining encrypted bytes, but mutable-root publishing remains a
+separate capability granted only by the selected profile sync policy.
+
 The first IPFS/IPNS backend can use Kubo RPC on loopback because Kubo already
 exposes add, pin, and name APIs. broadwebd must treat Kubo RPC as an
 administrative API: local by default, never exposed to the public internet by
