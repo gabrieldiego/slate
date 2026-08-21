@@ -190,7 +190,9 @@ Current baseline:
 - Local settings/app-domain publishing now filters outgoing snapshots and tail
   manifests through the enabled app sync-domain table. Disabled domains can
   still be used as local typed state, but they are not published to broadweb
-  profile-sync objects until explicitly enabled.
+  profile-sync objects until explicitly enabled. The compaction target is also
+  selected from enabled domains, so disabled-domain churn does not force
+  outgoing snapshots or manifest tails.
 - broadwebd has a protocol-neutral `profile-sync` application service with an
   in-memory local fixture backend. Unit tests cover object transfer, retention,
   mutable root publish/resolve, provider discovery, per-object transfer

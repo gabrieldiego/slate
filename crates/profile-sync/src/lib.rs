@@ -2330,20 +2330,26 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
         retention_policy: ProfileSyncRetentionPolicy,
         now: i64,
     ) -> Result<Option<PublishedSettingsCompaction>, ProfileSyncPublishError> {
-        let Some(target) =
-            database.settings_sync_compaction_target(profile, &retention_policy, now)?
+        let enabled_domain_ids = enabled_settings_sync_domain_ids(database, profile)?;
+        let enabled_domains = enabled_domain_ids.iter().cloned().collect::<Vec<_>>();
+        let Some(target) = database.settings_sync_compaction_target_for_domains(
+            profile,
+            &retention_policy,
+            now,
+            enabled_domains.as_slice(),
+        )?
         else {
             return Ok(None);
         };
-        let events = enabled_settings_sync_text_events_after(
-            database,
-            profile,
-            target.previous_snapshot_covers_revision,
-            u32::MAX,
-        )?;
-        if events.is_empty() {
-            return Ok(None);
-        }
+        let events = database
+            .sync_setting_text_events_after(
+                profile,
+                target.previous_snapshot_covers_revision,
+                u32::MAX,
+            )?
+            .into_iter()
+            .filter(|event| enabled_domain_ids.contains(&event.change.domain))
+            .collect::<Vec<_>>();
         let covered_changes = events
             .iter()
             .take(target.covered_change_count)
@@ -3172,10 +3178,10 @@ mod tests {
         ProfileSyncDeviceSigner, ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
         ProfileSyncSettingsCandidatePullApplyStatus, SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_SETTINGS,
         SlateProfileDatabase, StorageError, SyncChangeRecord, SyncContentKeyEpochRegistration,
-        SyncDevicePublicKeyRegistration, open_signed_profile_sync_device_head,
-        open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
-        open_signed_sync_setting_text, pull_signed_profile_sync_device_head,
-        settings_sync_snapshot_id,
+        SyncDevicePublicKeyRegistration, SyncSnapshotRegistration,
+        open_signed_profile_sync_device_head, open_signed_profile_sync_manifest,
+        open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
+        pull_signed_profile_sync_device_head, settings_sync_snapshot_id,
     };
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -6780,6 +6786,79 @@ mod tests {
         .expect("verify compacted tail object");
         assert_eq!(incoming.key, "ui.zoom");
         assert_eq!(incoming.value, "110");
+
+        let _ = std::fs::remove_dir_all(state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_publisher_does_not_compact_disabled_app_domains() {
+        let network = InProcessBroadwebNetwork::new();
+        let state_root = test_state_root("disabled-domain-compaction");
+        let db_root = test_state_root("disabled-domain-compaction-db");
+        let daemon = network
+            .daemon_for_device(
+                &state_root,
+                ResourceBudget::default(),
+                "runtime-disabled-domain-compaction",
+            )
+            .expect("start in-process profile-sync daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-disabled-domain-compaction",
+        )
+        .expect("open local settings database");
+        let baseline_revision = database
+            .latest_sync_revision(DEFAULT_PROFILE_ID)
+            .expect("read baseline revision");
+        if baseline_revision > 0 {
+            database
+                .record_sync_snapshot(&SyncSnapshotRegistration {
+                    profile: DEFAULT_PROFILE_ID.to_string(),
+                    snapshot_id: "snapshot-baseline".to_string(),
+                    backend_object_id: Some("snapshot-object-baseline".to_string()),
+                    covers_revision: baseline_revision,
+                    included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+                })
+                .expect("record baseline snapshot");
+        }
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                "default_view",
+                "month",
+            )
+            .expect("write disabled calendar setting");
+        let content_key = ProfileSyncContentKey::from_bytes([67; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-disabled-domain-compaction")
+            .expect("generate signer");
+        let publisher = BroadwebdProfileSyncPublisher::new(&daemon);
+
+        let compaction = publisher
+            .compact_and_publish_settings(
+                &database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy {
+                    min_tail_change_count: 0,
+                    change_retention_seconds: 0,
+                    ..ProfileSyncRetentionPolicy::default()
+                },
+                i64::MAX,
+            )
+            .expect("disabled app domain compaction is evaluated locally");
+
+        assert_eq!(compaction, None);
+        assert!(
+            database
+                .profile_sync_root(DEFAULT_PROFILE_ID, "settings/latest")
+                .expect("read settings root")
+                .is_none()
+        );
 
         let _ = std::fs::remove_dir_all(state_root);
         let _ = std::fs::remove_dir_all(db_root);

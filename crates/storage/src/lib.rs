@@ -3256,6 +3256,43 @@ impl SlateProfileDatabase {
         }))
     }
 
+    pub fn settings_sync_compaction_target_for_domains(
+        &self,
+        profile: &str,
+        retention_policy: &ProfileSyncRetentionPolicy,
+        now: i64,
+        included_domains: &[String],
+    ) -> Result<Option<SyncCompactionTarget>, StorageError> {
+        let included_domains = normalized_snapshot_domains(included_domains);
+        if included_domains.is_empty() {
+            return Ok(None);
+        }
+        let previous_snapshot_covers_revision = self
+            .latest_sync_snapshot(profile)?
+            .map(|snapshot| snapshot.covers_revision)
+            .unwrap_or(0);
+        let events = self
+            .sync_setting_text_events_after(profile, previous_snapshot_covers_revision, u32::MAX)?
+            .into_iter()
+            .filter(|event| included_domains.contains(&event.change.domain))
+            .collect::<Vec<_>>();
+        let Some(target_index) =
+            compaction_target_event_index(events.as_slice(), retention_policy, now)
+        else {
+            return Ok(None);
+        };
+        let target = &events[target_index];
+
+        Ok(Some(SyncCompactionTarget {
+            profile: profile.to_string(),
+            previous_snapshot_covers_revision,
+            covers_revision: target.revision.revision,
+            covers_change_id: target.change.id,
+            covered_change_count: target_index + 1,
+            retained_tail_change_count: events.len() - target_index - 1,
+        }))
+    }
+
     pub fn settings_sync_snapshot_payload(
         &self,
         profile: &str,
@@ -9081,6 +9118,92 @@ mod tests {
         assert_eq!(
             database
                 .settings_sync_compaction_target(DEFAULT_PROFILE_ID, &policy, i64::MAX)
+                .unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn settings_sync_compaction_target_can_filter_domains() {
+        let database_path =
+            test_dir("sync-compaction-target-domains").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let baseline_revision = database.latest_sync_revision(DEFAULT_PROFILE_ID).unwrap();
+        if baseline_revision > 0 {
+            database
+                .record_sync_snapshot(&SyncSnapshotRegistration {
+                    profile: DEFAULT_PROFILE_ID.to_string(),
+                    snapshot_id: "snapshot-baseline".to_string(),
+                    backend_object_id: Some("snapshot-object-baseline".to_string()),
+                    covers_revision: baseline_revision,
+                    included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+                })
+                .unwrap();
+        }
+
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "setting.0",
+                "value-0",
+            )
+            .unwrap();
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                "default_view",
+                "month",
+            )
+            .unwrap();
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "setting.1",
+                "value-1",
+            )
+            .unwrap();
+
+        let policy = ProfileSyncRetentionPolicy {
+            min_tail_change_count: 1,
+            change_retention_seconds: 0,
+            inactive_device_grace_seconds: DEFAULT_PROFILE_SYNC_INACTIVE_DEVICE_GRACE_SECONDS,
+        };
+        let all_events = database
+            .sync_setting_text_events_after(DEFAULT_PROFILE_ID, baseline_revision, 10)
+            .unwrap();
+        assert_eq!(all_events.len(), 3);
+        let settings_events = all_events
+            .iter()
+            .filter(|event| event.change.domain == SYNC_DOMAIN_SETTINGS)
+            .collect::<Vec<_>>();
+        assert_eq!(settings_events.len(), 2);
+
+        let target = database
+            .settings_sync_compaction_target_for_domains(
+                DEFAULT_PROFILE_ID,
+                &policy,
+                i64::MAX,
+                &[SYNC_DOMAIN_SETTINGS.to_string()],
+            )
+            .unwrap()
+            .expect("settings-domain compaction target");
+        assert_eq!(target.previous_snapshot_covers_revision, baseline_revision);
+        assert_eq!(target.covers_revision, settings_events[0].revision.revision);
+        assert_eq!(target.covers_change_id, settings_events[0].change.id);
+        assert_eq!(target.covered_change_count, 1);
+        assert_eq!(target.retained_tail_change_count, 1);
+
+        assert_eq!(
+            database
+                .settings_sync_compaction_target_for_domains(
+                    DEFAULT_PROFILE_ID,
+                    &policy,
+                    i64::MAX,
+                    &[SYNC_DOMAIN_CHAT.to_string()],
+                )
                 .unwrap(),
             None
         );
