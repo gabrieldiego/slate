@@ -517,6 +517,11 @@ broadwebd daemon without publishing, pulling, or opening any additional
 transport. Fixture tests use `InProcessBroadwebNetwork` for this path so health
 policy can be validated without loopback ports, OS DNS, public gateways, Tor,
 IPFS/IPNS, or external relays.
+The runner can also return before-and-after health around one bounded settings
+sync cycle. That keeps the future runtime scheduler's first responsibility
+simple: run a capped cycle, inspect whether provider/root health changed, and
+surface degraded state without introducing background polling, socket fixtures,
+or a separate health transport.
 Object bytes are also provider-held: fetches require at least one online
 provider with the object, and retaining an object copies the bytes into the
 retaining provider's in-process store. Tests can pause object transfer from one

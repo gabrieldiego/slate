@@ -293,6 +293,44 @@ impl From<ProfileSyncReceiveError> for ProfileSyncCycleError {
     }
 }
 
+#[derive(Debug)]
+pub enum ProfileSyncCycleWithHealthError {
+    Health(BroadwebdError),
+    Cycle(ProfileSyncCycleError),
+}
+
+impl fmt::Display for ProfileSyncCycleWithHealthError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Health(error) => {
+                write!(formatter, "profile sync health check failed: {error}")
+            }
+            Self::Cycle(error) => write!(formatter, "profile sync cycle failed: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for ProfileSyncCycleWithHealthError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Health(error) => Some(error),
+            Self::Cycle(error) => Some(error),
+        }
+    }
+}
+
+impl From<BroadwebdError> for ProfileSyncCycleWithHealthError {
+    fn from(error: BroadwebdError) -> Self {
+        Self::Health(error)
+    }
+}
+
+impl From<ProfileSyncCycleError> for ProfileSyncCycleWithHealthError {
+    fn from(error: ProfileSyncCycleError) -> Self {
+        Self::Cycle(error)
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PublishedSettingsTailManifest {
     pub manifest_object_id: String,
@@ -449,6 +487,23 @@ impl SettingsSyncCycleRun {
 
     pub fn applied_count(&self) -> usize {
         self.receive.applied_count()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncCycleWithHealthRun {
+    pub before_health: SettingsSyncHealthReport,
+    pub cycle: SettingsSyncCycleRun,
+    pub after_health: SettingsSyncHealthReport,
+}
+
+impl SettingsSyncCycleWithHealthRun {
+    pub fn degraded_before(&self) -> bool {
+        self.before_health.degraded()
+    }
+
+    pub fn degraded_after(&self) -> bool {
+        self.after_health.degraded()
     }
 }
 
@@ -636,6 +691,50 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
             ));
         };
         Ok(health)
+    }
+
+    pub fn run_settings_sync_cycle_with_health(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        settings_root_id: &str,
+        content_key: &ProfileSyncContentKey,
+        key_id: &str,
+        signer: &ProfileSyncDeviceSigner,
+        retention_policy: ProfileSyncRetentionPolicy,
+        max_publish_steps: u32,
+        max_trusted_devices: u32,
+        minimum_online_retaining_providers: usize,
+    ) -> Result<SettingsSyncCycleWithHealthRun, ProfileSyncCycleWithHealthError> {
+        let before_health = self.settings_sync_health(
+            database,
+            profile,
+            settings_root_id,
+            minimum_online_retaining_providers,
+        )?;
+        let cycle = self.run_settings_sync_cycle(
+            database,
+            profile,
+            settings_root_id,
+            content_key,
+            key_id,
+            signer,
+            retention_policy,
+            max_publish_steps,
+            max_trusted_devices,
+        )?;
+        let after_health = self.settings_sync_health(
+            database,
+            profile,
+            settings_root_id,
+            minimum_online_retaining_providers,
+        )?;
+
+        Ok(SettingsSyncCycleWithHealthRun {
+            before_health,
+            cycle,
+            after_health,
+        })
     }
 
     pub fn run_settings_sync_cycle(
@@ -2763,6 +2862,74 @@ mod tests {
             published_health
                 .local_device_head_root_health
                 .online_retaining_providers,
+            1
+        );
+
+        let _ = std::fs::remove_dir_all(state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_runner_wraps_cycle_with_health() {
+        let network = InProcessBroadwebNetwork::new();
+        let state_root = test_state_root("cycle-with-health");
+        let db_root = test_state_root("cycle-with-health-db");
+        let daemon = network
+            .daemon_for_device(
+                &state_root,
+                ResourceBudget::default(),
+                "runtime-health-cycle",
+            )
+            .expect("start in-process profile-sync daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-health-cycle",
+        )
+        .expect("open local settings database");
+        let profile = "healthcycleprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([54; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer =
+            ProfileSyncDeviceSigner::generate("runtime-health-cycle").expect("generate signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register local trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write local setting");
+
+        let run = BroadwebdSettingsSyncRunner::new(&daemon)
+            .run_settings_sync_cycle_with_health(
+                &database,
+                profile,
+                settings_root_id,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+                4,
+                1,
+            )
+            .expect("run bounded settings sync cycle with health");
+
+        assert!(run.degraded_before());
+        assert!(!run.before_health.provider_health.degraded);
+        assert!(run.before_health.settings_root_health.degraded);
+        assert!(run.before_health.local_device_head_root_health.degraded);
+        assert_eq!(run.cycle.published_step_count(), 1);
+        assert_eq!(run.cycle.applied_count(), 0);
+        assert!(!run.degraded_after());
+        assert_eq!(run.after_health.settings_root_health.visible_candidates, 1);
+        assert_eq!(
+            run.after_health
+                .local_device_head_root_health
+                .visible_candidates,
             1
         );
 

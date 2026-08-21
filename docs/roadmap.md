@@ -243,6 +243,11 @@ Current baseline:
   local device-head root health. The regression test runs through
   `InProcessBroadwebNetwork`, so scheduler-facing health checks stay inside the
   test process and do not open loopback ports.
+- The settings sync runner can now wrap one bounded sync cycle with before and
+  after health reports using the same in-process daemon path. This gives the
+  eventual scheduler/UI a single result that shows whether a degraded local
+  state recovered after publishing or receiving, without starting background
+  services or using socket-based fixtures.
 - The local profile-sync fixture can now mark simulated devices offline and
   online, allowing tests to verify unavailable devices fail closed without
   touching sockets, DNS, Tor, IPFS, or external relays.
