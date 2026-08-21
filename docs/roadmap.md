@@ -293,7 +293,10 @@ Current baseline:
   Files, and Storage metadata is visible through those typed app-domain watcher
   polls after a trusted broadwebd apply. The fixture initializes receiver
   cursors before sync, applies a signed encrypted snapshot, then records each
-  app cursor only after the decoded payload batch is inspected.
+  app cursor only after the decoded payload batch is inspected. The same
+  watcher path now covers post-snapshot update tails for all three domains, so
+  apps can observe incremental metadata changes after acknowledging the
+  snapshot batch.
 - The profile-sync bridge can now publish post-snapshot local settings updates
   by reusing the latest retained `slate-settings.db` snapshot object, publishing
   only the new tail changes, moving the settings root, and publishing a fresh

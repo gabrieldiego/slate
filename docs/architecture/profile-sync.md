@@ -262,6 +262,9 @@ The broadwebd runtime bridge fixture now covers this watcher contract after a
 trusted receive: Chat, Files, and Storage cursors are initialized before sync,
 the signed encrypted snapshot is applied, and each app-domain poll returns the
 decoded payload that the app can inspect before advancing its cursor.
+The update-tail fixture then records those snapshot cursors, applies a
+post-snapshot manifest tail, and verifies each app-domain poll returns only the
+incremental decoded payload for that domain.
 
 ## Data Objects
 
