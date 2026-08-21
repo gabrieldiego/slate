@@ -207,7 +207,10 @@ Current baseline:
   snapshot object id, tail change object ids, included domains, and device
   frontiers. The local two-device fixture now publishes `settings/latest` to a
   signed encrypted manifest object, then fetches and applies the signed
-  encrypted tail setting-change object named by that manifest.
+  encrypted tail setting-change object named by that manifest. Manifests now
+  include schema version, membership epoch, and retention-policy metadata so
+  local fixtures can model account epoch and future compaction decisions without
+  changing the encrypted object shape again.
 - Incoming synced settings now have an initial deterministic conflict policy:
   the highest logical clock wins, with device id and device sequence as stable
   tie-breakers. Losing setting changes are retained in `settings_changes`
@@ -236,9 +239,9 @@ Next:
   policy checks for richer local fixture behavior.
 - Split sync backends into discovery, connectivity, transfer, availability, and
   mutable-root roles so different broadweb protocols can be combined.
-- Define the equal-control account authority model: signed device heads,
-  membership epochs, enrollment records, and availability providers with no
-  profile write authority.
+- Extend the initial manifest membership epoch into the full equal-control
+  account authority model: signed device heads, enrollment records, and
+  availability providers with no profile write authority.
 - Add Kubo RPC-backed operations for encrypted object add, pin, unpin, pin
   verification, IPNS publish, and IPNS resolve as the first IPFS/IPNS backend.
 - Extend snapshot payloads, sync object metadata, conflict handling, and merge
@@ -250,8 +253,9 @@ Next:
   publishing, content encryption epochs, and device enrollment.
 - Publish encrypted profile manifests and snapshots through the selected
   backend, then point the profile mutable root at the newest manifest.
-- Implement retention and compaction: keep deltas for active devices and recent
-  changes, then squash older state into encrypted snapshots.
+- Implement retention and compaction from manifest retention metadata: keep
+  deltas for active devices and recent changes, then squash older state into
+  encrypted snapshots.
 - Add device enrollment, revocation, and key rotation before syncing sensitive
   profile domains.
 - Expand local distributed-protocol fixtures to simulate offline devices,
