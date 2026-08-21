@@ -888,7 +888,16 @@ where
 pub enum ProfileSyncTrustedOpenError {
     Storage(StorageError),
     SyncObject(SyncObjectError),
-    UntrustedDevice { profile: String, device_id: String },
+    UntrustedDevice {
+        profile: String,
+        device_id: String,
+    },
+    UnauthorizedDeviceEpoch {
+        profile: String,
+        device_id: String,
+        key_membership_epoch: i64,
+        manifest_membership_epoch: i64,
+    },
 }
 
 impl fmt::Display for ProfileSyncTrustedOpenError {
@@ -905,6 +914,15 @@ impl fmt::Display for ProfileSyncTrustedOpenError {
                 formatter,
                 "profile {profile} has no trusted public key for sync device {device_id}"
             ),
+            Self::UnauthorizedDeviceEpoch {
+                profile,
+                device_id,
+                key_membership_epoch,
+                manifest_membership_epoch,
+            } => write!(
+                formatter,
+                "profile {profile} sync device {device_id} was trusted at membership epoch {key_membership_epoch}, after manifest epoch {manifest_membership_epoch}"
+            ),
         }
     }
 }
@@ -914,7 +932,7 @@ impl std::error::Error for ProfileSyncTrustedOpenError {
         match self {
             Self::Storage(error) => Some(error),
             Self::SyncObject(error) => Some(error),
-            Self::UntrustedDevice { .. } => None,
+            Self::UntrustedDevice { .. } | Self::UnauthorizedDeviceEpoch { .. } => None,
         }
     }
 }
@@ -2774,8 +2792,18 @@ impl SlateProfileDatabase {
             profile,
             key_id,
         )?;
+        self.validate_signed_object_membership_epoch(
+            manifest_object.bytes.as_slice(),
+            profile,
+            manifest.membership_epoch,
+        )?;
         let snapshot = snapshot_object
             .map(|snapshot_object| {
+                self.validate_signed_object_membership_epoch(
+                    snapshot_object.bytes.as_slice(),
+                    profile,
+                    manifest.membership_epoch,
+                )?;
                 Ok(VerifiedProfileSyncSettingsSnapshot {
                     object_id: snapshot_object.object_id.clone(),
                     snapshot: self.open_trusted_signed_profile_sync_settings_snapshot(
@@ -2789,6 +2817,11 @@ impl SlateProfileDatabase {
             .transpose()?;
         let mut tail_changes = Vec::with_capacity(tail_change_objects.len());
         for tail_object in tail_change_objects {
+            self.validate_signed_object_membership_epoch(
+                tail_object.bytes.as_slice(),
+                profile,
+                manifest.membership_epoch,
+            )?;
             tail_changes.push(VerifiedProfileSyncSettingsTailChange {
                 object_id: tail_object.object_id.clone(),
                 change: self.open_trusted_signed_sync_setting_text_for_profile(
@@ -2931,6 +2964,16 @@ impl SlateProfileDatabase {
         profile: &str,
         signed_object: &SignedSyncObject,
     ) -> Result<ProfileSyncDevicePublicKey, ProfileSyncTrustedOpenError> {
+        Ok(self
+            .trusted_public_key_record_for_signed_object(profile, signed_object)?
+            .public_key)
+    }
+
+    fn trusted_public_key_record_for_signed_object(
+        &self,
+        profile: &str,
+        signed_object: &SignedSyncObject,
+    ) -> Result<SyncDevicePublicKeyRecord, ProfileSyncTrustedOpenError> {
         if !is_valid_sync_identifier(signed_object.device_id.as_str()) {
             return Err(ProfileSyncTrustedOpenError::SyncObject(
                 SyncObjectError::InvalidDeviceId(signed_object.device_id.clone()),
@@ -2946,7 +2989,27 @@ impl SlateProfileDatabase {
                 device_id: signed_object.device_id.clone(),
             });
         };
-        Ok(record.public_key)
+        Ok(record)
+    }
+
+    fn validate_signed_object_membership_epoch(
+        &self,
+        bytes: &[u8],
+        profile: &str,
+        manifest_membership_epoch: i64,
+    ) -> Result<(), ProfileSyncTrustedOpenError> {
+        let signed_object =
+            SignedSyncObject::from_bytes(bytes).map_err(ProfileSyncTrustedOpenError::SyncObject)?;
+        let record = self.trusted_public_key_record_for_signed_object(profile, &signed_object)?;
+        if record.membership_epoch > manifest_membership_epoch {
+            return Err(ProfileSyncTrustedOpenError::UnauthorizedDeviceEpoch {
+                profile: profile.to_string(),
+                device_id: signed_object.device_id,
+                key_membership_epoch: record.membership_epoch,
+                manifest_membership_epoch,
+            });
+        }
+        Ok(())
     }
 
     pub fn sync_snapshot(
@@ -4719,6 +4782,91 @@ mod tests {
                     actual_device_id,
                 })
             )) if expected_device_id == "device-a" && actual_device_id == "device-a"
+        ));
+        assert_eq!(
+            destination
+                .profile_sync_root(DEFAULT_PROFILE_ID, root_id)
+                .unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn profile_sync_trusted_pull_rejects_signer_after_manifest_epoch() {
+        let content_key = ProfileSyncContentKey::from_bytes([19; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let trusted_public_key = signer.public_key().unwrap();
+        let key_id = "content-key-epoch-1";
+        let root_id = "settings/latest";
+        let manifest_object_id = "manifest-object-1";
+        let manifest = ProfileSyncManifest {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: root_id.to_string(),
+            schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            current_snapshot_object_id: None,
+            tail_change_object_ids: Vec::new(),
+            included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            device_frontiers: vec![ProfileSyncDeviceFrontier {
+                device_id: "device-a".to_string(),
+                latest_sequence: 1,
+                latest_change_object_id: None,
+            }],
+            retention_policy: ProfileSyncRetentionPolicy::default(),
+            created_at: 101,
+        };
+        let mut source = InMemoryProfileSyncObjectSource::default();
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            manifest_object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+                key_id,
+                serde_json::to_vec(&manifest).unwrap().as_slice(),
+                &content_key,
+                &signer,
+                61,
+            ),
+        );
+        source.publish_root(DEFAULT_PROFILE_ID, root_id, manifest_object_id);
+        let destination_path =
+            test_dir("sync-trusted-future-key-epoch").join(DEFAULT_DATABASE_FILE_NAME);
+        let destination =
+            SlateProfileDatabase::open_resolved_with_device_id(destination_path, "device-b")
+                .unwrap();
+        destination
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: trusted_public_key,
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1,
+            })
+            .unwrap();
+
+        let error = destination
+            .pull_and_apply_trusted_signed_settings_manifest_objects(
+                &source,
+                DEFAULT_PROFILE_ID,
+                root_id,
+                &content_key,
+                key_id,
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            ProfileSyncTrustedPullApplyError::Pull(ProfileSyncTrustedPullError::Open(
+                ProfileSyncTrustedOpenError::UnauthorizedDeviceEpoch {
+                    profile,
+                    device_id,
+                    key_membership_epoch,
+                    manifest_membership_epoch,
+                }
+            )) if profile == DEFAULT_PROFILE_ID
+                && device_id == "device-a"
+                && key_membership_epoch == DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1
+                && manifest_membership_epoch == DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH
         ));
         assert_eq!(
             destination

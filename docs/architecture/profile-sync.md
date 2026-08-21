@@ -182,8 +182,8 @@ sync-layer work.
 settings pull path now uses that store to verify each signed manifest, snapshot,
 and tail object. The embedded public key in a sync object is treated as
 untrusted metadata until it matches the stored key for that signing device.
-Unknown devices and stored-key mismatches fail before decryption or root
-advancement.
+Unknown devices, stored-key mismatches, and signer keys first trusted after the
+manifest membership epoch fail before decryption or root advancement.
 
 ## Key Model
 

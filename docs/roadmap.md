@@ -235,6 +235,9 @@ Current baseline:
   matched to a stored trusted device key, signature-verified, decrypted, and
   only then applied. Unknown devices and stale or mismatched stored keys fail
   before the stored root advances.
+- Trusted signed settings pulls now also check the stored device-key membership
+  epoch against the manifest membership epoch. A key first trusted after the
+  manifest epoch cannot authorize that manifest, snapshot, or tail object set.
 - `slate-settings.db` now has typed snapshot metadata APIs for recording
   encrypted backend object ids, covered revisions, included domains, and latest
   snapshot lookup. This is metadata only; snapshot payloads stay in encrypted
