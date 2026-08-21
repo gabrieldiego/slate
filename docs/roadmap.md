@@ -248,7 +248,10 @@ Current baseline:
   selected from enabled domains, so disabled-domain churn does not force
   outgoing snapshots or manifest tails. The profile-sync publisher now composes
   enabled-domain event feeds directly instead of loading all app-domain
-  settings changes and filtering disabled domains in memory.
+  settings changes and filtering disabled domains in memory. Runtime bridge
+  coverage now includes disabled typed Chat metadata, proving sensitive
+  app-domain rows stay local across both snapshot and tail publish checks while
+  the domain is disabled.
 - broadwebd has a protocol-neutral `profile-sync` application service with an
   in-memory local fixture backend. Unit tests cover object transfer, retention,
   mutable root publish/resolve, provider discovery, per-object transfer

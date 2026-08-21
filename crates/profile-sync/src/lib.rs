@@ -7530,6 +7530,161 @@ mod tests {
     }
 
     #[test]
+    fn broadwebd_publisher_skips_disabled_typed_app_metadata_from_local_publish() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("disabled-typed-domain-publisher");
+        let receiver_state_root = test_state_root("disabled-typed-domain-receiver");
+        let publisher_db_root = test_state_root("disabled-typed-domain-publisher-db");
+        let receiver_db_root = test_state_root("disabled-typed-domain-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "runtime-disabled-typed-domain-publisher",
+            )
+            .expect("start disabled typed domain publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "runtime-disabled-typed-domain-receiver",
+            )
+            .expect("start disabled typed domain receiver daemon");
+        let publisher_database = SlateProfileDatabase::open_resolved_with_device_id(
+            publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-disabled-typed-domain-publisher",
+        )
+        .expect("open disabled typed domain publisher settings database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-disabled-typed-domain-receiver",
+        )
+        .expect("open disabled typed domain receiver settings database");
+        publisher_database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("publisher writes enabled setting");
+        publisher_database
+            .upsert_chat_conversation(&ChatConversationUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                conversation_id: "runtime-disabled-chat-1".to_string(),
+                provider_id: Some("whatsapp".to_string()),
+                external_thread_id: Some("private-thread@example.test".to_string()),
+                display_name: "Private Team".to_string(),
+                avatar_key: Some("chat-avatar:runtime-disabled-chat-1".to_string()),
+                last_message_at: Some(1_789_050_000),
+                unread_count: 3,
+                archived: false,
+                muted: false,
+            })
+            .expect("publisher writes disabled typed chat metadata");
+        let content_key = ProfileSyncContentKey::from_bytes([75; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-disabled-typed-domain-publisher")
+            .expect("generate disabled typed domain publisher signer");
+        receiver_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: signer.public_key().expect("read signer public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("receiver trusts disabled typed domain publisher key");
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+
+        let published = publisher
+            .publish_full_local_settings_snapshot_head(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish enabled-only snapshot head")
+            .expect("enabled settings changes exist");
+
+        assert_eq!(
+            published.publication.manifest.included_domains,
+            vec![SYNC_DOMAIN_SETTINGS.to_string()]
+        );
+        assert_eq!(
+            published.publication.tail_change_object_ids,
+            Vec::<String>::new()
+        );
+
+        let applied = BroadwebdProfileSyncObjectSource::new(&receiver_daemon)
+            .pull_record_and_apply_trusted_settings_from_device_head(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                published.device_head.root_id.as_str(),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+            )
+            .expect("receiver applies enabled-only snapshot from trusted head");
+        assert!(matches!(
+            applied,
+            BroadwebdTrustedDeviceHeadSyncStatus::Applied { .. }
+        ));
+        assert_eq!(
+            receiver_database
+                .get_setting_text("ui.theme")
+                .expect("read receiver theme")
+                .as_deref(),
+            Some("teal")
+        );
+        assert!(
+            receiver_database
+                .get_sync_setting_text(
+                    DEFAULT_PROFILE_ID,
+                    SYNC_DOMAIN_CHAT,
+                    "conversation.runtime-disabled-chat-1"
+                )
+                .expect("read receiver disabled chat sync setting")
+                .is_none()
+        );
+        assert!(
+            receiver_database
+                .chat_conversations(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver disabled typed chat metadata")
+                .is_empty()
+        );
+
+        publisher_database
+            .upsert_chat_conversation(&ChatConversationUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                conversation_id: "runtime-disabled-chat-2".to_string(),
+                provider_id: Some("sms".to_string()),
+                external_thread_id: Some("+15550101010".to_string()),
+                display_name: "Private SMS".to_string(),
+                avatar_key: None,
+                last_message_at: Some(1_789_050_100),
+                unread_count: 1,
+                archived: false,
+                muted: true,
+            })
+            .expect("publisher writes disabled typed chat metadata after snapshot");
+        let pending = publisher
+            .publish_pending_local_settings_head(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("disabled typed chat tail should not publish");
+        assert!(matches!(
+            pending,
+            LocalSettingsHeadPublishStatus::UpToDate { .. }
+        ));
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
     fn broadwebd_publisher_publishes_local_settings_tail_head_from_latest_snapshot() {
         let network = InProcessBroadwebNetwork::new();
         let publisher_state_root = test_state_root("tail-head-publisher");

@@ -433,6 +433,9 @@ set, so local changes in disabled domains do not force snapshot publication or
 tail trimming. Publisher-side event selection should request per-domain feeds
 for the enabled domains instead of reading every app-domain payload and
 discarding disabled domains afterward.
+Fixture coverage includes typed Chat metadata written while Chat sync remains
+disabled. That state stays in the publisher's local materialized rows and is
+not included in snapshot or tail publication until the domain is enabled.
 
 No app should bypass `profile-sync` with an ad hoc network path for replicated
 profile state. If an app needs a protocol-specific backend, broadwebd should
