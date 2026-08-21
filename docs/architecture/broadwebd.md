@@ -635,7 +635,9 @@ the `InProcessBroadwebNetwork` layer when downstream crate tests need simulated
 gateway or Kubo behavior. That layer returns internal `slate-fixture-http://`
 or `slate-fixture-kubo://` endpoints, records request targets in memory, and
 keeps subresource and rendering smoke tests inside the process instead of
-binding a local port.
+binding a local port. Downstream crates should not build socket-shaped fixture
+handles around the lower-level registries; the in-process layer is the default
+test boundary.
 
 Real protocol tests should use local fixtures or mock daemons. Tests must not
 require live IPFS, Tor, I2P, public gateways, or external network availability

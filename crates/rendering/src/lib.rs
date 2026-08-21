@@ -1201,9 +1201,8 @@ mod tests {
     use slate_broadwebd::{
         BroadwebDaemon, HttpFetchService, IpfsConfig, IpfsService, PluginRegistry,
         test_fixtures::{
+            InProcessBroadwebNetwork, InProcessHttpFixture, InProcessKuboRpcFixture,
             InternalFixtureHttpResponse, InternalKuboRpcResponse,
-            register_internal_fixture_http_sequence, register_internal_kubo_rpc_fixture,
-            take_internal_fixture_http_requests, take_internal_kubo_rpc_fixture_requests,
         },
     };
     use std::fs;
@@ -1327,7 +1326,7 @@ mod tests {
     }
 
     fn servo_backend_renders_ipfs_fixture_with_subresource() {
-        let (gateway, server) = local_ipfs_gateway_fixture();
+        let (gateway, server) = in_process_ipfs_gateway_fixture();
         let state_root = test_state_root("rendering-ipfs-fixture");
         let mut registry = PluginRegistry::new();
         registry.register_protocol_service(IpfsService::new(
@@ -1342,7 +1341,7 @@ mod tests {
                 RenderViewport::new(640, 360),
             )
         });
-        let requests = server.join().expect("gateway fixture");
+        let requests = server.finish();
         let style_download_path = state_root
             .join("profiles")
             .join("default")
@@ -1380,7 +1379,7 @@ mod tests {
     }
 
     fn servo_backend_renders_ipfs_kubo_directory_fixture_with_subresource() {
-        let (rpc, server) = local_ipfs_kubo_rpc_fixture();
+        let (rpc, server) = in_process_ipfs_kubo_rpc_fixture();
         let state_root = test_state_root("rendering-ipfs-kubo-fixture");
         let mut registry = PluginRegistry::new();
         registry.register_protocol_service(IpfsService::new(
@@ -1395,7 +1394,11 @@ mod tests {
                 RenderViewport::new(640, 360),
             )
         });
-        let requests = server.join().expect("Kubo fixture");
+        let requests = server
+            .finish()
+            .into_iter()
+            .map(|request| request_path(&request))
+            .collect::<Vec<_>>();
         let style_download_path = state_root
             .join("profiles")
             .join("default")
@@ -1437,7 +1440,7 @@ mod tests {
     }
 
     fn servo_backend_renders_ipns_fixture() {
-        let (gateway, server) = local_ipns_gateway_fixture();
+        let (gateway, server) = in_process_ipns_gateway_fixture();
         let state_root = test_state_root("rendering-ipns-fixture");
         let mut registry = PluginRegistry::new();
         registry.register_protocol_service(IpfsService::new(
@@ -1452,7 +1455,7 @@ mod tests {
                 RenderViewport::new(640, 360),
             )
         });
-        let requests = server.join().expect("gateway fixture");
+        let requests = server.finish();
         let _ = fs::remove_dir_all(state_root);
 
         assert_eq!(surface.title, "IPNS Fixture Ready");
@@ -1473,7 +1476,7 @@ mod tests {
     }
 
     fn servo_backend_records_ipfs_download_fixture() {
-        let (gateway, server) = local_ipfs_download_gateway_fixture();
+        let (gateway, server) = in_process_ipfs_download_gateway_fixture();
         let state_root = test_state_root("rendering-ipfs-download-fixture");
         let mut registry = PluginRegistry::new();
         registry.register_protocol_service(IpfsService::new(
@@ -1488,7 +1491,7 @@ mod tests {
                 RenderViewport::new(640, 360),
             )
         });
-        let requests = server.join().expect("gateway fixture");
+        let requests = server.finish();
         let download_path = state_root
             .join("profiles")
             .join("default")
@@ -1514,7 +1517,7 @@ mod tests {
     }
 
     fn servo_backend_renders_ipfs_gateway_error_fixture() {
-        let (gateway, server) = local_ipfs_error_gateway_fixture();
+        let (gateway, server) = in_process_ipfs_error_gateway_fixture();
         let state_root = test_state_root("rendering-ipfs-error-fixture");
         let mut registry = PluginRegistry::new();
         registry.register_protocol_service(IpfsService::new(
@@ -1529,7 +1532,7 @@ mod tests {
                 RenderViewport::new(640, 360),
             )
         });
-        let requests = server.join().expect("gateway fixture");
+        let requests = server.finish();
         let download_path = state_root
             .join("profiles")
             .join("default")
@@ -1596,8 +1599,8 @@ mod tests {
         );
     }
 
-    fn local_ipfs_gateway_fixture() -> (String, InternalHttpFixtureHandle) {
-        local_gateway_fixture(
+    fn in_process_ipfs_gateway_fixture() -> (String, InProcessHttpFixture) {
+        in_process_gateway_fixture(
             &[
                 "/ipfs/bafybeigdyrzt/index.html",
                 "/ipfs/bafybeigdyrzt/style.css",
@@ -1606,26 +1609,26 @@ mod tests {
         )
     }
 
-    fn local_ipns_gateway_fixture() -> (String, InternalHttpFixtureHandle) {
-        local_gateway_fixture(&["/ipns/example.net/index.html"], ipns_fixture_response)
+    fn in_process_ipns_gateway_fixture() -> (String, InProcessHttpFixture) {
+        in_process_gateway_fixture(&["/ipns/example.net/index.html"], ipns_fixture_response)
     }
 
-    fn local_ipfs_download_gateway_fixture() -> (String, InternalHttpFixtureHandle) {
-        local_gateway_fixture(
+    fn in_process_ipfs_download_gateway_fixture() -> (String, InProcessHttpFixture) {
+        in_process_gateway_fixture(
             &["/ipfs/bafybeigdyrzt/picture.png"],
             ipfs_download_fixture_response,
         )
     }
 
-    fn local_ipfs_error_gateway_fixture() -> (String, InternalHttpFixtureHandle) {
-        local_gateway_fixture(
+    fn in_process_ipfs_error_gateway_fixture() -> (String, InProcessHttpFixture) {
+        in_process_gateway_fixture(
             &["/ipfs/bafybeigdyrzt/missing.txt"],
             ipfs_error_fixture_response,
         )
     }
 
-    fn local_ipfs_kubo_rpc_fixture() -> (String, InternalKuboRpcFixtureHandle) {
-        local_kubo_rpc_fixture(
+    fn in_process_ipfs_kubo_rpc_fixture() -> (String, InProcessKuboRpcFixture) {
+        in_process_kubo_rpc_fixture(
             &[
                 "/api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Fdocs",
                 "/api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Fdocs%2Findex.html",
@@ -1635,10 +1638,10 @@ mod tests {
         )
     }
 
-    fn local_gateway_fixture(
+    fn in_process_gateway_fixture(
         expected_paths: &[&str],
         response_for: fn(&str) -> (&'static str, &'static str, &'static str),
-    ) -> (String, InternalHttpFixtureHandle) {
+    ) -> (String, InProcessHttpFixture) {
         let responses = expected_paths
             .iter()
             .map(|path| {
@@ -1654,14 +1657,14 @@ mod tests {
                 }
             })
             .collect();
-        let address = register_internal_fixture_http_sequence(responses);
-        (address.clone(), InternalHttpFixtureHandle { address })
+        let fixture = InProcessBroadwebNetwork::new().http_sequence(responses);
+        (fixture.base_url().to_string(), fixture)
     }
 
-    fn local_kubo_rpc_fixture(
+    fn in_process_kubo_rpc_fixture(
         expected_paths: &[&str],
         response_for: fn(&str) -> (&'static str, &'static str, &'static str),
-    ) -> (String, InternalKuboRpcFixtureHandle) {
+    ) -> (String, InProcessKuboRpcFixture) {
         let responses = expected_paths
             .iter()
             .map(|path| {
@@ -1673,8 +1676,8 @@ mod tests {
                 }
             })
             .collect();
-        let address = register_internal_kubo_rpc_fixture(responses);
-        (address.clone(), InternalKuboRpcFixtureHandle { address })
+        let fixture = InProcessBroadwebNetwork::new().kubo_rpc_sequence(responses);
+        (fixture.base_url().to_string(), fixture)
     }
 
     fn status_code(status: &str) -> u16 {
@@ -1684,31 +1687,6 @@ mod tests {
             .expect("fixture status should include numeric code")
             .parse()
             .expect("fixture status code should be numeric")
-    }
-
-    struct InternalHttpFixtureHandle {
-        address: String,
-    }
-
-    impl InternalHttpFixtureHandle {
-        fn join(self) -> Result<Vec<String>, String> {
-            Ok(take_internal_fixture_http_requests(self.address.as_str()))
-        }
-    }
-
-    struct InternalKuboRpcFixtureHandle {
-        address: String,
-    }
-
-    impl InternalKuboRpcFixtureHandle {
-        fn join(self) -> Result<Vec<String>, String> {
-            Ok(
-                take_internal_kubo_rpc_fixture_requests(self.address.as_str())
-                    .into_iter()
-                    .map(|request| request_path(&request))
-                    .collect(),
-            )
-        }
     }
 
     fn request_path(request: &str) -> String {
