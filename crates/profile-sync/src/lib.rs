@@ -342,7 +342,15 @@ impl From<ProfileSyncPolicyError> for ProfileSyncCycleWithHealthError {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ProfileSyncPolicyError {
-    ProviderHealthDegraded { health: SettingsSyncHealthReport },
+    ProviderHealthDegraded {
+        health: SettingsSyncHealthReport,
+    },
+    ProviderMinimumUnmet {
+        provider_role: &'static str,
+        minimum: usize,
+        actual: usize,
+        health: SettingsSyncHealthReport,
+    },
 }
 
 impl fmt::Display for ProfileSyncPolicyError {
@@ -352,6 +360,16 @@ impl fmt::Display for ProfileSyncPolicyError {
                 formatter,
                 "profile {} provider health is degraded: {}",
                 health.profile, health.provider_health.message
+            ),
+            Self::ProviderMinimumUnmet {
+                provider_role,
+                minimum,
+                actual,
+                health,
+            } => write!(
+                formatter,
+                "profile {} requires at least {} {}, but health reported {}",
+                health.profile, minimum, provider_role, actual
             ),
         }
     }
@@ -540,6 +558,10 @@ pub struct SettingsSyncCyclePolicy {
     pub retention_policy: ProfileSyncRetentionPolicy,
     pub max_publish_steps: u32,
     pub max_trusted_devices: u32,
+    pub minimum_fresh_online_providers: usize,
+    pub minimum_object_transfer_providers: usize,
+    pub minimum_availability_providers: usize,
+    pub minimum_mutable_root_providers: usize,
     pub minimum_online_retaining_providers: usize,
     pub require_healthy_providers: bool,
 }
@@ -555,9 +577,33 @@ impl SettingsSyncCyclePolicy {
             retention_policy,
             max_publish_steps,
             max_trusted_devices,
+            minimum_fresh_online_providers: 1,
+            minimum_object_transfer_providers: 1,
+            minimum_availability_providers: 1,
+            minimum_mutable_root_providers: 1,
             minimum_online_retaining_providers,
             require_healthy_providers: true,
         }
+    }
+
+    pub fn with_minimum_fresh_online_providers(mut self, minimum: usize) -> Self {
+        self.minimum_fresh_online_providers = minimum;
+        self
+    }
+
+    pub fn with_minimum_object_transfer_providers(mut self, minimum: usize) -> Self {
+        self.minimum_object_transfer_providers = minimum;
+        self
+    }
+
+    pub fn with_minimum_availability_providers(mut self, minimum: usize) -> Self {
+        self.minimum_availability_providers = minimum;
+        self
+    }
+
+    pub fn with_minimum_mutable_root_providers(mut self, minimum: usize) -> Self {
+        self.minimum_mutable_root_providers = minimum;
+        self
     }
 
     pub fn with_provider_health_required(mut self, required: bool) -> Self {
@@ -569,8 +615,53 @@ impl SettingsSyncCyclePolicy {
         &self,
         health: &SettingsSyncHealthReport,
     ) -> Result<(), ProfileSyncPolicyError> {
-        if self.require_healthy_providers && health.provider_health.degraded {
+        if !self.require_healthy_providers {
+            return Ok(());
+        }
+        if health.provider_health.degraded {
             return Err(ProfileSyncPolicyError::ProviderHealthDegraded {
+                health: health.clone(),
+            });
+        }
+        self.check_provider_minimum(
+            "fresh online providers",
+            self.minimum_fresh_online_providers,
+            health.provider_health.fresh_online_providers,
+            health,
+        )?;
+        self.check_provider_minimum(
+            "object-transfer providers",
+            self.minimum_object_transfer_providers,
+            health.provider_health.object_transfer_providers,
+            health,
+        )?;
+        self.check_provider_minimum(
+            "availability providers",
+            self.minimum_availability_providers,
+            health.provider_health.availability_providers,
+            health,
+        )?;
+        self.check_provider_minimum(
+            "mutable-root providers",
+            self.minimum_mutable_root_providers,
+            health.provider_health.mutable_root_providers,
+            health,
+        )?;
+        Ok(())
+    }
+
+    fn check_provider_minimum(
+        &self,
+        provider_role: &'static str,
+        minimum: usize,
+        actual: usize,
+        health: &SettingsSyncHealthReport,
+    ) -> Result<(), ProfileSyncPolicyError> {
+        if actual < minimum {
+            return Err(ProfileSyncPolicyError::ProviderMinimumUnmet {
+                provider_role,
+                minimum,
+                actual,
                 health: health.clone(),
             });
         }
@@ -3157,6 +3248,95 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_policy_requires_fresh_provider_quorum() {
+        let network = InProcessBroadwebNetwork::new();
+        let first_state_root = test_state_root("cycle-policy-quorum-first");
+        let second_state_root = test_state_root("cycle-policy-quorum-second");
+        let db_root = test_state_root("cycle-policy-quorum-db");
+        let first_daemon = network
+            .daemon_for_device(
+                &first_state_root,
+                ResourceBudget::default(),
+                "runtime-quorum-a",
+            )
+            .expect("start first in-process profile-sync daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-quorum-a",
+        )
+        .expect("open local settings database");
+        let profile = "quorumprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([58; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer =
+            ProfileSyncDeviceSigner::generate("runtime-quorum-a").expect("generate signer");
+        let policy = SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 1)
+            .with_minimum_fresh_online_providers(2);
+
+        let one_provider_error = BroadwebdSettingsSyncRunner::new(&first_daemon)
+            .run_settings_sync_cycle_with_active_key_policy(
+                &database,
+                profile,
+                settings_root_id,
+                &content_key,
+                &signer,
+                &policy,
+            )
+            .expect_err("one fresh provider should not satisfy the policy");
+        let ProfileSyncCycleWithHealthError::Policy(ProfileSyncPolicyError::ProviderMinimumUnmet {
+            provider_role,
+            minimum,
+            actual,
+            health,
+        }) = one_provider_error
+        else {
+            panic!("expected provider quorum policy error, got {one_provider_error:?}");
+        };
+        assert_eq!(provider_role, "fresh online providers");
+        assert_eq!(minimum, 2);
+        assert_eq!(actual, 1);
+        assert_eq!(health.provider_health.fresh_online_providers, 1);
+        assert!(!health.provider_health.degraded);
+
+        let _second_daemon = network
+            .daemon_for_device(
+                &second_state_root,
+                ResourceBudget::default(),
+                "runtime-quorum-b",
+            )
+            .expect("start second in-process profile-sync daemon");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register local trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write local setting");
+
+        let run = BroadwebdSettingsSyncRunner::new(&first_daemon)
+            .run_settings_sync_cycle_with_active_key_policy(
+                &database,
+                profile,
+                settings_root_id,
+                &content_key,
+                &signer,
+                &policy,
+            )
+            .expect("two fresh providers satisfy the policy");
+        assert_eq!(run.before_health.provider_health.fresh_online_providers, 2);
+        assert_eq!(run.cycle.published_step_count(), 1);
+        assert!(!run.degraded_after());
+
+        let _ = std::fs::remove_dir_all(first_state_root);
+        let _ = std::fs::remove_dir_all(second_state_root);
         let _ = std::fs::remove_dir_all(db_root);
     }
 

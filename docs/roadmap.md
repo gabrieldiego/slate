@@ -259,6 +259,11 @@ Current baseline:
   still supplies the actual content key and device signer secret material, so
   the database remains metadata-only while the scheduler no longer has to pass
   duplicated key ids around.
+- Settings sync cycle policy now supports explicit provider quorum checks for
+  fresh online, object-transfer, availability, and mutable-root providers. The
+  in-process fixture covers a policy that refuses to run with only one fresh
+  provider and then succeeds once a second simulated device provider is present,
+  without opening sockets or contacting any external discovery service.
 - The local profile-sync fixture can now mark simulated devices offline and
   online, allowing tests to verify unavailable devices fail closed without
   touching sockets, DNS, Tor, IPFS, or external relays.
