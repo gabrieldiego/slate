@@ -477,6 +477,12 @@ first, then receives from trusted devices. The local device's own public key
 still belongs in the trusted-key table because manifests may reference retained
 snapshot dependencies signed by the local device, even though the receive runner
 does not pull the local device's head as a remote source.
+Before the cycle touches broadwebd it validates the caller-supplied credentials
+against local profile state: `key_id` must match the active content-key epoch in
+`slate-settings.db`, that epoch must use the supported content encryption
+algorithm, and the supplied local signer must match the trusted public key for
+the local sync device. The database stores key metadata and trusted public keys,
+not plaintext content keys or private signing keys.
 
 The local fake backend must model provider availability inside the test process.
 Each simulated device registers as a provider, retained objects are scoped to

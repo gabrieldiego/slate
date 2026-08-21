@@ -232,6 +232,12 @@ Current baseline:
   round trip where one device publishes a full snapshot, the second receives it
   and publishes an incremental tail, and the first receives that tail without
   opening loopback sockets.
+- The settings sync cycle now validates caller-supplied credentials against
+  `slate-settings.db` before touching broadwebd: the requested content-key id
+  must be the active key epoch, the active epoch must use the supported content
+  encryption algorithm, and the supplied local signer must match the trusted
+  public key recorded for the local sync device. Secret key bytes remain outside
+  the database.
 - The local profile-sync fixture can now mark simulated devices offline and
   online, allowing tests to verify unavailable devices fail closed without
   touching sockets, DNS, Tor, IPFS, or external relays.
@@ -499,9 +505,9 @@ Next:
   backend, then point the profile mutable root at the newest manifest.
 - Use the storage compaction target to publish encrypted snapshots, trim
   manifest tails, and then enforce retention across broadwebd providers.
-- Wire the bounded settings sync cycle into the runtime scheduler with trusted
-  account keys loaded from `slate-settings.db` and visible policy/health
-  handling.
+- Wire the bounded settings sync cycle into the runtime scheduler with secret
+  material supplied by the platform key store or enrollment flow, active key
+  metadata loaded from `slate-settings.db`, and visible policy/health handling.
 - Add device enrollment, revocation, and key rotation before syncing sensitive
   profile domains.
 - Expand local distributed-protocol fixtures to simulate offline devices,

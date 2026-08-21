@@ -11,13 +11,14 @@ use slate_broadwebd::{
 };
 use slate_storage::{
     DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH, EncryptedSyncObject, IncomingSyncSettingText,
-    PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND, PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
-    PROFILE_SYNC_MANIFEST_OBJECT_KIND, PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND,
-    PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND, PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION,
-    ProfileSyncContentKey, ProfileSyncDeviceHead, ProfileSyncDeviceHeadPullRecordStatus,
-    ProfileSyncDeviceSigner, ProfileSyncManifest, ProfileSyncObjectBytes, ProfileSyncObjectSource,
-    ProfileSyncRetentionPolicy, ProfileSyncRootCandidate as StorageProfileSyncRootCandidate,
-    ProfileSyncRootRecord, ProfileSyncSettingsManifestApplication, ProfileSyncSettingsSnapshot,
+    PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305, PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
+    PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+    PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND, PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND,
+    PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION, ProfileSyncContentKey, ProfileSyncDeviceHead,
+    ProfileSyncDeviceHeadPullRecordStatus, ProfileSyncDeviceSigner, ProfileSyncManifest,
+    ProfileSyncObjectBytes, ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
+    ProfileSyncRootCandidate as StorageProfileSyncRootCandidate, ProfileSyncRootRecord,
+    ProfileSyncSettingsManifestApplication, ProfileSyncSettingsSnapshot,
     ProfileSyncSettingsSnapshotPublication, ProfileSyncSettingsTailChangePublication,
     ProfileSyncTrustedPullApplyError, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, StorageError,
     SyncChangeRecord, SyncCompactionTarget, SyncDevicePublicKeyRecord, SyncObjectError,
@@ -167,7 +168,80 @@ impl From<ProfileSyncTrustedPullApplyError<BroadwebdError>> for ProfileSyncRecei
 }
 
 #[derive(Debug)]
+pub enum ProfileSyncCredentialError {
+    Storage(StorageError),
+    SyncObject(SyncObjectError),
+    InactiveContentKey {
+        profile: String,
+        expected_key_id: String,
+        active_key_id: String,
+    },
+    UntrustedLocalDevice {
+        profile: String,
+        device_id: String,
+    },
+    LocalDevicePublicKeyMismatch {
+        profile: String,
+        device_id: String,
+    },
+}
+
+impl fmt::Display for ProfileSyncCredentialError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Storage(error) => {
+                write!(formatter, "profile sync credential storage error: {error}")
+            }
+            Self::SyncObject(error) => {
+                write!(formatter, "profile sync credential object error: {error}")
+            }
+            Self::InactiveContentKey {
+                profile,
+                expected_key_id,
+                active_key_id,
+            } => write!(
+                formatter,
+                "profile {profile} active sync content key is {active_key_id}, not requested key {expected_key_id}"
+            ),
+            Self::UntrustedLocalDevice { profile, device_id } => write!(
+                formatter,
+                "profile {profile} has no trusted public key for local sync device {device_id}"
+            ),
+            Self::LocalDevicePublicKeyMismatch { profile, device_id } => write!(
+                formatter,
+                "profile {profile} trusted public key for local sync device {device_id} does not match the supplied signer"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ProfileSyncCredentialError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Storage(error) => Some(error),
+            Self::SyncObject(error) => Some(error),
+            Self::InactiveContentKey { .. }
+            | Self::UntrustedLocalDevice { .. }
+            | Self::LocalDevicePublicKeyMismatch { .. } => None,
+        }
+    }
+}
+
+impl From<StorageError> for ProfileSyncCredentialError {
+    fn from(error: StorageError) -> Self {
+        Self::Storage(error)
+    }
+}
+
+impl From<SyncObjectError> for ProfileSyncCredentialError {
+    fn from(error: SyncObjectError) -> Self {
+        Self::SyncObject(error)
+    }
+}
+
+#[derive(Debug)]
 pub enum ProfileSyncCycleError {
+    Credentials(ProfileSyncCredentialError),
     Publish(ProfileSyncPublishError),
     Receive(ProfileSyncReceiveError),
 }
@@ -175,6 +249,12 @@ pub enum ProfileSyncCycleError {
 impl fmt::Display for ProfileSyncCycleError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Credentials(error) => {
+                write!(
+                    formatter,
+                    "profile sync credential preflight failed: {error}"
+                )
+            }
             Self::Publish(error) => write!(formatter, "profile sync publish cycle failed: {error}"),
             Self::Receive(error) => write!(formatter, "profile sync receive cycle failed: {error}"),
         }
@@ -184,6 +264,7 @@ impl fmt::Display for ProfileSyncCycleError {
 impl std::error::Error for ProfileSyncCycleError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
+            Self::Credentials(error) => Some(error),
             Self::Publish(error) => Some(error),
             Self::Receive(error) => Some(error),
         }
@@ -193,6 +274,12 @@ impl std::error::Error for ProfileSyncCycleError {
 impl From<ProfileSyncPublishError> for ProfileSyncCycleError {
     fn from(error: ProfileSyncPublishError) -> Self {
         Self::Publish(error)
+    }
+}
+
+impl From<ProfileSyncCredentialError> for ProfileSyncCycleError {
+    fn from(error: ProfileSyncCredentialError) -> Self {
+        Self::Credentials(error)
     }
 }
 
@@ -470,6 +557,7 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
         max_publish_steps: u32,
         max_trusted_devices: u32,
     ) -> Result<SettingsSyncCycleRun, ProfileSyncCycleError> {
+        validate_settings_sync_cycle_credentials(database, profile, key_id, signer)?;
         trusted_remote_device_public_keys(database, profile, max_trusted_devices)?;
         let publisher = BroadwebdProfileSyncPublisher::new(self.daemon);
         let publish = publisher.run_pending_local_settings_sync(
@@ -1302,6 +1390,49 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
     }
 }
 
+pub fn validate_settings_sync_cycle_credentials(
+    database: &SlateProfileDatabase,
+    profile: &str,
+    key_id: &str,
+    signer: &ProfileSyncDeviceSigner,
+) -> Result<(), ProfileSyncCredentialError> {
+    let active_key = database
+        .active_sync_content_key_epoch(profile)?
+        .ok_or_else(|| StorageError::MissingActiveSyncContentKey(profile.to_string()))?;
+    if active_key.algorithm != PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305 {
+        return Err(StorageError::UnsupportedSyncContentKeyAlgorithm {
+            key_id: active_key.key_id,
+            algorithm: active_key.algorithm,
+        }
+        .into());
+    }
+    if active_key.key_id != key_id {
+        return Err(ProfileSyncCredentialError::InactiveContentKey {
+            profile: profile.to_string(),
+            expected_key_id: key_id.to_string(),
+            active_key_id: active_key.key_id,
+        });
+    }
+
+    let public_key = signer.public_key()?;
+    let Some(trusted_key) =
+        database.sync_device_public_key(profile, public_key.device_id.as_str())?
+    else {
+        return Err(ProfileSyncCredentialError::UntrustedLocalDevice {
+            profile: profile.to_string(),
+            device_id: public_key.device_id,
+        });
+    };
+    if trusted_key.public_key != public_key {
+        return Err(ProfileSyncCredentialError::LocalDevicePublicKeyMismatch {
+            profile: profile.to_string(),
+            device_id: trusted_key.public_key.device_id,
+        });
+    }
+
+    Ok(())
+}
+
 fn trusted_remote_device_public_keys(
     database: &SlateProfileDatabase,
     profile: &str,
@@ -1564,23 +1695,37 @@ mod tests {
     use super::{
         BroadwebdProfileSyncObjectSource, BroadwebdProfileSyncPublisher,
         BroadwebdSettingsSyncRunner, BroadwebdTrustedDeviceHeadSyncStatus,
-        LocalSettingsHeadPublishStatus, ProfileSyncReceiveError, settings_device_head_root_id,
+        LocalSettingsHeadPublishStatus, ProfileSyncCredentialError, ProfileSyncCycleError,
+        ProfileSyncReceiveError, settings_device_head_root_id,
     };
     use slate_broadwebd::{ResourceBudget, test_fixtures::InProcessBroadwebNetwork};
     use slate_storage::{
         DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
-        IncomingSyncSettingText, PROFILE_SYNC_CONTENT_KEY_BYTES,
-        PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, ProfileSyncContentKey, ProfileSyncDeviceHead,
-        ProfileSyncDeviceSigner, ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
-        SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, SyncChangeRecord,
-        SyncDevicePublicKeyRegistration, open_signed_profile_sync_device_head,
-        open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
-        open_signed_sync_setting_text, pull_signed_profile_sync_device_head,
-        settings_sync_snapshot_id,
+        IncomingSyncSettingText, PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305,
+        PROFILE_SYNC_CONTENT_KEY_BYTES, PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
+        ProfileSyncContentKey, ProfileSyncDeviceHead, ProfileSyncDeviceSigner,
+        ProfileSyncObjectSource, ProfileSyncRetentionPolicy, SYNC_DOMAIN_CALENDAR,
+        SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, StorageError, SyncChangeRecord,
+        SyncContentKeyEpochRegistration, SyncDevicePublicKeyRegistration,
+        open_signed_profile_sync_device_head, open_signed_profile_sync_manifest,
+        open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
+        pull_signed_profile_sync_device_head, settings_sync_snapshot_id,
     };
     use std::time::{SystemTime, UNIX_EPOCH};
 
     const TEST_CONTENT_KEY_ID: &str = "content-key-epoch-1";
+
+    fn register_test_content_key_epoch(database: &SlateProfileDatabase, profile: &str) {
+        database
+            .register_sync_content_key_epoch(&SyncContentKeyEpochRegistration {
+                profile: profile.to_string(),
+                key_id: TEST_CONTENT_KEY_ID.to_string(),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                algorithm: PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305.to_string(),
+                active: true,
+            })
+            .expect("register active test content key epoch");
+    }
 
     #[test]
     fn broadwebd_bridge_publishes_and_reads_fixture_objects() {
@@ -2196,6 +2341,8 @@ mod tests {
             ProfileSyncDeviceSigner::generate("runtime-x").expect("generate first signer");
         let second_signer =
             ProfileSyncDeviceSigner::generate("runtime-y").expect("generate second signer");
+        register_test_content_key_epoch(&first_database, profile);
+        register_test_content_key_epoch(&second_database, profile);
         first_database
             .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
                 profile: profile.to_string(),
@@ -2315,6 +2462,112 @@ mod tests {
         let _ = std::fs::remove_dir_all(second_state_root);
         let _ = std::fs::remove_dir_all(first_db_root);
         let _ = std::fs::remove_dir_all(second_db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_runner_rejects_invalid_cycle_credentials() {
+        let network = InProcessBroadwebNetwork::new();
+        let state_root = test_state_root("cycle-credentials");
+        let db_root = test_state_root("cycle-credentials-db");
+        let daemon = network
+            .daemon_for_device(&state_root, ResourceBudget::default(), "runtime-z")
+            .expect("start daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-z",
+        )
+        .expect("open settings database");
+        let profile = "credentialprofile";
+        let content_key = ProfileSyncContentKey::from_bytes([52; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-z").expect("generate signer");
+        let runner = BroadwebdSettingsSyncRunner::new(&daemon);
+
+        let missing_key_error = runner
+            .run_settings_sync_cycle(
+                &database,
+                profile,
+                "settings/latest",
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+                4,
+            )
+            .expect_err("missing active content key should fail");
+        assert!(matches!(
+            missing_key_error,
+            ProfileSyncCycleError::Credentials(ProfileSyncCredentialError::Storage(
+                StorageError::MissingActiveSyncContentKey(profile)
+            )) if profile == "credentialprofile"
+        ));
+
+        register_test_content_key_epoch(&database, profile);
+        let wrong_signer =
+            ProfileSyncDeviceSigner::generate("runtime-z").expect("generate wrong signer");
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: wrong_signer.public_key().expect("wrong public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register mismatched local public key");
+        let key_mismatch_error = runner
+            .run_settings_sync_cycle(
+                &database,
+                profile,
+                "settings/latest",
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+                4,
+            )
+            .expect_err("mismatched local signer should fail");
+        assert!(matches!(
+            key_mismatch_error,
+            ProfileSyncCycleError::Credentials(
+                ProfileSyncCredentialError::LocalDevicePublicKeyMismatch {
+                    profile,
+                    device_id
+                }
+            ) if profile == "credentialprofile" && device_id == "runtime-z"
+        ));
+
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register matching local public key");
+        let inactive_key_error = runner
+            .run_settings_sync_cycle(
+                &database,
+                profile,
+                "settings/latest",
+                &content_key,
+                "content-key-epoch-2",
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+                4,
+            )
+            .expect_err("inactive requested content key should fail");
+        assert!(matches!(
+            inactive_key_error,
+            ProfileSyncCycleError::Credentials(ProfileSyncCredentialError::InactiveContentKey {
+                profile,
+                expected_key_id,
+                active_key_id
+            }) if profile == "credentialprofile"
+                && expected_key_id == "content-key-epoch-2"
+                && active_key_id == TEST_CONTENT_KEY_ID
+        ));
+
+        let _ = std::fs::remove_dir_all(state_root);
+        let _ = std::fs::remove_dir_all(db_root);
     }
 
     #[test]
