@@ -738,6 +738,11 @@ Current baseline:
   records through broadwebd's `InProcessBroadwebNetwork`, using retained objects
   and explicit `account/membership/<record-id>` roots so authority records move
   between simulated devices without loopback ports or external protocols.
+- A discoverable `account/membership/log` index can now be published from
+  `slate-settings.db` membership history and received through the same
+  in-process fixture transport. It is non-authoritative discovery metadata:
+  each listed object is checked against its signed membership payload before
+  storage applies enrollment or revocation.
 
 Next:
 

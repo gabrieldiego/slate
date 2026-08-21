@@ -563,6 +563,11 @@ them through `slate-settings.db`. The fixture coverage for this path uses two
 devices on one `InProcessBroadwebNetwork`, so membership authority propagation
 is exercised without loopback listeners, DNS, public gateways, Tor, IPFS/IPNS,
 or external relays.
+The bridge can now also publish a small `account/membership/log` index that
+lists retained membership record objects in epoch order. The index is only a
+discovery layer: receivers validate each entry against the signed membership
+record payload and rely on storage authorization before changing trusted device
+state.
 The broadwebd source bridge can also run the receive side for one trusted
 device head: resolve and verify the head, record the verified head root in
 `slate-settings.db`, apply the referenced settings manifest when the head is

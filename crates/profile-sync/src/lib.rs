@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 use core::fmt;
+use serde::{Deserialize, Serialize};
 use slate_broadwebd::{
     BroadwebDaemon, BroadwebdError, ProfileSyncObjectRequest as BroadwebdProfileSyncObjectRequest,
     ProfileSyncProfileRequest as BroadwebdProfileSyncProfileRequest,
@@ -20,13 +21,14 @@ use slate_storage::{
     PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, PROFILE_SYNC_MANIFEST_OBJECT_KIND,
     PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND, PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND,
     PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION, ProfileSyncContentKey, ProfileSyncDeviceHead,
-    ProfileSyncDeviceHeadPullRecordStatus, ProfileSyncDeviceSigner, ProfileSyncManifest,
-    ProfileSyncObjectBytes, ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
+    ProfileSyncDeviceHeadPullRecordStatus, ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner,
+    ProfileSyncManifest, ProfileSyncMembershipRecord, ProfileSyncObjectBytes,
+    ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
     ProfileSyncRootCandidate as StorageProfileSyncRootCandidate, ProfileSyncRootRecord,
     ProfileSyncSettingsCandidatePullApplyStatus, ProfileSyncSettingsManifestApplication,
     ProfileSyncSettingsSnapshot, ProfileSyncSettingsSnapshotPublication,
     ProfileSyncSettingsTailChangePublication, ProfileSyncTrustedPullApplyError,
-    SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, StorageError,
+    SYNC_DOMAIN_SETTINGS, SignedSyncObject, SlateProfileDatabase, StorageError,
     SyncAccountMembershipRecordApplication, SyncChangeRecord, SyncCompactionTarget,
     SyncDevicePublicKeyRecord, SyncObjectError, SyncSettingTextEvent, SyncSnapshotRecord,
     SyncSnapshotRegistration, VerifiedProfileSyncDeviceHead, open_signed_profile_sync_device_head,
@@ -34,6 +36,9 @@ use slate_storage::{
     settings_sync_snapshot_id,
 };
 use std::collections::BTreeSet;
+
+pub const PROFILE_SYNC_MEMBERSHIP_LOG_SCHEMA_VERSION: u8 = 1;
+pub const PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID: &str = "account/membership/log";
 
 #[derive(Clone, Copy)]
 pub struct BroadwebdProfileSyncObjectSource<'a> {
@@ -78,6 +83,32 @@ pub struct PublishedProfileSyncMembershipRecord {
     pub signed_record: Vec<u8>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ProfileSyncMembershipLog {
+    pub profile: String,
+    pub schema_version: u8,
+    pub records: Vec<ProfileSyncMembershipLogEntry>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ProfileSyncMembershipLogEntry {
+    pub record_id: String,
+    pub root_id: String,
+    pub object_id: String,
+    pub membership_epoch: i64,
+    pub record_kind: String,
+    pub device_id: String,
+    pub signer_device_id: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PublishedProfileSyncMembershipLog {
+    pub profile: String,
+    pub root_id: String,
+    pub object_id: String,
+    pub log: ProfileSyncMembershipLog,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ProfileSyncMembershipRecordPullStatus {
     NoPublishedRoot {
@@ -92,6 +123,24 @@ pub enum ProfileSyncMembershipRecordPullStatus {
     Applied {
         root: ProfileSyncRootRecord,
         application: SyncAccountMembershipRecordApplication,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ProfileSyncMembershipLogPullStatus {
+    NoPublishedRoot {
+        profile: String,
+        root_id: String,
+    },
+    Unchanged {
+        profile: String,
+        root_id: String,
+        object_id: String,
+    },
+    Applied {
+        root: ProfileSyncRootRecord,
+        log: ProfileSyncMembershipLog,
+        applications: Vec<SyncAccountMembershipRecordApplication>,
     },
 }
 
@@ -158,7 +207,9 @@ impl From<SyncObjectError> for ProfileSyncPublishError {
 pub enum ProfileSyncReceiveError {
     Broadwebd(BroadwebdError),
     Storage(StorageError),
+    SyncObject(SyncObjectError),
     PullApply(ProfileSyncTrustedPullApplyError<BroadwebdError>),
+    InvalidMembershipLog(String),
     TrustedDeviceLimitExceeded {
         profile: String,
         trusted_device_count: usize,
@@ -171,7 +222,11 @@ impl fmt::Display for ProfileSyncReceiveError {
         match self {
             Self::Broadwebd(error) => write!(formatter, "profile sync backend error: {error}"),
             Self::Storage(error) => write!(formatter, "profile sync storage error: {error}"),
+            Self::SyncObject(error) => write!(formatter, "profile sync object error: {error}"),
             Self::PullApply(error) => write!(formatter, "profile sync receive error: {error}"),
+            Self::InvalidMembershipLog(reason) => {
+                write!(formatter, "invalid profile sync membership log: {reason}")
+            }
             Self::TrustedDeviceLimitExceeded {
                 profile,
                 trusted_device_count,
@@ -189,7 +244,9 @@ impl std::error::Error for ProfileSyncReceiveError {
         match self {
             Self::Broadwebd(error) => Some(error),
             Self::Storage(error) => Some(error),
+            Self::SyncObject(error) => Some(error),
             Self::PullApply(error) => Some(error),
+            Self::InvalidMembershipLog(_) => None,
             Self::TrustedDeviceLimitExceeded { .. } => None,
         }
     }
@@ -204,6 +261,12 @@ impl From<StorageError> for ProfileSyncReceiveError {
 impl From<BroadwebdError> for ProfileSyncReceiveError {
     fn from(error: BroadwebdError) -> Self {
         Self::Broadwebd(error)
+    }
+}
+
+impl From<SyncObjectError> for ProfileSyncReceiveError {
+    fn from(error: SyncObjectError) -> Self {
+        Self::SyncObject(error)
     }
 }
 
@@ -1382,6 +1445,48 @@ impl<'a> BroadwebdProfileSyncObjectSource<'a> {
         Ok(ProfileSyncMembershipRecordPullStatus::Applied { root, application })
     }
 
+    pub fn pull_and_apply_sync_account_membership_log_if_changed(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        root_id: &str,
+    ) -> Result<ProfileSyncMembershipLogPullStatus, ProfileSyncReceiveError> {
+        let Some(object_id) = self.resolve_profile_sync_root(profile, root_id)? else {
+            return Ok(ProfileSyncMembershipLogPullStatus::NoPublishedRoot {
+                profile: profile.to_string(),
+                root_id: root_id.to_string(),
+            });
+        };
+        if database
+            .profile_sync_root(profile, root_id)?
+            .is_some_and(|root| root.object_id == object_id)
+        {
+            return Ok(ProfileSyncMembershipLogPullStatus::Unchanged {
+                profile: profile.to_string(),
+                root_id: root_id.to_string(),
+                object_id,
+            });
+        }
+
+        let log_object = self.get_profile_sync_object(profile, object_id.as_str())?;
+        let log = decode_profile_sync_membership_log(log_object.bytes.as_slice(), profile)?;
+        let mut applications = Vec::with_capacity(log.records.len());
+        for entry in &log.records {
+            let signed_record = self.get_profile_sync_object(profile, entry.object_id.as_str())?;
+            validate_membership_log_entry_object(profile, entry, signed_record.bytes.as_slice())?;
+            applications.push(
+                database
+                    .apply_signed_sync_account_membership_record(signed_record.bytes.as_slice())?,
+            );
+        }
+        let root = database.set_profile_sync_root(profile, root_id, object_id.as_str())?;
+        Ok(ProfileSyncMembershipLogPullStatus::Applied {
+            root,
+            log,
+            applications,
+        })
+    }
+
     pub fn pull_record_and_apply_trusted_settings_from_device_head(
         &self,
         database: &SlateProfileDatabase,
@@ -2246,6 +2351,51 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
             object_id,
             signed_record,
         })
+    }
+
+    pub fn publish_local_sync_account_membership_log(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        root_id: &str,
+    ) -> Result<Option<PublishedProfileSyncMembershipLog>, ProfileSyncPublishError> {
+        let records = database.sync_account_membership_records(profile)?;
+        if records.is_empty() {
+            return Ok(None);
+        }
+
+        let mut entries = Vec::with_capacity(records.len());
+        for record in records {
+            let record_root_id = sync_membership_record_root_id(record.record_id.as_str());
+            let publication = self.publish_signed_sync_account_membership_record(
+                profile,
+                record_root_id.as_str(),
+                record.signed_record,
+            )?;
+            entries.push(ProfileSyncMembershipLogEntry {
+                record_id: record.record_id,
+                root_id: record_root_id,
+                object_id: publication.object_id,
+                membership_epoch: record.membership_epoch,
+                record_kind: record.record_kind,
+                device_id: record.device_id,
+                signer_device_id: record.signer_device_id,
+            });
+        }
+
+        let log = ProfileSyncMembershipLog {
+            profile: profile.to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_LOG_SCHEMA_VERSION,
+            records: entries,
+        };
+        let log_bytes = serde_json::to_vec(&log).map_err(SyncObjectError::Encode)?;
+        let object_id = self.put_retained_root(profile, root_id, log_bytes)?;
+        Ok(Some(PublishedProfileSyncMembershipLog {
+            profile: profile.to_string(),
+            root_id: root_id.to_string(),
+            object_id,
+            log,
+        }))
     }
 
     pub fn put_retained_root_with_dependencies(
@@ -3233,6 +3383,118 @@ fn sign_encrypted_json_object(
     signer.sign(encrypted_bytes.as_slice())?.to_bytes()
 }
 
+fn decode_profile_sync_membership_log(
+    bytes: &[u8],
+    expected_profile: &str,
+) -> Result<ProfileSyncMembershipLog, ProfileSyncReceiveError> {
+    let log: ProfileSyncMembershipLog =
+        serde_json::from_slice(bytes).map_err(SyncObjectError::Decode)?;
+    validate_profile_sync_membership_log(&log, expected_profile)?;
+    Ok(log)
+}
+
+fn validate_profile_sync_membership_log(
+    log: &ProfileSyncMembershipLog,
+    expected_profile: &str,
+) -> Result<(), ProfileSyncReceiveError> {
+    if log.schema_version != PROFILE_SYNC_MEMBERSHIP_LOG_SCHEMA_VERSION {
+        return Err(ProfileSyncReceiveError::InvalidMembershipLog(format!(
+            "unsupported schema version {}",
+            log.schema_version
+        )));
+    }
+    if log.profile != expected_profile {
+        return Err(ProfileSyncReceiveError::InvalidMembershipLog(format!(
+            "expected profile {expected_profile}, got {}",
+            log.profile
+        )));
+    }
+
+    let mut seen_record_ids = BTreeSet::new();
+    let mut previous_key: Option<(i64, String)> = None;
+    for entry in &log.records {
+        if entry.record_id.is_empty() {
+            return Err(ProfileSyncReceiveError::InvalidMembershipLog(
+                "record id must not be empty".to_string(),
+            ));
+        }
+        if entry.root_id != sync_membership_record_root_id(entry.record_id.as_str()) {
+            return Err(ProfileSyncReceiveError::InvalidMembershipLog(format!(
+                "record {} has unexpected root {}",
+                entry.record_id, entry.root_id
+            )));
+        }
+        if entry.object_id.is_empty() {
+            return Err(ProfileSyncReceiveError::InvalidMembershipLog(format!(
+                "record {} has an empty object id",
+                entry.record_id
+            )));
+        }
+        if entry.membership_epoch < 1 {
+            return Err(ProfileSyncReceiveError::InvalidMembershipLog(format!(
+                "record {} has invalid membership epoch {}",
+                entry.record_id, entry.membership_epoch
+            )));
+        }
+        if !seen_record_ids.insert(entry.record_id.clone()) {
+            return Err(ProfileSyncReceiveError::InvalidMembershipLog(format!(
+                "record {} is duplicated",
+                entry.record_id
+            )));
+        }
+
+        let current_key = (entry.membership_epoch, entry.record_id.clone());
+        if previous_key
+            .as_ref()
+            .is_some_and(|previous| previous > &current_key)
+        {
+            return Err(ProfileSyncReceiveError::InvalidMembershipLog(
+                "records must be ordered by membership epoch and record id".to_string(),
+            ));
+        }
+        previous_key = Some(current_key);
+    }
+
+    Ok(())
+}
+
+fn validate_membership_log_entry_object(
+    expected_profile: &str,
+    entry: &ProfileSyncMembershipLogEntry,
+    signed_record: &[u8],
+) -> Result<(), ProfileSyncReceiveError> {
+    let (signer_device_id, membership_record) =
+        decode_signed_membership_record_for_membership_log(signed_record)?;
+    let expected_root_id = sync_membership_record_root_id(membership_record.record_id.as_str());
+    if membership_record.profile != expected_profile
+        || entry.record_id != membership_record.record_id
+        || entry.root_id != expected_root_id
+        || entry.membership_epoch != membership_record.membership_epoch
+        || entry.record_kind != membership_record.record_kind
+        || entry.device_id != membership_record.device_id
+        || entry.signer_device_id != signer_device_id
+    {
+        return Err(ProfileSyncReceiveError::InvalidMembershipLog(format!(
+            "entry {} does not match its signed membership record",
+            entry.record_id
+        )));
+    }
+    Ok(())
+}
+
+fn decode_signed_membership_record_for_membership_log(
+    signed_record: &[u8],
+) -> Result<(String, ProfileSyncMembershipRecord), ProfileSyncReceiveError> {
+    let signed_object = SignedSyncObject::from_bytes(signed_record)?;
+    let signer_key = ProfileSyncDevicePublicKey {
+        device_id: signed_object.device_id.clone(),
+        bytes: signed_object.public_key.clone(),
+    };
+    let payload = signed_object.verify_with(&signer_key)?;
+    let membership_record = ProfileSyncMembershipRecord::from_bytes(payload)?;
+    Ok((signed_object.device_id, membership_record))
+}
+
 impl ProfileSyncObjectSource for BroadwebdProfileSyncObjectSource<'_> {
     type Error = BroadwebdError;
 
@@ -3306,7 +3568,8 @@ mod tests {
         BroadwebdProfileSyncObjectSource, BroadwebdProfileSyncPublisher,
         BroadwebdSettingsSyncRunner, BroadwebdSettingsSyncScheduler,
         BroadwebdTrustedDeviceHeadSyncStatus, LocalSettingsHeadPublishStatus,
-        ProfileSyncCredentialError, ProfileSyncCycleError, ProfileSyncCycleWithHealthError,
+        PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID, ProfileSyncCredentialError, ProfileSyncCycleError,
+        ProfileSyncCycleWithHealthError, ProfileSyncMembershipLogPullStatus,
         ProfileSyncMembershipRecordPullStatus, ProfileSyncPolicyError, ProfileSyncReceiveError,
         SettingsSyncCyclePolicy, SettingsSyncRetentionProviderHandle, SettingsSyncRuntimeSecrets,
         SettingsSyncSchedulerConfig, settings_device_head_root_id, sync_membership_record_root_id,
@@ -3520,6 +3783,156 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_bridge_publishes_and_applies_membership_log_without_loopback() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("membership-log-publisher");
+        let receiver_state_root = test_state_root("membership-log-receiver");
+        let publisher_db_root = test_state_root("membership-log-publisher-db");
+        let receiver_db_root = test_state_root("membership-log-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "membership-log-publisher-device",
+            )
+            .expect("start in-process membership log publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "membership-log-receiver-device",
+            )
+            .expect("start in-process membership log receiver daemon");
+        let publisher_database =
+            SlateProfileDatabase::open_resolved(publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME))
+                .expect("open publisher settings database");
+        let receiver_database =
+            SlateProfileDatabase::open_resolved(receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME))
+                .expect("open receiver settings database");
+        let signer_a = ProfileSyncDeviceSigner::generate("membership-log-device-a")
+            .expect("generate membership log signer a");
+        let signer_b = ProfileSyncDeviceSigner::generate("membership-log-device-b")
+            .expect("generate membership log signer b");
+        let enroll_a = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-membership-log-device-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-log-device-a".to_string(),
+            device_public_key: Some(signer_a.public_key().expect("read signer a public key")),
+            created_at: 10,
+        };
+        let signed_enroll_a = signed_membership_record_bytes(&signer_a, &enroll_a);
+        publisher_database
+            .apply_signed_sync_account_membership_record(signed_enroll_a.as_slice())
+            .expect("publisher bootstraps signer a membership");
+        let enroll_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-enroll-membership-log-device-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-log-device-b".to_string(),
+            device_public_key: Some(signer_b.public_key().expect("read signer b public key")),
+            created_at: 20,
+        };
+        let signed_enroll_b = signed_membership_record_bytes(&signer_a, &enroll_b);
+        publisher_database
+            .apply_signed_sync_account_membership_record(signed_enroll_b.as_slice())
+            .expect("publisher applies signer b membership");
+
+        let publication = BroadwebdProfileSyncPublisher::new(&publisher_daemon)
+            .publish_local_sync_account_membership_log(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            )
+            .expect("publish local membership log through in-process broadwebd")
+            .expect("membership log has records");
+        assert_eq!(publication.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(publication.root_id, PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID);
+        assert_eq!(publication.log.records.len(), 2);
+        assert_eq!(
+            publication.log.records[0].root_id,
+            sync_membership_record_root_id("epoch-1-enroll-membership-log-device-a")
+        );
+        assert_eq!(
+            publication.log.records[1].root_id,
+            sync_membership_record_root_id("epoch-2-enroll-membership-log-device-b")
+        );
+
+        let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
+        assert_eq!(
+            source
+                .resolve_profile_sync_root(
+                    DEFAULT_PROFILE_ID,
+                    sync_membership_record_root_id("epoch-2-enroll-membership-log-device-b")
+                        .as_str(),
+                )
+                .expect("resolve published membership record root")
+                .as_deref(),
+            Some(publication.log.records[1].object_id.as_str())
+        );
+        let applied = source
+            .pull_and_apply_sync_account_membership_log_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            )
+            .expect("pull and apply membership log through in-process broadwebd");
+        let ProfileSyncMembershipLogPullStatus::Applied {
+            root,
+            log,
+            applications,
+        } = applied
+        else {
+            panic!("expected applied membership log from in-process broadwebd");
+        };
+        assert_eq!(root.object_id, publication.object_id);
+        assert_eq!(log, publication.log);
+        assert_eq!(applications.len(), 2);
+        assert!(applications[0].bootstrapped);
+        assert!(applications[0].applied);
+        assert!(!applications[1].bootstrapped);
+        assert!(applications[1].applied);
+        assert!(
+            receiver_database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "membership-log-device-a")
+                .expect("read receiver signer a key")
+                .expect("receiver has signer a key")
+                .trusted
+        );
+        assert!(
+            receiver_database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "membership-log-device-b")
+                .expect("read receiver signer b key")
+                .expect("receiver has signer b key")
+                .trusted
+        );
+
+        let unchanged = source
+            .pull_and_apply_sync_account_membership_log_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            )
+            .expect("skip unchanged membership log root");
+        assert!(matches!(
+            unchanged,
+            ProfileSyncMembershipLogPullStatus::Unchanged {
+                object_id,
+                ..
+            } if object_id == publication.object_id
+        ));
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
         let _ = std::fs::remove_dir_all(receiver_db_root);
     }
 
