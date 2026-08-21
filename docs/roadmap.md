@@ -230,6 +230,10 @@ Current baseline:
   connectivity, object transfer, availability, and mutable-root publishing,
   with `can_publish_roots` kept as a compatibility flag derived from the
   mutable-root role.
+- The profile-sync service now validates mutable-root ids and backend object
+  ids before fixture lookup, retain, resolve, or publish operations, keeping
+  malformed path-like or whitespace-bearing identifiers out of the backend
+  model.
 - Storage now provides `EncryptedSyncObject` envelopes using ChaCha20-Poly1305
   AEAD through `ring`, and the local two-device fixture moves encrypted setting
   change payloads through broadwebd instead of plaintext JSON.

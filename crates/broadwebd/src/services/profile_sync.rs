@@ -11,6 +11,8 @@ use std::sync::{Arc, Mutex};
 const LOCAL_PROVIDER_ID: &str = "local-fake-profile-sync";
 const LOCAL_PROVIDER_KIND: &str = "local-fake";
 const LOCAL_PRIVACY_BOUNDARY: &str = "in-memory local test backend; no sockets or external network";
+const MAX_PROFILE_SYNC_OBJECT_ID_BYTES: usize = 2048;
+const MAX_PROFILE_SYNC_ROOT_ID_BYTES: usize = 256;
 
 #[derive(Clone, Debug)]
 pub struct ProfileSyncService {
@@ -152,6 +154,7 @@ impl ProfileSyncService {
         budget: &ResourceBudget,
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
+        validate_profile_sync_object_id(&request.object_id)?;
         let store = self.store()?;
         let object_id = request.object_id;
         let bytes = find_online_object(&store, &self.provider_id, &request.profile, &object_id)
@@ -173,6 +176,7 @@ impl ProfileSyncService {
         request: ProfileSyncObjectRequest,
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
+        validate_profile_sync_object_id(&request.object_id)?;
         let mut store = self.store()?;
         let Some(bytes) = find_online_object(
             &store,
@@ -210,6 +214,7 @@ impl ProfileSyncService {
         request: ProfileSyncObjectRequest,
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
+        validate_profile_sync_object_id(&request.object_id)?;
         let mut store = self.store()?;
         store.retained.remove(&(
             self.provider_id.clone(),
@@ -244,6 +249,7 @@ impl ProfileSyncService {
         request: ProfileSyncObjectRequest,
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
+        validate_profile_sync_object_id(&request.object_id)?;
         let store = self.store()?;
         let retained_key = (
             self.provider_id.clone(),
@@ -270,6 +276,8 @@ impl ProfileSyncService {
         request: ProfileSyncRootUpdate,
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
+        validate_profile_sync_root_id(&request.root_id)?;
+        validate_profile_sync_object_id(&request.object_id)?;
         if !self.roles.mutable_roots {
             return Err(BroadwebdError::UnsupportedRequest(format!(
                 "profile sync provider cannot publish mutable roots: {}",
@@ -314,6 +322,7 @@ impl ProfileSyncService {
         request: ProfileSyncRootRequest,
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
+        validate_profile_sync_root_id(&request.root_id)?;
         let store = self.store()?;
         let object_id = latest_visible_root_candidate(
             &store,
@@ -333,6 +342,7 @@ impl ProfileSyncService {
         request: ProfileSyncRootRequest,
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
+        validate_profile_sync_root_id(&request.root_id)?;
         let store = self.store()?;
         Ok(ProfileSyncResponse::RootCandidates {
             root_id: request.root_id.clone(),
@@ -456,14 +466,16 @@ impl LocalProfileSyncFixture {
         available: bool,
     ) -> Result<(), BroadwebdError> {
         let profile = profile.as_ref();
+        let root_id = root_id.as_ref();
         validate_profile(profile)?;
+        validate_profile_sync_root_id(root_id)?;
         let source_provider_id = local_fixture_provider_id(source_device_id);
         let target_provider_id = local_fixture_provider_id(target_device_id);
         let link = (
             source_provider_id,
             target_provider_id,
             profile.to_string(),
-            root_id.as_ref().to_string(),
+            root_id.to_string(),
         );
         let mut store = self
             .store
@@ -550,6 +562,39 @@ fn validate_profile(profile: &str) -> Result<(), BroadwebdError> {
         Ok(())
     } else {
         Err(BroadwebdError::InvalidProfile(profile.to_string()))
+    }
+}
+
+fn validate_profile_sync_root_id(root_id: &str) -> Result<(), BroadwebdError> {
+    let is_valid = !root_id.is_empty()
+        && root_id.len() <= MAX_PROFILE_SYNC_ROOT_ID_BYTES
+        && root_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'/'))
+        && root_id.split('/').all(|segment| {
+            !segment.is_empty() && segment != "." && segment != ".." && !segment.starts_with('.')
+        });
+    if is_valid {
+        Ok(())
+    } else {
+        Err(BroadwebdError::UnsupportedRequest(
+            "invalid profile sync root id".to_string(),
+        ))
+    }
+}
+
+fn validate_profile_sync_object_id(object_id: &str) -> Result<(), BroadwebdError> {
+    let is_valid = !object_id.is_empty()
+        && object_id.len() <= MAX_PROFILE_SYNC_OBJECT_ID_BYTES
+        && object_id.bytes().all(|byte| {
+            byte.is_ascii_graphic() && !matches!(byte, b'\\' | b'\'' | b'"' | b'<' | b'>' | b'`')
+        });
+    if is_valid {
+        Ok(())
+    } else {
+        Err(BroadwebdError::UnsupportedRequest(
+            "invalid profile sync object id".to_string(),
+        ))
     }
 }
 
@@ -715,6 +760,72 @@ mod tests {
     fn local_object_ids_are_deterministic_for_test_backend() {
         assert_eq!(local_object_id(b"settings"), local_object_id(b"settings"));
         assert_ne!(local_object_id(b"settings"), local_object_id(b"calendar"));
+    }
+
+    #[test]
+    fn local_fixture_rejects_invalid_profile_sync_identifiers() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut device = PluginRegistry::new();
+        let budget = ResourceBudget::default();
+
+        device.register_service(fixture.service_for_device("a"));
+
+        let empty_root = device
+            .profile_sync(
+                ProfileSyncRequest::ResolveRoot(ProfileSyncRootRequest::new("default", "")),
+                &budget,
+            )
+            .expect_err("empty root id should fail before backend lookup");
+        assert!(matches!(
+            empty_root,
+            BroadwebdError::UnsupportedRequest(message)
+                if message.contains("invalid profile sync root id")
+        ));
+
+        let escaped_root = device
+            .profile_sync(
+                ProfileSyncRequest::ListRootCandidates(ProfileSyncRootRequest::new(
+                    "default",
+                    "settings/../latest",
+                )),
+                &budget,
+            )
+            .expect_err("path-like root escape should fail before backend lookup");
+        assert!(matches!(
+            escaped_root,
+            BroadwebdError::UnsupportedRequest(message)
+                if message.contains("invalid profile sync root id")
+        ));
+
+        let empty_object = device
+            .profile_sync(
+                ProfileSyncRequest::GetEncryptedObject(ProfileSyncObjectRequest::new(
+                    "default", "",
+                )),
+                &budget,
+            )
+            .expect_err("empty object id should fail before backend lookup");
+        assert!(matches!(
+            empty_object,
+            BroadwebdError::UnsupportedRequest(message)
+                if message.contains("invalid profile sync object id")
+        ));
+
+        let malformed_object = device
+            .profile_sync(
+                ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+                    "default",
+                    "settings/latest",
+                    "not valid",
+                )),
+                &budget,
+            )
+            .expect_err("malformed object id should fail before publish lookup");
+        assert!(matches!(
+            malformed_object,
+            BroadwebdError::UnsupportedRequest(message)
+                if message.contains("invalid profile sync object id")
+        ));
     }
 
     #[test]
