@@ -381,6 +381,10 @@ Current baseline:
 - Storage also owns snapshot-and-tail manifest construction for publish flows,
   deriving compacted frontiers from covered change records and extending them
   with retained tail object ids when a post-snapshot manifest tail remains.
+- The `slate-profile-sync` runtime bridge can now publish signed encrypted
+  settings snapshot manifests through broadwebd: it retains the snapshot object,
+  retains any post-snapshot tail change objects, signs the storage-owned
+  manifest, and publishes `settings/latest` to the manifest object id.
 - Incoming synced settings now have an initial deterministic conflict policy:
   the highest logical clock wins, with device id and device sequence as stable
   tie-breakers. Losing setting changes are retained in `settings_changes`

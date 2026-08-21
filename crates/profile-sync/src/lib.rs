@@ -11,11 +11,14 @@ use slate_broadwebd::{
 };
 use slate_storage::{
     EncryptedSyncObject, IncomingSyncSettingText, PROFILE_SYNC_MANIFEST_OBJECT_KIND,
-    PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND, ProfileSyncContentKey, ProfileSyncDeviceSigner,
+    PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND, PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND,
+    PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION, ProfileSyncContentKey, ProfileSyncDeviceSigner,
     ProfileSyncManifest, ProfileSyncObjectBytes, ProfileSyncObjectSource,
     ProfileSyncRetentionPolicy, ProfileSyncRootCandidate as StorageProfileSyncRootCandidate,
+    ProfileSyncSettingsSnapshot, ProfileSyncSettingsSnapshotPublication,
     ProfileSyncSettingsTailChangePublication, SYNC_DOMAIN_SETTINGS, StorageError, SyncChangeRecord,
-    SyncObjectError, settings_sync_manifest_for_tail_changes,
+    SyncObjectError, settings_sync_manifest_for_snapshot_and_tail_changes,
+    settings_sync_manifest_for_tail_changes,
 };
 
 #[derive(Clone, Copy)]
@@ -92,6 +95,14 @@ impl From<SyncObjectError> for ProfileSyncPublishError {
 pub struct PublishedSettingsTailManifest {
     pub manifest_object_id: String,
     pub manifest: ProfileSyncManifest,
+    pub tail_change_object_ids: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PublishedSettingsSnapshotManifest {
+    pub manifest_object_id: String,
+    pub manifest: ProfileSyncManifest,
+    pub snapshot_object_id: String,
     pub tail_change_object_ids: Vec<String>,
 }
 
@@ -254,24 +265,13 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
         retention_policy: ProfileSyncRetentionPolicy,
     ) -> Result<PublishedSettingsTailManifest, ProfileSyncPublishError> {
         validate_tail_changes_for_publish(profile, changes)?;
-        let mut tail_publications = Vec::with_capacity(changes.len());
-        for change in changes {
-            let incoming = incoming_setting_from_change(change);
-            let object_bytes = sign_encrypted_json_object(
-                incoming.profile.as_str(),
-                incoming.domain.as_str(),
-                PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND,
-                key_id,
-                &serde_json::to_vec(&incoming).map_err(SyncObjectError::Encode)?,
-                content_key,
-                signer,
-            )?;
-            let object_id = self.put_retained_object(profile, object_bytes)?;
-            tail_publications.push(ProfileSyncSettingsTailChangePublication {
-                object_id,
-                change: change.clone(),
-            });
-        }
+        let tail_publications = self.publish_settings_tail_change_publications(
+            profile,
+            changes,
+            content_key,
+            key_id,
+            signer,
+        )?;
 
         let manifest = settings_sync_manifest_for_tail_changes(
             profile,
@@ -297,6 +297,100 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
             tail_change_object_ids,
         })
     }
+
+    pub fn publish_signed_settings_snapshot_manifest(
+        &self,
+        profile: &str,
+        root_id: &str,
+        snapshot: &ProfileSyncSettingsSnapshot,
+        covered_changes: &[SyncChangeRecord],
+        tail_changes: &[SyncChangeRecord],
+        content_key: &ProfileSyncContentKey,
+        key_id: &str,
+        signer: &ProfileSyncDeviceSigner,
+        retention_policy: ProfileSyncRetentionPolicy,
+    ) -> Result<PublishedSettingsSnapshotManifest, ProfileSyncPublishError> {
+        validate_snapshot_for_publish(profile, snapshot)?;
+        validate_snapshot_covered_changes_for_publish(profile, snapshot, covered_changes)?;
+        validate_setting_changes_for_publish(profile, tail_changes, "tail change")?;
+
+        let snapshot_bytes = sign_encrypted_json_object(
+            snapshot.profile.as_str(),
+            SYNC_DOMAIN_SETTINGS,
+            PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND,
+            key_id,
+            &serde_json::to_vec(snapshot).map_err(SyncObjectError::Encode)?,
+            content_key,
+            signer,
+        )?;
+        let snapshot_object_id = self.put_retained_object(profile, snapshot_bytes)?;
+        let tail_publications = self.publish_settings_tail_change_publications(
+            profile,
+            tail_changes,
+            content_key,
+            key_id,
+            signer,
+        )?;
+        let snapshot_publication = ProfileSyncSettingsSnapshotPublication {
+            object_id: snapshot_object_id.clone(),
+            snapshot: snapshot.clone(),
+            covered_changes: covered_changes.to_vec(),
+        };
+        let manifest = settings_sync_manifest_for_snapshot_and_tail_changes(
+            profile,
+            root_id,
+            &snapshot_publication,
+            tail_publications.as_slice(),
+            retention_policy,
+        )?;
+        let manifest_bytes = sign_encrypted_json_object(
+            manifest.profile.as_str(),
+            SYNC_DOMAIN_SETTINGS,
+            PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+            key_id,
+            &serde_json::to_vec(&manifest).map_err(SyncObjectError::Encode)?,
+            content_key,
+            signer,
+        )?;
+        let manifest_object_id = self.put_retained_root(profile, root_id, manifest_bytes)?;
+        let tail_change_object_ids = manifest.tail_change_object_ids.clone();
+
+        Ok(PublishedSettingsSnapshotManifest {
+            manifest_object_id,
+            manifest,
+            snapshot_object_id,
+            tail_change_object_ids,
+        })
+    }
+
+    fn publish_settings_tail_change_publications(
+        &self,
+        profile: &str,
+        changes: &[SyncChangeRecord],
+        content_key: &ProfileSyncContentKey,
+        key_id: &str,
+        signer: &ProfileSyncDeviceSigner,
+    ) -> Result<Vec<ProfileSyncSettingsTailChangePublication>, ProfileSyncPublishError> {
+        let mut tail_publications = Vec::with_capacity(changes.len());
+        for change in changes {
+            let incoming = incoming_setting_from_change(change);
+            let object_bytes = sign_encrypted_json_object(
+                incoming.profile.as_str(),
+                incoming.domain.as_str(),
+                PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND,
+                key_id,
+                &serde_json::to_vec(&incoming).map_err(SyncObjectError::Encode)?,
+                content_key,
+                signer,
+            )?;
+            let object_id = self.put_retained_object(profile, object_bytes)?;
+            tail_publications.push(ProfileSyncSettingsTailChangePublication {
+                object_id,
+                change: change.clone(),
+            });
+        }
+        Ok(tail_publications)
+    }
 }
 
 fn validate_tail_changes_for_publish(
@@ -308,16 +402,63 @@ fn validate_tail_changes_for_publish(
             "settings manifest tail is empty".to_string(),
         ));
     }
+    validate_setting_changes_for_publish(profile, changes, "tail change")
+}
+
+fn validate_snapshot_for_publish(
+    profile: &str,
+    snapshot: &ProfileSyncSettingsSnapshot,
+) -> Result<(), StorageError> {
+    if snapshot.profile != profile {
+        return Err(StorageError::InvalidProfileSyncManifest(format!(
+            "snapshot profile {} does not match manifest profile {}",
+            snapshot.profile, profile
+        )));
+    }
+    if snapshot.schema_version != PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION {
+        return Err(StorageError::UnsupportedSyncSnapshotSchema(
+            snapshot.schema_version,
+        ));
+    }
+    Ok(())
+}
+
+fn validate_snapshot_covered_changes_for_publish(
+    profile: &str,
+    snapshot: &ProfileSyncSettingsSnapshot,
+    changes: &[SyncChangeRecord],
+) -> Result<(), StorageError> {
+    validate_setting_changes_for_publish(profile, changes, "snapshot-covered change")?;
+    for change in changes {
+        if !snapshot
+            .included_domains
+            .iter()
+            .any(|domain| domain == &change.domain)
+        {
+            return Err(StorageError::InvalidProfileSyncManifest(format!(
+                "snapshot-covered change {} domain {} is not included in snapshot",
+                change.id, change.domain
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn validate_setting_changes_for_publish(
+    profile: &str,
+    changes: &[SyncChangeRecord],
+    label: &str,
+) -> Result<(), StorageError> {
     for change in changes {
         if change.profile != profile {
             return Err(StorageError::InvalidProfileSyncManifest(format!(
-                "tail change {} profile {} does not match manifest profile {}",
+                "{label} {} profile {} does not match manifest profile {}",
                 change.id, change.profile, profile
             )));
         }
         if change.operation != "set_text" {
             return Err(StorageError::InvalidProfileSyncManifest(format!(
-                "tail change {} operation {} is not supported by settings manifests",
+                "{label} {} operation {} is not supported by settings manifests",
                 change.id, change.operation
             )));
         }
@@ -427,7 +568,8 @@ mod tests {
         DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, PROFILE_SYNC_CONTENT_KEY_BYTES,
         ProfileSyncContentKey, ProfileSyncDeviceSigner, ProfileSyncObjectSource,
         ProfileSyncRetentionPolicy, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase,
-        open_signed_profile_sync_manifest, open_signed_sync_setting_text,
+        open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
+        open_signed_sync_setting_text,
     };
 
     const TEST_CONTENT_KEY_ID: &str = "content-key-epoch-1";
@@ -619,6 +761,128 @@ mod tests {
         assert_eq!(incoming.key, "ui.theme");
         assert_eq!(incoming.value, "teal");
         assert_eq!(incoming.device_id, "runtime-c");
+
+        let _ = std::fs::remove_dir_all(state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_publisher_publishes_signed_settings_snapshot_manifest() {
+        let network = InProcessBroadwebNetwork::new();
+        let state_root = test_state_root("signed-snapshot-publish");
+        let db_root = test_state_root("signed-snapshot-db");
+        let daemon = network
+            .daemon_for_device(&state_root, ResourceBudget::default(), "runtime-d")
+            .expect("start in-process profile-sync daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-d",
+        )
+        .expect("open local settings database");
+        let covered_change = database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write compacted sync setting");
+        let covers_revision = database
+            .latest_sync_revision(DEFAULT_PROFILE_ID)
+            .expect("read snapshot revision");
+        let snapshot = database
+            .settings_sync_snapshot_payload(
+                DEFAULT_PROFILE_ID,
+                covers_revision,
+                &[SYNC_DOMAIN_SETTINGS.to_string()],
+            )
+            .expect("build settings snapshot payload");
+        let tail_change = database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.zoom", "110")
+            .expect("write retained tail sync setting");
+        let content_key = ProfileSyncContentKey::from_bytes([42; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-d").expect("generate signer");
+        let public_key = signer.public_key().expect("read signer public key");
+        let publisher = BroadwebdProfileSyncPublisher::new(&daemon);
+
+        let publication = publisher
+            .publish_signed_settings_snapshot_manifest(
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &snapshot,
+                std::slice::from_ref(&covered_change),
+                std::slice::from_ref(&tail_change),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish signed settings snapshot manifest");
+
+        assert_eq!(publication.manifest.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(publication.manifest.root_id, "settings/latest");
+        assert_eq!(
+            publication.manifest.current_snapshot_object_id.as_deref(),
+            Some(publication.snapshot_object_id.as_str())
+        );
+        assert_eq!(publication.tail_change_object_ids.len(), 1);
+        assert_eq!(
+            publication.manifest.tail_change_object_ids,
+            publication.tail_change_object_ids
+        );
+
+        let source = BroadwebdProfileSyncObjectSource::new(&daemon);
+        assert_eq!(
+            source
+                .resolve_profile_sync_root(DEFAULT_PROFILE_ID, "settings/latest")
+                .expect("resolve signed snapshot manifest root")
+                .as_deref(),
+            Some(publication.manifest_object_id.as_str())
+        );
+
+        let manifest_object = source
+            .get_profile_sync_object(DEFAULT_PROFILE_ID, publication.manifest_object_id.as_str())
+            .expect("fetch signed manifest object");
+        let manifest = open_signed_profile_sync_manifest(
+            manifest_object.bytes.as_slice(),
+            &content_key,
+            &public_key,
+            DEFAULT_PROFILE_ID,
+            TEST_CONTENT_KEY_ID,
+        )
+        .expect("verify signed manifest object");
+        assert_eq!(manifest, publication.manifest);
+
+        let snapshot_object = source
+            .get_profile_sync_object(DEFAULT_PROFILE_ID, publication.snapshot_object_id.as_str())
+            .expect("fetch signed snapshot object");
+        let decoded_snapshot = open_signed_profile_sync_settings_snapshot(
+            snapshot_object.bytes.as_slice(),
+            &content_key,
+            &public_key,
+            DEFAULT_PROFILE_ID,
+            TEST_CONTENT_KEY_ID,
+        )
+        .expect("verify signed snapshot object");
+        assert_eq!(decoded_snapshot, snapshot);
+
+        let tail_object_id = publication
+            .tail_change_object_ids
+            .first()
+            .expect("tail object id");
+        let tail_object = source
+            .get_profile_sync_object(DEFAULT_PROFILE_ID, tail_object_id)
+            .expect("fetch signed tail object");
+        let incoming = open_signed_sync_setting_text(
+            tail_object.bytes.as_slice(),
+            &content_key,
+            &public_key,
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            TEST_CONTENT_KEY_ID,
+        )
+        .expect("verify signed tail object");
+        assert_eq!(incoming.key, "ui.zoom");
+        assert_eq!(incoming.value, "110");
+        assert_eq!(incoming.device_id, "runtime-d");
+        assert_retained(&publisher, publication.snapshot_object_id.as_str());
+        assert_retained(&publisher, publication.manifest_object_id.as_str());
+        assert_retained(&publisher, tail_object_id);
 
         let _ = std::fs::remove_dir_all(state_root);
         let _ = std::fs::remove_dir_all(db_root);

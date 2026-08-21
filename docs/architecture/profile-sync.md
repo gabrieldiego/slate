@@ -417,6 +417,11 @@ For settings tails, the bridge can convert local `SyncChangeRecord` values into
 signed encrypted `setting-change` objects, build the storage-owned manifest,
 and publish that manifest root without taking ownership of merge policy or
 database mutation.
+For settings snapshots, the bridge can sign and retain the compacted snapshot
+object, sign and retain any post-snapshot tail objects, ask storage to build the
+snapshot-and-tail manifest, then publish the mutable root to the signed
+manifest object. Compaction policy and snapshot payload selection remain owned
+by storage.
 
 The local fake backend must model provider availability inside the test process.
 Each simulated device registers as a provider, retained objects are scoped to
