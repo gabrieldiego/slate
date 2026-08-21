@@ -281,7 +281,10 @@ membership epoch. Device heads can be pulled through the same profile-sync
 object source abstraction as manifests: the helper resolves the per-device head
 root, fetches the object, verifies/decrypts it, and returns the verified head
 with its backend object id. Publishing per-device heads and merging multiple
-authorized heads are separate runtime and broadwebd wiring steps.
+authorized heads are separate runtime and broadwebd wiring steps. The local
+two-device fixture already exercises the first handoff: a publishing provider
+writes a signed encrypted head, the receiving provider retains it, and the head
+remains pullable after the publisher is marked offline.
 
 The first synced domains should be settings that are safe to apply live, such as
 UI preferences, protocol adapter configuration, rail app ordering, and

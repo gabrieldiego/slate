@@ -9,11 +9,12 @@ use slate_storage::{
     DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
     EncryptedSyncObject, IncomingSyncSettingText,
     PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305, PROFILE_SYNC_CONTENT_KEY_BYTES,
+    PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND, PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
     PROFILE_SYNC_MANIFEST_OBJECT_KIND, PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
     PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND, PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND,
     PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION, ProfileSyncContentKey,
-    ProfileSyncDeviceFrontier, ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner,
-    ProfileSyncManifest, ProfileSyncObjectBytes, ProfileSyncObjectSource,
+    ProfileSyncDeviceFrontier, ProfileSyncDeviceHead, ProfileSyncDevicePublicKey,
+    ProfileSyncDeviceSigner, ProfileSyncManifest, ProfileSyncObjectBytes, ProfileSyncObjectSource,
     ProfileSyncRetentionPolicy, ProfileSyncSettingsPullApplyStatus, ProfileSyncSettingsSnapshot,
     SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, SyncChangeRecord, SyncContentKeyEpochRegistration,
     SyncDevicePublicKeyRegistration, SyncRevisionRecord, SyncSnapshotRegistration,
@@ -702,6 +703,129 @@ fn two_local_devices_apply_snapshot_then_manifest_tail_changes() {
     let _ = std::fs::remove_dir_all(device_b_root);
 }
 
+#[test]
+fn two_local_devices_publish_and_pull_device_head_through_profile_fixture() {
+    let fixture = LocalProfileSyncFixture::new();
+    let mut device_a_broadweb = PluginRegistry::new();
+    let mut device_b_broadweb = PluginRegistry::new();
+    let budget = ResourceBudget::default();
+
+    device_a_broadweb.register_service(fixture.service_for_device("head-device-a"));
+    device_b_broadweb.register_service(fixture.service_for_device("head-device-b"));
+
+    let device_a_root = test_dir("head-device-a");
+    let device_b_root = test_dir("head-device-b");
+    let device_a_db = SlateProfileDatabase::open_resolved_with_device_id(
+        device_a_root.join(DEFAULT_DATABASE_FILE_NAME),
+        "head-device-a",
+    )
+    .expect("open head fixture device a slate-settings.db");
+    let device_b_db = SlateProfileDatabase::open_resolved_with_device_id(
+        device_b_root.join(DEFAULT_DATABASE_FILE_NAME),
+        "head-device-b",
+    )
+    .expect("open head fixture device b slate-settings.db");
+    let device_a_signer =
+        ProfileSyncDeviceSigner::generate("head-device-a").expect("create head device a key");
+    let trusted_device_a_key = device_a_signer
+        .public_key()
+        .expect("read head device a public key");
+    device_b_db
+        .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            public_key: trusted_device_a_key,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+        })
+        .expect("device b trusts head device a signing key");
+    let content_key = fixture_content_key();
+    let change = device_a_db
+        .set_sync_setting_text(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            "sync.head.probe",
+            "ready",
+        )
+        .expect("head fixture device a writes local setting");
+    let change_object_id = put_object(
+        &device_a_broadweb,
+        DEFAULT_PROFILE_ID,
+        sign_encrypted_setting_change(&change, &content_key, &device_a_signer),
+        &budget,
+    );
+    let manifest_object_id = put_object(
+        &device_a_broadweb,
+        DEFAULT_PROFILE_ID,
+        sign_encrypted_manifest(
+            SETTINGS_ROOT_ID,
+            change_object_id.as_str(),
+            &change,
+            &content_key,
+            &device_a_signer,
+        ),
+        &budget,
+    );
+    let head_root_id = "settings/devices/head-device-a/head";
+    let device_head = ProfileSyncDeviceHead {
+        profile: DEFAULT_PROFILE_ID.to_string(),
+        device_id: "head-device-a".to_string(),
+        root_id: head_root_id.to_string(),
+        schema_version: PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
+        membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+        latest_manifest_object_id: manifest_object_id.clone(),
+        latest_change_object_id: Some(change_object_id.clone()),
+        device_sequence: change.device_sequence,
+        logical_clock: change.logical_clock,
+        created_at: change.created_at,
+    };
+    let device_head_bytes =
+        sign_encrypted_device_head(&device_head, &content_key, &device_a_signer);
+    assert!(
+        !std::str::from_utf8(device_head_bytes.as_slice())
+            .expect("fixture device head object is JSON envelope")
+            .contains(manifest_object_id.as_str())
+    );
+    let device_head_object_id = put_and_publish_object(
+        &device_a_broadweb,
+        DEFAULT_PROFILE_ID,
+        head_root_id,
+        device_head_bytes,
+        &budget,
+    );
+
+    device_b_broadweb
+        .profile_sync(
+            ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                DEFAULT_PROFILE_ID,
+                device_head_object_id.clone(),
+            )),
+            &budget,
+        )
+        .expect("device b retains device head object before device a goes offline");
+    fixture
+        .set_device_online("head-device-a", false)
+        .expect("mark head fixture device a offline");
+
+    let source = RegistryProfileSyncObjectSource {
+        registry: &device_b_broadweb,
+        budget: &budget,
+    };
+    let pulled = device_b_db
+        .pull_trusted_signed_profile_sync_device_head(
+            &source,
+            DEFAULT_PROFILE_ID,
+            head_root_id,
+            &content_key,
+            FIXTURE_CONTENT_KEY_ID,
+        )
+        .expect("device b pulls trusted device head")
+        .expect("device head root resolves");
+    assert_eq!(pulled.object_id, device_head_object_id);
+    assert_eq!(pulled.device_head, device_head);
+
+    let _ = std::fs::remove_dir_all(device_a_root);
+    let _ = std::fs::remove_dir_all(device_b_root);
+}
+
 fn incoming_setting_from_change(change: &SyncChangeRecord) -> IncomingSyncSettingText {
     assert_eq!(change.operation, "set_text");
     IncomingSyncSettingText::new(
@@ -764,6 +888,31 @@ fn sign_encrypted_settings_snapshot(
         .expect("sign fixture encrypted snapshot object")
         .to_bytes()
         .expect("encode fixture signed snapshot object")
+}
+
+fn sign_encrypted_device_head(
+    device_head: &ProfileSyncDeviceHead,
+    content_key: &ProfileSyncContentKey,
+    signer: &ProfileSyncDeviceSigner,
+) -> Vec<u8> {
+    let payload = serde_json::to_vec(device_head).expect("encode fixture device head payload");
+    let encrypted_object = EncryptedSyncObject::seal(
+        device_head.profile.as_str(),
+        SYNC_DOMAIN_SETTINGS,
+        PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
+        FIXTURE_CONTENT_KEY_ID,
+        payload.as_slice(),
+        content_key,
+    )
+    .expect("encrypt fixture device head");
+    let encrypted_bytes = encrypted_object
+        .to_bytes()
+        .expect("encode fixture encrypted device head");
+    signer
+        .sign(encrypted_bytes.as_slice())
+        .expect("sign fixture encrypted device head")
+        .to_bytes()
+        .expect("encode fixture signed device head")
 }
 
 fn sign_encrypted_manifest(

@@ -268,6 +268,10 @@ Current baseline:
   profile-sync object source abstraction. Both explicit-key and trusted-key
   helpers resolve a per-device head root, fetch the object, verify/decrypt it,
   and return the verified head with its backend object id.
+- The local two-device broadwebd fixture now publishes and pulls a trusted
+  signed encrypted device head through an in-process per-device root. The test
+  retains the head object on the receiving provider before the publishing
+  provider goes offline, covering the no-socket provider handoff path.
 - `slate-settings.db` now has typed snapshot metadata APIs for recording
   encrypted backend object ids, covered revisions, included domains, and latest
   snapshot lookup. This is metadata only; snapshot payloads stay in encrypted
