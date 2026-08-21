@@ -422,9 +422,7 @@ impl ProfileSyncObjectSource for BroadwebdProfileSyncObjectSource<'_> {
 #[cfg(test)]
 mod tests {
     use super::{BroadwebdProfileSyncObjectSource, BroadwebdProfileSyncPublisher};
-    use slate_broadwebd::{
-        BroadwebDaemon, LocalProfileSyncFixture, PluginRegistry, ResourceBudget,
-    };
+    use slate_broadwebd::{ResourceBudget, test_fixtures::InProcessBroadwebNetwork};
     use slate_storage::{
         DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, PROFILE_SYNC_CONTENT_KEY_BYTES,
         ProfileSyncContentKey, ProfileSyncDeviceSigner, ProfileSyncObjectSource,
@@ -436,13 +434,11 @@ mod tests {
 
     #[test]
     fn broadwebd_bridge_publishes_and_reads_fixture_objects() {
-        let fixture = LocalProfileSyncFixture::new();
-        let mut registry = PluginRegistry::new();
-        registry.register_service(fixture.service_for_device("runtime-a"));
+        let network = InProcessBroadwebNetwork::new();
         let state_root = test_state_root("broadwebd-source");
-        let daemon =
-            BroadwebDaemon::start_with_registry(&state_root, ResourceBudget::default(), registry)
-                .expect("start local profile-sync daemon");
+        let daemon = network
+            .daemon_for_device(&state_root, ResourceBudget::default(), "runtime-a")
+            .expect("start in-process profile-sync daemon");
         let object_bytes = b"encrypted runtime object".to_vec();
         let publisher = BroadwebdProfileSyncPublisher::new(&daemon);
         let object_id = publisher
@@ -494,13 +490,11 @@ mod tests {
 
     #[test]
     fn broadwebd_publisher_retains_dependencies_before_publishing_root() {
-        let fixture = LocalProfileSyncFixture::new();
-        let mut registry = PluginRegistry::new();
-        registry.register_service(fixture.service_for_device("runtime-b"));
+        let network = InProcessBroadwebNetwork::new();
         let state_root = test_state_root("broadwebd-batch-publish");
-        let daemon =
-            BroadwebDaemon::start_with_registry(&state_root, ResourceBudget::default(), registry)
-                .expect("start local profile-sync daemon");
+        let daemon = network
+            .daemon_for_device(&state_root, ResourceBudget::default(), "runtime-b")
+            .expect("start in-process profile-sync daemon");
         let publisher = BroadwebdProfileSyncPublisher::new(&daemon);
         let source = BroadwebdProfileSyncObjectSource::new(&daemon);
 
@@ -545,14 +539,12 @@ mod tests {
 
     #[test]
     fn broadwebd_publisher_publishes_signed_settings_tail_manifest() {
-        let fixture = LocalProfileSyncFixture::new();
-        let mut registry = PluginRegistry::new();
-        registry.register_service(fixture.service_for_device("runtime-c"));
+        let network = InProcessBroadwebNetwork::new();
         let state_root = test_state_root("signed-tail-publish");
         let db_root = test_state_root("signed-tail-db");
-        let daemon =
-            BroadwebDaemon::start_with_registry(&state_root, ResourceBudget::default(), registry)
-                .expect("start local profile-sync daemon");
+        let daemon = network
+            .daemon_for_device(&state_root, ResourceBudget::default(), "runtime-c")
+            .expect("start in-process profile-sync daemon");
         let database = SlateProfileDatabase::open_resolved_with_device_id(
             db_root.join(DEFAULT_DATABASE_FILE_NAME),
             "runtime-c",

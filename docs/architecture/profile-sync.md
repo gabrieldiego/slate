@@ -517,6 +517,10 @@ discovery reports that boundary.
   object transfer, pinning or availability, offline devices, delayed sync, and
   conflicts inside the test process, without loopback sockets, the real
   internet, Tor, public IPFS/IPNS, or any external relay.
+- Downstream profile-sync runtime tests should construct broadwebd registries
+  through `InProcessBroadwebNetwork` so simulated devices share one in-memory
+  provider graph and fixture HTTP fetches reject non-synthetic URLs before DNS
+  or socket access.
 - Kubo integration tests are ignored or environment-gated and run against
   loopback only.
 - Leak tests assert that sync never falls through to DNS, public gateways,

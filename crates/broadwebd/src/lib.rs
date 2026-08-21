@@ -77,16 +77,54 @@ pub use transports::direct_http::DirectHttpTransport;
 #[cfg(any(test, feature = "test-fixtures"))]
 pub mod test_fixtures {
     use crate::http::{
+        fetch_http_url, is_internal_fixture_http_url, parse_http_url,
         register_internal_fixture_http_response, register_internal_fixture_http_sequence,
         take_internal_fixture_http_requests,
     };
     use crate::protocols::ipfs::{
         register_internal_kubo_rpc_fixture, take_internal_kubo_rpc_fixture_requests,
     };
+    use crate::services::{http_fetch::HttpFetchService, profile_sync::ProfileSyncService};
+    use crate::{
+        BroadwebDaemon, BroadwebdError, DIRECT_HTTP_PLUGIN, PluginKind, PluginMetadata,
+        PluginRegistry, ProfileSyncProviderRoles, ResourceBudget, ResourceProfile,
+        TransportHttpRequest, TransportPlugin,
+    };
+    use std::path::PathBuf;
 
     pub use crate::http::{InternalFixtureHttpResponse, unregistered_internal_fixture_http_url};
     pub use crate::protocols::ipfs::InternalKuboRpcResponse;
     pub use crate::services::profile_sync::LocalProfileSyncFixture;
+
+    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+    pub struct InProcessFixtureHttpTransport;
+
+    impl TransportPlugin for InProcessFixtureHttpTransport {
+        fn metadata(&self) -> PluginMetadata {
+            PluginMetadata::new(DIRECT_HTTP_PLUGIN, PluginKind::Transport)
+                .with_capabilities(&["http-fixture", "http-fetch", "in-process"])
+                .with_privacy_boundary(
+                    "in-process HTTP fixture transport; no sockets, DNS, or external network",
+                )
+                .with_resource_profile(ResourceProfile::Low)
+        }
+
+        fn fetch_http(
+            &self,
+            request: &TransportHttpRequest,
+            budget: &ResourceBudget,
+        ) -> Result<crate::HttpFetchResponse, BroadwebdError> {
+            let url = parse_http_url(&request.url)?;
+            if is_internal_fixture_http_url(&url) {
+                return fetch_http_url(url, budget);
+            }
+
+            Err(BroadwebdError::UnsupportedRequest(format!(
+                "in-process fixture HTTP transport cannot fetch external URL: {}",
+                request.url
+            )))
+        }
+    }
 
     /// In-process broadweb network fixture.
     ///
@@ -94,45 +132,101 @@ pub mod test_fixtures {
     /// such as `slate-fixture-http://` and `slate-fixture-kubo://`. They are
     /// resolved through process-local registries and never bind loopback
     /// sockets, start listeners, or contact external networks.
-    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-    pub struct InProcessBroadwebNetwork;
+    #[derive(Clone, Debug, Default)]
+    pub struct InProcessBroadwebNetwork {
+        profile_sync: LocalProfileSyncFixture,
+    }
 
     impl InProcessBroadwebNetwork {
         pub fn new() -> Self {
-            Self
+            Self::default()
         }
 
-        pub fn http_response(self, response: InternalFixtureHttpResponse) -> InProcessHttpFixture {
+        pub fn fixture_registry(&self) -> PluginRegistry {
+            let mut registry = PluginRegistry::new();
+            registry.register_transport(InProcessFixtureHttpTransport);
+            registry.register_service(HttpFetchService);
+            registry.register_service(ProfileSyncService::new());
+            registry
+        }
+
+        pub fn registry_for_device(&self, device_id: impl AsRef<str>) -> PluginRegistry {
+            let mut registry = self.fixture_registry();
+            registry.register_service(self.profile_sync.service_for_device(device_id));
+            registry
+        }
+
+        pub fn registry_for_availability_provider(
+            &self,
+            provider_id: impl AsRef<str>,
+        ) -> PluginRegistry {
+            let mut registry = self.fixture_registry();
+            registry.register_service(
+                self.profile_sync
+                    .service_for_availability_provider(provider_id),
+            );
+            registry
+        }
+
+        pub fn registry_for_provider_with_roles(
+            &self,
+            provider_id: impl Into<String>,
+            provider_kind: impl Into<String>,
+            roles: ProfileSyncProviderRoles,
+        ) -> PluginRegistry {
+            let mut registry = self.fixture_registry();
+            registry.register_service(self.profile_sync.service_for_provider_with_roles(
+                provider_id,
+                provider_kind,
+                roles,
+            ));
+            registry
+        }
+
+        pub fn daemon_for_device(
+            &self,
+            state_root: impl Into<PathBuf>,
+            budget: ResourceBudget,
+            device_id: impl AsRef<str>,
+        ) -> Result<BroadwebDaemon, BroadwebdError> {
+            BroadwebDaemon::start_with_registry(
+                state_root,
+                budget,
+                self.registry_for_device(device_id),
+            )
+        }
+
+        pub fn http_response(&self, response: InternalFixtureHttpResponse) -> InProcessHttpFixture {
             InProcessHttpFixture::new(register_internal_fixture_http_response(response))
         }
 
         pub fn http_sequence(
-            self,
+            &self,
             responses: Vec<InternalFixtureHttpResponse>,
         ) -> InProcessHttpFixture {
             InProcessHttpFixture::new(register_internal_fixture_http_sequence(responses))
         }
 
-        pub fn missing_http_url(self) -> String {
+        pub fn missing_http_url(&self) -> String {
             unregistered_internal_fixture_http_url()
         }
 
         pub fn kubo_rpc_response(
-            self,
+            &self,
             response: InternalKuboRpcResponse,
         ) -> InProcessKuboRpcFixture {
             InProcessKuboRpcFixture::new(register_internal_kubo_rpc_fixture(vec![response]))
         }
 
         pub fn kubo_rpc_sequence(
-            self,
+            &self,
             responses: Vec<InternalKuboRpcResponse>,
         ) -> InProcessKuboRpcFixture {
             InProcessKuboRpcFixture::new(register_internal_kubo_rpc_fixture(responses))
         }
 
-        pub fn profile_sync(self) -> LocalProfileSyncFixture {
-            LocalProfileSyncFixture::new()
+        pub fn profile_sync(&self) -> LocalProfileSyncFixture {
+            self.profile_sync.clone()
         }
     }
 

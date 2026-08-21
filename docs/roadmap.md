@@ -195,6 +195,11 @@ Current baseline:
   lookup, public gateway, or local daemon. The daemon fetch resolver now honors
   these synthetic HTTP fixture URLs whenever broadwebd is built with the
   `test-fixtures` feature, so downstream fixture tests stay in process too.
+- `InProcessBroadwebNetwork` now exposes fixture-only broadwebd registries and
+  per-device daemon constructors. These registries install an in-process HTTP
+  transport that handles only `slate-fixture-http://` URLs and rejects ordinary
+  `http://` or `https://` requests, while profile-sync device registries share
+  one in-memory simulated network state.
 - Rendering broadweb smoke fixtures now consume that same `test-fixtures`
   layer, so IPFS/IPNS gateway and Kubo subresource tests record simulated
   requests without starting loopback HTTP servers. The rendering tests now use

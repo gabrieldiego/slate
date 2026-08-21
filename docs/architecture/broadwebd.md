@@ -639,6 +639,14 @@ binding a local port. Downstream crates should not build socket-shaped fixture
 handles around the lower-level registries; the in-process layer is the default
 test boundary.
 
+Fixture broadwebd registries should be created through `InProcessBroadwebNetwork`
+instead of the production default registry. The fixture registry installs an
+in-process HTTP transport under the normal direct-HTTP plugin id so synthetic
+fixture URLs route through the usual daemon fetch path, but ordinary external
+`http://` and `https://` URLs fail closed before any DNS lookup or socket
+operation. Profile-sync device registries created by the same network object
+share one simulated provider/object/root store.
+
 Real protocol tests should use local fixtures or mock daemons. Tests must not
 require live IPFS, Tor, I2P, public gateways, or external network availability
 unless they are explicitly marked as external/manual.
