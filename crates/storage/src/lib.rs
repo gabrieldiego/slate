@@ -756,6 +756,28 @@ pub struct SyncCompactionTarget {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VerifiedProfileSyncSettingsSnapshot {
+    pub object_id: String,
+    pub snapshot: ProfileSyncSettingsSnapshot,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VerifiedProfileSyncSettingsTailChange {
+    pub object_id: String,
+    pub change: IncomingSyncSettingText,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncSettingsManifestApplication {
+    pub profile: String,
+    pub root_id: String,
+    pub manifest_object_id: String,
+    pub snapshot: Option<SyncSnapshotRecord>,
+    pub snapshot_changes: Vec<SyncChangeRecord>,
+    pub tail_changes: Vec<SyncChangeRecord>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProfileSyncRootRecord {
     pub profile: String,
     pub root_id: String,
@@ -778,6 +800,8 @@ pub enum StorageError {
     Clock(std::time::SystemTimeError),
     InvalidSyncDeviceId(String),
     InvalidSyncRootId(String),
+    InvalidProfileSyncManifest(String),
+    UnsupportedProfileSyncManifestSchema(u8),
     UnsupportedSyncSnapshotSchema(u8),
 }
 
@@ -811,6 +835,15 @@ impl fmt::Display for StorageError {
             Self::InvalidSyncRootId(root_id) => {
                 write!(formatter, "invalid sync root id: {root_id}")
             }
+            Self::InvalidProfileSyncManifest(reason) => {
+                write!(formatter, "invalid profile sync manifest: {reason}")
+            }
+            Self::UnsupportedProfileSyncManifestSchema(schema_version) => {
+                write!(
+                    formatter,
+                    "unsupported profile sync manifest schema version: {schema_version}"
+                )
+            }
             Self::UnsupportedSyncSnapshotSchema(schema_version) => {
                 write!(
                     formatter,
@@ -831,6 +864,8 @@ impl std::error::Error for StorageError {
             Self::Clock(error) => Some(error),
             Self::InvalidSyncDeviceId(_) => None,
             Self::InvalidSyncRootId(_) => None,
+            Self::InvalidProfileSyncManifest(_) => None,
+            Self::UnsupportedProfileSyncManifestSchema(_) => None,
             Self::UnsupportedSyncSnapshotSchema(_) => None,
         }
     }
@@ -1887,6 +1922,49 @@ impl SlateProfileDatabase {
         Ok(changes)
     }
 
+    pub fn apply_verified_settings_manifest(
+        &self,
+        manifest_object_id: &str,
+        manifest: &ProfileSyncManifest,
+        snapshot: Option<&VerifiedProfileSyncSettingsSnapshot>,
+        tail_changes: &[VerifiedProfileSyncSettingsTailChange],
+    ) -> Result<ProfileSyncSettingsManifestApplication, StorageError> {
+        validate_settings_manifest_application(manifest, snapshot, tail_changes)?;
+
+        let mut snapshot_record = None;
+        let mut snapshot_changes = Vec::new();
+        if let Some(snapshot) = snapshot {
+            snapshot_changes = self.apply_settings_snapshot(&snapshot.snapshot)?;
+            snapshot_record = Some(self.record_sync_snapshot(&SyncSnapshotRegistration {
+                profile: manifest.profile.clone(),
+                snapshot_id: settings_snapshot_id(snapshot.snapshot.covers_revision),
+                backend_object_id: Some(snapshot.object_id.clone()),
+                covers_revision: snapshot.snapshot.covers_revision,
+                included_domains: snapshot.snapshot.included_domains.clone(),
+            })?);
+        }
+
+        let mut applied_tail_changes = Vec::new();
+        for tail_change in tail_changes {
+            applied_tail_changes.push(self.apply_sync_setting_text(&tail_change.change)?);
+        }
+
+        self.set_profile_sync_root(
+            manifest.profile.as_str(),
+            manifest.root_id.as_str(),
+            manifest_object_id,
+        )?;
+
+        Ok(ProfileSyncSettingsManifestApplication {
+            profile: manifest.profile.clone(),
+            root_id: manifest.root_id.clone(),
+            manifest_object_id: manifest_object_id.to_string(),
+            snapshot: snapshot_record,
+            snapshot_changes,
+            tail_changes: applied_tail_changes,
+        })
+    }
+
     pub fn sync_snapshot(
         &self,
         profile: &str,
@@ -2285,6 +2363,103 @@ fn normalized_snapshot_domains(domains: &[String]) -> Vec<String> {
         .collect::<std::collections::BTreeSet<_>>()
         .into_iter()
         .collect()
+}
+
+fn settings_snapshot_id(covers_revision: i64) -> String {
+    format!("settings-snapshot-r{covers_revision}")
+}
+
+fn validate_settings_manifest_application(
+    manifest: &ProfileSyncManifest,
+    snapshot: Option<&VerifiedProfileSyncSettingsSnapshot>,
+    tail_changes: &[VerifiedProfileSyncSettingsTailChange],
+) -> Result<(), StorageError> {
+    if manifest.schema_version != PROFILE_SYNC_MANIFEST_SCHEMA_VERSION {
+        return Err(StorageError::UnsupportedProfileSyncManifestSchema(
+            manifest.schema_version,
+        ));
+    }
+    if manifest.profile.is_empty() {
+        return Err(StorageError::InvalidProfileSyncManifest(
+            "manifest profile is empty".to_string(),
+        ));
+    }
+    if manifest.root_id.is_empty() {
+        return Err(StorageError::InvalidSyncRootId(manifest.root_id.clone()));
+    }
+
+    match (manifest.current_snapshot_object_id.as_deref(), snapshot) {
+        (Some(expected_object_id), Some(snapshot))
+            if expected_object_id == snapshot.object_id.as_str() =>
+        {
+            validate_manifest_snapshot(manifest, snapshot)?
+        }
+        (Some(expected_object_id), Some(snapshot)) => {
+            return Err(StorageError::InvalidProfileSyncManifest(format!(
+                "manifest current snapshot object {expected_object_id} does not match verified snapshot object {}",
+                snapshot.object_id
+            )));
+        }
+        (Some(expected_object_id), None) => {
+            return Err(StorageError::InvalidProfileSyncManifest(format!(
+                "manifest references missing snapshot object {expected_object_id}"
+            )));
+        }
+        (None, Some(snapshot)) => {
+            return Err(StorageError::InvalidProfileSyncManifest(format!(
+                "verified snapshot object {} is not referenced by manifest",
+                snapshot.object_id
+            )));
+        }
+        (None, None) => {}
+    }
+
+    let actual_tail_object_ids = tail_changes
+        .iter()
+        .map(|tail| tail.object_id.clone())
+        .collect::<Vec<_>>();
+    if actual_tail_object_ids != manifest.tail_change_object_ids {
+        return Err(StorageError::InvalidProfileSyncManifest(
+            "manifest tail object ids do not match verified tail changes".to_string(),
+        ));
+    }
+    for tail in tail_changes {
+        if tail.change.profile != manifest.profile {
+            return Err(StorageError::InvalidProfileSyncManifest(format!(
+                "tail change {} profile {} does not match manifest profile {}",
+                tail.object_id, tail.change.profile, manifest.profile
+            )));
+        }
+        if !manifest.included_domains.contains(&tail.change.domain) {
+            return Err(StorageError::InvalidProfileSyncManifest(format!(
+                "tail change {} domain {} is not included in manifest",
+                tail.object_id, tail.change.domain
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_manifest_snapshot(
+    manifest: &ProfileSyncManifest,
+    snapshot: &VerifiedProfileSyncSettingsSnapshot,
+) -> Result<(), StorageError> {
+    if snapshot.snapshot.profile != manifest.profile {
+        return Err(StorageError::InvalidProfileSyncManifest(format!(
+            "snapshot object {} profile {} does not match manifest profile {}",
+            snapshot.object_id, snapshot.snapshot.profile, manifest.profile
+        )));
+    }
+    for domain in &snapshot.snapshot.included_domains {
+        if !manifest.included_domains.contains(domain) {
+            return Err(StorageError::InvalidProfileSyncManifest(format!(
+                "snapshot object {} domain {domain} is not included in manifest",
+                snapshot.object_id
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn encode_snapshot_domains(domains: &[String]) -> Result<String, StorageError> {
@@ -3918,6 +4093,159 @@ mod tests {
                     event.change.domain == SYNC_DOMAIN_SETTINGS
                         && event.change.entity_key == "ui.theme"
                 })
+        );
+    }
+
+    #[test]
+    fn verified_settings_manifest_applies_snapshot_then_tail_and_tracks_root() {
+        let source_path = test_dir("sync-manifest-source").join(DEFAULT_DATABASE_FILE_NAME);
+        let source =
+            SlateProfileDatabase::open_resolved_with_device_id(source_path, "device-a").unwrap();
+        source
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .unwrap();
+        let snapshot_revision = source.latest_sync_revision(DEFAULT_PROFILE_ID).unwrap();
+        let snapshot = source
+            .settings_sync_snapshot_payload(
+                DEFAULT_PROFILE_ID,
+                snapshot_revision,
+                &[SYNC_DOMAIN_SETTINGS.to_string()],
+            )
+            .unwrap();
+        let tail_change = source
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "ui.theme",
+                "slate",
+            )
+            .unwrap();
+        let manifest = ProfileSyncManifest {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: "settings/latest".to_string(),
+            schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            current_snapshot_object_id: Some("snapshot-object-1".to_string()),
+            tail_change_object_ids: vec!["tail-object-1".to_string()],
+            included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            device_frontiers: vec![ProfileSyncDeviceFrontier {
+                device_id: tail_change.device_id.clone(),
+                latest_sequence: tail_change.device_sequence,
+                latest_change_object_id: Some("tail-object-1".to_string()),
+            }],
+            retention_policy: ProfileSyncRetentionPolicy::default(),
+            created_at: tail_change.created_at,
+        };
+
+        let destination_path =
+            test_dir("sync-manifest-destination").join(DEFAULT_DATABASE_FILE_NAME);
+        let destination =
+            SlateProfileDatabase::open_resolved_with_device_id(destination_path, "device-b")
+                .unwrap();
+        let applied = destination
+            .apply_verified_settings_manifest(
+                "manifest-object-1",
+                &manifest,
+                Some(&VerifiedProfileSyncSettingsSnapshot {
+                    object_id: "snapshot-object-1".to_string(),
+                    snapshot,
+                }),
+                &[VerifiedProfileSyncSettingsTailChange {
+                    object_id: "tail-object-1".to_string(),
+                    change: IncomingSyncSettingText::new(
+                        tail_change.profile,
+                        tail_change.domain,
+                        tail_change.entity_key,
+                        tail_change.payload,
+                        tail_change.device_id,
+                        tail_change.device_sequence,
+                        tail_change.logical_clock,
+                    ),
+                }],
+            )
+            .unwrap();
+
+        assert_eq!(applied.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(applied.root_id, "settings/latest");
+        assert_eq!(applied.manifest_object_id, "manifest-object-1");
+        assert_eq!(
+            applied
+                .snapshot
+                .as_ref()
+                .and_then(|snapshot| snapshot.backend_object_id.as_deref()),
+            Some("snapshot-object-1")
+        );
+        assert!(
+            applied
+                .snapshot_changes
+                .iter()
+                .any(|change| change.entity_key == "ui.theme" && change.payload == "teal")
+        );
+        assert_eq!(applied.tail_changes.len(), 1);
+        assert_eq!(applied.tail_changes[0].payload, "slate");
+        assert!(applied.tail_changes[0].applied_at.is_some());
+        assert_eq!(
+            destination.get_setting_text("ui.theme").unwrap().as_deref(),
+            Some("slate")
+        );
+        assert_eq!(
+            destination
+                .profile_sync_root(DEFAULT_PROFILE_ID, "settings/latest")
+                .unwrap()
+                .expect("settings root")
+                .object_id,
+            "manifest-object-1"
+        );
+    }
+
+    #[test]
+    fn verified_settings_manifest_rejects_mismatched_tail_objects_before_applying() {
+        let database_path = test_dir("sync-manifest-invalid").join(DEFAULT_DATABASE_FILE_NAME);
+        let database =
+            SlateProfileDatabase::open_resolved_with_device_id(database_path, "device-b").unwrap();
+        let manifest = ProfileSyncManifest {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: "settings/latest".to_string(),
+            schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            current_snapshot_object_id: None,
+            tail_change_object_ids: vec!["expected-tail-object".to_string()],
+            included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            device_frontiers: Vec::new(),
+            retention_policy: ProfileSyncRetentionPolicy::default(),
+            created_at: 1,
+        };
+
+        let error = database
+            .apply_verified_settings_manifest(
+                "manifest-object-1",
+                &manifest,
+                None,
+                &[VerifiedProfileSyncSettingsTailChange {
+                    object_id: "wrong-tail-object".to_string(),
+                    change: IncomingSyncSettingText::new(
+                        DEFAULT_PROFILE_ID,
+                        SYNC_DOMAIN_SETTINGS,
+                        "ui.theme",
+                        "slate",
+                        "device-a",
+                        1,
+                        1,
+                    ),
+                }],
+            )
+            .unwrap_err();
+
+        assert!(matches!(error, StorageError::InvalidProfileSyncManifest(_)));
+        assert_eq!(
+            database.get_setting_text("ui.theme").unwrap().as_deref(),
+            None
+        );
+        assert_eq!(
+            database
+                .profile_sync_root(DEFAULT_PROFILE_ID, "settings/latest")
+                .unwrap(),
+            None
         );
     }
 

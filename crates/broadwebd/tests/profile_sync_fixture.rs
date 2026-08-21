@@ -13,6 +13,7 @@ use slate_storage::{
     ProfileSyncDeviceSigner, ProfileSyncManifest, ProfileSyncRetentionPolicy,
     ProfileSyncSettingsSnapshot, SYNC_DOMAIN_SETTINGS, SignedSyncObject, SlateProfileDatabase,
     SyncChangeRecord, SyncRevisionRecord, SyncSnapshotRegistration,
+    VerifiedProfileSyncSettingsSnapshot, VerifiedProfileSyncSettingsTailChange,
 };
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -645,17 +646,6 @@ fn two_local_devices_apply_snapshot_then_manifest_tail_changes() {
         &content_key,
         &trusted_device_a_key,
     );
-    device_b_db
-        .apply_settings_snapshot(&verified_snapshot)
-        .expect("device b applies snapshot before manifest tail");
-    assert_eq!(
-        device_b_db
-            .get_setting_text("ui.theme")
-            .expect("read device b theme after snapshot")
-            .as_deref(),
-        Some("teal")
-    );
-
     let fetched_tail = fetch_object(
         &device_b_broadweb,
         DEFAULT_PROFILE_ID,
@@ -667,9 +657,33 @@ fn two_local_devices_apply_snapshot_then_manifest_tail_changes() {
         &content_key,
         &trusted_device_a_key,
     );
-    let applied_tail = device_b_db
-        .apply_sync_setting_text(&incoming_tail)
-        .expect("device b applies manifest tail change");
+    let applied_manifest = device_b_db
+        .apply_verified_settings_manifest(
+            manifest_object_id.as_str(),
+            &manifest,
+            Some(&VerifiedProfileSyncSettingsSnapshot {
+                object_id: snapshot_object_id.clone(),
+                snapshot: verified_snapshot,
+            }),
+            &[VerifiedProfileSyncSettingsTailChange {
+                object_id: tail_change_object_id.clone(),
+                change: incoming_tail,
+            }],
+        )
+        .expect("device b applies verified snapshot and manifest tail");
+    assert_eq!(applied_manifest.manifest_object_id, manifest_object_id);
+    assert_eq!(
+        applied_manifest
+            .snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.backend_object_id.as_deref()),
+        Some(snapshot_object_id.as_str())
+    );
+    let applied_tail = applied_manifest
+        .tail_changes
+        .iter()
+        .find(|change| change.entity_key == "ui.theme")
+        .expect("manifest application includes theme tail");
     assert_eq!(applied_tail.payload, "slate");
     assert!(applied_tail.applied_at.is_some());
     assert_eq!(
@@ -678,6 +692,14 @@ fn two_local_devices_apply_snapshot_then_manifest_tail_changes() {
             .expect("read device b theme after tail")
             .as_deref(),
         Some("slate")
+    );
+    assert_eq!(
+        device_b_db
+            .profile_sync_root(DEFAULT_PROFILE_ID, SETTINGS_ROOT_ID)
+            .expect("read device b manifest root")
+            .expect("device b manifest root exists")
+            .object_id,
+        manifest_object_id
     );
 
     let _ = std::fs::remove_dir_all(device_a_root);
