@@ -598,6 +598,9 @@ stores the membership-log root or writes any trusted device key.
 Membership logs are capped at a fixed record count before entry fetch or apply,
 so oversized indexes fail before they can force unbounded fixture object reads
 or database mutations.
+The publisher enforces the same cap before writing membership record objects or
+advancing the log root, so oversized local history waits for future membership
+compaction instead of publishing an index receivers must reject.
 The broadwebd source bridge can also run the receive side for one trusted
 device head: resolve and verify the head, record the verified head root in
 `slate-settings.db`, apply the referenced settings manifest when the head is

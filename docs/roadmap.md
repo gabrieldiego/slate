@@ -766,6 +766,9 @@ Current baseline:
   advancing the stored log root or writing trusted device keys.
 - Membership logs now have a fixed record-count cap enforced before entry
   fetch or apply, with socketless fixture coverage for oversized indexes.
+- Membership-log publishing now enforces the same cap before writing any
+  membership record objects or advancing the log root, so local history that
+  needs compaction cannot create a distributed index receivers will reject.
 
 Next:
 

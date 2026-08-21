@@ -171,6 +171,11 @@ pub enum ProfileSyncPublishError {
     Broadwebd(BroadwebdError),
     Storage(StorageError),
     SyncObject(SyncObjectError),
+    MembershipLogTooLarge {
+        profile: String,
+        max_records: usize,
+        actual_records: usize,
+    },
     LocalSyncLoopExhausted {
         profile: String,
         settings_root_id: String,
@@ -184,6 +189,14 @@ impl fmt::Display for ProfileSyncPublishError {
             Self::Broadwebd(error) => write!(formatter, "profile sync backend error: {error}"),
             Self::Storage(error) => write!(formatter, "profile sync storage error: {error}"),
             Self::SyncObject(error) => write!(formatter, "profile sync object error: {error}"),
+            Self::MembershipLogTooLarge {
+                profile,
+                max_records,
+                actual_records,
+            } => write!(
+                formatter,
+                "profile sync membership log for profile {profile} has {actual_records} records, exceeding max {max_records}"
+            ),
             Self::LocalSyncLoopExhausted {
                 profile,
                 settings_root_id,
@@ -202,6 +215,7 @@ impl std::error::Error for ProfileSyncPublishError {
             Self::Broadwebd(error) => Some(error),
             Self::Storage(error) => Some(error),
             Self::SyncObject(error) => Some(error),
+            Self::MembershipLogTooLarge { .. } => None,
             Self::LocalSyncLoopExhausted { .. } => None,
         }
     }
@@ -2698,6 +2712,13 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
         if records.is_empty() {
             return Ok(None);
         }
+        if records.len() > PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS {
+            return Err(ProfileSyncPublishError::MembershipLogTooLarge {
+                profile: profile.to_string(),
+                max_records: PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS,
+                actual_records: records.len(),
+            });
+        }
 
         let mut entries = Vec::with_capacity(records.len());
         for record in records {
@@ -3913,8 +3934,8 @@ mod tests {
         PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID, ProfileSyncCredentialError, ProfileSyncCycleError,
         ProfileSyncCycleWithHealthError, ProfileSyncMembershipLog, ProfileSyncMembershipLogEntry,
         ProfileSyncMembershipLogPullStatus, ProfileSyncMembershipRecordPullStatus,
-        ProfileSyncPolicyError, ProfileSyncReceiveError, SettingsSyncCyclePolicy,
-        SettingsSyncRetentionProviderHandle, SettingsSyncRuntimeSecrets,
+        ProfileSyncPolicyError, ProfileSyncPublishError, ProfileSyncReceiveError,
+        SettingsSyncCyclePolicy, SettingsSyncRetentionProviderHandle, SettingsSyncRuntimeSecrets,
         SettingsSyncSchedulerConfig, settings_device_head_root_id, sync_membership_record_root_id,
     };
     use slate_broadwebd::{
@@ -4906,6 +4927,78 @@ mod tests {
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
         let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_membership_log_publisher_rejects_oversized_local_history_without_loopback() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("membership-log-publish-oversized-publisher");
+        let publisher_db_root = test_state_root("membership-log-publish-oversized-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "membership-log-publish-oversized-publisher",
+            )
+            .expect("start in-process oversized membership log publisher daemon");
+        let publisher_database =
+            SlateProfileDatabase::open_resolved(publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME))
+                .expect("open oversized membership log publisher database");
+        let signer = ProfileSyncDeviceSigner::generate("membership-log-publish-oversized-signer")
+            .expect("generate oversized membership log signer");
+        let signer_public_key = signer.public_key().expect("read signer public key");
+        for index in 0..=super::PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS {
+            let record = ProfileSyncMembershipRecord {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                record_id: format!("epoch-1-enroll-publish-oversized-{index:03}"),
+                schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+                device_id: signer.device_id().to_string(),
+                device_public_key: Some(signer_public_key.clone()),
+                created_at: index as i64,
+            };
+            publisher_database
+                .record_signed_sync_account_membership_record(
+                    signed_membership_record_bytes(&signer, &record).as_slice(),
+                )
+                .expect("record oversized membership history entry");
+        }
+
+        let error = BroadwebdProfileSyncPublisher::new(&publisher_daemon)
+            .publish_local_sync_account_membership_log(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            )
+            .expect_err("publisher should reject oversized local membership history");
+        assert!(matches!(
+            error,
+            ProfileSyncPublishError::MembershipLogTooLarge {
+                max_records,
+                actual_records,
+                ..
+            } if max_records == super::PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS
+                && actual_records == super::PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS + 1
+        ));
+        assert_eq!(
+            BroadwebdProfileSyncObjectSource::new(&publisher_daemon)
+                .resolve_profile_sync_root(DEFAULT_PROFILE_ID, PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID)
+                .expect("read oversized publisher membership log root"),
+            None
+        );
+        assert_eq!(
+            BroadwebdProfileSyncObjectSource::new(&publisher_daemon)
+                .resolve_profile_sync_root(
+                    DEFAULT_PROFILE_ID,
+                    sync_membership_record_root_id("epoch-1-enroll-publish-oversized-000").as_str(),
+                )
+                .expect("read oversized publisher first membership record root"),
+            None
+        );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
     }
 
     #[test]
