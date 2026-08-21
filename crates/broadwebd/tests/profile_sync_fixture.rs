@@ -7,8 +7,9 @@ use slate_broadwebd::{
 };
 use slate_storage::{
     DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, EncryptedSyncObject, IncomingSyncSettingText,
-    PROFILE_SYNC_CONTENT_KEY_BYTES, ProfileSyncContentKey, SYNC_DOMAIN_SETTINGS,
-    SlateProfileDatabase, SyncChangeRecord, SyncRevisionRecord,
+    PROFILE_SYNC_CONTENT_KEY_BYTES, ProfileSyncContentKey, ProfileSyncDevicePublicKey,
+    ProfileSyncDeviceSigner, SYNC_DOMAIN_SETTINGS, SignedSyncObject, SlateProfileDatabase,
+    SyncChangeRecord, SyncRevisionRecord,
 };
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -38,6 +39,11 @@ fn two_local_slate_settings_databases_sync_through_profile_fixture() {
         "device-b",
     )
     .expect("open device b slate-settings.db");
+    let device_a_signer =
+        ProfileSyncDeviceSigner::generate("device-a").expect("create device a signing key");
+    let trusted_device_a_key = device_a_signer
+        .public_key()
+        .expect("read device a public key");
 
     let local_change = device_a_db
         .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
@@ -45,7 +51,7 @@ fn two_local_slate_settings_databases_sync_through_profile_fixture() {
     assert_eq!(local_change.device_id, "device-a");
 
     let content_key = fixture_content_key();
-    let object_bytes = encrypt_setting_change(&local_change, &content_key);
+    let object_bytes = sign_encrypted_setting_change(&local_change, &content_key, &device_a_signer);
     assert!(
         !std::str::from_utf8(object_bytes.as_slice())
             .expect("fixture object is JSON envelope")
@@ -67,7 +73,11 @@ fn two_local_slate_settings_databases_sync_through_profile_fixture() {
     );
     assert_eq!(fetched.object_id, object_id);
 
-    let incoming = decrypt_setting_change(fetched.bytes.as_slice(), &content_key);
+    let incoming = verify_and_decrypt_setting_change(
+        fetched.bytes.as_slice(),
+        &content_key,
+        &trusted_device_a_key,
+    );
     let applied = device_b_db
         .apply_sync_setting_text(&incoming)
         .expect("device b applies incoming setting");
@@ -127,13 +137,14 @@ fn incoming_setting_from_change(change: &SyncChangeRecord) -> IncomingSyncSettin
     )
 }
 
-fn encrypt_setting_change(
+fn sign_encrypted_setting_change(
     change: &SyncChangeRecord,
     content_key: &ProfileSyncContentKey,
+    signer: &ProfileSyncDeviceSigner,
 ) -> Vec<u8> {
     let incoming = incoming_setting_from_change(change);
     let payload = serde_json::to_vec(&incoming).expect("encode fixture sync payload");
-    EncryptedSyncObject::seal(
+    let encrypted_object = EncryptedSyncObject::seal(
         incoming.profile.as_str(),
         incoming.domain.as_str(),
         SETTINGS_CHANGE_OBJECT_KIND,
@@ -141,17 +152,28 @@ fn encrypt_setting_change(
         payload.as_slice(),
         content_key,
     )
-    .expect("encrypt fixture sync object")
-    .to_bytes()
-    .expect("encode fixture encrypted sync object")
+    .expect("encrypt fixture sync object");
+    let encrypted_bytes = encrypted_object
+        .to_bytes()
+        .expect("encode fixture encrypted sync object");
+    signer
+        .sign(encrypted_bytes.as_slice())
+        .expect("sign fixture encrypted sync object")
+        .to_bytes()
+        .expect("encode fixture signed sync object")
 }
 
-fn decrypt_setting_change(
+fn verify_and_decrypt_setting_change(
     bytes: &[u8],
     content_key: &ProfileSyncContentKey,
+    public_key: &ProfileSyncDevicePublicKey,
 ) -> IncomingSyncSettingText {
-    let encrypted_object =
-        EncryptedSyncObject::from_bytes(bytes).expect("decode fixture encrypted sync object");
+    let signed_object = SignedSyncObject::from_bytes(bytes).expect("decode fixture signed object");
+    let encrypted_bytes = signed_object
+        .verify_with(public_key)
+        .expect("verify fixture signed object");
+    let encrypted_object = EncryptedSyncObject::from_bytes(encrypted_bytes)
+        .expect("decode fixture encrypted sync object");
     assert_eq!(encrypted_object.profile, DEFAULT_PROFILE_ID);
     assert_eq!(encrypted_object.domain, SYNC_DOMAIN_SETTINGS);
     assert_eq!(encrypted_object.object_kind, SETTINGS_CHANGE_OBJECT_KIND);
