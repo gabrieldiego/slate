@@ -53,6 +53,7 @@ pub const DEFAULT_HOME_BOOKMARKS: [DefaultBookmark; 2] = [
 ];
 
 const DEFAULT_BOOKMARKS_SEEDED_SETTING_KEY: &str = "bookmarks.defaults_seeded";
+const APP_SYNC_DOMAIN_CURSOR_KEY_PREFIX: &str = "app_sync.cursor.";
 const PROFILE_SYNC_ROOT_KEY_PREFIX: &str = "profile_sync.root.";
 const PROFILE_SYNC_SNAPSHOT_DEVICE_ID: &str = "snapshot";
 
@@ -1616,6 +1617,14 @@ pub struct AppSyncDomainRecord {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AppSyncDomainCursorRecord {
+    pub profile: String,
+    pub domain: String,
+    pub latest_revision: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SyncDeviceRegistration {
     pub profile: String,
     pub device_id: String,
@@ -1954,6 +1963,8 @@ pub enum StorageError {
     Clock(std::time::SystemTimeError),
     InvalidSyncDeviceId(String),
     InvalidSyncContentKeyId(String),
+    InvalidSyncDomain(String),
+    InvalidSyncRevision(i64),
     MissingActiveSyncContentKey(String),
     UnsupportedSyncContentKeyAlgorithm {
         key_id: String,
@@ -2000,6 +2011,12 @@ impl fmt::Display for StorageError {
             }
             Self::InvalidSyncContentKeyId(key_id) => {
                 write!(formatter, "invalid sync content key id: {key_id}")
+            }
+            Self::InvalidSyncDomain(domain) => {
+                write!(formatter, "invalid sync domain: {domain}")
+            }
+            Self::InvalidSyncRevision(revision) => {
+                write!(formatter, "invalid sync revision: {revision}")
             }
             Self::MissingActiveSyncContentKey(profile) => {
                 write!(
@@ -2052,6 +2069,8 @@ impl std::error::Error for StorageError {
             Self::Clock(error) => Some(error),
             Self::InvalidSyncDeviceId(_) => None,
             Self::InvalidSyncContentKeyId(_) => None,
+            Self::InvalidSyncDomain(_) => None,
+            Self::InvalidSyncRevision(_) => None,
             Self::MissingActiveSyncContentKey(_) => None,
             Self::UnsupportedSyncContentKeyAlgorithm { .. }
             | Self::UnauthorizedSyncContentKeyEpoch { .. } => None,
@@ -2648,6 +2667,65 @@ impl SlateProfileDatabase {
             domains.push(record.map_err(|source| self.database_error(source))?);
         }
         Ok(domains)
+    }
+
+    pub fn app_sync_domain_cursor(
+        &self,
+        profile: &str,
+        domain: &str,
+    ) -> Result<Option<AppSyncDomainCursorRecord>, StorageError> {
+        validate_sync_domain(domain)?;
+        let connection = self.connection()?;
+        let key = app_sync_domain_cursor_key(domain);
+        connection
+            .query_row(
+                "SELECT profile, key, value, updated_at
+                 FROM sync_state
+                 WHERE profile = ?1 AND key = ?2",
+                params![profile, key.as_str()],
+                app_sync_domain_cursor_record_from_row,
+            )
+            .optional()
+            .map_err(|source| self.database_error(source))
+    }
+
+    pub fn record_app_sync_domain_cursor(
+        &self,
+        profile: &str,
+        domain: &str,
+        latest_revision: i64,
+    ) -> Result<AppSyncDomainCursorRecord, StorageError> {
+        validate_sync_domain(domain)?;
+        if latest_revision < 0 {
+            return Err(StorageError::InvalidSyncRevision(latest_revision));
+        }
+
+        let connection = self.connection()?;
+        let now = unix_time_seconds()?;
+        let key = app_sync_domain_cursor_key(domain);
+        let current_revision = self
+            .app_sync_domain_cursor(profile, domain)?
+            .map(|cursor| cursor.latest_revision)
+            .unwrap_or(0);
+        let stored_revision = current_revision.max(latest_revision);
+        let stored_revision_value = stored_revision.to_string();
+        connection
+            .execute(
+                "INSERT INTO sync_state (profile, key, value, updated_at)
+                 VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT(profile, key) DO UPDATE SET
+                   value = excluded.value,
+                   updated_at = excluded.updated_at",
+                params![profile, key.as_str(), stored_revision_value.as_str(), now],
+            )
+            .map_err(|source| self.database_error(source))?;
+
+        Ok(AppSyncDomainCursorRecord {
+            profile: profile.to_string(),
+            domain: domain.to_string(),
+            latest_revision: stored_revision,
+            updated_at: now,
+        })
     }
 
     pub fn register_sync_device(
@@ -5075,6 +5153,33 @@ fn profile_sync_root_key(root_id: &str) -> String {
     format!("{PROFILE_SYNC_ROOT_KEY_PREFIX}{root_id}")
 }
 
+fn validate_sync_domain(domain: &str) -> Result<(), StorageError> {
+    if domain.is_empty() {
+        return Err(StorageError::InvalidSyncDomain(domain.to_string()));
+    }
+    Ok(())
+}
+
+fn app_sync_domain_cursor_key(domain: &str) -> String {
+    format!("{APP_SYNC_DOMAIN_CURSOR_KEY_PREFIX}{domain}")
+}
+
+fn app_sync_domain_from_cursor_key(key: &str) -> Result<String, rusqlite::Error> {
+    key.strip_prefix(APP_SYNC_DOMAIN_CURSOR_KEY_PREFIX)
+        .filter(|domain| !domain.is_empty())
+        .map(ToString::to_string)
+        .ok_or_else(|| {
+            rusqlite::Error::FromSqlConversionFailure(
+                1,
+                Type::Text,
+                Box::new(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "malformed app sync domain cursor key",
+                )),
+            )
+        })
+}
+
 fn profile_sync_root_id_from_key(key: &str) -> Result<String, rusqlite::Error> {
     key.strip_prefix(PROFILE_SYNC_ROOT_KEY_PREFIX)
         .filter(|root_id| !root_id.is_empty())
@@ -5089,6 +5194,22 @@ fn profile_sync_root_id_from_key(key: &str) -> Result<String, rusqlite::Error> {
                 )),
             )
         })
+}
+
+fn app_sync_domain_cursor_record_from_row(
+    row: &rusqlite::Row<'_>,
+) -> Result<AppSyncDomainCursorRecord, rusqlite::Error> {
+    let key: String = row.get(1)?;
+    let value: String = row.get(2)?;
+    let latest_revision = value.parse::<i64>().map_err(|source| {
+        rusqlite::Error::FromSqlConversionFailure(2, Type::Text, Box::new(source))
+    })?;
+    Ok(AppSyncDomainCursorRecord {
+        profile: row.get(0)?,
+        domain: app_sync_domain_from_cursor_key(key.as_str())?,
+        latest_revision,
+        updated_at: row.get(3)?,
+    })
 }
 
 fn sync_content_key_epoch_record_from_row(
@@ -9262,6 +9383,126 @@ mod tests {
         assert!(!idle_poll.advanced());
         assert_eq!(idle_poll.latest_revision, second_poll.latest_revision);
         assert!(idle_poll.events.is_empty());
+    }
+
+    #[test]
+    fn app_sync_domain_cursors_persist_independent_progress() {
+        let database_path = test_dir("app-sync-domain-cursors").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let baseline_revision = database.latest_sync_revision(DEFAULT_PROFILE_ID).unwrap();
+
+        assert_eq!(
+            database
+                .app_sync_domain_cursor(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CALENDAR)
+                .unwrap(),
+            None
+        );
+
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "ui.theme",
+                "slate",
+            )
+            .unwrap();
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                "default_view",
+                "month",
+            )
+            .unwrap();
+        database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CALENDAR, "timezone", "UTC")
+            .unwrap();
+        let downloads_change = database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_DOWNLOADS,
+                "last_filter",
+                "active",
+            )
+            .unwrap();
+
+        let first_poll = database
+            .poll_sync_setting_text_events_for_domain(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                baseline_revision,
+                1,
+            )
+            .unwrap();
+        let first_cursor = database
+            .record_app_sync_domain_cursor(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                first_poll.latest_revision,
+            )
+            .unwrap();
+        assert_eq!(first_cursor.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(first_cursor.domain, SYNC_DOMAIN_CALENDAR);
+        assert_eq!(first_cursor.latest_revision, first_poll.latest_revision);
+
+        let stale_cursor = database
+            .record_app_sync_domain_cursor(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                baseline_revision,
+            )
+            .unwrap();
+        assert_eq!(stale_cursor.latest_revision, first_poll.latest_revision);
+
+        let second_poll = database
+            .poll_sync_setting_text_events_for_domain(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                stale_cursor.latest_revision,
+                8,
+            )
+            .unwrap();
+        let final_cursor = database
+            .record_app_sync_domain_cursor(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                second_poll.latest_revision,
+            )
+            .unwrap();
+        assert_eq!(final_cursor.latest_revision, second_poll.latest_revision);
+        assert_eq!(
+            database
+                .app_sync_domain_cursor(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CALENDAR)
+                .unwrap(),
+            Some(final_cursor.clone())
+        );
+        assert!(final_cursor.latest_revision < downloads_change.id);
+        assert_eq!(
+            database.latest_sync_revision(DEFAULT_PROFILE_ID).unwrap(),
+            downloads_change.id
+        );
+    }
+
+    #[test]
+    fn app_sync_domain_cursor_rejects_invalid_inputs() {
+        let database_path =
+            test_dir("app-sync-domain-cursor-invalid").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+
+        let empty_domain_error = database
+            .app_sync_domain_cursor(DEFAULT_PROFILE_ID, "")
+            .expect_err("empty domain should be invalid");
+        assert!(matches!(
+            empty_domain_error,
+            StorageError::InvalidSyncDomain(domain) if domain.is_empty()
+        ));
+
+        assert!(matches!(
+            database
+                .record_app_sync_domain_cursor(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CALENDAR, -1)
+                .expect_err("negative revision should be invalid"),
+            StorageError::InvalidSyncRevision(-1)
+        ));
     }
 
     #[test]

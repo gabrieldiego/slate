@@ -219,6 +219,9 @@ Current baseline:
   requests without starting loopback HTTP servers. The rendering tests now use
   `InProcessBroadwebNetwork` directly instead of socket-shaped local fixture
   handles.
+- `slate-settings.db` can now persist app-domain watcher cursors in
+  profile-scoped `sync_state` rows. Cursor writes are monotonic, so stale or
+  duplicate watcher batches cannot move a rail app's sync cursor backward.
 - The profile-sync bridge can now publish post-snapshot local settings updates
   by reusing the latest retained `slate-settings.db` snapshot object, publishing
   only the new tail changes, moving the settings root, and publishing a fresh

@@ -733,6 +733,9 @@ discovery reports that boundary.
   through `InProcessBroadwebNetwork` so simulated devices share one in-memory
   provider graph and fixture HTTP fetches reject non-synthetic URLs before DNS
   or socket access.
+- App-owned sync watchers should persist profile/domain-scoped cursors in
+  `slate-settings.db` after applying a batch, and cursor advancement should be
+  monotonic so duplicate or stale fixture deliveries cannot rewind app state.
 - Kubo integration tests are ignored or environment-gated and run against
   loopback only.
 - Leak tests assert that sync never falls through to DNS, public gateways,
