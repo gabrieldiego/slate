@@ -282,7 +282,8 @@ Current baseline:
   signed encrypted device head through an in-process per-device root. The test
   retains the head object on the receiving provider before the publishing
   provider goes offline, records the verified head root in `slate-settings.db`,
-  and verifies the unchanged-root short circuit on the next pull.
+  verifies the unchanged-root short circuit on the next pull, and follows the
+  head to apply the referenced settings manifest while the publisher is offline.
 - `slate-settings.db` now has typed snapshot metadata APIs for recording
   encrypted backend object ids, covered revisions, included domains, and latest
   snapshot lookup. This is metadata only; snapshot payloads stay in encrypted

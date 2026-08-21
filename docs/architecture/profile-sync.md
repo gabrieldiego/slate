@@ -293,7 +293,9 @@ exercises the first handoff: a publishing provider writes a signed encrypted
 head, the receiving provider retains it, and the head remains pullable after the
 publisher is marked offline. The receiver records the verified head root in
 `slate-settings.db` and then verifies the unchanged-root short circuit on the
-next pull.
+next pull. The same fixture also retains the referenced manifest and tail
+objects, then applies the settings manifest by following the verified head while
+the publishing provider remains offline.
 
 The first synced domains should be settings that are safe to apply live, such as
 UI preferences, protocol adapter configuration, rail app ordering, and

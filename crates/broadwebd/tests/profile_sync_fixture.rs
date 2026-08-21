@@ -802,6 +802,24 @@ fn two_local_devices_publish_and_pull_device_head_through_profile_fixture() {
             &budget,
         )
         .expect("device b retains device head object before device a goes offline");
+    device_b_broadweb
+        .profile_sync(
+            ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                DEFAULT_PROFILE_ID,
+                manifest_object_id.clone(),
+            )),
+            &budget,
+        )
+        .expect("device b retains manifest object before device a goes offline");
+    device_b_broadweb
+        .profile_sync(
+            ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                DEFAULT_PROFILE_ID,
+                change_object_id.clone(),
+            )),
+            &budget,
+        )
+        .expect("device b retains change object before device a goes offline");
     fixture
         .set_device_online("head-device-a", false)
         .expect("mark head fixture device a offline");
@@ -855,6 +873,40 @@ fn two_local_devices_publish_and_pull_device_head_through_profile_fixture() {
             root_id: head_root_id.to_string(),
             object_id: device_head_object_id,
         }
+    );
+
+    let applied = device_b_db
+        .pull_and_apply_trusted_signed_settings_manifest_objects_from_device_head(
+            &source,
+            DEFAULT_PROFILE_ID,
+            &pulled,
+            &content_key,
+            FIXTURE_CONTENT_KEY_ID,
+        )
+        .expect("device b follows device head and applies trusted manifest");
+    assert_eq!(applied.manifest_object_id, manifest_object_id);
+    assert_eq!(
+        applied
+            .tail_changes
+            .iter()
+            .find(|change| change.entity_key == "sync.head.probe")
+            .map(|change| change.payload.as_str()),
+        Some("ready")
+    );
+    assert_eq!(
+        device_b_db
+            .get_setting_text("sync.head.probe")
+            .expect("read device b setting applied through device head")
+            .as_deref(),
+        Some("ready")
+    );
+    assert_eq!(
+        device_b_db
+            .profile_sync_root(DEFAULT_PROFILE_ID, SETTINGS_ROOT_ID)
+            .expect("read device b settings manifest root")
+            .expect("device b settings manifest root exists")
+            .object_id,
+        manifest_object_id
     );
 
     let _ = std::fs::remove_dir_all(device_a_root);
