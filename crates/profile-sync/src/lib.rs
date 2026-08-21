@@ -837,6 +837,49 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
         })
     }
 
+    pub fn run_settings_sync_cycle_with_active_key_policy(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        settings_root_id: &str,
+        content_key: &ProfileSyncContentKey,
+        signer: &ProfileSyncDeviceSigner,
+        policy: &SettingsSyncCyclePolicy,
+    ) -> Result<SettingsSyncCycleWithHealthRun, ProfileSyncCycleWithHealthError> {
+        let before_health = self.settings_sync_health(
+            database,
+            profile,
+            settings_root_id,
+            policy.minimum_online_retaining_providers,
+        )?;
+        policy.check_before_cycle(&before_health)?;
+        let key_id = active_settings_sync_content_key_id(database, profile)
+            .map_err(ProfileSyncCycleError::from)?;
+        let cycle = self.run_settings_sync_cycle(
+            database,
+            profile,
+            settings_root_id,
+            content_key,
+            key_id.as_str(),
+            signer,
+            policy.retention_policy.clone(),
+            policy.max_publish_steps,
+            policy.max_trusted_devices,
+        )?;
+        let after_health = self.settings_sync_health(
+            database,
+            profile,
+            settings_root_id,
+            policy.minimum_online_retaining_providers,
+        )?;
+
+        Ok(SettingsSyncCycleWithHealthRun {
+            before_health,
+            cycle,
+            after_health,
+        })
+    }
+
     pub fn run_settings_sync_cycle(
         &self,
         database: &SlateProfileDatabase,
@@ -1688,21 +1731,12 @@ pub fn validate_settings_sync_cycle_credentials(
     key_id: &str,
     signer: &ProfileSyncDeviceSigner,
 ) -> Result<(), ProfileSyncCredentialError> {
-    let active_key = database
-        .active_sync_content_key_epoch(profile)?
-        .ok_or_else(|| StorageError::MissingActiveSyncContentKey(profile.to_string()))?;
-    if active_key.algorithm != PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305 {
-        return Err(StorageError::UnsupportedSyncContentKeyAlgorithm {
-            key_id: active_key.key_id,
-            algorithm: active_key.algorithm,
-        }
-        .into());
-    }
-    if active_key.key_id != key_id {
+    let active_key_id = active_settings_sync_content_key_id(database, profile)?;
+    if active_key_id != key_id {
         return Err(ProfileSyncCredentialError::InactiveContentKey {
             profile: profile.to_string(),
             expected_key_id: key_id.to_string(),
-            active_key_id: active_key.key_id,
+            active_key_id,
         });
     }
 
@@ -1723,6 +1757,23 @@ pub fn validate_settings_sync_cycle_credentials(
     }
 
     Ok(())
+}
+
+pub fn active_settings_sync_content_key_id(
+    database: &SlateProfileDatabase,
+    profile: &str,
+) -> Result<String, ProfileSyncCredentialError> {
+    let active_key = database
+        .active_sync_content_key_epoch(profile)?
+        .ok_or_else(|| StorageError::MissingActiveSyncContentKey(profile.to_string()))?;
+    if active_key.algorithm != PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305 {
+        return Err(StorageError::UnsupportedSyncContentKeyAlgorithm {
+            key_id: active_key.key_id,
+            algorithm: active_key.algorithm,
+        }
+        .into());
+    }
+    Ok(active_key.key_id)
 }
 
 fn trusted_remote_device_public_keys(
@@ -3104,6 +3155,103 @@ mod tests {
                 .message
                 .contains("mutable-root provider")
         );
+
+        let _ = std::fs::remove_dir_all(state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_policy_uses_active_content_key_metadata() {
+        let network = InProcessBroadwebNetwork::new();
+        let state_root = test_state_root("cycle-active-key-policy");
+        let db_root = test_state_root("cycle-active-key-policy-db");
+        let daemon = network
+            .daemon_for_device(&state_root, ResourceBudget::default(), "runtime-active-key")
+            .expect("start in-process profile-sync daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-active-key",
+        )
+        .expect("open local settings database");
+        let profile = "activekeyprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([56; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-active-key")
+            .expect("generate active key signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register local trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write local setting");
+
+        let run = BroadwebdSettingsSyncRunner::new(&daemon)
+            .run_settings_sync_cycle_with_active_key_policy(
+                &database,
+                profile,
+                settings_root_id,
+                &content_key,
+                &signer,
+                &SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 1),
+            )
+            .expect("active key metadata drives settings sync cycle");
+
+        assert!(!run.before_health.provider_health.degraded);
+        assert!(run.before_health.settings_root_health.degraded);
+        assert_eq!(run.cycle.published_step_count(), 1);
+        assert_eq!(run.cycle.applied_count(), 0);
+        assert!(!run.degraded_after());
+
+        let _ = std::fs::remove_dir_all(state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_policy_reports_missing_active_content_key() {
+        let network = InProcessBroadwebNetwork::new();
+        let state_root = test_state_root("cycle-active-key-missing");
+        let db_root = test_state_root("cycle-active-key-missing-db");
+        let daemon = network
+            .daemon_for_device(
+                &state_root,
+                ResourceBudget::default(),
+                "runtime-missing-active-key",
+            )
+            .expect("start in-process profile-sync daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-missing-active-key",
+        )
+        .expect("open local settings database");
+        let profile = "missingactivekeyprofile";
+        let content_key = ProfileSyncContentKey::from_bytes([57; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-missing-active-key")
+            .expect("generate missing active key signer");
+
+        let error = BroadwebdSettingsSyncRunner::new(&daemon)
+            .run_settings_sync_cycle_with_active_key_policy(
+                &database,
+                profile,
+                "settings/latest",
+                &content_key,
+                &signer,
+                &SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 1),
+            )
+            .expect_err("missing active content-key metadata should fail");
+
+        assert!(matches!(
+            error,
+            ProfileSyncCycleWithHealthError::Cycle(ProfileSyncCycleError::Credentials(
+                ProfileSyncCredentialError::Storage(
+                    StorageError::MissingActiveSyncContentKey(missing_profile)
+                )
+            )) if missing_profile == "missingactivekeyprofile"
+        ));
 
         let _ = std::fs::remove_dir_all(state_root);
         let _ = std::fs::remove_dir_all(db_root);

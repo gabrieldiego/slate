@@ -528,6 +528,11 @@ whether fresh provider health is required before running. The runtime-facing
 policy path samples health first and rejects degraded provider roles before
 loading credentials or attempting mutable-root writes, while still allowing
 missing settings roots to recover during an initial healthy-provider publish.
+After provider policy passes, the runtime-facing runner can load the active
+content-key id from `slate-settings.db` and use caller-supplied secret material
+for the actual encrypted publish/pull cycle. The database therefore stores
+active key metadata and trusted public keys, not plaintext content keys or
+device signing keys.
 Object bytes are also provider-held: fetches require at least one online
 provider with the object, and retaining an object copies the bytes into the
 retaining provider's in-process store. Tests can pause object transfer from one
