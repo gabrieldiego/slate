@@ -467,13 +467,35 @@ fn two_local_devices_transfer_compacted_settings_snapshot_through_profile_fixtur
     );
     assert_eq!(verified_snapshot, snapshot);
 
+    let applied_snapshot_changes = device_b_db
+        .apply_settings_snapshot(&verified_snapshot)
+        .expect("device b applies verified incoming snapshot");
+    let applied_theme = applied_snapshot_changes
+        .iter()
+        .find(|change| change.domain == SYNC_DOMAIN_SETTINGS && change.entity_key == "ui.theme")
+        .expect("snapshot application includes theme change");
+    assert_eq!(applied_theme.payload, "teal");
+    assert!(applied_theme.applied_at.is_some());
+    assert_eq!(
+        device_b_db
+            .get_setting_text("ui.theme")
+            .expect("read applied device b legacy setting")
+            .as_deref(),
+        Some("teal")
+    );
+    let snapshot_value = device_b_db
+        .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme")
+        .expect("read applied device b snapshot setting")
+        .expect("device b snapshot setting exists");
+    assert_eq!(snapshot_value.value, "teal");
+
     device_b_db
         .record_sync_snapshot(&SyncSnapshotRegistration {
             profile: DEFAULT_PROFILE_ID.to_string(),
             snapshot_id: snapshot_id.clone(),
             backend_object_id: Some(snapshot_object_id.clone()),
             covers_revision: verified_snapshot.covers_revision,
-            included_domains: verified_snapshot.included_domains,
+            included_domains: verified_snapshot.included_domains.clone(),
         })
         .expect("device b records verified incoming snapshot");
     let latest_snapshot = device_b_db
@@ -485,12 +507,21 @@ fn two_local_devices_transfer_compacted_settings_snapshot_through_profile_fixtur
         latest_snapshot.backend_object_id.as_deref(),
         Some(snapshot_object_id.as_str())
     );
+    let duplicate_snapshot_changes = device_b_db
+        .apply_settings_snapshot(&verified_snapshot)
+        .expect("duplicate snapshot application is idempotent");
     assert_eq!(
         device_b_db
-            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme")
-            .expect("read unapplied device b snapshot setting"),
-        None
+            .sync_revisions_after(DEFAULT_PROFILE_ID, snapshot_value.revision)
+            .expect("read revisions after duplicate snapshot"),
+        Vec::<SyncRevisionRecord>::new()
     );
+    let duplicate_theme = duplicate_snapshot_changes
+        .iter()
+        .find(|change| change.domain == SYNC_DOMAIN_SETTINGS && change.entity_key == "ui.theme")
+        .expect("duplicate snapshot includes theme change");
+    assert_eq!(duplicate_theme.id, applied_theme.id);
+    assert_eq!(duplicate_theme.applied_at, applied_theme.applied_at);
 
     let _ = std::fs::remove_dir_all(device_a_root);
     let _ = std::fs::remove_dir_all(device_b_root);
