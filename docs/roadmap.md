@@ -179,6 +179,13 @@ Current baseline:
 - Slate stores local settings and bookmarks in profile-owned SQLite state.
 - `slate-settings.db` is the first target for local-first distributed profile
   state and typed sync change streams.
+- `slate-settings.db` now records typed settings values, changes, revisions,
+  app sync domains, known sync devices, per-instance local sync device ids, and
+  idempotent incoming setting-change application.
+- broadwebd has a protocol-neutral `profile-sync` application service with an
+  in-memory local fixture backend. Unit tests cover object transfer, retention,
+  mutable root publish/resolve, provider discovery, and two local
+  `slate-settings.db` files syncing one setting through fixture bytes.
 - IPFS/IPNS is the first concrete backend under consideration, but the product
   goal is protocol-neutral: approved Slate devices should find each other, move
   encrypted sync objects, and optionally use approved providers to keep those
@@ -190,8 +197,8 @@ Current baseline:
 
 Next:
 
-- Add a protocol-neutral `profile-sync` application service to broadwebd with a
-  fake backend and explicit policy checks.
+- Expand the protocol-neutral `profile-sync` application service with explicit
+  policy checks for richer local fixture behavior.
 - Split sync backends into discovery, connectivity, transfer, availability, and
   mutable-root roles so different broadweb protocols can be combined.
 - Define the equal-control account authority model: signed device heads,
@@ -199,8 +206,8 @@ Next:
   profile write authority.
 - Add Kubo RPC-backed operations for encrypted object add, pin, unpin, pin
   verification, IPNS publish, and IPNS resolve as the first IPFS/IPNS backend.
-- Redesign `slate-settings.db` as a materialized local view over typed change
-  records, snapshots, device state, and revision notifications.
+- Add snapshots, sync object metadata, conflict handling, and merge policy on
+  top of the initial `slate-settings.db` typed change and revision model.
 - Add a settings watcher so externally synced changes are applied through normal
   runtime update paths instead of raw database replacement.
 - Define the Slate Sync Secret hierarchy for manifest signing, mutable-root
@@ -211,14 +218,9 @@ Next:
   changes, then squash older state into encrypted snapshots.
 - Add device enrollment, revocation, and key rotation before syncing sensitive
   profile domains.
-- Start implementation with syncable `slate-settings.db` state as the minimum
-  requirement. It should work without any network backend at first, but its
-  schema should already model typed changes, revisions, app domains, and future
-  sync object metadata.
-- Build local distributed-protocol fixtures that simulate peer discovery,
-  mutable records, object transfer, pinning or availability, offline devices,
-  delayed sync, and conflicts without using the real internet, Tor, public
-  IPFS/IPNS, or external relays.
+- Expand local distributed-protocol fixtures to simulate offline devices,
+  delayed sync, availability loss, pinning policy, and conflicts without using
+  the real internet, Tor, public IPFS/IPNS, or external relays.
 - Commit each coherent step separately and rerun focused regression tests for
   storage, broadwebd, rail apps, and chrome behavior as those areas are touched.
 
@@ -262,11 +264,13 @@ Future protocol candidates:
 
 Priority order:
 
-1. Local syncable `slate-settings.db` state: typed changes, snapshots, revisions,
-   device state, app domains, and local-only application of updates.
+1. Local syncable `slate-settings.db` state: snapshots, sync object metadata,
+   conflict policy, and compaction on top of the implemented typed changes,
+   revisions, device state, app domains, and local-only application of updates.
 2. Runtime settings watcher that applies local typed changes through normal
    browser-core/chrome/routing paths.
-3. broadwebd protocol-neutral `profile-sync` service contract and fake backend.
+3. Broaden the implemented broadwebd `profile-sync` service contract with
+   policy checks, richer fixture controls, and backend role separation.
 4. Backend role model for discovery, connectivity, transfer, availability, and
    mutable roots.
 5. Equal-control account authority model with signed device heads and membership
