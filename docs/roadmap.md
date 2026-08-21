@@ -195,6 +195,10 @@ Current baseline:
 - Storage now also provides `SignedSyncObject` wrappers using Ed25519 device
   keys, and the local two-device fixture verifies the signed encrypted payload
   against device A's trusted public key before decryption and application.
+- `slate-settings.db` now has typed snapshot metadata APIs for recording
+  encrypted backend object ids, covered revisions, included domains, and latest
+  snapshot lookup. This is metadata only; snapshot payloads stay in encrypted
+  sync objects.
 - IPFS/IPNS is the first concrete backend under consideration, but the product
   goal is protocol-neutral: approved Slate devices should find each other, move
   encrypted sync objects, and optionally use approved providers to keep those
