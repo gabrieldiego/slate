@@ -1746,6 +1746,25 @@ pub struct SyncSettingTextEvent {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SyncSettingTextDomainPoll {
+    pub profile: String,
+    pub domain: String,
+    pub previous_revision: i64,
+    pub latest_revision: i64,
+    pub events: Vec<SyncSettingTextEvent>,
+}
+
+impl SyncSettingTextDomainPoll {
+    pub fn advanced(&self) -> bool {
+        self.latest_revision > self.previous_revision
+    }
+
+    pub fn event_count(&self) -> usize {
+        self.events.len()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SyncSnapshotRegistration {
     pub profile: String,
     pub snapshot_id: String,
@@ -3224,6 +3243,28 @@ impl SlateProfileDatabase {
             events.push(record.map_err(|source| self.database_error(source))?);
         }
         Ok(events)
+    }
+
+    pub fn poll_sync_setting_text_events_for_domain(
+        &self,
+        profile: &str,
+        domain: &str,
+        after_revision: i64,
+        limit: u32,
+    ) -> Result<SyncSettingTextDomainPoll, StorageError> {
+        let events =
+            self.sync_setting_text_events_after_for_domain(profile, domain, after_revision, limit)?;
+        let latest_revision = events
+            .last()
+            .map(|event| event.revision.revision)
+            .unwrap_or(after_revision);
+        Ok(SyncSettingTextDomainPoll {
+            profile: profile.to_string(),
+            domain: domain.to_string(),
+            previous_revision: after_revision,
+            latest_revision,
+            events,
+        })
     }
 
     pub fn record_sync_snapshot(
@@ -9143,6 +9184,84 @@ mod tests {
             )
             .unwrap();
         assert_eq!(after_first_calendar, vec![calendar_events[1].clone()]);
+    }
+
+    #[test]
+    fn sync_setting_text_domain_poll_tracks_one_app_cursor() {
+        let database_path = test_dir("sync-setting-domain-poll").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let baseline_revision = database.latest_sync_revision(DEFAULT_PROFILE_ID).unwrap();
+
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "ui.theme",
+                "slate",
+            )
+            .unwrap();
+        let first_calendar_change = database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                "default_view",
+                "month",
+            )
+            .unwrap();
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_DOWNLOADS,
+                "last_filter",
+                "active",
+            )
+            .unwrap();
+        let second_calendar_change = database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CALENDAR, "timezone", "UTC")
+            .unwrap();
+
+        let first_poll = database
+            .poll_sync_setting_text_events_for_domain(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                baseline_revision,
+                1,
+            )
+            .unwrap();
+        assert_eq!(first_poll.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(first_poll.domain, SYNC_DOMAIN_CALENDAR);
+        assert_eq!(first_poll.previous_revision, baseline_revision);
+        assert!(first_poll.advanced());
+        assert_eq!(first_poll.event_count(), 1);
+        assert_eq!(first_poll.events[0].change, first_calendar_change);
+        assert_eq!(
+            first_poll.latest_revision,
+            first_poll.events[0].revision.revision
+        );
+
+        let second_poll = database
+            .poll_sync_setting_text_events_for_domain(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                first_poll.latest_revision,
+                8,
+            )
+            .unwrap();
+        assert!(second_poll.advanced());
+        assert_eq!(second_poll.event_count(), 1);
+        assert_eq!(second_poll.events[0].change, second_calendar_change);
+
+        let idle_poll = database
+            .poll_sync_setting_text_events_for_domain(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                second_poll.latest_revision,
+                8,
+            )
+            .unwrap();
+        assert!(!idle_poll.advanced());
+        assert_eq!(idle_poll.latest_revision, second_poll.latest_revision);
+        assert!(idle_poll.events.is_empty());
     }
 
     #[test]

@@ -579,6 +579,10 @@ Current baseline:
   domain, allowing future runtime app watchers to initialize and persist
   independent cursors without treating unrelated app-domain updates as their
   own progress.
+- Storage now exposes a reusable bounded poll result for one sync domain. It
+  returns the previous cursor, latest cursor, and applied event batch so future
+  app watchers can share the same local-only polling shape without chrome
+  dependencies.
 - Chrome now has a runtime synced-settings watcher over that feed. The desktop
   app polls it during the normal Servo pump, applying recognized synced chrome
   zoom and key binding updates through the same in-memory runtime state used by

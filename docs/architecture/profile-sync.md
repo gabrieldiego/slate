@@ -242,7 +242,10 @@ general feed remains available for sync internals, but app/runtime dispatch
 should prefer the domain-scoped feed so chrome, Calendar, Contacts, Downloads,
 and future apps only inspect replicated payloads for the sync domain they own.
 Watchers should initialize their cursors from the latest applied revision for
-their own domain instead of using the profile-wide latest revision.
+their own domain instead of using the profile-wide latest revision. The storage
+poll helper returns the previous cursor, latest cursor, and bounded applied
+event batch for one domain, which lets app watchers share one local-only polling
+contract while dispatching through app-owned update paths.
 
 ## Data Objects
 
