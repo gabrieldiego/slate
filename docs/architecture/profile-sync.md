@@ -100,6 +100,14 @@ Tor onion services can make a home daemon privately reachable; and a contracted
 pinning service can improve encrypted object availability without being trusted
 with plaintext.
 
+The initial Files projection uses `slate-settings.db` as a metadata-only
+materialized view keyed by file entry id. Replicated Files payloads may include
+sync-set membership, parent entry, display name, entry kind, content object
+reference, MIME type, size, modified time, integrity, and retention policy. They
+must not include file bytes, local filesystem paths, or per-device availability
+state. Those heavier and device-specific concerns belong in later
+object-transfer and retention layers.
+
 ## Account Authority Model
 
 A Slate sync account is a replicated cryptographic authority set, not a server
@@ -373,8 +381,11 @@ Planned domains:
   aggregation preferences. Message contents, SMS/WhatsApp secrets, and provider
   tokens require separate designs before sync.
 - `files`: file metadata, user-selected sync sets, directory manifests, content
-  object references, retention policy, and local availability state. File bytes
-  may use heavier transfer/storage backends than settings changes.
+  object references, integrity metadata, and retention policy. The initial
+  Files projection stores metadata-only entries keyed by entry id and emits
+  tombstones for deletion. File bytes, local paths, and per-device availability
+  remain outside replicated settings payloads and should use heavier
+  object-transfer and retention backends later.
 - `downloads`: download history, source routing metadata, integrity metadata,
   and user-selected persistent file records. Temporary downloads should stay
   local unless explicitly promoted. The initial Downloads projection is

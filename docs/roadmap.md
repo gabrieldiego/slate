@@ -209,6 +209,12 @@ Current baseline:
   bookmark changes. Trusted incoming bookmark-slot changes now materialize into
   the local bookmark rows during profile-sync apply, and existing bookmark
   removals emit slot tombstones that delete stale rows on receiving devices.
+- Files metadata now has a local-first `slate-settings.db` materialized table
+  and sync-domain JSON projection with tombstones. The initial projection tracks
+  sync-set membership, parent entry, name, entry kind, content object reference,
+  MIME type, size, modified time, integrity, and retention policy. File bytes,
+  local paths, and per-device availability stay out of replicated settings
+  payloads until heavier object-transfer backends are wired.
 - Local settings/app-domain publishing now filters outgoing snapshots and tail
   manifests through the enabled app sync-domain table. Disabled domains can
   still be used as local typed state, but they are not published to broadweb

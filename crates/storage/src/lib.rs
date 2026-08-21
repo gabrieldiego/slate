@@ -57,6 +57,7 @@ const BOOKMARK_HOME_SLOT_SYNC_KEY_PREFIX: &str = "home.slot.";
 const CALENDAR_EVENT_SYNC_KEY_PREFIX: &str = "event.";
 const CONTACT_CARD_SYNC_KEY_PREFIX: &str = "contact.";
 const DOWNLOAD_METADATA_SYNC_KEY_PREFIX: &str = "download.";
+const FILE_ENTRY_SYNC_KEY_PREFIX: &str = "entry.";
 const APP_SYNC_DOMAIN_CURSOR_KEY_PREFIX: &str = "app_sync.cursor.";
 const PROFILE_SYNC_ROOT_KEY_PREFIX: &str = "profile_sync.root.";
 const PROFILE_SYNC_SNAPSHOT_DEVICE_ID: &str = "snapshot";
@@ -1699,6 +1700,57 @@ pub struct ContactCardSyncPayload {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FileEntryUpdate {
+    pub profile: String,
+    pub entry_id: String,
+    pub sync_set_id: Option<String>,
+    pub parent_id: Option<String>,
+    pub name: String,
+    pub entry_kind: String,
+    pub content_ref: Option<String>,
+    pub mime_type: Option<String>,
+    pub size_bytes: Option<u64>,
+    pub modified_at: Option<i64>,
+    pub integrity: Option<String>,
+    pub retention_policy: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FileEntryRecord {
+    pub profile: String,
+    pub entry_id: String,
+    pub sync_set_id: Option<String>,
+    pub parent_id: Option<String>,
+    pub name: String,
+    pub entry_kind: String,
+    pub content_ref: Option<String>,
+    pub mime_type: Option<String>,
+    pub size_bytes: Option<u64>,
+    pub modified_at: Option<i64>,
+    pub integrity: Option<String>,
+    pub retention_policy: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct FileEntrySyncPayload {
+    pub entry_id: String,
+    pub sync_set_id: Option<String>,
+    pub parent_id: Option<String>,
+    pub name: String,
+    pub entry_kind: String,
+    pub content_ref: Option<String>,
+    pub mime_type: Option<String>,
+    pub size_bytes: Option<u64>,
+    pub modified_at: Option<i64>,
+    pub integrity: Option<String>,
+    pub retention_policy: Option<String>,
+    #[serde(default)]
+    pub deleted: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CookieUpdate {
     pub profile: String,
     pub domain: String,
@@ -2121,6 +2173,9 @@ pub enum StorageError {
     InvalidCalendarEventId(String),
     InvalidContactId(String),
     InvalidDownloadSize(u64),
+    InvalidFileEntryId(String),
+    InvalidFileEntryKind(String),
+    InvalidFileSize(u64),
     MissingActiveSyncContentKey(String),
     UnsupportedSyncContentKeyAlgorithm {
         key_id: String,
@@ -2189,6 +2244,18 @@ impl fmt::Display for StorageError {
                     "download metadata size exceeds SQLite integer range: {size_bytes}"
                 )
             }
+            Self::InvalidFileEntryId(entry_id) => {
+                write!(formatter, "invalid file entry id: {entry_id}")
+            }
+            Self::InvalidFileEntryKind(entry_kind) => {
+                write!(formatter, "invalid file entry kind: {entry_kind}")
+            }
+            Self::InvalidFileSize(size_bytes) => {
+                write!(
+                    formatter,
+                    "file metadata size exceeds SQLite integer range: {size_bytes}"
+                )
+            }
             Self::MissingActiveSyncContentKey(profile) => {
                 write!(
                     formatter,
@@ -2246,6 +2313,9 @@ impl std::error::Error for StorageError {
             Self::InvalidCalendarEventId(_) => None,
             Self::InvalidContactId(_) => None,
             Self::InvalidDownloadSize(_) => None,
+            Self::InvalidFileEntryId(_) => None,
+            Self::InvalidFileEntryKind(_) => None,
+            Self::InvalidFileSize(_) => None,
             Self::MissingActiveSyncContentKey(_) => None,
             Self::UnsupportedSyncContentKeyAlgorithm { .. }
             | Self::UnauthorizedSyncContentKeyEpoch { .. } => None,
@@ -2862,6 +2932,123 @@ impl SlateProfileDatabase {
                 &transaction,
                 profile,
                 SYNC_DOMAIN_CONTACTS,
+                sync_key.as_str(),
+                sync_payload.as_str(),
+                self.local_sync_device_id(),
+                now,
+            )
+            .map_err(|source| self.database_error(source))?;
+        }
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(())
+    }
+
+    pub fn upsert_file_entry(
+        &self,
+        entry: &FileEntryUpdate,
+    ) -> Result<FileEntryRecord, StorageError> {
+        validate_file_entry_update(entry)?;
+        let sync_key = file_entry_sync_key(entry.entry_id.as_str());
+        let sync_payload = file_entry_sync_payload(entry)?;
+        let payload = FileEntrySyncPayload {
+            entry_id: entry.entry_id.clone(),
+            sync_set_id: entry.sync_set_id.clone(),
+            parent_id: entry.parent_id.clone(),
+            name: entry.name.clone(),
+            entry_kind: entry.entry_kind.clone(),
+            content_ref: entry.content_ref.clone(),
+            mime_type: entry.mime_type.clone(),
+            size_bytes: entry.size_bytes,
+            modified_at: entry.modified_at,
+            integrity: entry.integrity.clone(),
+            retention_policy: entry.retention_policy.clone(),
+            deleted: false,
+        };
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let now = unix_time_seconds()?;
+        upsert_file_entry_in_transaction(&transaction, entry.profile.as_str(), &payload, now)
+            .map_err(|source| self.database_error(source))?;
+        record_sync_setting_text_in_transaction(
+            &transaction,
+            entry.profile.as_str(),
+            SYNC_DOMAIN_FILES,
+            sync_key.as_str(),
+            sync_payload.as_str(),
+            self.local_sync_device_id(),
+            now,
+        )
+        .map_err(|source| self.database_error(source))?;
+        let record = file_entry_record_by_id_in_transaction(
+            &transaction,
+            entry.profile.as_str(),
+            entry.entry_id.as_str(),
+        )
+        .map_err(|source| self.database_error(source))?;
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(record)
+    }
+
+    pub fn file_entries(
+        &self,
+        profile: &str,
+        limit: u32,
+    ) -> Result<Vec<FileEntryRecord>, StorageError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT profile, entry_id, sync_set_id, parent_id, name, entry_kind,
+                        content_ref, mime_type, size_bytes, modified_at, integrity,
+                        retention_policy, created_at, updated_at
+                 FROM file_entries
+                 WHERE profile = ?1
+                 ORDER BY sync_set_id, parent_id, name, entry_id
+                 LIMIT ?2",
+            )
+            .map_err(|source| self.database_error(source))?;
+        let records = statement
+            .query_map(
+                params![profile, i64::from(limit)],
+                file_entry_record_from_row,
+            )
+            .map_err(|source| self.database_error(source))?;
+
+        let mut entries = Vec::new();
+        for record in records {
+            entries.push(record.map_err(|source| self.database_error(source))?);
+        }
+        Ok(entries)
+    }
+
+    pub fn remove_file_entry(&self, profile: &str, entry_id: &str) -> Result<(), StorageError> {
+        validate_file_entry_id(entry_id)?;
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let now = unix_time_seconds()?;
+        let removed =
+            file_entry_record_by_id_optional_in_transaction(&transaction, profile, entry_id)
+                .map_err(|source| self.database_error(source))?;
+        transaction
+            .execute(
+                "DELETE FROM file_entries WHERE profile = ?1 AND entry_id = ?2",
+                params![profile, entry_id],
+            )
+            .map_err(|source| self.database_error(source))?;
+        if let Some(record) = removed {
+            let sync_key = file_entry_sync_key(record.entry_id.as_str());
+            let sync_payload = file_entry_tombstone_sync_payload(&record)?;
+            record_sync_setting_text_in_transaction(
+                &transaction,
+                profile,
+                SYNC_DOMAIN_FILES,
                 sync_key.as_str(),
                 sync_payload.as_str(),
                 self.local_sync_device_id(),
@@ -5273,6 +5460,30 @@ impl SlateProfileDatabase {
                 CREATE INDEX IF NOT EXISTS contact_cards_display_name
                     ON contact_cards(profile, display_name, contact_id);
 
+                CREATE TABLE IF NOT EXISTS file_entries (
+                    profile TEXT NOT NULL,
+                    entry_id TEXT NOT NULL,
+                    sync_set_id TEXT,
+                    parent_id TEXT,
+                    name TEXT NOT NULL,
+                    entry_kind TEXT NOT NULL,
+                    content_ref TEXT,
+                    mime_type TEXT,
+                    size_bytes INTEGER,
+                    modified_at INTEGER,
+                    integrity TEXT,
+                    retention_policy TEXT,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    PRIMARY KEY(profile, entry_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS file_entries_parent
+                    ON file_entries(profile, parent_id, name, entry_id);
+
+                CREATE INDEX IF NOT EXISTS file_entries_sync_set
+                    ON file_entries(profile, sync_set_id, entry_id);
+
                 CREATE TABLE IF NOT EXISTS cookies (
                     profile TEXT NOT NULL,
                     domain TEXT NOT NULL,
@@ -5899,6 +6110,46 @@ fn contact_card_tombstone_sync_payload(
     .map_err(StorageError::EncodeSyncPayload)
 }
 
+fn file_entry_sync_key(entry_id: &str) -> String {
+    format!("{FILE_ENTRY_SYNC_KEY_PREFIX}{entry_id}")
+}
+
+fn file_entry_sync_payload(entry: &FileEntryUpdate) -> Result<String, StorageError> {
+    serde_json::to_string(&FileEntrySyncPayload {
+        entry_id: entry.entry_id.clone(),
+        sync_set_id: entry.sync_set_id.clone(),
+        parent_id: entry.parent_id.clone(),
+        name: entry.name.clone(),
+        entry_kind: entry.entry_kind.clone(),
+        content_ref: entry.content_ref.clone(),
+        mime_type: entry.mime_type.clone(),
+        size_bytes: entry.size_bytes,
+        modified_at: entry.modified_at,
+        integrity: entry.integrity.clone(),
+        retention_policy: entry.retention_policy.clone(),
+        deleted: false,
+    })
+    .map_err(StorageError::EncodeSyncPayload)
+}
+
+fn file_entry_tombstone_sync_payload(entry: &FileEntryRecord) -> Result<String, StorageError> {
+    serde_json::to_string(&FileEntrySyncPayload {
+        entry_id: entry.entry_id.clone(),
+        sync_set_id: entry.sync_set_id.clone(),
+        parent_id: entry.parent_id.clone(),
+        name: entry.name.clone(),
+        entry_kind: entry.entry_kind.clone(),
+        content_ref: entry.content_ref.clone(),
+        mime_type: entry.mime_type.clone(),
+        size_bytes: entry.size_bytes,
+        modified_at: entry.modified_at,
+        integrity: entry.integrity.clone(),
+        retention_policy: entry.retention_policy.clone(),
+        deleted: true,
+    })
+    .map_err(StorageError::EncodeSyncPayload)
+}
+
 fn validate_sync_domain(domain: &str) -> Result<(), StorageError> {
     if domain.is_empty() {
         return Err(StorageError::InvalidSyncDomain(domain.to_string()));
@@ -5918,6 +6169,32 @@ fn validate_contact_id(contact_id: &str) -> Result<(), StorageError> {
         return Ok(());
     }
     Err(StorageError::InvalidContactId(contact_id.to_string()))
+}
+
+fn validate_file_entry_update(entry: &FileEntryUpdate) -> Result<(), StorageError> {
+    validate_file_entry_id(entry.entry_id.as_str())?;
+    if let Some(parent_id) = entry.parent_id.as_deref() {
+        validate_file_entry_id(parent_id)?;
+    }
+    validate_file_entry_kind(entry.entry_kind.as_str())?;
+    if let Some(size_bytes) = entry.size_bytes {
+        let _ = file_size_to_i64(size_bytes)?;
+    }
+    Ok(())
+}
+
+fn validate_file_entry_id(entry_id: &str) -> Result<(), StorageError> {
+    if is_valid_sync_identifier(entry_id) {
+        return Ok(());
+    }
+    Err(StorageError::InvalidFileEntryId(entry_id.to_string()))
+}
+
+fn validate_file_entry_kind(entry_kind: &str) -> Result<(), StorageError> {
+    if matches!(entry_kind, "file" | "directory") {
+        return Ok(());
+    }
+    Err(StorageError::InvalidFileEntryKind(entry_kind.to_string()))
 }
 
 fn app_sync_domain_cursor_key(domain: &str) -> String {
@@ -6243,6 +6520,26 @@ fn apply_sync_setting_materialized_view_in_transaction(
         )?;
     }
 
+    if change.domain == SYNC_DOMAIN_FILES
+        && change.key.as_str().starts_with(FILE_ENTRY_SYNC_KEY_PREFIX)
+    {
+        let payload = file_entry_sync_payload_from_text(change.value.as_str())?;
+        validate_file_entry_sync_payload_for_sql(&payload)?;
+        let expected_key = file_entry_sync_key(payload.entry_id.as_str());
+        if change.key != expected_key {
+            return Err(invalid_file_entry_sync_payload_error(format!(
+                "file entry sync key {} does not match payload id {}",
+                change.key, payload.entry_id
+            )));
+        }
+        apply_file_entry_sync_payload_in_transaction(
+            transaction,
+            change.profile.as_str(),
+            &payload,
+            now,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -6312,6 +6609,23 @@ fn contact_card_sync_payload_from_text(
 }
 
 fn invalid_contact_card_sync_payload_error(message: String) -> rusqlite::Error {
+    rusqlite::Error::FromSqlConversionFailure(
+        3,
+        Type::Text,
+        Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            message,
+        )),
+    )
+}
+
+fn file_entry_sync_payload_from_text(value: &str) -> Result<FileEntrySyncPayload, rusqlite::Error> {
+    serde_json::from_str(value).map_err(|source| {
+        rusqlite::Error::FromSqlConversionFailure(3, Type::Text, Box::new(source))
+    })
+}
+
+fn invalid_file_entry_sync_payload_error(message: String) -> rusqlite::Error {
     rusqlite::Error::FromSqlConversionFailure(
         3,
         Type::Text,
@@ -6591,6 +6905,173 @@ fn contact_card_record_from_row(
         avatar_key: row.get(9)?,
         created_at: row.get(10)?,
         updated_at: row.get(11)?,
+    })
+}
+
+fn apply_file_entry_sync_payload_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    payload: &FileEntrySyncPayload,
+    now: i64,
+) -> Result<(), rusqlite::Error> {
+    if payload.deleted {
+        transaction.execute(
+            "DELETE FROM file_entries WHERE profile = ?1 AND entry_id = ?2",
+            params![profile, payload.entry_id.as_str()],
+        )?;
+        return Ok(());
+    }
+
+    upsert_file_entry_in_transaction(transaction, profile, payload, now)
+}
+
+fn upsert_file_entry_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    payload: &FileEntrySyncPayload,
+    now: i64,
+) -> Result<(), rusqlite::Error> {
+    let size_bytes = match payload.size_bytes {
+        Some(size_bytes) => Some(file_size_to_sql_i64(size_bytes)?),
+        None => None,
+    };
+    transaction.execute(
+        "INSERT INTO file_entries
+           (profile, entry_id, sync_set_id, parent_id, name, entry_kind, content_ref,
+            mime_type, size_bytes, modified_at, integrity, retention_policy, created_at,
+            updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13)
+         ON CONFLICT(profile, entry_id) DO UPDATE SET
+           sync_set_id = excluded.sync_set_id,
+           parent_id = excluded.parent_id,
+           name = excluded.name,
+           entry_kind = excluded.entry_kind,
+           content_ref = excluded.content_ref,
+           mime_type = excluded.mime_type,
+           size_bytes = excluded.size_bytes,
+           modified_at = excluded.modified_at,
+           integrity = excluded.integrity,
+           retention_policy = excluded.retention_policy,
+           updated_at = excluded.updated_at",
+        params![
+            profile,
+            payload.entry_id.as_str(),
+            payload.sync_set_id.as_deref(),
+            payload.parent_id.as_deref(),
+            payload.name.as_str(),
+            payload.entry_kind.as_str(),
+            payload.content_ref.as_deref(),
+            payload.mime_type.as_deref(),
+            size_bytes,
+            payload.modified_at,
+            payload.integrity.as_deref(),
+            payload.retention_policy.as_deref(),
+            now
+        ],
+    )?;
+    Ok(())
+}
+
+fn file_entry_record_by_id_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    entry_id: &str,
+) -> Result<FileEntryRecord, rusqlite::Error> {
+    transaction.query_row(
+        "SELECT profile, entry_id, sync_set_id, parent_id, name, entry_kind, content_ref,
+                mime_type, size_bytes, modified_at, integrity, retention_policy, created_at,
+                updated_at
+         FROM file_entries
+         WHERE profile = ?1 AND entry_id = ?2",
+        params![profile, entry_id],
+        file_entry_record_from_row,
+    )
+}
+
+fn file_entry_record_by_id_optional_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    entry_id: &str,
+) -> Result<Option<FileEntryRecord>, rusqlite::Error> {
+    transaction
+        .query_row(
+            "SELECT profile, entry_id, sync_set_id, parent_id, name, entry_kind, content_ref,
+                    mime_type, size_bytes, modified_at, integrity, retention_policy, created_at,
+                    updated_at
+             FROM file_entries
+             WHERE profile = ?1 AND entry_id = ?2",
+            params![profile, entry_id],
+            file_entry_record_from_row,
+        )
+        .optional()
+}
+
+fn file_entry_record_from_row(row: &rusqlite::Row<'_>) -> Result<FileEntryRecord, rusqlite::Error> {
+    let size_bytes = match row.get::<_, Option<i64>>(8)? {
+        Some(size_bytes) => Some(file_size_from_sql_i64(size_bytes)?),
+        None => None,
+    };
+    Ok(FileEntryRecord {
+        profile: row.get(0)?,
+        entry_id: row.get(1)?,
+        sync_set_id: row.get(2)?,
+        parent_id: row.get(3)?,
+        name: row.get(4)?,
+        entry_kind: row.get(5)?,
+        content_ref: row.get(6)?,
+        mime_type: row.get(7)?,
+        size_bytes,
+        modified_at: row.get(9)?,
+        integrity: row.get(10)?,
+        retention_policy: row.get(11)?,
+        created_at: row.get(12)?,
+        updated_at: row.get(13)?,
+    })
+}
+
+fn validate_file_entry_sync_payload_for_sql(
+    payload: &FileEntrySyncPayload,
+) -> Result<(), rusqlite::Error> {
+    if !is_valid_sync_identifier(payload.entry_id.as_str()) {
+        return Err(invalid_file_entry_sync_payload_error(format!(
+            "invalid file entry id: {}",
+            payload.entry_id
+        )));
+    }
+    if let Some(parent_id) = payload.parent_id.as_deref()
+        && !is_valid_sync_identifier(parent_id)
+    {
+        return Err(invalid_file_entry_sync_payload_error(format!(
+            "invalid file parent id: {parent_id}"
+        )));
+    }
+    if !matches!(payload.entry_kind.as_str(), "file" | "directory") {
+        return Err(invalid_file_entry_sync_payload_error(format!(
+            "invalid file entry kind: {}",
+            payload.entry_kind
+        )));
+    }
+    if let Some(size_bytes) = payload.size_bytes {
+        let _ = file_size_to_sql_i64(size_bytes)?;
+    }
+    Ok(())
+}
+
+fn file_size_to_i64(size_bytes: u64) -> Result<i64, StorageError> {
+    i64::try_from(size_bytes).map_err(|_| StorageError::InvalidFileSize(size_bytes))
+}
+
+fn file_size_to_sql_i64(size_bytes: u64) -> Result<i64, rusqlite::Error> {
+    i64::try_from(size_bytes).map_err(|_| {
+        invalid_file_entry_sync_payload_error(format!(
+            "file size exceeds SQLite integer range: {size_bytes}"
+        ))
+    })
+}
+
+fn file_size_from_sql_i64(size_bytes: i64) -> Result<u64, rusqlite::Error> {
+    u64::try_from(size_bytes).map_err(|source| {
+        rusqlite::Error::FromSqlConversionFailure(8, Type::Integer, Box::new(source))
     })
 }
 
@@ -11363,6 +11844,332 @@ mod tests {
         assert!(
             database
                 .contact_cards(DEFAULT_PROFILE_ID, 10)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn file_entry_writes_metadata_sync_change_without_local_paths_or_bytes() {
+        let database_path = test_dir("file-entry-local").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let entry = FileEntryUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            entry_id: "file-1".to_string(),
+            sync_set_id: Some("set-docs".to_string()),
+            parent_id: Some("root".to_string()),
+            name: "report.pdf".to_string(),
+            entry_kind: "file".to_string(),
+            content_ref: Some("bafybeigdyrzt-report".to_string()),
+            mime_type: Some("application/pdf".to_string()),
+            size_bytes: Some(4096),
+            modified_at: Some(1_788_900_000),
+            integrity: Some("sha256-report".to_string()),
+            retention_policy: Some("keep-latest".to_string()),
+        };
+
+        let record = database.upsert_file_entry(&entry).unwrap();
+
+        assert_eq!(record.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(record.entry_id, "file-1");
+        assert_eq!(record.sync_set_id.as_deref(), Some("set-docs"));
+        assert_eq!(record.parent_id.as_deref(), Some("root"));
+        assert_eq!(record.name, "report.pdf");
+        assert_eq!(record.entry_kind, "file");
+        assert_eq!(record.content_ref.as_deref(), Some("bafybeigdyrzt-report"));
+        assert_eq!(record.size_bytes, Some(4096));
+        assert_eq!(
+            database.file_entries(DEFAULT_PROFILE_ID, 10).unwrap(),
+            vec![record]
+        );
+        let events = database
+            .sync_setting_text_events_after_for_domain(DEFAULT_PROFILE_ID, SYNC_DOMAIN_FILES, 0, 10)
+            .unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].change.entity_key, "entry.file-1");
+        let payload: FileEntrySyncPayload =
+            serde_json::from_str(events[0].change.payload.as_str()).unwrap();
+        assert_eq!(payload.entry_id, "file-1");
+        assert_eq!(payload.content_ref.as_deref(), Some("bafybeigdyrzt-report"));
+        assert!(!payload.deleted);
+        let payload_json: serde_json::Value =
+            serde_json::from_str(events[0].change.payload.as_str()).unwrap();
+        assert!(payload_json.get("path").is_none());
+        assert!(payload_json.get("local_path").is_none());
+        assert!(payload_json.get("file_bytes").is_none());
+        assert!(payload_json.get("contents").is_none());
+        let value = database
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_FILES, "entry.file-1")
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, events[0].change.payload);
+    }
+
+    #[test]
+    fn file_entry_removal_records_tombstone() {
+        let database_path = test_dir("file-entry-tombstone").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        database
+            .upsert_file_entry(&FileEntryUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                entry_id: "file-2".to_string(),
+                sync_set_id: Some("set-docs".to_string()),
+                parent_id: None,
+                name: "old-note.txt".to_string(),
+                entry_kind: "file".to_string(),
+                content_ref: Some("bafy-old-note".to_string()),
+                mime_type: Some("text/plain".to_string()),
+                size_bytes: Some(12),
+                modified_at: Some(1_788_910_000),
+                integrity: None,
+                retention_policy: None,
+            })
+            .unwrap();
+
+        database
+            .remove_file_entry(DEFAULT_PROFILE_ID, "file-2")
+            .unwrap();
+
+        assert!(
+            database
+                .file_entries(DEFAULT_PROFILE_ID, 10)
+                .unwrap()
+                .is_empty()
+        );
+        let events = database
+            .sync_setting_text_events_after_for_domain(DEFAULT_PROFILE_ID, SYNC_DOMAIN_FILES, 0, 10)
+            .unwrap();
+        assert_eq!(events.len(), 2);
+        let tombstone: FileEntrySyncPayload =
+            serde_json::from_str(events[1].change.payload.as_str()).unwrap();
+        assert!(tombstone.deleted);
+        assert_eq!(tombstone.entry_id, "file-2");
+        assert_eq!(tombstone.name, "old-note.txt");
+        let value = database
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_FILES, "entry.file-2")
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, events[1].change.payload);
+    }
+
+    #[test]
+    fn incoming_file_entry_change_updates_rows() {
+        let database_path = test_dir("incoming-file-entry").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let payload = FileEntrySyncPayload {
+            entry_id: "file-3".to_string(),
+            sync_set_id: Some("set-media".to_string()),
+            parent_id: Some("folder-1".to_string()),
+            name: "song.flac".to_string(),
+            entry_kind: "file".to_string(),
+            content_ref: Some("bafy-song".to_string()),
+            mime_type: Some("audio/flac".to_string()),
+            size_bytes: Some(65_536),
+            modified_at: Some(1_788_920_000),
+            integrity: Some("sha256-song".to_string()),
+            retention_policy: Some("pin".to_string()),
+            deleted: false,
+        };
+        let incoming = IncomingSyncSettingText::new(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_FILES,
+            file_entry_sync_key(payload.entry_id.as_str()),
+            serde_json::to_string(&payload).unwrap(),
+            "device-b",
+            1,
+            20,
+        );
+
+        let applied = database.apply_sync_setting_text(&incoming).unwrap();
+
+        assert_eq!(applied.domain, SYNC_DOMAIN_FILES);
+        assert_eq!(applied.entity_key, "entry.file-3");
+        assert!(applied.applied_at.is_some());
+        let entries = database.file_entries(DEFAULT_PROFILE_ID, 10).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].entry_id, "file-3");
+        assert_eq!(entries[0].parent_id.as_deref(), Some("folder-1"));
+        assert_eq!(entries[0].name, "song.flac");
+        assert_eq!(entries[0].content_ref.as_deref(), Some("bafy-song"));
+        assert_eq!(entries[0].size_bytes, Some(65_536));
+    }
+
+    #[test]
+    fn incoming_file_entry_tombstone_removes_row() {
+        let database_path =
+            test_dir("incoming-file-entry-tombstone").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        database
+            .upsert_file_entry(&FileEntryUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                entry_id: "file-4".to_string(),
+                sync_set_id: None,
+                parent_id: None,
+                name: "temporary.bin".to_string(),
+                entry_kind: "file".to_string(),
+                content_ref: Some("bafy-temporary".to_string()),
+                mime_type: Some("application/octet-stream".to_string()),
+                size_bytes: Some(8),
+                modified_at: None,
+                integrity: None,
+                retention_policy: None,
+            })
+            .unwrap();
+        let tombstone = FileEntrySyncPayload {
+            entry_id: "file-4".to_string(),
+            sync_set_id: None,
+            parent_id: None,
+            name: "temporary.bin".to_string(),
+            entry_kind: "file".to_string(),
+            content_ref: Some("bafy-temporary".to_string()),
+            mime_type: Some("application/octet-stream".to_string()),
+            size_bytes: Some(8),
+            modified_at: None,
+            integrity: None,
+            retention_policy: None,
+            deleted: true,
+        };
+
+        let applied = database
+            .apply_sync_setting_text(&IncomingSyncSettingText::new(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_FILES,
+                file_entry_sync_key("file-4"),
+                serde_json::to_string(&tombstone).unwrap(),
+                "zz-device",
+                1,
+                100,
+            ))
+            .unwrap();
+
+        assert!(applied.applied_at.is_some());
+        assert!(
+            database
+                .file_entries(DEFAULT_PROFILE_ID, 10)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn incoming_losing_file_entry_change_does_not_replace_winner() {
+        let database_path =
+            test_dir("incoming-file-entry-conflict").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let winning_payload = FileEntrySyncPayload {
+            entry_id: "file-5".to_string(),
+            sync_set_id: Some("set-docs".to_string()),
+            parent_id: None,
+            name: "winner.txt".to_string(),
+            entry_kind: "file".to_string(),
+            content_ref: Some("bafy-winner".to_string()),
+            mime_type: Some("text/plain".to_string()),
+            size_bytes: Some(300),
+            modified_at: Some(1_788_930_000),
+            integrity: None,
+            retention_policy: Some("keep-latest".to_string()),
+            deleted: false,
+        };
+        let losing_payload = FileEntrySyncPayload {
+            entry_id: "file-5".to_string(),
+            sync_set_id: Some("set-docs".to_string()),
+            parent_id: None,
+            name: "loser.txt".to_string(),
+            entry_kind: "file".to_string(),
+            content_ref: Some("bafy-loser".to_string()),
+            mime_type: Some("text/plain".to_string()),
+            size_bytes: Some(100),
+            modified_at: Some(1_788_940_000),
+            integrity: None,
+            retention_policy: Some("keep-latest".to_string()),
+            deleted: false,
+        };
+
+        let winning = database
+            .apply_sync_setting_text(&IncomingSyncSettingText::new(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_FILES,
+                file_entry_sync_key("file-5"),
+                serde_json::to_string(&winning_payload).unwrap(),
+                "device-b",
+                2,
+                40,
+            ))
+            .unwrap();
+        let losing = database
+            .apply_sync_setting_text(&IncomingSyncSettingText::new(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_FILES,
+                file_entry_sync_key("file-5"),
+                serde_json::to_string(&losing_payload).unwrap(),
+                "device-c",
+                1,
+                30,
+            ))
+            .unwrap();
+
+        assert!(winning.applied_at.is_some());
+        assert_eq!(losing.applied_at, None);
+        let entries = database.file_entries(DEFAULT_PROFILE_ID, 10).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].name, "winner.txt");
+        assert_eq!(entries[0].content_ref.as_deref(), Some("bafy-winner"));
+        assert_eq!(entries[0].size_bytes, Some(300));
+        let value = database
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_FILES, "entry.file-5")
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, winning.payload);
+    }
+
+    #[test]
+    fn file_entry_ids_kinds_and_sizes_are_validated() {
+        let database_path = test_dir("file-entry-invalid").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let invalid_id = FileEntryUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            entry_id: "../file".to_string(),
+            sync_set_id: None,
+            parent_id: None,
+            name: "Invalid".to_string(),
+            entry_kind: "file".to_string(),
+            content_ref: None,
+            mime_type: None,
+            size_bytes: None,
+            modified_at: None,
+            integrity: None,
+            retention_policy: None,
+        };
+        let invalid_kind = FileEntryUpdate {
+            entry_id: "file-6".to_string(),
+            entry_kind: "symlink".to_string(),
+            ..invalid_id.clone()
+        };
+        let invalid_size = FileEntryUpdate {
+            entry_id: "file-7".to_string(),
+            entry_kind: "file".to_string(),
+            size_bytes: Some(i64::MAX as u64 + 1),
+            ..invalid_id.clone()
+        };
+
+        let id_error = database.upsert_file_entry(&invalid_id).unwrap_err();
+        let kind_error = database.upsert_file_entry(&invalid_kind).unwrap_err();
+        let size_error = database.upsert_file_entry(&invalid_size).unwrap_err();
+
+        assert!(matches!(
+            id_error,
+            StorageError::InvalidFileEntryId(entry_id) if entry_id == "../file"
+        ));
+        assert!(matches!(
+            kind_error,
+            StorageError::InvalidFileEntryKind(entry_kind) if entry_kind == "symlink"
+        ));
+        assert!(
+            matches!(size_error, StorageError::InvalidFileSize(size) if size == i64::MAX as u64 + 1)
+        );
+        assert!(
+            database
+                .file_entries(DEFAULT_PROFILE_ID, 10)
                 .unwrap()
                 .is_empty()
         );
