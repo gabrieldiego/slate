@@ -459,6 +459,11 @@ pub enum SyncObjectError {
         expected_change_object_id: Option<String>,
         actual_change_object_id: Option<String>,
     },
+    UnexpectedDeviceHeadManifestEpoch {
+        device_id: String,
+        head_membership_epoch: i64,
+        manifest_membership_epoch: i64,
+    },
     Encode(serde_json::Error),
     Decode(serde_json::Error),
 }
@@ -524,6 +529,14 @@ impl fmt::Display for SyncObjectError {
                 formatter,
                 "unexpected sync manifest frontier for device {device_id}: expected sequence {expected_sequence} and change {expected_change_object_id:?}, got sequence {actual_sequence:?} and change {actual_change_object_id:?}"
             ),
+            Self::UnexpectedDeviceHeadManifestEpoch {
+                device_id,
+                head_membership_epoch,
+                manifest_membership_epoch,
+            } => write!(
+                formatter,
+                "unexpected sync manifest membership epoch for device {device_id}: expected head epoch {head_membership_epoch}, got manifest epoch {manifest_membership_epoch}"
+            ),
             Self::Encode(error) => write!(formatter, "failed to encode sync object: {error}"),
             Self::Decode(error) => write!(formatter, "failed to decode sync object: {error}"),
         }
@@ -549,7 +562,8 @@ impl std::error::Error for SyncObjectError {
             | Self::UnexpectedObjectKind { .. }
             | Self::UnexpectedKeyId { .. }
             | Self::UnexpectedRootId { .. }
-            | Self::UnexpectedDeviceFrontier { .. } => None,
+            | Self::UnexpectedDeviceFrontier { .. }
+            | Self::UnexpectedDeviceHeadManifestEpoch { .. } => None,
         }
     }
 }
@@ -1247,6 +1261,14 @@ fn validate_profile_sync_device_head_manifest(
     device_head: &ProfileSyncDeviceHead,
     manifest: &ProfileSyncManifest,
 ) -> Result<(), SyncObjectError> {
+    if manifest.membership_epoch != device_head.membership_epoch {
+        return Err(SyncObjectError::UnexpectedDeviceHeadManifestEpoch {
+            device_id: device_head.device_id.clone(),
+            head_membership_epoch: device_head.membership_epoch,
+            manifest_membership_epoch: manifest.membership_epoch,
+        });
+    }
+
     let frontier = manifest
         .device_frontiers
         .iter()
@@ -6036,6 +6058,94 @@ mod tests {
             )) if device_id == "device-a"
                 && expected_sequence == 1
                 && expected_change_object_id.as_deref() == Some("change-object-1")
+        ));
+    }
+
+    #[test]
+    fn profile_sync_trusted_pull_manifest_from_device_head_rejects_epoch_mismatch() {
+        let content_key = ProfileSyncContentKey::from_bytes([33; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let trusted_public_key = signer.public_key().unwrap();
+        let key_id = "content-key-epoch-1";
+        let manifest_object_id = "manifest-with-mismatched-epoch";
+        let manifest = ProfileSyncManifest {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: "settings/latest".to_string(),
+            schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1,
+            current_snapshot_object_id: None,
+            tail_change_object_ids: Vec::new(),
+            included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            device_frontiers: vec![ProfileSyncDeviceFrontier {
+                device_id: "device-a".to_string(),
+                latest_sequence: 1,
+                latest_change_object_id: None,
+            }],
+            retention_policy: ProfileSyncRetentionPolicy::default(),
+            created_at: 1234,
+        };
+        let mut source = InMemoryProfileSyncObjectSource::default();
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            manifest_object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+                key_id,
+                serde_json::to_vec(&manifest).unwrap().as_slice(),
+                &content_key,
+                &signer,
+                36,
+            ),
+        );
+        let destination_path =
+            test_dir("sync-trusted-device-head-epoch-mismatch").join(DEFAULT_DATABASE_FILE_NAME);
+        let destination =
+            SlateProfileDatabase::open_resolved_with_device_id(destination_path, "device-b")
+                .unwrap();
+        destination
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: trusted_public_key,
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .unwrap();
+        let device_head = VerifiedProfileSyncDeviceHead {
+            object_id: "device-head-object-1".to_string(),
+            device_head: ProfileSyncDeviceHead {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                device_id: "device-a".to_string(),
+                root_id: "settings/devices/device-a/head".to_string(),
+                schema_version: PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                latest_manifest_object_id: manifest_object_id.to_string(),
+                latest_change_object_id: None,
+                device_sequence: 1,
+                logical_clock: 1,
+                created_at: 1235,
+            },
+        };
+
+        assert!(matches!(
+            destination.pull_trusted_signed_profile_sync_settings_manifest_objects_from_device_head(
+                &source,
+                DEFAULT_PROFILE_ID,
+                &device_head,
+                &content_key,
+                key_id,
+            ),
+            Err(ProfileSyncTrustedPullError::Open(
+                ProfileSyncTrustedOpenError::SyncObject(
+                    SyncObjectError::UnexpectedDeviceHeadManifestEpoch {
+                        device_id,
+                        head_membership_epoch,
+                        manifest_membership_epoch,
+                    }
+                )
+            )) if device_id == "device-a"
+                && head_membership_epoch == DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH
+                && manifest_membership_epoch == DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1
         ));
     }
 
