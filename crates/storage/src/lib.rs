@@ -4563,6 +4563,27 @@ impl SlateProfileDatabase {
             .map_err(|source| self.database_error(source))
     }
 
+    pub fn sync_account_membership_record_count(
+        &self,
+        profile: &str,
+    ) -> Result<usize, StorageError> {
+        let connection = self.connection()?;
+        let count = connection
+            .query_row(
+                "SELECT COUNT(*)
+                 FROM sync_account_membership_records
+                 WHERE profile = ?1",
+                [profile],
+                |row| row.get::<_, i64>(0),
+            )
+            .map_err(|source| self.database_error(source))?;
+        usize::try_from(count).map_err(|_| {
+            StorageError::InvalidProfileSyncMembershipRecord(format!(
+                "membership record count out of range: {count}"
+            ))
+        })
+    }
+
     pub fn sync_account_membership_records(
         &self,
         profile: &str,
@@ -12583,12 +12604,30 @@ mod tests {
         };
         let signed_enroll = signed_membership_record_bytes(&signer, &enroll_record);
 
+        assert_eq!(
+            database
+                .sync_account_membership_record_count(DEFAULT_PROFILE_ID)
+                .unwrap(),
+            0
+        );
         let first = database
             .record_signed_sync_account_membership_record(signed_enroll.as_slice())
             .unwrap();
+        assert_eq!(
+            database
+                .sync_account_membership_record_count(DEFAULT_PROFILE_ID)
+                .unwrap(),
+            1
+        );
         let second = database
             .record_signed_sync_account_membership_record(signed_enroll.as_slice())
             .unwrap();
+        assert_eq!(
+            database
+                .sync_account_membership_record_count(DEFAULT_PROFILE_ID)
+                .unwrap(),
+            1
+        );
 
         assert_eq!(first, second);
         assert_eq!(first.profile, DEFAULT_PROFILE_ID);
@@ -12623,6 +12662,12 @@ mod tests {
         database
             .record_signed_sync_account_membership_record(signed_revoke.as_slice())
             .unwrap();
+        assert_eq!(
+            database
+                .sync_account_membership_record_count(DEFAULT_PROFILE_ID)
+                .unwrap(),
+            2
+        );
 
         let records = database
             .sync_account_membership_records(DEFAULT_PROFILE_ID)

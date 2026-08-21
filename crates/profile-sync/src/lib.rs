@@ -2828,7 +2828,7 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
         profile: &str,
         root_id: &str,
     ) -> Result<ProfileSyncMembershipLogPublicationPlan, ProfileSyncPublishError> {
-        let record_count = database.sync_account_membership_records(profile)?.len();
+        let record_count = database.sync_account_membership_record_count(profile)?;
         Ok(ProfileSyncMembershipLogPublicationPlan::for_record_count(
             profile,
             root_id,

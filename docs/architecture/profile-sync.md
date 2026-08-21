@@ -602,10 +602,11 @@ The publisher enforces the same cap before writing membership record objects or
 advancing the log root, so oversized local history waits for future membership
 compaction instead of publishing an index receivers must reject.
 A read-only publication plan exposes empty, publishable, and too-large states
-from local `slate-settings.db` history without touching broadwebd. The
-scheduler facade can compose that local membership-log preview with the
-existing read-only selected-provider plan, giving runtime/UI code a safe
-membership-aware preview before membership compaction exists.
+from a count-only `slate-settings.db` query without loading every signed
+membership record blob or touching broadwebd. The scheduler facade can compose
+that local membership-log preview with the existing read-only selected-provider
+plan, giving runtime/UI code a safe membership-aware preview before membership
+compaction exists.
 Membership-aware scheduler runs also check that local publication plan first
 and refuse oversized local history before pulling remote membership, publishing
 settings objects, or advancing roots.

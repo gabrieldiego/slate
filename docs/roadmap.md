@@ -770,10 +770,11 @@ Current baseline:
   membership record objects or advancing the log root, so local history that
   needs compaction cannot create a distributed index receivers will reject.
 - Membership-log publishing now also has a read-only local plan that reports
-  empty, publishable, or too-large history before any broadwebd call or root
-  mutation. The scheduler facade can now include that local membership-log
-  publication preview alongside the existing selected-provider plan, without
-  pulling remote membership or advancing roots.
+  empty, publishable, or too-large history from a count-only
+  `slate-settings.db` query before any broadwebd call or root mutation. The
+  scheduler facade can now include that local membership-log publication
+  preview alongside the existing selected-provider plan, without pulling remote
+  membership or advancing roots.
 - Membership-aware scheduler runs now reject oversized local membership history
   from that preview before pulling remote membership, publishing settings
   objects, or advancing any profile-sync roots.
