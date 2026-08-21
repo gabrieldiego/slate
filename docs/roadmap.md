@@ -186,6 +186,9 @@ Current baseline:
   in-memory local fixture backend. Unit tests cover object transfer, retention,
   mutable root publish/resolve, provider discovery, and two local
   `slate-settings.db` files syncing one setting through fixture bytes.
+- Storage now provides `EncryptedSyncObject` envelopes using ChaCha20-Poly1305
+  AEAD through `ring`, and the local two-device fixture moves encrypted setting
+  change payloads through broadwebd instead of plaintext JSON.
 - IPFS/IPNS is the first concrete backend under consideration, but the product
   goal is protocol-neutral: approved Slate devices should find each other, move
   encrypted sync objects, and optionally use approved providers to keep those
@@ -275,7 +278,8 @@ Priority order:
    mutable roots.
 5. Equal-control account authority model with signed device heads and membership
    epochs.
-6. Encrypted signed manifest/snapshot/change encoding.
+6. Signed manifest/snapshot/change encoding and key-epoch integration on top of
+   the implemented encrypted object envelope.
 7. Kubo RPC add/pin/IPNS implementation with loopback-only validation.
 8. Two-device local sync flow and retention compaction.
 
