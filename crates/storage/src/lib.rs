@@ -663,6 +663,12 @@ pub struct SyncRevisionRecord {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SyncSettingTextEvent {
+    pub revision: SyncRevisionRecord,
+    pub change: SyncChangeRecord,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SyncSnapshotRegistration {
     pub profile: String,
     pub snapshot_id: String,
@@ -1588,6 +1594,67 @@ impl SlateProfileDatabase {
             revisions.push(record.map_err(|source| self.database_error(source))?);
         }
         Ok(revisions)
+    }
+
+    pub fn sync_setting_text_events_after(
+        &self,
+        profile: &str,
+        after_revision: i64,
+        limit: u32,
+    ) -> Result<Vec<SyncSettingTextEvent>, StorageError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT revisions.revision, revisions.profile, revisions.domain,
+                        revisions.change_id, revisions.created_at,
+                        changes.id, changes.profile, changes.domain, changes.entity_key,
+                        changes.operation, changes.payload, changes.device_id,
+                        changes.device_sequence, changes.logical_clock, changes.created_at,
+                        changes.applied_at
+                 FROM settings_revisions revisions
+                 JOIN settings_changes changes
+                   ON changes.id = revisions.change_id
+                  AND changes.profile = revisions.profile
+                 WHERE revisions.profile = ?1
+                   AND revisions.revision > ?2
+                   AND changes.operation = 'set_text'
+                   AND changes.applied_at IS NOT NULL
+                 ORDER BY revisions.revision
+                 LIMIT ?3",
+            )
+            .map_err(|source| self.database_error(source))?;
+        let records = statement
+            .query_map(params![profile, after_revision, i64::from(limit)], |row| {
+                Ok(SyncSettingTextEvent {
+                    revision: SyncRevisionRecord {
+                        revision: row.get(0)?,
+                        profile: row.get(1)?,
+                        domain: row.get(2)?,
+                        change_id: row.get(3)?,
+                        created_at: row.get(4)?,
+                    },
+                    change: SyncChangeRecord {
+                        id: row.get(5)?,
+                        profile: row.get(6)?,
+                        domain: row.get(7)?,
+                        entity_key: row.get(8)?,
+                        operation: row.get(9)?,
+                        payload: row.get(10)?,
+                        device_id: row.get(11)?,
+                        device_sequence: row.get(12)?,
+                        logical_clock: row.get(13)?,
+                        created_at: row.get(14)?,
+                        applied_at: row.get(15)?,
+                    },
+                })
+            })
+            .map_err(|source| self.database_error(source))?;
+
+        let mut events = Vec::new();
+        for record in records {
+            events.push(record.map_err(|source| self.database_error(source))?);
+        }
+        Ok(events)
     }
 
     pub fn record_sync_snapshot(
@@ -3098,6 +3165,72 @@ mod tests {
             .unwrap();
         assert_eq!(remote_value.value, "remote");
         assert!(remote_value.revision > value.revision);
+    }
+
+    #[test]
+    fn sync_setting_text_events_follow_applied_revisions_only() {
+        let database_path = test_dir("sync-setting-events").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let baseline_revision = database
+            .sync_revisions_after(DEFAULT_PROFILE_ID, 0)
+            .unwrap()
+            .last()
+            .map(|revision| revision.revision)
+            .unwrap_or(0);
+
+        let settings_change = database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "ui.theme",
+                "local",
+            )
+            .unwrap();
+        let calendar_change = database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                "default_view",
+                "month",
+            )
+            .unwrap();
+        let losing_change = database
+            .apply_sync_setting_text(&IncomingSyncSettingText::new(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "ui.theme",
+                "older",
+                "device-b",
+                1,
+                settings_change.logical_clock - 1,
+            ))
+            .unwrap();
+        assert_eq!(losing_change.applied_at, None);
+
+        let events = database
+            .sync_setting_text_events_after(DEFAULT_PROFILE_ID, baseline_revision, 10)
+            .unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].revision.change_id, settings_change.id);
+        assert_eq!(events[0].change, settings_change);
+        assert_eq!(events[1].revision.change_id, calendar_change.id);
+        assert_eq!(events[1].change, calendar_change);
+        assert!(events.iter().all(|event| event.change.applied_at.is_some()));
+        assert!(
+            !events
+                .iter()
+                .any(|event| event.change.id == losing_change.id)
+        );
+
+        let first_batch = database
+            .sync_setting_text_events_after(DEFAULT_PROFILE_ID, baseline_revision, 1)
+            .unwrap();
+        assert_eq!(first_batch, vec![events[0].clone()]);
+
+        let after_first = database
+            .sync_setting_text_events_after(DEFAULT_PROFILE_ID, events[0].revision.revision, 10)
+            .unwrap();
+        assert_eq!(after_first, vec![events[1].clone()]);
     }
 
     #[test]
