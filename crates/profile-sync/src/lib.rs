@@ -3210,19 +3210,19 @@ mod tests {
         test_fixtures::InProcessBroadwebNetwork,
     };
     use slate_storage::{
-        AppSyncDomainRegistration, BookmarkSlotSyncPayload, BookmarkUpdate,
+        AppSyncDomainRegistration, BookmarkSlotSyncPayload, BookmarkUpdate, ChatConversationUpdate,
         DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
-        IncomingSyncSettingText, PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305,
-        PROFILE_SYNC_CONTENT_KEY_BYTES, PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
-        ProfileSyncContentKey, ProfileSyncDeviceHead, ProfileSyncDeviceSigner,
-        ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
+        FileEntryUpdate, IncomingSyncSettingText,
+        PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305, PROFILE_SYNC_CONTENT_KEY_BYTES,
+        PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, ProfileSyncContentKey, ProfileSyncDeviceHead,
+        ProfileSyncDeviceSigner, ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
         ProfileSyncSettingsCandidatePullApplyStatus, SYNC_DOMAIN_BOOKMARKS, SYNC_DOMAIN_CALENDAR,
-        SYNC_DOMAIN_CHAT, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, StorageError,
-        SyncChangeRecord, SyncContentKeyEpochRegistration, SyncDevicePublicKeyRegistration,
-        SyncSnapshotRegistration, open_signed_profile_sync_device_head,
-        open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
-        open_signed_sync_setting_text, pull_signed_profile_sync_device_head,
-        settings_sync_snapshot_id,
+        SYNC_DOMAIN_CHAT, SYNC_DOMAIN_FILES, SYNC_DOMAIN_SETTINGS, SYNC_DOMAIN_STORAGE,
+        SlateProfileDatabase, StorageError, StorageProviderUpdate, SyncChangeRecord,
+        SyncContentKeyEpochRegistration, SyncDevicePublicKeyRegistration, SyncSnapshotRegistration,
+        open_signed_profile_sync_device_head, open_signed_profile_sync_manifest,
+        open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
+        pull_signed_profile_sync_device_head, settings_sync_snapshot_id,
     };
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -6406,6 +6406,201 @@ mod tests {
         assert!(deleted_bookmark_payload.deleted);
         assert_eq!(deleted_bookmark_payload.url, "https://old.example/");
         assert_eq!(deleted_bookmark_payload.position, 3);
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_publisher_syncs_typed_app_metadata_snapshot_head() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("typed-app-snapshot-head-publisher");
+        let receiver_state_root = test_state_root("typed-app-snapshot-head-receiver");
+        let publisher_db_root = test_state_root("typed-app-snapshot-head-publisher-db");
+        let receiver_db_root = test_state_root("typed-app-snapshot-head-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "runtime-typed-app-publisher",
+            )
+            .expect("start typed app publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "runtime-typed-app-receiver",
+            )
+            .expect("start typed app receiver daemon");
+        let publisher_database = SlateProfileDatabase::open_resolved_with_device_id(
+            publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-typed-app-publisher",
+        )
+        .expect("open typed app publisher settings database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-typed-app-receiver",
+        )
+        .expect("open typed app receiver settings database");
+        for (domain, privacy_classification, sync_content) in [
+            (SYNC_DOMAIN_CHAT, "sensitive", false),
+            (SYNC_DOMAIN_FILES, "content", true),
+            (SYNC_DOMAIN_STORAGE, "sensitive", false),
+        ] {
+            publisher_database
+                .register_app_sync_domain(&AppSyncDomainRegistration {
+                    profile: DEFAULT_PROFILE_ID.to_string(),
+                    domain: domain.to_string(),
+                    schema_version: 1,
+                    enabled: true,
+                    privacy_classification: privacy_classification.to_string(),
+                    sync_content,
+                })
+                .expect("enable typed app sync domain for publisher test profile");
+        }
+        publisher_database
+            .upsert_chat_conversation(&ChatConversationUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                conversation_id: "runtime-chat-1".to_string(),
+                provider_id: Some("whatsapp".to_string()),
+                external_thread_id: Some("team@example.test".to_string()),
+                display_name: "Runtime Team".to_string(),
+                avatar_key: Some("chat-avatar:runtime-chat-1".to_string()),
+                last_message_at: Some(1_789_010_000),
+                unread_count: 4,
+                archived: false,
+                muted: true,
+            })
+            .expect("publisher writes typed chat metadata");
+        publisher_database
+            .upsert_file_entry(&FileEntryUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                entry_id: "runtime-file-1".to_string(),
+                sync_set_id: Some("runtime-set".to_string()),
+                parent_id: None,
+                name: "runtime.txt".to_string(),
+                entry_kind: "file".to_string(),
+                content_ref: Some("bafy-runtime-file".to_string()),
+                mime_type: Some("text/plain".to_string()),
+                size_bytes: Some(512),
+                modified_at: Some(1_789_010_100),
+                integrity: Some("sha256-runtime-file".to_string()),
+                retention_policy: Some("keep-latest".to_string()),
+            })
+            .expect("publisher writes typed file metadata");
+        publisher_database
+            .upsert_storage_provider(&StorageProviderUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                provider_id: "runtime-provider-1".to_string(),
+                provider_kind: "ipfs".to_string(),
+                display_name: "Runtime IPFS".to_string(),
+                endpoint_ref: Some(
+                    "/dnsaddr/runtime.example.test/p2p/runtime-provider-1".to_string(),
+                ),
+                discovery: true,
+                connectivity: true,
+                object_transfer: true,
+                availability: true,
+                mutable_roots: false,
+                quota_bytes: Some(8_192),
+                max_retained_objects: Some(16),
+                pinning_policy: Some("manual".to_string()),
+                enabled: true,
+            })
+            .expect("publisher writes typed storage provider metadata");
+
+        let content_key = ProfileSyncContentKey::from_bytes([71; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-typed-app-publisher")
+            .expect("generate typed app publisher signer");
+        let public_key = signer.public_key().expect("read signer public key");
+        receiver_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key,
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("receiver trusts typed app publisher key");
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+
+        let published = publisher
+            .publish_full_local_settings_snapshot_head(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish typed app metadata snapshot head")
+            .expect("typed app metadata changes exist");
+
+        assert_eq!(
+            published.publication.manifest.included_domains,
+            vec![
+                SYNC_DOMAIN_CHAT.to_string(),
+                SYNC_DOMAIN_FILES.to_string(),
+                SYNC_DOMAIN_SETTINGS.to_string(),
+                SYNC_DOMAIN_STORAGE.to_string()
+            ]
+        );
+        assert_eq!(
+            published.snapshot_record.included_domains,
+            published.publication.manifest.included_domains
+        );
+        assert_eq!(
+            published.publication.tail_change_object_ids,
+            Vec::<String>::new()
+        );
+
+        let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
+        let applied = source
+            .pull_record_and_apply_trusted_settings_from_device_head(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                published.device_head.root_id.as_str(),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+            )
+            .expect("receiver applies typed app snapshot from trusted head");
+        let BroadwebdTrustedDeviceHeadSyncStatus::Applied { application, .. } = applied else {
+            panic!("expected typed app snapshot application, got {applied:?}");
+        };
+        assert_eq!(
+            application.manifest_object_id,
+            published.publication.manifest_object_id
+        );
+        assert!(application.snapshot.is_some());
+        assert_eq!(application.tail_changes, Vec::<SyncChangeRecord>::new());
+
+        let conversations = receiver_database
+            .chat_conversations(DEFAULT_PROFILE_ID, 10)
+            .expect("read receiver typed chat metadata");
+        assert_eq!(conversations.len(), 1);
+        assert_eq!(conversations[0].conversation_id, "runtime-chat-1");
+        assert_eq!(conversations[0].display_name, "Runtime Team");
+        assert_eq!(conversations[0].unread_count, 4);
+        assert!(conversations[0].muted);
+
+        let files = receiver_database
+            .file_entries(DEFAULT_PROFILE_ID, 10)
+            .expect("read receiver typed file metadata");
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].entry_id, "runtime-file-1");
+        assert_eq!(files[0].content_ref.as_deref(), Some("bafy-runtime-file"));
+        assert_eq!(files[0].size_bytes, Some(512));
+
+        let providers = receiver_database
+            .storage_providers(DEFAULT_PROFILE_ID, 10)
+            .expect("read receiver typed storage provider metadata");
+        assert_eq!(providers.len(), 1);
+        assert_eq!(providers[0].provider_id, "runtime-provider-1");
+        assert_eq!(providers[0].provider_kind, "ipfs");
+        assert_eq!(providers[0].quota_bytes, Some(8_192));
+        assert!(providers[0].availability);
+        assert_eq!(providers[0].pinning_policy.as_deref(), Some("manual"));
 
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
