@@ -4507,7 +4507,52 @@ impl SlateProfileDatabase {
                 membership_record.device_id
             )));
         }
+        if membership_record.membership_epoch == latest_epoch
+            && let Some(applied_record) = self
+                .applied_sync_account_membership_record_for_device_epoch(
+                    membership_record.profile.as_str(),
+                    membership_record.device_id.as_str(),
+                    membership_record.membership_epoch,
+                )?
+        {
+            return Err(StorageError::InvalidProfileSyncMembershipRecord(format!(
+                "membership record {} conflicts with already-applied record {} at epoch {} for device {}",
+                membership_record.record_id,
+                applied_record.record_id,
+                membership_record.membership_epoch,
+                membership_record.device_id
+            )));
+        }
         Ok(())
+    }
+
+    fn applied_sync_account_membership_record_for_device_epoch(
+        &self,
+        profile: &str,
+        device_id: &str,
+        membership_epoch: i64,
+    ) -> Result<Option<SyncAccountMembershipRecord>, StorageError> {
+        if !is_valid_sync_identifier(device_id) {
+            return Err(StorageError::InvalidSyncDeviceId(device_id.to_string()));
+        }
+
+        let connection = self.connection()?;
+        connection
+            .query_row(
+                "SELECT profile, record_id, membership_epoch, record_kind, device_id,
+                        signer_device_id, signed_record, created_at, applied_at
+                 FROM sync_account_membership_records
+                 WHERE profile = ?1
+                   AND device_id = ?2
+                   AND membership_epoch = ?3
+                   AND applied_at IS NOT NULL
+                 ORDER BY record_id
+                 LIMIT 1",
+                params![profile, device_id, membership_epoch],
+                sync_account_membership_record_from_row,
+            )
+            .optional()
+            .map_err(|source| self.database_error(source))
     }
 
     fn latest_applied_sync_account_membership_epoch(
@@ -12859,6 +12904,44 @@ mod tests {
                 .sync_device_public_key(DEFAULT_PROFILE_ID, "device-b")
                 .unwrap()
                 .expect("device b key remains present")
+                .trusted
+        );
+
+        let conflicting_signer_b = ProfileSyncDeviceSigner::generate("device-b").unwrap();
+        let conflicting_rotate_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-3-rotate-device-b-conflict".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 3,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY.to_string(),
+            device_id: "device-b".to_string(),
+            device_public_key: Some(conflicting_signer_b.public_key().unwrap()),
+            created_at: 50,
+        };
+        let conflict_error = database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &conflicting_rotate_b).as_slice(),
+            )
+            .unwrap_err();
+        assert!(matches!(
+            conflict_error,
+            StorageError::InvalidProfileSyncMembershipRecord(reason)
+                if reason.contains("conflicts with already-applied record epoch-3-revoke-device-b")
+        ));
+        assert!(
+            database
+                .sync_account_membership_record(
+                    DEFAULT_PROFILE_ID,
+                    "epoch-3-rotate-device-b-conflict"
+                )
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            !database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "device-b")
+                .unwrap()
+                .expect("device b remains present after conflicting same-epoch record")
                 .trusted
         );
     }

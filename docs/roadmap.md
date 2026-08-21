@@ -782,7 +782,9 @@ Current baseline:
 - `slate-settings.db` now enforces the first membership epoch-ordering rule:
   after a newer membership operation for a target device has applied, a
   different older-epoch operation for that device is rejected and not stored.
-  Exact replay of an already-applied record remains idempotent.
+  A different same-epoch operation for a target device is also rejected once
+  another record at that epoch has applied, while exact replay of an
+  already-applied record remains idempotent.
 - The broadwebd membership-log receive fixture now covers that epoch-ordering
   rule over in-process object transfer: a stale older-epoch record is rejected
   without storing it, re-trusting the device, or advancing the membership-log

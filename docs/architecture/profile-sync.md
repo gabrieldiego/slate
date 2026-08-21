@@ -257,9 +257,12 @@ preflight refuses to publish with a distrusted local signer. This is a local
 revocation guard for current fixtures and scheduler policy. The local
 membership apply helper can now distrust a target device key from a signed
 revocation record, and it rejects a different older-epoch membership operation
-for that target device once a newer operation has already applied. Exact record
-replay remains idempotent. Full account-level revocation still needs richer
-epoch transition and multi-approval policy.
+for that target device once a newer operation has already applied. It also
+rejects a different same-epoch operation for a target device when another
+record at that epoch has already applied, so a conflicting rotate cannot undo
+an applied revoke in the same epoch. Exact record replay remains idempotent.
+Full account-level revocation still needs richer epoch transition and
+multi-approval policy.
 The profile-sync membership-log receive path exercises the same storage guard:
 a stale older-epoch record carried through broadwebd fixture objects fails
 without storing that record, re-trusting the device, or advancing the
