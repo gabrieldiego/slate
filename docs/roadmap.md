@@ -211,6 +211,11 @@ Current baseline:
   local device head. The regression test runs two simulated devices through
   `InProcessBroadwebNetwork`, so the incremental handoff stays inside the test
   process without loopback sockets or external protocol services.
+- `slate-profile-sync` now has a scheduler-facing local settings head publisher
+  that chooses the next local action from `slate-settings.db`: no-op when a
+  profile has no changes, full snapshot for the first publish or unpublished
+  snapshot state, no-op when the retained snapshot is current, and incremental
+  tail publish when changes exist after that snapshot.
 - The local profile-sync fixture can now mark simulated devices offline and
   online, allowing tests to verify unavailable devices fail closed without
   touching sockets, DNS, Tor, IPFS, or external relays.
@@ -478,8 +483,8 @@ Next:
   backend, then point the profile mutable root at the newest manifest.
 - Use the storage compaction target to publish encrypted snapshots, trim
   manifest tails, and then enforce retention across broadwebd providers.
-- Wire the local incremental settings-tail publisher into the eventual sync
-  scheduler so changed `slate-settings.db` rows can move the local device head
+- Add the first explicit sync scheduler loop around the local settings head
+  publisher so changed `slate-settings.db` rows can move the local device head
   without a manual publish call.
 - Add device enrollment, revocation, and key rotation before syncing sensitive
   profile domains.

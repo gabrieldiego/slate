@@ -452,6 +452,11 @@ local device head, and records both roots locally. Tests run the handoff between
 two simulated devices through `InProcessBroadwebNetwork`, so this path does not
 bind loopback sockets or rely on external IPFS/IPNS, Tor, DNS, or relay
 services.
+The scheduler-facing local publish entry point now chooses between that
+incremental tail path, the full-snapshot bootstrap path, and explicit no-op
+states by inspecting `slate-settings.db`. This keeps the eventual scheduler from
+duplicating assumptions about whether the latest snapshot was retained, whether
+new rows exist after it, or whether a profile has no syncable settings yet.
 
 The local fake backend must model provider availability inside the test process.
 Each simulated device registers as a provider, retained objects are scoped to
