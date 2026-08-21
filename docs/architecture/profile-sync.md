@@ -372,7 +372,10 @@ low-risk or metadata-only. Calendar, contacts, chat, files, and storage are
 registered but disabled by default because they are sensitive or content
 bearing. Reopening the database must not reset an existing enable/disable
 choice; default seeding preserves user-controlled enablement while refreshing
-the built-in domain metadata.
+the built-in domain metadata. Local publishing must consult this table before
+creating snapshots or tail manifests: disabled domains may remain local typed
+state, but they are not included in outgoing broadweb profile-sync objects until
+explicitly enabled.
 
 No app should bypass `profile-sync` with an ad hoc network path for replicated
 profile state. If an app needs a protocol-specific backend, broadwebd should

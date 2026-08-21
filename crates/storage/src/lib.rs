@@ -2552,6 +2552,13 @@ impl SlateProfileDatabase {
         Ok(())
     }
 
+    pub fn ensure_default_app_sync_domains(&self, profile: &str) -> Result<(), StorageError> {
+        for domain in DEFAULT_APP_SYNC_DOMAINS {
+            self.seed_default_app_sync_domain(profile, &domain)?;
+        }
+        Ok(())
+    }
+
     pub fn app_sync_domains(
         &self,
         profile: &str,
@@ -4572,14 +4579,13 @@ impl SlateProfileDatabase {
             provider_authority: false,
         })?;
 
-        for domain in DEFAULT_APP_SYNC_DOMAINS {
-            self.seed_default_app_sync_domain(&domain)?;
-        }
+        self.ensure_default_app_sync_domains(DEFAULT_PROFILE_ID)?;
         Ok(())
     }
 
     fn seed_default_app_sync_domain(
         &self,
+        profile: &str,
         domain: &DefaultAppSyncDomain,
     ) -> Result<(), StorageError> {
         let connection = self.connection()?;
@@ -4596,7 +4602,7 @@ impl SlateProfileDatabase {
                    sync_content = excluded.sync_content,
                    updated_at = excluded.updated_at",
                 params![
-                    DEFAULT_PROFILE_ID,
+                    profile,
                     domain.domain,
                     domain.schema_version,
                     bool_to_integer(domain.default_enabled),
@@ -8362,6 +8368,42 @@ mod tests {
         assert_eq!(devices[0].device_id, DEFAULT_SYNC_DEVICE_ID);
         assert_eq!(devices[0].membership_epoch, 1);
         assert!(!devices[0].provider_authority);
+    }
+
+    #[test]
+    fn default_app_sync_domains_can_be_seeded_for_custom_profiles() {
+        let database_path = test_dir("sync-domain-custom-profile").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+
+        database.ensure_default_app_sync_domains("work").unwrap();
+
+        let domains = database.app_sync_domains("work").unwrap();
+        assert_eq!(domains.len(), DEFAULT_APP_SYNC_DOMAINS.len());
+        assert!(domains.iter().any(|domain| {
+            domain.domain == SYNC_DOMAIN_SETTINGS
+                && domain.enabled
+                && domain.privacy_classification == "low-risk"
+        }));
+        assert!(domains.iter().any(|domain| {
+            domain.domain == SYNC_DOMAIN_CALENDAR
+                && !domain.enabled
+                && domain.privacy_classification == "sensitive"
+        }));
+
+        let enabled_domain_names = database
+            .enabled_app_sync_domains("work")
+            .unwrap()
+            .into_iter()
+            .map(|domain| domain.domain)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            enabled_domain_names,
+            vec![
+                SYNC_DOMAIN_BOOKMARKS.to_string(),
+                SYNC_DOMAIN_DOWNLOADS.to_string(),
+                SYNC_DOMAIN_SETTINGS.to_string(),
+            ]
+        );
     }
 
     #[test]

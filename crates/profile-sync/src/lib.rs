@@ -27,10 +27,10 @@ use slate_storage::{
     ProfileSyncSettingsSnapshot, ProfileSyncSettingsSnapshotPublication,
     ProfileSyncSettingsTailChangePublication, ProfileSyncTrustedPullApplyError,
     SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, StorageError, SyncChangeRecord,
-    SyncCompactionTarget, SyncDevicePublicKeyRecord, SyncObjectError, SyncSnapshotRecord,
-    SyncSnapshotRegistration, VerifiedProfileSyncDeviceHead, open_signed_profile_sync_device_head,
-    settings_sync_manifest_for_snapshot_and_tail_changes, settings_sync_manifest_for_tail_changes,
-    settings_sync_snapshot_id,
+    SyncCompactionTarget, SyncDevicePublicKeyRecord, SyncObjectError, SyncSettingTextEvent,
+    SyncSnapshotRecord, SyncSnapshotRegistration, VerifiedProfileSyncDeviceHead,
+    open_signed_profile_sync_device_head, settings_sync_manifest_for_snapshot_and_tail_changes,
+    settings_sync_manifest_for_tail_changes, settings_sync_snapshot_id,
 };
 use std::collections::BTreeSet;
 
@@ -2335,11 +2335,15 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
         else {
             return Ok(None);
         };
-        let events = database.sync_setting_text_events_after(
+        let events = enabled_settings_sync_text_events_after(
+            database,
             profile,
             target.previous_snapshot_covers_revision,
             u32::MAX,
         )?;
+        if events.is_empty() {
+            return Ok(None);
+        }
         let covered_changes = events
             .iter()
             .take(target.covered_change_count)
@@ -2425,7 +2429,7 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
         signer: &ProfileSyncDeviceSigner,
         retention_policy: ProfileSyncRetentionPolicy,
     ) -> Result<Option<PublishedLocalSettingsSnapshotHead>, ProfileSyncPublishError> {
-        let events = database.sync_setting_text_events_after(profile, 0, u32::MAX)?;
+        let events = enabled_settings_sync_text_events_after(database, profile, 0, u32::MAX)?;
         if events.is_empty() {
             return Ok(None);
         }
@@ -2531,7 +2535,8 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
             ))
             .into());
         };
-        let tail_events = database.sync_setting_text_events_after(
+        let tail_events = enabled_settings_sync_text_events_after(
+            database,
             profile,
             snapshot_record.covers_revision,
             u32::MAX,
@@ -2546,7 +2551,7 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
         else {
             return Ok(None);
         };
-        let all_events = database.sync_setting_text_events_after(profile, 0, u32::MAX)?;
+        let all_events = enabled_settings_sync_text_events_after(database, profile, 0, u32::MAX)?;
         let covered_changes = all_events
             .iter()
             .take_while(|event| event.revision.revision <= snapshot_record.covers_revision)
@@ -2635,7 +2640,8 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
         let latest_snapshot = database.latest_sync_snapshot(profile)?;
         if let Some(snapshot_record) = latest_snapshot.as_ref() {
             if snapshot_record.backend_object_id.is_some() {
-                let local_tail_events = database.sync_setting_text_events_after(
+                let local_tail_events = enabled_settings_sync_text_events_after(
+                    database,
                     profile,
                     snapshot_record.covers_revision,
                     u32::MAX,
@@ -2801,6 +2807,34 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
         }
         Ok(tail_publications)
     }
+}
+
+fn enabled_settings_sync_domain_ids(
+    database: &SlateProfileDatabase,
+    profile: &str,
+) -> Result<BTreeSet<String>, StorageError> {
+    if database.app_sync_domains(profile)?.is_empty() {
+        database.ensure_default_app_sync_domains(profile)?;
+    }
+    Ok(database
+        .enabled_app_sync_domains(profile)?
+        .into_iter()
+        .map(|domain| domain.domain)
+        .collect())
+}
+
+fn enabled_settings_sync_text_events_after(
+    database: &SlateProfileDatabase,
+    profile: &str,
+    after_revision: i64,
+    limit: u32,
+) -> Result<Vec<SyncSettingTextEvent>, StorageError> {
+    let enabled_domain_ids = enabled_settings_sync_domain_ids(database, profile)?;
+    Ok(database
+        .sync_setting_text_events_after(profile, after_revision, limit)?
+        .into_iter()
+        .filter(|event| enabled_domain_ids.contains(&event.change.domain))
+        .collect())
 }
 
 pub fn validate_settings_sync_cycle_credentials(
@@ -3131,11 +3165,11 @@ mod tests {
     };
     use slate_broadwebd::{ResourceBudget, test_fixtures::InProcessBroadwebNetwork};
     use slate_storage::{
-        DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
-        IncomingSyncSettingText, PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305,
-        PROFILE_SYNC_CONTENT_KEY_BYTES, PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
-        ProfileSyncContentKey, ProfileSyncDeviceHead, ProfileSyncDeviceSigner,
-        ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
+        AppSyncDomainRegistration, DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID,
+        DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH, IncomingSyncSettingText,
+        PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305, PROFILE_SYNC_CONTENT_KEY_BYTES,
+        PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, ProfileSyncContentKey, ProfileSyncDeviceHead,
+        ProfileSyncDeviceSigner, ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
         ProfileSyncSettingsCandidatePullApplyStatus, SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_SETTINGS,
         SlateProfileDatabase, StorageError, SyncChangeRecord, SyncContentKeyEpochRegistration,
         SyncDevicePublicKeyRegistration, open_signed_profile_sync_device_head,
@@ -5740,6 +5774,16 @@ mod tests {
         )
         .expect("open receiver settings database");
         publisher_database
+            .register_app_sync_domain(&AppSyncDomainRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                domain: SYNC_DOMAIN_CALENDAR.to_string(),
+                schema_version: 1,
+                enabled: true,
+                privacy_classification: "sensitive".to_string(),
+                sync_content: false,
+            })
+            .expect("enable calendar sync for publisher test profile");
+        publisher_database
             .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
             .expect("publisher writes theme setting");
         publisher_database
@@ -5843,6 +5887,141 @@ mod tests {
                 .value,
             "month"
         );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_publisher_skips_disabled_app_domains_from_local_publish() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("disabled-domain-publisher");
+        let receiver_state_root = test_state_root("disabled-domain-receiver");
+        let publisher_db_root = test_state_root("disabled-domain-publisher-db");
+        let receiver_db_root = test_state_root("disabled-domain-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "runtime-disabled-domain-publisher",
+            )
+            .expect("start publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "runtime-disabled-domain-receiver",
+            )
+            .expect("start receiver daemon");
+        let publisher_database = SlateProfileDatabase::open_resolved_with_device_id(
+            publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-disabled-domain-publisher",
+        )
+        .expect("open publisher settings database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-disabled-domain-receiver",
+        )
+        .expect("open receiver settings database");
+        publisher_database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("publisher writes enabled setting");
+        publisher_database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                "default_view",
+                "month",
+            )
+            .expect("publisher writes disabled calendar setting");
+        let content_key = ProfileSyncContentKey::from_bytes([66; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-disabled-domain-publisher")
+            .expect("generate signer");
+        let public_key = signer.public_key().expect("read signer public key");
+        receiver_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key,
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("receiver trusts publisher key");
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+
+        let published = publisher
+            .publish_full_local_settings_snapshot_head(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish enabled app-domain snapshot head")
+            .expect("enabled settings changes exist");
+
+        assert_eq!(
+            published.publication.manifest.included_domains,
+            vec![SYNC_DOMAIN_SETTINGS.to_string()]
+        );
+        assert_eq!(
+            published.snapshot_record.included_domains,
+            vec![SYNC_DOMAIN_SETTINGS.to_string()]
+        );
+
+        let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
+        let applied = source
+            .pull_record_and_apply_trusted_settings_from_device_head(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                published.device_head.root_id.as_str(),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+            )
+            .expect("receiver applies full snapshot from trusted head");
+        assert!(matches!(
+            applied,
+            BroadwebdTrustedDeviceHeadSyncStatus::Applied { .. }
+        ));
+        assert_eq!(
+            receiver_database
+                .get_setting_text("ui.theme")
+                .expect("read receiver theme")
+                .as_deref(),
+            Some("teal")
+        );
+        assert!(
+            receiver_database
+                .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CALENDAR, "default_view")
+                .expect("read receiver calendar sync setting")
+                .is_none()
+        );
+
+        publisher_database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                "default_view",
+                "week",
+            )
+            .expect("publisher writes disabled calendar tail setting");
+        let pending = publisher
+            .publish_pending_local_settings_head(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("disabled calendar tail should not publish");
+        assert!(matches!(
+            pending,
+            LocalSettingsHeadPublishStatus::UpToDate { .. }
+        ));
 
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
@@ -6445,6 +6624,16 @@ mod tests {
         let baseline_revision = database
             .latest_sync_revision(DEFAULT_PROFILE_ID)
             .expect("read baseline revision");
+        database
+            .register_app_sync_domain(&AppSyncDomainRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                domain: SYNC_DOMAIN_CALENDAR.to_string(),
+                schema_version: 1,
+                enabled: true,
+                privacy_classification: "sensitive".to_string(),
+                sync_content: false,
+            })
+            .expect("enable calendar sync for compaction test profile");
         database
             .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
             .expect("write first compacted setting");

@@ -187,6 +187,10 @@ Current baseline:
   privacy classifications. Low-risk and metadata domains are enabled by
   default; sensitive and content-bearing app domains are present but opt-in,
   and default seeding preserves a user's stored enable/disable choice.
+- Local settings/app-domain publishing now filters outgoing snapshots and tail
+  manifests through the enabled app sync-domain table. Disabled domains can
+  still be used as local typed state, but they are not published to broadweb
+  profile-sync objects until explicitly enabled.
 - broadwebd has a protocol-neutral `profile-sync` application service with an
   in-memory local fixture backend. Unit tests cover object transfer, retention,
   mutable root publish/resolve, provider discovery, per-object transfer
