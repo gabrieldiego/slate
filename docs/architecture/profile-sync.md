@@ -443,6 +443,15 @@ publishes the snapshot manifest, publishes the local per-device head pointing at
 that manifest, and records both published roots locally. This favors a complete
 handoff for new trusted devices before the later incremental publish loop trims
 tails and reuses retained snapshots.
+The next publish helper reuses the latest retained local
+`slate-settings.db` snapshot object when new settings changes appear after that
+snapshot. It rebuilds the covered snapshot payload from storage for validation,
+retains the existing backend object, publishes only the post-snapshot tail
+changes, moves the settings mutable root to the new manifest, publishes a fresh
+local device head, and records both roots locally. Tests run the handoff between
+two simulated devices through `InProcessBroadwebNetwork`, so this path does not
+bind loopback sockets or rely on external IPFS/IPNS, Tor, DNS, or relay
+services.
 
 The local fake backend must model provider availability inside the test process.
 Each simulated device registers as a provider, retained objects are scoped to
