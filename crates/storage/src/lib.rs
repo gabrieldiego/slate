@@ -40,6 +40,7 @@ pub const DEFAULT_HOME_BOOKMARKS: [DefaultBookmark; 2] = [
 ];
 
 const DEFAULT_BOOKMARKS_SEEDED_SETTING_KEY: &str = "bookmarks.defaults_seeded";
+const PROFILE_SYNC_ROOT_KEY_PREFIX: &str = "profile_sync.root.";
 
 const DEFAULT_APP_SYNC_DOMAINS: [DefaultAppSyncDomain; 8] = [
     DefaultAppSyncDomain {
@@ -662,6 +663,14 @@ pub struct SyncSnapshotRecord {
     pub created_at: i64,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncRootRecord {
+    pub profile: String,
+    pub root_id: String,
+    pub object_id: String,
+    pub updated_at: i64,
+}
+
 #[derive(Debug)]
 pub enum StorageError {
     CurrentDirectory(std::io::Error),
@@ -676,6 +685,7 @@ pub enum StorageError {
     EncodeSnapshotDomains(serde_json::Error),
     Clock(std::time::SystemTimeError),
     InvalidSyncDeviceId(String),
+    InvalidSyncRootId(String),
 }
 
 impl fmt::Display for StorageError {
@@ -705,6 +715,9 @@ impl fmt::Display for StorageError {
             Self::InvalidSyncDeviceId(device_id) => {
                 write!(formatter, "invalid sync device id: {device_id}")
             }
+            Self::InvalidSyncRootId(root_id) => {
+                write!(formatter, "invalid sync root id: {root_id}")
+            }
         }
     }
 }
@@ -718,6 +731,7 @@ impl std::error::Error for StorageError {
             Self::EncodeSnapshotDomains(error) => Some(error),
             Self::Clock(error) => Some(error),
             Self::InvalidSyncDeviceId(_) => None,
+            Self::InvalidSyncRootId(_) => None,
         }
     }
 }
@@ -1635,6 +1649,88 @@ impl SlateProfileDatabase {
             .map_err(|source| self.database_error(source))
     }
 
+    pub fn set_profile_sync_root(
+        &self,
+        profile: &str,
+        root_id: &str,
+        object_id: &str,
+    ) -> Result<ProfileSyncRootRecord, StorageError> {
+        if root_id.is_empty() {
+            return Err(StorageError::InvalidSyncRootId(root_id.to_string()));
+        }
+
+        let connection = self.connection()?;
+        let now = unix_time_seconds()?;
+        let key = profile_sync_root_key(root_id);
+        connection
+            .execute(
+                "INSERT INTO sync_state (profile, key, value, updated_at)
+                 VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT(profile, key) DO UPDATE SET
+                   value = excluded.value,
+                   updated_at = excluded.updated_at",
+                params![profile, key.as_str(), object_id, now],
+            )
+            .map_err(|source| self.database_error(source))?;
+
+        Ok(ProfileSyncRootRecord {
+            profile: profile.to_string(),
+            root_id: root_id.to_string(),
+            object_id: object_id.to_string(),
+            updated_at: now,
+        })
+    }
+
+    pub fn profile_sync_root(
+        &self,
+        profile: &str,
+        root_id: &str,
+    ) -> Result<Option<ProfileSyncRootRecord>, StorageError> {
+        if root_id.is_empty() {
+            return Err(StorageError::InvalidSyncRootId(root_id.to_string()));
+        }
+
+        let connection = self.connection()?;
+        let key = profile_sync_root_key(root_id);
+        connection
+            .query_row(
+                "SELECT profile, key, value, updated_at
+                 FROM sync_state
+                 WHERE profile = ?1 AND key = ?2",
+                params![profile, key.as_str()],
+                profile_sync_root_record_from_row,
+            )
+            .optional()
+            .map_err(|source| self.database_error(source))
+    }
+
+    pub fn profile_sync_roots(
+        &self,
+        profile: &str,
+    ) -> Result<Vec<ProfileSyncRootRecord>, StorageError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT profile, key, value, updated_at
+                 FROM sync_state
+                 WHERE profile = ?1 AND key LIKE ?2
+                 ORDER BY key",
+            )
+            .map_err(|source| self.database_error(source))?;
+        let records = statement
+            .query_map(
+                params![profile, format!("{PROFILE_SYNC_ROOT_KEY_PREFIX}%")],
+                profile_sync_root_record_from_row,
+            )
+            .map_err(|source| self.database_error(source))?;
+
+        let mut roots = Vec::new();
+        for record in records {
+            roots.push(record.map_err(|source| self.database_error(source))?);
+        }
+        Ok(roots)
+    }
+
     fn initialize(&self) -> Result<(), StorageError> {
         let connection = self.connection()?;
         connection
@@ -1947,6 +2043,38 @@ fn sync_snapshot_record_from_row(
         covers_revision: row.get(3)?,
         included_domains,
         created_at: row.get(5)?,
+    })
+}
+
+fn profile_sync_root_key(root_id: &str) -> String {
+    format!("{PROFILE_SYNC_ROOT_KEY_PREFIX}{root_id}")
+}
+
+fn profile_sync_root_id_from_key(key: &str) -> Result<String, rusqlite::Error> {
+    key.strip_prefix(PROFILE_SYNC_ROOT_KEY_PREFIX)
+        .filter(|root_id| !root_id.is_empty())
+        .map(ToString::to_string)
+        .ok_or_else(|| {
+            rusqlite::Error::FromSqlConversionFailure(
+                1,
+                Type::Text,
+                Box::new(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "malformed profile sync root key",
+                )),
+            )
+        })
+}
+
+fn profile_sync_root_record_from_row(
+    row: &rusqlite::Row<'_>,
+) -> Result<ProfileSyncRootRecord, rusqlite::Error> {
+    let key: String = row.get(1)?;
+    Ok(ProfileSyncRootRecord {
+        profile: row.get(0)?,
+        root_id: profile_sync_root_id_from_key(key.as_str())?,
+        object_id: row.get(2)?,
+        updated_at: row.get(3)?,
     })
 }
 
@@ -2827,6 +2955,63 @@ mod tests {
             .unwrap()
             .expect("snapshot-1");
         assert_eq!(snapshot, updated_first);
+    }
+
+    #[test]
+    fn profile_sync_roots_track_latest_manifest_objects() {
+        let database_path = test_dir("sync-roots").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+
+        assert_eq!(
+            database
+                .profile_sync_root(DEFAULT_PROFILE_ID, "settings/latest")
+                .unwrap(),
+            None
+        );
+
+        let root = database
+            .set_profile_sync_root(DEFAULT_PROFILE_ID, "settings/latest", "manifest-object-1")
+            .unwrap();
+        assert_eq!(root.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(root.root_id, "settings/latest");
+        assert_eq!(root.object_id, "manifest-object-1");
+
+        let loaded = database
+            .profile_sync_root(DEFAULT_PROFILE_ID, "settings/latest")
+            .unwrap()
+            .expect("settings root");
+        assert_eq!(loaded, root);
+
+        let updated = database
+            .set_profile_sync_root(DEFAULT_PROFILE_ID, "settings/latest", "manifest-object-2")
+            .unwrap();
+        assert_eq!(updated.object_id, "manifest-object-2");
+
+        database
+            .set_profile_sync_root(DEFAULT_PROFILE_ID, "bookmarks/latest", "bookmark-manifest")
+            .unwrap();
+        database
+            .set_profile_sync_root("testing", "settings/latest", "testing-manifest")
+            .unwrap();
+
+        let roots = database.profile_sync_roots(DEFAULT_PROFILE_ID).unwrap();
+        assert_eq!(roots.len(), 2);
+        assert_eq!(roots[0].root_id, "bookmarks/latest");
+        assert_eq!(roots[1].root_id, "settings/latest");
+        assert_eq!(roots[1].object_id, "manifest-object-2");
+
+        let testing_roots = database.profile_sync_roots("testing").unwrap();
+        assert_eq!(testing_roots.len(), 1);
+        assert_eq!(testing_roots[0].object_id, "testing-manifest");
+
+        let error = database
+            .set_profile_sync_root(DEFAULT_PROFILE_ID, "", "manifest")
+            .unwrap_err();
+        assert!(matches!(error, StorageError::InvalidSyncRootId(root_id) if root_id.is_empty()));
+        let error = database
+            .profile_sync_root(DEFAULT_PROFILE_ID, "")
+            .unwrap_err();
+        assert!(matches!(error, StorageError::InvalidSyncRootId(root_id) if root_id.is_empty()));
     }
 
     #[test]
