@@ -753,6 +753,10 @@ Current baseline:
 - Membership-aware settings cycles can now retain the combined published
   settings and membership object set through selected in-process availability
   providers.
+- Active-key preflight can now pull the membership log before credential
+  checks, letting a newly enrolled local fixture device pass scheduler-style
+  preflight after its trusted key is learned from the distributed membership
+  history.
 - Membership-log receive fixtures now reject mismatched index entries before
   advancing the stored log root or writing trusted device keys.
 

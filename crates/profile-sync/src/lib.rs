@@ -1051,6 +1051,18 @@ pub struct SettingsSyncCyclePreflight {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncCyclePreflightWithMembershipLog {
+    pub pulled_membership_log: ProfileSyncMembershipLogPullStatus,
+    pub preflight: SettingsSyncCyclePreflight,
+}
+
+impl SettingsSyncCyclePreflightWithMembershipLog {
+    pub fn pulled_membership_application_count(&self) -> usize {
+        self.pulled_membership_log.applied_count()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettingsSyncCyclePolicy {
     pub retention_policy: ProfileSyncRetentionPolicy,
     pub max_publish_steps: u32,
@@ -2118,6 +2130,36 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
             trusted_remote_device_count,
             retention_provider_candidates,
             before_health,
+        })
+    }
+
+    pub fn settings_sync_cycle_preflight_with_membership_log_and_active_key_policy(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        settings_root_id: &str,
+        membership_log_root_id: &str,
+        signer: &ProfileSyncDeviceSigner,
+        policy: &SettingsSyncCyclePolicy,
+    ) -> Result<SettingsSyncCyclePreflightWithMembershipLog, ProfileSyncCycleWithHealthError> {
+        let pulled_membership_log = BroadwebdProfileSyncObjectSource::new(self.daemon)
+            .pull_and_apply_sync_account_membership_log_if_changed(
+                database,
+                profile,
+                membership_log_root_id,
+            )
+            .map_err(ProfileSyncCycleError::from)?;
+        let preflight = self.settings_sync_cycle_preflight_with_active_key_policy(
+            database,
+            profile,
+            settings_root_id,
+            signer,
+            policy,
+        )?;
+
+        Ok(SettingsSyncCyclePreflightWithMembershipLog {
+            pulled_membership_log,
+            preflight,
         })
     }
 
@@ -4257,6 +4299,133 @@ mod tests {
         let _ = std::fs::remove_dir_all(device_state_root);
         let _ = std::fs::remove_dir_all(provider_state_root);
         let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn membership_preflight_enrolls_local_device_before_credential_check_without_loopback() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("membership-preflight-publisher");
+        let receiver_state_root = test_state_root("membership-preflight-receiver");
+        let publisher_db_root = test_state_root("membership-preflight-publisher-db");
+        let receiver_db_root = test_state_root("membership-preflight-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "membership-preflight-device-a",
+            )
+            .expect("start in-process membership preflight publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "membership-preflight-device-b",
+            )
+            .expect("start in-process membership preflight receiver daemon");
+        let publisher_database = SlateProfileDatabase::open_resolved_with_device_id(
+            publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "membership-preflight-device-a",
+        )
+        .expect("open membership preflight publisher database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "membership-preflight-device-b",
+        )
+        .expect("open membership preflight receiver database");
+        let signer_a = ProfileSyncDeviceSigner::generate("membership-preflight-device-a")
+            .expect("generate membership preflight signer a");
+        let signer_b = ProfileSyncDeviceSigner::generate("membership-preflight-device-b")
+            .expect("generate membership preflight signer b");
+        register_test_content_key_epoch(&receiver_database, DEFAULT_PROFILE_ID);
+        let enroll_a = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-membership-preflight-device-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-preflight-device-a".to_string(),
+            device_public_key: Some(signer_a.public_key().expect("read signer a public key")),
+            created_at: 10,
+        };
+        publisher_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_a).as_slice(),
+            )
+            .expect("publisher bootstraps membership preflight signer a");
+        let enroll_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-enroll-membership-preflight-device-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-preflight-device-b".to_string(),
+            device_public_key: Some(signer_b.public_key().expect("read signer b public key")),
+            created_at: 20,
+        };
+        publisher_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_b).as_slice(),
+            )
+            .expect("publisher applies membership preflight signer b enrollment");
+        BroadwebdProfileSyncPublisher::new(&publisher_daemon)
+            .publish_local_sync_account_membership_log(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            )
+            .expect("publish membership preflight log")
+            .expect("membership preflight log has records");
+
+        let policy = SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 1)
+            .with_provider_health_required(false);
+        let runner = BroadwebdSettingsSyncRunner::new(&receiver_daemon);
+        let direct_error = runner
+            .settings_sync_cycle_preflight_with_active_key_policy(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &signer_b,
+                &policy,
+            )
+            .expect_err("plain preflight should reject missing local trusted key");
+        assert!(matches!(
+            direct_error,
+            ProfileSyncCycleWithHealthError::Cycle(ProfileSyncCycleError::Credentials(
+                ProfileSyncCredentialError::UntrustedLocalDevice { device_id, .. }
+            )) if device_id == "membership-preflight-device-b"
+        ));
+
+        let preflight = runner
+            .settings_sync_cycle_preflight_with_membership_log_and_active_key_policy(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                &signer_b,
+                &policy,
+            )
+            .expect("membership-aware preflight applies local enrollment before credentials");
+        assert_eq!(preflight.pulled_membership_application_count(), 2);
+        assert_eq!(
+            preflight.preflight.local_device_id,
+            "membership-preflight-device-b"
+        );
+        assert_eq!(
+            preflight.preflight.signer_device_id,
+            "membership-preflight-device-b"
+        );
+        assert!(
+            receiver_database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "membership-preflight-device-b")
+                .expect("read receiver local trusted key")
+                .expect("membership-aware preflight stores local key")
+                .trusted
+        );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
     }
 
     #[test]
