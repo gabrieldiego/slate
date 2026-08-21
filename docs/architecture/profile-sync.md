@@ -538,7 +538,11 @@ role. This keeps availability-only providers from being mistaken for devices
 with profile write authority. The local fixture enforces those roles before
 serving object transfer, retention, provider discovery, root discovery, or
 mutable-root publish requests, and objects held by providers without the
-object-transfer role are not visible to other simulated devices.
+object-transfer role are not visible to other simulated devices. The fixture can
+also block retention for a selected provider through a simulated local pinning
+policy while leaving that provider online and able to transfer encrypted
+objects. This lets tests model "provider reachable, but not willing to pin"
+without binding sockets, sleeping, or changing provider roles.
 The service boundary validates profile ids, mutable-root ids, and backend
 object ids before any fixture backend lookup, retain, or publish operation.
 Malformed identifiers fail locally instead of being interpreted as path-like

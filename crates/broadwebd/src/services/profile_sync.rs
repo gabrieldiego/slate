@@ -36,6 +36,7 @@ struct ProfileSyncStore {
     offline_providers: BTreeSet<String>,
     delayed_transfers: BTreeSet<(String, String)>,
     delayed_roots: BTreeSet<(String, String, String, String)>,
+    retention_blocked_providers: BTreeSet<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -188,6 +189,15 @@ impl ProfileSyncService {
         self.require_role(self.roles.availability, "profile-sync/availability")?;
         self.require_role(self.roles.object_transfer, "profile-sync/object-transfer")?;
         let mut store = self.store()?;
+        if store
+            .retention_blocked_providers
+            .contains(&self.provider_id)
+        {
+            return Err(BroadwebdError::UnsupportedRequest(format!(
+                "profile sync retention is blocked by local pinning policy for provider: {}",
+                self.provider_id
+            )));
+        }
         let Some(bytes) = find_online_object(
             &store,
             &self.provider_id,
@@ -630,6 +640,50 @@ impl LocalProfileSyncFixture {
             store.offline_providers.remove(provider_id.as_str());
         } else {
             store.offline_providers.insert(provider_id);
+        }
+        Ok(())
+    }
+
+    pub fn set_device_retention_available(
+        &self,
+        device_id: impl AsRef<str>,
+        available: bool,
+    ) -> Result<(), BroadwebdError> {
+        self.set_provider_retention_available(local_fixture_provider_id(device_id), available)
+    }
+
+    pub fn set_availability_provider_retention_available(
+        &self,
+        provider_id: impl AsRef<str>,
+        available: bool,
+    ) -> Result<(), BroadwebdError> {
+        self.set_provider_retention_available(
+            local_fixture_availability_provider_id(provider_id),
+            available,
+        )
+    }
+
+    pub fn set_provider_retention_available(
+        &self,
+        provider_id: impl AsRef<str>,
+        available: bool,
+    ) -> Result<(), BroadwebdError> {
+        let provider_id = provider_id.as_ref();
+        let mut store = self
+            .store
+            .lock()
+            .map_err(|_| BroadwebdError::Request("profile sync store lock poisoned".to_string()))?;
+        if !store.providers.contains_key(provider_id) {
+            return Err(BroadwebdError::UnsupportedRequest(format!(
+                "unknown profile sync provider: {provider_id}"
+            )));
+        }
+        if available {
+            store.retention_blocked_providers.remove(provider_id);
+        } else {
+            store
+                .retention_blocked_providers
+                .insert(provider_id.to_string());
         }
         Ok(())
     }
@@ -2498,6 +2552,117 @@ mod tests {
             ProfileSyncResponse::GetEncryptedObject {
                 object_id,
                 bytes: b"encrypted object waiting for delayed transfer".to_vec(),
+            }
+        );
+    }
+
+    #[test]
+    fn local_fixture_can_block_retention_by_pinning_policy() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut device = PluginRegistry::new();
+        let mut provider = PluginRegistry::new();
+        let budget = ResourceBudget::default();
+
+        device.register_service(fixture.service_for_device("publisher"));
+        provider.register_service(fixture.service_for_availability_provider("pinner"));
+
+        let put = device
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"encrypted object for policy-gated pinning".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("device can put object into fixture");
+        let ProfileSyncResponse::PutEncryptedObject { object_id } = put else {
+            panic!("unexpected put response");
+        };
+        fixture
+            .set_availability_provider_retention_available("pinner", false)
+            .expect("block pinner retention policy");
+
+        let fetch = provider
+            .profile_sync(
+                ProfileSyncRequest::GetEncryptedObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("provider can still transfer object while retention is blocked");
+        assert_eq!(
+            fetch,
+            ProfileSyncResponse::GetEncryptedObject {
+                object_id: object_id.clone(),
+                bytes: b"encrypted object for policy-gated pinning".to_vec(),
+            }
+        );
+        let retain_error = provider
+            .profile_sync(
+                ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect_err("provider retention policy blocks pinning");
+        assert!(matches!(
+            retain_error,
+            BroadwebdError::UnsupportedRequest(message)
+                if message.contains("pinning policy")
+        ));
+        let retained_status = provider
+            .profile_sync(
+                ProfileSyncRequest::VerifyRetainedObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("provider can still verify retention state");
+        assert_eq!(
+            retained_status,
+            ProfileSyncResponse::RetainedObjectStatus {
+                object_id: object_id.clone(),
+                retained: false,
+                available: true,
+            }
+        );
+
+        fixture
+            .set_availability_provider_retention_available("pinner", true)
+            .expect("allow pinner retention policy");
+        let retained = provider
+            .profile_sync(
+                ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("provider can retain after pinning policy allows it");
+        assert_eq!(
+            retained,
+            ProfileSyncResponse::RetainObject {
+                object_id: object_id.clone(),
+                retained: true,
+            }
+        );
+        let retained_status = provider
+            .profile_sync(
+                ProfileSyncRequest::VerifyRetainedObject(ProfileSyncObjectRequest::new(
+                    "default", object_id,
+                )),
+                &budget,
+            )
+            .expect("provider can verify retained object");
+        assert_eq!(
+            retained_status,
+            ProfileSyncResponse::RetainedObjectStatus {
+                object_id: local_object_id(b"encrypted object for policy-gated pinning"),
+                retained: true,
+                available: true,
             }
         );
     }

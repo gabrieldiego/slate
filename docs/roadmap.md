@@ -357,6 +357,10 @@ Current baseline:
   simulated devices. Delayed transfers stay inside the process and make the
   target device treat the source provider's encrypted bytes as unavailable
   until the fixture releases the link.
+- The local profile-sync fixture can now block retention for a selected
+  provider through a simulated local pinning policy. The provider remains
+  online and can still transfer encrypted objects, but new retain requests fail
+  locally until the fixture policy is reopened.
 - The fixture can also delay mutable-root propagation between two simulated
   devices. Root delay is independent from object transfer, so tests can model a
   device that can fetch a known encrypted object but has not seen the newest
