@@ -234,7 +234,8 @@ Current baseline:
   fixture now seals those payloads into signed encrypted snapshot objects,
   publishes manifests that point at the current snapshot object, verifies the
   snapshot on the receiving device, applies the verified snapshot into
-  `slate-settings.db`, and records its backend object metadata.
+  `slate-settings.db`, records its backend object metadata, and also covers
+  replaying retained manifest tail changes after the snapshot has been applied.
 - Storage can now apply a verified settings snapshot by replaying its text
   values through the same conflict policy used for incoming tail changes:
   snapshot values materialize in `settings_values` and the legacy settings view
