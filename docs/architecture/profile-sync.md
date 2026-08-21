@@ -413,6 +413,10 @@ stays independent from storage's encrypted object semantics, and sync-only tests
 should target this crate when possible so they do not compile the renderer.
 The publisher also has a retained dependency/root helper for publish flows that
 must upload snapshot or tail objects before publishing the manifest root.
+For settings tails, the bridge can convert local `SyncChangeRecord` values into
+signed encrypted `setting-change` objects, build the storage-owned manifest,
+and publish that manifest root without taking ownership of merge policy or
+database mutation.
 
 The local fake backend must model provider availability inside the test process.
 Each simulated device registers as a provider, retained objects are scoped to

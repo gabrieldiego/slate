@@ -10951,6 +10951,7 @@ version = "0.0.1"
 name = "slate-profile-sync"
 version = "0.0.1"
 dependencies = [
+ "serde_json",
  "slate-broadwebd",
  "slate-storage",
 ]

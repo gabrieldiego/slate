@@ -282,6 +282,11 @@ Current baseline:
   encrypted dependency objects first, matching the snapshot/tail-then-manifest
   order needed by settings sync while keeping object signing and encryption in
   storage.
+- `slate-profile-sync` can now publish actual signed encrypted settings tail
+  manifests: it turns local `SyncChangeRecord` values into signed
+  `setting-change` objects, retains them, builds the storage-owned manifest,
+  signs/encrypts that manifest, publishes it as `settings/latest`, and verifies
+  the result through the local broadwebd fixture.
 - `slate-settings.db` can now pull and apply a signed settings manifest in one
   storage call once runtime provides an object source and content key bytes. The
   active trusted helper reads the content-key id and profile-scoped device
