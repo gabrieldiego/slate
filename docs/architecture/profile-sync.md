@@ -258,6 +258,10 @@ For typed app domains, storage also provides a decoded poll helper that turns
 the JSON payload into an app-owned type before the caller records the cursor.
 Decode failures leave the persisted cursor unchanged, so a malformed replicated
 payload cannot be acknowledged as applied by accident.
+The broadwebd runtime bridge fixture now covers this watcher contract after a
+trusted receive: Chat, Files, and Storage cursors are initialized before sync,
+the signed encrypted snapshot is applied, and each app-domain poll returns the
+decoded payload that the app can inspect before advancing its cursor.
 
 ## Data Objects
 

@@ -289,6 +289,11 @@ Current baseline:
   sync-domain JSON payloads before a watcher advances its persisted cursor. A
   malformed app payload fails the poll and leaves the app cursor unchanged, so
   runtime app watchers can avoid acknowledging a batch they did not apply.
+- The `slate-profile-sync` runtime bridge now verifies received typed Chat,
+  Files, and Storage metadata is visible through those typed app-domain watcher
+  polls after a trusted broadwebd apply. The fixture initializes receiver
+  cursors before sync, applies a signed encrypted snapshot, then records each
+  app cursor only after the decoded payload batch is inspected.
 - The profile-sync bridge can now publish post-snapshot local settings updates
   by reusing the latest retained `slate-settings.db` snapshot object, publishing
   only the new tail changes, moving the settings root, and publishing a fresh

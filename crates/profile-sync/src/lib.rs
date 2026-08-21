@@ -6524,6 +6524,30 @@ mod tests {
                 membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
             })
             .expect("receiver trusts typed app publisher key");
+        let initial_chat_poll = receiver_database
+            .poll_typed_sync_setting_text_events_for_app_domain::<ChatConversationSyncPayload>(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CHAT,
+                8,
+            )
+            .expect("initialize receiver chat watcher cursor");
+        let initial_file_poll = receiver_database
+            .poll_typed_sync_setting_text_events_for_app_domain::<FileEntrySyncPayload>(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_FILES,
+                8,
+            )
+            .expect("initialize receiver files watcher cursor");
+        let initial_storage_poll = receiver_database
+            .poll_typed_sync_setting_text_events_for_app_domain::<StorageProviderSyncPayload>(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_STORAGE,
+                8,
+            )
+            .expect("initialize receiver storage watcher cursor");
+        assert_eq!(initial_chat_poll.event_count(), 0);
+        assert_eq!(initial_file_poll.event_count(), 0);
+        assert_eq!(initial_storage_poll.event_count(), 0);
         let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
 
         let published = publisher
@@ -6603,6 +6627,108 @@ mod tests {
         assert_eq!(providers[0].quota_bytes, Some(8_192));
         assert!(providers[0].availability);
         assert_eq!(providers[0].pinning_policy.as_deref(), Some("manual"));
+
+        let chat_poll = receiver_database
+            .poll_typed_sync_setting_text_events_for_app_domain::<ChatConversationSyncPayload>(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CHAT,
+                8,
+            )
+            .expect("poll receiver chat typed app events after sync apply");
+        assert!(chat_poll.advanced());
+        assert_eq!(
+            chat_poll.previous_revision,
+            initial_chat_poll.latest_revision
+        );
+        assert_eq!(chat_poll.event_count(), 1);
+        assert_eq!(
+            chat_poll.events[0].change.entity_key,
+            "conversation.runtime-chat-1"
+        );
+        assert_eq!(chat_poll.events[0].value.conversation_id, "runtime-chat-1");
+        assert_eq!(chat_poll.events[0].value.display_name, "Runtime Team");
+        assert_eq!(chat_poll.events[0].value.unread_count, 4);
+        assert!(chat_poll.events[0].value.muted);
+        assert!(!chat_poll.events[0].value.deleted);
+        assert_eq!(
+            receiver_database
+                .app_sync_domain_cursor(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CHAT)
+                .expect("read receiver chat watcher cursor")
+                .map(|cursor| cursor.latest_revision),
+            Some(initial_chat_poll.latest_revision)
+        );
+        assert_eq!(
+            receiver_database
+                .record_typed_app_sync_domain_poll_cursor(&chat_poll)
+                .expect("record receiver chat watcher cursor")
+                .latest_revision,
+            chat_poll.latest_revision
+        );
+
+        let file_poll = receiver_database
+            .poll_typed_sync_setting_text_events_for_app_domain::<FileEntrySyncPayload>(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_FILES,
+                8,
+            )
+            .expect("poll receiver files typed app events after sync apply");
+        assert!(file_poll.advanced());
+        assert_eq!(
+            file_poll.previous_revision,
+            initial_file_poll.latest_revision
+        );
+        assert_eq!(file_poll.event_count(), 1);
+        assert_eq!(
+            file_poll.events[0].change.entity_key,
+            "entry.runtime-file-1"
+        );
+        assert_eq!(file_poll.events[0].value.entry_id, "runtime-file-1");
+        assert_eq!(
+            file_poll.events[0].value.content_ref.as_deref(),
+            Some("bafy-runtime-file")
+        );
+        assert_eq!(file_poll.events[0].value.size_bytes, Some(512));
+        assert!(!file_poll.events[0].value.deleted);
+        assert_eq!(
+            receiver_database
+                .record_typed_app_sync_domain_poll_cursor(&file_poll)
+                .expect("record receiver files watcher cursor")
+                .latest_revision,
+            file_poll.latest_revision
+        );
+
+        let storage_poll = receiver_database
+            .poll_typed_sync_setting_text_events_for_app_domain::<StorageProviderSyncPayload>(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_STORAGE,
+                8,
+            )
+            .expect("poll receiver storage typed app events after sync apply");
+        assert!(storage_poll.advanced());
+        assert_eq!(
+            storage_poll.previous_revision,
+            initial_storage_poll.latest_revision
+        );
+        assert_eq!(storage_poll.event_count(), 1);
+        assert_eq!(
+            storage_poll.events[0].change.entity_key,
+            "provider.runtime-provider-1"
+        );
+        assert_eq!(
+            storage_poll.events[0].value.provider_id,
+            "runtime-provider-1"
+        );
+        assert_eq!(storage_poll.events[0].value.provider_kind, "ipfs");
+        assert_eq!(storage_poll.events[0].value.quota_bytes, Some(8_192));
+        assert!(storage_poll.events[0].value.availability);
+        assert!(!storage_poll.events[0].value.deleted);
+        assert_eq!(
+            receiver_database
+                .record_typed_app_sync_domain_poll_cursor(&storage_poll)
+                .expect("record receiver storage watcher cursor")
+                .latest_revision,
+            storage_poll.latest_revision
+        );
 
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
