@@ -3210,19 +3210,21 @@ mod tests {
         test_fixtures::InProcessBroadwebNetwork,
     };
     use slate_storage::{
-        AppSyncDomainRegistration, BookmarkSlotSyncPayload, BookmarkUpdate, ChatConversationUpdate,
-        DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+        AppSyncDomainRegistration, BookmarkSlotSyncPayload, BookmarkUpdate,
+        ChatConversationSyncPayload, ChatConversationUpdate, DEFAULT_DATABASE_FILE_NAME,
+        DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH, FileEntrySyncPayload,
         FileEntryUpdate, IncomingSyncSettingText,
         PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305, PROFILE_SYNC_CONTENT_KEY_BYTES,
         PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, ProfileSyncContentKey, ProfileSyncDeviceHead,
         ProfileSyncDeviceSigner, ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
         ProfileSyncSettingsCandidatePullApplyStatus, SYNC_DOMAIN_BOOKMARKS, SYNC_DOMAIN_CALENDAR,
         SYNC_DOMAIN_CHAT, SYNC_DOMAIN_FILES, SYNC_DOMAIN_SETTINGS, SYNC_DOMAIN_STORAGE,
-        SlateProfileDatabase, StorageError, StorageProviderUpdate, SyncChangeRecord,
-        SyncContentKeyEpochRegistration, SyncDevicePublicKeyRegistration, SyncSnapshotRegistration,
-        open_signed_profile_sync_device_head, open_signed_profile_sync_manifest,
-        open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
-        pull_signed_profile_sync_device_head, settings_sync_snapshot_id,
+        SlateProfileDatabase, StorageError, StorageProviderSyncPayload, StorageProviderUpdate,
+        SyncChangeRecord, SyncContentKeyEpochRegistration, SyncDevicePublicKeyRegistration,
+        SyncSnapshotRegistration, open_signed_profile_sync_device_head,
+        open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
+        open_signed_sync_setting_text, pull_signed_profile_sync_device_head,
+        settings_sync_snapshot_id,
     };
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -6601,6 +6603,244 @@ mod tests {
         assert_eq!(providers[0].quota_bytes, Some(8_192));
         assert!(providers[0].availability);
         assert_eq!(providers[0].pinning_policy.as_deref(), Some("manual"));
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_publisher_syncs_typed_app_metadata_tombstone_snapshot_head() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("typed-app-tombstone-head-publisher");
+        let receiver_state_root = test_state_root("typed-app-tombstone-head-receiver");
+        let publisher_db_root = test_state_root("typed-app-tombstone-head-publisher-db");
+        let receiver_db_root = test_state_root("typed-app-tombstone-head-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "runtime-typed-app-delete-publisher",
+            )
+            .expect("start typed app tombstone publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "runtime-typed-app-delete-receiver",
+            )
+            .expect("start typed app tombstone receiver daemon");
+        let publisher_database = SlateProfileDatabase::open_resolved_with_device_id(
+            publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-typed-app-delete-publisher",
+        )
+        .expect("open typed app tombstone publisher settings database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-typed-app-delete-receiver",
+        )
+        .expect("open typed app tombstone receiver settings database");
+        for (domain, privacy_classification, sync_content) in [
+            (SYNC_DOMAIN_CHAT, "sensitive", false),
+            (SYNC_DOMAIN_FILES, "content", true),
+            (SYNC_DOMAIN_STORAGE, "sensitive", false),
+        ] {
+            publisher_database
+                .register_app_sync_domain(&AppSyncDomainRegistration {
+                    profile: DEFAULT_PROFILE_ID.to_string(),
+                    domain: domain.to_string(),
+                    schema_version: 1,
+                    enabled: true,
+                    privacy_classification: privacy_classification.to_string(),
+                    sync_content,
+                })
+                .expect("enable typed app tombstone sync domain for publisher test profile");
+        }
+
+        let chat_update = ChatConversationUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            conversation_id: "runtime-chat-delete".to_string(),
+            provider_id: Some("whatsapp".to_string()),
+            external_thread_id: Some("old-team@example.test".to_string()),
+            display_name: "Old Runtime Team".to_string(),
+            avatar_key: Some("chat-avatar:runtime-chat-delete".to_string()),
+            last_message_at: Some(1_789_020_000),
+            unread_count: 2,
+            archived: false,
+            muted: false,
+        };
+        let file_update = FileEntryUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            entry_id: "runtime-file-delete".to_string(),
+            sync_set_id: Some("runtime-set".to_string()),
+            parent_id: None,
+            name: "old-runtime.txt".to_string(),
+            entry_kind: "file".to_string(),
+            content_ref: Some("bafy-runtime-delete".to_string()),
+            mime_type: Some("text/plain".to_string()),
+            size_bytes: Some(1_024),
+            modified_at: Some(1_789_020_100),
+            integrity: Some("sha256-runtime-delete".to_string()),
+            retention_policy: Some("keep-latest".to_string()),
+        };
+        let provider_update = StorageProviderUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            provider_id: "runtime-provider-delete".to_string(),
+            provider_kind: "ipfs".to_string(),
+            display_name: "Old Runtime IPFS".to_string(),
+            endpoint_ref: Some(
+                "/dnsaddr/old-runtime.example.test/p2p/runtime-provider-delete".to_string(),
+            ),
+            discovery: true,
+            connectivity: true,
+            object_transfer: true,
+            availability: true,
+            mutable_roots: false,
+            quota_bytes: Some(4_096),
+            max_retained_objects: Some(8),
+            pinning_policy: Some("manual".to_string()),
+            enabled: true,
+        };
+        for database in [&publisher_database, &receiver_database] {
+            database
+                .upsert_chat_conversation(&chat_update)
+                .expect("seed typed chat metadata");
+            database
+                .upsert_file_entry(&file_update)
+                .expect("seed typed file metadata");
+            database
+                .upsert_storage_provider(&provider_update)
+                .expect("seed typed storage provider metadata");
+        }
+        publisher_database
+            .remove_chat_conversation(DEFAULT_PROFILE_ID, chat_update.conversation_id.as_str())
+            .expect("publisher tombstones typed chat metadata");
+        publisher_database
+            .remove_file_entry(DEFAULT_PROFILE_ID, file_update.entry_id.as_str())
+            .expect("publisher tombstones typed file metadata");
+        publisher_database
+            .remove_storage_provider(DEFAULT_PROFILE_ID, provider_update.provider_id.as_str())
+            .expect("publisher tombstones typed storage provider metadata");
+
+        let content_key = ProfileSyncContentKey::from_bytes([72; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-typed-app-delete-publisher")
+            .expect("generate typed app tombstone publisher signer");
+        receiver_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: signer.public_key().expect("read signer public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("receiver trusts typed app tombstone publisher key");
+
+        let published = BroadwebdProfileSyncPublisher::new(&publisher_daemon)
+            .publish_full_local_settings_snapshot_head(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish typed app tombstone snapshot head")
+            .expect("typed app tombstone metadata changes exist");
+
+        assert_eq!(
+            published.publication.manifest.included_domains,
+            vec![
+                SYNC_DOMAIN_CHAT.to_string(),
+                SYNC_DOMAIN_FILES.to_string(),
+                SYNC_DOMAIN_SETTINGS.to_string(),
+                SYNC_DOMAIN_STORAGE.to_string()
+            ]
+        );
+        assert_eq!(
+            published.publication.tail_change_object_ids,
+            Vec::<String>::new()
+        );
+
+        let applied = BroadwebdProfileSyncObjectSource::new(&receiver_daemon)
+            .pull_record_and_apply_trusted_settings_from_device_head(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                published.device_head.root_id.as_str(),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+            )
+            .expect("receiver applies typed app tombstone snapshot from trusted head");
+        let BroadwebdTrustedDeviceHeadSyncStatus::Applied { application, .. } = applied else {
+            panic!("expected typed app tombstone snapshot application, got {applied:?}");
+        };
+        assert_eq!(
+            application.manifest_object_id,
+            published.publication.manifest_object_id
+        );
+        assert!(application.snapshot.is_some());
+        assert_eq!(application.tail_changes, Vec::<SyncChangeRecord>::new());
+
+        assert!(
+            receiver_database
+                .chat_conversations(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver typed chat metadata")
+                .is_empty()
+        );
+        assert!(
+            receiver_database
+                .file_entries(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver typed file metadata")
+                .is_empty()
+        );
+        assert!(
+            receiver_database
+                .storage_providers(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver typed storage provider metadata")
+                .is_empty()
+        );
+
+        let chat_value = receiver_database
+            .get_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CHAT,
+                "conversation.runtime-chat-delete",
+            )
+            .expect("read receiver chat tombstone sync setting")
+            .expect("receiver chat tombstone sync setting")
+            .value;
+        let chat_payload: ChatConversationSyncPayload =
+            serde_json::from_str(chat_value.as_str()).expect("decode chat tombstone payload");
+        assert!(chat_payload.deleted);
+        assert_eq!(chat_payload.conversation_id, "runtime-chat-delete");
+
+        let file_value = receiver_database
+            .get_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_FILES,
+                "entry.runtime-file-delete",
+            )
+            .expect("read receiver file tombstone sync setting")
+            .expect("receiver file tombstone sync setting")
+            .value;
+        let file_payload: FileEntrySyncPayload =
+            serde_json::from_str(file_value.as_str()).expect("decode file tombstone payload");
+        assert!(file_payload.deleted);
+        assert_eq!(file_payload.entry_id, "runtime-file-delete");
+
+        let provider_value = receiver_database
+            .get_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_STORAGE,
+                "provider.runtime-provider-delete",
+            )
+            .expect("read receiver storage provider tombstone sync setting")
+            .expect("receiver storage provider tombstone sync setting")
+            .value;
+        let provider_payload: StorageProviderSyncPayload =
+            serde_json::from_str(provider_value.as_str())
+                .expect("decode storage provider tombstone payload");
+        assert!(provider_payload.deleted);
+        assert_eq!(provider_payload.provider_id, "runtime-provider-delete");
 
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
