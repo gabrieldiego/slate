@@ -206,6 +206,11 @@ Current baseline:
   require the expected profile, domain, object kind, and content-key id, and
   decode manifests, settings snapshots, or setting-change payloads without
   duplicating fixture-only verifier logic.
+- Storage now also has an object-set handoff for fetched settings sync data:
+  runtime code can pass the fetched manifest object, optional snapshot object,
+  and manifest tail objects through one decode helper, then apply the resulting
+  verified object set to `slate-settings.db` through the existing manifest
+  validation path.
 - `slate-settings.db` now has typed snapshot metadata APIs for recording
   encrypted backend object ids, covered revisions, included domains, and latest
   snapshot lookup. This is metadata only; snapshot payloads stay in encrypted

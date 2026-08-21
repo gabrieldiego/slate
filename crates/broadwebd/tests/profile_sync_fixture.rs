@@ -12,11 +12,11 @@ use slate_storage::{
     PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND, PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND,
     PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION, ProfileSyncContentKey,
     ProfileSyncDeviceFrontier, ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner,
-    ProfileSyncManifest, ProfileSyncRetentionPolicy, ProfileSyncSettingsSnapshot,
-    SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, SyncChangeRecord, SyncRevisionRecord,
-    SyncSnapshotRegistration, VerifiedProfileSyncSettingsSnapshot,
-    VerifiedProfileSyncSettingsTailChange, open_signed_profile_sync_manifest,
-    open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
+    ProfileSyncManifest, ProfileSyncObjectBytes, ProfileSyncRetentionPolicy,
+    ProfileSyncSettingsSnapshot, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, SyncChangeRecord,
+    SyncRevisionRecord, SyncSnapshotRegistration, open_signed_profile_sync_manifest,
+    open_signed_profile_sync_settings_manifest_objects, open_signed_profile_sync_settings_snapshot,
+    open_signed_sync_setting_text,
 };
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -641,35 +641,34 @@ fn two_local_devices_apply_snapshot_then_manifest_tail_changes() {
         snapshot_object_id.as_str(),
         &budget,
     );
-    let verified_snapshot = verify_and_decrypt_settings_snapshot(
-        fetched_snapshot.bytes.as_slice(),
-        &content_key,
-        &trusted_device_a_key,
-    );
     let fetched_tail = fetch_object(
         &device_b_broadweb,
         DEFAULT_PROFILE_ID,
         tail_change_object_id.as_str(),
         &budget,
     );
-    let incoming_tail = verify_and_decrypt_setting_change(
-        fetched_tail.bytes.as_slice(),
+    let verified_objects = open_signed_profile_sync_settings_manifest_objects(
+        &ProfileSyncObjectBytes {
+            object_id: fetched_manifest.object_id.clone(),
+            bytes: fetched_manifest.bytes.clone(),
+        },
+        Some(&ProfileSyncObjectBytes {
+            object_id: fetched_snapshot.object_id.clone(),
+            bytes: fetched_snapshot.bytes.clone(),
+        }),
+        &[ProfileSyncObjectBytes {
+            object_id: fetched_tail.object_id.clone(),
+            bytes: fetched_tail.bytes.clone(),
+        }],
         &content_key,
         &trusted_device_a_key,
-    );
+        DEFAULT_PROFILE_ID,
+        FIXTURE_CONTENT_KEY_ID,
+    )
+    .expect("open fetched manifest object set");
+    assert_eq!(verified_objects.manifest, manifest);
     let applied_manifest = device_b_db
-        .apply_verified_settings_manifest(
-            manifest_object_id.as_str(),
-            &manifest,
-            Some(&VerifiedProfileSyncSettingsSnapshot {
-                object_id: snapshot_object_id.clone(),
-                snapshot: verified_snapshot,
-            }),
-            &[VerifiedProfileSyncSettingsTailChange {
-                object_id: tail_change_object_id.clone(),
-                change: incoming_tail,
-            }],
-        )
+        .apply_verified_settings_manifest_objects(&verified_objects)
         .expect("device b applies verified snapshot and manifest tail");
     assert_eq!(applied_manifest.manifest_object_id, manifest_object_id);
     assert_eq!(

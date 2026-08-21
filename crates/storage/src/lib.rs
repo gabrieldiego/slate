@@ -709,6 +709,105 @@ pub fn open_signed_sync_setting_text(
     serde_json::from_slice(payload.as_slice()).map_err(SyncObjectError::Decode)
 }
 
+pub fn open_signed_sync_setting_text_for_profile(
+    bytes: &[u8],
+    content_key: &ProfileSyncContentKey,
+    public_key: &ProfileSyncDevicePublicKey,
+    profile: &str,
+    key_id: &str,
+) -> Result<IncomingSyncSettingText, SyncObjectError> {
+    let signed_object = SignedSyncObject::from_bytes(bytes)?;
+    let encrypted_bytes = signed_object.verify_with(public_key)?;
+    let encrypted_object = EncryptedSyncObject::from_bytes(encrypted_bytes)?;
+    if encrypted_object.profile != profile {
+        return Err(SyncObjectError::UnexpectedProfile {
+            expected: profile.to_string(),
+            actual: encrypted_object.profile.clone(),
+        });
+    }
+    if encrypted_object.object_kind != PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND {
+        return Err(SyncObjectError::UnexpectedObjectKind {
+            expected: PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND.to_string(),
+            actual: encrypted_object.object_kind.clone(),
+        });
+    }
+    if encrypted_object.key_id != key_id {
+        return Err(SyncObjectError::UnexpectedKeyId {
+            expected: key_id.to_string(),
+            actual: encrypted_object.key_id.clone(),
+        });
+    }
+
+    let payload = encrypted_object.open(content_key)?;
+    let change: IncomingSyncSettingText =
+        serde_json::from_slice(payload.as_slice()).map_err(SyncObjectError::Decode)?;
+    if change.profile != encrypted_object.profile {
+        return Err(SyncObjectError::UnexpectedProfile {
+            expected: encrypted_object.profile,
+            actual: change.profile,
+        });
+    }
+    if change.domain != encrypted_object.domain {
+        return Err(SyncObjectError::UnexpectedDomain {
+            expected: encrypted_object.domain,
+            actual: change.domain,
+        });
+    }
+    Ok(change)
+}
+
+pub fn open_signed_profile_sync_settings_manifest_objects(
+    manifest_object: &ProfileSyncObjectBytes,
+    snapshot_object: Option<&ProfileSyncObjectBytes>,
+    tail_change_objects: &[ProfileSyncObjectBytes],
+    content_key: &ProfileSyncContentKey,
+    public_key: &ProfileSyncDevicePublicKey,
+    profile: &str,
+    key_id: &str,
+) -> Result<VerifiedProfileSyncSettingsManifestObjects, SyncObjectError> {
+    let manifest = open_signed_profile_sync_manifest(
+        manifest_object.bytes.as_slice(),
+        content_key,
+        public_key,
+        profile,
+        key_id,
+    )?;
+    let snapshot = snapshot_object
+        .map(|snapshot_object| {
+            Ok(VerifiedProfileSyncSettingsSnapshot {
+                object_id: snapshot_object.object_id.clone(),
+                snapshot: open_signed_profile_sync_settings_snapshot(
+                    snapshot_object.bytes.as_slice(),
+                    content_key,
+                    public_key,
+                    profile,
+                    key_id,
+                )?,
+            })
+        })
+        .transpose()?;
+    let mut tail_changes = Vec::with_capacity(tail_change_objects.len());
+    for tail_object in tail_change_objects {
+        tail_changes.push(VerifiedProfileSyncSettingsTailChange {
+            object_id: tail_object.object_id.clone(),
+            change: open_signed_sync_setting_text_for_profile(
+                tail_object.bytes.as_slice(),
+                content_key,
+                public_key,
+                profile,
+                key_id,
+            )?,
+        });
+    }
+
+    Ok(VerifiedProfileSyncSettingsManifestObjects {
+        manifest_object_id: manifest_object.object_id.clone(),
+        manifest,
+        snapshot,
+        tail_changes,
+    })
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BookmarkUpdate {
     pub profile: String,
@@ -925,6 +1024,12 @@ pub struct SyncCompactionTarget {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncObjectBytes {
+    pub object_id: String,
+    pub bytes: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VerifiedProfileSyncSettingsSnapshot {
     pub object_id: String,
     pub snapshot: ProfileSyncSettingsSnapshot,
@@ -934,6 +1039,14 @@ pub struct VerifiedProfileSyncSettingsSnapshot {
 pub struct VerifiedProfileSyncSettingsTailChange {
     pub object_id: String,
     pub change: IncomingSyncSettingText,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VerifiedProfileSyncSettingsManifestObjects {
+    pub manifest_object_id: String,
+    pub manifest: ProfileSyncManifest,
+    pub snapshot: Option<VerifiedProfileSyncSettingsSnapshot>,
+    pub tail_changes: Vec<VerifiedProfileSyncSettingsTailChange>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -2132,6 +2245,18 @@ impl SlateProfileDatabase {
             snapshot_changes,
             tail_changes: applied_tail_changes,
         })
+    }
+
+    pub fn apply_verified_settings_manifest_objects(
+        &self,
+        objects: &VerifiedProfileSyncSettingsManifestObjects,
+    ) -> Result<ProfileSyncSettingsManifestApplication, StorageError> {
+        self.apply_verified_settings_manifest(
+            objects.manifest_object_id.as_str(),
+            &objects.manifest,
+            objects.snapshot.as_ref(),
+            objects.tail_changes.as_slice(),
+        )
     }
 
     pub fn sync_snapshot(
@@ -4349,27 +4474,28 @@ mod tests {
         let destination =
             SlateProfileDatabase::open_resolved_with_device_id(destination_path, "device-b")
                 .unwrap();
+        let verified_objects = VerifiedProfileSyncSettingsManifestObjects {
+            manifest_object_id: "manifest-object-1".to_string(),
+            manifest: manifest.clone(),
+            snapshot: Some(VerifiedProfileSyncSettingsSnapshot {
+                object_id: "snapshot-object-1".to_string(),
+                snapshot,
+            }),
+            tail_changes: vec![VerifiedProfileSyncSettingsTailChange {
+                object_id: "tail-object-1".to_string(),
+                change: IncomingSyncSettingText::new(
+                    tail_change.profile,
+                    tail_change.domain,
+                    tail_change.entity_key,
+                    tail_change.payload,
+                    tail_change.device_id,
+                    tail_change.device_sequence,
+                    tail_change.logical_clock,
+                ),
+            }],
+        };
         let applied = destination
-            .apply_verified_settings_manifest(
-                "manifest-object-1",
-                &manifest,
-                Some(&VerifiedProfileSyncSettingsSnapshot {
-                    object_id: "snapshot-object-1".to_string(),
-                    snapshot,
-                }),
-                &[VerifiedProfileSyncSettingsTailChange {
-                    object_id: "tail-object-1".to_string(),
-                    change: IncomingSyncSettingText::new(
-                        tail_change.profile,
-                        tail_change.domain,
-                        tail_change.entity_key,
-                        tail_change.payload,
-                        tail_change.device_id,
-                        tail_change.device_sequence,
-                        tail_change.logical_clock,
-                    ),
-                }],
-            )
+            .apply_verified_settings_manifest_objects(&verified_objects)
             .unwrap();
 
         assert_eq!(applied.profile, DEFAULT_PROFILE_ID);
