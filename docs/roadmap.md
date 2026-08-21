@@ -274,6 +274,11 @@ Current baseline:
   `InProcessBroadwebNetwork`, and the fixture daemon constructors reject
   loopback gateway or RPC endpoints so simulated tests cannot drift back to
   local sockets.
+- Fixture transports now advertise `socketless-fixture` in broadwebd health
+  metadata, and synthetic Kubo RPC fixture fetches resolve through the
+  in-process registry before constructing any real HTTP client. This keeps the
+  default profile-sync and rendering fixture loops independent from loopback
+  listeners, firewall state, DNS, public gateways, or escalation prompts.
 - Rendering broadweb smoke fixtures now consume that same `test-fixtures`
   layer, so IPFS/IPNS gateway and Kubo subresource tests record simulated
   requests without starting loopback HTTP servers. The rendering tests now use

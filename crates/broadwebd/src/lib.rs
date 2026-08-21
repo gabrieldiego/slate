@@ -120,7 +120,12 @@ pub mod test_fixtures {
     impl TransportPlugin for InProcessFixtureHttpTransport {
         fn metadata(&self) -> PluginMetadata {
             PluginMetadata::new(DIRECT_HTTP_PLUGIN, PluginKind::Transport)
-                .with_capabilities(&["http-fixture", "http-fetch", "in-process"])
+                .with_capabilities(&[
+                    "http-fixture",
+                    "http-fetch",
+                    "in-process",
+                    "socketless-fixture",
+                ])
                 .with_privacy_boundary(
                     "in-process HTTP fixture transport; no sockets, DNS, or external network",
                 )

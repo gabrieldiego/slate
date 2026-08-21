@@ -121,29 +121,41 @@ impl Default for IpfsGatewayTransport {
 
 impl TransportPlugin for IpfsGatewayTransport {
     fn metadata(&self) -> PluginMetadata {
-        let capabilities = match (self.gateway_scope(), self.has_public_gateway_fallback()) {
-            (IpfsGatewayScope::Local, true) => [
+        let is_internal_fixture = is_internal_fixture_gateway(self.gateway_base());
+        let capabilities: &[&str] = match (
+            is_internal_fixture,
+            self.gateway_scope(),
+            self.has_public_gateway_fallback(),
+        ) {
+            (true, _, _) => &[
+                "ipfs",
+                "ipns",
+                "http-fetch",
+                "in-process-fixture",
+                "socketless-fixture",
+            ],
+            (false, IpfsGatewayScope::Local, true) => &[
                 "ipfs",
                 "ipns",
                 "http-fetch",
                 "local-gateway",
                 "public-gateway-fallback",
             ],
-            (IpfsGatewayScope::Local, false) => [
+            (false, IpfsGatewayScope::Local, false) => &[
                 "ipfs",
                 "ipns",
                 "http-fetch",
                 "local-gateway",
                 "local-gateway-only",
             ],
-            (IpfsGatewayScope::Public, true) => [
+            (false, IpfsGatewayScope::Public, true) => &[
                 "ipfs",
                 "ipns",
                 "http-fetch",
                 "public-gateway",
                 "public-gateway-fallback",
             ],
-            (IpfsGatewayScope::Public, false) => [
+            (false, IpfsGatewayScope::Public, false) => &[
                 "ipfs",
                 "ipns",
                 "http-fetch",
@@ -151,17 +163,24 @@ impl TransportPlugin for IpfsGatewayTransport {
                 "public-gateway-only",
             ],
         };
-        let privacy_boundary = match (self.gateway_scope(), self.has_public_gateway_fallback()) {
-            (IpfsGatewayScope::Local, true) => {
+        let privacy_boundary = match (
+            is_internal_fixture,
+            self.gateway_scope(),
+            self.has_public_gateway_fallback(),
+        ) {
+            (true, _, _) => {
+                "in-process IPFS gateway fixture; no sockets, DNS, loopback listener, or external network"
+            }
+            (false, IpfsGatewayScope::Local, true) => {
                 "local IPFS gateway first; falls back to configured public IPFS gateways for IPFS/IPNS requests when local retrieval fails"
             }
-            (IpfsGatewayScope::Local, false) => "local IPFS gateway over HTTP",
-            (IpfsGatewayScope::Public, _) => {
+            (false, IpfsGatewayScope::Local, false) => "local IPFS gateway over HTTP",
+            (false, IpfsGatewayScope::Public, _) => {
                 "explicit public IPFS gateway list; requested CIDs, IPNS names, and client network metadata leave the machine"
             }
         };
         PluginMetadata::new(IPFS_GATEWAY_PLUGIN, PluginKind::Transport)
-            .with_capabilities(&capabilities)
+            .with_capabilities(capabilities)
             .with_privacy_boundary(privacy_boundary)
             .with_resource_profile(ResourceProfile::Medium)
     }
@@ -214,6 +233,20 @@ impl TransportPlugin for IpfsGatewayTransport {
         Err(last_error.unwrap_or_else(|| {
             BroadwebdError::UnsupportedRequest("no IPFS gateways are configured".to_string())
         }))
+    }
+}
+
+fn is_internal_fixture_gateway(gateway_base: &str) -> bool {
+    #[cfg(any(test, feature = "test-fixtures"))]
+    {
+        parse_http_url(gateway_base)
+            .ok()
+            .is_some_and(|url| crate::http::is_internal_fixture_http_url(&url))
+    }
+    #[cfg(not(any(test, feature = "test-fixtures")))]
+    {
+        let _ = gateway_base;
+        false
     }
 }
 

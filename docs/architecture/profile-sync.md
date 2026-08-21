@@ -803,6 +803,10 @@ discovery reports that boundary.
   through `InProcessBroadwebNetwork` so simulated devices share one in-memory
   provider graph and fixture HTTP fetches reject non-synthetic URLs before DNS
   or socket access.
+- Fixture broadwebd health should advertise `socketless-fixture` for internal
+  HTTP, IPFS gateway, and Kubo RPC transports. Synthetic Kubo fixture fetches
+  must resolve through the in-process registry before constructing a real HTTP
+  client, so default tests never depend on loopback listeners or firewall state.
 - App-owned sync watchers should persist profile/domain-scoped cursors in
   `slate-settings.db` after applying a batch, and cursor advancement should be
   monotonic so duplicate or stale fixture deliveries cannot rewind app state.

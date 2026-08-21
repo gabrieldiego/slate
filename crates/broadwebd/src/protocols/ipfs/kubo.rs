@@ -28,6 +28,19 @@ impl IpfsKuboRpcEndpoint {
     pub fn api_base_url(&self) -> &str {
         &self.api_base_url
     }
+
+    fn is_internal_fixture(&self) -> bool {
+        #[cfg(any(test, feature = "test-fixtures"))]
+        {
+            Url::parse(self.api_base_url.as_str())
+                .ok()
+                .is_some_and(|url| is_internal_kubo_rpc_fixture_url(&url))
+        }
+        #[cfg(not(any(test, feature = "test-fixtures")))]
+        {
+            false
+        }
+    }
 }
 
 impl Default for IpfsKuboRpcEndpoint {
@@ -66,11 +79,29 @@ impl Default for IpfsKuboRpcTransport {
 
 impl TransportPlugin for IpfsKuboRpcTransport {
     fn metadata(&self) -> PluginMetadata {
-        PluginMetadata::new(IPFS_KUBO_RPC_PLUGIN, PluginKind::Transport)
-            .with_capabilities(&["ipfs", "ipns", "http-fetch", "local-kubo-rpc"])
-            .with_privacy_boundary(
+        let (capabilities, privacy_boundary): (&[&str], &str) = if self
+            .endpoint
+            .is_internal_fixture()
+        {
+            (
+                &[
+                    "ipfs",
+                    "ipns",
+                    "http-fetch",
+                    "in-process-fixture",
+                    "socketless-fixture",
+                ],
+                "in-process Kubo RPC fixture; no sockets, DNS, loopback listener, or external network",
+            )
+        } else {
+            (
+                &["ipfs", "ipns", "http-fetch", "local-kubo-rpc"],
                 "local Kubo RPC over HTTP; sends requested CIDs and IPNS names to the local node",
             )
+        };
+        PluginMetadata::new(IPFS_KUBO_RPC_PLUGIN, PluginKind::Transport)
+            .with_capabilities(capabilities)
+            .with_privacy_boundary(privacy_boundary)
             .with_resource_profile(ResourceProfile::Medium)
     }
 
@@ -79,11 +110,17 @@ impl TransportPlugin for IpfsKuboRpcTransport {
         request: &TransportHttpRequest,
         budget: &ResourceBudget,
     ) -> Result<HttpFetchResponse, BroadwebdError> {
-        let client = reqwest::blocking::Client::builder()
-            .timeout(REQUEST_TIMEOUT)
-            .user_agent(USER_AGENT)
-            .build()
-            .map_err(request_error)?;
+        let client = if self.endpoint.is_internal_fixture() {
+            None
+        } else {
+            Some(
+                reqwest::blocking::Client::builder()
+                    .timeout(REQUEST_TIMEOUT)
+                    .user_agent(USER_AGENT)
+                    .build()
+                    .map_err(request_error)?,
+            )
+        };
 
         let mut last_response = None;
         for candidate in ipfs_content_path_candidates(&request.url)? {
@@ -102,7 +139,12 @@ impl TransportPlugin for IpfsKuboRpcTransport {
                 continue;
             }
 
-            let response = client.post(url).send().map_err(request_error)?;
+            let response = client
+                .as_ref()
+                .expect("non-fixture Kubo RPC fetch should have an HTTP client")
+                .post(url)
+                .send()
+                .map_err(request_error)?;
             let status_code = response.status().as_u16();
             let headers = response_headers(response.headers());
             let body = response.bytes().map_err(request_error)?.to_vec();

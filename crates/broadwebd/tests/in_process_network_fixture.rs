@@ -433,6 +433,57 @@ fn ipfs_fixture_daemons_use_internal_protocol_endpoints() {
     let _ = std::fs::remove_dir_all(kubo_state_root);
 }
 
+#[test]
+fn in_process_protocol_fixture_metadata_reports_socketless_boundaries() {
+    let network = InProcessBroadwebNetwork::new();
+    let gateway_fixture = network.http_response(InternalFixtureHttpResponse {
+        status_code: 200,
+        content_type: Some("text/html; charset=utf-8".to_string()),
+        headers: vec![HttpHeader {
+            name: "content-type".to_string(),
+            value: "text/html; charset=utf-8".to_string(),
+        }],
+        body: b"<!doctype html><title>Fixture IPFS</title>".to_vec(),
+    });
+    let kubo_fixture = network.kubo_rpc_response(InternalKuboRpcResponse {
+        status_code: 200,
+        content_type: "text/html; charset=utf-8".to_string(),
+        body: b"<!doctype html><title>Fixture Kubo</title>".to_vec(),
+    });
+    let gateway_state_root = std::env::temp_dir().join(format!(
+        "slate-broadwebd-fixture-metadata-gateway-{}",
+        std::process::id()
+    ));
+    let kubo_state_root = std::env::temp_dir().join(format!(
+        "slate-broadwebd-fixture-metadata-kubo-{}",
+        std::process::id()
+    ));
+    let gateway_daemon = network
+        .daemon_for_ipfs_gateway(
+            &gateway_state_root,
+            ResourceBudget::default(),
+            gateway_fixture.base_url().to_string(),
+        )
+        .expect("start fixture gateway daemon");
+    let kubo_daemon = network
+        .daemon_for_kubo_rpc(
+            &kubo_state_root,
+            ResourceBudget::default(),
+            kubo_fixture.base_url().to_string(),
+        )
+        .expect("start fixture Kubo daemon");
+
+    assert_socketless_fixture_plugin(&gateway_daemon, "direct-http");
+    assert_socketless_fixture_plugin(&gateway_daemon, "ipfs-gateway");
+    assert_socketless_fixture_plugin(&kubo_daemon, "direct-http");
+    assert_socketless_fixture_plugin(&kubo_daemon, "ipfs-kubo-rpc");
+
+    assert!(gateway_fixture.finish().is_empty());
+    assert!(kubo_fixture.finish().is_empty());
+    let _ = std::fs::remove_dir_all(gateway_state_root);
+    let _ = std::fs::remove_dir_all(kubo_state_root);
+}
+
 fn expect_daemon_error(
     result: Result<BroadwebDaemon, BroadwebdError>,
     message: &str,
@@ -441,4 +492,26 @@ fn expect_daemon_error(
         Ok(_) => panic!("{message}"),
         Err(error) => error,
     }
+}
+
+fn assert_socketless_fixture_plugin(daemon: &BroadwebDaemon, plugin_id: &str) {
+    let status = daemon
+        .health()
+        .plugins
+        .into_iter()
+        .find(|status| status.metadata.id == plugin_id)
+        .unwrap_or_else(|| panic!("missing fixture plugin {plugin_id}"));
+
+    assert!(
+        status
+            .metadata
+            .capabilities
+            .iter()
+            .any(|capability| capability == "socketless-fixture"),
+        "{plugin_id} should advertise socketless fixture behavior"
+    );
+    assert!(
+        status.metadata.privacy_boundary.contains("no sockets"),
+        "{plugin_id} should report a socketless privacy boundary"
+    );
 }
