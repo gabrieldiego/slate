@@ -1618,6 +1618,12 @@ pub struct VerifiedProfileSyncSettingsManifestCandidate {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncSettingsManifestCandidateApplication {
+    pub root_candidate: ProfileSyncRootCandidate,
+    pub application: ProfileSyncSettingsManifestApplication,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VerifiedProfileSyncDeviceHead {
     pub object_id: String,
     pub device_head: ProfileSyncDeviceHead,
@@ -3115,6 +3121,34 @@ impl SlateProfileDatabase {
         )
     }
 
+    pub fn apply_verified_settings_manifest_candidates(
+        &self,
+        candidates: &[VerifiedProfileSyncSettingsManifestCandidate],
+    ) -> Result<Vec<ProfileSyncSettingsManifestCandidateApplication>, StorageError> {
+        let mut ordered_candidates = candidates.iter().collect::<Vec<_>>();
+        ordered_candidates.sort_by(|left, right| {
+            (
+                left.root_candidate.publish_sequence,
+                left.root_candidate.publisher_id.as_str(),
+                left.root_candidate.object_id.as_str(),
+            )
+                .cmp(&(
+                    right.root_candidate.publish_sequence,
+                    right.root_candidate.publisher_id.as_str(),
+                    right.root_candidate.object_id.as_str(),
+                ))
+        });
+
+        let mut applications = Vec::with_capacity(ordered_candidates.len());
+        for candidate in ordered_candidates {
+            applications.push(ProfileSyncSettingsManifestCandidateApplication {
+                root_candidate: candidate.root_candidate.clone(),
+                application: self.apply_verified_settings_manifest_objects(&candidate.objects)?,
+            });
+        }
+        Ok(applications)
+    }
+
     pub fn open_trusted_signed_encrypted_sync_payload(
         &self,
         bytes: &[u8],
@@ -3557,6 +3591,33 @@ impl SlateProfileDatabase {
             });
         }
         Ok(verified_candidates)
+    }
+
+    pub fn pull_and_apply_trusted_signed_profile_sync_settings_manifest_candidates<Source>(
+        &self,
+        source: &Source,
+        profile: &str,
+        root_id: &str,
+        content_key: &ProfileSyncContentKey,
+        key_id: &str,
+    ) -> Result<
+        Vec<ProfileSyncSettingsManifestCandidateApplication>,
+        ProfileSyncTrustedPullApplyError<Source::Error>,
+    >
+    where
+        Source: ProfileSyncObjectSource,
+    {
+        let candidates = self
+            .pull_trusted_signed_profile_sync_settings_manifest_candidates(
+                source,
+                profile,
+                root_id,
+                content_key,
+                key_id,
+            )
+            .map_err(ProfileSyncTrustedPullApplyError::Pull)?;
+        self.apply_verified_settings_manifest_candidates(candidates.as_slice())
+            .map_err(ProfileSyncTrustedPullApplyError::Storage)
     }
 
     pub fn pull_trusted_signed_profile_sync_settings_manifest_objects<Source>(
@@ -6737,6 +6798,38 @@ mod tests {
                 .unwrap()
                 .is_none(),
             "listing manifest candidates should not apply or record a winner"
+        );
+
+        let applications = destination
+            .apply_verified_settings_manifest_candidates(candidates.as_slice())
+            .unwrap();
+        assert_eq!(
+            applications
+                .iter()
+                .map(|application| {
+                    (
+                        application.root_candidate.publisher_id.as_str(),
+                        application.application.manifest_object_id.as_str(),
+                    )
+                })
+                .collect::<Vec<_>>(),
+            vec![
+                ("provider-device-a", manifest_a_object_id),
+                ("provider-device-b", manifest_b_object_id),
+            ],
+            "candidate application should run oldest root publication first"
+        );
+        assert_eq!(
+            destination.get_setting_text("ui.theme").unwrap().as_deref(),
+            Some("teal")
+        );
+        assert_eq!(
+            destination
+                .profile_sync_root(DEFAULT_PROFILE_ID, root_id)
+                .unwrap()
+                .expect("candidate application records newest verified root")
+                .object_id,
+            manifest_b_object_id
         );
     }
 

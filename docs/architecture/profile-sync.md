@@ -139,9 +139,10 @@ encrypted snapshots:
   object id.
 - `sync_state` tracks mutable roots, known devices, frontiers, and publish
   state.
-- The storage pull boundary can list visible mutable-root candidates and verify
-  each candidate's signed manifest before any merge or winner-selection policy
-  applies it.
+- The storage pull boundary can list visible mutable-root candidates, verify
+  each candidate's signed manifest, and apply verified candidates in
+  deterministic oldest-to-newest publication order. Per-setting conflict
+  resolution still uses the typed change policy, not backend publication order.
 - `settings_revisions` lets runtime services observe committed changes.
 
 External updates should enter through validated change records and snapshots,

@@ -486,6 +486,53 @@ fn local_fixture_pulls_competing_settings_root_candidates_through_storage() {
         "candidate listing should not choose or record a winning settings root"
     );
 
+    let applications = device_c_db
+        .pull_and_apply_trusted_signed_profile_sync_settings_manifest_candidates(
+            &source,
+            DEFAULT_PROFILE_ID,
+            SETTINGS_ROOT_ID,
+            &content_key,
+            FIXTURE_CONTENT_KEY_ID,
+        )
+        .expect("device c applies competing trusted root candidates");
+    assert_eq!(
+        applications
+            .iter()
+            .map(|application| {
+                (
+                    application.root_candidate.publisher_id.as_str(),
+                    application.application.manifest_object_id.as_str(),
+                )
+            })
+            .collect::<Vec<_>>(),
+        vec![
+            (
+                "local-fixture-device-candidate-device-a",
+                manifest_a_object_id.as_str(),
+            ),
+            (
+                "local-fixture-device-candidate-device-b",
+                manifest_b_object_id.as_str(),
+            ),
+        ],
+        "candidate application should run oldest root publication first"
+    );
+    assert_eq!(
+        device_c_db
+            .get_setting_text("sync.candidate")
+            .expect("read merged candidate setting")
+            .as_deref(),
+        Some("bravo")
+    );
+    assert_eq!(
+        device_c_db
+            .profile_sync_root(DEFAULT_PROFILE_ID, SETTINGS_ROOT_ID)
+            .expect("read applied candidate root")
+            .expect("applied candidate root exists")
+            .object_id,
+        manifest_b_object_id
+    );
+
     let _ = std::fs::remove_dir_all(device_a_root);
     let _ = std::fs::remove_dir_all(device_b_root);
     let _ = std::fs::remove_dir_all(device_c_root);

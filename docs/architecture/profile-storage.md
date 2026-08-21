@@ -103,7 +103,8 @@ Planned sync tables:
 - `settings_revisions`: monotonic revision rows for runtime watchers.
 - `sync_state`: device frontiers, mutable roots, publish state, and retention
   metadata. Mutable-root pulls can enumerate competing backend candidates and
-  verify each signed manifest before storage records an applied root.
+  verify each signed manifest before applying candidates in deterministic order
+  and recording the newest applied root.
 - `app_sync_domains`: registered first-party app domains, schema versions,
   enabled/paused state, and privacy classification.
 

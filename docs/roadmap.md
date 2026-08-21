@@ -315,9 +315,10 @@ Current baseline:
   exposing raw key/value state to callers.
 - Storage can now ask a profile-sync object source for visible mutable-root
   candidates, verify each trusted signed settings manifest candidate with
-  stored device keys, and leave winner selection/application to a later merge
-  step. The broadwebd local fixture bridge covers competing `settings/latest`
-  candidates entirely in process.
+  stored device keys, and apply verified candidates in deterministic
+  oldest-to-newest publication order while setting values still use the typed
+  logical-clock conflict policy. The broadwebd local fixture bridge covers
+  competing `settings/latest` candidates entirely in process.
 - Storage now has a serializable `ProfileSyncManifest` payload with optional
   snapshot object id, tail change object ids, included domains, and device
   frontiers. The local two-device fixture now publishes `settings/latest` to a
