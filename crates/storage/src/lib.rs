@@ -21,10 +21,12 @@ pub const PROFILE_SYNC_CONTENT_KEY_BYTES: usize = 32;
 pub const PROFILE_SYNC_NONCE_BYTES: usize = 12;
 pub const SYNC_OBJECT_VERSION: u8 = 1;
 pub const PROFILE_SYNC_MANIFEST_SCHEMA_VERSION: u8 = 1;
+pub const PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND: &str = "setting-change";
 pub const PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND: &str = "settings-snapshot";
 pub const PROFILE_SYNC_MANIFEST_OBJECT_KIND: &str = "manifest";
+pub const PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND: &str = "device-head";
 pub const DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH: i64 = 1;
 pub const DEFAULT_PROFILE_SYNC_MIN_TAIL_CHANGE_COUNT: u32 = 32;
 pub const DEFAULT_PROFILE_SYNC_CHANGE_RETENTION_SECONDS: i64 = 14 * 24 * 60 * 60;
@@ -299,6 +301,22 @@ pub struct ProfileSyncManifest {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ProfileSyncDeviceHead {
+    pub profile: String,
+    pub device_id: String,
+    pub root_id: String,
+    #[serde(default = "default_profile_sync_device_head_schema_version")]
+    pub schema_version: u8,
+    #[serde(default = "default_profile_sync_membership_epoch")]
+    pub membership_epoch: i64,
+    pub latest_manifest_object_id: String,
+    pub latest_change_object_id: Option<String>,
+    pub device_sequence: i64,
+    pub logical_clock: i64,
+    pub created_at: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct ProfileSyncRetentionPolicy {
     pub min_tail_change_count: u32,
     pub change_retention_seconds: i64,
@@ -343,6 +361,10 @@ pub struct ProfileSyncDeviceFrontier {
 
 fn default_profile_sync_manifest_schema_version() -> u8 {
     PROFILE_SYNC_MANIFEST_SCHEMA_VERSION
+}
+
+fn default_profile_sync_device_head_schema_version() -> u8 {
+    PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION
 }
 
 fn default_profile_sync_membership_epoch() -> i64 {
@@ -669,6 +691,39 @@ pub fn open_signed_profile_sync_manifest(
         key_id,
     )?;
     serde_json::from_slice(payload.as_slice()).map_err(SyncObjectError::Decode)
+}
+
+pub fn open_signed_profile_sync_device_head(
+    bytes: &[u8],
+    content_key: &ProfileSyncContentKey,
+    public_key: &ProfileSyncDevicePublicKey,
+    profile: &str,
+    key_id: &str,
+) -> Result<ProfileSyncDeviceHead, SyncObjectError> {
+    let payload = open_signed_encrypted_sync_payload(
+        bytes,
+        content_key,
+        public_key,
+        profile,
+        SYNC_DOMAIN_SETTINGS,
+        PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
+        key_id,
+    )?;
+    let device_head: ProfileSyncDeviceHead =
+        serde_json::from_slice(payload.as_slice()).map_err(SyncObjectError::Decode)?;
+    if device_head.profile != profile {
+        return Err(SyncObjectError::UnexpectedProfile {
+            expected: profile.to_string(),
+            actual: device_head.profile,
+        });
+    }
+    if device_head.device_id != public_key.device_id {
+        return Err(SyncObjectError::DeviceKeyMismatch {
+            expected_device_id: public_key.device_id.clone(),
+            actual_device_id: device_head.device_id,
+        });
+    }
+    Ok(device_head)
 }
 
 pub fn open_signed_profile_sync_settings_snapshot(
@@ -2894,6 +2949,23 @@ impl SlateProfileDatabase {
             .map_err(ProfileSyncTrustedOpenError::SyncObject)
     }
 
+    pub fn open_trusted_signed_profile_sync_device_head(
+        &self,
+        bytes: &[u8],
+        content_key: &ProfileSyncContentKey,
+        profile: &str,
+        key_id: &str,
+    ) -> Result<ProfileSyncDeviceHead, ProfileSyncTrustedOpenError> {
+        let signed_object =
+            SignedSyncObject::from_bytes(bytes).map_err(ProfileSyncTrustedOpenError::SyncObject)?;
+        let public_key = self.trusted_public_key_for_signed_object(profile, &signed_object)?;
+        let device_head =
+            open_signed_profile_sync_device_head(bytes, content_key, &public_key, profile, key_id)
+                .map_err(ProfileSyncTrustedOpenError::SyncObject)?;
+        self.validate_signed_object_membership_epoch(bytes, profile, device_head.membership_epoch)?;
+        Ok(device_head)
+    }
+
     pub fn open_trusted_signed_profile_sync_settings_snapshot(
         &self,
         bytes: &[u8],
@@ -4729,6 +4801,172 @@ mod tests {
             ),
             Err(SyncObjectError::UnexpectedKeyId { expected, actual })
                 if expected == "content-key-epoch-2" && actual == "content-key-epoch-1"
+        ));
+    }
+
+    #[test]
+    fn profile_sync_device_head_can_be_signed_and_encrypted() {
+        let content_key = ProfileSyncContentKey::from_bytes([24; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let trusted_public_key = signer.public_key().unwrap();
+        let device_head = ProfileSyncDeviceHead {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            device_id: "device-a".to_string(),
+            root_id: "settings/devices/device-a/head".to_string(),
+            schema_version: PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            latest_manifest_object_id: "manifest-object-3".to_string(),
+            latest_change_object_id: Some("change-object-7".to_string()),
+            device_sequence: 7,
+            logical_clock: 11,
+            created_at: 1234,
+        };
+        let signed_bytes = sign_test_sync_object(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
+            "content-key-epoch-1",
+            serde_json::to_vec(&device_head).unwrap().as_slice(),
+            &content_key,
+            &signer,
+            24,
+        );
+
+        assert!(
+            !std::str::from_utf8(signed_bytes.as_slice())
+                .unwrap()
+                .contains("manifest-object-3")
+        );
+        assert_eq!(
+            open_signed_profile_sync_device_head(
+                signed_bytes.as_slice(),
+                &content_key,
+                &trusted_public_key,
+                DEFAULT_PROFILE_ID,
+                "content-key-epoch-1",
+            )
+            .unwrap(),
+            device_head
+        );
+        assert!(matches!(
+            open_signed_profile_sync_manifest(
+                signed_bytes.as_slice(),
+                &content_key,
+                &trusted_public_key,
+                DEFAULT_PROFILE_ID,
+                "content-key-epoch-1",
+            ),
+            Err(SyncObjectError::UnexpectedObjectKind { expected, actual })
+                if expected == PROFILE_SYNC_MANIFEST_OBJECT_KIND
+                    && actual == PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND
+        ));
+
+        let mismatched_payload = ProfileSyncDeviceHead {
+            device_id: "device-b".to_string(),
+            ..device_head
+        };
+        let mismatched_signed_bytes = sign_test_sync_object(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
+            "content-key-epoch-1",
+            serde_json::to_vec(&mismatched_payload).unwrap().as_slice(),
+            &content_key,
+            &signer,
+            25,
+        );
+        assert!(matches!(
+            open_signed_profile_sync_device_head(
+                mismatched_signed_bytes.as_slice(),
+                &content_key,
+                &trusted_public_key,
+                DEFAULT_PROFILE_ID,
+                "content-key-epoch-1",
+            ),
+            Err(SyncObjectError::DeviceKeyMismatch {
+                expected_device_id,
+                actual_device_id
+            }) if expected_device_id == "device-a" && actual_device_id == "device-b"
+        ));
+    }
+
+    #[test]
+    fn profile_sync_trusted_device_head_uses_stored_signer_membership_epoch() {
+        let content_key = ProfileSyncContentKey::from_bytes([25; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let trusted_public_key = signer.public_key().unwrap();
+        let key_id = "content-key-epoch-1";
+        let device_head = ProfileSyncDeviceHead {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            device_id: "device-a".to_string(),
+            root_id: "settings/devices/device-a/head".to_string(),
+            schema_version: PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            latest_manifest_object_id: "manifest-object-3".to_string(),
+            latest_change_object_id: None,
+            device_sequence: 1,
+            logical_clock: 1,
+            created_at: 1234,
+        };
+        let signed_bytes = sign_test_sync_object(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
+            key_id,
+            serde_json::to_vec(&device_head).unwrap().as_slice(),
+            &content_key,
+            &signer,
+            26,
+        );
+        let trusted_path = test_dir("sync-trusted-device-head").join(DEFAULT_DATABASE_FILE_NAME);
+        let trusted_database =
+            SlateProfileDatabase::open_resolved_with_device_id(trusted_path, "device-b").unwrap();
+        trusted_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: trusted_public_key.clone(),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .unwrap();
+
+        assert_eq!(
+            trusted_database
+                .open_trusted_signed_profile_sync_device_head(
+                    signed_bytes.as_slice(),
+                    &content_key,
+                    DEFAULT_PROFILE_ID,
+                    key_id,
+                )
+                .unwrap(),
+            device_head
+        );
+
+        let late_path = test_dir("sync-trusted-device-head-late").join(DEFAULT_DATABASE_FILE_NAME);
+        let late_database =
+            SlateProfileDatabase::open_resolved_with_device_id(late_path, "device-b").unwrap();
+        late_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: trusted_public_key,
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1,
+            })
+            .unwrap();
+        assert!(matches!(
+            late_database.open_trusted_signed_profile_sync_device_head(
+                signed_bytes.as_slice(),
+                &content_key,
+                DEFAULT_PROFILE_ID,
+                key_id,
+            ),
+            Err(ProfileSyncTrustedOpenError::UnauthorizedDeviceEpoch {
+                profile,
+                device_id,
+                key_membership_epoch,
+                manifest_membership_epoch,
+            }) if profile == DEFAULT_PROFILE_ID
+                && device_id == "device-a"
+                && key_membership_epoch == DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1
+                && manifest_membership_epoch == DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH
         ));
     }
 

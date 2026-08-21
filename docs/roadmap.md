@@ -259,6 +259,11 @@ Current baseline:
   manifests are reported distinctly. When the published root matches the stored
   verified root, storage skips object fetch, key lookup, decrypt, and apply
   work.
+- Storage now has a typed signed encrypted device-head sync object. Device
+  heads identify a profile, device, per-device root, latest manifest object,
+  optional latest change object, membership epoch, sequence, and logical clock;
+  trusted opening uses the stored device public-key table and rejects device
+  keys introduced after the head membership epoch.
 - `slate-settings.db` now has typed snapshot metadata APIs for recording
   encrypted backend object ids, covered revisions, included domains, and latest
   snapshot lookup. This is metadata only; snapshot payloads stay in encrypted

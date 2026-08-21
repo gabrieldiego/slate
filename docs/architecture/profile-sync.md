@@ -244,10 +244,13 @@ sync_manifest:
 device_head:
   profile_id
   device_id
+  root_id
+  schema_version
   membership_epoch
   latest_manifest_object_id
   latest_change_object_id
   device_sequence
+  logical_clock
   created_at
   signature
 
@@ -269,6 +272,13 @@ sync_change:
   encrypted_payload
   signature
 ```
+
+The storage crate already represents device heads as signed encrypted sync
+objects for the settings domain. Opening a trusted device head verifies the
+stored device public key, decrypts the payload, checks that the payload device
+matches the signer, and rejects signer keys introduced after the head
+membership epoch. Publishing per-device heads and merging multiple authorized
+heads are separate runtime and broadwebd wiring steps.
 
 The first synced domains should be settings that are safe to apply live, such as
 UI preferences, protocol adapter configuration, rail app ordering, and
