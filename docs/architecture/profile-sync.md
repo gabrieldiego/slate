@@ -574,6 +574,13 @@ returns a per-provider status report before enforcing the post-cycle root
 health policy. This is still a local fixture shape, but it gives the future
 runtime scheduler the right sequencing contract: publish encrypted state,
 handoff availability, then evaluate whether the profile is durable enough.
+The same runner also has a shared-root candidate variant for equal-control
+devices: after the local publish/device-head receive steps, it applies visible
+trusted `settings/latest` candidate manifests, retains the union of locally
+published objects and verified received candidate objects, and then checks root
+health. A receive-only shared-root recovery can relax local device-head health
+while still requiring the shared settings root itself to satisfy the configured
+retaining-provider quorum.
 After provider policy passes, the runtime-facing runner can load the active
 content-key id from `slate-settings.db` and use caller-supplied secret material
 for the actual encrypted publish/pull cycle. The database therefore stores

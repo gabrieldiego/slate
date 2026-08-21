@@ -313,6 +313,11 @@ Current baseline:
   the same cycle. It publishes/pulls through the local device daemon, asks those
   providers to retain the published object set, reports per-provider retention
   status, and only then enforces the strict post-cycle root quorum.
+- The same runtime-facing cycle can now apply shared settings-root candidates
+  and retain the union of locally published objects plus received candidate
+  objects before checking shared settings-root health. Receive-only candidate
+  cycles can keep local device-head health relaxed while still requiring the
+  shared settings root to meet the selected retaining-provider quorum.
 - The local profile-sync fixture can now mark simulated devices offline and
   online, allowing tests to verify unavailable devices fail closed without
   touching sockets, DNS, Tor, IPFS, or external relays.

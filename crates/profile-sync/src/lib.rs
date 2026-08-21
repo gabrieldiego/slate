@@ -791,21 +791,68 @@ impl SettingsSyncCycleWithSharedRootCandidatesRun {
     }
 
     pub fn shared_root_candidate_object_ids(&self) -> Vec<String> {
-        let mut object_ids = Vec::new();
-        let mut seen = BTreeSet::new();
-        if let ProfileSyncSettingsCandidatePullApplyStatus::Applied(applications) =
-            &self.shared_root_candidates
-        {
-            for application in applications {
-                extend_unique_object_ids(
-                    &mut object_ids,
-                    &mut seen,
-                    application.application.sync_object_ids.clone(),
-                );
-            }
-        }
-        object_ids
+        shared_root_candidate_object_ids(&self.shared_root_candidates)
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncCycleWithSharedRootRetentionRun {
+    pub before_health: SettingsSyncHealthReport,
+    pub cycle: SettingsSyncCycleRun,
+    pub shared_root_candidates: ProfileSyncSettingsCandidatePullApplyStatus,
+    pub retained_object_ids: Vec<String>,
+    pub retention: Vec<SettingsSyncCycleProviderRetentionRun>,
+    pub after_health: SettingsSyncHealthReport,
+}
+
+impl SettingsSyncCycleWithSharedRootRetentionRun {
+    pub fn degraded_before(&self) -> bool {
+        self.before_health.degraded()
+    }
+
+    pub fn degraded_after(&self) -> bool {
+        self.after_health.degraded()
+    }
+
+    pub fn shared_root_candidate_application_count(&self) -> usize {
+        match &self.shared_root_candidates {
+            ProfileSyncSettingsCandidatePullApplyStatus::Applied(applications) => {
+                applications.len()
+            }
+            ProfileSyncSettingsCandidatePullApplyStatus::NoPublishedRoot { .. }
+            | ProfileSyncSettingsCandidatePullApplyStatus::Unchanged { .. } => 0,
+        }
+    }
+
+    pub fn shared_root_candidate_object_ids(&self) -> Vec<String> {
+        shared_root_candidate_object_ids(&self.shared_root_candidates)
+    }
+
+    pub fn retained_provider_count(&self) -> usize {
+        self.retention
+            .iter()
+            .filter(|provider| {
+                provider.object_count() > 0 && provider.object_count() == provider.retained_count()
+            })
+            .count()
+    }
+}
+
+fn shared_root_candidate_object_ids(
+    status: &ProfileSyncSettingsCandidatePullApplyStatus,
+) -> Vec<String> {
+    let mut object_ids = Vec::new();
+    let mut seen = BTreeSet::new();
+    if let ProfileSyncSettingsCandidatePullApplyStatus::Applied(applications) = status {
+        for application in applications {
+            extend_unique_object_ids(
+                &mut object_ids,
+                &mut seen,
+                application.application.sync_object_ids.clone(),
+            );
+        }
+    }
+    object_ids
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -833,6 +880,8 @@ pub struct SettingsSyncCyclePolicy {
     pub maximum_stale_online_providers: Option<usize>,
     pub require_healthy_providers: bool,
     pub require_healthy_roots_after_cycle: bool,
+    pub require_healthy_settings_root_after_cycle: bool,
+    pub require_healthy_local_device_head_root_after_cycle: bool,
 }
 
 impl SettingsSyncCyclePolicy {
@@ -854,6 +903,8 @@ impl SettingsSyncCyclePolicy {
             maximum_stale_online_providers: None,
             require_healthy_providers: true,
             require_healthy_roots_after_cycle: true,
+            require_healthy_settings_root_after_cycle: true,
+            require_healthy_local_device_head_root_after_cycle: true,
         }
     }
 
@@ -889,6 +940,21 @@ impl SettingsSyncCyclePolicy {
 
     pub fn with_root_health_required_after_cycle(mut self, required: bool) -> Self {
         self.require_healthy_roots_after_cycle = required;
+        self.require_healthy_settings_root_after_cycle = required;
+        self.require_healthy_local_device_head_root_after_cycle = required;
+        self
+    }
+
+    pub fn with_settings_root_health_required_after_cycle(mut self, required: bool) -> Self {
+        self.require_healthy_settings_root_after_cycle = required;
+        self
+    }
+
+    pub fn with_local_device_head_root_health_required_after_cycle(
+        mut self,
+        required: bool,
+    ) -> Self {
+        self.require_healthy_local_device_head_root_after_cycle = required;
         self
     }
 
@@ -982,13 +1048,15 @@ impl SettingsSyncCyclePolicy {
         if !self.require_healthy_roots_after_cycle {
             return Ok(());
         }
-        if health.settings_root_health.degraded {
+        if self.require_healthy_settings_root_after_cycle && health.settings_root_health.degraded {
             return Err(ProfileSyncPolicyError::RootHealthDegraded {
                 root_kind: "settings root",
                 health: health.clone(),
             });
         }
-        if health.local_device_head_root_health.degraded {
+        if self.require_healthy_local_device_head_root_after_cycle
+            && health.local_device_head_root_health.degraded
+        {
             return Err(ProfileSyncPolicyError::RootHealthDegraded {
                 root_kind: "local device-head root",
                 health: health.clone(),
@@ -1450,6 +1518,86 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
             before_health: preflight.before_health,
             cycle,
             shared_root_candidates,
+            after_health,
+        })
+    }
+
+    pub fn run_settings_sync_cycle_with_active_key_policy_shared_root_candidates_and_retention_providers(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        settings_root_id: &str,
+        content_key: &ProfileSyncContentKey,
+        signer: &ProfileSyncDeviceSigner,
+        policy: &SettingsSyncCyclePolicy,
+        retention_provider_daemons: &[&BroadwebDaemon],
+    ) -> Result<SettingsSyncCycleWithSharedRootRetentionRun, ProfileSyncCycleWithHealthError> {
+        let preflight = self.settings_sync_cycle_preflight_with_active_key_policy(
+            database,
+            profile,
+            settings_root_id,
+            signer,
+            policy,
+        )?;
+        let cycle = self.run_settings_sync_cycle(
+            database,
+            profile,
+            settings_root_id,
+            content_key,
+            preflight.active_key_id.as_str(),
+            signer,
+            policy.retention_policy.clone(),
+            policy.max_publish_steps,
+            policy.max_trusted_devices,
+        )?;
+        let source = BroadwebdProfileSyncObjectSource::new(self.daemon);
+        let shared_root_candidates = source
+            .pull_and_apply_active_trusted_settings_manifest_candidates_if_changed(
+                database,
+                profile,
+                settings_root_id,
+                content_key,
+            )
+            .map_err(ProfileSyncReceiveError::from)
+            .map_err(ProfileSyncCycleError::from)?;
+
+        let mut retained_object_ids = Vec::new();
+        let mut seen = BTreeSet::new();
+        extend_unique_object_ids(
+            &mut retained_object_ids,
+            &mut seen,
+            cycle.published_object_ids(),
+        );
+        extend_unique_object_ids(
+            &mut retained_object_ids,
+            &mut seen,
+            shared_root_candidate_object_ids(&shared_root_candidates),
+        );
+
+        let mut retention = Vec::with_capacity(retention_provider_daemons.len());
+        for (provider_index, provider_daemon) in retention_provider_daemons.iter().enumerate() {
+            let object_statuses = BroadwebdProfileSyncPublisher::new(*provider_daemon)
+                .retain_profile_sync_objects(profile, retained_object_ids.as_slice())
+                .map_err(ProfileSyncCycleWithHealthError::Retention)?;
+            retention.push(SettingsSyncCycleProviderRetentionRun {
+                provider_index,
+                object_statuses,
+            });
+        }
+        let after_health = self.settings_sync_health(
+            database,
+            profile,
+            settings_root_id,
+            policy.minimum_online_retaining_providers,
+        )?;
+        policy.check_after_cycle(&after_health)?;
+
+        Ok(SettingsSyncCycleWithSharedRootRetentionRun {
+            before_health: preflight.before_health,
+            cycle,
+            shared_root_candidates,
+            retained_object_ids,
+            retention,
             after_health,
         })
     }
@@ -3720,18 +3868,19 @@ mod tests {
             .expect("second candidate publishes shared root");
 
         let receive_only_policy =
-            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 1)
-                .with_root_health_required_after_cycle(false);
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2)
+                .with_local_device_head_root_health_required_after_cycle(false);
         let run = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
-            .run_settings_sync_cycle_with_active_key_policy_and_shared_root_candidates(
+            .run_settings_sync_cycle_with_active_key_policy_shared_root_candidates_and_retention_providers(
                 &receiver_database,
                 profile,
                 settings_root_id,
                 &content_key,
                 &receiver_signer,
                 &receive_only_policy,
+                &[&provider_daemon],
             )
-            .expect("receiver applies shared-root candidates during active-key cycle");
+            .expect("receiver applies and retains shared-root candidates during active-key cycle");
         assert_eq!(run.cycle.published_step_count(), 0);
         assert_eq!(run.cycle.applied_count(), 0);
         assert_eq!(run.shared_root_candidate_application_count(), 2);
@@ -3763,7 +3912,30 @@ mod tests {
                 second_publication.tail_change_object_ids[0].clone(),
             ]
         );
+        assert_eq!(run.retained_object_ids, shared_object_ids);
+        assert_eq!(run.retention.len(), 1);
+        assert_eq!(run.retention[0].object_count(), shared_object_ids.len());
+        assert_eq!(run.retention[0].retained_count(), shared_object_ids.len());
+        assert_eq!(run.retained_provider_count(), 1);
+        assert!(
+            run.retention[0]
+                .object_statuses
+                .iter()
+                .all(|status| status.retained)
+        );
+        assert!(
+            run.retention[0]
+                .object_statuses
+                .iter()
+                .all(|status| status.available)
+        );
         assert!(!run.after_health.settings_root_health.degraded);
+        assert_eq!(
+            run.after_health
+                .settings_root_health
+                .online_retaining_providers,
+            2
+        );
         assert!(run.after_health.local_device_head_root_health.degraded);
         assert_eq!(
             receiver_database
@@ -3781,12 +3953,6 @@ mod tests {
                 .object_id,
             second_publication.manifest_object_id.as_str()
         );
-        let retained = BroadwebdProfileSyncPublisher::new(&provider_daemon)
-            .retain_profile_sync_objects(profile, shared_object_ids.as_slice())
-            .expect("availability provider retains received candidate objects");
-        assert_eq!(retained.len(), shared_object_ids.len());
-        assert!(retained.iter().all(|status| status.retained));
-        assert!(retained.iter().all(|status| status.available));
         let retained_shared_root_health = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
             .profile_sync_root_health(profile, settings_root_id, 2)
             .expect("read retained shared-root health");
@@ -3794,16 +3960,35 @@ mod tests {
         assert_eq!(retained_shared_root_health.online_retaining_providers, 2);
 
         let unchanged = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
-            .run_settings_sync_cycle_with_active_key_policy_and_shared_root_candidates(
+            .run_settings_sync_cycle_with_active_key_policy_shared_root_candidates_and_retention_providers(
                 &receiver_database,
                 profile,
                 settings_root_id,
                 &content_key,
                 &receiver_signer,
                 &receive_only_policy,
+                &[&provider_daemon],
             )
             .expect("receiver checks unchanged shared-root candidates");
         assert_eq!(unchanged.shared_root_candidate_application_count(), 0);
+        assert!(unchanged.retained_object_ids.is_empty());
+        assert_eq!(unchanged.retention.len(), 1);
+        assert_eq!(unchanged.retention[0].object_count(), 0);
+        assert_eq!(unchanged.retained_provider_count(), 0);
+        assert!(!unchanged.after_health.settings_root_health.degraded);
+        assert_eq!(
+            unchanged
+                .after_health
+                .settings_root_health
+                .online_retaining_providers,
+            2
+        );
+        assert!(
+            unchanged
+                .after_health
+                .local_device_head_root_health
+                .degraded
+        );
         assert_eq!(
             unchanged.shared_root_candidates,
             ProfileSyncSettingsCandidatePullApplyStatus::Unchanged {
