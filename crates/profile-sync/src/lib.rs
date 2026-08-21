@@ -6611,6 +6611,302 @@ mod tests {
     }
 
     #[test]
+    fn broadwebd_publisher_syncs_typed_app_metadata_tail_head() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("typed-app-tail-head-publisher");
+        let receiver_state_root = test_state_root("typed-app-tail-head-receiver");
+        let publisher_db_root = test_state_root("typed-app-tail-head-publisher-db");
+        let receiver_db_root = test_state_root("typed-app-tail-head-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "runtime-typed-app-upsert-tail-publisher",
+            )
+            .expect("start typed app upsert tail publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "runtime-typed-app-upsert-tail-receiver",
+            )
+            .expect("start typed app upsert tail receiver daemon");
+        let publisher_database = SlateProfileDatabase::open_resolved_with_device_id(
+            publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-typed-app-upsert-tail-publisher",
+        )
+        .expect("open typed app upsert tail publisher settings database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-typed-app-upsert-tail-receiver",
+        )
+        .expect("open typed app upsert tail receiver settings database");
+        for (domain, privacy_classification, sync_content) in [
+            (SYNC_DOMAIN_CHAT, "sensitive", false),
+            (SYNC_DOMAIN_FILES, "content", true),
+            (SYNC_DOMAIN_STORAGE, "sensitive", false),
+        ] {
+            publisher_database
+                .register_app_sync_domain(&AppSyncDomainRegistration {
+                    profile: DEFAULT_PROFILE_ID.to_string(),
+                    domain: domain.to_string(),
+                    schema_version: 1,
+                    enabled: true,
+                    privacy_classification: privacy_classification.to_string(),
+                    sync_content,
+                })
+                .expect("enable typed app upsert tail sync domain for publisher test profile");
+        }
+
+        publisher_database
+            .upsert_chat_conversation(&ChatConversationUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                conversation_id: "runtime-chat-tail-1".to_string(),
+                provider_id: Some("whatsapp".to_string()),
+                external_thread_id: Some("tail-team@example.test".to_string()),
+                display_name: "Runtime Team".to_string(),
+                avatar_key: Some("chat-avatar:runtime-chat-tail-1".to_string()),
+                last_message_at: Some(1_789_040_000),
+                unread_count: 1,
+                archived: false,
+                muted: false,
+            })
+            .expect("publisher writes initial typed chat metadata");
+        publisher_database
+            .upsert_file_entry(&FileEntryUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                entry_id: "runtime-file-tail-1".to_string(),
+                sync_set_id: Some("runtime-set".to_string()),
+                parent_id: None,
+                name: "runtime-initial.txt".to_string(),
+                entry_kind: "file".to_string(),
+                content_ref: Some("bafy-runtime-file-initial".to_string()),
+                mime_type: Some("text/plain".to_string()),
+                size_bytes: Some(128),
+                modified_at: Some(1_789_040_100),
+                integrity: Some("sha256-runtime-file-initial".to_string()),
+                retention_policy: Some("keep-latest".to_string()),
+            })
+            .expect("publisher writes initial typed file metadata");
+        publisher_database
+            .upsert_storage_provider(&StorageProviderUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                provider_id: "runtime-provider-tail-1".to_string(),
+                provider_kind: "ipfs".to_string(),
+                display_name: "Runtime IPFS".to_string(),
+                endpoint_ref: Some(
+                    "/dnsaddr/runtime-tail.example.test/p2p/runtime-provider-tail-1".to_string(),
+                ),
+                discovery: true,
+                connectivity: true,
+                object_transfer: true,
+                availability: false,
+                mutable_roots: false,
+                quota_bytes: Some(4_096),
+                max_retained_objects: Some(8),
+                pinning_policy: Some("manual".to_string()),
+                enabled: true,
+            })
+            .expect("publisher writes initial typed storage provider metadata");
+
+        let content_key = ProfileSyncContentKey::from_bytes([74; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-typed-app-upsert-tail-publisher")
+            .expect("generate typed app upsert tail publisher signer");
+        receiver_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: signer.public_key().expect("read signer public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("receiver trusts typed app upsert tail publisher key");
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+        let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
+
+        let full = publisher
+            .publish_full_local_settings_snapshot_head(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish initial typed app metadata snapshot head")
+            .expect("initial typed app metadata changes exist");
+        let full_applied = source
+            .pull_record_and_apply_trusted_settings_from_device_head(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                full.device_head.root_id.as_str(),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+            )
+            .expect("receiver applies initial typed app snapshot");
+        assert!(matches!(
+            full_applied,
+            BroadwebdTrustedDeviceHeadSyncStatus::Applied { .. }
+        ));
+        assert_eq!(
+            receiver_database
+                .chat_conversations(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver initial typed chat metadata")[0]
+                .display_name,
+            "Runtime Team"
+        );
+        assert_eq!(
+            receiver_database
+                .file_entries(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver initial typed file metadata")[0]
+                .name,
+            "runtime-initial.txt"
+        );
+        assert_eq!(
+            receiver_database
+                .storage_providers(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver initial typed storage provider metadata")[0]
+                .availability,
+            false
+        );
+
+        publisher_database
+            .upsert_chat_conversation(&ChatConversationUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                conversation_id: "runtime-chat-tail-1".to_string(),
+                provider_id: Some("whatsapp".to_string()),
+                external_thread_id: Some("tail-team@example.test".to_string()),
+                display_name: "Runtime Team Updated".to_string(),
+                avatar_key: Some("chat-avatar:runtime-chat-tail-1-updated".to_string()),
+                last_message_at: Some(1_789_040_500),
+                unread_count: 7,
+                archived: true,
+                muted: true,
+            })
+            .expect("publisher writes typed chat metadata tail update");
+        publisher_database
+            .upsert_file_entry(&FileEntryUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                entry_id: "runtime-file-tail-1".to_string(),
+                sync_set_id: Some("runtime-set".to_string()),
+                parent_id: Some("runtime-folder-tail".to_string()),
+                name: "runtime-updated.txt".to_string(),
+                entry_kind: "file".to_string(),
+                content_ref: Some("bafy-runtime-file-updated".to_string()),
+                mime_type: Some("text/plain".to_string()),
+                size_bytes: Some(2_048),
+                modified_at: Some(1_789_040_600),
+                integrity: Some("sha256-runtime-file-updated".to_string()),
+                retention_policy: Some("keep-pinned".to_string()),
+            })
+            .expect("publisher writes typed file metadata tail update");
+        publisher_database
+            .upsert_storage_provider(&StorageProviderUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                provider_id: "runtime-provider-tail-1".to_string(),
+                provider_kind: "ipfs".to_string(),
+                display_name: "Runtime IPFS Updated".to_string(),
+                endpoint_ref: Some(
+                    "/dnsaddr/runtime-tail-updated.example.test/p2p/runtime-provider-tail-1"
+                        .to_string(),
+                ),
+                discovery: true,
+                connectivity: true,
+                object_transfer: true,
+                availability: true,
+                mutable_roots: true,
+                quota_bytes: Some(16_384),
+                max_retained_objects: Some(32),
+                pinning_policy: Some("auto".to_string()),
+                enabled: false,
+            })
+            .expect("publisher writes typed storage provider metadata tail update");
+
+        let tail = publisher
+            .publish_local_settings_tail_head(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish typed app metadata tail head")
+            .expect("typed app metadata tail changes exist");
+
+        assert_eq!(
+            tail.publication.snapshot_object_id,
+            full.publication.snapshot_object_id
+        );
+        assert_eq!(tail.publication.tail_change_object_ids.len(), 3);
+        assert_eq!(
+            tail.device_head.device_head.latest_change_object_id,
+            tail.publication.tail_change_object_ids.last().cloned()
+        );
+
+        let applied = source
+            .pull_record_and_apply_trusted_settings_from_device_head(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                tail.device_head.root_id.as_str(),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+            )
+            .expect("receiver applies typed app metadata tail from trusted head");
+        let BroadwebdTrustedDeviceHeadSyncStatus::Applied { application, .. } = applied else {
+            panic!("expected typed app metadata tail application, got {applied:?}");
+        };
+        assert_eq!(
+            application.manifest_object_id,
+            tail.publication.manifest_object_id
+        );
+        assert!(application.snapshot.is_some());
+        assert_eq!(application.tail_changes.len(), 3);
+
+        let conversations = receiver_database
+            .chat_conversations(DEFAULT_PROFILE_ID, 10)
+            .expect("read receiver updated typed chat metadata");
+        assert_eq!(conversations.len(), 1);
+        assert_eq!(conversations[0].conversation_id, "runtime-chat-tail-1");
+        assert_eq!(conversations[0].display_name, "Runtime Team Updated");
+        assert_eq!(conversations[0].unread_count, 7);
+        assert!(conversations[0].archived);
+        assert!(conversations[0].muted);
+
+        let files = receiver_database
+            .file_entries(DEFAULT_PROFILE_ID, 10)
+            .expect("read receiver updated typed file metadata");
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].entry_id, "runtime-file-tail-1");
+        assert_eq!(files[0].parent_id.as_deref(), Some("runtime-folder-tail"));
+        assert_eq!(files[0].name, "runtime-updated.txt");
+        assert_eq!(
+            files[0].content_ref.as_deref(),
+            Some("bafy-runtime-file-updated")
+        );
+        assert_eq!(files[0].size_bytes, Some(2_048));
+        assert_eq!(files[0].retention_policy.as_deref(), Some("keep-pinned"));
+
+        let providers = receiver_database
+            .storage_providers(DEFAULT_PROFILE_ID, 10)
+            .expect("read receiver updated typed storage provider metadata");
+        assert_eq!(providers.len(), 1);
+        assert_eq!(providers[0].provider_id, "runtime-provider-tail-1");
+        assert_eq!(providers[0].display_name, "Runtime IPFS Updated");
+        assert!(providers[0].availability);
+        assert!(providers[0].mutable_roots);
+        assert_eq!(providers[0].quota_bytes, Some(16_384));
+        assert_eq!(providers[0].max_retained_objects, Some(32));
+        assert_eq!(providers[0].pinning_policy.as_deref(), Some("auto"));
+        assert!(!providers[0].enabled);
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
     fn broadwebd_publisher_syncs_typed_app_metadata_tombstone_snapshot_head() {
         let network = InProcessBroadwebNetwork::new();
         let publisher_state_root = test_state_root("typed-app-tombstone-head-publisher");
