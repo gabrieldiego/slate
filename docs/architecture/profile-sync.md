@@ -602,8 +602,10 @@ The publisher enforces the same cap before writing membership record objects or
 advancing the log root, so oversized local history waits for future membership
 compaction instead of publishing an index receivers must reject.
 A read-only publication plan exposes empty, publishable, and too-large states
-from local `slate-settings.db` history without touching broadwebd, giving the
-future scheduler/UI a safe preview before membership compaction exists.
+from local `slate-settings.db` history without touching broadwebd. The
+scheduler facade can compose that local membership-log preview with the
+existing read-only selected-provider plan, giving runtime/UI code a safe
+membership-aware preview before membership compaction exists.
 The broadwebd source bridge can also run the receive side for one trusted
 device head: resolve and verify the head, record the verified head root in
 `slate-settings.db`, apply the referenced settings manifest when the head is

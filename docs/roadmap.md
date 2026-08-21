@@ -771,8 +771,9 @@ Current baseline:
   needs compaction cannot create a distributed index receivers will reject.
 - Membership-log publishing now also has a read-only local plan that reports
   empty, publishable, or too-large history before any broadwebd call or root
-  mutation. This is the first non-mutating preview primitive needed for
-  membership-aware scheduler planning.
+  mutation. The scheduler facade can now include that local membership-log
+  publication preview alongside the existing selected-provider plan, without
+  pulling remote membership or advancing roots.
 
 Next:
 

@@ -1468,6 +1468,34 @@ impl SettingsSyncScheduledCyclePlan {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncScheduledMembershipCyclePlan {
+    pub membership_log_publication: ProfileSyncMembershipLogPublicationPlan,
+    pub cycle: SettingsSyncScheduledCyclePlan,
+}
+
+impl SettingsSyncScheduledMembershipCyclePlan {
+    pub fn retention_candidate_count(&self) -> usize {
+        self.cycle.retention_candidate_count()
+    }
+
+    pub fn selected_retention_provider_count(&self) -> usize {
+        self.cycle.selected_retention_provider_count()
+    }
+
+    pub fn undiscovered_retention_provider_count(&self) -> usize {
+        self.cycle.undiscovered_retention_provider_count()
+    }
+
+    pub fn duplicate_retention_provider_count(&self) -> usize {
+        self.cycle.duplicate_retention_provider_count()
+    }
+
+    pub fn degraded_before(&self) -> bool {
+        self.cycle.degraded_before()
+    }
+}
+
 struct SelectedSettingsSyncRetentionProviders<'a> {
     plan: SettingsSyncScheduledCyclePlan,
     daemons: Vec<&'a BroadwebDaemon>,
@@ -2464,6 +2492,34 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             select_settings_sync_retention_provider_handles(preflight, retention_provider_handles)
                 .plan,
         )
+    }
+
+    pub fn plan_once_with_membership_log_selecting_retention_providers(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        membership_log_root_id: &str,
+        signer: &ProfileSyncDeviceSigner,
+        retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'_>],
+    ) -> Result<SettingsSyncScheduledMembershipCyclePlan, ProfileSyncCycleWithHealthError> {
+        let membership_log_publication = BroadwebdProfileSyncPublisher::new(self.daemon)
+            .plan_local_sync_account_membership_log(
+                database,
+                config.profile.as_str(),
+                membership_log_root_id,
+            )
+            .map_err(ProfileSyncCycleError::from)?;
+        let cycle = self.plan_once_selecting_retention_providers(
+            database,
+            config,
+            signer,
+            retention_provider_handles,
+        )?;
+
+        Ok(SettingsSyncScheduledMembershipCyclePlan {
+            membership_log_publication,
+            cycle,
+        })
     }
 
     pub fn run_once_selecting_retention_providers(
@@ -7500,6 +7556,21 @@ mod tests {
                 membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
             })
             .expect("register scheduler local trusted public key");
+        let local_membership_record = ProfileSyncMembershipRecord {
+            profile: profile.to_string(),
+            record_id: "epoch-1-enroll-runtime-scheduler-select-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "runtime-scheduler-select-a".to_string(),
+            device_public_key: Some(signer.public_key().expect("local membership public key")),
+            created_at: 10,
+        };
+        database
+            .record_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer, &local_membership_record).as_slice(),
+            )
+            .expect("record scheduler local membership history");
         database
             .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
             .expect("write scheduler local setting");
@@ -7563,6 +7634,50 @@ mod tests {
             database
                 .profile_sync_roots(profile)
                 .expect("read roots after plan")
+                .is_empty()
+        );
+
+        let membership_plan = scheduler
+            .plan_once_with_membership_log_selecting_retention_providers(
+                &database,
+                &config,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                &signer,
+                &retention_provider_handles,
+            )
+            .expect("scheduler membership plan previews local membership publication");
+
+        assert_eq!(
+            membership_plan.membership_log_publication.status,
+            ProfileSyncMembershipLogPublicationPlanStatus::Publishable
+        );
+        assert_eq!(membership_plan.membership_log_publication.record_count, 1);
+        assert_eq!(
+            membership_plan.cycle.selected_retention_provider_ids,
+            vec![selected_provider_id.to_string()]
+        );
+        assert_eq!(
+            membership_plan.cycle.undiscovered_retention_provider_ids,
+            vec!["not-a-discovered-provider".to_string()]
+        );
+        assert_eq!(
+            membership_plan.cycle.duplicate_retention_provider_ids,
+            vec![selected_provider_id.to_string()]
+        );
+        assert_eq!(membership_plan.selected_retention_provider_count(), 1);
+        assert_eq!(membership_plan.undiscovered_retention_provider_count(), 1);
+        assert_eq!(membership_plan.duplicate_retention_provider_count(), 1);
+        assert!(membership_plan.membership_log_publication.is_publishable());
+        assert_eq!(
+            database
+                .latest_sync_revision(profile)
+                .expect("read latest revision after membership plan"),
+            latest_revision_before_plan
+        );
+        assert!(
+            database
+                .profile_sync_roots(profile)
+                .expect("read roots after membership plan")
                 .is_empty()
         );
 
