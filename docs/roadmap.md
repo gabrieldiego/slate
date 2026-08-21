@@ -226,6 +226,10 @@ Current baseline:
 - The local profile-sync fixture now distinguishes logged-in device providers
   from availability-only providers. Availability providers can retain and serve
   encrypted bytes, and discovery reports that they cannot publish mutable roots.
+- Provider discovery now exposes typed roles for discovery, local
+  connectivity, object transfer, availability, and mutable-root publishing,
+  with `can_publish_roots` kept as a compatibility flag derived from the
+  mutable-root role.
 - Storage now provides `EncryptedSyncObject` envelopes using ChaCha20-Poly1305
   AEAD through `ring`, and the local two-device fixture moves encrypted setting
   change payloads through broadwebd instead of plaintext JSON.
@@ -385,8 +389,9 @@ Next:
 
 - Expand the protocol-neutral `profile-sync` application service with explicit
   policy checks for richer local fixture behavior.
-- Split sync backends into discovery, connectivity, transfer, availability, and
-  mutable-root roles so different broadweb protocols can be combined.
+- Continue splitting sync backends into discovery, connectivity, transfer,
+  availability, and mutable-root implementations so different broadweb
+  protocols can be combined behind the typed provider role records.
 - Extend the initial manifest membership epoch into the full equal-control
   account authority model: signed device heads, enrollment records, and
   availability providers with no profile write authority.

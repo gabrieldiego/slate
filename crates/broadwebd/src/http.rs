@@ -342,7 +342,39 @@ pub struct ProfileSyncProviderRecord {
     pub provider_kind: String,
     pub privacy_boundary: String,
     pub retained_objects: usize,
+    pub roles: ProfileSyncProviderRoles,
     pub can_publish_roots: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ProfileSyncProviderRoles {
+    pub discovery: bool,
+    pub connectivity: bool,
+    pub object_transfer: bool,
+    pub availability: bool,
+    pub mutable_roots: bool,
+}
+
+impl ProfileSyncProviderRoles {
+    pub const fn logged_in_device() -> Self {
+        Self {
+            discovery: true,
+            connectivity: true,
+            object_transfer: true,
+            availability: true,
+            mutable_roots: true,
+        }
+    }
+
+    pub const fn availability_provider() -> Self {
+        Self {
+            discovery: true,
+            connectivity: true,
+            object_transfer: true,
+            availability: true,
+            mutable_roots: false,
+        }
+    }
 }
 
 pub(crate) fn parse_http_url(input: &str) -> Result<Url, BroadwebdError> {

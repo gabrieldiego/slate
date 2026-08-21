@@ -48,9 +48,9 @@ pub use health::{
 pub use http::{
     DownloadRecord, FetchDisposition, FetchPurpose, FetchRouteInfo, HttpFetchRequest,
     HttpFetchResponse, HttpHeader, ProfileSyncObjectRequest, ProfileSyncProfileRequest,
-    ProfileSyncProviderRecord, ProfileSyncPutObjectRequest, ProfileSyncRequest,
-    ProfileSyncResponse, ProfileSyncRootCandidate, ProfileSyncRootRequest, ProfileSyncRootUpdate,
-    ServiceRequest, ServiceResponse, TransportHttpRequest,
+    ProfileSyncProviderRecord, ProfileSyncProviderRoles, ProfileSyncPutObjectRequest,
+    ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootCandidate, ProfileSyncRootRequest,
+    ProfileSyncRootUpdate, ServiceRequest, ServiceResponse, TransportHttpRequest,
 };
 pub use protocols::ipfs::{
     IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport, IpfsKuboRpcEndpoint,
@@ -215,9 +215,9 @@ mod tests {
         IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport, IpfsKuboRpcEndpoint,
         IpfsService, IpfsTransportKind, PROFILE_SYNC_PLUGIN, PluginHealth, PluginKind,
         PluginMetadata, PluginRegistry, ProfileSyncObjectRequest, ProfileSyncProfileRequest,
-        ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse,
-        ProfileSyncRootRequest, ProfileSyncRootUpdate, ProtocolService, ResourceBudget,
-        ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, StateRoot, TOR_ARTI_HTTP_PLUGIN,
+        ProfileSyncProviderRoles, ProfileSyncPutObjectRequest, ProfileSyncRequest,
+        ProfileSyncResponse, ProfileSyncRootRequest, ProfileSyncRootUpdate, ProtocolService,
+        ResourceBudget, ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, StateRoot, TOR_ARTI_HTTP_PLUGIN,
         TOR_PROTOCOL_SERVICE, TorService, TransportHttpRequest, TransportPlugin,
         ipfs_gateway_http_url, ipfs_kubo_cat_url, tor_http_target, tor_url_from_http_url,
     };
@@ -481,6 +481,14 @@ mod tests {
         assert_eq!(providers.len(), 1);
         assert_eq!(providers[0].provider_kind, "local-fake");
         assert_eq!(providers[0].retained_objects, 1);
+        assert_eq!(
+            providers[0].roles,
+            ProfileSyncProviderRoles::logged_in_device()
+        );
+        assert_eq!(
+            providers[0].can_publish_roots,
+            providers[0].roles.mutable_roots
+        );
 
         let released = daemon
             .profile_sync(ProfileSyncRequest::ReleaseObject(

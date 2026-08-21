@@ -1,9 +1,9 @@
 use crate::{
     ApplicationServicePlugin, BroadwebdError, PROFILE_SYNC_PLUGIN, PluginKind, PluginMetadata,
     PluginRegistry, ProfileSyncObjectRequest, ProfileSyncProfileRequest, ProfileSyncProviderRecord,
-    ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootCandidate,
-    ProfileSyncRootRequest, ProfileSyncRootUpdate, ResourceBudget, ResourceProfile, ServiceRequest,
-    ServiceResponse,
+    ProfileSyncProviderRoles, ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse,
+    ProfileSyncRootCandidate, ProfileSyncRootRequest, ProfileSyncRootUpdate, ResourceBudget,
+    ResourceProfile, ServiceRequest, ServiceResponse,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
@@ -18,7 +18,7 @@ pub struct ProfileSyncService {
     provider_id: String,
     provider_kind: String,
     privacy_boundary: String,
-    can_publish_roots: bool,
+    roles: ProfileSyncProviderRoles,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -44,7 +44,7 @@ struct ProfileSyncRootState {
 struct ProfileSyncProviderState {
     provider_kind: String,
     privacy_boundary: String,
-    can_publish_roots: bool,
+    roles: ProfileSyncProviderRoles,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -59,7 +59,7 @@ impl Default for ProfileSyncService {
             provider_id: LOCAL_PROVIDER_ID.to_string(),
             provider_kind: LOCAL_PROVIDER_KIND.to_string(),
             privacy_boundary: LOCAL_PRIVACY_BOUNDARY.to_string(),
-            can_publish_roots: true,
+            roles: ProfileSyncProviderRoles::logged_in_device(),
         }
     }
 }
@@ -70,21 +70,31 @@ impl ProfileSyncService {
     }
 
     fn local_fixture(store: Arc<Mutex<ProfileSyncStore>>, provider_id: impl Into<String>) -> Self {
-        Self::local_fixture_provider(store, provider_id, "local-fixture", true)
+        Self::local_fixture_provider(
+            store,
+            provider_id,
+            "local-fixture",
+            ProfileSyncProviderRoles::logged_in_device(),
+        )
     }
 
     fn local_fixture_availability_provider(
         store: Arc<Mutex<ProfileSyncStore>>,
         provider_id: impl Into<String>,
     ) -> Self {
-        Self::local_fixture_provider(store, provider_id, "local-fixture-availability", false)
+        Self::local_fixture_provider(
+            store,
+            provider_id,
+            "local-fixture-availability",
+            ProfileSyncProviderRoles::availability_provider(),
+        )
     }
 
     fn local_fixture_provider(
         store: Arc<Mutex<ProfileSyncStore>>,
         provider_id: impl Into<String>,
         provider_kind: impl Into<String>,
-        can_publish_roots: bool,
+        roles: ProfileSyncProviderRoles,
     ) -> Self {
         let provider_id = provider_id.into();
         let provider_kind = provider_kind.into();
@@ -95,7 +105,7 @@ impl ProfileSyncService {
                 ProfileSyncProviderState {
                     provider_kind: provider_kind.clone(),
                     privacy_boundary: privacy_boundary.clone(),
-                    can_publish_roots,
+                    roles,
                 },
             );
         }
@@ -104,7 +114,7 @@ impl ProfileSyncService {
             provider_id,
             provider_kind,
             privacy_boundary,
-            can_publish_roots,
+            roles,
         }
     }
 
@@ -260,7 +270,7 @@ impl ProfileSyncService {
         request: ProfileSyncRootUpdate,
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
-        if !self.can_publish_roots {
+        if !self.roles.mutable_roots {
             return Err(BroadwebdError::UnsupportedRequest(format!(
                 "profile sync provider cannot publish mutable roots: {}",
                 self.provider_id
@@ -351,7 +361,8 @@ impl ProfileSyncService {
                     &self.provider_id,
                     &request.profile,
                 ),
-                can_publish_roots: self.can_publish_roots,
+                roles: self.roles,
+                can_publish_roots: self.roles.mutable_roots,
             }]
         } else {
             store
@@ -363,7 +374,8 @@ impl ProfileSyncService {
                     provider_kind: state.provider_kind.clone(),
                     privacy_boundary: state.privacy_boundary.clone(),
                     retained_objects: retained_object_count(&store, provider_id, &request.profile),
-                    can_publish_roots: state.can_publish_roots,
+                    roles: state.roles,
+                    can_publish_roots: state.roles.mutable_roots,
                 })
                 .collect()
         };
@@ -468,21 +480,23 @@ impl LocalProfileSyncFixture {
 
 impl ApplicationServicePlugin for ProfileSyncService {
     fn metadata(&self) -> PluginMetadata {
-        let capabilities: &[&str] = if self.can_publish_roots {
+        let capabilities: &[&str] = if self.roles.mutable_roots {
             &[
                 "profile-sync/fake",
+                "profile-sync/provider-discovery",
+                "profile-sync/local-connectivity",
                 "profile-sync/object-transfer",
                 "profile-sync/local-retention",
                 "profile-sync/mutable-root",
-                "profile-sync/provider-discovery",
             ]
         } else {
             &[
                 "profile-sync/fake",
+                "profile-sync/provider-discovery",
+                "profile-sync/local-connectivity",
                 "profile-sync/object-transfer",
                 "profile-sync/local-retention",
                 "profile-sync/availability-provider",
-                "profile-sync/provider-discovery",
             ]
         };
         PluginMetadata::new(PROFILE_SYNC_PLUGIN, PluginKind::ApplicationService)
@@ -693,8 +707,8 @@ mod tests {
     use super::{LocalProfileSyncFixture, local_object_id};
     use crate::{
         BroadwebdError, PluginRegistry, ProfileSyncObjectRequest, ProfileSyncProfileRequest,
-        ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse,
-        ProfileSyncRootRequest, ProfileSyncRootUpdate, ResourceBudget,
+        ProfileSyncProviderRoles, ProfileSyncPutObjectRequest, ProfileSyncRequest,
+        ProfileSyncResponse, ProfileSyncRootRequest, ProfileSyncRootUpdate, ResourceBudget,
     };
 
     #[test]
@@ -1086,6 +1100,7 @@ mod tests {
         assert!(providers.iter().all(|provider| {
             provider.provider_kind == "local-fixture"
                 && provider.privacy_boundary.contains("no sockets")
+                && provider.roles == ProfileSyncProviderRoles::logged_in_device()
                 && provider.can_publish_roots
         }));
 
@@ -1176,7 +1191,12 @@ mod tests {
             .expect("availability provider is discoverable");
         assert_eq!(provider.provider_kind, "local-fixture-availability");
         assert_eq!(provider.retained_objects, 1);
+        assert_eq!(
+            provider.roles,
+            ProfileSyncProviderRoles::availability_provider()
+        );
         assert!(!provider.can_publish_roots);
+        assert_eq!(provider.can_publish_roots, provider.roles.mutable_roots);
 
         device_a
             .profile_sync(
