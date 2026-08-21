@@ -471,6 +471,12 @@ local sync device id, rejects runs that exceed the caller's device limit, and
 pulls each trusted settings device head via the broadwebd source bridge. The
 runner reports per-device results so callers can distinguish applied manifests,
 unchanged heads, and trusted devices that have no published root yet.
+A higher-level settings sync cycle composes the local publisher and receive
+runner. It preflights the trusted-device limit, publishes local pending settings
+first, then receives from trusted devices. The local device's own public key
+still belongs in the trusted-key table because manifests may reference retained
+snapshot dependencies signed by the local device, even though the receive runner
+does not pull the local device's head as a remote source.
 
 The local fake backend must model provider availability inside the test process.
 Each simulated device registers as a provider, retained objects are scoped to

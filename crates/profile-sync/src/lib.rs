@@ -20,10 +20,10 @@ use slate_storage::{
     ProfileSyncRootRecord, ProfileSyncSettingsManifestApplication, ProfileSyncSettingsSnapshot,
     ProfileSyncSettingsSnapshotPublication, ProfileSyncSettingsTailChangePublication,
     ProfileSyncTrustedPullApplyError, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, StorageError,
-    SyncChangeRecord, SyncCompactionTarget, SyncObjectError, SyncSnapshotRecord,
-    SyncSnapshotRegistration, VerifiedProfileSyncDeviceHead, open_signed_profile_sync_device_head,
-    settings_sync_manifest_for_snapshot_and_tail_changes, settings_sync_manifest_for_tail_changes,
-    settings_sync_snapshot_id,
+    SyncChangeRecord, SyncCompactionTarget, SyncDevicePublicKeyRecord, SyncObjectError,
+    SyncSnapshotRecord, SyncSnapshotRegistration, VerifiedProfileSyncDeviceHead,
+    open_signed_profile_sync_device_head, settings_sync_manifest_for_snapshot_and_tail_changes,
+    settings_sync_manifest_for_tail_changes, settings_sync_snapshot_id,
 };
 use std::collections::BTreeSet;
 
@@ -34,6 +34,11 @@ pub struct BroadwebdProfileSyncObjectSource<'a> {
 
 #[derive(Clone, Copy)]
 pub struct BroadwebdProfileSyncPublisher<'a> {
+    daemon: &'a BroadwebDaemon,
+}
+
+#[derive(Clone, Copy)]
+pub struct BroadwebdSettingsSyncRunner<'a> {
     daemon: &'a BroadwebDaemon,
 }
 
@@ -158,6 +163,42 @@ impl From<StorageError> for ProfileSyncReceiveError {
 impl From<ProfileSyncTrustedPullApplyError<BroadwebdError>> for ProfileSyncReceiveError {
     fn from(error: ProfileSyncTrustedPullApplyError<BroadwebdError>) -> Self {
         Self::PullApply(error)
+    }
+}
+
+#[derive(Debug)]
+pub enum ProfileSyncCycleError {
+    Publish(ProfileSyncPublishError),
+    Receive(ProfileSyncReceiveError),
+}
+
+impl fmt::Display for ProfileSyncCycleError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Publish(error) => write!(formatter, "profile sync publish cycle failed: {error}"),
+            Self::Receive(error) => write!(formatter, "profile sync receive cycle failed: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for ProfileSyncCycleError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Publish(error) => Some(error),
+            Self::Receive(error) => Some(error),
+        }
+    }
+}
+
+impl From<ProfileSyncPublishError> for ProfileSyncCycleError {
+    fn from(error: ProfileSyncPublishError) -> Self {
+        Self::Publish(error)
+    }
+}
+
+impl From<ProfileSyncReceiveError> for ProfileSyncCycleError {
+    fn from(error: ProfileSyncReceiveError) -> Self {
+        Self::Receive(error)
     }
 }
 
@@ -302,6 +343,24 @@ impl TrustedSettingsSyncRun {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncCycleRun {
+    pub profile: String,
+    pub settings_root_id: String,
+    pub publish: LocalSettingsSyncRun,
+    pub receive: TrustedSettingsSyncRun,
+}
+
+impl SettingsSyncCycleRun {
+    pub fn published_step_count(&self) -> usize {
+        self.publish.published_step_count()
+    }
+
+    pub fn applied_count(&self) -> usize {
+        self.receive.applied_count()
+    }
+}
+
 pub fn settings_device_head_root_id(device_id: &str) -> String {
     format!("settings/devices/{device_id}/head")
 }
@@ -367,18 +426,7 @@ impl<'a> BroadwebdProfileSyncObjectSource<'a> {
         key_id: &str,
         max_devices: u32,
     ) -> Result<TrustedSettingsSyncRun, ProfileSyncReceiveError> {
-        let trusted_devices = database
-            .sync_device_public_keys(profile)?
-            .into_iter()
-            .filter(|record| record.public_key.device_id != database.local_sync_device_id())
-            .collect::<Vec<_>>();
-        if trusted_devices.len() > max_devices as usize {
-            return Err(ProfileSyncReceiveError::TrustedDeviceLimitExceeded {
-                profile: profile.to_string(),
-                trusted_device_count: trusted_devices.len(),
-                max_devices,
-            });
-        }
+        let trusted_devices = trusted_remote_device_public_keys(database, profile, max_devices)?;
 
         let mut devices = Vec::with_capacity(trusted_devices.len());
         for trusted_device in trusted_devices {
@@ -401,6 +449,53 @@ impl<'a> BroadwebdProfileSyncObjectSource<'a> {
         Ok(TrustedSettingsSyncRun {
             profile: profile.to_string(),
             devices,
+        })
+    }
+}
+
+impl<'a> BroadwebdSettingsSyncRunner<'a> {
+    pub fn new(daemon: &'a BroadwebDaemon) -> Self {
+        Self { daemon }
+    }
+
+    pub fn run_settings_sync_cycle(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        settings_root_id: &str,
+        content_key: &ProfileSyncContentKey,
+        key_id: &str,
+        signer: &ProfileSyncDeviceSigner,
+        retention_policy: ProfileSyncRetentionPolicy,
+        max_publish_steps: u32,
+        max_trusted_devices: u32,
+    ) -> Result<SettingsSyncCycleRun, ProfileSyncCycleError> {
+        trusted_remote_device_public_keys(database, profile, max_trusted_devices)?;
+        let publisher = BroadwebdProfileSyncPublisher::new(self.daemon);
+        let publish = publisher.run_pending_local_settings_sync(
+            database,
+            profile,
+            settings_root_id,
+            content_key,
+            key_id,
+            signer,
+            retention_policy,
+            max_publish_steps,
+        )?;
+        let source = BroadwebdProfileSyncObjectSource::new(self.daemon);
+        let receive = source.pull_and_apply_trusted_settings_from_registered_devices(
+            database,
+            profile,
+            content_key,
+            key_id,
+            max_trusted_devices,
+        )?;
+
+        Ok(SettingsSyncCycleRun {
+            profile: profile.to_string(),
+            settings_root_id: settings_root_id.to_string(),
+            publish,
+            receive,
         })
     }
 }
@@ -1207,6 +1302,26 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
     }
 }
 
+fn trusted_remote_device_public_keys(
+    database: &SlateProfileDatabase,
+    profile: &str,
+    max_devices: u32,
+) -> Result<Vec<SyncDevicePublicKeyRecord>, ProfileSyncReceiveError> {
+    let trusted_devices = database
+        .sync_device_public_keys(profile)?
+        .into_iter()
+        .filter(|record| record.public_key.device_id != database.local_sync_device_id())
+        .collect::<Vec<_>>();
+    if trusted_devices.len() > max_devices as usize {
+        return Err(ProfileSyncReceiveError::TrustedDeviceLimitExceeded {
+            profile: profile.to_string(),
+            trusted_device_count: trusted_devices.len(),
+            max_devices,
+        });
+    }
+    Ok(trusted_devices)
+}
+
 fn validate_tail_changes_for_publish(
     profile: &str,
     changes: &[SyncChangeRecord],
@@ -1448,8 +1563,8 @@ impl ProfileSyncObjectSource for BroadwebdProfileSyncObjectSource<'_> {
 mod tests {
     use super::{
         BroadwebdProfileSyncObjectSource, BroadwebdProfileSyncPublisher,
-        BroadwebdTrustedDeviceHeadSyncStatus, LocalSettingsHeadPublishStatus,
-        ProfileSyncReceiveError, settings_device_head_root_id,
+        BroadwebdSettingsSyncRunner, BroadwebdTrustedDeviceHeadSyncStatus,
+        LocalSettingsHeadPublishStatus, ProfileSyncReceiveError, settings_device_head_root_id,
     };
     use slate_broadwebd::{ResourceBudget, test_fixtures::InProcessBroadwebNetwork};
     use slate_storage::{
@@ -2049,6 +2164,157 @@ mod tests {
         let _ = std::fs::remove_dir_all(receiver_state_root);
         let _ = std::fs::remove_dir_all(publisher_db_root);
         let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_runner_publishes_then_receives_in_one_cycle() {
+        let network = InProcessBroadwebNetwork::new();
+        let first_state_root = test_state_root("cycle-first");
+        let second_state_root = test_state_root("cycle-second");
+        let first_db_root = test_state_root("cycle-first-db");
+        let second_db_root = test_state_root("cycle-second-db");
+        let first_daemon = network
+            .daemon_for_device(&first_state_root, ResourceBudget::default(), "runtime-x")
+            .expect("start first daemon");
+        let second_daemon = network
+            .daemon_for_device(&second_state_root, ResourceBudget::default(), "runtime-y")
+            .expect("start second daemon");
+        let first_database = SlateProfileDatabase::open_resolved_with_device_id(
+            first_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-x",
+        )
+        .expect("open first settings database");
+        let second_database = SlateProfileDatabase::open_resolved_with_device_id(
+            second_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-y",
+        )
+        .expect("open second settings database");
+        let profile = "cycleprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([51; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let first_signer =
+            ProfileSyncDeviceSigner::generate("runtime-x").expect("generate first signer");
+        let second_signer =
+            ProfileSyncDeviceSigner::generate("runtime-y").expect("generate second signer");
+        first_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: first_signer.public_key().expect("first self public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("first device trusts itself for retained dependencies");
+        first_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: second_signer.public_key().expect("second public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("first device trusts second");
+        second_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: second_signer.public_key().expect("second self public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("second device trusts itself for retained dependencies");
+        second_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: first_signer.public_key().expect("first public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("second device trusts first");
+
+        first_database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("first device writes local setting");
+        let first_cycle = BroadwebdSettingsSyncRunner::new(&first_daemon)
+            .run_settings_sync_cycle(
+                &first_database,
+                profile,
+                settings_root_id,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &first_signer,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+                4,
+            )
+            .expect("first device runs sync cycle");
+        assert_eq!(first_cycle.published_step_count(), 1);
+        assert_eq!(first_cycle.applied_count(), 0);
+
+        let second_pull_cycle = BroadwebdSettingsSyncRunner::new(&second_daemon)
+            .run_settings_sync_cycle(
+                &second_database,
+                profile,
+                settings_root_id,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &second_signer,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+                4,
+            )
+            .expect("second device runs sync cycle");
+        assert_eq!(second_pull_cycle.published_step_count(), 0);
+        assert_eq!(second_pull_cycle.applied_count(), 1);
+        assert_eq!(
+            second_database
+                .get_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme")
+                .expect("read second synced theme")
+                .expect("second synced theme")
+                .value,
+            "teal"
+        );
+
+        second_database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.zoom", "110")
+            .expect("second device writes local setting");
+        let second_publish_cycle = BroadwebdSettingsSyncRunner::new(&second_daemon)
+            .run_settings_sync_cycle(
+                &second_database,
+                profile,
+                settings_root_id,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &second_signer,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+                4,
+            )
+            .expect("second device publishes sync cycle");
+        assert_eq!(second_publish_cycle.published_step_count(), 1);
+        assert_eq!(second_publish_cycle.applied_count(), 0);
+
+        let first_pull_cycle = BroadwebdSettingsSyncRunner::new(&first_daemon)
+            .run_settings_sync_cycle(
+                &first_database,
+                profile,
+                settings_root_id,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &first_signer,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+                4,
+            )
+            .expect("first device pulls second device cycle");
+        assert_eq!(first_pull_cycle.published_step_count(), 0);
+        assert_eq!(first_pull_cycle.applied_count(), 1);
+        assert_eq!(
+            first_database
+                .get_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.zoom")
+                .expect("read first synced zoom")
+                .expect("first synced zoom")
+                .value,
+            "110"
+        );
+
+        let _ = std::fs::remove_dir_all(first_state_root);
+        let _ = std::fs::remove_dir_all(second_state_root);
+        let _ = std::fs::remove_dir_all(first_db_root);
+        let _ = std::fs::remove_dir_all(second_db_root);
     }
 
     #[test]
