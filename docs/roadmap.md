@@ -227,6 +227,11 @@ Current baseline:
   local device, enforces a caller-supplied maximum trusted-device count, and
   pulls each trusted settings device head through broadwebd before applying new
   manifests.
+- The broadwebd-backed profile-sync source can now also apply active trusted
+  competing settings-root candidates through storage's candidate merge path.
+  The in-process regression covers two equal-control devices publishing
+  different signed `settings/latest` roots and a third trusted device applying
+  both candidates without loopback sockets.
 - `slate-profile-sync` now exposes a bounded settings sync cycle that preflights
   the trusted-device count, publishes local pending settings first, then pulls
   registered trusted device heads. The in-process two-device fixture covers a

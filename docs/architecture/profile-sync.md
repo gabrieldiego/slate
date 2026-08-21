@@ -471,6 +471,14 @@ local sync device id, rejects runs that exceed the caller's device limit, and
 pulls each trusted settings device head via the broadwebd source bridge. The
 runner reports per-device results so callers can distinguish applied manifests,
 unchanged heads, and trusted devices that have no published root yet.
+The same broadwebd source bridge also exposes storage's active trusted
+settings-root candidate path. A receiver can list all visible competing
+`settings/latest` roots through broadwebd, verify each signed manifest against
+trusted device keys and the active content-key epoch in `slate-settings.db`,
+apply them in storage's deterministic candidate order, and record the newest
+verified root. This keeps equal-control device merge behavior available through
+the runtime-facing bridge without adding a socket fixture or a backend-specific
+merge path.
 A higher-level settings sync cycle composes the local publisher and receive
 runner. It preflights the trusted-device limit, publishes local pending settings
 first, then receives from trusted devices. The local device's own public key

@@ -23,13 +23,14 @@ use slate_storage::{
     ProfileSyncDeviceHeadPullRecordStatus, ProfileSyncDeviceSigner, ProfileSyncManifest,
     ProfileSyncObjectBytes, ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
     ProfileSyncRootCandidate as StorageProfileSyncRootCandidate, ProfileSyncRootRecord,
-    ProfileSyncSettingsManifestApplication, ProfileSyncSettingsSnapshot,
-    ProfileSyncSettingsSnapshotPublication, ProfileSyncSettingsTailChangePublication,
-    ProfileSyncTrustedPullApplyError, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, StorageError,
-    SyncChangeRecord, SyncCompactionTarget, SyncDevicePublicKeyRecord, SyncObjectError,
-    SyncSnapshotRecord, SyncSnapshotRegistration, VerifiedProfileSyncDeviceHead,
-    open_signed_profile_sync_device_head, settings_sync_manifest_for_snapshot_and_tail_changes,
-    settings_sync_manifest_for_tail_changes, settings_sync_snapshot_id,
+    ProfileSyncSettingsCandidatePullApplyStatus, ProfileSyncSettingsManifestApplication,
+    ProfileSyncSettingsSnapshot, ProfileSyncSettingsSnapshotPublication,
+    ProfileSyncSettingsTailChangePublication, ProfileSyncTrustedPullApplyError,
+    SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, StorageError, SyncChangeRecord,
+    SyncCompactionTarget, SyncDevicePublicKeyRecord, SyncObjectError, SyncSnapshotRecord,
+    SyncSnapshotRegistration, VerifiedProfileSyncDeviceHead, open_signed_profile_sync_device_head,
+    settings_sync_manifest_for_snapshot_and_tail_changes, settings_sync_manifest_for_tail_changes,
+    settings_sync_snapshot_id,
 };
 use std::collections::BTreeSet;
 
@@ -1059,6 +1060,24 @@ impl<'a> BroadwebdProfileSyncObjectSource<'a> {
             profile: profile.to_string(),
             devices,
         })
+    }
+
+    pub fn pull_and_apply_active_trusted_settings_manifest_candidates_if_changed(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        root_id: &str,
+        content_key: &ProfileSyncContentKey,
+    ) -> Result<
+        ProfileSyncSettingsCandidatePullApplyStatus,
+        ProfileSyncTrustedPullApplyError<BroadwebdError>,
+    > {
+        database.pull_and_apply_active_trusted_signed_settings_manifest_candidates_if_changed(
+            self,
+            profile,
+            root_id,
+            content_key,
+        )
     }
 }
 
@@ -2571,12 +2590,13 @@ mod tests {
         IncomingSyncSettingText, PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305,
         PROFILE_SYNC_CONTENT_KEY_BYTES, PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
         ProfileSyncContentKey, ProfileSyncDeviceHead, ProfileSyncDeviceSigner,
-        ProfileSyncObjectSource, ProfileSyncRetentionPolicy, SYNC_DOMAIN_CALENDAR,
-        SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, StorageError, SyncChangeRecord,
-        SyncContentKeyEpochRegistration, SyncDevicePublicKeyRegistration,
-        open_signed_profile_sync_device_head, open_signed_profile_sync_manifest,
-        open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
-        pull_signed_profile_sync_device_head, settings_sync_snapshot_id,
+        ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
+        ProfileSyncSettingsCandidatePullApplyStatus, SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_SETTINGS,
+        SlateProfileDatabase, StorageError, SyncChangeRecord, SyncContentKeyEpochRegistration,
+        SyncDevicePublicKeyRegistration, open_signed_profile_sync_device_head,
+        open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
+        open_signed_sync_setting_text, pull_signed_profile_sync_device_head,
+        settings_sync_snapshot_id,
     };
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -3019,6 +3039,166 @@ mod tests {
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
         let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_source_applies_competing_trusted_settings_manifest_candidates() {
+        let network = InProcessBroadwebNetwork::new();
+        let first_state_root = test_state_root("candidate-bridge-first");
+        let second_state_root = test_state_root("candidate-bridge-second");
+        let receiver_state_root = test_state_root("candidate-bridge-receiver");
+        let first_db_root = test_state_root("candidate-bridge-first-db");
+        let second_db_root = test_state_root("candidate-bridge-second-db");
+        let receiver_db_root = test_state_root("candidate-bridge-receiver-db");
+        let first_daemon = network
+            .daemon_for_device(
+                &first_state_root,
+                ResourceBudget::default(),
+                "runtime-candidate-a",
+            )
+            .expect("start first candidate publisher daemon");
+        let second_daemon = network
+            .daemon_for_device(
+                &second_state_root,
+                ResourceBudget::default(),
+                "runtime-candidate-b",
+            )
+            .expect("start second candidate publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "runtime-candidate-c",
+            )
+            .expect("start candidate receiver daemon");
+        let first_database = SlateProfileDatabase::open_resolved_with_device_id(
+            first_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-candidate-a",
+        )
+        .expect("open first candidate settings database");
+        let second_database = SlateProfileDatabase::open_resolved_with_device_id(
+            second_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-candidate-b",
+        )
+        .expect("open second candidate settings database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-candidate-c",
+        )
+        .expect("open receiver candidate settings database");
+        let profile = "candidateprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([62; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let first_signer =
+            ProfileSyncDeviceSigner::generate("runtime-candidate-a").expect("first signer");
+        let second_signer =
+            ProfileSyncDeviceSigner::generate("runtime-candidate-b").expect("second signer");
+        register_test_content_key_epoch(&receiver_database, profile);
+        for public_key in [
+            first_signer.public_key().expect("first public key"),
+            second_signer.public_key().expect("second public key"),
+        ] {
+            receiver_database
+                .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                    profile: profile.to_string(),
+                    public_key,
+                    membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                })
+                .expect("receiver trusts candidate publisher key");
+        }
+
+        let first_change = first_database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "alpha")
+            .expect("first candidate writes setting");
+        let first_publication = BroadwebdProfileSyncPublisher::new(&first_daemon)
+            .publish_signed_settings_tail_changes(
+                profile,
+                settings_root_id,
+                std::slice::from_ref(&first_change),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &first_signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("first candidate publishes shared settings root");
+        let second_change = second_database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "bravo")
+            .expect("second candidate writes setting");
+        let second_publication = BroadwebdProfileSyncPublisher::new(&second_daemon)
+            .publish_signed_settings_tail_changes(
+                profile,
+                settings_root_id,
+                std::slice::from_ref(&second_change),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &second_signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("second candidate publishes shared settings root");
+
+        let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
+        let status = source
+            .pull_and_apply_active_trusted_settings_manifest_candidates_if_changed(
+                &receiver_database,
+                profile,
+                settings_root_id,
+                &content_key,
+            )
+            .expect("receiver applies competing broadwebd settings candidates");
+        let ProfileSyncSettingsCandidatePullApplyStatus::Applied(applications) = status else {
+            panic!("expected candidate applications, got {status:?}");
+        };
+        assert_eq!(
+            applications
+                .iter()
+                .map(|application| application.application.manifest_object_id.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                first_publication.manifest_object_id.as_str(),
+                second_publication.manifest_object_id.as_str(),
+            ],
+            "candidate application should run oldest publication first"
+        );
+        assert_eq!(
+            receiver_database
+                .get_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme")
+                .expect("read receiver candidate value")
+                .expect("receiver candidate value")
+                .value,
+            "bravo"
+        );
+        assert_eq!(
+            receiver_database
+                .profile_sync_root(profile, settings_root_id)
+                .expect("read receiver shared settings root")
+                .expect("receiver shared settings root")
+                .object_id,
+            second_publication.manifest_object_id.as_str()
+        );
+
+        let unchanged = source
+            .pull_and_apply_active_trusted_settings_manifest_candidates_if_changed(
+                &receiver_database,
+                profile,
+                settings_root_id,
+                &content_key,
+            )
+            .expect("receiver checks unchanged candidate roots");
+        assert_eq!(
+            unchanged,
+            ProfileSyncSettingsCandidatePullApplyStatus::Unchanged {
+                profile: profile.to_string(),
+                root_id: settings_root_id.to_string(),
+                object_id: second_publication.manifest_object_id.clone(),
+            }
+        );
+
+        let _ = std::fs::remove_dir_all(first_state_root);
+        let _ = std::fs::remove_dir_all(second_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(first_db_root);
+        let _ = std::fs::remove_dir_all(second_db_root);
         let _ = std::fs::remove_dir_all(receiver_db_root);
     }
 
