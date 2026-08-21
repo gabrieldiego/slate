@@ -569,6 +569,13 @@ Current baseline:
   local credential preflight refuses to publish with a local signer whose
   stored key was distrusted. This is only a local revocation primitive; signed
   account membership revocation and enrollment policy are still future work.
+- `slate-settings.db` now has a signed account membership record table and
+  storage API. Membership records are stored by profile, record id, membership
+  epoch, record kind, target device id, signer device id, and exact signed
+  bytes; the signed-record helper verifies the signature against the embedded
+  signer key and validates enroll, revoke, and device-key-rotation payload
+  shapes before accepting them. Applying those records to the trusted device
+  key table remains the next account-policy step.
 - Trusted signed settings pulls now also check the stored device-key membership
   epoch against the manifest membership epoch. A key first trusted after the
   manifest epoch cannot authorize that manifest, snapshot, or tail object set.
@@ -730,9 +737,10 @@ Next:
 - Continue splitting sync backends into discovery, connectivity, transfer,
   availability, and mutable-root implementations so different broadweb
   protocols can be combined behind the typed provider role records.
-- Extend the initial manifest membership epoch into the full equal-control
-  account authority model: signed device heads, enrollment records, and
-  availability providers with no profile write authority.
+- Extend the stored signed membership record history into the full
+  equal-control account authority model: apply enrollment, revocation, and key
+  rotation records to trusted device keys while keeping availability providers
+  without profile write authority.
 - Add Kubo RPC-backed operations for encrypted object add, pin, unpin, pin
   verification, IPNS publish, and IPNS resolve as the first IPFS/IPNS backend.
 - Implement the actual runtime sync loop that supplies a broadwebd-backed object

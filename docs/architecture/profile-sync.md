@@ -135,6 +135,14 @@ device to approve a new device, but the format should leave room for stricter
 policies such as M-of-N approval for device revocation, recovery, or sensitive
 sync domains.
 
+`slate-settings.db` now has the first local persistence primitive for that
+authority set: signed membership records are stored by profile, record id,
+membership epoch, record kind, target device id, signer device id, and exact
+signed bytes. The storage helper verifies the record signature against the
+embedded signer key and validates the signed payload shape before insert, but it
+does not yet apply account policy or mutate the trusted device-key table from
+those records.
+
 ## State Model
 
 The local SQLite database remains the fast materialized view that the browser
@@ -244,7 +252,8 @@ Runtime trusted-device enumeration skips distrusted remote keys, trusted object
 opening rejects signed payloads from distrusted devices, and local credential
 preflight refuses to publish with a distrusted local signer. This is a local
 revocation guard for current fixtures and scheduler policy; full account-level
-revocation still needs signed membership records and epoch transition rules.
+revocation still needs the stored signed membership records to be applied
+through epoch transition rules.
 
 The active-key pull path also exposes an idempotent root-status helper for sync
 polling. It resolves the published root first and reports missing roots,

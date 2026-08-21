@@ -23,11 +23,15 @@ pub const PROFILE_SYNC_NONCE_BYTES: usize = 12;
 pub const SYNC_OBJECT_VERSION: u8 = 1;
 pub const PROFILE_SYNC_MANIFEST_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION: u8 = 1;
+pub const PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND: &str = "setting-change";
 pub const PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND: &str = "settings-snapshot";
 pub const PROFILE_SYNC_MANIFEST_OBJECT_KIND: &str = "manifest";
 pub const PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND: &str = "device-head";
+pub const PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE: &str = "enroll-device";
+pub const PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE: &str = "revoke-device";
+pub const PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY: &str = "rotate-device-key";
 pub const DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH: i64 = 1;
 pub const DEFAULT_PROFILE_SYNC_MIN_TAIL_CHANGE_COUNT: u32 = 32;
 pub const DEFAULT_PROFILE_SYNC_CHANGE_RETENTION_SECONDS: i64 = 14 * 24 * 60 * 60;
@@ -335,6 +339,19 @@ pub struct ProfileSyncDeviceHead {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ProfileSyncMembershipRecord {
+    pub profile: String,
+    pub record_id: String,
+    #[serde(default = "default_profile_sync_membership_record_schema_version")]
+    pub schema_version: u8,
+    pub membership_epoch: i64,
+    pub record_kind: String,
+    pub device_id: String,
+    pub device_public_key: Option<ProfileSyncDevicePublicKey>,
+    pub created_at: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct ProfileSyncRetentionPolicy {
     pub min_tail_change_count: u32,
     pub change_retention_seconds: i64,
@@ -385,8 +402,22 @@ fn default_profile_sync_device_head_schema_version() -> u8 {
     PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION
 }
 
+fn default_profile_sync_membership_record_schema_version() -> u8 {
+    PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION
+}
+
 fn default_profile_sync_membership_epoch() -> i64 {
     DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH
+}
+
+impl ProfileSyncMembershipRecord {
+    pub fn to_bytes(&self) -> Result<Vec<u8>, SyncObjectError> {
+        serde_json::to_vec(self).map_err(SyncObjectError::Encode)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, SyncObjectError> {
+        serde_json::from_slice(bytes).map_err(SyncObjectError::Decode)
+    }
 }
 
 impl SignedSyncObject {
@@ -1971,6 +2002,29 @@ pub struct SyncDevicePublicKeyRecord {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SyncAccountMembershipRecordRegistration {
+    pub profile: String,
+    pub record_id: String,
+    pub membership_epoch: i64,
+    pub record_kind: String,
+    pub device_id: String,
+    pub signer_device_id: String,
+    pub signed_record: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SyncAccountMembershipRecord {
+    pub profile: String,
+    pub record_id: String,
+    pub membership_epoch: i64,
+    pub record_kind: String,
+    pub device_id: String,
+    pub signer_device_id: String,
+    pub signed_record: Vec<u8>,
+    pub created_at: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SyncContentKeyEpochRegistration {
     pub profile: String,
     pub key_id: String,
@@ -2398,6 +2452,10 @@ pub enum StorageError {
     EncodeSnapshotDomains(serde_json::Error),
     Clock(std::time::SystemTimeError),
     InvalidSyncDeviceId(String),
+    InvalidSyncMembershipRecordId(String),
+    InvalidSyncMembershipRecordKind(String),
+    InvalidSyncMembershipEpoch(i64),
+    InvalidProfileSyncMembershipRecord(String),
     InvalidSyncContentKeyId(String),
     InvalidSyncDomain(String),
     InvalidSyncRevision(i64),
@@ -2427,6 +2485,7 @@ pub enum StorageError {
     InvalidSyncRootId(String),
     InvalidProfileSyncManifest(String),
     UnsupportedProfileSyncManifestSchema(u8),
+    UnsupportedProfileSyncMembershipRecordSchema(u8),
     UnsupportedSyncSnapshotSchema(u8),
 }
 
@@ -2462,6 +2521,27 @@ impl fmt::Display for StorageError {
             Self::Clock(error) => write!(formatter, "failed to read system clock: {error}"),
             Self::InvalidSyncDeviceId(device_id) => {
                 write!(formatter, "invalid sync device id: {device_id}")
+            }
+            Self::InvalidSyncMembershipRecordId(record_id) => {
+                write!(formatter, "invalid sync membership record id: {record_id}")
+            }
+            Self::InvalidSyncMembershipRecordKind(record_kind) => {
+                write!(
+                    formatter,
+                    "invalid sync membership record kind: {record_kind}"
+                )
+            }
+            Self::InvalidSyncMembershipEpoch(membership_epoch) => {
+                write!(
+                    formatter,
+                    "invalid sync membership epoch: {membership_epoch}"
+                )
+            }
+            Self::InvalidProfileSyncMembershipRecord(reason) => {
+                write!(
+                    formatter,
+                    "invalid profile sync membership record: {reason}"
+                )
             }
             Self::InvalidSyncContentKeyId(key_id) => {
                 write!(formatter, "invalid sync content key id: {key_id}")
@@ -2551,6 +2631,12 @@ impl fmt::Display for StorageError {
                     "unsupported profile sync manifest schema version: {schema_version}"
                 )
             }
+            Self::UnsupportedProfileSyncMembershipRecordSchema(schema_version) => {
+                write!(
+                    formatter,
+                    "unsupported profile sync membership record schema version: {schema_version}"
+                )
+            }
             Self::UnsupportedSyncSnapshotSchema(schema_version) => {
                 write!(
                     formatter,
@@ -2572,6 +2658,10 @@ impl std::error::Error for StorageError {
             Self::EncodeSnapshotDomains(error) => Some(error),
             Self::Clock(error) => Some(error),
             Self::InvalidSyncDeviceId(_) => None,
+            Self::InvalidSyncMembershipRecordId(_) => None,
+            Self::InvalidSyncMembershipRecordKind(_) => None,
+            Self::InvalidSyncMembershipEpoch(_) => None,
+            Self::InvalidProfileSyncMembershipRecord(_) => None,
             Self::InvalidSyncContentKeyId(_) => None,
             Self::InvalidSyncDomain(_) => None,
             Self::InvalidSyncRevision(_) => None,
@@ -2593,6 +2683,7 @@ impl std::error::Error for StorageError {
             Self::InvalidSyncRootId(_) => None,
             Self::InvalidProfileSyncManifest(_) => None,
             Self::UnsupportedProfileSyncManifestSchema(_) => None,
+            Self::UnsupportedProfileSyncMembershipRecordSchema(_) => None,
             Self::UnsupportedSyncSnapshotSchema(_) => None,
         }
     }
@@ -4239,6 +4330,128 @@ impl SlateProfileDatabase {
             keys.push(record.map_err(|source| self.database_error(source))?);
         }
         Ok(keys)
+    }
+
+    pub fn record_signed_sync_account_membership_record(
+        &self,
+        signed_record: &[u8],
+    ) -> Result<SyncAccountMembershipRecord, StorageError> {
+        let signed_object = SignedSyncObject::from_bytes(signed_record)
+            .map_err(|error| StorageError::InvalidProfileSyncMembershipRecord(error.to_string()))?;
+        if !is_valid_sync_identifier(signed_object.device_id.as_str()) {
+            return Err(StorageError::InvalidSyncDeviceId(signed_object.device_id));
+        }
+        let signer_public_key = ProfileSyncDevicePublicKey {
+            device_id: signed_object.device_id.clone(),
+            bytes: signed_object.public_key.clone(),
+        };
+        let payload = signed_object
+            .verify_with(&signer_public_key)
+            .map_err(|error| StorageError::InvalidProfileSyncMembershipRecord(error.to_string()))?;
+        let membership_record = ProfileSyncMembershipRecord::from_bytes(payload)
+            .map_err(|error| StorageError::InvalidProfileSyncMembershipRecord(error.to_string()))?;
+        validate_profile_sync_membership_record(&membership_record)?;
+
+        self.record_sync_account_membership_record(&SyncAccountMembershipRecordRegistration {
+            profile: membership_record.profile,
+            record_id: membership_record.record_id,
+            membership_epoch: membership_record.membership_epoch,
+            record_kind: membership_record.record_kind,
+            device_id: membership_record.device_id,
+            signer_device_id: signed_object.device_id,
+            signed_record: signed_record.to_vec(),
+        })
+    }
+
+    fn record_sync_account_membership_record(
+        &self,
+        registration: &SyncAccountMembershipRecordRegistration,
+    ) -> Result<SyncAccountMembershipRecord, StorageError> {
+        validate_sync_account_membership_registration(registration)?;
+
+        let connection = self.connection()?;
+        connection
+            .execute(
+                "INSERT OR IGNORE INTO sync_account_membership_records
+                   (profile, record_id, membership_epoch, record_kind, device_id,
+                    signer_device_id, signed_record, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                params![
+                    registration.profile.as_str(),
+                    registration.record_id.as_str(),
+                    registration.membership_epoch,
+                    registration.record_kind.as_str(),
+                    registration.device_id.as_str(),
+                    registration.signer_device_id.as_str(),
+                    registration.signed_record.as_slice(),
+                    unix_time_seconds()?,
+                ],
+            )
+            .map_err(|source| self.database_error(source))?;
+
+        let record = self
+            .sync_account_membership_record(
+                registration.profile.as_str(),
+                registration.record_id.as_str(),
+            )?
+            .ok_or_else(|| self.database_error(rusqlite::Error::QueryReturnedNoRows))?;
+        if record.signed_record != registration.signed_record {
+            return Err(StorageError::InvalidProfileSyncMembershipRecord(format!(
+                "membership record {} already exists with different signed bytes",
+                registration.record_id
+            )));
+        }
+        Ok(record)
+    }
+
+    pub fn sync_account_membership_record(
+        &self,
+        profile: &str,
+        record_id: &str,
+    ) -> Result<Option<SyncAccountMembershipRecord>, StorageError> {
+        if !is_valid_sync_identifier(record_id) {
+            return Err(StorageError::InvalidSyncMembershipRecordId(
+                record_id.to_string(),
+            ));
+        }
+
+        let connection = self.connection()?;
+        connection
+            .query_row(
+                "SELECT profile, record_id, membership_epoch, record_kind, device_id,
+                        signer_device_id, signed_record, created_at
+                 FROM sync_account_membership_records
+                 WHERE profile = ?1 AND record_id = ?2",
+                params![profile, record_id],
+                sync_account_membership_record_from_row,
+            )
+            .optional()
+            .map_err(|source| self.database_error(source))
+    }
+
+    pub fn sync_account_membership_records(
+        &self,
+        profile: &str,
+    ) -> Result<Vec<SyncAccountMembershipRecord>, StorageError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT profile, record_id, membership_epoch, record_kind, device_id,
+                        signer_device_id, signed_record, created_at
+                 FROM sync_account_membership_records
+                 WHERE profile = ?1
+                 ORDER BY membership_epoch, record_id",
+            )
+            .map_err(|source| self.database_error(source))?;
+        let records = statement
+            .query_map([profile], sync_account_membership_record_from_row)
+            .map_err(|source| self.database_error(source))?;
+
+        let mut membership_records = Vec::new();
+        for record in records {
+            membership_records.push(record.map_err(|source| self.database_error(source))?);
+        }
+        Ok(membership_records)
     }
 
     pub fn register_sync_content_key_epoch(
@@ -6222,6 +6435,24 @@ impl SlateProfileDatabase {
                     PRIMARY KEY(profile, device_id)
                 );
 
+                CREATE TABLE IF NOT EXISTS sync_account_membership_records (
+                    profile TEXT NOT NULL,
+                    record_id TEXT NOT NULL,
+                    membership_epoch INTEGER NOT NULL,
+                    record_kind TEXT NOT NULL,
+                    device_id TEXT NOT NULL,
+                    signer_device_id TEXT NOT NULL,
+                    signed_record BLOB NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    PRIMARY KEY(profile, record_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS sync_account_membership_records_epoch
+                    ON sync_account_membership_records(profile, membership_epoch, record_id);
+
+                CREATE INDEX IF NOT EXISTS sync_account_membership_records_device
+                    ON sync_account_membership_records(profile, device_id, membership_epoch);
+
                 CREATE TABLE IF NOT EXISTS sync_content_key_epochs (
                     profile TEXT NOT NULL,
                     key_id TEXT NOT NULL,
@@ -6309,6 +6540,13 @@ impl SlateProfileDatabase {
             )
             .map_err(|source| self.database_error(source))?;
         self.ensure_sync_device_public_keys_trusted_column(&connection)?;
+        connection
+            .execute(
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at)
+                 VALUES (4, CAST(strftime('%s', 'now') AS INTEGER))",
+                [],
+            )
+            .map_err(|source| self.database_error(source))?;
         Ok(())
     }
 
@@ -7167,6 +7405,130 @@ fn is_valid_sync_identifier(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+}
+
+fn validate_profile_sync_membership_record(
+    record: &ProfileSyncMembershipRecord,
+) -> Result<(), StorageError> {
+    if record.schema_version != PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION {
+        return Err(StorageError::UnsupportedProfileSyncMembershipRecordSchema(
+            record.schema_version,
+        ));
+    }
+    if record.membership_epoch < 1 {
+        return Err(StorageError::InvalidSyncMembershipEpoch(
+            record.membership_epoch,
+        ));
+    }
+    if !is_valid_sync_identifier(record.record_id.as_str()) {
+        return Err(StorageError::InvalidSyncMembershipRecordId(
+            record.record_id.clone(),
+        ));
+    }
+    if !is_valid_sync_identifier(record.device_id.as_str()) {
+        return Err(StorageError::InvalidSyncDeviceId(record.device_id.clone()));
+    }
+    if !is_valid_profile_sync_membership_record_kind(record.record_kind.as_str()) {
+        return Err(StorageError::InvalidSyncMembershipRecordKind(
+            record.record_kind.clone(),
+        ));
+    }
+
+    match record.record_kind.as_str() {
+        PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE
+        | PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY => {
+            let public_key = record.device_public_key.as_ref().ok_or_else(|| {
+                StorageError::InvalidProfileSyncMembershipRecord(format!(
+                    "{} requires a device public key",
+                    record.record_kind
+                ))
+            })?;
+            validate_membership_record_public_key(record, public_key)?;
+        }
+        PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE => {
+            if record.device_public_key.is_some() {
+                return Err(StorageError::InvalidProfileSyncMembershipRecord(
+                    "revoke-device records must not carry a replacement public key".to_string(),
+                ));
+            }
+        }
+        _ => {
+            return Err(StorageError::InvalidSyncMembershipRecordKind(
+                record.record_kind.clone(),
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_membership_record_public_key(
+    record: &ProfileSyncMembershipRecord,
+    public_key: &ProfileSyncDevicePublicKey,
+) -> Result<(), StorageError> {
+    if !is_valid_sync_identifier(public_key.device_id.as_str()) {
+        return Err(StorageError::InvalidSyncDeviceId(
+            public_key.device_id.clone(),
+        ));
+    }
+    if public_key.device_id != record.device_id {
+        return Err(StorageError::InvalidProfileSyncMembershipRecord(format!(
+            "membership public key device id {} does not match target device {}",
+            public_key.device_id, record.device_id
+        )));
+    }
+    if public_key.bytes.is_empty() {
+        return Err(StorageError::InvalidProfileSyncMembershipRecord(format!(
+            "membership record {} has an empty device public key",
+            record.record_id
+        )));
+    }
+    Ok(())
+}
+
+fn validate_sync_account_membership_registration(
+    registration: &SyncAccountMembershipRecordRegistration,
+) -> Result<(), StorageError> {
+    if registration.membership_epoch < 1 {
+        return Err(StorageError::InvalidSyncMembershipEpoch(
+            registration.membership_epoch,
+        ));
+    }
+    if !is_valid_sync_identifier(registration.record_id.as_str()) {
+        return Err(StorageError::InvalidSyncMembershipRecordId(
+            registration.record_id.clone(),
+        ));
+    }
+    if !is_valid_profile_sync_membership_record_kind(registration.record_kind.as_str()) {
+        return Err(StorageError::InvalidSyncMembershipRecordKind(
+            registration.record_kind.clone(),
+        ));
+    }
+    if !is_valid_sync_identifier(registration.device_id.as_str()) {
+        return Err(StorageError::InvalidSyncDeviceId(
+            registration.device_id.clone(),
+        ));
+    }
+    if !is_valid_sync_identifier(registration.signer_device_id.as_str()) {
+        return Err(StorageError::InvalidSyncDeviceId(
+            registration.signer_device_id.clone(),
+        ));
+    }
+    if registration.signed_record.is_empty() {
+        return Err(StorageError::InvalidProfileSyncMembershipRecord(
+            "membership record signed bytes are empty".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn is_valid_profile_sync_membership_record_kind(record_kind: &str) -> bool {
+    matches!(
+        record_kind,
+        PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE
+            | PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE
+            | PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY
+    )
 }
 
 fn record_sync_device_seen_in_transaction(
@@ -8502,6 +8864,21 @@ fn sync_device_public_key_record_from_row(
     })
 }
 
+fn sync_account_membership_record_from_row(
+    row: &rusqlite::Row<'_>,
+) -> Result<SyncAccountMembershipRecord, rusqlite::Error> {
+    Ok(SyncAccountMembershipRecord {
+        profile: row.get(0)?,
+        record_id: row.get(1)?,
+        membership_epoch: row.get(2)?,
+        record_kind: row.get(3)?,
+        device_id: row.get(4)?,
+        signer_device_id: row.get(5)?,
+        signed_record: row.get(6)?,
+        created_at: row.get(7)?,
+    })
+}
+
 fn table_has_column(
     connection: &Connection,
     table: &str,
@@ -8684,6 +9061,17 @@ mod tests {
         .unwrap();
         signer
             .sign(encrypted.to_bytes().unwrap().as_slice())
+            .unwrap()
+            .to_bytes()
+            .unwrap()
+    }
+
+    fn signed_membership_record_bytes(
+        signer: &ProfileSyncDeviceSigner,
+        record: &ProfileSyncMembershipRecord,
+    ) -> Vec<u8> {
+        signer
+            .sign(record.to_bytes().unwrap().as_slice())
             .unwrap()
             .to_bytes()
             .unwrap()
@@ -11989,6 +12377,219 @@ mod tests {
             database.sync_device_public_key(DEFAULT_PROFILE_ID, "../device-a"),
             Err(StorageError::InvalidSyncDeviceId(device_id)) if device_id == "../device-a"
         ));
+    }
+
+    #[test]
+    fn signed_sync_account_membership_records_round_trip() {
+        let database_path = test_dir("sync-account-membership").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let signer = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let device_public_key = signer.public_key().unwrap();
+        let enroll_record = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-device-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-a".to_string(),
+            device_public_key: Some(device_public_key),
+            created_at: 10,
+        };
+        let signed_enroll = signed_membership_record_bytes(&signer, &enroll_record);
+
+        let first = database
+            .record_signed_sync_account_membership_record(signed_enroll.as_slice())
+            .unwrap();
+        let second = database
+            .record_signed_sync_account_membership_record(signed_enroll.as_slice())
+            .unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(first.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(first.record_id, "epoch-1-enroll-device-a");
+        assert_eq!(first.membership_epoch, 1);
+        assert_eq!(
+            first.record_kind,
+            PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE
+        );
+        assert_eq!(first.device_id, "device-a");
+        assert_eq!(first.signer_device_id, "device-a");
+        assert_eq!(first.signed_record, signed_enroll);
+        assert_eq!(
+            database
+                .sync_account_membership_record(DEFAULT_PROFILE_ID, "epoch-1-enroll-device-a")
+                .unwrap()
+                .expect("membership record"),
+            first
+        );
+
+        let revoke_record = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-revoke-device-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 2,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE.to_string(),
+            device_id: "device-b".to_string(),
+            device_public_key: None,
+            created_at: 20,
+        };
+        let signed_revoke = signed_membership_record_bytes(&signer, &revoke_record);
+        database
+            .record_signed_sync_account_membership_record(signed_revoke.as_slice())
+            .unwrap();
+
+        let records = database
+            .sync_account_membership_records(DEFAULT_PROFILE_ID)
+            .unwrap();
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0].record_id, "epoch-1-enroll-device-a");
+        assert_eq!(records[1].record_id, "epoch-2-revoke-device-b");
+    }
+
+    #[test]
+    fn sync_account_membership_records_reject_reused_ids_with_different_bytes() {
+        let database_path =
+            test_dir("sync-account-membership-conflict").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let first = SyncAccountMembershipRecordRegistration {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-device-a".to_string(),
+            membership_epoch: 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-a".to_string(),
+            signer_device_id: "device-a".to_string(),
+            signed_record: vec![1, 2, 3],
+        };
+        let second = SyncAccountMembershipRecordRegistration {
+            signed_record: vec![3, 2, 1],
+            ..first.clone()
+        };
+
+        database
+            .record_sync_account_membership_record(&first)
+            .unwrap();
+        let error = database
+            .record_sync_account_membership_record(&second)
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            StorageError::InvalidProfileSyncMembershipRecord(reason)
+                if reason.contains("already exists with different signed bytes")
+        ));
+    }
+
+    #[test]
+    fn signed_sync_account_membership_records_validate_payload_shape() {
+        let database_path =
+            test_dir("invalid-sync-account-membership").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let signer = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let other_public_key = ProfileSyncDeviceSigner::generate("device-b")
+            .unwrap()
+            .public_key()
+            .unwrap();
+        let mismatched_key_record = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-device-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-a".to_string(),
+            device_public_key: Some(other_public_key),
+            created_at: 10,
+        };
+        let error = database
+            .record_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer, &mismatched_key_record).as_slice(),
+            )
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            StorageError::InvalidProfileSyncMembershipRecord(reason)
+                if reason.contains("does not match target device")
+        ));
+
+        let invalid_id_record = ProfileSyncMembershipRecord {
+            record_id: "../epoch-1".to_string(),
+            device_public_key: Some(signer.public_key().unwrap()),
+            ..mismatched_key_record
+        };
+        let error = database
+            .record_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer, &invalid_id_record).as_slice(),
+            )
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            StorageError::InvalidSyncMembershipRecordId(record_id) if record_id == "../epoch-1"
+        ));
+
+        let mut tampered = signed_membership_record_bytes(&signer, &invalid_id_record);
+        let last = tampered.last_mut().expect("signed bytes");
+        *last = last.wrapping_add(1);
+        let error = database
+            .record_signed_sync_account_membership_record(tampered.as_slice())
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            StorageError::InvalidProfileSyncMembershipRecord(_)
+        ));
+    }
+
+    #[test]
+    fn sync_account_membership_records_table_is_added_to_existing_databases() {
+        let database_path =
+            test_dir("sync-account-membership-migration").join(DEFAULT_DATABASE_FILE_NAME);
+        {
+            let connection = Connection::open(&database_path).unwrap();
+            connection
+                .execute_batch(
+                    "
+                    CREATE TABLE schema_migrations (
+                        version INTEGER PRIMARY KEY,
+                        applied_at INTEGER NOT NULL
+                    );
+                    INSERT INTO schema_migrations(version, applied_at) VALUES (1, 10);
+                    ",
+                )
+                .unwrap();
+        }
+
+        let database = SlateProfileDatabase::open_resolved(database_path.clone()).unwrap();
+        let signer = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let record = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-device-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-a".to_string(),
+            device_public_key: Some(signer.public_key().unwrap()),
+            created_at: 10,
+        };
+        database
+            .record_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer, &record).as_slice(),
+            )
+            .unwrap();
+
+        assert_eq!(
+            database
+                .sync_account_membership_records(DEFAULT_PROFILE_ID)
+                .unwrap()
+                .len(),
+            1
+        );
+        let connection = Connection::open(database_path).unwrap();
+        let migration_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM schema_migrations WHERE version = 4",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(migration_count, 1);
     }
 
     #[test]
