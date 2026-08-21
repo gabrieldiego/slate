@@ -263,8 +263,8 @@ contract: initialize at the domain head, poll bounded decoded batches, and
 acknowledge only after the app has applied the batch.
 The broadwebd runtime bridge fixture now covers this watcher contract after a
 trusted receive: Chat, Files, and Storage cursors are initialized before sync,
-the signed encrypted snapshot is applied, and each app-domain poll returns the
-decoded payload that the app can inspect before advancing its cursor.
+the signed encrypted snapshot is applied, and each typed watcher runs an app
+callback over the decoded payload before acknowledging the cursor.
 The update-tail fixture then records those snapshot cursors, applies a
 post-snapshot manifest tail, and verifies each app-domain poll returns only the
 incremental decoded payload for that domain.

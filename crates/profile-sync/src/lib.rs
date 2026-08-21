@@ -3221,7 +3221,7 @@ mod tests {
         SYNC_DOMAIN_CHAT, SYNC_DOMAIN_FILES, SYNC_DOMAIN_SETTINGS, SYNC_DOMAIN_STORAGE,
         SlateProfileDatabase, StorageError, StorageProviderSyncPayload, StorageProviderUpdate,
         SyncChangeRecord, SyncContentKeyEpochRegistration, SyncDevicePublicKeyRegistration,
-        SyncSnapshotRegistration, open_signed_profile_sync_device_head,
+        SyncSnapshotRegistration, TypedAppSyncDomainWatcher, open_signed_profile_sync_device_head,
         open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
         open_signed_sync_setting_text, pull_signed_profile_sync_device_head,
         settings_sync_snapshot_id,
@@ -6524,30 +6524,57 @@ mod tests {
                 membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
             })
             .expect("receiver trusts typed app publisher key");
-        let initial_chat_poll = receiver_database
-            .poll_typed_sync_setting_text_events_for_app_domain::<ChatConversationSyncPayload>(
-                DEFAULT_PROFILE_ID,
-                SYNC_DOMAIN_CHAT,
-                8,
-            )
-            .expect("initialize receiver chat watcher cursor");
-        let initial_file_poll = receiver_database
-            .poll_typed_sync_setting_text_events_for_app_domain::<FileEntrySyncPayload>(
-                DEFAULT_PROFILE_ID,
-                SYNC_DOMAIN_FILES,
-                8,
-            )
-            .expect("initialize receiver files watcher cursor");
-        let initial_storage_poll = receiver_database
-            .poll_typed_sync_setting_text_events_for_app_domain::<StorageProviderSyncPayload>(
-                DEFAULT_PROFILE_ID,
-                SYNC_DOMAIN_STORAGE,
-                8,
-            )
-            .expect("initialize receiver storage watcher cursor");
-        assert_eq!(initial_chat_poll.event_count(), 0);
-        assert_eq!(initial_file_poll.event_count(), 0);
-        assert_eq!(initial_storage_poll.event_count(), 0);
+        let chat_watcher = TypedAppSyncDomainWatcher::<ChatConversationSyncPayload>::new(
+            receiver_database.clone(),
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_CHAT,
+            8,
+        )
+        .expect("initialize receiver chat watcher cursor");
+        let file_watcher = TypedAppSyncDomainWatcher::<FileEntrySyncPayload>::new(
+            receiver_database.clone(),
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_FILES,
+            8,
+        )
+        .expect("initialize receiver files watcher cursor");
+        let storage_watcher = TypedAppSyncDomainWatcher::<StorageProviderSyncPayload>::new(
+            receiver_database.clone(),
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_STORAGE,
+            8,
+        )
+        .expect("initialize receiver storage watcher cursor");
+        let initial_chat_revision = chat_watcher
+            .current_revision()
+            .expect("read initial receiver chat watcher cursor");
+        let initial_file_revision = file_watcher
+            .current_revision()
+            .expect("read initial receiver files watcher cursor");
+        let initial_storage_revision = storage_watcher
+            .current_revision()
+            .expect("read initial receiver storage watcher cursor");
+        assert_eq!(
+            chat_watcher
+                .poll_once()
+                .expect("poll idle chat")
+                .event_count(),
+            0
+        );
+        assert_eq!(
+            file_watcher
+                .poll_once()
+                .expect("poll idle files")
+                .event_count(),
+            0
+        );
+        assert_eq!(
+            storage_watcher
+                .poll_once()
+                .expect("poll idle storage")
+                .event_count(),
+            0
+        );
         let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
 
         let published = publisher
@@ -6628,18 +6655,26 @@ mod tests {
         assert!(providers[0].availability);
         assert_eq!(providers[0].pinning_policy.as_deref(), Some("manual"));
 
-        let chat_poll = receiver_database
-            .poll_typed_sync_setting_text_events_for_app_domain::<ChatConversationSyncPayload>(
-                DEFAULT_PROFILE_ID,
-                SYNC_DOMAIN_CHAT,
-                8,
-            )
-            .expect("poll receiver chat typed app events after sync apply");
+        let chat_applied = chat_watcher
+            .poll_apply_and_acknowledge(|chat_poll| {
+                assert!(chat_poll.advanced());
+                assert_eq!(chat_poll.previous_revision, initial_chat_revision);
+                assert_eq!(chat_poll.event_count(), 1);
+                assert_eq!(
+                    chat_poll.events[0].change.entity_key,
+                    "conversation.runtime-chat-1"
+                );
+                assert_eq!(chat_poll.events[0].value.conversation_id, "runtime-chat-1");
+                assert_eq!(chat_poll.events[0].value.display_name, "Runtime Team");
+                assert_eq!(chat_poll.events[0].value.unread_count, 4);
+                assert!(chat_poll.events[0].value.muted);
+                assert!(!chat_poll.events[0].value.deleted);
+                Ok::<(), &'static str>(())
+            })
+            .expect("apply and acknowledge receiver chat typed app events after sync apply");
+        let chat_poll = chat_applied.poll;
         assert!(chat_poll.advanced());
-        assert_eq!(
-            chat_poll.previous_revision,
-            initial_chat_poll.latest_revision
-        );
+        assert_eq!(chat_poll.previous_revision, initial_chat_revision);
         assert_eq!(chat_poll.event_count(), 1);
         assert_eq!(
             chat_poll.events[0].change.entity_key,
@@ -6655,28 +6690,35 @@ mod tests {
                 .app_sync_domain_cursor(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CHAT)
                 .expect("read receiver chat watcher cursor")
                 .map(|cursor| cursor.latest_revision),
-            Some(initial_chat_poll.latest_revision)
+            Some(chat_poll.latest_revision)
         );
         assert_eq!(
-            receiver_database
-                .record_typed_app_sync_domain_poll_cursor(&chat_poll)
-                .expect("record receiver chat watcher cursor")
-                .latest_revision,
+            chat_applied.cursor.latest_revision,
             chat_poll.latest_revision
         );
 
-        let file_poll = receiver_database
-            .poll_typed_sync_setting_text_events_for_app_domain::<FileEntrySyncPayload>(
-                DEFAULT_PROFILE_ID,
-                SYNC_DOMAIN_FILES,
-                8,
-            )
-            .expect("poll receiver files typed app events after sync apply");
+        let file_applied = file_watcher
+            .poll_apply_and_acknowledge(|file_poll| {
+                assert!(file_poll.advanced());
+                assert_eq!(file_poll.previous_revision, initial_file_revision);
+                assert_eq!(file_poll.event_count(), 1);
+                assert_eq!(
+                    file_poll.events[0].change.entity_key,
+                    "entry.runtime-file-1"
+                );
+                assert_eq!(file_poll.events[0].value.entry_id, "runtime-file-1");
+                assert_eq!(
+                    file_poll.events[0].value.content_ref.as_deref(),
+                    Some("bafy-runtime-file")
+                );
+                assert_eq!(file_poll.events[0].value.size_bytes, Some(512));
+                assert!(!file_poll.events[0].value.deleted);
+                Ok::<(), &'static str>(())
+            })
+            .expect("apply and acknowledge receiver files typed app events after sync apply");
+        let file_poll = file_applied.poll;
         assert!(file_poll.advanced());
-        assert_eq!(
-            file_poll.previous_revision,
-            initial_file_poll.latest_revision
-        );
+        assert_eq!(file_poll.previous_revision, initial_file_revision);
         assert_eq!(file_poll.event_count(), 1);
         assert_eq!(
             file_poll.events[0].change.entity_key,
@@ -6690,25 +6732,33 @@ mod tests {
         assert_eq!(file_poll.events[0].value.size_bytes, Some(512));
         assert!(!file_poll.events[0].value.deleted);
         assert_eq!(
-            receiver_database
-                .record_typed_app_sync_domain_poll_cursor(&file_poll)
-                .expect("record receiver files watcher cursor")
-                .latest_revision,
+            file_applied.cursor.latest_revision,
             file_poll.latest_revision
         );
 
-        let storage_poll = receiver_database
-            .poll_typed_sync_setting_text_events_for_app_domain::<StorageProviderSyncPayload>(
-                DEFAULT_PROFILE_ID,
-                SYNC_DOMAIN_STORAGE,
-                8,
-            )
-            .expect("poll receiver storage typed app events after sync apply");
+        let storage_applied = storage_watcher
+            .poll_apply_and_acknowledge(|storage_poll| {
+                assert!(storage_poll.advanced());
+                assert_eq!(storage_poll.previous_revision, initial_storage_revision);
+                assert_eq!(storage_poll.event_count(), 1);
+                assert_eq!(
+                    storage_poll.events[0].change.entity_key,
+                    "provider.runtime-provider-1"
+                );
+                assert_eq!(
+                    storage_poll.events[0].value.provider_id,
+                    "runtime-provider-1"
+                );
+                assert_eq!(storage_poll.events[0].value.provider_kind, "ipfs");
+                assert_eq!(storage_poll.events[0].value.quota_bytes, Some(8_192));
+                assert!(storage_poll.events[0].value.availability);
+                assert!(!storage_poll.events[0].value.deleted);
+                Ok::<(), &'static str>(())
+            })
+            .expect("apply and acknowledge receiver storage typed app events after sync apply");
+        let storage_poll = storage_applied.poll;
         assert!(storage_poll.advanced());
-        assert_eq!(
-            storage_poll.previous_revision,
-            initial_storage_poll.latest_revision
-        );
+        assert_eq!(storage_poll.previous_revision, initial_storage_revision);
         assert_eq!(storage_poll.event_count(), 1);
         assert_eq!(
             storage_poll.events[0].change.entity_key,
@@ -6723,10 +6773,7 @@ mod tests {
         assert!(storage_poll.events[0].value.availability);
         assert!(!storage_poll.events[0].value.deleted);
         assert_eq!(
-            receiver_database
-                .record_typed_app_sync_domain_poll_cursor(&storage_poll)
-                .expect("record receiver storage watcher cursor")
-                .latest_revision,
+            storage_applied.cursor.latest_revision,
             storage_poll.latest_revision
         );
 
@@ -6847,30 +6894,57 @@ mod tests {
             .expect("receiver trusts typed app upsert tail publisher key");
         let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
         let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
-        let initial_chat_cursor = receiver_database
-            .poll_typed_sync_setting_text_events_for_app_domain::<ChatConversationSyncPayload>(
-                DEFAULT_PROFILE_ID,
-                SYNC_DOMAIN_CHAT,
-                8,
-            )
-            .expect("initialize receiver chat cursor before typed app snapshot");
-        let initial_file_cursor = receiver_database
-            .poll_typed_sync_setting_text_events_for_app_domain::<FileEntrySyncPayload>(
-                DEFAULT_PROFILE_ID,
-                SYNC_DOMAIN_FILES,
-                8,
-            )
-            .expect("initialize receiver files cursor before typed app snapshot");
-        let initial_storage_cursor = receiver_database
-            .poll_typed_sync_setting_text_events_for_app_domain::<StorageProviderSyncPayload>(
-                DEFAULT_PROFILE_ID,
-                SYNC_DOMAIN_STORAGE,
-                8,
-            )
-            .expect("initialize receiver storage cursor before typed app snapshot");
-        assert_eq!(initial_chat_cursor.event_count(), 0);
-        assert_eq!(initial_file_cursor.event_count(), 0);
-        assert_eq!(initial_storage_cursor.event_count(), 0);
+        let chat_watcher = TypedAppSyncDomainWatcher::<ChatConversationSyncPayload>::new(
+            receiver_database.clone(),
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_CHAT,
+            8,
+        )
+        .expect("initialize receiver chat cursor before typed app snapshot");
+        let file_watcher = TypedAppSyncDomainWatcher::<FileEntrySyncPayload>::new(
+            receiver_database.clone(),
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_FILES,
+            8,
+        )
+        .expect("initialize receiver files cursor before typed app snapshot");
+        let storage_watcher = TypedAppSyncDomainWatcher::<StorageProviderSyncPayload>::new(
+            receiver_database.clone(),
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_STORAGE,
+            8,
+        )
+        .expect("initialize receiver storage cursor before typed app snapshot");
+        let initial_chat_revision = chat_watcher
+            .current_revision()
+            .expect("read initial chat cursor before typed app snapshot");
+        let initial_file_revision = file_watcher
+            .current_revision()
+            .expect("read initial files cursor before typed app snapshot");
+        let initial_storage_revision = storage_watcher
+            .current_revision()
+            .expect("read initial storage cursor before typed app snapshot");
+        assert_eq!(
+            chat_watcher
+                .poll_once()
+                .expect("poll idle chat before typed app snapshot")
+                .event_count(),
+            0
+        );
+        assert_eq!(
+            file_watcher
+                .poll_once()
+                .expect("poll idle files before typed app snapshot")
+                .event_count(),
+            0
+        );
+        assert_eq!(
+            storage_watcher
+                .poll_once()
+                .expect("poll idle storage before typed app snapshot")
+                .event_count(),
+            0
+        );
 
         let full = publisher
             .publish_full_local_settings_snapshot_head(
@@ -6918,18 +6992,25 @@ mod tests {
                 .availability,
             false
         );
-        let snapshot_chat_poll = receiver_database
-            .poll_typed_sync_setting_text_events_for_app_domain::<ChatConversationSyncPayload>(
-                DEFAULT_PROFILE_ID,
-                SYNC_DOMAIN_CHAT,
-                8,
-            )
-            .expect("receiver polls initial typed chat snapshot payload");
+        let snapshot_chat_applied = chat_watcher
+            .poll_apply_and_acknowledge(|snapshot_chat_poll| {
+                assert!(snapshot_chat_poll.advanced());
+                assert_eq!(snapshot_chat_poll.previous_revision, initial_chat_revision);
+                assert_eq!(snapshot_chat_poll.event_count(), 1);
+                assert_eq!(
+                    snapshot_chat_poll.events[0].value.conversation_id,
+                    "runtime-chat-tail-1"
+                );
+                assert_eq!(
+                    snapshot_chat_poll.events[0].value.display_name,
+                    "Runtime Team"
+                );
+                Ok::<(), &'static str>(())
+            })
+            .expect("receiver applies initial typed chat snapshot payload");
+        let snapshot_chat_poll = snapshot_chat_applied.poll;
         assert!(snapshot_chat_poll.advanced());
-        assert_eq!(
-            snapshot_chat_poll.previous_revision,
-            initial_chat_cursor.latest_revision
-        );
+        assert_eq!(snapshot_chat_poll.previous_revision, initial_chat_revision);
         assert_eq!(snapshot_chat_poll.event_count(), 1);
         assert_eq!(
             snapshot_chat_poll.events[0].value.conversation_id,
@@ -6939,22 +7020,30 @@ mod tests {
             snapshot_chat_poll.events[0].value.display_name,
             "Runtime Team"
         );
-        receiver_database
-            .record_typed_app_sync_domain_poll_cursor(&snapshot_chat_poll)
-            .expect("record receiver chat snapshot cursor");
-
-        let snapshot_file_poll = receiver_database
-            .poll_typed_sync_setting_text_events_for_app_domain::<FileEntrySyncPayload>(
-                DEFAULT_PROFILE_ID,
-                SYNC_DOMAIN_FILES,
-                8,
-            )
-            .expect("receiver polls initial typed files snapshot payload");
-        assert!(snapshot_file_poll.advanced());
         assert_eq!(
-            snapshot_file_poll.previous_revision,
-            initial_file_cursor.latest_revision
+            snapshot_chat_applied.cursor.latest_revision,
+            snapshot_chat_poll.latest_revision
         );
+
+        let snapshot_file_applied = file_watcher
+            .poll_apply_and_acknowledge(|snapshot_file_poll| {
+                assert!(snapshot_file_poll.advanced());
+                assert_eq!(snapshot_file_poll.previous_revision, initial_file_revision);
+                assert_eq!(snapshot_file_poll.event_count(), 1);
+                assert_eq!(
+                    snapshot_file_poll.events[0].value.entry_id,
+                    "runtime-file-tail-1"
+                );
+                assert_eq!(
+                    snapshot_file_poll.events[0].value.name,
+                    "runtime-initial.txt"
+                );
+                Ok::<(), &'static str>(())
+            })
+            .expect("receiver applies initial typed files snapshot payload");
+        let snapshot_file_poll = snapshot_file_applied.poll;
+        assert!(snapshot_file_poll.advanced());
+        assert_eq!(snapshot_file_poll.previous_revision, initial_file_revision);
         assert_eq!(snapshot_file_poll.event_count(), 1);
         assert_eq!(
             snapshot_file_poll.events[0].value.entry_id,
@@ -6964,21 +7053,32 @@ mod tests {
             snapshot_file_poll.events[0].value.name,
             "runtime-initial.txt"
         );
-        receiver_database
-            .record_typed_app_sync_domain_poll_cursor(&snapshot_file_poll)
-            .expect("record receiver files snapshot cursor");
+        assert_eq!(
+            snapshot_file_applied.cursor.latest_revision,
+            snapshot_file_poll.latest_revision
+        );
 
-        let snapshot_storage_poll = receiver_database
-            .poll_typed_sync_setting_text_events_for_app_domain::<StorageProviderSyncPayload>(
-                DEFAULT_PROFILE_ID,
-                SYNC_DOMAIN_STORAGE,
-                8,
-            )
-            .expect("receiver polls initial typed storage snapshot payload");
+        let snapshot_storage_applied = storage_watcher
+            .poll_apply_and_acknowledge(|snapshot_storage_poll| {
+                assert!(snapshot_storage_poll.advanced());
+                assert_eq!(
+                    snapshot_storage_poll.previous_revision,
+                    initial_storage_revision
+                );
+                assert_eq!(snapshot_storage_poll.event_count(), 1);
+                assert_eq!(
+                    snapshot_storage_poll.events[0].value.provider_id,
+                    "runtime-provider-tail-1"
+                );
+                assert!(!snapshot_storage_poll.events[0].value.availability);
+                Ok::<(), &'static str>(())
+            })
+            .expect("receiver applies initial typed storage snapshot payload");
+        let snapshot_storage_poll = snapshot_storage_applied.poll;
         assert!(snapshot_storage_poll.advanced());
         assert_eq!(
             snapshot_storage_poll.previous_revision,
-            initial_storage_cursor.latest_revision
+            initial_storage_revision
         );
         assert_eq!(snapshot_storage_poll.event_count(), 1);
         assert_eq!(
@@ -6986,9 +7086,10 @@ mod tests {
             "runtime-provider-tail-1"
         );
         assert!(!snapshot_storage_poll.events[0].value.availability);
-        receiver_database
-            .record_typed_app_sync_domain_poll_cursor(&snapshot_storage_poll)
-            .expect("record receiver storage snapshot cursor");
+        assert_eq!(
+            snapshot_storage_applied.cursor.latest_revision,
+            snapshot_storage_poll.latest_revision
+        );
 
         publisher_database
             .upsert_chat_conversation(&ChatConversationUpdate {
@@ -7121,13 +7222,29 @@ mod tests {
         assert_eq!(providers[0].pinning_policy.as_deref(), Some("auto"));
         assert!(!providers[0].enabled);
 
-        let tail_chat_poll = receiver_database
-            .poll_typed_sync_setting_text_events_for_app_domain::<ChatConversationSyncPayload>(
-                DEFAULT_PROFILE_ID,
-                SYNC_DOMAIN_CHAT,
-                8,
-            )
-            .expect("receiver polls typed chat tail payload");
+        let tail_chat_applied = chat_watcher
+            .poll_apply_and_acknowledge(|tail_chat_poll| {
+                assert!(tail_chat_poll.advanced());
+                assert_eq!(
+                    tail_chat_poll.previous_revision,
+                    snapshot_chat_poll.latest_revision
+                );
+                assert_eq!(tail_chat_poll.event_count(), 1);
+                assert_eq!(
+                    tail_chat_poll.events[0].value.conversation_id,
+                    "runtime-chat-tail-1"
+                );
+                assert_eq!(
+                    tail_chat_poll.events[0].value.display_name,
+                    "Runtime Team Updated"
+                );
+                assert_eq!(tail_chat_poll.events[0].value.unread_count, 7);
+                assert!(tail_chat_poll.events[0].value.archived);
+                assert!(tail_chat_poll.events[0].value.muted);
+                Ok::<(), &'static str>(())
+            })
+            .expect("receiver applies typed chat tail payload");
+        let tail_chat_poll = tail_chat_applied.poll;
         assert!(tail_chat_poll.advanced());
         assert_eq!(
             tail_chat_poll.previous_revision,
@@ -7145,17 +7262,33 @@ mod tests {
         assert_eq!(tail_chat_poll.events[0].value.unread_count, 7);
         assert!(tail_chat_poll.events[0].value.archived);
         assert!(tail_chat_poll.events[0].value.muted);
-        receiver_database
-            .record_typed_app_sync_domain_poll_cursor(&tail_chat_poll)
-            .expect("record receiver chat tail cursor");
+        assert_eq!(
+            tail_chat_applied.cursor.latest_revision,
+            tail_chat_poll.latest_revision
+        );
 
-        let tail_file_poll = receiver_database
-            .poll_typed_sync_setting_text_events_for_app_domain::<FileEntrySyncPayload>(
-                DEFAULT_PROFILE_ID,
-                SYNC_DOMAIN_FILES,
-                8,
-            )
-            .expect("receiver polls typed files tail payload");
+        let tail_file_applied = file_watcher
+            .poll_apply_and_acknowledge(|tail_file_poll| {
+                assert!(tail_file_poll.advanced());
+                assert_eq!(
+                    tail_file_poll.previous_revision,
+                    snapshot_file_poll.latest_revision
+                );
+                assert_eq!(tail_file_poll.event_count(), 1);
+                assert_eq!(
+                    tail_file_poll.events[0].value.entry_id,
+                    "runtime-file-tail-1"
+                );
+                assert_eq!(tail_file_poll.events[0].value.name, "runtime-updated.txt");
+                assert_eq!(tail_file_poll.events[0].value.size_bytes, Some(2_048));
+                assert_eq!(
+                    tail_file_poll.events[0].value.retention_policy.as_deref(),
+                    Some("keep-pinned")
+                );
+                Ok::<(), &'static str>(())
+            })
+            .expect("receiver applies typed files tail payload");
+        let tail_file_poll = tail_file_applied.poll;
         assert!(tail_file_poll.advanced());
         assert_eq!(
             tail_file_poll.previous_revision,
@@ -7172,17 +7305,34 @@ mod tests {
             tail_file_poll.events[0].value.retention_policy.as_deref(),
             Some("keep-pinned")
         );
-        receiver_database
-            .record_typed_app_sync_domain_poll_cursor(&tail_file_poll)
-            .expect("record receiver files tail cursor");
+        assert_eq!(
+            tail_file_applied.cursor.latest_revision,
+            tail_file_poll.latest_revision
+        );
 
-        let tail_storage_poll = receiver_database
-            .poll_typed_sync_setting_text_events_for_app_domain::<StorageProviderSyncPayload>(
-                DEFAULT_PROFILE_ID,
-                SYNC_DOMAIN_STORAGE,
-                8,
-            )
-            .expect("receiver polls typed storage tail payload");
+        let tail_storage_applied = storage_watcher
+            .poll_apply_and_acknowledge(|tail_storage_poll| {
+                assert!(tail_storage_poll.advanced());
+                assert_eq!(
+                    tail_storage_poll.previous_revision,
+                    snapshot_storage_poll.latest_revision
+                );
+                assert_eq!(tail_storage_poll.event_count(), 1);
+                assert_eq!(
+                    tail_storage_poll.events[0].value.provider_id,
+                    "runtime-provider-tail-1"
+                );
+                assert_eq!(
+                    tail_storage_poll.events[0].value.display_name,
+                    "Runtime IPFS Updated"
+                );
+                assert!(tail_storage_poll.events[0].value.availability);
+                assert!(tail_storage_poll.events[0].value.mutable_roots);
+                assert!(!tail_storage_poll.events[0].value.enabled);
+                Ok::<(), &'static str>(())
+            })
+            .expect("receiver applies typed storage tail payload");
+        let tail_storage_poll = tail_storage_applied.poll;
         assert!(tail_storage_poll.advanced());
         assert_eq!(
             tail_storage_poll.previous_revision,
@@ -7200,9 +7350,10 @@ mod tests {
         assert!(tail_storage_poll.events[0].value.availability);
         assert!(tail_storage_poll.events[0].value.mutable_roots);
         assert!(!tail_storage_poll.events[0].value.enabled);
-        receiver_database
-            .record_typed_app_sync_domain_poll_cursor(&tail_storage_poll)
-            .expect("record receiver storage tail cursor");
+        assert_eq!(
+            tail_storage_applied.cursor.latest_revision,
+            tail_storage_poll.latest_revision
+        );
 
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
@@ -7517,14 +7668,23 @@ mod tests {
             .expect("receiver trusts typed app tombstone tail publisher key");
         let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
         let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
-        let initial_chat_cursor = receiver_database
-            .poll_typed_sync_setting_text_events_for_app_domain::<ChatConversationSyncPayload>(
-                DEFAULT_PROFILE_ID,
-                SYNC_DOMAIN_CHAT,
-                8,
-            )
-            .expect("initialize receiver chat cursor before tombstone tail snapshot");
-        assert_eq!(initial_chat_cursor.event_count(), 0);
+        let chat_watcher = TypedAppSyncDomainWatcher::<ChatConversationSyncPayload>::new(
+            receiver_database.clone(),
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_CHAT,
+            8,
+        )
+        .expect("initialize receiver chat cursor before tombstone tail snapshot");
+        let initial_chat_revision = chat_watcher
+            .current_revision()
+            .expect("read initial receiver chat cursor before tombstone tail snapshot");
+        assert_eq!(
+            chat_watcher
+                .poll_once()
+                .expect("poll idle chat before tombstone tail snapshot")
+                .event_count(),
+            0
+        );
 
         let full = publisher
             .publish_full_local_settings_snapshot_head(
@@ -7558,18 +7718,26 @@ mod tests {
                 .len(),
             1
         );
-        let snapshot_chat_poll = receiver_database
-            .poll_typed_sync_setting_text_events_for_app_domain::<ChatConversationSyncPayload>(
-                DEFAULT_PROFILE_ID,
-                SYNC_DOMAIN_CHAT,
-                8,
-            )
-            .expect("receiver polls typed chat snapshot before tombstone tail");
+        let snapshot_chat_applied = chat_watcher
+            .poll_apply_and_acknowledge(|snapshot_chat_poll| {
+                assert!(snapshot_chat_poll.advanced());
+                assert_eq!(snapshot_chat_poll.previous_revision, initial_chat_revision);
+                assert_eq!(snapshot_chat_poll.event_count(), 1);
+                assert_eq!(
+                    snapshot_chat_poll.events[0].value.conversation_id,
+                    "runtime-chat-tail-delete"
+                );
+                assert_eq!(
+                    snapshot_chat_poll.events[0].value.display_name,
+                    "Tail Runtime Team"
+                );
+                assert!(!snapshot_chat_poll.events[0].value.deleted);
+                Ok::<(), &'static str>(())
+            })
+            .expect("receiver applies typed chat snapshot before tombstone tail");
+        let snapshot_chat_poll = snapshot_chat_applied.poll;
         assert!(snapshot_chat_poll.advanced());
-        assert_eq!(
-            snapshot_chat_poll.previous_revision,
-            initial_chat_cursor.latest_revision
-        );
+        assert_eq!(snapshot_chat_poll.previous_revision, initial_chat_revision);
         assert_eq!(snapshot_chat_poll.event_count(), 1);
         assert_eq!(
             snapshot_chat_poll.events[0].value.conversation_id,
@@ -7580,9 +7748,10 @@ mod tests {
             "Tail Runtime Team"
         );
         assert!(!snapshot_chat_poll.events[0].value.deleted);
-        receiver_database
-            .record_typed_app_sync_domain_poll_cursor(&snapshot_chat_poll)
-            .expect("record receiver chat snapshot cursor before tombstone tail");
+        assert_eq!(
+            snapshot_chat_applied.cursor.latest_revision,
+            snapshot_chat_poll.latest_revision
+        );
 
         publisher_database
             .remove_chat_conversation(DEFAULT_PROFILE_ID, chat_update.conversation_id.as_str())
@@ -7649,13 +7818,27 @@ mod tests {
         assert!(chat_payload.deleted);
         assert_eq!(chat_payload.conversation_id, "runtime-chat-tail-delete");
 
-        let tombstone_chat_poll = receiver_database
-            .poll_typed_sync_setting_text_events_for_app_domain::<ChatConversationSyncPayload>(
-                DEFAULT_PROFILE_ID,
-                SYNC_DOMAIN_CHAT,
-                8,
-            )
-            .expect("receiver polls typed chat tombstone tail payload");
+        let tombstone_chat_applied = chat_watcher
+            .poll_apply_and_acknowledge(|tombstone_chat_poll| {
+                assert!(tombstone_chat_poll.advanced());
+                assert_eq!(
+                    tombstone_chat_poll.previous_revision,
+                    snapshot_chat_poll.latest_revision
+                );
+                assert_eq!(tombstone_chat_poll.event_count(), 1);
+                assert_eq!(
+                    tombstone_chat_poll.events[0].change.entity_key,
+                    "conversation.runtime-chat-tail-delete"
+                );
+                assert!(tombstone_chat_poll.events[0].value.deleted);
+                assert_eq!(
+                    tombstone_chat_poll.events[0].value.conversation_id,
+                    "runtime-chat-tail-delete"
+                );
+                Ok::<(), &'static str>(())
+            })
+            .expect("receiver applies typed chat tombstone tail payload");
+        let tombstone_chat_poll = tombstone_chat_applied.poll;
         assert!(tombstone_chat_poll.advanced());
         assert_eq!(
             tombstone_chat_poll.previous_revision,
@@ -7672,10 +7855,7 @@ mod tests {
             "runtime-chat-tail-delete"
         );
         assert_eq!(
-            receiver_database
-                .record_typed_app_sync_domain_poll_cursor(&tombstone_chat_poll)
-                .expect("record receiver chat tombstone tail cursor")
-                .latest_revision,
+            tombstone_chat_applied.cursor.latest_revision,
             tombstone_chat_poll.latest_revision
         );
 

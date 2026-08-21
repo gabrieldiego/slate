@@ -302,8 +302,9 @@ Current baseline:
 - The `slate-profile-sync` runtime bridge now verifies received typed Chat,
   Files, and Storage metadata is visible through those typed app-domain watcher
   polls after a trusted broadwebd apply. The fixture initializes receiver
-  cursors before sync, applies a signed encrypted snapshot, then records each
-  app cursor only after the decoded payload batch is inspected. The same
+  cursors before sync, applies a signed encrypted snapshot, then uses the
+  typed watcher apply-and-acknowledge helper so each cursor is persisted only
+  after the simulated app callback inspects the decoded payload batch. The same
   watcher path now covers post-snapshot update tails for all three domains, so
   apps can observe incremental metadata changes after acknowledging the
   snapshot batch. Chat tombstone tails are covered through the same typed
