@@ -305,13 +305,17 @@ require the manifest membership epoch to match the head epoch, require a
 matching manifest frontier for the head device, sequence, and latest change
 object, and apply the settings manifest without resolving the global settings
 root.
-Publishing per-device heads and merging multiple authorized heads are separate
-runtime and broadwebd wiring steps. The local two-device fixture already
-exercises the first handoff: a publishing provider writes a signed encrypted
-head, the receiving provider retains it, and the head remains pullable after the
-publisher is marked offline. The receiver records the verified head root in
-`slate-settings.db` and then verifies the unchanged-root short circuit on the
-next pull. The same fixture also retains the referenced manifest and tail
+Publishing per-device heads is now part of the `slate-profile-sync` runtime
+bridge: it validates the storage-owned head payload against the target
+per-device root and signing key, signs and retains the encrypted `device-head`
+object, and publishes roots such as `settings/devices/<device>/head`. Merging
+multiple authorized heads is a separate runtime step. The local two-device
+fixture already exercises the first handoff: a publishing provider writes a
+signed encrypted head, the receiving provider retains it, and the head remains
+pullable after the publisher is marked offline. The receiver records the
+verified head root in `slate-settings.db` and then verifies the unchanged-root
+short circuit on the next pull. The same fixture also retains the referenced
+manifest and tail
 objects, then applies the settings manifest by following the verified head while
 the publishing provider remains offline.
 
@@ -426,6 +430,9 @@ The bridge can also drive one storage-selected compaction step: ask
 `slate-settings.db` for a compaction target, derive snapshot domains from the
 covered change records, publish the signed snapshot manifest, and record the
 published snapshot object id back into storage.
+For per-device heads, the bridge signs and publishes storage-owned
+`ProfileSyncDeviceHead` payloads while keeping the head schema and trust checks
+in storage.
 
 The local fake backend must model provider availability inside the test process.
 Each simulated device registers as a provider, retained objects are scoped to

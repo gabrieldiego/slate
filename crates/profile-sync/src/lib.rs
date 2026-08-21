@@ -10,10 +10,11 @@ use slate_broadwebd::{
     ProfileSyncRootUpdate as BroadwebdProfileSyncRootUpdate,
 };
 use slate_storage::{
-    EncryptedSyncObject, IncomingSyncSettingText, PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+    EncryptedSyncObject, IncomingSyncSettingText, PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
+    PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, PROFILE_SYNC_MANIFEST_OBJECT_KIND,
     PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND, PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND,
-    PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION, ProfileSyncContentKey, ProfileSyncDeviceSigner,
-    ProfileSyncManifest, ProfileSyncObjectBytes, ProfileSyncObjectSource,
+    PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION, ProfileSyncContentKey, ProfileSyncDeviceHead,
+    ProfileSyncDeviceSigner, ProfileSyncManifest, ProfileSyncObjectBytes, ProfileSyncObjectSource,
     ProfileSyncRetentionPolicy, ProfileSyncRootCandidate as StorageProfileSyncRootCandidate,
     ProfileSyncSettingsSnapshot, ProfileSyncSettingsSnapshotPublication,
     ProfileSyncSettingsTailChangePublication, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase,
@@ -113,6 +114,17 @@ pub struct PublishedSettingsCompaction {
     pub target: SyncCompactionTarget,
     pub publication: PublishedSettingsSnapshotManifest,
     pub snapshot_record: SyncSnapshotRecord,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PublishedProfileSyncDeviceHead {
+    pub root_id: String,
+    pub object_id: String,
+    pub device_head: ProfileSyncDeviceHead,
+}
+
+pub fn settings_device_head_root_id(device_id: &str) -> String {
+    format!("settings/devices/{device_id}/head")
 }
 
 impl<'a> BroadwebdProfileSyncObjectSource<'a> {
@@ -440,6 +452,34 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
         }))
     }
 
+    pub fn publish_signed_profile_sync_device_head(
+        &self,
+        profile: &str,
+        root_id: &str,
+        device_head: &ProfileSyncDeviceHead,
+        content_key: &ProfileSyncContentKey,
+        key_id: &str,
+        signer: &ProfileSyncDeviceSigner,
+    ) -> Result<PublishedProfileSyncDeviceHead, ProfileSyncPublishError> {
+        validate_device_head_for_publish(profile, root_id, device_head, signer)?;
+        let object_bytes = sign_encrypted_json_object(
+            device_head.profile.as_str(),
+            SYNC_DOMAIN_SETTINGS,
+            PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
+            key_id,
+            &serde_json::to_vec(device_head).map_err(SyncObjectError::Encode)?,
+            content_key,
+            signer,
+        )?;
+        let object_id = self.put_retained_root(profile, root_id, object_bytes)?;
+
+        Ok(PublishedProfileSyncDeviceHead {
+            root_id: root_id.to_string(),
+            object_id,
+            device_head: device_head.clone(),
+        })
+    }
+
     fn publish_settings_tail_change_publications(
         &self,
         profile: &str,
@@ -543,6 +583,53 @@ fn validate_setting_changes_for_publish(
     Ok(())
 }
 
+fn validate_device_head_for_publish(
+    profile: &str,
+    root_id: &str,
+    device_head: &ProfileSyncDeviceHead,
+    signer: &ProfileSyncDeviceSigner,
+) -> Result<(), ProfileSyncPublishError> {
+    if root_id.is_empty() {
+        return Err(StorageError::InvalidSyncRootId(root_id.to_string()).into());
+    }
+    if device_head.profile != profile {
+        return Err(StorageError::InvalidProfileSyncManifest(format!(
+            "device head profile {} does not match publish profile {}",
+            device_head.profile, profile
+        ))
+        .into());
+    }
+    if device_head.root_id != root_id {
+        return Err(StorageError::InvalidProfileSyncManifest(format!(
+            "device head root {} does not match publish root {}",
+            device_head.root_id, root_id
+        ))
+        .into());
+    }
+    if device_head.schema_version != PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION {
+        return Err(SyncObjectError::UnsupportedSchema {
+            object_kind: PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND.to_string(),
+            schema_version: device_head.schema_version,
+        }
+        .into());
+    }
+    let public_key = signer.public_key()?;
+    if device_head.device_id != public_key.device_id {
+        return Err(SyncObjectError::DeviceKeyMismatch {
+            expected_device_id: public_key.device_id,
+            actual_device_id: device_head.device_id.clone(),
+        }
+        .into());
+    }
+    if device_head.latest_manifest_object_id.is_empty() {
+        return Err(StorageError::InvalidProfileSyncManifest(
+            "device head latest manifest object id is empty".to_string(),
+        )
+        .into());
+    }
+    Ok(())
+}
+
 fn incoming_setting_from_change(change: &SyncChangeRecord) -> IncomingSyncSettingText {
     IncomingSyncSettingText::new(
         change.profile.clone(),
@@ -639,14 +726,19 @@ impl ProfileSyncObjectSource for BroadwebdProfileSyncObjectSource<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{BroadwebdProfileSyncObjectSource, BroadwebdProfileSyncPublisher};
+    use super::{
+        BroadwebdProfileSyncObjectSource, BroadwebdProfileSyncPublisher,
+        settings_device_head_root_id,
+    };
     use slate_broadwebd::{ResourceBudget, test_fixtures::InProcessBroadwebNetwork};
     use slate_storage::{
-        DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, PROFILE_SYNC_CONTENT_KEY_BYTES,
-        ProfileSyncContentKey, ProfileSyncDeviceSigner, ProfileSyncObjectSource,
-        ProfileSyncRetentionPolicy, SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_SETTINGS,
-        SlateProfileDatabase, open_signed_profile_sync_manifest,
-        open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
+        DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+        PROFILE_SYNC_CONTENT_KEY_BYTES, PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
+        ProfileSyncContentKey, ProfileSyncDeviceHead, ProfileSyncDeviceSigner,
+        ProfileSyncObjectSource, ProfileSyncRetentionPolicy, SYNC_DOMAIN_CALENDAR,
+        SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, open_signed_profile_sync_device_head,
+        open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
+        open_signed_sync_setting_text, pull_signed_profile_sync_device_head,
         settings_sync_snapshot_id,
     };
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -840,6 +932,103 @@ mod tests {
         assert_eq!(incoming.key, "ui.theme");
         assert_eq!(incoming.value, "teal");
         assert_eq!(incoming.device_id, "runtime-c");
+
+        let _ = std::fs::remove_dir_all(state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_publisher_publishes_signed_profile_sync_device_head() {
+        let network = InProcessBroadwebNetwork::new();
+        let state_root = test_state_root("signed-device-head-publish");
+        let db_root = test_state_root("signed-device-head-db");
+        let daemon = network
+            .daemon_for_device(&state_root, ResourceBudget::default(), "runtime-f")
+            .expect("start in-process profile-sync daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-f",
+        )
+        .expect("open local settings database");
+        let change = database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write local sync setting");
+        let content_key = ProfileSyncContentKey::from_bytes([44; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-f").expect("generate signer");
+        let public_key = signer.public_key().expect("read signer public key");
+        let publisher = BroadwebdProfileSyncPublisher::new(&daemon);
+        let manifest_publication = publisher
+            .publish_signed_settings_tail_changes(
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                std::slice::from_ref(&change),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish signed settings manifest");
+        let head_root_id = settings_device_head_root_id("runtime-f");
+        let device_head = ProfileSyncDeviceHead {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            device_id: "runtime-f".to_string(),
+            root_id: head_root_id.clone(),
+            schema_version: PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            latest_manifest_object_id: manifest_publication.manifest_object_id.clone(),
+            latest_change_object_id: manifest_publication.tail_change_object_ids.first().cloned(),
+            device_sequence: change.device_sequence,
+            logical_clock: change.logical_clock,
+            created_at: change.created_at,
+        };
+
+        let head_publication = publisher
+            .publish_signed_profile_sync_device_head(
+                DEFAULT_PROFILE_ID,
+                head_root_id.as_str(),
+                &device_head,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+            )
+            .expect("publish signed device head");
+
+        assert_eq!(head_publication.root_id, head_root_id);
+        assert_eq!(head_publication.device_head, device_head);
+        assert_retained(&publisher, head_publication.object_id.as_str());
+
+        let source = BroadwebdProfileSyncObjectSource::new(&daemon);
+        assert_eq!(
+            source
+                .resolve_profile_sync_root(DEFAULT_PROFILE_ID, head_publication.root_id.as_str())
+                .expect("resolve signed device head root")
+                .as_deref(),
+            Some(head_publication.object_id.as_str())
+        );
+        let head_object = source
+            .get_profile_sync_object(DEFAULT_PROFILE_ID, head_publication.object_id.as_str())
+            .expect("fetch signed device head object");
+        let decoded_head = open_signed_profile_sync_device_head(
+            head_object.bytes.as_slice(),
+            &content_key,
+            &public_key,
+            DEFAULT_PROFILE_ID,
+            TEST_CONTENT_KEY_ID,
+        )
+        .expect("verify signed device head object");
+        assert_eq!(decoded_head, device_head);
+        let pulled_head = pull_signed_profile_sync_device_head(
+            &source,
+            DEFAULT_PROFILE_ID,
+            head_publication.root_id.as_str(),
+            &content_key,
+            &public_key,
+            TEST_CONTENT_KEY_ID,
+        )
+        .expect("pull signed device head")
+        .expect("published device head");
+        assert_eq!(pulled_head.object_id, head_publication.object_id);
+        assert_eq!(pulled_head.device_head, device_head);
 
         let _ = std::fs::remove_dir_all(state_root);
         let _ = std::fs::remove_dir_all(db_root);

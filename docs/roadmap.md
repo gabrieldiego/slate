@@ -333,6 +333,10 @@ Current baseline:
   helpers resolve a per-device head root, fetch the object, verify/decrypt it,
   require the decrypted head to name the resolved root, and return the verified
   head with its backend object id.
+- `slate-profile-sync` can now publish signed encrypted per-device heads
+  through broadwebd. The bridge validates the storage-owned head payload
+  against the target root and signer, retains the encrypted `device-head`
+  object, and publishes roots such as `settings/devices/<device>/head`.
 - `slate-settings.db` can now pull, verify, and record trusted device-head
   roots with the same idempotent root check used by settings manifests:
   missing roots, unchanged roots, and verified updates are reported separately,
