@@ -239,7 +239,8 @@ Current baseline:
   metadata. The tests enable those opt-in domains on the publisher, publish
   signed encrypted device-head snapshots through broadwebd's in-process
   fixture, verify the receiver materializes typed rows, and verify tombstone
-  snapshots delete stale typed rows on the receiver.
+  snapshots and post-snapshot tombstone tails delete stale typed rows on the
+  receiver.
 - Local settings/app-domain publishing now filters outgoing snapshots and tail
   manifests through the enabled app sync-domain table. Disabled domains can
   still be used as local typed state, but they are not published to broadweb

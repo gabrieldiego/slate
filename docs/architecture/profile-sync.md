@@ -440,9 +440,11 @@ expose it through the same discovery, connectivity, transfer, availability, and
 mutable-root roles.
 The current runtime bridge coverage includes signed encrypted full-snapshot
 handoffs for Chat, Files, and Storage metadata, including tombstone snapshots
-that remove stale typed rows from a receiver. These tests use
-`InProcessBroadwebNetwork`, so app-domain create and delete propagation is
-verified without loopback sockets or external protocols.
+that remove stale typed rows from a receiver. It also covers a post-snapshot
+Chat tombstone tail to verify incremental typed deletions use the same trusted
+device-head path. These tests use `InProcessBroadwebNetwork`, so app-domain
+create and delete propagation is verified without loopback sockets or external
+protocols.
 
 ## Compaction And Retention
 

@@ -6849,6 +6849,180 @@ mod tests {
     }
 
     #[test]
+    fn broadwebd_publisher_syncs_typed_app_metadata_tombstone_tail_head() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("typed-app-tombstone-tail-publisher");
+        let receiver_state_root = test_state_root("typed-app-tombstone-tail-receiver");
+        let publisher_db_root = test_state_root("typed-app-tombstone-tail-publisher-db");
+        let receiver_db_root = test_state_root("typed-app-tombstone-tail-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "runtime-typed-app-tail-publisher",
+            )
+            .expect("start typed app tombstone tail publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "runtime-typed-app-tail-receiver",
+            )
+            .expect("start typed app tombstone tail receiver daemon");
+        let publisher_database = SlateProfileDatabase::open_resolved_with_device_id(
+            publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-typed-app-tail-publisher",
+        )
+        .expect("open typed app tombstone tail publisher settings database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-typed-app-tail-receiver",
+        )
+        .expect("open typed app tombstone tail receiver settings database");
+        publisher_database
+            .register_app_sync_domain(&AppSyncDomainRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                domain: SYNC_DOMAIN_CHAT.to_string(),
+                schema_version: 1,
+                enabled: true,
+                privacy_classification: "sensitive".to_string(),
+                sync_content: false,
+            })
+            .expect("enable chat sync domain for tombstone tail test profile");
+        let chat_update = ChatConversationUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            conversation_id: "runtime-chat-tail-delete".to_string(),
+            provider_id: Some("whatsapp".to_string()),
+            external_thread_id: Some("tail-team@example.test".to_string()),
+            display_name: "Tail Runtime Team".to_string(),
+            avatar_key: Some("chat-avatar:runtime-chat-tail-delete".to_string()),
+            last_message_at: Some(1_789_030_000),
+            unread_count: 1,
+            archived: false,
+            muted: false,
+        };
+        publisher_database
+            .upsert_chat_conversation(&chat_update)
+            .expect("publisher writes typed chat metadata before snapshot");
+
+        let content_key = ProfileSyncContentKey::from_bytes([73; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-typed-app-tail-publisher")
+            .expect("generate typed app tombstone tail publisher signer");
+        receiver_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: signer.public_key().expect("read signer public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("receiver trusts typed app tombstone tail publisher key");
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+        let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
+
+        let full = publisher
+            .publish_full_local_settings_snapshot_head(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish typed app metadata snapshot head")
+            .expect("typed app metadata changes exist before deletion");
+        let full_applied = source
+            .pull_record_and_apply_trusted_settings_from_device_head(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                full.device_head.root_id.as_str(),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+            )
+            .expect("receiver applies typed app snapshot before tombstone tail");
+        assert!(matches!(
+            full_applied,
+            BroadwebdTrustedDeviceHeadSyncStatus::Applied { .. }
+        ));
+        assert_eq!(
+            receiver_database
+                .chat_conversations(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver typed chat metadata")
+                .len(),
+            1
+        );
+
+        publisher_database
+            .remove_chat_conversation(DEFAULT_PROFILE_ID, chat_update.conversation_id.as_str())
+            .expect("publisher tombstones typed chat metadata after snapshot");
+        let tail = publisher
+            .publish_local_settings_tail_head(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish typed app metadata tombstone tail head")
+            .expect("typed app tombstone tail changes exist");
+
+        assert_eq!(
+            tail.publication.snapshot_object_id,
+            full.publication.snapshot_object_id
+        );
+        assert_eq!(tail.publication.tail_change_object_ids.len(), 1);
+        assert_eq!(
+            tail.device_head.device_head.latest_change_object_id,
+            tail.publication.tail_change_object_ids.first().cloned()
+        );
+
+        let applied = source
+            .pull_record_and_apply_trusted_settings_from_device_head(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                tail.device_head.root_id.as_str(),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+            )
+            .expect("receiver applies typed app tombstone tail from trusted head");
+        let BroadwebdTrustedDeviceHeadSyncStatus::Applied { application, .. } = applied else {
+            panic!("expected typed app tombstone tail application, got {applied:?}");
+        };
+        assert_eq!(
+            application.manifest_object_id,
+            tail.publication.manifest_object_id
+        );
+        assert!(application.snapshot.is_some());
+        assert_eq!(application.tail_changes.len(), 1);
+        assert!(
+            receiver_database
+                .chat_conversations(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver typed chat metadata after tombstone tail")
+                .is_empty()
+        );
+
+        let chat_value = receiver_database
+            .get_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CHAT,
+                "conversation.runtime-chat-tail-delete",
+            )
+            .expect("read receiver chat tombstone tail sync setting")
+            .expect("receiver chat tombstone tail sync setting")
+            .value;
+        let chat_payload: ChatConversationSyncPayload =
+            serde_json::from_str(chat_value.as_str()).expect("decode chat tombstone tail payload");
+        assert!(chat_payload.deleted);
+        assert_eq!(chat_payload.conversation_id, "runtime-chat-tail-delete");
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
     fn enabled_settings_sync_events_preserve_order_without_disabled_domains() {
         let db_root = test_state_root("enabled-domain-event-feed-db");
         let database =
