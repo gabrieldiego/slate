@@ -1596,6 +1596,19 @@ impl SlateProfileDatabase {
         Ok(revisions)
     }
 
+    pub fn latest_sync_revision(&self, profile: &str) -> Result<i64, StorageError> {
+        let connection = self.connection()?;
+        connection
+            .query_row(
+                "SELECT COALESCE(MAX(revision), 0)
+                 FROM settings_revisions
+                 WHERE profile = ?1",
+                [profile],
+                |row| row.get(0),
+            )
+            .map_err(|source| self.database_error(source))
+    }
+
     pub fn sync_setting_text_events_after(
         &self,
         profile: &str,
@@ -3231,6 +3244,10 @@ mod tests {
             .sync_setting_text_events_after(DEFAULT_PROFILE_ID, events[0].revision.revision, 10)
             .unwrap();
         assert_eq!(after_first, vec![events[1].clone()]);
+        assert_eq!(
+            database.latest_sync_revision(DEFAULT_PROFILE_ID).unwrap(),
+            events[1].revision.revision
+        );
     }
 
     #[test]
