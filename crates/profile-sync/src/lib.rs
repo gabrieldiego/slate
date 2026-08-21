@@ -3667,9 +3667,10 @@ mod tests {
         BroadwebdSettingsSyncRunner, BroadwebdSettingsSyncScheduler,
         BroadwebdTrustedDeviceHeadSyncStatus, LocalSettingsHeadPublishStatus,
         PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID, ProfileSyncCredentialError, ProfileSyncCycleError,
-        ProfileSyncCycleWithHealthError, ProfileSyncMembershipLogPullStatus,
-        ProfileSyncMembershipRecordPullStatus, ProfileSyncPolicyError, ProfileSyncReceiveError,
-        SettingsSyncCyclePolicy, SettingsSyncRetentionProviderHandle, SettingsSyncRuntimeSecrets,
+        ProfileSyncCycleWithHealthError, ProfileSyncMembershipLog, ProfileSyncMembershipLogEntry,
+        ProfileSyncMembershipLogPullStatus, ProfileSyncMembershipRecordPullStatus,
+        ProfileSyncPolicyError, ProfileSyncReceiveError, SettingsSyncCyclePolicy,
+        SettingsSyncRetentionProviderHandle, SettingsSyncRuntimeSecrets,
         SettingsSyncSchedulerConfig, settings_device_head_root_id, sync_membership_record_root_id,
     };
     use slate_broadwebd::{
@@ -4103,6 +4104,111 @@ mod tests {
         let _ = std::fs::remove_dir_all(device_state_root);
         let _ = std::fs::remove_dir_all(provider_state_root);
         let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_membership_log_rejects_mismatched_record_objects_without_loopback() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("membership-log-mismatch-publisher");
+        let receiver_state_root = test_state_root("membership-log-mismatch-receiver");
+        let receiver_db_root = test_state_root("membership-log-mismatch-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "membership-log-mismatch-publisher",
+            )
+            .expect("start in-process membership log mismatch publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "membership-log-mismatch-receiver",
+            )
+            .expect("start in-process membership log mismatch receiver daemon");
+        let receiver_database =
+            SlateProfileDatabase::open_resolved(receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME))
+                .expect("open membership log mismatch receiver database");
+        let signer_a = ProfileSyncDeviceSigner::generate("membership-log-mismatch-a")
+            .expect("generate mismatch signer a");
+        let signer_b = ProfileSyncDeviceSigner::generate("membership-log-mismatch-b")
+            .expect("generate mismatch signer b");
+        let enroll_a = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-membership-log-mismatch-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-log-mismatch-a".to_string(),
+            device_public_key: Some(signer_a.public_key().expect("read signer a public key")),
+            created_at: 10,
+        };
+        let enroll_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-membership-log-mismatch-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-log-mismatch-b".to_string(),
+            device_public_key: Some(signer_b.public_key().expect("read signer b public key")),
+            created_at: 11,
+        };
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+        let mismatched_object_id = publisher
+            .put_retained_object(
+                DEFAULT_PROFILE_ID,
+                signed_membership_record_bytes(&signer_b, &enroll_b),
+            )
+            .expect("put mismatched signed membership record object");
+        let log = ProfileSyncMembershipLog {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            schema_version: super::PROFILE_SYNC_MEMBERSHIP_LOG_SCHEMA_VERSION,
+            records: vec![ProfileSyncMembershipLogEntry {
+                record_id: enroll_a.record_id.clone(),
+                root_id: sync_membership_record_root_id(enroll_a.record_id.as_str()),
+                object_id: mismatched_object_id,
+                membership_epoch: enroll_a.membership_epoch,
+                record_kind: enroll_a.record_kind.clone(),
+                device_id: enroll_a.device_id.clone(),
+                signer_device_id: signer_a.device_id().to_string(),
+            }],
+        };
+        publisher
+            .put_retained_root(
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                serde_json::to_vec(&log).expect("encode mismatched membership log"),
+            )
+            .expect("publish mismatched membership log");
+
+        let error = BroadwebdProfileSyncObjectSource::new(&receiver_daemon)
+            .pull_and_apply_sync_account_membership_log_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            )
+            .expect_err("mismatched membership log object should be rejected");
+        assert!(matches!(
+            error,
+            ProfileSyncReceiveError::InvalidMembershipLog(reason)
+                if reason.contains("does not match its signed membership record")
+        ));
+        assert!(
+            receiver_database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "membership-log-mismatch-a")
+                .expect("read receiver key a")
+                .is_none()
+        );
+        assert!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID)
+                .expect("read membership log root")
+                .is_none()
+        );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
     }
 
     #[test]
