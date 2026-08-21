@@ -344,6 +344,10 @@ Current baseline:
 - The read-only scheduler plan now also proves stale selected retention-provider
   handles are excluded from the fresh candidate set and reported before any
   local revision or sync-root state is mutated.
+- Scheduler runs using selected provider handles now reject a selected
+  retention-provider set that cannot satisfy the requested retaining-provider
+  quorum before publishing local objects, pulling candidates, retaining
+  objects, or mutating sync roots.
 - Scheduler-facing fixture coverage now includes retention quota and
   pinning-policy failures from a selected availability provider. The cycle
   surfaces the local refusal as a retention error instead of reporting

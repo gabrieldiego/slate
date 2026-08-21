@@ -978,6 +978,10 @@ impl SettingsSyncCyclePolicy {
         self
     }
 
+    pub fn minimum_selected_retention_provider_count(&self) -> usize {
+        self.minimum_online_retaining_providers.saturating_sub(1)
+    }
+
     pub fn check_before_cycle(
         &self,
         health: &SettingsSyncHealthReport,
@@ -1023,6 +1027,19 @@ impl SettingsSyncCyclePolicy {
             )?;
         }
         Ok(())
+    }
+
+    pub fn check_selected_retention_provider_count(
+        &self,
+        actual: usize,
+        health: &SettingsSyncHealthReport,
+    ) -> Result<(), ProfileSyncPolicyError> {
+        self.check_provider_minimum(
+            "selected retention providers",
+            self.minimum_selected_retention_provider_count(),
+            actual,
+            health,
+        )
     }
 
     fn check_provider_minimum(
@@ -1937,6 +1954,10 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         let selection =
             select_settings_sync_retention_provider_handles(preflight, retention_provider_handles);
         let plan = selection.plan;
+        config.policy.check_selected_retention_provider_count(
+            plan.selected_retention_provider_count(),
+            &plan.preflight.before_health,
+        )?;
         let cycle = runner
             .run_settings_sync_cycle_with_active_key_policy_shared_root_candidates_and_retention_providers_after_preflight(
                 database,
@@ -5583,6 +5604,106 @@ mod tests {
                 .profile_sync_roots(profile)
                 .expect("read roots after plan")
                 .is_empty()
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_scheduler_rejects_insufficient_selected_retention_before_mutation() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("scheduler-selected-quorum-device");
+        let provider_state_root = test_state_root("scheduler-selected-quorum-provider");
+        let db_root = test_state_root("scheduler-selected-quorum-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-selected-quorum-a",
+            )
+            .expect("start in-process profile-sync scheduler device daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-selected-quorum-pinner",
+            )
+            .expect("start in-process scheduler availability provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-scheduler-selected-quorum-a",
+        )
+        .expect("open scheduler local settings database");
+        let profile = "schedulerselectedquorumprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([70; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-scheduler-selected-quorum-a")
+            .expect("generate scheduler local device signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register scheduler local trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write scheduler local setting");
+        let latest_revision_before_run = database
+            .latest_sync_revision(profile)
+            .expect("read latest scheduler revision");
+
+        let error = BroadwebdSettingsSyncScheduler::new(&device_daemon)
+            .run_once_selecting_retention_providers(
+                &database,
+                &SettingsSyncSchedulerConfig::new(
+                    profile,
+                    settings_root_id,
+                    SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
+                ),
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                &[],
+            )
+            .expect_err("scheduler should reject a selected-provider set that cannot meet quorum");
+
+        let ProfileSyncCycleWithHealthError::Policy(ProfileSyncPolicyError::ProviderMinimumUnmet {
+            provider_role,
+            minimum,
+            actual,
+            health,
+        }) = error
+        else {
+            panic!("expected selected retention provider policy error, got {error:?}");
+        };
+        assert_eq!(provider_role, "selected retention providers");
+        assert_eq!(minimum, 1);
+        assert_eq!(actual, 0);
+        assert!(!health.provider_health.degraded);
+        assert_eq!(
+            database
+                .latest_sync_revision(profile)
+                .expect("read latest revision after rejected run"),
+            latest_revision_before_run
+        );
+        assert!(
+            database
+                .profile_sync_roots(profile)
+                .expect("read roots after rejected run")
+                .is_empty()
+        );
+        let retained = provider_daemon
+            .profile_sync(BroadwebdProfileSyncRequest::ListRetainedObjects(
+                BroadwebdProfileSyncProfileRequest::new(profile),
+            ))
+            .expect("provider can list retained objects after rejected scheduler run");
+        assert_eq!(
+            retained,
+            BroadwebdProfileSyncResponse::RetainedObjects {
+                object_ids: Vec::new(),
+            }
         );
 
         let _ = std::fs::remove_dir_all(device_state_root);

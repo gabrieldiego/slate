@@ -637,11 +637,13 @@ tests can model provider selection through `InProcessBroadwebNetwork` without
 loopback sockets or external discovery. That selector is also exposed as a
 read-only scheduler plan: it runs preflight, reports selected, undiscovered,
 and duplicate handles, and does not publish, pull, retain, or mutate sync
-roots. If a selected fixture provider refuses retention because of local quota
-or pinning policy, the cycle surfaces that as a retention error instead of
-reporting successful durability. Cadence, platform key-store loading,
-enrollment flow, and real provider materialization remain separate runtime
-layers.
+roots. The selected-handle runtime path also rejects a provider set that cannot
+meet the requested retaining-provider quorum before publishing local objects,
+pulling candidates, retaining objects, or mutating sync roots. If a selected
+fixture provider refuses retention because of local quota or pinning policy, the
+cycle surfaces that as a retention error instead of reporting successful
+durability. Cadence, platform key-store loading, enrollment flow, and real
+provider materialization remain separate runtime layers.
 Object bytes are also provider-held: fetches require at least one online
 provider with the object, and retaining an object copies the bytes into the
 retaining provider's in-process store. Tests can pause object transfer from one
