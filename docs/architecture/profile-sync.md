@@ -208,6 +208,12 @@ Key rotation and device revocation should be represented as account membership
 epoch changes. Old epochs may remain readable for migration, but new writes
 should use the current encryption epoch.
 
+`slate-settings.db` tracks content-key epoch metadata so runtime code can bind
+objects to the expected key id, membership epoch, algorithm, and active epoch.
+It does not store raw content encryption keys. Key bytes should come from a
+keychain entry, recovery-secret derivation, or an enrollment flow before being
+passed into the decrypt/apply path.
+
 ## Data Objects
 
 The exact encoding can be CBOR, postcard, or another compact structured format.

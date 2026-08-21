@@ -221,11 +221,11 @@ Current baseline:
   backend supplied the bytes. The broadwebd local fixture now exercises this
   source-based pull path.
 - `slate-settings.db` can now pull and apply a signed settings manifest in one
-  storage call once runtime provides an object source, content key, and
-  content-key id. The trusted helper reads profile-scoped device public keys
-  from the database, returns `None` for an absent published root, applies valid
-  manifests through the existing validation path, and surfaces manifest or trust
-  failures without advancing the stored root.
+  storage call once runtime provides an object source and content key bytes. The
+  active trusted helper reads the content-key id and profile-scoped device
+  public keys from the database, returns `None` for an absent published root,
+  applies valid manifests through the existing validation path, and surfaces
+  manifest or trust failures without advancing the stored root.
 - `slate-settings.db` now has a trusted sync device public-key table and APIs
   to register, update, fetch, and list profile-scoped device signing keys. This
   gives the future runtime sync loop a local trust store instead of relying on
@@ -238,6 +238,10 @@ Current baseline:
 - Trusted signed settings pulls now also check the stored device-key membership
   epoch against the manifest membership epoch. A key first trusted after the
   manifest epoch cannot authorize that manifest, snapshot, or tail object set.
+- `slate-settings.db` now tracks profile-scoped content-key epoch metadata:
+  key id, membership epoch, algorithm, active status, and timestamps. The table
+  deliberately stores no raw key bytes; secret storage remains keychain,
+  recovery-secret, or enrollment work.
 - `slate-settings.db` now has typed snapshot metadata APIs for recording
   encrypted backend object ids, covered revisions, included domains, and latest
   snapshot lookup. This is metadata only; snapshot payloads stay in encrypted

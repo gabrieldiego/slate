@@ -29,6 +29,7 @@ pub const DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH: i64 = 1;
 pub const DEFAULT_PROFILE_SYNC_MIN_TAIL_CHANGE_COUNT: u32 = 32;
 pub const DEFAULT_PROFILE_SYNC_CHANGE_RETENTION_SECONDS: i64 = 14 * 24 * 60 * 60;
 pub const DEFAULT_PROFILE_SYNC_INACTIVE_DEVICE_GRACE_SECONDS: i64 = 30 * 24 * 60 * 60;
+pub const PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305: &str = "chacha20-poly1305";
 pub const SYNC_DOMAIN_BOOKMARKS: &str = "bookmarks";
 pub const SYNC_DOMAIN_CALENDAR: &str = "calendar";
 pub const SYNC_DOMAIN_CHAT: &str = "chat";
@@ -1221,6 +1222,26 @@ pub struct SyncDevicePublicKeyRecord {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SyncContentKeyEpochRegistration {
+    pub profile: String,
+    pub key_id: String,
+    pub membership_epoch: i64,
+    pub algorithm: String,
+    pub active: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SyncContentKeyEpochRecord {
+    pub profile: String,
+    pub key_id: String,
+    pub membership_epoch: i64,
+    pub algorithm: String,
+    pub active: bool,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SyncSettingValueRecord {
     pub profile: String,
     pub domain: String,
@@ -1381,6 +1402,8 @@ pub enum StorageError {
     EncodeSnapshotDomains(serde_json::Error),
     Clock(std::time::SystemTimeError),
     InvalidSyncDeviceId(String),
+    InvalidSyncContentKeyId(String),
+    MissingActiveSyncContentKey(String),
     InvalidSyncRootId(String),
     InvalidProfileSyncManifest(String),
     UnsupportedProfileSyncManifestSchema(u8),
@@ -1414,6 +1437,15 @@ impl fmt::Display for StorageError {
             Self::InvalidSyncDeviceId(device_id) => {
                 write!(formatter, "invalid sync device id: {device_id}")
             }
+            Self::InvalidSyncContentKeyId(key_id) => {
+                write!(formatter, "invalid sync content key id: {key_id}")
+            }
+            Self::MissingActiveSyncContentKey(profile) => {
+                write!(
+                    formatter,
+                    "profile {profile} has no active sync content key epoch"
+                )
+            }
             Self::InvalidSyncRootId(root_id) => {
                 write!(formatter, "invalid sync root id: {root_id}")
             }
@@ -1445,6 +1477,8 @@ impl std::error::Error for StorageError {
             Self::EncodeSnapshotDomains(error) => Some(error),
             Self::Clock(error) => Some(error),
             Self::InvalidSyncDeviceId(_) => None,
+            Self::InvalidSyncContentKeyId(_) => None,
+            Self::MissingActiveSyncContentKey(_) => None,
             Self::InvalidSyncRootId(_) => None,
             Self::InvalidProfileSyncManifest(_) => None,
             Self::UnsupportedProfileSyncManifestSchema(_) => None,
@@ -2141,6 +2175,135 @@ impl SlateProfileDatabase {
             keys.push(record.map_err(|source| self.database_error(source))?);
         }
         Ok(keys)
+    }
+
+    pub fn register_sync_content_key_epoch(
+        &self,
+        registration: &SyncContentKeyEpochRegistration,
+    ) -> Result<SyncContentKeyEpochRecord, StorageError> {
+        if !is_valid_sync_identifier(registration.key_id.as_str()) {
+            return Err(StorageError::InvalidSyncContentKeyId(
+                registration.key_id.clone(),
+            ));
+        }
+
+        let now = unix_time_seconds()?;
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        if registration.active {
+            transaction
+                .execute(
+                    "UPDATE sync_content_key_epochs
+                     SET active = 0, updated_at = ?2
+                     WHERE profile = ?1 AND active = 1",
+                    params![registration.profile.as_str(), now],
+                )
+                .map_err(|source| self.database_error(source))?;
+        }
+        transaction
+            .execute(
+                "INSERT INTO sync_content_key_epochs
+                   (profile, key_id, membership_epoch, algorithm, active, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)
+                 ON CONFLICT(profile, key_id) DO UPDATE SET
+                   membership_epoch = excluded.membership_epoch,
+                   algorithm = excluded.algorithm,
+                   active = excluded.active,
+                   updated_at = excluded.updated_at",
+                params![
+                    registration.profile.as_str(),
+                    registration.key_id.as_str(),
+                    registration.membership_epoch,
+                    registration.algorithm.as_str(),
+                    bool_to_integer(registration.active),
+                    now
+                ],
+            )
+            .map_err(|source| self.database_error(source))?;
+        let record = transaction
+            .query_row(
+                "SELECT profile, key_id, membership_epoch, algorithm, active,
+                        created_at, updated_at
+                 FROM sync_content_key_epochs
+                 WHERE profile = ?1 AND key_id = ?2",
+                params![registration.profile.as_str(), registration.key_id.as_str()],
+                sync_content_key_epoch_record_from_row,
+            )
+            .map_err(|source| self.database_error(source))?;
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(record)
+    }
+
+    pub fn sync_content_key_epoch(
+        &self,
+        profile: &str,
+        key_id: &str,
+    ) -> Result<Option<SyncContentKeyEpochRecord>, StorageError> {
+        if !is_valid_sync_identifier(key_id) {
+            return Err(StorageError::InvalidSyncContentKeyId(key_id.to_string()));
+        }
+
+        let connection = self.connection()?;
+        connection
+            .query_row(
+                "SELECT profile, key_id, membership_epoch, algorithm, active,
+                        created_at, updated_at
+                 FROM sync_content_key_epochs
+                 WHERE profile = ?1 AND key_id = ?2",
+                params![profile, key_id],
+                sync_content_key_epoch_record_from_row,
+            )
+            .optional()
+            .map_err(|source| self.database_error(source))
+    }
+
+    pub fn sync_content_key_epochs(
+        &self,
+        profile: &str,
+    ) -> Result<Vec<SyncContentKeyEpochRecord>, StorageError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT profile, key_id, membership_epoch, algorithm, active,
+                        created_at, updated_at
+                 FROM sync_content_key_epochs
+                 WHERE profile = ?1
+                 ORDER BY membership_epoch, key_id",
+            )
+            .map_err(|source| self.database_error(source))?;
+        let records = statement
+            .query_map([profile], sync_content_key_epoch_record_from_row)
+            .map_err(|source| self.database_error(source))?;
+
+        let mut keys = Vec::new();
+        for record in records {
+            keys.push(record.map_err(|source| self.database_error(source))?);
+        }
+        Ok(keys)
+    }
+
+    pub fn active_sync_content_key_epoch(
+        &self,
+        profile: &str,
+    ) -> Result<Option<SyncContentKeyEpochRecord>, StorageError> {
+        let connection = self.connection()?;
+        connection
+            .query_row(
+                "SELECT profile, key_id, membership_epoch, algorithm, active,
+                        created_at, updated_at
+                 FROM sync_content_key_epochs
+                 WHERE profile = ?1 AND active = 1
+                 ORDER BY membership_epoch DESC, updated_at DESC
+                 LIMIT 1",
+                [profile],
+                sync_content_key_epoch_record_from_row,
+            )
+            .optional()
+            .map_err(|source| self.database_error(source))
     }
 
     pub fn set_sync_setting_text(
@@ -2927,6 +3090,33 @@ impl SlateProfileDatabase {
             .map_err(ProfileSyncTrustedPullApplyError::Storage)
     }
 
+    pub fn pull_and_apply_active_trusted_signed_settings_manifest_objects<Source>(
+        &self,
+        source: &Source,
+        profile: &str,
+        root_id: &str,
+        content_key: &ProfileSyncContentKey,
+    ) -> Result<
+        Option<ProfileSyncSettingsManifestApplication>,
+        ProfileSyncTrustedPullApplyError<Source::Error>,
+    >
+    where
+        Source: ProfileSyncObjectSource,
+    {
+        let key = self
+            .active_sync_content_key_epoch(profile)
+            .map_err(ProfileSyncTrustedPullApplyError::Storage)?
+            .ok_or_else(|| StorageError::MissingActiveSyncContentKey(profile.to_string()))
+            .map_err(ProfileSyncTrustedPullApplyError::Storage)?;
+        self.pull_and_apply_trusted_signed_settings_manifest_objects(
+            source,
+            profile,
+            root_id,
+            content_key,
+            key.key_id.as_str(),
+        )
+    }
+
     pub fn pull_and_apply_signed_settings_manifest_objects<Source>(
         &self,
         source: &Source,
@@ -3216,6 +3406,21 @@ impl SlateProfileDatabase {
                     updated_at INTEGER NOT NULL,
                     PRIMARY KEY(profile, device_id)
                 );
+
+                CREATE TABLE IF NOT EXISTS sync_content_key_epochs (
+                    profile TEXT NOT NULL,
+                    key_id TEXT NOT NULL,
+                    membership_epoch INTEGER NOT NULL DEFAULT 1,
+                    algorithm TEXT NOT NULL,
+                    active INTEGER NOT NULL DEFAULT 0,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    PRIMARY KEY(profile, key_id)
+                );
+
+                CREATE UNIQUE INDEX IF NOT EXISTS sync_content_key_epochs_one_active
+                    ON sync_content_key_epochs(profile)
+                    WHERE active = 1;
 
                 CREATE TABLE IF NOT EXISTS settings_changes (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3584,6 +3789,20 @@ fn profile_sync_root_id_from_key(key: &str) -> Result<String, rusqlite::Error> {
                 )),
             )
         })
+}
+
+fn sync_content_key_epoch_record_from_row(
+    row: &rusqlite::Row<'_>,
+) -> Result<SyncContentKeyEpochRecord, rusqlite::Error> {
+    Ok(SyncContentKeyEpochRecord {
+        profile: row.get(0)?,
+        key_id: row.get(1)?,
+        membership_epoch: row.get(2)?,
+        algorithm: row.get(3)?,
+        active: integer_to_bool(row.get(4)?),
+        created_at: row.get(5)?,
+        updated_at: row.get(6)?,
+    })
 }
 
 fn profile_sync_root_record_from_row(
@@ -4611,14 +4830,22 @@ mod tests {
                 membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
             })
             .unwrap();
+        destination
+            .register_sync_content_key_epoch(&SyncContentKeyEpochRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                key_id: key_id.to_string(),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                algorithm: PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305.to_string(),
+                active: true,
+            })
+            .unwrap();
 
         let applied = destination
-            .pull_and_apply_trusted_signed_settings_manifest_objects(
+            .pull_and_apply_active_trusted_signed_settings_manifest_objects(
                 &source,
                 DEFAULT_PROFILE_ID,
                 root_id,
                 &content_key,
-                key_id,
             )
             .unwrap()
             .expect("trusted settings root applied");
@@ -5322,6 +5549,91 @@ mod tests {
         assert!(matches!(
             database.sync_device_public_key(DEFAULT_PROFILE_ID, "../device-a"),
             Err(StorageError::InvalidSyncDeviceId(device_id)) if device_id == "../device-a"
+        ));
+    }
+
+    #[test]
+    fn sync_content_key_epochs_track_one_active_key_per_profile() {
+        let database_path = test_dir("sync-content-key-epoch").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let first = database
+            .register_sync_content_key_epoch(&SyncContentKeyEpochRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                key_id: "content-key-epoch-1".to_string(),
+                membership_epoch: 1,
+                algorithm: PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305.to_string(),
+                active: true,
+            })
+            .unwrap();
+
+        assert_eq!(first.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(first.key_id, "content-key-epoch-1");
+        assert_eq!(first.membership_epoch, 1);
+        assert_eq!(
+            first.algorithm,
+            PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305
+        );
+        assert!(first.active);
+        assert_eq!(
+            database
+                .active_sync_content_key_epoch(DEFAULT_PROFILE_ID)
+                .unwrap()
+                .expect("active content key"),
+            first
+        );
+
+        let second = database
+            .register_sync_content_key_epoch(&SyncContentKeyEpochRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                key_id: "content-key-epoch-2".to_string(),
+                membership_epoch: 2,
+                algorithm: PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305.to_string(),
+                active: true,
+            })
+            .unwrap();
+
+        let first_after = database
+            .sync_content_key_epoch(DEFAULT_PROFILE_ID, "content-key-epoch-1")
+            .unwrap()
+            .expect("first key metadata");
+        assert!(!first_after.active);
+        assert!(second.active);
+        assert_eq!(
+            database
+                .active_sync_content_key_epoch(DEFAULT_PROFILE_ID)
+                .unwrap()
+                .expect("rotated active content key")
+                .key_id,
+            "content-key-epoch-2"
+        );
+        let epochs = database
+            .sync_content_key_epochs(DEFAULT_PROFILE_ID)
+            .unwrap();
+        assert_eq!(epochs.len(), 2);
+        assert_eq!(epochs.iter().filter(|epoch| epoch.active).count(), 1);
+    }
+
+    #[test]
+    fn sync_content_key_epochs_reject_invalid_key_ids() {
+        let database_path = test_dir("invalid-sync-content-key").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+
+        let error = database
+            .register_sync_content_key_epoch(&SyncContentKeyEpochRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                key_id: "../content-key".to_string(),
+                membership_epoch: 1,
+                algorithm: PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305.to_string(),
+                active: true,
+            })
+            .unwrap_err();
+
+        assert!(
+            matches!(error, StorageError::InvalidSyncContentKeyId(key_id) if key_id == "../content-key")
+        );
+        assert!(matches!(
+            database.sync_content_key_epoch(DEFAULT_PROFILE_ID, "../content-key"),
+            Err(StorageError::InvalidSyncContentKeyId(key_id)) if key_id == "../content-key"
         ));
     }
 

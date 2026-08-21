@@ -7,16 +7,18 @@ use slate_broadwebd::{
 };
 use slate_storage::{
     DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
-    EncryptedSyncObject, IncomingSyncSettingText, PROFILE_SYNC_CONTENT_KEY_BYTES,
+    EncryptedSyncObject, IncomingSyncSettingText,
+    PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305, PROFILE_SYNC_CONTENT_KEY_BYTES,
     PROFILE_SYNC_MANIFEST_OBJECT_KIND, PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
     PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND, PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND,
     PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION, ProfileSyncContentKey,
     ProfileSyncDeviceFrontier, ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner,
     ProfileSyncManifest, ProfileSyncObjectBytes, ProfileSyncObjectSource,
     ProfileSyncRetentionPolicy, ProfileSyncSettingsSnapshot, SYNC_DOMAIN_SETTINGS,
-    SlateProfileDatabase, SyncChangeRecord, SyncDevicePublicKeyRegistration, SyncRevisionRecord,
-    SyncSnapshotRegistration, open_signed_profile_sync_manifest,
-    open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
+    SlateProfileDatabase, SyncChangeRecord, SyncContentKeyEpochRegistration,
+    SyncDevicePublicKeyRegistration, SyncRevisionRecord, SyncSnapshotRegistration,
+    open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
+    open_signed_sync_setting_text,
 };
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -573,6 +575,15 @@ fn two_local_devices_apply_snapshot_then_manifest_tail_changes() {
             membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
         })
         .expect("device b trusts tail device a signing key");
+    device_b_db
+        .register_sync_content_key_epoch(&SyncContentKeyEpochRegistration {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            key_id: FIXTURE_CONTENT_KEY_ID.to_string(),
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            algorithm: PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305.to_string(),
+            active: true,
+        })
+        .expect("device b records active tail fixture content key epoch");
     let content_key = fixture_content_key();
 
     device_a_db
@@ -630,12 +641,11 @@ fn two_local_devices_apply_snapshot_then_manifest_tail_changes() {
         budget: &budget,
     };
     let applied_manifest = device_b_db
-        .pull_and_apply_trusted_signed_settings_manifest_objects(
+        .pull_and_apply_active_trusted_signed_settings_manifest_objects(
             &source,
             DEFAULT_PROFILE_ID,
             SETTINGS_ROOT_ID,
             &content_key,
-            FIXTURE_CONTENT_KEY_ID,
         )
         .expect("device b pulls trusted manifest object set")
         .expect("settings root resolves");
