@@ -238,6 +238,11 @@ Current baseline:
   round trip where one device publishes a full snapshot, the second receives it
   and publishes an incremental tail, and the first receives that tail without
   opening loopback sockets.
+- The active-key policy cycle can now include shared settings-root candidate
+  application. A receiver can run one bounded cycle that publishes nothing,
+  observes no per-device-head updates, applies competing `settings/latest`
+  candidates through broadwebd, and reports that shared-root candidate work in
+  the cycle result.
 - The settings sync cycle now validates caller-supplied credentials against
   `slate-settings.db` before touching broadwebd: the requested content-key id
   must be the active key epoch, the active epoch must use the supported content

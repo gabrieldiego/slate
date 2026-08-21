@@ -764,6 +764,34 @@ impl SettingsSyncCycleWithRetentionRun {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncCycleWithSharedRootCandidatesRun {
+    pub before_health: SettingsSyncHealthReport,
+    pub cycle: SettingsSyncCycleRun,
+    pub shared_root_candidates: ProfileSyncSettingsCandidatePullApplyStatus,
+    pub after_health: SettingsSyncHealthReport,
+}
+
+impl SettingsSyncCycleWithSharedRootCandidatesRun {
+    pub fn degraded_before(&self) -> bool {
+        self.before_health.degraded()
+    }
+
+    pub fn degraded_after(&self) -> bool {
+        self.after_health.degraded()
+    }
+
+    pub fn shared_root_candidate_application_count(&self) -> usize {
+        match &self.shared_root_candidates {
+            ProfileSyncSettingsCandidatePullApplyStatus::Applied(applications) => {
+                applications.len()
+            }
+            ProfileSyncSettingsCandidatePullApplyStatus::NoPublishedRoot { .. }
+            | ProfileSyncSettingsCandidatePullApplyStatus::Unchanged { .. } => 0,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettingsSyncCyclePreflight {
     pub profile: String,
     pub settings_root_id: String,
@@ -1356,6 +1384,59 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
         })
     }
 
+    pub fn run_settings_sync_cycle_with_active_key_policy_and_shared_root_candidates(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        settings_root_id: &str,
+        content_key: &ProfileSyncContentKey,
+        signer: &ProfileSyncDeviceSigner,
+        policy: &SettingsSyncCyclePolicy,
+    ) -> Result<SettingsSyncCycleWithSharedRootCandidatesRun, ProfileSyncCycleWithHealthError> {
+        let preflight = self.settings_sync_cycle_preflight_with_active_key_policy(
+            database,
+            profile,
+            settings_root_id,
+            signer,
+            policy,
+        )?;
+        let cycle = self.run_settings_sync_cycle(
+            database,
+            profile,
+            settings_root_id,
+            content_key,
+            preflight.active_key_id.as_str(),
+            signer,
+            policy.retention_policy.clone(),
+            policy.max_publish_steps,
+            policy.max_trusted_devices,
+        )?;
+        let source = BroadwebdProfileSyncObjectSource::new(self.daemon);
+        let shared_root_candidates = source
+            .pull_and_apply_active_trusted_settings_manifest_candidates_if_changed(
+                database,
+                profile,
+                settings_root_id,
+                content_key,
+            )
+            .map_err(ProfileSyncReceiveError::from)
+            .map_err(ProfileSyncCycleError::from)?;
+        let after_health = self.settings_sync_health(
+            database,
+            profile,
+            settings_root_id,
+            policy.minimum_online_retaining_providers,
+        )?;
+        policy.check_after_cycle(&after_health)?;
+
+        Ok(SettingsSyncCycleWithSharedRootCandidatesRun {
+            before_health: preflight.before_health,
+            cycle,
+            shared_root_candidates,
+            after_health,
+        })
+    }
+
     pub fn settings_sync_cycle_preflight_with_active_key_policy(
         &self,
         database: &SlateProfileDatabase,
@@ -1889,11 +1970,7 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
         let Some(head_change) =
             latest_local_device_change_for_head(database.local_sync_device_id(), &covered_changes)
         else {
-            return Err(StorageError::InvalidProfileSyncManifest(format!(
-                "no local settings change exists for device {}",
-                database.local_sync_device_id()
-            ))
-            .into());
+            return Ok(None);
         };
         let covers_revision = events
             .last()
@@ -3509,6 +3586,185 @@ mod tests {
         let _ = std::fs::remove_dir_all(second_state_root);
         let _ = std::fs::remove_dir_all(first_db_root);
         let _ = std::fs::remove_dir_all(second_db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_cycle_can_apply_shared_root_candidates() {
+        let network = InProcessBroadwebNetwork::new();
+        let first_state_root = test_state_root("cycle-candidate-first");
+        let second_state_root = test_state_root("cycle-candidate-second");
+        let receiver_state_root = test_state_root("cycle-candidate-receiver");
+        let first_db_root = test_state_root("cycle-candidate-first-db");
+        let second_db_root = test_state_root("cycle-candidate-second-db");
+        let receiver_db_root = test_state_root("cycle-candidate-receiver-db");
+        let first_daemon = network
+            .daemon_for_device(
+                &first_state_root,
+                ResourceBudget::default(),
+                "runtime-cycle-candidate-a",
+            )
+            .expect("start first candidate publisher daemon");
+        let second_daemon = network
+            .daemon_for_device(
+                &second_state_root,
+                ResourceBudget::default(),
+                "runtime-cycle-candidate-b",
+            )
+            .expect("start second candidate publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "runtime-cycle-candidate-c",
+            )
+            .expect("start candidate receiver daemon");
+        let first_database = SlateProfileDatabase::open_resolved_with_device_id(
+            first_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-cycle-candidate-a",
+        )
+        .expect("open first candidate database");
+        let second_database = SlateProfileDatabase::open_resolved_with_device_id(
+            second_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-cycle-candidate-b",
+        )
+        .expect("open second candidate database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-cycle-candidate-c",
+        )
+        .expect("open receiver candidate database");
+        let profile = "cyclecandidateprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([63; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let first_signer =
+            ProfileSyncDeviceSigner::generate("runtime-cycle-candidate-a").expect("first signer");
+        let second_signer =
+            ProfileSyncDeviceSigner::generate("runtime-cycle-candidate-b").expect("second signer");
+        let receiver_signer = ProfileSyncDeviceSigner::generate("runtime-cycle-candidate-c")
+            .expect("receiver signer");
+        register_test_content_key_epoch(&receiver_database, profile);
+        for public_key in [
+            first_signer.public_key().expect("first public key"),
+            second_signer.public_key().expect("second public key"),
+            receiver_signer.public_key().expect("receiver public key"),
+        ] {
+            receiver_database
+                .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                    profile: profile.to_string(),
+                    public_key,
+                    membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                })
+                .expect("receiver trusts sync device key");
+        }
+
+        let first_change = first_database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "alpha")
+            .expect("first candidate writes setting");
+        let first_publication = BroadwebdProfileSyncPublisher::new(&first_daemon)
+            .publish_signed_settings_tail_changes(
+                profile,
+                settings_root_id,
+                std::slice::from_ref(&first_change),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &first_signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("first candidate publishes shared root");
+        let second_change = second_database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "bravo")
+            .expect("second candidate writes setting");
+        let second_publication = BroadwebdProfileSyncPublisher::new(&second_daemon)
+            .publish_signed_settings_tail_changes(
+                profile,
+                settings_root_id,
+                std::slice::from_ref(&second_change),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &second_signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("second candidate publishes shared root");
+
+        let receive_only_policy =
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 1)
+                .with_root_health_required_after_cycle(false);
+        let run = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
+            .run_settings_sync_cycle_with_active_key_policy_and_shared_root_candidates(
+                &receiver_database,
+                profile,
+                settings_root_id,
+                &content_key,
+                &receiver_signer,
+                &receive_only_policy,
+            )
+            .expect("receiver applies shared-root candidates during active-key cycle");
+        assert_eq!(run.cycle.published_step_count(), 0);
+        assert_eq!(run.cycle.applied_count(), 0);
+        assert_eq!(run.shared_root_candidate_application_count(), 2);
+        let ProfileSyncSettingsCandidatePullApplyStatus::Applied(applications) =
+            &run.shared_root_candidates
+        else {
+            panic!(
+                "expected shared-root candidate applications, got {:?}",
+                run.shared_root_candidates
+            );
+        };
+        assert_eq!(
+            applications
+                .iter()
+                .map(|application| application.application.manifest_object_id.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                first_publication.manifest_object_id.as_str(),
+                second_publication.manifest_object_id.as_str(),
+            ]
+        );
+        assert!(!run.after_health.settings_root_health.degraded);
+        assert!(run.after_health.local_device_head_root_health.degraded);
+        assert_eq!(
+            receiver_database
+                .get_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme")
+                .expect("read receiver shared candidate value")
+                .expect("receiver shared candidate value")
+                .value,
+            "bravo"
+        );
+        assert_eq!(
+            receiver_database
+                .profile_sync_root(profile, settings_root_id)
+                .expect("read receiver shared root")
+                .expect("receiver shared root")
+                .object_id,
+            second_publication.manifest_object_id.as_str()
+        );
+
+        let unchanged = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
+            .run_settings_sync_cycle_with_active_key_policy_and_shared_root_candidates(
+                &receiver_database,
+                profile,
+                settings_root_id,
+                &content_key,
+                &receiver_signer,
+                &receive_only_policy,
+            )
+            .expect("receiver checks unchanged shared-root candidates");
+        assert_eq!(unchanged.shared_root_candidate_application_count(), 0);
+        assert_eq!(
+            unchanged.shared_root_candidates,
+            ProfileSyncSettingsCandidatePullApplyStatus::Unchanged {
+                profile: profile.to_string(),
+                root_id: settings_root_id.to_string(),
+                object_id: second_publication.manifest_object_id.clone(),
+            }
+        );
+
+        let _ = std::fs::remove_dir_all(first_state_root);
+        let _ = std::fs::remove_dir_all(second_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(first_db_root);
+        let _ = std::fs::remove_dir_all(second_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
     }
 
     #[test]

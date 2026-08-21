@@ -485,6 +485,14 @@ first, then receives from trusted devices. The local device's own public key
 still belongs in the trusted-key table because manifests may reference retained
 snapshot dependencies signed by the local device, even though the receive runner
 does not pull the local device's head as a remote source.
+An active-key policy cycle variant can also apply visible shared settings-root
+candidates after the bounded local publish and device-head receive steps. Its
+result reports the normal cycle plus the shared-root candidate status, so the
+runtime scheduler can distinguish "no device head changed" from "equal-control
+shared roots were merged" without adding another transport or polling loop. A
+receive-only candidate merge can recover the shared settings root while still
+leaving the local device-head root missing; strict after-cycle local-head
+health remains a separate policy choice.
 Before the cycle touches broadwebd it validates the caller-supplied credentials
 against local profile state: `key_id` must match the active content-key epoch in
 `slate-settings.db`, that epoch must use the supported content encryption
