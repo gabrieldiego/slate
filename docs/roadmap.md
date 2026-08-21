@@ -196,10 +196,11 @@ Current baseline:
   these synthetic HTTP fixture URLs whenever broadwebd is built with the
   `test-fixtures` feature, so downstream fixture tests stay in process too.
 - `InProcessBroadwebNetwork` now exposes fixture-only broadwebd registries and
-  per-device daemon constructors. These registries install an in-process HTTP
-  transport that handles only `slate-fixture-http://` URLs and rejects ordinary
-  `http://` or `https://` requests, while profile-sync device registries share
-  one in-memory simulated network state.
+  per-device and availability-provider daemon constructors. These registries
+  install an in-process HTTP transport that handles only
+  `slate-fixture-http://` URLs and rejects ordinary `http://` or `https://`
+  requests, while profile-sync registries share one in-memory simulated network
+  state.
 - Rendering broadweb smoke fixtures now consume that same `test-fixtures`
   layer, so IPFS/IPNS gateway and Kubo subresource tests record simulated
   requests without starting loopback HTTP servers. The rendering tests now use
@@ -279,6 +280,11 @@ Current baseline:
   healthy-provider cycle, but the runtime path reports a policy error if the
   resulting settings root or local device-head root does not meet the configured
   online retaining-provider quorum.
+- Published settings sync cycles now expose the encrypted object ids they
+  created. An in-process availability-provider daemon can retain that object
+  set through the same fixture network, and the regression proves root quorum
+  recovers without opening loopback ports or contacting external protocol
+  services.
 - The local profile-sync fixture can now mark simulated devices offline and
   online, allowing tests to verify unavailable devices fail closed without
   touching sockets, DNS, Tor, IPFS, or external relays.

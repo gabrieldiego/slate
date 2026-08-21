@@ -645,7 +645,9 @@ in-process HTTP transport under the normal direct-HTTP plugin id so synthetic
 fixture URLs route through the usual daemon fetch path, but ordinary external
 `http://` and `https://` URLs fail closed before any DNS lookup or socket
 operation. Profile-sync device registries created by the same network object
-share one simulated provider/object/root store.
+share one simulated provider/object/root store with availability-provider
+registries, so quorum, retention, and object-transfer tests can run without
+opening a listening port.
 
 Real protocol tests should use local fixtures or mock daemons. Tests must not
 require live IPFS, Tor, I2P, public gateways, or external network availability

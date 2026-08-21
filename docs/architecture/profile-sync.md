@@ -537,6 +537,14 @@ root and the local device-head root satisfy the configured online
 retaining-provider quorum. This lets a first publish recover from missing roots
 while still surfacing insufficient post-publish availability as a runtime policy
 failure.
+Published cycle results expose the encrypted object ids created by the local
+publish step: settings snapshots, tail changes, manifests, and device-head
+objects. Availability providers can retain that exact object set through
+broadwebd without gaining mutable-root authority. Fixture coverage uses an
+`InProcessBroadwebNetwork` availability-provider daemon to copy those objects
+inside the test process and then re-check root health, so quorum recovery is
+validated without loopback sockets, OS DNS, Tor, IPFS/IPNS, public gateways, or
+external relays.
 After provider policy passes, the runtime-facing runner can load the active
 content-key id from `slate-settings.db` and use caller-supplied secret material
 for the actual encrypted publish/pull cycle. The database therefore stores

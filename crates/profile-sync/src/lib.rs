@@ -407,12 +407,37 @@ pub struct PublishedSettingsTailManifest {
     pub tail_change_object_ids: Vec<String>,
 }
 
+impl PublishedSettingsTailManifest {
+    pub fn published_object_ids(&self) -> Vec<String> {
+        let mut object_ids = Vec::new();
+        let mut seen = BTreeSet::new();
+        for object_id in self.tail_change_object_ids.iter() {
+            push_unique_object_id(&mut object_ids, &mut seen, object_id);
+        }
+        push_unique_object_id(&mut object_ids, &mut seen, &self.manifest_object_id);
+        object_ids
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PublishedSettingsSnapshotManifest {
     pub manifest_object_id: String,
     pub manifest: ProfileSyncManifest,
     pub snapshot_object_id: String,
     pub tail_change_object_ids: Vec<String>,
+}
+
+impl PublishedSettingsSnapshotManifest {
+    pub fn published_object_ids(&self) -> Vec<String> {
+        let mut object_ids = Vec::new();
+        let mut seen = BTreeSet::new();
+        push_unique_object_id(&mut object_ids, &mut seen, &self.snapshot_object_id);
+        for object_id in self.tail_change_object_ids.iter() {
+            push_unique_object_id(&mut object_ids, &mut seen, object_id);
+        }
+        push_unique_object_id(&mut object_ids, &mut seen, &self.manifest_object_id);
+        object_ids
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -429,6 +454,12 @@ pub struct PublishedProfileSyncDeviceHead {
     pub device_head: ProfileSyncDeviceHead,
 }
 
+impl PublishedProfileSyncDeviceHead {
+    pub fn published_object_ids(&self) -> Vec<String> {
+        vec![self.object_id.clone()]
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PublishedLocalSettingsSnapshotHead {
     pub publication: PublishedSettingsSnapshotManifest,
@@ -438,6 +469,26 @@ pub struct PublishedLocalSettingsSnapshotHead {
     pub device_head_root: ProfileSyncRootRecord,
 }
 
+impl PublishedLocalSettingsSnapshotHead {
+    pub fn published_object_ids(&self) -> Vec<String> {
+        let mut object_ids = Vec::new();
+        let mut seen = BTreeSet::new();
+        extend_unique_object_ids(
+            &mut object_ids,
+            &mut seen,
+            self.publication.published_object_ids(),
+        );
+        extend_unique_object_ids(
+            &mut object_ids,
+            &mut seen,
+            self.device_head.published_object_ids(),
+        );
+        push_unique_object_id(&mut object_ids, &mut seen, &self.settings_root.object_id);
+        push_unique_object_id(&mut object_ids, &mut seen, &self.device_head_root.object_id);
+        object_ids
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PublishedLocalSettingsTailHead {
     pub publication: PublishedSettingsSnapshotManifest,
@@ -445,6 +496,26 @@ pub struct PublishedLocalSettingsTailHead {
     pub snapshot_record: SyncSnapshotRecord,
     pub settings_root: ProfileSyncRootRecord,
     pub device_head_root: ProfileSyncRootRecord,
+}
+
+impl PublishedLocalSettingsTailHead {
+    pub fn published_object_ids(&self) -> Vec<String> {
+        let mut object_ids = Vec::new();
+        let mut seen = BTreeSet::new();
+        extend_unique_object_ids(
+            &mut object_ids,
+            &mut seen,
+            self.publication.published_object_ids(),
+        );
+        extend_unique_object_ids(
+            &mut object_ids,
+            &mut seen,
+            self.device_head.published_object_ids(),
+        );
+        push_unique_object_id(&mut object_ids, &mut seen, &self.settings_root.object_id);
+        push_unique_object_id(&mut object_ids, &mut seen, &self.device_head_root.object_id);
+        object_ids
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -471,6 +542,14 @@ impl LocalSettingsHeadPublishStatus {
             Self::NoLocalSettingsChanges | Self::UpToDate { .. } => None,
         }
     }
+
+    pub fn published_object_ids(&self) -> Vec<String> {
+        match self {
+            Self::PublishedFullSnapshot(published) => published.published_object_ids(),
+            Self::PublishedIncrementalTail(published) => published.published_object_ids(),
+            Self::NoLocalSettingsChanges | Self::UpToDate { .. } => Vec::new(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -493,6 +572,15 @@ impl LocalSettingsSyncRun {
             .iter()
             .filter(|step| step.published_manifest_object_id().is_some())
             .count()
+    }
+
+    pub fn published_object_ids(&self) -> Vec<String> {
+        let mut object_ids = Vec::new();
+        let mut seen = BTreeSet::new();
+        for step in self.steps.iter() {
+            extend_unique_object_ids(&mut object_ids, &mut seen, step.published_object_ids());
+        }
+        object_ids
     }
 }
 
@@ -556,6 +644,31 @@ impl SettingsSyncCycleRun {
 
     pub fn applied_count(&self) -> usize {
         self.receive.applied_count()
+    }
+
+    pub fn published_object_ids(&self) -> Vec<String> {
+        self.publish.published_object_ids()
+    }
+}
+
+fn push_unique_object_id(
+    object_ids: &mut Vec<String>,
+    seen: &mut BTreeSet<String>,
+    object_id: &str,
+) {
+    let object_id = object_id.to_string();
+    if seen.insert(object_id.clone()) {
+        object_ids.push(object_id);
+    }
+}
+
+fn extend_unique_object_ids(
+    object_ids: &mut Vec<String>,
+    seen: &mut BTreeSet<String>,
+    incoming: impl IntoIterator<Item = String>,
+) {
+    for object_id in incoming {
+        push_unique_object_id(object_ids, seen, &object_id);
     }
 }
 
@@ -1189,6 +1302,27 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
             retained,
             available,
         })
+    }
+
+    pub fn retain_published_objects(
+        &self,
+        profile: &str,
+        object_ids: &[String],
+    ) -> Result<Vec<BroadwebdProfileSyncRetentionStatus>, BroadwebdError> {
+        let mut statuses = Vec::with_capacity(object_ids.len());
+        for object_id in object_ids {
+            self.retain_object(profile, object_id)?;
+            statuses.push(self.verify_retained_object(profile, object_id)?);
+        }
+        Ok(statuses)
+    }
+
+    pub fn retain_settings_sync_cycle_objects(
+        &self,
+        cycle: &SettingsSyncCycleRun,
+    ) -> Result<Vec<BroadwebdProfileSyncRetentionStatus>, BroadwebdError> {
+        let object_ids = cycle.published_object_ids();
+        self.retain_published_objects(cycle.profile.as_str(), object_ids.as_slice())
     }
 
     pub fn publish_root(
@@ -2239,9 +2373,7 @@ mod tests {
         ProfileSyncCycleWithHealthError, ProfileSyncPolicyError, ProfileSyncReceiveError,
         SettingsSyncCyclePolicy, settings_device_head_root_id,
     };
-    use slate_broadwebd::{
-        BroadwebDaemon, ResourceBudget, test_fixtures::InProcessBroadwebNetwork,
-    };
+    use slate_broadwebd::{ResourceBudget, test_fixtures::InProcessBroadwebNetwork};
     use slate_storage::{
         DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
         IncomingSyncSettingText, PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305,
@@ -3342,12 +3474,13 @@ mod tests {
         let network = InProcessBroadwebNetwork::new();
         let state_root = test_state_root("cycle-policy-degraded-provider");
         let db_root = test_state_root("cycle-policy-degraded-provider-db");
-        let daemon = BroadwebDaemon::start_with_registry(
-            &state_root,
-            ResourceBudget::default(),
-            network.registry_for_availability_provider("runtime-policy-provider"),
-        )
-        .expect("start availability-only in-process provider daemon");
+        let daemon = network
+            .daemon_for_availability_provider(
+                &state_root,
+                ResourceBudget::default(),
+                "runtime-policy-provider",
+            )
+            .expect("start availability-only in-process provider daemon");
         let database = SlateProfileDatabase::open_resolved_with_device_id(
             db_root.join(DEFAULT_DATABASE_FILE_NAME),
             "runtime-policy",
@@ -3561,6 +3694,106 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_availability_provider_retains_cycle_objects_for_root_quorum() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("cycle-retention-device");
+        let provider_state_root = test_state_root("cycle-retention-provider");
+        let db_root = test_state_root("cycle-retention-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-retain-a",
+            )
+            .expect("start in-process profile-sync device daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "runtime-retain-pinner",
+            )
+            .expect("start in-process availability-provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-retain-a",
+        )
+        .expect("open local settings database");
+        let profile = "retentionprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([60; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-retain-a")
+            .expect("generate local device signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register local trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write local setting");
+
+        let run = BroadwebdSettingsSyncRunner::new(&device_daemon)
+            .run_settings_sync_cycle_with_health(
+                &database,
+                profile,
+                settings_root_id,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+                4,
+                2,
+            )
+            .expect("publish through in-process fixture with report-only health");
+        assert_eq!(run.cycle.published_step_count(), 1);
+        assert!(run.degraded_after());
+        assert_eq!(
+            run.after_health
+                .settings_root_health
+                .online_retaining_providers,
+            1
+        );
+
+        let object_ids = run.cycle.published_object_ids();
+        assert_eq!(object_ids.len(), 3);
+        let LocalSettingsHeadPublishStatus::PublishedFullSnapshot(published) =
+            &run.cycle.publish.steps[0]
+        else {
+            panic!("first local publish step should publish a full snapshot");
+        };
+        assert!(object_ids.contains(&published.publication.snapshot_object_id));
+        assert!(object_ids.contains(&published.publication.manifest_object_id));
+        assert!(object_ids.contains(&published.device_head.object_id));
+
+        let statuses = BroadwebdProfileSyncPublisher::new(&provider_daemon)
+            .retain_settings_sync_cycle_objects(&run.cycle)
+            .expect("in-process provider retains all cycle objects");
+        assert_eq!(statuses.len(), object_ids.len());
+        assert!(statuses.iter().all(|status| status.retained));
+        assert!(statuses.iter().all(|status| status.available));
+
+        let health = BroadwebdSettingsSyncRunner::new(&device_daemon)
+            .settings_sync_health(&database, profile, settings_root_id, 2)
+            .expect("read retained-root health from in-process fixture");
+        assert!(!health.degraded());
+        assert_eq!(health.settings_root_health.online_retaining_providers, 2);
+        assert_eq!(
+            health
+                .local_device_head_root_health
+                .online_retaining_providers,
+            2
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
         let _ = std::fs::remove_dir_all(db_root);
     }
 

@@ -196,6 +196,34 @@ pub mod test_fixtures {
             )
         }
 
+        pub fn daemon_for_availability_provider(
+            &self,
+            state_root: impl Into<PathBuf>,
+            budget: ResourceBudget,
+            provider_id: impl AsRef<str>,
+        ) -> Result<BroadwebDaemon, BroadwebdError> {
+            BroadwebDaemon::start_with_registry(
+                state_root,
+                budget,
+                self.registry_for_availability_provider(provider_id),
+            )
+        }
+
+        pub fn daemon_for_provider_with_roles(
+            &self,
+            state_root: impl Into<PathBuf>,
+            budget: ResourceBudget,
+            provider_id: impl Into<String>,
+            provider_kind: impl Into<String>,
+            roles: ProfileSyncProviderRoles,
+        ) -> Result<BroadwebDaemon, BroadwebdError> {
+            BroadwebDaemon::start_with_registry(
+                state_root,
+                budget,
+                self.registry_for_provider_with_roles(provider_id, provider_kind, roles),
+            )
+        }
+
         pub fn http_response(&self, response: InternalFixtureHttpResponse) -> InProcessHttpFixture {
             InProcessHttpFixture::new(register_internal_fixture_http_response(response))
         }
