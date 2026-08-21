@@ -3081,6 +3081,23 @@ impl SlateProfileDatabase {
             .map_err(|source| self.database_error(source))
     }
 
+    pub fn latest_sync_revision_for_domain(
+        &self,
+        profile: &str,
+        domain: &str,
+    ) -> Result<i64, StorageError> {
+        let connection = self.connection()?;
+        connection
+            .query_row(
+                "SELECT COALESCE(MAX(revision), 0)
+                 FROM settings_revisions
+                 WHERE profile = ?1 AND domain = ?2",
+                params![profile, domain],
+                |row| row.get(0),
+            )
+            .map_err(|source| self.database_error(source))
+    }
+
     pub fn sync_setting_text_events_after(
         &self,
         profile: &str,
@@ -9073,6 +9090,12 @@ mod tests {
             .unwrap();
         assert_eq!(settings_events.len(), 1);
         assert_eq!(settings_events[0].change, settings_change);
+        assert_eq!(
+            database
+                .latest_sync_revision_for_domain(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS)
+                .unwrap(),
+            settings_events[0].revision.revision
+        );
 
         let calendar_events = database
             .sync_setting_text_events_after_for_domain(
@@ -9088,6 +9111,18 @@ mod tests {
                 .map(|event| event.change.clone())
                 .collect::<Vec<_>>(),
             vec![first_calendar_change.clone(), second_calendar_change]
+        );
+        assert_eq!(
+            database
+                .latest_sync_revision_for_domain(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CALENDAR)
+                .unwrap(),
+            calendar_events[1].revision.revision
+        );
+        assert_eq!(
+            database
+                .latest_sync_revision_for_domain(DEFAULT_PROFILE_ID, "unknown-domain")
+                .unwrap(),
+            0
         );
 
         let first_calendar_batch = database
