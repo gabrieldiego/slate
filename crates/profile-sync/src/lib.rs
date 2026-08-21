@@ -2842,12 +2842,7 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
         profile: &str,
         root_id: &str,
     ) -> Result<Option<PublishedProfileSyncMembershipLog>, ProfileSyncPublishError> {
-        let records = database.sync_account_membership_records(profile)?;
-        let plan = ProfileSyncMembershipLogPublicationPlan::for_record_count(
-            profile,
-            root_id,
-            records.len(),
-        );
+        let plan = self.plan_local_sync_account_membership_log(database, profile, root_id)?;
         if plan.is_empty() {
             return Ok(None);
         }
@@ -2856,6 +2851,23 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
                 profile: plan.profile,
                 max_records: plan.max_records,
                 actual_records: plan.record_count,
+            });
+        }
+
+        let records = database.sync_account_membership_records(profile)?;
+        let loaded_plan = ProfileSyncMembershipLogPublicationPlan::for_record_count(
+            profile,
+            root_id,
+            records.len(),
+        );
+        if loaded_plan.is_empty() {
+            return Ok(None);
+        }
+        if loaded_plan.requires_compaction() {
+            return Err(ProfileSyncPublishError::MembershipLogTooLarge {
+                profile: loaded_plan.profile,
+                max_records: loaded_plan.max_records,
+                actual_records: loaded_plan.record_count,
             });
         }
 

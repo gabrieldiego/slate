@@ -598,9 +598,10 @@ stores the membership-log root or writes any trusted device key.
 Membership logs are capped at a fixed record count before entry fetch or apply,
 so oversized indexes fail before they can force unbounded fixture object reads
 or database mutations.
-The publisher enforces the same cap before writing membership record objects or
-advancing the log root, so oversized local history waits for future membership
-compaction instead of publishing an index receivers must reject.
+The publisher enforces the same cap through that count-only plan before loading
+signed membership record blobs, writing membership record objects, or advancing
+the log root, so oversized local history waits for future membership compaction
+instead of publishing an index receivers must reject.
 A read-only publication plan exposes empty, publishable, and too-large states
 from a count-only `slate-settings.db` query without loading every signed
 membership record blob or touching broadwebd. The scheduler facade can compose

@@ -766,9 +766,10 @@ Current baseline:
   advancing the stored log root or writing trusted device keys.
 - Membership logs now have a fixed record-count cap enforced before entry
   fetch or apply, with socketless fixture coverage for oversized indexes.
-- Membership-log publishing now enforces the same cap before writing any
-  membership record objects or advancing the log root, so local history that
-  needs compaction cannot create a distributed index receivers will reject.
+- Membership-log publishing now enforces the same cap through a count-only
+  plan before loading signed membership record blobs, writing any membership
+  record objects, or advancing the log root. Local history that needs
+  compaction cannot create a distributed index receivers will reject.
 - Membership-log publishing now also has a read-only local plan that reports
   empty, publishable, or too-large history from a count-only
   `slate-settings.db` query before any broadwebd call or root mutation. The
