@@ -1088,6 +1088,7 @@ fn shared_root_candidate_object_ids(
 #[derive(Clone, Copy)]
 pub struct SettingsSyncRetentionProviderHandle<'a> {
     pub provider_id: &'a str,
+    pub endpoint_ref: Option<&'a str>,
     pub daemon: &'a BroadwebDaemon,
 }
 
@@ -1095,6 +1096,19 @@ impl<'a> SettingsSyncRetentionProviderHandle<'a> {
     pub fn new(provider_id: &'a str, daemon: &'a BroadwebDaemon) -> Self {
         Self {
             provider_id,
+            endpoint_ref: None,
+            daemon,
+        }
+    }
+
+    pub fn with_endpoint_ref(
+        provider_id: &'a str,
+        endpoint_ref: &'a str,
+        daemon: &'a BroadwebDaemon,
+    ) -> Self {
+        Self {
+            provider_id,
+            endpoint_ref: Some(endpoint_ref),
             daemon,
         }
     }
@@ -1591,9 +1605,16 @@ pub struct SettingsSyncStoredRetentionProviderPlan {
     pub max_stored_provider_count: u32,
     pub stored_provider_count: usize,
     pub enabled_retention_provider_ids: Vec<String>,
+    pub enabled_retention_provider_endpoints: Vec<SettingsSyncStoredRetentionProviderEndpoint>,
     pub disabled_provider_ids: Vec<String>,
     pub stored_role_ineligible_provider_ids: Vec<String>,
     pub cycle: SettingsSyncScheduledCyclePlan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncStoredRetentionProviderEndpoint {
+    pub provider_id: String,
+    pub endpoint_ref: Option<String>,
 }
 
 impl SettingsSyncStoredRetentionProviderPlan {
@@ -1646,12 +1667,17 @@ impl SettingsSyncStoredRetentionProviderPlan {
 pub struct SettingsSyncStoredRetentionProviderRun {
     pub stored_provider_plan: SettingsSyncStoredRetentionProviderPlan,
     pub unmaterialized_retention_provider_ids: Vec<String>,
+    pub endpoint_mismatch_retention_provider_ids: Vec<String>,
     pub cycle: SettingsSyncCycleWithSharedRootRetentionRun,
 }
 
 impl SettingsSyncStoredRetentionProviderRun {
     pub fn unmaterialized_retention_provider_count(&self) -> usize {
         self.unmaterialized_retention_provider_ids.len()
+    }
+
+    pub fn endpoint_mismatch_retention_provider_count(&self) -> usize {
+        self.endpoint_mismatch_retention_provider_ids.len()
     }
 
     pub fn selected_retention_provider_count(&self) -> usize {
@@ -1662,6 +1688,7 @@ impl SettingsSyncStoredRetentionProviderRun {
     pub fn materialized_retention_provider_count(&self) -> usize {
         self.selected_retention_provider_count()
             .saturating_sub(self.unmaterialized_retention_provider_count())
+            .saturating_sub(self.endpoint_mismatch_retention_provider_count())
     }
 
     pub fn retained_provider_count(&self) -> usize {
@@ -1702,6 +1729,7 @@ pub struct SettingsSyncStoredRetentionProviderMembershipRun {
     pub preflight: SettingsSyncCyclePreflightWithMembershipLog,
     pub stored_provider_plan: SettingsSyncStoredRetentionProviderPlan,
     pub unmaterialized_retention_provider_ids: Vec<String>,
+    pub endpoint_mismatch_retention_provider_ids: Vec<String>,
     pub cycle: SettingsSyncCycleWithMembershipLogRetentionRun,
 }
 
@@ -1714,6 +1742,10 @@ impl SettingsSyncStoredRetentionProviderMembershipRun {
         self.unmaterialized_retention_provider_ids.len()
     }
 
+    pub fn endpoint_mismatch_retention_provider_count(&self) -> usize {
+        self.endpoint_mismatch_retention_provider_ids.len()
+    }
+
     pub fn selected_retention_provider_count(&self) -> usize {
         self.stored_provider_plan
             .selected_retention_provider_count()
@@ -1722,6 +1754,7 @@ impl SettingsSyncStoredRetentionProviderMembershipRun {
     pub fn materialized_retention_provider_count(&self) -> usize {
         self.selected_retention_provider_count()
             .saturating_sub(self.unmaterialized_retention_provider_count())
+            .saturating_sub(self.endpoint_mismatch_retention_provider_count())
     }
 
     pub fn retained_provider_count(&self) -> usize {
@@ -1852,6 +1885,7 @@ fn select_settings_sync_retention_provider_handles<'a>(
 struct StoredRetentionProviderSelection {
     stored_provider_count: usize,
     enabled_retention_provider_ids: Vec<String>,
+    enabled_retention_provider_endpoints: Vec<SettingsSyncStoredRetentionProviderEndpoint>,
     disabled_provider_ids: Vec<String>,
     stored_role_ineligible_provider_ids: Vec<String>,
 }
@@ -1860,6 +1894,7 @@ fn select_stored_retention_provider_ids(
     providers: Vec<StorageProviderRecord>,
 ) -> StoredRetentionProviderSelection {
     let mut enabled_retention_provider_ids = Vec::new();
+    let mut enabled_retention_provider_endpoints = Vec::new();
     let mut disabled_provider_ids = Vec::new();
     let mut stored_role_ineligible_provider_ids = Vec::new();
     let stored_provider_count = providers.len();
@@ -1873,12 +1908,17 @@ fn select_stored_retention_provider_ids(
             stored_role_ineligible_provider_ids.push(provider.provider_id);
             continue;
         }
+        enabled_retention_provider_endpoints.push(SettingsSyncStoredRetentionProviderEndpoint {
+            provider_id: provider.provider_id.clone(),
+            endpoint_ref: provider.endpoint_ref,
+        });
         enabled_retention_provider_ids.push(provider.provider_id);
     }
 
     StoredRetentionProviderSelection {
         stored_provider_count,
         enabled_retention_provider_ids,
+        enabled_retention_provider_endpoints,
         disabled_provider_ids,
         stored_role_ineligible_provider_ids,
     }
@@ -1898,6 +1938,7 @@ fn settings_sync_stored_retention_provider_plan(
         max_stored_provider_count,
         stored_provider_count: stored_selection.stored_provider_count,
         enabled_retention_provider_ids: stored_selection.enabled_retention_provider_ids,
+        enabled_retention_provider_endpoints: stored_selection.enabled_retention_provider_endpoints,
         disabled_provider_ids: stored_selection.disabled_provider_ids,
         stored_role_ineligible_provider_ids: stored_selection.stored_role_ineligible_provider_ids,
         cycle,
@@ -1907,8 +1948,9 @@ fn settings_sync_stored_retention_provider_plan(
 fn materialize_stored_retention_provider_daemons<'a>(
     plan: &SettingsSyncStoredRetentionProviderPlan,
     retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'a>],
-) -> (Vec<String>, Vec<&'a BroadwebDaemon>) {
+) -> (Vec<String>, Vec<String>, Vec<&'a BroadwebDaemon>) {
     let mut unmaterialized_retention_provider_ids = Vec::new();
+    let mut endpoint_mismatch_retention_provider_ids = Vec::new();
     let mut daemons = Vec::new();
 
     for provider_id in &plan.cycle.selected_retention_provider_ids {
@@ -1916,13 +1958,37 @@ fn materialize_stored_retention_provider_daemons<'a>(
             .iter()
             .find(|handle| handle.provider_id == provider_id)
         {
+            if !stored_provider_endpoint_matches_handle(plan, provider_id, handle.endpoint_ref) {
+                endpoint_mismatch_retention_provider_ids.push(provider_id.clone());
+                continue;
+            }
             daemons.push(handle.daemon);
         } else {
             unmaterialized_retention_provider_ids.push(provider_id.clone());
         }
     }
 
-    (unmaterialized_retention_provider_ids, daemons)
+    (
+        unmaterialized_retention_provider_ids,
+        endpoint_mismatch_retention_provider_ids,
+        daemons,
+    )
+}
+
+fn stored_provider_endpoint_matches_handle(
+    plan: &SettingsSyncStoredRetentionProviderPlan,
+    provider_id: &str,
+    handle_endpoint_ref: Option<&str>,
+) -> bool {
+    let Some(stored_endpoint_ref) = plan
+        .enabled_retention_provider_endpoints
+        .iter()
+        .find(|endpoint| endpoint.provider_id == provider_id)
+        .and_then(|endpoint| endpoint.endpoint_ref.as_deref())
+    else {
+        return true;
+    };
+    handle_endpoint_ref == Some(stored_endpoint_ref)
 }
 
 #[derive(Clone, Copy)]
@@ -3046,14 +3112,18 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             stored_provider_plan.ineligible_retention_provider_count(),
             &stored_provider_plan.cycle.preflight.before_health,
         )?;
-        let (unmaterialized_retention_provider_ids, daemons) =
-            materialize_stored_retention_provider_daemons(
-                &stored_provider_plan,
-                retention_provider_handles,
-            );
+        let (
+            unmaterialized_retention_provider_ids,
+            endpoint_mismatch_retention_provider_ids,
+            daemons,
+        ) = materialize_stored_retention_provider_daemons(
+            &stored_provider_plan,
+            retention_provider_handles,
+        );
         let materialized_retention_provider_count = stored_provider_plan
             .selected_retention_provider_count()
-            .saturating_sub(unmaterialized_retention_provider_ids.len());
+            .saturating_sub(unmaterialized_retention_provider_ids.len())
+            .saturating_sub(endpoint_mismatch_retention_provider_ids.len());
         config.policy.check_selected_retention_provider_count(
             materialized_retention_provider_count,
             &stored_provider_plan.cycle.preflight.before_health,
@@ -3071,6 +3141,7 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         Ok(SettingsSyncStoredRetentionProviderRun {
             stored_provider_plan,
             unmaterialized_retention_provider_ids,
+            endpoint_mismatch_retention_provider_ids,
             cycle,
         })
     }
@@ -3206,14 +3277,18 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             stored_provider_plan.ineligible_retention_provider_count(),
             &preflight.preflight.before_health,
         )?;
-        let (unmaterialized_retention_provider_ids, daemons) =
-            materialize_stored_retention_provider_daemons(
-                &stored_provider_plan,
-                retention_provider_handles,
-            );
+        let (
+            unmaterialized_retention_provider_ids,
+            endpoint_mismatch_retention_provider_ids,
+            daemons,
+        ) = materialize_stored_retention_provider_daemons(
+            &stored_provider_plan,
+            retention_provider_handles,
+        );
         let materialized_retention_provider_count = stored_provider_plan
             .selected_retention_provider_count()
-            .saturating_sub(unmaterialized_retention_provider_ids.len());
+            .saturating_sub(unmaterialized_retention_provider_ids.len())
+            .saturating_sub(endpoint_mismatch_retention_provider_ids.len());
         config.policy.check_selected_retention_provider_count(
             materialized_retention_provider_count,
             &preflight.preflight.before_health,
@@ -3233,6 +3308,7 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             preflight,
             stored_provider_plan,
             unmaterialized_retention_provider_ids,
+            endpoint_mismatch_retention_provider_ids,
             cycle,
         })
     }
@@ -5701,6 +5777,7 @@ mod tests {
             .expect("publisher publishes stored membership and settings state");
 
         let selected_provider_id = "local-fixture-availability-membership-stored-scheduler-pinner";
+        let selected_provider_endpoint_ref = format!("fixture:{selected_provider_id}");
         let unmaterialized_provider_id =
             "local-fixture-availability-membership-stored-scheduler-extra";
         for provider in [
@@ -5727,10 +5804,12 @@ mod tests {
                 .upsert_storage_provider(&provider)
                 .expect("receiver writes stored membership provider metadata");
         }
-        let materialized_provider_handles = [SettingsSyncRetentionProviderHandle::new(
-            selected_provider_id,
-            &provider_daemon,
-        )];
+        let materialized_provider_handles =
+            [SettingsSyncRetentionProviderHandle::with_endpoint_ref(
+                selected_provider_id,
+                selected_provider_endpoint_ref.as_str(),
+                &provider_daemon,
+            )];
         let scheduler = BroadwebdSettingsSyncScheduler::new(&receiver_daemon);
         let config = SettingsSyncSchedulerConfig::new(
             DEFAULT_PROFILE_ID,
@@ -5784,8 +5863,10 @@ mod tests {
             run.unmaterialized_retention_provider_ids,
             vec![unmaterialized_provider_id.to_string()]
         );
+        assert!(run.endpoint_mismatch_retention_provider_ids.is_empty());
         assert_eq!(run.selected_retention_provider_count(), 2);
         assert_eq!(run.materialized_retention_provider_count(), 1);
+        assert_eq!(run.endpoint_mismatch_retention_provider_count(), 0);
         assert_eq!(run.cycle.cycle.cycle.applied_count(), 1);
         assert_eq!(
             receiver_database
@@ -9406,6 +9487,7 @@ mod tests {
             .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
             .expect("write scheduler stored-run local setting");
         let selected_provider_id = "local-fixture-availability-runtime-scheduler-stored-run-pinner";
+        let selected_provider_endpoint_ref = format!("fixture:{selected_provider_id}");
         let unmaterialized_provider_id =
             "local-fixture-availability-runtime-scheduler-stored-run-extra";
         for provider in [
@@ -9434,10 +9516,12 @@ mod tests {
         }
 
         let scheduler = BroadwebdSettingsSyncScheduler::new(&device_daemon);
-        let materialized_provider_handles = [SettingsSyncRetentionProviderHandle::new(
-            selected_provider_id,
-            &provider_daemon,
-        )];
+        let materialized_provider_handles =
+            [SettingsSyncRetentionProviderHandle::with_endpoint_ref(
+                selected_provider_id,
+                selected_provider_endpoint_ref.as_str(),
+                &provider_daemon,
+            )];
         let strict_config = SettingsSyncSchedulerConfig::new(
             profile,
             settings_root_id,
@@ -9471,11 +9555,45 @@ mod tests {
                 .is_empty()
         );
 
+        let endpoint_mismatch_provider_handles =
+            [SettingsSyncRetentionProviderHandle::with_endpoint_ref(
+                selected_provider_id,
+                "fixture:wrong-stored-provider",
+                &provider_daemon,
+            )];
         let config = SettingsSyncSchedulerConfig::new(
             profile,
             settings_root_id,
             SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
         );
+        let mismatch_error = scheduler
+            .run_once_with_stored_retention_provider_handles(
+                &database,
+                &config,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                8,
+                &endpoint_mismatch_provider_handles,
+            )
+            .expect_err("scheduler should reject endpoint-mismatched stored provider handle");
+        let ProfileSyncCycleWithHealthError::Policy(ProfileSyncPolicyError::ProviderMinimumUnmet {
+            provider_role,
+            minimum,
+            actual,
+            ..
+        }) = mismatch_error
+        else {
+            panic!("expected endpoint mismatch provider minimum error, got {mismatch_error:?}");
+        };
+        assert_eq!(provider_role, "selected retention providers");
+        assert_eq!(minimum, 1);
+        assert_eq!(actual, 0);
+        assert!(
+            database
+                .profile_sync_roots(profile)
+                .expect("read roots after endpoint mismatch failure")
+                .is_empty()
+        );
+
         let run = scheduler
             .run_once_with_stored_retention_provider_handles(
                 &database,
@@ -9507,9 +9625,11 @@ mod tests {
             run.unmaterialized_retention_provider_ids,
             vec![unmaterialized_provider_id.to_string()]
         );
+        assert!(run.endpoint_mismatch_retention_provider_ids.is_empty());
         assert_eq!(run.selected_retention_provider_count(), 2);
         assert_eq!(run.materialized_retention_provider_count(), 1);
         assert_eq!(run.unmaterialized_retention_provider_count(), 1);
+        assert_eq!(run.endpoint_mismatch_retention_provider_count(), 0);
         assert!(run.degraded_before());
         assert_eq!(run.cycle.cycle.published_step_count(), 1);
         assert_eq!(run.cycle.retention.len(), 1);

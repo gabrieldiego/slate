@@ -819,11 +819,16 @@ starting protocol daemons, publishing, retaining, or opening sockets. A stored
 provider scheduler tick can then run only against already-materialized daemon
 handles supplied by runtime code. Stored selected providers without a matching
 handle are reported as unmaterialized, and only materialized selected providers
-count toward the retaining-provider quorum. The membership-aware scheduler has
-the same stored-provider path: its read-only plan preserves the no-mutation
-boundary and does not pull membership records to satisfy credential preflight,
-while its runtime path pulls the membership log first and then selects stored
-retention providers from the updated `slate-settings.db` view. The
+count toward the retaining-provider quorum. When a stored row has an
+`endpoint_ref`, the materialized handle must report the same endpoint before it
+can be used for retention. Endpoint mismatches are tracked separately from
+missing handles and excluded from quorum, so runtime code cannot satisfy a
+stored provider selection with the wrong local fixture or future protocol
+endpoint. The membership-aware scheduler has the same stored-provider path: its
+read-only plan preserves the no-mutation boundary and does not pull membership
+records to satisfy credential preflight, while its runtime path pulls the
+membership log first and then selects stored retention providers from the
+updated `slate-settings.db` view. The
 selected-handle runtime path also rejects a provider set that cannot meet the
 requested retaining-provider quorum before publishing local objects, pulling
 candidates, retaining objects, or mutating sync roots. If a selected fixture

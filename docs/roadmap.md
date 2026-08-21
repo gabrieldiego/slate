@@ -478,6 +478,11 @@ Current baseline:
   counts only materialized selected providers toward the retention quorum, and
   performs the publish/retain/root-health sequence entirely through
   `InProcessBroadwebNetwork` fixture daemons in tests.
+- Stored-provider runtime ticks now require supplied materialized provider
+  handles to match the stored `endpoint_ref` when one is configured. Endpoint
+  mismatches are excluded from the materialized provider quorum, preventing a
+  provider-id match from silently using the wrong local fixture or future
+  protocol endpoint.
 - The membership-aware scheduler now has the same stored-provider path. Its
   read-only plan keeps the existing no-mutation boundary and will not pull
   membership records to satisfy credentials, while the runtime path pulls the
