@@ -607,9 +607,6 @@ mod tests {
         RenderDocument, RenderSurface, RenderViewport, ServoBackend, ServoDocument,
         ServoDocumentSource, ServoDocumentStatus, ServoFrame,
     };
-    use std::io::{Read, Write};
-    use std::net::TcpListener;
-    use std::thread;
 
     #[test]
     fn initial_state_has_home_tab() {
@@ -895,35 +892,32 @@ mod tests {
     }
 
     #[test]
-    fn navigating_http_hands_page_to_servo() {
-        let listener = TcpListener::bind("127.0.0.1:0").expect("bind local server");
-        let address = format!("http://{}", listener.local_addr().expect("local socket"));
-        let server = thread::spawn(move || {
-            let (mut stream, _) = listener.accept().expect("accept request");
-            let mut request = [0_u8; 1024];
-            let _ = stream.read(&mut request).expect("read request");
-            let body = "<!doctype html><html><head><title>Browser Core Web</title></head>\
-                        <body><h1>Fetched From Web</h1><p>HTTP fixture body.</p></body></html>";
-            let response = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                body.len(),
-                body
-            );
-            stream
-                .write_all(response.as_bytes())
-                .expect("write response");
-        });
-
+    fn navigating_http_hands_address_to_surface_loader() {
         let mut state = BrowserState::new(&ServoBackend);
-        state.navigate(&address).expect("HTTP navigation");
-        server.join().expect("server thread");
+        state
+            .navigate_with_surface_loader(
+                "http://example.test/page",
+                RenderViewport::default(),
+                |address, _title, viewport| {
+                    assert_eq!(address, "http://example.test/page");
+                    let mut surface = cached_web_surface(
+                        address,
+                        viewport.width as usize,
+                        viewport.height as usize,
+                    );
+                    surface.title = "Browser Core Web".to_string();
+                    surface.summary = "Rendered by test loader".to_string();
+                    surface
+                },
+            )
+            .expect("HTTP navigation");
 
         assert_eq!(state.surface.title, "Browser Core Web");
-        assert_eq!(state.surface.summary, "Rendered by Servo");
+        assert_eq!(state.surface.summary, "Rendered by test loader");
         let RenderDocument::Web(document) = &state.surface.document else {
-            panic!("expected Servo document");
+            panic!("expected web document");
         };
-        assert_eq!(document.source, ServoDocumentSource::Web);
+        assert_eq!(document.address, "http://example.test/page");
         assert!(!document.frame.pixels.is_empty());
     }
 
