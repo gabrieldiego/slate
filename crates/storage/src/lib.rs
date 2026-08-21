@@ -19,6 +19,11 @@ pub const DEFAULT_SYNC_DEVICE_ID: &str = "local-device";
 pub const PROFILE_SYNC_CONTENT_KEY_BYTES: usize = 32;
 pub const PROFILE_SYNC_NONCE_BYTES: usize = 12;
 pub const SYNC_OBJECT_VERSION: u8 = 1;
+pub const PROFILE_SYNC_MANIFEST_SCHEMA_VERSION: u8 = 1;
+pub const DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH: i64 = 1;
+pub const DEFAULT_PROFILE_SYNC_MIN_TAIL_CHANGE_COUNT: u32 = 32;
+pub const DEFAULT_PROFILE_SYNC_CHANGE_RETENTION_SECONDS: i64 = 14 * 24 * 60 * 60;
+pub const DEFAULT_PROFILE_SYNC_INACTIVE_DEVICE_GRACE_SECONDS: i64 = 30 * 24 * 60 * 60;
 pub const SYNC_DOMAIN_BOOKMARKS: &str = "bookmarks";
 pub const SYNC_DOMAIN_CALENDAR: &str = "calendar";
 pub const SYNC_DOMAIN_CHAT: &str = "chat";
@@ -273,11 +278,34 @@ pub struct SignedSyncObject {
 pub struct ProfileSyncManifest {
     pub profile: String,
     pub root_id: String,
+    #[serde(default = "default_profile_sync_manifest_schema_version")]
+    pub schema_version: u8,
+    #[serde(default = "default_profile_sync_membership_epoch")]
+    pub membership_epoch: i64,
     pub current_snapshot_object_id: Option<String>,
     pub tail_change_object_ids: Vec<String>,
     pub included_domains: Vec<String>,
     pub device_frontiers: Vec<ProfileSyncDeviceFrontier>,
+    #[serde(default)]
+    pub retention_policy: ProfileSyncRetentionPolicy,
     pub created_at: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ProfileSyncRetentionPolicy {
+    pub min_tail_change_count: u32,
+    pub change_retention_seconds: i64,
+    pub inactive_device_grace_seconds: i64,
+}
+
+impl Default for ProfileSyncRetentionPolicy {
+    fn default() -> Self {
+        Self {
+            min_tail_change_count: DEFAULT_PROFILE_SYNC_MIN_TAIL_CHANGE_COUNT,
+            change_retention_seconds: DEFAULT_PROFILE_SYNC_CHANGE_RETENTION_SECONDS,
+            inactive_device_grace_seconds: DEFAULT_PROFILE_SYNC_INACTIVE_DEVICE_GRACE_SECONDS,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
@@ -285,6 +313,14 @@ pub struct ProfileSyncDeviceFrontier {
     pub device_id: String,
     pub latest_sequence: i64,
     pub latest_change_object_id: Option<String>,
+}
+
+fn default_profile_sync_manifest_schema_version() -> u8 {
+    PROFILE_SYNC_MANIFEST_SCHEMA_VERSION
+}
+
+fn default_profile_sync_membership_epoch() -> i64 {
+    DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH
 }
 
 impl SignedSyncObject {
@@ -2743,6 +2779,8 @@ mod tests {
         let manifest = ProfileSyncManifest {
             profile: DEFAULT_PROFILE_ID.to_string(),
             root_id: "settings/latest".to_string(),
+            schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
             current_snapshot_object_id: Some("snapshot-object-1".to_string()),
             tail_change_object_ids: vec!["change-object-2".to_string()],
             included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
@@ -2751,6 +2789,7 @@ mod tests {
                 latest_sequence: 7,
                 latest_change_object_id: Some("change-object-2".to_string()),
             }],
+            retention_policy: ProfileSyncRetentionPolicy::default(),
             created_at: 1234,
         };
         let manifest_payload = serde_json::to_vec(&manifest).unwrap();
@@ -2784,6 +2823,37 @@ mod tests {
         let decoded_manifest: ProfileSyncManifest =
             serde_json::from_slice(decoded_payload.as_slice()).unwrap();
         assert_eq!(decoded_manifest, manifest);
+    }
+
+    #[test]
+    fn profile_sync_manifest_decodes_default_membership_and_retention_metadata() {
+        let payload = serde_json::json!({
+            "profile": DEFAULT_PROFILE_ID,
+            "root_id": "settings/latest",
+            "current_snapshot_object_id": null,
+            "tail_change_object_ids": ["change-object-1"],
+            "included_domains": [SYNC_DOMAIN_SETTINGS],
+            "device_frontiers": [{
+                "device_id": "device-a",
+                "latest_sequence": 1,
+                "latest_change_object_id": "change-object-1"
+            }],
+            "created_at": 1234
+        });
+        let manifest: ProfileSyncManifest = serde_json::from_value(payload).unwrap();
+
+        assert_eq!(
+            manifest.schema_version,
+            PROFILE_SYNC_MANIFEST_SCHEMA_VERSION
+        );
+        assert_eq!(
+            manifest.membership_epoch,
+            DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH
+        );
+        assert_eq!(
+            manifest.retention_policy,
+            ProfileSyncRetentionPolicy::default()
+        );
     }
 
     #[test]

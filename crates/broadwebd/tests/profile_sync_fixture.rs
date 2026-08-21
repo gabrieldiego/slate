@@ -6,10 +6,12 @@ use slate_broadwebd::{
     ResourceBudget,
 };
 use slate_storage::{
-    DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, EncryptedSyncObject, IncomingSyncSettingText,
-    PROFILE_SYNC_CONTENT_KEY_BYTES, ProfileSyncContentKey, ProfileSyncDeviceFrontier,
-    ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner, ProfileSyncManifest, SYNC_DOMAIN_SETTINGS,
-    SignedSyncObject, SlateProfileDatabase, SyncChangeRecord, SyncRevisionRecord,
+    DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+    EncryptedSyncObject, IncomingSyncSettingText, PROFILE_SYNC_CONTENT_KEY_BYTES,
+    PROFILE_SYNC_MANIFEST_SCHEMA_VERSION, ProfileSyncContentKey, ProfileSyncDeviceFrontier,
+    ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner, ProfileSyncManifest,
+    ProfileSyncRetentionPolicy, SYNC_DOMAIN_SETTINGS, SignedSyncObject, SlateProfileDatabase,
+    SyncChangeRecord, SyncRevisionRecord,
 };
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -100,6 +102,18 @@ fn two_local_slate_settings_databases_sync_through_profile_fixture() {
     );
     assert_eq!(manifest.profile, DEFAULT_PROFILE_ID);
     assert_eq!(manifest.root_id, SETTINGS_ROOT_ID);
+    assert_eq!(
+        manifest.schema_version,
+        PROFILE_SYNC_MANIFEST_SCHEMA_VERSION
+    );
+    assert_eq!(
+        manifest.membership_epoch,
+        DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH
+    );
+    assert_eq!(
+        manifest.retention_policy,
+        ProfileSyncRetentionPolicy::default()
+    );
     assert_eq!(
         manifest.tail_change_object_ids,
         vec![change_object_id.clone()]
@@ -360,6 +374,8 @@ fn sign_encrypted_manifest(
     let manifest = ProfileSyncManifest {
         profile: change.profile.clone(),
         root_id: root_id.to_string(),
+        schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+        membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
         current_snapshot_object_id: None,
         tail_change_object_ids: vec![change_object_id.to_string()],
         included_domains: vec![change.domain.clone()],
@@ -368,6 +384,7 @@ fn sign_encrypted_manifest(
             latest_sequence: change.device_sequence,
             latest_change_object_id: Some(change_object_id.to_string()),
         }],
+        retention_policy: ProfileSyncRetentionPolicy::default(),
         created_at: change.created_at,
     };
     let payload = serde_json::to_vec(&manifest).expect("encode fixture manifest payload");
