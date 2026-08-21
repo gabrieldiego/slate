@@ -234,7 +234,12 @@ Current baseline:
   fixture now seals those payloads into signed encrypted snapshot objects,
   publishes manifests that point at the current snapshot object, verifies the
   snapshot on the receiving device, and records its backend object metadata
-  without applying the snapshot values yet.
+  before snapshot values are applied.
+- Storage can now apply a verified settings snapshot by replaying its text
+  values through the same conflict policy used for incoming tail changes:
+  snapshot values materialize in `settings_values` and the legacy settings view
+  when they win, while stale snapshot values are retained without overwriting a
+  newer local or incoming winner.
 - IPFS/IPNS is the first concrete backend under consideration, but the product
   goal is protocol-neutral: approved Slate devices should find each other, move
   encrypted sync objects, and optionally use approved providers to keep those
@@ -255,9 +260,8 @@ Next:
   availability providers with no profile write authority.
 - Add Kubo RPC-backed operations for encrypted object add, pin, unpin, pin
   verification, IPNS publish, and IPNS resolve as the first IPFS/IPNS backend.
-- Apply verified settings snapshots to `slate-settings.db`, including
-  deterministic merge behavior when a snapshot races newer local or incoming
-  tail changes.
+- Wire verified settings snapshot application into the local `profile-sync`
+  fixture and then into the runtime sync flow that consumes published manifests.
 - Replace opportunistic chrome polling with a runtime watcher that applies
   externally synced changes through normal browser-core, chrome, routing, and
   privacy update paths instead of raw database replacement.
