@@ -413,7 +413,10 @@ Provider discovery reports explicit roles for discovery, connectivity, object
 transfer, availability, and mutable-root publishing; the older
 `can_publish_roots` flag remains a compatibility view over the mutable-root
 role. This keeps availability-only providers from being mistaken for devices
-with profile write authority.
+with profile write authority. The local fixture enforces those roles before
+serving object transfer, retention, provider discovery, root discovery, or
+mutable-root publish requests, and objects held by providers without the
+object-transfer role are not visible to other simulated devices.
 The service boundary validates profile ids, mutable-root ids, and backend
 object ids before any fixture backend lookup, retain, or publish operation.
 Malformed identifiers fail locally instead of being interpreted as path-like

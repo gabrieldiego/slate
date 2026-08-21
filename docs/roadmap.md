@@ -230,6 +230,10 @@ Current baseline:
   connectivity, object transfer, availability, and mutable-root publishing,
   with `can_publish_roots` kept as a compatibility flag derived from the
   mutable-root role.
+- The local profile-sync fixture now enforces those provider roles before
+  object transfer, retention, provider discovery, root discovery, or
+  mutable-root publishing. Objects held by providers without object-transfer
+  authority are treated as unavailable by other simulated devices.
 - The profile-sync service now validates mutable-root ids and backend object
   ids before fixture lookup, retain, resolve, or publish operations, keeping
   malformed path-like or whitespace-bearing identifiers out of the backend
@@ -391,8 +395,9 @@ Current baseline:
 
 Next:
 
-- Expand the protocol-neutral `profile-sync` application service with explicit
-  policy checks for richer local fixture behavior.
+- Extend the protocol-neutral `profile-sync` application service with richer
+  policy checks for retention quorum, provider freshness, and degraded sync
+  health.
 - Continue splitting sync backends into discovery, connectivity, transfer,
   availability, and mutable-root implementations so different broadweb
   protocols can be combined behind the typed provider role records.

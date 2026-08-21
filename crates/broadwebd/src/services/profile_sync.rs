@@ -128,7 +128,7 @@ impl ProfileSyncService {
                 self.provider_id
             )))
         } else {
-            Ok(())
+            self.require_role(self.roles.connectivity, "profile-sync/local-connectivity")
         }
     }
 
@@ -138,6 +138,7 @@ impl ProfileSyncService {
         budget: &ResourceBudget,
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
+        self.require_role(self.roles.object_transfer, "profile-sync/object-transfer")?;
         validate_object_budget(request.bytes.len(), budget)?;
         let object_id = local_object_id(&request.bytes);
         let mut store = self.store()?;
@@ -155,6 +156,7 @@ impl ProfileSyncService {
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
         validate_profile_sync_object_id(&request.object_id)?;
+        self.require_role(self.roles.object_transfer, "profile-sync/object-transfer")?;
         let store = self.store()?;
         let object_id = request.object_id;
         let bytes = find_online_object(&store, &self.provider_id, &request.profile, &object_id)
@@ -177,6 +179,8 @@ impl ProfileSyncService {
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
         validate_profile_sync_object_id(&request.object_id)?;
+        self.require_role(self.roles.availability, "profile-sync/availability")?;
+        self.require_role(self.roles.object_transfer, "profile-sync/object-transfer")?;
         let mut store = self.store()?;
         let Some(bytes) = find_online_object(
             &store,
@@ -215,6 +219,7 @@ impl ProfileSyncService {
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
         validate_profile_sync_object_id(&request.object_id)?;
+        self.require_role(self.roles.availability, "profile-sync/availability")?;
         let mut store = self.store()?;
         store.retained.remove(&(
             self.provider_id.clone(),
@@ -232,6 +237,7 @@ impl ProfileSyncService {
         request: ProfileSyncProfileRequest,
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
+        self.require_role(self.roles.availability, "profile-sync/availability")?;
         let store = self.store()?;
         let object_ids = store
             .retained
@@ -250,6 +256,7 @@ impl ProfileSyncService {
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
         validate_profile_sync_object_id(&request.object_id)?;
+        self.require_role(self.roles.availability, "profile-sync/availability")?;
         let store = self.store()?;
         let retained_key = (
             self.provider_id.clone(),
@@ -278,12 +285,7 @@ impl ProfileSyncService {
         validate_profile(&request.profile)?;
         validate_profile_sync_root_id(&request.root_id)?;
         validate_profile_sync_object_id(&request.object_id)?;
-        if !self.roles.mutable_roots {
-            return Err(BroadwebdError::UnsupportedRequest(format!(
-                "profile sync provider cannot publish mutable roots: {}",
-                self.provider_id
-            )));
-        }
+        self.require_role(self.roles.mutable_roots, "profile-sync/mutable-root")?;
 
         let mut store = self.store()?;
         if !provider_has_object(
@@ -323,6 +325,7 @@ impl ProfileSyncService {
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
         validate_profile_sync_root_id(&request.root_id)?;
+        self.require_role(self.roles.discovery, "profile-sync/provider-discovery")?;
         let store = self.store()?;
         let object_id = latest_visible_root_candidate(
             &store,
@@ -343,6 +346,7 @@ impl ProfileSyncService {
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
         validate_profile_sync_root_id(&request.root_id)?;
+        self.require_role(self.roles.discovery, "profile-sync/provider-discovery")?;
         let store = self.store()?;
         Ok(ProfileSyncResponse::RootCandidates {
             root_id: request.root_id.clone(),
@@ -360,6 +364,7 @@ impl ProfileSyncService {
         request: ProfileSyncProfileRequest,
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
+        self.require_role(self.roles.discovery, "profile-sync/provider-discovery")?;
         let store = self.store()?;
         let providers = if store.providers.is_empty() {
             vec![ProfileSyncProviderRecord {
@@ -397,6 +402,17 @@ impl ProfileSyncService {
             .lock()
             .map_err(|_| BroadwebdError::Request("profile sync store lock poisoned".to_string()))
     }
+
+    fn require_role(&self, enabled: bool, role: &str) -> Result<(), BroadwebdError> {
+        if enabled {
+            Ok(())
+        } else {
+            Err(BroadwebdError::UnsupportedRequest(format!(
+                "profile sync provider lacks {role} role: {}",
+                self.provider_id
+            )))
+        }
+    }
 }
 
 impl LocalProfileSyncFixture {
@@ -415,6 +431,20 @@ impl LocalProfileSyncFixture {
         ProfileSyncService::local_fixture_availability_provider(
             self.store.clone(),
             local_fixture_availability_provider_id(provider_id),
+        )
+    }
+
+    pub fn service_for_provider_with_roles(
+        &self,
+        provider_id: impl Into<String>,
+        provider_kind: impl Into<String>,
+        roles: ProfileSyncProviderRoles,
+    ) -> ProfileSyncService {
+        ProfileSyncService::local_fixture_provider(
+            self.store.clone(),
+            provider_id,
+            provider_kind,
+            roles,
         )
     }
 
@@ -492,27 +522,26 @@ impl LocalProfileSyncFixture {
 
 impl ApplicationServicePlugin for ProfileSyncService {
     fn metadata(&self) -> PluginMetadata {
-        let capabilities: &[&str] = if self.roles.mutable_roots {
-            &[
-                "profile-sync/fake",
-                "profile-sync/provider-discovery",
-                "profile-sync/local-connectivity",
-                "profile-sync/object-transfer",
-                "profile-sync/local-retention",
-                "profile-sync/mutable-root",
-            ]
-        } else {
-            &[
-                "profile-sync/fake",
-                "profile-sync/provider-discovery",
-                "profile-sync/local-connectivity",
-                "profile-sync/object-transfer",
-                "profile-sync/local-retention",
-                "profile-sync/availability-provider",
-            ]
-        };
+        let mut capabilities = vec!["profile-sync/fake"];
+        if self.roles.discovery {
+            capabilities.push("profile-sync/provider-discovery");
+        }
+        if self.roles.connectivity {
+            capabilities.push("profile-sync/local-connectivity");
+        }
+        if self.roles.object_transfer {
+            capabilities.push("profile-sync/object-transfer");
+        }
+        if self.roles.availability {
+            capabilities.push("profile-sync/local-retention");
+        }
+        if self.roles.mutable_roots {
+            capabilities.push("profile-sync/mutable-root");
+        } else if self.roles.availability {
+            capabilities.push("profile-sync/availability-provider");
+        }
         PluginMetadata::new(PROFILE_SYNC_PLUGIN, PluginKind::ApplicationService)
-            .with_capabilities(capabilities)
+            .with_capabilities(capabilities.as_slice())
             .with_privacy_boundary("local in-memory fake profile-sync backend for tests")
             .with_resource_profile(ResourceProfile::Low)
     }
@@ -645,6 +674,7 @@ fn find_online_object<'a>(
             stored_profile == profile
                 && stored_object_id == object_id
                 && !store.offline_providers.contains(provider_id.as_str())
+                && provider_supports_role(store, provider_id, |roles| roles.object_transfer)
                 && transfer_available(store, provider_id, requester_provider_id)
         })
         .map(|(_, bytes)| bytes)
@@ -702,6 +732,9 @@ fn visible_root_candidates(
             |((stored_profile, stored_root_id, publisher_provider_id), root)| {
                 if stored_profile != profile
                     || stored_root_id != root_id
+                    || !provider_supports_role(store, publisher_provider_id, |roles| {
+                        roles.mutable_roots
+                    })
                     || !root_available(
                         store,
                         publisher_provider_id,
@@ -728,6 +761,17 @@ fn visible_root_candidates(
             .then_with(|| left.object_id.cmp(&right.object_id))
     });
     candidates
+}
+
+fn provider_supports_role(
+    store: &ProfileSyncStore,
+    provider_id: &str,
+    role: impl FnOnce(ProfileSyncProviderRoles) -> bool,
+) -> bool {
+    store
+        .providers
+        .get(provider_id)
+        .map_or(true, |state| role(state.roles))
 }
 
 fn local_fixture_provider_id(device_id: impl AsRef<str>) -> String {
@@ -1238,6 +1282,232 @@ mod tests {
     }
 
     #[test]
+    fn local_fixture_enforces_provider_roles() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut device_a = PluginRegistry::new();
+        let mut no_transfer = PluginRegistry::new();
+        let mut no_availability = PluginRegistry::new();
+        let mut no_discovery = PluginRegistry::new();
+        let mut no_connectivity = PluginRegistry::new();
+        let budget = ResourceBudget::default();
+
+        device_a.register_service(fixture.service_for_device("a"));
+        no_transfer.register_service(fixture.service_for_provider_with_roles(
+            "local-fixture-no-transfer",
+            "local-fixture-custom",
+            ProfileSyncProviderRoles {
+                object_transfer: false,
+                mutable_roots: false,
+                ..ProfileSyncProviderRoles::logged_in_device()
+            },
+        ));
+        no_availability.register_service(fixture.service_for_provider_with_roles(
+            "local-fixture-no-availability",
+            "local-fixture-custom",
+            ProfileSyncProviderRoles {
+                availability: false,
+                mutable_roots: false,
+                ..ProfileSyncProviderRoles::logged_in_device()
+            },
+        ));
+        no_discovery.register_service(fixture.service_for_provider_with_roles(
+            "local-fixture-no-discovery",
+            "local-fixture-custom",
+            ProfileSyncProviderRoles {
+                discovery: false,
+                mutable_roots: false,
+                ..ProfileSyncProviderRoles::logged_in_device()
+            },
+        ));
+        no_connectivity.register_service(fixture.service_for_provider_with_roles(
+            "local-fixture-no-connectivity",
+            "local-fixture-custom",
+            ProfileSyncProviderRoles {
+                connectivity: false,
+                mutable_roots: false,
+                ..ProfileSyncProviderRoles::logged_in_device()
+            },
+        ));
+
+        let put = device_a
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"encrypted role policy object".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("device a can put object into fixture");
+        let ProfileSyncResponse::PutEncryptedObject { object_id } = put else {
+            panic!("unexpected put response");
+        };
+        device_a
+            .profile_sync(
+                ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+                    "default",
+                    "settings/latest",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("device a can publish fixture root");
+
+        let get_without_transfer = no_transfer
+            .profile_sync(
+                ProfileSyncRequest::GetEncryptedObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect_err("provider without transfer must not fetch objects");
+        assert!(matches!(
+            get_without_transfer,
+            BroadwebdError::UnsupportedRequest(message)
+                if message.contains("profile-sync/object-transfer")
+                    && message.contains("local-fixture-no-transfer")
+        ));
+
+        let retain_without_transfer = no_transfer
+            .profile_sync(
+                ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect_err("provider without transfer must not retain remote objects");
+        assert!(matches!(
+            retain_without_transfer,
+            BroadwebdError::UnsupportedRequest(message)
+                if message.contains("profile-sync/object-transfer")
+                    && message.contains("local-fixture-no-transfer")
+        ));
+
+        let retain_without_availability = no_availability
+            .profile_sync(
+                ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect_err("provider without availability must not retain objects");
+        assert!(matches!(
+            retain_without_availability,
+            BroadwebdError::UnsupportedRequest(message)
+                if message.contains("profile-sync/availability")
+                    && message.contains("local-fixture-no-availability")
+        ));
+
+        let list_without_availability = no_availability
+            .profile_sync(
+                ProfileSyncRequest::ListRetainedObjects(ProfileSyncProfileRequest::new("default")),
+                &budget,
+            )
+            .expect_err("provider without availability must not list retained objects");
+        assert!(matches!(
+            list_without_availability,
+            BroadwebdError::UnsupportedRequest(message)
+                if message.contains("profile-sync/availability")
+                    && message.contains("local-fixture-no-availability")
+        ));
+
+        let discover_without_discovery = no_discovery
+            .profile_sync(
+                ProfileSyncRequest::DiscoverProviders(ProfileSyncProfileRequest::new("default")),
+                &budget,
+            )
+            .expect_err("provider without discovery must not discover providers");
+        assert!(matches!(
+            discover_without_discovery,
+            BroadwebdError::UnsupportedRequest(message)
+                if message.contains("profile-sync/provider-discovery")
+                    && message.contains("local-fixture-no-discovery")
+        ));
+
+        let resolve_without_discovery = no_discovery
+            .profile_sync(
+                ProfileSyncRequest::ResolveRoot(ProfileSyncRootRequest::new(
+                    "default",
+                    "settings/latest",
+                )),
+                &budget,
+            )
+            .expect_err("provider without discovery must not resolve roots");
+        assert!(matches!(
+            resolve_without_discovery,
+            BroadwebdError::UnsupportedRequest(message)
+                if message.contains("profile-sync/provider-discovery")
+                    && message.contains("local-fixture-no-discovery")
+        ));
+
+        let discover_without_connectivity = no_connectivity
+            .profile_sync(
+                ProfileSyncRequest::DiscoverProviders(ProfileSyncProfileRequest::new("default")),
+                &budget,
+            )
+            .expect_err("provider without connectivity must not answer service calls");
+        assert!(matches!(
+            discover_without_connectivity,
+            BroadwebdError::UnsupportedRequest(message)
+                if message.contains("profile-sync/local-connectivity")
+                    && message.contains("local-fixture-no-connectivity")
+        ));
+
+        let mut custom_source = PluginRegistry::new();
+        let mut requester = PluginRegistry::new();
+        custom_source.register_service(fixture.service_for_provider_with_roles(
+            "local-fixture-source-role",
+            "local-fixture-custom",
+            ProfileSyncProviderRoles {
+                mutable_roots: false,
+                ..ProfileSyncProviderRoles::logged_in_device()
+            },
+        ));
+        requester.register_service(fixture.service_for_device("requester"));
+        let put_from_source = custom_source
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"source object that later loses transfer".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("source can put before losing transfer role");
+        let ProfileSyncResponse::PutEncryptedObject {
+            object_id: source_object_id,
+        } = put_from_source
+        else {
+            panic!("unexpected put response");
+        };
+        let mut source_without_transfer = PluginRegistry::new();
+        source_without_transfer.register_service(fixture.service_for_provider_with_roles(
+            "local-fixture-source-role",
+            "local-fixture-custom",
+            ProfileSyncProviderRoles {
+                object_transfer: false,
+                mutable_roots: false,
+                ..ProfileSyncProviderRoles::logged_in_device()
+            },
+        ));
+        let unavailable_from_source_without_transfer = requester
+            .profile_sync(
+                ProfileSyncRequest::GetEncryptedObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    source_object_id,
+                )),
+                &budget,
+            )
+            .expect_err("objects held by a no-transfer provider should be unavailable");
+        assert!(matches!(
+            unavailable_from_source_without_transfer,
+            BroadwebdError::UnsupportedRequest(message)
+                if message.contains("not available")
+        ));
+    }
+
+    #[test]
     fn local_fixture_availability_provider_cannot_publish_roots() {
         let fixture = LocalProfileSyncFixture::new();
         let mut device_a = PluginRegistry::new();
@@ -1283,7 +1553,7 @@ mod tests {
         assert!(matches!(
             publish_error,
             BroadwebdError::UnsupportedRequest(message)
-                if message.contains("cannot publish mutable roots")
+                if message.contains("profile-sync/mutable-root")
                     && message.contains("local-fixture-availability-pin-1")
         ));
 
