@@ -186,6 +186,9 @@ Current baseline:
   in-memory local fixture backend. Unit tests cover object transfer, retention,
   mutable root publish/resolve, provider discovery, and two local
   `slate-settings.db` files syncing one setting through fixture bytes.
+- The local profile-sync fixture can now mark simulated devices offline and
+  online, allowing tests to verify unavailable devices fail closed without
+  touching sockets, DNS, Tor, IPFS, or external relays.
 - Storage now provides `EncryptedSyncObject` envelopes using ChaCha20-Poly1305
   AEAD through `ring`, and the local two-device fixture moves encrypted setting
   change payloads through broadwebd instead of plaintext JSON.
