@@ -275,6 +275,10 @@ Current baseline:
   in-process fixture covers a policy that refuses to run with only one fresh
   provider and then succeeds once a second simulated device provider is present,
   without opening sockets or contacting any external discovery service.
+- Settings sync cycle policy can now also cap stale online providers. This lets
+  the runtime scheduler reject a provider set that has enough fresh peers to
+  meet quorum but still contains stale online peers the selected policy does
+  not want to tolerate.
 - Policy-gated settings sync cycles now also check root health after the bounded
   publish/pull attempt. Missing roots can still recover during an initial
   healthy-provider cycle, but the runtime path reports a policy error if the

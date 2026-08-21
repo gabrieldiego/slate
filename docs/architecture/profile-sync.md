@@ -529,8 +529,9 @@ policy path samples health first and rejects degraded provider roles before
 loading credentials or attempting mutable-root writes, while still allowing
 missing settings roots to recover during an initial healthy-provider publish.
 The same policy can require minimum fresh online, object-transfer,
-availability, and mutable-root provider counts. These thresholds are Slate
-scheduler decisions over broadwebd's reported health; broadwebd stays a
+availability, and mutable-root provider counts, and it can cap stale online
+providers when the scheduler wants stricter freshness. These thresholds are
+Slate scheduler decisions over broadwebd's reported health; broadwebd stays a
 protocol-neutral reporter and fixture host.
 After the bounded cycle runs, the policy-gated path checks whether the settings
 root and the local device-head root satisfy the configured online
