@@ -245,6 +245,11 @@ Current baseline:
 - Active-key trusted settings pulls now reject unsupported content-key
   algorithms and content keys introduced after the manifest membership epoch
   before applying or advancing the stored root.
+- Active-key trusted settings pulls now have an idempotent root-status helper:
+  missing published roots, unchanged already-verified roots, and applied
+  manifests are reported distinctly. When the published root matches the stored
+  verified root, storage skips object fetch, key lookup, decrypt, and apply
+  work.
 - `slate-settings.db` now has typed snapshot metadata APIs for recording
   encrypted backend object ids, covered revisions, included domains, and latest
   snapshot lookup. This is metadata only; snapshot payloads stay in encrypted

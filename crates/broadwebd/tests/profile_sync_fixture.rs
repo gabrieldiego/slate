@@ -14,8 +14,8 @@ use slate_storage::{
     PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION, ProfileSyncContentKey,
     ProfileSyncDeviceFrontier, ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner,
     ProfileSyncManifest, ProfileSyncObjectBytes, ProfileSyncObjectSource,
-    ProfileSyncRetentionPolicy, ProfileSyncSettingsSnapshot, SYNC_DOMAIN_SETTINGS,
-    SlateProfileDatabase, SyncChangeRecord, SyncContentKeyEpochRegistration,
+    ProfileSyncRetentionPolicy, ProfileSyncSettingsPullApplyStatus, ProfileSyncSettingsSnapshot,
+    SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, SyncChangeRecord, SyncContentKeyEpochRegistration,
     SyncDevicePublicKeyRegistration, SyncRevisionRecord, SyncSnapshotRegistration,
     open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
     open_signed_sync_setting_text,
@@ -640,15 +640,17 @@ fn two_local_devices_apply_snapshot_then_manifest_tail_changes() {
         registry: &device_b_broadweb,
         budget: &budget,
     };
-    let applied_manifest = device_b_db
-        .pull_and_apply_active_trusted_signed_settings_manifest_objects(
+    let status = device_b_db
+        .pull_and_apply_active_trusted_signed_settings_manifest_objects_if_changed(
             &source,
             DEFAULT_PROFILE_ID,
             SETTINGS_ROOT_ID,
             &content_key,
         )
-        .expect("device b pulls trusted manifest object set")
-        .expect("settings root resolves");
+        .expect("device b pulls trusted manifest object set");
+    let ProfileSyncSettingsPullApplyStatus::Applied(applied_manifest) = status else {
+        panic!("expected device b to apply changed settings root, got {status:?}");
+    };
     assert_eq!(applied_manifest.manifest_object_id, manifest_object_id);
     assert_eq!(
         applied_manifest
@@ -678,6 +680,22 @@ fn two_local_devices_apply_snapshot_then_manifest_tail_changes() {
             .expect("device b manifest root exists")
             .object_id,
         manifest_object_id
+    );
+    let unchanged = device_b_db
+        .pull_and_apply_active_trusted_signed_settings_manifest_objects_if_changed(
+            &source,
+            DEFAULT_PROFILE_ID,
+            SETTINGS_ROOT_ID,
+            &content_key,
+        )
+        .expect("device b checks unchanged settings root");
+    assert_eq!(
+        unchanged,
+        ProfileSyncSettingsPullApplyStatus::Unchanged {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: SETTINGS_ROOT_ID.to_string(),
+            object_id: manifest_object_id,
+        }
     );
 
     let _ = std::fs::remove_dir_all(device_a_root);

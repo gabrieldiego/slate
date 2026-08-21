@@ -1388,6 +1388,20 @@ pub struct ProfileSyncRootRecord {
     pub updated_at: i64,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ProfileSyncSettingsPullApplyStatus {
+    NoPublishedRoot {
+        profile: String,
+        root_id: String,
+    },
+    Unchanged {
+        profile: String,
+        root_id: String,
+        object_id: String,
+    },
+    Applied(ProfileSyncSettingsManifestApplication),
+}
+
 #[derive(Debug)]
 pub enum StorageError {
     CurrentDirectory(std::io::Error),
@@ -3154,6 +3168,55 @@ impl SlateProfileDatabase {
             .map_err(ProfileSyncTrustedPullApplyError::Storage)
     }
 
+    pub fn pull_and_apply_active_trusted_signed_settings_manifest_objects_if_changed<Source>(
+        &self,
+        source: &Source,
+        profile: &str,
+        root_id: &str,
+        content_key: &ProfileSyncContentKey,
+    ) -> Result<ProfileSyncSettingsPullApplyStatus, ProfileSyncTrustedPullApplyError<Source::Error>>
+    where
+        Source: ProfileSyncObjectSource,
+    {
+        let Some(published_object_id) = source
+            .resolve_profile_sync_root(profile, root_id)
+            .map_err(|source| {
+                ProfileSyncTrustedPullApplyError::Pull(ProfileSyncTrustedPullError::Source(source))
+            })?
+        else {
+            return Ok(ProfileSyncSettingsPullApplyStatus::NoPublishedRoot {
+                profile: profile.to_string(),
+                root_id: root_id.to_string(),
+            });
+        };
+
+        if let Some(local_root) = self
+            .profile_sync_root(profile, root_id)
+            .map_err(ProfileSyncTrustedPullApplyError::Storage)?
+        {
+            if local_root.object_id == published_object_id {
+                return Ok(ProfileSyncSettingsPullApplyStatus::Unchanged {
+                    profile: profile.to_string(),
+                    root_id: root_id.to_string(),
+                    object_id: published_object_id,
+                });
+            }
+        }
+
+        match self.pull_and_apply_active_trusted_signed_settings_manifest_objects(
+            source,
+            profile,
+            root_id,
+            content_key,
+        )? {
+            Some(application) => Ok(ProfileSyncSettingsPullApplyStatus::Applied(application)),
+            None => Ok(ProfileSyncSettingsPullApplyStatus::NoPublishedRoot {
+                profile: profile.to_string(),
+                root_id: root_id.to_string(),
+            }),
+        }
+    }
+
     pub fn pull_and_apply_signed_settings_manifest_objects<Source>(
         &self,
         source: &Source,
@@ -4905,14 +4968,16 @@ mod tests {
             .unwrap();
 
         let applied = destination
-            .pull_and_apply_active_trusted_signed_settings_manifest_objects(
+            .pull_and_apply_active_trusted_signed_settings_manifest_objects_if_changed(
                 &source,
                 DEFAULT_PROFILE_ID,
                 root_id,
                 &content_key,
             )
-            .unwrap()
-            .expect("trusted settings root applied");
+            .unwrap();
+        let ProfileSyncSettingsPullApplyStatus::Applied(applied) = applied else {
+            panic!("expected trusted settings root to apply, got {applied:?}");
+        };
 
         assert_eq!(applied.manifest_object_id, manifest_object_id);
         assert_eq!(applied.tail_changes.len(), 1);
@@ -4927,6 +4992,69 @@ mod tests {
                 .expect("stored trusted pull root")
                 .object_id,
             manifest_object_id
+        );
+    }
+
+    #[test]
+    fn profile_sync_active_key_pull_reports_missing_published_root() {
+        let content_key = ProfileSyncContentKey::from_bytes([22; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let source = InMemoryProfileSyncObjectSource::default();
+        let destination_path =
+            test_dir("sync-active-missing-root").join(DEFAULT_DATABASE_FILE_NAME);
+        let destination =
+            SlateProfileDatabase::open_resolved_with_device_id(destination_path, "device-b")
+                .unwrap();
+
+        let status = destination
+            .pull_and_apply_active_trusted_signed_settings_manifest_objects_if_changed(
+                &source,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &content_key,
+            )
+            .unwrap();
+
+        assert_eq!(
+            status,
+            ProfileSyncSettingsPullApplyStatus::NoPublishedRoot {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                root_id: "settings/latest".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn profile_sync_active_key_pull_skips_unchanged_root_without_fetching() {
+        let content_key = ProfileSyncContentKey::from_bytes([23; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let root_id = "settings/latest";
+        let object_id = "manifest-object-1";
+        let mut source = InMemoryProfileSyncObjectSource::default();
+        source.publish_root(DEFAULT_PROFILE_ID, root_id, object_id);
+        let destination_path =
+            test_dir("sync-active-unchanged-root").join(DEFAULT_DATABASE_FILE_NAME);
+        let destination =
+            SlateProfileDatabase::open_resolved_with_device_id(destination_path, "device-b")
+                .unwrap();
+        destination
+            .set_profile_sync_root(DEFAULT_PROFILE_ID, root_id, object_id)
+            .unwrap();
+
+        let status = destination
+            .pull_and_apply_active_trusted_signed_settings_manifest_objects_if_changed(
+                &source,
+                DEFAULT_PROFILE_ID,
+                root_id,
+                &content_key,
+            )
+            .unwrap();
+
+        assert_eq!(
+            status,
+            ProfileSyncSettingsPullApplyStatus::Unchanged {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                root_id: root_id.to_string(),
+                object_id: object_id.to_string(),
+            }
         );
     }
 

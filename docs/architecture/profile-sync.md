@@ -216,6 +216,12 @@ store raw content encryption keys. Key bytes should come from a keychain entry,
 recovery-secret derivation, or an enrollment flow before being passed into the
 decrypt/apply path.
 
+The active-key pull path also exposes an idempotent root-status helper for sync
+polling. It resolves the published root first and reports missing roots,
+unchanged already-verified roots, or applied manifests separately. If the
+published root object id matches the locally stored verified root, storage does
+not fetch, decrypt, or apply the object set again.
+
 ## Data Objects
 
 The exact encoding can be CBOR, postcard, or another compact structured format.
