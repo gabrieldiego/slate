@@ -376,6 +376,8 @@ Required service operations:
 - Retain, release, list, and verify objects used by profile sync.
 - Publish a mutable root to a manifest object id.
 - Resolve a mutable root to a manifest object id.
+- List competing mutable-root candidates when multiple authorized devices have
+  published roots that may need merge handling.
 - Discover approved devices and providers that may have profile sync objects.
 - Establish direct, relayed, local, or private-network transfer sessions.
 - Report backend health and publish failures.
@@ -400,9 +402,12 @@ source-held encrypted bytes as unavailable without sleeping, binding sockets, or
 contacting any external network. Tests can also pause mutable-root propagation
 from one simulated publishing device to another independently from object
 transfer, so root freshness and encrypted-object availability can fail in
-separate ways. The fixture also models availability-only providers: they may
-retain and serve encrypted bytes, but their provider policy denies mutable-root
-publishing and discovery reports that boundary.
+separate ways. The fixture keeps one visible root candidate per publishing
+device and can list competing candidates in newest-first order, giving merge
+tests a local model for equal-control devices publishing different signed roots.
+The fixture also models availability-only providers: they may retain and serve
+encrypted bytes, but their provider policy denies mutable-root publishing and
+discovery reports that boundary.
 
 ## Privacy Boundaries
 

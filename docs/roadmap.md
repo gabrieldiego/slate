@@ -216,6 +216,11 @@ Current baseline:
   devices. Root delay is independent from object transfer, so tests can model a
   device that can fetch a known encrypted object but has not seen the newest
   root record yet.
+- The profile-sync service can list visible competing mutable-root candidates.
+  The local fixture keeps one candidate per publishing device, resolves the
+  newest visible candidate for the legacy root path, and exposes all candidates
+  so future merge tests can model equal-control devices publishing different
+  signed roots.
 - The local profile-sync fixture now distinguishes logged-in device providers
   from availability-only providers. Availability providers can retain and serve
   encrypted bytes, and discovery reports that they cannot publish mutable roots.

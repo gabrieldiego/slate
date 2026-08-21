@@ -1,8 +1,9 @@
 use crate::{
     ApplicationServicePlugin, BroadwebdError, PROFILE_SYNC_PLUGIN, PluginKind, PluginMetadata,
     PluginRegistry, ProfileSyncObjectRequest, ProfileSyncProfileRequest, ProfileSyncProviderRecord,
-    ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootRequest,
-    ProfileSyncRootUpdate, ResourceBudget, ResourceProfile, ServiceRequest, ServiceResponse,
+    ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootCandidate,
+    ProfileSyncRootRequest, ProfileSyncRootUpdate, ResourceBudget, ResourceProfile, ServiceRequest,
+    ServiceResponse,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
@@ -24,7 +25,8 @@ pub struct ProfileSyncService {
 struct ProfileSyncStore {
     objects: BTreeMap<(String, String, String), Vec<u8>>,
     retained: BTreeSet<(String, String, String)>,
-    roots: BTreeMap<(String, String), ProfileSyncRootState>,
+    roots: BTreeMap<(String, String, String), ProfileSyncRootState>,
+    next_root_sequence: u64,
     providers: BTreeMap<String, ProfileSyncProviderState>,
     offline_providers: BTreeSet<String>,
     delayed_transfers: BTreeSet<(String, String)>,
@@ -35,6 +37,7 @@ struct ProfileSyncStore {
 struct ProfileSyncRootState {
     object_id: String,
     publisher_provider_id: String,
+    publish_sequence: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -276,11 +279,18 @@ impl ProfileSyncService {
                 request.object_id
             )));
         }
+        store.next_root_sequence += 1;
+        let publish_sequence = store.next_root_sequence;
         store.roots.insert(
-            (request.profile, request.root_id.clone()),
+            (
+                request.profile,
+                request.root_id.clone(),
+                self.provider_id.clone(),
+            ),
             ProfileSyncRootState {
                 object_id: request.object_id.clone(),
                 publisher_provider_id: self.provider_id.clone(),
+                publish_sequence,
             },
         );
         Ok(ProfileSyncResponse::Root {
@@ -295,22 +305,33 @@ impl ProfileSyncService {
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
         let store = self.store()?;
-        let object_id = store
-            .roots
-            .get(&(request.profile.clone(), request.root_id.clone()))
-            .filter(|root| {
-                root_available(
-                    &store,
-                    root.publisher_provider_id.as_str(),
-                    self.provider_id.as_str(),
-                    request.profile.as_str(),
-                    request.root_id.as_str(),
-                )
-            })
-            .map(|root| root.object_id.clone());
+        let object_id = latest_visible_root_candidate(
+            &store,
+            self.provider_id.as_str(),
+            request.profile.as_str(),
+            request.root_id.as_str(),
+        )
+        .map(|candidate| candidate.object_id);
         Ok(ProfileSyncResponse::Root {
             root_id: request.root_id.clone(),
             object_id,
+        })
+    }
+
+    fn list_root_candidates(
+        &self,
+        request: ProfileSyncRootRequest,
+    ) -> Result<ProfileSyncResponse, BroadwebdError> {
+        validate_profile(&request.profile)?;
+        let store = self.store()?;
+        Ok(ProfileSyncResponse::RootCandidates {
+            root_id: request.root_id.clone(),
+            candidates: visible_root_candidates(
+                &store,
+                self.provider_id.as_str(),
+                request.profile.as_str(),
+                request.root_id.as_str(),
+            ),
         })
     }
 
@@ -497,6 +518,9 @@ impl ApplicationServicePlugin for ProfileSyncService {
             }
             ProfileSyncRequest::PublishRoot(request) => self.publish_root(request)?,
             ProfileSyncRequest::ResolveRoot(request) => self.resolve_root(request)?,
+            ProfileSyncRequest::ListRootCandidates(request) => {
+                self.list_root_candidates(request)?
+            }
             ProfileSyncRequest::DiscoverProviders(request) => self.discover_providers(request)?,
         };
         Ok(ServiceResponse::ProfileSync(response))
@@ -593,6 +617,58 @@ fn root_available(
             profile.to_string(),
             root_id.to_string(),
         ))
+}
+
+fn latest_visible_root_candidate(
+    store: &ProfileSyncStore,
+    requester_provider_id: &str,
+    profile: &str,
+    root_id: &str,
+) -> Option<ProfileSyncRootCandidate> {
+    visible_root_candidates(store, requester_provider_id, profile, root_id)
+        .into_iter()
+        .next()
+}
+
+fn visible_root_candidates(
+    store: &ProfileSyncStore,
+    requester_provider_id: &str,
+    profile: &str,
+    root_id: &str,
+) -> Vec<ProfileSyncRootCandidate> {
+    let mut candidates = store
+        .roots
+        .iter()
+        .filter_map(
+            |((stored_profile, stored_root_id, publisher_provider_id), root)| {
+                if stored_profile != profile
+                    || stored_root_id != root_id
+                    || !root_available(
+                        store,
+                        publisher_provider_id,
+                        requester_provider_id,
+                        profile,
+                        root_id,
+                    )
+                {
+                    return None;
+                }
+                Some(ProfileSyncRootCandidate {
+                    publisher_provider_id: root.publisher_provider_id.clone(),
+                    object_id: root.object_id.clone(),
+                    publish_sequence: root.publish_sequence,
+                })
+            },
+        )
+        .collect::<Vec<_>>();
+    candidates.sort_by(|left, right| {
+        right
+            .publish_sequence
+            .cmp(&left.publish_sequence)
+            .then_with(|| left.publisher_provider_id.cmp(&right.publisher_provider_id))
+            .then_with(|| left.object_id.cmp(&right.object_id))
+    });
+    candidates
 }
 
 fn local_fixture_provider_id(device_id: impl AsRef<str>) -> String {
@@ -699,6 +775,119 @@ mod tests {
             panic!("unexpected get response");
         };
         assert_eq!(bytes, b"encrypted manifest from device a");
+    }
+
+    #[test]
+    fn local_fixture_lists_competing_mutable_root_candidates() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut device_a = PluginRegistry::new();
+        let mut device_b = PluginRegistry::new();
+        let mut device_c = PluginRegistry::new();
+        let budget = ResourceBudget::default();
+
+        device_a.register_service(fixture.service_for_device("a"));
+        device_b.register_service(fixture.service_for_device("b"));
+        device_c.register_service(fixture.service_for_device("c"));
+
+        let put_a = device_a
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"encrypted root candidate from device a".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("device a can put root candidate into fixture");
+        let ProfileSyncResponse::PutEncryptedObject {
+            object_id: object_a,
+        } = put_a
+        else {
+            panic!("unexpected put response");
+        };
+        device_a
+            .profile_sync(
+                ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+                    "default",
+                    "profile-root",
+                    object_a.clone(),
+                )),
+                &budget,
+            )
+            .expect("device a can publish root candidate");
+
+        let put_b = device_b
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"encrypted root candidate from device b".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("device b can put competing root candidate into fixture");
+        let ProfileSyncResponse::PutEncryptedObject {
+            object_id: object_b,
+        } = put_b
+        else {
+            panic!("unexpected put response");
+        };
+        device_b
+            .profile_sync(
+                ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+                    "default",
+                    "profile-root",
+                    object_b.clone(),
+                )),
+                &budget,
+            )
+            .expect("device b can publish competing root candidate");
+
+        let candidates = device_c
+            .profile_sync(
+                ProfileSyncRequest::ListRootCandidates(ProfileSyncRootRequest::new(
+                    "default",
+                    "profile-root",
+                )),
+                &budget,
+            )
+            .expect("device c can list visible root candidates");
+        let ProfileSyncResponse::RootCandidates {
+            root_id,
+            candidates,
+        } = candidates
+        else {
+            panic!("unexpected candidates response");
+        };
+        assert_eq!(root_id, "profile-root");
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(
+            candidates[0].publisher_provider_id,
+            "local-fixture-device-b"
+        );
+        assert_eq!(candidates[0].object_id, object_b);
+        assert_eq!(candidates[0].publish_sequence, 2);
+        assert_eq!(
+            candidates[1].publisher_provider_id,
+            "local-fixture-device-a"
+        );
+        assert_eq!(candidates[1].object_id, object_a);
+        assert_eq!(candidates[1].publish_sequence, 1);
+
+        let resolved = device_c
+            .profile_sync(
+                ProfileSyncRequest::ResolveRoot(ProfileSyncRootRequest::new(
+                    "default",
+                    "profile-root",
+                )),
+                &budget,
+            )
+            .expect("device c resolves latest visible candidate");
+        assert_eq!(
+            resolved,
+            ProfileSyncResponse::Root {
+                root_id: "profile-root".to_string(),
+                object_id: Some(candidates[0].object_id.clone()),
+            }
+        );
     }
 
     #[test]

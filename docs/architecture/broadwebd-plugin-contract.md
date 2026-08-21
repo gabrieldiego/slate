@@ -202,6 +202,8 @@ The initial service contract should cover:
 - `PublishRoot`: publish the current manifest object id to an approved mutable
   root.
 - `ResolveRoot`: resolve a profile mutable root to a manifest object id.
+- `ListRootCandidates`: list visible competing mutable-root candidates for
+  merge/debug paths before storage chooses which signed objects to trust.
 - `DiscoverProviders`: find approved devices or providers that may have profile
   sync objects.
 - `OpenTransferSession`: establish a direct, relayed, local, or private-network

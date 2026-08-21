@@ -208,6 +208,7 @@ pub enum ProfileSyncRequest {
     VerifyRetainedObject(ProfileSyncObjectRequest),
     PublishRoot(ProfileSyncRootUpdate),
     ResolveRoot(ProfileSyncRootRequest),
+    ListRootCandidates(ProfileSyncRootRequest),
     DiscoverProviders(ProfileSyncProfileRequest),
 }
 
@@ -319,9 +320,20 @@ pub enum ProfileSyncResponse {
         root_id: String,
         object_id: Option<String>,
     },
+    RootCandidates {
+        root_id: String,
+        candidates: Vec<ProfileSyncRootCandidate>,
+    },
     Providers {
         providers: Vec<ProfileSyncProviderRecord>,
     },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncRootCandidate {
+    pub publisher_provider_id: String,
+    pub object_id: String,
+    pub publish_sequence: u64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
