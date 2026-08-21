@@ -577,6 +577,10 @@ and its referenced signed records, and the broadwebd publisher can hand that
 object set to an availability provider. Fixture coverage retains the set
 through an in-process provider so no loopback socket or external pinning service
 is needed.
+The membership-aware settings runner can also hand the combined settings and
+membership publication set to selected availability providers. This keeps the
+bootstrap authority records and the first settings objects available through
+the same in-process retention path.
 The receive fixture also covers a tampered index entry that points at a
 different signed record object. That path fails before `slate-settings.db`
 stores the membership-log root or writes any trusted device key.

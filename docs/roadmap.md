@@ -750,6 +750,9 @@ Current baseline:
 - Membership log publications now expose their retained object set, and
   broadwebd fixture providers can retain the log and each referenced signed
   membership record through the same in-process availability layer.
+- Membership-aware settings cycles can now retain the combined published
+  settings and membership object set through selected in-process availability
+  providers.
 - Membership-log receive fixtures now reject mismatched index entries before
   advancing the stored log root or writing trusted device keys.
 

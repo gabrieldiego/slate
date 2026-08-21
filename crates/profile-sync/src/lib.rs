@@ -822,6 +822,24 @@ impl SettingsSyncCycleWithMembershipLogRun {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncCycleWithMembershipLogRetentionRun {
+    pub cycle: SettingsSyncCycleWithMembershipLogRun,
+    pub retained_object_ids: Vec<String>,
+    pub retention: Vec<SettingsSyncCycleProviderRetentionRun>,
+}
+
+impl SettingsSyncCycleWithMembershipLogRetentionRun {
+    pub fn retained_provider_count(&self) -> usize {
+        self.retention
+            .iter()
+            .filter(|provider| {
+                provider.object_count() > 0 && provider.object_count() == provider.retained_count()
+            })
+            .count()
+    }
+}
+
 fn push_unique_object_id(
     object_ids: &mut Vec<String>,
     seen: &mut BTreeSet<String>,
@@ -2185,6 +2203,54 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
             pulled_membership_log,
             cycle,
             published_membership_log,
+        })
+    }
+
+    pub fn run_settings_sync_cycle_with_membership_log_and_retention_providers(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        settings_root_id: &str,
+        membership_log_root_id: &str,
+        content_key: &ProfileSyncContentKey,
+        key_id: &str,
+        signer: &ProfileSyncDeviceSigner,
+        retention_policy: ProfileSyncRetentionPolicy,
+        max_publish_steps: u32,
+        max_trusted_devices: u32,
+        retention_provider_daemons: &[&BroadwebDaemon],
+    ) -> Result<SettingsSyncCycleWithMembershipLogRetentionRun, ProfileSyncCycleWithHealthError>
+    {
+        let cycle = self
+            .run_settings_sync_cycle_with_membership_log(
+                database,
+                profile,
+                settings_root_id,
+                membership_log_root_id,
+                content_key,
+                key_id,
+                signer,
+                retention_policy,
+                max_publish_steps,
+                max_trusted_devices,
+            )
+            .map_err(ProfileSyncCycleWithHealthError::Cycle)?;
+        let retained_object_ids = cycle.published_object_ids();
+        let mut retention = Vec::with_capacity(retention_provider_daemons.len());
+        for (provider_index, provider_daemon) in retention_provider_daemons.iter().enumerate() {
+            let object_statuses = BroadwebdProfileSyncPublisher::new(*provider_daemon)
+                .retain_profile_sync_objects(profile, retained_object_ids.as_slice())
+                .map_err(ProfileSyncCycleWithHealthError::Retention)?;
+            retention.push(SettingsSyncCycleProviderRetentionRun {
+                provider_index,
+                object_statuses,
+            });
+        }
+
+        Ok(SettingsSyncCycleWithMembershipLogRetentionRun {
+            cycle,
+            retained_object_ids,
+            retention,
         })
     }
 }
@@ -4100,6 +4166,93 @@ mod tests {
         );
         assert!(statuses.iter().all(|status| status.retained));
         assert!(statuses.iter().all(|status| status.available));
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn membership_cycle_retains_settings_and_membership_objects_without_loopback() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("membership-cycle-retention-device");
+        let provider_state_root = test_state_root("membership-cycle-retention-provider");
+        let db_root = test_state_root("membership-cycle-retention-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "membership-cycle-retention-device",
+            )
+            .expect("start in-process membership cycle retention device daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "membership-cycle-retention-pinner",
+            )
+            .expect("start in-process membership cycle retention provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "membership-cycle-retention-device",
+        )
+        .expect("open membership cycle retention database");
+        let content_key = ProfileSyncContentKey::from_bytes([77; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("membership-cycle-retention-device")
+            .expect("generate membership cycle retention signer");
+        register_test_content_key_epoch(&database, DEFAULT_PROFILE_ID);
+        let enroll = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-membership-cycle-retention-device".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-cycle-retention-device".to_string(),
+            device_public_key: Some(signer.public_key().expect("read signer public key")),
+            created_at: 10,
+        };
+        database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer, &enroll).as_slice(),
+            )
+            .expect("bootstrap membership cycle retention signer");
+        database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write membership cycle retention setting");
+
+        let run = BroadwebdSettingsSyncRunner::new(&device_daemon)
+            .run_settings_sync_cycle_with_membership_log_and_retention_providers(
+                &database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+                4,
+                &[&provider_daemon],
+            )
+            .expect("membership-aware cycle retains settings and membership objects");
+
+        assert_eq!(run.cycle.cycle.published_step_count(), 1);
+        assert!(run.cycle.published_membership_log.is_some());
+        assert_eq!(run.retention.len(), 1);
+        assert_eq!(
+            run.retention[0].object_count(),
+            run.retained_object_ids.len()
+        );
+        assert_eq!(
+            run.retention[0].retained_count(),
+            run.retained_object_ids.len()
+        );
+        assert_eq!(
+            run.retention[0].available_count(),
+            run.retained_object_ids.len()
+        );
+        assert_eq!(run.retained_provider_count(), 1);
+        assert_eq!(run.retained_object_ids, run.cycle.published_object_ids());
 
         let _ = std::fs::remove_dir_all(device_state_root);
         let _ = std::fs::remove_dir_all(provider_state_root);
