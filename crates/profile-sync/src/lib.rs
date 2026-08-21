@@ -2335,6 +2335,22 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
         max_publish_steps: u32,
         max_trusted_devices: u32,
     ) -> Result<SettingsSyncCycleWithMembershipLogRun, ProfileSyncCycleError> {
+        let publisher = BroadwebdProfileSyncPublisher::new(self.daemon);
+        let membership_log_publication = publisher.plan_local_sync_account_membership_log(
+            database,
+            profile,
+            membership_log_root_id,
+        )?;
+        if membership_log_publication.requires_compaction() {
+            return Err(ProfileSyncCycleError::from(
+                ProfileSyncPublishError::MembershipLogTooLarge {
+                    profile: membership_log_publication.profile,
+                    max_records: membership_log_publication.max_records,
+                    actual_records: membership_log_publication.record_count,
+                },
+            ));
+        }
+
         let source = BroadwebdProfileSyncObjectSource::new(self.daemon);
         let pulled_membership_log = source
             .pull_and_apply_sync_account_membership_log_if_changed(
@@ -2354,7 +2370,7 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
             max_publish_steps,
             max_trusted_devices,
         )?;
-        let published_membership_log = BroadwebdProfileSyncPublisher::new(self.daemon)
+        let published_membership_log = publisher
             .publish_local_sync_account_membership_log(database, profile, membership_log_root_id)
             .map_err(ProfileSyncCycleError::from)?;
 
@@ -5207,6 +5223,36 @@ mod tests {
                     sync_membership_record_root_id("epoch-1-enroll-publish-oversized-000").as_str(),
                 )
                 .expect("read planned oversized publisher first membership record root"),
+            None
+        );
+
+        let runner_error = BroadwebdSettingsSyncRunner::new(&publisher_daemon)
+            .run_settings_sync_cycle_with_membership_log(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                &ProfileSyncContentKey::from_bytes([90; PROFILE_SYNC_CONTENT_KEY_BYTES]),
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+                4,
+            )
+            .expect_err("runner should reject oversized local membership history before sync");
+        assert!(matches!(
+            runner_error,
+            ProfileSyncCycleError::Publish(ProfileSyncPublishError::MembershipLogTooLarge {
+                max_records,
+                actual_records,
+                ..
+            }) if max_records == super::PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS
+                && actual_records == super::PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS + 1
+        ));
+        assert_eq!(
+            BroadwebdProfileSyncObjectSource::new(&publisher_daemon)
+                .resolve_profile_sync_root(DEFAULT_PROFILE_ID, PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID)
+                .expect("read runner-rejected oversized publisher membership log root"),
             None
         );
 
