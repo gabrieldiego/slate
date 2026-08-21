@@ -542,6 +542,10 @@ content-key id from `slate-settings.db` and use caller-supplied secret material
 for the actual encrypted publish/pull cycle. The database therefore stores
 active key metadata and trusted public keys, not plaintext content keys or
 device signing keys.
+The local device signer must match the database's local sync device id before a
+cycle can publish local device-head state. Trusted remote public keys remain
+valid receive-side trust anchors, but they cannot be reused as the local
+publishing identity.
 Object bytes are also provider-held: fetches require at least one online
 provider with the object, and retaining an object copies the bytes into the
 retaining provider's in-process store. Tests can pause object transfer from one

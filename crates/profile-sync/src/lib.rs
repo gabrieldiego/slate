@@ -188,6 +188,11 @@ pub enum ProfileSyncCredentialError {
         profile: String,
         device_id: String,
     },
+    LocalDeviceSignerMismatch {
+        profile: String,
+        local_device_id: String,
+        signer_device_id: String,
+    },
 }
 
 impl fmt::Display for ProfileSyncCredentialError {
@@ -215,6 +220,14 @@ impl fmt::Display for ProfileSyncCredentialError {
                 formatter,
                 "profile {profile} trusted public key for local sync device {device_id} does not match the supplied signer"
             ),
+            Self::LocalDeviceSignerMismatch {
+                profile,
+                local_device_id,
+                signer_device_id,
+            } => write!(
+                formatter,
+                "profile {profile} local sync device is {local_device_id}, but supplied signer is for {signer_device_id}"
+            ),
         }
     }
 }
@@ -226,7 +239,8 @@ impl std::error::Error for ProfileSyncCredentialError {
             Self::SyncObject(error) => Some(error),
             Self::InactiveContentKey { .. }
             | Self::UntrustedLocalDevice { .. }
-            | Self::LocalDevicePublicKeyMismatch { .. } => None,
+            | Self::LocalDevicePublicKeyMismatch { .. }
+            | Self::LocalDeviceSignerMismatch { .. } => None,
         }
     }
 }
@@ -1873,6 +1887,13 @@ pub fn validate_settings_sync_cycle_credentials(
     }
 
     let public_key = signer.public_key()?;
+    if public_key.device_id != database.local_sync_device_id() {
+        return Err(ProfileSyncCredentialError::LocalDeviceSignerMismatch {
+            profile: profile.to_string(),
+            local_device_id: database.local_sync_device_id().to_string(),
+            signer_device_id: public_key.device_id,
+        });
+    }
     let Some(trusted_key) =
         database.sync_device_public_key(profile, public_key.device_id.as_str())?
     else {
@@ -3020,6 +3041,40 @@ mod tests {
                 membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
             })
             .expect("register matching local public key");
+        let remote_signer =
+            ProfileSyncDeviceSigner::generate("runtime-z-remote").expect("generate remote signer");
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: remote_signer.public_key().expect("remote public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register trusted remote public key");
+        let remote_signer_error = runner
+            .run_settings_sync_cycle(
+                &database,
+                profile,
+                "settings/latest",
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &remote_signer,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+                4,
+            )
+            .expect_err("trusted remote signer should not publish local device state");
+        assert!(matches!(
+            remote_signer_error,
+            ProfileSyncCycleError::Credentials(
+                ProfileSyncCredentialError::LocalDeviceSignerMismatch {
+                    profile,
+                    local_device_id,
+                    signer_device_id
+                }
+            ) if profile == "credentialprofile"
+                && local_device_id == "runtime-z"
+                && signer_device_id == "runtime-z-remote"
+        ));
         let inactive_key_error = runner
             .run_settings_sync_cycle(
                 &database,

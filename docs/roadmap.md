@@ -259,6 +259,11 @@ Current baseline:
   still supplies the actual content key and device signer secret material, so
   the database remains metadata-only while the scheduler no longer has to pass
   duplicated key ids around.
+- Settings sync credential preflight now also requires the supplied signer to
+  belong to `slate-settings.db`'s local sync device id. A trusted remote device
+  public key in the same profile is not enough to publish local device-head
+  state, preventing local cycles from accidentally signing with another
+  enrolled device's identity.
 - Settings sync cycle policy now supports explicit provider quorum checks for
   fresh online, object-transfer, availability, and mutable-root providers. The
   in-process fixture covers a policy that refuses to run with only one fresh
