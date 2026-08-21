@@ -1350,6 +1350,33 @@ impl SettingsSyncScheduledCycleRun {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncScheduledMembershipCycleRun {
+    pub preflight: SettingsSyncCyclePreflightWithMembershipLog,
+    pub selected_retention_provider_ids: Vec<String>,
+    pub undiscovered_retention_provider_ids: Vec<String>,
+    pub duplicate_retention_provider_ids: Vec<String>,
+    pub cycle: SettingsSyncCycleWithMembershipLogRetentionRun,
+}
+
+impl SettingsSyncScheduledMembershipCycleRun {
+    pub fn selected_retention_provider_count(&self) -> usize {
+        self.selected_retention_provider_ids.len()
+    }
+
+    pub fn undiscovered_retention_provider_count(&self) -> usize {
+        self.undiscovered_retention_provider_ids.len()
+    }
+
+    pub fn duplicate_retention_provider_count(&self) -> usize {
+        self.duplicate_retention_provider_ids.len()
+    }
+
+    pub fn retained_provider_count(&self) -> usize {
+        self.cycle.retained_provider_count()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettingsSyncScheduledCyclePlan {
     pub preflight: SettingsSyncCyclePreflight,
     pub selected_retention_provider_ids: Vec<String>,
@@ -2277,6 +2304,60 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
                 max_trusted_devices,
             )
             .map_err(ProfileSyncCycleWithHealthError::Cycle)?;
+        self.retain_membership_log_cycle_publications(profile, cycle, retention_provider_daemons)
+    }
+
+    fn run_settings_sync_cycle_with_membership_log_and_retention_providers_after_preflight(
+        &self,
+        database: &SlateProfileDatabase,
+        content_key: &ProfileSyncContentKey,
+        signer: &ProfileSyncDeviceSigner,
+        policy: &SettingsSyncCyclePolicy,
+        membership_log_root_id: &str,
+        retention_provider_daemons: &[&BroadwebDaemon],
+        preflight: &SettingsSyncCyclePreflightWithMembershipLog,
+    ) -> Result<SettingsSyncCycleWithMembershipLogRetentionRun, ProfileSyncCycleWithHealthError>
+    {
+        let cycle = self
+            .run_settings_sync_cycle(
+                database,
+                preflight.preflight.profile.as_str(),
+                preflight.preflight.settings_root_id.as_str(),
+                content_key,
+                preflight.preflight.active_key_id.as_str(),
+                signer,
+                policy.retention_policy.clone(),
+                policy.max_publish_steps,
+                policy.max_trusted_devices,
+            )
+            .map_err(ProfileSyncCycleWithHealthError::Cycle)?;
+        let published_membership_log = BroadwebdProfileSyncPublisher::new(self.daemon)
+            .publish_local_sync_account_membership_log(
+                database,
+                preflight.preflight.profile.as_str(),
+                membership_log_root_id,
+            )
+            .map_err(ProfileSyncCycleError::from)
+            .map_err(ProfileSyncCycleWithHealthError::Cycle)?;
+        let membership_cycle = SettingsSyncCycleWithMembershipLogRun {
+            pulled_membership_log: preflight.pulled_membership_log.clone(),
+            cycle,
+            published_membership_log,
+        };
+        self.retain_membership_log_cycle_publications(
+            preflight.preflight.profile.as_str(),
+            membership_cycle,
+            retention_provider_daemons,
+        )
+    }
+
+    fn retain_membership_log_cycle_publications(
+        &self,
+        profile: &str,
+        cycle: SettingsSyncCycleWithMembershipLogRun,
+        retention_provider_daemons: &[&BroadwebDaemon],
+    ) -> Result<SettingsSyncCycleWithMembershipLogRetentionRun, ProfileSyncCycleWithHealthError>
+    {
         let retained_object_ids = cycle.published_object_ids();
         let mut retention = Vec::with_capacity(retention_provider_daemons.len());
         for (provider_index, provider_daemon) in retention_provider_daemons.iter().enumerate() {
@@ -2357,6 +2438,53 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
 
         Ok(SettingsSyncScheduledCycleRun {
             preflight: plan.preflight,
+            selected_retention_provider_ids: plan.selected_retention_provider_ids,
+            undiscovered_retention_provider_ids: plan.undiscovered_retention_provider_ids,
+            duplicate_retention_provider_ids: plan.duplicate_retention_provider_ids,
+            cycle,
+        })
+    }
+
+    pub fn run_once_with_membership_log_selecting_retention_providers(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        membership_log_root_id: &str,
+        secrets: SettingsSyncRuntimeSecrets<'_>,
+        retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'_>],
+    ) -> Result<SettingsSyncScheduledMembershipCycleRun, ProfileSyncCycleWithHealthError> {
+        let runner = BroadwebdSettingsSyncRunner::new(self.daemon);
+        let preflight = runner
+            .settings_sync_cycle_preflight_with_membership_log_and_active_key_policy(
+                database,
+                config.profile.as_str(),
+                config.settings_root_id.as_str(),
+                membership_log_root_id,
+                secrets.signer,
+                &config.policy,
+            )?;
+        let selection = select_settings_sync_retention_provider_handles(
+            preflight.preflight.clone(),
+            retention_provider_handles,
+        );
+        let plan = selection.plan;
+        config.policy.check_selected_retention_provider_count(
+            plan.selected_retention_provider_count(),
+            &preflight.preflight.before_health,
+        )?;
+        let cycle = runner
+            .run_settings_sync_cycle_with_membership_log_and_retention_providers_after_preflight(
+                database,
+                secrets.content_key,
+                secrets.signer,
+                &config.policy,
+                membership_log_root_id,
+                selection.daemons.as_slice(),
+                &preflight,
+            )?;
+
+        Ok(SettingsSyncScheduledMembershipCycleRun {
+            preflight,
             selected_retention_provider_ids: plan.selected_retention_provider_ids,
             undiscovered_retention_provider_ids: plan.undiscovered_retention_provider_ids,
             duplicate_retention_provider_ids: plan.duplicate_retention_provider_ids,
@@ -4424,6 +4552,171 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn scheduler_runs_membership_aware_cycle_with_selected_provider_without_loopback() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("membership-scheduler-publisher");
+        let receiver_state_root = test_state_root("membership-scheduler-receiver");
+        let provider_state_root = test_state_root("membership-scheduler-provider");
+        let publisher_db_root = test_state_root("membership-scheduler-publisher-db");
+        let receiver_db_root = test_state_root("membership-scheduler-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "membership-scheduler-device-a",
+            )
+            .expect("start in-process membership scheduler publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "membership-scheduler-device-b",
+            )
+            .expect("start in-process membership scheduler receiver daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "membership-scheduler-pinner",
+            )
+            .expect("start in-process membership scheduler provider daemon");
+        let publisher_database = SlateProfileDatabase::open_resolved_with_device_id(
+            publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "membership-scheduler-device-a",
+        )
+        .expect("open membership scheduler publisher database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "membership-scheduler-device-b",
+        )
+        .expect("open membership scheduler receiver database");
+        let content_key = ProfileSyncContentKey::from_bytes([78; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer_a = ProfileSyncDeviceSigner::generate("membership-scheduler-device-a")
+            .expect("generate membership scheduler signer a");
+        let signer_b = ProfileSyncDeviceSigner::generate("membership-scheduler-device-b")
+            .expect("generate membership scheduler signer b");
+        register_test_content_key_epoch(&publisher_database, DEFAULT_PROFILE_ID);
+        register_test_content_key_epoch(&receiver_database, DEFAULT_PROFILE_ID);
+        let enroll_a = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-membership-scheduler-device-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-scheduler-device-a".to_string(),
+            device_public_key: Some(signer_a.public_key().expect("read signer a public key")),
+            created_at: 10,
+        };
+        publisher_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_a).as_slice(),
+            )
+            .expect("publisher bootstraps membership scheduler signer a");
+        let enroll_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-enroll-membership-scheduler-device-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-scheduler-device-b".to_string(),
+            device_public_key: Some(signer_b.public_key().expect("read signer b public key")),
+            created_at: 20,
+        };
+        publisher_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_b).as_slice(),
+            )
+            .expect("publisher applies membership scheduler signer b enrollment");
+        publisher_database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("publisher writes membership scheduler setting");
+        BroadwebdSettingsSyncRunner::new(&publisher_daemon)
+            .run_settings_sync_cycle_with_membership_log(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer_a,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+                4,
+            )
+            .expect("publisher publishes membership and settings state");
+        assert!(
+            receiver_database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "membership-scheduler-device-b")
+                .expect("read receiver local key before scheduler")
+                .is_none()
+        );
+
+        let selected_provider_id = "local-fixture-availability-membership-scheduler-pinner";
+        let retention_provider_handles = [
+            SettingsSyncRetentionProviderHandle::new(
+                "not-discovered-membership-provider",
+                &provider_daemon,
+            ),
+            SettingsSyncRetentionProviderHandle::new(selected_provider_id, &provider_daemon),
+            SettingsSyncRetentionProviderHandle::new(selected_provider_id, &provider_daemon),
+        ];
+        let config = SettingsSyncSchedulerConfig::new(
+            DEFAULT_PROFILE_ID,
+            "settings/latest",
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2)
+                .with_provider_health_required(false)
+                .with_root_health_required_after_cycle(false),
+        );
+        let run = BroadwebdSettingsSyncScheduler::new(&receiver_daemon)
+            .run_once_with_membership_log_selecting_retention_providers(
+                &receiver_database,
+                &config,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer_b),
+                &retention_provider_handles,
+            )
+            .expect("membership-aware scheduler applies and retains through selected provider");
+
+        assert_eq!(run.preflight.pulled_membership_application_count(), 2);
+        assert_eq!(
+            run.selected_retention_provider_ids,
+            vec![selected_provider_id.to_string()]
+        );
+        assert_eq!(
+            run.undiscovered_retention_provider_ids,
+            vec!["not-discovered-membership-provider".to_string()]
+        );
+        assert_eq!(
+            run.duplicate_retention_provider_ids,
+            vec![selected_provider_id.to_string()]
+        );
+        assert_eq!(run.cycle.cycle.cycle.applied_count(), 1);
+        assert_eq!(
+            receiver_database
+                .get_setting_text("ui.theme")
+                .expect("read synced membership scheduler setting")
+                .as_deref(),
+            Some("teal")
+        );
+        assert_eq!(run.cycle.retention.len(), 1);
+        assert_eq!(
+            run.cycle.retention[0].object_count(),
+            run.cycle.retained_object_ids.len()
+        );
+        assert_eq!(
+            run.cycle.retention[0].retained_count(),
+            run.cycle.retained_object_ids.len()
+        );
+        assert_eq!(run.retained_provider_count(), 1);
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
         let _ = std::fs::remove_dir_all(publisher_db_root);
         let _ = std::fs::remove_dir_all(receiver_db_root);
     }

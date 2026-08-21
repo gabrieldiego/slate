@@ -585,6 +585,13 @@ The active-key preflight also has a membership-aware form: it pulls the
 membership log before checking the local signer against trusted device keys.
 This gives scheduler planning a path for newly enrolled devices whose local
 trusted key arrives from the distributed membership history.
+The scheduler facade now has an explicit membership-aware selected-provider run
+path. It pulls membership, performs active-key preflight, filters selected
+retention-provider handles against discovered providers, runs the settings
+cycle, and retains the combined settings and membership publication set through
+selected in-process providers. The read-only scheduler plan path remains
+membership-unaware for now because pulling membership mutates
+`slate-settings.db`.
 The receive fixture also covers a tampered index entry that points at a
 different signed record object. That path fails before `slate-settings.db`
 stores the membership-log root or writes any trusted device key.

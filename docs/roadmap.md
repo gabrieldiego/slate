@@ -757,6 +757,11 @@ Current baseline:
   checks, letting a newly enrolled local fixture device pass scheduler-style
   preflight after its trusted key is learned from the distributed membership
   history.
+- The scheduler facade now has an explicit membership-aware selected-provider
+  run path, with fixture coverage for applying a remote settings head and
+  retaining the combined settings plus membership object set through an
+  in-process availability provider. The read-only plan path remains
+  membership-unaware until membership discovery has a non-mutating preview mode.
 - Membership-log receive fixtures now reject mismatched index entries before
   advancing the stored log root or writing trusted device keys.
 
