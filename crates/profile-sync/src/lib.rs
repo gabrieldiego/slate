@@ -577,6 +577,17 @@ impl SettingsSyncCycleWithHealthRun {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncCyclePreflight {
+    pub profile: String,
+    pub settings_root_id: String,
+    pub local_device_id: String,
+    pub signer_device_id: String,
+    pub active_key_id: String,
+    pub trusted_remote_device_count: usize,
+    pub before_health: SettingsSyncHealthReport,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettingsSyncCyclePolicy {
     pub retention_policy: ProfileSyncRetentionPolicy,
     pub max_publish_steps: u32,
@@ -991,21 +1002,19 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
         signer: &ProfileSyncDeviceSigner,
         policy: &SettingsSyncCyclePolicy,
     ) -> Result<SettingsSyncCycleWithHealthRun, ProfileSyncCycleWithHealthError> {
-        let before_health = self.settings_sync_health(
+        let preflight = self.settings_sync_cycle_preflight_with_active_key_policy(
             database,
             profile,
             settings_root_id,
-            policy.minimum_online_retaining_providers,
+            signer,
+            policy,
         )?;
-        policy.check_before_cycle(&before_health)?;
-        let key_id = active_settings_sync_content_key_id(database, profile)
-            .map_err(ProfileSyncCycleError::from)?;
         let cycle = self.run_settings_sync_cycle(
             database,
             profile,
             settings_root_id,
             content_key,
-            key_id.as_str(),
+            preflight.active_key_id.as_str(),
             signer,
             policy.retention_policy.clone(),
             policy.max_publish_steps,
@@ -1020,9 +1029,44 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
         policy.check_after_cycle(&after_health)?;
 
         Ok(SettingsSyncCycleWithHealthRun {
-            before_health,
+            before_health: preflight.before_health,
             cycle,
             after_health,
+        })
+    }
+
+    pub fn settings_sync_cycle_preflight_with_active_key_policy(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        settings_root_id: &str,
+        signer: &ProfileSyncDeviceSigner,
+        policy: &SettingsSyncCyclePolicy,
+    ) -> Result<SettingsSyncCyclePreflight, ProfileSyncCycleWithHealthError> {
+        let before_health = self.settings_sync_health(
+            database,
+            profile,
+            settings_root_id,
+            policy.minimum_online_retaining_providers,
+        )?;
+        policy.check_before_cycle(&before_health)?;
+        let active_key_id = active_settings_sync_content_key_id(database, profile)
+            .map_err(ProfileSyncCycleError::from)?;
+        validate_settings_sync_cycle_credentials(database, profile, active_key_id.as_str(), signer)
+            .map_err(ProfileSyncCycleError::from)?;
+        let trusted_remote_device_count =
+            trusted_remote_device_public_keys(database, profile, policy.max_trusted_devices)
+                .map_err(ProfileSyncCycleError::from)?
+                .len();
+
+        Ok(SettingsSyncCyclePreflight {
+            profile: profile.to_string(),
+            settings_root_id: settings_root_id.to_string(),
+            local_device_id: database.local_sync_device_id().to_string(),
+            signer_device_id: signer.device_id().to_string(),
+            active_key_id,
+            trusted_remote_device_count,
+            before_health,
         })
     }
 
@@ -3612,6 +3656,151 @@ mod tests {
                 )
             )) if missing_profile == "missingactivekeyprofile"
         ));
+
+        let _ = std::fs::remove_dir_all(state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_preflight_reports_runtime_inputs_without_publishing() {
+        let network = InProcessBroadwebNetwork::new();
+        let state_root = test_state_root("cycle-preflight");
+        let db_root = test_state_root("cycle-preflight-db");
+        let daemon = network
+            .daemon_for_device(&state_root, ResourceBudget::default(), "runtime-preflight")
+            .expect("start in-process profile-sync daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-preflight",
+        )
+        .expect("open local settings database");
+        let profile = "preflightprofile";
+        let settings_root_id = "settings/latest";
+        let signer =
+            ProfileSyncDeviceSigner::generate("runtime-preflight").expect("generate signer");
+        let remote_signer =
+            ProfileSyncDeviceSigner::generate("runtime-preflight-remote").expect("remote signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register local public key");
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: remote_signer.public_key().expect("remote public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register remote public key");
+
+        let preflight = BroadwebdSettingsSyncRunner::new(&daemon)
+            .settings_sync_cycle_preflight_with_active_key_policy(
+                &database,
+                profile,
+                settings_root_id,
+                &signer,
+                &SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 1),
+            )
+            .expect("settings sync preflight");
+
+        assert_eq!(preflight.profile, profile);
+        assert_eq!(preflight.settings_root_id, settings_root_id);
+        assert_eq!(preflight.local_device_id, "runtime-preflight");
+        assert_eq!(preflight.signer_device_id, "runtime-preflight");
+        assert_eq!(preflight.active_key_id, TEST_CONTENT_KEY_ID);
+        assert_eq!(preflight.trusted_remote_device_count, 1);
+        assert!(!preflight.before_health.provider_health.degraded);
+        assert!(preflight.before_health.settings_root_health.degraded);
+        assert!(
+            database
+                .profile_sync_root(profile, settings_root_id)
+                .expect("read settings root")
+                .is_none()
+        );
+        assert!(
+            database
+                .profile_sync_root(
+                    profile,
+                    settings_device_head_root_id("runtime-preflight").as_str()
+                )
+                .expect("read local device-head root")
+                .is_none()
+        );
+
+        let _ = std::fs::remove_dir_all(state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_preflight_enforces_trusted_device_limit() {
+        let network = InProcessBroadwebNetwork::new();
+        let state_root = test_state_root("cycle-preflight-device-limit");
+        let db_root = test_state_root("cycle-preflight-device-limit-db");
+        let daemon = network
+            .daemon_for_device(
+                &state_root,
+                ResourceBudget::default(),
+                "runtime-preflight-limit",
+            )
+            .expect("start in-process profile-sync daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-preflight-limit",
+        )
+        .expect("open local settings database");
+        let profile = "preflightlimitprofile";
+        let settings_root_id = "settings/latest";
+        let signer =
+            ProfileSyncDeviceSigner::generate("runtime-preflight-limit").expect("generate signer");
+        let first_remote =
+            ProfileSyncDeviceSigner::generate("runtime-preflight-limit-a").expect("remote a");
+        let second_remote =
+            ProfileSyncDeviceSigner::generate("runtime-preflight-limit-b").expect("remote b");
+        register_test_content_key_epoch(&database, profile);
+        for public_key in [
+            signer.public_key().expect("local public key"),
+            first_remote.public_key().expect("first remote public key"),
+            second_remote
+                .public_key()
+                .expect("second remote public key"),
+        ] {
+            database
+                .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                    profile: profile.to_string(),
+                    public_key,
+                    membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                })
+                .expect("register public key");
+        }
+
+        let error = BroadwebdSettingsSyncRunner::new(&daemon)
+            .settings_sync_cycle_preflight_with_active_key_policy(
+                &database,
+                profile,
+                settings_root_id,
+                &signer,
+                &SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 1, 1),
+            )
+            .expect_err("trusted device limit should fail in preflight");
+        assert!(matches!(
+            error,
+            ProfileSyncCycleWithHealthError::Cycle(ProfileSyncCycleError::Receive(
+                ProfileSyncReceiveError::TrustedDeviceLimitExceeded {
+                    profile,
+                    trusted_device_count: 2,
+                    max_devices: 1
+                }
+            )) if profile == "preflightlimitprofile"
+        ));
+        assert!(
+            database
+                .profile_sync_root(profile, settings_root_id)
+                .expect("read settings root")
+                .is_none()
+        );
 
         let _ = std::fs::remove_dir_all(state_root);
         let _ = std::fs::remove_dir_all(db_root);

@@ -546,6 +546,11 @@ The local device signer must match the database's local sync device id before a
 cycle can publish local device-head state. Trusted remote public keys remain
 valid receive-side trust anchors, but they cannot be reused as the local
 publishing identity.
+The runner exposes that work as an explicit read-only preflight: sample
+broadwebd health, apply before-cycle provider policy, load active key metadata,
+validate the local signer, and enforce trusted-device bounds. Preflight does
+not take the content key secret and does not publish, retain, pull, or mutate
+sync roots.
 Object bytes are also provider-held: fetches require at least one online
 provider with the object, and retaining an object copies the bytes into the
 retaining provider's in-process store. Tests can pause object transfer from one

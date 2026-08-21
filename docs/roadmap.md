@@ -264,6 +264,11 @@ Current baseline:
   public key in the same profile is not enough to publish local device-head
   state, preventing local cycles from accidentally signing with another
   enrolled device's identity.
+- The runtime-facing runner now exposes an explicit read-only settings sync
+  preflight. It samples provider/root health, applies before-cycle provider
+  policy, loads active content-key metadata, validates the local signer
+  identity, and enforces the trusted-device bound before any encrypted
+  publish/pull attempt.
 - Settings sync cycle policy now supports explicit provider quorum checks for
   fresh online, object-transfer, availability, and mutable-root providers. The
   in-process fixture covers a policy that refuses to run with only one fresh
