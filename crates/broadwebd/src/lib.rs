@@ -65,7 +65,10 @@ pub use registry::{
     ApplicationServicePlugin, PluginInstallReport, PluginRegistry, ProtocolInstallReport,
     ProtocolService, TransportPlugin,
 };
-pub use services::{http_fetch::HttpFetchService, profile_sync::ProfileSyncService};
+pub use services::{
+    http_fetch::HttpFetchService,
+    profile_sync::{LocalProfileSyncFixture, ProfileSyncService},
+};
 pub use state::{StateRoot, TemporaryDownloadRecord};
 pub use status::{BroadwebStatusKind, BroadwebStatusReporter, BroadwebStatusSnapshot};
 pub use transports::direct_http::DirectHttpTransport;

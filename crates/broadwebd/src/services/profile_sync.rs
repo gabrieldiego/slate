@@ -8,10 +8,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
 const LOCAL_PROVIDER_ID: &str = "local-fake-profile-sync";
+const LOCAL_PROVIDER_KIND: &str = "local-fake";
+const LOCAL_PRIVACY_BOUNDARY: &str = "in-memory local test backend; no sockets or external network";
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct ProfileSyncService {
     store: Arc<Mutex<ProfileSyncStore>>,
+    provider_id: String,
+    provider_kind: String,
+    privacy_boundary: String,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -21,9 +26,34 @@ struct ProfileSyncStore {
     roots: BTreeMap<(String, String), String>,
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct LocalProfileSyncFixture {
+    store: Arc<Mutex<ProfileSyncStore>>,
+}
+
+impl Default for ProfileSyncService {
+    fn default() -> Self {
+        Self {
+            store: Arc::new(Mutex::new(ProfileSyncStore::default())),
+            provider_id: LOCAL_PROVIDER_ID.to_string(),
+            provider_kind: LOCAL_PROVIDER_KIND.to_string(),
+            privacy_boundary: LOCAL_PRIVACY_BOUNDARY.to_string(),
+        }
+    }
+}
+
 impl ProfileSyncService {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    fn local_fixture(store: Arc<Mutex<ProfileSyncStore>>, provider_id: impl Into<String>) -> Self {
+        Self {
+            store,
+            provider_id: provider_id.into(),
+            provider_kind: "local-fixture".to_string(),
+            privacy_boundary: LOCAL_PRIVACY_BOUNDARY.to_string(),
+        }
     }
 
     fn put_object(
@@ -153,10 +183,9 @@ impl ProfileSyncService {
             .count();
         Ok(ProfileSyncResponse::Providers {
             providers: vec![ProfileSyncProviderRecord {
-                provider_id: LOCAL_PROVIDER_ID.to_string(),
-                provider_kind: "local-fake".to_string(),
-                privacy_boundary: "in-memory local test backend; no sockets or external network"
-                    .to_string(),
+                provider_id: self.provider_id.clone(),
+                provider_kind: self.provider_kind.clone(),
+                privacy_boundary: self.privacy_boundary.clone(),
                 retained_objects,
             }],
         })
@@ -166,6 +195,19 @@ impl ProfileSyncService {
         self.store
             .lock()
             .map_err(|_| BroadwebdError::Request("profile sync store lock poisoned".to_string()))
+    }
+}
+
+impl LocalProfileSyncFixture {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn service_for_device(&self, device_id: impl AsRef<str>) -> ProfileSyncService {
+        ProfileSyncService::local_fixture(
+            self.store.clone(),
+            format!("local-fixture-device-{}", device_id.as_ref()),
+        )
     }
 }
 
@@ -231,11 +273,89 @@ fn local_object_id(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::local_object_id;
+    use super::{LocalProfileSyncFixture, local_object_id};
+    use crate::{
+        PluginRegistry, ProfileSyncObjectRequest, ProfileSyncPutObjectRequest, ProfileSyncRequest,
+        ProfileSyncResponse, ProfileSyncRootRequest, ProfileSyncRootUpdate, ResourceBudget,
+    };
 
     #[test]
     fn local_object_ids_are_deterministic_for_test_backend() {
         assert_eq!(local_object_id(b"settings"), local_object_id(b"settings"));
         assert_ne!(local_object_id(b"settings"), local_object_id(b"calendar"));
+    }
+
+    #[test]
+    fn local_fixture_devices_share_simulated_protocol_state() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut device_a = PluginRegistry::new();
+        let mut device_b = PluginRegistry::new();
+        let budget = ResourceBudget::default();
+
+        device_a.register_service(fixture.service_for_device("a"));
+        device_b.register_service(fixture.service_for_device("b"));
+
+        let put = device_a
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"encrypted manifest from device a".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("device a can put object into fixture");
+        let ProfileSyncResponse::PutEncryptedObject { object_id } = put else {
+            panic!("unexpected put response");
+        };
+
+        device_a
+            .profile_sync(
+                ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("device a can retain fixture object");
+        device_a
+            .profile_sync(
+                ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+                    "default",
+                    "profile-root",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("device a can publish fixture root");
+
+        let resolved = device_b
+            .profile_sync(
+                ProfileSyncRequest::ResolveRoot(ProfileSyncRootRequest::new(
+                    "default",
+                    "profile-root",
+                )),
+                &budget,
+            )
+            .expect("device b can resolve fixture root");
+        assert_eq!(
+            resolved,
+            ProfileSyncResponse::Root {
+                root_id: "profile-root".to_string(),
+                object_id: Some(object_id.clone())
+            }
+        );
+
+        let fetched = device_b
+            .profile_sync(
+                ProfileSyncRequest::GetEncryptedObject(ProfileSyncObjectRequest::new(
+                    "default", object_id,
+                )),
+                &budget,
+            )
+            .expect("device b can fetch fixture object");
+        let ProfileSyncResponse::GetEncryptedObject { bytes, .. } = fetched else {
+            panic!("unexpected get response");
+        };
+        assert_eq!(bytes, b"encrypted manifest from device a");
     }
 }
