@@ -132,6 +132,10 @@ Already covered:
   by default because event titles, notes, locations, recurrence, and reminders
   are sensitive and must only leave the device inside encrypted profile-sync
   objects.
+- Contact cards now have a local-first `slate-settings.db` materialized table
+  and sync-domain JSON projection with tombstones. Contacts sync stays disabled
+  by default because names, email addresses, phone numbers, notes, and avatar
+  references are sensitive profile data.
 
 Backlog:
 

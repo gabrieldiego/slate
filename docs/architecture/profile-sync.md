@@ -363,8 +363,12 @@ Planned domains:
   published after the user enables the domain and profile-sync seals the changes
   into encrypted objects.
 - `contacts`: contact cards, identities, groups, local aliases, and provider
-  mapping. Contacts are sensitive and should not be synced before the app has a
-  dedicated privacy note.
+  mapping. Contacts are sensitive. The initial Contacts projection stores basic
+  contact cards locally and emits JSON changes keyed by contact id, including
+  tombstones for deletion. Contacts remains disabled by default so names, email
+  addresses, phone numbers, notes, and avatar references are only published
+  after the user enables the domain and profile-sync seals the changes into
+  encrypted objects.
 - `chat`: account/provider configuration, local conversation metadata, and
   aggregation preferences. Message contents, SMS/WhatsApp secrets, and provider
   tokens require separate designs before sync.

@@ -55,6 +55,7 @@ pub const DEFAULT_HOME_BOOKMARKS: [DefaultBookmark; 2] = [
 const DEFAULT_BOOKMARKS_SEEDED_SETTING_KEY: &str = "bookmarks.defaults_seeded";
 const BOOKMARK_HOME_SLOT_SYNC_KEY_PREFIX: &str = "home.slot.";
 const CALENDAR_EVENT_SYNC_KEY_PREFIX: &str = "event.";
+const CONTACT_CARD_SYNC_KEY_PREFIX: &str = "contact.";
 const DOWNLOAD_METADATA_SYNC_KEY_PREFIX: &str = "download.";
 const APP_SYNC_DOMAIN_CURSOR_KEY_PREFIX: &str = "app_sync.cursor.";
 const PROFILE_SYNC_ROOT_KEY_PREFIX: &str = "profile_sync.root.";
@@ -1653,6 +1654,51 @@ pub struct CalendarEventSyncPayload {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContactCardUpdate {
+    pub profile: String,
+    pub contact_id: String,
+    pub display_name: String,
+    pub given_name: Option<String>,
+    pub family_name: Option<String>,
+    pub organization: Option<String>,
+    pub primary_email: Option<String>,
+    pub primary_phone: Option<String>,
+    pub notes: Option<String>,
+    pub avatar_key: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContactCardRecord {
+    pub profile: String,
+    pub contact_id: String,
+    pub display_name: String,
+    pub given_name: Option<String>,
+    pub family_name: Option<String>,
+    pub organization: Option<String>,
+    pub primary_email: Option<String>,
+    pub primary_phone: Option<String>,
+    pub notes: Option<String>,
+    pub avatar_key: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ContactCardSyncPayload {
+    pub contact_id: String,
+    pub display_name: String,
+    pub given_name: Option<String>,
+    pub family_name: Option<String>,
+    pub organization: Option<String>,
+    pub primary_email: Option<String>,
+    pub primary_phone: Option<String>,
+    pub notes: Option<String>,
+    pub avatar_key: Option<String>,
+    #[serde(default)]
+    pub deleted: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CookieUpdate {
     pub profile: String,
     pub domain: String,
@@ -2073,6 +2119,7 @@ pub enum StorageError {
     InvalidSyncDomain(String),
     InvalidSyncRevision(i64),
     InvalidCalendarEventId(String),
+    InvalidContactId(String),
     InvalidDownloadSize(u64),
     MissingActiveSyncContentKey(String),
     UnsupportedSyncContentKeyAlgorithm {
@@ -2132,6 +2179,9 @@ impl fmt::Display for StorageError {
             }
             Self::InvalidCalendarEventId(event_id) => {
                 write!(formatter, "invalid calendar event id: {event_id}")
+            }
+            Self::InvalidContactId(contact_id) => {
+                write!(formatter, "invalid contact id: {contact_id}")
             }
             Self::InvalidDownloadSize(size_bytes) => {
                 write!(
@@ -2194,6 +2244,7 @@ impl std::error::Error for StorageError {
             Self::InvalidSyncDomain(_) => None,
             Self::InvalidSyncRevision(_) => None,
             Self::InvalidCalendarEventId(_) => None,
+            Self::InvalidContactId(_) => None,
             Self::InvalidDownloadSize(_) => None,
             Self::MissingActiveSyncContentKey(_) => None,
             Self::UnsupportedSyncContentKeyAlgorithm { .. }
@@ -2696,6 +2747,121 @@ impl SlateProfileDatabase {
                 &transaction,
                 profile,
                 SYNC_DOMAIN_CALENDAR,
+                sync_key.as_str(),
+                sync_payload.as_str(),
+                self.local_sync_device_id(),
+                now,
+            )
+            .map_err(|source| self.database_error(source))?;
+        }
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(())
+    }
+
+    pub fn upsert_contact_card(
+        &self,
+        contact: &ContactCardUpdate,
+    ) -> Result<ContactCardRecord, StorageError> {
+        validate_contact_id(contact.contact_id.as_str())?;
+        let sync_key = contact_card_sync_key(contact.contact_id.as_str());
+        let sync_payload = contact_card_sync_payload(contact)?;
+        let payload = ContactCardSyncPayload {
+            contact_id: contact.contact_id.clone(),
+            display_name: contact.display_name.clone(),
+            given_name: contact.given_name.clone(),
+            family_name: contact.family_name.clone(),
+            organization: contact.organization.clone(),
+            primary_email: contact.primary_email.clone(),
+            primary_phone: contact.primary_phone.clone(),
+            notes: contact.notes.clone(),
+            avatar_key: contact.avatar_key.clone(),
+            deleted: false,
+        };
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let now = unix_time_seconds()?;
+        upsert_contact_card_in_transaction(&transaction, contact.profile.as_str(), &payload, now)
+            .map_err(|source| self.database_error(source))?;
+        record_sync_setting_text_in_transaction(
+            &transaction,
+            contact.profile.as_str(),
+            SYNC_DOMAIN_CONTACTS,
+            sync_key.as_str(),
+            sync_payload.as_str(),
+            self.local_sync_device_id(),
+            now,
+        )
+        .map_err(|source| self.database_error(source))?;
+        let record = contact_card_record_by_id_in_transaction(
+            &transaction,
+            contact.profile.as_str(),
+            contact.contact_id.as_str(),
+        )
+        .map_err(|source| self.database_error(source))?;
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(record)
+    }
+
+    pub fn contact_cards(
+        &self,
+        profile: &str,
+        limit: u32,
+    ) -> Result<Vec<ContactCardRecord>, StorageError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT profile, contact_id, display_name, given_name, family_name,
+                        organization, primary_email, primary_phone, notes, avatar_key,
+                        created_at, updated_at
+                 FROM contact_cards
+                 WHERE profile = ?1
+                 ORDER BY display_name, contact_id
+                 LIMIT ?2",
+            )
+            .map_err(|source| self.database_error(source))?;
+        let records = statement
+            .query_map(
+                params![profile, i64::from(limit)],
+                contact_card_record_from_row,
+            )
+            .map_err(|source| self.database_error(source))?;
+
+        let mut contacts = Vec::new();
+        for record in records {
+            contacts.push(record.map_err(|source| self.database_error(source))?);
+        }
+        Ok(contacts)
+    }
+
+    pub fn remove_contact_card(&self, profile: &str, contact_id: &str) -> Result<(), StorageError> {
+        validate_contact_id(contact_id)?;
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let now = unix_time_seconds()?;
+        let removed =
+            contact_card_record_by_id_optional_in_transaction(&transaction, profile, contact_id)
+                .map_err(|source| self.database_error(source))?;
+        transaction
+            .execute(
+                "DELETE FROM contact_cards WHERE profile = ?1 AND contact_id = ?2",
+                params![profile, contact_id],
+            )
+            .map_err(|source| self.database_error(source))?;
+        if let Some(record) = removed {
+            let sync_key = contact_card_sync_key(record.contact_id.as_str());
+            let sync_payload = contact_card_tombstone_sync_payload(&record)?;
+            record_sync_setting_text_in_transaction(
+                &transaction,
+                profile,
+                SYNC_DOMAIN_CONTACTS,
                 sync_key.as_str(),
                 sync_payload.as_str(),
                 self.local_sync_device_id(),
@@ -5088,6 +5254,25 @@ impl SlateProfileDatabase {
                 CREATE INDEX IF NOT EXISTS calendar_events_starts_at
                     ON calendar_events(profile, starts_at, event_id);
 
+                CREATE TABLE IF NOT EXISTS contact_cards (
+                    profile TEXT NOT NULL,
+                    contact_id TEXT NOT NULL,
+                    display_name TEXT NOT NULL,
+                    given_name TEXT,
+                    family_name TEXT,
+                    organization TEXT,
+                    primary_email TEXT,
+                    primary_phone TEXT,
+                    notes TEXT,
+                    avatar_key TEXT,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    PRIMARY KEY(profile, contact_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS contact_cards_display_name
+                    ON contact_cards(profile, display_name, contact_id);
+
                 CREATE TABLE IF NOT EXISTS cookies (
                     profile TEXT NOT NULL,
                     domain TEXT NOT NULL,
@@ -5676,6 +5861,44 @@ fn calendar_event_tombstone_sync_payload(
     .map_err(StorageError::EncodeSyncPayload)
 }
 
+fn contact_card_sync_key(contact_id: &str) -> String {
+    format!("{CONTACT_CARD_SYNC_KEY_PREFIX}{contact_id}")
+}
+
+fn contact_card_sync_payload(contact: &ContactCardUpdate) -> Result<String, StorageError> {
+    serde_json::to_string(&ContactCardSyncPayload {
+        contact_id: contact.contact_id.clone(),
+        display_name: contact.display_name.clone(),
+        given_name: contact.given_name.clone(),
+        family_name: contact.family_name.clone(),
+        organization: contact.organization.clone(),
+        primary_email: contact.primary_email.clone(),
+        primary_phone: contact.primary_phone.clone(),
+        notes: contact.notes.clone(),
+        avatar_key: contact.avatar_key.clone(),
+        deleted: false,
+    })
+    .map_err(StorageError::EncodeSyncPayload)
+}
+
+fn contact_card_tombstone_sync_payload(
+    contact: &ContactCardRecord,
+) -> Result<String, StorageError> {
+    serde_json::to_string(&ContactCardSyncPayload {
+        contact_id: contact.contact_id.clone(),
+        display_name: contact.display_name.clone(),
+        given_name: contact.given_name.clone(),
+        family_name: contact.family_name.clone(),
+        organization: contact.organization.clone(),
+        primary_email: contact.primary_email.clone(),
+        primary_phone: contact.primary_phone.clone(),
+        notes: contact.notes.clone(),
+        avatar_key: contact.avatar_key.clone(),
+        deleted: true,
+    })
+    .map_err(StorageError::EncodeSyncPayload)
+}
+
 fn validate_sync_domain(domain: &str) -> Result<(), StorageError> {
     if domain.is_empty() {
         return Err(StorageError::InvalidSyncDomain(domain.to_string()));
@@ -5688,6 +5911,13 @@ fn validate_calendar_event_id(event_id: &str) -> Result<(), StorageError> {
         return Ok(());
     }
     Err(StorageError::InvalidCalendarEventId(event_id.to_string()))
+}
+
+fn validate_contact_id(contact_id: &str) -> Result<(), StorageError> {
+    if is_valid_sync_identifier(contact_id) {
+        return Ok(());
+    }
+    Err(StorageError::InvalidContactId(contact_id.to_string()))
 }
 
 fn app_sync_domain_cursor_key(domain: &str) -> String {
@@ -5963,6 +6193,34 @@ fn apply_sync_setting_materialized_view_in_transaction(
         )?;
     }
 
+    if change.domain == SYNC_DOMAIN_CONTACTS
+        && change
+            .key
+            .as_str()
+            .starts_with(CONTACT_CARD_SYNC_KEY_PREFIX)
+    {
+        let payload = contact_card_sync_payload_from_text(change.value.as_str())?;
+        if !is_valid_sync_identifier(payload.contact_id.as_str()) {
+            return Err(invalid_contact_card_sync_payload_error(format!(
+                "invalid contact id: {}",
+                payload.contact_id
+            )));
+        }
+        let expected_key = contact_card_sync_key(payload.contact_id.as_str());
+        if change.key != expected_key {
+            return Err(invalid_contact_card_sync_payload_error(format!(
+                "contact sync key {} does not match payload id {}",
+                change.key, payload.contact_id
+            )));
+        }
+        apply_contact_card_sync_payload_in_transaction(
+            transaction,
+            change.profile.as_str(),
+            &payload,
+            now,
+        )?;
+    }
+
     if change.domain == SYNC_DOMAIN_DOWNLOADS
         && change
             .key
@@ -6035,6 +6293,25 @@ fn calendar_event_sync_payload_from_text(
 }
 
 fn invalid_calendar_event_sync_payload_error(message: String) -> rusqlite::Error {
+    rusqlite::Error::FromSqlConversionFailure(
+        3,
+        Type::Text,
+        Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            message,
+        )),
+    )
+}
+
+fn contact_card_sync_payload_from_text(
+    value: &str,
+) -> Result<ContactCardSyncPayload, rusqlite::Error> {
+    serde_json::from_str(value).map_err(|source| {
+        rusqlite::Error::FromSqlConversionFailure(3, Type::Text, Box::new(source))
+    })
+}
+
+fn invalid_contact_card_sync_payload_error(message: String) -> rusqlite::Error {
     rusqlite::Error::FromSqlConversionFailure(
         3,
         Type::Text,
@@ -6208,6 +6485,112 @@ fn calendar_event_record_from_row(
         reminder_minutes: row.get(10)?,
         created_at: row.get(11)?,
         updated_at: row.get(12)?,
+    })
+}
+
+fn apply_contact_card_sync_payload_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    payload: &ContactCardSyncPayload,
+    now: i64,
+) -> Result<(), rusqlite::Error> {
+    if payload.deleted {
+        transaction.execute(
+            "DELETE FROM contact_cards WHERE profile = ?1 AND contact_id = ?2",
+            params![profile, payload.contact_id.as_str()],
+        )?;
+        return Ok(());
+    }
+
+    upsert_contact_card_in_transaction(transaction, profile, payload, now)
+}
+
+fn upsert_contact_card_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    payload: &ContactCardSyncPayload,
+    now: i64,
+) -> Result<(), rusqlite::Error> {
+    transaction.execute(
+        "INSERT INTO contact_cards
+           (profile, contact_id, display_name, given_name, family_name, organization,
+            primary_email, primary_phone, notes, avatar_key, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11)
+         ON CONFLICT(profile, contact_id) DO UPDATE SET
+           display_name = excluded.display_name,
+           given_name = excluded.given_name,
+           family_name = excluded.family_name,
+           organization = excluded.organization,
+           primary_email = excluded.primary_email,
+           primary_phone = excluded.primary_phone,
+           notes = excluded.notes,
+           avatar_key = excluded.avatar_key,
+           updated_at = excluded.updated_at",
+        params![
+            profile,
+            payload.contact_id.as_str(),
+            payload.display_name.as_str(),
+            payload.given_name.as_deref(),
+            payload.family_name.as_deref(),
+            payload.organization.as_deref(),
+            payload.primary_email.as_deref(),
+            payload.primary_phone.as_deref(),
+            payload.notes.as_deref(),
+            payload.avatar_key.as_deref(),
+            now
+        ],
+    )?;
+    Ok(())
+}
+
+fn contact_card_record_by_id_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    contact_id: &str,
+) -> Result<ContactCardRecord, rusqlite::Error> {
+    transaction.query_row(
+        "SELECT profile, contact_id, display_name, given_name, family_name, organization,
+                primary_email, primary_phone, notes, avatar_key, created_at, updated_at
+         FROM contact_cards
+         WHERE profile = ?1 AND contact_id = ?2",
+        params![profile, contact_id],
+        contact_card_record_from_row,
+    )
+}
+
+fn contact_card_record_by_id_optional_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    contact_id: &str,
+) -> Result<Option<ContactCardRecord>, rusqlite::Error> {
+    transaction
+        .query_row(
+            "SELECT profile, contact_id, display_name, given_name, family_name, organization,
+                    primary_email, primary_phone, notes, avatar_key, created_at, updated_at
+             FROM contact_cards
+             WHERE profile = ?1 AND contact_id = ?2",
+            params![profile, contact_id],
+            contact_card_record_from_row,
+        )
+        .optional()
+}
+
+fn contact_card_record_from_row(
+    row: &rusqlite::Row<'_>,
+) -> Result<ContactCardRecord, rusqlite::Error> {
+    Ok(ContactCardRecord {
+        profile: row.get(0)?,
+        contact_id: row.get(1)?,
+        display_name: row.get(2)?,
+        given_name: row.get(3)?,
+        family_name: row.get(4)?,
+        organization: row.get(5)?,
+        primary_email: row.get(6)?,
+        primary_phone: row.get(7)?,
+        notes: row.get(8)?,
+        avatar_key: row.get(9)?,
+        created_at: row.get(10)?,
+        updated_at: row.get(11)?,
     })
 }
 
@@ -10672,6 +11055,314 @@ mod tests {
         assert!(
             database
                 .calendar_events(DEFAULT_PROFILE_ID, 10)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn contact_card_writes_sync_change_and_materializes_row() {
+        let database_path = test_dir("contact-card-local").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let contact = ContactCardUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            contact_id: "contact-1".to_string(),
+            display_name: "Ada Lovelace".to_string(),
+            given_name: Some("Ada".to_string()),
+            family_name: Some("Lovelace".to_string()),
+            organization: Some("Analytical Engine".to_string()),
+            primary_email: Some("ada@example.test".to_string()),
+            primary_phone: Some("+15550101000".to_string()),
+            notes: Some("Sensitive local address book entry".to_string()),
+            avatar_key: Some("contact-avatar:contact-1".to_string()),
+        };
+
+        let record = database.upsert_contact_card(&contact).unwrap();
+
+        assert_eq!(record.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(record.contact_id, "contact-1");
+        assert_eq!(record.display_name, "Ada Lovelace");
+        assert_eq!(record.given_name.as_deref(), Some("Ada"));
+        assert_eq!(record.primary_email.as_deref(), Some("ada@example.test"));
+        assert_eq!(
+            record.avatar_key.as_deref(),
+            Some("contact-avatar:contact-1")
+        );
+        assert_eq!(
+            database.contact_cards(DEFAULT_PROFILE_ID, 10).unwrap(),
+            vec![record]
+        );
+        let events = database
+            .sync_setting_text_events_after_for_domain(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CONTACTS,
+                0,
+                10,
+            )
+            .unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].change.entity_key, "contact.contact-1");
+        let payload: ContactCardSyncPayload =
+            serde_json::from_str(events[0].change.payload.as_str()).unwrap();
+        assert_eq!(payload.contact_id, "contact-1");
+        assert_eq!(payload.display_name, "Ada Lovelace");
+        assert!(!payload.deleted);
+        let value = database
+            .get_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CONTACTS,
+                "contact.contact-1",
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, events[0].change.payload);
+    }
+
+    #[test]
+    fn contact_card_removal_records_tombstone() {
+        let database_path = test_dir("contact-card-tombstone").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        database
+            .upsert_contact_card(&ContactCardUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                contact_id: "contact-2".to_string(),
+                display_name: "Grace Hopper".to_string(),
+                given_name: Some("Grace".to_string()),
+                family_name: Some("Hopper".to_string()),
+                organization: Some("Navy".to_string()),
+                primary_email: None,
+                primary_phone: None,
+                notes: None,
+                avatar_key: None,
+            })
+            .unwrap();
+
+        database
+            .remove_contact_card(DEFAULT_PROFILE_ID, "contact-2")
+            .unwrap();
+
+        assert!(
+            database
+                .contact_cards(DEFAULT_PROFILE_ID, 10)
+                .unwrap()
+                .is_empty()
+        );
+        let events = database
+            .sync_setting_text_events_after_for_domain(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CONTACTS,
+                0,
+                10,
+            )
+            .unwrap();
+        assert_eq!(events.len(), 2);
+        let tombstone: ContactCardSyncPayload =
+            serde_json::from_str(events[1].change.payload.as_str()).unwrap();
+        assert!(tombstone.deleted);
+        assert_eq!(tombstone.contact_id, "contact-2");
+        assert_eq!(tombstone.display_name, "Grace Hopper");
+        let value = database
+            .get_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CONTACTS,
+                "contact.contact-2",
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, events[1].change.payload);
+    }
+
+    #[test]
+    fn incoming_contact_card_change_updates_rows() {
+        let database_path = test_dir("incoming-contact-card").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let payload = ContactCardSyncPayload {
+            contact_id: "contact-3".to_string(),
+            display_name: "Katherine Johnson".to_string(),
+            given_name: Some("Katherine".to_string()),
+            family_name: Some("Johnson".to_string()),
+            organization: Some("NASA".to_string()),
+            primary_email: Some("katherine@example.test".to_string()),
+            primary_phone: None,
+            notes: Some("Imported from another Slate device".to_string()),
+            avatar_key: None,
+            deleted: false,
+        };
+        let incoming = IncomingSyncSettingText::new(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_CONTACTS,
+            contact_card_sync_key(payload.contact_id.as_str()),
+            serde_json::to_string(&payload).unwrap(),
+            "device-b",
+            1,
+            20,
+        );
+
+        let applied = database.apply_sync_setting_text(&incoming).unwrap();
+
+        assert_eq!(applied.domain, SYNC_DOMAIN_CONTACTS);
+        assert_eq!(applied.entity_key, "contact.contact-3");
+        assert!(applied.applied_at.is_some());
+        let contacts = database.contact_cards(DEFAULT_PROFILE_ID, 10).unwrap();
+        assert_eq!(contacts.len(), 1);
+        assert_eq!(contacts[0].contact_id, "contact-3");
+        assert_eq!(contacts[0].display_name, "Katherine Johnson");
+        assert_eq!(contacts[0].organization.as_deref(), Some("NASA"));
+        assert_eq!(
+            contacts[0].primary_email.as_deref(),
+            Some("katherine@example.test")
+        );
+    }
+
+    #[test]
+    fn incoming_contact_card_tombstone_removes_row() {
+        let database_path =
+            test_dir("incoming-contact-card-tombstone").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        database
+            .upsert_contact_card(&ContactCardUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                contact_id: "contact-4".to_string(),
+                display_name: "Temporary Contact".to_string(),
+                given_name: None,
+                family_name: None,
+                organization: None,
+                primary_email: Some("temporary@example.test".to_string()),
+                primary_phone: None,
+                notes: None,
+                avatar_key: None,
+            })
+            .unwrap();
+        let tombstone = ContactCardSyncPayload {
+            contact_id: "contact-4".to_string(),
+            display_name: "Temporary Contact".to_string(),
+            given_name: None,
+            family_name: None,
+            organization: None,
+            primary_email: Some("temporary@example.test".to_string()),
+            primary_phone: None,
+            notes: None,
+            avatar_key: None,
+            deleted: true,
+        };
+
+        let applied = database
+            .apply_sync_setting_text(&IncomingSyncSettingText::new(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CONTACTS,
+                contact_card_sync_key("contact-4"),
+                serde_json::to_string(&tombstone).unwrap(),
+                "zz-device",
+                1,
+                100,
+            ))
+            .unwrap();
+
+        assert!(applied.applied_at.is_some());
+        assert!(
+            database
+                .contact_cards(DEFAULT_PROFILE_ID, 10)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn incoming_losing_contact_card_change_does_not_replace_winner() {
+        let database_path =
+            test_dir("incoming-contact-card-conflict").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let winning_payload = ContactCardSyncPayload {
+            contact_id: "contact-5".to_string(),
+            display_name: "Winner Contact".to_string(),
+            given_name: None,
+            family_name: None,
+            organization: Some("Winner Org".to_string()),
+            primary_email: None,
+            primary_phone: None,
+            notes: None,
+            avatar_key: None,
+            deleted: false,
+        };
+        let losing_payload = ContactCardSyncPayload {
+            contact_id: "contact-5".to_string(),
+            display_name: "Loser Contact".to_string(),
+            given_name: None,
+            family_name: None,
+            organization: Some("Loser Org".to_string()),
+            primary_email: None,
+            primary_phone: None,
+            notes: None,
+            avatar_key: None,
+            deleted: false,
+        };
+
+        let winning = database
+            .apply_sync_setting_text(&IncomingSyncSettingText::new(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CONTACTS,
+                contact_card_sync_key("contact-5"),
+                serde_json::to_string(&winning_payload).unwrap(),
+                "device-b",
+                2,
+                40,
+            ))
+            .unwrap();
+        let losing = database
+            .apply_sync_setting_text(&IncomingSyncSettingText::new(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CONTACTS,
+                contact_card_sync_key("contact-5"),
+                serde_json::to_string(&losing_payload).unwrap(),
+                "device-c",
+                1,
+                30,
+            ))
+            .unwrap();
+
+        assert!(winning.applied_at.is_some());
+        assert_eq!(losing.applied_at, None);
+        let contacts = database.contact_cards(DEFAULT_PROFILE_ID, 10).unwrap();
+        assert_eq!(contacts.len(), 1);
+        assert_eq!(contacts[0].display_name, "Winner Contact");
+        assert_eq!(contacts[0].organization.as_deref(), Some("Winner Org"));
+        let value = database
+            .get_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CONTACTS,
+                "contact.contact-5",
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, winning.payload);
+    }
+
+    #[test]
+    fn contact_card_ids_must_be_sync_identifiers() {
+        let database_path = test_dir("contact-card-invalid-id").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let contact = ContactCardUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            contact_id: "../contact".to_string(),
+            display_name: "Invalid".to_string(),
+            given_name: None,
+            family_name: None,
+            organization: None,
+            primary_email: None,
+            primary_phone: None,
+            notes: None,
+            avatar_key: None,
+        };
+
+        let error = database.upsert_contact_card(&contact).unwrap_err();
+
+        assert!(matches!(
+            error,
+            StorageError::InvalidContactId(contact_id) if contact_id == "../contact"
+        ));
+        assert!(
+            database
+                .contact_cards(DEFAULT_PROFILE_ID, 10)
                 .unwrap()
                 .is_empty()
         );
