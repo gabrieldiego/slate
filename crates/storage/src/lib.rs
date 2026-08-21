@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use ring::{aead, rand};
+use ring::{aead, rand, signature};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use ring::rand::SecureRandom;
+use ring::signature::KeyPair;
 use rusqlite::{Connection, OptionalExtension, params};
 
 pub const DEFAULT_DATABASE_FILE_NAME: &str = "slate-settings.db";
@@ -176,6 +177,126 @@ impl fmt::Debug for ProfileSyncContentKey {
     }
 }
 
+#[derive(Clone, Eq, PartialEq)]
+pub struct ProfileSyncDeviceSigner {
+    device_id: String,
+    pkcs8: Vec<u8>,
+}
+
+impl ProfileSyncDeviceSigner {
+    pub fn generate(device_id: impl Into<String>) -> Result<Self, SyncObjectError> {
+        let device_id = device_id.into();
+        if !is_valid_sync_identifier(device_id.as_str()) {
+            return Err(SyncObjectError::InvalidDeviceId(device_id));
+        }
+
+        let pkcs8 = signature::Ed25519KeyPair::generate_pkcs8(&rand::SystemRandom::new())
+            .map_err(|_| SyncObjectError::Random)?;
+        Ok(Self {
+            device_id,
+            pkcs8: pkcs8.as_ref().to_vec(),
+        })
+    }
+
+    pub fn from_pkcs8(
+        device_id: impl Into<String>,
+        pkcs8: impl Into<Vec<u8>>,
+    ) -> Result<Self, SyncObjectError> {
+        let device_id = device_id.into();
+        if !is_valid_sync_identifier(device_id.as_str()) {
+            return Err(SyncObjectError::InvalidDeviceId(device_id));
+        }
+        let signer = Self {
+            device_id,
+            pkcs8: pkcs8.into(),
+        };
+        signer.key_pair()?;
+        Ok(signer)
+    }
+
+    pub fn device_id(&self) -> &str {
+        self.device_id.as_str()
+    }
+
+    pub fn public_key(&self) -> Result<ProfileSyncDevicePublicKey, SyncObjectError> {
+        Ok(ProfileSyncDevicePublicKey {
+            device_id: self.device_id.clone(),
+            bytes: self.key_pair()?.public_key().as_ref().to_vec(),
+        })
+    }
+
+    pub fn sign(&self, payload: &[u8]) -> Result<SignedSyncObject, SyncObjectError> {
+        let key_pair = self.key_pair()?;
+        Ok(SignedSyncObject {
+            version: SYNC_OBJECT_VERSION,
+            device_id: self.device_id.clone(),
+            public_key: key_pair.public_key().as_ref().to_vec(),
+            payload: payload.to_vec(),
+            signature: key_pair.sign(payload).as_ref().to_vec(),
+        })
+    }
+
+    fn key_pair(&self) -> Result<signature::Ed25519KeyPair, SyncObjectError> {
+        signature::Ed25519KeyPair::from_pkcs8(self.pkcs8.as_slice())
+            .map_err(|_| SyncObjectError::Key)
+    }
+}
+
+impl fmt::Debug for ProfileSyncDeviceSigner {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ProfileSyncDeviceSigner")
+            .field("device_id", &self.device_id)
+            .field("pkcs8", &"<redacted>")
+            .finish()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ProfileSyncDevicePublicKey {
+    pub device_id: String,
+    pub bytes: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct SignedSyncObject {
+    pub version: u8,
+    pub device_id: String,
+    pub public_key: Vec<u8>,
+    pub payload: Vec<u8>,
+    pub signature: Vec<u8>,
+}
+
+impl SignedSyncObject {
+    pub fn verify_with(
+        &self,
+        public_key: &ProfileSyncDevicePublicKey,
+    ) -> Result<&[u8], SyncObjectError> {
+        if self.version != SYNC_OBJECT_VERSION {
+            return Err(SyncObjectError::UnsupportedVersion(self.version));
+        }
+        if self.device_id != public_key.device_id || self.public_key != public_key.bytes {
+            return Err(SyncObjectError::DeviceKeyMismatch {
+                expected_device_id: public_key.device_id.clone(),
+                actual_device_id: self.device_id.clone(),
+            });
+        }
+
+        signature::UnparsedPublicKey::new(&signature::ED25519, public_key.bytes.as_slice())
+            .verify(self.payload.as_slice(), self.signature.as_slice())
+            .map_err(|_| SyncObjectError::Verify)?;
+        Ok(self.payload.as_slice())
+    }
+
+    pub fn to_bytes(&self) -> Result<Vec<u8>, SyncObjectError> {
+        serde_json::to_vec(self).map_err(SyncObjectError::Encode)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, SyncObjectError> {
+        serde_json::from_slice(bytes).map_err(SyncObjectError::Decode)
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct EncryptedSyncObject {
     pub version: u8,
@@ -190,10 +311,19 @@ pub struct EncryptedSyncObject {
 #[derive(Debug)]
 pub enum SyncObjectError {
     Random,
+    Key,
     Encrypt,
     Decrypt,
+    Verify,
     UnsupportedVersion(u8),
-    InvalidNonceLength { actual: usize },
+    InvalidDeviceId(String),
+    DeviceKeyMismatch {
+        expected_device_id: String,
+        actual_device_id: String,
+    },
+    InvalidNonceLength {
+        actual: usize,
+    },
     Encode(serde_json::Error),
     Decode(serde_json::Error),
 }
@@ -202,11 +332,23 @@ impl fmt::Display for SyncObjectError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Random => write!(formatter, "failed to generate sync object nonce"),
+            Self::Key => write!(formatter, "invalid profile sync signing key"),
             Self::Encrypt => write!(formatter, "failed to encrypt sync object"),
             Self::Decrypt => write!(formatter, "failed to decrypt sync object"),
+            Self::Verify => write!(formatter, "failed to verify sync object signature"),
             Self::UnsupportedVersion(version) => {
                 write!(formatter, "unsupported sync object version: {version}")
             }
+            Self::InvalidDeviceId(device_id) => {
+                write!(formatter, "invalid sync object device id: {device_id}")
+            }
+            Self::DeviceKeyMismatch {
+                expected_device_id,
+                actual_device_id,
+            } => write!(
+                formatter,
+                "sync object device key mismatch: expected {expected_device_id}, got {actual_device_id}"
+            ),
             Self::InvalidNonceLength { actual } => {
                 write!(formatter, "invalid sync object nonce length: {actual}")
             }
@@ -221,9 +363,13 @@ impl std::error::Error for SyncObjectError {
         match self {
             Self::Encode(error) | Self::Decode(error) => Some(error),
             Self::Random
+            | Self::Key
             | Self::Encrypt
             | Self::Decrypt
+            | Self::Verify
             | Self::UnsupportedVersion(_)
+            | Self::InvalidDeviceId(_)
+            | Self::DeviceKeyMismatch { .. }
             | Self::InvalidNonceLength { .. } => None,
         }
     }
@@ -2013,6 +2159,103 @@ mod tests {
             unsupported.open(&content_key),
             Err(SyncObjectError::UnsupportedVersion(version))
                 if version == SYNC_OBJECT_VERSION + 1
+        ));
+    }
+
+    #[test]
+    fn signed_sync_objects_verify_encrypted_payloads_against_trusted_device_key() {
+        let content_key = ProfileSyncContentKey::from_bytes([9; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let trusted_public_key = signer.public_key().unwrap();
+        let payload = serde_json::to_vec(&IncomingSyncSettingText::new(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            "ui.theme",
+            "teal",
+            "device-a",
+            1,
+            1,
+        ))
+        .unwrap();
+        let encrypted_object = EncryptedSyncObject::seal_with_nonce(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            "setting-change",
+            "content-key-epoch-1",
+            payload.as_slice(),
+            &content_key,
+            [4; PROFILE_SYNC_NONCE_BYTES],
+        )
+        .unwrap();
+        let encrypted_bytes = encrypted_object.to_bytes().unwrap();
+        let signed = signer.sign(encrypted_bytes.as_slice()).unwrap();
+
+        let encoded = signed.to_bytes().unwrap();
+        assert!(
+            !std::str::from_utf8(encoded.as_slice())
+                .unwrap()
+                .contains("teal")
+        );
+
+        let decoded = SignedSyncObject::from_bytes(encoded.as_slice()).unwrap();
+        let verified_payload = decoded.verify_with(&trusted_public_key).unwrap();
+        assert_eq!(verified_payload, encrypted_bytes.as_slice());
+
+        let encrypted_after_verify = EncryptedSyncObject::from_bytes(verified_payload).unwrap();
+        assert_eq!(
+            encrypted_after_verify.open(&content_key).unwrap(),
+            payload.as_slice()
+        );
+
+        let mut tampered_payload = decoded.clone();
+        tampered_payload.payload[0] ^= 1;
+        assert!(matches!(
+            tampered_payload.verify_with(&trusted_public_key),
+            Err(SyncObjectError::Verify)
+        ));
+
+        let mut tampered_signature = decoded.clone();
+        tampered_signature.signature[0] ^= 1;
+        assert!(matches!(
+            tampered_signature.verify_with(&trusted_public_key),
+            Err(SyncObjectError::Verify)
+        ));
+
+        let wrong_device_public_key = ProfileSyncDeviceSigner::generate("device-b")
+            .unwrap()
+            .public_key()
+            .unwrap();
+        assert!(matches!(
+            decoded.verify_with(&wrong_device_public_key),
+            Err(SyncObjectError::DeviceKeyMismatch {
+                expected_device_id,
+                actual_device_id
+            }) if expected_device_id == "device-b" && actual_device_id == "device-a"
+        ));
+
+        let wrong_key_same_device = ProfileSyncDeviceSigner::generate("device-a")
+            .unwrap()
+            .public_key()
+            .unwrap();
+        assert!(matches!(
+            decoded.verify_with(&wrong_key_same_device),
+            Err(SyncObjectError::DeviceKeyMismatch {
+                expected_device_id,
+                actual_device_id
+            }) if expected_device_id == "device-a" && actual_device_id == "device-a"
+        ));
+
+        let mut unsupported = decoded;
+        unsupported.version = SYNC_OBJECT_VERSION + 1;
+        assert!(matches!(
+            unsupported.verify_with(&trusted_public_key),
+            Err(SyncObjectError::UnsupportedVersion(version))
+                if version == SYNC_OBJECT_VERSION + 1
+        ));
+
+        assert!(matches!(
+            ProfileSyncDeviceSigner::generate("../device-a"),
+            Err(SyncObjectError::InvalidDeviceId(device_id)) if device_id == "../device-a"
         ));
     }
 

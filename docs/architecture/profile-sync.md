@@ -171,9 +171,12 @@ The initial local fixture path uses storage-owned `EncryptedSyncObject`
 envelopes and `ring`'s ChaCha20-Poly1305 AEAD to keep sync object payloads
 opaque before broadwebd stores or transfers them. Public envelope metadata such
 as profile, domain, object kind, and key id is authenticated as associated data.
-This is content encryption only; account membership signatures, manifest
-signatures, recovery credentials, and key rotation remain separate sync-layer
-work.
+Storage also provides a `SignedSyncObject` wrapper using Ed25519 device keys so
+the receiving side can verify encrypted object bytes against an already trusted
+device public key before decrypting or applying them. This is the first
+device-signature primitive only; account membership epochs, manifest
+signatures, recovery credentials, revocation, and key rotation remain separate
+sync-layer work.
 
 ## Key Model
 
