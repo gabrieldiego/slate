@@ -31,6 +31,8 @@ struct ProfileSyncStore {
     roots: BTreeMap<(String, String, String), ProfileSyncRootState>,
     next_root_sequence: u64,
     providers: BTreeMap<String, ProfileSyncProviderState>,
+    next_provider_seen_sequence: u64,
+    minimum_provider_seen_sequence: u64,
     offline_providers: BTreeSet<String>,
     delayed_transfers: BTreeSet<(String, String)>,
     delayed_roots: BTreeSet<(String, String, String, String)>,
@@ -48,6 +50,7 @@ struct ProfileSyncProviderState {
     provider_kind: String,
     privacy_boundary: String,
     roles: ProfileSyncProviderRoles,
+    last_seen_sequence: u64,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -103,12 +106,14 @@ impl ProfileSyncService {
         let provider_kind = provider_kind.into();
         let privacy_boundary = LOCAL_PRIVACY_BOUNDARY.to_string();
         if let Ok(mut store) = store.lock() {
+            let last_seen_sequence = next_provider_seen_sequence(&mut store);
             store.providers.insert(
                 provider_id.clone(),
                 ProfileSyncProviderState {
                     provider_kind: provider_kind.clone(),
                     privacy_boundary: privacy_boundary.clone(),
                     roles,
+                    last_seen_sequence,
                 },
             );
         }
@@ -438,7 +443,10 @@ impl ProfileSyncService {
             store
                 .providers
                 .iter()
-                .filter(|(provider_id, _)| !store.offline_providers.contains(provider_id.as_str()))
+                .filter(|(provider_id, state)| {
+                    provider_is_online(&store, provider_id, state.roles)
+                        && provider_is_fresh(&store, state.last_seen_sequence)
+                })
                 .map(|(provider_id, state)| ProfileSyncProviderRecord {
                     provider_id: provider_id.clone(),
                     provider_kind: state.provider_kind.clone(),
@@ -462,6 +470,8 @@ impl ProfileSyncService {
         let providers = provider_health_entries(&store, self.provider_id.as_str(), self.roles);
         let known_providers = providers.len();
         let mut online_providers = 0;
+        let mut fresh_online_providers = 0;
+        let mut stale_online_providers = 0;
         let mut object_transfer_providers = 0;
         let mut availability_providers = 0;
         let mut mutable_root_providers = 0;
@@ -469,22 +479,28 @@ impl ProfileSyncService {
         for provider in providers {
             if provider.online {
                 online_providers += 1;
-                retained_objects +=
-                    retained_object_count(&store, provider.provider_id, &request.profile);
-                if provider.roles.object_transfer {
-                    object_transfer_providers += 1;
-                }
-                if provider.roles.availability {
-                    availability_providers += 1;
-                }
-                if provider.roles.mutable_roots {
-                    mutable_root_providers += 1;
+                if provider.fresh {
+                    fresh_online_providers += 1;
+                    retained_objects +=
+                        retained_object_count(&store, provider.provider_id, &request.profile);
+                    if provider.roles.object_transfer {
+                        object_transfer_providers += 1;
+                    }
+                    if provider.roles.availability {
+                        availability_providers += 1;
+                    }
+                    if provider.roles.mutable_roots {
+                        mutable_root_providers += 1;
+                    }
+                } else {
+                    stale_online_providers += 1;
                 }
             }
         }
         let offline_providers = known_providers.saturating_sub(online_providers);
         let (degraded, message) = profile_sync_health_message(
             online_providers,
+            fresh_online_providers,
             object_transfer_providers,
             availability_providers,
             mutable_root_providers,
@@ -496,6 +512,9 @@ impl ProfileSyncService {
                 known_providers,
                 online_providers,
                 offline_providers,
+                fresh_online_providers,
+                stale_online_providers,
+                minimum_provider_seen_sequence: store.minimum_provider_seen_sequence,
                 object_transfer_providers,
                 availability_providers,
                 mutable_root_providers,
@@ -555,6 +574,46 @@ impl LocalProfileSyncFixture {
             provider_kind,
             roles,
         )
+    }
+
+    pub fn expire_current_provider_freshness(&self) -> Result<u64, BroadwebdError> {
+        let mut store = self
+            .store
+            .lock()
+            .map_err(|_| BroadwebdError::Request("profile sync store lock poisoned".to_string()))?;
+        store.minimum_provider_seen_sequence = store.next_provider_seen_sequence.saturating_add(1);
+        Ok(store.minimum_provider_seen_sequence)
+    }
+
+    pub fn mark_device_seen(&self, device_id: impl AsRef<str>) -> Result<u64, BroadwebdError> {
+        self.mark_provider_seen(local_fixture_provider_id(device_id))
+    }
+
+    pub fn mark_availability_provider_seen(
+        &self,
+        provider_id: impl AsRef<str>,
+    ) -> Result<u64, BroadwebdError> {
+        self.mark_provider_seen(local_fixture_availability_provider_id(provider_id))
+    }
+
+    pub fn mark_provider_seen(&self, provider_id: impl AsRef<str>) -> Result<u64, BroadwebdError> {
+        let provider_id = provider_id.as_ref();
+        let mut store = self
+            .store
+            .lock()
+            .map_err(|_| BroadwebdError::Request("profile sync store lock poisoned".to_string()))?;
+        if !store.providers.contains_key(provider_id) {
+            return Err(BroadwebdError::UnsupportedRequest(format!(
+                "unknown profile sync provider: {provider_id}"
+            )));
+        }
+        let last_seen_sequence = next_provider_seen_sequence(&mut store);
+        store
+            .providers
+            .get_mut(provider_id)
+            .expect("provider existence was checked before marking freshness")
+            .last_seen_sequence = last_seen_sequence;
+        Ok(last_seen_sequence)
     }
 
     pub fn set_device_online(
@@ -754,6 +813,7 @@ struct ProfileSyncProviderHealthEntry<'a> {
     provider_id: &'a str,
     roles: ProfileSyncProviderRoles,
     online: bool,
+    fresh: bool,
 }
 
 fn provider_health_entries<'a>(
@@ -766,6 +826,7 @@ fn provider_health_entries<'a>(
             provider_id: default_provider_id,
             roles: default_roles,
             online: default_roles.connectivity,
+            fresh: provider_is_fresh(store, 0),
         }];
     }
 
@@ -775,14 +836,15 @@ fn provider_health_entries<'a>(
         .map(|(provider_id, state)| ProfileSyncProviderHealthEntry {
             provider_id: provider_id.as_str(),
             roles: state.roles,
-            online: state.roles.connectivity
-                && !store.offline_providers.contains(provider_id.as_str()),
+            online: provider_is_online(store, provider_id, state.roles),
+            fresh: provider_is_fresh(store, state.last_seen_sequence),
         })
         .collect()
 }
 
 fn profile_sync_health_message(
     online_providers: usize,
+    fresh_online_providers: usize,
     object_transfer_providers: usize,
     availability_providers: usize,
     mutable_root_providers: usize,
@@ -792,20 +854,28 @@ fn profile_sync_health_message(
             true,
             "profile sync has no online providers in the local fixture".to_string(),
         )
+    } else if fresh_online_providers == 0 {
+        (
+            true,
+            "profile sync has no fresh online providers in the local fixture".to_string(),
+        )
     } else if object_transfer_providers == 0 {
         (
             true,
-            "profile sync has no online object-transfer provider in the local fixture".to_string(),
+            "profile sync has no fresh online object-transfer provider in the local fixture"
+                .to_string(),
         )
     } else if availability_providers == 0 {
         (
             true,
-            "profile sync has no online availability provider in the local fixture".to_string(),
+            "profile sync has no fresh online availability provider in the local fixture"
+                .to_string(),
         )
     } else if mutable_root_providers == 0 {
         (
             true,
-            "profile sync has no online mutable-root provider in the local fixture".to_string(),
+            "profile sync has no fresh online mutable-root provider in the local fixture"
+                .to_string(),
         )
     } else {
         (
@@ -836,8 +906,7 @@ fn online_retaining_provider_count(
         .filter(|(provider_id, retained_profile, retained_object_id)| {
             retained_profile == profile
                 && retained_object_id == object_id
-                && !store.offline_providers.contains(provider_id.as_str())
-                && provider_supports_role(store, provider_id, |roles| {
+                && provider_is_fresh_online_for_role(store, provider_id, |roles| {
                     roles.availability && roles.object_transfer
                 })
         })
@@ -858,26 +927,27 @@ fn profile_sync_root_health_message(
     } else if !latest_object_available {
         (
             true,
-            "profile sync root object is not available from an online provider in the local fixture"
+            "profile sync root object is not available from a fresh online provider in the local fixture"
                 .to_string(),
         )
     } else if online_retaining_providers == 0 {
         (
             true,
-            "profile sync root object is not retained by an online provider in the local fixture"
+            "profile sync root object is not retained by a fresh online provider in the local fixture"
                 .to_string(),
         )
     } else if online_retaining_providers < minimum_online_retaining_providers {
         (
             true,
             format!(
-                "profile sync root has {online_retaining_providers} online retaining providers, below the requested quorum of {minimum_online_retaining_providers}"
+                "profile sync root has {online_retaining_providers} fresh online retaining providers, below the requested quorum of {minimum_online_retaining_providers}"
             ),
         )
     } else {
         (
             false,
-            "profile sync root is available and retained in the local fixture".to_string(),
+            "profile sync root is available and retained by fresh online providers in the local fixture"
+                .to_string(),
         )
     }
 }
@@ -907,8 +977,9 @@ fn find_online_object<'a>(
         .find(|((provider_id, stored_profile, stored_object_id), _)| {
             stored_profile == profile
                 && stored_object_id == object_id
-                && !store.offline_providers.contains(provider_id.as_str())
-                && provider_supports_role(store, provider_id, |roles| roles.object_transfer)
+                && provider_is_fresh_online_for_role(store, provider_id, |roles| {
+                    roles.object_transfer
+                })
                 && transfer_available(store, provider_id, requester_provider_id)
         })
         .map(|(_, bytes)| bytes)
@@ -966,9 +1037,7 @@ fn visible_root_candidates(
             |((stored_profile, stored_root_id, publisher_provider_id), root)| {
                 if stored_profile != profile
                     || stored_root_id != root_id
-                    || !provider_supports_role(store, publisher_provider_id, |roles| {
-                        roles.mutable_roots
-                    })
+                    || !provider_has_role(store, publisher_provider_id, |roles| roles.mutable_roots)
                     || !root_available(
                         store,
                         publisher_provider_id,
@@ -997,7 +1066,36 @@ fn visible_root_candidates(
     candidates
 }
 
-fn provider_supports_role(
+fn next_provider_seen_sequence(store: &mut ProfileSyncStore) -> u64 {
+    store.next_provider_seen_sequence = store.next_provider_seen_sequence.saturating_add(1);
+    store.next_provider_seen_sequence
+}
+
+fn provider_is_online(
+    store: &ProfileSyncStore,
+    provider_id: &str,
+    roles: ProfileSyncProviderRoles,
+) -> bool {
+    roles.connectivity && !store.offline_providers.contains(provider_id)
+}
+
+fn provider_is_fresh(store: &ProfileSyncStore, last_seen_sequence: u64) -> bool {
+    last_seen_sequence >= store.minimum_provider_seen_sequence
+}
+
+fn provider_is_fresh_online_for_role(
+    store: &ProfileSyncStore,
+    provider_id: &str,
+    role: impl FnOnce(ProfileSyncProviderRoles) -> bool,
+) -> bool {
+    store.providers.get(provider_id).map_or(true, |state| {
+        provider_is_online(store, provider_id, state.roles)
+            && provider_is_fresh(store, state.last_seen_sequence)
+            && role(state.roles)
+    })
+}
+
+fn provider_has_role(
     store: &ProfileSyncStore,
     provider_id: &str,
     role: impl FnOnce(ProfileSyncProviderRoles) -> bool,
@@ -1886,6 +1984,9 @@ mod tests {
         assert_eq!(health.known_providers, 2);
         assert_eq!(health.online_providers, 2);
         assert_eq!(health.offline_providers, 0);
+        assert_eq!(health.fresh_online_providers, 2);
+        assert_eq!(health.stale_online_providers, 0);
+        assert_eq!(health.minimum_provider_seen_sequence, 0);
         assert_eq!(health.object_transfer_providers, 2);
         assert_eq!(health.availability_providers, 2);
         assert_eq!(health.mutable_root_providers, 1);
@@ -1908,12 +2009,70 @@ mod tests {
         assert_eq!(health.known_providers, 2);
         assert_eq!(health.online_providers, 1);
         assert_eq!(health.offline_providers, 1);
+        assert_eq!(health.fresh_online_providers, 1);
+        assert_eq!(health.stale_online_providers, 0);
+        assert_eq!(health.minimum_provider_seen_sequence, 0);
         assert_eq!(health.object_transfer_providers, 1);
         assert_eq!(health.availability_providers, 1);
         assert_eq!(health.mutable_root_providers, 0);
         assert_eq!(health.retained_objects, 1);
         assert!(health.degraded);
         assert!(health.message.contains("mutable-root provider"));
+    }
+
+    #[test]
+    fn local_fixture_reports_stale_provider_health() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut device_a = PluginRegistry::new();
+        let mut device_b = PluginRegistry::new();
+        let budget = ResourceBudget::default();
+
+        device_a.register_service(fixture.service_for_device("a"));
+        device_b.register_service(fixture.service_for_device("b"));
+
+        let minimum_seen = fixture
+            .expire_current_provider_freshness()
+            .expect("expire current provider freshness");
+        let stale = device_b
+            .profile_sync(
+                ProfileSyncRequest::ProviderHealth(ProfileSyncProfileRequest::new("default")),
+                &budget,
+            )
+            .expect("device b can inspect stale provider health");
+        let ProfileSyncResponse::ProviderHealth { health } = stale else {
+            panic!("unexpected health response");
+        };
+        assert_eq!(health.known_providers, 2);
+        assert_eq!(health.online_providers, 2);
+        assert_eq!(health.offline_providers, 0);
+        assert_eq!(health.fresh_online_providers, 0);
+        assert_eq!(health.stale_online_providers, 2);
+        assert_eq!(health.minimum_provider_seen_sequence, minimum_seen);
+        assert_eq!(health.object_transfer_providers, 0);
+        assert_eq!(health.availability_providers, 0);
+        assert_eq!(health.mutable_root_providers, 0);
+        assert!(health.degraded);
+        assert!(health.message.contains("fresh online providers"));
+
+        fixture.mark_device_seen("b").expect("mark device b fresh");
+        let recovering = device_b
+            .profile_sync(
+                ProfileSyncRequest::ProviderHealth(ProfileSyncProfileRequest::new("default")),
+                &budget,
+            )
+            .expect("device b can inspect recovering provider health");
+        let ProfileSyncResponse::ProviderHealth { health } = recovering else {
+            panic!("unexpected health response");
+        };
+        assert_eq!(health.known_providers, 2);
+        assert_eq!(health.online_providers, 2);
+        assert_eq!(health.offline_providers, 0);
+        assert_eq!(health.fresh_online_providers, 1);
+        assert_eq!(health.stale_online_providers, 1);
+        assert_eq!(health.object_transfer_providers, 1);
+        assert_eq!(health.availability_providers, 1);
+        assert_eq!(health.mutable_root_providers, 1);
+        assert!(!health.degraded);
     }
 
     #[test]
@@ -2045,6 +2204,90 @@ mod tests {
         assert_eq!(health.online_retaining_providers, 0);
         assert!(health.degraded);
         assert!(health.message.contains("not retained"));
+    }
+
+    #[test]
+    fn local_fixture_root_health_ignores_stale_retaining_provider() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut device_a = PluginRegistry::new();
+        let mut availability_provider = PluginRegistry::new();
+        let budget = ResourceBudget::default();
+
+        device_a.register_service(fixture.service_for_device("a"));
+        availability_provider.register_service(fixture.service_for_availability_provider("pin-1"));
+
+        let put = device_a
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"encrypted root freshness object".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("device a can put object into fixture");
+        let ProfileSyncResponse::PutEncryptedObject { object_id } = put else {
+            panic!("unexpected put response");
+        };
+        device_a
+            .profile_sync(
+                ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+                    "default",
+                    "settings/latest",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("device a can publish root for health");
+        availability_provider
+            .profile_sync(
+                ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("availability provider can retain root object");
+
+        fixture
+            .expire_current_provider_freshness()
+            .expect("expire current provider freshness");
+        fixture.mark_device_seen("a").expect("mark device a fresh");
+
+        let stale_retention = device_a
+            .profile_sync(
+                ProfileSyncRequest::RootHealth(ProfileSyncRootHealthRequest::new(
+                    "default",
+                    "settings/latest",
+                )),
+                &budget,
+            )
+            .expect("stale retained root health is reported locally");
+        let ProfileSyncResponse::RootHealth { health } = stale_retention else {
+            panic!("unexpected root health response");
+        };
+        assert_eq!(health.latest_object_id.as_deref(), Some(object_id.as_str()));
+        assert!(health.latest_object_available);
+        assert_eq!(health.online_retaining_providers, 0);
+        assert!(health.degraded);
+        assert!(health.message.contains("not retained"));
+
+        fixture
+            .mark_availability_provider_seen("pin-1")
+            .expect("mark availability provider fresh");
+        let healthy = device_a
+            .profile_sync(
+                ProfileSyncRequest::RootHealth(ProfileSyncRootHealthRequest::new(
+                    "default",
+                    "settings/latest",
+                )),
+                &budget,
+            )
+            .expect("fresh retained root health is reported locally");
+        let ProfileSyncResponse::RootHealth { health } = healthy else {
+            panic!("unexpected root health response");
+        };
+        assert_eq!(health.online_retaining_providers, 1);
+        assert!(!health.degraded);
     }
 
     #[test]

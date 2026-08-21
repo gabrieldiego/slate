@@ -421,12 +421,15 @@ The service boundary validates profile ids, mutable-root ids, and backend
 object ids before any fixture backend lookup, retain, or publish operation.
 Malformed identifiers fail locally instead of being interpreted as path-like
 state, implicit URLs, or backend-specific fallthrough.
-Provider health requests summarize known, online, offline, object-transfer,
-availability, and mutable-root providers inside the fixture and mark the profile
-degraded when one required role has no online provider. Root health requests
-inspect a concrete mutable root, reporting visible candidates, latest root
-object availability, whether that object is retained by an online provider, and
-whether it meets the caller's minimum online retaining-provider quorum.
+Provider health requests summarize known, online, offline, fresh, stale,
+object-transfer, availability, and mutable-root providers inside the fixture and
+mark the profile degraded when one required role has no fresh online provider.
+Freshness uses an explicit in-process sequence floor controlled by the fixture,
+not wall-clock sleeps, sockets, or background network polling. Root health
+requests inspect a concrete mutable root, reporting visible candidates, latest
+root object availability, whether that object is retained by a fresh online
+provider, and whether it meets the caller's minimum online retaining-provider
+quorum.
 Object bytes are also provider-held: fetches require at least one online
 provider with the object, and retaining an object copies the bytes into the
 retaining provider's in-process store. Tests can pause object transfer from one

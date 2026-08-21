@@ -241,12 +241,14 @@ Current baseline:
   malformed path-like or whitespace-bearing identifiers out of the backend
   model.
 - The local profile-sync fixture now reports provider health counts for known,
-  online, offline, object-transfer, availability, and mutable-root providers,
-  and marks sync degraded when one required role has no online provider.
+  online, offline, fresh, stale, object-transfer, availability, and mutable-root
+  providers, and marks sync degraded when one required role has no fresh online
+  provider. Freshness is modeled with an explicit fixture sequence floor rather
+  than wall-clock sleeps, sockets, or background network polling.
 - The same fixture can now report health for a concrete mutable root, including
   visible candidate count, latest root object availability, and whether that
-  object is retained by enough online providers to satisfy the caller's local
-  quorum policy.
+  object is retained by enough fresh online providers to satisfy the caller's
+  local quorum policy.
 - Storage now provides `EncryptedSyncObject` envelopes using ChaCha20-Poly1305
   AEAD through `ring`, and the local two-device fixture moves encrypted setting
   change payloads through broadwebd instead of plaintext JSON.
