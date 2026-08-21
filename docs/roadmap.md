@@ -233,8 +233,8 @@ Current baseline:
   deterministic domain and key ordering. The local two-device `profile-sync`
   fixture now seals those payloads into signed encrypted snapshot objects,
   publishes manifests that point at the current snapshot object, verifies the
-  snapshot on the receiving device, and records its backend object metadata
-  before snapshot values are applied.
+  snapshot on the receiving device, applies the verified snapshot into
+  `slate-settings.db`, and records its backend object metadata.
 - Storage can now apply a verified settings snapshot by replaying its text
   values through the same conflict policy used for incoming tail changes:
   snapshot values materialize in `settings_values` and the legacy settings view
@@ -260,8 +260,8 @@ Next:
   availability providers with no profile write authority.
 - Add Kubo RPC-backed operations for encrypted object add, pin, unpin, pin
   verification, IPNS publish, and IPNS resolve as the first IPFS/IPNS backend.
-- Wire verified settings snapshot application into the local `profile-sync`
-  fixture and then into the runtime sync flow that consumes published manifests.
+- Wire verified settings snapshot application into the runtime sync flow that
+  consumes published manifests.
 - Replace opportunistic chrome polling with a runtime watcher that applies
   externally synced changes through normal browser-core, chrome, routing, and
   privacy update paths instead of raw database replacement.
