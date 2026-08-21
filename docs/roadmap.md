@@ -472,6 +472,12 @@ Current baseline:
   offline, broadweb-role-ineligible, and undiscovered providers are reported
   separately without publishing, retaining, mutating roots, opening sockets, or
   contacting external services.
+- Stored retention-provider metadata can now drive one scheduler tick when the
+  runtime supplies matching already-materialized provider daemon handles. The
+  run reports selected stored providers that have no materialized handle,
+  counts only materialized selected providers toward the retention quorum, and
+  performs the publish/retain/root-health sequence entirely through
+  `InProcessBroadwebNetwork` fixture daemons in tests.
 - The read-only scheduler plan now also proves stale selected retention-provider
   handles are excluded from the fresh candidate set and reported before any
   local revision or sync-root state is mutated.
