@@ -527,9 +527,10 @@ Current baseline:
   `settings_revisions` and `settings_changes`, giving runtime code a typed
   polling surface for externally synced setting updates without reading raw
   change rows.
-- Chrome now consumes that feed opportunistically before serving Slate internal
-  pages, applying recognized synced chrome zoom and key binding updates through
-  the same in-memory runtime state used by `slate://settings`.
+- Chrome now has a runtime synced-settings watcher over that feed. The desktop
+  app polls it during the normal Servo pump, applying recognized synced chrome
+  zoom and key binding updates through the same in-memory runtime state used by
+  `slate://settings` instead of waiting for an internal page request.
 - Storage now has a retention-policy-based settings compaction target helper
   that uses the latest snapshot and applied settings revisions to identify how
   far a future encrypted snapshot can squash while preserving the configured
@@ -576,9 +577,9 @@ Next:
 - Implement the actual runtime sync loop that supplies a broadwebd-backed object
   source, trusted account keys loaded from `slate-settings.db`, and explicit
   sync policy checks to the storage pull-and-apply helper.
-- Replace opportunistic chrome polling with a runtime watcher that applies
-  externally synced changes through normal browser-core, chrome, routing, and
-  privacy update paths instead of raw database replacement.
+- Extend the runtime watcher beyond the first chrome settings path so
+  externally synced routing, privacy, app, and browser-core changes are applied
+  through their normal update paths instead of raw database replacement.
 - Define the Slate Sync Secret hierarchy for manifest signing, mutable-root
   publishing, content encryption epochs, and device enrollment.
 - Publish encrypted profile manifests and snapshots through the selected

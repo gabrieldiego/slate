@@ -6,7 +6,7 @@
 
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicI64, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use headers::{ContentType, HeaderMapExt};
 use log::warn;
@@ -43,31 +43,24 @@ const CHROME_ELEMENT_ZOOM_PERCENT_DEFAULT: u32 = 90;
 const CHROME_ELEMENT_ZOOM_PERCENT_MIN: u32 = 75;
 const CHROME_ELEMENT_ZOOM_PERCENT_MAX: u32 = 115;
 const CHROME_ELEMENT_ZOOM_SETTING_KEY: &str = "chrome.zoom";
-const CHROME_SETTINGS_EVENT_BATCH_LIMIT: u32 = 64;
 
 static CHROME_ELEMENT_ZOOM_PERCENT: AtomicU32 = AtomicU32::new(CHROME_ELEMENT_ZOOM_PERCENT_DEFAULT);
 
 pub struct SlateProtocolHandler {
     database: Option<SlateProfileDatabase>,
-    settings_sync_revision: AtomicI64,
 }
 
 impl Default for SlateProtocolHandler {
     fn default() -> Self {
-        Self {
-            database: None,
-            settings_sync_revision: AtomicI64::new(0),
-        }
+        Self { database: None }
     }
 }
 
 impl SlateProtocolHandler {
     pub(crate) fn new(database: SlateProfileDatabase) -> Self {
         initialize_chrome_settings_from_database(&database);
-        let settings_sync_revision = latest_settings_sync_revision(&database);
         Self {
             database: Some(database),
-            settings_sync_revision: AtomicI64::new(settings_sync_revision),
         }
     }
 }
@@ -104,8 +97,6 @@ impl ProtocolHandler for SlateProtocolHandler {
         done_chan: &mut DoneChannel,
         context: &FetchContext,
     ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
-        self.refresh_synced_chrome_settings();
-
         let url = request.current_url();
         if is_slate_settings_state_url(url.as_url()) {
             return settings_json_response(request, current_chrome_element_zoom_setting());
@@ -176,24 +167,6 @@ impl ProtocolHandler for SlateProtocolHandler {
 }
 
 impl SlateProtocolHandler {
-    fn refresh_synced_chrome_settings(&self) {
-        let Some(database) = &self.database else {
-            return;
-        };
-        let after_revision = self.settings_sync_revision.load(Ordering::Relaxed);
-        match apply_synced_chrome_settings_from_database(
-            database,
-            after_revision,
-            CHROME_SETTINGS_EVENT_BATCH_LIMIT,
-        ) {
-            Ok(latest_revision) => {
-                self.settings_sync_revision
-                    .store(latest_revision, Ordering::Relaxed);
-            }
-            Err(error) => warn!("failed to refresh synced chrome settings: {error}"),
-        }
-    }
-
     fn persist_chrome_element_zoom_setting(&self, zoom: f32) {
         if let Some(database) = &self.database {
             if let Err(error) = database.set_setting_f32(CHROME_ELEMENT_ZOOM_SETTING_KEY, zoom) {
@@ -205,16 +178,6 @@ impl SlateProtocolHandler {
     fn persist_key_bindings(&self, key_bindings: &SlateKeyBindings) {
         if let Some(database) = &self.database {
             persist_key_bindings_to_database(database, key_bindings);
-        }
-    }
-}
-
-fn latest_settings_sync_revision(database: &SlateProfileDatabase) -> i64 {
-    match database.latest_sync_revision(DEFAULT_PROFILE_ID) {
-        Ok(revision) => revision,
-        Err(error) => {
-            warn!("failed to read latest settings sync revision: {error}");
-            0
         }
     }
 }

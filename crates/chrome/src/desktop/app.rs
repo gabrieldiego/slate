@@ -26,6 +26,7 @@ use crate::desktop::headed_window::HeadedWindow;
 use crate::desktop::headless_window::HeadlessWindow;
 use crate::desktop::page_scripts::SLATE_TEXT_SELECTION_SCRIPT;
 use crate::desktop::protocols;
+use crate::desktop::settings_watcher::SyncedChromeSettingsWatcher;
 use crate::desktop::tracing::trace_winit_event;
 use crate::parser::get_default_url;
 use crate::prefs::ServoShellPreferences;
@@ -157,6 +158,7 @@ pub struct App {
     event_loop_proxy: Option<EventLoopProxy<AppEvent>>,
     initial_url: ServoUrl,
     profile_database: SlateProfileDatabase,
+    synced_settings_watcher: SyncedChromeSettingsWatcher,
     t_start: Instant,
     t: Instant,
     state: AppState,
@@ -178,6 +180,7 @@ impl App {
         let profile_database =
             SlateProfileDatabase::open(servo_shell_preferences.settings_database_path.clone())
                 .expect("failed to open Slate settings database");
+        let synced_settings_watcher = SyncedChromeSettingsWatcher::new(profile_database.clone());
 
         let t = Instant::now();
         App {
@@ -188,6 +191,7 @@ impl App {
             event_loop_proxy: event_loop.event_loop_proxy(),
             initial_url,
             profile_database,
+            synced_settings_watcher,
             t_start: t,
             t,
             state: AppState::Initializing,
@@ -308,6 +312,7 @@ impl App {
         let AppState::Running(state) = &self.state else {
             return false;
         };
+        self.synced_settings_watcher.poll_once_logged();
 
         let create_platform_window = |url: Url| self.create_platform_window(url, active_event_loop);
         if !state.spin_event_loop(Some(&create_platform_window)) {

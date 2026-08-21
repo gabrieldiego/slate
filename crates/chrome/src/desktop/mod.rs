@@ -19,6 +19,7 @@ mod key_bindings;
 mod keyutils;
 mod page_scripts;
 mod protocols;
+mod settings_watcher;
 mod slate_theme;
 mod tracing;
 #[cfg(feature = "webxr")]

@@ -323,6 +323,13 @@ The first synced domains should be settings that are safe to apply live, such as
 UI preferences, protocol adapter configuration, rail app ordering, and
 bookmarks. More sensitive domains need separate threat notes before entering
 sync.
+The initial chrome runtime path watches the typed applied-settings event feed
+from `slate-settings.db` and advances a local revision cursor during the normal
+desktop Servo pump. Recognized chrome settings such as chrome zoom and key
+bindings are applied through the existing in-memory runtime setters, so synced
+changes no longer depend on serving a `slate://` page. Later routing, privacy,
+browser-core, and app settings should plug into the same watcher shape instead
+of replacing raw database state behind active components.
 
 ## App Sync Domains
 
