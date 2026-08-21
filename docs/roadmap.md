@@ -218,6 +218,9 @@ Current baseline:
   `settings_revisions` and `settings_changes`, giving runtime code a typed
   polling surface for externally synced setting updates without reading raw
   change rows.
+- Chrome now consumes that feed opportunistically before serving Slate internal
+  pages, applying recognized synced chrome zoom and key binding updates through
+  the same in-memory runtime state used by `slate://settings`.
 - IPFS/IPNS is the first concrete backend under consideration, but the product
   goal is protocol-neutral: approved Slate devices should find each other, move
   encrypted sync objects, and optionally use approved providers to keep those
@@ -240,8 +243,8 @@ Next:
   verification, IPNS publish, and IPNS resolve as the first IPFS/IPNS backend.
 - Extend snapshot payloads, sync object metadata, conflict handling, and merge
   policy beyond the initial settings text merge model.
-- Wire the storage settings event feed into a runtime watcher so externally
-  synced changes are applied through normal browser-core, chrome, routing, and
+- Replace opportunistic chrome polling with a runtime watcher that applies
+  externally synced changes through normal browser-core, chrome, routing, and
   privacy update paths instead of raw database replacement.
 - Define the Slate Sync Secret hierarchy for manifest signing, mutable-root
   publishing, content encryption epochs, and device enrollment.
