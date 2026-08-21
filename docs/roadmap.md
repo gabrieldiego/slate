@@ -385,6 +385,11 @@ Current baseline:
   ineligible rather than unknown. Runtime selected-provider runs reject those
   partial-role providers before publishing, pulling, retaining objects, or
   mutating sync roots.
+- Root health now reports delayed mutable-root candidate counts and publisher
+  provider ids from the in-process fixture. The profile-sync runner surfaces
+  those fields in scheduler-facing health reports, so delayed root propagation
+  can be distinguished from a genuinely empty root without loopback sockets or
+  external discovery.
 - `slate-profile-sync` now has a typed settings sync cycle policy carrying
   retention, publish-step, trusted-device, and retaining-provider quorum
   limits. The runtime-facing policy path checks provider health before touching
@@ -804,8 +809,8 @@ Current baseline:
 Next:
 
 - Continue extending the protocol-neutral `profile-sync` application service
-  with provider freshness policy for delayed roots and eventually real
-  protocol-backed provider materialization.
+  with provider freshness policy for delayed object transfers and eventually
+  real protocol-backed provider materialization.
 - Continue splitting sync backends into discovery, connectivity, transfer,
   availability, and mutable-root implementations so different broadweb
   protocols can be combined behind the typed provider role records.

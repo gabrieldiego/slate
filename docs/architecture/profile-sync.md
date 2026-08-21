@@ -824,9 +824,12 @@ source-held encrypted bytes as unavailable without sleeping, binding sockets, or
 contacting any external network. Tests can also pause mutable-root propagation
 from one simulated publishing device to another independently from object
 transfer, so root freshness and encrypted-object availability can fail in
-separate ways. The fixture keeps one visible root candidate per publishing
-device and can list competing candidates in newest-first order, giving merge
-tests a local model for equal-control devices publishing different signed roots.
+separate ways. Root health reports delayed mutable-root candidate counts and
+publisher provider ids, so scheduler-facing health can distinguish a truly
+empty root from a root hidden by delayed in-process propagation. The fixture
+keeps one visible root candidate per publishing device and can list competing
+candidates in newest-first order, giving merge tests a local model for
+equal-control devices publishing different signed roots.
 The fixture also models availability-only providers: they may retain and serve
 encrypted bytes, but their provider policy denies mutable-root publishing and
 discovery reports that boundary.

@@ -7126,6 +7126,103 @@ mod tests {
     }
 
     #[test]
+    fn broadwebd_settings_sync_health_reports_delayed_root_candidates() {
+        let network = InProcessBroadwebNetwork::new();
+        let fixture = network.profile_sync();
+        let source_state_root = test_state_root("cycle-delayed-root-source");
+        let receiver_state_root = test_state_root("cycle-delayed-root-receiver");
+        let receiver_db_root = test_state_root("cycle-delayed-root-receiver-db");
+        let source_daemon = network
+            .daemon_for_device(
+                &source_state_root,
+                ResourceBudget::default(),
+                "runtime-delayed-root-source",
+            )
+            .expect("start in-process delayed-root source daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "runtime-delayed-root-receiver",
+            )
+            .expect("start in-process delayed-root receiver daemon");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-delayed-root-receiver",
+        )
+        .expect("open delayed-root receiver settings database");
+        let profile = "delayedroothealthprofile";
+        let settings_root_id = "settings/latest";
+        fixture
+            .set_device_root_available(
+                "runtime-delayed-root-source",
+                "runtime-delayed-root-receiver",
+                profile,
+                settings_root_id,
+                false,
+            )
+            .expect("delay settings root from source to receiver");
+        let object_id = BroadwebdProfileSyncPublisher::new(&source_daemon)
+            .put_retained_root(
+                profile,
+                settings_root_id,
+                b"encrypted delayed settings root".to_vec(),
+            )
+            .expect("source publishes delayed settings root");
+
+        let delayed_health = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
+            .settings_sync_health(&receiver_database, profile, settings_root_id, 1)
+            .expect("receiver reads delayed root health");
+        assert_eq!(delayed_health.settings_root_health.visible_candidates, 0);
+        assert_eq!(delayed_health.settings_root_health.delayed_candidates, 1);
+        assert_eq!(
+            delayed_health
+                .settings_root_health
+                .delayed_publisher_provider_ids,
+            vec!["local-fixture-device-runtime-delayed-root-source".to_string()]
+        );
+        assert!(delayed_health.settings_root_health.degraded);
+        assert!(
+            delayed_health
+                .settings_root_health
+                .message
+                .contains("delayed")
+        );
+
+        fixture
+            .set_device_root_available(
+                "runtime-delayed-root-source",
+                "runtime-delayed-root-receiver",
+                profile,
+                settings_root_id,
+                true,
+            )
+            .expect("release settings root from source to receiver");
+        let released_health = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
+            .settings_sync_health(&receiver_database, profile, settings_root_id, 1)
+            .expect("receiver reads released root health");
+        assert_eq!(released_health.settings_root_health.visible_candidates, 1);
+        assert_eq!(
+            released_health
+                .settings_root_health
+                .latest_object_id
+                .as_deref(),
+            Some(object_id.as_str())
+        );
+        assert_eq!(released_health.settings_root_health.delayed_candidates, 0);
+        assert!(
+            released_health
+                .settings_root_health
+                .delayed_publisher_provider_ids
+                .is_empty()
+        );
+
+        let _ = std::fs::remove_dir_all(source_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
     fn broadwebd_settings_sync_runner_wraps_cycle_with_health() {
         let network = InProcessBroadwebNetwork::new();
         let state_root = test_state_root("cycle-with-health");

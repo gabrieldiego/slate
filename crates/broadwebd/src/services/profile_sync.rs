@@ -401,6 +401,16 @@ impl ProfileSyncService {
             request.profile.as_str(),
             request.root_id.as_str(),
         );
+        let delayed_candidates = delayed_root_candidates(
+            &store,
+            self.provider_id.as_str(),
+            request.profile.as_str(),
+            request.root_id.as_str(),
+        );
+        let delayed_publisher_provider_ids = delayed_candidates
+            .iter()
+            .map(|candidate| candidate.publisher_provider_id.clone())
+            .collect::<Vec<_>>();
         let latest_object_id = candidates
             .first()
             .map(|candidate| candidate.object_id.clone());
@@ -421,6 +431,7 @@ impl ProfileSyncService {
             .unwrap_or_default();
         let (degraded, message) = profile_sync_root_health_message(
             candidates.len(),
+            delayed_candidates.len(),
             latest_object_available,
             online_retaining_providers,
             request.minimum_online_retaining_providers,
@@ -431,6 +442,8 @@ impl ProfileSyncService {
                 profile: request.profile,
                 root_id: request.root_id,
                 visible_candidates: candidates.len(),
+                delayed_candidates: delayed_candidates.len(),
+                delayed_publisher_provider_ids,
                 latest_object_id,
                 latest_object_available,
                 online_retaining_providers,
@@ -1048,11 +1061,20 @@ fn online_retaining_provider_count(
 
 fn profile_sync_root_health_message(
     visible_candidates: usize,
+    delayed_candidates: usize,
     latest_object_available: bool,
     online_retaining_providers: usize,
     minimum_online_retaining_providers: usize,
 ) -> (bool, String) {
     if visible_candidates == 0 {
+        if delayed_candidates > 0 {
+            return (
+                true,
+                format!(
+                    "profile sync root has no visible candidates in the local fixture; {delayed_candidates} candidate(s) are delayed"
+                ),
+            );
+        }
         (
             true,
             "profile sync root has no visible candidates in the local fixture".to_string(),
@@ -1172,6 +1194,48 @@ fn visible_root_candidates(
                     || stored_root_id != root_id
                     || !provider_has_role(store, publisher_provider_id, |roles| roles.mutable_roots)
                     || !root_available(
+                        store,
+                        publisher_provider_id,
+                        requester_provider_id,
+                        profile,
+                        root_id,
+                    )
+                {
+                    return None;
+                }
+                Some(ProfileSyncRootCandidate {
+                    publisher_provider_id: root.publisher_provider_id.clone(),
+                    object_id: root.object_id.clone(),
+                    publish_sequence: root.publish_sequence,
+                })
+            },
+        )
+        .collect::<Vec<_>>();
+    candidates.sort_by(|left, right| {
+        right
+            .publish_sequence
+            .cmp(&left.publish_sequence)
+            .then_with(|| left.publisher_provider_id.cmp(&right.publisher_provider_id))
+            .then_with(|| left.object_id.cmp(&right.object_id))
+    });
+    candidates
+}
+
+fn delayed_root_candidates(
+    store: &ProfileSyncStore,
+    requester_provider_id: &str,
+    profile: &str,
+    root_id: &str,
+) -> Vec<ProfileSyncRootCandidate> {
+    let mut candidates = store
+        .roots
+        .iter()
+        .filter_map(
+            |((stored_profile, stored_root_id, publisher_provider_id), root)| {
+                if stored_profile != profile
+                    || stored_root_id != root_id
+                    || !provider_has_role(store, publisher_provider_id, |roles| roles.mutable_roots)
+                    || root_available(
                         store,
                         publisher_provider_id,
                         requester_provider_id,
@@ -1577,6 +1641,26 @@ mod tests {
                 object_id: None,
             }
         );
+        let delayed_health = device_b
+            .profile_sync(
+                ProfileSyncRequest::RootHealth(ProfileSyncRootHealthRequest::new(
+                    "default",
+                    "profile-root",
+                )),
+                &budget,
+            )
+            .expect("device b can inspect delayed fixture root health");
+        let ProfileSyncResponse::RootHealth { health } = delayed_health else {
+            panic!("unexpected root health response");
+        };
+        assert_eq!(health.visible_candidates, 0);
+        assert_eq!(health.delayed_candidates, 1);
+        assert_eq!(
+            health.delayed_publisher_provider_ids,
+            vec!["local-fixture-device-a".to_string()]
+        );
+        assert!(health.degraded);
+        assert!(health.message.contains("delayed"));
         let source_resolved = device_a
             .profile_sync(
                 ProfileSyncRequest::ResolveRoot(ProfileSyncRootRequest::new(
@@ -1629,6 +1713,21 @@ mod tests {
                 object_id: Some(object_id),
             }
         );
+        let released_health = device_b
+            .profile_sync(
+                ProfileSyncRequest::RootHealth(ProfileSyncRootHealthRequest::new(
+                    "default",
+                    "profile-root",
+                )),
+                &budget,
+            )
+            .expect("device b can inspect released fixture root health");
+        let ProfileSyncResponse::RootHealth { health } = released_health else {
+            panic!("unexpected root health response");
+        };
+        assert_eq!(health.visible_candidates, 1);
+        assert_eq!(health.delayed_candidates, 0);
+        assert!(health.delayed_publisher_provider_ids.is_empty());
     }
 
     #[test]

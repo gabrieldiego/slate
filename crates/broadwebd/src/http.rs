@@ -404,6 +404,8 @@ pub struct ProfileSyncRootHealth {
     pub profile: String,
     pub root_id: String,
     pub visible_candidates: usize,
+    pub delayed_candidates: usize,
+    pub delayed_publisher_provider_ids: Vec<String>,
     pub latest_object_id: Option<String>,
     pub latest_object_available: bool,
     pub online_retaining_providers: usize,
