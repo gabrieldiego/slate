@@ -819,14 +819,18 @@ starting protocol daemons, publishing, retaining, or opening sockets. A stored
 provider scheduler tick can then run only against already-materialized daemon
 handles supplied by runtime code. Stored selected providers without a matching
 handle are reported as unmaterialized, and only materialized selected providers
-count toward the retaining-provider quorum. The selected-handle runtime path
-also rejects a provider set that cannot meet the requested retaining-provider
-quorum before publishing local objects, pulling candidates, retaining objects,
-or mutating sync roots. If a selected fixture provider refuses retention because
-of local quota or pinning policy, the cycle surfaces that as a retention error
-instead of reporting successful durability. Cadence, platform key-store
-loading, enrollment flow, and real provider daemon construction remain separate
-runtime layers.
+count toward the retaining-provider quorum. The membership-aware scheduler has
+the same stored-provider path: its read-only plan preserves the no-mutation
+boundary and does not pull membership records to satisfy credential preflight,
+while its runtime path pulls the membership log first and then selects stored
+retention providers from the updated `slate-settings.db` view. The
+selected-handle runtime path also rejects a provider set that cannot meet the
+requested retaining-provider quorum before publishing local objects, pulling
+candidates, retaining objects, or mutating sync roots. If a selected fixture
+provider refuses retention because of local quota or pinning policy, the cycle
+surfaces that as a retention error instead of reporting successful durability.
+Cadence, platform key-store loading, enrollment flow, and real provider daemon
+construction remain separate runtime layers.
 Object bytes are also provider-held: fetches require at least one online
 provider with the object, and retaining an object copies the bytes into the
 retaining provider's in-process store. Tests can pause object transfer from one

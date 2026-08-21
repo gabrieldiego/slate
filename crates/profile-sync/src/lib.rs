@@ -1677,6 +1677,58 @@ impl SettingsSyncStoredRetentionProviderRun {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncStoredRetentionProviderMembershipPlan {
+    pub membership_log_publication: ProfileSyncMembershipLogPublicationPlan,
+    pub cycle: SettingsSyncStoredRetentionProviderPlan,
+}
+
+impl SettingsSyncStoredRetentionProviderMembershipPlan {
+    pub fn retention_candidate_count(&self) -> usize {
+        self.cycle.retention_candidate_count()
+    }
+
+    pub fn selected_retention_provider_count(&self) -> usize {
+        self.cycle.selected_retention_provider_count()
+    }
+
+    pub fn unpublishable_membership_log(&self) -> bool {
+        self.membership_log_publication.requires_compaction()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncStoredRetentionProviderMembershipRun {
+    pub preflight: SettingsSyncCyclePreflightWithMembershipLog,
+    pub stored_provider_plan: SettingsSyncStoredRetentionProviderPlan,
+    pub unmaterialized_retention_provider_ids: Vec<String>,
+    pub cycle: SettingsSyncCycleWithMembershipLogRetentionRun,
+}
+
+impl SettingsSyncStoredRetentionProviderMembershipRun {
+    pub fn pulled_membership_application_count(&self) -> usize {
+        self.preflight.pulled_membership_application_count()
+    }
+
+    pub fn unmaterialized_retention_provider_count(&self) -> usize {
+        self.unmaterialized_retention_provider_ids.len()
+    }
+
+    pub fn selected_retention_provider_count(&self) -> usize {
+        self.stored_provider_plan
+            .selected_retention_provider_count()
+    }
+
+    pub fn materialized_retention_provider_count(&self) -> usize {
+        self.selected_retention_provider_count()
+            .saturating_sub(self.unmaterialized_retention_provider_count())
+    }
+
+    pub fn retained_provider_count(&self) -> usize {
+        self.cycle.retained_provider_count()
+    }
+}
+
 struct SelectedSettingsSyncRetentionProviders<'a> {
     plan: SettingsSyncScheduledCyclePlan,
     daemons: Vec<&'a BroadwebDaemon>,
@@ -2878,6 +2930,35 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         })
     }
 
+    pub fn plan_once_with_membership_log_and_stored_retention_providers(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        membership_log_root_id: &str,
+        signer: &ProfileSyncDeviceSigner,
+        max_stored_providers: u32,
+    ) -> Result<SettingsSyncStoredRetentionProviderMembershipPlan, ProfileSyncCycleWithHealthError>
+    {
+        let membership_log_publication = BroadwebdProfileSyncPublisher::new(self.daemon)
+            .plan_local_sync_account_membership_log(
+                database,
+                config.profile.as_str(),
+                membership_log_root_id,
+            )
+            .map_err(ProfileSyncCycleError::from)?;
+        let cycle = self.plan_once_with_stored_retention_providers(
+            database,
+            config,
+            signer,
+            max_stored_providers,
+        )?;
+
+        Ok(SettingsSyncStoredRetentionProviderMembershipPlan {
+            membership_log_publication,
+            cycle,
+        })
+    }
+
     pub fn run_once_selecting_retention_providers(
         &self,
         database: &SlateProfileDatabase,
@@ -3066,6 +3147,92 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             ineligible_retention_provider_ids: plan.ineligible_retention_provider_ids,
             undiscovered_retention_provider_ids: plan.undiscovered_retention_provider_ids,
             duplicate_retention_provider_ids: plan.duplicate_retention_provider_ids,
+            cycle,
+        })
+    }
+
+    pub fn run_once_with_membership_log_and_stored_retention_provider_handles(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        membership_log_root_id: &str,
+        secrets: SettingsSyncRuntimeSecrets<'_>,
+        max_stored_providers: u32,
+        retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'_>],
+    ) -> Result<SettingsSyncStoredRetentionProviderMembershipRun, ProfileSyncCycleWithHealthError>
+    {
+        let membership_log_publication = BroadwebdProfileSyncPublisher::new(self.daemon)
+            .plan_local_sync_account_membership_log(
+                database,
+                config.profile.as_str(),
+                membership_log_root_id,
+            )
+            .map_err(ProfileSyncCycleError::from)?;
+        if membership_log_publication.requires_compaction() {
+            return Err(ProfileSyncCycleWithHealthError::Cycle(
+                ProfileSyncCycleError::from(ProfileSyncPublishError::MembershipLogTooLarge {
+                    profile: membership_log_publication.profile,
+                    max_records: membership_log_publication.max_records,
+                    actual_records: membership_log_publication.record_count,
+                }),
+            ));
+        }
+
+        let runner = BroadwebdSettingsSyncRunner::new(self.daemon);
+        let preflight = runner
+            .settings_sync_cycle_preflight_with_membership_log_and_active_key_policy(
+                database,
+                config.profile.as_str(),
+                config.settings_root_id.as_str(),
+                membership_log_root_id,
+                secrets.signer,
+                &config.policy,
+            )?;
+        let stored_providers = database
+            .storage_providers(config.profile.as_str(), max_stored_providers)
+            .map_err(ProfileSyncCredentialError::from)
+            .map_err(ProfileSyncCycleError::from)?;
+        let stored_provider_plan = settings_sync_stored_retention_provider_plan(
+            preflight.preflight.clone(),
+            max_stored_providers,
+            select_stored_retention_provider_ids(stored_providers),
+        );
+        config.policy.check_selected_retention_provider_freshness(
+            stored_provider_plan.stale_retention_provider_count(),
+            stored_provider_plan.offline_retention_provider_count(),
+            &preflight.preflight.before_health,
+        )?;
+        config.policy.check_selected_retention_provider_roles(
+            stored_provider_plan.ineligible_retention_provider_count(),
+            &preflight.preflight.before_health,
+        )?;
+        let (unmaterialized_retention_provider_ids, daemons) =
+            materialize_stored_retention_provider_daemons(
+                &stored_provider_plan,
+                retention_provider_handles,
+            );
+        let materialized_retention_provider_count = stored_provider_plan
+            .selected_retention_provider_count()
+            .saturating_sub(unmaterialized_retention_provider_ids.len());
+        config.policy.check_selected_retention_provider_count(
+            materialized_retention_provider_count,
+            &preflight.preflight.before_health,
+        )?;
+        let cycle = runner
+            .run_settings_sync_cycle_with_membership_log_and_retention_providers_after_preflight(
+                database,
+                secrets.content_key,
+                secrets.signer,
+                &config.policy,
+                membership_log_root_id,
+                daemons.as_slice(),
+                &preflight,
+            )?;
+
+        Ok(SettingsSyncStoredRetentionProviderMembershipRun {
+            preflight,
+            stored_provider_plan,
+            unmaterialized_retention_provider_ids,
             cycle,
         })
     }
@@ -5426,6 +5593,218 @@ mod tests {
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
         let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn scheduler_runs_membership_aware_cycle_with_stored_provider_without_loopback() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("membership-stored-scheduler-publisher");
+        let receiver_state_root = test_state_root("membership-stored-scheduler-receiver");
+        let provider_state_root = test_state_root("membership-stored-scheduler-provider");
+        let unmaterialized_state_root =
+            test_state_root("membership-stored-scheduler-unmaterialized");
+        let publisher_db_root = test_state_root("membership-stored-scheduler-publisher-db");
+        let receiver_db_root = test_state_root("membership-stored-scheduler-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "membership-stored-scheduler-device-a",
+            )
+            .expect("start in-process stored membership scheduler publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "membership-stored-scheduler-device-b",
+            )
+            .expect("start in-process stored membership scheduler receiver daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "membership-stored-scheduler-pinner",
+            )
+            .expect("start in-process stored membership scheduler provider daemon");
+        let _unmaterialized_provider_daemon = network
+            .daemon_for_availability_provider(
+                &unmaterialized_state_root,
+                ResourceBudget::default(),
+                "membership-stored-scheduler-extra",
+            )
+            .expect("start in-process stored membership unmaterialized provider daemon");
+        let publisher_database = SlateProfileDatabase::open_resolved_with_device_id(
+            publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "membership-stored-scheduler-device-a",
+        )
+        .expect("open stored membership scheduler publisher database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "membership-stored-scheduler-device-b",
+        )
+        .expect("open stored membership scheduler receiver database");
+        let content_key = ProfileSyncContentKey::from_bytes([83; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer_a = ProfileSyncDeviceSigner::generate("membership-stored-scheduler-device-a")
+            .expect("generate stored membership scheduler signer a");
+        let signer_b = ProfileSyncDeviceSigner::generate("membership-stored-scheduler-device-b")
+            .expect("generate stored membership scheduler signer b");
+        register_test_content_key_epoch(&publisher_database, DEFAULT_PROFILE_ID);
+        register_test_content_key_epoch(&receiver_database, DEFAULT_PROFILE_ID);
+        let enroll_a = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-membership-stored-scheduler-device-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-stored-scheduler-device-a".to_string(),
+            device_public_key: Some(signer_a.public_key().expect("read signer a public key")),
+            created_at: 10,
+        };
+        publisher_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_a).as_slice(),
+            )
+            .expect("publisher bootstraps stored membership scheduler signer a");
+        let enroll_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-enroll-membership-stored-scheduler-device-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-stored-scheduler-device-b".to_string(),
+            device_public_key: Some(signer_b.public_key().expect("read signer b public key")),
+            created_at: 20,
+        };
+        publisher_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_b).as_slice(),
+            )
+            .expect("publisher applies stored membership scheduler signer b enrollment");
+        publisher_database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("publisher writes stored membership scheduler setting");
+        BroadwebdSettingsSyncRunner::new(&publisher_daemon)
+            .run_settings_sync_cycle_with_membership_log(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer_a,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+                4,
+            )
+            .expect("publisher publishes stored membership and settings state");
+
+        let selected_provider_id = "local-fixture-availability-membership-stored-scheduler-pinner";
+        let unmaterialized_provider_id =
+            "local-fixture-availability-membership-stored-scheduler-extra";
+        for provider in [
+            test_storage_provider_update(
+                DEFAULT_PROFILE_ID,
+                selected_provider_id,
+                "local-fixture-availability",
+                "Stored membership pinner",
+                true,
+                true,
+                true,
+            ),
+            test_storage_provider_update(
+                DEFAULT_PROFILE_ID,
+                unmaterialized_provider_id,
+                "local-fixture-availability",
+                "Stored membership extra pinner",
+                true,
+                true,
+                true,
+            ),
+        ] {
+            receiver_database
+                .upsert_storage_provider(&provider)
+                .expect("receiver writes stored membership provider metadata");
+        }
+        let materialized_provider_handles = [SettingsSyncRetentionProviderHandle::new(
+            selected_provider_id,
+            &provider_daemon,
+        )];
+        let scheduler = BroadwebdSettingsSyncScheduler::new(&receiver_daemon);
+        let config = SettingsSyncSchedulerConfig::new(
+            DEFAULT_PROFILE_ID,
+            "settings/latest",
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2)
+                .with_provider_health_required(false)
+                .with_root_health_required_after_cycle(false),
+        );
+
+        let plan_error = scheduler
+            .plan_once_with_membership_log_and_stored_retention_providers(
+                &receiver_database,
+                &config,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                &signer_b,
+                8,
+            )
+            .expect_err("read-only stored membership plan does not pull enrollment records");
+        assert!(matches!(
+            plan_error,
+            ProfileSyncCycleWithHealthError::Cycle(ProfileSyncCycleError::Credentials(
+                ProfileSyncCredentialError::UntrustedLocalDevice { device_id, .. }
+            )) if device_id == "membership-stored-scheduler-device-b"
+        ));
+
+        let run = scheduler
+            .run_once_with_membership_log_and_stored_retention_provider_handles(
+                &receiver_database,
+                &config,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer_b),
+                8,
+                &materialized_provider_handles,
+            )
+            .expect(
+                "stored membership scheduler applies and retains through materialized provider",
+            );
+
+        assert_eq!(run.pulled_membership_application_count(), 2);
+        assert_eq!(run.stored_provider_plan.stored_provider_count, 2);
+        assert_eq!(
+            run.stored_provider_plan
+                .cycle
+                .selected_retention_provider_ids,
+            vec![
+                unmaterialized_provider_id.to_string(),
+                selected_provider_id.to_string()
+            ]
+        );
+        assert_eq!(
+            run.unmaterialized_retention_provider_ids,
+            vec![unmaterialized_provider_id.to_string()]
+        );
+        assert_eq!(run.selected_retention_provider_count(), 2);
+        assert_eq!(run.materialized_retention_provider_count(), 1);
+        assert_eq!(run.cycle.cycle.cycle.applied_count(), 1);
+        assert_eq!(
+            receiver_database
+                .get_setting_text("ui.theme")
+                .expect("read synced stored membership scheduler setting")
+                .as_deref(),
+            Some("teal")
+        );
+        assert_eq!(run.cycle.retention.len(), 1);
+        assert_eq!(
+            run.cycle.retention[0].retained_count(),
+            run.cycle.retained_object_ids.len()
+        );
+        assert_eq!(run.retained_provider_count(), 1);
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(unmaterialized_state_root);
         let _ = std::fs::remove_dir_all(publisher_db_root);
         let _ = std::fs::remove_dir_all(receiver_db_root);
     }

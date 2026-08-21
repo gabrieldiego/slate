@@ -478,6 +478,13 @@ Current baseline:
   counts only materialized selected providers toward the retention quorum, and
   performs the publish/retain/root-health sequence entirely through
   `InProcessBroadwebNetwork` fixture daemons in tests.
+- The membership-aware scheduler now has the same stored-provider path. Its
+  read-only plan keeps the existing no-mutation boundary and will not pull
+  membership records to satisfy credentials, while the runtime path pulls the
+  membership log first, then selects enabled retention providers from
+  `slate-settings.db`, reports unmaterialized stored providers, and retains the
+  resulting membership/settings publication set through supplied in-process
+  provider handles.
 - The read-only scheduler plan now also proves stale selected retention-provider
   handles are excluded from the fresh candidate set and reported before any
   local revision or sync-root state is mutated.
