@@ -221,6 +221,11 @@ Current baseline:
   reads the stored local device-head root as the published local frontier, so it
   does not repeatedly publish the same post-snapshot tail and does not re-sign
   remote-device rows as local tail changes.
+- The receive side now has a bounded trusted-device settings sync runner. It
+  reads the trusted device public-key table from `slate-settings.db`, skips the
+  local device, enforces a caller-supplied maximum trusted-device count, and
+  pulls each trusted settings device head through broadwebd before applying new
+  manifests.
 - The local profile-sync fixture can now mark simulated devices offline and
   online, allowing tests to verify unavailable devices fail closed without
   touching sockets, DNS, Tor, IPFS, or external relays.
@@ -488,9 +493,9 @@ Next:
   backend, then point the profile mutable root at the newest manifest.
 - Use the storage compaction target to publish encrypted snapshots, trim
   manifest tails, and then enforce retention across broadwebd providers.
-- Wire the bounded local settings sync loop into the runtime scheduler with
-  trusted account keys loaded from `slate-settings.db` and visible policy/health
-  handling.
+- Wire the bounded local publish and trusted-device receive loops into the
+  runtime scheduler with trusted account keys loaded from `slate-settings.db`
+  and visible policy/health handling.
 - Add device enrollment, revocation, and key rotation before syncing sensitive
   profile domains.
 - Expand local distributed-protocol fixtures to simulate offline devices,

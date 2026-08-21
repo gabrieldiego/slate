@@ -465,6 +465,12 @@ that signed frontier with the latest local-device setting sequence. Applied
 remote-device rows after the retained snapshot are not re-signed into the local
 tail; future merge work should publish those devices through their own trusted
 heads or through an explicit merged snapshot.
+The receive side has a matching bounded trusted-device runner. It lists
+profile-scoped trusted device public keys from `slate-settings.db`, skips the
+local sync device id, rejects runs that exceed the caller's device limit, and
+pulls each trusted settings device head via the broadwebd source bridge. The
+runner reports per-device results so callers can distinguish applied manifests,
+unchanged heads, and trusted devices that have no published root yet.
 
 The local fake backend must model provider availability inside the test process.
 Each simulated device registers as a provider, retained objects are scoped to

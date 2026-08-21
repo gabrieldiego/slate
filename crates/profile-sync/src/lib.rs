@@ -111,6 +111,56 @@ impl From<SyncObjectError> for ProfileSyncPublishError {
     }
 }
 
+#[derive(Debug)]
+pub enum ProfileSyncReceiveError {
+    Storage(StorageError),
+    PullApply(ProfileSyncTrustedPullApplyError<BroadwebdError>),
+    TrustedDeviceLimitExceeded {
+        profile: String,
+        trusted_device_count: usize,
+        max_devices: u32,
+    },
+}
+
+impl fmt::Display for ProfileSyncReceiveError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Storage(error) => write!(formatter, "profile sync storage error: {error}"),
+            Self::PullApply(error) => write!(formatter, "profile sync receive error: {error}"),
+            Self::TrustedDeviceLimitExceeded {
+                profile,
+                trusted_device_count,
+                max_devices,
+            } => write!(
+                formatter,
+                "trusted settings sync for profile {profile} has {trusted_device_count} remote trusted devices, exceeding max {max_devices}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ProfileSyncReceiveError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Storage(error) => Some(error),
+            Self::PullApply(error) => Some(error),
+            Self::TrustedDeviceLimitExceeded { .. } => None,
+        }
+    }
+}
+
+impl From<StorageError> for ProfileSyncReceiveError {
+    fn from(error: StorageError) -> Self {
+        Self::Storage(error)
+    }
+}
+
+impl From<ProfileSyncTrustedPullApplyError<BroadwebdError>> for ProfileSyncReceiveError {
+    fn from(error: ProfileSyncTrustedPullApplyError<BroadwebdError>) -> Self {
+        Self::PullApply(error)
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PublishedSettingsTailManifest {
     pub manifest_object_id: String,
@@ -225,6 +275,33 @@ pub enum BroadwebdTrustedDeviceHeadSyncStatus {
     },
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TrustedSettingsDeviceSyncResult {
+    pub device_id: String,
+    pub root_id: String,
+    pub status: BroadwebdTrustedDeviceHeadSyncStatus,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TrustedSettingsSyncRun {
+    pub profile: String,
+    pub devices: Vec<TrustedSettingsDeviceSyncResult>,
+}
+
+impl TrustedSettingsSyncRun {
+    pub fn applied_count(&self) -> usize {
+        self.devices
+            .iter()
+            .filter(|device| {
+                matches!(
+                    device.status,
+                    BroadwebdTrustedDeviceHeadSyncStatus::Applied { .. }
+                )
+            })
+            .count()
+    }
+}
+
 pub fn settings_device_head_root_id(device_id: &str) -> String {
     format!("settings/devices/{device_id}/head")
 }
@@ -280,6 +357,51 @@ impl<'a> BroadwebdProfileSyncObjectSource<'a> {
                 })
             }
         }
+    }
+
+    pub fn pull_and_apply_trusted_settings_from_registered_devices(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        content_key: &ProfileSyncContentKey,
+        key_id: &str,
+        max_devices: u32,
+    ) -> Result<TrustedSettingsSyncRun, ProfileSyncReceiveError> {
+        let trusted_devices = database
+            .sync_device_public_keys(profile)?
+            .into_iter()
+            .filter(|record| record.public_key.device_id != database.local_sync_device_id())
+            .collect::<Vec<_>>();
+        if trusted_devices.len() > max_devices as usize {
+            return Err(ProfileSyncReceiveError::TrustedDeviceLimitExceeded {
+                profile: profile.to_string(),
+                trusted_device_count: trusted_devices.len(),
+                max_devices,
+            });
+        }
+
+        let mut devices = Vec::with_capacity(trusted_devices.len());
+        for trusted_device in trusted_devices {
+            let device_id = trusted_device.public_key.device_id;
+            let root_id = settings_device_head_root_id(device_id.as_str());
+            let status = self.pull_record_and_apply_trusted_settings_from_device_head(
+                database,
+                profile,
+                root_id.as_str(),
+                content_key,
+                key_id,
+            )?;
+            devices.push(TrustedSettingsDeviceSyncResult {
+                device_id,
+                root_id,
+                status,
+            });
+        }
+
+        Ok(TrustedSettingsSyncRun {
+            profile: profile.to_string(),
+            devices,
+        })
     }
 }
 
@@ -1327,7 +1449,7 @@ mod tests {
     use super::{
         BroadwebdProfileSyncObjectSource, BroadwebdProfileSyncPublisher,
         BroadwebdTrustedDeviceHeadSyncStatus, LocalSettingsHeadPublishStatus,
-        settings_device_head_root_id,
+        ProfileSyncReceiveError, settings_device_head_root_id,
     };
     use slate_broadwebd::{ResourceBudget, test_fixtures::InProcessBroadwebNetwork};
     use slate_storage::{
@@ -1766,6 +1888,162 @@ mod tests {
             BroadwebdTrustedDeviceHeadSyncStatus::Unchanged { object_id, .. }
                 if object_id == head_publication.object_id
         ));
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_source_pulls_registered_trusted_device_heads_with_device_bound() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("trusted-devices-publisher");
+        let receiver_state_root = test_state_root("trusted-devices-receiver");
+        let publisher_db_root = test_state_root("trusted-devices-publisher-db");
+        let receiver_db_root = test_state_root("trusted-devices-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "runtime-u",
+            )
+            .expect("start publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(&receiver_state_root, ResourceBudget::default(), "runtime-v")
+            .expect("start receiver daemon");
+        let publisher_database = SlateProfileDatabase::open_resolved_with_device_id(
+            publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-u",
+        )
+        .expect("open publisher settings database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-v",
+        )
+        .expect("open receiver settings database");
+        publisher_database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("publisher writes sync setting");
+        let content_key = ProfileSyncContentKey::from_bytes([50; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let publisher_signer =
+            ProfileSyncDeviceSigner::generate("runtime-u").expect("generate publisher signer");
+        let receiver_signer =
+            ProfileSyncDeviceSigner::generate("runtime-v").expect("generate receiver signer");
+        let missing_signer =
+            ProfileSyncDeviceSigner::generate("runtime-w").expect("generate missing signer");
+        for public_key in [
+            publisher_signer.public_key().expect("publisher public key"),
+            receiver_signer.public_key().expect("receiver public key"),
+            missing_signer.public_key().expect("missing public key"),
+        ] {
+            receiver_database
+                .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                    profile: DEFAULT_PROFILE_ID.to_string(),
+                    public_key,
+                    membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                })
+                .expect("receiver trusts device key");
+        }
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+        let published = publisher
+            .publish_full_local_settings_snapshot_head(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &publisher_signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish trusted device settings head")
+            .expect("publisher has settings changes");
+
+        let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
+        let limit_error = source
+            .pull_and_apply_trusted_settings_from_registered_devices(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                1,
+            )
+            .expect_err("device bound should reject two remote trusted devices");
+        assert!(matches!(
+            limit_error,
+            ProfileSyncReceiveError::TrustedDeviceLimitExceeded {
+                trusted_device_count: 2,
+                max_devices: 1,
+                ..
+            }
+        ));
+
+        let run = source
+            .pull_and_apply_trusted_settings_from_registered_devices(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                4,
+            )
+            .expect("pull registered trusted devices");
+        assert_eq!(run.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(run.devices.len(), 2);
+        assert_eq!(run.applied_count(), 1);
+        assert!(
+            run.devices
+                .iter()
+                .all(|device| device.device_id != receiver_database.local_sync_device_id())
+        );
+
+        let published_device = run
+            .devices
+            .iter()
+            .find(|device| device.device_id == "runtime-u")
+            .expect("published trusted device result");
+        let BroadwebdTrustedDeviceHeadSyncStatus::Applied { application, .. } =
+            &published_device.status
+        else {
+            panic!("expected published trusted device to apply: {published_device:?}");
+        };
+        assert_eq!(
+            application.manifest_object_id,
+            published.publication.manifest_object_id
+        );
+
+        let missing_device = run
+            .devices
+            .iter()
+            .find(|device| device.device_id == "runtime-w")
+            .expect("missing trusted device result");
+        assert!(matches!(
+            &missing_device.status,
+            BroadwebdTrustedDeviceHeadSyncStatus::NoPublishedRoot { root_id, .. }
+                if root_id == "settings/devices/runtime-w/head"
+        ));
+        assert_eq!(
+            receiver_database
+                .get_setting_text("ui.theme")
+                .expect("read synced receiver setting")
+                .as_deref(),
+            Some("teal")
+        );
+
+        let unchanged = source
+            .pull_and_apply_trusted_settings_from_registered_devices(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                4,
+            )
+            .expect("pull registered trusted devices again");
+        assert_eq!(unchanged.applied_count(), 0);
+        assert!(unchanged.devices.iter().any(|device| matches!(
+            &device.status,
+            BroadwebdTrustedDeviceHeadSyncStatus::Unchanged { object_id, .. }
+                if device.device_id == "runtime-u" && object_id == &published.device_head.object_id
+        )));
 
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
