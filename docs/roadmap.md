@@ -214,6 +214,10 @@ Current baseline:
   without updating `settings_values`, the legacy settings view, or watcher
   revisions. The local two-device profile-sync fixture now covers signed
   encrypted replay of a stale setting object against a newer local value.
+- Storage now exposes a bounded applied-settings event feed over
+  `settings_revisions` and `settings_changes`, giving runtime code a typed
+  polling surface for externally synced setting updates without reading raw
+  change rows.
 - IPFS/IPNS is the first concrete backend under consideration, but the product
   goal is protocol-neutral: approved Slate devices should find each other, move
   encrypted sync objects, and optionally use approved providers to keep those
@@ -236,8 +240,9 @@ Next:
   verification, IPNS publish, and IPNS resolve as the first IPFS/IPNS backend.
 - Extend snapshot payloads, sync object metadata, conflict handling, and merge
   policy beyond the initial settings text merge model.
-- Add a settings watcher so externally synced changes are applied through normal
-  runtime update paths instead of raw database replacement.
+- Wire the storage settings event feed into a runtime watcher so externally
+  synced changes are applied through normal browser-core, chrome, routing, and
+  privacy update paths instead of raw database replacement.
 - Define the Slate Sync Secret hierarchy for manifest signing, mutable-root
   publishing, content encryption epochs, and device enrollment.
 - Publish encrypted profile manifests and snapshots through the selected
