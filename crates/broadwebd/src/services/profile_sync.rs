@@ -21,7 +21,7 @@ pub struct ProfileSyncService {
 
 #[derive(Clone, Debug, Default)]
 struct ProfileSyncStore {
-    objects: BTreeMap<(String, String), Vec<u8>>,
+    objects: BTreeMap<(String, String, String), Vec<u8>>,
     retained: BTreeSet<(String, String, String)>,
     roots: BTreeMap<(String, String), String>,
     providers: BTreeMap<String, ProfileSyncProviderState>,
@@ -97,9 +97,10 @@ impl ProfileSyncService {
         validate_object_budget(request.bytes.len(), budget)?;
         let object_id = local_object_id(&request.bytes);
         let mut store = self.store()?;
-        store
-            .objects
-            .insert((request.profile, object_id.clone()), request.bytes);
+        store.objects.insert(
+            (self.provider_id.clone(), request.profile, object_id.clone()),
+            request.bytes,
+        );
         Ok(ProfileSyncResponse::PutEncryptedObject { object_id })
     }
 
@@ -111,15 +112,12 @@ impl ProfileSyncService {
         validate_profile(&request.profile)?;
         let store = self.store()?;
         let object_id = request.object_id;
-        let bytes = store
-            .objects
-            .get(&(request.profile, object_id.clone()))
-            .ok_or_else(|| {
-                BroadwebdError::UnsupportedRequest(format!(
-                    "profile sync object not found: {}",
-                    object_id
-                ))
-            })?;
+        let bytes = find_online_object(&store, &request.profile, &object_id).ok_or_else(|| {
+            BroadwebdError::UnsupportedRequest(format!(
+                "profile sync object not available from an online provider: {}",
+                object_id
+            ))
+        })?;
         validate_object_budget(bytes.len(), budget)?;
         Ok(ProfileSyncResponse::GetEncryptedObject {
             object_id,
@@ -133,15 +131,21 @@ impl ProfileSyncService {
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
         let mut store = self.store()?;
-        if !store
-            .objects
-            .contains_key(&(request.profile.clone(), request.object_id.clone()))
-        {
+        let Some(bytes) = find_online_object(&store, &request.profile, &request.object_id).cloned()
+        else {
             return Err(BroadwebdError::UnsupportedRequest(format!(
-                "cannot retain missing profile sync object: {}",
+                "cannot retain unavailable profile sync object: {}",
                 request.object_id
             )));
-        }
+        };
+        store.objects.insert(
+            (
+                self.provider_id.clone(),
+                request.profile.clone(),
+                request.object_id.clone(),
+            ),
+            bytes,
+        );
         store.retained.insert((
             self.provider_id.clone(),
             request.profile,
@@ -193,14 +197,13 @@ impl ProfileSyncService {
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
         let store = self.store()?;
-        let object_key = (request.profile.clone(), request.object_id.clone());
         let retained_key = (
             self.provider_id.clone(),
-            request.profile,
+            request.profile.clone(),
             request.object_id.clone(),
         );
         let retained = store.retained.contains(&retained_key);
-        let available = store.objects.contains_key(&object_key);
+        let available = find_online_object(&store, &request.profile, &request.object_id).is_some();
         Ok(ProfileSyncResponse::RetainedObjectStatus {
             object_id: request.object_id,
             retained,
@@ -214,12 +217,14 @@ impl ProfileSyncService {
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
         let mut store = self.store()?;
-        if !store
-            .objects
-            .contains_key(&(request.profile.clone(), request.object_id.clone()))
-        {
+        if !provider_has_object(
+            &store,
+            &self.provider_id,
+            &request.profile,
+            &request.object_id,
+        ) {
             return Err(BroadwebdError::UnsupportedRequest(format!(
-                "cannot publish missing profile sync object: {}",
+                "cannot publish missing local profile sync object: {}",
                 request.object_id
             )));
         }
@@ -394,6 +399,35 @@ fn retained_object_count(store: &ProfileSyncStore, provider_id: &str, profile: &
             retained_provider_id == provider_id && retained_profile == profile
         })
         .count()
+}
+
+fn provider_has_object(
+    store: &ProfileSyncStore,
+    provider_id: &str,
+    profile: &str,
+    object_id: &str,
+) -> bool {
+    store.objects.contains_key(&(
+        provider_id.to_string(),
+        profile.to_string(),
+        object_id.to_string(),
+    ))
+}
+
+fn find_online_object<'a>(
+    store: &'a ProfileSyncStore,
+    profile: &str,
+    object_id: &str,
+) -> Option<&'a Vec<u8>> {
+    store
+        .objects
+        .iter()
+        .find(|((provider_id, stored_profile, stored_object_id), _)| {
+            stored_profile == profile
+                && stored_object_id == object_id
+                && !store.offline_providers.contains(provider_id.as_str())
+        })
+        .map(|(_, bytes)| bytes)
 }
 
 fn local_fixture_provider_id(device_id: impl AsRef<str>) -> String {
@@ -609,6 +643,97 @@ mod tests {
         assert_eq!(
             provider_ids,
             vec!["local-fixture-device-a", "local-fixture-device-b"]
+        );
+    }
+
+    #[test]
+    fn local_fixture_object_availability_follows_online_providers() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut device_a = PluginRegistry::new();
+        let mut device_b = PluginRegistry::new();
+        let budget = ResourceBudget::default();
+
+        device_a.register_service(fixture.service_for_device("a"));
+        device_b.register_service(fixture.service_for_device("b"));
+
+        let put = device_a
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"encrypted object only on device a".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("device a can put object into fixture");
+        let ProfileSyncResponse::PutEncryptedObject { object_id } = put else {
+            panic!("unexpected put response");
+        };
+
+        fixture
+            .set_device_online("a", false)
+            .expect("mark fixture device a offline");
+        let unavailable = device_b
+            .profile_sync(
+                ProfileSyncRequest::GetEncryptedObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect_err("device b cannot fetch when only provider is offline");
+        assert!(matches!(
+            unavailable,
+            BroadwebdError::UnsupportedRequest(message)
+                if message.contains("not available")
+        ));
+
+        fixture
+            .set_device_online("a", true)
+            .expect("mark fixture device a online");
+        device_b
+            .profile_sync(
+                ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("device b can retain object while device a is online");
+        fixture
+            .set_device_online("a", false)
+            .expect("mark fixture device a offline again");
+
+        let fetched = device_b
+            .profile_sync(
+                ProfileSyncRequest::GetEncryptedObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("device b can fetch retained object after device a goes offline");
+        assert_eq!(
+            fetched,
+            ProfileSyncResponse::GetEncryptedObject {
+                object_id: object_id.clone(),
+                bytes: b"encrypted object only on device a".to_vec(),
+            }
+        );
+        let verified = device_b
+            .profile_sync(
+                ProfileSyncRequest::VerifyRetainedObject(ProfileSyncObjectRequest::new(
+                    "default", object_id,
+                )),
+                &budget,
+            )
+            .expect("device b can verify retained local availability");
+        assert_eq!(
+            verified,
+            ProfileSyncResponse::RetainedObjectStatus {
+                object_id: local_object_id(b"encrypted object only on device a"),
+                retained: true,
+                available: true,
+            }
         );
     }
 

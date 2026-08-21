@@ -203,6 +203,10 @@ Current baseline:
   online in-process providers with their own retained-object counts, so tests
   can model availability loss without implying that one device retaining bytes
   makes every device a pinning provider.
+- The fixture object store is now provider-aware: encrypted bytes are available
+  only while at least one provider holding them is online, and retaining an
+  object copies it into the retaining provider's in-process store. This lets
+  tests model simple handoff and availability loss without any sockets.
 - Storage now provides `EncryptedSyncObject` envelopes using ChaCha20-Poly1305
   AEAD through `ring`, and the local two-device fixture moves encrypted setting
   change payloads through broadwebd instead of plaintext JSON.

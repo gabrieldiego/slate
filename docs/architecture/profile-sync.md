@@ -362,6 +362,9 @@ Each simulated device registers as a provider, retained objects are scoped to
 that provider, and discovery only reports providers that the fixture currently
 marks online. This lets tests exercise pinning and availability policy without
 loopback sockets, OS DNS, public gateways, Tor, IPFS/IPNS, or external relays.
+Object bytes are also provider-held: fetches require at least one online
+provider with the object, and retaining an object copies the bytes into the
+retaining provider's in-process store.
 
 ## Privacy Boundaries
 
