@@ -5479,6 +5479,118 @@ mod tests {
     }
 
     #[test]
+    fn broadwebd_settings_sync_scheduler_plan_excludes_stale_retention_provider_handles() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("scheduler-stale-select-device");
+        let provider_state_root = test_state_root("scheduler-stale-select-provider");
+        let db_root = test_state_root("scheduler-stale-select-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-stale-select-a",
+            )
+            .expect("start in-process profile-sync scheduler device daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-stale-select-pinner",
+            )
+            .expect("start in-process scheduler stale availability provider daemon");
+        network
+            .profile_sync()
+            .expire_current_provider_freshness()
+            .expect("expire current provider freshness");
+        network
+            .profile_sync()
+            .mark_device_seen("runtime-scheduler-stale-select-a")
+            .expect("keep the local scheduler device fresh");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-scheduler-stale-select-a",
+        )
+        .expect("open scheduler local settings database");
+        let profile = "schedulerstaleselectprofile";
+        let settings_root_id = "settings/latest";
+        let signer = ProfileSyncDeviceSigner::generate("runtime-scheduler-stale-select-a")
+            .expect("generate scheduler local device signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register scheduler local trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write scheduler local setting");
+
+        let selected_provider_id =
+            "local-fixture-availability-runtime-scheduler-stale-select-pinner";
+        let latest_revision_before_plan = database
+            .latest_sync_revision(profile)
+            .expect("read latest scheduler revision");
+        let plan = BroadwebdSettingsSyncScheduler::new(&device_daemon)
+            .plan_once_selecting_retention_providers(
+                &database,
+                &SettingsSyncSchedulerConfig::new(
+                    profile,
+                    settings_root_id,
+                    SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
+                ),
+                &signer,
+                &[SettingsSyncRetentionProviderHandle::new(
+                    selected_provider_id,
+                    &provider_daemon,
+                )],
+            )
+            .expect("scheduler plan filters stale selected retention provider handles");
+
+        assert_eq!(plan.retention_candidate_count(), 1);
+        assert!(
+            plan.preflight
+                .retention_provider_candidates
+                .iter()
+                .any(|provider| {
+                    provider.provider_id == "local-fixture-device-runtime-scheduler-stale-select-a"
+                })
+        );
+        assert_eq!(plan.selected_retention_provider_count(), 0);
+        assert_eq!(
+            plan.undiscovered_retention_provider_ids,
+            vec![selected_provider_id.to_string()]
+        );
+        assert_eq!(plan.duplicate_retention_provider_count(), 0);
+        assert!(plan.degraded_before());
+        assert!(!plan.preflight.before_health.provider_health.degraded);
+        assert_eq!(
+            plan.preflight
+                .before_health
+                .provider_health
+                .stale_online_providers,
+            1
+        );
+        assert_eq!(
+            database
+                .latest_sync_revision(profile)
+                .expect("read latest revision after plan"),
+            latest_revision_before_plan
+        );
+        assert!(
+            database
+                .profile_sync_roots(profile)
+                .expect("read roots after plan")
+                .is_empty()
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
     fn broadwebd_settings_sync_scheduler_surfaces_retention_quota_failure() {
         let network = InProcessBroadwebNetwork::new();
         let device_state_root = test_state_root("scheduler-quota-device");

@@ -341,6 +341,9 @@ Current baseline:
   external discovery. The same selection logic is available as a read-only
   scheduler plan that reports selected, undiscovered, and duplicate handles
   before any publish, pull, retain, or root mutation occurs.
+- The read-only scheduler plan now also proves stale selected retention-provider
+  handles are excluded from the fresh candidate set and reported before any
+  local revision or sync-root state is mutated.
 - Scheduler-facing fixture coverage now includes retention quota and
   pinning-policy failures from a selected availability provider. The cycle
   surfaces the local refusal as a retention error instead of reporting
