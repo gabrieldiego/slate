@@ -5,7 +5,7 @@ use std::time::Duration;
 use url::Url;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(12);
-#[cfg(test)]
+#[cfg(any(test, feature = "test-fixtures"))]
 const INTERNAL_HTTP_FIXTURE_SCHEME: &str = "slate-fixture-http";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -340,7 +340,7 @@ pub(crate) fn fetch_http_url(
     url: Url,
     budget: &ResourceBudget,
 ) -> Result<HttpFetchResponse, BroadwebdError> {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-fixtures"))]
     if is_internal_fixture_http_url(&url) {
         return fetch_internal_fixture_http_url(&url, budget);
     }
@@ -400,18 +400,23 @@ fn response_headers(headers: &reqwest::header::HeaderMap) -> Vec<HttpHeader> {
         .collect()
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-fixtures"))]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct InternalFixtureHttpResponse {
+pub struct InternalFixtureHttpResponse {
     pub status_code: u16,
     pub content_type: Option<String>,
     pub headers: Vec<HttpHeader>,
     pub body: Vec<u8>,
 }
 
-#[cfg(test)]
-pub(crate) fn register_internal_fixture_http_response(
-    response: InternalFixtureHttpResponse,
+#[cfg(any(test, feature = "test-fixtures"))]
+pub fn register_internal_fixture_http_response(response: InternalFixtureHttpResponse) -> String {
+    register_internal_fixture_http_sequence(vec![response])
+}
+
+#[cfg(any(test, feature = "test-fixtures"))]
+pub fn register_internal_fixture_http_sequence(
+    responses: Vec<InternalFixtureHttpResponse>,
 ) -> String {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -422,12 +427,28 @@ pub(crate) fn register_internal_fixture_http_response(
     internal_fixture_http_responses()
         .lock()
         .expect("internal HTTP fixture registry should not be poisoned")
-        .insert(base_url.clone(), response);
+        .insert(
+            base_url.clone(),
+            InternalFixtureHttp {
+                responses: responses.into(),
+                requests: Vec::new(),
+            },
+        );
     base_url
 }
 
-#[cfg(test)]
-pub(crate) fn unregistered_internal_fixture_http_url() -> String {
+#[cfg(any(test, feature = "test-fixtures"))]
+pub fn take_internal_fixture_http_requests(base_url: &str) -> Vec<String> {
+    internal_fixture_http_responses()
+        .lock()
+        .expect("internal HTTP fixture registry should not be poisoned")
+        .remove(base_url)
+        .map(|fixture| fixture.requests)
+        .unwrap_or_default()
+}
+
+#[cfg(any(test, feature = "test-fixtures"))]
+pub fn unregistered_internal_fixture_http_url() -> String {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     static NEXT_MISSING_FIXTURE_ID: AtomicUsize = AtomicUsize::new(1);
@@ -436,7 +457,7 @@ pub(crate) fn unregistered_internal_fixture_http_url() -> String {
     format!("{INTERNAL_HTTP_FIXTURE_SCHEME}://missing-{id}")
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-fixtures"))]
 pub(crate) fn is_internal_fixture_http_url(url: &Url) -> bool {
     url.scheme() == INTERNAL_HTTP_FIXTURE_SCHEME
         && url
@@ -444,7 +465,7 @@ pub(crate) fn is_internal_fixture_http_url(url: &Url) -> bool {
             .is_some_and(|host| host.starts_with("fixture-") || host.starts_with("missing-"))
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-fixtures"))]
 fn fetch_internal_fixture_http_url(
     url: &Url,
     budget: &ResourceBudget,
@@ -463,9 +484,13 @@ fn fetch_internal_fixture_http_url(
             "internal HTTP fixture has no response for {url_text}"
         )));
     };
-    let response = fixtures
-        .remove(base_url.as_str())
+    let fixture = fixtures
+        .get_mut(base_url.as_str())
         .expect("matched internal HTTP fixture should exist");
+    fixture.requests.push(http_fixture_request_target(url));
+    let response = fixture.responses.pop_front().ok_or_else(|| {
+        BroadwebdError::Request(format!("internal HTTP fixture {base_url} has no response"))
+    })?;
 
     if response.body.len() > budget.max_http_response_bytes {
         return Err(BroadwebdError::ResponseTooLarge {
@@ -488,14 +513,33 @@ fn fetch_internal_fixture_http_url(
     ))
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-fixtures"))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct InternalFixtureHttp {
+    responses: std::collections::VecDeque<InternalFixtureHttpResponse>,
+    requests: Vec<String>,
+}
+
+#[cfg(any(test, feature = "test-fixtures"))]
+fn http_fixture_request_target(url: &Url) -> String {
+    let mut target = url.path().to_string();
+    if target.is_empty() {
+        target.push('/');
+    }
+    if let Some(query) = url.query() {
+        target.push('?');
+        target.push_str(query);
+    }
+    target
+}
+
+#[cfg(any(test, feature = "test-fixtures"))]
 fn internal_fixture_http_responses()
--> &'static std::sync::Mutex<std::collections::BTreeMap<String, InternalFixtureHttpResponse>> {
+-> &'static std::sync::Mutex<std::collections::BTreeMap<String, InternalFixtureHttp>> {
     use std::collections::BTreeMap;
     use std::sync::{Mutex, OnceLock};
 
-    static RESPONSES: OnceLock<Mutex<BTreeMap<String, InternalFixtureHttpResponse>>> =
-        OnceLock::new();
+    static RESPONSES: OnceLock<Mutex<BTreeMap<String, InternalFixtureHttp>>> = OnceLock::new();
 
     RESPONSES.get_or_init(|| Mutex::new(BTreeMap::new()))
 }

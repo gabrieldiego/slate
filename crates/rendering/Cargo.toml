@@ -14,5 +14,8 @@ servo.workspace = true
 slate-broadwebd.workspace = true
 url.workspace = true
 
+[dev-dependencies]
+slate-broadwebd = { workspace = true, features = ["test-fixtures"] }
+
 [lints]
 workspace = true

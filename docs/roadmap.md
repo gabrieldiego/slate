@@ -192,6 +192,9 @@ Current baseline:
   inside the test process instead of binding loopback ports. Missing simulated
   fixtures fail as internal fixture errors instead of falling through to a real
   socket, DNS lookup, public gateway, or local daemon.
+- Rendering broadweb smoke fixtures now consume that same `test-fixtures`
+  layer, so IPFS/IPNS gateway and Kubo subresource tests record simulated
+  requests without starting loopback HTTP servers.
 - The local profile-sync fixture can now mark simulated devices offline and
   online, allowing tests to verify unavailable devices fail closed without
   touching sockets, DNS, Tor, IPFS, or external relays.

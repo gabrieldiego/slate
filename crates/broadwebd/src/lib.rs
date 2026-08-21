@@ -73,11 +73,24 @@ pub use state::{StateRoot, TemporaryDownloadRecord};
 pub use status::{BroadwebStatusKind, BroadwebStatusReporter, BroadwebStatusSnapshot};
 pub use transports::direct_http::DirectHttpTransport;
 
+#[cfg(any(test, feature = "test-fixtures"))]
+pub mod test_fixtures {
+    pub use crate::http::{
+        InternalFixtureHttpResponse, register_internal_fixture_http_response,
+        register_internal_fixture_http_sequence, take_internal_fixture_http_requests,
+        unregistered_internal_fixture_http_url,
+    };
+    pub use crate::protocols::ipfs::{
+        InternalKuboRpcResponse, register_internal_kubo_rpc_fixture,
+        take_internal_kubo_rpc_fixture_requests,
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::http::{
         InternalFixtureHttpResponse, register_internal_fixture_http_response,
-        unregistered_internal_fixture_http_url,
+        take_internal_fixture_http_requests, unregistered_internal_fixture_http_url,
     };
     use super::protocols::ipfs::{
         InternalKuboRpcResponse, register_internal_kubo_rpc_fixture,
@@ -1777,7 +1790,7 @@ mod tests {
             headers,
             body: body.as_bytes().to_vec(),
         });
-        (address, InternalHttpFixtureHandle)
+        (address.clone(), InternalHttpFixtureHandle { address })
     }
 
     fn missing_internal_http_fixture_url() -> String {
@@ -1826,10 +1839,13 @@ mod tests {
             .expect("fixture status code should be numeric")
     }
 
-    struct InternalHttpFixtureHandle;
+    struct InternalHttpFixtureHandle {
+        address: String,
+    }
 
     impl InternalHttpFixtureHandle {
         fn join(self) -> Result<(), String> {
+            take_internal_fixture_http_requests(self.address.as_str());
             Ok(())
         }
     }

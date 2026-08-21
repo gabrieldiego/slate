@@ -10,7 +10,7 @@ use url::Url;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(12);
 const USER_AGENT: &str = "Slate/0.0.1";
-#[cfg(test)]
+#[cfg(any(test, feature = "test-fixtures"))]
 const INTERNAL_KUBO_RPC_FIXTURE_SCHEME: &str = "slate-fixture-kubo";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -91,7 +91,7 @@ impl TransportPlugin for IpfsKuboRpcTransport {
                 kubo_cat_url_for_path(&candidate.content_path, self.endpoint.api_base_url())?;
             let url = parse_http_url(&cat_url)?;
 
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-fixtures"))]
             if is_internal_kubo_rpc_fixture_url(&url) {
                 let fetch_response =
                     fetch_internal_kubo_rpc_fixture(&url, &candidate.document_url, budget)?;
@@ -223,7 +223,7 @@ fn should_try_directory_index(path: &str) -> bool {
 fn validate_kubo_rpc_url(api_base_url: &str) -> Result<(), BroadwebdError> {
     let url =
         Url::parse(api_base_url).map_err(|error| BroadwebdError::InvalidUrl(error.to_string()))?;
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-fixtures"))]
     if is_internal_kubo_rpc_fixture_url(&url) {
         return Ok(());
     }
@@ -267,18 +267,16 @@ fn response_headers(headers: &reqwest::header::HeaderMap) -> Vec<HttpHeader> {
         .collect()
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-fixtures"))]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct InternalKuboRpcResponse {
+pub struct InternalKuboRpcResponse {
     pub status_code: u16,
     pub content_type: String,
     pub body: Vec<u8>,
 }
 
-#[cfg(test)]
-pub(crate) fn register_internal_kubo_rpc_fixture(
-    responses: Vec<InternalKuboRpcResponse>,
-) -> String {
+#[cfg(any(test, feature = "test-fixtures"))]
+pub fn register_internal_kubo_rpc_fixture(responses: Vec<InternalKuboRpcResponse>) -> String {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     static NEXT_FIXTURE_ID: AtomicUsize = AtomicUsize::new(1);
@@ -298,8 +296,8 @@ pub(crate) fn register_internal_kubo_rpc_fixture(
     base_url
 }
 
-#[cfg(test)]
-pub(crate) fn take_internal_kubo_rpc_fixture_requests(base_url: &str) -> Vec<String> {
+#[cfg(any(test, feature = "test-fixtures"))]
+pub fn take_internal_kubo_rpc_fixture_requests(base_url: &str) -> Vec<String> {
     internal_kubo_rpc_fixtures()
         .lock()
         .expect("internal Kubo fixture registry should not be poisoned")
@@ -308,14 +306,14 @@ pub(crate) fn take_internal_kubo_rpc_fixture_requests(base_url: &str) -> Vec<Str
         .unwrap_or_default()
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-fixtures"))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct InternalKuboRpcFixture {
     responses: std::collections::VecDeque<InternalKuboRpcResponse>,
     requests: Vec<String>,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-fixtures"))]
 fn is_internal_kubo_rpc_fixture_url(url: &Url) -> bool {
     url.scheme() == INTERNAL_KUBO_RPC_FIXTURE_SCHEME
         && url
@@ -323,7 +321,7 @@ fn is_internal_kubo_rpc_fixture_url(url: &Url) -> bool {
             .is_some_and(|host| host.starts_with("fixture-"))
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-fixtures"))]
 fn fetch_internal_kubo_rpc_fixture(
     url: &Url,
     document_url: &str,
@@ -371,7 +369,7 @@ fn fetch_internal_kubo_rpc_fixture(
     ))
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-fixtures"))]
 fn internal_kubo_rpc_base_url(url: &Url) -> Result<String, BroadwebdError> {
     if url.scheme() == INTERNAL_KUBO_RPC_FIXTURE_SCHEME {
         let host = url.host_str().ok_or_else(|| {
@@ -394,7 +392,7 @@ fn internal_kubo_rpc_base_url(url: &Url) -> Result<String, BroadwebdError> {
     ))
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-fixtures"))]
 fn internal_kubo_rpc_fixtures()
 -> &'static std::sync::Mutex<std::collections::BTreeMap<String, InternalKuboRpcFixture>> {
     use std::collections::BTreeMap;

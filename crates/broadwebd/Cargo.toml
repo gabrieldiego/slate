@@ -6,6 +6,9 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+test-fixtures = []
+
 [dependencies]
 arti-client = { version = "0.45", default-features = false, features = ["tokio", "rustls", "onion-service-client"] }
 reqwest.workspace = true

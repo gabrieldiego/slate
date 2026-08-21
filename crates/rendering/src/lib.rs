@@ -1200,13 +1200,14 @@ mod tests {
     };
     use slate_broadwebd::{
         BroadwebDaemon, HttpFetchService, IpfsConfig, IpfsService, PluginRegistry,
+        test_fixtures::{
+            InternalFixtureHttpResponse, InternalKuboRpcResponse,
+            register_internal_fixture_http_sequence, register_internal_kubo_rpc_fixture,
+            take_internal_fixture_http_requests, take_internal_kubo_rpc_fixture_requests,
+        },
     };
     use std::fs;
-    use std::io::{ErrorKind, Read, Write};
-    use std::net::TcpListener;
     use std::path::PathBuf;
-    use std::thread;
-    use std::time::{Duration, Instant};
 
     #[test]
     fn servo_backend_points_at_vendored_path() {
@@ -1595,72 +1596,126 @@ mod tests {
         );
     }
 
-    fn local_ipfs_gateway_fixture() -> (String, thread::JoinHandle<Vec<String>>) {
-        local_gateway_fixture(2, ipfs_fixture_response)
+    fn local_ipfs_gateway_fixture() -> (String, InternalHttpFixtureHandle) {
+        local_gateway_fixture(
+            &[
+                "/ipfs/bafybeigdyrzt/index.html",
+                "/ipfs/bafybeigdyrzt/style.css",
+            ],
+            ipfs_fixture_response,
+        )
     }
 
-    fn local_ipns_gateway_fixture() -> (String, thread::JoinHandle<Vec<String>>) {
-        local_gateway_fixture(1, ipns_fixture_response)
+    fn local_ipns_gateway_fixture() -> (String, InternalHttpFixtureHandle) {
+        local_gateway_fixture(&["/ipns/example.net/index.html"], ipns_fixture_response)
     }
 
-    fn local_ipfs_download_gateway_fixture() -> (String, thread::JoinHandle<Vec<String>>) {
-        local_gateway_fixture(1, ipfs_download_fixture_response)
+    fn local_ipfs_download_gateway_fixture() -> (String, InternalHttpFixtureHandle) {
+        local_gateway_fixture(
+            &["/ipfs/bafybeigdyrzt/picture.png"],
+            ipfs_download_fixture_response,
+        )
     }
 
-    fn local_ipfs_error_gateway_fixture() -> (String, thread::JoinHandle<Vec<String>>) {
-        local_gateway_fixture(1, ipfs_error_fixture_response)
+    fn local_ipfs_error_gateway_fixture() -> (String, InternalHttpFixtureHandle) {
+        local_gateway_fixture(
+            &["/ipfs/bafybeigdyrzt/missing.txt"],
+            ipfs_error_fixture_response,
+        )
     }
 
-    fn local_ipfs_kubo_rpc_fixture() -> (String, thread::JoinHandle<Vec<String>>) {
-        local_gateway_fixture(3, ipfs_kubo_fixture_response)
+    fn local_ipfs_kubo_rpc_fixture() -> (String, InternalKuboRpcFixtureHandle) {
+        local_kubo_rpc_fixture(
+            &[
+                "/api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Fdocs",
+                "/api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Fdocs%2Findex.html",
+                "/api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Fdocs%2Fstyle.css",
+            ],
+            ipfs_kubo_fixture_response,
+        )
     }
 
     fn local_gateway_fixture(
-        expected_requests: usize,
+        expected_paths: &[&str],
         response_for: fn(&str) -> (&'static str, &'static str, &'static str),
-    ) -> (String, thread::JoinHandle<Vec<String>>) {
-        let listener = TcpListener::bind("127.0.0.1:0").expect("bind IPFS gateway fixture");
-        listener
-            .set_nonblocking(true)
-            .expect("set fixture listener nonblocking");
-        let address = format!("http://{}", listener.local_addr().expect("local address"));
-        let server = thread::spawn(move || {
-            let mut requests = Vec::new();
-            let deadline = Instant::now() + Duration::from_secs(5);
-            while requests.len() < expected_requests && Instant::now() < deadline {
-                match listener.accept() {
-                    Ok((mut stream, _)) => {
-                        let mut request = [0_u8; 2048];
-                        let read = stream.read(&mut request).expect("read fixture request");
-                        let request = String::from_utf8_lossy(&request[..read]);
-                        let path = request_path(&request);
-                        let (status, content_type, body) = response_for(&path);
-                        requests.push(path);
-                        let response = format!(
-                            "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                            body.len()
-                        );
-                        stream
-                            .write_all(response.as_bytes())
-                            .expect("write fixture response");
-                    }
-                    Err(error) if error.kind() == ErrorKind::WouldBlock => {
-                        thread::sleep(Duration::from_millis(10));
-                    }
-                    Err(error) => panic!("accept fixture request: {error}"),
+    ) -> (String, InternalHttpFixtureHandle) {
+        let responses = expected_paths
+            .iter()
+            .map(|path| {
+                let (status, content_type, body) = response_for(path);
+                InternalFixtureHttpResponse {
+                    status_code: status_code(status),
+                    content_type: Some(content_type.to_string()),
+                    headers: vec![slate_broadwebd::HttpHeader {
+                        name: "content-type".to_string(),
+                        value: content_type.to_string(),
+                    }],
+                    body: body.as_bytes().to_vec(),
                 }
-            }
-            requests
-        });
-        (address, server)
+            })
+            .collect();
+        let address = register_internal_fixture_http_sequence(responses);
+        (address.clone(), InternalHttpFixtureHandle { address })
+    }
+
+    fn local_kubo_rpc_fixture(
+        expected_paths: &[&str],
+        response_for: fn(&str) -> (&'static str, &'static str, &'static str),
+    ) -> (String, InternalKuboRpcFixtureHandle) {
+        let responses = expected_paths
+            .iter()
+            .map(|path| {
+                let (status, content_type, body) = response_for(path);
+                InternalKuboRpcResponse {
+                    status_code: status_code(status),
+                    content_type: content_type.to_string(),
+                    body: body.as_bytes().to_vec(),
+                }
+            })
+            .collect();
+        let address = register_internal_kubo_rpc_fixture(responses);
+        (address.clone(), InternalKuboRpcFixtureHandle { address })
+    }
+
+    fn status_code(status: &str) -> u16 {
+        status
+            .split_whitespace()
+            .next()
+            .expect("fixture status should include numeric code")
+            .parse()
+            .expect("fixture status code should be numeric")
+    }
+
+    struct InternalHttpFixtureHandle {
+        address: String,
+    }
+
+    impl InternalHttpFixtureHandle {
+        fn join(self) -> Result<Vec<String>, String> {
+            Ok(take_internal_fixture_http_requests(self.address.as_str()))
+        }
+    }
+
+    struct InternalKuboRpcFixtureHandle {
+        address: String,
+    }
+
+    impl InternalKuboRpcFixtureHandle {
+        fn join(self) -> Result<Vec<String>, String> {
+            Ok(
+                take_internal_kubo_rpc_fixture_requests(self.address.as_str())
+                    .into_iter()
+                    .map(|request| request_path(&request))
+                    .collect(),
+            )
+        }
     }
 
     fn request_path(request: &str) -> String {
         request
-            .lines()
-            .next()
-            .and_then(|line| line.split_whitespace().nth(1))
-            .unwrap_or("/")
+            .split_whitespace()
+            .nth(1)
+            .unwrap_or(request)
             .to_string()
     }
 

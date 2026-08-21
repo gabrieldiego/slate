@@ -626,6 +626,12 @@ fixtures should run entirely inside the local test process by default and must
 not contact the real internet, Tor, public IPFS/IPNS, external relays, or
 loopback sockets.
 
+Broadweb HTTP-style fixtures should use broadwebd's `test-fixtures` feature and
+internal `slate-fixture-http://` or `slate-fixture-kubo://` endpoints when
+downstream crate tests need simulated gateway or Kubo behavior. This keeps
+subresource and rendering smoke tests inside the process instead of binding a
+local port.
+
 Real protocol tests should use local fixtures or mock daemons. Tests must not
 require live IPFS, Tor, I2P, public gateways, or external network availability
 unless they are explicitly marked as external/manual.
