@@ -808,6 +808,125 @@ pub fn open_signed_profile_sync_settings_manifest_objects(
     })
 }
 
+pub trait ProfileSyncObjectSource {
+    type Error;
+
+    fn resolve_profile_sync_root(
+        &self,
+        profile: &str,
+        root_id: &str,
+    ) -> Result<Option<String>, Self::Error>;
+
+    fn get_profile_sync_object(
+        &self,
+        profile: &str,
+        object_id: &str,
+    ) -> Result<ProfileSyncObjectBytes, Self::Error>;
+}
+
+#[derive(Debug)]
+pub enum ProfileSyncPullError<SourceError> {
+    Source(SourceError),
+    SyncObject(SyncObjectError),
+    ObjectIdMismatch { expected: String, actual: String },
+}
+
+impl<SourceError: fmt::Display> fmt::Display for ProfileSyncPullError<SourceError> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Source(error) => write!(formatter, "profile sync object source failed: {error}"),
+            Self::SyncObject(error) => write!(formatter, "profile sync object failed: {error}"),
+            Self::ObjectIdMismatch { expected, actual } => write!(
+                formatter,
+                "profile sync source returned object id {actual}, expected {expected}"
+            ),
+        }
+    }
+}
+
+impl<SourceError> std::error::Error for ProfileSyncPullError<SourceError>
+where
+    SourceError: std::error::Error + 'static,
+{
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Source(error) => Some(error),
+            Self::SyncObject(error) => Some(error),
+            Self::ObjectIdMismatch { .. } => None,
+        }
+    }
+}
+
+pub fn pull_signed_profile_sync_settings_manifest_objects<Source>(
+    source: &Source,
+    profile: &str,
+    root_id: &str,
+    content_key: &ProfileSyncContentKey,
+    public_key: &ProfileSyncDevicePublicKey,
+    key_id: &str,
+) -> Result<Option<VerifiedProfileSyncSettingsManifestObjects>, ProfileSyncPullError<Source::Error>>
+where
+    Source: ProfileSyncObjectSource,
+{
+    let Some(manifest_object_id) = source
+        .resolve_profile_sync_root(profile, root_id)
+        .map_err(ProfileSyncPullError::Source)?
+    else {
+        return Ok(None);
+    };
+
+    let manifest_object = fetch_profile_sync_object(source, profile, manifest_object_id.as_str())?;
+    let manifest = open_signed_profile_sync_manifest(
+        manifest_object.bytes.as_slice(),
+        content_key,
+        public_key,
+        profile,
+        key_id,
+    )
+    .map_err(ProfileSyncPullError::SyncObject)?;
+    let snapshot_object = manifest
+        .current_snapshot_object_id
+        .as_deref()
+        .map(|object_id| fetch_profile_sync_object(source, profile, object_id))
+        .transpose()?;
+    let mut tail_change_objects = Vec::with_capacity(manifest.tail_change_object_ids.len());
+    for object_id in &manifest.tail_change_object_ids {
+        tail_change_objects.push(fetch_profile_sync_object(source, profile, object_id)?);
+    }
+
+    open_signed_profile_sync_settings_manifest_objects(
+        &manifest_object,
+        snapshot_object.as_ref(),
+        tail_change_objects.as_slice(),
+        content_key,
+        public_key,
+        profile,
+        key_id,
+    )
+    .map(Some)
+    .map_err(ProfileSyncPullError::SyncObject)
+}
+
+fn fetch_profile_sync_object<Source>(
+    source: &Source,
+    profile: &str,
+    object_id: &str,
+) -> Result<ProfileSyncObjectBytes, ProfileSyncPullError<Source::Error>>
+where
+    Source: ProfileSyncObjectSource,
+{
+    let object = source
+        .get_profile_sync_object(profile, object_id)
+        .map_err(ProfileSyncPullError::Source)?;
+    if object.object_id != object_id {
+        return Err(ProfileSyncPullError::ObjectIdMismatch {
+            expected: object_id.to_string(),
+            actual: object.object_id,
+        });
+    }
+    Ok(object)
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BookmarkUpdate {
     pub profile: String,
@@ -3194,6 +3313,84 @@ mod tests {
         path
     }
 
+    fn sign_test_sync_object(
+        profile: &str,
+        domain: &str,
+        object_kind: &str,
+        key_id: &str,
+        payload: &[u8],
+        content_key: &ProfileSyncContentKey,
+        signer: &ProfileSyncDeviceSigner,
+        nonce_byte: u8,
+    ) -> Vec<u8> {
+        let encrypted = EncryptedSyncObject::seal_with_nonce(
+            profile,
+            domain,
+            object_kind,
+            key_id,
+            payload,
+            content_key,
+            [nonce_byte; PROFILE_SYNC_NONCE_BYTES],
+        )
+        .unwrap();
+        signer
+            .sign(encrypted.to_bytes().unwrap().as_slice())
+            .unwrap()
+            .to_bytes()
+            .unwrap()
+    }
+
+    #[derive(Default)]
+    struct InMemoryProfileSyncObjectSource {
+        roots: BTreeMap<(String, String), String>,
+        objects: BTreeMap<(String, String), ProfileSyncObjectBytes>,
+    }
+
+    impl InMemoryProfileSyncObjectSource {
+        fn publish_root(&mut self, profile: &str, root_id: &str, object_id: &str) {
+            self.roots.insert(
+                (profile.to_string(), root_id.to_string()),
+                object_id.to_string(),
+            );
+        }
+
+        fn insert_object(&mut self, profile: &str, object_id: &str, bytes: Vec<u8>) {
+            self.objects.insert(
+                (profile.to_string(), object_id.to_string()),
+                ProfileSyncObjectBytes {
+                    object_id: object_id.to_string(),
+                    bytes,
+                },
+            );
+        }
+    }
+
+    impl ProfileSyncObjectSource for InMemoryProfileSyncObjectSource {
+        type Error = String;
+
+        fn resolve_profile_sync_root(
+            &self,
+            profile: &str,
+            root_id: &str,
+        ) -> Result<Option<String>, Self::Error> {
+            Ok(self
+                .roots
+                .get(&(profile.to_string(), root_id.to_string()))
+                .cloned())
+        }
+
+        fn get_profile_sync_object(
+            &self,
+            profile: &str,
+            object_id: &str,
+        ) -> Result<ProfileSyncObjectBytes, Self::Error> {
+            self.objects
+                .get(&(profile.to_string(), object_id.to_string()))
+                .cloned()
+                .ok_or_else(|| format!("missing object {object_id}"))
+        }
+    }
+
     #[test]
     fn database_resolution_prefers_explicit_path() {
         let launch_dir = test_dir("explicit-launch");
@@ -3527,6 +3724,181 @@ mod tests {
             ),
             Err(SyncObjectError::UnexpectedKeyId { expected, actual })
                 if expected == "content-key-epoch-2" && actual == "content-key-epoch-1"
+        ));
+    }
+
+    #[test]
+    fn profile_sync_pull_fetches_manifest_snapshot_and_tail_objects() {
+        let content_key = ProfileSyncContentKey::from_bytes([12; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let trusted_public_key = signer.public_key().unwrap();
+        let key_id = "content-key-epoch-1";
+        let root_id = "settings/latest";
+        let snapshot_object_id = "snapshot-object-1";
+        let tail_object_id = "tail-object-1";
+        let manifest_object_id = "manifest-object-1";
+        let snapshot = ProfileSyncSettingsSnapshot {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            schema_version: PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION,
+            covers_revision: 1,
+            included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            values: vec![ProfileSyncSettingsSnapshotValue {
+                domain: SYNC_DOMAIN_SETTINGS.to_string(),
+                key: "ui.theme".to_string(),
+                value: "teal".to_string(),
+                value_kind: "text".to_string(),
+                revision: 1,
+            }],
+            created_at: 100,
+        };
+        let tail_change = IncomingSyncSettingText::new(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            "ui.theme",
+            "slate",
+            "device-a",
+            2,
+            2,
+        );
+        let manifest = ProfileSyncManifest {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: root_id.to_string(),
+            schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            current_snapshot_object_id: Some(snapshot_object_id.to_string()),
+            tail_change_object_ids: vec![tail_object_id.to_string()],
+            included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            device_frontiers: vec![ProfileSyncDeviceFrontier {
+                device_id: "device-a".to_string(),
+                latest_sequence: 2,
+                latest_change_object_id: Some(tail_object_id.to_string()),
+            }],
+            retention_policy: ProfileSyncRetentionPolicy::default(),
+            created_at: 101,
+        };
+        let snapshot_payload = serde_json::to_vec(&snapshot).unwrap();
+        let tail_payload = serde_json::to_vec(&tail_change).unwrap();
+        let manifest_payload = serde_json::to_vec(&manifest).unwrap();
+        let mut source = InMemoryProfileSyncObjectSource::default();
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            snapshot_object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND,
+                key_id,
+                snapshot_payload.as_slice(),
+                &content_key,
+                &signer,
+                11,
+            ),
+        );
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            tail_object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND,
+                key_id,
+                tail_payload.as_slice(),
+                &content_key,
+                &signer,
+                12,
+            ),
+        );
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            manifest_object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+                key_id,
+                manifest_payload.as_slice(),
+                &content_key,
+                &signer,
+                13,
+            ),
+        );
+        source.publish_root(DEFAULT_PROFILE_ID, root_id, manifest_object_id);
+
+        let pulled = pull_signed_profile_sync_settings_manifest_objects(
+            &source,
+            DEFAULT_PROFILE_ID,
+            root_id,
+            &content_key,
+            &trusted_public_key,
+            key_id,
+        )
+        .unwrap()
+        .expect("published settings root");
+        assert_eq!(pulled.manifest_object_id, manifest_object_id);
+        assert_eq!(pulled.manifest, manifest);
+        assert_eq!(
+            pulled
+                .snapshot
+                .as_ref()
+                .map(|snapshot| snapshot.object_id.as_str()),
+            Some(snapshot_object_id)
+        );
+        assert_eq!(pulled.tail_changes[0].object_id, tail_object_id);
+
+        let destination_path = test_dir("sync-pull-destination").join(DEFAULT_DATABASE_FILE_NAME);
+        let destination =
+            SlateProfileDatabase::open_resolved_with_device_id(destination_path, "device-b")
+                .unwrap();
+        destination
+            .apply_verified_settings_manifest_objects(&pulled)
+            .unwrap();
+
+        assert_eq!(
+            destination.get_setting_text("ui.theme").unwrap().as_deref(),
+            Some("slate")
+        );
+        assert_eq!(
+            destination
+                .profile_sync_root(DEFAULT_PROFILE_ID, root_id)
+                .unwrap()
+                .expect("stored profile root")
+                .object_id,
+            manifest_object_id
+        );
+    }
+
+    #[test]
+    fn profile_sync_pull_rejects_source_object_id_mismatch() {
+        let content_key = ProfileSyncContentKey::from_bytes([13; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let trusted_public_key = signer.public_key().unwrap();
+        let mut source = InMemoryProfileSyncObjectSource::default();
+        source.publish_root(DEFAULT_PROFILE_ID, "settings/latest", "manifest-object-1");
+        source.objects.insert(
+            (
+                DEFAULT_PROFILE_ID.to_string(),
+                "manifest-object-1".to_string(),
+            ),
+            ProfileSyncObjectBytes {
+                object_id: "wrong-object".to_string(),
+                bytes: Vec::new(),
+            },
+        );
+
+        let error = pull_signed_profile_sync_settings_manifest_objects(
+            &source,
+            DEFAULT_PROFILE_ID,
+            "settings/latest",
+            &content_key,
+            &trusted_public_key,
+            "content-key-epoch-1",
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            ProfileSyncPullError::ObjectIdMismatch { expected, actual }
+                if expected == "manifest-object-1" && actual == "wrong-object"
         ));
     }
 

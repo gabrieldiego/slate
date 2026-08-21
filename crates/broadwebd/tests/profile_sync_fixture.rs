@@ -1,9 +1,9 @@
 #![forbid(unsafe_code)]
 
 use slate_broadwebd::{
-    LocalProfileSyncFixture, PluginRegistry, ProfileSyncObjectRequest, ProfileSyncPutObjectRequest,
-    ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootRequest, ProfileSyncRootUpdate,
-    ResourceBudget,
+    BroadwebdError, LocalProfileSyncFixture, PluginRegistry, ProfileSyncObjectRequest,
+    ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootRequest,
+    ProfileSyncRootUpdate, ResourceBudget,
 };
 use slate_storage::{
     DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
@@ -12,11 +12,11 @@ use slate_storage::{
     PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND, PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND,
     PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION, ProfileSyncContentKey,
     ProfileSyncDeviceFrontier, ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner,
-    ProfileSyncManifest, ProfileSyncObjectBytes, ProfileSyncRetentionPolicy,
-    ProfileSyncSettingsSnapshot, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, SyncChangeRecord,
-    SyncRevisionRecord, SyncSnapshotRegistration, open_signed_profile_sync_manifest,
-    open_signed_profile_sync_settings_manifest_objects, open_signed_profile_sync_settings_snapshot,
-    open_signed_sync_setting_text,
+    ProfileSyncManifest, ProfileSyncObjectBytes, ProfileSyncObjectSource,
+    ProfileSyncRetentionPolicy, ProfileSyncSettingsSnapshot, SYNC_DOMAIN_SETTINGS,
+    SlateProfileDatabase, SyncChangeRecord, SyncRevisionRecord, SyncSnapshotRegistration,
+    open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
+    open_signed_sync_setting_text, pull_signed_profile_sync_settings_manifest_objects,
 };
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -422,21 +422,25 @@ fn two_local_devices_transfer_compacted_settings_snapshot_through_profile_fixtur
         &budget,
     );
 
-    let fetched_manifest = fetch_published_object(
-        &device_b_broadweb,
+    let source = RegistryProfileSyncObjectSource {
+        registry: &device_b_broadweb,
+        budget: &budget,
+    };
+    let verified_objects = pull_signed_profile_sync_settings_manifest_objects(
+        &source,
         DEFAULT_PROFILE_ID,
         SETTINGS_ROOT_ID,
-        &budget,
-    );
-    assert_eq!(fetched_manifest.object_id, manifest_object_id);
-    let manifest = verify_and_decrypt_manifest(
-        fetched_manifest.bytes.as_slice(),
         &content_key,
         &trusted_device_a_key,
-    );
+        FIXTURE_CONTENT_KEY_ID,
+    )
+    .expect("pull fetched manifest object set")
+    .expect("settings root resolves");
+    assert_eq!(verified_objects.manifest_object_id, manifest_object_id);
+    let manifest = &verified_objects.manifest;
     assert_eq!(
-        manifest.current_snapshot_object_id,
-        Some(snapshot_object_id.clone())
+        manifest.current_snapshot_object_id.as_deref(),
+        Some(snapshot_object_id.as_str())
     );
     assert_eq!(manifest.tail_change_object_ids, Vec::<String>::new());
     assert_eq!(manifest.included_domains, included_domains);
@@ -607,21 +611,25 @@ fn two_local_devices_apply_snapshot_then_manifest_tail_changes() {
         &budget,
     );
 
-    let fetched_manifest = fetch_published_object(
-        &device_b_broadweb,
+    let source = RegistryProfileSyncObjectSource {
+        registry: &device_b_broadweb,
+        budget: &budget,
+    };
+    let verified_objects = pull_signed_profile_sync_settings_manifest_objects(
+        &source,
         DEFAULT_PROFILE_ID,
         SETTINGS_ROOT_ID,
-        &budget,
-    );
-    assert_eq!(fetched_manifest.object_id, manifest_object_id);
-    let manifest = verify_and_decrypt_manifest(
-        fetched_manifest.bytes.as_slice(),
         &content_key,
         &trusted_device_a_key,
-    );
+        FIXTURE_CONTENT_KEY_ID,
+    )
+    .expect("pull fetched manifest object set")
+    .expect("settings root resolves");
+    assert_eq!(verified_objects.manifest_object_id, manifest_object_id);
+    let manifest = &verified_objects.manifest;
     assert_eq!(
-        manifest.current_snapshot_object_id,
-        Some(snapshot_object_id.clone())
+        manifest.current_snapshot_object_id.as_deref(),
+        Some(snapshot_object_id.as_str())
     );
     assert_eq!(
         manifest.tail_change_object_ids,
@@ -635,38 +643,6 @@ fn two_local_devices_apply_snapshot_then_manifest_tail_changes() {
         Some(tail_change_object_id.as_str())
     );
 
-    let fetched_snapshot = fetch_object(
-        &device_b_broadweb,
-        DEFAULT_PROFILE_ID,
-        snapshot_object_id.as_str(),
-        &budget,
-    );
-    let fetched_tail = fetch_object(
-        &device_b_broadweb,
-        DEFAULT_PROFILE_ID,
-        tail_change_object_id.as_str(),
-        &budget,
-    );
-    let verified_objects = open_signed_profile_sync_settings_manifest_objects(
-        &ProfileSyncObjectBytes {
-            object_id: fetched_manifest.object_id.clone(),
-            bytes: fetched_manifest.bytes.clone(),
-        },
-        Some(&ProfileSyncObjectBytes {
-            object_id: fetched_snapshot.object_id.clone(),
-            bytes: fetched_snapshot.bytes.clone(),
-        }),
-        &[ProfileSyncObjectBytes {
-            object_id: fetched_tail.object_id.clone(),
-            bytes: fetched_tail.bytes.clone(),
-        }],
-        &content_key,
-        &trusted_device_a_key,
-        DEFAULT_PROFILE_ID,
-        FIXTURE_CONTENT_KEY_ID,
-    )
-    .expect("open fetched manifest object set");
-    assert_eq!(verified_objects.manifest, manifest);
     let applied_manifest = device_b_db
         .apply_verified_settings_manifest_objects(&verified_objects)
         .expect("device b applies verified snapshot and manifest tail");
@@ -932,6 +908,51 @@ fn fixture_content_key() -> ProfileSyncContentKey {
 struct FetchedObject {
     object_id: String,
     bytes: Vec<u8>,
+}
+
+struct RegistryProfileSyncObjectSource<'a> {
+    registry: &'a PluginRegistry,
+    budget: &'a ResourceBudget,
+}
+
+impl ProfileSyncObjectSource for RegistryProfileSyncObjectSource<'_> {
+    type Error = BroadwebdError;
+
+    fn resolve_profile_sync_root(
+        &self,
+        profile: &str,
+        root_id: &str,
+    ) -> Result<Option<String>, Self::Error> {
+        let response = self.registry.profile_sync(
+            ProfileSyncRequest::ResolveRoot(ProfileSyncRootRequest::new(profile, root_id)),
+            self.budget,
+        )?;
+        let ProfileSyncResponse::Root { object_id, .. } = response else {
+            return Err(BroadwebdError::UnsupportedRequest(
+                "profile-sync resolve root returned a non-root response".to_string(),
+            ));
+        };
+        Ok(object_id)
+    }
+
+    fn get_profile_sync_object(
+        &self,
+        profile: &str,
+        object_id: &str,
+    ) -> Result<ProfileSyncObjectBytes, Self::Error> {
+        let response = self.registry.profile_sync(
+            ProfileSyncRequest::GetEncryptedObject(ProfileSyncObjectRequest::new(
+                profile, object_id,
+            )),
+            self.budget,
+        )?;
+        let ProfileSyncResponse::GetEncryptedObject { object_id, bytes } = response else {
+            return Err(BroadwebdError::UnsupportedRequest(
+                "profile-sync get object returned a non-object response".to_string(),
+            ));
+        };
+        Ok(ProfileSyncObjectBytes { object_id, bytes })
+    }
 }
 
 fn put_object(
