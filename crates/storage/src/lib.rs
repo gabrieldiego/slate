@@ -932,6 +932,18 @@ pub trait ProfileSyncObjectSource {
         root_id: &str,
     ) -> Result<Option<String>, Self::Error>;
 
+    fn list_profile_sync_root_candidates(
+        &self,
+        profile: &str,
+        root_id: &str,
+    ) -> Result<Vec<ProfileSyncRootCandidate>, Self::Error> {
+        Ok(self
+            .resolve_profile_sync_root(profile, root_id)?
+            .map(ProfileSyncRootCandidate::resolved_root)
+            .into_iter()
+            .collect())
+    }
+
     fn get_profile_sync_object(
         &self,
         profile: &str,
@@ -1555,6 +1567,31 @@ pub struct ProfileSyncObjectBytes {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncRootCandidate {
+    pub publisher_id: String,
+    pub object_id: String,
+    pub publish_sequence: u64,
+}
+
+impl ProfileSyncRootCandidate {
+    pub fn new(
+        publisher_id: impl Into<String>,
+        object_id: impl Into<String>,
+        publish_sequence: u64,
+    ) -> Self {
+        Self {
+            publisher_id: publisher_id.into(),
+            object_id: object_id.into(),
+            publish_sequence,
+        }
+    }
+
+    fn resolved_root(object_id: impl Into<String>) -> Self {
+        Self::new("resolved-root", object_id, 0)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VerifiedProfileSyncSettingsSnapshot {
     pub object_id: String,
     pub snapshot: ProfileSyncSettingsSnapshot,
@@ -1572,6 +1609,12 @@ pub struct VerifiedProfileSyncSettingsManifestObjects {
     pub manifest: ProfileSyncManifest,
     pub snapshot: Option<VerifiedProfileSyncSettingsSnapshot>,
     pub tail_changes: Vec<VerifiedProfileSyncSettingsTailChange>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VerifiedProfileSyncSettingsManifestCandidate {
+    pub root_candidate: ProfileSyncRootCandidate,
+    pub objects: VerifiedProfileSyncSettingsManifestObjects,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -3482,6 +3525,40 @@ impl SlateProfileDatabase {
             .map_err(ProfileSyncTrustedPullApplyError::Storage)
     }
 
+    pub fn pull_trusted_signed_profile_sync_settings_manifest_candidates<Source>(
+        &self,
+        source: &Source,
+        profile: &str,
+        root_id: &str,
+        content_key: &ProfileSyncContentKey,
+        key_id: &str,
+    ) -> Result<
+        Vec<VerifiedProfileSyncSettingsManifestCandidate>,
+        ProfileSyncTrustedPullError<Source::Error>,
+    >
+    where
+        Source: ProfileSyncObjectSource,
+    {
+        let candidates = source
+            .list_profile_sync_root_candidates(profile, root_id)
+            .map_err(ProfileSyncTrustedPullError::Source)?;
+        let mut verified_candidates = Vec::with_capacity(candidates.len());
+        for candidate in candidates {
+            let objects = self.pull_trusted_signed_profile_sync_settings_manifest_objects_by_id(
+                source,
+                profile,
+                candidate.object_id.as_str(),
+                content_key,
+                key_id,
+            )?;
+            verified_candidates.push(VerifiedProfileSyncSettingsManifestCandidate {
+                root_candidate: candidate,
+                objects,
+            });
+        }
+        Ok(verified_candidates)
+    }
+
     pub fn pull_trusted_signed_profile_sync_settings_manifest_objects<Source>(
         &self,
         source: &Source,
@@ -3503,8 +3580,32 @@ impl SlateProfileDatabase {
             return Ok(None);
         };
 
+        self.pull_trusted_signed_profile_sync_settings_manifest_objects_by_id(
+            source,
+            profile,
+            manifest_object_id.as_str(),
+            content_key,
+            key_id,
+        )
+        .map(Some)
+    }
+
+    fn pull_trusted_signed_profile_sync_settings_manifest_objects_by_id<Source>(
+        &self,
+        source: &Source,
+        profile: &str,
+        manifest_object_id: &str,
+        content_key: &ProfileSyncContentKey,
+        key_id: &str,
+    ) -> Result<
+        VerifiedProfileSyncSettingsManifestObjects,
+        ProfileSyncTrustedPullError<Source::Error>,
+    >
+    where
+        Source: ProfileSyncObjectSource,
+    {
         let manifest_object =
-            fetch_trusted_profile_sync_object(source, profile, manifest_object_id.as_str())?;
+            fetch_trusted_profile_sync_object(source, profile, manifest_object_id)?;
         let manifest = self
             .open_trusted_signed_profile_sync_manifest(
                 manifest_object.bytes.as_slice(),
@@ -3533,7 +3634,6 @@ impl SlateProfileDatabase {
             profile,
             key_id,
         )
-        .map(Some)
         .map_err(ProfileSyncTrustedPullError::Open)
     }
 
@@ -4787,6 +4887,7 @@ mod tests {
     #[derive(Default)]
     struct InMemoryProfileSyncObjectSource {
         roots: BTreeMap<(String, String), String>,
+        root_candidates: BTreeMap<(String, String), Vec<ProfileSyncRootCandidate>>,
         objects: BTreeMap<(String, String), ProfileSyncObjectBytes>,
     }
 
@@ -4796,6 +4897,24 @@ mod tests {
                 (profile.to_string(), root_id.to_string()),
                 object_id.to_string(),
             );
+        }
+
+        fn publish_root_candidate(
+            &mut self,
+            profile: &str,
+            root_id: &str,
+            publisher_id: &str,
+            object_id: &str,
+            publish_sequence: u64,
+        ) {
+            self.root_candidates
+                .entry((profile.to_string(), root_id.to_string()))
+                .or_default()
+                .push(ProfileSyncRootCandidate::new(
+                    publisher_id,
+                    object_id,
+                    publish_sequence,
+                ));
         }
 
         fn insert_object(&mut self, profile: &str, object_id: &str, bytes: Vec<u8>) {
@@ -4821,6 +4940,24 @@ mod tests {
                 .roots
                 .get(&(profile.to_string(), root_id.to_string()))
                 .cloned())
+        }
+
+        fn list_profile_sync_root_candidates(
+            &self,
+            profile: &str,
+            root_id: &str,
+        ) -> Result<Vec<ProfileSyncRootCandidate>, Self::Error> {
+            if let Some(candidates) = self
+                .root_candidates
+                .get(&(profile.to_string(), root_id.to_string()))
+            {
+                return Ok(candidates.clone());
+            }
+            Ok(self
+                .resolve_profile_sync_root(profile, root_id)?
+                .map(ProfileSyncRootCandidate::resolved_root)
+                .into_iter()
+                .collect())
         }
 
         fn get_profile_sync_object(
@@ -6409,6 +6546,197 @@ mod tests {
                 .expect("stored trusted pull root")
                 .object_id,
             manifest_object_id
+        );
+    }
+
+    #[test]
+    fn profile_sync_trusted_pull_lists_competing_manifest_candidates() {
+        let content_key = ProfileSyncContentKey::from_bytes([34; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer_a = ProfileSyncDeviceSigner::generate("candidate-device-a").unwrap();
+        let signer_b = ProfileSyncDeviceSigner::generate("candidate-device-b").unwrap();
+        let public_key_a = signer_a.public_key().unwrap();
+        let public_key_b = signer_b.public_key().unwrap();
+        let key_id = "content-key-epoch-1";
+        let root_id = "settings/latest";
+        let change_a_object_id = "candidate-change-a";
+        let change_b_object_id = "candidate-change-b";
+        let manifest_a_object_id = "candidate-manifest-a";
+        let manifest_b_object_id = "candidate-manifest-b";
+        let change_a = IncomingSyncSettingText::new(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            "ui.theme",
+            "aqua",
+            "candidate-device-a",
+            1,
+            1,
+        );
+        let change_b = IncomingSyncSettingText::new(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            "ui.theme",
+            "teal",
+            "candidate-device-b",
+            1,
+            2,
+        );
+        let manifest_a = ProfileSyncManifest {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: root_id.to_string(),
+            schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            current_snapshot_object_id: None,
+            tail_change_object_ids: vec![change_a_object_id.to_string()],
+            included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            device_frontiers: vec![ProfileSyncDeviceFrontier {
+                device_id: "candidate-device-a".to_string(),
+                latest_sequence: 1,
+                latest_change_object_id: Some(change_a_object_id.to_string()),
+            }],
+            retention_policy: ProfileSyncRetentionPolicy::default(),
+            created_at: 101,
+        };
+        let manifest_b = ProfileSyncManifest {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: root_id.to_string(),
+            schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            current_snapshot_object_id: None,
+            tail_change_object_ids: vec![change_b_object_id.to_string()],
+            included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            device_frontiers: vec![ProfileSyncDeviceFrontier {
+                device_id: "candidate-device-b".to_string(),
+                latest_sequence: 1,
+                latest_change_object_id: Some(change_b_object_id.to_string()),
+            }],
+            retention_policy: ProfileSyncRetentionPolicy::default(),
+            created_at: 102,
+        };
+        let mut source = InMemoryProfileSyncObjectSource::default();
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            change_a_object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND,
+                key_id,
+                serde_json::to_vec(&change_a).unwrap().as_slice(),
+                &content_key,
+                &signer_a,
+                41,
+            ),
+        );
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            change_b_object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND,
+                key_id,
+                serde_json::to_vec(&change_b).unwrap().as_slice(),
+                &content_key,
+                &signer_b,
+                42,
+            ),
+        );
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            manifest_a_object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+                key_id,
+                serde_json::to_vec(&manifest_a).unwrap().as_slice(),
+                &content_key,
+                &signer_a,
+                43,
+            ),
+        );
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            manifest_b_object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+                key_id,
+                serde_json::to_vec(&manifest_b).unwrap().as_slice(),
+                &content_key,
+                &signer_b,
+                44,
+            ),
+        );
+        source.publish_root_candidate(
+            DEFAULT_PROFILE_ID,
+            root_id,
+            "provider-device-b",
+            manifest_b_object_id,
+            2,
+        );
+        source.publish_root_candidate(
+            DEFAULT_PROFILE_ID,
+            root_id,
+            "provider-device-a",
+            manifest_a_object_id,
+            1,
+        );
+        let destination_path =
+            test_dir("sync-trusted-candidate-roots").join(DEFAULT_DATABASE_FILE_NAME);
+        let destination =
+            SlateProfileDatabase::open_resolved_with_device_id(destination_path, "device-c")
+                .unwrap();
+        destination
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: public_key_a,
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .unwrap();
+        destination
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: public_key_b,
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .unwrap();
+
+        let candidates = destination
+            .pull_trusted_signed_profile_sync_settings_manifest_candidates(
+                &source,
+                DEFAULT_PROFILE_ID,
+                root_id,
+                &content_key,
+                key_id,
+            )
+            .unwrap();
+
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(
+            candidates
+                .iter()
+                .map(|candidate| (
+                    candidate.root_candidate.publisher_id.as_str(),
+                    candidate.root_candidate.object_id.as_str(),
+                    candidate.root_candidate.publish_sequence,
+                    candidate.objects.tail_changes[0].change.value.as_str(),
+                ))
+                .collect::<Vec<_>>(),
+            vec![
+                ("provider-device-b", manifest_b_object_id, 2, "teal"),
+                ("provider-device-a", manifest_a_object_id, 1, "aqua"),
+            ]
+        );
+        assert_eq!(candidates[0].objects.manifest, manifest_b);
+        assert_eq!(candidates[1].objects.manifest, manifest_a);
+        assert!(
+            destination
+                .profile_sync_root(DEFAULT_PROFILE_ID, root_id)
+                .unwrap()
+                .is_none(),
+            "listing manifest candidates should not apply or record a winner"
         );
     }
 

@@ -139,6 +139,9 @@ encrypted snapshots:
   object id.
 - `sync_state` tracks mutable roots, known devices, frontiers, and publish
   state.
+- The storage pull boundary can list visible mutable-root candidates and verify
+  each candidate's signed manifest before any merge or winner-selection policy
+  applies it.
 - `settings_revisions` lets runtime services observe committed changes.
 
 External updates should enter through validated change records and snapshots,
@@ -158,6 +161,8 @@ The mutable-root backend stores or advertises current profile roots or device
 heads:
 
 - The root resolves to the latest encrypted sync manifest object id.
+- Backends may expose multiple visible root candidates for the same root when
+  equal-control devices publish competing manifests.
 - The manifest identifies the current snapshot and unsquashed tail changes.
 - The manifest is signed by an authorized device key or by an account policy
   threshold.

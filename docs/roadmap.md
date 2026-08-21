@@ -313,6 +313,11 @@ Current baseline:
 - `sync_state` now has typed profile sync root APIs so storage can persist the
   last verified manifest object id for roots such as `settings/latest` without
   exposing raw key/value state to callers.
+- Storage can now ask a profile-sync object source for visible mutable-root
+  candidates, verify each trusted signed settings manifest candidate with
+  stored device keys, and leave winner selection/application to a later merge
+  step. The broadwebd local fixture bridge covers competing `settings/latest`
+  candidates entirely in process.
 - Storage now has a serializable `ProfileSyncManifest` payload with optional
   snapshot object id, tail change object ids, included domains, and device
   frontiers. The local two-device fixture now publishes `settings/latest` to a

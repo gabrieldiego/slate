@@ -16,8 +16,8 @@ use slate_storage::{
     ProfileSyncDeviceFrontier, ProfileSyncDeviceHead, ProfileSyncDeviceHeadPullRecordStatus,
     ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner, ProfileSyncManifest,
     ProfileSyncObjectBytes, ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
-    ProfileSyncSettingsPullApplyStatus, ProfileSyncSettingsSnapshot, SYNC_DOMAIN_SETTINGS,
-    SlateProfileDatabase, SyncChangeRecord, SyncContentKeyEpochRegistration,
+    ProfileSyncRootCandidate, ProfileSyncSettingsPullApplyStatus, ProfileSyncSettingsSnapshot,
+    SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, SyncChangeRecord, SyncContentKeyEpochRegistration,
     SyncDevicePublicKeyRegistration, SyncRevisionRecord, SyncSnapshotRegistration,
     open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
     open_signed_sync_setting_text,
@@ -330,6 +330,165 @@ fn two_local_devices_keep_newer_setting_when_fixture_replays_stale_change() {
 
     let _ = std::fs::remove_dir_all(device_a_root);
     let _ = std::fs::remove_dir_all(device_b_root);
+}
+
+#[test]
+fn local_fixture_pulls_competing_settings_root_candidates_through_storage() {
+    let fixture = LocalProfileSyncFixture::new();
+    let mut device_a_broadweb = PluginRegistry::new();
+    let mut device_b_broadweb = PluginRegistry::new();
+    let mut device_c_broadweb = PluginRegistry::new();
+    let budget = ResourceBudget::default();
+
+    device_a_broadweb.register_service(fixture.service_for_device("candidate-device-a"));
+    device_b_broadweb.register_service(fixture.service_for_device("candidate-device-b"));
+    device_c_broadweb.register_service(fixture.service_for_device("candidate-device-c"));
+
+    let device_a_root = test_dir("candidate-device-a");
+    let device_b_root = test_dir("candidate-device-b");
+    let device_c_root = test_dir("candidate-device-c");
+    let device_a_db = SlateProfileDatabase::open_resolved_with_device_id(
+        device_a_root.join(DEFAULT_DATABASE_FILE_NAME),
+        "candidate-device-a",
+    )
+    .expect("open candidate fixture device a slate-settings.db");
+    let device_b_db = SlateProfileDatabase::open_resolved_with_device_id(
+        device_b_root.join(DEFAULT_DATABASE_FILE_NAME),
+        "candidate-device-b",
+    )
+    .expect("open candidate fixture device b slate-settings.db");
+    let device_c_db = SlateProfileDatabase::open_resolved_with_device_id(
+        device_c_root.join(DEFAULT_DATABASE_FILE_NAME),
+        "candidate-device-c",
+    )
+    .expect("open candidate fixture device c slate-settings.db");
+    let device_a_signer = ProfileSyncDeviceSigner::generate("candidate-device-a")
+        .expect("create candidate device a signing key");
+    let device_b_signer = ProfileSyncDeviceSigner::generate("candidate-device-b")
+        .expect("create candidate device b signing key");
+    device_c_db
+        .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            public_key: device_a_signer
+                .public_key()
+                .expect("read candidate device a public key"),
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+        })
+        .expect("device c trusts candidate device a");
+    device_c_db
+        .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            public_key: device_b_signer
+                .public_key()
+                .expect("read candidate device b public key"),
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+        })
+        .expect("device c trusts candidate device b");
+
+    let content_key = fixture_content_key();
+    let change_a = device_a_db
+        .set_sync_setting_text(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            "sync.candidate",
+            "alpha",
+        )
+        .expect("candidate device a writes local setting");
+    let change_a_object_id = put_object(
+        &device_a_broadweb,
+        DEFAULT_PROFILE_ID,
+        sign_encrypted_setting_change(&change_a, &content_key, &device_a_signer),
+        &budget,
+    );
+    let manifest_a_object_id = put_and_publish_object(
+        &device_a_broadweb,
+        DEFAULT_PROFILE_ID,
+        SETTINGS_ROOT_ID,
+        sign_encrypted_manifest(
+            SETTINGS_ROOT_ID,
+            change_a_object_id.as_str(),
+            &change_a,
+            &content_key,
+            &device_a_signer,
+        ),
+        &budget,
+    );
+
+    let change_b = device_b_db
+        .set_sync_setting_text(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            "sync.candidate",
+            "bravo",
+        )
+        .expect("candidate device b writes local setting");
+    let change_b_object_id = put_object(
+        &device_b_broadweb,
+        DEFAULT_PROFILE_ID,
+        sign_encrypted_setting_change(&change_b, &content_key, &device_b_signer),
+        &budget,
+    );
+    let manifest_b_object_id = put_and_publish_object(
+        &device_b_broadweb,
+        DEFAULT_PROFILE_ID,
+        SETTINGS_ROOT_ID,
+        sign_encrypted_manifest(
+            SETTINGS_ROOT_ID,
+            change_b_object_id.as_str(),
+            &change_b,
+            &content_key,
+            &device_b_signer,
+        ),
+        &budget,
+    );
+
+    let source = RegistryProfileSyncObjectSource {
+        registry: &device_c_broadweb,
+        budget: &budget,
+    };
+    let candidates = device_c_db
+        .pull_trusted_signed_profile_sync_settings_manifest_candidates(
+            &source,
+            DEFAULT_PROFILE_ID,
+            SETTINGS_ROOT_ID,
+            &content_key,
+            FIXTURE_CONTENT_KEY_ID,
+        )
+        .expect("device c pulls competing trusted root candidates");
+
+    assert_eq!(
+        candidates
+            .iter()
+            .map(|candidate| (
+                candidate.root_candidate.publisher_id.as_str(),
+                candidate.root_candidate.object_id.as_str(),
+                candidate.objects.tail_changes[0].change.value.as_str(),
+            ))
+            .collect::<Vec<_>>(),
+        vec![
+            (
+                "local-fixture-device-candidate-device-b",
+                manifest_b_object_id.as_str(),
+                "bravo",
+            ),
+            (
+                "local-fixture-device-candidate-device-a",
+                manifest_a_object_id.as_str(),
+                "alpha",
+            ),
+        ]
+    );
+    assert!(
+        device_c_db
+            .profile_sync_root(DEFAULT_PROFILE_ID, SETTINGS_ROOT_ID)
+            .expect("read candidate fixture device c settings root")
+            .is_none(),
+        "candidate listing should not choose or record a winning settings root"
+    );
+
+    let _ = std::fs::remove_dir_all(device_a_root);
+    let _ = std::fs::remove_dir_all(device_b_root);
+    let _ = std::fs::remove_dir_all(device_c_root);
 }
 
 #[test]
@@ -1190,6 +1349,32 @@ impl ProfileSyncObjectSource for RegistryProfileSyncObjectSource<'_> {
             ));
         };
         Ok(object_id)
+    }
+
+    fn list_profile_sync_root_candidates(
+        &self,
+        profile: &str,
+        root_id: &str,
+    ) -> Result<Vec<ProfileSyncRootCandidate>, Self::Error> {
+        let response = self.registry.profile_sync(
+            ProfileSyncRequest::ListRootCandidates(ProfileSyncRootRequest::new(profile, root_id)),
+            self.budget,
+        )?;
+        let ProfileSyncResponse::RootCandidates { candidates, .. } = response else {
+            return Err(BroadwebdError::UnsupportedRequest(
+                "profile-sync list root candidates returned a non-candidate response".to_string(),
+            ));
+        };
+        Ok(candidates
+            .into_iter()
+            .map(|candidate| {
+                ProfileSyncRootCandidate::new(
+                    candidate.publisher_provider_id,
+                    candidate.object_id,
+                    candidate.publish_sequence,
+                )
+            })
+            .collect())
     }
 
     fn get_profile_sync_object(
