@@ -334,6 +334,9 @@ Current baseline:
   It derives tail object order, included domains, created time, and per-device
   frontiers from typed change records plus backend object ids, and the
   broadwebd local fixture uses it instead of hand-assembling simple manifests.
+- Storage also owns snapshot-and-tail manifest construction for publish flows,
+  deriving compacted frontiers from covered change records and extending them
+  with retained tail object ids when a post-snapshot manifest tail remains.
 - Incoming synced settings now have an initial deterministic conflict policy:
   the highest logical clock wins, with device id and device sequence as stable
   tie-breakers. Losing setting changes are retained in `settings_changes`

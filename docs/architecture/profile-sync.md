@@ -173,6 +173,9 @@ heads:
 - Publish-side storage helpers build tail-change manifests from local change
   records and backend object ids so device frontiers and included domains come
   from typed `slate-settings.db` state, not ad hoc caller assembly.
+- Snapshot publish helpers do the same for compacted snapshot manifests,
+  preserving compacted device frontiers and allowing a retained manifest tail
+  to extend the newest device frontier.
 - Each device verifies signatures before applying any sync data.
 
 This makes backend persistence independent from trust. Object identifiers, such

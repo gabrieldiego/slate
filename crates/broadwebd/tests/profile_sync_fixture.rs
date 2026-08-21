@@ -12,16 +12,16 @@ use slate_storage::{
     PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND, PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
     PROFILE_SYNC_MANIFEST_OBJECT_KIND, PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
     PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND, PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND,
-    PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION, ProfileSyncContentKey,
-    ProfileSyncDeviceFrontier, ProfileSyncDeviceHead, ProfileSyncDeviceHeadPullRecordStatus,
-    ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner, ProfileSyncManifest,
-    ProfileSyncObjectBytes, ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
-    ProfileSyncRootCandidate, ProfileSyncSettingsPullApplyStatus, ProfileSyncSettingsSnapshot,
+    PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION, ProfileSyncContentKey, ProfileSyncDeviceHead,
+    ProfileSyncDeviceHeadPullRecordStatus, ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner,
+    ProfileSyncManifest, ProfileSyncObjectBytes, ProfileSyncObjectSource,
+    ProfileSyncRetentionPolicy, ProfileSyncRootCandidate, ProfileSyncSettingsPullApplyStatus,
+    ProfileSyncSettingsSnapshot, ProfileSyncSettingsSnapshotPublication,
     ProfileSyncSettingsTailChangePublication, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase,
     SyncChangeRecord, SyncContentKeyEpochRegistration, SyncDevicePublicKeyRegistration,
     SyncRevisionRecord, SyncSnapshotRegistration, open_signed_profile_sync_manifest,
     open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
-    settings_sync_manifest_for_tail_changes,
+    settings_sync_manifest_for_snapshot_and_tail_changes, settings_sync_manifest_for_tail_changes,
 };
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -1265,22 +1265,18 @@ fn sign_encrypted_manifest_with_snapshot(
     content_key: &ProfileSyncContentKey,
     signer: &ProfileSyncDeviceSigner,
 ) -> Vec<u8> {
-    let manifest = ProfileSyncManifest {
-        profile: snapshot.profile.clone(),
-        root_id: root_id.to_string(),
-        schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
-        membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
-        current_snapshot_object_id: Some(snapshot_object_id.to_string()),
-        tail_change_object_ids: Vec::new(),
-        included_domains: snapshot.included_domains.clone(),
-        device_frontiers: vec![ProfileSyncDeviceFrontier {
-            device_id: latest_change.device_id.clone(),
-            latest_sequence: latest_change.device_sequence,
-            latest_change_object_id: None,
-        }],
-        retention_policy: ProfileSyncRetentionPolicy::default(),
-        created_at: snapshot.created_at,
-    };
+    let manifest = settings_sync_manifest_for_snapshot_and_tail_changes(
+        snapshot.profile.as_str(),
+        root_id,
+        &ProfileSyncSettingsSnapshotPublication {
+            object_id: snapshot_object_id.to_string(),
+            snapshot: snapshot.clone(),
+            covered_changes: vec![latest_change.clone()],
+        },
+        &[],
+        ProfileSyncRetentionPolicy::default(),
+    )
+    .expect("build fixture manifest from snapshot");
     sign_encrypted_manifest_payload(&manifest, content_key, signer)
 }
 
@@ -1293,26 +1289,21 @@ fn sign_encrypted_manifest_with_snapshot_tail(
     content_key: &ProfileSyncContentKey,
     signer: &ProfileSyncDeviceSigner,
 ) -> Vec<u8> {
-    let mut included_domains = snapshot.included_domains.clone();
-    included_domains.push(tail_change.domain.clone());
-    included_domains.sort();
-    included_domains.dedup();
-    let manifest = ProfileSyncManifest {
-        profile: snapshot.profile.clone(),
-        root_id: root_id.to_string(),
-        schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
-        membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
-        current_snapshot_object_id: Some(snapshot_object_id.to_string()),
-        tail_change_object_ids: vec![tail_change_object_id.to_string()],
-        included_domains,
-        device_frontiers: vec![ProfileSyncDeviceFrontier {
-            device_id: tail_change.device_id.clone(),
-            latest_sequence: tail_change.device_sequence,
-            latest_change_object_id: Some(tail_change_object_id.to_string()),
+    let manifest = settings_sync_manifest_for_snapshot_and_tail_changes(
+        snapshot.profile.as_str(),
+        root_id,
+        &ProfileSyncSettingsSnapshotPublication {
+            object_id: snapshot_object_id.to_string(),
+            snapshot: snapshot.clone(),
+            covered_changes: Vec::new(),
+        },
+        &[ProfileSyncSettingsTailChangePublication {
+            object_id: tail_change_object_id.to_string(),
+            change: tail_change.clone(),
         }],
-        retention_policy: ProfileSyncRetentionPolicy::default(),
-        created_at: tail_change.created_at,
-    };
+        ProfileSyncRetentionPolicy::default(),
+    )
+    .expect("build fixture manifest from snapshot and tail change");
     sign_encrypted_manifest_payload(&manifest, content_key, signer)
 }
 

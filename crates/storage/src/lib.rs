@@ -1000,6 +1000,134 @@ pub fn settings_sync_manifest_for_tail_changes(
     })
 }
 
+pub fn settings_sync_manifest_for_snapshot_and_tail_changes(
+    profile: &str,
+    root_id: &str,
+    snapshot: &ProfileSyncSettingsSnapshotPublication,
+    tail_changes: &[ProfileSyncSettingsTailChangePublication],
+    retention_policy: ProfileSyncRetentionPolicy,
+) -> Result<ProfileSyncManifest, StorageError> {
+    if root_id.is_empty() {
+        return Err(StorageError::InvalidSyncRootId(root_id.to_string()));
+    }
+    if snapshot.object_id.is_empty() {
+        return Err(StorageError::InvalidProfileSyncManifest(
+            "settings manifest snapshot object id is empty".to_string(),
+        ));
+    }
+    if snapshot.snapshot.profile != profile {
+        return Err(StorageError::InvalidProfileSyncManifest(format!(
+            "snapshot profile {} does not match manifest profile {}",
+            snapshot.snapshot.profile, profile
+        )));
+    }
+    if snapshot.snapshot.schema_version != PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION {
+        return Err(StorageError::UnsupportedSyncSnapshotSchema(
+            snapshot.snapshot.schema_version,
+        ));
+    }
+
+    let mut included_domains =
+        normalized_snapshot_domains(snapshot.snapshot.included_domains.as_slice());
+    let mut tail_change_object_ids = Vec::with_capacity(tail_changes.len());
+    let mut device_frontiers: BTreeMap<String, ProfileSyncDeviceFrontier> = BTreeMap::new();
+    let mut created_at = snapshot.snapshot.created_at;
+    for change in &snapshot.covered_changes {
+        if change.profile != profile {
+            return Err(StorageError::InvalidProfileSyncManifest(format!(
+                "snapshot-covered change {} profile {} does not match manifest profile {}",
+                change.id, change.profile, profile
+            )));
+        }
+        if change.operation != "set_text" {
+            return Err(StorageError::InvalidProfileSyncManifest(format!(
+                "snapshot-covered change {} operation {} is not supported by settings manifests",
+                change.id, change.operation
+            )));
+        }
+        if !included_domains.contains(&change.domain) {
+            return Err(StorageError::InvalidProfileSyncManifest(format!(
+                "snapshot-covered change {} domain {} is not included in snapshot",
+                change.id, change.domain
+            )));
+        }
+        upsert_device_frontier(
+            &mut device_frontiers,
+            ProfileSyncDeviceFrontier {
+                device_id: change.device_id.clone(),
+                latest_sequence: change.device_sequence,
+                latest_change_object_id: None,
+            },
+        );
+    }
+
+    for tail in tail_changes {
+        if tail.object_id.is_empty() {
+            return Err(StorageError::InvalidProfileSyncManifest(
+                "settings manifest tail object id is empty".to_string(),
+            ));
+        }
+        if tail.change.profile != profile {
+            return Err(StorageError::InvalidProfileSyncManifest(format!(
+                "tail change {} profile {} does not match manifest profile {}",
+                tail.object_id, tail.change.profile, profile
+            )));
+        }
+        if tail.change.operation != "set_text" {
+            return Err(StorageError::InvalidProfileSyncManifest(format!(
+                "tail change {} operation {} is not supported by settings manifests",
+                tail.object_id, tail.change.operation
+            )));
+        }
+
+        included_domains.push(tail.change.domain.clone());
+        tail_change_object_ids.push(tail.object_id.clone());
+        created_at = created_at.max(tail.change.created_at);
+        upsert_device_frontier(
+            &mut device_frontiers,
+            ProfileSyncDeviceFrontier {
+                device_id: tail.change.device_id.clone(),
+                latest_sequence: tail.change.device_sequence,
+                latest_change_object_id: Some(tail.object_id.clone()),
+            },
+        );
+    }
+    included_domains.sort();
+    included_domains.dedup();
+
+    Ok(ProfileSyncManifest {
+        profile: profile.to_string(),
+        root_id: root_id.to_string(),
+        schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+        membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+        current_snapshot_object_id: Some(snapshot.object_id.clone()),
+        tail_change_object_ids,
+        included_domains,
+        device_frontiers: device_frontiers.into_values().collect(),
+        retention_policy,
+        created_at,
+    })
+}
+
+fn upsert_device_frontier(
+    frontiers: &mut BTreeMap<String, ProfileSyncDeviceFrontier>,
+    next: ProfileSyncDeviceFrontier,
+) {
+    match frontiers.get(next.device_id.as_str()) {
+        Some(existing)
+            if (
+                existing.latest_sequence,
+                existing.latest_change_object_id.as_deref(),
+            ) >= (
+                next.latest_sequence,
+                next.latest_change_object_id.as_deref(),
+            ) => {}
+        _ => {
+            frontiers.insert(next.device_id.clone(), next);
+        }
+    }
+}
+
 pub trait ProfileSyncObjectSource {
     type Error;
 
@@ -1684,6 +1812,13 @@ pub struct VerifiedProfileSyncSettingsTailChange {
 pub struct ProfileSyncSettingsTailChangePublication {
     pub object_id: String,
     pub change: SyncChangeRecord,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncSettingsSnapshotPublication {
+    pub object_id: String,
+    pub snapshot: ProfileSyncSettingsSnapshot,
+    pub covered_changes: Vec<SyncChangeRecord>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -5327,6 +5462,157 @@ mod tests {
                     object_id: "change-object-1".to_string(),
                     change: first,
                 }],
+                ProfileSyncRetentionPolicy::default(),
+            ),
+            Err(StorageError::InvalidProfileSyncManifest(_))
+        ));
+    }
+
+    #[test]
+    fn settings_manifest_builder_uses_snapshot_publication_and_tail_changes() {
+        let compacted_settings_change = SyncChangeRecord {
+            id: 1,
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            domain: SYNC_DOMAIN_SETTINGS.to_string(),
+            entity_key: "ui.theme".to_string(),
+            operation: "set_text".to_string(),
+            payload: "teal".to_string(),
+            device_id: "device-a".to_string(),
+            device_sequence: 1,
+            logical_clock: 1,
+            created_at: 100,
+            applied_at: Some(100),
+        };
+        let compacted_calendar_change = SyncChangeRecord {
+            id: 2,
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            domain: SYNC_DOMAIN_CALENDAR.to_string(),
+            entity_key: "default_view".to_string(),
+            operation: "set_text".to_string(),
+            payload: "month".to_string(),
+            device_id: "device-b".to_string(),
+            device_sequence: 3,
+            logical_clock: 3,
+            created_at: 105,
+            applied_at: Some(105),
+        };
+        let tail_change = SyncChangeRecord {
+            id: 3,
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            domain: SYNC_DOMAIN_SETTINGS.to_string(),
+            entity_key: "ui.theme".to_string(),
+            operation: "set_text".to_string(),
+            payload: "slate".to_string(),
+            device_id: "device-a".to_string(),
+            device_sequence: 2,
+            logical_clock: 4,
+            created_at: 130,
+            applied_at: Some(130),
+        };
+        let snapshot = ProfileSyncSettingsSnapshot {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            schema_version: PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION,
+            covers_revision: 2,
+            included_domains: vec![
+                SYNC_DOMAIN_SETTINGS.to_string(),
+                SYNC_DOMAIN_CALENDAR.to_string(),
+            ],
+            values: Vec::new(),
+            created_at: 120,
+        };
+        let snapshot_publication = ProfileSyncSettingsSnapshotPublication {
+            object_id: "snapshot-object-1".to_string(),
+            snapshot: snapshot.clone(),
+            covered_changes: vec![
+                compacted_settings_change.clone(),
+                compacted_calendar_change.clone(),
+            ],
+        };
+
+        let snapshot_only = settings_sync_manifest_for_snapshot_and_tail_changes(
+            DEFAULT_PROFILE_ID,
+            "settings/latest",
+            &snapshot_publication,
+            &[],
+            ProfileSyncRetentionPolicy::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            snapshot_only.current_snapshot_object_id.as_deref(),
+            Some("snapshot-object-1")
+        );
+        assert_eq!(snapshot_only.tail_change_object_ids, Vec::<String>::new());
+        assert_eq!(snapshot_only.created_at, 120);
+        assert_eq!(
+            snapshot_only.device_frontiers,
+            vec![
+                ProfileSyncDeviceFrontier {
+                    device_id: "device-a".to_string(),
+                    latest_sequence: 1,
+                    latest_change_object_id: None,
+                },
+                ProfileSyncDeviceFrontier {
+                    device_id: "device-b".to_string(),
+                    latest_sequence: 3,
+                    latest_change_object_id: None,
+                },
+            ]
+        );
+
+        let snapshot_with_tail = settings_sync_manifest_for_snapshot_and_tail_changes(
+            DEFAULT_PROFILE_ID,
+            "settings/latest",
+            &snapshot_publication,
+            &[ProfileSyncSettingsTailChangePublication {
+                object_id: "tail-change-object-1".to_string(),
+                change: tail_change.clone(),
+            }],
+            ProfileSyncRetentionPolicy::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            snapshot_with_tail.current_snapshot_object_id.as_deref(),
+            Some("snapshot-object-1")
+        );
+        assert_eq!(
+            snapshot_with_tail.tail_change_object_ids,
+            vec!["tail-change-object-1"]
+        );
+        assert_eq!(
+            snapshot_with_tail.included_domains,
+            vec![SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_SETTINGS]
+        );
+        assert_eq!(snapshot_with_tail.created_at, 130);
+        assert_eq!(
+            snapshot_with_tail.device_frontiers,
+            vec![
+                ProfileSyncDeviceFrontier {
+                    device_id: "device-a".to_string(),
+                    latest_sequence: 2,
+                    latest_change_object_id: Some("tail-change-object-1".to_string()),
+                },
+                ProfileSyncDeviceFrontier {
+                    device_id: "device-b".to_string(),
+                    latest_sequence: 3,
+                    latest_change_object_id: None,
+                },
+            ]
+        );
+
+        let excluded_domain_snapshot = ProfileSyncSettingsSnapshot {
+            included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            ..snapshot
+        };
+        assert!(matches!(
+            settings_sync_manifest_for_snapshot_and_tail_changes(
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &ProfileSyncSettingsSnapshotPublication {
+                    object_id: "snapshot-object-2".to_string(),
+                    snapshot: excluded_domain_snapshot,
+                    covered_changes: vec![compacted_calendar_change],
+                },
+                &[],
                 ProfileSyncRetentionPolicy::default(),
             ),
             Err(StorageError::InvalidProfileSyncManifest(_))
