@@ -208,6 +208,10 @@ Current baseline:
   only while at least one provider holding them is online, and retaining an
   object copies it into the retaining provider's in-process store. This lets
   tests model simple handoff and availability loss without any sockets.
+- The local profile-sync fixture can now delay object transfer between two
+  simulated devices. Delayed transfers stay inside the process and make the
+  target device treat the source provider's encrypted bytes as unavailable
+  until the fixture releases the link.
 - The local profile-sync fixture now distinguishes logged-in device providers
   from availability-only providers. Availability providers can retain and serve
   encrypted bytes, and discovery reports that they cannot publish mutable roots.

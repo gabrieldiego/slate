@@ -27,6 +27,7 @@ struct ProfileSyncStore {
     roots: BTreeMap<(String, String), String>,
     providers: BTreeMap<String, ProfileSyncProviderState>,
     offline_providers: BTreeSet<String>,
+    delayed_transfers: BTreeSet<(String, String)>,
 }
 
 #[derive(Clone, Debug)]
@@ -133,12 +134,13 @@ impl ProfileSyncService {
         validate_profile(&request.profile)?;
         let store = self.store()?;
         let object_id = request.object_id;
-        let bytes = find_online_object(&store, &request.profile, &object_id).ok_or_else(|| {
-            BroadwebdError::UnsupportedRequest(format!(
-                "profile sync object not available from an online provider: {}",
-                object_id
-            ))
-        })?;
+        let bytes = find_online_object(&store, &self.provider_id, &request.profile, &object_id)
+            .ok_or_else(|| {
+                BroadwebdError::UnsupportedRequest(format!(
+                    "profile sync object not available from an online provider: {}",
+                    object_id
+                ))
+            })?;
         validate_object_budget(bytes.len(), budget)?;
         Ok(ProfileSyncResponse::GetEncryptedObject {
             object_id,
@@ -152,8 +154,13 @@ impl ProfileSyncService {
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
         validate_profile(&request.profile)?;
         let mut store = self.store()?;
-        let Some(bytes) = find_online_object(&store, &request.profile, &request.object_id).cloned()
-        else {
+        let Some(bytes) = find_online_object(
+            &store,
+            &self.provider_id,
+            &request.profile,
+            &request.object_id,
+        )
+        .cloned() else {
             return Err(BroadwebdError::UnsupportedRequest(format!(
                 "cannot retain unavailable profile sync object: {}",
                 request.object_id
@@ -224,7 +231,13 @@ impl ProfileSyncService {
             request.object_id.clone(),
         );
         let retained = store.retained.contains(&retained_key);
-        let available = find_online_object(&store, &request.profile, &request.object_id).is_some();
+        let available = find_online_object(
+            &store,
+            &self.provider_id,
+            &request.profile,
+            &request.object_id,
+        )
+        .is_some();
         Ok(ProfileSyncResponse::RetainedObjectStatus {
             object_id: request.object_id,
             retained,
@@ -359,6 +372,27 @@ impl LocalProfileSyncFixture {
         }
         Ok(())
     }
+
+    pub fn set_device_transfer_available(
+        &self,
+        source_device_id: impl AsRef<str>,
+        target_device_id: impl AsRef<str>,
+        available: bool,
+    ) -> Result<(), BroadwebdError> {
+        let source_provider_id = local_fixture_provider_id(source_device_id);
+        let target_provider_id = local_fixture_provider_id(target_device_id);
+        let mut store = self
+            .store
+            .lock()
+            .map_err(|_| BroadwebdError::Request("profile sync store lock poisoned".to_string()))?;
+        let link = (source_provider_id, target_provider_id);
+        if available {
+            store.delayed_transfers.remove(&link);
+        } else {
+            store.delayed_transfers.insert(link);
+        }
+        Ok(())
+    }
 }
 
 impl ApplicationServicePlugin for ProfileSyncService {
@@ -467,6 +501,7 @@ fn provider_has_object(
 
 fn find_online_object<'a>(
     store: &'a ProfileSyncStore,
+    requester_provider_id: &str,
     profile: &str,
     object_id: &str,
 ) -> Option<&'a Vec<u8>> {
@@ -477,8 +512,21 @@ fn find_online_object<'a>(
             stored_profile == profile
                 && stored_object_id == object_id
                 && !store.offline_providers.contains(provider_id.as_str())
+                && transfer_available(store, provider_id, requester_provider_id)
         })
         .map(|(_, bytes)| bytes)
+}
+
+fn transfer_available(
+    store: &ProfileSyncStore,
+    source_provider_id: &str,
+    requester_provider_id: &str,
+) -> bool {
+    source_provider_id == requester_provider_id
+        || !store.delayed_transfers.contains(&(
+            source_provider_id.to_string(),
+            requester_provider_id.to_string(),
+        ))
 }
 
 fn local_fixture_provider_id(device_id: impl AsRef<str>) -> String {
@@ -884,6 +932,125 @@ mod tests {
                 object_id: local_object_id(b"encrypted object only on device a"),
                 retained: true,
                 available: true,
+            }
+        );
+    }
+
+    #[test]
+    fn local_fixture_can_delay_object_transfer_between_devices() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut device_a = PluginRegistry::new();
+        let mut device_b = PluginRegistry::new();
+        let budget = ResourceBudget::default();
+
+        device_a.register_service(fixture.service_for_device("a"));
+        device_b.register_service(fixture.service_for_device("b"));
+
+        let put = device_a
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"encrypted object waiting for delayed transfer".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("device a can put object into fixture");
+        let ProfileSyncResponse::PutEncryptedObject { object_id } = put else {
+            panic!("unexpected put response");
+        };
+        fixture
+            .set_device_transfer_available("a", "b", false)
+            .expect("delay transfer from device a to device b");
+
+        let unavailable = device_b
+            .profile_sync(
+                ProfileSyncRequest::GetEncryptedObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect_err("device b cannot fetch while transfer is delayed");
+        assert!(matches!(
+            unavailable,
+            BroadwebdError::UnsupportedRequest(message)
+                if message.contains("not available")
+        ));
+        let retained_status = device_b
+            .profile_sync(
+                ProfileSyncRequest::VerifyRetainedObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("device b can verify delayed object status");
+        assert_eq!(
+            retained_status,
+            ProfileSyncResponse::RetainedObjectStatus {
+                object_id: object_id.clone(),
+                retained: false,
+                available: false,
+            }
+        );
+        let retain_error = device_b
+            .profile_sync(
+                ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect_err("device b cannot retain while transfer is delayed");
+        assert!(matches!(
+            retain_error,
+            BroadwebdError::UnsupportedRequest(message)
+                if message.contains("cannot retain unavailable")
+        ));
+
+        let own_fetch = device_a
+            .profile_sync(
+                ProfileSyncRequest::GetEncryptedObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("device a can still fetch its own object");
+        assert_eq!(
+            own_fetch,
+            ProfileSyncResponse::GetEncryptedObject {
+                object_id: object_id.clone(),
+                bytes: b"encrypted object waiting for delayed transfer".to_vec(),
+            }
+        );
+
+        fixture
+            .set_device_transfer_available("a", "b", true)
+            .expect("release delayed transfer from device a to device b");
+        device_b
+            .profile_sync(
+                ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("device b can retain after delayed transfer is released");
+        let fetched = device_b
+            .profile_sync(
+                ProfileSyncRequest::GetEncryptedObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("device b can fetch after retaining delayed object");
+        assert_eq!(
+            fetched,
+            ProfileSyncResponse::GetEncryptedObject {
+                object_id,
+                bytes: b"encrypted object waiting for delayed transfer".to_vec(),
             }
         );
     }

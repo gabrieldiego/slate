@@ -394,10 +394,12 @@ marks online. This lets tests exercise pinning and availability policy without
 loopback sockets, OS DNS, public gateways, Tor, IPFS/IPNS, or external relays.
 Object bytes are also provider-held: fetches require at least one online
 provider with the object, and retaining an object copies the bytes into the
-retaining provider's in-process store. The fixture also models
-availability-only providers: they may retain and serve encrypted bytes, but
-their provider policy denies mutable-root publishing and discovery reports that
-boundary.
+retaining provider's in-process store. Tests can pause object transfer from one
+simulated device provider to another; while paused, the target treats the
+source-held encrypted bytes as unavailable without sleeping, binding sockets, or
+contacting any external network. The fixture also models availability-only
+providers: they may retain and serve encrypted bytes, but their provider policy
+denies mutable-root publishing and discovery reports that boundary.
 
 ## Privacy Boundaries
 
