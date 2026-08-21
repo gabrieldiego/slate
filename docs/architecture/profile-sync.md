@@ -792,6 +792,11 @@ sync roots. It also returns discovered online retention-capable providers with
 availability and object-transfer roles. Freshness is enforced through the
 provider health policy, while the provider records give the scheduler concrete
 selection candidates without granting those providers mutable-root authority.
+The health report now includes concrete fresh, stale, and offline provider ids
+from the in-process fixture. Scheduler handle selection uses those ids to
+distinguish stale or offline selected retention providers from unknown
+providers, and the runtime path rejects stale or offline selected providers
+before publishing, pulling, retaining objects, or mutating sync roots.
 The first scheduler facade is deliberately explicit: one caller-triggered tick
 combines a profile/root config, caller-held content key and signer, the local
 broadwebd daemon, and selected retention-provider daemons. It runs the

@@ -494,6 +494,9 @@ impl ProfileSyncService {
         let mut online_providers = 0;
         let mut fresh_online_providers = 0;
         let mut stale_online_providers = 0;
+        let mut fresh_online_provider_ids = Vec::new();
+        let mut stale_online_provider_ids = Vec::new();
+        let mut offline_provider_ids = Vec::new();
         let mut object_transfer_providers = 0;
         let mut availability_providers = 0;
         let mut mutable_root_providers = 0;
@@ -503,6 +506,7 @@ impl ProfileSyncService {
                 online_providers += 1;
                 if provider.fresh {
                     fresh_online_providers += 1;
+                    fresh_online_provider_ids.push(provider.provider_id.to_string());
                     retained_objects +=
                         retained_object_count(&store, provider.provider_id, &request.profile);
                     if provider.roles.object_transfer {
@@ -516,7 +520,10 @@ impl ProfileSyncService {
                     }
                 } else {
                     stale_online_providers += 1;
+                    stale_online_provider_ids.push(provider.provider_id.to_string());
                 }
+            } else {
+                offline_provider_ids.push(provider.provider_id.to_string());
             }
         }
         let offline_providers = known_providers.saturating_sub(online_providers);
@@ -536,6 +543,9 @@ impl ProfileSyncService {
                 offline_providers,
                 fresh_online_providers,
                 stale_online_providers,
+                fresh_online_provider_ids,
+                stale_online_provider_ids,
+                offline_provider_ids,
                 minimum_provider_seen_sequence: store.minimum_provider_seen_sequence,
                 object_transfer_providers,
                 availability_providers,
@@ -2109,6 +2119,15 @@ mod tests {
         assert_eq!(health.offline_providers, 0);
         assert_eq!(health.fresh_online_providers, 2);
         assert_eq!(health.stale_online_providers, 0);
+        assert_eq!(
+            health.fresh_online_provider_ids,
+            vec![
+                "local-fixture-availability-pin-1".to_string(),
+                "local-fixture-device-a".to_string()
+            ]
+        );
+        assert!(health.stale_online_provider_ids.is_empty());
+        assert!(health.offline_provider_ids.is_empty());
         assert_eq!(health.minimum_provider_seen_sequence, 0);
         assert_eq!(health.object_transfer_providers, 2);
         assert_eq!(health.availability_providers, 2);
@@ -2134,6 +2153,15 @@ mod tests {
         assert_eq!(health.offline_providers, 1);
         assert_eq!(health.fresh_online_providers, 1);
         assert_eq!(health.stale_online_providers, 0);
+        assert_eq!(
+            health.fresh_online_provider_ids,
+            vec!["local-fixture-availability-pin-1".to_string()]
+        );
+        assert!(health.stale_online_provider_ids.is_empty());
+        assert_eq!(
+            health.offline_provider_ids,
+            vec!["local-fixture-device-a".to_string()]
+        );
         assert_eq!(health.minimum_provider_seen_sequence, 0);
         assert_eq!(health.object_transfer_providers, 1);
         assert_eq!(health.availability_providers, 1);
@@ -2170,6 +2198,15 @@ mod tests {
         assert_eq!(health.offline_providers, 0);
         assert_eq!(health.fresh_online_providers, 0);
         assert_eq!(health.stale_online_providers, 2);
+        assert!(health.fresh_online_provider_ids.is_empty());
+        assert_eq!(
+            health.stale_online_provider_ids,
+            vec![
+                "local-fixture-device-a".to_string(),
+                "local-fixture-device-b".to_string()
+            ]
+        );
+        assert!(health.offline_provider_ids.is_empty());
         assert_eq!(health.minimum_provider_seen_sequence, minimum_seen);
         assert_eq!(health.object_transfer_providers, 0);
         assert_eq!(health.availability_providers, 0);
@@ -2192,6 +2229,15 @@ mod tests {
         assert_eq!(health.offline_providers, 0);
         assert_eq!(health.fresh_online_providers, 1);
         assert_eq!(health.stale_online_providers, 1);
+        assert_eq!(
+            health.fresh_online_provider_ids,
+            vec!["local-fixture-device-b".to_string()]
+        );
+        assert_eq!(
+            health.stale_online_provider_ids,
+            vec!["local-fixture-device-a".to_string()]
+        );
+        assert!(health.offline_provider_ids.is_empty());
         assert_eq!(health.object_transfer_providers, 1);
         assert_eq!(health.availability_providers, 1);
         assert_eq!(health.mutable_root_providers, 1);

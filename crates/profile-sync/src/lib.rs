@@ -1294,6 +1294,26 @@ impl SettingsSyncCyclePolicy {
         )
     }
 
+    pub fn check_selected_retention_provider_freshness(
+        &self,
+        stale_selected: usize,
+        offline_selected: usize,
+        health: &SettingsSyncHealthReport,
+    ) -> Result<(), ProfileSyncPolicyError> {
+        self.check_provider_maximum(
+            "stale selected retention providers",
+            0,
+            stale_selected,
+            health,
+        )?;
+        self.check_provider_maximum(
+            "offline selected retention providers",
+            0,
+            offline_selected,
+            health,
+        )
+    }
+
     fn check_provider_minimum(
         &self,
         provider_role: &'static str,
@@ -1380,6 +1400,8 @@ impl SettingsSyncSchedulerConfig {
 pub struct SettingsSyncScheduledCycleRun {
     pub preflight: SettingsSyncCyclePreflight,
     pub selected_retention_provider_ids: Vec<String>,
+    pub stale_retention_provider_ids: Vec<String>,
+    pub offline_retention_provider_ids: Vec<String>,
     pub undiscovered_retention_provider_ids: Vec<String>,
     pub duplicate_retention_provider_ids: Vec<String>,
     pub cycle: SettingsSyncCycleWithSharedRootRetentionRun,
@@ -1392,6 +1414,14 @@ impl SettingsSyncScheduledCycleRun {
 
     pub fn undiscovered_retention_provider_count(&self) -> usize {
         self.undiscovered_retention_provider_ids.len()
+    }
+
+    pub fn stale_retention_provider_count(&self) -> usize {
+        self.stale_retention_provider_ids.len()
+    }
+
+    pub fn offline_retention_provider_count(&self) -> usize {
+        self.offline_retention_provider_ids.len()
     }
 
     pub fn duplicate_retention_provider_count(&self) -> usize {
@@ -1415,6 +1445,8 @@ impl SettingsSyncScheduledCycleRun {
 pub struct SettingsSyncScheduledMembershipCycleRun {
     pub preflight: SettingsSyncCyclePreflightWithMembershipLog,
     pub selected_retention_provider_ids: Vec<String>,
+    pub stale_retention_provider_ids: Vec<String>,
+    pub offline_retention_provider_ids: Vec<String>,
     pub undiscovered_retention_provider_ids: Vec<String>,
     pub duplicate_retention_provider_ids: Vec<String>,
     pub cycle: SettingsSyncCycleWithMembershipLogRetentionRun,
@@ -1427,6 +1459,14 @@ impl SettingsSyncScheduledMembershipCycleRun {
 
     pub fn undiscovered_retention_provider_count(&self) -> usize {
         self.undiscovered_retention_provider_ids.len()
+    }
+
+    pub fn stale_retention_provider_count(&self) -> usize {
+        self.stale_retention_provider_ids.len()
+    }
+
+    pub fn offline_retention_provider_count(&self) -> usize {
+        self.offline_retention_provider_ids.len()
     }
 
     pub fn duplicate_retention_provider_count(&self) -> usize {
@@ -1442,6 +1482,8 @@ impl SettingsSyncScheduledMembershipCycleRun {
 pub struct SettingsSyncScheduledCyclePlan {
     pub preflight: SettingsSyncCyclePreflight,
     pub selected_retention_provider_ids: Vec<String>,
+    pub stale_retention_provider_ids: Vec<String>,
+    pub offline_retention_provider_ids: Vec<String>,
     pub undiscovered_retention_provider_ids: Vec<String>,
     pub duplicate_retention_provider_ids: Vec<String>,
 }
@@ -1453,6 +1495,14 @@ impl SettingsSyncScheduledCyclePlan {
 
     pub fn selected_retention_provider_count(&self) -> usize {
         self.selected_retention_provider_ids.len()
+    }
+
+    pub fn stale_retention_provider_count(&self) -> usize {
+        self.stale_retention_provider_ids.len()
+    }
+
+    pub fn offline_retention_provider_count(&self) -> usize {
+        self.offline_retention_provider_ids.len()
     }
 
     pub fn undiscovered_retention_provider_count(&self) -> usize {
@@ -1483,6 +1533,14 @@ impl SettingsSyncScheduledMembershipCyclePlan {
         self.cycle.selected_retention_provider_count()
     }
 
+    pub fn stale_retention_provider_count(&self) -> usize {
+        self.cycle.stale_retention_provider_count()
+    }
+
+    pub fn offline_retention_provider_count(&self) -> usize {
+        self.cycle.offline_retention_provider_count()
+    }
+
     pub fn undiscovered_retention_provider_count(&self) -> usize {
         self.cycle.undiscovered_retention_provider_count()
     }
@@ -1507,6 +1565,8 @@ fn select_settings_sync_retention_provider_handles<'a>(
 ) -> SelectedSettingsSyncRetentionProviders<'a> {
     let (
         selected_retention_provider_ids,
+        stale_retention_provider_ids,
+        offline_retention_provider_ids,
         undiscovered_retention_provider_ids,
         duplicate_retention_provider_ids,
         daemons,
@@ -1516,17 +1576,43 @@ fn select_settings_sync_retention_provider_handles<'a>(
             .iter()
             .map(|provider| provider.provider_id.as_str())
             .collect::<BTreeSet<_>>();
+        let stale_provider_ids = preflight
+            .before_health
+            .provider_health
+            .stale_online_provider_ids
+            .iter()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
+        let offline_provider_ids = preflight
+            .before_health
+            .provider_health
+            .offline_provider_ids
+            .iter()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
         let mut seen_selected_provider_ids = BTreeSet::new();
+        let mut seen_stale_provider_ids = BTreeSet::new();
+        let mut seen_offline_provider_ids = BTreeSet::new();
         let mut seen_undiscovered_provider_ids = BTreeSet::new();
         let mut seen_duplicate_provider_ids = BTreeSet::new();
         let mut selected_retention_provider_ids = Vec::new();
+        let mut stale_retention_provider_ids = Vec::new();
+        let mut offline_retention_provider_ids = Vec::new();
         let mut undiscovered_retention_provider_ids = Vec::new();
         let mut duplicate_retention_provider_ids = Vec::new();
         let mut daemons = Vec::new();
 
         for handle in retention_provider_handles {
             if !candidate_provider_ids.contains(handle.provider_id) {
-                if seen_undiscovered_provider_ids.insert(handle.provider_id) {
+                if stale_provider_ids.contains(handle.provider_id) {
+                    if seen_stale_provider_ids.insert(handle.provider_id) {
+                        stale_retention_provider_ids.push(handle.provider_id.to_string());
+                    }
+                } else if offline_provider_ids.contains(handle.provider_id) {
+                    if seen_offline_provider_ids.insert(handle.provider_id) {
+                        offline_retention_provider_ids.push(handle.provider_id.to_string());
+                    }
+                } else if seen_undiscovered_provider_ids.insert(handle.provider_id) {
                     undiscovered_retention_provider_ids.push(handle.provider_id.to_string());
                 }
                 continue;
@@ -1543,6 +1629,8 @@ fn select_settings_sync_retention_provider_handles<'a>(
 
         (
             selected_retention_provider_ids,
+            stale_retention_provider_ids,
+            offline_retention_provider_ids,
             undiscovered_retention_provider_ids,
             duplicate_retention_provider_ids,
             daemons,
@@ -1553,6 +1641,8 @@ fn select_settings_sync_retention_provider_handles<'a>(
         plan: SettingsSyncScheduledCyclePlan {
             preflight,
             selected_retention_provider_ids,
+            stale_retention_provider_ids,
+            offline_retention_provider_ids,
             undiscovered_retention_provider_ids,
             duplicate_retention_provider_ids,
         },
@@ -2556,6 +2646,11 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         let selection =
             select_settings_sync_retention_provider_handles(preflight, retention_provider_handles);
         let plan = selection.plan;
+        config.policy.check_selected_retention_provider_freshness(
+            plan.stale_retention_provider_count(),
+            plan.offline_retention_provider_count(),
+            &plan.preflight.before_health,
+        )?;
         config.policy.check_selected_retention_provider_count(
             plan.selected_retention_provider_count(),
             &plan.preflight.before_health,
@@ -2573,6 +2668,8 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         Ok(SettingsSyncScheduledCycleRun {
             preflight: plan.preflight,
             selected_retention_provider_ids: plan.selected_retention_provider_ids,
+            stale_retention_provider_ids: plan.stale_retention_provider_ids,
+            offline_retention_provider_ids: plan.offline_retention_provider_ids,
             undiscovered_retention_provider_ids: plan.undiscovered_retention_provider_ids,
             duplicate_retention_provider_ids: plan.duplicate_retention_provider_ids,
             cycle,
@@ -2619,6 +2716,11 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             retention_provider_handles,
         );
         let plan = selection.plan;
+        config.policy.check_selected_retention_provider_freshness(
+            plan.stale_retention_provider_count(),
+            plan.offline_retention_provider_count(),
+            &preflight.preflight.before_health,
+        )?;
         config.policy.check_selected_retention_provider_count(
             plan.selected_retention_provider_count(),
             &preflight.preflight.before_health,
@@ -2637,6 +2739,8 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         Ok(SettingsSyncScheduledMembershipCycleRun {
             preflight,
             selected_retention_provider_ids: plan.selected_retention_provider_ids,
+            stale_retention_provider_ids: plan.stale_retention_provider_ids,
+            offline_retention_provider_ids: plan.offline_retention_provider_ids,
             undiscovered_retention_provider_ids: plan.undiscovered_retention_provider_ids,
             duplicate_retention_provider_ids: plan.duplicate_retention_provider_ids,
             cycle,
@@ -7330,7 +7434,7 @@ mod tests {
                 "runtime-offline-b",
             )
             .expect("start second in-process profile-sync daemon");
-        let _offline_daemon = network
+        let offline_daemon = network
             .daemon_for_device(
                 &offline_state_root,
                 ResourceBudget::default(),
@@ -7347,6 +7451,7 @@ mod tests {
         )
         .expect("open local settings database");
         let profile = "offlineproviderprofile";
+        let content_key = ProfileSyncContentKey::from_bytes([73; PROFILE_SYNC_CONTENT_KEY_BYTES]);
         let signer =
             ProfileSyncDeviceSigner::generate("runtime-offline-a").expect("generate local signer");
         register_test_content_key_epoch(&database, profile);
@@ -7387,10 +7492,89 @@ mod tests {
         assert!(!health.provider_health.degraded);
         assert_eq!(health.provider_health.fresh_online_providers, 2);
         assert_eq!(health.provider_health.offline_providers, 1);
+        assert_eq!(
+            health.provider_health.offline_provider_ids,
+            vec!["local-fixture-device-runtime-offline-c".to_string()]
+        );
+
+        let selected_provider_id = "local-fixture-device-runtime-offline-c";
+        let selection_policy =
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2)
+                .with_minimum_fresh_online_providers(2);
+        let plan = BroadwebdSettingsSyncScheduler::new(&first_daemon)
+            .plan_once_selecting_retention_providers(
+                &database,
+                &SettingsSyncSchedulerConfig::new(profile, "settings/latest", selection_policy),
+                &signer,
+                &[SettingsSyncRetentionProviderHandle::new(
+                    selected_provider_id,
+                    &offline_daemon,
+                )],
+            )
+            .expect("scheduler plan classifies offline selected retention provider");
+        assert_eq!(
+            plan.offline_retention_provider_ids,
+            vec![selected_provider_id.to_string()]
+        );
+        assert_eq!(plan.offline_retention_provider_count(), 1);
+        assert!(plan.stale_retention_provider_ids.is_empty());
+        assert!(plan.undiscovered_retention_provider_ids.is_empty());
+
+        let run_error = BroadwebdSettingsSyncScheduler::new(&first_daemon)
+            .run_once_selecting_retention_providers(
+                &database,
+                &SettingsSyncSchedulerConfig::new(
+                    profile,
+                    "settings/latest",
+                    SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2)
+                        .with_minimum_fresh_online_providers(2),
+                ),
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                &[SettingsSyncRetentionProviderHandle::new(
+                    selected_provider_id,
+                    &offline_daemon,
+                )],
+            )
+            .expect_err("scheduler run should reject offline selected retention provider");
+        let ProfileSyncCycleWithHealthError::Policy(
+            ProfileSyncPolicyError::ProviderMaximumExceeded {
+                provider_role,
+                maximum,
+                actual,
+                health,
+            },
+        ) = run_error
+        else {
+            panic!("expected offline selected retention provider error, got {run_error:?}");
+        };
+        assert_eq!(provider_role, "offline selected retention providers");
+        assert_eq!(maximum, 0);
+        assert_eq!(actual, 1);
+        assert_eq!(
+            health.provider_health.offline_provider_ids,
+            vec![selected_provider_id.to_string()]
+        );
+        assert!(
+            database
+                .profile_sync_roots(profile)
+                .expect("read roots after rejected offline run")
+                .is_empty()
+        );
 
         fixture
             .set_device_online("runtime-offline-c", true)
             .expect("bring third provider online");
+        let retained = offline_daemon
+            .profile_sync(BroadwebdProfileSyncRequest::ListRetainedObjects(
+                BroadwebdProfileSyncProfileRequest::new(profile),
+            ))
+            .expect("recovered provider can list retained objects after rejected scheduler run");
+        assert_eq!(
+            retained,
+            BroadwebdProfileSyncResponse::RetainedObjects {
+                object_ids: Vec::new(),
+            }
+        );
         let preflight = BroadwebdSettingsSyncRunner::new(&first_daemon)
             .settings_sync_cycle_preflight_with_active_key_policy(
                 &database,
@@ -8047,6 +8231,7 @@ mod tests {
         .expect("open scheduler local settings database");
         let profile = "schedulerstaleselectprofile";
         let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([72; PROFILE_SYNC_CONTENT_KEY_BYTES]);
         let signer = ProfileSyncDeviceSigner::generate("runtime-scheduler-stale-select-a")
             .expect("generate scheduler local device signer");
         register_test_content_key_epoch(&database, profile);
@@ -8093,7 +8278,18 @@ mod tests {
         );
         assert_eq!(plan.selected_retention_provider_count(), 0);
         assert_eq!(
-            plan.undiscovered_retention_provider_ids,
+            plan.stale_retention_provider_ids,
+            vec![selected_provider_id.to_string()]
+        );
+        assert_eq!(plan.stale_retention_provider_count(), 1);
+        assert!(plan.offline_retention_provider_ids.is_empty());
+        assert_eq!(plan.offline_retention_provider_count(), 0);
+        assert!(plan.undiscovered_retention_provider_ids.is_empty());
+        assert_eq!(
+            plan.preflight
+                .before_health
+                .provider_health
+                .stale_online_provider_ids,
             vec![selected_provider_id.to_string()]
         );
         assert_eq!(plan.duplicate_retention_provider_count(), 0);
@@ -8117,6 +8313,63 @@ mod tests {
                 .profile_sync_roots(profile)
                 .expect("read roots after plan")
                 .is_empty()
+        );
+
+        let run_error = BroadwebdSettingsSyncScheduler::new(&device_daemon)
+            .run_once_selecting_retention_providers(
+                &database,
+                &SettingsSyncSchedulerConfig::new(
+                    profile,
+                    settings_root_id,
+                    SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
+                ),
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                &[SettingsSyncRetentionProviderHandle::new(
+                    selected_provider_id,
+                    &provider_daemon,
+                )],
+            )
+            .expect_err("scheduler run should reject stale selected retention provider");
+        let ProfileSyncCycleWithHealthError::Policy(
+            ProfileSyncPolicyError::ProviderMaximumExceeded {
+                provider_role,
+                maximum,
+                actual,
+                health,
+            },
+        ) = run_error
+        else {
+            panic!("expected stale selected retention provider error, got {run_error:?}");
+        };
+        assert_eq!(provider_role, "stale selected retention providers");
+        assert_eq!(maximum, 0);
+        assert_eq!(actual, 1);
+        assert_eq!(
+            health.provider_health.stale_online_provider_ids,
+            vec![selected_provider_id.to_string()]
+        );
+        assert_eq!(
+            database
+                .latest_sync_revision(profile)
+                .expect("read latest revision after rejected stale run"),
+            latest_revision_before_plan
+        );
+        assert!(
+            database
+                .profile_sync_roots(profile)
+                .expect("read roots after rejected stale run")
+                .is_empty()
+        );
+        let retained = provider_daemon
+            .profile_sync(BroadwebdProfileSyncRequest::ListRetainedObjects(
+                BroadwebdProfileSyncProfileRequest::new(profile),
+            ))
+            .expect("stale provider can list retained objects after rejected scheduler run");
+        assert_eq!(
+            retained,
+            BroadwebdProfileSyncResponse::RetainedObjects {
+                object_ids: Vec::new(),
+            }
         );
 
         let _ = std::fs::remove_dir_all(device_state_root);
