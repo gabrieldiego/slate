@@ -48,9 +48,10 @@ pub use health::{
 pub use http::{
     DownloadRecord, FetchDisposition, FetchPurpose, FetchRouteInfo, HttpFetchRequest,
     HttpFetchResponse, HttpHeader, ProfileSyncObjectRequest, ProfileSyncProfileRequest,
-    ProfileSyncProviderRecord, ProfileSyncProviderRoles, ProfileSyncPutObjectRequest,
-    ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootCandidate, ProfileSyncRootRequest,
-    ProfileSyncRootUpdate, ServiceRequest, ServiceResponse, TransportHttpRequest,
+    ProfileSyncProviderHealth, ProfileSyncProviderRecord, ProfileSyncProviderRoles,
+    ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootCandidate,
+    ProfileSyncRootRequest, ProfileSyncRootUpdate, ServiceRequest, ServiceResponse,
+    TransportHttpRequest,
 };
 pub use protocols::ipfs::{
     IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport, IpfsKuboRpcEndpoint,

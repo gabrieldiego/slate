@@ -1,9 +1,9 @@
 use crate::{
     ApplicationServicePlugin, BroadwebdError, PROFILE_SYNC_PLUGIN, PluginKind, PluginMetadata,
-    PluginRegistry, ProfileSyncObjectRequest, ProfileSyncProfileRequest, ProfileSyncProviderRecord,
-    ProfileSyncProviderRoles, ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse,
-    ProfileSyncRootCandidate, ProfileSyncRootRequest, ProfileSyncRootUpdate, ResourceBudget,
-    ResourceProfile, ServiceRequest, ServiceResponse,
+    PluginRegistry, ProfileSyncObjectRequest, ProfileSyncProfileRequest, ProfileSyncProviderHealth,
+    ProfileSyncProviderRecord, ProfileSyncProviderRoles, ProfileSyncPutObjectRequest,
+    ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootCandidate, ProfileSyncRootRequest,
+    ProfileSyncRootUpdate, ResourceBudget, ResourceProfile, ServiceRequest, ServiceResponse,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
@@ -397,6 +397,60 @@ impl ProfileSyncService {
         Ok(ProfileSyncResponse::Providers { providers })
     }
 
+    fn provider_health(
+        &self,
+        request: ProfileSyncProfileRequest,
+    ) -> Result<ProfileSyncResponse, BroadwebdError> {
+        validate_profile(&request.profile)?;
+        self.require_role(self.roles.discovery, "profile-sync/provider-discovery")?;
+        let store = self.store()?;
+        let providers = provider_health_entries(&store, self.provider_id.as_str(), self.roles);
+        let known_providers = providers.len();
+        let mut online_providers = 0;
+        let mut object_transfer_providers = 0;
+        let mut availability_providers = 0;
+        let mut mutable_root_providers = 0;
+        let mut retained_objects = 0;
+        for provider in providers {
+            if provider.online {
+                online_providers += 1;
+                retained_objects +=
+                    retained_object_count(&store, provider.provider_id, &request.profile);
+                if provider.roles.object_transfer {
+                    object_transfer_providers += 1;
+                }
+                if provider.roles.availability {
+                    availability_providers += 1;
+                }
+                if provider.roles.mutable_roots {
+                    mutable_root_providers += 1;
+                }
+            }
+        }
+        let offline_providers = known_providers.saturating_sub(online_providers);
+        let (degraded, message) = profile_sync_health_message(
+            online_providers,
+            object_transfer_providers,
+            availability_providers,
+            mutable_root_providers,
+        );
+
+        Ok(ProfileSyncResponse::ProviderHealth {
+            health: ProfileSyncProviderHealth {
+                profile: request.profile,
+                known_providers,
+                online_providers,
+                offline_providers,
+                object_transfer_providers,
+                availability_providers,
+                mutable_root_providers,
+                retained_objects,
+                degraded,
+                message,
+            },
+        })
+    }
+
     fn store(&self) -> Result<std::sync::MutexGuard<'_, ProfileSyncStore>, BroadwebdError> {
         self.store
             .lock()
@@ -577,6 +631,7 @@ impl ApplicationServicePlugin for ProfileSyncService {
                 self.list_root_candidates(request)?
             }
             ProfileSyncRequest::DiscoverProviders(request) => self.discover_providers(request)?,
+            ProfileSyncRequest::ProviderHealth(request) => self.provider_health(request)?,
         };
         Ok(ServiceResponse::ProfileSync(response))
     }
@@ -635,6 +690,72 @@ fn validate_object_budget(size: usize, budget: &ResourceBudget) -> Result<(), Br
         })
     } else {
         Ok(())
+    }
+}
+
+#[derive(Clone, Copy)]
+struct ProfileSyncProviderHealthEntry<'a> {
+    provider_id: &'a str,
+    roles: ProfileSyncProviderRoles,
+    online: bool,
+}
+
+fn provider_health_entries<'a>(
+    store: &'a ProfileSyncStore,
+    default_provider_id: &'a str,
+    default_roles: ProfileSyncProviderRoles,
+) -> Vec<ProfileSyncProviderHealthEntry<'a>> {
+    if store.providers.is_empty() {
+        return vec![ProfileSyncProviderHealthEntry {
+            provider_id: default_provider_id,
+            roles: default_roles,
+            online: default_roles.connectivity,
+        }];
+    }
+
+    store
+        .providers
+        .iter()
+        .map(|(provider_id, state)| ProfileSyncProviderHealthEntry {
+            provider_id: provider_id.as_str(),
+            roles: state.roles,
+            online: state.roles.connectivity
+                && !store.offline_providers.contains(provider_id.as_str()),
+        })
+        .collect()
+}
+
+fn profile_sync_health_message(
+    online_providers: usize,
+    object_transfer_providers: usize,
+    availability_providers: usize,
+    mutable_root_providers: usize,
+) -> (bool, String) {
+    if online_providers == 0 {
+        (
+            true,
+            "profile sync has no online providers in the local fixture".to_string(),
+        )
+    } else if object_transfer_providers == 0 {
+        (
+            true,
+            "profile sync has no online object-transfer provider in the local fixture".to_string(),
+        )
+    } else if availability_providers == 0 {
+        (
+            true,
+            "profile sync has no online availability provider in the local fixture".to_string(),
+        )
+    } else if mutable_root_providers == 0 {
+        (
+            true,
+            "profile sync has no online mutable-root provider in the local fixture".to_string(),
+        )
+    } else {
+        (
+            false,
+            "profile sync providers are ready in the local fixture".to_string(),
+        )
     }
 }
 
@@ -1605,6 +1726,80 @@ mod tests {
                 object_id: Some(object_id),
             }
         );
+    }
+
+    #[test]
+    fn local_fixture_reports_degraded_provider_health() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut device_a = PluginRegistry::new();
+        let mut availability_provider = PluginRegistry::new();
+        let budget = ResourceBudget::default();
+
+        device_a.register_service(fixture.service_for_device("a"));
+        availability_provider.register_service(fixture.service_for_availability_provider("pin-1"));
+
+        let put = device_a
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"encrypted health object".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("device a can put object into fixture");
+        let ProfileSyncResponse::PutEncryptedObject { object_id } = put else {
+            panic!("unexpected put response");
+        };
+        availability_provider
+            .profile_sync(
+                ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                    "default", object_id,
+                )),
+                &budget,
+            )
+            .expect("availability provider can retain health object");
+
+        let healthy = device_a
+            .profile_sync(
+                ProfileSyncRequest::ProviderHealth(ProfileSyncProfileRequest::new("default")),
+                &budget,
+            )
+            .expect("device a can inspect provider health");
+        let ProfileSyncResponse::ProviderHealth { health } = healthy else {
+            panic!("unexpected health response");
+        };
+        assert_eq!(health.profile, "default");
+        assert_eq!(health.known_providers, 2);
+        assert_eq!(health.online_providers, 2);
+        assert_eq!(health.offline_providers, 0);
+        assert_eq!(health.object_transfer_providers, 2);
+        assert_eq!(health.availability_providers, 2);
+        assert_eq!(health.mutable_root_providers, 1);
+        assert_eq!(health.retained_objects, 1);
+        assert!(!health.degraded);
+
+        fixture
+            .set_device_online("a", false)
+            .expect("mark only mutable-root provider offline");
+
+        let degraded = availability_provider
+            .profile_sync(
+                ProfileSyncRequest::ProviderHealth(ProfileSyncProfileRequest::new("default")),
+                &budget,
+            )
+            .expect("availability provider can inspect degraded health");
+        let ProfileSyncResponse::ProviderHealth { health } = degraded else {
+            panic!("unexpected health response");
+        };
+        assert_eq!(health.known_providers, 2);
+        assert_eq!(health.online_providers, 1);
+        assert_eq!(health.offline_providers, 1);
+        assert_eq!(health.object_transfer_providers, 1);
+        assert_eq!(health.availability_providers, 1);
+        assert_eq!(health.mutable_root_providers, 0);
+        assert_eq!(health.retained_objects, 1);
+        assert!(health.degraded);
+        assert!(health.message.contains("mutable-root provider"));
     }
 
     #[test]

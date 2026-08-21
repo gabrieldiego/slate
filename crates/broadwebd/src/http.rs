@@ -210,6 +210,7 @@ pub enum ProfileSyncRequest {
     ResolveRoot(ProfileSyncRootRequest),
     ListRootCandidates(ProfileSyncRootRequest),
     DiscoverProviders(ProfileSyncProfileRequest),
+    ProviderHealth(ProfileSyncProfileRequest),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -327,6 +328,9 @@ pub enum ProfileSyncResponse {
     Providers {
         providers: Vec<ProfileSyncProviderRecord>,
     },
+    ProviderHealth {
+        health: ProfileSyncProviderHealth,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -344,6 +348,20 @@ pub struct ProfileSyncProviderRecord {
     pub retained_objects: usize,
     pub roles: ProfileSyncProviderRoles,
     pub can_publish_roots: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncProviderHealth {
+    pub profile: String,
+    pub known_providers: usize,
+    pub online_providers: usize,
+    pub offline_providers: usize,
+    pub object_transfer_providers: usize,
+    pub availability_providers: usize,
+    pub mutable_root_providers: usize,
+    pub retained_objects: usize,
+    pub degraded: bool,
+    pub message: String,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
