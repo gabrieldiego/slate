@@ -210,9 +210,11 @@ should use the current encryption epoch.
 
 `slate-settings.db` tracks content-key epoch metadata so runtime code can bind
 objects to the expected key id, membership epoch, algorithm, and active epoch.
-It does not store raw content encryption keys. Key bytes should come from a
-keychain entry, recovery-secret derivation, or an enrollment flow before being
-passed into the decrypt/apply path.
+The active-key pull path rejects unsupported algorithms and keys introduced
+after the manifest membership epoch before applying profile state. It does not
+store raw content encryption keys. Key bytes should come from a keychain entry,
+recovery-secret derivation, or an enrollment flow before being passed into the
+decrypt/apply path.
 
 ## Data Objects
 

@@ -242,6 +242,9 @@ Current baseline:
   key id, membership epoch, algorithm, active status, and timestamps. The table
   deliberately stores no raw key bytes; secret storage remains keychain,
   recovery-secret, or enrollment work.
+- Active-key trusted settings pulls now reject unsupported content-key
+  algorithms and content keys introduced after the manifest membership epoch
+  before applying or advancing the stored root.
 - `slate-settings.db` now has typed snapshot metadata APIs for recording
   encrypted backend object ids, covered revisions, included domains, and latest
   snapshot lookup. This is metadata only; snapshot payloads stay in encrypted

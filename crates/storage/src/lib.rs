@@ -1404,6 +1404,16 @@ pub enum StorageError {
     InvalidSyncDeviceId(String),
     InvalidSyncContentKeyId(String),
     MissingActiveSyncContentKey(String),
+    UnsupportedSyncContentKeyAlgorithm {
+        key_id: String,
+        algorithm: String,
+    },
+    UnauthorizedSyncContentKeyEpoch {
+        profile: String,
+        key_id: String,
+        key_membership_epoch: i64,
+        manifest_membership_epoch: i64,
+    },
     InvalidSyncRootId(String),
     InvalidProfileSyncManifest(String),
     UnsupportedProfileSyncManifestSchema(u8),
@@ -1446,6 +1456,19 @@ impl fmt::Display for StorageError {
                     "profile {profile} has no active sync content key epoch"
                 )
             }
+            Self::UnsupportedSyncContentKeyAlgorithm { key_id, algorithm } => write!(
+                formatter,
+                "unsupported sync content key algorithm for {key_id}: {algorithm}"
+            ),
+            Self::UnauthorizedSyncContentKeyEpoch {
+                profile,
+                key_id,
+                key_membership_epoch,
+                manifest_membership_epoch,
+            } => write!(
+                formatter,
+                "profile {profile} sync content key {key_id} was introduced at membership epoch {key_membership_epoch}, after manifest epoch {manifest_membership_epoch}"
+            ),
             Self::InvalidSyncRootId(root_id) => {
                 write!(formatter, "invalid sync root id: {root_id}")
             }
@@ -1479,6 +1502,8 @@ impl std::error::Error for StorageError {
             Self::InvalidSyncDeviceId(_) => None,
             Self::InvalidSyncContentKeyId(_) => None,
             Self::MissingActiveSyncContentKey(_) => None,
+            Self::UnsupportedSyncContentKeyAlgorithm { .. }
+            | Self::UnauthorizedSyncContentKeyEpoch { .. } => None,
             Self::InvalidSyncRootId(_) => None,
             Self::InvalidProfileSyncManifest(_) => None,
             Self::UnsupportedProfileSyncManifestSchema(_) => None,
@@ -3108,13 +3133,25 @@ impl SlateProfileDatabase {
             .map_err(ProfileSyncTrustedPullApplyError::Storage)?
             .ok_or_else(|| StorageError::MissingActiveSyncContentKey(profile.to_string()))
             .map_err(ProfileSyncTrustedPullApplyError::Storage)?;
-        self.pull_and_apply_trusted_signed_settings_manifest_objects(
-            source,
-            profile,
-            root_id,
-            content_key,
-            key.key_id.as_str(),
-        )
+        validate_active_sync_content_key_epoch(&key)
+            .map_err(ProfileSyncTrustedPullApplyError::Storage)?;
+        let Some(objects) = self
+            .pull_trusted_signed_profile_sync_settings_manifest_objects(
+                source,
+                profile,
+                root_id,
+                content_key,
+                key.key_id.as_str(),
+            )
+            .map_err(ProfileSyncTrustedPullApplyError::Pull)?
+        else {
+            return Ok(None);
+        };
+        validate_sync_content_key_epoch_for_manifest(&key, &objects.manifest)
+            .map_err(ProfileSyncTrustedPullApplyError::Storage)?;
+        self.apply_verified_settings_manifest_objects(&objects)
+            .map(Some)
+            .map_err(ProfileSyncTrustedPullApplyError::Storage)
     }
 
     pub fn pull_and_apply_signed_settings_manifest_objects<Source>(
@@ -3629,6 +3666,33 @@ fn normalized_snapshot_domains(domains: &[String]) -> Vec<String> {
 
 fn settings_snapshot_id(covers_revision: i64) -> String {
     format!("settings-snapshot-r{covers_revision}")
+}
+
+fn validate_active_sync_content_key_epoch(
+    key: &SyncContentKeyEpochRecord,
+) -> Result<(), StorageError> {
+    if key.algorithm != PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305 {
+        return Err(StorageError::UnsupportedSyncContentKeyAlgorithm {
+            key_id: key.key_id.clone(),
+            algorithm: key.algorithm.clone(),
+        });
+    }
+    Ok(())
+}
+
+fn validate_sync_content_key_epoch_for_manifest(
+    key: &SyncContentKeyEpochRecord,
+    manifest: &ProfileSyncManifest,
+) -> Result<(), StorageError> {
+    if key.membership_epoch > manifest.membership_epoch {
+        return Err(StorageError::UnauthorizedSyncContentKeyEpoch {
+            profile: manifest.profile.clone(),
+            key_id: key.key_id.clone(),
+            key_membership_epoch: key.membership_epoch,
+            manifest_membership_epoch: manifest.membership_epoch,
+        });
+    }
+    Ok(())
 }
 
 fn validate_settings_manifest_application(
@@ -4863,6 +4927,141 @@ mod tests {
                 .expect("stored trusted pull root")
                 .object_id,
             manifest_object_id
+        );
+    }
+
+    #[test]
+    fn profile_sync_active_key_pull_rejects_unsupported_content_key_algorithm() {
+        let content_key = ProfileSyncContentKey::from_bytes([20; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let source = InMemoryProfileSyncObjectSource::default();
+        let destination_path =
+            test_dir("sync-active-unsupported-algorithm").join(DEFAULT_DATABASE_FILE_NAME);
+        let destination =
+            SlateProfileDatabase::open_resolved_with_device_id(destination_path, "device-b")
+                .unwrap();
+        destination
+            .register_sync_content_key_epoch(&SyncContentKeyEpochRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                key_id: "content-key-epoch-1".to_string(),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                algorithm: "future-aead".to_string(),
+                active: true,
+            })
+            .unwrap();
+
+        let error = destination
+            .pull_and_apply_active_trusted_signed_settings_manifest_objects(
+                &source,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &content_key,
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            ProfileSyncTrustedPullApplyError::Storage(
+                StorageError::UnsupportedSyncContentKeyAlgorithm { key_id, algorithm }
+            ) if key_id == "content-key-epoch-1" && algorithm == "future-aead"
+        ));
+        assert_eq!(
+            destination
+                .profile_sync_root(DEFAULT_PROFILE_ID, "settings/latest")
+                .unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn profile_sync_active_key_pull_rejects_content_key_after_manifest_epoch() {
+        let content_key = ProfileSyncContentKey::from_bytes([21; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let trusted_public_key = signer.public_key().unwrap();
+        let key_id = "content-key-epoch-1";
+        let root_id = "settings/latest";
+        let manifest_object_id = "manifest-object-1";
+        let manifest = ProfileSyncManifest {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: root_id.to_string(),
+            schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            current_snapshot_object_id: None,
+            tail_change_object_ids: Vec::new(),
+            included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            device_frontiers: vec![ProfileSyncDeviceFrontier {
+                device_id: "device-a".to_string(),
+                latest_sequence: 1,
+                latest_change_object_id: None,
+            }],
+            retention_policy: ProfileSyncRetentionPolicy::default(),
+            created_at: 101,
+        };
+        let mut source = InMemoryProfileSyncObjectSource::default();
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            manifest_object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+                key_id,
+                serde_json::to_vec(&manifest).unwrap().as_slice(),
+                &content_key,
+                &signer,
+                71,
+            ),
+        );
+        source.publish_root(DEFAULT_PROFILE_ID, root_id, manifest_object_id);
+        let destination_path =
+            test_dir("sync-active-future-key-epoch").join(DEFAULT_DATABASE_FILE_NAME);
+        let destination =
+            SlateProfileDatabase::open_resolved_with_device_id(destination_path, "device-b")
+                .unwrap();
+        destination
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: trusted_public_key,
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .unwrap();
+        destination
+            .register_sync_content_key_epoch(&SyncContentKeyEpochRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                key_id: key_id.to_string(),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1,
+                algorithm: PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305.to_string(),
+                active: true,
+            })
+            .unwrap();
+
+        let error = destination
+            .pull_and_apply_active_trusted_signed_settings_manifest_objects(
+                &source,
+                DEFAULT_PROFILE_ID,
+                root_id,
+                &content_key,
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            ProfileSyncTrustedPullApplyError::Storage(
+                StorageError::UnauthorizedSyncContentKeyEpoch {
+                    profile,
+                    key_id,
+                    key_membership_epoch,
+                    manifest_membership_epoch,
+                }
+            ) if profile == DEFAULT_PROFILE_ID
+                && key_id == "content-key-epoch-1"
+                && key_membership_epoch == DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1
+                && manifest_membership_epoch == DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH
+        ));
+        assert_eq!(
+            destination
+                .profile_sync_root(DEFAULT_PROFILE_ID, root_id)
+                .unwrap(),
+            None
         );
     }
 
