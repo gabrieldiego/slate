@@ -606,6 +606,9 @@ from local `slate-settings.db` history without touching broadwebd. The
 scheduler facade can compose that local membership-log preview with the
 existing read-only selected-provider plan, giving runtime/UI code a safe
 membership-aware preview before membership compaction exists.
+Membership-aware scheduler runs also check that local publication plan first
+and refuse oversized local history before pulling remote membership, publishing
+settings objects, or advancing roots.
 The broadwebd source bridge can also run the receive side for one trusted
 device head: resolve and verify the head, record the verified head root in
 `slate-settings.db`, apply the referenced settings manifest when the head is

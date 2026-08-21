@@ -2571,6 +2571,23 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         secrets: SettingsSyncRuntimeSecrets<'_>,
         retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'_>],
     ) -> Result<SettingsSyncScheduledMembershipCycleRun, ProfileSyncCycleWithHealthError> {
+        let membership_log_publication = BroadwebdProfileSyncPublisher::new(self.daemon)
+            .plan_local_sync_account_membership_log(
+                database,
+                config.profile.as_str(),
+                membership_log_root_id,
+            )
+            .map_err(ProfileSyncCycleError::from)?;
+        if membership_log_publication.requires_compaction() {
+            return Err(ProfileSyncCycleWithHealthError::Cycle(
+                ProfileSyncCycleError::from(ProfileSyncPublishError::MembershipLogTooLarge {
+                    profile: membership_log_publication.profile,
+                    max_records: membership_log_publication.max_records,
+                    actual_records: membership_log_publication.record_count,
+                }),
+            ));
+        }
+
         let runner = BroadwebdSettingsSyncRunner::new(self.daemon);
         let preflight = runner
             .settings_sync_cycle_preflight_with_membership_log_and_active_key_policy(
@@ -5178,6 +5195,40 @@ mod tests {
                     sync_membership_record_root_id("epoch-1-enroll-publish-oversized-000").as_str(),
                 )
                 .expect("read planned oversized publisher first membership record root"),
+            None
+        );
+
+        let scheduler_error = BroadwebdSettingsSyncScheduler::new(&publisher_daemon)
+            .run_once_with_membership_log_selecting_retention_providers(
+                &publisher_database,
+                &SettingsSyncSchedulerConfig::new(
+                    DEFAULT_PROFILE_ID,
+                    "settings/latest",
+                    SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 1),
+                ),
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                SettingsSyncRuntimeSecrets::new(
+                    &ProfileSyncContentKey::from_bytes([91; PROFILE_SYNC_CONTENT_KEY_BYTES]),
+                    &signer,
+                ),
+                &[],
+            )
+            .expect_err("scheduler should reject oversized local membership history before sync");
+        assert!(matches!(
+            scheduler_error,
+            ProfileSyncCycleWithHealthError::Cycle(ProfileSyncCycleError::Publish(
+                ProfileSyncPublishError::MembershipLogTooLarge {
+                    max_records,
+                    actual_records,
+                    ..
+                }
+            )) if max_records == super::PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS
+                && actual_records == super::PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS + 1
+        ));
+        assert_eq!(
+            BroadwebdProfileSyncObjectSource::new(&publisher_daemon)
+                .resolve_profile_sync_root(DEFAULT_PROFILE_ID, PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID)
+                .expect("read scheduler-rejected oversized publisher membership log root"),
             None
         );
 

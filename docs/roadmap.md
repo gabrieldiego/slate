@@ -774,6 +774,9 @@ Current baseline:
   mutation. The scheduler facade can now include that local membership-log
   publication preview alongside the existing selected-provider plan, without
   pulling remote membership or advancing roots.
+- Membership-aware scheduler runs now reject oversized local membership history
+  from that preview before pulling remote membership, publishing settings
+  objects, or advancing any profile-sync roots.
 
 Next:
 
