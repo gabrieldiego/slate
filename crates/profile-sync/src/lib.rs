@@ -2857,11 +2857,24 @@ fn enabled_settings_sync_text_events_after(
     limit: u32,
 ) -> Result<Vec<SyncSettingTextEvent>, StorageError> {
     let enabled_domain_ids = enabled_settings_sync_domain_ids(database, profile)?;
-    Ok(database
-        .sync_setting_text_events_after(profile, after_revision, limit)?
-        .into_iter()
-        .filter(|event| enabled_domain_ids.contains(&event.change.domain))
-        .collect())
+    let mut events = Vec::new();
+    for domain in enabled_domain_ids {
+        events.extend(database.sync_setting_text_events_after_for_domain(
+            profile,
+            domain.as_str(),
+            after_revision,
+            limit,
+        )?);
+    }
+    events.sort_by_key(|event| {
+        (
+            event.revision.revision,
+            event.revision.created_at,
+            event.revision.change_id,
+        )
+    });
+    events.truncate(limit as usize);
+    Ok(events)
 }
 
 pub fn validate_settings_sync_cycle_credentials(
@@ -3202,9 +3215,9 @@ mod tests {
         PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305, PROFILE_SYNC_CONTENT_KEY_BYTES,
         PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, ProfileSyncContentKey, ProfileSyncDeviceHead,
         ProfileSyncDeviceSigner, ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
-        ProfileSyncSettingsCandidatePullApplyStatus, SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_SETTINGS,
-        SlateProfileDatabase, StorageError, SyncChangeRecord, SyncContentKeyEpochRegistration,
-        SyncDevicePublicKeyRegistration, SyncSnapshotRegistration,
+        ProfileSyncSettingsCandidatePullApplyStatus, SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_CHAT,
+        SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, StorageError, SyncChangeRecord,
+        SyncContentKeyEpochRegistration, SyncDevicePublicKeyRegistration, SyncSnapshotRegistration,
         open_signed_profile_sync_device_head, open_signed_profile_sync_manifest,
         open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
         pull_signed_profile_sync_device_head, settings_sync_snapshot_id,
@@ -6309,6 +6322,82 @@ mod tests {
         let _ = std::fs::remove_dir_all(receiver_state_root);
         let _ = std::fs::remove_dir_all(publisher_db_root);
         let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn enabled_settings_sync_events_preserve_order_without_disabled_domains() {
+        let db_root = test_state_root("enabled-domain-event-feed-db");
+        let database =
+            SlateProfileDatabase::open_resolved(db_root.join(DEFAULT_DATABASE_FILE_NAME))
+                .expect("open settings database");
+        let baseline_revision = database
+            .latest_sync_revision(DEFAULT_PROFILE_ID)
+            .expect("read baseline revision");
+        database
+            .register_app_sync_domain(&AppSyncDomainRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                domain: SYNC_DOMAIN_CALENDAR.to_string(),
+                schema_version: 1,
+                enabled: true,
+                privacy_classification: "sensitive".to_string(),
+                sync_content: false,
+            })
+            .expect("enable calendar sync for test profile");
+
+        let first_settings = database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write first enabled settings event");
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CHAT,
+                "last_thread",
+                "thread-1",
+            )
+            .expect("write disabled chat event");
+        let calendar = database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                "default_view",
+                "month",
+            )
+            .expect("write enabled calendar event");
+        let second_settings = database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.zoom", "110")
+            .expect("write second enabled settings event");
+
+        let first_batch = super::enabled_settings_sync_text_events_after(
+            &database,
+            DEFAULT_PROFILE_ID,
+            baseline_revision,
+            2,
+        )
+        .expect("read first enabled event batch");
+        assert_eq!(
+            first_batch
+                .iter()
+                .map(|event| event.change.clone())
+                .collect::<Vec<_>>(),
+            vec![first_settings.clone(), calendar.clone()]
+        );
+
+        let next_batch = super::enabled_settings_sync_text_events_after(
+            &database,
+            DEFAULT_PROFILE_ID,
+            first_batch[0].revision.revision,
+            10,
+        )
+        .expect("read next enabled event batch");
+        assert_eq!(
+            next_batch
+                .iter()
+                .map(|event| event.change.clone())
+                .collect::<Vec<_>>(),
+            vec![calendar, second_settings]
+        );
+
+        let _ = std::fs::remove_dir_all(db_root);
     }
 
     #[test]

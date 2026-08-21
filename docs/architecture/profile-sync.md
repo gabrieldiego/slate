@@ -382,7 +382,9 @@ creating snapshots or tail manifests: disabled domains may remain local typed
 state, but they are not included in outgoing broadweb profile-sync objects until
 explicitly enabled. Compaction target selection uses the same enabled-domain
 set, so local changes in disabled domains do not force snapshot publication or
-tail trimming.
+tail trimming. Publisher-side event selection should request per-domain feeds
+for the enabled domains instead of reading every app-domain payload and
+discarding disabled domains afterward.
 
 No app should bypass `profile-sync` with an ad hoc network path for replicated
 profile state. If an app needs a protocol-specific backend, broadwebd should

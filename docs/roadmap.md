@@ -192,7 +192,9 @@ Current baseline:
   still be used as local typed state, but they are not published to broadweb
   profile-sync objects until explicitly enabled. The compaction target is also
   selected from enabled domains, so disabled-domain churn does not force
-  outgoing snapshots or manifest tails.
+  outgoing snapshots or manifest tails. The profile-sync publisher now composes
+  enabled-domain event feeds directly instead of loading all app-domain
+  settings changes and filtering disabled domains in memory.
 - broadwebd has a protocol-neutral `profile-sync` application service with an
   in-memory local fixture backend. Unit tests cover object transfer, retention,
   mutable root publish/resolve, provider discovery, per-object transfer
