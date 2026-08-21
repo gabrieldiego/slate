@@ -127,6 +127,11 @@ Already covered:
   sync-domain JSON projection for URL, route, transport, filename, MIME type,
   byte count, and integrity metadata. File bytes and local paths stay outside
   the replicated settings payload.
+- Calendar events now have a local-first `slate-settings.db` materialized table
+  and sync-domain JSON projection with tombstones. Calendar sync stays disabled
+  by default because event titles, notes, locations, recurrence, and reminders
+  are sensitive and must only leave the device inside encrypted profile-sync
+  objects.
 
 Backlog:
 

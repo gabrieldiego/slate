@@ -357,7 +357,11 @@ Planned domains:
   references.
 - `calendar`: events, calendars, reminders, recurrence metadata, and provider
   mapping. Calendar data is sensitive and must be encrypted before any backend
-  sees it.
+  sees it. The initial Calendar projection stores event metadata locally and
+  emits JSON changes keyed by event id, including tombstones for deletion.
+  Calendar remains disabled by default so those sensitive values are only
+  published after the user enables the domain and profile-sync seals the changes
+  into encrypted objects.
 - `contacts`: contact cards, identities, groups, local aliases, and provider
   mapping. Contacts are sensitive and should not be synced before the app has a
   dedicated privacy note.

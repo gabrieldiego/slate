@@ -54,6 +54,7 @@ pub const DEFAULT_HOME_BOOKMARKS: [DefaultBookmark; 2] = [
 
 const DEFAULT_BOOKMARKS_SEEDED_SETTING_KEY: &str = "bookmarks.defaults_seeded";
 const BOOKMARK_HOME_SLOT_SYNC_KEY_PREFIX: &str = "home.slot.";
+const CALENDAR_EVENT_SYNC_KEY_PREFIX: &str = "event.";
 const DOWNLOAD_METADATA_SYNC_KEY_PREFIX: &str = "download.";
 const APP_SYNC_DOMAIN_CURSOR_KEY_PREFIX: &str = "app_sync.cursor.";
 const PROFILE_SYNC_ROOT_KEY_PREFIX: &str = "profile_sync.root.";
@@ -1604,6 +1605,54 @@ pub struct DownloadMetadataSyncPayload {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CalendarEventUpdate {
+    pub profile: String,
+    pub event_id: String,
+    pub calendar_id: Option<String>,
+    pub title: String,
+    pub starts_at: i64,
+    pub ends_at: Option<i64>,
+    pub time_zone: Option<String>,
+    pub location: Option<String>,
+    pub notes: Option<String>,
+    pub recurrence_rule: Option<String>,
+    pub reminder_minutes: Option<i64>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CalendarEventRecord {
+    pub profile: String,
+    pub event_id: String,
+    pub calendar_id: Option<String>,
+    pub title: String,
+    pub starts_at: i64,
+    pub ends_at: Option<i64>,
+    pub time_zone: Option<String>,
+    pub location: Option<String>,
+    pub notes: Option<String>,
+    pub recurrence_rule: Option<String>,
+    pub reminder_minutes: Option<i64>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct CalendarEventSyncPayload {
+    pub event_id: String,
+    pub calendar_id: Option<String>,
+    pub title: String,
+    pub starts_at: i64,
+    pub ends_at: Option<i64>,
+    pub time_zone: Option<String>,
+    pub location: Option<String>,
+    pub notes: Option<String>,
+    pub recurrence_rule: Option<String>,
+    pub reminder_minutes: Option<i64>,
+    #[serde(default)]
+    pub deleted: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CookieUpdate {
     pub profile: String,
     pub domain: String,
@@ -2023,6 +2072,7 @@ pub enum StorageError {
     InvalidSyncContentKeyId(String),
     InvalidSyncDomain(String),
     InvalidSyncRevision(i64),
+    InvalidCalendarEventId(String),
     InvalidDownloadSize(u64),
     MissingActiveSyncContentKey(String),
     UnsupportedSyncContentKeyAlgorithm {
@@ -2079,6 +2129,9 @@ impl fmt::Display for StorageError {
             }
             Self::InvalidSyncRevision(revision) => {
                 write!(formatter, "invalid sync revision: {revision}")
+            }
+            Self::InvalidCalendarEventId(event_id) => {
+                write!(formatter, "invalid calendar event id: {event_id}")
             }
             Self::InvalidDownloadSize(size_bytes) => {
                 write!(
@@ -2140,6 +2193,7 @@ impl std::error::Error for StorageError {
             Self::InvalidSyncContentKeyId(_) => None,
             Self::InvalidSyncDomain(_) => None,
             Self::InvalidSyncRevision(_) => None,
+            Self::InvalidCalendarEventId(_) => None,
             Self::InvalidDownloadSize(_) => None,
             Self::MissingActiveSyncContentKey(_) => None,
             Self::UnsupportedSyncContentKeyAlgorithm { .. }
@@ -2538,6 +2592,121 @@ impl SlateProfileDatabase {
             downloads.push(record.map_err(|source| self.database_error(source))?);
         }
         Ok(downloads)
+    }
+
+    pub fn upsert_calendar_event(
+        &self,
+        event: &CalendarEventUpdate,
+    ) -> Result<CalendarEventRecord, StorageError> {
+        validate_calendar_event_id(event.event_id.as_str())?;
+        let sync_key = calendar_event_sync_key(event.event_id.as_str());
+        let sync_payload = calendar_event_sync_payload(event)?;
+        let payload = CalendarEventSyncPayload {
+            event_id: event.event_id.clone(),
+            calendar_id: event.calendar_id.clone(),
+            title: event.title.clone(),
+            starts_at: event.starts_at,
+            ends_at: event.ends_at,
+            time_zone: event.time_zone.clone(),
+            location: event.location.clone(),
+            notes: event.notes.clone(),
+            recurrence_rule: event.recurrence_rule.clone(),
+            reminder_minutes: event.reminder_minutes,
+            deleted: false,
+        };
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let now = unix_time_seconds()?;
+        upsert_calendar_event_in_transaction(&transaction, event.profile.as_str(), &payload, now)
+            .map_err(|source| self.database_error(source))?;
+        record_sync_setting_text_in_transaction(
+            &transaction,
+            event.profile.as_str(),
+            SYNC_DOMAIN_CALENDAR,
+            sync_key.as_str(),
+            sync_payload.as_str(),
+            self.local_sync_device_id(),
+            now,
+        )
+        .map_err(|source| self.database_error(source))?;
+        let record = calendar_event_record_by_id_in_transaction(
+            &transaction,
+            event.profile.as_str(),
+            event.event_id.as_str(),
+        )
+        .map_err(|source| self.database_error(source))?;
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(record)
+    }
+
+    pub fn calendar_events(
+        &self,
+        profile: &str,
+        limit: u32,
+    ) -> Result<Vec<CalendarEventRecord>, StorageError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT profile, event_id, calendar_id, title, starts_at, ends_at, time_zone,
+                        location, notes, recurrence_rule, reminder_minutes, created_at, updated_at
+                 FROM calendar_events
+                 WHERE profile = ?1
+                 ORDER BY starts_at, event_id
+                 LIMIT ?2",
+            )
+            .map_err(|source| self.database_error(source))?;
+        let records = statement
+            .query_map(
+                params![profile, i64::from(limit)],
+                calendar_event_record_from_row,
+            )
+            .map_err(|source| self.database_error(source))?;
+
+        let mut events = Vec::new();
+        for record in records {
+            events.push(record.map_err(|source| self.database_error(source))?);
+        }
+        Ok(events)
+    }
+
+    pub fn remove_calendar_event(&self, profile: &str, event_id: &str) -> Result<(), StorageError> {
+        validate_calendar_event_id(event_id)?;
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let now = unix_time_seconds()?;
+        let removed =
+            calendar_event_record_by_id_optional_in_transaction(&transaction, profile, event_id)
+                .map_err(|source| self.database_error(source))?;
+        transaction
+            .execute(
+                "DELETE FROM calendar_events WHERE profile = ?1 AND event_id = ?2",
+                params![profile, event_id],
+            )
+            .map_err(|source| self.database_error(source))?;
+        if let Some(record) = removed {
+            let sync_key = calendar_event_sync_key(record.event_id.as_str());
+            let sync_payload = calendar_event_tombstone_sync_payload(&record)?;
+            record_sync_setting_text_in_transaction(
+                &transaction,
+                profile,
+                SYNC_DOMAIN_CALENDAR,
+                sync_key.as_str(),
+                sync_payload.as_str(),
+                self.local_sync_device_id(),
+                now,
+            )
+            .map_err(|source| self.database_error(source))?;
+        }
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(())
     }
 
     pub fn upsert_cookie(&self, cookie: &CookieUpdate) -> Result<(), StorageError> {
@@ -4899,6 +5068,26 @@ impl SlateProfileDatabase {
                 CREATE INDEX IF NOT EXISTS downloads_updated_at
                     ON downloads(profile, updated_at DESC);
 
+                CREATE TABLE IF NOT EXISTS calendar_events (
+                    profile TEXT NOT NULL,
+                    event_id TEXT NOT NULL,
+                    calendar_id TEXT,
+                    title TEXT NOT NULL,
+                    starts_at INTEGER NOT NULL,
+                    ends_at INTEGER,
+                    time_zone TEXT,
+                    location TEXT,
+                    notes TEXT,
+                    recurrence_rule TEXT,
+                    reminder_minutes INTEGER,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    PRIMARY KEY(profile, event_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS calendar_events_starts_at
+                    ON calendar_events(profile, starts_at, event_id);
+
                 CREATE TABLE IF NOT EXISTS cookies (
                     profile TEXT NOT NULL,
                     domain TEXT NOT NULL,
@@ -5447,11 +5636,58 @@ fn download_metadata_sync_payload(
     .map_err(StorageError::EncodeSyncPayload)
 }
 
+fn calendar_event_sync_key(event_id: &str) -> String {
+    format!("{CALENDAR_EVENT_SYNC_KEY_PREFIX}{event_id}")
+}
+
+fn calendar_event_sync_payload(event: &CalendarEventUpdate) -> Result<String, StorageError> {
+    serde_json::to_string(&CalendarEventSyncPayload {
+        event_id: event.event_id.clone(),
+        calendar_id: event.calendar_id.clone(),
+        title: event.title.clone(),
+        starts_at: event.starts_at,
+        ends_at: event.ends_at,
+        time_zone: event.time_zone.clone(),
+        location: event.location.clone(),
+        notes: event.notes.clone(),
+        recurrence_rule: event.recurrence_rule.clone(),
+        reminder_minutes: event.reminder_minutes,
+        deleted: false,
+    })
+    .map_err(StorageError::EncodeSyncPayload)
+}
+
+fn calendar_event_tombstone_sync_payload(
+    event: &CalendarEventRecord,
+) -> Result<String, StorageError> {
+    serde_json::to_string(&CalendarEventSyncPayload {
+        event_id: event.event_id.clone(),
+        calendar_id: event.calendar_id.clone(),
+        title: event.title.clone(),
+        starts_at: event.starts_at,
+        ends_at: event.ends_at,
+        time_zone: event.time_zone.clone(),
+        location: event.location.clone(),
+        notes: event.notes.clone(),
+        recurrence_rule: event.recurrence_rule.clone(),
+        reminder_minutes: event.reminder_minutes,
+        deleted: true,
+    })
+    .map_err(StorageError::EncodeSyncPayload)
+}
+
 fn validate_sync_domain(domain: &str) -> Result<(), StorageError> {
     if domain.is_empty() {
         return Err(StorageError::InvalidSyncDomain(domain.to_string()));
     }
     Ok(())
+}
+
+fn validate_calendar_event_id(event_id: &str) -> Result<(), StorageError> {
+    if is_valid_sync_identifier(event_id) {
+        return Ok(());
+    }
+    Err(StorageError::InvalidCalendarEventId(event_id.to_string()))
 }
 
 fn app_sync_domain_cursor_key(domain: &str) -> String {
@@ -5699,6 +5935,34 @@ fn apply_sync_setting_materialized_view_in_transaction(
         )?;
     }
 
+    if change.domain == SYNC_DOMAIN_CALENDAR
+        && change
+            .key
+            .as_str()
+            .starts_with(CALENDAR_EVENT_SYNC_KEY_PREFIX)
+    {
+        let payload = calendar_event_sync_payload_from_text(change.value.as_str())?;
+        if !is_valid_sync_identifier(payload.event_id.as_str()) {
+            return Err(invalid_calendar_event_sync_payload_error(format!(
+                "invalid calendar event id: {}",
+                payload.event_id
+            )));
+        }
+        let expected_key = calendar_event_sync_key(payload.event_id.as_str());
+        if change.key != expected_key {
+            return Err(invalid_calendar_event_sync_payload_error(format!(
+                "calendar event sync key {} does not match payload id {}",
+                change.key, payload.event_id
+            )));
+        }
+        apply_calendar_event_sync_payload_in_transaction(
+            transaction,
+            change.profile.as_str(),
+            &payload,
+            now,
+        )?;
+    }
+
     if change.domain == SYNC_DOMAIN_DOWNLOADS
         && change
             .key
@@ -5752,6 +6016,25 @@ fn download_metadata_sync_payload_from_text(
 }
 
 fn invalid_download_metadata_sync_payload_error(message: String) -> rusqlite::Error {
+    rusqlite::Error::FromSqlConversionFailure(
+        3,
+        Type::Text,
+        Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            message,
+        )),
+    )
+}
+
+fn calendar_event_sync_payload_from_text(
+    value: &str,
+) -> Result<CalendarEventSyncPayload, rusqlite::Error> {
+    serde_json::from_str(value).map_err(|source| {
+        rusqlite::Error::FromSqlConversionFailure(3, Type::Text, Box::new(source))
+    })
+}
+
+fn invalid_calendar_event_sync_payload_error(message: String) -> rusqlite::Error {
     rusqlite::Error::FromSqlConversionFailure(
         3,
         Type::Text,
@@ -5817,6 +6100,115 @@ fn apply_bookmark_slot_sync_payload_in_transaction(
         ],
     )?;
     Ok(())
+}
+
+fn apply_calendar_event_sync_payload_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    payload: &CalendarEventSyncPayload,
+    now: i64,
+) -> Result<(), rusqlite::Error> {
+    if payload.deleted {
+        transaction.execute(
+            "DELETE FROM calendar_events WHERE profile = ?1 AND event_id = ?2",
+            params![profile, payload.event_id.as_str()],
+        )?;
+        return Ok(());
+    }
+
+    upsert_calendar_event_in_transaction(transaction, profile, payload, now)
+}
+
+fn upsert_calendar_event_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    payload: &CalendarEventSyncPayload,
+    now: i64,
+) -> Result<(), rusqlite::Error> {
+    transaction.execute(
+        "INSERT INTO calendar_events
+           (profile, event_id, calendar_id, title, starts_at, ends_at, time_zone, location,
+            notes, recurrence_rule, reminder_minutes, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12)
+         ON CONFLICT(profile, event_id) DO UPDATE SET
+           calendar_id = excluded.calendar_id,
+           title = excluded.title,
+           starts_at = excluded.starts_at,
+           ends_at = excluded.ends_at,
+           time_zone = excluded.time_zone,
+           location = excluded.location,
+           notes = excluded.notes,
+           recurrence_rule = excluded.recurrence_rule,
+           reminder_minutes = excluded.reminder_minutes,
+           updated_at = excluded.updated_at",
+        params![
+            profile,
+            payload.event_id.as_str(),
+            payload.calendar_id.as_deref(),
+            payload.title.as_str(),
+            payload.starts_at,
+            payload.ends_at,
+            payload.time_zone.as_deref(),
+            payload.location.as_deref(),
+            payload.notes.as_deref(),
+            payload.recurrence_rule.as_deref(),
+            payload.reminder_minutes,
+            now
+        ],
+    )?;
+    Ok(())
+}
+
+fn calendar_event_record_by_id_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    event_id: &str,
+) -> Result<CalendarEventRecord, rusqlite::Error> {
+    transaction.query_row(
+        "SELECT profile, event_id, calendar_id, title, starts_at, ends_at, time_zone,
+                location, notes, recurrence_rule, reminder_minutes, created_at, updated_at
+         FROM calendar_events
+         WHERE profile = ?1 AND event_id = ?2",
+        params![profile, event_id],
+        calendar_event_record_from_row,
+    )
+}
+
+fn calendar_event_record_by_id_optional_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    event_id: &str,
+) -> Result<Option<CalendarEventRecord>, rusqlite::Error> {
+    transaction
+        .query_row(
+            "SELECT profile, event_id, calendar_id, title, starts_at, ends_at, time_zone,
+                    location, notes, recurrence_rule, reminder_minutes, created_at, updated_at
+             FROM calendar_events
+             WHERE profile = ?1 AND event_id = ?2",
+            params![profile, event_id],
+            calendar_event_record_from_row,
+        )
+        .optional()
+}
+
+fn calendar_event_record_from_row(
+    row: &rusqlite::Row<'_>,
+) -> Result<CalendarEventRecord, rusqlite::Error> {
+    Ok(CalendarEventRecord {
+        profile: row.get(0)?,
+        event_id: row.get(1)?,
+        calendar_id: row.get(2)?,
+        title: row.get(3)?,
+        starts_at: row.get(4)?,
+        ends_at: row.get(5)?,
+        time_zone: row.get(6)?,
+        location: row.get(7)?,
+        notes: row.get(8)?,
+        recurrence_rule: row.get(9)?,
+        reminder_minutes: row.get(10)?,
+        created_at: row.get(11)?,
+        updated_at: row.get(12)?,
+    })
 }
 
 fn upsert_download_metadata_in_transaction(
@@ -9977,6 +10369,309 @@ mod tests {
         assert!(
             database
                 .downloads(DEFAULT_PROFILE_ID, 10)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn calendar_event_writes_sync_change_and_materializes_row() {
+        let database_path = test_dir("calendar-event-local").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let event = CalendarEventUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            event_id: "event-1".to_string(),
+            calendar_id: Some("personal".to_string()),
+            title: "Design review".to_string(),
+            starts_at: 1_788_480_000,
+            ends_at: Some(1_788_483_600),
+            time_zone: Some("America/Los_Angeles".to_string()),
+            location: Some("Slate room".to_string()),
+            notes: Some("Review distributed sync milestones".to_string()),
+            recurrence_rule: None,
+            reminder_minutes: Some(15),
+        };
+
+        let record = database.upsert_calendar_event(&event).unwrap();
+
+        assert_eq!(record.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(record.event_id, "event-1");
+        assert_eq!(record.calendar_id.as_deref(), Some("personal"));
+        assert_eq!(record.title, "Design review");
+        assert_eq!(record.starts_at, 1_788_480_000);
+        assert_eq!(record.ends_at, Some(1_788_483_600));
+        assert_eq!(record.reminder_minutes, Some(15));
+        assert_eq!(
+            database.calendar_events(DEFAULT_PROFILE_ID, 10).unwrap(),
+            vec![record]
+        );
+        let events = database
+            .sync_setting_text_events_after_for_domain(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                0,
+                10,
+            )
+            .unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].change.entity_key, "event.event-1");
+        let payload: CalendarEventSyncPayload =
+            serde_json::from_str(events[0].change.payload.as_str()).unwrap();
+        assert_eq!(payload.event_id, "event-1");
+        assert_eq!(payload.title, "Design review");
+        assert!(!payload.deleted);
+        let value = database
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CALENDAR, "event.event-1")
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, events[0].change.payload);
+    }
+
+    #[test]
+    fn calendar_event_removal_records_tombstone() {
+        let database_path = test_dir("calendar-event-tombstone").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        database
+            .upsert_calendar_event(&CalendarEventUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                event_id: "event-2".to_string(),
+                calendar_id: Some("work".to_string()),
+                title: "Sync checkpoint".to_string(),
+                starts_at: 1_788_500_000,
+                ends_at: None,
+                time_zone: Some("UTC".to_string()),
+                location: None,
+                notes: None,
+                recurrence_rule: None,
+                reminder_minutes: None,
+            })
+            .unwrap();
+
+        database
+            .remove_calendar_event(DEFAULT_PROFILE_ID, "event-2")
+            .unwrap();
+
+        assert!(
+            database
+                .calendar_events(DEFAULT_PROFILE_ID, 10)
+                .unwrap()
+                .is_empty()
+        );
+        let events = database
+            .sync_setting_text_events_after_for_domain(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                0,
+                10,
+            )
+            .unwrap();
+        assert_eq!(events.len(), 2);
+        let tombstone: CalendarEventSyncPayload =
+            serde_json::from_str(events[1].change.payload.as_str()).unwrap();
+        assert!(tombstone.deleted);
+        assert_eq!(tombstone.event_id, "event-2");
+        assert_eq!(tombstone.title, "Sync checkpoint");
+        let value = database
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CALENDAR, "event.event-2")
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, events[1].change.payload);
+    }
+
+    #[test]
+    fn incoming_calendar_event_change_updates_event_rows() {
+        let database_path = test_dir("incoming-calendar-event").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let payload = CalendarEventSyncPayload {
+            event_id: "event-3".to_string(),
+            calendar_id: Some("shared".to_string()),
+            title: "Shared planning".to_string(),
+            starts_at: 1_788_600_000,
+            ends_at: Some(1_788_603_000),
+            time_zone: Some("America/Los_Angeles".to_string()),
+            location: Some("Remote".to_string()),
+            notes: Some("Encrypted in profile sync objects".to_string()),
+            recurrence_rule: Some("FREQ=WEEKLY;COUNT=3".to_string()),
+            reminder_minutes: Some(30),
+            deleted: false,
+        };
+        let incoming = IncomingSyncSettingText::new(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_CALENDAR,
+            calendar_event_sync_key(payload.event_id.as_str()),
+            serde_json::to_string(&payload).unwrap(),
+            "device-b",
+            1,
+            20,
+        );
+
+        let applied = database.apply_sync_setting_text(&incoming).unwrap();
+
+        assert_eq!(applied.domain, SYNC_DOMAIN_CALENDAR);
+        assert_eq!(applied.entity_key, "event.event-3");
+        assert!(applied.applied_at.is_some());
+        let events = database.calendar_events(DEFAULT_PROFILE_ID, 10).unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_id, "event-3");
+        assert_eq!(events[0].calendar_id.as_deref(), Some("shared"));
+        assert_eq!(events[0].title, "Shared planning");
+        assert_eq!(
+            events[0].recurrence_rule.as_deref(),
+            Some("FREQ=WEEKLY;COUNT=3")
+        );
+        assert_eq!(events[0].reminder_minutes, Some(30));
+    }
+
+    #[test]
+    fn incoming_calendar_event_tombstone_removes_event_row() {
+        let database_path =
+            test_dir("incoming-calendar-event-tombstone").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        database
+            .upsert_calendar_event(&CalendarEventUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                event_id: "event-4".to_string(),
+                calendar_id: None,
+                title: "Temporary event".to_string(),
+                starts_at: 1_788_700_000,
+                ends_at: None,
+                time_zone: None,
+                location: None,
+                notes: None,
+                recurrence_rule: None,
+                reminder_minutes: None,
+            })
+            .unwrap();
+        let tombstone = CalendarEventSyncPayload {
+            event_id: "event-4".to_string(),
+            calendar_id: None,
+            title: "Temporary event".to_string(),
+            starts_at: 1_788_700_000,
+            ends_at: None,
+            time_zone: None,
+            location: None,
+            notes: None,
+            recurrence_rule: None,
+            reminder_minutes: None,
+            deleted: true,
+        };
+
+        let applied = database
+            .apply_sync_setting_text(&IncomingSyncSettingText::new(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                calendar_event_sync_key("event-4"),
+                serde_json::to_string(&tombstone).unwrap(),
+                "zz-device",
+                1,
+                100,
+            ))
+            .unwrap();
+
+        assert!(applied.applied_at.is_some());
+        assert!(
+            database
+                .calendar_events(DEFAULT_PROFILE_ID, 10)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn incoming_losing_calendar_event_change_does_not_replace_winner() {
+        let database_path =
+            test_dir("incoming-calendar-event-conflict").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let winning_payload = CalendarEventSyncPayload {
+            event_id: "event-5".to_string(),
+            calendar_id: None,
+            title: "Winner".to_string(),
+            starts_at: 1_788_800_000,
+            ends_at: None,
+            time_zone: None,
+            location: None,
+            notes: None,
+            recurrence_rule: None,
+            reminder_minutes: None,
+            deleted: false,
+        };
+        let losing_payload = CalendarEventSyncPayload {
+            event_id: "event-5".to_string(),
+            calendar_id: None,
+            title: "Loser".to_string(),
+            starts_at: 1_788_900_000,
+            ends_at: None,
+            time_zone: None,
+            location: None,
+            notes: None,
+            recurrence_rule: None,
+            reminder_minutes: None,
+            deleted: false,
+        };
+
+        let winning = database
+            .apply_sync_setting_text(&IncomingSyncSettingText::new(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                calendar_event_sync_key("event-5"),
+                serde_json::to_string(&winning_payload).unwrap(),
+                "device-b",
+                2,
+                40,
+            ))
+            .unwrap();
+        let losing = database
+            .apply_sync_setting_text(&IncomingSyncSettingText::new(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                calendar_event_sync_key("event-5"),
+                serde_json::to_string(&losing_payload).unwrap(),
+                "device-c",
+                1,
+                30,
+            ))
+            .unwrap();
+
+        assert!(winning.applied_at.is_some());
+        assert_eq!(losing.applied_at, None);
+        let events = database.calendar_events(DEFAULT_PROFILE_ID, 10).unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].title, "Winner");
+        assert_eq!(events[0].starts_at, 1_788_800_000);
+        let value = database
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CALENDAR, "event.event-5")
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, winning.payload);
+    }
+
+    #[test]
+    fn calendar_event_ids_must_be_sync_identifiers() {
+        let database_path = test_dir("calendar-event-invalid-id").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let event = CalendarEventUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            event_id: "../event".to_string(),
+            calendar_id: None,
+            title: "Invalid".to_string(),
+            starts_at: 1_788_800_000,
+            ends_at: None,
+            time_zone: None,
+            location: None,
+            notes: None,
+            recurrence_rule: None,
+            reminder_minutes: None,
+        };
+
+        let error = database.upsert_calendar_event(&event).unwrap_err();
+
+        assert!(matches!(
+            error,
+            StorageError::InvalidCalendarEventId(event_id) if event_id == "../event"
+        ));
+        assert!(
+            database
+                .calendar_events(DEFAULT_PROFILE_ID, 10)
                 .unwrap()
                 .is_empty()
         );
