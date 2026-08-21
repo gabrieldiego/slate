@@ -192,7 +192,9 @@ Current baseline:
   through the `InProcessBroadwebNetwork` fixture layer inside the test process
   instead of binding loopback ports. Missing simulated fixtures fail as
   internal fixture errors instead of falling through to a real socket, DNS
-  lookup, public gateway, or local daemon.
+  lookup, public gateway, or local daemon. The daemon fetch resolver now honors
+  these synthetic HTTP fixture URLs whenever broadwebd is built with the
+  `test-fixtures` feature, so downstream fixture tests stay in process too.
 - Rendering broadweb smoke fixtures now consume that same `test-fixtures`
   layer, so IPFS/IPNS gateway and Kubo subresource tests record simulated
   requests without starting loopback HTTP servers. The rendering tests now use
