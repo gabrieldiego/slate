@@ -2,6 +2,7 @@
 
 use ring::{aead, rand, signature};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -20,6 +21,7 @@ pub const PROFILE_SYNC_CONTENT_KEY_BYTES: usize = 32;
 pub const PROFILE_SYNC_NONCE_BYTES: usize = 12;
 pub const SYNC_OBJECT_VERSION: u8 = 1;
 pub const PROFILE_SYNC_MANIFEST_SCHEMA_VERSION: u8 = 1;
+pub const PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION: u8 = 1;
 pub const DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH: i64 = 1;
 pub const DEFAULT_PROFILE_SYNC_MIN_TAIL_CHANGE_COUNT: u32 = 32;
 pub const DEFAULT_PROFILE_SYNC_CHANGE_RETENTION_SECONDS: i64 = 14 * 24 * 60 * 60;
@@ -306,6 +308,25 @@ impl Default for ProfileSyncRetentionPolicy {
             inactive_device_grace_seconds: DEFAULT_PROFILE_SYNC_INACTIVE_DEVICE_GRACE_SECONDS,
         }
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ProfileSyncSettingsSnapshot {
+    pub profile: String,
+    pub schema_version: u8,
+    pub covers_revision: i64,
+    pub included_domains: Vec<String>,
+    pub values: Vec<ProfileSyncSettingsSnapshotValue>,
+    pub created_at: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ProfileSyncSettingsSnapshotValue {
+    pub domain: String,
+    pub key: String,
+    pub value: String,
+    pub value_kind: String,
+    pub revision: i64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
@@ -1722,7 +1743,8 @@ impl SlateProfileDatabase {
     ) -> Result<SyncSnapshotRecord, StorageError> {
         let connection = self.connection()?;
         let now = unix_time_seconds()?;
-        let included_domains = encode_snapshot_domains(snapshot.included_domains.as_slice())?;
+        let normalized_domains = normalized_snapshot_domains(snapshot.included_domains.as_slice());
+        let included_domains = encode_snapshot_domains(normalized_domains.as_slice())?;
         connection
             .execute(
                 "INSERT INTO settings_snapshots
@@ -1827,6 +1849,45 @@ impl SlateProfileDatabase {
             covered_change_count: target_index + 1,
             retained_tail_change_count: events.len() - target_index - 1,
         }))
+    }
+
+    pub fn settings_sync_snapshot_payload(
+        &self,
+        profile: &str,
+        covers_revision: i64,
+        included_domains: &[String],
+    ) -> Result<ProfileSyncSettingsSnapshot, StorageError> {
+        let included_domains = normalized_snapshot_domains(included_domains);
+        let mut values_by_key: BTreeMap<(String, String), ProfileSyncSettingsSnapshotValue> =
+            BTreeMap::new();
+        let events = self.sync_setting_text_events_after(profile, 0, u32::MAX)?;
+        for event in events {
+            if event.revision.revision > covers_revision {
+                break;
+            }
+            if !included_domains.contains(&event.change.domain) {
+                continue;
+            }
+            values_by_key.insert(
+                (event.change.domain.clone(), event.change.entity_key.clone()),
+                ProfileSyncSettingsSnapshotValue {
+                    domain: event.change.domain,
+                    key: event.change.entity_key,
+                    value: event.change.payload,
+                    value_kind: "text".to_string(),
+                    revision: event.revision.revision,
+                },
+            );
+        }
+
+        Ok(ProfileSyncSettingsSnapshot {
+            profile: profile.to_string(),
+            schema_version: PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION,
+            covers_revision,
+            included_domains,
+            values: values_by_key.into_values().collect(),
+            created_at: unix_time_seconds()?,
+        })
     }
 
     pub fn sync_snapshot(
@@ -2217,6 +2278,16 @@ fn bool_to_integer(value: bool) -> i64 {
 
 fn integer_to_bool(value: i64) -> bool {
     value != 0
+}
+
+fn normalized_snapshot_domains(domains: &[String]) -> Vec<String> {
+    domains
+        .iter()
+        .filter(|domain| !domain.is_empty())
+        .cloned()
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect()
 }
 
 fn encode_snapshot_domains(domains: &[String]) -> Result<String, StorageError> {
@@ -3422,8 +3493,8 @@ mod tests {
         assert_eq!(
             first_snapshot.included_domains,
             vec![
-                SYNC_DOMAIN_SETTINGS.to_string(),
-                SYNC_DOMAIN_BOOKMARKS.to_string()
+                SYNC_DOMAIN_BOOKMARKS.to_string(),
+                SYNC_DOMAIN_SETTINGS.to_string()
             ]
         );
 
@@ -3542,6 +3613,72 @@ mod tests {
                 .unwrap(),
             None
         );
+    }
+
+    #[test]
+    fn settings_sync_snapshot_payload_materializes_values_at_target_revision() {
+        let database_path = test_dir("sync-snapshot-payload").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let profile = "snapshot-profile";
+
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .unwrap();
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_CALENDAR, "default_view", "month")
+            .unwrap();
+        let covers_revision = database.latest_sync_revision(profile).unwrap();
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "slate")
+            .unwrap();
+
+        let included_domains = vec![
+            SYNC_DOMAIN_SETTINGS.to_string(),
+            SYNC_DOMAIN_CALENDAR.to_string(),
+            SYNC_DOMAIN_SETTINGS.to_string(),
+            String::new(),
+        ];
+        let snapshot = database
+            .settings_sync_snapshot_payload(profile, covers_revision, &included_domains)
+            .unwrap();
+
+        assert_eq!(snapshot.profile, profile);
+        assert_eq!(
+            snapshot.schema_version,
+            PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION
+        );
+        assert_eq!(snapshot.covers_revision, covers_revision);
+        assert_eq!(
+            snapshot.included_domains,
+            vec![
+                SYNC_DOMAIN_CALENDAR.to_string(),
+                SYNC_DOMAIN_SETTINGS.to_string()
+            ]
+        );
+        assert_eq!(
+            snapshot.values,
+            vec![
+                ProfileSyncSettingsSnapshotValue {
+                    domain: SYNC_DOMAIN_CALENDAR.to_string(),
+                    key: "default_view".to_string(),
+                    value: "month".to_string(),
+                    value_kind: "text".to_string(),
+                    revision: covers_revision,
+                },
+                ProfileSyncSettingsSnapshotValue {
+                    domain: SYNC_DOMAIN_SETTINGS.to_string(),
+                    key: "ui.theme".to_string(),
+                    value: "teal".to_string(),
+                    value_kind: "text".to_string(),
+                    revision: covers_revision - 1,
+                }
+            ]
+        );
+
+        let encoded = serde_json::to_vec(&snapshot).unwrap();
+        let decoded: ProfileSyncSettingsSnapshot =
+            serde_json::from_slice(encoded.as_slice()).unwrap();
+        assert_eq!(decoded, snapshot);
     }
 
     #[test]
