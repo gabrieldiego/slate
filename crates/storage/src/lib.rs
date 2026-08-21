@@ -48,6 +48,7 @@ pub const DEFAULT_HOME_BOOKMARKS: [DefaultBookmark; 2] = [
 
 const DEFAULT_BOOKMARKS_SEEDED_SETTING_KEY: &str = "bookmarks.defaults_seeded";
 const PROFILE_SYNC_ROOT_KEY_PREFIX: &str = "profile_sync.root.";
+const PROFILE_SYNC_SNAPSHOT_DEVICE_ID: &str = "snapshot";
 
 const DEFAULT_APP_SYNC_DOMAINS: [DefaultAppSyncDomain; 8] = [
     DefaultAppSyncDomain {
@@ -777,6 +778,7 @@ pub enum StorageError {
     Clock(std::time::SystemTimeError),
     InvalidSyncDeviceId(String),
     InvalidSyncRootId(String),
+    UnsupportedSyncSnapshotSchema(u8),
 }
 
 impl fmt::Display for StorageError {
@@ -809,6 +811,12 @@ impl fmt::Display for StorageError {
             Self::InvalidSyncRootId(root_id) => {
                 write!(formatter, "invalid sync root id: {root_id}")
             }
+            Self::UnsupportedSyncSnapshotSchema(schema_version) => {
+                write!(
+                    formatter,
+                    "unsupported sync settings snapshot schema version: {schema_version}"
+                )
+            }
         }
     }
 }
@@ -823,6 +831,7 @@ impl std::error::Error for StorageError {
             Self::Clock(error) => Some(error),
             Self::InvalidSyncDeviceId(_) => None,
             Self::InvalidSyncRootId(_) => None,
+            Self::UnsupportedSyncSnapshotSchema(_) => None,
         }
     }
 }
@@ -1483,76 +1492,8 @@ impl SlateProfileDatabase {
             .map_err(|source| self.database_error(source))?;
         let now = unix_time_seconds()?;
 
-        record_sync_device_seen_in_transaction(
-            &transaction,
-            change.profile.as_str(),
-            change.device_id.as_str(),
-            now,
-        )
-        .map_err(|source| self.database_error(source))?;
-
-        if let Some(existing) = sync_change_by_device_sequence_in_transaction(
-            &transaction,
-            change.profile.as_str(),
-            change.device_id.as_str(),
-            change.device_sequence,
-        )
-        .map_err(|source| self.database_error(source))?
-        {
-            transaction
-                .commit()
-                .map_err(|source| self.database_error(source))?;
-            return Ok(existing);
-        }
-
-        let existing_winner = sync_setting_winner_in_transaction(
-            &transaction,
-            change.profile.as_str(),
-            change.domain.as_str(),
-            change.key.as_str(),
-        )
-        .map_err(|source| self.database_error(source))?;
-        let should_apply = setting_change_wins(change, existing_winner.as_ref());
-
-        let applied = if should_apply {
-            if change.profile == DEFAULT_PROFILE_ID && change.domain == SYNC_DOMAIN_SETTINGS {
-                transaction
-                    .execute(
-                        "INSERT INTO settings (key, value, updated_at)
-                         VALUES (?1, ?2, ?3)
-                         ON CONFLICT(key) DO UPDATE SET
-                           value = excluded.value,
-                           updated_at = excluded.updated_at",
-                        params![change.key.as_str(), change.value.as_str(), now],
-                    )
-                    .map_err(|source| self.database_error(source))?;
-            }
-            insert_sync_setting_text_change_in_transaction(
-                &transaction,
-                change.profile.as_str(),
-                change.domain.as_str(),
-                change.key.as_str(),
-                change.value.as_str(),
-                change.device_id.as_str(),
-                change.device_sequence,
-                change.logical_clock,
-                now,
-            )
-        } else {
-            insert_sync_setting_text_change_record_in_transaction(
-                &transaction,
-                change.profile.as_str(),
-                change.domain.as_str(),
-                change.key.as_str(),
-                change.value.as_str(),
-                change.device_id.as_str(),
-                change.device_sequence,
-                change.logical_clock,
-                now,
-                None,
-            )
-        }
-        .map_err(|source| self.database_error(source))?;
+        let applied = apply_sync_setting_text_in_transaction(&transaction, change, now)
+            .map_err(|source| self.database_error(source))?;
         transaction
             .commit()
             .map_err(|source| self.database_error(source))?;
@@ -1888,6 +1829,62 @@ impl SlateProfileDatabase {
             values: values_by_key.into_values().collect(),
             created_at: unix_time_seconds()?,
         })
+    }
+
+    pub fn apply_settings_snapshot(
+        &self,
+        snapshot: &ProfileSyncSettingsSnapshot,
+    ) -> Result<Vec<SyncChangeRecord>, StorageError> {
+        if snapshot.schema_version != PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION {
+            return Err(StorageError::UnsupportedSyncSnapshotSchema(
+                snapshot.schema_version,
+            ));
+        }
+
+        let included_domains = normalized_snapshot_domains(snapshot.included_domains.as_slice());
+        let mut values = snapshot.values.clone();
+        values.sort_by(|left, right| {
+            (
+                left.revision,
+                left.domain.as_str(),
+                left.key.as_str(),
+                left.value.as_str(),
+            )
+                .cmp(&(
+                    right.revision,
+                    right.domain.as_str(),
+                    right.key.as_str(),
+                    right.value.as_str(),
+                ))
+        });
+
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let now = unix_time_seconds()?;
+        let mut changes = Vec::new();
+        for value in values {
+            if value.value_kind != "text" || !included_domains.contains(&value.domain) {
+                continue;
+            }
+            let change = IncomingSyncSettingText::new(
+                snapshot.profile.clone(),
+                value.domain,
+                value.key,
+                value.value,
+                PROFILE_SYNC_SNAPSHOT_DEVICE_ID,
+                value.revision,
+                value.revision,
+            );
+            let applied = apply_sync_setting_text_in_transaction(&transaction, &change, now)
+                .map_err(|source| self.database_error(source))?;
+            changes.push(applied);
+        }
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(changes)
     }
 
     pub fn sync_snapshot(
@@ -2496,6 +2493,73 @@ fn setting_change_wins(
         existing.device_id.as_str(),
         existing.device_sequence,
     )
+}
+
+fn apply_sync_setting_text_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    change: &IncomingSyncSettingText,
+    now: i64,
+) -> Result<SyncChangeRecord, rusqlite::Error> {
+    record_sync_device_seen_in_transaction(
+        transaction,
+        change.profile.as_str(),
+        change.device_id.as_str(),
+        now,
+    )?;
+
+    if let Some(existing) = sync_change_by_device_sequence_in_transaction(
+        transaction,
+        change.profile.as_str(),
+        change.device_id.as_str(),
+        change.device_sequence,
+    )? {
+        return Ok(existing);
+    }
+
+    let existing_winner = sync_setting_winner_in_transaction(
+        transaction,
+        change.profile.as_str(),
+        change.domain.as_str(),
+        change.key.as_str(),
+    )?;
+    let should_apply = setting_change_wins(change, existing_winner.as_ref());
+
+    if should_apply {
+        if change.profile == DEFAULT_PROFILE_ID && change.domain == SYNC_DOMAIN_SETTINGS {
+            transaction.execute(
+                "INSERT INTO settings (key, value, updated_at)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT(key) DO UPDATE SET
+                   value = excluded.value,
+                   updated_at = excluded.updated_at",
+                params![change.key.as_str(), change.value.as_str(), now],
+            )?;
+        }
+        insert_sync_setting_text_change_in_transaction(
+            transaction,
+            change.profile.as_str(),
+            change.domain.as_str(),
+            change.key.as_str(),
+            change.value.as_str(),
+            change.device_id.as_str(),
+            change.device_sequence,
+            change.logical_clock,
+            now,
+        )
+    } else {
+        insert_sync_setting_text_change_record_in_transaction(
+            transaction,
+            change.profile.as_str(),
+            change.domain.as_str(),
+            change.key.as_str(),
+            change.value.as_str(),
+            change.device_id.as_str(),
+            change.device_sequence,
+            change.logical_clock,
+            now,
+            None,
+        )
+    }
 }
 
 fn sync_change_record_from_row(
@@ -3679,6 +3743,182 @@ mod tests {
         let decoded: ProfileSyncSettingsSnapshot =
             serde_json::from_slice(encoded.as_slice()).unwrap();
         assert_eq!(decoded, snapshot);
+    }
+
+    #[test]
+    fn applying_settings_snapshot_materializes_values_idempotently() {
+        let source_path = test_dir("sync-snapshot-source").join(DEFAULT_DATABASE_FILE_NAME);
+        let source =
+            SlateProfileDatabase::open_resolved_with_device_id(source_path, "device-a").unwrap();
+        source
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .unwrap();
+        source
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                "default_view",
+                "month",
+            )
+            .unwrap();
+        let covers_revision = source.latest_sync_revision(DEFAULT_PROFILE_ID).unwrap();
+        let snapshot = source
+            .settings_sync_snapshot_payload(
+                DEFAULT_PROFILE_ID,
+                covers_revision,
+                &[
+                    SYNC_DOMAIN_SETTINGS.to_string(),
+                    SYNC_DOMAIN_CALENDAR.to_string(),
+                ],
+            )
+            .unwrap();
+
+        let destination_path =
+            test_dir("sync-snapshot-destination").join(DEFAULT_DATABASE_FILE_NAME);
+        let destination =
+            SlateProfileDatabase::open_resolved_with_device_id(destination_path, "device-b")
+                .unwrap();
+        let baseline_revision = destination
+            .latest_sync_revision(DEFAULT_PROFILE_ID)
+            .unwrap();
+        let applied = destination.apply_settings_snapshot(&snapshot).unwrap();
+
+        assert_eq!(applied.len(), snapshot.values.len());
+        assert!(
+            applied
+                .iter()
+                .all(|change| change.device_id == PROFILE_SYNC_SNAPSHOT_DEVICE_ID)
+        );
+        assert!(applied.iter().all(|change| change.applied_at.is_some()));
+        assert_eq!(
+            destination.get_setting_text("ui.theme").unwrap().as_deref(),
+            Some("teal")
+        );
+        assert_eq!(
+            destination
+                .get_setting_text("default_view")
+                .unwrap()
+                .as_deref(),
+            None
+        );
+
+        let theme_value = destination
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme")
+            .unwrap()
+            .unwrap();
+        assert_eq!(theme_value.value, "teal");
+        let calendar_value = destination
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CALENDAR, "default_view")
+            .unwrap()
+            .unwrap();
+        assert_eq!(calendar_value.value, "month");
+        assert_eq!(
+            destination
+                .sync_revisions_after(DEFAULT_PROFILE_ID, baseline_revision)
+                .unwrap()
+                .len(),
+            applied
+                .iter()
+                .filter(|change| change.applied_at.is_some())
+                .count()
+        );
+
+        let latest_revision = destination
+            .latest_sync_revision(DEFAULT_PROFILE_ID)
+            .unwrap();
+        let duplicate = destination.apply_settings_snapshot(&snapshot).unwrap();
+        assert_eq!(duplicate, applied);
+        assert_eq!(
+            destination
+                .sync_revisions_after(DEFAULT_PROFILE_ID, latest_revision)
+                .unwrap(),
+            Vec::<SyncRevisionRecord>::new()
+        );
+        assert!(
+            destination
+                .sync_devices(DEFAULT_PROFILE_ID)
+                .unwrap()
+                .iter()
+                .any(|device| device.device_id == PROFILE_SYNC_SNAPSHOT_DEVICE_ID)
+        );
+    }
+
+    #[test]
+    fn applying_settings_snapshot_keeps_newer_local_value() {
+        let source_path = test_dir("sync-stale-snapshot-source").join(DEFAULT_DATABASE_FILE_NAME);
+        let source =
+            SlateProfileDatabase::open_resolved_with_device_id(source_path, "device-a").unwrap();
+        source
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "ui.theme",
+                "stale",
+            )
+            .unwrap();
+        let snapshot = source
+            .settings_sync_snapshot_payload(
+                DEFAULT_PROFILE_ID,
+                source.latest_sync_revision(DEFAULT_PROFILE_ID).unwrap(),
+                &[SYNC_DOMAIN_SETTINGS.to_string()],
+            )
+            .unwrap();
+        let snapshot_theme_value = snapshot
+            .values
+            .iter()
+            .find(|value| value.domain == SYNC_DOMAIN_SETTINGS && value.key == "ui.theme")
+            .expect("stale snapshot contains theme value");
+        let snapshot_value_revision = snapshot_theme_value.revision;
+
+        let destination_path =
+            test_dir("sync-stale-snapshot-destination").join(DEFAULT_DATABASE_FILE_NAME);
+        let destination =
+            SlateProfileDatabase::open_resolved_with_device_id(destination_path, "device-b")
+                .unwrap();
+        for index in 0..=snapshot_value_revision {
+            destination
+                .set_sync_setting_text(
+                    DEFAULT_PROFILE_ID,
+                    SYNC_DOMAIN_SETTINGS,
+                    "ui.theme",
+                    &format!("local-{index}"),
+                )
+                .unwrap();
+        }
+        let winning_value = destination
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme")
+            .unwrap()
+            .unwrap();
+
+        let replayed = destination.apply_settings_snapshot(&snapshot).unwrap();
+        let replayed_theme = replayed
+            .iter()
+            .find(|change| change.domain == SYNC_DOMAIN_SETTINGS && change.entity_key == "ui.theme")
+            .expect("replayed snapshot includes theme value");
+        assert_eq!(replayed_theme.payload, "stale");
+        assert_eq!(replayed_theme.applied_at, None);
+        let expected_local_value = format!("local-{snapshot_value_revision}");
+        assert_eq!(
+            destination.get_setting_text("ui.theme").unwrap().as_deref(),
+            Some(expected_local_value.as_str())
+        );
+        assert_eq!(
+            destination
+                .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme")
+                .unwrap()
+                .unwrap(),
+            winning_value
+        );
+        assert!(
+            !destination
+                .sync_setting_text_events_after(DEFAULT_PROFILE_ID, winning_value.revision, 10)
+                .unwrap()
+                .iter()
+                .any(|event| {
+                    event.change.domain == SYNC_DOMAIN_SETTINGS
+                        && event.change.entity_key == "ui.theme"
+                })
+        );
     }
 
     #[test]
