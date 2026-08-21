@@ -241,6 +241,9 @@ Current baseline:
 - The local profile-sync fixture now reports provider health counts for known,
   online, offline, object-transfer, availability, and mutable-root providers,
   and marks sync degraded when one required role has no online provider.
+- The same fixture can now report health for a concrete mutable root, including
+  visible candidate count, latest root object availability, and whether that
+  object is retained by an online provider.
 - Storage now provides `EncryptedSyncObject` envelopes using ChaCha20-Poly1305
   AEAD through `ring`, and the local two-device fixture moves encrypted setting
   change payloads through broadwebd instead of plaintext JSON.
@@ -399,8 +402,7 @@ Current baseline:
 Next:
 
 - Extend the protocol-neutral `profile-sync` application service with richer
-  policy checks for retention quorum, provider freshness, and health reporting
-  tied to concrete roots and retained objects.
+  policy checks for retention quorum and provider freshness.
 - Continue splitting sync backends into discovery, connectivity, transfer,
   availability, and mutable-root implementations so different broadweb
   protocols can be combined behind the typed provider role records.

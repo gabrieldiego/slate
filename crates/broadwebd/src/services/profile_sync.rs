@@ -2,8 +2,9 @@ use crate::{
     ApplicationServicePlugin, BroadwebdError, PROFILE_SYNC_PLUGIN, PluginKind, PluginMetadata,
     PluginRegistry, ProfileSyncObjectRequest, ProfileSyncProfileRequest, ProfileSyncProviderHealth,
     ProfileSyncProviderRecord, ProfileSyncProviderRoles, ProfileSyncPutObjectRequest,
-    ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootCandidate, ProfileSyncRootRequest,
-    ProfileSyncRootUpdate, ResourceBudget, ResourceProfile, ServiceRequest, ServiceResponse,
+    ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootCandidate, ProfileSyncRootHealth,
+    ProfileSyncRootRequest, ProfileSyncRootUpdate, ResourceBudget, ResourceProfile, ServiceRequest,
+    ServiceResponse,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
@@ -359,6 +360,58 @@ impl ProfileSyncService {
         })
     }
 
+    fn root_health(
+        &self,
+        request: ProfileSyncRootRequest,
+    ) -> Result<ProfileSyncResponse, BroadwebdError> {
+        validate_profile(&request.profile)?;
+        validate_profile_sync_root_id(&request.root_id)?;
+        self.require_role(self.roles.discovery, "profile-sync/provider-discovery")?;
+        let store = self.store()?;
+        let candidates = visible_root_candidates(
+            &store,
+            self.provider_id.as_str(),
+            request.profile.as_str(),
+            request.root_id.as_str(),
+        );
+        let latest_object_id = candidates
+            .first()
+            .map(|candidate| candidate.object_id.clone());
+        let latest_object_available = latest_object_id.as_deref().is_some_and(|object_id| {
+            find_online_object(
+                &store,
+                self.provider_id.as_str(),
+                request.profile.as_str(),
+                object_id,
+            )
+            .is_some()
+        });
+        let online_retaining_providers = latest_object_id
+            .as_deref()
+            .map(|object_id| {
+                online_retaining_provider_count(&store, request.profile.as_str(), object_id)
+            })
+            .unwrap_or_default();
+        let (degraded, message) = profile_sync_root_health_message(
+            candidates.len(),
+            latest_object_available,
+            online_retaining_providers,
+        );
+
+        Ok(ProfileSyncResponse::RootHealth {
+            health: ProfileSyncRootHealth {
+                profile: request.profile,
+                root_id: request.root_id,
+                visible_candidates: candidates.len(),
+                latest_object_id,
+                latest_object_available,
+                online_retaining_providers,
+                degraded,
+                message,
+            },
+        })
+    }
+
     fn discover_providers(
         &self,
         request: ProfileSyncProfileRequest,
@@ -632,6 +685,7 @@ impl ApplicationServicePlugin for ProfileSyncService {
             }
             ProfileSyncRequest::DiscoverProviders(request) => self.discover_providers(request)?,
             ProfileSyncRequest::ProviderHealth(request) => self.provider_health(request)?,
+            ProfileSyncRequest::RootHealth(request) => self.root_health(request)?,
         };
         Ok(ServiceResponse::ProfileSync(response))
     }
@@ -767,6 +821,55 @@ fn retained_object_count(store: &ProfileSyncStore, provider_id: &str, profile: &
             retained_provider_id == provider_id && retained_profile == profile
         })
         .count()
+}
+
+fn online_retaining_provider_count(
+    store: &ProfileSyncStore,
+    profile: &str,
+    object_id: &str,
+) -> usize {
+    store
+        .retained
+        .iter()
+        .filter(|(provider_id, retained_profile, retained_object_id)| {
+            retained_profile == profile
+                && retained_object_id == object_id
+                && !store.offline_providers.contains(provider_id.as_str())
+                && provider_supports_role(store, provider_id, |roles| {
+                    roles.availability && roles.object_transfer
+                })
+        })
+        .count()
+}
+
+fn profile_sync_root_health_message(
+    visible_candidates: usize,
+    latest_object_available: bool,
+    online_retaining_providers: usize,
+) -> (bool, String) {
+    if visible_candidates == 0 {
+        (
+            true,
+            "profile sync root has no visible candidates in the local fixture".to_string(),
+        )
+    } else if !latest_object_available {
+        (
+            true,
+            "profile sync root object is not available from an online provider in the local fixture"
+                .to_string(),
+        )
+    } else if online_retaining_providers == 0 {
+        (
+            true,
+            "profile sync root object is not retained by an online provider in the local fixture"
+                .to_string(),
+        )
+    } else {
+        (
+            false,
+            "profile sync root is available and retained in the local fixture".to_string(),
+        )
+    }
 }
 
 fn provider_has_object(
@@ -1800,6 +1903,116 @@ mod tests {
         assert_eq!(health.retained_objects, 1);
         assert!(health.degraded);
         assert!(health.message.contains("mutable-root provider"));
+    }
+
+    #[test]
+    fn local_fixture_reports_root_health_for_retained_objects() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut device_a = PluginRegistry::new();
+        let mut availability_provider = PluginRegistry::new();
+        let budget = ResourceBudget::default();
+
+        device_a.register_service(fixture.service_for_device("a"));
+        availability_provider.register_service(fixture.service_for_availability_provider("pin-1"));
+
+        let missing = device_a
+            .profile_sync(
+                ProfileSyncRequest::RootHealth(ProfileSyncRootRequest::new(
+                    "default",
+                    "settings/latest",
+                )),
+                &budget,
+            )
+            .expect("missing root health is reported locally");
+        let ProfileSyncResponse::RootHealth { health } = missing else {
+            panic!("unexpected root health response");
+        };
+        assert_eq!(health.root_id, "settings/latest");
+        assert_eq!(health.visible_candidates, 0);
+        assert_eq!(health.latest_object_id, None);
+        assert!(!health.latest_object_available);
+        assert_eq!(health.online_retaining_providers, 0);
+        assert!(health.degraded);
+        assert!(health.message.contains("no visible candidates"));
+
+        let put = device_a
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"encrypted root health object".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("device a can put object into fixture");
+        let ProfileSyncResponse::PutEncryptedObject { object_id } = put else {
+            panic!("unexpected put response");
+        };
+        device_a
+            .profile_sync(
+                ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+                    "default",
+                    "settings/latest",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("device a can publish root for health");
+        availability_provider
+            .profile_sync(
+                ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("availability provider can retain root object");
+
+        let healthy = device_a
+            .profile_sync(
+                ProfileSyncRequest::RootHealth(ProfileSyncRootRequest::new(
+                    "default",
+                    "settings/latest",
+                )),
+                &budget,
+            )
+            .expect("retained root health is reported locally");
+        let ProfileSyncResponse::RootHealth { health } = healthy else {
+            panic!("unexpected root health response");
+        };
+        assert_eq!(health.profile, "default");
+        assert_eq!(health.root_id, "settings/latest");
+        assert_eq!(health.visible_candidates, 1);
+        assert_eq!(health.latest_object_id.as_deref(), Some(object_id.as_str()));
+        assert!(health.latest_object_available);
+        assert_eq!(health.online_retaining_providers, 1);
+        assert!(!health.degraded);
+
+        availability_provider
+            .profile_sync(
+                ProfileSyncRequest::ReleaseObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("availability provider can release root object");
+        let unretained = device_a
+            .profile_sync(
+                ProfileSyncRequest::RootHealth(ProfileSyncRootRequest::new(
+                    "default",
+                    "settings/latest",
+                )),
+                &budget,
+            )
+            .expect("unretained root health is reported locally");
+        let ProfileSyncResponse::RootHealth { health } = unretained else {
+            panic!("unexpected root health response");
+        };
+        assert_eq!(health.latest_object_id.as_deref(), Some(object_id.as_str()));
+        assert!(health.latest_object_available);
+        assert_eq!(health.online_retaining_providers, 0);
+        assert!(health.degraded);
+        assert!(health.message.contains("not retained"));
     }
 
     #[test]

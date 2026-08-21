@@ -50,8 +50,8 @@ pub use http::{
     HttpFetchResponse, HttpHeader, ProfileSyncObjectRequest, ProfileSyncProfileRequest,
     ProfileSyncProviderHealth, ProfileSyncProviderRecord, ProfileSyncProviderRoles,
     ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootCandidate,
-    ProfileSyncRootRequest, ProfileSyncRootUpdate, ServiceRequest, ServiceResponse,
-    TransportHttpRequest,
+    ProfileSyncRootHealth, ProfileSyncRootRequest, ProfileSyncRootUpdate, ServiceRequest,
+    ServiceResponse, TransportHttpRequest,
 };
 pub use protocols::ipfs::{
     IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport, IpfsKuboRpcEndpoint,

@@ -211,6 +211,7 @@ pub enum ProfileSyncRequest {
     ListRootCandidates(ProfileSyncRootRequest),
     DiscoverProviders(ProfileSyncProfileRequest),
     ProviderHealth(ProfileSyncProfileRequest),
+    RootHealth(ProfileSyncRootRequest),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -331,6 +332,9 @@ pub enum ProfileSyncResponse {
     ProviderHealth {
         health: ProfileSyncProviderHealth,
     },
+    RootHealth {
+        health: ProfileSyncRootHealth,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -360,6 +364,18 @@ pub struct ProfileSyncProviderHealth {
     pub availability_providers: usize,
     pub mutable_root_providers: usize,
     pub retained_objects: usize,
+    pub degraded: bool,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncRootHealth {
+    pub profile: String,
+    pub root_id: String,
+    pub visible_candidates: usize,
+    pub latest_object_id: Option<String>,
+    pub latest_object_available: bool,
+    pub online_retaining_providers: usize,
     pub degraded: bool,
     pub message: String,
 }

@@ -423,7 +423,9 @@ Malformed identifiers fail locally instead of being interpreted as path-like
 state, implicit URLs, or backend-specific fallthrough.
 Provider health requests summarize known, online, offline, object-transfer,
 availability, and mutable-root providers inside the fixture and mark the profile
-degraded when one required role has no online provider.
+degraded when one required role has no online provider. Root health requests
+inspect a concrete mutable root, reporting visible candidates, latest root
+object availability, and whether that object is retained by an online provider.
 Object bytes are also provider-held: fetches require at least one online
 provider with the object, and retaining an object copies the bytes into the
 retaining provider's in-process store. Tests can pause object transfer from one
