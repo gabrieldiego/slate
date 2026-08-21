@@ -522,6 +522,17 @@ pub(crate) fn set_current_key_bindings(bindings: SlateKeyBindings) {
     }
 }
 
+pub(crate) fn apply_key_binding_setting(key: &str, value: &str) -> bool {
+    let Some(action) = key_binding_action_from_setting_key(key) else {
+        return false;
+    };
+    let binding = KeyBinding::parse(value).unwrap_or_else(|| default_key_binding(action));
+    let mut bindings = current_key_bindings();
+    bindings.set_binding(action, binding);
+    set_current_key_bindings(bindings);
+    true
+}
+
 pub(crate) fn key_binding_action_for_event(event: &KeyboardEvent) -> Option<KeyBindingAction> {
     current_key_bindings().action_for_event(event)
 }
@@ -615,6 +626,13 @@ fn load_key_binding_from_database(
         );
     }
     default
+}
+
+fn key_binding_action_from_setting_key(key: &str) -> Option<KeyBindingAction> {
+    KEY_BINDING_ACTIONS
+        .iter()
+        .copied()
+        .find(|action| action.setting_key() == key)
 }
 
 fn legacy_default_setting_value(action: KeyBindingAction) -> Option<&'static str> {
@@ -798,6 +816,34 @@ mod tests {
                 && entry["query"] == "key_select_all"
                 && entry["default_value"] == "Primary+A"
         }));
+    }
+
+    #[test]
+    fn synced_key_binding_setting_updates_current_bindings() {
+        set_current_key_bindings(SlateKeyBindings::default());
+
+        assert!(apply_key_binding_setting(
+            KeyBindingAction::NextTab.setting_key(),
+            "Alt+ArrowRight",
+        ));
+        assert_eq!(
+            current_key_bindings()
+                .binding(KeyBindingAction::NextTab)
+                .setting_value(),
+            "Alt+ArrowRight"
+        );
+
+        assert!(!apply_key_binding_setting("chrome.zoom", "1.05"));
+        assert!(apply_key_binding_setting(
+            KeyBindingAction::NextTab.setting_key(),
+            "not a shortcut",
+        ));
+        assert_eq!(
+            current_key_bindings()
+                .binding(KeyBindingAction::NextTab)
+                .setting_value(),
+            KeyBindingAction::NextTab.default_setting_value()
+        );
     }
 
     #[test]

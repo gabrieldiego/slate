@@ -6,7 +6,7 @@
 
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicU32, Ordering};
 
 use headers::{ContentType, HeaderMapExt};
 use log::warn;
@@ -19,12 +19,16 @@ use slate_broadwebd::{
     FetchDisposition, HttpFetchRequest, StateRoot, TemporaryDownloadRecord,
     default_session_state_root,
 };
-use slate_storage::{DEFAULT_PROFILE_ID, SlateProfileDatabase};
+use slate_storage::{
+    DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, StorageError,
+    SyncSettingTextEvent,
+};
 use url::Url;
 
 use crate::desktop::key_bindings::{
-    SlateKeyBindings, current_key_bindings_json_value, initialize_key_bindings_from_database,
-    key_bindings_from_settings_url, persist_key_bindings_to_database, set_current_key_bindings,
+    SlateKeyBindings, apply_key_binding_setting, current_key_bindings_json_value,
+    initialize_key_bindings_from_database, key_bindings_from_settings_url,
+    persist_key_bindings_to_database, set_current_key_bindings,
 };
 use crate::desktop::protocols::broadweb::{
     broadweb_download_ready_html, escape_html_text, fetch_with_default_broadwebd,
@@ -39,19 +43,31 @@ const CHROME_ELEMENT_ZOOM_PERCENT_DEFAULT: u32 = 90;
 const CHROME_ELEMENT_ZOOM_PERCENT_MIN: u32 = 75;
 const CHROME_ELEMENT_ZOOM_PERCENT_MAX: u32 = 115;
 const CHROME_ELEMENT_ZOOM_SETTING_KEY: &str = "chrome.zoom";
+const CHROME_SETTINGS_EVENT_BATCH_LIMIT: u32 = 64;
 
 static CHROME_ELEMENT_ZOOM_PERCENT: AtomicU32 = AtomicU32::new(CHROME_ELEMENT_ZOOM_PERCENT_DEFAULT);
 
-#[derive(Default)]
 pub struct SlateProtocolHandler {
     database: Option<SlateProfileDatabase>,
+    settings_sync_revision: AtomicI64,
+}
+
+impl Default for SlateProtocolHandler {
+    fn default() -> Self {
+        Self {
+            database: None,
+            settings_sync_revision: AtomicI64::new(0),
+        }
+    }
 }
 
 impl SlateProtocolHandler {
     pub(crate) fn new(database: SlateProfileDatabase) -> Self {
         initialize_chrome_settings_from_database(&database);
+        let settings_sync_revision = latest_settings_sync_revision(&database);
         Self {
             database: Some(database),
+            settings_sync_revision: AtomicI64::new(settings_sync_revision),
         }
     }
 }
@@ -88,6 +104,8 @@ impl ProtocolHandler for SlateProtocolHandler {
         done_chan: &mut DoneChannel,
         context: &FetchContext,
     ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
+        self.refresh_synced_chrome_settings();
+
         let url = request.current_url();
         if is_slate_settings_state_url(url.as_url()) {
             return settings_json_response(request, current_chrome_element_zoom_setting());
@@ -158,6 +176,24 @@ impl ProtocolHandler for SlateProtocolHandler {
 }
 
 impl SlateProtocolHandler {
+    fn refresh_synced_chrome_settings(&self) {
+        let Some(database) = &self.database else {
+            return;
+        };
+        let after_revision = self.settings_sync_revision.load(Ordering::Relaxed);
+        match apply_synced_chrome_settings_from_database(
+            database,
+            after_revision,
+            CHROME_SETTINGS_EVENT_BATCH_LIMIT,
+        ) {
+            Ok(latest_revision) => {
+                self.settings_sync_revision
+                    .store(latest_revision, Ordering::Relaxed);
+            }
+            Err(error) => warn!("failed to refresh synced chrome settings: {error}"),
+        }
+    }
+
     fn persist_chrome_element_zoom_setting(&self, zoom: f32) {
         if let Some(database) = &self.database {
             if let Err(error) = database.set_setting_f32(CHROME_ELEMENT_ZOOM_SETTING_KEY, zoom) {
@@ -169,6 +205,16 @@ impl SlateProtocolHandler {
     fn persist_key_bindings(&self, key_bindings: &SlateKeyBindings) {
         if let Some(database) = &self.database {
             persist_key_bindings_to_database(database, key_bindings);
+        }
+    }
+}
+
+fn latest_settings_sync_revision(database: &SlateProfileDatabase) -> i64 {
+    match database.latest_sync_revision(DEFAULT_PROFILE_ID) {
+        Ok(revision) => revision,
+        Err(error) => {
+            warn!("failed to read latest settings sync revision: {error}");
+            0
         }
     }
 }
@@ -186,6 +232,49 @@ pub(crate) fn initialize_chrome_settings_from_database(database: &SlateProfileDa
         }
     };
     set_current_chrome_element_zoom_setting(zoom);
+}
+
+pub(crate) fn apply_synced_chrome_settings_from_database(
+    database: &SlateProfileDatabase,
+    after_revision: i64,
+    limit: u32,
+) -> Result<i64, StorageError> {
+    let events =
+        database.sync_setting_text_events_after(DEFAULT_PROFILE_ID, after_revision, limit)?;
+    Ok(apply_synced_chrome_settings_events(
+        after_revision,
+        events.as_slice(),
+    ))
+}
+
+fn apply_synced_chrome_settings_events(
+    after_revision: i64,
+    events: &[SyncSettingTextEvent],
+) -> i64 {
+    let mut latest_revision = after_revision;
+    for event in events {
+        latest_revision = latest_revision.max(event.revision.revision);
+        apply_synced_chrome_setting_event(event);
+    }
+    latest_revision
+}
+
+fn apply_synced_chrome_setting_event(event: &SyncSettingTextEvent) {
+    if event.change.profile != DEFAULT_PROFILE_ID || event.change.domain != SYNC_DOMAIN_SETTINGS {
+        return;
+    }
+
+    match event.change.entity_key.as_str() {
+        CHROME_ELEMENT_ZOOM_SETTING_KEY => match event.change.payload.parse::<f32>() {
+            Ok(zoom) => {
+                set_current_chrome_element_zoom_setting(zoom);
+            }
+            Err(error) => warn!("failed to apply synced chrome zoom setting: {error}"),
+        },
+        key => {
+            apply_key_binding_setting(key, event.change.payload.as_str());
+        }
+    }
 }
 
 pub(crate) fn clamp_chrome_element_zoom_setting(zoom: f32) -> f32 {
@@ -544,10 +633,26 @@ mod tests {
         is_slate_settings_preview_url, is_slate_settings_save_url, is_slate_settings_url,
         is_slate_web_url, slate_download_error_html,
     };
+    use crate::desktop::key_bindings::{
+        SlateKeyBindings, current_key_bindings_json_value, set_current_key_bindings,
+    };
     use slate_broadwebd::FetchPurpose;
     use slate_broadwebd::TemporaryDownloadRecord;
+    use slate_storage::{
+        DEFAULT_PROFILE_ID, IncomingSyncSettingText, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase,
+    };
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use url::Url;
+
+    fn unique_database_path(name: &str) -> PathBuf {
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        std::env::temp_dir().join(format!(
+            "slate-protocol-settings-{name}-{}-{}.db",
+            std::process::id(),
+            COUNTER.fetch_add(1, Ordering::Relaxed)
+        ))
+    }
 
     #[test]
     fn slate_home_url_matches_host_and_path_forms() {
@@ -804,6 +909,66 @@ mod tests {
         assert_eq!(parsed["key_bindings"][7]["query"], "key_copy");
         assert_eq!(parsed["key_bindings"][8]["id"], "paste");
         assert_eq!(parsed["key_bindings"][9]["id"], "select_all");
+    }
+
+    #[test]
+    fn synced_chrome_settings_feed_updates_runtime_state() {
+        let path = unique_database_path("runtime-feed");
+        let database = SlateProfileDatabase::open_resolved(path.clone()).unwrap();
+        let baseline_revision = database.latest_sync_revision(DEFAULT_PROFILE_ID).unwrap();
+
+        super::set_current_chrome_element_zoom_setting(super::CHROME_ELEMENT_ZOOM_SETTING_DEFAULT);
+        set_current_key_bindings(SlateKeyBindings::default());
+        let zoom_change = database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "chrome.zoom",
+                "1.05",
+            )
+            .unwrap();
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "keybindings.next_tab",
+                "Alt+ArrowRight",
+            )
+            .unwrap();
+
+        let revision =
+            super::apply_synced_chrome_settings_from_database(&database, baseline_revision, 64)
+                .unwrap();
+        assert!(revision > baseline_revision);
+        assert_eq!(super::current_chrome_element_zoom_setting(), 1.05);
+        let key_bindings = current_key_bindings_json_value();
+        let next_tab = key_bindings
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| entry["id"] == "next_tab")
+            .expect("next_tab binding");
+        assert_eq!(next_tab["value"], "Alt+ArrowRight");
+
+        let losing_zoom = database
+            .apply_sync_setting_text(&IncomingSyncSettingText::new(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "chrome.zoom",
+                "0.80",
+                "device-b",
+                1,
+                zoom_change.logical_clock - 1,
+            ))
+            .unwrap();
+        assert_eq!(losing_zoom.applied_at, None);
+        let unchanged_revision =
+            super::apply_synced_chrome_settings_from_database(&database, revision, 64).unwrap();
+        assert_eq!(unchanged_revision, revision);
+        assert_eq!(super::current_chrome_element_zoom_setting(), 1.05);
+
+        drop(database);
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]
