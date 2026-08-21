@@ -369,7 +369,10 @@ Planned domains:
   may use heavier transfer/storage backends than settings changes.
 - `downloads`: download history, source routing metadata, integrity metadata,
   and user-selected persistent file records. Temporary downloads should stay
-  local unless explicitly promoted.
+  local unless explicitly promoted. The initial Downloads projection is
+  metadata-only: winning sync changes materialize URL, route, transport,
+  filename, MIME type, byte count, and integrity fields into local rows, while
+  file bytes and local paths stay out of replicated settings payloads.
 - `storage`: broadweb storage providers, pinning leases, quotas, object health,
   and repair metadata.
 - Future apps such as Player, Notes, Tasks, Mail, or Media Library should define

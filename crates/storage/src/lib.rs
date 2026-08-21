@@ -54,6 +54,7 @@ pub const DEFAULT_HOME_BOOKMARKS: [DefaultBookmark; 2] = [
 
 const DEFAULT_BOOKMARKS_SEEDED_SETTING_KEY: &str = "bookmarks.defaults_seeded";
 const BOOKMARK_HOME_SLOT_SYNC_KEY_PREFIX: &str = "home.slot.";
+const DOWNLOAD_METADATA_SYNC_KEY_PREFIX: &str = "download.";
 const APP_SYNC_DOMAIN_CURSOR_KEY_PREFIX: &str = "app_sync.cursor.";
 const PROFILE_SYNC_ROOT_KEY_PREFIX: &str = "profile_sync.root.";
 const PROFILE_SYNC_SNAPSHOT_DEVICE_ID: &str = "snapshot";
@@ -1560,6 +1561,49 @@ pub struct BookmarkRecord {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DownloadMetadataUpdate {
+    pub profile: String,
+    pub download_id: String,
+    pub source_url: String,
+    pub final_url: String,
+    pub route: Option<String>,
+    pub transport_id: Option<String>,
+    pub filename: String,
+    pub content_type: Option<String>,
+    pub size_bytes: u64,
+    pub integrity: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DownloadMetadataRecord {
+    pub profile: String,
+    pub download_id: String,
+    pub source_url: String,
+    pub final_url: String,
+    pub route: Option<String>,
+    pub transport_id: Option<String>,
+    pub filename: String,
+    pub content_type: Option<String>,
+    pub size_bytes: u64,
+    pub integrity: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct DownloadMetadataSyncPayload {
+    pub download_id: String,
+    pub source_url: String,
+    pub final_url: String,
+    pub route: Option<String>,
+    pub transport_id: Option<String>,
+    pub filename: String,
+    pub content_type: Option<String>,
+    pub size_bytes: u64,
+    pub integrity: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CookieUpdate {
     pub profile: String,
     pub domain: String,
@@ -1979,6 +2023,7 @@ pub enum StorageError {
     InvalidSyncContentKeyId(String),
     InvalidSyncDomain(String),
     InvalidSyncRevision(i64),
+    InvalidDownloadSize(u64),
     MissingActiveSyncContentKey(String),
     UnsupportedSyncContentKeyAlgorithm {
         key_id: String,
@@ -2035,6 +2080,12 @@ impl fmt::Display for StorageError {
             Self::InvalidSyncRevision(revision) => {
                 write!(formatter, "invalid sync revision: {revision}")
             }
+            Self::InvalidDownloadSize(size_bytes) => {
+                write!(
+                    formatter,
+                    "download metadata size exceeds SQLite integer range: {size_bytes}"
+                )
+            }
             Self::MissingActiveSyncContentKey(profile) => {
                 write!(
                     formatter,
@@ -2089,6 +2140,7 @@ impl std::error::Error for StorageError {
             Self::InvalidSyncContentKeyId(_) => None,
             Self::InvalidSyncDomain(_) => None,
             Self::InvalidSyncRevision(_) => None,
+            Self::InvalidDownloadSize(_) => None,
             Self::MissingActiveSyncContentKey(_) => None,
             Self::UnsupportedSyncContentKeyAlgorithm { .. }
             | Self::UnauthorizedSyncContentKeyEpoch { .. } => None,
@@ -2404,6 +2456,88 @@ impl SlateProfileDatabase {
             .commit()
             .map_err(|source| self.database_error(source))?;
         Ok(())
+    }
+
+    pub fn record_download_metadata(
+        &self,
+        download: &DownloadMetadataUpdate,
+    ) -> Result<DownloadMetadataRecord, StorageError> {
+        let _ = download_size_to_i64(download.size_bytes)?;
+        let sync_key = download_metadata_sync_key(download.download_id.as_str());
+        let sync_payload = download_metadata_sync_payload(download)?;
+        let payload = DownloadMetadataSyncPayload {
+            download_id: download.download_id.clone(),
+            source_url: download.source_url.clone(),
+            final_url: download.final_url.clone(),
+            route: download.route.clone(),
+            transport_id: download.transport_id.clone(),
+            filename: download.filename.clone(),
+            content_type: download.content_type.clone(),
+            size_bytes: download.size_bytes,
+            integrity: download.integrity.clone(),
+        };
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let now = unix_time_seconds()?;
+        upsert_download_metadata_in_transaction(
+            &transaction,
+            download.profile.as_str(),
+            &payload,
+            now,
+        )
+        .map_err(|source| self.database_error(source))?;
+        record_sync_setting_text_in_transaction(
+            &transaction,
+            download.profile.as_str(),
+            SYNC_DOMAIN_DOWNLOADS,
+            sync_key.as_str(),
+            sync_payload.as_str(),
+            self.local_sync_device_id(),
+            now,
+        )
+        .map_err(|source| self.database_error(source))?;
+        let record = download_metadata_record_by_id_in_transaction(
+            &transaction,
+            download.profile.as_str(),
+            download.download_id.as_str(),
+        )
+        .map_err(|source| self.database_error(source))?;
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(record)
+    }
+
+    pub fn downloads(
+        &self,
+        profile: &str,
+        limit: u32,
+    ) -> Result<Vec<DownloadMetadataRecord>, StorageError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT profile, download_id, source_url, final_url, route, transport_id,
+                        filename, content_type, size_bytes, integrity, created_at, updated_at
+                 FROM downloads
+                 WHERE profile = ?1
+                 ORDER BY updated_at DESC, download_id
+                 LIMIT ?2",
+            )
+            .map_err(|source| self.database_error(source))?;
+        let records = statement
+            .query_map(
+                params![profile, i64::from(limit)],
+                download_metadata_record_from_row,
+            )
+            .map_err(|source| self.database_error(source))?;
+
+        let mut downloads = Vec::new();
+        for record in records {
+            downloads.push(record.map_err(|source| self.database_error(source))?);
+        }
+        Ok(downloads)
     }
 
     pub fn upsert_cookie(&self, cookie: &CookieUpdate) -> Result<(), StorageError> {
@@ -4746,6 +4880,25 @@ impl SlateProfileDatabase {
                     UNIQUE(profile, url)
                 );
 
+                CREATE TABLE IF NOT EXISTS downloads (
+                    profile TEXT NOT NULL,
+                    download_id TEXT NOT NULL,
+                    source_url TEXT NOT NULL,
+                    final_url TEXT NOT NULL,
+                    route TEXT,
+                    transport_id TEXT,
+                    filename TEXT NOT NULL,
+                    content_type TEXT,
+                    size_bytes INTEGER NOT NULL,
+                    integrity TEXT,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    PRIMARY KEY(profile, download_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS downloads_updated_at
+                    ON downloads(profile, updated_at DESC);
+
                 CREATE TABLE IF NOT EXISTS cookies (
                     profile TEXT NOT NULL,
                     domain TEXT NOT NULL,
@@ -5273,6 +5426,27 @@ fn bookmark_home_slot_sync_payload(
     .map_err(StorageError::EncodeSyncPayload)
 }
 
+fn download_metadata_sync_key(download_id: &str) -> String {
+    format!("{DOWNLOAD_METADATA_SYNC_KEY_PREFIX}{download_id}")
+}
+
+fn download_metadata_sync_payload(
+    download: &DownloadMetadataUpdate,
+) -> Result<String, StorageError> {
+    serde_json::to_string(&DownloadMetadataSyncPayload {
+        download_id: download.download_id.clone(),
+        source_url: download.source_url.clone(),
+        final_url: download.final_url.clone(),
+        route: download.route.clone(),
+        transport_id: download.transport_id.clone(),
+        filename: download.filename.clone(),
+        content_type: download.content_type.clone(),
+        size_bytes: download.size_bytes,
+        integrity: download.integrity.clone(),
+    })
+    .map_err(StorageError::EncodeSyncPayload)
+}
+
 fn validate_sync_domain(domain: &str) -> Result<(), StorageError> {
     if domain.is_empty() {
         return Err(StorageError::InvalidSyncDomain(domain.to_string()));
@@ -5525,6 +5699,28 @@ fn apply_sync_setting_materialized_view_in_transaction(
         )?;
     }
 
+    if change.domain == SYNC_DOMAIN_DOWNLOADS
+        && change
+            .key
+            .as_str()
+            .starts_with(DOWNLOAD_METADATA_SYNC_KEY_PREFIX)
+    {
+        let payload = download_metadata_sync_payload_from_text(change.value.as_str())?;
+        let expected_key = download_metadata_sync_key(payload.download_id.as_str());
+        if change.key != expected_key {
+            return Err(invalid_download_metadata_sync_payload_error(format!(
+                "download metadata sync key {} does not match payload id {}",
+                change.key, payload.download_id
+            )));
+        }
+        upsert_download_metadata_in_transaction(
+            transaction,
+            change.profile.as_str(),
+            &payload,
+            now,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -5537,6 +5733,25 @@ fn bookmark_home_slot_sync_payload_from_text(
 }
 
 fn invalid_bookmark_slot_sync_payload_error(message: String) -> rusqlite::Error {
+    rusqlite::Error::FromSqlConversionFailure(
+        3,
+        Type::Text,
+        Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            message,
+        )),
+    )
+}
+
+fn download_metadata_sync_payload_from_text(
+    value: &str,
+) -> Result<DownloadMetadataSyncPayload, rusqlite::Error> {
+    serde_json::from_str(value).map_err(|source| {
+        rusqlite::Error::FromSqlConversionFailure(3, Type::Text, Box::new(source))
+    })
+}
+
+fn invalid_download_metadata_sync_payload_error(message: String) -> rusqlite::Error {
     rusqlite::Error::FromSqlConversionFailure(
         3,
         Type::Text,
@@ -5602,6 +5817,98 @@ fn apply_bookmark_slot_sync_payload_in_transaction(
         ],
     )?;
     Ok(())
+}
+
+fn upsert_download_metadata_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    payload: &DownloadMetadataSyncPayload,
+    now: i64,
+) -> Result<(), rusqlite::Error> {
+    let size_bytes = download_size_to_sql_i64(payload.size_bytes)?;
+    transaction.execute(
+        "INSERT INTO downloads
+           (profile, download_id, source_url, final_url, route, transport_id, filename,
+            content_type, size_bytes, integrity, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11)
+         ON CONFLICT(profile, download_id) DO UPDATE SET
+           source_url = excluded.source_url,
+           final_url = excluded.final_url,
+           route = excluded.route,
+           transport_id = excluded.transport_id,
+           filename = excluded.filename,
+           content_type = excluded.content_type,
+           size_bytes = excluded.size_bytes,
+           integrity = excluded.integrity,
+           updated_at = excluded.updated_at",
+        params![
+            profile,
+            payload.download_id.as_str(),
+            payload.source_url.as_str(),
+            payload.final_url.as_str(),
+            payload.route.as_deref(),
+            payload.transport_id.as_deref(),
+            payload.filename.as_str(),
+            payload.content_type.as_deref(),
+            size_bytes,
+            payload.integrity.as_deref(),
+            now
+        ],
+    )?;
+    Ok(())
+}
+
+fn download_metadata_record_by_id_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    download_id: &str,
+) -> Result<DownloadMetadataRecord, rusqlite::Error> {
+    transaction.query_row(
+        "SELECT profile, download_id, source_url, final_url, route, transport_id,
+                filename, content_type, size_bytes, integrity, created_at, updated_at
+         FROM downloads
+         WHERE profile = ?1 AND download_id = ?2",
+        params![profile, download_id],
+        download_metadata_record_from_row,
+    )
+}
+
+fn download_metadata_record_from_row(
+    row: &rusqlite::Row<'_>,
+) -> Result<DownloadMetadataRecord, rusqlite::Error> {
+    let size_bytes = download_size_from_sql_i64(row.get(8)?)?;
+    Ok(DownloadMetadataRecord {
+        profile: row.get(0)?,
+        download_id: row.get(1)?,
+        source_url: row.get(2)?,
+        final_url: row.get(3)?,
+        route: row.get(4)?,
+        transport_id: row.get(5)?,
+        filename: row.get(6)?,
+        content_type: row.get(7)?,
+        size_bytes,
+        integrity: row.get(9)?,
+        created_at: row.get(10)?,
+        updated_at: row.get(11)?,
+    })
+}
+
+fn download_size_to_i64(size_bytes: u64) -> Result<i64, StorageError> {
+    i64::try_from(size_bytes).map_err(|_| StorageError::InvalidDownloadSize(size_bytes))
+}
+
+fn download_size_to_sql_i64(size_bytes: u64) -> Result<i64, rusqlite::Error> {
+    i64::try_from(size_bytes).map_err(|_| {
+        invalid_download_metadata_sync_payload_error(format!(
+            "download size exceeds SQLite integer range: {size_bytes}"
+        ))
+    })
+}
+
+fn download_size_from_sql_i64(size_bytes: i64) -> Result<u64, rusqlite::Error> {
+    u64::try_from(size_bytes).map_err(|source| {
+        rusqlite::Error::FromSqlConversionFailure(8, Type::Integer, Box::new(source))
+    })
 }
 
 fn apply_sync_setting_text_in_transaction(
@@ -9465,6 +9772,214 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(value.value, winning.payload);
+    }
+
+    #[test]
+    fn download_metadata_writes_sync_change_without_file_bytes() {
+        let database_path = test_dir("download-metadata-local").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let download = DownloadMetadataUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            download_id: "download-1".to_string(),
+            source_url: "ipfs://bafybeigdyrzt/picture.png".to_string(),
+            final_url: "ipfs://bafybeigdyrzt/picture.png".to_string(),
+            route: Some("ipfs://bafybeigdyrzt/picture.png".to_string()),
+            transport_id: Some("ipfs-gateway".to_string()),
+            filename: "picture.png".to_string(),
+            content_type: Some("image/png".to_string()),
+            size_bytes: 42,
+            integrity: Some("sha256-fixture".to_string()),
+        };
+
+        let record = database.record_download_metadata(&download).unwrap();
+
+        assert_eq!(record.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(record.download_id, "download-1");
+        assert_eq!(record.filename, "picture.png");
+        assert_eq!(record.size_bytes, 42);
+        assert_eq!(record.transport_id.as_deref(), Some("ipfs-gateway"));
+        let downloads = database.downloads(DEFAULT_PROFILE_ID, 10).unwrap();
+        assert_eq!(downloads, vec![record]);
+        let events = database
+            .sync_setting_text_events_after_for_domain(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_DOWNLOADS,
+                0,
+                10,
+            )
+            .unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].change.entity_key, "download.download-1");
+        let payload: DownloadMetadataSyncPayload =
+            serde_json::from_str(events[0].change.payload.as_str()).unwrap();
+        assert_eq!(payload.download_id, "download-1");
+        assert_eq!(payload.source_url, "ipfs://bafybeigdyrzt/picture.png");
+        assert_eq!(payload.filename, "picture.png");
+        let payload_json: serde_json::Value =
+            serde_json::from_str(events[0].change.payload.as_str()).unwrap();
+        assert!(payload_json.get("path").is_none());
+        assert!(payload_json.get("local_path").is_none());
+        assert!(payload_json.get("file_bytes").is_none());
+        assert!(payload_json.get("contents").is_none());
+        let value = database
+            .get_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_DOWNLOADS,
+                "download.download-1",
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, events[0].change.payload);
+    }
+
+    #[test]
+    fn incoming_download_metadata_change_updates_download_rows() {
+        let database_path = test_dir("incoming-download-metadata").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let payload = DownloadMetadataSyncPayload {
+            download_id: "download-2".to_string(),
+            source_url: "https://example.com/report.pdf".to_string(),
+            final_url: "https://cdn.example.com/report.pdf".to_string(),
+            route: Some("https://cdn.example.com/report.pdf".to_string()),
+            transport_id: Some("direct-http".to_string()),
+            filename: "report.pdf".to_string(),
+            content_type: Some("application/pdf".to_string()),
+            size_bytes: 2048,
+            integrity: None,
+        };
+        let incoming = IncomingSyncSettingText::new(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_DOWNLOADS,
+            download_metadata_sync_key(payload.download_id.as_str()),
+            serde_json::to_string(&payload).unwrap(),
+            "device-b",
+            1,
+            20,
+        );
+
+        let applied = database.apply_sync_setting_text(&incoming).unwrap();
+
+        assert_eq!(applied.domain, SYNC_DOMAIN_DOWNLOADS);
+        assert_eq!(applied.entity_key, "download.download-2");
+        assert!(applied.applied_at.is_some());
+        let downloads = database.downloads(DEFAULT_PROFILE_ID, 10).unwrap();
+        assert_eq!(downloads.len(), 1);
+        assert_eq!(downloads[0].download_id, "download-2");
+        assert_eq!(downloads[0].source_url, "https://example.com/report.pdf");
+        assert_eq!(downloads[0].final_url, "https://cdn.example.com/report.pdf");
+        assert_eq!(downloads[0].transport_id.as_deref(), Some("direct-http"));
+        assert_eq!(downloads[0].filename, "report.pdf");
+        assert_eq!(downloads[0].size_bytes, 2048);
+        let value = database
+            .get_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_DOWNLOADS,
+                "download.download-2",
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, applied.payload);
+    }
+
+    #[test]
+    fn incoming_losing_download_metadata_change_does_not_replace_winner() {
+        let database_path =
+            test_dir("incoming-download-metadata-conflict").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let winning_payload = DownloadMetadataSyncPayload {
+            download_id: "download-3".to_string(),
+            source_url: "https://winner.example/file.zip".to_string(),
+            final_url: "https://winner.example/file.zip".to_string(),
+            route: None,
+            transport_id: Some("direct-http".to_string()),
+            filename: "winner.zip".to_string(),
+            content_type: Some("application/zip".to_string()),
+            size_bytes: 300,
+            integrity: Some("sha256-winner".to_string()),
+        };
+        let losing_payload = DownloadMetadataSyncPayload {
+            download_id: "download-3".to_string(),
+            source_url: "https://loser.example/file.zip".to_string(),
+            final_url: "https://loser.example/file.zip".to_string(),
+            route: None,
+            transport_id: Some("direct-http".to_string()),
+            filename: "loser.zip".to_string(),
+            content_type: Some("application/zip".to_string()),
+            size_bytes: 100,
+            integrity: Some("sha256-loser".to_string()),
+        };
+
+        let winning = database
+            .apply_sync_setting_text(&IncomingSyncSettingText::new(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_DOWNLOADS,
+                download_metadata_sync_key("download-3"),
+                serde_json::to_string(&winning_payload).unwrap(),
+                "device-b",
+                2,
+                40,
+            ))
+            .unwrap();
+        let losing = database
+            .apply_sync_setting_text(&IncomingSyncSettingText::new(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_DOWNLOADS,
+                download_metadata_sync_key("download-3"),
+                serde_json::to_string(&losing_payload).unwrap(),
+                "device-c",
+                1,
+                30,
+            ))
+            .unwrap();
+
+        assert!(winning.applied_at.is_some());
+        assert_eq!(losing.applied_at, None);
+        let downloads = database.downloads(DEFAULT_PROFILE_ID, 10).unwrap();
+        assert_eq!(downloads.len(), 1);
+        assert_eq!(downloads[0].download_id, "download-3");
+        assert_eq!(downloads[0].source_url, "https://winner.example/file.zip");
+        assert_eq!(downloads[0].filename, "winner.zip");
+        assert_eq!(downloads[0].size_bytes, 300);
+        let value = database
+            .get_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_DOWNLOADS,
+                "download.download-3",
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, winning.payload);
+    }
+
+    #[test]
+    fn oversized_download_metadata_is_rejected_before_sqlite_insert() {
+        let database_path =
+            test_dir("download-metadata-oversized").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let download = DownloadMetadataUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            download_id: "too-large".to_string(),
+            source_url: "https://example.com/large.bin".to_string(),
+            final_url: "https://example.com/large.bin".to_string(),
+            route: None,
+            transport_id: Some("direct-http".to_string()),
+            filename: "large.bin".to_string(),
+            content_type: Some("application/octet-stream".to_string()),
+            size_bytes: i64::MAX as u64 + 1,
+            integrity: None,
+        };
+
+        let error = database.record_download_metadata(&download).unwrap_err();
+
+        assert!(
+            matches!(error, StorageError::InvalidDownloadSize(size) if size == i64::MAX as u64 + 1)
+        );
+        assert!(
+            database
+                .downloads(DEFAULT_PROFILE_ID, 10)
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]

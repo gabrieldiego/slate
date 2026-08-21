@@ -123,13 +123,17 @@ Already covered:
 - Home bookmark favicons and other small binary blobs.
 - Browsing history URL/title/visit metadata from Servo history callbacks.
 - Cookie schema, though live HTTP cookies are still owned by Servo today.
+- Downloads metadata now has a `slate-settings.db` materialized table and
+  sync-domain JSON projection for URL, route, transport, filename, MIME type,
+  byte count, and integrity metadata. File bytes and local paths stay outside
+  the replicated settings payload.
 
 Backlog:
 
-- Downloads: source URL, final routed URL, protocol or transport, filename,
-  saved path, size, MIME type, status, timestamps, failure reason, and later
-  integrity metadata. Download files should remain normal files; the database
-  should store their records.
+- Downloads: persistent file records, local saved-path handling, status,
+  timestamps surfaced in the UI, failure reason, and promotion rules for
+  temporary downloads. Download files should remain normal files; replicated
+  settings payloads should continue to exclude local paths and file bytes.
 - Session restore: open windows, tab order, active tab, singleton internal tabs,
   last URL/title per tab, and eventually back/forward history when the rendering
   boundary exposes enough state.
