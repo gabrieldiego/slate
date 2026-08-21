@@ -270,6 +270,11 @@ Current baseline:
   policy, loads active content-key metadata, validates the local signer
   identity, and enforces the trusted-device bound before any encrypted
   publish/pull attempt.
+- Preflight now also includes discovered retention-capable provider records.
+  The list is filtered to fresh online providers that advertise both
+  availability and object-transfer roles, letting future scheduler/UI code
+  choose concrete logged-in devices or availability-only providers instead of
+  relying only on aggregate health counters.
 - Settings sync cycle policy now supports explicit provider quorum checks for
   fresh online, object-transfer, availability, and mutable-root providers. The
   in-process fixture covers a policy that refuses to run with only one fresh

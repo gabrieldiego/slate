@@ -566,7 +566,10 @@ The runner exposes that work as an explicit read-only preflight: sample
 broadwebd health, apply before-cycle provider policy, load active key metadata,
 validate the local signer, and enforce trusted-device bounds. Preflight does
 not take the content key secret and does not publish, retain, pull, or mutate
-sync roots.
+sync roots. It also returns discovered retention-capable providers, filtered to
+fresh online records with availability and object-transfer roles. That gives
+the future scheduler concrete provider candidates while keeping provider
+selection separate from mutable-root authority.
 Object bytes are also provider-held: fetches require at least one online
 provider with the object, and retaining an object copies the bytes into the
 retaining provider's in-process store. Tests can pause object transfer from one

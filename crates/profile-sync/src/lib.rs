@@ -5,6 +5,7 @@ use slate_broadwebd::{
     BroadwebDaemon, BroadwebdError, ProfileSyncObjectRequest as BroadwebdProfileSyncObjectRequest,
     ProfileSyncProfileRequest as BroadwebdProfileSyncProfileRequest,
     ProfileSyncProviderHealth as BroadwebdProfileSyncProviderHealth,
+    ProfileSyncProviderRecord as BroadwebdProfileSyncProviderRecord,
     ProfileSyncPutObjectRequest as BroadwebdProfileSyncPutObjectRequest,
     ProfileSyncRequest as BroadwebdProfileSyncRequest,
     ProfileSyncResponse as BroadwebdProfileSyncResponse,
@@ -769,6 +770,7 @@ pub struct SettingsSyncCyclePreflight {
     pub signer_device_id: String,
     pub active_key_id: String,
     pub trusted_remote_device_count: usize,
+    pub retention_provider_candidates: Vec<BroadwebdProfileSyncProviderRecord>,
     pub before_health: SettingsSyncHealthReport,
 }
 
@@ -1113,6 +1115,34 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
         Ok(health)
     }
 
+    pub fn profile_sync_providers(
+        &self,
+        profile: &str,
+    ) -> Result<Vec<BroadwebdProfileSyncProviderRecord>, BroadwebdError> {
+        let response = self
+            .daemon
+            .profile_sync(BroadwebdProfileSyncRequest::DiscoverProviders(
+                BroadwebdProfileSyncProfileRequest::new(profile),
+            ))?;
+        let BroadwebdProfileSyncResponse::Providers { providers } = response else {
+            return Err(BroadwebdError::UnsupportedRequest(
+                "profile-sync provider discovery returned a non-provider response".to_string(),
+            ));
+        };
+        Ok(providers)
+    }
+
+    pub fn profile_sync_retention_provider_candidates(
+        &self,
+        profile: &str,
+    ) -> Result<Vec<BroadwebdProfileSyncProviderRecord>, BroadwebdError> {
+        Ok(self
+            .profile_sync_providers(profile)?
+            .into_iter()
+            .filter(|provider| provider.roles.availability && provider.roles.object_transfer)
+            .collect())
+    }
+
     pub fn profile_sync_root_health(
         &self,
         profile: &str,
@@ -1322,6 +1352,8 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
             policy.minimum_online_retaining_providers,
         )?;
         policy.check_before_cycle(&before_health)?;
+        let retention_provider_candidates =
+            self.profile_sync_retention_provider_candidates(profile)?;
         let active_key_id = active_settings_sync_content_key_id(database, profile)
             .map_err(ProfileSyncCycleError::from)?;
         validate_settings_sync_cycle_credentials(database, profile, active_key_id.as_str(), signer)
@@ -1338,6 +1370,7 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
             signer_device_id: signer.device_id().to_string(),
             active_key_id,
             trusted_remote_device_count,
+            retention_provider_candidates,
             before_health,
         })
     }
@@ -4268,10 +4301,18 @@ mod tests {
     fn broadwebd_settings_sync_preflight_reports_runtime_inputs_without_publishing() {
         let network = InProcessBroadwebNetwork::new();
         let state_root = test_state_root("cycle-preflight");
+        let provider_state_root = test_state_root("cycle-preflight-provider");
         let db_root = test_state_root("cycle-preflight-db");
         let daemon = network
             .daemon_for_device(&state_root, ResourceBudget::default(), "runtime-preflight")
             .expect("start in-process profile-sync daemon");
+        let _provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "runtime-preflight-pinner",
+            )
+            .expect("start in-process availability-provider daemon");
         let database = SlateProfileDatabase::open_resolved_with_device_id(
             db_root.join(DEFAULT_DATABASE_FILE_NAME),
             "runtime-preflight",
@@ -4315,7 +4356,35 @@ mod tests {
         assert_eq!(preflight.signer_device_id, "runtime-preflight");
         assert_eq!(preflight.active_key_id, TEST_CONTENT_KEY_ID);
         assert_eq!(preflight.trusted_remote_device_count, 1);
+        assert_eq!(preflight.retention_provider_candidates.len(), 2);
+        assert!(
+            preflight
+                .retention_provider_candidates
+                .iter()
+                .any(|provider| {
+                    provider.provider_id == "local-fixture-device-runtime-preflight"
+                        && provider.roles.mutable_roots
+                        && provider.roles.availability
+                })
+        );
+        assert!(
+            preflight
+                .retention_provider_candidates
+                .iter()
+                .any(|provider| {
+                    provider.provider_id == "local-fixture-availability-runtime-preflight-pinner"
+                        && !provider.roles.mutable_roots
+                        && provider.roles.availability
+                })
+        );
         assert!(!preflight.before_health.provider_health.degraded);
+        assert_eq!(
+            preflight
+                .before_health
+                .provider_health
+                .availability_providers,
+            2
+        );
         assert!(preflight.before_health.settings_root_health.degraded);
         assert!(
             database
@@ -4334,6 +4403,7 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
         let _ = std::fs::remove_dir_all(db_root);
     }
 
