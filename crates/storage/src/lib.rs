@@ -884,6 +884,106 @@ where
     }
 }
 
+#[derive(Debug)]
+pub enum ProfileSyncTrustedOpenError {
+    Storage(StorageError),
+    SyncObject(SyncObjectError),
+    UntrustedDevice { profile: String, device_id: String },
+}
+
+impl fmt::Display for ProfileSyncTrustedOpenError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Storage(error) => {
+                write!(
+                    formatter,
+                    "failed to read trusted profile sync key: {error}"
+                )
+            }
+            Self::SyncObject(error) => write!(formatter, "profile sync object failed: {error}"),
+            Self::UntrustedDevice { profile, device_id } => write!(
+                formatter,
+                "profile {profile} has no trusted public key for sync device {device_id}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ProfileSyncTrustedOpenError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Storage(error) => Some(error),
+            Self::SyncObject(error) => Some(error),
+            Self::UntrustedDevice { .. } => None,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum ProfileSyncTrustedPullError<SourceError> {
+    Source(SourceError),
+    Open(ProfileSyncTrustedOpenError),
+    ObjectIdMismatch { expected: String, actual: String },
+}
+
+impl<SourceError: fmt::Display> fmt::Display for ProfileSyncTrustedPullError<SourceError> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Source(error) => write!(formatter, "profile sync object source failed: {error}"),
+            Self::Open(error) => write!(formatter, "trusted profile sync object failed: {error}"),
+            Self::ObjectIdMismatch { expected, actual } => write!(
+                formatter,
+                "profile sync source returned object id {actual}, expected {expected}"
+            ),
+        }
+    }
+}
+
+impl<SourceError> std::error::Error for ProfileSyncTrustedPullError<SourceError>
+where
+    SourceError: std::error::Error + 'static,
+{
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Source(error) => Some(error),
+            Self::Open(error) => Some(error),
+            Self::ObjectIdMismatch { .. } => None,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum ProfileSyncTrustedPullApplyError<SourceError> {
+    Pull(ProfileSyncTrustedPullError<SourceError>),
+    Storage(StorageError),
+}
+
+impl<SourceError: fmt::Display> fmt::Display for ProfileSyncTrustedPullApplyError<SourceError> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Pull(error) => {
+                write!(
+                    formatter,
+                    "failed to pull trusted profile sync data: {error}"
+                )
+            }
+            Self::Storage(error) => write!(formatter, "failed to apply profile sync data: {error}"),
+        }
+    }
+}
+
+impl<SourceError> std::error::Error for ProfileSyncTrustedPullApplyError<SourceError>
+where
+    SourceError: std::error::Error + 'static,
+{
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Pull(error) => Some(error),
+            Self::Storage(error) => Some(error),
+        }
+    }
+}
+
 pub fn pull_signed_profile_sync_settings_manifest_objects<Source>(
     source: &Source,
     profile: &str,
@@ -947,6 +1047,26 @@ where
         .map_err(ProfileSyncPullError::Source)?;
     if object.object_id != object_id {
         return Err(ProfileSyncPullError::ObjectIdMismatch {
+            expected: object_id.to_string(),
+            actual: object.object_id,
+        });
+    }
+    Ok(object)
+}
+
+fn fetch_trusted_profile_sync_object<Source>(
+    source: &Source,
+    profile: &str,
+    object_id: &str,
+) -> Result<ProfileSyncObjectBytes, ProfileSyncTrustedPullError<Source::Error>>
+where
+    Source: ProfileSyncObjectSource,
+{
+    let object = source
+        .get_profile_sync_object(profile, object_id)
+        .map_err(ProfileSyncTrustedPullError::Source)?;
+    if object.object_id != object_id {
+        return Err(ProfileSyncTrustedPullError::ObjectIdMismatch {
             expected: object_id.to_string(),
             actual: object.object_id,
         });
@@ -2505,6 +2625,275 @@ impl SlateProfileDatabase {
         )
     }
 
+    pub fn open_trusted_signed_encrypted_sync_payload(
+        &self,
+        bytes: &[u8],
+        content_key: &ProfileSyncContentKey,
+        expected_profile: &str,
+        expected_domain: &str,
+        expected_object_kind: &str,
+        expected_key_id: &str,
+    ) -> Result<Vec<u8>, ProfileSyncTrustedOpenError> {
+        let signed_object =
+            SignedSyncObject::from_bytes(bytes).map_err(ProfileSyncTrustedOpenError::SyncObject)?;
+        let public_key =
+            self.trusted_public_key_for_signed_object(expected_profile, &signed_object)?;
+        let encrypted_bytes = signed_object
+            .verify_with(&public_key)
+            .map_err(ProfileSyncTrustedOpenError::SyncObject)?;
+        let encrypted_object = EncryptedSyncObject::from_bytes(encrypted_bytes)
+            .map_err(ProfileSyncTrustedOpenError::SyncObject)?;
+        encrypted_object
+            .open_expected(
+                content_key,
+                expected_profile,
+                expected_domain,
+                expected_object_kind,
+                expected_key_id,
+            )
+            .map_err(ProfileSyncTrustedOpenError::SyncObject)
+    }
+
+    pub fn open_trusted_signed_profile_sync_manifest(
+        &self,
+        bytes: &[u8],
+        content_key: &ProfileSyncContentKey,
+        profile: &str,
+        key_id: &str,
+    ) -> Result<ProfileSyncManifest, ProfileSyncTrustedOpenError> {
+        let payload = self.open_trusted_signed_encrypted_sync_payload(
+            bytes,
+            content_key,
+            profile,
+            SYNC_DOMAIN_SETTINGS,
+            PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+            key_id,
+        )?;
+        serde_json::from_slice(payload.as_slice())
+            .map_err(SyncObjectError::Decode)
+            .map_err(ProfileSyncTrustedOpenError::SyncObject)
+    }
+
+    pub fn open_trusted_signed_profile_sync_settings_snapshot(
+        &self,
+        bytes: &[u8],
+        content_key: &ProfileSyncContentKey,
+        profile: &str,
+        key_id: &str,
+    ) -> Result<ProfileSyncSettingsSnapshot, ProfileSyncTrustedOpenError> {
+        let payload = self.open_trusted_signed_encrypted_sync_payload(
+            bytes,
+            content_key,
+            profile,
+            SYNC_DOMAIN_SETTINGS,
+            PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND,
+            key_id,
+        )?;
+        serde_json::from_slice(payload.as_slice())
+            .map_err(SyncObjectError::Decode)
+            .map_err(ProfileSyncTrustedOpenError::SyncObject)
+    }
+
+    pub fn open_trusted_signed_sync_setting_text_for_profile(
+        &self,
+        bytes: &[u8],
+        content_key: &ProfileSyncContentKey,
+        profile: &str,
+        key_id: &str,
+    ) -> Result<IncomingSyncSettingText, ProfileSyncTrustedOpenError> {
+        let signed_object =
+            SignedSyncObject::from_bytes(bytes).map_err(ProfileSyncTrustedOpenError::SyncObject)?;
+        let public_key = self.trusted_public_key_for_signed_object(profile, &signed_object)?;
+        let encrypted_bytes = signed_object
+            .verify_with(&public_key)
+            .map_err(ProfileSyncTrustedOpenError::SyncObject)?;
+        let encrypted_object = EncryptedSyncObject::from_bytes(encrypted_bytes)
+            .map_err(ProfileSyncTrustedOpenError::SyncObject)?;
+        if encrypted_object.profile != profile {
+            return Err(ProfileSyncTrustedOpenError::SyncObject(
+                SyncObjectError::UnexpectedProfile {
+                    expected: profile.to_string(),
+                    actual: encrypted_object.profile.clone(),
+                },
+            ));
+        }
+        if encrypted_object.object_kind != PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND {
+            return Err(ProfileSyncTrustedOpenError::SyncObject(
+                SyncObjectError::UnexpectedObjectKind {
+                    expected: PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND.to_string(),
+                    actual: encrypted_object.object_kind.clone(),
+                },
+            ));
+        }
+        if encrypted_object.key_id != key_id {
+            return Err(ProfileSyncTrustedOpenError::SyncObject(
+                SyncObjectError::UnexpectedKeyId {
+                    expected: key_id.to_string(),
+                    actual: encrypted_object.key_id.clone(),
+                },
+            ));
+        }
+
+        let payload = encrypted_object
+            .open(content_key)
+            .map_err(ProfileSyncTrustedOpenError::SyncObject)?;
+        let change: IncomingSyncSettingText = serde_json::from_slice(payload.as_slice())
+            .map_err(SyncObjectError::Decode)
+            .map_err(ProfileSyncTrustedOpenError::SyncObject)?;
+        if change.profile != encrypted_object.profile {
+            return Err(ProfileSyncTrustedOpenError::SyncObject(
+                SyncObjectError::UnexpectedProfile {
+                    expected: encrypted_object.profile,
+                    actual: change.profile,
+                },
+            ));
+        }
+        if change.domain != encrypted_object.domain {
+            return Err(ProfileSyncTrustedOpenError::SyncObject(
+                SyncObjectError::UnexpectedDomain {
+                    expected: encrypted_object.domain,
+                    actual: change.domain,
+                },
+            ));
+        }
+        Ok(change)
+    }
+
+    pub fn open_trusted_signed_profile_sync_settings_manifest_objects(
+        &self,
+        manifest_object: &ProfileSyncObjectBytes,
+        snapshot_object: Option<&ProfileSyncObjectBytes>,
+        tail_change_objects: &[ProfileSyncObjectBytes],
+        content_key: &ProfileSyncContentKey,
+        profile: &str,
+        key_id: &str,
+    ) -> Result<VerifiedProfileSyncSettingsManifestObjects, ProfileSyncTrustedOpenError> {
+        let manifest = self.open_trusted_signed_profile_sync_manifest(
+            manifest_object.bytes.as_slice(),
+            content_key,
+            profile,
+            key_id,
+        )?;
+        let snapshot = snapshot_object
+            .map(|snapshot_object| {
+                Ok(VerifiedProfileSyncSettingsSnapshot {
+                    object_id: snapshot_object.object_id.clone(),
+                    snapshot: self.open_trusted_signed_profile_sync_settings_snapshot(
+                        snapshot_object.bytes.as_slice(),
+                        content_key,
+                        profile,
+                        key_id,
+                    )?,
+                })
+            })
+            .transpose()?;
+        let mut tail_changes = Vec::with_capacity(tail_change_objects.len());
+        for tail_object in tail_change_objects {
+            tail_changes.push(VerifiedProfileSyncSettingsTailChange {
+                object_id: tail_object.object_id.clone(),
+                change: self.open_trusted_signed_sync_setting_text_for_profile(
+                    tail_object.bytes.as_slice(),
+                    content_key,
+                    profile,
+                    key_id,
+                )?,
+            });
+        }
+
+        Ok(VerifiedProfileSyncSettingsManifestObjects {
+            manifest_object_id: manifest_object.object_id.clone(),
+            manifest,
+            snapshot,
+            tail_changes,
+        })
+    }
+
+    pub fn pull_trusted_signed_profile_sync_settings_manifest_objects<Source>(
+        &self,
+        source: &Source,
+        profile: &str,
+        root_id: &str,
+        content_key: &ProfileSyncContentKey,
+        key_id: &str,
+    ) -> Result<
+        Option<VerifiedProfileSyncSettingsManifestObjects>,
+        ProfileSyncTrustedPullError<Source::Error>,
+    >
+    where
+        Source: ProfileSyncObjectSource,
+    {
+        let Some(manifest_object_id) = source
+            .resolve_profile_sync_root(profile, root_id)
+            .map_err(ProfileSyncTrustedPullError::Source)?
+        else {
+            return Ok(None);
+        };
+
+        let manifest_object =
+            fetch_trusted_profile_sync_object(source, profile, manifest_object_id.as_str())?;
+        let manifest = self
+            .open_trusted_signed_profile_sync_manifest(
+                manifest_object.bytes.as_slice(),
+                content_key,
+                profile,
+                key_id,
+            )
+            .map_err(ProfileSyncTrustedPullError::Open)?;
+        let snapshot_object = manifest
+            .current_snapshot_object_id
+            .as_deref()
+            .map(|object_id| fetch_trusted_profile_sync_object(source, profile, object_id))
+            .transpose()?;
+        let mut tail_change_objects = Vec::with_capacity(manifest.tail_change_object_ids.len());
+        for object_id in &manifest.tail_change_object_ids {
+            tail_change_objects.push(fetch_trusted_profile_sync_object(
+                source, profile, object_id,
+            )?);
+        }
+
+        self.open_trusted_signed_profile_sync_settings_manifest_objects(
+            &manifest_object,
+            snapshot_object.as_ref(),
+            tail_change_objects.as_slice(),
+            content_key,
+            profile,
+            key_id,
+        )
+        .map(Some)
+        .map_err(ProfileSyncTrustedPullError::Open)
+    }
+
+    pub fn pull_and_apply_trusted_signed_settings_manifest_objects<Source>(
+        &self,
+        source: &Source,
+        profile: &str,
+        root_id: &str,
+        content_key: &ProfileSyncContentKey,
+        key_id: &str,
+    ) -> Result<
+        Option<ProfileSyncSettingsManifestApplication>,
+        ProfileSyncTrustedPullApplyError<Source::Error>,
+    >
+    where
+        Source: ProfileSyncObjectSource,
+    {
+        let Some(objects) = self
+            .pull_trusted_signed_profile_sync_settings_manifest_objects(
+                source,
+                profile,
+                root_id,
+                content_key,
+                key_id,
+            )
+            .map_err(ProfileSyncTrustedPullApplyError::Pull)?
+        else {
+            return Ok(None);
+        };
+        self.apply_verified_settings_manifest_objects(&objects)
+            .map(Some)
+            .map_err(ProfileSyncTrustedPullApplyError::Storage)
+    }
+
     pub fn pull_and_apply_signed_settings_manifest_objects<Source>(
         &self,
         source: &Source,
@@ -2535,6 +2924,29 @@ impl SlateProfileDatabase {
         self.apply_verified_settings_manifest_objects(&objects)
             .map(Some)
             .map_err(ProfileSyncPullApplyError::Storage)
+    }
+
+    fn trusted_public_key_for_signed_object(
+        &self,
+        profile: &str,
+        signed_object: &SignedSyncObject,
+    ) -> Result<ProfileSyncDevicePublicKey, ProfileSyncTrustedOpenError> {
+        if !is_valid_sync_identifier(signed_object.device_id.as_str()) {
+            return Err(ProfileSyncTrustedOpenError::SyncObject(
+                SyncObjectError::InvalidDeviceId(signed_object.device_id.clone()),
+            ));
+        }
+
+        let Some(record) = self
+            .sync_device_public_key(profile, signed_object.device_id.as_str())
+            .map_err(ProfileSyncTrustedOpenError::Storage)?
+        else {
+            return Err(ProfileSyncTrustedOpenError::UntrustedDevice {
+                profile: profile.to_string(),
+                device_id: signed_object.device_id.clone(),
+            });
+        };
+        Ok(record.public_key)
     }
 
     pub fn sync_snapshot(
@@ -4058,6 +4470,261 @@ mod tests {
                 .expect("stored profile root")
                 .object_id,
             manifest_object_id
+        );
+    }
+
+    #[test]
+    fn profile_sync_trusted_pull_uses_stored_device_public_key() {
+        let content_key = ProfileSyncContentKey::from_bytes([16; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let trusted_public_key = signer.public_key().unwrap();
+        let key_id = "content-key-epoch-1";
+        let root_id = "settings/latest";
+        let tail_object_id = "tail-object-1";
+        let manifest_object_id = "manifest-object-1";
+        let tail_change = IncomingSyncSettingText::new(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            "ui.theme",
+            "slate",
+            "device-a",
+            1,
+            1,
+        );
+        let manifest = ProfileSyncManifest {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: root_id.to_string(),
+            schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            current_snapshot_object_id: None,
+            tail_change_object_ids: vec![tail_object_id.to_string()],
+            included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            device_frontiers: vec![ProfileSyncDeviceFrontier {
+                device_id: "device-a".to_string(),
+                latest_sequence: 1,
+                latest_change_object_id: Some(tail_object_id.to_string()),
+            }],
+            retention_policy: ProfileSyncRetentionPolicy::default(),
+            created_at: 101,
+        };
+        let mut source = InMemoryProfileSyncObjectSource::default();
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            tail_object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND,
+                key_id,
+                serde_json::to_vec(&tail_change).unwrap().as_slice(),
+                &content_key,
+                &signer,
+                31,
+            ),
+        );
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            manifest_object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+                key_id,
+                serde_json::to_vec(&manifest).unwrap().as_slice(),
+                &content_key,
+                &signer,
+                32,
+            ),
+        );
+        source.publish_root(DEFAULT_PROFILE_ID, root_id, manifest_object_id);
+        let destination_path = test_dir("sync-trusted-pull").join(DEFAULT_DATABASE_FILE_NAME);
+        let destination =
+            SlateProfileDatabase::open_resolved_with_device_id(destination_path, "device-b")
+                .unwrap();
+        destination
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: trusted_public_key,
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .unwrap();
+
+        let applied = destination
+            .pull_and_apply_trusted_signed_settings_manifest_objects(
+                &source,
+                DEFAULT_PROFILE_ID,
+                root_id,
+                &content_key,
+                key_id,
+            )
+            .unwrap()
+            .expect("trusted settings root applied");
+
+        assert_eq!(applied.manifest_object_id, manifest_object_id);
+        assert_eq!(applied.tail_changes.len(), 1);
+        assert_eq!(
+            destination.get_setting_text("ui.theme").unwrap().as_deref(),
+            Some("slate")
+        );
+        assert_eq!(
+            destination
+                .profile_sync_root(DEFAULT_PROFILE_ID, root_id)
+                .unwrap()
+                .expect("stored trusted pull root")
+                .object_id,
+            manifest_object_id
+        );
+    }
+
+    #[test]
+    fn profile_sync_trusted_pull_rejects_unknown_signer() {
+        let content_key = ProfileSyncContentKey::from_bytes([17; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let key_id = "content-key-epoch-1";
+        let root_id = "settings/latest";
+        let manifest_object_id = "manifest-object-1";
+        let manifest = ProfileSyncManifest {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: root_id.to_string(),
+            schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            current_snapshot_object_id: None,
+            tail_change_object_ids: Vec::new(),
+            included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            device_frontiers: vec![ProfileSyncDeviceFrontier {
+                device_id: "device-a".to_string(),
+                latest_sequence: 1,
+                latest_change_object_id: None,
+            }],
+            retention_policy: ProfileSyncRetentionPolicy::default(),
+            created_at: 101,
+        };
+        let mut source = InMemoryProfileSyncObjectSource::default();
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            manifest_object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+                key_id,
+                serde_json::to_vec(&manifest).unwrap().as_slice(),
+                &content_key,
+                &signer,
+                41,
+            ),
+        );
+        source.publish_root(DEFAULT_PROFILE_ID, root_id, manifest_object_id);
+        let destination_path =
+            test_dir("sync-trusted-unknown-signer").join(DEFAULT_DATABASE_FILE_NAME);
+        let destination =
+            SlateProfileDatabase::open_resolved_with_device_id(destination_path, "device-b")
+                .unwrap();
+
+        let error = destination
+            .pull_and_apply_trusted_signed_settings_manifest_objects(
+                &source,
+                DEFAULT_PROFILE_ID,
+                root_id,
+                &content_key,
+                key_id,
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            ProfileSyncTrustedPullApplyError::Pull(ProfileSyncTrustedPullError::Open(
+                ProfileSyncTrustedOpenError::UntrustedDevice { profile, device_id }
+            )) if profile == DEFAULT_PROFILE_ID && device_id == "device-a"
+        ));
+        assert_eq!(
+            destination
+                .profile_sync_root(DEFAULT_PROFILE_ID, root_id)
+                .unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn profile_sync_trusted_pull_rejects_stored_key_mismatch() {
+        let content_key = ProfileSyncContentKey::from_bytes([18; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let wrong_public_key = ProfileSyncDeviceSigner::generate("device-a")
+            .unwrap()
+            .public_key()
+            .unwrap();
+        let key_id = "content-key-epoch-1";
+        let root_id = "settings/latest";
+        let manifest_object_id = "manifest-object-1";
+        let manifest = ProfileSyncManifest {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: root_id.to_string(),
+            schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            current_snapshot_object_id: None,
+            tail_change_object_ids: Vec::new(),
+            included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            device_frontiers: vec![ProfileSyncDeviceFrontier {
+                device_id: "device-a".to_string(),
+                latest_sequence: 1,
+                latest_change_object_id: None,
+            }],
+            retention_policy: ProfileSyncRetentionPolicy::default(),
+            created_at: 101,
+        };
+        let mut source = InMemoryProfileSyncObjectSource::default();
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            manifest_object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+                key_id,
+                serde_json::to_vec(&manifest).unwrap().as_slice(),
+                &content_key,
+                &signer,
+                51,
+            ),
+        );
+        source.publish_root(DEFAULT_PROFILE_ID, root_id, manifest_object_id);
+        let destination_path =
+            test_dir("sync-trusted-key-mismatch").join(DEFAULT_DATABASE_FILE_NAME);
+        let destination =
+            SlateProfileDatabase::open_resolved_with_device_id(destination_path, "device-b")
+                .unwrap();
+        destination
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: wrong_public_key,
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .unwrap();
+
+        let error = destination
+            .pull_and_apply_trusted_signed_settings_manifest_objects(
+                &source,
+                DEFAULT_PROFILE_ID,
+                root_id,
+                &content_key,
+                key_id,
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            ProfileSyncTrustedPullApplyError::Pull(ProfileSyncTrustedPullError::Open(
+                ProfileSyncTrustedOpenError::SyncObject(SyncObjectError::DeviceKeyMismatch {
+                    expected_device_id,
+                    actual_device_id,
+                })
+            )) if expected_device_id == "device-a" && actual_device_id == "device-a"
+        ));
+        assert_eq!(
+            destination
+                .profile_sync_root(DEFAULT_PROFILE_ID, root_id)
+                .unwrap(),
+            None
         );
     }
 

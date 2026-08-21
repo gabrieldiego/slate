@@ -178,6 +178,13 @@ device-signature primitive only; account membership epochs, manifest
 signatures, recovery credentials, revocation, and key rotation remain separate
 sync-layer work.
 
+`slate-settings.db` stores profile-scoped trusted device signing keys and the
+settings pull path now uses that store to verify each signed manifest, snapshot,
+and tail object. The embedded public key in a sync object is treated as
+untrusted metadata until it matches the stored key for that signing device.
+Unknown devices and stored-key mismatches fail before decryption or root
+advancement.
+
 ## Key Model
 
 The shareable recovery credential should be a Slate Sync Secret, not one raw key

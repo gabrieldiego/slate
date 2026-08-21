@@ -14,9 +14,9 @@ use slate_storage::{
     ProfileSyncDeviceFrontier, ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner,
     ProfileSyncManifest, ProfileSyncObjectBytes, ProfileSyncObjectSource,
     ProfileSyncRetentionPolicy, ProfileSyncSettingsSnapshot, SYNC_DOMAIN_SETTINGS,
-    SlateProfileDatabase, SyncChangeRecord, SyncRevisionRecord, SyncSnapshotRegistration,
-    open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
-    open_signed_sync_setting_text, pull_signed_profile_sync_settings_manifest_objects,
+    SlateProfileDatabase, SyncChangeRecord, SyncDevicePublicKeyRegistration, SyncRevisionRecord,
+    SyncSnapshotRegistration, open_signed_profile_sync_manifest,
+    open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
 };
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -355,6 +355,13 @@ fn two_local_devices_transfer_compacted_settings_snapshot_through_profile_fixtur
     let trusted_device_a_key = device_a_signer
         .public_key()
         .expect("read snapshot device a public key");
+    device_b_db
+        .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            public_key: trusted_device_a_key.clone(),
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+        })
+        .expect("device b trusts snapshot device a signing key");
 
     let latest_change = device_a_db
         .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
@@ -426,16 +433,16 @@ fn two_local_devices_transfer_compacted_settings_snapshot_through_profile_fixtur
         registry: &device_b_broadweb,
         budget: &budget,
     };
-    let verified_objects = pull_signed_profile_sync_settings_manifest_objects(
-        &source,
-        DEFAULT_PROFILE_ID,
-        SETTINGS_ROOT_ID,
-        &content_key,
-        &trusted_device_a_key,
-        FIXTURE_CONTENT_KEY_ID,
-    )
-    .expect("pull fetched manifest object set")
-    .expect("settings root resolves");
+    let verified_objects = device_b_db
+        .pull_trusted_signed_profile_sync_settings_manifest_objects(
+            &source,
+            DEFAULT_PROFILE_ID,
+            SETTINGS_ROOT_ID,
+            &content_key,
+            FIXTURE_CONTENT_KEY_ID,
+        )
+        .expect("trusted pull fetched manifest object set")
+        .expect("settings root resolves");
     assert_eq!(verified_objects.manifest_object_id, manifest_object_id);
     let manifest = &verified_objects.manifest;
     assert_eq!(
@@ -559,6 +566,13 @@ fn two_local_devices_apply_snapshot_then_manifest_tail_changes() {
     let trusted_device_a_key = device_a_signer
         .public_key()
         .expect("read tail device a public key");
+    device_b_db
+        .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            public_key: trusted_device_a_key,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+        })
+        .expect("device b trusts tail device a signing key");
     let content_key = fixture_content_key();
 
     device_a_db
@@ -615,37 +629,16 @@ fn two_local_devices_apply_snapshot_then_manifest_tail_changes() {
         registry: &device_b_broadweb,
         budget: &budget,
     };
-    let verified_objects = pull_signed_profile_sync_settings_manifest_objects(
-        &source,
-        DEFAULT_PROFILE_ID,
-        SETTINGS_ROOT_ID,
-        &content_key,
-        &trusted_device_a_key,
-        FIXTURE_CONTENT_KEY_ID,
-    )
-    .expect("pull fetched manifest object set")
-    .expect("settings root resolves");
-    assert_eq!(verified_objects.manifest_object_id, manifest_object_id);
-    let manifest = &verified_objects.manifest;
-    assert_eq!(
-        manifest.current_snapshot_object_id.as_deref(),
-        Some(snapshot_object_id.as_str())
-    );
-    assert_eq!(
-        manifest.tail_change_object_ids,
-        vec![tail_change_object_id.clone()]
-    );
-    assert_eq!(manifest.device_frontiers.len(), 1);
-    assert_eq!(
-        manifest.device_frontiers[0]
-            .latest_change_object_id
-            .as_deref(),
-        Some(tail_change_object_id.as_str())
-    );
-
     let applied_manifest = device_b_db
-        .apply_verified_settings_manifest_objects(&verified_objects)
-        .expect("device b applies verified snapshot and manifest tail");
+        .pull_and_apply_trusted_signed_settings_manifest_objects(
+            &source,
+            DEFAULT_PROFILE_ID,
+            SETTINGS_ROOT_ID,
+            &content_key,
+            FIXTURE_CONTENT_KEY_ID,
+        )
+        .expect("device b pulls trusted manifest object set")
+        .expect("settings root resolves");
     assert_eq!(applied_manifest.manifest_object_id, manifest_object_id);
     assert_eq!(
         applied_manifest
