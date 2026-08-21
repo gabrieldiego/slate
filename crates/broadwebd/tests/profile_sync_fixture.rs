@@ -8,15 +8,17 @@ use slate_broadwebd::{
 use slate_storage::{
     DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
     EncryptedSyncObject, IncomingSyncSettingText, PROFILE_SYNC_CONTENT_KEY_BYTES,
-    PROFILE_SYNC_MANIFEST_SCHEMA_VERSION, ProfileSyncContentKey, ProfileSyncDeviceFrontier,
-    ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner, ProfileSyncManifest,
-    ProfileSyncRetentionPolicy, SYNC_DOMAIN_SETTINGS, SignedSyncObject, SlateProfileDatabase,
-    SyncChangeRecord, SyncRevisionRecord,
+    PROFILE_SYNC_MANIFEST_SCHEMA_VERSION, PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION,
+    ProfileSyncContentKey, ProfileSyncDeviceFrontier, ProfileSyncDevicePublicKey,
+    ProfileSyncDeviceSigner, ProfileSyncManifest, ProfileSyncRetentionPolicy,
+    ProfileSyncSettingsSnapshot, SYNC_DOMAIN_SETTINGS, SignedSyncObject, SlateProfileDatabase,
+    SyncChangeRecord, SyncRevisionRecord, SyncSnapshotRegistration,
 };
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const SETTINGS_CHANGE_OBJECT_KIND: &str = "setting-change";
+const SETTINGS_SNAPSHOT_OBJECT_KIND: &str = "settings-snapshot";
 const MANIFEST_OBJECT_KIND: &str = "manifest";
 const FIXTURE_CONTENT_KEY_ID: &str = "content-key-epoch-1";
 const SETTINGS_ROOT_ID: &str = "settings/latest";
@@ -325,6 +327,175 @@ fn two_local_devices_keep_newer_setting_when_fixture_replays_stale_change() {
     let _ = std::fs::remove_dir_all(device_b_root);
 }
 
+#[test]
+fn two_local_devices_transfer_compacted_settings_snapshot_through_profile_fixture() {
+    let fixture = LocalProfileSyncFixture::new();
+    let mut device_a_broadweb = PluginRegistry::new();
+    let mut device_b_broadweb = PluginRegistry::new();
+    let budget = ResourceBudget::default();
+
+    device_a_broadweb.register_service(fixture.service_for_device("snapshot-device-a"));
+    device_b_broadweb.register_service(fixture.service_for_device("snapshot-device-b"));
+
+    let device_a_root = test_dir("snapshot-device-a");
+    let device_b_root = test_dir("snapshot-device-b");
+    let device_a_db = SlateProfileDatabase::open_resolved_with_device_id(
+        device_a_root.join(DEFAULT_DATABASE_FILE_NAME),
+        "snapshot-device-a",
+    )
+    .expect("open snapshot fixture device a slate-settings.db");
+    let device_b_db = SlateProfileDatabase::open_resolved_with_device_id(
+        device_b_root.join(DEFAULT_DATABASE_FILE_NAME),
+        "snapshot-device-b",
+    )
+    .expect("open snapshot fixture device b slate-settings.db");
+    let device_a_signer = ProfileSyncDeviceSigner::generate("snapshot-device-a")
+        .expect("create snapshot device a signing key");
+    let trusted_device_a_key = device_a_signer
+        .public_key()
+        .expect("read snapshot device a public key");
+
+    let latest_change = device_a_db
+        .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+        .expect("snapshot fixture device a writes local setting");
+    let covers_revision = device_a_db
+        .latest_sync_revision(DEFAULT_PROFILE_ID)
+        .expect("read snapshot fixture latest revision");
+    let included_domains = vec![SYNC_DOMAIN_SETTINGS.to_string()];
+    let snapshot = device_a_db
+        .settings_sync_snapshot_payload(DEFAULT_PROFILE_ID, covers_revision, &included_domains)
+        .expect("build settings snapshot payload");
+
+    assert_eq!(snapshot.profile, DEFAULT_PROFILE_ID);
+    assert_eq!(
+        snapshot.schema_version,
+        PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION
+    );
+    assert_eq!(snapshot.covers_revision, covers_revision);
+    assert_eq!(snapshot.included_domains, included_domains);
+    let snapshot_value = snapshot
+        .values
+        .iter()
+        .find(|value| value.domain == SYNC_DOMAIN_SETTINGS && value.key == "ui.theme")
+        .expect("snapshot contains theme value");
+    assert_eq!(snapshot_value.value, "teal");
+
+    let content_key = fixture_content_key();
+    let snapshot_bytes =
+        sign_encrypted_settings_snapshot(&snapshot, &content_key, &device_a_signer);
+    assert!(
+        !std::str::from_utf8(snapshot_bytes.as_slice())
+            .expect("fixture snapshot object is JSON envelope")
+            .contains("teal")
+    );
+    let snapshot_object_id = put_object(
+        &device_a_broadweb,
+        DEFAULT_PROFILE_ID,
+        snapshot_bytes,
+        &budget,
+    );
+    let snapshot_id = format!("settings-snapshot-r{}", snapshot.covers_revision);
+    device_a_db
+        .record_sync_snapshot(&SyncSnapshotRegistration {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            snapshot_id: snapshot_id.clone(),
+            backend_object_id: Some(snapshot_object_id.clone()),
+            covers_revision: snapshot.covers_revision,
+            included_domains: snapshot.included_domains.clone(),
+        })
+        .expect("device a records published snapshot");
+
+    let manifest_bytes = sign_encrypted_manifest_with_snapshot(
+        SETTINGS_ROOT_ID,
+        snapshot_object_id.as_str(),
+        &snapshot,
+        &latest_change,
+        &content_key,
+        &device_a_signer,
+    );
+    let manifest_object_id = put_and_publish_object(
+        &device_a_broadweb,
+        DEFAULT_PROFILE_ID,
+        SETTINGS_ROOT_ID,
+        manifest_bytes,
+        &budget,
+    );
+
+    let fetched_manifest = fetch_published_object(
+        &device_b_broadweb,
+        DEFAULT_PROFILE_ID,
+        SETTINGS_ROOT_ID,
+        &budget,
+    );
+    assert_eq!(fetched_manifest.object_id, manifest_object_id);
+    let manifest = verify_and_decrypt_manifest(
+        fetched_manifest.bytes.as_slice(),
+        &content_key,
+        &trusted_device_a_key,
+    );
+    assert_eq!(
+        manifest.current_snapshot_object_id,
+        Some(snapshot_object_id.clone())
+    );
+    assert_eq!(manifest.tail_change_object_ids, Vec::<String>::new());
+    assert_eq!(manifest.included_domains, included_domains);
+    assert_eq!(manifest.device_frontiers.len(), 1);
+    assert_eq!(
+        manifest.device_frontiers[0].latest_sequence,
+        latest_change.device_sequence
+    );
+    assert_eq!(manifest.device_frontiers[0].latest_change_object_id, None);
+
+    device_b_db
+        .set_profile_sync_root(
+            DEFAULT_PROFILE_ID,
+            SETTINGS_ROOT_ID,
+            manifest_object_id.as_str(),
+        )
+        .expect("device b stores verified snapshot manifest root");
+
+    let fetched_snapshot = fetch_object(
+        &device_b_broadweb,
+        DEFAULT_PROFILE_ID,
+        snapshot_object_id.as_str(),
+        &budget,
+    );
+    let verified_snapshot = verify_and_decrypt_settings_snapshot(
+        fetched_snapshot.bytes.as_slice(),
+        &content_key,
+        &trusted_device_a_key,
+    );
+    assert_eq!(verified_snapshot, snapshot);
+
+    device_b_db
+        .record_sync_snapshot(&SyncSnapshotRegistration {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            snapshot_id: snapshot_id.clone(),
+            backend_object_id: Some(snapshot_object_id.clone()),
+            covers_revision: verified_snapshot.covers_revision,
+            included_domains: verified_snapshot.included_domains,
+        })
+        .expect("device b records verified incoming snapshot");
+    let latest_snapshot = device_b_db
+        .latest_sync_snapshot(DEFAULT_PROFILE_ID)
+        .expect("read device b latest snapshot")
+        .expect("device b latest snapshot exists");
+    assert_eq!(latest_snapshot.snapshot_id, snapshot_id);
+    assert_eq!(
+        latest_snapshot.backend_object_id.as_deref(),
+        Some(snapshot_object_id.as_str())
+    );
+    assert_eq!(
+        device_b_db
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme")
+            .expect("read unapplied device b snapshot setting"),
+        None
+    );
+
+    let _ = std::fs::remove_dir_all(device_a_root);
+    let _ = std::fs::remove_dir_all(device_b_root);
+}
+
 fn incoming_setting_from_change(change: &SyncChangeRecord) -> IncomingSyncSettingText {
     assert_eq!(change.operation, "set_text");
     IncomingSyncSettingText::new(
@@ -364,6 +535,31 @@ fn sign_encrypted_setting_change(
         .expect("encode fixture signed sync object")
 }
 
+fn sign_encrypted_settings_snapshot(
+    snapshot: &ProfileSyncSettingsSnapshot,
+    content_key: &ProfileSyncContentKey,
+    signer: &ProfileSyncDeviceSigner,
+) -> Vec<u8> {
+    let payload = serde_json::to_vec(snapshot).expect("encode fixture snapshot payload");
+    let encrypted_object = EncryptedSyncObject::seal(
+        snapshot.profile.as_str(),
+        SYNC_DOMAIN_SETTINGS,
+        SETTINGS_SNAPSHOT_OBJECT_KIND,
+        FIXTURE_CONTENT_KEY_ID,
+        payload.as_slice(),
+        content_key,
+    )
+    .expect("encrypt fixture snapshot object");
+    let encrypted_bytes = encrypted_object
+        .to_bytes()
+        .expect("encode fixture encrypted snapshot object");
+    signer
+        .sign(encrypted_bytes.as_slice())
+        .expect("sign fixture encrypted snapshot object")
+        .to_bytes()
+        .expect("encode fixture signed snapshot object")
+}
+
 fn sign_encrypted_manifest(
     root_id: &str,
     change_object_id: &str,
@@ -387,6 +583,41 @@ fn sign_encrypted_manifest(
         retention_policy: ProfileSyncRetentionPolicy::default(),
         created_at: change.created_at,
     };
+    sign_encrypted_manifest_payload(&manifest, content_key, signer)
+}
+
+fn sign_encrypted_manifest_with_snapshot(
+    root_id: &str,
+    snapshot_object_id: &str,
+    snapshot: &ProfileSyncSettingsSnapshot,
+    latest_change: &SyncChangeRecord,
+    content_key: &ProfileSyncContentKey,
+    signer: &ProfileSyncDeviceSigner,
+) -> Vec<u8> {
+    let manifest = ProfileSyncManifest {
+        profile: snapshot.profile.clone(),
+        root_id: root_id.to_string(),
+        schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+        membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+        current_snapshot_object_id: Some(snapshot_object_id.to_string()),
+        tail_change_object_ids: Vec::new(),
+        included_domains: snapshot.included_domains.clone(),
+        device_frontiers: vec![ProfileSyncDeviceFrontier {
+            device_id: latest_change.device_id.clone(),
+            latest_sequence: latest_change.device_sequence,
+            latest_change_object_id: None,
+        }],
+        retention_policy: ProfileSyncRetentionPolicy::default(),
+        created_at: snapshot.created_at,
+    };
+    sign_encrypted_manifest_payload(&manifest, content_key, signer)
+}
+
+fn sign_encrypted_manifest_payload(
+    manifest: &ProfileSyncManifest,
+    content_key: &ProfileSyncContentKey,
+    signer: &ProfileSyncDeviceSigner,
+) -> Vec<u8> {
     let payload = serde_json::to_vec(&manifest).expect("encode fixture manifest payload");
     let encrypted_object = EncryptedSyncObject::seal(
         manifest.profile.as_str(),
@@ -427,6 +658,29 @@ fn verify_and_decrypt_setting_change(
         .open(content_key)
         .expect("decrypt fixture sync object");
     serde_json::from_slice(payload.as_slice()).expect("decode fixture sync payload")
+}
+
+fn verify_and_decrypt_settings_snapshot(
+    bytes: &[u8],
+    content_key: &ProfileSyncContentKey,
+    public_key: &ProfileSyncDevicePublicKey,
+) -> ProfileSyncSettingsSnapshot {
+    let signed_object =
+        SignedSyncObject::from_bytes(bytes).expect("decode fixture signed snapshot object");
+    let encrypted_bytes = signed_object
+        .verify_with(public_key)
+        .expect("verify fixture signed snapshot object");
+    let encrypted_object = EncryptedSyncObject::from_bytes(encrypted_bytes)
+        .expect("decode fixture encrypted snapshot object");
+    assert_eq!(encrypted_object.profile, DEFAULT_PROFILE_ID);
+    assert_eq!(encrypted_object.domain, SYNC_DOMAIN_SETTINGS);
+    assert_eq!(encrypted_object.object_kind, SETTINGS_SNAPSHOT_OBJECT_KIND);
+    assert_eq!(encrypted_object.key_id, FIXTURE_CONTENT_KEY_ID);
+
+    let payload = encrypted_object
+        .open(content_key)
+        .expect("decrypt fixture snapshot object");
+    serde_json::from_slice(payload.as_slice()).expect("decode fixture snapshot payload")
 }
 
 fn verify_and_decrypt_manifest(
