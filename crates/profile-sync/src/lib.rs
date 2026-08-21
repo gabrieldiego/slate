@@ -1314,6 +1314,19 @@ impl SettingsSyncCyclePolicy {
         )
     }
 
+    pub fn check_selected_retention_provider_roles(
+        &self,
+        ineligible_selected: usize,
+        health: &SettingsSyncHealthReport,
+    ) -> Result<(), ProfileSyncPolicyError> {
+        self.check_provider_maximum(
+            "ineligible selected retention providers",
+            0,
+            ineligible_selected,
+            health,
+        )
+    }
+
     fn check_provider_minimum(
         &self,
         provider_role: &'static str,
@@ -1402,6 +1415,7 @@ pub struct SettingsSyncScheduledCycleRun {
     pub selected_retention_provider_ids: Vec<String>,
     pub stale_retention_provider_ids: Vec<String>,
     pub offline_retention_provider_ids: Vec<String>,
+    pub ineligible_retention_provider_ids: Vec<String>,
     pub undiscovered_retention_provider_ids: Vec<String>,
     pub duplicate_retention_provider_ids: Vec<String>,
     pub cycle: SettingsSyncCycleWithSharedRootRetentionRun,
@@ -1422,6 +1436,10 @@ impl SettingsSyncScheduledCycleRun {
 
     pub fn offline_retention_provider_count(&self) -> usize {
         self.offline_retention_provider_ids.len()
+    }
+
+    pub fn ineligible_retention_provider_count(&self) -> usize {
+        self.ineligible_retention_provider_ids.len()
     }
 
     pub fn duplicate_retention_provider_count(&self) -> usize {
@@ -1447,6 +1465,7 @@ pub struct SettingsSyncScheduledMembershipCycleRun {
     pub selected_retention_provider_ids: Vec<String>,
     pub stale_retention_provider_ids: Vec<String>,
     pub offline_retention_provider_ids: Vec<String>,
+    pub ineligible_retention_provider_ids: Vec<String>,
     pub undiscovered_retention_provider_ids: Vec<String>,
     pub duplicate_retention_provider_ids: Vec<String>,
     pub cycle: SettingsSyncCycleWithMembershipLogRetentionRun,
@@ -1469,6 +1488,10 @@ impl SettingsSyncScheduledMembershipCycleRun {
         self.offline_retention_provider_ids.len()
     }
 
+    pub fn ineligible_retention_provider_count(&self) -> usize {
+        self.ineligible_retention_provider_ids.len()
+    }
+
     pub fn duplicate_retention_provider_count(&self) -> usize {
         self.duplicate_retention_provider_ids.len()
     }
@@ -1484,6 +1507,7 @@ pub struct SettingsSyncScheduledCyclePlan {
     pub selected_retention_provider_ids: Vec<String>,
     pub stale_retention_provider_ids: Vec<String>,
     pub offline_retention_provider_ids: Vec<String>,
+    pub ineligible_retention_provider_ids: Vec<String>,
     pub undiscovered_retention_provider_ids: Vec<String>,
     pub duplicate_retention_provider_ids: Vec<String>,
 }
@@ -1503,6 +1527,10 @@ impl SettingsSyncScheduledCyclePlan {
 
     pub fn offline_retention_provider_count(&self) -> usize {
         self.offline_retention_provider_ids.len()
+    }
+
+    pub fn ineligible_retention_provider_count(&self) -> usize {
+        self.ineligible_retention_provider_ids.len()
     }
 
     pub fn undiscovered_retention_provider_count(&self) -> usize {
@@ -1541,6 +1569,10 @@ impl SettingsSyncScheduledMembershipCyclePlan {
         self.cycle.offline_retention_provider_count()
     }
 
+    pub fn ineligible_retention_provider_count(&self) -> usize {
+        self.cycle.ineligible_retention_provider_count()
+    }
+
     pub fn undiscovered_retention_provider_count(&self) -> usize {
         self.cycle.undiscovered_retention_provider_count()
     }
@@ -1567,6 +1599,7 @@ fn select_settings_sync_retention_provider_handles<'a>(
         selected_retention_provider_ids,
         stale_retention_provider_ids,
         offline_retention_provider_ids,
+        ineligible_retention_provider_ids,
         undiscovered_retention_provider_ids,
         duplicate_retention_provider_ids,
         daemons,
@@ -1590,14 +1623,23 @@ fn select_settings_sync_retention_provider_handles<'a>(
             .iter()
             .map(String::as_str)
             .collect::<BTreeSet<_>>();
+        let fresh_online_provider_ids = preflight
+            .before_health
+            .provider_health
+            .fresh_online_provider_ids
+            .iter()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
         let mut seen_selected_provider_ids = BTreeSet::new();
         let mut seen_stale_provider_ids = BTreeSet::new();
         let mut seen_offline_provider_ids = BTreeSet::new();
+        let mut seen_ineligible_provider_ids = BTreeSet::new();
         let mut seen_undiscovered_provider_ids = BTreeSet::new();
         let mut seen_duplicate_provider_ids = BTreeSet::new();
         let mut selected_retention_provider_ids = Vec::new();
         let mut stale_retention_provider_ids = Vec::new();
         let mut offline_retention_provider_ids = Vec::new();
+        let mut ineligible_retention_provider_ids = Vec::new();
         let mut undiscovered_retention_provider_ids = Vec::new();
         let mut duplicate_retention_provider_ids = Vec::new();
         let mut daemons = Vec::new();
@@ -1611,6 +1653,10 @@ fn select_settings_sync_retention_provider_handles<'a>(
                 } else if offline_provider_ids.contains(handle.provider_id) {
                     if seen_offline_provider_ids.insert(handle.provider_id) {
                         offline_retention_provider_ids.push(handle.provider_id.to_string());
+                    }
+                } else if fresh_online_provider_ids.contains(handle.provider_id) {
+                    if seen_ineligible_provider_ids.insert(handle.provider_id) {
+                        ineligible_retention_provider_ids.push(handle.provider_id.to_string());
                     }
                 } else if seen_undiscovered_provider_ids.insert(handle.provider_id) {
                     undiscovered_retention_provider_ids.push(handle.provider_id.to_string());
@@ -1631,6 +1677,7 @@ fn select_settings_sync_retention_provider_handles<'a>(
             selected_retention_provider_ids,
             stale_retention_provider_ids,
             offline_retention_provider_ids,
+            ineligible_retention_provider_ids,
             undiscovered_retention_provider_ids,
             duplicate_retention_provider_ids,
             daemons,
@@ -1643,6 +1690,7 @@ fn select_settings_sync_retention_provider_handles<'a>(
             selected_retention_provider_ids,
             stale_retention_provider_ids,
             offline_retention_provider_ids,
+            ineligible_retention_provider_ids,
             undiscovered_retention_provider_ids,
             duplicate_retention_provider_ids,
         },
@@ -2651,6 +2699,10 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             plan.offline_retention_provider_count(),
             &plan.preflight.before_health,
         )?;
+        config.policy.check_selected_retention_provider_roles(
+            plan.ineligible_retention_provider_count(),
+            &plan.preflight.before_health,
+        )?;
         config.policy.check_selected_retention_provider_count(
             plan.selected_retention_provider_count(),
             &plan.preflight.before_health,
@@ -2670,6 +2722,7 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             selected_retention_provider_ids: plan.selected_retention_provider_ids,
             stale_retention_provider_ids: plan.stale_retention_provider_ids,
             offline_retention_provider_ids: plan.offline_retention_provider_ids,
+            ineligible_retention_provider_ids: plan.ineligible_retention_provider_ids,
             undiscovered_retention_provider_ids: plan.undiscovered_retention_provider_ids,
             duplicate_retention_provider_ids: plan.duplicate_retention_provider_ids,
             cycle,
@@ -2721,6 +2774,10 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             plan.offline_retention_provider_count(),
             &preflight.preflight.before_health,
         )?;
+        config.policy.check_selected_retention_provider_roles(
+            plan.ineligible_retention_provider_count(),
+            &preflight.preflight.before_health,
+        )?;
         config.policy.check_selected_retention_provider_count(
             plan.selected_retention_provider_count(),
             &preflight.preflight.before_health,
@@ -2741,6 +2798,7 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             selected_retention_provider_ids: plan.selected_retention_provider_ids,
             stale_retention_provider_ids: plan.stale_retention_provider_ids,
             offline_retention_provider_ids: plan.offline_retention_provider_ids,
+            ineligible_retention_provider_ids: plan.ineligible_retention_provider_ids,
             undiscovered_retention_provider_ids: plan.undiscovered_retention_provider_ids,
             duplicate_retention_provider_ids: plan.duplicate_retention_provider_ids,
             cycle,
@@ -4212,6 +4270,7 @@ mod tests {
     };
     use slate_broadwebd::{
         BroadwebdError, ProfileSyncProfileRequest as BroadwebdProfileSyncProfileRequest,
+        ProfileSyncProviderRoles as BroadwebdProfileSyncProviderRoles,
         ProfileSyncRequest as BroadwebdProfileSyncRequest,
         ProfileSyncResponse as BroadwebdProfileSyncResponse, ResourceBudget,
         test_fixtures::InProcessBroadwebNetwork,
@@ -8072,6 +8131,9 @@ mod tests {
             vec![selected_provider_id.to_string()]
         );
         assert_eq!(plan.selected_retention_provider_count(), 1);
+        assert_eq!(plan.stale_retention_provider_count(), 0);
+        assert_eq!(plan.offline_retention_provider_count(), 0);
+        assert_eq!(plan.ineligible_retention_provider_count(), 0);
         assert_eq!(plan.undiscovered_retention_provider_count(), 1);
         assert_eq!(plan.duplicate_retention_provider_count(), 1);
         assert!(plan.degraded_before());
@@ -8117,6 +8179,9 @@ mod tests {
             vec![selected_provider_id.to_string()]
         );
         assert_eq!(membership_plan.selected_retention_provider_count(), 1);
+        assert_eq!(membership_plan.stale_retention_provider_count(), 0);
+        assert_eq!(membership_plan.offline_retention_provider_count(), 0);
+        assert_eq!(membership_plan.ineligible_retention_provider_count(), 0);
         assert_eq!(membership_plan.undiscovered_retention_provider_count(), 1);
         assert_eq!(membership_plan.duplicate_retention_provider_count(), 1);
         assert!(membership_plan.membership_log_publication.is_publishable());
@@ -8169,6 +8234,9 @@ mod tests {
             vec![selected_provider_id.to_string()]
         );
         assert_eq!(run.selected_retention_provider_count(), 1);
+        assert_eq!(run.stale_retention_provider_count(), 0);
+        assert_eq!(run.offline_retention_provider_count(), 0);
+        assert_eq!(run.ineligible_retention_provider_count(), 0);
         assert_eq!(run.undiscovered_retention_provider_count(), 1);
         assert_eq!(run.duplicate_retention_provider_count(), 1);
         assert!(run.degraded_before());
@@ -8193,6 +8261,181 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(device_state_root);
         let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_scheduler_classifies_ineligible_retention_provider_handles() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("scheduler-ineligible-device");
+        let no_availability_state_root = test_state_root("scheduler-ineligible-no-availability");
+        let no_transfer_state_root = test_state_root("scheduler-ineligible-no-transfer");
+        let db_root = test_state_root("scheduler-ineligible-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-ineligible-a",
+            )
+            .expect("start in-process profile-sync scheduler device daemon");
+        let no_availability_provider_id = "local-fixture-scheduler-no-availability";
+        let no_availability_daemon = network
+            .daemon_for_provider_with_roles(
+                &no_availability_state_root,
+                ResourceBudget::default(),
+                no_availability_provider_id,
+                "local-fixture-custom",
+                BroadwebdProfileSyncProviderRoles {
+                    availability: false,
+                    mutable_roots: false,
+                    ..BroadwebdProfileSyncProviderRoles::logged_in_device()
+                },
+            )
+            .expect("start in-process no-availability provider daemon");
+        let no_transfer_provider_id = "local-fixture-scheduler-no-transfer";
+        let no_transfer_daemon = network
+            .daemon_for_provider_with_roles(
+                &no_transfer_state_root,
+                ResourceBudget::default(),
+                no_transfer_provider_id,
+                "local-fixture-custom",
+                BroadwebdProfileSyncProviderRoles {
+                    object_transfer: false,
+                    mutable_roots: false,
+                    ..BroadwebdProfileSyncProviderRoles::logged_in_device()
+                },
+            )
+            .expect("start in-process no-transfer provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-scheduler-ineligible-a",
+        )
+        .expect("open scheduler local settings database");
+        let profile = "schedulerineligibleprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([74; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-scheduler-ineligible-a")
+            .expect("generate scheduler local device signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register scheduler local trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write scheduler local setting");
+
+        let config = SettingsSyncSchedulerConfig::new(
+            profile,
+            settings_root_id,
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
+        );
+        let retention_provider_handles = [
+            SettingsSyncRetentionProviderHandle::new(
+                no_availability_provider_id,
+                &no_availability_daemon,
+            ),
+            SettingsSyncRetentionProviderHandle::new(no_transfer_provider_id, &no_transfer_daemon),
+        ];
+        let latest_revision_before_plan = database
+            .latest_sync_revision(profile)
+            .expect("read latest scheduler revision");
+        let scheduler = BroadwebdSettingsSyncScheduler::new(&device_daemon);
+        let plan = scheduler
+            .plan_once_selecting_retention_providers(
+                &database,
+                &config,
+                &signer,
+                &retention_provider_handles,
+            )
+            .expect("scheduler plan classifies ineligible retention provider handles");
+
+        assert_eq!(plan.retention_candidate_count(), 1);
+        assert_eq!(plan.selected_retention_provider_count(), 0);
+        assert_eq!(plan.stale_retention_provider_count(), 0);
+        assert_eq!(plan.offline_retention_provider_count(), 0);
+        assert_eq!(
+            plan.ineligible_retention_provider_ids,
+            vec![
+                no_availability_provider_id.to_string(),
+                no_transfer_provider_id.to_string()
+            ]
+        );
+        assert_eq!(plan.ineligible_retention_provider_count(), 2);
+        assert!(plan.undiscovered_retention_provider_ids.is_empty());
+        assert_eq!(
+            database
+                .latest_sync_revision(profile)
+                .expect("read latest revision after ineligible plan"),
+            latest_revision_before_plan
+        );
+        assert!(
+            database
+                .profile_sync_roots(profile)
+                .expect("read roots after ineligible plan")
+                .is_empty()
+        );
+
+        let run_error = scheduler
+            .run_once_selecting_retention_providers(
+                &database,
+                &config,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                &retention_provider_handles,
+            )
+            .expect_err("scheduler run should reject ineligible retention providers");
+        let ProfileSyncCycleWithHealthError::Policy(
+            ProfileSyncPolicyError::ProviderMaximumExceeded {
+                provider_role,
+                maximum,
+                actual,
+                health,
+            },
+        ) = run_error
+        else {
+            panic!("expected ineligible selected retention provider error, got {run_error:?}");
+        };
+        assert_eq!(provider_role, "ineligible selected retention providers");
+        assert_eq!(maximum, 0);
+        assert_eq!(actual, 2);
+        assert!(
+            health
+                .provider_health
+                .fresh_online_provider_ids
+                .iter()
+                .any(|provider_id| provider_id == no_availability_provider_id)
+        );
+        assert!(
+            health
+                .provider_health
+                .fresh_online_provider_ids
+                .iter()
+                .any(|provider_id| provider_id == no_transfer_provider_id)
+        );
+        assert!(
+            database
+                .profile_sync_roots(profile)
+                .expect("read roots after rejected ineligible run")
+                .is_empty()
+        );
+        let retained = device_daemon
+            .profile_sync(BroadwebdProfileSyncRequest::ListRetainedObjects(
+                BroadwebdProfileSyncProfileRequest::new(profile),
+            ))
+            .expect("local device can list retained objects after rejected scheduler run");
+        assert_eq!(
+            retained,
+            BroadwebdProfileSyncResponse::RetainedObjects {
+                object_ids: Vec::new(),
+            }
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(no_availability_state_root);
+        let _ = std::fs::remove_dir_all(no_transfer_state_root);
         let _ = std::fs::remove_dir_all(db_root);
     }
 
