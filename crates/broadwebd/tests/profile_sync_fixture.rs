@@ -6,22 +6,24 @@ use slate_broadwebd::{
     ProfileSyncRootUpdate, ResourceBudget,
 };
 use slate_storage::{
-    DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
-    EncryptedSyncObject, IncomingSyncSettingText,
-    PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305, PROFILE_SYNC_CONTENT_KEY_BYTES,
-    PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND, PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
-    PROFILE_SYNC_MANIFEST_OBJECT_KIND, PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
-    PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND, PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND,
-    PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION, ProfileSyncContentKey, ProfileSyncDeviceHead,
-    ProfileSyncDeviceHeadPullRecordStatus, ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner,
-    ProfileSyncManifest, ProfileSyncObjectBytes, ProfileSyncObjectSource,
-    ProfileSyncRetentionPolicy, ProfileSyncRootCandidate, ProfileSyncSettingsPullApplyStatus,
-    ProfileSyncSettingsSnapshot, ProfileSyncSettingsSnapshotPublication,
-    ProfileSyncSettingsTailChangePublication, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase,
-    SyncChangeRecord, SyncContentKeyEpochRegistration, SyncDevicePublicKeyRegistration,
-    SyncRevisionRecord, SyncSnapshotRegistration, open_signed_profile_sync_manifest,
-    open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
-    settings_sync_manifest_for_snapshot_and_tail_changes, settings_sync_manifest_for_tail_changes,
+    ChatConversationUpdate, DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID,
+    DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH, EncryptedSyncObject, FileEntryUpdate,
+    IncomingSyncSettingText, PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305,
+    PROFILE_SYNC_CONTENT_KEY_BYTES, PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
+    PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+    PROFILE_SYNC_MANIFEST_SCHEMA_VERSION, PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND,
+    PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND, PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION,
+    ProfileSyncContentKey, ProfileSyncDeviceHead, ProfileSyncDeviceHeadPullRecordStatus,
+    ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner, ProfileSyncManifest,
+    ProfileSyncObjectBytes, ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
+    ProfileSyncRootCandidate, ProfileSyncSettingsPullApplyStatus, ProfileSyncSettingsSnapshot,
+    ProfileSyncSettingsSnapshotPublication, ProfileSyncSettingsTailChangePublication,
+    SYNC_DOMAIN_CHAT, SYNC_DOMAIN_FILES, SYNC_DOMAIN_SETTINGS, SYNC_DOMAIN_STORAGE,
+    SlateProfileDatabase, StorageProviderUpdate, SyncChangeRecord, SyncContentKeyEpochRegistration,
+    SyncDevicePublicKeyRegistration, SyncRevisionRecord, SyncSnapshotRegistration,
+    open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
+    open_signed_sync_setting_text, settings_sync_manifest_for_snapshot_and_tail_changes,
+    settings_sync_manifest_for_tail_changes,
 };
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -192,6 +194,222 @@ fn two_local_slate_settings_databases_sync_through_profile_fixture() {
         device_b_known_devices
             .iter()
             .any(|device| device.device_id == "device-b")
+    );
+
+    let _ = std::fs::remove_dir_all(device_a_root);
+    let _ = std::fs::remove_dir_all(device_b_root);
+}
+
+#[test]
+fn app_domain_metadata_syncs_through_profile_fixture() {
+    let fixture = LocalProfileSyncFixture::new();
+    let mut device_a_broadweb = PluginRegistry::new();
+    let mut device_b_broadweb = PluginRegistry::new();
+    let budget = ResourceBudget::default();
+
+    device_a_broadweb.register_service(fixture.service_for_device("app-domain-device-a"));
+    device_b_broadweb.register_service(fixture.service_for_device("app-domain-device-b"));
+
+    let device_a_root = test_dir("app-domain-device-a");
+    let device_b_root = test_dir("app-domain-device-b");
+    let device_a_db = SlateProfileDatabase::open_resolved_with_device_id(
+        device_a_root.join(DEFAULT_DATABASE_FILE_NAME),
+        "app-domain-device-a",
+    )
+    .expect("open app-domain fixture device a slate-settings.db");
+    let device_b_db = SlateProfileDatabase::open_resolved_with_device_id(
+        device_b_root.join(DEFAULT_DATABASE_FILE_NAME),
+        "app-domain-device-b",
+    )
+    .expect("open app-domain fixture device b slate-settings.db");
+    let device_a_signer = ProfileSyncDeviceSigner::generate("app-domain-device-a")
+        .expect("create app-domain device a signing key");
+    let trusted_device_a_key = device_a_signer
+        .public_key()
+        .expect("read app-domain device a public key");
+    device_b_db
+        .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            public_key: trusted_device_a_key,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+        })
+        .expect("device b trusts app-domain device a signing key");
+    device_b_db
+        .register_sync_content_key_epoch(&SyncContentKeyEpochRegistration {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            key_id: FIXTURE_CONTENT_KEY_ID.to_string(),
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            algorithm: PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305.to_string(),
+            active: true,
+        })
+        .expect("device b records active app-domain fixture content key epoch");
+
+    let baseline_revision = device_a_db
+        .latest_sync_revision(DEFAULT_PROFILE_ID)
+        .expect("read app-domain baseline revision");
+    device_a_db
+        .upsert_chat_conversation(&ChatConversationUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            conversation_id: "chat-sync-1".to_string(),
+            provider_id: Some("whatsapp".to_string()),
+            external_thread_id: Some("team@example.test".to_string()),
+            display_name: "Fixture Team".to_string(),
+            avatar_key: Some("chat-avatar:chat-sync-1".to_string()),
+            last_message_at: Some(1_789_000_000),
+            unread_count: 2,
+            archived: false,
+            muted: false,
+        })
+        .expect("device a writes chat app-domain metadata");
+    device_a_db
+        .upsert_file_entry(&FileEntryUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            entry_id: "file-sync-1".to_string(),
+            sync_set_id: Some("set-fixture".to_string()),
+            parent_id: None,
+            name: "fixture.txt".to_string(),
+            entry_kind: "file".to_string(),
+            content_ref: Some("bafy-fixture-file".to_string()),
+            mime_type: Some("text/plain".to_string()),
+            size_bytes: Some(128),
+            modified_at: Some(1_789_000_100),
+            integrity: Some("sha256-fixture-file".to_string()),
+            retention_policy: Some("keep-latest".to_string()),
+        })
+        .expect("device a writes file app-domain metadata");
+    device_a_db
+        .upsert_storage_provider(&StorageProviderUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            provider_id: "provider-sync-1".to_string(),
+            provider_kind: "ipfs".to_string(),
+            display_name: "Fixture IPFS".to_string(),
+            endpoint_ref: Some("/dnsaddr/fixture.example.test/p2p/provider-sync-1".to_string()),
+            discovery: true,
+            connectivity: true,
+            object_transfer: true,
+            availability: true,
+            mutable_roots: false,
+            quota_bytes: Some(4_096),
+            max_retained_objects: Some(8),
+            pinning_policy: Some("manual".to_string()),
+            enabled: true,
+        })
+        .expect("device a writes storage app-domain metadata");
+
+    let app_events = device_a_db
+        .sync_setting_text_events_after(DEFAULT_PROFILE_ID, baseline_revision, 10)
+        .expect("read app-domain fixture events");
+    assert_eq!(app_events.len(), 3);
+    assert_eq!(
+        app_events
+            .iter()
+            .map(|event| event.change.domain.as_str())
+            .collect::<Vec<_>>(),
+        vec![SYNC_DOMAIN_CHAT, SYNC_DOMAIN_FILES, SYNC_DOMAIN_STORAGE]
+    );
+
+    let content_key = fixture_content_key();
+    let mut tail_publications = Vec::new();
+    for event in &app_events {
+        let change_bytes =
+            sign_encrypted_setting_change(&event.change, &content_key, &device_a_signer);
+        let envelope = std::str::from_utf8(change_bytes.as_slice())
+            .expect("app-domain fixture object is JSON envelope");
+        assert!(!envelope.contains("Fixture Team"));
+        assert!(!envelope.contains("fixture.txt"));
+        assert!(!envelope.contains("Fixture IPFS"));
+        let object_id = put_object(
+            &device_a_broadweb,
+            DEFAULT_PROFILE_ID,
+            change_bytes,
+            &budget,
+        );
+        tail_publications.push(ProfileSyncSettingsTailChangePublication {
+            object_id,
+            change: event.change.clone(),
+        });
+    }
+    let manifest = settings_sync_manifest_for_tail_changes(
+        DEFAULT_PROFILE_ID,
+        SETTINGS_ROOT_ID,
+        tail_publications.as_slice(),
+        ProfileSyncRetentionPolicy::default(),
+    )
+    .expect("build app-domain fixture manifest");
+    assert_eq!(
+        manifest.included_domains,
+        vec![
+            SYNC_DOMAIN_CHAT.to_string(),
+            SYNC_DOMAIN_FILES.to_string(),
+            SYNC_DOMAIN_STORAGE.to_string()
+        ]
+    );
+    let manifest_object_id = put_and_publish_object(
+        &device_a_broadweb,
+        DEFAULT_PROFILE_ID,
+        SETTINGS_ROOT_ID,
+        sign_encrypted_manifest_payload(&manifest, &content_key, &device_a_signer),
+        &budget,
+    );
+
+    let source = RegistryProfileSyncObjectSource {
+        registry: &device_b_broadweb,
+        budget: &budget,
+    };
+    let status = device_b_db
+        .pull_and_apply_active_trusted_signed_settings_manifest_objects_if_changed(
+            &source,
+            DEFAULT_PROFILE_ID,
+            SETTINGS_ROOT_ID,
+            &content_key,
+        )
+        .expect("device b pulls app-domain manifest object set");
+    let ProfileSyncSettingsPullApplyStatus::Applied(applied_manifest) = status else {
+        panic!("expected device b to apply app-domain settings root, got {status:?}");
+    };
+    assert_eq!(applied_manifest.manifest_object_id, manifest_object_id);
+    assert_eq!(applied_manifest.tail_changes.len(), 3);
+
+    let conversations = device_b_db
+        .chat_conversations(DEFAULT_PROFILE_ID, 10)
+        .expect("read synced chat conversations");
+    assert_eq!(conversations.len(), 1);
+    assert_eq!(conversations[0].conversation_id, "chat-sync-1");
+    assert_eq!(conversations[0].display_name, "Fixture Team");
+    assert_eq!(conversations[0].unread_count, 2);
+
+    let files = device_b_db
+        .file_entries(DEFAULT_PROFILE_ID, 10)
+        .expect("read synced file entries");
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0].entry_id, "file-sync-1");
+    assert_eq!(files[0].content_ref.as_deref(), Some("bafy-fixture-file"));
+    assert_eq!(files[0].size_bytes, Some(128));
+
+    let providers = device_b_db
+        .storage_providers(DEFAULT_PROFILE_ID, 10)
+        .expect("read synced storage providers");
+    assert_eq!(providers.len(), 1);
+    assert_eq!(providers[0].provider_id, "provider-sync-1");
+    assert_eq!(providers[0].provider_kind, "ipfs");
+    assert!(providers[0].availability);
+    assert_eq!(providers[0].pinning_policy.as_deref(), Some("manual"));
+
+    let unchanged = device_b_db
+        .pull_and_apply_active_trusted_signed_settings_manifest_objects_if_changed(
+            &source,
+            DEFAULT_PROFILE_ID,
+            SETTINGS_ROOT_ID,
+            &content_key,
+        )
+        .expect("device b checks unchanged app-domain settings root");
+    assert_eq!(
+        unchanged,
+        ProfileSyncSettingsPullApplyStatus::Unchanged {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: SETTINGS_ROOT_ID.to_string(),
+            object_id: manifest_object_id,
+        }
     );
 
     let _ = std::fs::remove_dir_all(device_a_root);

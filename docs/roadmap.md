@@ -229,6 +229,11 @@ Current baseline:
   broadweb role flags, quota hints, retained-object limits, pinning policy, and
   enabled state. Provider credentials, private keys, local daemon paths, live
   health, and per-device availability stay local to runtime or secret storage.
+- The local broadwebd profile-sync fixture now carries typed app-domain
+  metadata through the encrypted manifest path between two local
+  `slate-settings.db` instances. The regression covers Chat, Files, and Storage
+  provider projections over the in-process fixture network, with encrypted tail
+  objects and no loopback sockets.
 - Local settings/app-domain publishing now filters outgoing snapshots and tail
   manifests through the enabled app sync-domain table. Disabled domains can
   still be used as local typed state, but they are not published to broadweb
