@@ -13,10 +13,11 @@ use slate_storage::{
     PROFILE_SYNC_MANIFEST_OBJECT_KIND, PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
     PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND, PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND,
     PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION, ProfileSyncContentKey,
-    ProfileSyncDeviceFrontier, ProfileSyncDeviceHead, ProfileSyncDevicePublicKey,
-    ProfileSyncDeviceSigner, ProfileSyncManifest, ProfileSyncObjectBytes, ProfileSyncObjectSource,
-    ProfileSyncRetentionPolicy, ProfileSyncSettingsPullApplyStatus, ProfileSyncSettingsSnapshot,
-    SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, SyncChangeRecord, SyncContentKeyEpochRegistration,
+    ProfileSyncDeviceFrontier, ProfileSyncDeviceHead, ProfileSyncDeviceHeadPullRecordStatus,
+    ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner, ProfileSyncManifest,
+    ProfileSyncObjectBytes, ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
+    ProfileSyncSettingsPullApplyStatus, ProfileSyncSettingsSnapshot, SYNC_DOMAIN_SETTINGS,
+    SlateProfileDatabase, SyncChangeRecord, SyncContentKeyEpochRegistration,
     SyncDevicePublicKeyRegistration, SyncRevisionRecord, SyncSnapshotRegistration,
     open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
     open_signed_sync_setting_text,
@@ -809,18 +810,52 @@ fn two_local_devices_publish_and_pull_device_head_through_profile_fixture() {
         registry: &device_b_broadweb,
         budget: &budget,
     };
-    let pulled = device_b_db
-        .pull_trusted_signed_profile_sync_device_head(
+    let status = device_b_db
+        .pull_and_record_trusted_signed_profile_sync_device_head_if_changed(
             &source,
             DEFAULT_PROFILE_ID,
             head_root_id,
             &content_key,
             FIXTURE_CONTENT_KEY_ID,
         )
-        .expect("device b pulls trusted device head")
-        .expect("device head root resolves");
+        .expect("device b pulls trusted device head");
+    let ProfileSyncDeviceHeadPullRecordStatus::Updated {
+        device_head: pulled,
+        root,
+    } = status
+    else {
+        panic!("expected device b to record changed device head root, got {status:?}");
+    };
     assert_eq!(pulled.object_id, device_head_object_id);
     assert_eq!(pulled.device_head, device_head);
+    assert_eq!(root.root_id, head_root_id);
+    assert_eq!(root.object_id, device_head_object_id);
+    assert_eq!(
+        device_b_db
+            .profile_sync_root(DEFAULT_PROFILE_ID, head_root_id)
+            .expect("read device b device head root")
+            .expect("device b device head root exists")
+            .object_id,
+        device_head_object_id
+    );
+
+    let unchanged = device_b_db
+        .pull_and_record_trusted_signed_profile_sync_device_head_if_changed(
+            &source,
+            DEFAULT_PROFILE_ID,
+            head_root_id,
+            &content_key,
+            FIXTURE_CONTENT_KEY_ID,
+        )
+        .expect("device b checks unchanged trusted device head");
+    assert_eq!(
+        unchanged,
+        ProfileSyncDeviceHeadPullRecordStatus::Unchanged {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: head_root_id.to_string(),
+            object_id: device_head_object_id,
+        }
+    );
 
     let _ = std::fs::remove_dir_all(device_a_root);
     let _ = std::fs::remove_dir_all(device_b_root);
