@@ -1198,12 +1198,9 @@ mod tests {
         ServoDocumentStatus, VENDORED_SERVO_PATH, broadweb_html_with_document_base,
         with_test_broadwebd,
     };
-    use slate_broadwebd::{
-        BroadwebDaemon, HttpFetchService, IpfsConfig, IpfsService, PluginRegistry,
-        test_fixtures::{
-            InProcessBroadwebNetwork, InProcessHttpFixture, InProcessKuboRpcFixture,
-            InternalFixtureHttpResponse, InternalKuboRpcResponse,
-        },
+    use slate_broadwebd::test_fixtures::{
+        InProcessBroadwebNetwork, InProcessHttpFixture, InProcessKuboRpcFixture,
+        InternalFixtureHttpResponse, InternalKuboRpcResponse,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -1328,13 +1325,9 @@ mod tests {
     fn servo_backend_renders_ipfs_fixture_with_subresource() {
         let (gateway, server) = in_process_ipfs_gateway_fixture();
         let state_root = test_state_root("rendering-ipfs-fixture");
-        let mut registry = PluginRegistry::new();
-        registry.register_protocol_service(IpfsService::new(
-            IpfsConfig::new(&gateway).expect("local IPFS gateway config"),
-        ));
-        registry.register_service(HttpFetchService);
-        let daemon = BroadwebDaemon::start_with_registry(&state_root, Default::default(), registry)
-            .expect("test broadwebd");
+        let daemon = InProcessBroadwebNetwork::new()
+            .daemon_for_ipfs_gateway(&state_root, Default::default(), gateway)
+            .expect("test fixture broadwebd");
         let surface = with_test_broadwebd(daemon, || {
             ServoBackend.load_address_with_viewport(
                 "ipfs://bafybeigdyrzt/index.html",
@@ -1381,13 +1374,9 @@ mod tests {
     fn servo_backend_renders_ipfs_kubo_directory_fixture_with_subresource() {
         let (rpc, server) = in_process_ipfs_kubo_rpc_fixture();
         let state_root = test_state_root("rendering-ipfs-kubo-fixture");
-        let mut registry = PluginRegistry::new();
-        registry.register_protocol_service(IpfsService::new(
-            IpfsConfig::with_kubo_rpc(&rpc).expect("local Kubo RPC config"),
-        ));
-        registry.register_service(HttpFetchService);
-        let daemon = BroadwebDaemon::start_with_registry(&state_root, Default::default(), registry)
-            .expect("test broadwebd");
+        let daemon = InProcessBroadwebNetwork::new()
+            .daemon_for_kubo_rpc(&state_root, Default::default(), rpc)
+            .expect("test fixture broadwebd");
         let surface = with_test_broadwebd(daemon, || {
             ServoBackend.load_address_with_viewport(
                 "ipfs://bafybeigdyrzt/docs",
@@ -1442,13 +1431,9 @@ mod tests {
     fn servo_backend_renders_ipns_fixture() {
         let (gateway, server) = in_process_ipns_gateway_fixture();
         let state_root = test_state_root("rendering-ipns-fixture");
-        let mut registry = PluginRegistry::new();
-        registry.register_protocol_service(IpfsService::new(
-            IpfsConfig::new(&gateway).expect("local IPFS gateway config"),
-        ));
-        registry.register_service(HttpFetchService);
-        let daemon = BroadwebDaemon::start_with_registry(&state_root, Default::default(), registry)
-            .expect("test broadwebd");
+        let daemon = InProcessBroadwebNetwork::new()
+            .daemon_for_ipfs_gateway(&state_root, Default::default(), gateway)
+            .expect("test fixture broadwebd");
         let surface = with_test_broadwebd(daemon, || {
             ServoBackend.load_address_with_viewport(
                 "ipns://example.net/index.html",
@@ -1478,13 +1463,9 @@ mod tests {
     fn servo_backend_records_ipfs_download_fixture() {
         let (gateway, server) = in_process_ipfs_download_gateway_fixture();
         let state_root = test_state_root("rendering-ipfs-download-fixture");
-        let mut registry = PluginRegistry::new();
-        registry.register_protocol_service(IpfsService::new(
-            IpfsConfig::new(&gateway).expect("local IPFS gateway config"),
-        ));
-        registry.register_service(HttpFetchService);
-        let daemon = BroadwebDaemon::start_with_registry(&state_root, Default::default(), registry)
-            .expect("test broadwebd");
+        let daemon = InProcessBroadwebNetwork::new()
+            .daemon_for_ipfs_gateway(&state_root, Default::default(), gateway)
+            .expect("test fixture broadwebd");
         let surface = with_test_broadwebd(daemon, || {
             ServoBackend.load_address_with_viewport(
                 "ipfs://bafybeigdyrzt/picture.png",
@@ -1519,13 +1500,9 @@ mod tests {
     fn servo_backend_renders_ipfs_gateway_error_fixture() {
         let (gateway, server) = in_process_ipfs_error_gateway_fixture();
         let state_root = test_state_root("rendering-ipfs-error-fixture");
-        let mut registry = PluginRegistry::new();
-        registry.register_protocol_service(IpfsService::new(
-            IpfsConfig::new(&gateway).expect("local IPFS gateway config"),
-        ));
-        registry.register_service(HttpFetchService);
-        let daemon = BroadwebDaemon::start_with_registry(&state_root, Default::default(), registry)
-            .expect("test broadwebd");
+        let daemon = InProcessBroadwebNetwork::new()
+            .daemon_for_ipfs_gateway(&state_root, Default::default(), gateway)
+            .expect("test fixture broadwebd");
         let surface = with_test_broadwebd(daemon, || {
             ServoBackend.load_address_with_viewport(
                 "ipfs://bafybeigdyrzt/missing.txt",

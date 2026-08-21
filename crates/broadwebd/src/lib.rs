@@ -86,8 +86,8 @@ pub mod test_fixtures {
     };
     use crate::services::{http_fetch::HttpFetchService, profile_sync::ProfileSyncService};
     use crate::{
-        BroadwebDaemon, BroadwebdError, DIRECT_HTTP_PLUGIN, PluginKind, PluginMetadata,
-        PluginRegistry, ProfileSyncProviderRoles, ResourceBudget, ResourceProfile,
+        BroadwebDaemon, BroadwebdError, DIRECT_HTTP_PLUGIN, IpfsConfig, IpfsService, PluginKind,
+        PluginMetadata, PluginRegistry, ProfileSyncProviderRoles, ResourceBudget, ResourceProfile,
         TransportHttpRequest, TransportPlugin,
     };
     use std::path::PathBuf;
@@ -183,6 +183,26 @@ pub mod test_fixtures {
             registry
         }
 
+        pub fn registry_for_ipfs_gateway(
+            &self,
+            gateway_base: impl Into<String>,
+        ) -> Result<PluginRegistry, BroadwebdError> {
+            let mut registry = self.fixture_registry();
+            registry.register_protocol_service(IpfsService::new(IpfsConfig::new(gateway_base)?));
+            Ok(registry)
+        }
+
+        pub fn registry_for_kubo_rpc(
+            &self,
+            api_base_url: impl Into<String>,
+        ) -> Result<PluginRegistry, BroadwebdError> {
+            let mut registry = self.fixture_registry();
+            registry.register_protocol_service(IpfsService::new(IpfsConfig::with_kubo_rpc(
+                api_base_url,
+            )?));
+            Ok(registry)
+        }
+
         pub fn daemon_for_device(
             &self,
             state_root: impl Into<PathBuf>,
@@ -206,6 +226,32 @@ pub mod test_fixtures {
                 state_root,
                 budget,
                 self.registry_for_availability_provider(provider_id),
+            )
+        }
+
+        pub fn daemon_for_ipfs_gateway(
+            &self,
+            state_root: impl Into<PathBuf>,
+            budget: ResourceBudget,
+            gateway_base: impl Into<String>,
+        ) -> Result<BroadwebDaemon, BroadwebdError> {
+            BroadwebDaemon::start_with_registry(
+                state_root,
+                budget,
+                self.registry_for_ipfs_gateway(gateway_base)?,
+            )
+        }
+
+        pub fn daemon_for_kubo_rpc(
+            &self,
+            state_root: impl Into<PathBuf>,
+            budget: ResourceBudget,
+            api_base_url: impl Into<String>,
+        ) -> Result<BroadwebDaemon, BroadwebdError> {
+            BroadwebDaemon::start_with_registry(
+                state_root,
+                budget,
+                self.registry_for_kubo_rpc(api_base_url)?,
             )
         }
 

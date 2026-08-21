@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 #![cfg(feature = "test-fixtures")]
 
+use slate_broadwebd::test_fixtures::InternalKuboRpcResponse;
 use slate_broadwebd::{
     BroadwebDaemon, BroadwebdError, HttpFetchRequest, HttpHeader, ProfileSyncObjectRequest,
     ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootRequest,
@@ -147,4 +148,84 @@ fn device_daemons_share_profile_sync_without_loopback_transport() {
 
     let _ = std::fs::remove_dir_all(first_state_root);
     let _ = std::fs::remove_dir_all(second_state_root);
+}
+
+#[test]
+fn ipfs_fixture_daemons_use_internal_protocol_endpoints() {
+    let network = InProcessBroadwebNetwork::new();
+    let gateway_fixture = network.http_response(InternalFixtureHttpResponse {
+        status_code: 200,
+        content_type: Some("text/html; charset=utf-8".to_string()),
+        headers: vec![HttpHeader {
+            name: "content-type".to_string(),
+            value: "text/html; charset=utf-8".to_string(),
+        }],
+        body: b"<!doctype html><title>Fixture IPFS</title>".to_vec(),
+    });
+    let kubo_fixture = network.kubo_rpc_response(InternalKuboRpcResponse {
+        status_code: 200,
+        content_type: "text/html; charset=utf-8".to_string(),
+        body: b"<!doctype html><title>Fixture Kubo</title>".to_vec(),
+    });
+    let gateway_state_root = std::env::temp_dir().join(format!(
+        "slate-broadwebd-fixture-ipfs-gateway-{}",
+        std::process::id()
+    ));
+    let kubo_state_root = std::env::temp_dir().join(format!(
+        "slate-broadwebd-fixture-ipfs-kubo-{}",
+        std::process::id()
+    ));
+    let gateway_daemon = network
+        .daemon_for_ipfs_gateway(
+            &gateway_state_root,
+            ResourceBudget::default(),
+            gateway_fixture.base_url().to_string(),
+        )
+        .expect("start fixture gateway daemon");
+    let kubo_daemon = network
+        .daemon_for_kubo_rpc(
+            &kubo_state_root,
+            ResourceBudget::default(),
+            kubo_fixture.base_url().to_string(),
+        )
+        .expect("start fixture Kubo daemon");
+
+    let gateway_response = gateway_daemon
+        .fetch_http(HttpFetchRequest::default_profile(
+            "ipfs://bafybeigdyrzt/index.html",
+        ))
+        .expect("fetch synthetic IPFS gateway fixture");
+    let kubo_response = kubo_daemon
+        .fetch_http(HttpFetchRequest::default_profile(
+            "ipfs://bafybeigdyrzt/index.html",
+        ))
+        .expect("fetch synthetic Kubo fixture");
+
+    assert_eq!(
+        gateway_response
+            .route
+            .as_ref()
+            .expect("gateway route")
+            .transport_id,
+        "ipfs-gateway"
+    );
+    assert_eq!(
+        kubo_response
+            .route
+            .as_ref()
+            .expect("Kubo route")
+            .transport_id,
+        "ipfs-kubo-rpc"
+    );
+    assert_eq!(
+        gateway_fixture.finish(),
+        vec!["/ipfs/bafybeigdyrzt/index.html"]
+    );
+    assert_eq!(
+        kubo_fixture.finish(),
+        vec!["POST /api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Findex.html HTTP/1.1"]
+    );
+
+    let _ = std::fs::remove_dir_all(gateway_state_root);
+    let _ = std::fs::remove_dir_all(kubo_state_root);
 }
