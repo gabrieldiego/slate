@@ -518,12 +518,16 @@ pub struct InternalFixtureHttpResponse {
 }
 
 #[cfg(any(test, feature = "test-fixtures"))]
-pub fn register_internal_fixture_http_response(response: InternalFixtureHttpResponse) -> String {
-    register_internal_fixture_http_sequence(vec![response])
+pub(crate) fn register_internal_fixture_http_response_for_network(
+    network_id: &str,
+    response: InternalFixtureHttpResponse,
+) -> String {
+    register_internal_fixture_http_sequence_for_network(network_id, vec![response])
 }
 
 #[cfg(any(test, feature = "test-fixtures"))]
-pub fn register_internal_fixture_http_sequence(
+pub(crate) fn register_internal_fixture_http_sequence_for_network(
+    network_id: &str,
     responses: Vec<InternalFixtureHttpResponse>,
 ) -> String {
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -531,7 +535,11 @@ pub fn register_internal_fixture_http_sequence(
     static NEXT_FIXTURE_ID: AtomicUsize = AtomicUsize::new(1);
 
     let id = NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed);
-    let base_url = format!("{INTERNAL_HTTP_FIXTURE_SCHEME}://fixture-{id}/");
+    let base_url = if network_id == "global" {
+        format!("{INTERNAL_HTTP_FIXTURE_SCHEME}://fixture-{id}/")
+    } else {
+        format!("{INTERNAL_HTTP_FIXTURE_SCHEME}://{network_id}/fixture-{id}/")
+    };
     internal_fixture_http_responses()
         .lock()
         .expect("internal HTTP fixture registry should not be poisoned")
@@ -556,21 +564,44 @@ pub fn take_internal_fixture_http_requests(base_url: &str) -> Vec<String> {
 }
 
 #[cfg(any(test, feature = "test-fixtures"))]
-pub fn unregistered_internal_fixture_http_url() -> String {
+pub(crate) fn unregistered_internal_fixture_http_url_for_network(network_id: &str) -> String {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     static NEXT_MISSING_FIXTURE_ID: AtomicUsize = AtomicUsize::new(1);
 
     let id = NEXT_MISSING_FIXTURE_ID.fetch_add(1, Ordering::Relaxed);
-    format!("{INTERNAL_HTTP_FIXTURE_SCHEME}://missing-{id}")
+    if network_id == "global" {
+        format!("{INTERNAL_HTTP_FIXTURE_SCHEME}://missing-{id}")
+    } else {
+        format!("{INTERNAL_HTTP_FIXTURE_SCHEME}://{network_id}/missing-{id}")
+    }
 }
 
 #[cfg(any(test, feature = "test-fixtures"))]
 pub(crate) fn is_internal_fixture_http_url(url: &Url) -> bool {
-    url.scheme() == INTERNAL_HTTP_FIXTURE_SCHEME
-        && url
-            .host_str()
-            .is_some_and(|host| host.starts_with("fixture-") || host.starts_with("missing-"))
+    if url.scheme() != INTERNAL_HTTP_FIXTURE_SCHEME {
+        return false;
+    }
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    if host.starts_with("fixture-") || host.starts_with("missing-") {
+        return true;
+    }
+    internal_fixture_http_path_token(url)
+        .as_deref()
+        .is_some_and(|token| token.starts_with("fixture-") || token.starts_with("missing-"))
+}
+
+#[cfg(any(test, feature = "test-fixtures"))]
+pub(crate) fn internal_fixture_http_url_belongs_to_network(url: &Url, network_id: &str) -> bool {
+    if !is_internal_fixture_http_url(url) {
+        return false;
+    }
+    let Some(url_network_id) = internal_fixture_http_network_id(url) else {
+        return network_id == "global";
+    };
+    url_network_id == network_id
 }
 
 #[cfg(any(test, feature = "test-fixtures"))]
@@ -631,6 +662,18 @@ struct InternalFixtureHttp {
 #[cfg(any(test, feature = "test-fixtures"))]
 fn http_fixture_request_target(url: &Url) -> String {
     let mut target = url.path().to_string();
+    if let Some(host) = url.host_str()
+        && !host.starts_with("fixture-")
+        && !host.starts_with("missing-")
+        && let Some(token) = internal_fixture_http_path_token(url)
+    {
+        let prefix = format!("/{token}");
+        if target == prefix {
+            target = "/".to_string();
+        } else if let Some(stripped) = target.strip_prefix(&prefix) {
+            target = stripped.to_string();
+        }
+    }
     if target.is_empty() {
         target.push('/');
     }
@@ -639,6 +682,21 @@ fn http_fixture_request_target(url: &Url) -> String {
         target.push_str(query);
     }
     target
+}
+
+#[cfg(any(test, feature = "test-fixtures"))]
+fn internal_fixture_http_network_id(url: &Url) -> Option<String> {
+    let host = url.host_str()?;
+    if host.starts_with("fixture-") || host.starts_with("missing-") {
+        return None;
+    }
+    internal_fixture_http_path_token(url).map(|_| host.to_string())
+}
+
+#[cfg(any(test, feature = "test-fixtures"))]
+fn internal_fixture_http_path_token(url: &Url) -> Option<String> {
+    url.path_segments()
+        .and_then(|mut segments| segments.next().map(str::to_string))
 }
 
 #[cfg(any(test, feature = "test-fixtures"))]

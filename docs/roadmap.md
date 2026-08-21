@@ -222,7 +222,10 @@ Current baseline:
   install an in-process HTTP transport that handles only
   `slate-fixture-http://` URLs and rejects ordinary `http://` or `https://`
   requests, while profile-sync registries share one in-memory simulated network
-  state.
+  state. The synthetic HTTP and Kubo fixture URLs are scoped to the creating
+  `InProcessBroadwebNetwork`, and the fixture daemon constructors reject
+  loopback gateway or RPC endpoints so simulated tests cannot drift back to
+  local sockets.
 - Rendering broadweb smoke fixtures now consume that same `test-fixtures`
   layer, so IPFS/IPNS gateway and Kubo subresource tests record simulated
   requests without starting loopback HTTP servers. The rendering tests now use

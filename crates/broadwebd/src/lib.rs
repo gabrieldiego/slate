@@ -77,12 +77,14 @@ pub use transports::direct_http::DirectHttpTransport;
 #[cfg(any(test, feature = "test-fixtures"))]
 pub mod test_fixtures {
     use crate::http::{
-        fetch_http_url, is_internal_fixture_http_url, parse_http_url,
-        register_internal_fixture_http_response, register_internal_fixture_http_sequence,
-        take_internal_fixture_http_requests,
+        fetch_http_url, internal_fixture_http_url_belongs_to_network, is_internal_fixture_http_url,
+        parse_http_url, register_internal_fixture_http_response_for_network,
+        register_internal_fixture_http_sequence_for_network, take_internal_fixture_http_requests,
+        unregistered_internal_fixture_http_url_for_network,
     };
     use crate::protocols::ipfs::{
-        register_internal_kubo_rpc_fixture, take_internal_kubo_rpc_fixture_requests,
+        internal_kubo_rpc_url_belongs_to_network, register_internal_kubo_rpc_fixture_for_network,
+        take_internal_kubo_rpc_fixture_requests,
     };
     use crate::services::{http_fetch::HttpFetchService, profile_sync::ProfileSyncService};
     use crate::{
@@ -92,12 +94,28 @@ pub mod test_fixtures {
     };
     use std::path::PathBuf;
 
-    pub use crate::http::{InternalFixtureHttpResponse, unregistered_internal_fixture_http_url};
+    pub use crate::http::InternalFixtureHttpResponse;
     pub use crate::protocols::ipfs::InternalKuboRpcResponse;
     pub use crate::services::profile_sync::LocalProfileSyncFixture;
 
-    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-    pub struct InProcessFixtureHttpTransport;
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    pub struct InProcessFixtureHttpTransport {
+        network_id: String,
+    }
+
+    impl InProcessFixtureHttpTransport {
+        fn new(network_id: impl Into<String>) -> Self {
+            Self {
+                network_id: network_id.into(),
+            }
+        }
+    }
+
+    impl Default for InProcessFixtureHttpTransport {
+        fn default() -> Self {
+            Self::new("global")
+        }
+    }
 
     impl TransportPlugin for InProcessFixtureHttpTransport {
         fn metadata(&self) -> PluginMetadata {
@@ -116,6 +134,12 @@ pub mod test_fixtures {
         ) -> Result<crate::HttpFetchResponse, BroadwebdError> {
             let url = parse_http_url(&request.url)?;
             if is_internal_fixture_http_url(&url) {
+                if !internal_fixture_http_url_belongs_to_network(&url, self.network_id.as_str()) {
+                    return Err(BroadwebdError::UnsupportedRequest(format!(
+                        "internal HTTP fixture URL does not belong to in-process network {}: {}",
+                        self.network_id, request.url
+                    )));
+                }
                 return fetch_http_url(url, budget);
             }
 
@@ -132,9 +156,19 @@ pub mod test_fixtures {
     /// such as `slate-fixture-http://` and `slate-fixture-kubo://`. They are
     /// resolved through process-local registries and never bind loopback
     /// sockets, start listeners, or contact external networks.
-    #[derive(Clone, Debug, Default)]
+    #[derive(Clone, Debug)]
     pub struct InProcessBroadwebNetwork {
+        network_id: String,
         profile_sync: LocalProfileSyncFixture,
+    }
+
+    impl Default for InProcessBroadwebNetwork {
+        fn default() -> Self {
+            Self {
+                network_id: next_in_process_network_id(),
+                profile_sync: LocalProfileSyncFixture::new(),
+            }
+        }
     }
 
     impl InProcessBroadwebNetwork {
@@ -144,10 +178,15 @@ pub mod test_fixtures {
 
         pub fn fixture_registry(&self) -> PluginRegistry {
             let mut registry = PluginRegistry::new();
-            registry.register_transport(InProcessFixtureHttpTransport);
+            registry
+                .register_transport(InProcessFixtureHttpTransport::new(self.network_id.clone()));
             registry.register_service(HttpFetchService);
             registry.register_service(ProfileSyncService::new());
             registry
+        }
+
+        pub fn network_id(&self) -> &str {
+            self.network_id.as_str()
         }
 
         pub fn registry_for_device(&self, device_id: impl AsRef<str>) -> PluginRegistry {
@@ -187,6 +226,15 @@ pub mod test_fixtures {
             &self,
             gateway_base: impl Into<String>,
         ) -> Result<PluginRegistry, BroadwebdError> {
+            let gateway_base = gateway_base.into();
+            let gateway_url = parse_http_url(&gateway_base)?;
+            if !internal_fixture_http_url_belongs_to_network(&gateway_url, self.network_id.as_str())
+            {
+                return Err(BroadwebdError::UnsupportedRequest(format!(
+                    "in-process IPFS gateway fixtures must use a URL created by network {}: {}",
+                    self.network_id, gateway_base
+                )));
+            }
             let mut registry = self.fixture_registry();
             registry.register_protocol_service(IpfsService::new(IpfsConfig::new(gateway_base)?));
             Ok(registry)
@@ -196,6 +244,14 @@ pub mod test_fixtures {
             &self,
             api_base_url: impl Into<String>,
         ) -> Result<PluginRegistry, BroadwebdError> {
+            let api_base_url = api_base_url.into();
+            let api_url = parse_http_url(&api_base_url)?;
+            if !internal_kubo_rpc_url_belongs_to_network(&api_url, self.network_id.as_str()) {
+                return Err(BroadwebdError::UnsupportedRequest(format!(
+                    "in-process Kubo RPC fixtures must use a URL created by network {}: {}",
+                    self.network_id, api_base_url
+                )));
+            }
             let mut registry = self.fixture_registry();
             registry.register_protocol_service(IpfsService::new(IpfsConfig::with_kubo_rpc(
                 api_base_url,
@@ -271,37 +327,58 @@ pub mod test_fixtures {
         }
 
         pub fn http_response(&self, response: InternalFixtureHttpResponse) -> InProcessHttpFixture {
-            InProcessHttpFixture::new(register_internal_fixture_http_response(response))
+            InProcessHttpFixture::new(register_internal_fixture_http_response_for_network(
+                self.network_id.as_str(),
+                response,
+            ))
         }
 
         pub fn http_sequence(
             &self,
             responses: Vec<InternalFixtureHttpResponse>,
         ) -> InProcessHttpFixture {
-            InProcessHttpFixture::new(register_internal_fixture_http_sequence(responses))
+            InProcessHttpFixture::new(register_internal_fixture_http_sequence_for_network(
+                self.network_id.as_str(),
+                responses,
+            ))
         }
 
         pub fn missing_http_url(&self) -> String {
-            unregistered_internal_fixture_http_url()
+            unregistered_internal_fixture_http_url_for_network(self.network_id.as_str())
         }
 
         pub fn kubo_rpc_response(
             &self,
             response: InternalKuboRpcResponse,
         ) -> InProcessKuboRpcFixture {
-            InProcessKuboRpcFixture::new(register_internal_kubo_rpc_fixture(vec![response]))
+            InProcessKuboRpcFixture::new(register_internal_kubo_rpc_fixture_for_network(
+                self.network_id.as_str(),
+                vec![response],
+            ))
         }
 
         pub fn kubo_rpc_sequence(
             &self,
             responses: Vec<InternalKuboRpcResponse>,
         ) -> InProcessKuboRpcFixture {
-            InProcessKuboRpcFixture::new(register_internal_kubo_rpc_fixture(responses))
+            InProcessKuboRpcFixture::new(register_internal_kubo_rpc_fixture_for_network(
+                self.network_id.as_str(),
+                responses,
+            ))
         }
 
         pub fn profile_sync(&self) -> LocalProfileSyncFixture {
             self.profile_sync.clone()
         }
+    }
+
+    fn next_in_process_network_id() -> String {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        static NEXT_NETWORK_ID: AtomicUsize = AtomicUsize::new(1);
+
+        let id = NEXT_NETWORK_ID.fetch_add(1, Ordering::Relaxed);
+        format!("network-{id}")
     }
 
     #[derive(Debug)]

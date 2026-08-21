@@ -23,7 +23,9 @@ impl TransportPlugin for DirectHttpTransport {
         let url = parse_http_url(&request.url)?;
         #[cfg(any(test, feature = "test-fixtures"))]
         if crate::http::is_internal_fixture_http_url(&url) {
-            return fetch_http_url(url, budget);
+            return Err(BroadwebdError::UnsupportedRequest(format!(
+                "{DIRECT_HTTP_PLUGIN} cannot fetch internal fixture URL; use InProcessBroadwebNetwork"
+            )));
         }
 
         if !matches!(url.scheme(), "http" | "https") {

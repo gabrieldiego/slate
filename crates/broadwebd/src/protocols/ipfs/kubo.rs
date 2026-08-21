@@ -276,13 +276,20 @@ pub struct InternalKuboRpcResponse {
 }
 
 #[cfg(any(test, feature = "test-fixtures"))]
-pub fn register_internal_kubo_rpc_fixture(responses: Vec<InternalKuboRpcResponse>) -> String {
+pub(crate) fn register_internal_kubo_rpc_fixture_for_network(
+    network_id: &str,
+    responses: Vec<InternalKuboRpcResponse>,
+) -> String {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     static NEXT_FIXTURE_ID: AtomicUsize = AtomicUsize::new(1);
 
     let id = NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed);
-    let base_url = format!("{INTERNAL_KUBO_RPC_FIXTURE_SCHEME}://fixture-{id}");
+    let base_url = if network_id == "global" {
+        format!("{INTERNAL_KUBO_RPC_FIXTURE_SCHEME}://fixture-{id}")
+    } else {
+        format!("{INTERNAL_KUBO_RPC_FIXTURE_SCHEME}://{network_id}/fixture-{id}")
+    };
     internal_kubo_rpc_fixtures()
         .lock()
         .expect("internal Kubo fixture registry should not be poisoned")
@@ -297,7 +304,7 @@ pub fn register_internal_kubo_rpc_fixture(responses: Vec<InternalKuboRpcResponse
 }
 
 #[cfg(any(test, feature = "test-fixtures"))]
-pub fn take_internal_kubo_rpc_fixture_requests(base_url: &str) -> Vec<String> {
+pub(crate) fn take_internal_kubo_rpc_fixture_requests(base_url: &str) -> Vec<String> {
     internal_kubo_rpc_fixtures()
         .lock()
         .expect("internal Kubo fixture registry should not be poisoned")
@@ -315,10 +322,29 @@ struct InternalKuboRpcFixture {
 
 #[cfg(any(test, feature = "test-fixtures"))]
 fn is_internal_kubo_rpc_fixture_url(url: &Url) -> bool {
-    url.scheme() == INTERNAL_KUBO_RPC_FIXTURE_SCHEME
-        && url
-            .host_str()
-            .is_some_and(|host| host.starts_with("fixture-"))
+    if url.scheme() != INTERNAL_KUBO_RPC_FIXTURE_SCHEME {
+        return false;
+    }
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    if host.starts_with("fixture-") {
+        return true;
+    }
+    internal_kubo_rpc_path_token(url)
+        .as_deref()
+        .is_some_and(|token| token.starts_with("fixture-"))
+}
+
+#[cfg(any(test, feature = "test-fixtures"))]
+pub(crate) fn internal_kubo_rpc_url_belongs_to_network(url: &Url, network_id: &str) -> bool {
+    if !is_internal_kubo_rpc_fixture_url(url) {
+        return false;
+    }
+    let Some(url_network_id) = internal_kubo_rpc_network_id(url) else {
+        return network_id == "global";
+    };
+    url_network_id == network_id
 }
 
 #[cfg(any(test, feature = "test-fixtures"))]
@@ -375,7 +401,9 @@ fn internal_kubo_rpc_base_url(url: &Url) -> Result<String, BroadwebdError> {
         let host = url.host_str().ok_or_else(|| {
             BroadwebdError::InvalidUrl(format!("invalid internal Kubo fixture URL: {url}"))
         })?;
-        return Ok(format!("{}://{}", url.scheme(), host));
+        if host.starts_with("fixture-") {
+            return Ok(format!("{}://{}", url.scheme(), host));
+        }
     }
 
     let fixture_segment = url
@@ -390,6 +418,21 @@ fn internal_kubo_rpc_base_url(url: &Url) -> Result<String, BroadwebdError> {
         url.host_str().unwrap_or_default(),
         fixture_segment
     ))
+}
+
+#[cfg(any(test, feature = "test-fixtures"))]
+fn internal_kubo_rpc_network_id(url: &Url) -> Option<String> {
+    let host = url.host_str()?;
+    if host.starts_with("fixture-") {
+        return None;
+    }
+    internal_kubo_rpc_path_token(url).map(|_| host.to_string())
+}
+
+#[cfg(any(test, feature = "test-fixtures"))]
+fn internal_kubo_rpc_path_token(url: &Url) -> Option<String> {
+    url.path_segments()
+        .and_then(|mut segments| segments.next().map(str::to_string))
 }
 
 #[cfg(any(test, feature = "test-fixtures"))]
