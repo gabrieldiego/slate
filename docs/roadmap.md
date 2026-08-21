@@ -224,6 +224,10 @@ Current baseline:
 - Chrome now consumes that feed opportunistically before serving Slate internal
   pages, applying recognized synced chrome zoom and key binding updates through
   the same in-memory runtime state used by `slate://settings`.
+- Storage now has a retention-policy-based settings compaction target helper
+  that uses the latest snapshot and applied settings revisions to identify how
+  far a future encrypted snapshot can squash while preserving the configured
+  unsquashed tail.
 - IPFS/IPNS is the first concrete backend under consideration, but the product
   goal is protocol-neutral: approved Slate devices should find each other, move
   encrypted sync objects, and optionally use approved providers to keep those
@@ -253,9 +257,8 @@ Next:
   publishing, content encryption epochs, and device enrollment.
 - Publish encrypted profile manifests and snapshots through the selected
   backend, then point the profile mutable root at the newest manifest.
-- Implement retention and compaction from manifest retention metadata: keep
-  deltas for active devices and recent changes, then squash older state into
-  encrypted snapshots.
+- Use the storage compaction target to publish encrypted snapshots, trim
+  manifest tails, and then enforce retention across broadwebd providers.
 - Add device enrollment, revocation, and key rotation before syncing sensitive
   profile domains.
 - Expand local distributed-protocol fixtures to simulate offline devices,
