@@ -365,6 +365,15 @@ Planned domains:
 - Future apps such as Player, Notes, Tasks, Mail, or Media Library should define
   their own sync domain before storing replicated state.
 
+`slate-settings.db` seeds these domains with privacy metadata so the sync UI can
+show what each app would share before the app has its full schema. Settings,
+bookmarks, and downloads metadata are enabled by default because they are
+low-risk or metadata-only. Calendar, contacts, chat, files, and storage are
+registered but disabled by default because they are sensitive or content
+bearing. Reopening the database must not reset an existing enable/disable
+choice; default seeding preserves user-controlled enablement while refreshing
+the built-in domain metadata.
+
 No app should bypass `profile-sync` with an ad hoc network path for replicated
 profile state. If an app needs a protocol-specific backend, broadwebd should
 expose it through the same discovery, connectivity, transfer, availability, and

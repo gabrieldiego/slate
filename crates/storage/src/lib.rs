@@ -62,48 +62,56 @@ const DEFAULT_APP_SYNC_DOMAINS: [DefaultAppSyncDomain; 8] = [
         schema_version: 1,
         privacy_classification: "low-risk",
         sync_content: false,
+        default_enabled: true,
     },
     DefaultAppSyncDomain {
         domain: SYNC_DOMAIN_BOOKMARKS,
         schema_version: 1,
         privacy_classification: "low-risk",
         sync_content: false,
+        default_enabled: true,
     },
     DefaultAppSyncDomain {
         domain: SYNC_DOMAIN_CALENDAR,
         schema_version: 1,
         privacy_classification: "sensitive",
         sync_content: false,
+        default_enabled: false,
     },
     DefaultAppSyncDomain {
         domain: SYNC_DOMAIN_CONTACTS,
         schema_version: 1,
         privacy_classification: "sensitive",
         sync_content: false,
+        default_enabled: false,
     },
     DefaultAppSyncDomain {
         domain: SYNC_DOMAIN_CHAT,
         schema_version: 1,
         privacy_classification: "sensitive",
         sync_content: false,
+        default_enabled: false,
     },
     DefaultAppSyncDomain {
         domain: SYNC_DOMAIN_FILES,
         schema_version: 1,
         privacy_classification: "content",
         sync_content: true,
+        default_enabled: false,
     },
     DefaultAppSyncDomain {
         domain: SYNC_DOMAIN_DOWNLOADS,
         schema_version: 1,
         privacy_classification: "metadata",
         sync_content: false,
+        default_enabled: true,
     },
     DefaultAppSyncDomain {
         domain: SYNC_DOMAIN_STORAGE,
         schema_version: 1,
         privacy_classification: "sensitive",
         sync_content: false,
+        default_enabled: false,
     },
 ];
 
@@ -167,6 +175,7 @@ pub struct DefaultAppSyncDomain {
     pub schema_version: i64,
     pub privacy_classification: &'static str,
     pub sync_content: bool,
+    pub default_enabled: bool,
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -2579,6 +2588,42 @@ impl SlateProfileDatabase {
         Ok(domains)
     }
 
+    pub fn enabled_app_sync_domains(
+        &self,
+        profile: &str,
+    ) -> Result<Vec<AppSyncDomainRecord>, StorageError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT profile, domain, schema_version, enabled, privacy_classification,
+                        sync_content, created_at, updated_at
+                 FROM app_sync_domains
+                 WHERE profile = ?1 AND enabled = 1
+                 ORDER BY domain",
+            )
+            .map_err(|source| self.database_error(source))?;
+        let records = statement
+            .query_map([profile], |row| {
+                Ok(AppSyncDomainRecord {
+                    profile: row.get(0)?,
+                    domain: row.get(1)?,
+                    schema_version: row.get(2)?,
+                    enabled: integer_to_bool(row.get(3)?),
+                    privacy_classification: row.get(4)?,
+                    sync_content: integer_to_bool(row.get(5)?),
+                    created_at: row.get(6)?,
+                    updated_at: row.get(7)?,
+                })
+            })
+            .map_err(|source| self.database_error(source))?;
+
+        let mut domains = Vec::new();
+        for record in records {
+            domains.push(record.map_err(|source| self.database_error(source))?);
+        }
+        Ok(domains)
+    }
+
     pub fn register_sync_device(
         &self,
         device: &SyncDeviceRegistration,
@@ -4528,15 +4573,39 @@ impl SlateProfileDatabase {
         })?;
 
         for domain in DEFAULT_APP_SYNC_DOMAINS {
-            self.register_app_sync_domain(&AppSyncDomainRegistration {
-                profile: DEFAULT_PROFILE_ID.to_string(),
-                domain: domain.domain.to_string(),
-                schema_version: domain.schema_version,
-                enabled: true,
-                privacy_classification: domain.privacy_classification.to_string(),
-                sync_content: domain.sync_content,
-            })?;
+            self.seed_default_app_sync_domain(&domain)?;
         }
+        Ok(())
+    }
+
+    fn seed_default_app_sync_domain(
+        &self,
+        domain: &DefaultAppSyncDomain,
+    ) -> Result<(), StorageError> {
+        let connection = self.connection()?;
+        let now = unix_time_seconds()?;
+        connection
+            .execute(
+                "INSERT INTO app_sync_domains
+                   (profile, domain, schema_version, enabled, privacy_classification,
+                    sync_content, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)
+                 ON CONFLICT(profile, domain) DO UPDATE SET
+                   schema_version = excluded.schema_version,
+                   privacy_classification = excluded.privacy_classification,
+                   sync_content = excluded.sync_content,
+                   updated_at = excluded.updated_at",
+                params![
+                    DEFAULT_PROFILE_ID,
+                    domain.domain,
+                    domain.schema_version,
+                    bool_to_integer(domain.default_enabled),
+                    domain.privacy_classification,
+                    bool_to_integer(domain.sync_content),
+                    now
+                ],
+            )
+            .map_err(|source| self.database_error(source))?;
         Ok(())
     }
 
@@ -8256,22 +8325,77 @@ mod tests {
         }));
         assert!(domains.iter().any(|domain| {
             domain.domain == SYNC_DOMAIN_FILES
-                && domain.enabled
+                && !domain.enabled
                 && domain.privacy_classification == "content"
                 && domain.sync_content
         }));
         assert!(domains.iter().any(|domain| {
             domain.domain == SYNC_DOMAIN_CONTACTS
-                && domain.enabled
+                && !domain.enabled
                 && domain.privacy_classification == "sensitive"
                 && !domain.sync_content
         }));
+        assert!(domains.iter().any(|domain| {
+            domain.domain == SYNC_DOMAIN_DOWNLOADS
+                && domain.enabled
+                && domain.privacy_classification == "metadata"
+        }));
+
+        let enabled_domains = database
+            .enabled_app_sync_domains(DEFAULT_PROFILE_ID)
+            .unwrap();
+        let enabled_domain_names = enabled_domains
+            .iter()
+            .map(|domain| domain.domain.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            enabled_domain_names,
+            vec![
+                SYNC_DOMAIN_BOOKMARKS,
+                SYNC_DOMAIN_DOWNLOADS,
+                SYNC_DOMAIN_SETTINGS,
+            ]
+        );
 
         let devices = database.sync_devices(DEFAULT_PROFILE_ID).unwrap();
         assert_eq!(devices.len(), 1);
         assert_eq!(devices[0].device_id, DEFAULT_SYNC_DEVICE_ID);
         assert_eq!(devices[0].membership_epoch, 1);
         assert!(!devices[0].provider_authority);
+    }
+
+    #[test]
+    fn default_sync_domain_seeding_preserves_user_enabled_choices() {
+        let database_path = test_dir("sync-domain-enabled-choice").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path.clone()).unwrap();
+        database
+            .register_app_sync_domain(&AppSyncDomainRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                domain: SYNC_DOMAIN_CALENDAR.to_string(),
+                schema_version: 1,
+                enabled: true,
+                privacy_classification: "sensitive".to_string(),
+                sync_content: false,
+            })
+            .unwrap();
+        drop(database);
+
+        let reopened = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let calendar = reopened
+            .app_sync_domains(DEFAULT_PROFILE_ID)
+            .unwrap()
+            .into_iter()
+            .find(|domain| domain.domain == SYNC_DOMAIN_CALENDAR)
+            .expect("calendar sync domain should be seeded");
+        assert!(calendar.enabled);
+
+        let enabled_domain_names = reopened
+            .enabled_app_sync_domains(DEFAULT_PROFILE_ID)
+            .unwrap()
+            .into_iter()
+            .map(|domain| domain.domain)
+            .collect::<Vec<_>>();
+        assert!(enabled_domain_names.contains(&SYNC_DOMAIN_CALENDAR.to_string()));
     }
 
     #[test]

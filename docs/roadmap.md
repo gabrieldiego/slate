@@ -182,6 +182,11 @@ Current baseline:
 - `slate-settings.db` now records typed settings values, changes, revisions,
   app sync domains, known sync devices, per-instance local sync device ids, and
   idempotent incoming setting-change application.
+- App sync domains for Settings, Bookmarks, Downloads, Calendar, Contacts,
+  Chat, Files, and Storage are seeded into `slate-settings.db` with explicit
+  privacy classifications. Low-risk and metadata domains are enabled by
+  default; sensitive and content-bearing app domains are present but opt-in,
+  and default seeding preserves a user's stored enable/disable choice.
 - broadwebd has a protocol-neutral `profile-sync` application service with an
   in-memory local fixture backend. Unit tests cover object transfer, retention,
   mutable root publish/resolve, provider discovery, per-object transfer
@@ -625,10 +630,10 @@ Backlog:
   identifiers, timing, object sizes, or traffic volume.
 - Add account governance policy for QR enrollment, recovery files, device
   revocation, and future M-of-N approval for high-risk account changes.
-- Add first-party app sync domains for Files, Contacts, Calendar, Chat,
-  Downloads, Storage, and future rail apps. Each app should define typed change
-  records, merge behavior, privacy notes, and whether it syncs content bytes,
-  metadata, or both.
+- Add typed sync records, merge behavior, and privacy notes for each first-party
+  app domain. Files, Contacts, Calendar, Chat, Downloads, Storage, and future
+  rail apps should each define whether they sync content bytes, metadata, or
+  both before moving beyond generic domain registration.
 
 Future protocol candidates:
 
