@@ -4119,6 +4119,8 @@ mod tests {
         FileEntryUpdate, IncomingSyncSettingText,
         PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305, PROFILE_SYNC_CONTENT_KEY_BYTES,
         PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE,
+        PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE,
+        PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY,
         PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION, ProfileSyncContentKey,
         ProfileSyncDeviceHead, ProfileSyncDeviceSigner, ProfileSyncMembershipRecord,
         ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
@@ -5070,6 +5072,163 @@ mod tests {
             receiver_database
                 .profile_sync_root(DEFAULT_PROFILE_ID, PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID)
                 .expect("read membership log root")
+                .is_none()
+        );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_membership_log_rejects_stale_epoch_records_without_loopback() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("membership-log-stale-publisher");
+        let receiver_state_root = test_state_root("membership-log-stale-receiver");
+        let receiver_db_root = test_state_root("membership-log-stale-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "membership-log-stale-publisher",
+            )
+            .expect("start in-process stale membership log publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "membership-log-stale-receiver",
+            )
+            .expect("start in-process stale membership log receiver daemon");
+        let receiver_database =
+            SlateProfileDatabase::open_resolved(receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME))
+                .expect("open stale membership log receiver database");
+        let signer_a = ProfileSyncDeviceSigner::generate("membership-log-stale-a")
+            .expect("generate stale signer a");
+        let signer_b = ProfileSyncDeviceSigner::generate("membership-log-stale-b")
+            .expect("generate stale signer b");
+        let enroll_a = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-membership-log-stale-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-log-stale-a".to_string(),
+            device_public_key: Some(signer_a.public_key().expect("read signer a public key")),
+            created_at: 10,
+        };
+        receiver_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_a).as_slice(),
+            )
+            .expect("bootstrap stale log receiver signer a");
+        let enroll_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-enroll-membership-log-stale-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-log-stale-b".to_string(),
+            device_public_key: Some(signer_b.public_key().expect("read signer b public key")),
+            created_at: 20,
+        };
+        receiver_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_b).as_slice(),
+            )
+            .expect("apply stale log receiver signer b enrollment");
+        let revoke_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-3-revoke-membership-log-stale-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 2,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE.to_string(),
+            device_id: "membership-log-stale-b".to_string(),
+            device_public_key: None,
+            created_at: 30,
+        };
+        receiver_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &revoke_b).as_slice(),
+            )
+            .expect("apply stale log receiver signer b revocation");
+
+        let replacement_b = ProfileSyncDeviceSigner::generate("membership-log-stale-b")
+            .expect("generate stale replacement signer b");
+        let stale_rotate_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-rotate-membership-log-stale-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY.to_string(),
+            device_id: "membership-log-stale-b".to_string(),
+            device_public_key: Some(
+                replacement_b
+                    .public_key()
+                    .expect("read replacement signer b public key"),
+            ),
+            created_at: 40,
+        };
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+        let stale_object_id = publisher
+            .put_retained_object(
+                DEFAULT_PROFILE_ID,
+                signed_membership_record_bytes(&signer_a, &stale_rotate_b),
+            )
+            .expect("put stale signed membership record object");
+        let log = ProfileSyncMembershipLog {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            schema_version: super::PROFILE_SYNC_MEMBERSHIP_LOG_SCHEMA_VERSION,
+            records: vec![ProfileSyncMembershipLogEntry {
+                record_id: stale_rotate_b.record_id.clone(),
+                root_id: sync_membership_record_root_id(stale_rotate_b.record_id.as_str()),
+                object_id: stale_object_id,
+                membership_epoch: stale_rotate_b.membership_epoch,
+                record_kind: stale_rotate_b.record_kind.clone(),
+                device_id: stale_rotate_b.device_id.clone(),
+                signer_device_id: signer_a.device_id().to_string(),
+            }],
+        };
+        publisher
+            .put_retained_root(
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                serde_json::to_vec(&log).expect("encode stale membership log"),
+            )
+            .expect("publish stale membership log");
+
+        let error = BroadwebdProfileSyncObjectSource::new(&receiver_daemon)
+            .pull_and_apply_sync_account_membership_log_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            )
+            .expect_err("stale membership log record should be rejected");
+        assert!(matches!(
+            error,
+            ProfileSyncReceiveError::Storage(StorageError::InvalidProfileSyncMembershipRecord(reason))
+                if reason.contains("older than latest applied epoch 3")
+        ));
+        assert!(
+            receiver_database
+                .sync_account_membership_record(
+                    DEFAULT_PROFILE_ID,
+                    "epoch-2-rotate-membership-log-stale-b",
+                )
+                .expect("read stale log record")
+                .is_none()
+        );
+        assert!(
+            !receiver_database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "membership-log-stale-b")
+                .expect("read stale log signer b key")
+                .expect("stale log signer b key")
+                .trusted
+        );
+        assert!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID)
+                .expect("read stale membership log root")
                 .is_none()
         );
 

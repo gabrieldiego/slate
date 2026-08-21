@@ -260,6 +260,10 @@ revocation record, and it rejects a different older-epoch membership operation
 for that target device once a newer operation has already applied. Exact record
 replay remains idempotent. Full account-level revocation still needs richer
 epoch transition and multi-approval policy.
+The profile-sync membership-log receive path exercises the same storage guard:
+a stale older-epoch record carried through broadwebd fixture objects fails
+without storing that record, re-trusting the device, or advancing the
+membership-log root.
 
 The active-key pull path also exposes an idempotent root-status helper for sync
 polling. It resolves the published root first and reports missing roots,
