@@ -522,6 +522,12 @@ sync cycle. That keeps the future runtime scheduler's first responsibility
 simple: run a capped cycle, inspect whether provider/root health changed, and
 surface degraded state without introducing background polling, socket fixtures,
 or a separate health transport.
+Cycle policy is now explicit data: retention policy, maximum local publish
+steps, maximum trusted devices, minimum online retaining-provider quorum, and
+whether fresh provider health is required before running. The runtime-facing
+policy path samples health first and rejects degraded provider roles before
+loading credentials or attempting mutable-root writes, while still allowing
+missing settings roots to recover during an initial healthy-provider publish.
 Object bytes are also provider-held: fetches require at least one online
 provider with the object, and retaining an object copies the bytes into the
 retaining provider's in-process store. Tests can pause object transfer from one

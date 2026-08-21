@@ -296,6 +296,7 @@ impl From<ProfileSyncReceiveError> for ProfileSyncCycleError {
 #[derive(Debug)]
 pub enum ProfileSyncCycleWithHealthError {
     Health(BroadwebdError),
+    Policy(ProfileSyncPolicyError),
     Cycle(ProfileSyncCycleError),
 }
 
@@ -305,6 +306,7 @@ impl fmt::Display for ProfileSyncCycleWithHealthError {
             Self::Health(error) => {
                 write!(formatter, "profile sync health check failed: {error}")
             }
+            Self::Policy(error) => write!(formatter, "profile sync policy check failed: {error}"),
             Self::Cycle(error) => write!(formatter, "profile sync cycle failed: {error}"),
         }
     }
@@ -314,6 +316,7 @@ impl std::error::Error for ProfileSyncCycleWithHealthError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Health(error) => Some(error),
+            Self::Policy(error) => Some(error),
             Self::Cycle(error) => Some(error),
         }
     }
@@ -330,6 +333,31 @@ impl From<ProfileSyncCycleError> for ProfileSyncCycleWithHealthError {
         Self::Cycle(error)
     }
 }
+
+impl From<ProfileSyncPolicyError> for ProfileSyncCycleWithHealthError {
+    fn from(error: ProfileSyncPolicyError) -> Self {
+        Self::Policy(error)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ProfileSyncPolicyError {
+    ProviderHealthDegraded { health: SettingsSyncHealthReport },
+}
+
+impl fmt::Display for ProfileSyncPolicyError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ProviderHealthDegraded { health } => write!(
+                formatter,
+                "profile {} provider health is degraded: {}",
+                health.profile, health.provider_health.message
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ProfileSyncPolicyError {}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PublishedSettingsTailManifest {
@@ -504,6 +532,49 @@ impl SettingsSyncCycleWithHealthRun {
 
     pub fn degraded_after(&self) -> bool {
         self.after_health.degraded()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncCyclePolicy {
+    pub retention_policy: ProfileSyncRetentionPolicy,
+    pub max_publish_steps: u32,
+    pub max_trusted_devices: u32,
+    pub minimum_online_retaining_providers: usize,
+    pub require_healthy_providers: bool,
+}
+
+impl SettingsSyncCyclePolicy {
+    pub fn new(
+        retention_policy: ProfileSyncRetentionPolicy,
+        max_publish_steps: u32,
+        max_trusted_devices: u32,
+        minimum_online_retaining_providers: usize,
+    ) -> Self {
+        Self {
+            retention_policy,
+            max_publish_steps,
+            max_trusted_devices,
+            minimum_online_retaining_providers,
+            require_healthy_providers: true,
+        }
+    }
+
+    pub fn with_provider_health_required(mut self, required: bool) -> Self {
+        self.require_healthy_providers = required;
+        self
+    }
+
+    pub fn check_before_cycle(
+        &self,
+        health: &SettingsSyncHealthReport,
+    ) -> Result<(), ProfileSyncPolicyError> {
+        if self.require_healthy_providers && health.provider_health.degraded {
+            return Err(ProfileSyncPolicyError::ProviderHealthDegraded {
+                health: health.clone(),
+            });
+        }
+        Ok(())
     }
 }
 
@@ -706,12 +777,41 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
         max_trusted_devices: u32,
         minimum_online_retaining_providers: usize,
     ) -> Result<SettingsSyncCycleWithHealthRun, ProfileSyncCycleWithHealthError> {
+        let policy = SettingsSyncCyclePolicy::new(
+            retention_policy,
+            max_publish_steps,
+            max_trusted_devices,
+            minimum_online_retaining_providers,
+        )
+        .with_provider_health_required(false);
+        self.run_settings_sync_cycle_with_policy(
+            database,
+            profile,
+            settings_root_id,
+            content_key,
+            key_id,
+            signer,
+            &policy,
+        )
+    }
+
+    pub fn run_settings_sync_cycle_with_policy(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        settings_root_id: &str,
+        content_key: &ProfileSyncContentKey,
+        key_id: &str,
+        signer: &ProfileSyncDeviceSigner,
+        policy: &SettingsSyncCyclePolicy,
+    ) -> Result<SettingsSyncCycleWithHealthRun, ProfileSyncCycleWithHealthError> {
         let before_health = self.settings_sync_health(
             database,
             profile,
             settings_root_id,
-            minimum_online_retaining_providers,
+            policy.minimum_online_retaining_providers,
         )?;
+        policy.check_before_cycle(&before_health)?;
         let cycle = self.run_settings_sync_cycle(
             database,
             profile,
@@ -719,15 +819,15 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
             content_key,
             key_id,
             signer,
-            retention_policy,
-            max_publish_steps,
-            max_trusted_devices,
+            policy.retention_policy.clone(),
+            policy.max_publish_steps,
+            policy.max_trusted_devices,
         )?;
         let after_health = self.settings_sync_health(
             database,
             profile,
             settings_root_id,
-            minimum_online_retaining_providers,
+            policy.minimum_online_retaining_providers,
         )?;
 
         Ok(SettingsSyncCycleWithHealthRun {
@@ -1888,9 +1988,12 @@ mod tests {
         BroadwebdProfileSyncObjectSource, BroadwebdProfileSyncPublisher,
         BroadwebdSettingsSyncRunner, BroadwebdTrustedDeviceHeadSyncStatus,
         LocalSettingsHeadPublishStatus, ProfileSyncCredentialError, ProfileSyncCycleError,
-        ProfileSyncReceiveError, settings_device_head_root_id,
+        ProfileSyncCycleWithHealthError, ProfileSyncPolicyError, ProfileSyncReceiveError,
+        SettingsSyncCyclePolicy, settings_device_head_root_id,
     };
-    use slate_broadwebd::{ResourceBudget, test_fixtures::InProcessBroadwebNetwork};
+    use slate_broadwebd::{
+        BroadwebDaemon, ResourceBudget, test_fixtures::InProcessBroadwebNetwork,
+    };
     use slate_storage::{
         DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
         IncomingSyncSettingText, PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305,
@@ -2931,6 +3034,75 @@ mod tests {
                 .local_device_head_root_health
                 .visible_candidates,
             1
+        );
+
+        let policy_run = BroadwebdSettingsSyncRunner::new(&daemon)
+            .run_settings_sync_cycle_with_policy(
+                &database,
+                profile,
+                settings_root_id,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                &SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 1),
+            )
+            .expect("strict policy allows cycle when providers are healthy");
+        assert!(!policy_run.degraded_before());
+        assert_eq!(policy_run.cycle.published_step_count(), 0);
+        assert!(!policy_run.degraded_after());
+
+        let _ = std::fs::remove_dir_all(state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_policy_rejects_degraded_provider_health() {
+        let network = InProcessBroadwebNetwork::new();
+        let state_root = test_state_root("cycle-policy-degraded-provider");
+        let db_root = test_state_root("cycle-policy-degraded-provider-db");
+        let daemon = BroadwebDaemon::start_with_registry(
+            &state_root,
+            ResourceBudget::default(),
+            network.registry_for_availability_provider("runtime-policy-provider"),
+        )
+        .expect("start availability-only in-process provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-policy",
+        )
+        .expect("open local settings database");
+        let profile = "policyprofile";
+        let content_key = ProfileSyncContentKey::from_bytes([55; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-policy").expect("generate signer");
+        let policy = SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 1);
+
+        let error = BroadwebdSettingsSyncRunner::new(&daemon)
+            .run_settings_sync_cycle_with_policy(
+                &database,
+                profile,
+                "settings/latest",
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                &policy,
+            )
+            .expect_err("availability-only provider health should fail runtime policy");
+
+        let ProfileSyncCycleWithHealthError::Policy(
+            ProfileSyncPolicyError::ProviderHealthDegraded { health },
+        ) = error
+        else {
+            panic!("expected degraded provider policy error, got {error:?}");
+        };
+        assert_eq!(health.profile, profile);
+        assert!(health.provider_health.degraded);
+        assert_eq!(health.provider_health.online_providers, 1);
+        assert_eq!(health.provider_health.mutable_root_providers, 0);
+        assert!(
+            health
+                .provider_health
+                .message
+                .contains("mutable-root provider")
         );
 
         let _ = std::fs::remove_dir_all(state_root);

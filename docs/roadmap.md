@@ -248,6 +248,12 @@ Current baseline:
   eventual scheduler/UI a single result that shows whether a degraded local
   state recovered after publishing or receiving, without starting background
   services or using socket-based fixtures.
+- `slate-profile-sync` now has a typed settings sync cycle policy carrying
+  retention, publish-step, trusted-device, and retaining-provider quorum
+  limits. The runtime-facing policy path checks provider health before touching
+  credentials or publishing, so tests can prove an availability-only provider
+  is rejected locally instead of failing later as an attempted mutable-root
+  write.
 - The local profile-sync fixture can now mark simulated devices offline and
   online, allowing tests to verify unavailable devices fail closed without
   touching sockets, DNS, Tor, IPFS, or external relays.
