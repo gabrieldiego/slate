@@ -747,6 +747,9 @@ Current baseline:
   before the existing settings sync cycle, so local fixture devices can be
   enrolled and then immediately use trusted device-head settings sync without
   loopback sockets or external protocol services.
+- Membership log publications now expose their retained object set, and
+  broadwebd fixture providers can retain the log and each referenced signed
+  membership record through the same in-process availability layer.
 
 Next:
 

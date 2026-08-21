@@ -2383,6 +2383,14 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
         self.retain_profile_sync_objects(cycle.profile.as_str(), object_ids.as_slice())
     }
 
+    pub fn retain_profile_sync_membership_log_objects(
+        &self,
+        publication: &PublishedProfileSyncMembershipLog,
+    ) -> Result<Vec<BroadwebdProfileSyncRetentionStatus>, BroadwebdError> {
+        let object_ids = publication.published_object_ids();
+        self.retain_profile_sync_objects(publication.profile.as_str(), object_ids.as_slice())
+    }
+
     pub fn publish_root(
         &self,
         profile: &str,
@@ -4024,6 +4032,77 @@ mod tests {
         let _ = std::fs::remove_dir_all(receiver_state_root);
         let _ = std::fs::remove_dir_all(publisher_db_root);
         let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_membership_log_objects_can_be_retained_by_provider_without_loopback() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("membership-log-retention-device");
+        let provider_state_root = test_state_root("membership-log-retention-provider");
+        let db_root = test_state_root("membership-log-retention-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "membership-log-retention-device",
+            )
+            .expect("start in-process membership log device daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "membership-log-retention-pinner",
+            )
+            .expect("start in-process membership log availability provider daemon");
+        let database =
+            SlateProfileDatabase::open_resolved(db_root.join(DEFAULT_DATABASE_FILE_NAME))
+                .expect("open membership log retention database");
+        let signer = ProfileSyncDeviceSigner::generate("membership-log-retention-signer")
+            .expect("generate membership log retention signer");
+        let enroll = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-membership-log-retention-signer".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-log-retention-signer".to_string(),
+            device_public_key: Some(signer.public_key().expect("read signer public key")),
+            created_at: 10,
+        };
+        database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer, &enroll).as_slice(),
+            )
+            .expect("bootstrap membership log retention signer");
+
+        let publication = BroadwebdProfileSyncPublisher::new(&device_daemon)
+            .publish_local_sync_account_membership_log(
+                &database,
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            )
+            .expect("publish membership log for retention")
+            .expect("membership log has one record");
+        let object_ids = publication.published_object_ids();
+        assert_eq!(object_ids.len(), 2);
+
+        let statuses = BroadwebdProfileSyncPublisher::new(&provider_daemon)
+            .retain_profile_sync_membership_log_objects(&publication)
+            .expect("provider retains membership log object set");
+        assert_eq!(statuses.len(), object_ids.len());
+        assert_eq!(
+            statuses
+                .iter()
+                .map(|status| status.object_id.clone())
+                .collect::<Vec<_>>(),
+            object_ids
+        );
+        assert!(statuses.iter().all(|status| status.retained));
+        assert!(statuses.iter().all(|status| status.available));
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
     }
 
     #[test]

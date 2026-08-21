@@ -572,6 +572,11 @@ An additive runner path can pull and apply that membership log before running
 the normal settings cycle. This lets a newly enrolled local device learn its
 own trusted key and remote trusted keys before credential preflight and before
 trusted device-head pulls.
+The published membership log exposes the retained object ids for both the log
+and its referenced signed records, and the broadwebd publisher can hand that
+object set to an availability provider. Fixture coverage retains the set
+through an in-process provider so no loopback socket or external pinning service
+is needed.
 The broadwebd source bridge can also run the receive side for one trusted
 device head: resolve and verify the head, record the verified head root in
 `slate-settings.db`, apply the referenced settings manifest when the head is
