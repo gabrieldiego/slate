@@ -384,6 +384,15 @@ fn local_fixture_pulls_competing_settings_root_candidates_through_storage() {
             membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
         })
         .expect("device c trusts candidate device b");
+    device_c_db
+        .register_sync_content_key_epoch(&SyncContentKeyEpochRegistration {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            key_id: FIXTURE_CONTENT_KEY_ID.to_string(),
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            algorithm: PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305.to_string(),
+            active: true,
+        })
+        .expect("device c registers active sync content key");
 
     let content_key = fixture_content_key();
     let change_a = device_a_db
@@ -486,15 +495,18 @@ fn local_fixture_pulls_competing_settings_root_candidates_through_storage() {
         "candidate listing should not choose or record a winning settings root"
     );
 
-    let applications = device_c_db
-        .pull_and_apply_trusted_signed_profile_sync_settings_manifest_candidates(
+    let status = device_c_db
+        .pull_and_apply_active_trusted_signed_settings_manifest_candidates_if_changed(
             &source,
             DEFAULT_PROFILE_ID,
             SETTINGS_ROOT_ID,
             &content_key,
-            FIXTURE_CONTENT_KEY_ID,
         )
         .expect("device c applies competing trusted root candidates");
+    let slate_storage::ProfileSyncSettingsCandidatePullApplyStatus::Applied(applications) = status
+    else {
+        panic!("expected device c to apply competing root candidates, got {status:?}");
+    };
     assert_eq!(
         applications
             .iter()
@@ -530,7 +542,23 @@ fn local_fixture_pulls_competing_settings_root_candidates_through_storage() {
             .expect("read applied candidate root")
             .expect("applied candidate root exists")
             .object_id,
-        manifest_b_object_id
+        manifest_b_object_id.as_str()
+    );
+    let unchanged = device_c_db
+        .pull_and_apply_active_trusted_signed_settings_manifest_candidates_if_changed(
+            &source,
+            DEFAULT_PROFILE_ID,
+            SETTINGS_ROOT_ID,
+            &content_key,
+        )
+        .expect("device c checks unchanged competing trusted root candidates");
+    assert_eq!(
+        unchanged,
+        slate_storage::ProfileSyncSettingsCandidatePullApplyStatus::Unchanged {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: SETTINGS_ROOT_ID.to_string(),
+            object_id: manifest_b_object_id.clone(),
+        }
     );
 
     let _ = std::fs::remove_dir_all(device_a_root);

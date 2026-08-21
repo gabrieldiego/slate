@@ -1662,6 +1662,20 @@ pub enum ProfileSyncSettingsPullApplyStatus {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ProfileSyncSettingsCandidatePullApplyStatus {
+    NoPublishedRoot {
+        profile: String,
+        root_id: String,
+    },
+    Unchanged {
+        profile: String,
+        root_id: String,
+        object_id: String,
+    },
+    Applied(Vec<ProfileSyncSettingsManifestCandidateApplication>),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ProfileSyncDeviceHeadPullRecordStatus {
     NoPublishedRoot {
         profile: String,
@@ -3620,6 +3634,79 @@ impl SlateProfileDatabase {
             .map_err(ProfileSyncTrustedPullApplyError::Storage)
     }
 
+    pub fn pull_and_apply_active_trusted_signed_settings_manifest_candidates_if_changed<Source>(
+        &self,
+        source: &Source,
+        profile: &str,
+        root_id: &str,
+        content_key: &ProfileSyncContentKey,
+    ) -> Result<
+        ProfileSyncSettingsCandidatePullApplyStatus,
+        ProfileSyncTrustedPullApplyError<Source::Error>,
+    >
+    where
+        Source: ProfileSyncObjectSource,
+    {
+        let key = self
+            .active_sync_content_key_epoch(profile)
+            .map_err(ProfileSyncTrustedPullApplyError::Storage)?
+            .ok_or_else(|| StorageError::MissingActiveSyncContentKey(profile.to_string()))
+            .map_err(ProfileSyncTrustedPullApplyError::Storage)?;
+        validate_active_sync_content_key_epoch(&key)
+            .map_err(ProfileSyncTrustedPullApplyError::Storage)?;
+
+        let candidates = source
+            .list_profile_sync_root_candidates(profile, root_id)
+            .map_err(|source| {
+                ProfileSyncTrustedPullApplyError::Pull(ProfileSyncTrustedPullError::Source(source))
+            })?;
+        let Some(newest_candidate) = newest_profile_sync_root_candidate(candidates.as_slice())
+        else {
+            return Ok(
+                ProfileSyncSettingsCandidatePullApplyStatus::NoPublishedRoot {
+                    profile: profile.to_string(),
+                    root_id: root_id.to_string(),
+                },
+            );
+        };
+
+        if let Some(local_root) = self
+            .profile_sync_root(profile, root_id)
+            .map_err(ProfileSyncTrustedPullApplyError::Storage)?
+        {
+            if local_root.object_id == newest_candidate.object_id {
+                return Ok(ProfileSyncSettingsCandidatePullApplyStatus::Unchanged {
+                    profile: profile.to_string(),
+                    root_id: root_id.to_string(),
+                    object_id: newest_candidate.object_id.clone(),
+                });
+            }
+        }
+
+        let mut verified_candidates = Vec::with_capacity(candidates.len());
+        for candidate in candidates {
+            let objects = self
+                .pull_trusted_signed_profile_sync_settings_manifest_objects_by_id(
+                    source,
+                    profile,
+                    candidate.object_id.as_str(),
+                    content_key,
+                    key.key_id.as_str(),
+                )
+                .map_err(ProfileSyncTrustedPullApplyError::Pull)?;
+            validate_sync_content_key_epoch_for_manifest(&key, &objects.manifest)
+                .map_err(ProfileSyncTrustedPullApplyError::Storage)?;
+            verified_candidates.push(VerifiedProfileSyncSettingsManifestCandidate {
+                root_candidate: candidate,
+                objects,
+            });
+        }
+
+        self.apply_verified_settings_manifest_candidates(verified_candidates.as_slice())
+            .map(ProfileSyncSettingsCandidatePullApplyStatus::Applied)
+            .map_err(ProfileSyncTrustedPullApplyError::Storage)
+    }
+
     pub fn pull_trusted_signed_profile_sync_settings_manifest_objects<Source>(
         &self,
         source: &Source,
@@ -4356,6 +4443,23 @@ fn validate_sync_content_key_epoch_for_manifest(
         });
     }
     Ok(())
+}
+
+fn newest_profile_sync_root_candidate(
+    candidates: &[ProfileSyncRootCandidate],
+) -> Option<&ProfileSyncRootCandidate> {
+    candidates.iter().max_by(|left, right| {
+        (
+            left.publish_sequence,
+            left.publisher_id.as_str(),
+            left.object_id.as_str(),
+        )
+            .cmp(&(
+                right.publish_sequence,
+                right.publisher_id.as_str(),
+                right.object_id.as_str(),
+            ))
+    })
 }
 
 fn validate_settings_manifest_application(
@@ -6830,6 +6934,80 @@ mod tests {
                 .expect("candidate application records newest verified root")
                 .object_id,
             manifest_b_object_id
+        );
+
+        let active_destination_path =
+            test_dir("sync-active-candidate-roots").join(DEFAULT_DATABASE_FILE_NAME);
+        let active_destination =
+            SlateProfileDatabase::open_resolved_with_device_id(active_destination_path, "device-d")
+                .unwrap();
+        active_destination
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: signer_a.public_key().unwrap(),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .unwrap();
+        active_destination
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: signer_b.public_key().unwrap(),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .unwrap();
+        active_destination
+            .register_sync_content_key_epoch(&SyncContentKeyEpochRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                key_id: key_id.to_string(),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                algorithm: PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305.to_string(),
+                active: true,
+            })
+            .unwrap();
+
+        let active_status = active_destination
+            .pull_and_apply_active_trusted_signed_settings_manifest_candidates_if_changed(
+                &source,
+                DEFAULT_PROFILE_ID,
+                root_id,
+                &content_key,
+            )
+            .unwrap();
+        let ProfileSyncSettingsCandidatePullApplyStatus::Applied(active_applications) =
+            active_status
+        else {
+            panic!("expected active candidate application, got {active_status:?}");
+        };
+        assert_eq!(
+            active_applications
+                .iter()
+                .map(|application| application.application.manifest_object_id.as_str())
+                .collect::<Vec<_>>(),
+            vec![manifest_a_object_id, manifest_b_object_id]
+        );
+        assert_eq!(
+            active_destination
+                .get_setting_text("ui.theme")
+                .unwrap()
+                .as_deref(),
+            Some("teal")
+        );
+
+        let unchanged = active_destination
+            .pull_and_apply_active_trusted_signed_settings_manifest_candidates_if_changed(
+                &source,
+                DEFAULT_PROFILE_ID,
+                root_id,
+                &content_key,
+            )
+            .unwrap();
+        assert_eq!(
+            unchanged,
+            ProfileSyncSettingsCandidatePullApplyStatus::Unchanged {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                root_id: root_id.to_string(),
+                object_id: manifest_b_object_id.to_string(),
+            }
         );
     }
 

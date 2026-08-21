@@ -318,7 +318,10 @@ Current baseline:
   stored device keys, and apply verified candidates in deterministic
   oldest-to-newest publication order while setting values still use the typed
   logical-clock conflict policy. The broadwebd local fixture bridge covers
-  competing `settings/latest` candidates entirely in process.
+  competing `settings/latest` candidates entirely in process. An active-key
+  candidate pull path now reports missing, unchanged, and applied states so a
+  future runtime poller can skip object fetches when the newest visible
+  candidate is already the stored verified root.
 - Storage now has a serializable `ProfileSyncManifest` payload with optional
   snapshot object id, tail change object ids, included domains, and device
   frontiers. The local two-device fixture now publishes `settings/latest` to a

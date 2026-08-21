@@ -143,6 +143,9 @@ encrypted snapshots:
   each candidate's signed manifest, and apply verified candidates in
   deterministic oldest-to-newest publication order. Per-setting conflict
   resolution still uses the typed change policy, not backend publication order.
+- Runtime-style pulls can use the active content-key epoch and report missing,
+  unchanged, or applied candidate sets without fetching objects when the newest
+  visible candidate already matches the stored verified root.
 - `settings_revisions` lets runtime services observe committed changes.
 
 External updates should enter through validated change records and snapshots,
