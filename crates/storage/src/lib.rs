@@ -9,6 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use ring::rand::SecureRandom;
 use ring::signature::KeyPair;
+use rusqlite::types::Type;
 use rusqlite::{Connection, OptionalExtension, params};
 
 pub const DEFAULT_DATABASE_FILE_NAME: &str = "slate-settings.db";
@@ -642,6 +643,25 @@ pub struct SyncRevisionRecord {
     pub created_at: i64,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SyncSnapshotRegistration {
+    pub profile: String,
+    pub snapshot_id: String,
+    pub backend_object_id: Option<String>,
+    pub covers_revision: i64,
+    pub included_domains: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SyncSnapshotRecord {
+    pub profile: String,
+    pub snapshot_id: String,
+    pub backend_object_id: Option<String>,
+    pub covers_revision: i64,
+    pub included_domains: Vec<String>,
+    pub created_at: i64,
+}
+
 #[derive(Debug)]
 pub enum StorageError {
     CurrentDirectory(std::io::Error),
@@ -653,6 +673,7 @@ pub enum StorageError {
         path: PathBuf,
         source: rusqlite::Error,
     },
+    EncodeSnapshotDomains(serde_json::Error),
     Clock(std::time::SystemTimeError),
     InvalidSyncDeviceId(String),
 }
@@ -677,6 +698,9 @@ impl fmt::Display for StorageError {
                     path.display()
                 )
             }
+            Self::EncodeSnapshotDomains(error) => {
+                write!(formatter, "failed to encode sync snapshot domains: {error}")
+            }
             Self::Clock(error) => write!(formatter, "failed to read system clock: {error}"),
             Self::InvalidSyncDeviceId(device_id) => {
                 write!(formatter, "invalid sync device id: {device_id}")
@@ -691,6 +715,7 @@ impl std::error::Error for StorageError {
             Self::CurrentDirectory(error) => Some(error),
             Self::CreateDirectory { source, .. } => Some(source),
             Self::Database { source, .. } => Some(source),
+            Self::EncodeSnapshotDomains(error) => Some(error),
             Self::Clock(error) => Some(error),
             Self::InvalidSyncDeviceId(_) => None,
         }
@@ -1510,6 +1535,106 @@ impl SlateProfileDatabase {
         Ok(revisions)
     }
 
+    pub fn record_sync_snapshot(
+        &self,
+        snapshot: &SyncSnapshotRegistration,
+    ) -> Result<SyncSnapshotRecord, StorageError> {
+        let connection = self.connection()?;
+        let now = unix_time_seconds()?;
+        let included_domains = encode_snapshot_domains(snapshot.included_domains.as_slice())?;
+        connection
+            .execute(
+                "INSERT INTO settings_snapshots
+                   (profile, snapshot_id, backend_object_id, covers_revision, included_domains,
+                    created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                 ON CONFLICT(profile, snapshot_id) DO UPDATE SET
+                   backend_object_id = excluded.backend_object_id,
+                   covers_revision = excluded.covers_revision,
+                   included_domains = excluded.included_domains",
+                params![
+                    snapshot.profile.as_str(),
+                    snapshot.snapshot_id.as_str(),
+                    snapshot.backend_object_id.as_deref(),
+                    snapshot.covers_revision,
+                    included_domains.as_str(),
+                    now
+                ],
+            )
+            .map_err(|source| self.database_error(source))?;
+
+        self.sync_snapshot(snapshot.profile.as_str(), snapshot.snapshot_id.as_str())?
+            .ok_or_else(|| self.database_error(rusqlite::Error::QueryReturnedNoRows))
+    }
+
+    pub fn sync_snapshots_after(
+        &self,
+        profile: &str,
+        after_revision: i64,
+    ) -> Result<Vec<SyncSnapshotRecord>, StorageError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT profile, snapshot_id, backend_object_id, covers_revision,
+                        included_domains, created_at
+                 FROM settings_snapshots
+                 WHERE profile = ?1 AND covers_revision > ?2
+                 ORDER BY covers_revision, created_at, snapshot_id",
+            )
+            .map_err(|source| self.database_error(source))?;
+        let records = statement
+            .query_map(
+                params![profile, after_revision],
+                sync_snapshot_record_from_row,
+            )
+            .map_err(|source| self.database_error(source))?;
+
+        let mut snapshots = Vec::new();
+        for record in records {
+            snapshots.push(record.map_err(|source| self.database_error(source))?);
+        }
+        Ok(snapshots)
+    }
+
+    pub fn latest_sync_snapshot(
+        &self,
+        profile: &str,
+    ) -> Result<Option<SyncSnapshotRecord>, StorageError> {
+        let connection = self.connection()?;
+        connection
+            .query_row(
+                "SELECT profile, snapshot_id, backend_object_id, covers_revision,
+                        included_domains, created_at
+                 FROM settings_snapshots
+                 WHERE profile = ?1
+                 ORDER BY covers_revision DESC, created_at DESC, snapshot_id DESC
+                 LIMIT 1",
+                params![profile],
+                sync_snapshot_record_from_row,
+            )
+            .optional()
+            .map_err(|source| self.database_error(source))
+    }
+
+    pub fn sync_snapshot(
+        &self,
+        profile: &str,
+        snapshot_id: &str,
+    ) -> Result<Option<SyncSnapshotRecord>, StorageError> {
+        let connection = self.connection()?;
+        connection
+            .query_row(
+                "SELECT profile, snapshot_id, backend_object_id, covers_revision,
+                        included_domains, created_at
+                 FROM settings_snapshots
+                 WHERE profile = ?1 AND snapshot_id = ?2",
+                params![profile, snapshot_id],
+                sync_snapshot_record_from_row,
+            )
+            .optional()
+            .map_err(|source| self.database_error(source))
+    }
+
     fn initialize(&self) -> Result<(), StorageError> {
         let connection = self.connection()?;
         connection
@@ -1657,6 +1782,9 @@ impl SlateProfileDatabase {
                     PRIMARY KEY(profile, snapshot_id)
                 );
 
+                CREATE INDEX IF NOT EXISTS settings_snapshots_profile_revision
+                    ON settings_snapshots(profile, covers_revision);
+
                 CREATE TABLE IF NOT EXISTS sync_state (
                     profile TEXT NOT NULL,
                     key TEXT NOT NULL,
@@ -1794,6 +1922,32 @@ fn bool_to_integer(value: bool) -> i64 {
 
 fn integer_to_bool(value: i64) -> bool {
     value != 0
+}
+
+fn encode_snapshot_domains(domains: &[String]) -> Result<String, StorageError> {
+    serde_json::to_string(domains).map_err(StorageError::EncodeSnapshotDomains)
+}
+
+fn decode_snapshot_domains(value: &str) -> Result<Vec<String>, serde_json::Error> {
+    serde_json::from_str(value)
+}
+
+fn sync_snapshot_record_from_row(
+    row: &rusqlite::Row<'_>,
+) -> Result<SyncSnapshotRecord, rusqlite::Error> {
+    let included_domains_json: String = row.get(4)?;
+    let included_domains =
+        decode_snapshot_domains(included_domains_json.as_str()).map_err(|source| {
+            rusqlite::Error::FromSqlConversionFailure(4, Type::Text, Box::new(source))
+        })?;
+    Ok(SyncSnapshotRecord {
+        profile: row.get(0)?,
+        snapshot_id: row.get(1)?,
+        backend_object_id: row.get(2)?,
+        covers_revision: row.get(3)?,
+        included_domains,
+        created_at: row.get(5)?,
+    })
 }
 
 fn seal_sync_payload(
@@ -2577,6 +2731,102 @@ mod tests {
 
         let devices = database.sync_devices(DEFAULT_PROFILE_ID).unwrap();
         assert!(devices.iter().any(|device| device.device_id == "device-b"));
+    }
+
+    #[test]
+    fn sync_snapshot_metadata_tracks_compacted_revisions() {
+        let database_path = test_dir("sync-snapshots").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+
+        assert_eq!(
+            database.latest_sync_snapshot(DEFAULT_PROFILE_ID).unwrap(),
+            None
+        );
+
+        database.set_setting_text("ui.theme", "teal").unwrap();
+        let first_revision = database
+            .sync_revisions_after(DEFAULT_PROFILE_ID, 0)
+            .unwrap()
+            .last()
+            .expect("first revision")
+            .revision;
+        let first_snapshot = database
+            .record_sync_snapshot(&SyncSnapshotRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                snapshot_id: "snapshot-1".to_string(),
+                backend_object_id: Some("local-object-1".to_string()),
+                covers_revision: first_revision,
+                included_domains: vec![
+                    SYNC_DOMAIN_SETTINGS.to_string(),
+                    SYNC_DOMAIN_BOOKMARKS.to_string(),
+                ],
+            })
+            .unwrap();
+
+        assert_eq!(first_snapshot.snapshot_id, "snapshot-1");
+        assert_eq!(
+            first_snapshot.backend_object_id.as_deref(),
+            Some("local-object-1")
+        );
+        assert_eq!(first_snapshot.covers_revision, first_revision);
+        assert_eq!(
+            first_snapshot.included_domains,
+            vec![
+                SYNC_DOMAIN_SETTINGS.to_string(),
+                SYNC_DOMAIN_BOOKMARKS.to_string()
+            ]
+        );
+
+        database.set_setting_text("chrome.zoom", "1.10").unwrap();
+        let second_revision = database
+            .sync_revisions_after(DEFAULT_PROFILE_ID, first_revision)
+            .unwrap()
+            .last()
+            .expect("second revision")
+            .revision;
+        database
+            .record_sync_snapshot(&SyncSnapshotRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                snapshot_id: "snapshot-2".to_string(),
+                backend_object_id: Some("local-object-2".to_string()),
+                covers_revision: second_revision,
+                included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            })
+            .unwrap();
+
+        let latest = database
+            .latest_sync_snapshot(DEFAULT_PROFILE_ID)
+            .unwrap()
+            .expect("latest snapshot");
+        assert_eq!(latest.snapshot_id, "snapshot-2");
+        assert_eq!(latest.covers_revision, second_revision);
+
+        let after_first = database
+            .sync_snapshots_after(DEFAULT_PROFILE_ID, first_revision)
+            .unwrap();
+        assert_eq!(after_first.len(), 1);
+        assert_eq!(after_first[0].snapshot_id, "snapshot-2");
+
+        let updated_first = database
+            .record_sync_snapshot(&SyncSnapshotRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                snapshot_id: "snapshot-1".to_string(),
+                backend_object_id: Some("local-object-1b".to_string()),
+                covers_revision: second_revision,
+                included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            })
+            .unwrap();
+        assert_eq!(
+            updated_first.backend_object_id.as_deref(),
+            Some("local-object-1b")
+        );
+        assert_eq!(updated_first.covers_revision, second_revision);
+
+        let snapshot = database
+            .sync_snapshot(DEFAULT_PROFILE_ID, "snapshot-1")
+            .unwrap()
+            .expect("snapshot-1");
+        assert_eq!(snapshot, updated_first);
     }
 
     #[test]
