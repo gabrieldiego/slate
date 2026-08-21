@@ -2117,6 +2117,24 @@ pub struct TypedAppSyncDomainWatcher<T> {
     payload: PhantomData<T>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TypedAppSyncDomainWatcherApply<T> {
+    pub poll: TypedSyncSettingTextDomainPoll<T>,
+    pub cursor: AppSyncDomainCursorRecord,
+}
+
+#[derive(Debug)]
+pub enum TypedAppSyncDomainWatcherApplyError<E> {
+    Storage(StorageError),
+    Apply(E),
+}
+
+impl<E> From<StorageError> for TypedAppSyncDomainWatcherApplyError<E> {
+    fn from(error: StorageError) -> Self {
+        Self::Storage(error)
+    }
+}
+
 impl<T> TypedAppSyncDomainWatcher<T>
 where
     T: DeserializeOwned,
@@ -2175,6 +2193,16 @@ where
         poll: &TypedSyncSettingTextDomainPoll<T>,
     ) -> Result<AppSyncDomainCursorRecord, StorageError> {
         self.database.record_typed_app_sync_domain_poll_cursor(poll)
+    }
+
+    pub fn poll_apply_and_acknowledge<E>(
+        &self,
+        apply: impl FnOnce(&TypedSyncSettingTextDomainPoll<T>) -> Result<(), E>,
+    ) -> Result<TypedAppSyncDomainWatcherApply<T>, TypedAppSyncDomainWatcherApplyError<E>> {
+        let poll = self.poll_once()?;
+        apply(&poll).map_err(TypedAppSyncDomainWatcherApplyError::Apply)?;
+        let cursor = self.acknowledge(&poll)?;
+        Ok(TypedAppSyncDomainWatcherApply { poll, cursor })
     }
 }
 
@@ -14793,6 +14821,35 @@ mod tests {
         assert_eq!(second.events[0].value.conversation_id, "chat-watcher-2");
         assert_eq!(second.events[0].value.provider_id.as_deref(), Some("sms"));
         assert!(second.events[0].value.muted);
+        assert_eq!(watcher.current_revision().unwrap(), first.latest_revision);
+
+        let apply_error = watcher
+            .poll_apply_and_acknowledge(|poll| {
+                assert_eq!(poll.event_count(), 1);
+                assert_eq!(poll.events[0].value.conversation_id, "chat-watcher-2");
+                Err("app apply failed")
+            })
+            .expect_err("failed app apply should not acknowledge the batch");
+        assert!(matches!(
+            apply_error,
+            TypedAppSyncDomainWatcherApplyError::Apply("app apply failed")
+        ));
+        assert_eq!(watcher.current_revision().unwrap(), first.latest_revision);
+
+        let applied = watcher
+            .poll_apply_and_acknowledge(|poll| {
+                assert_eq!(poll.previous_revision, first.latest_revision);
+                assert_eq!(poll.event_count(), 1);
+                assert_eq!(poll.events[0].value.conversation_id, "chat-watcher-2");
+                Ok::<(), &'static str>(())
+            })
+            .unwrap();
+        assert_eq!(applied.poll.event_count(), 1);
+        assert_eq!(applied.cursor.latest_revision, applied.poll.latest_revision);
+        assert_eq!(
+            watcher.current_revision().unwrap(),
+            applied.poll.latest_revision
+        );
     }
 
     #[test]

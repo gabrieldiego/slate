@@ -297,7 +297,8 @@ Current baseline:
 - Storage now also has a reusable typed app-domain watcher wrapper. Runtime app
   code can initialize a domain cursor at the current domain head, poll bounded
   decoded batches, and acknowledge the batch only after app-owned apply work
-  succeeds.
+  succeeds. The wrapper also has an apply-and-acknowledge helper that runs an
+  app callback first and persists the cursor only when that callback succeeds.
 - The `slate-profile-sync` runtime bridge now verifies received typed Chat,
   Files, and Storage metadata is visible through those typed app-domain watcher
   polls after a trusted broadwebd apply. The fixture initializes receiver

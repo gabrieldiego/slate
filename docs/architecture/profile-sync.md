@@ -812,7 +812,8 @@ discovery reports that boundary.
   monotonic so duplicate or stale fixture deliveries cannot rewind app state.
   The storage cursor-backed poll helper initializes missing cursors at the
   domain head, then leaves advancement to the caller after app-owned state is
-  updated.
+  updated. The typed watcher apply helper should call app-owned apply code
+  before acknowledging a batch and keep the previous cursor if apply fails.
 - Kubo integration tests are ignored or environment-gated and run against
   loopback only.
 - Leak tests assert that sync never falls through to DNS, public gateways,
