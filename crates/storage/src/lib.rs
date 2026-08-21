@@ -1,16 +1,22 @@
 #![forbid(unsafe_code)]
 
+use ring::{aead, rand};
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use ring::rand::SecureRandom;
 use rusqlite::{Connection, OptionalExtension, params};
 
 pub const DEFAULT_DATABASE_FILE_NAME: &str = "slate-settings.db";
 pub const DEFAULT_HOME_DIRECTORY_NAME: &str = ".slate";
 pub const DEFAULT_PROFILE_ID: &str = "default";
 pub const DEFAULT_SYNC_DEVICE_ID: &str = "local-device";
+pub const PROFILE_SYNC_CONTENT_KEY_BYTES: usize = 32;
+pub const PROFILE_SYNC_NONCE_BYTES: usize = 12;
+pub const SYNC_OBJECT_VERSION: u8 = 1;
 pub const SYNC_DOMAIN_BOOKMARKS: &str = "bookmarks";
 pub const SYNC_DOMAIN_CALENDAR: &str = "calendar";
 pub const SYNC_DOMAIN_CHAT: &str = "chat";
@@ -144,6 +150,170 @@ pub struct DefaultAppSyncDomain {
     pub schema_version: i64,
     pub privacy_classification: &'static str,
     pub sync_content: bool,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct ProfileSyncContentKey {
+    bytes: [u8; PROFILE_SYNC_CONTENT_KEY_BYTES],
+}
+
+impl ProfileSyncContentKey {
+    pub fn from_bytes(bytes: [u8; PROFILE_SYNC_CONTENT_KEY_BYTES]) -> Self {
+        Self { bytes }
+    }
+
+    fn as_bytes(&self) -> &[u8] {
+        self.bytes.as_slice()
+    }
+}
+
+impl fmt::Debug for ProfileSyncContentKey {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ProfileSyncContentKey")
+            .field("bytes", &"<redacted>")
+            .finish()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct EncryptedSyncObject {
+    pub version: u8,
+    pub profile: String,
+    pub domain: String,
+    pub object_kind: String,
+    pub key_id: String,
+    pub nonce: Vec<u8>,
+    pub ciphertext: Vec<u8>,
+}
+
+#[derive(Debug)]
+pub enum SyncObjectError {
+    Random,
+    Encrypt,
+    Decrypt,
+    UnsupportedVersion(u8),
+    InvalidNonceLength { actual: usize },
+    Encode(serde_json::Error),
+    Decode(serde_json::Error),
+}
+
+impl fmt::Display for SyncObjectError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Random => write!(formatter, "failed to generate sync object nonce"),
+            Self::Encrypt => write!(formatter, "failed to encrypt sync object"),
+            Self::Decrypt => write!(formatter, "failed to decrypt sync object"),
+            Self::UnsupportedVersion(version) => {
+                write!(formatter, "unsupported sync object version: {version}")
+            }
+            Self::InvalidNonceLength { actual } => {
+                write!(formatter, "invalid sync object nonce length: {actual}")
+            }
+            Self::Encode(error) => write!(formatter, "failed to encode sync object: {error}"),
+            Self::Decode(error) => write!(formatter, "failed to decode sync object: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for SyncObjectError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Encode(error) | Self::Decode(error) => Some(error),
+            Self::Random
+            | Self::Encrypt
+            | Self::Decrypt
+            | Self::UnsupportedVersion(_)
+            | Self::InvalidNonceLength { .. } => None,
+        }
+    }
+}
+
+impl EncryptedSyncObject {
+    pub fn seal(
+        profile: impl Into<String>,
+        domain: impl Into<String>,
+        object_kind: impl Into<String>,
+        key_id: impl Into<String>,
+        plaintext: &[u8],
+        content_key: &ProfileSyncContentKey,
+    ) -> Result<Self, SyncObjectError> {
+        let mut nonce = [0_u8; PROFILE_SYNC_NONCE_BYTES];
+        rand::SystemRandom::new()
+            .fill(&mut nonce)
+            .map_err(|_| SyncObjectError::Random)?;
+        Self::seal_with_nonce(
+            profile,
+            domain,
+            object_kind,
+            key_id,
+            plaintext,
+            content_key,
+            nonce,
+        )
+    }
+
+    pub fn seal_with_nonce(
+        profile: impl Into<String>,
+        domain: impl Into<String>,
+        object_kind: impl Into<String>,
+        key_id: impl Into<String>,
+        plaintext: &[u8],
+        content_key: &ProfileSyncContentKey,
+        nonce: [u8; PROFILE_SYNC_NONCE_BYTES],
+    ) -> Result<Self, SyncObjectError> {
+        let mut object = Self {
+            version: SYNC_OBJECT_VERSION,
+            profile: profile.into(),
+            domain: domain.into(),
+            object_kind: object_kind.into(),
+            key_id: key_id.into(),
+            nonce: nonce.to_vec(),
+            ciphertext: plaintext.to_vec(),
+        };
+        object.ciphertext = seal_sync_payload(
+            object.associated_data().as_bytes(),
+            object.ciphertext.as_slice(),
+            content_key,
+            nonce,
+        )?;
+        Ok(object)
+    }
+
+    pub fn open(&self, content_key: &ProfileSyncContentKey) -> Result<Vec<u8>, SyncObjectError> {
+        if self.version != SYNC_OBJECT_VERSION {
+            return Err(SyncObjectError::UnsupportedVersion(self.version));
+        }
+
+        let nonce: [u8; PROFILE_SYNC_NONCE_BYTES] =
+            self.nonce
+                .as_slice()
+                .try_into()
+                .map_err(|_| SyncObjectError::InvalidNonceLength {
+                    actual: self.nonce.len(),
+                })?;
+        open_sync_payload(
+            self.associated_data().as_bytes(),
+            self.ciphertext.as_slice(),
+            content_key,
+            nonce,
+        )
+    }
+
+    pub fn to_bytes(&self) -> Result<Vec<u8>, SyncObjectError> {
+        serde_json::to_vec(self).map_err(SyncObjectError::Encode)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, SyncObjectError> {
+        serde_json::from_slice(bytes).map_err(SyncObjectError::Decode)
+    }
+
+    fn associated_data(&self) -> String {
+        format!(
+            "slate-profile-sync:v{}:{}:{}:{}:{}",
+            self.version, self.profile, self.domain, self.object_kind, self.key_id
+        )
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -284,7 +454,7 @@ pub struct SyncChangeRecord {
     pub applied_at: Option<i64>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct IncomingSyncSettingText {
     pub profile: String,
     pub domain: String,
@@ -1480,6 +1650,49 @@ fn integer_to_bool(value: i64) -> bool {
     value != 0
 }
 
+fn seal_sync_payload(
+    associated_data: &[u8],
+    plaintext: &[u8],
+    content_key: &ProfileSyncContentKey,
+    nonce: [u8; PROFILE_SYNC_NONCE_BYTES],
+) -> Result<Vec<u8>, SyncObjectError> {
+    let key = sync_aead_key(content_key)?;
+    let mut sealed = plaintext.to_vec();
+    key.seal_in_place_append_tag(
+        aead::Nonce::assume_unique_for_key(nonce),
+        aead::Aad::from(associated_data),
+        &mut sealed,
+    )
+    .map_err(|_| SyncObjectError::Encrypt)?;
+    Ok(sealed)
+}
+
+fn open_sync_payload(
+    associated_data: &[u8],
+    ciphertext: &[u8],
+    content_key: &ProfileSyncContentKey,
+    nonce: [u8; PROFILE_SYNC_NONCE_BYTES],
+) -> Result<Vec<u8>, SyncObjectError> {
+    let key = sync_aead_key(content_key)?;
+    let mut plaintext = ciphertext.to_vec();
+    let plaintext = key
+        .open_in_place(
+            aead::Nonce::assume_unique_for_key(nonce),
+            aead::Aad::from(associated_data),
+            plaintext.as_mut_slice(),
+        )
+        .map_err(|_| SyncObjectError::Decrypt)?;
+    Ok(plaintext.to_vec())
+}
+
+fn sync_aead_key(
+    content_key: &ProfileSyncContentKey,
+) -> Result<aead::LessSafeKey, SyncObjectError> {
+    let key = aead::UnboundKey::new(&aead::CHACHA20_POLY1305, content_key.as_bytes())
+        .map_err(|_| SyncObjectError::Encrypt)?;
+    Ok(aead::LessSafeKey::new(key))
+}
+
 fn is_valid_sync_identifier(value: &str) -> bool {
     !value.is_empty()
         && value
@@ -1723,6 +1936,84 @@ mod tests {
 
         assert_eq!(resolved.path, launch_dir.join(DEFAULT_DATABASE_FILE_NAME));
         assert_eq!(resolved.source, DatabasePathSource::LaunchDirectoryCreated);
+    }
+
+    #[test]
+    fn encrypted_sync_objects_round_trip_and_reject_tampering() {
+        let content_key = ProfileSyncContentKey::from_bytes([7; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let wrong_content_key =
+            ProfileSyncContentKey::from_bytes([8; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let payload = serde_json::to_vec(&IncomingSyncSettingText::new(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            "ui.theme",
+            "teal",
+            "device-a",
+            1,
+            1,
+        ))
+        .unwrap();
+        let object = EncryptedSyncObject::seal_with_nonce(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            "setting-change",
+            "content-key-epoch-1",
+            payload.as_slice(),
+            &content_key,
+            [3; PROFILE_SYNC_NONCE_BYTES],
+        )
+        .unwrap();
+
+        assert_eq!(object.version, SYNC_OBJECT_VERSION);
+        assert_ne!(object.ciphertext, payload);
+
+        let encoded = object.to_bytes().unwrap();
+        assert!(
+            !std::str::from_utf8(encoded.as_slice())
+                .unwrap()
+                .contains("teal")
+        );
+
+        let decoded = EncryptedSyncObject::from_bytes(encoded.as_slice()).unwrap();
+        let plaintext = decoded.open(&content_key).unwrap();
+        assert_eq!(plaintext, payload);
+        let change: IncomingSyncSettingText = serde_json::from_slice(plaintext.as_slice()).unwrap();
+        assert_eq!(change.value, "teal");
+
+        let mut tampered_ciphertext = decoded.clone();
+        tampered_ciphertext.ciphertext[0] ^= 1;
+        assert!(matches!(
+            tampered_ciphertext.open(&content_key),
+            Err(SyncObjectError::Decrypt)
+        ));
+
+        let mut tampered_metadata = decoded.clone();
+        tampered_metadata.domain = SYNC_DOMAIN_CALENDAR.to_string();
+        assert!(matches!(
+            tampered_metadata.open(&content_key),
+            Err(SyncObjectError::Decrypt)
+        ));
+
+        assert!(matches!(
+            decoded.open(&wrong_content_key),
+            Err(SyncObjectError::Decrypt)
+        ));
+
+        let mut invalid_nonce = decoded.clone();
+        invalid_nonce.nonce.pop();
+        assert!(matches!(
+            invalid_nonce.open(&content_key),
+            Err(SyncObjectError::InvalidNonceLength { actual })
+                if actual == PROFILE_SYNC_NONCE_BYTES - 1
+        ));
+
+        let mut unsupported = decoded;
+        unsupported.version = SYNC_OBJECT_VERSION + 1;
+        assert!(matches!(
+            unsupported.open(&content_key),
+            Err(SyncObjectError::UnsupportedVersion(version))
+                if version == SYNC_OBJECT_VERSION + 1
+        ));
     }
 
     #[test]

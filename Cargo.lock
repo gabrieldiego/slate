@@ -10973,7 +10973,10 @@ name = "slate-storage"
 version = "0.0.1"
 dependencies = [
  "dirs",
+ "ring",
  "rusqlite",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

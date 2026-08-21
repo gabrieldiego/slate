@@ -167,6 +167,14 @@ This makes backend persistence independent from trust. Object identifiers, such
 as IPFS CIDs or Iroh BLAKE3 hashes, identify bytes. Slate signatures and
 encryption decide whether those bytes are authorized profile state.
 
+The initial local fixture path uses storage-owned `EncryptedSyncObject`
+envelopes and `ring`'s ChaCha20-Poly1305 AEAD to keep sync object payloads
+opaque before broadwebd stores or transfers them. Public envelope metadata such
+as profile, domain, object kind, and key id is authenticated as associated data.
+This is content encryption only; account membership signatures, manifest
+signatures, recovery credentials, and key rotation remain separate sync-layer
+work.
+
 ## Key Model
 
 The shareable recovery credential should be a Slate Sync Secret, not one raw key
