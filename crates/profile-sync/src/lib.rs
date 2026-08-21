@@ -29,11 +29,11 @@ use slate_storage::{
     ProfileSyncSettingsSnapshot, ProfileSyncSettingsSnapshotPublication,
     ProfileSyncSettingsTailChangePublication, ProfileSyncTrustedPullApplyError,
     SYNC_DOMAIN_SETTINGS, SignedSyncObject, SlateProfileDatabase, StorageError,
-    SyncAccountMembershipRecordApplication, SyncChangeRecord, SyncCompactionTarget,
-    SyncDevicePublicKeyRecord, SyncObjectError, SyncSettingTextEvent, SyncSnapshotRecord,
-    SyncSnapshotRegistration, VerifiedProfileSyncDeviceHead, open_signed_profile_sync_device_head,
-    settings_sync_manifest_for_snapshot_and_tail_changes, settings_sync_manifest_for_tail_changes,
-    settings_sync_snapshot_id,
+    StorageProviderRecord, SyncAccountMembershipRecordApplication, SyncChangeRecord,
+    SyncCompactionTarget, SyncDevicePublicKeyRecord, SyncObjectError, SyncSettingTextEvent,
+    SyncSnapshotRecord, SyncSnapshotRegistration, VerifiedProfileSyncDeviceHead,
+    open_signed_profile_sync_device_head, settings_sync_manifest_for_snapshot_and_tail_changes,
+    settings_sync_manifest_for_tail_changes, settings_sync_snapshot_id,
 };
 use std::collections::BTreeSet;
 
@@ -1586,115 +1586,214 @@ impl SettingsSyncScheduledMembershipCyclePlan {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncStoredRetentionProviderPlan {
+    pub max_stored_provider_count: u32,
+    pub stored_provider_count: usize,
+    pub enabled_retention_provider_ids: Vec<String>,
+    pub disabled_provider_ids: Vec<String>,
+    pub stored_role_ineligible_provider_ids: Vec<String>,
+    pub cycle: SettingsSyncScheduledCyclePlan,
+}
+
+impl SettingsSyncStoredRetentionProviderPlan {
+    pub fn enabled_retention_provider_count(&self) -> usize {
+        self.enabled_retention_provider_ids.len()
+    }
+
+    pub fn disabled_provider_count(&self) -> usize {
+        self.disabled_provider_ids.len()
+    }
+
+    pub fn stored_role_ineligible_provider_count(&self) -> usize {
+        self.stored_role_ineligible_provider_ids.len()
+    }
+
+    pub fn retention_candidate_count(&self) -> usize {
+        self.cycle.retention_candidate_count()
+    }
+
+    pub fn selected_retention_provider_count(&self) -> usize {
+        self.cycle.selected_retention_provider_count()
+    }
+
+    pub fn stale_retention_provider_count(&self) -> usize {
+        self.cycle.stale_retention_provider_count()
+    }
+
+    pub fn offline_retention_provider_count(&self) -> usize {
+        self.cycle.offline_retention_provider_count()
+    }
+
+    pub fn ineligible_retention_provider_count(&self) -> usize {
+        self.cycle.ineligible_retention_provider_count()
+    }
+
+    pub fn undiscovered_retention_provider_count(&self) -> usize {
+        self.cycle.undiscovered_retention_provider_count()
+    }
+
+    pub fn duplicate_retention_provider_count(&self) -> usize {
+        self.cycle.duplicate_retention_provider_count()
+    }
+
+    pub fn degraded_before(&self) -> bool {
+        self.cycle.degraded_before()
+    }
+}
+
 struct SelectedSettingsSyncRetentionProviders<'a> {
     plan: SettingsSyncScheduledCyclePlan,
     daemons: Vec<&'a BroadwebDaemon>,
 }
 
-fn select_settings_sync_retention_provider_handles<'a>(
+fn select_settings_sync_retention_provider_ids(
     preflight: SettingsSyncCyclePreflight,
-    retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'a>],
-) -> SelectedSettingsSyncRetentionProviders<'a> {
-    let (
+    retention_provider_ids: &[String],
+) -> SettingsSyncScheduledCyclePlan {
+    let candidate_provider_ids = preflight
+        .retention_provider_candidates
+        .iter()
+        .map(|provider| provider.provider_id.as_str())
+        .collect::<BTreeSet<_>>();
+    let stale_provider_ids = preflight
+        .before_health
+        .provider_health
+        .stale_online_provider_ids
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    let offline_provider_ids = preflight
+        .before_health
+        .provider_health
+        .offline_provider_ids
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    let fresh_online_provider_ids = preflight
+        .before_health
+        .provider_health
+        .fresh_online_provider_ids
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    let mut seen_selected_provider_ids = BTreeSet::new();
+    let mut seen_stale_provider_ids = BTreeSet::new();
+    let mut seen_offline_provider_ids = BTreeSet::new();
+    let mut seen_ineligible_provider_ids = BTreeSet::new();
+    let mut seen_undiscovered_provider_ids = BTreeSet::new();
+    let mut seen_duplicate_provider_ids = BTreeSet::new();
+    let mut selected_retention_provider_ids = Vec::new();
+    let mut stale_retention_provider_ids = Vec::new();
+    let mut offline_retention_provider_ids = Vec::new();
+    let mut ineligible_retention_provider_ids = Vec::new();
+    let mut undiscovered_retention_provider_ids = Vec::new();
+    let mut duplicate_retention_provider_ids = Vec::new();
+
+    for provider_id in retention_provider_ids {
+        let provider_id = provider_id.as_str();
+        if !candidate_provider_ids.contains(provider_id) {
+            if stale_provider_ids.contains(provider_id) {
+                if seen_stale_provider_ids.insert(provider_id) {
+                    stale_retention_provider_ids.push(provider_id.to_string());
+                }
+            } else if offline_provider_ids.contains(provider_id) {
+                if seen_offline_provider_ids.insert(provider_id) {
+                    offline_retention_provider_ids.push(provider_id.to_string());
+                }
+            } else if fresh_online_provider_ids.contains(provider_id) {
+                if seen_ineligible_provider_ids.insert(provider_id) {
+                    ineligible_retention_provider_ids.push(provider_id.to_string());
+                }
+            } else if seen_undiscovered_provider_ids.insert(provider_id) {
+                undiscovered_retention_provider_ids.push(provider_id.to_string());
+            }
+            continue;
+        }
+        if !seen_selected_provider_ids.insert(provider_id) {
+            if seen_duplicate_provider_ids.insert(provider_id) {
+                duplicate_retention_provider_ids.push(provider_id.to_string());
+            }
+            continue;
+        }
+        selected_retention_provider_ids.push(provider_id.to_string());
+    }
+
+    SettingsSyncScheduledCyclePlan {
+        preflight,
         selected_retention_provider_ids,
         stale_retention_provider_ids,
         offline_retention_provider_ids,
         ineligible_retention_provider_ids,
         undiscovered_retention_provider_ids,
         duplicate_retention_provider_ids,
-        daemons,
-    ) = {
-        let candidate_provider_ids = preflight
-            .retention_provider_candidates
-            .iter()
-            .map(|provider| provider.provider_id.as_str())
-            .collect::<BTreeSet<_>>();
-        let stale_provider_ids = preflight
-            .before_health
-            .provider_health
-            .stale_online_provider_ids
-            .iter()
-            .map(String::as_str)
-            .collect::<BTreeSet<_>>();
-        let offline_provider_ids = preflight
-            .before_health
-            .provider_health
-            .offline_provider_ids
-            .iter()
-            .map(String::as_str)
-            .collect::<BTreeSet<_>>();
-        let fresh_online_provider_ids = preflight
-            .before_health
-            .provider_health
-            .fresh_online_provider_ids
-            .iter()
-            .map(String::as_str)
-            .collect::<BTreeSet<_>>();
-        let mut seen_selected_provider_ids = BTreeSet::new();
-        let mut seen_stale_provider_ids = BTreeSet::new();
-        let mut seen_offline_provider_ids = BTreeSet::new();
-        let mut seen_ineligible_provider_ids = BTreeSet::new();
-        let mut seen_undiscovered_provider_ids = BTreeSet::new();
-        let mut seen_duplicate_provider_ids = BTreeSet::new();
-        let mut selected_retention_provider_ids = Vec::new();
-        let mut stale_retention_provider_ids = Vec::new();
-        let mut offline_retention_provider_ids = Vec::new();
-        let mut ineligible_retention_provider_ids = Vec::new();
-        let mut undiscovered_retention_provider_ids = Vec::new();
-        let mut duplicate_retention_provider_ids = Vec::new();
-        let mut daemons = Vec::new();
+    }
+}
 
-        for handle in retention_provider_handles {
-            if !candidate_provider_ids.contains(handle.provider_id) {
-                if stale_provider_ids.contains(handle.provider_id) {
-                    if seen_stale_provider_ids.insert(handle.provider_id) {
-                        stale_retention_provider_ids.push(handle.provider_id.to_string());
-                    }
-                } else if offline_provider_ids.contains(handle.provider_id) {
-                    if seen_offline_provider_ids.insert(handle.provider_id) {
-                        offline_retention_provider_ids.push(handle.provider_id.to_string());
-                    }
-                } else if fresh_online_provider_ids.contains(handle.provider_id) {
-                    if seen_ineligible_provider_ids.insert(handle.provider_id) {
-                        ineligible_retention_provider_ids.push(handle.provider_id.to_string());
-                    }
-                } else if seen_undiscovered_provider_ids.insert(handle.provider_id) {
-                    undiscovered_retention_provider_ids.push(handle.provider_id.to_string());
-                }
-                continue;
+fn select_settings_sync_retention_provider_handles<'a>(
+    preflight: SettingsSyncCyclePreflight,
+    retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'a>],
+) -> SelectedSettingsSyncRetentionProviders<'a> {
+    let provider_ids = retention_provider_handles
+        .iter()
+        .map(|handle| handle.provider_id.to_string())
+        .collect::<Vec<_>>();
+    let plan = select_settings_sync_retention_provider_ids(preflight, &provider_ids);
+    let selected_provider_ids = plan
+        .selected_retention_provider_ids
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    let mut seen_provider_ids = BTreeSet::new();
+    let daemons = retention_provider_handles
+        .iter()
+        .filter_map(|handle| {
+            if selected_provider_ids.contains(handle.provider_id)
+                && seen_provider_ids.insert(handle.provider_id)
+            {
+                Some(handle.daemon)
+            } else {
+                None
             }
-            if !seen_selected_provider_ids.insert(handle.provider_id) {
-                if seen_duplicate_provider_ids.insert(handle.provider_id) {
-                    duplicate_retention_provider_ids.push(handle.provider_id.to_string());
-                }
-                continue;
-            }
-            selected_retention_provider_ids.push(handle.provider_id.to_string());
-            daemons.push(handle.daemon);
+        })
+        .collect::<Vec<_>>();
+
+    SelectedSettingsSyncRetentionProviders { plan, daemons }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct StoredRetentionProviderSelection {
+    stored_provider_count: usize,
+    enabled_retention_provider_ids: Vec<String>,
+    disabled_provider_ids: Vec<String>,
+    stored_role_ineligible_provider_ids: Vec<String>,
+}
+
+fn select_stored_retention_provider_ids(
+    providers: Vec<StorageProviderRecord>,
+) -> StoredRetentionProviderSelection {
+    let mut enabled_retention_provider_ids = Vec::new();
+    let mut disabled_provider_ids = Vec::new();
+    let mut stored_role_ineligible_provider_ids = Vec::new();
+    let stored_provider_count = providers.len();
+
+    for provider in providers {
+        if !provider.enabled {
+            disabled_provider_ids.push(provider.provider_id);
+            continue;
         }
+        if !(provider.availability && provider.object_transfer) {
+            stored_role_ineligible_provider_ids.push(provider.provider_id);
+            continue;
+        }
+        enabled_retention_provider_ids.push(provider.provider_id);
+    }
 
-        (
-            selected_retention_provider_ids,
-            stale_retention_provider_ids,
-            offline_retention_provider_ids,
-            ineligible_retention_provider_ids,
-            undiscovered_retention_provider_ids,
-            duplicate_retention_provider_ids,
-            daemons,
-        )
-    };
-
-    SelectedSettingsSyncRetentionProviders {
-        plan: SettingsSyncScheduledCyclePlan {
-            preflight,
-            selected_retention_provider_ids,
-            stale_retention_provider_ids,
-            offline_retention_provider_ids,
-            ineligible_retention_provider_ids,
-            undiscovered_retention_provider_ids,
-            duplicate_retention_provider_ids,
-        },
-        daemons,
+    StoredRetentionProviderSelection {
+        stored_provider_count,
+        enabled_retention_provider_ids,
+        disabled_provider_ids,
+        stored_role_ineligible_provider_ids,
     }
 }
 
@@ -2646,6 +2745,42 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             select_settings_sync_retention_provider_handles(preflight, retention_provider_handles)
                 .plan,
         )
+    }
+
+    pub fn plan_once_with_stored_retention_providers(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        signer: &ProfileSyncDeviceSigner,
+        max_stored_providers: u32,
+    ) -> Result<SettingsSyncStoredRetentionProviderPlan, ProfileSyncCycleWithHealthError> {
+        let runner = BroadwebdSettingsSyncRunner::new(self.daemon);
+        let preflight = runner.settings_sync_cycle_preflight_with_active_key_policy(
+            database,
+            config.profile.as_str(),
+            config.settings_root_id.as_str(),
+            signer,
+            &config.policy,
+        )?;
+        let stored_providers = database
+            .storage_providers(config.profile.as_str(), max_stored_providers)
+            .map_err(ProfileSyncCredentialError::from)
+            .map_err(ProfileSyncCycleError::from)?;
+        let stored_selection = select_stored_retention_provider_ids(stored_providers);
+        let cycle = select_settings_sync_retention_provider_ids(
+            preflight,
+            stored_selection.enabled_retention_provider_ids.as_slice(),
+        );
+
+        Ok(SettingsSyncStoredRetentionProviderPlan {
+            max_stored_provider_count: max_stored_providers,
+            stored_provider_count: stored_selection.stored_provider_count,
+            enabled_retention_provider_ids: stored_selection.enabled_retention_provider_ids,
+            disabled_provider_ids: stored_selection.disabled_provider_ids,
+            stored_role_ineligible_provider_ids: stored_selection
+                .stored_role_ineligible_provider_ids,
+            cycle,
+        })
     }
 
     pub fn plan_once_with_membership_log_selecting_retention_providers(
@@ -4326,6 +4461,33 @@ mod tests {
             .expect("sign membership record")
             .to_bytes()
             .expect("encode signed membership record")
+    }
+
+    fn test_storage_provider_update(
+        profile: &str,
+        provider_id: &str,
+        provider_kind: &str,
+        display_name: &str,
+        object_transfer: bool,
+        availability: bool,
+        enabled: bool,
+    ) -> StorageProviderUpdate {
+        StorageProviderUpdate {
+            profile: profile.to_string(),
+            provider_id: provider_id.to_string(),
+            provider_kind: provider_kind.to_string(),
+            display_name: display_name.to_string(),
+            endpoint_ref: Some(format!("fixture:{provider_id}")),
+            discovery: false,
+            connectivity: true,
+            object_transfer,
+            availability,
+            mutable_roots: false,
+            quota_bytes: None,
+            max_retained_objects: Some(64),
+            pinning_policy: Some("auto".to_string()),
+            enabled,
+        }
     }
 
     #[test]
@@ -8451,6 +8613,237 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(device_state_root);
         let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_scheduler_plans_from_stored_retention_providers() {
+        let network = InProcessBroadwebNetwork::new();
+        let fixture = network.profile_sync();
+        let device_state_root = test_state_root("scheduler-stored-provider-device");
+        let selected_state_root = test_state_root("scheduler-stored-provider-selected");
+        let stale_state_root = test_state_root("scheduler-stored-provider-stale");
+        let offline_state_root = test_state_root("scheduler-stored-provider-offline");
+        let no_transfer_state_root = test_state_root("scheduler-stored-provider-no-transfer");
+        let db_root = test_state_root("scheduler-stored-provider-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-stored-a",
+            )
+            .expect("start in-process stored-provider scheduler device daemon");
+        let selected_provider_id = "local-fixture-availability-runtime-scheduler-stored-pinner";
+        let _selected_provider_daemon = network
+            .daemon_for_availability_provider(
+                &selected_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-stored-pinner",
+            )
+            .expect("start in-process stored selected provider daemon");
+        let stale_provider_id = "local-fixture-availability-runtime-scheduler-stored-stale";
+        let _stale_provider_daemon = network
+            .daemon_for_availability_provider(
+                &stale_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-stored-stale",
+            )
+            .expect("start in-process stored stale provider daemon");
+        let offline_provider_id = "local-fixture-device-runtime-scheduler-stored-offline";
+        let _offline_provider_daemon = network
+            .daemon_for_device(
+                &offline_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-stored-offline",
+            )
+            .expect("start in-process stored offline provider daemon");
+        let no_transfer_provider_id = "local-fixture-scheduler-stored-no-transfer";
+        let _no_transfer_provider_daemon = network
+            .daemon_for_provider_with_roles(
+                &no_transfer_state_root,
+                ResourceBudget::default(),
+                no_transfer_provider_id,
+                "local-fixture-custom",
+                BroadwebdProfileSyncProviderRoles {
+                    object_transfer: false,
+                    mutable_roots: false,
+                    ..BroadwebdProfileSyncProviderRoles::logged_in_device()
+                },
+            )
+            .expect("start in-process stored no-transfer provider daemon");
+        fixture
+            .expire_current_provider_freshness()
+            .expect("expire provider freshness before stored plan");
+        fixture
+            .mark_device_seen("runtime-scheduler-stored-a")
+            .expect("keep local device fresh");
+        fixture
+            .mark_availability_provider_seen("runtime-scheduler-stored-pinner")
+            .expect("keep selected provider fresh");
+        fixture
+            .mark_provider_seen(no_transfer_provider_id)
+            .expect("keep role-ineligible provider fresh");
+        fixture
+            .set_device_online("runtime-scheduler-stored-offline", false)
+            .expect("mark stored provider offline");
+
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-scheduler-stored-a",
+        )
+        .expect("open scheduler stored-provider settings database");
+        let profile = "schedulerstoredproviderprofile";
+        let settings_root_id = "settings/latest";
+        let signer = ProfileSyncDeviceSigner::generate("runtime-scheduler-stored-a")
+            .expect("generate scheduler stored-provider signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register scheduler stored-provider local trusted public key");
+        for provider in [
+            test_storage_provider_update(
+                profile,
+                selected_provider_id,
+                "local-fixture-availability",
+                "Selected pinner",
+                true,
+                true,
+                true,
+            ),
+            test_storage_provider_update(
+                profile,
+                stale_provider_id,
+                "local-fixture-availability",
+                "Stale pinner",
+                true,
+                true,
+                true,
+            ),
+            test_storage_provider_update(
+                profile,
+                offline_provider_id,
+                "local-fixture-availability",
+                "Offline pinner",
+                true,
+                true,
+                true,
+            ),
+            test_storage_provider_update(
+                profile,
+                no_transfer_provider_id,
+                "local-fixture-custom",
+                "No transfer",
+                true,
+                true,
+                true,
+            ),
+            test_storage_provider_update(
+                profile,
+                "stored-provider-no-local-retention-role",
+                "local-fixture",
+                "No local retention role",
+                false,
+                true,
+                true,
+            ),
+            test_storage_provider_update(
+                profile,
+                "stored-provider-disabled",
+                "local-fixture",
+                "Disabled pinner",
+                true,
+                true,
+                false,
+            ),
+            test_storage_provider_update(
+                profile,
+                "stored-provider-undiscovered",
+                "local-fixture-availability",
+                "Undiscovered pinner",
+                true,
+                true,
+                true,
+            ),
+        ] {
+            database
+                .upsert_storage_provider(&provider)
+                .expect("write stored retention provider metadata");
+        }
+
+        let config = SettingsSyncSchedulerConfig::new(
+            profile,
+            settings_root_id,
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
+        );
+        let latest_revision_before_plan = database
+            .latest_sync_revision(profile)
+            .expect("read latest revision before stored-provider plan");
+        let plan = BroadwebdSettingsSyncScheduler::new(&device_daemon)
+            .plan_once_with_stored_retention_providers(&database, &config, &signer, 16)
+            .expect("scheduler plan materializes stored retention providers");
+
+        assert_eq!(plan.max_stored_provider_count, 16);
+        assert_eq!(plan.stored_provider_count, 7);
+        assert_eq!(plan.retention_candidate_count(), 2);
+        assert_eq!(plan.enabled_retention_provider_count(), 5);
+        assert_eq!(
+            plan.cycle.selected_retention_provider_ids,
+            vec![selected_provider_id.to_string()]
+        );
+        assert_eq!(
+            plan.cycle.stale_retention_provider_ids,
+            vec![stale_provider_id.to_string()]
+        );
+        assert_eq!(
+            plan.cycle.offline_retention_provider_ids,
+            vec![offline_provider_id.to_string()]
+        );
+        assert_eq!(
+            plan.cycle.ineligible_retention_provider_ids,
+            vec![no_transfer_provider_id.to_string()]
+        );
+        assert_eq!(
+            plan.cycle.undiscovered_retention_provider_ids,
+            vec!["stored-provider-undiscovered".to_string()]
+        );
+        assert_eq!(
+            plan.stored_role_ineligible_provider_ids,
+            vec!["stored-provider-no-local-retention-role".to_string()]
+        );
+        assert_eq!(
+            plan.disabled_provider_ids,
+            vec!["stored-provider-disabled".to_string()]
+        );
+        assert_eq!(plan.selected_retention_provider_count(), 1);
+        assert_eq!(plan.stale_retention_provider_count(), 1);
+        assert_eq!(plan.offline_retention_provider_count(), 1);
+        assert_eq!(plan.ineligible_retention_provider_count(), 1);
+        assert_eq!(plan.undiscovered_retention_provider_count(), 1);
+        assert_eq!(plan.duplicate_retention_provider_count(), 0);
+        assert!(plan.degraded_before());
+        assert!(!plan.cycle.preflight.before_health.provider_health.degraded);
+        assert_eq!(
+            database
+                .latest_sync_revision(profile)
+                .expect("read latest revision after stored-provider plan"),
+            latest_revision_before_plan
+        );
+        assert!(
+            database
+                .profile_sync_roots(profile)
+                .expect("read roots after stored-provider plan")
+                .is_empty()
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(selected_state_root);
+        let _ = std::fs::remove_dir_all(stale_state_root);
+        let _ = std::fs::remove_dir_all(offline_state_root);
+        let _ = std::fs::remove_dir_all(no_transfer_state_root);
         let _ = std::fs::remove_dir_all(db_root);
     }
 

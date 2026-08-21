@@ -465,6 +465,13 @@ Current baseline:
   external discovery. The same selection logic is available as a read-only
   scheduler plan that reports selected, undiscovered, and duplicate handles
   before any publish, pull, retain, or root mutation occurs.
+- The scheduler can now also build a read-only retention-provider plan from
+  enabled storage-provider metadata in `slate-settings.db`. Stored providers
+  must locally advertise object-transfer and availability before they are
+  compared with broadwebd discovery; disabled, locally role-ineligible, stale,
+  offline, broadweb-role-ineligible, and undiscovered providers are reported
+  separately without publishing, retaining, mutating roots, opening sockets, or
+  contacting external services.
 - The read-only scheduler plan now also proves stale selected retention-provider
   handles are excluded from the fresh candidate set and reported before any
   local revision or sync-root state is mutated.
