@@ -279,11 +279,17 @@ Current baseline:
   in-process registry before constructing any real HTTP client. This keeps the
   default profile-sync and rendering fixture loops independent from loopback
   listeners, firewall state, DNS, public gateways, or escalation prompts.
+- broadwebd's own HTTP fixture unit tests now start daemons with
+  `InProcessBroadwebNetwork` fixture registries whenever they consume
+  `slate-fixture-http://` URLs. That keeps the production default direct HTTP
+  registry from becoming a fixture backdoor while still testing response
+  classification, downloads, headers, and budget enforcement entirely in
+  process.
 - Rendering broadweb smoke fixtures now consume that same `test-fixtures`
   layer, so IPFS/IPNS gateway and Kubo subresource tests record simulated
   requests without starting loopback HTTP servers. The rendering tests now use
-  `InProcessBroadwebNetwork` directly instead of socket-shaped local fixture
-  handles.
+  one shared `InProcessBroadwebNetwork` for both fixture URL registration and
+  daemon construction instead of socket-shaped local fixture handles.
 - `slate-settings.db` can now persist app-domain watcher cursors in
   profile-scoped `sync_state` rows. Cursor writes are monotonic, so stale or
   duplicate watcher batches cannot move a rail app's sync cursor backward.

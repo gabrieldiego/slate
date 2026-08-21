@@ -1323,9 +1323,10 @@ mod tests {
     }
 
     fn servo_backend_renders_ipfs_fixture_with_subresource() {
-        let (gateway, server) = in_process_ipfs_gateway_fixture();
+        let network = InProcessBroadwebNetwork::new();
+        let (gateway, server) = in_process_ipfs_gateway_fixture(&network);
         let state_root = test_state_root("rendering-ipfs-fixture");
-        let daemon = InProcessBroadwebNetwork::new()
+        let daemon = network
             .daemon_for_ipfs_gateway(&state_root, Default::default(), gateway)
             .expect("test fixture broadwebd");
         let surface = with_test_broadwebd(daemon, || {
@@ -1372,9 +1373,10 @@ mod tests {
     }
 
     fn servo_backend_renders_ipfs_kubo_directory_fixture_with_subresource() {
-        let (rpc, server) = in_process_ipfs_kubo_rpc_fixture();
+        let network = InProcessBroadwebNetwork::new();
+        let (rpc, server) = in_process_ipfs_kubo_rpc_fixture(&network);
         let state_root = test_state_root("rendering-ipfs-kubo-fixture");
-        let daemon = InProcessBroadwebNetwork::new()
+        let daemon = network
             .daemon_for_kubo_rpc(&state_root, Default::default(), rpc)
             .expect("test fixture broadwebd");
         let surface = with_test_broadwebd(daemon, || {
@@ -1429,9 +1431,10 @@ mod tests {
     }
 
     fn servo_backend_renders_ipns_fixture() {
-        let (gateway, server) = in_process_ipns_gateway_fixture();
+        let network = InProcessBroadwebNetwork::new();
+        let (gateway, server) = in_process_ipns_gateway_fixture(&network);
         let state_root = test_state_root("rendering-ipns-fixture");
-        let daemon = InProcessBroadwebNetwork::new()
+        let daemon = network
             .daemon_for_ipfs_gateway(&state_root, Default::default(), gateway)
             .expect("test fixture broadwebd");
         let surface = with_test_broadwebd(daemon, || {
@@ -1461,9 +1464,10 @@ mod tests {
     }
 
     fn servo_backend_records_ipfs_download_fixture() {
-        let (gateway, server) = in_process_ipfs_download_gateway_fixture();
+        let network = InProcessBroadwebNetwork::new();
+        let (gateway, server) = in_process_ipfs_download_gateway_fixture(&network);
         let state_root = test_state_root("rendering-ipfs-download-fixture");
-        let daemon = InProcessBroadwebNetwork::new()
+        let daemon = network
             .daemon_for_ipfs_gateway(&state_root, Default::default(), gateway)
             .expect("test fixture broadwebd");
         let surface = with_test_broadwebd(daemon, || {
@@ -1498,9 +1502,10 @@ mod tests {
     }
 
     fn servo_backend_renders_ipfs_gateway_error_fixture() {
-        let (gateway, server) = in_process_ipfs_error_gateway_fixture();
+        let network = InProcessBroadwebNetwork::new();
+        let (gateway, server) = in_process_ipfs_error_gateway_fixture(&network);
         let state_root = test_state_root("rendering-ipfs-error-fixture");
-        let daemon = InProcessBroadwebNetwork::new()
+        let daemon = network
             .daemon_for_ipfs_gateway(&state_root, Default::default(), gateway)
             .expect("test fixture broadwebd");
         let surface = with_test_broadwebd(daemon, || {
@@ -1576,8 +1581,11 @@ mod tests {
         );
     }
 
-    fn in_process_ipfs_gateway_fixture() -> (String, InProcessHttpFixture) {
+    fn in_process_ipfs_gateway_fixture(
+        network: &InProcessBroadwebNetwork,
+    ) -> (String, InProcessHttpFixture) {
         in_process_gateway_fixture(
+            network,
             &[
                 "/ipfs/bafybeigdyrzt/index.html",
                 "/ipfs/bafybeigdyrzt/style.css",
@@ -1586,26 +1594,41 @@ mod tests {
         )
     }
 
-    fn in_process_ipns_gateway_fixture() -> (String, InProcessHttpFixture) {
-        in_process_gateway_fixture(&["/ipns/example.net/index.html"], ipns_fixture_response)
+    fn in_process_ipns_gateway_fixture(
+        network: &InProcessBroadwebNetwork,
+    ) -> (String, InProcessHttpFixture) {
+        in_process_gateway_fixture(
+            network,
+            &["/ipns/example.net/index.html"],
+            ipns_fixture_response,
+        )
     }
 
-    fn in_process_ipfs_download_gateway_fixture() -> (String, InProcessHttpFixture) {
+    fn in_process_ipfs_download_gateway_fixture(
+        network: &InProcessBroadwebNetwork,
+    ) -> (String, InProcessHttpFixture) {
         in_process_gateway_fixture(
+            network,
             &["/ipfs/bafybeigdyrzt/picture.png"],
             ipfs_download_fixture_response,
         )
     }
 
-    fn in_process_ipfs_error_gateway_fixture() -> (String, InProcessHttpFixture) {
+    fn in_process_ipfs_error_gateway_fixture(
+        network: &InProcessBroadwebNetwork,
+    ) -> (String, InProcessHttpFixture) {
         in_process_gateway_fixture(
+            network,
             &["/ipfs/bafybeigdyrzt/missing.txt"],
             ipfs_error_fixture_response,
         )
     }
 
-    fn in_process_ipfs_kubo_rpc_fixture() -> (String, InProcessKuboRpcFixture) {
+    fn in_process_ipfs_kubo_rpc_fixture(
+        network: &InProcessBroadwebNetwork,
+    ) -> (String, InProcessKuboRpcFixture) {
         in_process_kubo_rpc_fixture(
+            network,
             &[
                 "/api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Fdocs",
                 "/api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Fdocs%2Findex.html",
@@ -1616,6 +1639,7 @@ mod tests {
     }
 
     fn in_process_gateway_fixture(
+        network: &InProcessBroadwebNetwork,
         expected_paths: &[&str],
         response_for: fn(&str) -> (&'static str, &'static str, &'static str),
     ) -> (String, InProcessHttpFixture) {
@@ -1634,11 +1658,12 @@ mod tests {
                 }
             })
             .collect();
-        let fixture = InProcessBroadwebNetwork::new().http_sequence(responses);
+        let fixture = network.http_sequence(responses);
         (fixture.base_url().to_string(), fixture)
     }
 
     fn in_process_kubo_rpc_fixture(
+        network: &InProcessBroadwebNetwork,
         expected_paths: &[&str],
         response_for: fn(&str) -> (&'static str, &'static str, &'static str),
     ) -> (String, InProcessKuboRpcFixture) {
@@ -1653,7 +1678,7 @@ mod tests {
                 }
             })
             .collect();
-        let fixture = InProcessBroadwebNetwork::new().kubo_rpc_sequence(responses);
+        let fixture = network.kubo_rpc_sequence(responses);
         (fixture.base_url().to_string(), fixture)
     }
 

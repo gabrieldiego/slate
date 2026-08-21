@@ -849,12 +849,19 @@ mod tests {
     }
 
     #[test]
-    fn http_fetch_uses_direct_http_transport() {
-        let (address, fixture) = in_process_http_fixture(
+    fn http_fetch_uses_in_process_http_transport() {
+        let network = InProcessBroadwebNetwork::new();
+        let (address, fixture) = in_process_http_fixture_for_network(
+            &network,
             "text/html; charset=utf-8",
             "<!doctype html><title>Broadwebd Fixture</title><h1>Fetched</h1>",
         );
-        let daemon = BroadwebDaemon::start(test_state_root("http-fetch")).expect("daemon");
+        let daemon = BroadwebDaemon::start_with_registry(
+            test_state_root("http-fetch"),
+            Default::default(),
+            network.fixture_registry(),
+        )
+        .expect("daemon");
         let response = daemon
             .fetch_http(HttpFetchRequest::default_profile(&address))
             .expect("fetch fixture");
@@ -1216,11 +1223,18 @@ mod tests {
 
     #[test]
     fn http_fetch_infers_html_from_generic_content_type_and_body() {
-        let (address, fixture) = in_process_http_fixture(
+        let network = InProcessBroadwebNetwork::new();
+        let (address, fixture) = in_process_http_fixture_for_network(
+            &network,
             "application/octet-stream",
             "<!doctype html><title>Sniffed HTML Fixture</title><h1>Fetched</h1>",
         );
-        let daemon = BroadwebDaemon::start(test_state_root("sniff-html-body")).expect("daemon");
+        let daemon = BroadwebDaemon::start_with_registry(
+            test_state_root("sniff-html-body"),
+            Default::default(),
+            network.fixture_registry(),
+        )
+        .expect("daemon");
         let response = daemon
             .fetch_http(HttpFetchRequest::default_profile(&address))
             .expect("fetch fixture");
@@ -1237,9 +1251,18 @@ mod tests {
 
     #[test]
     fn http_fetch_infers_html_fragment_from_generic_content_type() {
-        let (address, fixture) =
-            in_process_http_fixture("application/octet-stream", "<h2>Simple IPFS Fixture</h2>");
-        let daemon = BroadwebDaemon::start(test_state_root("sniff-html-fragment")).expect("daemon");
+        let network = InProcessBroadwebNetwork::new();
+        let (address, fixture) = in_process_http_fixture_for_network(
+            &network,
+            "application/octet-stream",
+            "<h2>Simple IPFS Fixture</h2>",
+        );
+        let daemon = BroadwebDaemon::start_with_registry(
+            test_state_root("sniff-html-fragment"),
+            Default::default(),
+            network.fixture_registry(),
+        )
+        .expect("daemon");
         let response = daemon
             .fetch_http(HttpFetchRequest::default_profile(&address))
             .expect("fetch fixture");
@@ -1256,10 +1279,19 @@ mod tests {
 
     #[test]
     fn http_fetch_infers_html_from_generic_content_type_and_path() {
-        let (address, fixture) =
-            in_process_http_fixture("application/octet-stream", "<h1>IPFS HTML Path</h1>");
+        let network = InProcessBroadwebNetwork::new();
+        let (address, fixture) = in_process_http_fixture_for_network(
+            &network,
+            "application/octet-stream",
+            "<h1>IPFS HTML Path</h1>",
+        );
         let address = format!("{address}/index.html");
-        let daemon = BroadwebDaemon::start(test_state_root("sniff-html-path")).expect("daemon");
+        let daemon = BroadwebDaemon::start_with_registry(
+            test_state_root("sniff-html-path"),
+            Default::default(),
+            network.fixture_registry(),
+        )
+        .expect("daemon");
         let response = daemon
             .fetch_http(HttpFetchRequest::default_profile(&address))
             .expect("fetch fixture");
@@ -1276,11 +1308,18 @@ mod tests {
 
     #[test]
     fn non_html_http_fetch_is_marked_as_download() {
-        let (address, fixture) = in_process_http_fixture("application/octet-stream", "binary-ish");
+        let network = InProcessBroadwebNetwork::new();
+        let (address, fixture) =
+            in_process_http_fixture_for_network(&network, "application/octet-stream", "binary-ish");
         let state_root = test_state_root("download");
         let download_root = test_download_root("download");
-        let daemon =
-            BroadwebDaemon::start_with_download_root(&state_root, &download_root).expect("daemon");
+        let daemon = BroadwebDaemon::start_with_registry_and_download_root(
+            &state_root,
+            &download_root,
+            Default::default(),
+            network.fixture_registry(),
+        )
+        .expect("daemon");
         let response = daemon
             .fetch_http(HttpFetchRequest::default_profile(&address))
             .expect("fetch fixture");
@@ -1305,15 +1344,22 @@ mod tests {
 
     #[test]
     fn content_disposition_attachment_sets_download_filename() {
-        let (address, fixture) = in_process_http_fixture_with_headers(
+        let network = InProcessBroadwebNetwork::new();
+        let (address, fixture) = in_process_http_fixture_with_headers_for_network(
+            &network,
             "text/html; charset=utf-8",
             &[r#"Content-Disposition: attachment; filename="report.html""#],
             "<!doctype html><title>Attachment</title>",
         );
         let state_root = test_state_root("attachment-download");
         let download_root = test_download_root("attachment-download");
-        let daemon =
-            BroadwebDaemon::start_with_download_root(&state_root, &download_root).expect("daemon");
+        let daemon = BroadwebDaemon::start_with_registry_and_download_root(
+            &state_root,
+            &download_root,
+            Default::default(),
+            network.fixture_registry(),
+        )
+        .expect("daemon");
         let response = daemon
             .fetch_http(HttpFetchRequest::default_profile(&address))
             .expect("fetch attachment fixture");
@@ -1335,14 +1381,21 @@ mod tests {
 
     #[test]
     fn explicit_download_request_saves_html_with_requested_filename() {
-        let (address, fixture) = in_process_http_fixture(
+        let network = InProcessBroadwebNetwork::new();
+        let (address, fixture) = in_process_http_fixture_for_network(
+            &network,
             "text/html; charset=utf-8",
             "<!doctype html><title>Download Me</title>",
         );
         let state_root = test_state_root("explicit-download");
         let download_root = test_download_root("explicit-download");
-        let daemon =
-            BroadwebDaemon::start_with_download_root(&state_root, &download_root).expect("daemon");
+        let daemon = BroadwebDaemon::start_with_registry_and_download_root(
+            &state_root,
+            &download_root,
+            Default::default(),
+            network.fixture_registry(),
+        )
+        .expect("daemon");
         let response = daemon
             .fetch_http(HttpFetchRequest::default_profile(&address).download_as("page.html"))
             .expect("fetch explicit download fixture");
@@ -1369,17 +1422,19 @@ mod tests {
 
     #[test]
     fn response_size_budget_is_enforced() {
-        let (address, fixture) = in_process_http_fixture("text/html", "0123456789");
-        let mut registry = PluginRegistry::new();
-        registry.register_transport(super::DirectHttpTransport);
-        registry.register_service(super::HttpFetchService);
+        let network = InProcessBroadwebNetwork::new();
+        let (address, fixture) =
+            in_process_http_fixture_for_network(&network, "text/html", "0123456789");
         let budget = ResourceBudget {
             max_http_response_bytes: 4,
             ..ResourceBudget::default()
         };
-        let daemon =
-            BroadwebDaemon::start_with_registry(test_state_root("budget"), budget, registry)
-                .expect("daemon");
+        let daemon = BroadwebDaemon::start_with_registry(
+            test_state_root("budget"),
+            budget,
+            network.fixture_registry(),
+        )
+        .expect("daemon");
         let error = daemon
             .fetch_http(HttpFetchRequest::default_profile(&address))
             .expect_err("budget exceeded");
@@ -1917,7 +1972,11 @@ mod tests {
         let route = response.route.expect("route info");
         assert_eq!(route.profile, "research");
         assert_eq!(route.transport_id, IPFS_KUBO_RPC_PLUGIN);
-        assert!(route.privacy_boundary.contains("local Kubo RPC"));
+        assert!(
+            route
+                .privacy_boundary
+                .contains("in-process Kubo RPC fixture")
+        );
         assert_eq!(route.purpose, FetchPurpose::Navigation);
 
         let _ = fs::remove_dir_all(daemon.state_root().path());
@@ -2117,15 +2176,31 @@ mod tests {
         content_type: &'static str,
         body: &'static str,
     ) -> (String, InProcessHttpFixture) {
-        in_process_http_status_fixture("200 OK", content_type, body)
+        let network = InProcessBroadwebNetwork::new();
+        in_process_http_fixture_for_network(&network, content_type, body)
     }
 
-    fn in_process_http_fixture_with_headers(
+    fn in_process_http_fixture_for_network(
+        network: &InProcessBroadwebNetwork,
+        content_type: &'static str,
+        body: &'static str,
+    ) -> (String, InProcessHttpFixture) {
+        in_process_http_status_fixture_for_network(network, "200 OK", content_type, body)
+    }
+
+    fn in_process_http_fixture_with_headers_for_network(
+        network: &InProcessBroadwebNetwork,
         content_type: &'static str,
         extra_headers: &'static [&'static str],
         body: &'static str,
     ) -> (String, InProcessHttpFixture) {
-        in_process_http_status_fixture_with_headers("200 OK", content_type, extra_headers, body)
+        in_process_http_status_fixture_with_headers_for_network(
+            network,
+            "200 OK",
+            content_type,
+            extra_headers,
+            body,
+        )
     }
 
     fn in_process_http_status_fixture(
@@ -2133,10 +2208,27 @@ mod tests {
         content_type: &'static str,
         body: &'static str,
     ) -> (String, InProcessHttpFixture) {
-        in_process_http_status_fixture_with_headers(status, content_type, &[], body)
+        let network = InProcessBroadwebNetwork::new();
+        in_process_http_status_fixture_for_network(&network, status, content_type, body)
     }
 
-    fn in_process_http_status_fixture_with_headers(
+    fn in_process_http_status_fixture_for_network(
+        network: &InProcessBroadwebNetwork,
+        status: &'static str,
+        content_type: &'static str,
+        body: &'static str,
+    ) -> (String, InProcessHttpFixture) {
+        in_process_http_status_fixture_with_headers_for_network(
+            network,
+            status,
+            content_type,
+            &[],
+            body,
+        )
+    }
+
+    fn in_process_http_status_fixture_with_headers_for_network(
+        network: &InProcessBroadwebNetwork,
         status: &'static str,
         content_type: &'static str,
         extra_headers: &'static [&'static str],
@@ -2155,7 +2247,7 @@ mod tests {
                 value: value.trim().to_string(),
             }
         }));
-        let fixture = InProcessBroadwebNetwork::new().http_response(InternalFixtureHttpResponse {
+        let fixture = network.http_response(InternalFixtureHttpResponse {
             status_code: status_code(status),
             content_type: Some(content_type.to_string()),
             headers,
