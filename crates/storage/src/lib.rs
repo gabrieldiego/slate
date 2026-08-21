@@ -1540,6 +1540,23 @@ pub enum ProfileSyncSettingsPullApplyStatus {
     Applied(ProfileSyncSettingsManifestApplication),
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ProfileSyncDeviceHeadPullRecordStatus {
+    NoPublishedRoot {
+        profile: String,
+        root_id: String,
+    },
+    Unchanged {
+        profile: String,
+        root_id: String,
+        object_id: String,
+    },
+    Updated {
+        device_head: VerifiedProfileSyncDeviceHead,
+        root: ProfileSyncRootRecord,
+    },
+}
+
 #[derive(Debug)]
 pub enum StorageError {
     CurrentDirectory(std::io::Error),
@@ -3233,6 +3250,73 @@ impl SlateProfileDatabase {
             object_id: device_head_object.object_id,
             device_head,
         }))
+    }
+
+    pub fn pull_and_record_trusted_signed_profile_sync_device_head_if_changed<Source>(
+        &self,
+        source: &Source,
+        profile: &str,
+        root_id: &str,
+        content_key: &ProfileSyncContentKey,
+        key_id: &str,
+    ) -> Result<
+        ProfileSyncDeviceHeadPullRecordStatus,
+        ProfileSyncTrustedPullApplyError<Source::Error>,
+    >
+    where
+        Source: ProfileSyncObjectSource,
+    {
+        let Some(device_head_object_id) = source
+            .resolve_profile_sync_root(profile, root_id)
+            .map_err(|source| {
+                ProfileSyncTrustedPullApplyError::Pull(ProfileSyncTrustedPullError::Source(source))
+            })?
+        else {
+            return Ok(ProfileSyncDeviceHeadPullRecordStatus::NoPublishedRoot {
+                profile: profile.to_string(),
+                root_id: root_id.to_string(),
+            });
+        };
+
+        if let Some(local_root) = self
+            .profile_sync_root(profile, root_id)
+            .map_err(ProfileSyncTrustedPullApplyError::Storage)?
+        {
+            if local_root.object_id == device_head_object_id {
+                return Ok(ProfileSyncDeviceHeadPullRecordStatus::Unchanged {
+                    profile: profile.to_string(),
+                    root_id: root_id.to_string(),
+                    object_id: device_head_object_id,
+                });
+            }
+        }
+
+        let device_head_object =
+            fetch_trusted_profile_sync_object(source, profile, device_head_object_id.as_str())
+                .map_err(ProfileSyncTrustedPullApplyError::Pull)?;
+        let device_head = self
+            .open_trusted_signed_profile_sync_device_head(
+                device_head_object.bytes.as_slice(),
+                content_key,
+                profile,
+                key_id,
+            )
+            .map_err(ProfileSyncTrustedPullError::Open)
+            .map_err(ProfileSyncTrustedPullApplyError::Pull)?;
+        validate_profile_sync_device_head_root(&device_head, root_id)
+            .map_err(ProfileSyncTrustedOpenError::SyncObject)
+            .map_err(ProfileSyncTrustedPullError::Open)
+            .map_err(ProfileSyncTrustedPullApplyError::Pull)?;
+        let root = self
+            .set_profile_sync_root(profile, root_id, device_head_object.object_id.as_str())
+            .map_err(ProfileSyncTrustedPullApplyError::Storage)?;
+        Ok(ProfileSyncDeviceHeadPullRecordStatus::Updated {
+            device_head: VerifiedProfileSyncDeviceHead {
+                object_id: device_head_object.object_id,
+                device_head,
+            },
+            root,
+        })
     }
 
     pub fn pull_trusted_signed_profile_sync_settings_manifest_objects<Source>(
@@ -5344,6 +5428,161 @@ mod tests {
             )) if expected == mismatched_root_id
                 && actual == "settings/devices/device-a/payload-head"
         ));
+    }
+
+    #[test]
+    fn profile_sync_trusted_device_head_record_reports_missing_and_unchanged_roots() {
+        let content_key = ProfileSyncContentKey::from_bytes([28; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let root_id = "settings/devices/device-a/head";
+        let object_id = "device-head-object-1";
+        let mut source = InMemoryProfileSyncObjectSource::default();
+        let destination_path =
+            test_dir("sync-trusted-record-device-head-empty").join(DEFAULT_DATABASE_FILE_NAME);
+        let destination =
+            SlateProfileDatabase::open_resolved_with_device_id(destination_path, "device-b")
+                .unwrap();
+
+        let missing = destination
+            .pull_and_record_trusted_signed_profile_sync_device_head_if_changed(
+                &source,
+                DEFAULT_PROFILE_ID,
+                root_id,
+                &content_key,
+                "content-key-epoch-1",
+            )
+            .unwrap();
+        assert_eq!(
+            missing,
+            ProfileSyncDeviceHeadPullRecordStatus::NoPublishedRoot {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                root_id: root_id.to_string(),
+            }
+        );
+
+        source.publish_root(DEFAULT_PROFILE_ID, root_id, object_id);
+        destination
+            .set_profile_sync_root(DEFAULT_PROFILE_ID, root_id, object_id)
+            .unwrap();
+        let unchanged = destination
+            .pull_and_record_trusted_signed_profile_sync_device_head_if_changed(
+                &source,
+                DEFAULT_PROFILE_ID,
+                root_id,
+                &content_key,
+                "content-key-epoch-1",
+            )
+            .unwrap();
+        assert_eq!(
+            unchanged,
+            ProfileSyncDeviceHeadPullRecordStatus::Unchanged {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                root_id: root_id.to_string(),
+                object_id: object_id.to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn profile_sync_trusted_device_head_record_updates_verified_root() {
+        let content_key = ProfileSyncContentKey::from_bytes([29; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let trusted_public_key = signer.public_key().unwrap();
+        let key_id = "content-key-epoch-1";
+        let root_id = "settings/devices/device-a/head";
+        let object_id = "device-head-object-1";
+        let device_head = ProfileSyncDeviceHead {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            device_id: "device-a".to_string(),
+            root_id: root_id.to_string(),
+            schema_version: PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            latest_manifest_object_id: "manifest-object-3".to_string(),
+            latest_change_object_id: None,
+            device_sequence: 1,
+            logical_clock: 1,
+            created_at: 1234,
+        };
+        let mut source = InMemoryProfileSyncObjectSource::default();
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
+                key_id,
+                serde_json::to_vec(&device_head).unwrap().as_slice(),
+                &content_key,
+                &signer,
+                31,
+            ),
+        );
+        source.publish_root(DEFAULT_PROFILE_ID, root_id, object_id);
+        let destination_path =
+            test_dir("sync-trusted-record-device-head").join(DEFAULT_DATABASE_FILE_NAME);
+        let destination =
+            SlateProfileDatabase::open_resolved_with_device_id(destination_path, "device-b")
+                .unwrap();
+        destination
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: trusted_public_key,
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .unwrap();
+
+        let updated = destination
+            .pull_and_record_trusted_signed_profile_sync_device_head_if_changed(
+                &source,
+                DEFAULT_PROFILE_ID,
+                root_id,
+                &content_key,
+                key_id,
+            )
+            .unwrap();
+        let ProfileSyncDeviceHeadPullRecordStatus::Updated {
+            device_head: updated_head,
+            root,
+        } = updated
+        else {
+            panic!("expected trusted device head update, got {updated:?}");
+        };
+        assert_eq!(
+            updated_head,
+            VerifiedProfileSyncDeviceHead {
+                object_id: object_id.to_string(),
+                device_head,
+            }
+        );
+        assert_eq!(root.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(root.root_id, root_id);
+        assert_eq!(root.object_id, object_id);
+        assert_eq!(
+            destination
+                .profile_sync_root(DEFAULT_PROFILE_ID, root_id)
+                .unwrap()
+                .expect("stored verified device head root")
+                .object_id,
+            object_id
+        );
+
+        let unchanged = destination
+            .pull_and_record_trusted_signed_profile_sync_device_head_if_changed(
+                &source,
+                DEFAULT_PROFILE_ID,
+                root_id,
+                &content_key,
+                key_id,
+            )
+            .unwrap();
+        assert_eq!(
+            unchanged,
+            ProfileSyncDeviceHeadPullRecordStatus::Unchanged {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                root_id: root_id.to_string(),
+                object_id: object_id.to_string(),
+            }
+        );
     }
 
     #[test]

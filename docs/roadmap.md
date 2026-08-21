@@ -270,6 +270,10 @@ Current baseline:
   helpers resolve a per-device head root, fetch the object, verify/decrypt it,
   require the decrypted head to name the resolved root, and return the verified
   head with its backend object id.
+- `slate-settings.db` can now pull, verify, and record trusted device-head
+  roots with the same idempotent root check used by settings manifests:
+  missing roots, unchanged roots, and verified updates are reported separately,
+  and unchanged roots skip object fetch and decrypt work.
 - The local two-device broadwebd fixture now publishes and pulls a trusted
   signed encrypted device head through an in-process per-device root. The test
   retains the head object on the receiving provider before the publishing
