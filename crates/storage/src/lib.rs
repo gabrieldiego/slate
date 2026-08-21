@@ -1067,6 +1067,22 @@ pub struct SyncDeviceRecord {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SyncDevicePublicKeyRegistration {
+    pub profile: String,
+    pub public_key: ProfileSyncDevicePublicKey,
+    pub membership_epoch: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SyncDevicePublicKeyRecord {
+    pub profile: String,
+    pub public_key: ProfileSyncDevicePublicKey,
+    pub membership_epoch: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SyncSettingValueRecord {
     pub profile: String,
     pub domain: String,
@@ -1905,6 +1921,90 @@ impl SlateProfileDatabase {
         Ok(devices)
     }
 
+    pub fn register_sync_device_public_key(
+        &self,
+        registration: &SyncDevicePublicKeyRegistration,
+    ) -> Result<SyncDevicePublicKeyRecord, StorageError> {
+        if !is_valid_sync_identifier(registration.public_key.device_id.as_str()) {
+            return Err(StorageError::InvalidSyncDeviceId(
+                registration.public_key.device_id.clone(),
+            ));
+        }
+
+        let connection = self.connection()?;
+        let now = unix_time_seconds()?;
+        connection
+            .execute(
+                "INSERT INTO sync_device_public_keys
+                   (profile, device_id, public_key, membership_epoch, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?5)
+                 ON CONFLICT(profile, device_id) DO UPDATE SET
+                   public_key = excluded.public_key,
+                   membership_epoch = excluded.membership_epoch,
+                   updated_at = excluded.updated_at",
+                params![
+                    registration.profile.as_str(),
+                    registration.public_key.device_id.as_str(),
+                    registration.public_key.bytes.as_slice(),
+                    registration.membership_epoch,
+                    now
+                ],
+            )
+            .map_err(|source| self.database_error(source))?;
+
+        self.sync_device_public_key(
+            registration.profile.as_str(),
+            registration.public_key.device_id.as_str(),
+        )?
+        .ok_or_else(|| self.database_error(rusqlite::Error::QueryReturnedNoRows))
+    }
+
+    pub fn sync_device_public_key(
+        &self,
+        profile: &str,
+        device_id: &str,
+    ) -> Result<Option<SyncDevicePublicKeyRecord>, StorageError> {
+        if !is_valid_sync_identifier(device_id) {
+            return Err(StorageError::InvalidSyncDeviceId(device_id.to_string()));
+        }
+
+        let connection = self.connection()?;
+        connection
+            .query_row(
+                "SELECT profile, device_id, public_key, membership_epoch, created_at, updated_at
+                 FROM sync_device_public_keys
+                 WHERE profile = ?1 AND device_id = ?2",
+                params![profile, device_id],
+                sync_device_public_key_record_from_row,
+            )
+            .optional()
+            .map_err(|source| self.database_error(source))
+    }
+
+    pub fn sync_device_public_keys(
+        &self,
+        profile: &str,
+    ) -> Result<Vec<SyncDevicePublicKeyRecord>, StorageError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT profile, device_id, public_key, membership_epoch, created_at, updated_at
+                 FROM sync_device_public_keys
+                 WHERE profile = ?1
+                 ORDER BY device_id",
+            )
+            .map_err(|source| self.database_error(source))?;
+        let records = statement
+            .query_map([profile], sync_device_public_key_record_from_row)
+            .map_err(|source| self.database_error(source))?;
+
+        let mut keys = Vec::new();
+        for record in records {
+            keys.push(record.map_err(|source| self.database_error(source))?);
+        }
+        Ok(keys)
+    }
+
     pub fn set_sync_setting_text(
         &self,
         profile: &str,
@@ -2632,6 +2732,16 @@ impl SlateProfileDatabase {
                     PRIMARY KEY(profile, device_id)
                 );
 
+                CREATE TABLE IF NOT EXISTS sync_device_public_keys (
+                    profile TEXT NOT NULL,
+                    device_id TEXT NOT NULL,
+                    public_key BLOB NOT NULL,
+                    membership_epoch INTEGER NOT NULL DEFAULT 1,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    PRIMARY KEY(profile, device_id)
+                );
+
                 CREATE TABLE IF NOT EXISTS settings_changes (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     profile TEXT NOT NULL,
@@ -3224,6 +3334,21 @@ fn sync_change_record_from_row(
         logical_clock: row.get(8)?,
         created_at: row.get(9)?,
         applied_at: row.get(10)?,
+    })
+}
+
+fn sync_device_public_key_record_from_row(
+    row: &rusqlite::Row<'_>,
+) -> Result<SyncDevicePublicKeyRecord, rusqlite::Error> {
+    Ok(SyncDevicePublicKeyRecord {
+        profile: row.get(0)?,
+        public_key: ProfileSyncDevicePublicKey {
+            device_id: row.get(1)?,
+            bytes: row.get(2)?,
+        },
+        membership_epoch: row.get(3)?,
+        created_at: row.get(4)?,
+        updated_at: row.get(5)?,
     })
 }
 
@@ -4300,6 +4425,89 @@ mod tests {
                 .unwrap_err();
 
         assert!(matches!(error, StorageError::InvalidSyncDeviceId(_)));
+    }
+
+    #[test]
+    fn sync_device_public_keys_round_trip_and_update() {
+        let database_path = test_dir("sync-device-public-key").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let first_key = ProfileSyncDeviceSigner::generate("device-a")
+            .unwrap()
+            .public_key()
+            .unwrap();
+        let first_record = database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: first_key.clone(),
+                membership_epoch: 1,
+            })
+            .unwrap();
+
+        assert_eq!(first_record.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(first_record.public_key, first_key);
+        assert_eq!(first_record.membership_epoch, 1);
+        assert_eq!(
+            database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "device-a")
+                .unwrap()
+                .expect("trusted device key"),
+            first_record
+        );
+        assert_eq!(
+            database
+                .sync_device_public_keys(DEFAULT_PROFILE_ID)
+                .unwrap()
+                .len(),
+            1
+        );
+
+        let second_key = ProfileSyncDeviceSigner::generate("device-a")
+            .unwrap()
+            .public_key()
+            .unwrap();
+        let second_record = database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: second_key.clone(),
+                membership_epoch: 2,
+            })
+            .unwrap();
+
+        assert_eq!(second_record.public_key, second_key);
+        assert_eq!(second_record.membership_epoch, 2);
+        assert_eq!(second_record.created_at, first_record.created_at);
+        assert!(second_record.updated_at >= first_record.updated_at);
+        assert_eq!(
+            database
+                .sync_device_public_keys(DEFAULT_PROFILE_ID)
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn sync_device_public_keys_reject_invalid_device_ids() {
+        let database_path =
+            test_dir("invalid-sync-device-public-key").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let error = database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: ProfileSyncDevicePublicKey {
+                    device_id: "../device-a".to_string(),
+                    bytes: vec![1, 2, 3],
+                },
+                membership_epoch: 1,
+            })
+            .unwrap_err();
+        assert!(
+            matches!(error, StorageError::InvalidSyncDeviceId(device_id) if device_id == "../device-a")
+        );
+        assert!(matches!(
+            database.sync_device_public_key(DEFAULT_PROFILE_ID, "../device-a"),
+            Err(StorageError::InvalidSyncDeviceId(device_id)) if device_id == "../device-a"
+        ));
     }
 
     #[test]

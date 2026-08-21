@@ -222,6 +222,10 @@ Current baseline:
   key, content key, and content-key id. The helper returns `None` for an absent
   published root, applies valid manifests through the existing validation path,
   and surfaces manifest validation failures without advancing the stored root.
+- `slate-settings.db` now has a trusted sync device public-key table and APIs
+  to register, update, fetch, and list profile-scoped device signing keys. This
+  gives the future runtime sync loop a local trust store instead of relying on
+  ad hoc public keys passed in by fixtures.
 - `slate-settings.db` now has typed snapshot metadata APIs for recording
   encrypted backend object ids, covered revisions, included domains, and latest
   snapshot lookup. This is metadata only; snapshot payloads stay in encrypted
@@ -293,8 +297,8 @@ Next:
 - Add Kubo RPC-backed operations for encrypted object add, pin, unpin, pin
   verification, IPNS publish, and IPNS resolve as the first IPFS/IPNS backend.
 - Implement the actual runtime sync loop that supplies a broadwebd-backed object
-  source, trusted account keys, and explicit sync policy checks to the storage
-  pull-and-apply helper.
+  source, trusted account keys loaded from `slate-settings.db`, and explicit
+  sync policy checks to the storage pull-and-apply helper.
 - Replace opportunistic chrome polling with a runtime watcher that applies
   externally synced changes through normal browser-core, chrome, routing, and
   privacy update paths instead of raw database replacement.
