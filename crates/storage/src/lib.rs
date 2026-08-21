@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use ring::{aead, rand, signature};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -2082,6 +2082,32 @@ impl SyncSettingTextDomainPoll {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TypedSyncSettingTextEvent<T> {
+    pub revision: SyncRevisionRecord,
+    pub change: SyncChangeRecord,
+    pub value: T,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TypedSyncSettingTextDomainPoll<T> {
+    pub profile: String,
+    pub domain: String,
+    pub previous_revision: i64,
+    pub latest_revision: i64,
+    pub events: Vec<TypedSyncSettingTextEvent<T>>,
+}
+
+impl<T> TypedSyncSettingTextDomainPoll<T> {
+    pub fn advanced(&self) -> bool {
+        self.latest_revision > self.previous_revision
+    }
+
+    pub fn event_count(&self) -> usize {
+        self.events.len()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SyncSnapshotRegistration {
     pub profile: String,
     pub snapshot_id: String,
@@ -2268,6 +2294,7 @@ pub enum StorageError {
         source: rusqlite::Error,
     },
     EncodeSyncPayload(serde_json::Error),
+    DecodeSyncPayload(serde_json::Error),
     EncodeSnapshotDomains(serde_json::Error),
     Clock(std::time::SystemTimeError),
     InvalidSyncDeviceId(String),
@@ -2325,6 +2352,9 @@ impl fmt::Display for StorageError {
             }
             Self::EncodeSyncPayload(error) => {
                 write!(formatter, "failed to encode sync payload: {error}")
+            }
+            Self::DecodeSyncPayload(error) => {
+                write!(formatter, "failed to decode sync payload: {error}")
             }
             Self::EncodeSnapshotDomains(error) => {
                 write!(formatter, "failed to encode sync snapshot domains: {error}")
@@ -2438,6 +2468,7 @@ impl std::error::Error for StorageError {
             Self::CreateDirectory { source, .. } => Some(source),
             Self::Database { source, .. } => Some(source),
             Self::EncodeSyncPayload(error) => Some(error),
+            Self::DecodeSyncPayload(error) => Some(error),
             Self::EncodeSnapshotDomains(error) => Some(error),
             Self::Clock(error) => Some(error),
             Self::InvalidSyncDeviceId(_) => None,
@@ -3872,9 +3903,53 @@ impl SlateProfileDatabase {
         self.poll_sync_setting_text_events_for_domain(profile, domain, previous_revision, limit)
     }
 
+    pub fn poll_typed_sync_setting_text_events_for_app_domain<T>(
+        &self,
+        profile: &str,
+        domain: &str,
+        limit: u32,
+    ) -> Result<TypedSyncSettingTextDomainPoll<T>, StorageError>
+    where
+        T: DeserializeOwned,
+    {
+        let poll = self.poll_sync_setting_text_events_for_app_domain(profile, domain, limit)?;
+        let events = poll
+            .events
+            .into_iter()
+            .map(|event| {
+                let value = serde_json::from_str::<T>(event.change.payload.as_str())
+                    .map_err(StorageError::DecodeSyncPayload)?;
+                Ok(TypedSyncSettingTextEvent {
+                    revision: event.revision,
+                    change: event.change,
+                    value,
+                })
+            })
+            .collect::<Result<Vec<_>, StorageError>>()?;
+
+        Ok(TypedSyncSettingTextDomainPoll {
+            profile: poll.profile,
+            domain: poll.domain,
+            previous_revision: poll.previous_revision,
+            latest_revision: poll.latest_revision,
+            events,
+        })
+    }
+
     pub fn record_app_sync_domain_poll_cursor(
         &self,
         poll: &SyncSettingTextDomainPoll,
+    ) -> Result<AppSyncDomainCursorRecord, StorageError> {
+        self.record_app_sync_domain_cursor(
+            poll.profile.as_str(),
+            poll.domain.as_str(),
+            poll.latest_revision,
+        )
+    }
+
+    pub fn record_typed_app_sync_domain_poll_cursor<T>(
+        &self,
+        poll: &TypedSyncSettingTextDomainPoll<T>,
     ) -> Result<AppSyncDomainCursorRecord, StorageError> {
         self.record_app_sync_domain_cursor(
             poll.profile.as_str(),
@@ -14409,6 +14484,140 @@ mod tests {
 
         let cursor = database.record_app_sync_domain_poll_cursor(&poll).unwrap();
         assert_eq!(cursor.latest_revision, second_revision);
+    }
+
+    #[test]
+    fn typed_app_sync_domain_poll_decodes_payloads_and_records_cursor() {
+        let database_path = test_dir("typed-app-sync-domain-poll").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+
+        let initial_poll = database
+            .poll_typed_sync_setting_text_events_for_app_domain::<ChatConversationSyncPayload>(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CHAT,
+                8,
+            )
+            .unwrap();
+        assert!(!initial_poll.advanced());
+        assert!(initial_poll.events.is_empty());
+
+        database
+            .upsert_chat_conversation(&ChatConversationUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                conversation_id: "chat-watch-1".to_string(),
+                provider_id: Some("whatsapp".to_string()),
+                external_thread_id: Some("team@example.test".to_string()),
+                display_name: "Team".to_string(),
+                avatar_key: Some("chat-avatar:chat-watch-1".to_string()),
+                last_message_at: Some(1_789_060_000),
+                unread_count: 2,
+                archived: false,
+                muted: false,
+            })
+            .unwrap();
+        database
+            .upsert_chat_conversation(&ChatConversationUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                conversation_id: "chat-watch-2".to_string(),
+                provider_id: Some("sms".to_string()),
+                external_thread_id: Some("+15550101010".to_string()),
+                display_name: "SMS".to_string(),
+                avatar_key: None,
+                last_message_at: Some(1_789_060_100),
+                unread_count: 1,
+                archived: false,
+                muted: true,
+            })
+            .unwrap();
+
+        let first_poll = database
+            .poll_typed_sync_setting_text_events_for_app_domain::<ChatConversationSyncPayload>(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CHAT,
+                1,
+            )
+            .unwrap();
+        assert!(first_poll.advanced());
+        assert_eq!(first_poll.previous_revision, initial_poll.latest_revision);
+        assert_eq!(first_poll.event_count(), 1);
+        assert_eq!(first_poll.events[0].change.domain, SYNC_DOMAIN_CHAT);
+        assert_eq!(
+            first_poll.events[0].change.entity_key,
+            "conversation.chat-watch-1"
+        );
+        assert_eq!(first_poll.events[0].value.conversation_id, "chat-watch-1");
+        assert_eq!(first_poll.events[0].value.display_name, "Team");
+        assert_eq!(first_poll.events[0].value.unread_count, 2);
+        assert!(!first_poll.events[0].value.deleted);
+        assert_eq!(
+            database
+                .app_sync_domain_cursor(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CHAT)
+                .unwrap()
+                .map(|cursor| cursor.latest_revision),
+            Some(initial_poll.latest_revision)
+        );
+
+        let cursor = database
+            .record_typed_app_sync_domain_poll_cursor(&first_poll)
+            .unwrap();
+        assert_eq!(cursor.latest_revision, first_poll.latest_revision);
+
+        let second_poll = database
+            .poll_typed_sync_setting_text_events_for_app_domain::<ChatConversationSyncPayload>(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CHAT,
+                8,
+            )
+            .unwrap();
+        assert!(second_poll.advanced());
+        assert_eq!(second_poll.previous_revision, first_poll.latest_revision);
+        assert_eq!(second_poll.event_count(), 1);
+        assert_eq!(second_poll.events[0].value.conversation_id, "chat-watch-2");
+        assert_eq!(
+            second_poll.events[0].value.provider_id.as_deref(),
+            Some("sms")
+        );
+        assert!(second_poll.events[0].value.muted);
+    }
+
+    #[test]
+    fn typed_app_sync_domain_poll_decode_error_does_not_advance_cursor() {
+        let database_path =
+            test_dir("typed-app-sync-domain-poll-decode-error").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+
+        let initial_poll = database
+            .poll_typed_sync_setting_text_events_for_app_domain::<ChatConversationSyncPayload>(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CHAT,
+                8,
+            )
+            .unwrap();
+        let initial_revision = initial_poll.latest_revision;
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CHAT,
+                "conversation.bad",
+                "{not-json",
+            )
+            .unwrap();
+
+        let error = database
+            .poll_typed_sync_setting_text_events_for_app_domain::<ChatConversationSyncPayload>(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CHAT,
+                8,
+            )
+            .expect_err("malformed typed payload should fail before cursor advancement");
+        assert!(matches!(error, StorageError::DecodeSyncPayload(_)));
+        assert_eq!(
+            database
+                .app_sync_domain_cursor(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CHAT)
+                .unwrap()
+                .map(|cursor| cursor.latest_revision),
+            Some(initial_revision)
+        );
     }
 
     #[test]

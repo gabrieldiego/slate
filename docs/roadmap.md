@@ -285,6 +285,10 @@ Current baseline:
   Storage also exposes a cursor-backed app-domain settings poll helper that
   initializes missing cursors at the domain head and lets callers advance the
   cursor only after they apply a returned batch.
+- Storage now also exposes a typed app-domain poll helper that decodes
+  sync-domain JSON payloads before a watcher advances its persisted cursor. A
+  malformed app payload fails the poll and leaves the app cursor unchanged, so
+  runtime app watchers can avoid acknowledging a batch they did not apply.
 - The profile-sync bridge can now publish post-snapshot local settings updates
   by reusing the latest retained `slate-settings.db` snapshot object, publishing
   only the new tail changes, moving the settings root, and publishing a fresh
