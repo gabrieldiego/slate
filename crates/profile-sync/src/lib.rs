@@ -3,9 +3,13 @@
 use core::fmt;
 use slate_broadwebd::{
     BroadwebDaemon, BroadwebdError, ProfileSyncObjectRequest as BroadwebdProfileSyncObjectRequest,
+    ProfileSyncProfileRequest as BroadwebdProfileSyncProfileRequest,
+    ProfileSyncProviderHealth as BroadwebdProfileSyncProviderHealth,
     ProfileSyncPutObjectRequest as BroadwebdProfileSyncPutObjectRequest,
     ProfileSyncRequest as BroadwebdProfileSyncRequest,
     ProfileSyncResponse as BroadwebdProfileSyncResponse,
+    ProfileSyncRootHealth as BroadwebdProfileSyncRootHealth,
+    ProfileSyncRootHealthRequest as BroadwebdProfileSyncRootHealthRequest,
     ProfileSyncRootRequest as BroadwebdProfileSyncRootRequest,
     ProfileSyncRootUpdate as BroadwebdProfileSyncRootUpdate,
 };
@@ -448,6 +452,24 @@ impl SettingsSyncCycleRun {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncHealthReport {
+    pub profile: String,
+    pub settings_root_id: String,
+    pub local_device_head_root_id: String,
+    pub provider_health: BroadwebdProfileSyncProviderHealth,
+    pub settings_root_health: BroadwebdProfileSyncRootHealth,
+    pub local_device_head_root_health: BroadwebdProfileSyncRootHealth,
+}
+
+impl SettingsSyncHealthReport {
+    pub fn degraded(&self) -> bool {
+        self.provider_health.degraded
+            || self.settings_root_health.degraded
+            || self.local_device_head_root_health.degraded
+    }
+}
+
 pub fn settings_device_head_root_id(device_id: &str) -> String {
     format!("settings/devices/{device_id}/head")
 }
@@ -543,6 +565,77 @@ impl<'a> BroadwebdProfileSyncObjectSource<'a> {
 impl<'a> BroadwebdSettingsSyncRunner<'a> {
     pub fn new(daemon: &'a BroadwebDaemon) -> Self {
         Self { daemon }
+    }
+
+    pub fn settings_sync_health(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        settings_root_id: &str,
+        minimum_online_retaining_providers: usize,
+    ) -> Result<SettingsSyncHealthReport, BroadwebdError> {
+        let local_device_head_root_id =
+            settings_device_head_root_id(database.local_sync_device_id());
+        let provider_health = self.profile_sync_provider_health(profile)?;
+        let settings_root_health = self.profile_sync_root_health(
+            profile,
+            settings_root_id,
+            minimum_online_retaining_providers,
+        )?;
+        let local_device_head_root_health = self.profile_sync_root_health(
+            profile,
+            local_device_head_root_id.as_str(),
+            minimum_online_retaining_providers,
+        )?;
+
+        Ok(SettingsSyncHealthReport {
+            profile: profile.to_string(),
+            settings_root_id: settings_root_id.to_string(),
+            local_device_head_root_id,
+            provider_health,
+            settings_root_health,
+            local_device_head_root_health,
+        })
+    }
+
+    pub fn profile_sync_provider_health(
+        &self,
+        profile: &str,
+    ) -> Result<BroadwebdProfileSyncProviderHealth, BroadwebdError> {
+        let response = self
+            .daemon
+            .profile_sync(BroadwebdProfileSyncRequest::ProviderHealth(
+                BroadwebdProfileSyncProfileRequest::new(profile),
+            ))?;
+        let BroadwebdProfileSyncResponse::ProviderHealth { health } = response else {
+            return Err(BroadwebdError::UnsupportedRequest(
+                "profile-sync provider health returned a non-health response".to_string(),
+            ));
+        };
+        Ok(health)
+    }
+
+    pub fn profile_sync_root_health(
+        &self,
+        profile: &str,
+        root_id: &str,
+        minimum_online_retaining_providers: usize,
+    ) -> Result<BroadwebdProfileSyncRootHealth, BroadwebdError> {
+        let response = self
+            .daemon
+            .profile_sync(BroadwebdProfileSyncRequest::RootHealth(
+                BroadwebdProfileSyncRootHealthRequest::with_minimum_online_retaining_providers(
+                    profile,
+                    root_id,
+                    minimum_online_retaining_providers,
+                ),
+            ))?;
+        let BroadwebdProfileSyncResponse::RootHealth { health } = response else {
+            return Err(BroadwebdError::UnsupportedRequest(
+                "profile-sync root health returned a non-health response".to_string(),
+            ));
+        };
+        Ok(health)
     }
 
     pub fn run_settings_sync_cycle(
@@ -2565,6 +2658,113 @@ mod tests {
                 && expected_key_id == "content-key-epoch-2"
                 && active_key_id == TEST_CONTENT_KEY_ID
         ));
+
+        let _ = std::fs::remove_dir_all(state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_runner_reports_in_process_fixture_health() {
+        let network = InProcessBroadwebNetwork::new();
+        let state_root = test_state_root("cycle-health");
+        let db_root = test_state_root("cycle-health-db");
+        let daemon = network
+            .daemon_for_device(&state_root, ResourceBudget::default(), "runtime-health")
+            .expect("start in-process profile-sync daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-health",
+        )
+        .expect("open local settings database");
+        let profile = "healthprofile";
+        let settings_root_id = "settings/latest";
+        let runner = BroadwebdSettingsSyncRunner::new(&daemon);
+
+        let empty_health = runner
+            .settings_sync_health(&database, profile, settings_root_id, 1)
+            .expect("read empty in-process settings sync health");
+        assert_eq!(empty_health.profile, profile);
+        assert_eq!(empty_health.settings_root_id, settings_root_id);
+        assert_eq!(
+            empty_health.local_device_head_root_id,
+            "settings/devices/runtime-health/head"
+        );
+        assert_eq!(empty_health.provider_health.online_providers, 1);
+        assert_eq!(empty_health.provider_health.object_transfer_providers, 1);
+        assert!(!empty_health.provider_health.degraded);
+        assert!(empty_health.settings_root_health.degraded);
+        assert!(empty_health.local_device_head_root_health.degraded);
+        assert!(empty_health.degraded());
+        assert!(
+            empty_health
+                .settings_root_health
+                .message
+                .contains("no visible candidates")
+        );
+
+        let content_key = ProfileSyncContentKey::from_bytes([53; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-health").expect("generate signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register local trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write local setting");
+        let cycle = runner
+            .run_settings_sync_cycle(
+                &database,
+                profile,
+                settings_root_id,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+                4,
+            )
+            .expect("publish local settings through in-process fixture");
+        assert_eq!(cycle.published_step_count(), 1);
+
+        let published_health = runner
+            .settings_sync_health(&database, profile, settings_root_id, 1)
+            .expect("read published in-process settings sync health");
+        assert!(!published_health.degraded());
+        assert_eq!(published_health.provider_health.online_providers, 1);
+        assert_eq!(published_health.provider_health.retained_objects, 3);
+        assert_eq!(published_health.settings_root_health.visible_candidates, 1);
+        assert!(
+            published_health
+                .settings_root_health
+                .latest_object_available
+        );
+        assert_eq!(
+            published_health
+                .settings_root_health
+                .online_retaining_providers,
+            1
+        );
+        assert_eq!(
+            published_health
+                .local_device_head_root_health
+                .visible_candidates,
+            1
+        );
+        assert!(
+            published_health
+                .local_device_head_root_health
+                .latest_object_available
+        );
+        assert_eq!(
+            published_health
+                .local_device_head_root_health
+                .online_retaining_providers,
+            1
+        );
 
         let _ = std::fs::remove_dir_all(state_root);
         let _ = std::fs::remove_dir_all(db_root);

@@ -238,6 +238,11 @@ Current baseline:
   encryption algorithm, and the supplied local signer must match the trusted
   public key recorded for the local sync device. Secret key bytes remain outside
   the database.
+- `slate-profile-sync` now exposes a read-only settings sync health report that
+  combines broadwebd provider health, the shared settings root health, and the
+  local device-head root health. The regression test runs through
+  `InProcessBroadwebNetwork`, so scheduler-facing health checks stay inside the
+  test process and do not open loopback ports.
 - The local profile-sync fixture can now mark simulated devices offline and
   online, allowing tests to verify unavailable devices fail closed without
   touching sockets, DNS, Tor, IPFS, or external relays.

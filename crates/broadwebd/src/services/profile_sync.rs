@@ -710,7 +710,9 @@ impl ApplicationServicePlugin for ProfileSyncService {
         }
         PluginMetadata::new(PROFILE_SYNC_PLUGIN, PluginKind::ApplicationService)
             .with_capabilities(capabilities.as_slice())
-            .with_privacy_boundary("local in-memory fake profile-sync backend for tests")
+            .with_privacy_boundary(
+                "local in-memory fake profile-sync backend for tests; no sockets or external network",
+            )
             .with_resource_profile(ResourceProfile::Low)
     }
 

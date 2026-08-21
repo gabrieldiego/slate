@@ -510,6 +510,13 @@ requests inspect a concrete mutable root, reporting visible candidates, latest
 root object availability, whether that object is retained by a fresh online
 provider, and whether it meets the caller's minimum online retaining-provider
 quorum.
+The `slate-profile-sync` bridge exposes those checks as one read-only settings
+sync health report for the eventual scheduler: provider health, shared settings
+root health, and local device-head root health are gathered through the selected
+broadwebd daemon without publishing, pulling, or opening any additional
+transport. Fixture tests use `InProcessBroadwebNetwork` for this path so health
+policy can be validated without loopback ports, OS DNS, public gateways, Tor,
+IPFS/IPNS, or external relays.
 Object bytes are also provider-held: fetches require at least one online
 provider with the object, and retaining an object copies the bytes into the
 retaining provider's in-process store. Tests can pause object transfer from one
