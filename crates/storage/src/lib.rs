@@ -269,6 +269,24 @@ pub struct SignedSyncObject {
     pub signature: Vec<u8>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ProfileSyncManifest {
+    pub profile: String,
+    pub root_id: String,
+    pub current_snapshot_object_id: Option<String>,
+    pub tail_change_object_ids: Vec<String>,
+    pub included_domains: Vec<String>,
+    pub device_frontiers: Vec<ProfileSyncDeviceFrontier>,
+    pub created_at: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ProfileSyncDeviceFrontier {
+    pub device_id: String,
+    pub latest_sequence: i64,
+    pub latest_change_object_id: Option<String>,
+}
+
 impl SignedSyncObject {
     pub fn verify_with(
         &self,
@@ -2539,6 +2557,57 @@ mod tests {
             ProfileSyncDeviceSigner::generate("../device-a"),
             Err(SyncObjectError::InvalidDeviceId(device_id)) if device_id == "../device-a"
         ));
+    }
+
+    #[test]
+    fn profile_sync_manifest_can_be_signed_and_encrypted() {
+        let content_key = ProfileSyncContentKey::from_bytes([10; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let trusted_public_key = signer.public_key().unwrap();
+        let manifest = ProfileSyncManifest {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: "settings/latest".to_string(),
+            current_snapshot_object_id: Some("snapshot-object-1".to_string()),
+            tail_change_object_ids: vec!["change-object-2".to_string()],
+            included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            device_frontiers: vec![ProfileSyncDeviceFrontier {
+                device_id: "device-a".to_string(),
+                latest_sequence: 7,
+                latest_change_object_id: Some("change-object-2".to_string()),
+            }],
+            created_at: 1234,
+        };
+        let manifest_payload = serde_json::to_vec(&manifest).unwrap();
+        let encrypted_manifest = EncryptedSyncObject::seal_with_nonce(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            "manifest",
+            "content-key-epoch-1",
+            manifest_payload.as_slice(),
+            &content_key,
+            [5; PROFILE_SYNC_NONCE_BYTES],
+        )
+        .unwrap();
+        let signed_manifest = signer
+            .sign(encrypted_manifest.to_bytes().unwrap().as_slice())
+            .unwrap();
+
+        let signed_bytes = signed_manifest.to_bytes().unwrap();
+        assert!(
+            !std::str::from_utf8(signed_bytes.as_slice())
+                .unwrap()
+                .contains("change-object-2")
+        );
+
+        let decoded = SignedSyncObject::from_bytes(signed_bytes.as_slice()).unwrap();
+        let encrypted_bytes = decoded.verify_with(&trusted_public_key).unwrap();
+        let decoded_encrypted_manifest = EncryptedSyncObject::from_bytes(encrypted_bytes).unwrap();
+        assert_eq!(decoded_encrypted_manifest.object_kind, "manifest");
+
+        let decoded_payload = decoded_encrypted_manifest.open(&content_key).unwrap();
+        let decoded_manifest: ProfileSyncManifest =
+            serde_json::from_slice(decoded_payload.as_slice()).unwrap();
+        assert_eq!(decoded_manifest, manifest);
     }
 
     #[test]
