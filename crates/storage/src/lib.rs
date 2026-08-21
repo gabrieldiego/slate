@@ -59,6 +59,7 @@ const CHAT_CONVERSATION_SYNC_KEY_PREFIX: &str = "conversation.";
 const CONTACT_CARD_SYNC_KEY_PREFIX: &str = "contact.";
 const DOWNLOAD_METADATA_SYNC_KEY_PREFIX: &str = "download.";
 const FILE_ENTRY_SYNC_KEY_PREFIX: &str = "entry.";
+const STORAGE_PROVIDER_SYNC_KEY_PREFIX: &str = "provider.";
 const APP_SYNC_DOMAIN_CURSOR_KEY_PREFIX: &str = "app_sync.cursor.";
 const PROFILE_SYNC_ROOT_KEY_PREFIX: &str = "profile_sync.root.";
 const PROFILE_SYNC_SNAPSHOT_DEVICE_ID: &str = "snapshot";
@@ -1797,6 +1798,63 @@ pub struct FileEntrySyncPayload {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StorageProviderUpdate {
+    pub profile: String,
+    pub provider_id: String,
+    pub provider_kind: String,
+    pub display_name: String,
+    pub endpoint_ref: Option<String>,
+    pub discovery: bool,
+    pub connectivity: bool,
+    pub object_transfer: bool,
+    pub availability: bool,
+    pub mutable_roots: bool,
+    pub quota_bytes: Option<u64>,
+    pub max_retained_objects: Option<u32>,
+    pub pinning_policy: Option<String>,
+    pub enabled: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StorageProviderRecord {
+    pub profile: String,
+    pub provider_id: String,
+    pub provider_kind: String,
+    pub display_name: String,
+    pub endpoint_ref: Option<String>,
+    pub discovery: bool,
+    pub connectivity: bool,
+    pub object_transfer: bool,
+    pub availability: bool,
+    pub mutable_roots: bool,
+    pub quota_bytes: Option<u64>,
+    pub max_retained_objects: Option<u32>,
+    pub pinning_policy: Option<String>,
+    pub enabled: bool,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct StorageProviderSyncPayload {
+    pub provider_id: String,
+    pub provider_kind: String,
+    pub display_name: String,
+    pub endpoint_ref: Option<String>,
+    pub discovery: bool,
+    pub connectivity: bool,
+    pub object_transfer: bool,
+    pub availability: bool,
+    pub mutable_roots: bool,
+    pub quota_bytes: Option<u64>,
+    pub max_retained_objects: Option<u32>,
+    pub pinning_policy: Option<String>,
+    pub enabled: bool,
+    #[serde(default)]
+    pub deleted: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CookieUpdate {
     pub profile: String,
     pub domain: String,
@@ -2224,6 +2282,10 @@ pub enum StorageError {
     InvalidFileEntryId(String),
     InvalidFileEntryKind(String),
     InvalidFileSize(u64),
+    InvalidStorageProviderId(String),
+    InvalidStorageProviderKind(String),
+    InvalidStorageProviderQuota(u64),
+    InvalidStoragePinningPolicy(String),
     MissingActiveSyncContentKey(String),
     UnsupportedSyncContentKeyAlgorithm {
         key_id: String,
@@ -2310,6 +2372,24 @@ impl fmt::Display for StorageError {
                     "file metadata size exceeds SQLite integer range: {size_bytes}"
                 )
             }
+            Self::InvalidStorageProviderId(provider_id) => {
+                write!(formatter, "invalid storage provider id: {provider_id}")
+            }
+            Self::InvalidStorageProviderKind(provider_kind) => {
+                write!(formatter, "invalid storage provider kind: {provider_kind}")
+            }
+            Self::InvalidStorageProviderQuota(quota_bytes) => {
+                write!(
+                    formatter,
+                    "storage provider quota exceeds SQLite integer range: {quota_bytes}"
+                )
+            }
+            Self::InvalidStoragePinningPolicy(pinning_policy) => {
+                write!(
+                    formatter,
+                    "invalid storage provider pinning policy: {pinning_policy}"
+                )
+            }
             Self::MissingActiveSyncContentKey(profile) => {
                 write!(
                     formatter,
@@ -2372,6 +2452,10 @@ impl std::error::Error for StorageError {
             Self::InvalidFileEntryId(_) => None,
             Self::InvalidFileEntryKind(_) => None,
             Self::InvalidFileSize(_) => None,
+            Self::InvalidStorageProviderId(_) => None,
+            Self::InvalidStorageProviderKind(_) => None,
+            Self::InvalidStorageProviderQuota(_) => None,
+            Self::InvalidStoragePinningPolicy(_) => None,
             Self::MissingActiveSyncContentKey(_) => None,
             Self::UnsupportedSyncContentKeyAlgorithm { .. }
             | Self::UnauthorizedSyncContentKeyEpoch { .. } => None,
@@ -3232,6 +3316,138 @@ impl SlateProfileDatabase {
                 &transaction,
                 profile,
                 SYNC_DOMAIN_FILES,
+                sync_key.as_str(),
+                sync_payload.as_str(),
+                self.local_sync_device_id(),
+                now,
+            )
+            .map_err(|source| self.database_error(source))?;
+        }
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(())
+    }
+
+    pub fn upsert_storage_provider(
+        &self,
+        provider: &StorageProviderUpdate,
+    ) -> Result<StorageProviderRecord, StorageError> {
+        validate_storage_provider_update(provider)?;
+        let sync_key = storage_provider_sync_key(provider.provider_id.as_str());
+        let sync_payload = storage_provider_sync_payload(provider)?;
+        let payload = StorageProviderSyncPayload {
+            provider_id: provider.provider_id.clone(),
+            provider_kind: provider.provider_kind.clone(),
+            display_name: provider.display_name.clone(),
+            endpoint_ref: provider.endpoint_ref.clone(),
+            discovery: provider.discovery,
+            connectivity: provider.connectivity,
+            object_transfer: provider.object_transfer,
+            availability: provider.availability,
+            mutable_roots: provider.mutable_roots,
+            quota_bytes: provider.quota_bytes,
+            max_retained_objects: provider.max_retained_objects,
+            pinning_policy: provider.pinning_policy.clone(),
+            enabled: provider.enabled,
+            deleted: false,
+        };
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let now = unix_time_seconds()?;
+        upsert_storage_provider_in_transaction(
+            &transaction,
+            provider.profile.as_str(),
+            &payload,
+            now,
+        )
+        .map_err(|source| self.database_error(source))?;
+        record_sync_setting_text_in_transaction(
+            &transaction,
+            provider.profile.as_str(),
+            SYNC_DOMAIN_STORAGE,
+            sync_key.as_str(),
+            sync_payload.as_str(),
+            self.local_sync_device_id(),
+            now,
+        )
+        .map_err(|source| self.database_error(source))?;
+        let record = storage_provider_record_by_id_in_transaction(
+            &transaction,
+            provider.profile.as_str(),
+            provider.provider_id.as_str(),
+        )
+        .map_err(|source| self.database_error(source))?;
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(record)
+    }
+
+    pub fn storage_providers(
+        &self,
+        profile: &str,
+        limit: u32,
+    ) -> Result<Vec<StorageProviderRecord>, StorageError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT profile, provider_id, provider_kind, display_name, endpoint_ref,
+                        discovery, connectivity, object_transfer, availability, mutable_roots,
+                        quota_bytes, max_retained_objects, pinning_policy, enabled,
+                        created_at, updated_at
+                 FROM storage_providers
+                 WHERE profile = ?1
+                 ORDER BY enabled DESC, provider_kind, display_name, provider_id
+                 LIMIT ?2",
+            )
+            .map_err(|source| self.database_error(source))?;
+        let records = statement
+            .query_map(
+                params![profile, i64::from(limit)],
+                storage_provider_record_from_row,
+            )
+            .map_err(|source| self.database_error(source))?;
+
+        let mut providers = Vec::new();
+        for record in records {
+            providers.push(record.map_err(|source| self.database_error(source))?);
+        }
+        Ok(providers)
+    }
+
+    pub fn remove_storage_provider(
+        &self,
+        profile: &str,
+        provider_id: &str,
+    ) -> Result<(), StorageError> {
+        validate_storage_provider_id(provider_id)?;
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let now = unix_time_seconds()?;
+        let removed = storage_provider_record_by_id_optional_in_transaction(
+            &transaction,
+            profile,
+            provider_id,
+        )
+        .map_err(|source| self.database_error(source))?;
+        transaction
+            .execute(
+                "DELETE FROM storage_providers WHERE profile = ?1 AND provider_id = ?2",
+                params![profile, provider_id],
+            )
+            .map_err(|source| self.database_error(source))?;
+        if let Some(record) = removed {
+            let sync_key = storage_provider_sync_key(record.provider_id.as_str());
+            let sync_payload = storage_provider_tombstone_sync_payload(&record)?;
+            record_sync_setting_text_in_transaction(
+                &transaction,
+                profile,
+                SYNC_DOMAIN_STORAGE,
                 sync_key.as_str(),
                 sync_payload.as_str(),
                 self.local_sync_device_id(),
@@ -5689,6 +5905,32 @@ impl SlateProfileDatabase {
                 CREATE INDEX IF NOT EXISTS file_entries_sync_set
                     ON file_entries(profile, sync_set_id, entry_id);
 
+                CREATE TABLE IF NOT EXISTS storage_providers (
+                    profile TEXT NOT NULL,
+                    provider_id TEXT NOT NULL,
+                    provider_kind TEXT NOT NULL,
+                    display_name TEXT NOT NULL,
+                    endpoint_ref TEXT,
+                    discovery INTEGER NOT NULL DEFAULT 0,
+                    connectivity INTEGER NOT NULL DEFAULT 0,
+                    object_transfer INTEGER NOT NULL DEFAULT 0,
+                    availability INTEGER NOT NULL DEFAULT 0,
+                    mutable_roots INTEGER NOT NULL DEFAULT 0,
+                    quota_bytes INTEGER,
+                    max_retained_objects INTEGER,
+                    pinning_policy TEXT,
+                    enabled INTEGER NOT NULL DEFAULT 0,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    PRIMARY KEY(profile, provider_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS storage_providers_kind
+                    ON storage_providers(profile, provider_kind, provider_id);
+
+                CREATE INDEX IF NOT EXISTS storage_providers_enabled
+                    ON storage_providers(profile, enabled, provider_id);
+
                 CREATE TABLE IF NOT EXISTS cookies (
                     profile TEXT NOT NULL,
                     domain TEXT NOT NULL,
@@ -6395,6 +6637,52 @@ fn file_entry_tombstone_sync_payload(entry: &FileEntryRecord) -> Result<String, 
     .map_err(StorageError::EncodeSyncPayload)
 }
 
+fn storage_provider_sync_key(provider_id: &str) -> String {
+    format!("{STORAGE_PROVIDER_SYNC_KEY_PREFIX}{provider_id}")
+}
+
+fn storage_provider_sync_payload(provider: &StorageProviderUpdate) -> Result<String, StorageError> {
+    serde_json::to_string(&StorageProviderSyncPayload {
+        provider_id: provider.provider_id.clone(),
+        provider_kind: provider.provider_kind.clone(),
+        display_name: provider.display_name.clone(),
+        endpoint_ref: provider.endpoint_ref.clone(),
+        discovery: provider.discovery,
+        connectivity: provider.connectivity,
+        object_transfer: provider.object_transfer,
+        availability: provider.availability,
+        mutable_roots: provider.mutable_roots,
+        quota_bytes: provider.quota_bytes,
+        max_retained_objects: provider.max_retained_objects,
+        pinning_policy: provider.pinning_policy.clone(),
+        enabled: provider.enabled,
+        deleted: false,
+    })
+    .map_err(StorageError::EncodeSyncPayload)
+}
+
+fn storage_provider_tombstone_sync_payload(
+    provider: &StorageProviderRecord,
+) -> Result<String, StorageError> {
+    serde_json::to_string(&StorageProviderSyncPayload {
+        provider_id: provider.provider_id.clone(),
+        provider_kind: provider.provider_kind.clone(),
+        display_name: provider.display_name.clone(),
+        endpoint_ref: provider.endpoint_ref.clone(),
+        discovery: provider.discovery,
+        connectivity: provider.connectivity,
+        object_transfer: provider.object_transfer,
+        availability: provider.availability,
+        mutable_roots: provider.mutable_roots,
+        quota_bytes: provider.quota_bytes,
+        max_retained_objects: provider.max_retained_objects,
+        pinning_policy: provider.pinning_policy.clone(),
+        enabled: provider.enabled,
+        deleted: true,
+    })
+    .map_err(StorageError::EncodeSyncPayload)
+}
+
 fn validate_sync_domain(domain: &str) -> Result<(), StorageError> {
     if domain.is_empty() {
         return Err(StorageError::InvalidSyncDomain(domain.to_string()));
@@ -6466,6 +6754,45 @@ fn validate_file_entry_kind(entry_kind: &str) -> Result<(), StorageError> {
         return Ok(());
     }
     Err(StorageError::InvalidFileEntryKind(entry_kind.to_string()))
+}
+
+fn validate_storage_provider_update(provider: &StorageProviderUpdate) -> Result<(), StorageError> {
+    validate_storage_provider_id(provider.provider_id.as_str())?;
+    validate_storage_provider_kind(provider.provider_kind.as_str())?;
+    if let Some(quota_bytes) = provider.quota_bytes {
+        let _ = storage_quota_to_i64(quota_bytes)?;
+    }
+    if let Some(pinning_policy) = provider.pinning_policy.as_deref() {
+        validate_storage_pinning_policy(pinning_policy)?;
+    }
+    Ok(())
+}
+
+fn validate_storage_provider_id(provider_id: &str) -> Result<(), StorageError> {
+    if is_valid_sync_identifier(provider_id) {
+        return Ok(());
+    }
+    Err(StorageError::InvalidStorageProviderId(
+        provider_id.to_string(),
+    ))
+}
+
+fn validate_storage_provider_kind(provider_kind: &str) -> Result<(), StorageError> {
+    if is_valid_sync_identifier(provider_kind) {
+        return Ok(());
+    }
+    Err(StorageError::InvalidStorageProviderKind(
+        provider_kind.to_string(),
+    ))
+}
+
+fn validate_storage_pinning_policy(pinning_policy: &str) -> Result<(), StorageError> {
+    if matches!(pinning_policy, "disabled" | "manual" | "auto" | "required") {
+        return Ok(());
+    }
+    Err(StorageError::InvalidStoragePinningPolicy(
+        pinning_policy.to_string(),
+    ))
 }
 
 fn app_sync_domain_cursor_key(domain: &str) -> String {
@@ -6834,6 +7161,29 @@ fn apply_sync_setting_materialized_view_in_transaction(
         )?;
     }
 
+    if change.domain == SYNC_DOMAIN_STORAGE
+        && change
+            .key
+            .as_str()
+            .starts_with(STORAGE_PROVIDER_SYNC_KEY_PREFIX)
+    {
+        let payload = storage_provider_sync_payload_from_text(change.value.as_str())?;
+        validate_storage_provider_sync_payload_for_sql(&payload)?;
+        let expected_key = storage_provider_sync_key(payload.provider_id.as_str());
+        if change.key != expected_key {
+            return Err(invalid_storage_provider_sync_payload_error(format!(
+                "storage provider sync key {} does not match payload id {}",
+                change.key, payload.provider_id
+            )));
+        }
+        apply_storage_provider_sync_payload_in_transaction(
+            transaction,
+            change.profile.as_str(),
+            &payload,
+            now,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -6939,6 +7289,25 @@ fn file_entry_sync_payload_from_text(value: &str) -> Result<FileEntrySyncPayload
 }
 
 fn invalid_file_entry_sync_payload_error(message: String) -> rusqlite::Error {
+    rusqlite::Error::FromSqlConversionFailure(
+        3,
+        Type::Text,
+        Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            message,
+        )),
+    )
+}
+
+fn storage_provider_sync_payload_from_text(
+    value: &str,
+) -> Result<StorageProviderSyncPayload, rusqlite::Error> {
+    serde_json::from_str(value).map_err(|source| {
+        rusqlite::Error::FromSqlConversionFailure(3, Type::Text, Box::new(source))
+    })
+}
+
+fn invalid_storage_provider_sync_payload_error(message: String) -> rusqlite::Error {
     rusqlite::Error::FromSqlConversionFailure(
         3,
         Type::Text,
@@ -7516,6 +7885,190 @@ fn file_size_to_sql_i64(size_bytes: u64) -> Result<i64, rusqlite::Error> {
 fn file_size_from_sql_i64(size_bytes: i64) -> Result<u64, rusqlite::Error> {
     u64::try_from(size_bytes).map_err(|source| {
         rusqlite::Error::FromSqlConversionFailure(8, Type::Integer, Box::new(source))
+    })
+}
+
+fn apply_storage_provider_sync_payload_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    payload: &StorageProviderSyncPayload,
+    now: i64,
+) -> Result<(), rusqlite::Error> {
+    if payload.deleted {
+        transaction.execute(
+            "DELETE FROM storage_providers WHERE profile = ?1 AND provider_id = ?2",
+            params![profile, payload.provider_id.as_str()],
+        )?;
+        return Ok(());
+    }
+
+    upsert_storage_provider_in_transaction(transaction, profile, payload, now)
+}
+
+fn upsert_storage_provider_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    payload: &StorageProviderSyncPayload,
+    now: i64,
+) -> Result<(), rusqlite::Error> {
+    let quota_bytes = match payload.quota_bytes {
+        Some(quota_bytes) => Some(storage_quota_to_sql_i64(quota_bytes)?),
+        None => None,
+    };
+    let max_retained_objects = payload.max_retained_objects.map(i64::from);
+    transaction.execute(
+        "INSERT INTO storage_providers
+           (profile, provider_id, provider_kind, display_name, endpoint_ref, discovery,
+            connectivity, object_transfer, availability, mutable_roots, quota_bytes,
+            max_retained_objects, pinning_policy, enabled, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15)
+         ON CONFLICT(profile, provider_id) DO UPDATE SET
+           provider_kind = excluded.provider_kind,
+           display_name = excluded.display_name,
+           endpoint_ref = excluded.endpoint_ref,
+           discovery = excluded.discovery,
+           connectivity = excluded.connectivity,
+           object_transfer = excluded.object_transfer,
+           availability = excluded.availability,
+           mutable_roots = excluded.mutable_roots,
+           quota_bytes = excluded.quota_bytes,
+           max_retained_objects = excluded.max_retained_objects,
+           pinning_policy = excluded.pinning_policy,
+           enabled = excluded.enabled,
+           updated_at = excluded.updated_at",
+        params![
+            profile,
+            payload.provider_id.as_str(),
+            payload.provider_kind.as_str(),
+            payload.display_name.as_str(),
+            payload.endpoint_ref.as_deref(),
+            payload.discovery,
+            payload.connectivity,
+            payload.object_transfer,
+            payload.availability,
+            payload.mutable_roots,
+            quota_bytes,
+            max_retained_objects,
+            payload.pinning_policy.as_deref(),
+            payload.enabled,
+            now
+        ],
+    )?;
+    Ok(())
+}
+
+fn storage_provider_record_by_id_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    provider_id: &str,
+) -> Result<StorageProviderRecord, rusqlite::Error> {
+    transaction.query_row(
+        "SELECT profile, provider_id, provider_kind, display_name, endpoint_ref, discovery,
+                connectivity, object_transfer, availability, mutable_roots, quota_bytes,
+                max_retained_objects, pinning_policy, enabled, created_at, updated_at
+         FROM storage_providers
+         WHERE profile = ?1 AND provider_id = ?2",
+        params![profile, provider_id],
+        storage_provider_record_from_row,
+    )
+}
+
+fn storage_provider_record_by_id_optional_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    provider_id: &str,
+) -> Result<Option<StorageProviderRecord>, rusqlite::Error> {
+    transaction
+        .query_row(
+            "SELECT profile, provider_id, provider_kind, display_name, endpoint_ref, discovery,
+                    connectivity, object_transfer, availability, mutable_roots, quota_bytes,
+                    max_retained_objects, pinning_policy, enabled, created_at, updated_at
+             FROM storage_providers
+             WHERE profile = ?1 AND provider_id = ?2",
+            params![profile, provider_id],
+            storage_provider_record_from_row,
+        )
+        .optional()
+}
+
+fn storage_provider_record_from_row(
+    row: &rusqlite::Row<'_>,
+) -> Result<StorageProviderRecord, rusqlite::Error> {
+    let quota_bytes = match row.get::<_, Option<i64>>(10)? {
+        Some(quota_bytes) => Some(storage_quota_from_sql_i64(quota_bytes)?),
+        None => None,
+    };
+    let max_retained_objects = match row.get::<_, Option<i64>>(11)? {
+        Some(max_retained_objects) => {
+            Some(u32::try_from(max_retained_objects).map_err(|source| {
+                rusqlite::Error::FromSqlConversionFailure(11, Type::Integer, Box::new(source))
+            })?)
+        }
+        None => None,
+    };
+    Ok(StorageProviderRecord {
+        profile: row.get(0)?,
+        provider_id: row.get(1)?,
+        provider_kind: row.get(2)?,
+        display_name: row.get(3)?,
+        endpoint_ref: row.get(4)?,
+        discovery: row.get(5)?,
+        connectivity: row.get(6)?,
+        object_transfer: row.get(7)?,
+        availability: row.get(8)?,
+        mutable_roots: row.get(9)?,
+        quota_bytes,
+        max_retained_objects,
+        pinning_policy: row.get(12)?,
+        enabled: row.get(13)?,
+        created_at: row.get(14)?,
+        updated_at: row.get(15)?,
+    })
+}
+
+fn validate_storage_provider_sync_payload_for_sql(
+    payload: &StorageProviderSyncPayload,
+) -> Result<(), rusqlite::Error> {
+    if !is_valid_sync_identifier(payload.provider_id.as_str()) {
+        return Err(invalid_storage_provider_sync_payload_error(format!(
+            "invalid storage provider id: {}",
+            payload.provider_id
+        )));
+    }
+    if !is_valid_sync_identifier(payload.provider_kind.as_str()) {
+        return Err(invalid_storage_provider_sync_payload_error(format!(
+            "invalid storage provider kind: {}",
+            payload.provider_kind
+        )));
+    }
+    if let Some(quota_bytes) = payload.quota_bytes {
+        let _ = storage_quota_to_sql_i64(quota_bytes)?;
+    }
+    if let Some(pinning_policy) = payload.pinning_policy.as_deref()
+        && !matches!(pinning_policy, "disabled" | "manual" | "auto" | "required")
+    {
+        return Err(invalid_storage_provider_sync_payload_error(format!(
+            "invalid storage provider pinning policy: {pinning_policy}"
+        )));
+    }
+    Ok(())
+}
+
+fn storage_quota_to_i64(quota_bytes: u64) -> Result<i64, StorageError> {
+    i64::try_from(quota_bytes).map_err(|_| StorageError::InvalidStorageProviderQuota(quota_bytes))
+}
+
+fn storage_quota_to_sql_i64(quota_bytes: u64) -> Result<i64, rusqlite::Error> {
+    i64::try_from(quota_bytes).map_err(|_| {
+        invalid_storage_provider_sync_payload_error(format!(
+            "storage provider quota exceeds SQLite integer range: {quota_bytes}"
+        ))
+    })
+}
+
+fn storage_quota_from_sql_i64(quota_bytes: i64) -> Result<u64, rusqlite::Error> {
+    u64::try_from(quota_bytes).map_err(|source| {
+        rusqlite::Error::FromSqlConversionFailure(10, Type::Integer, Box::new(source))
     })
 }
 
@@ -12928,6 +13481,399 @@ mod tests {
         assert!(
             database
                 .file_entries(DEFAULT_PROFILE_ID, 10)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn storage_provider_writes_metadata_sync_change_without_secrets_or_local_state() {
+        let database_path = test_dir("storage-provider-local").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let provider = StorageProviderUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            provider_id: "provider-1".to_string(),
+            provider_kind: "ipfs".to_string(),
+            display_name: "Home IPFS".to_string(),
+            endpoint_ref: Some("/dnsaddr/home.example.test/p2p/provider-1".to_string()),
+            discovery: true,
+            connectivity: true,
+            object_transfer: true,
+            availability: true,
+            mutable_roots: false,
+            quota_bytes: Some(1_048_576),
+            max_retained_objects: Some(32),
+            pinning_policy: Some("manual".to_string()),
+            enabled: true,
+        };
+
+        let record = database.upsert_storage_provider(&provider).unwrap();
+
+        assert_eq!(record.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(record.provider_id, "provider-1");
+        assert_eq!(record.provider_kind, "ipfs");
+        assert_eq!(record.display_name, "Home IPFS");
+        assert_eq!(record.quota_bytes, Some(1_048_576));
+        assert_eq!(record.max_retained_objects, Some(32));
+        assert_eq!(record.pinning_policy.as_deref(), Some("manual"));
+        assert!(record.enabled);
+        assert_eq!(
+            database.storage_providers(DEFAULT_PROFILE_ID, 10).unwrap(),
+            vec![record]
+        );
+        let events = database
+            .sync_setting_text_events_after_for_domain(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_STORAGE,
+                0,
+                10,
+            )
+            .unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].change.entity_key, "provider.provider-1");
+        let payload: StorageProviderSyncPayload =
+            serde_json::from_str(events[0].change.payload.as_str()).unwrap();
+        assert_eq!(payload.provider_id, "provider-1");
+        assert_eq!(payload.provider_kind, "ipfs");
+        assert!(payload.discovery);
+        assert!(!payload.mutable_roots);
+        assert!(!payload.deleted);
+        let payload_json: serde_json::Value =
+            serde_json::from_str(events[0].change.payload.as_str()).unwrap();
+        assert!(payload_json.get("secret").is_none());
+        assert!(payload_json.get("token").is_none());
+        assert!(payload_json.get("private_key").is_none());
+        assert!(payload_json.get("local_path").is_none());
+        assert!(payload_json.get("daemon_state").is_none());
+        assert!(payload_json.get("health").is_none());
+        let value = database
+            .get_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_STORAGE,
+                "provider.provider-1",
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, events[0].change.payload);
+    }
+
+    #[test]
+    fn storage_provider_removal_records_tombstone() {
+        let database_path = test_dir("storage-provider-tombstone").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        database
+            .upsert_storage_provider(&StorageProviderUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                provider_id: "provider-2".to_string(),
+                provider_kind: "iroh".to_string(),
+                display_name: "Laptop mesh".to_string(),
+                endpoint_ref: Some("iroh-node:provider-2".to_string()),
+                discovery: true,
+                connectivity: true,
+                object_transfer: true,
+                availability: false,
+                mutable_roots: false,
+                quota_bytes: None,
+                max_retained_objects: None,
+                pinning_policy: Some("disabled".to_string()),
+                enabled: true,
+            })
+            .unwrap();
+
+        database
+            .remove_storage_provider(DEFAULT_PROFILE_ID, "provider-2")
+            .unwrap();
+
+        assert!(
+            database
+                .storage_providers(DEFAULT_PROFILE_ID, 10)
+                .unwrap()
+                .is_empty()
+        );
+        let events = database
+            .sync_setting_text_events_after_for_domain(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_STORAGE,
+                0,
+                10,
+            )
+            .unwrap();
+        assert_eq!(events.len(), 2);
+        let tombstone: StorageProviderSyncPayload =
+            serde_json::from_str(events[1].change.payload.as_str()).unwrap();
+        assert!(tombstone.deleted);
+        assert_eq!(tombstone.provider_id, "provider-2");
+        assert_eq!(tombstone.display_name, "Laptop mesh");
+        let value = database
+            .get_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_STORAGE,
+                "provider.provider-2",
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, events[1].change.payload);
+    }
+
+    #[test]
+    fn incoming_storage_provider_change_updates_rows() {
+        let database_path = test_dir("incoming-storage-provider").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let payload = StorageProviderSyncPayload {
+            provider_id: "provider-3".to_string(),
+            provider_kind: "pinning".to_string(),
+            display_name: "Contracted pinning".to_string(),
+            endpoint_ref: Some("provider:contracted-pinning".to_string()),
+            discovery: false,
+            connectivity: true,
+            object_transfer: true,
+            availability: true,
+            mutable_roots: false,
+            quota_bytes: Some(9_000),
+            max_retained_objects: Some(4),
+            pinning_policy: Some("required".to_string()),
+            enabled: false,
+            deleted: false,
+        };
+        let incoming = IncomingSyncSettingText::new(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_STORAGE,
+            storage_provider_sync_key(payload.provider_id.as_str()),
+            serde_json::to_string(&payload).unwrap(),
+            "device-b",
+            1,
+            20,
+        );
+
+        let applied = database.apply_sync_setting_text(&incoming).unwrap();
+
+        assert_eq!(applied.domain, SYNC_DOMAIN_STORAGE);
+        assert_eq!(applied.entity_key, "provider.provider-3");
+        assert!(applied.applied_at.is_some());
+        let providers = database.storage_providers(DEFAULT_PROFILE_ID, 10).unwrap();
+        assert_eq!(providers.len(), 1);
+        assert_eq!(providers[0].provider_id, "provider-3");
+        assert_eq!(providers[0].provider_kind, "pinning");
+        assert_eq!(providers[0].quota_bytes, Some(9_000));
+        assert_eq!(providers[0].max_retained_objects, Some(4));
+        assert_eq!(providers[0].pinning_policy.as_deref(), Some("required"));
+        assert!(!providers[0].enabled);
+    }
+
+    #[test]
+    fn incoming_storage_provider_tombstone_removes_row() {
+        let database_path =
+            test_dir("incoming-storage-provider-tombstone").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        database
+            .upsert_storage_provider(&StorageProviderUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                provider_id: "provider-4".to_string(),
+                provider_kind: "ipfs".to_string(),
+                display_name: "Temporary provider".to_string(),
+                endpoint_ref: None,
+                discovery: true,
+                connectivity: true,
+                object_transfer: true,
+                availability: true,
+                mutable_roots: true,
+                quota_bytes: Some(1024),
+                max_retained_objects: Some(1),
+                pinning_policy: Some("auto".to_string()),
+                enabled: true,
+            })
+            .unwrap();
+        let tombstone = StorageProviderSyncPayload {
+            provider_id: "provider-4".to_string(),
+            provider_kind: "ipfs".to_string(),
+            display_name: "Temporary provider".to_string(),
+            endpoint_ref: None,
+            discovery: true,
+            connectivity: true,
+            object_transfer: true,
+            availability: true,
+            mutable_roots: true,
+            quota_bytes: Some(1024),
+            max_retained_objects: Some(1),
+            pinning_policy: Some("auto".to_string()),
+            enabled: true,
+            deleted: true,
+        };
+
+        let applied = database
+            .apply_sync_setting_text(&IncomingSyncSettingText::new(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_STORAGE,
+                storage_provider_sync_key("provider-4"),
+                serde_json::to_string(&tombstone).unwrap(),
+                "zz-device",
+                1,
+                100,
+            ))
+            .unwrap();
+
+        assert!(applied.applied_at.is_some());
+        assert!(
+            database
+                .storage_providers(DEFAULT_PROFILE_ID, 10)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn incoming_losing_storage_provider_change_does_not_replace_winner() {
+        let database_path =
+            test_dir("incoming-storage-provider-conflict").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let winning_payload = StorageProviderSyncPayload {
+            provider_id: "provider-5".to_string(),
+            provider_kind: "ipfs".to_string(),
+            display_name: "Winner provider".to_string(),
+            endpoint_ref: Some("provider:winner".to_string()),
+            discovery: true,
+            connectivity: true,
+            object_transfer: true,
+            availability: true,
+            mutable_roots: true,
+            quota_bytes: Some(500),
+            max_retained_objects: Some(5),
+            pinning_policy: Some("manual".to_string()),
+            enabled: true,
+            deleted: false,
+        };
+        let losing_payload = StorageProviderSyncPayload {
+            provider_id: "provider-5".to_string(),
+            provider_kind: "iroh".to_string(),
+            display_name: "Loser provider".to_string(),
+            endpoint_ref: Some("provider:loser".to_string()),
+            discovery: false,
+            connectivity: true,
+            object_transfer: true,
+            availability: false,
+            mutable_roots: false,
+            quota_bytes: Some(100),
+            max_retained_objects: Some(1),
+            pinning_policy: Some("disabled".to_string()),
+            enabled: false,
+            deleted: false,
+        };
+
+        let winning = database
+            .apply_sync_setting_text(&IncomingSyncSettingText::new(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_STORAGE,
+                storage_provider_sync_key("provider-5"),
+                serde_json::to_string(&winning_payload).unwrap(),
+                "device-b",
+                2,
+                40,
+            ))
+            .unwrap();
+        let losing = database
+            .apply_sync_setting_text(&IncomingSyncSettingText::new(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_STORAGE,
+                storage_provider_sync_key("provider-5"),
+                serde_json::to_string(&losing_payload).unwrap(),
+                "device-c",
+                1,
+                30,
+            ))
+            .unwrap();
+
+        assert!(winning.applied_at.is_some());
+        assert_eq!(losing.applied_at, None);
+        let providers = database.storage_providers(DEFAULT_PROFILE_ID, 10).unwrap();
+        assert_eq!(providers.len(), 1);
+        assert_eq!(providers[0].display_name, "Winner provider");
+        assert_eq!(providers[0].provider_kind, "ipfs");
+        assert_eq!(
+            providers[0].endpoint_ref.as_deref(),
+            Some("provider:winner")
+        );
+        assert_eq!(providers[0].quota_bytes, Some(500));
+        assert!(providers[0].mutable_roots);
+        let value = database
+            .get_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_STORAGE,
+                "provider.provider-5",
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, winning.payload);
+    }
+
+    #[test]
+    fn storage_provider_ids_kinds_quotas_and_pinning_policies_are_validated() {
+        let database_path = test_dir("storage-provider-invalid").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let invalid_id = StorageProviderUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            provider_id: "../provider".to_string(),
+            provider_kind: "ipfs".to_string(),
+            display_name: "Invalid".to_string(),
+            endpoint_ref: None,
+            discovery: false,
+            connectivity: false,
+            object_transfer: false,
+            availability: false,
+            mutable_roots: false,
+            quota_bytes: None,
+            max_retained_objects: None,
+            pinning_policy: Some("manual".to_string()),
+            enabled: false,
+        };
+        let invalid_kind = StorageProviderUpdate {
+            provider_id: "provider-6".to_string(),
+            provider_kind: "ipfs/rpc".to_string(),
+            ..invalid_id.clone()
+        };
+        let invalid_quota = StorageProviderUpdate {
+            provider_id: "provider-7".to_string(),
+            provider_kind: "ipfs".to_string(),
+            quota_bytes: Some(i64::MAX as u64 + 1),
+            ..invalid_id.clone()
+        };
+        let invalid_policy = StorageProviderUpdate {
+            provider_id: "provider-8".to_string(),
+            provider_kind: "ipfs".to_string(),
+            quota_bytes: None,
+            pinning_policy: Some("secret".to_string()),
+            ..invalid_id.clone()
+        };
+
+        let id_error = database.upsert_storage_provider(&invalid_id).unwrap_err();
+        let kind_error = database.upsert_storage_provider(&invalid_kind).unwrap_err();
+        let quota_error = database
+            .upsert_storage_provider(&invalid_quota)
+            .unwrap_err();
+        let policy_error = database
+            .upsert_storage_provider(&invalid_policy)
+            .unwrap_err();
+
+        assert!(matches!(
+            id_error,
+            StorageError::InvalidStorageProviderId(provider_id)
+                if provider_id == "../provider"
+        ));
+        assert!(matches!(
+            kind_error,
+            StorageError::InvalidStorageProviderKind(provider_kind)
+                if provider_kind == "ipfs/rpc"
+        ));
+        assert!(
+            matches!(quota_error, StorageError::InvalidStorageProviderQuota(quota) if quota == i64::MAX as u64 + 1)
+        );
+        assert!(matches!(
+            policy_error,
+            StorageError::InvalidStoragePinningPolicy(pinning_policy)
+                if pinning_policy == "secret"
+        ));
+        assert!(
+            database
+                .storage_providers(DEFAULT_PROFILE_ID, 10)
                 .unwrap()
                 .is_empty()
         );

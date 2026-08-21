@@ -396,8 +396,13 @@ Planned domains:
   metadata-only: winning sync changes materialize URL, route, transport,
   filename, MIME type, byte count, and integrity fields into local rows, while
   file bytes and local paths stay out of replicated settings payloads.
-- `storage`: broadweb storage providers, pinning leases, quotas, object health,
-  and repair metadata.
+- `storage`: broadweb storage providers, pinning policy, quota hints, retained
+  object limits, and repair preferences. The initial Storage projection stores
+  provider metadata keyed by provider id and emits tombstones for deletion. It
+  may include provider kind, display name, endpoint reference, broadweb role
+  flags, quota hints, retained-object limits, pinning policy, and enabled state.
+  Provider credentials, private keys, local daemon paths, live health, and
+  per-device availability must stay outside replicated settings payloads.
 - Future apps such as Player, Notes, Tasks, Mail, or Media Library should define
   their own sync domain before storing replicated state.
 

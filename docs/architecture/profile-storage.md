@@ -139,8 +139,11 @@ state:
   object references, and retention policy.
 - `downloads`: persistent download records, source routing metadata, integrity
   metadata, and user-promoted files.
-- `storage`: provider configuration, pinning leases, quotas, object health, and
-  repair metadata.
+- `storage`: provider configuration, pinning policy, quota hints, retained
+  object limits, and repair preferences. The initial replicated projection
+  stores provider metadata only; provider credentials, private keys, local
+  daemon paths, live health, and per-device availability stay outside
+  `slate-settings.db` sync payloads.
 
 Do not sync cookies, passwords, private browsing state, site storage, bearer
 tokens, or protocol private keys until separate privacy and key-storage designs
