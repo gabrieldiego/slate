@@ -115,6 +115,7 @@ impl Default for StoragePolicy {
 #[derive(Clone, Debug)]
 pub struct SlateProfileDatabase {
     path: Arc<PathBuf>,
+    local_sync_device_id: Arc<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -337,6 +338,7 @@ pub enum StorageError {
         source: rusqlite::Error,
     },
     Clock(std::time::SystemTimeError),
+    InvalidSyncDeviceId(String),
 }
 
 impl fmt::Display for StorageError {
@@ -360,6 +362,9 @@ impl fmt::Display for StorageError {
                 )
             }
             Self::Clock(error) => write!(formatter, "failed to read system clock: {error}"),
+            Self::InvalidSyncDeviceId(device_id) => {
+                write!(formatter, "invalid sync device id: {device_id}")
+            }
         }
     }
 }
@@ -371,6 +376,7 @@ impl std::error::Error for StorageError {
             Self::CreateDirectory { source, .. } => Some(source),
             Self::Database { source, .. } => Some(source),
             Self::Clock(error) => Some(error),
+            Self::InvalidSyncDeviceId(_) => None,
         }
     }
 }
@@ -387,6 +393,18 @@ impl SlateProfileDatabase {
     }
 
     pub fn open_resolved(path: PathBuf) -> Result<Self, StorageError> {
+        Self::open_resolved_with_device_id(path, DEFAULT_SYNC_DEVICE_ID)
+    }
+
+    pub fn open_resolved_with_device_id(
+        path: PathBuf,
+        local_sync_device_id: impl Into<String>,
+    ) -> Result<Self, StorageError> {
+        let local_sync_device_id = local_sync_device_id.into();
+        if !is_valid_sync_identifier(local_sync_device_id.as_str()) {
+            return Err(StorageError::InvalidSyncDeviceId(local_sync_device_id));
+        }
+
         if let Some(parent) = path.parent()
             && !parent.as_os_str().is_empty()
         {
@@ -398,6 +416,7 @@ impl SlateProfileDatabase {
 
         let database = Self {
             path: Arc::new(path),
+            local_sync_device_id: Arc::new(local_sync_device_id),
         };
         database.initialize()?;
         database.try_seed_default_sync_state();
@@ -407,6 +426,10 @@ impl SlateProfileDatabase {
 
     pub fn path(&self) -> &Path {
         self.path.as_ref()
+    }
+
+    pub fn local_sync_device_id(&self) -> &str {
+        self.local_sync_device_id.as_str()
     }
 
     pub fn get_setting_text(&self, key: &str) -> Result<Option<String>, StorageError> {
@@ -441,7 +464,7 @@ impl SlateProfileDatabase {
             SYNC_DOMAIN_SETTINGS,
             key,
             value,
-            DEFAULT_SYNC_DEVICE_ID,
+            self.local_sync_device_id(),
             now,
         )
         .map_err(|source| self.database_error(source))?;
@@ -994,7 +1017,7 @@ impl SlateProfileDatabase {
             domain,
             key,
             value,
-            DEFAULT_SYNC_DEVICE_ID,
+            self.local_sync_device_id(),
             now,
         )
         .map_err(|source| self.database_error(source))?;
@@ -1342,7 +1365,7 @@ impl SlateProfileDatabase {
     fn seed_default_sync_state(&self) -> Result<(), StorageError> {
         self.register_sync_device(&SyncDeviceRegistration {
             profile: DEFAULT_PROFILE_ID.to_string(),
-            device_id: DEFAULT_SYNC_DEVICE_ID.to_string(),
+            device_id: self.local_sync_device_id().to_string(),
             label: Some("Local Device".to_string()),
             membership_epoch: 1,
             provider_authority: false,
@@ -1455,6 +1478,13 @@ fn bool_to_integer(value: bool) -> i64 {
 
 fn integer_to_bool(value: i64) -> bool {
     value != 0
+}
+
+fn is_valid_sync_identifier(value: &str) -> bool {
+    !value.is_empty()
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
 }
 
 fn record_sync_device_seen_in_transaction(
@@ -1840,6 +1870,40 @@ mod tests {
         assert_eq!(devices[0].device_id, DEFAULT_SYNC_DEVICE_ID);
         assert_eq!(devices[0].membership_epoch, 1);
         assert!(!devices[0].provider_authority);
+    }
+
+    #[test]
+    fn database_can_use_distinct_local_sync_device_id() {
+        let database_path = test_dir("sync-device-id").join(DEFAULT_DATABASE_FILE_NAME);
+        let database =
+            SlateProfileDatabase::open_resolved_with_device_id(database_path, "device-a").unwrap();
+
+        assert_eq!(database.local_sync_device_id(), "device-a");
+
+        let devices = database.sync_devices(DEFAULT_PROFILE_ID).unwrap();
+        assert_eq!(devices.len(), 1);
+        assert_eq!(devices[0].device_id, "device-a");
+
+        let change = database.set_setting_text("ui.theme", "teal");
+        assert!(change.is_ok());
+        let changes = database
+            .sync_changes_after(DEFAULT_PROFILE_ID, 0, 100)
+            .unwrap();
+        assert!(
+            changes.iter().any(|change| {
+                change.entity_key == "ui.theme" && change.device_id == "device-a"
+            })
+        );
+    }
+
+    #[test]
+    fn database_rejects_invalid_local_sync_device_id() {
+        let database_path = test_dir("invalid-sync-device-id").join(DEFAULT_DATABASE_FILE_NAME);
+        let error =
+            SlateProfileDatabase::open_resolved_with_device_id(database_path, "../device-a")
+                .unwrap_err();
+
+        assert!(matches!(error, StorageError::InvalidSyncDeviceId(_)));
     }
 
     #[test]
