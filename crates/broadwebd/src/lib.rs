@@ -286,6 +286,32 @@ mod tests {
             }
         );
 
+        let retained_objects = daemon
+            .profile_sync(ProfileSyncRequest::ListRetainedObjects(
+                ProfileSyncProfileRequest::new("default"),
+            ))
+            .expect("list retained profile sync objects");
+        assert_eq!(
+            retained_objects,
+            ProfileSyncResponse::RetainedObjects {
+                object_ids: vec![object_id.clone()]
+            }
+        );
+
+        let verified = daemon
+            .profile_sync(ProfileSyncRequest::VerifyRetainedObject(
+                ProfileSyncObjectRequest::new("default", object_id.clone()),
+            ))
+            .expect("verify retained profile sync object");
+        assert_eq!(
+            verified,
+            ProfileSyncResponse::RetainedObjectStatus {
+                object_id: object_id.clone(),
+                retained: true,
+                available: true
+            }
+        );
+
         let published = daemon
             .profile_sync(ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
                 "default",
@@ -334,8 +360,22 @@ mod tests {
         assert_eq!(
             released,
             ProfileSyncResponse::ReleaseObject {
-                object_id,
+                object_id: object_id.clone(),
                 retained: false
+            }
+        );
+
+        let verified_after_release = daemon
+            .profile_sync(ProfileSyncRequest::VerifyRetainedObject(
+                ProfileSyncObjectRequest::new("default", object_id.clone()),
+            ))
+            .expect("verify released profile sync object");
+        assert_eq!(
+            verified_after_release,
+            ProfileSyncResponse::RetainedObjectStatus {
+                object_id,
+                retained: false,
+                available: true
             }
         );
 

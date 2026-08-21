@@ -202,6 +202,8 @@ pub enum ProfileSyncRequest {
     GetEncryptedObject(ProfileSyncObjectRequest),
     RetainObject(ProfileSyncObjectRequest),
     ReleaseObject(ProfileSyncObjectRequest),
+    ListRetainedObjects(ProfileSyncProfileRequest),
+    VerifyRetainedObject(ProfileSyncObjectRequest),
     PublishRoot(ProfileSyncRootUpdate),
     ResolveRoot(ProfileSyncRootRequest),
     DiscoverProviders(ProfileSyncProfileRequest),
@@ -302,6 +304,14 @@ pub enum ProfileSyncResponse {
     ReleaseObject {
         object_id: String,
         retained: bool,
+    },
+    RetainedObjects {
+        object_ids: Vec<String>,
+    },
+    RetainedObjectStatus {
+        object_id: String,
+        retained: bool,
+        available: bool,
     },
     Root {
         root_id: String,

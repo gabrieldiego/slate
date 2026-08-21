@@ -130,6 +130,37 @@ impl ProfileSyncService {
         })
     }
 
+    fn list_retained_objects(
+        &self,
+        request: ProfileSyncProfileRequest,
+    ) -> Result<ProfileSyncResponse, BroadwebdError> {
+        validate_profile(&request.profile)?;
+        let store = self.store()?;
+        let object_ids = store
+            .retained
+            .iter()
+            .filter(|(profile, _)| profile == &request.profile)
+            .map(|(_, object_id)| object_id.clone())
+            .collect();
+        Ok(ProfileSyncResponse::RetainedObjects { object_ids })
+    }
+
+    fn verify_retained_object(
+        &self,
+        request: ProfileSyncObjectRequest,
+    ) -> Result<ProfileSyncResponse, BroadwebdError> {
+        validate_profile(&request.profile)?;
+        let store = self.store()?;
+        let key = (request.profile, request.object_id.clone());
+        let retained = store.retained.contains(&key);
+        let available = store.objects.contains_key(&key);
+        Ok(ProfileSyncResponse::RetainedObjectStatus {
+            object_id: request.object_id,
+            retained,
+            available,
+        })
+    }
+
     fn publish_root(
         &self,
         request: ProfileSyncRootUpdate,
@@ -242,6 +273,12 @@ impl ApplicationServicePlugin for ProfileSyncService {
             ProfileSyncRequest::GetEncryptedObject(request) => self.get_object(request)?,
             ProfileSyncRequest::RetainObject(request) => self.retain_object(request)?,
             ProfileSyncRequest::ReleaseObject(request) => self.release_object(request)?,
+            ProfileSyncRequest::ListRetainedObjects(request) => {
+                self.list_retained_objects(request)?
+            }
+            ProfileSyncRequest::VerifyRetainedObject(request) => {
+                self.verify_retained_object(request)?
+            }
             ProfileSyncRequest::PublishRoot(request) => self.publish_root(request)?,
             ProfileSyncRequest::ResolveRoot(request) => self.resolve_root(request)?,
             ProfileSyncRequest::DiscoverProviders(request) => self.discover_providers(request)?,
