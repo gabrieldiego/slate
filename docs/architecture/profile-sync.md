@@ -139,9 +139,12 @@ sync domains.
 authority set: signed membership records are stored by profile, record id,
 membership epoch, record kind, target device id, signer device id, and exact
 signed bytes. The storage helper verifies the record signature against the
-embedded signer key and validates the signed payload shape before insert, but it
-does not yet apply account policy or mutate the trusted device-key table from
-those records.
+embedded signer key and validates the signed payload shape before insert. A
+separate local apply helper can bootstrap the first self-signed device
+enrollment, then requires later records to verify against a currently trusted
+signer key before enrolling, revoking, or rotating a target device key. Applied
+membership records are marked once so replaying an older enrollment record does
+not re-trust a later-revoked device.
 
 ## State Model
 
@@ -251,9 +254,10 @@ The local trust store can also mark a stored device signing key as distrusted.
 Runtime trusted-device enumeration skips distrusted remote keys, trusted object
 opening rejects signed payloads from distrusted devices, and local credential
 preflight refuses to publish with a distrusted local signer. This is a local
-revocation guard for current fixtures and scheduler policy; full account-level
-revocation still needs the stored signed membership records to be applied
-through epoch transition rules.
+revocation guard for current fixtures and scheduler policy. The local
+membership apply helper can now distrust a target device key from a signed
+revocation record, while full account-level revocation still needs richer epoch
+transition and multi-approval policy.
 
 The active-key pull path also exposes an idempotent root-status helper for sync
 polling. It resolves the published root first and reports missing roots,

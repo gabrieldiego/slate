@@ -574,8 +574,13 @@ Current baseline:
   epoch, record kind, target device id, signer device id, and exact signed
   bytes; the signed-record helper verifies the signature against the embedded
   signer key and validates enroll, revoke, and device-key-rotation payload
-  shapes before accepting them. Applying those records to the trusted device
-  key table remains the next account-policy step.
+  shapes before accepting them.
+- A local membership apply helper can now bootstrap the first self-signed
+  device enrollment, then requires later enrollment, revocation, and
+  device-key-rotation records to verify against a currently trusted signer key
+  before mutating the trusted device-key table. Applied records get an
+  `applied_at` marker, so replaying an older enrollment record does not
+  re-trust a device after a later revocation.
 - Trusted signed settings pulls now also check the stored device-key membership
   epoch against the manifest membership epoch. A key first trusted after the
   manifest epoch cannot authorize that manifest, snapshot, or tail object set.
@@ -738,9 +743,9 @@ Next:
   availability, and mutable-root implementations so different broadweb
   protocols can be combined behind the typed provider role records.
 - Extend the stored signed membership record history into the full
-  equal-control account authority model: apply enrollment, revocation, and key
-  rotation records to trusted device keys while keeping availability providers
-  without profile write authority.
+  equal-control account authority model: add epoch transition rules,
+  multi-approval policy, recovery-file enrollment, and provider records with no
+  profile write authority.
 - Add Kubo RPC-backed operations for encrypted object add, pin, unpin, pin
   verification, IPNS publish, and IPNS resolve as the first IPFS/IPNS backend.
 - Implement the actual runtime sync loop that supplies a broadwebd-backed object
