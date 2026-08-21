@@ -187,6 +187,11 @@ Current baseline:
   mutable root publish/resolve, provider discovery, per-object transfer
   budgets, and two local `slate-settings.db` files syncing one setting through
   fixture bytes.
+- broadwebd's simulated HTTP gateway and Kubo RPC fixtures now use test-only
+  `slate-fixture-http://` and `slate-fixture-kubo://` schemes that resolve
+  inside the test process instead of binding loopback ports. Missing simulated
+  fixtures fail as internal fixture errors instead of falling through to a real
+  socket, DNS lookup, public gateway, or local daemon.
 - The local profile-sync fixture can now mark simulated devices offline and
   online, allowing tests to verify unavailable devices fail closed without
   touching sockets, DNS, Tor, IPFS, or external relays.
@@ -236,6 +241,11 @@ Current baseline:
   snapshot on the receiving device, applies the verified snapshot into
   `slate-settings.db`, records its backend object metadata, and also covers
   replaying retained manifest tail changes after the snapshot has been applied.
+- Storage now exposes a reusable verified settings-manifest application helper
+  that validates manifest schema, snapshot object id, tail object ids, profile,
+  and included domains before applying the current snapshot, replaying the
+  manifest tail in order, recording snapshot backend metadata, and advancing the
+  stored `settings/latest` root.
 - Storage can now apply a verified settings snapshot by replaying its text
   values through the same conflict policy used for incoming tail changes:
   snapshot values materialize in `settings_values` and the legacy settings view
@@ -261,8 +271,9 @@ Next:
   availability providers with no profile write authority.
 - Add Kubo RPC-backed operations for encrypted object add, pin, unpin, pin
   verification, IPNS publish, and IPNS resolve as the first IPFS/IPNS backend.
-- Wire verified settings snapshot application into the runtime sync flow that
-  consumes published manifests.
+- Fetch and verify published manifest objects in the runtime sync flow, then
+  decode the referenced snapshot and tail payloads and feed them into the
+  storage verified-manifest application helper.
 - Replace opportunistic chrome polling with a runtime watcher that applies
   externally synced changes through normal browser-core, chrome, routing, and
   privacy update paths instead of raw database replacement.
@@ -275,8 +286,9 @@ Next:
 - Add device enrollment, revocation, and key rotation before syncing sensitive
   profile domains.
 - Expand local distributed-protocol fixtures to simulate offline devices,
-  delayed sync, availability loss, pinning policy, and conflicts without using
-  the real internet, Tor, public IPFS/IPNS, or external relays.
+  delayed sync, availability loss, pinning policy, and conflicts entirely
+  inside the test process, without loopback ports, the real internet, Tor,
+  public IPFS/IPNS, or external relays.
 - Commit each coherent step separately and rerun focused regression tests for
   storage, broadwebd, rail apps, and chrome behavior as those areas are touched.
 

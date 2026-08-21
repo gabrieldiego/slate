@@ -390,8 +390,8 @@ contract when they prove useful.
   failure handling without external network access.
 - Local distributed-protocol fixtures model peer discovery, mutable records,
   object transfer, pinning or availability, offline devices, delayed sync, and
-  conflicts without connecting to the real internet, Tor, public IPFS/IPNS, or
-  any external relay.
+  conflicts inside the test process, without loopback sockets, the real
+  internet, Tor, public IPFS/IPNS, or any external relay.
 - Kubo integration tests are ignored or environment-gated and run against
   loopback only.
 - Leak tests assert that sync never falls through to DNS, public gateways,

@@ -622,18 +622,20 @@ The first daemon tests should use fake adapters before real IPFS/Tor/I2P:
 Profile sync fixtures should model distributed-web protocol behavior locally:
 peer discovery, mutable root records, encrypted object transfer,
 pinning/availability, offline devices, delayed sync, and conflicts. These
-fixtures should run entirely inside the local test process or on loopback and
-must not contact the real internet, Tor, public IPFS/IPNS, or external relays.
+fixtures should run entirely inside the local test process by default and must
+not contact the real internet, Tor, public IPFS/IPNS, external relays, or
+loopback sockets.
 
 Real protocol tests should use local fixtures or mock daemons. Tests must not
 require live IPFS, Tor, I2P, public gateways, or external network availability
 unless they are explicitly marked as external/manual.
 
-Loopback network tests and external internet tests should be separate. Loopback
-tests may bind `127.0.0.1` to exercise the daemon's HTTP path without relying on
-public network availability. External tests may contact stable public endpoints,
-but they must be ignored by default and gated behind an explicit environment
-variable such as `SLATE_EXTERNAL_NETWORK_TESTS=1`.
+Loopback network tests and external internet tests should be separate from the
+default suite. Loopback tests may bind `127.0.0.1` only when explicitly needed
+to exercise a real daemon compatibility path, and should be ignored or otherwise
+opt-in. External tests may contact stable public endpoints, but they must be
+ignored by default and gated behind an explicit environment variable such as
+`SLATE_EXTERNAL_NETWORK_TESTS=1`.
 
 ## Implementation Slices
 
