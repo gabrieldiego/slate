@@ -10865,6 +10865,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "slate-storage",
  "tokio",
  "tor-rtcompat",
  "url",
