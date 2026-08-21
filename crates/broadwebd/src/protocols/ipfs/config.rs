@@ -283,6 +283,16 @@ impl IpfsConfig {
 fn validate_gateway_url(gateway_base: &str, scope: IpfsGatewayScope) -> Result<(), BroadwebdError> {
     let url =
         Url::parse(gateway_base).map_err(|error| BroadwebdError::InvalidUrl(error.to_string()))?;
+    #[cfg(test)]
+    if crate::http::is_internal_fixture_http_url(&url) {
+        return match scope {
+            IpfsGatewayScope::Local => Ok(()),
+            IpfsGatewayScope::Public => Err(BroadwebdError::UnsupportedRequest(format!(
+                "public IPFS gateway mode cannot use an internal fixture gateway: {gateway_base}"
+            ))),
+        };
+    }
+
     if !matches!(url.scheme(), "http" | "https") {
         return Err(BroadwebdError::UnsupportedRequest(format!(
             "unsupported IPFS gateway scheme: {}",

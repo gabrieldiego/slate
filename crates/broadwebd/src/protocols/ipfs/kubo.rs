@@ -10,6 +10,8 @@ use url::Url;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(12);
 const USER_AGENT: &str = "Slate/0.0.1";
+#[cfg(test)]
+const INTERNAL_KUBO_RPC_FIXTURE_SCHEME: &str = "slate-fixture-kubo";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IpfsKuboRpcEndpoint {
@@ -221,6 +223,11 @@ fn should_try_directory_index(path: &str) -> bool {
 fn validate_kubo_rpc_url(api_base_url: &str) -> Result<(), BroadwebdError> {
     let url =
         Url::parse(api_base_url).map_err(|error| BroadwebdError::InvalidUrl(error.to_string()))?;
+    #[cfg(test)]
+    if is_internal_kubo_rpc_fixture_url(&url) {
+        return Ok(());
+    }
+
     if !matches!(url.scheme(), "http" | "https") {
         return Err(BroadwebdError::UnsupportedRequest(format!(
             "unsupported Kubo RPC scheme: {}",
@@ -277,7 +284,7 @@ pub(crate) fn register_internal_kubo_rpc_fixture(
     static NEXT_FIXTURE_ID: AtomicUsize = AtomicUsize::new(1);
 
     let id = NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed);
-    let base_url = format!("http://127.0.0.1/slate-test-kubo-{id}");
+    let base_url = format!("{INTERNAL_KUBO_RPC_FIXTURE_SCHEME}://fixture-{id}");
     internal_kubo_rpc_fixtures()
         .lock()
         .expect("internal Kubo fixture registry should not be poisoned")
@@ -310,7 +317,10 @@ struct InternalKuboRpcFixture {
 
 #[cfg(test)]
 fn is_internal_kubo_rpc_fixture_url(url: &Url) -> bool {
-    matches!(url.host_str(), Some("127.0.0.1")) && url.path().starts_with("/slate-test-kubo-")
+    url.scheme() == INTERNAL_KUBO_RPC_FIXTURE_SCHEME
+        && url
+            .host_str()
+            .is_some_and(|host| host.starts_with("fixture-"))
 }
 
 #[cfg(test)]
@@ -363,6 +373,13 @@ fn fetch_internal_kubo_rpc_fixture(
 
 #[cfg(test)]
 fn internal_kubo_rpc_base_url(url: &Url) -> Result<String, BroadwebdError> {
+    if url.scheme() == INTERNAL_KUBO_RPC_FIXTURE_SCHEME {
+        let host = url.host_str().ok_or_else(|| {
+            BroadwebdError::InvalidUrl(format!("invalid internal Kubo fixture URL: {url}"))
+        })?;
+        return Ok(format!("{}://{}", url.scheme(), host));
+    }
+
     let fixture_segment = url
         .path_segments()
         .and_then(|mut segments| segments.next().map(str::to_string))

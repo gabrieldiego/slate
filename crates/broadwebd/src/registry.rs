@@ -301,6 +301,11 @@ impl PluginRegistry {
             }
         }
 
+        #[cfg(test)]
+        if crate::http::is_internal_fixture_http_url(&url) {
+            return Ok(DIRECT_HTTP_PLUGIN.to_string());
+        }
+
         if matches!(url.scheme(), "http" | "https") {
             return Ok(DIRECT_HTTP_PLUGIN.to_string());
         }

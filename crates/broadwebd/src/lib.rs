@@ -703,7 +703,7 @@ mod tests {
 
     #[test]
     fn ipfs_gateway_transport_falls_back_from_unavailable_local_gateway() {
-        let missing_gateway = unused_loopback_http_url();
+        let missing_gateway = missing_internal_http_fixture_url();
         let (fallback_gateway, server) = local_http_fixture(
             "text/html; charset=utf-8",
             "<!doctype html><title>Fallback Gateway</title>",
@@ -731,7 +731,7 @@ mod tests {
 
     #[test]
     fn ipfs_gateway_transport_reports_fallback_status() {
-        let missing_gateway = unused_loopback_http_url();
+        let missing_gateway = missing_internal_http_fixture_url();
         let (fallback_gateway, server) = local_http_fixture(
             "text/html; charset=utf-8",
             "<!doctype html><title>Status Gateway</title>",
@@ -799,7 +799,7 @@ mod tests {
 
     #[test]
     fn ipfs_gateway_transport_caches_success_and_resets_after_bounded_failure() {
-        let missing_gateway = unused_loopback_http_url();
+        let missing_gateway = missing_internal_http_fixture_url();
         let (fallback_gateway, server) = local_http_fixture(
             "text/html; charset=utf-8",
             "<!doctype html><title>Cached Gateway</title>",
@@ -1099,8 +1099,11 @@ mod tests {
         registry.register_protocol_service(TorService);
         registry.register_transport(FixtureTransport::new(TOR_ARTI_HTTP_PLUGIN, "Tor fixture"));
         registry.register_service(super::HttpFetchService);
-        let daemon = BroadwebDaemon::start_with_registry(
-            test_state_root("tor-route-context"),
+        let state_root = test_state_root("tor-route-context");
+        let download_root = test_download_root("tor-route-context");
+        let daemon = BroadwebDaemon::start_with_registry_and_download_root(
+            &state_root,
+            &download_root,
             Default::default(),
             registry,
         )
@@ -1126,7 +1129,8 @@ mod tests {
         assert_eq!(route.privacy_boundary, "test fixture transport");
         assert_eq!(route.purpose, FetchPurpose::Navigation);
 
-        let _ = fs::remove_dir_all(daemon.state_root().path());
+        let _ = fs::remove_dir_all(state_root);
+        let _ = fs::remove_dir_all(download_root);
     }
 
     #[test]
@@ -1776,7 +1780,7 @@ mod tests {
         (address, InternalHttpFixtureHandle)
     }
 
-    fn unused_loopback_http_url() -> String {
+    fn missing_internal_http_fixture_url() -> String {
         unregistered_internal_fixture_http_url()
     }
 

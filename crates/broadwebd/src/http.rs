@@ -5,6 +5,8 @@ use std::time::Duration;
 use url::Url;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(12);
+#[cfg(test)]
+const INTERNAL_HTTP_FIXTURE_SCHEME: &str = "slate-fixture-http";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HttpFetchRequest {
@@ -416,7 +418,7 @@ pub(crate) fn register_internal_fixture_http_response(
     static NEXT_FIXTURE_ID: AtomicUsize = AtomicUsize::new(1);
 
     let id = NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed);
-    let base_url = format!("http://127.0.0.1/slate-test-fixture-{id}/");
+    let base_url = format!("{INTERNAL_HTTP_FIXTURE_SCHEME}://fixture-{id}/");
     internal_fixture_http_responses()
         .lock()
         .expect("internal HTTP fixture registry should not be poisoned")
@@ -431,14 +433,15 @@ pub(crate) fn unregistered_internal_fixture_http_url() -> String {
     static NEXT_MISSING_FIXTURE_ID: AtomicUsize = AtomicUsize::new(1);
 
     let id = NEXT_MISSING_FIXTURE_ID.fetch_add(1, Ordering::Relaxed);
-    format!("http://127.0.0.1/slate-test-missing-{id}")
+    format!("{INTERNAL_HTTP_FIXTURE_SCHEME}://missing-{id}")
 }
 
 #[cfg(test)]
-fn is_internal_fixture_http_url(url: &Url) -> bool {
-    matches!(url.host_str(), Some("127.0.0.1"))
-        && (url.path().starts_with("/slate-test-fixture-")
-            || url.path().starts_with("/slate-test-missing-"))
+pub(crate) fn is_internal_fixture_http_url(url: &Url) -> bool {
+    url.scheme() == INTERNAL_HTTP_FIXTURE_SCHEME
+        && url
+            .host_str()
+            .is_some_and(|host| host.starts_with("fixture-") || host.starts_with("missing-"))
 }
 
 #[cfg(test)]
