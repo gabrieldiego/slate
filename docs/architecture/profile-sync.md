@@ -277,8 +277,11 @@ The storage crate already represents device heads as signed encrypted sync
 objects for the settings domain. Opening a trusted device head verifies the
 stored device public key, decrypts the payload, checks that the payload device
 matches the signer, and rejects signer keys introduced after the head
-membership epoch. Publishing per-device heads and merging multiple authorized
-heads are separate runtime and broadwebd wiring steps.
+membership epoch. Device heads can be pulled through the same profile-sync
+object source abstraction as manifests: the helper resolves the per-device head
+root, fetches the object, verifies/decrypts it, and returns the verified head
+with its backend object id. Publishing per-device heads and merging multiple
+authorized heads are separate runtime and broadwebd wiring steps.
 
 The first synced domains should be settings that are safe to apply live, such as
 UI preferences, protocol adapter configuration, rail app ordering, and

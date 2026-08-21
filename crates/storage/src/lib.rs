@@ -1108,6 +1108,40 @@ where
     .map_err(ProfileSyncPullError::SyncObject)
 }
 
+pub fn pull_signed_profile_sync_device_head<Source>(
+    source: &Source,
+    profile: &str,
+    root_id: &str,
+    content_key: &ProfileSyncContentKey,
+    public_key: &ProfileSyncDevicePublicKey,
+    key_id: &str,
+) -> Result<Option<VerifiedProfileSyncDeviceHead>, ProfileSyncPullError<Source::Error>>
+where
+    Source: ProfileSyncObjectSource,
+{
+    let Some(device_head_object_id) = source
+        .resolve_profile_sync_root(profile, root_id)
+        .map_err(ProfileSyncPullError::Source)?
+    else {
+        return Ok(None);
+    };
+
+    let device_head_object =
+        fetch_profile_sync_object(source, profile, device_head_object_id.as_str())?;
+    let device_head = open_signed_profile_sync_device_head(
+        device_head_object.bytes.as_slice(),
+        content_key,
+        public_key,
+        profile,
+        key_id,
+    )
+    .map_err(ProfileSyncPullError::SyncObject)?;
+    Ok(Some(VerifiedProfileSyncDeviceHead {
+        object_id: device_head_object.object_id,
+        device_head,
+    }))
+}
+
 fn fetch_profile_sync_object<Source>(
     source: &Source,
     profile: &str,
@@ -1423,6 +1457,12 @@ pub struct VerifiedProfileSyncSettingsManifestObjects {
     pub manifest: ProfileSyncManifest,
     pub snapshot: Option<VerifiedProfileSyncSettingsSnapshot>,
     pub tail_changes: Vec<VerifiedProfileSyncSettingsTailChange>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VerifiedProfileSyncDeviceHead {
+    pub object_id: String,
+    pub device_head: ProfileSyncDeviceHead,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -3113,6 +3153,40 @@ impl SlateProfileDatabase {
             snapshot,
             tail_changes,
         })
+    }
+
+    pub fn pull_trusted_signed_profile_sync_device_head<Source>(
+        &self,
+        source: &Source,
+        profile: &str,
+        root_id: &str,
+        content_key: &ProfileSyncContentKey,
+        key_id: &str,
+    ) -> Result<Option<VerifiedProfileSyncDeviceHead>, ProfileSyncTrustedPullError<Source::Error>>
+    where
+        Source: ProfileSyncObjectSource,
+    {
+        let Some(device_head_object_id) = source
+            .resolve_profile_sync_root(profile, root_id)
+            .map_err(ProfileSyncTrustedPullError::Source)?
+        else {
+            return Ok(None);
+        };
+
+        let device_head_object =
+            fetch_trusted_profile_sync_object(source, profile, device_head_object_id.as_str())?;
+        let device_head = self
+            .open_trusted_signed_profile_sync_device_head(
+                device_head_object.bytes.as_slice(),
+                content_key,
+                profile,
+                key_id,
+            )
+            .map_err(ProfileSyncTrustedPullError::Open)?;
+        Ok(Some(VerifiedProfileSyncDeviceHead {
+            object_id: device_head_object.object_id,
+            device_head,
+        }))
     }
 
     pub fn pull_trusted_signed_profile_sync_settings_manifest_objects<Source>(
@@ -4968,6 +5042,154 @@ mod tests {
                 && key_membership_epoch == DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1
                 && manifest_membership_epoch == DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH
         ));
+    }
+
+    #[test]
+    fn profile_sync_pull_fetches_device_head_object() {
+        let content_key = ProfileSyncContentKey::from_bytes([26; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let trusted_public_key = signer.public_key().unwrap();
+        let key_id = "content-key-epoch-1";
+        let root_id = "settings/devices/device-a/head";
+        let object_id = "device-head-object-1";
+        let device_head = ProfileSyncDeviceHead {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            device_id: "device-a".to_string(),
+            root_id: root_id.to_string(),
+            schema_version: PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            latest_manifest_object_id: "manifest-object-3".to_string(),
+            latest_change_object_id: Some("change-object-7".to_string()),
+            device_sequence: 7,
+            logical_clock: 11,
+            created_at: 1234,
+        };
+        let mut source = InMemoryProfileSyncObjectSource::default();
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
+                key_id,
+                serde_json::to_vec(&device_head).unwrap().as_slice(),
+                &content_key,
+                &signer,
+                27,
+            ),
+        );
+        source.publish_root(DEFAULT_PROFILE_ID, root_id, object_id);
+
+        let pulled = pull_signed_profile_sync_device_head(
+            &source,
+            DEFAULT_PROFILE_ID,
+            root_id,
+            &content_key,
+            &trusted_public_key,
+            key_id,
+        )
+        .unwrap()
+        .expect("published device head root");
+        assert_eq!(
+            pulled,
+            VerifiedProfileSyncDeviceHead {
+                object_id: object_id.to_string(),
+                device_head,
+            }
+        );
+        assert_eq!(
+            pull_signed_profile_sync_device_head(
+                &source,
+                DEFAULT_PROFILE_ID,
+                "settings/devices/device-b/head",
+                &content_key,
+                &trusted_public_key,
+                key_id,
+            )
+            .unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn profile_sync_trusted_pull_fetches_device_head_with_stored_key() {
+        let content_key = ProfileSyncContentKey::from_bytes([27; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let trusted_public_key = signer.public_key().unwrap();
+        let key_id = "content-key-epoch-1";
+        let root_id = "settings/devices/device-a/head";
+        let object_id = "device-head-object-1";
+        let device_head = ProfileSyncDeviceHead {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            device_id: "device-a".to_string(),
+            root_id: root_id.to_string(),
+            schema_version: PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            latest_manifest_object_id: "manifest-object-3".to_string(),
+            latest_change_object_id: None,
+            device_sequence: 1,
+            logical_clock: 1,
+            created_at: 1234,
+        };
+        let mut source = InMemoryProfileSyncObjectSource::default();
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
+                key_id,
+                serde_json::to_vec(&device_head).unwrap().as_slice(),
+                &content_key,
+                &signer,
+                28,
+            ),
+        );
+        source.publish_root(DEFAULT_PROFILE_ID, root_id, object_id);
+        let destination_path =
+            test_dir("sync-trusted-pull-device-head").join(DEFAULT_DATABASE_FILE_NAME);
+        let destination =
+            SlateProfileDatabase::open_resolved_with_device_id(destination_path, "device-b")
+                .unwrap();
+        destination
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: trusted_public_key,
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .unwrap();
+
+        let pulled = destination
+            .pull_trusted_signed_profile_sync_device_head(
+                &source,
+                DEFAULT_PROFILE_ID,
+                root_id,
+                &content_key,
+                key_id,
+            )
+            .unwrap()
+            .expect("published trusted device head root");
+        assert_eq!(
+            pulled,
+            VerifiedProfileSyncDeviceHead {
+                object_id: object_id.to_string(),
+                device_head,
+            }
+        );
+        assert_eq!(
+            destination
+                .pull_trusted_signed_profile_sync_device_head(
+                    &source,
+                    DEFAULT_PROFILE_ID,
+                    "settings/devices/device-b/head",
+                    &content_key,
+                    key_id,
+                )
+                .unwrap(),
+            None
+        );
     }
 
     #[test]

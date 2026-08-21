@@ -264,6 +264,10 @@ Current baseline:
   optional latest change object, membership epoch, sequence, and logical clock;
   trusted opening uses the stored device public-key table and rejects device
   keys introduced after the head membership epoch.
+- Storage can now pull a signed encrypted device-head object through the common
+  profile-sync object source abstraction. Both explicit-key and trusted-key
+  helpers resolve a per-device head root, fetch the object, verify/decrypt it,
+  and return the verified head with its backend object id.
 - `slate-settings.db` now has typed snapshot metadata APIs for recording
   encrypted backend object ids, covered revisions, included domains, and latest
   snapshot lookup. This is metadata only; snapshot payloads stay in encrypted
