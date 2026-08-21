@@ -923,6 +923,83 @@ pub fn open_signed_profile_sync_settings_manifest_objects(
     })
 }
 
+pub fn settings_sync_manifest_for_tail_changes(
+    profile: &str,
+    root_id: &str,
+    tail_changes: &[ProfileSyncSettingsTailChangePublication],
+    retention_policy: ProfileSyncRetentionPolicy,
+) -> Result<ProfileSyncManifest, StorageError> {
+    if root_id.is_empty() {
+        return Err(StorageError::InvalidSyncRootId(root_id.to_string()));
+    }
+    if tail_changes.is_empty() {
+        return Err(StorageError::InvalidProfileSyncManifest(
+            "settings manifest tail is empty".to_string(),
+        ));
+    }
+
+    let mut included_domains = Vec::with_capacity(tail_changes.len());
+    let mut tail_change_object_ids = Vec::with_capacity(tail_changes.len());
+    let mut device_frontiers: BTreeMap<String, ProfileSyncDeviceFrontier> = BTreeMap::new();
+    let mut created_at = 0;
+    for tail in tail_changes {
+        if tail.object_id.is_empty() {
+            return Err(StorageError::InvalidProfileSyncManifest(
+                "settings manifest tail object id is empty".to_string(),
+            ));
+        }
+        if tail.change.profile != profile {
+            return Err(StorageError::InvalidProfileSyncManifest(format!(
+                "tail change {} profile {} does not match manifest profile {}",
+                tail.object_id, tail.change.profile, profile
+            )));
+        }
+        if tail.change.operation != "set_text" {
+            return Err(StorageError::InvalidProfileSyncManifest(format!(
+                "tail change {} operation {} is not supported by settings manifests",
+                tail.object_id, tail.change.operation
+            )));
+        }
+
+        included_domains.push(tail.change.domain.clone());
+        tail_change_object_ids.push(tail.object_id.clone());
+        created_at = created_at.max(tail.change.created_at);
+        let next_frontier = ProfileSyncDeviceFrontier {
+            device_id: tail.change.device_id.clone(),
+            latest_sequence: tail.change.device_sequence,
+            latest_change_object_id: Some(tail.object_id.clone()),
+        };
+        match device_frontiers.get(tail.change.device_id.as_str()) {
+            Some(existing)
+                if (
+                    existing.latest_sequence,
+                    existing.latest_change_object_id.as_deref(),
+                ) >= (
+                    next_frontier.latest_sequence,
+                    next_frontier.latest_change_object_id.as_deref(),
+                ) => {}
+            _ => {
+                device_frontiers.insert(tail.change.device_id.clone(), next_frontier);
+            }
+        }
+    }
+    included_domains.sort();
+    included_domains.dedup();
+
+    Ok(ProfileSyncManifest {
+        profile: profile.to_string(),
+        root_id: root_id.to_string(),
+        schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+        membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+        current_snapshot_object_id: None,
+        tail_change_object_ids,
+        included_domains,
+        device_frontiers: device_frontiers.into_values().collect(),
+        retention_policy,
+        created_at,
+    })
+}
+
 pub trait ProfileSyncObjectSource {
     type Error;
 
@@ -1601,6 +1678,12 @@ pub struct VerifiedProfileSyncSettingsSnapshot {
 pub struct VerifiedProfileSyncSettingsTailChange {
     pub object_id: String,
     pub change: IncomingSyncSettingText,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncSettingsTailChangePublication {
+    pub object_id: String,
+    pub change: SyncChangeRecord,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -5135,6 +5218,119 @@ mod tests {
                 .cloned()
                 .ok_or_else(|| format!("missing object {object_id}"))
         }
+    }
+
+    #[test]
+    fn settings_manifest_builder_uses_tail_change_publications() {
+        let first = SyncChangeRecord {
+            id: 1,
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            domain: SYNC_DOMAIN_SETTINGS.to_string(),
+            entity_key: "ui.theme".to_string(),
+            operation: "set_text".to_string(),
+            payload: "teal".to_string(),
+            device_id: "device-a".to_string(),
+            device_sequence: 1,
+            logical_clock: 1,
+            created_at: 100,
+            applied_at: Some(100),
+        };
+        let second = SyncChangeRecord {
+            id: 2,
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            domain: SYNC_DOMAIN_CALENDAR.to_string(),
+            entity_key: "default_view".to_string(),
+            operation: "set_text".to_string(),
+            payload: "month".to_string(),
+            device_id: "device-a".to_string(),
+            device_sequence: 2,
+            logical_clock: 2,
+            created_at: 120,
+            applied_at: Some(120),
+        };
+        let third = SyncChangeRecord {
+            id: 3,
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            domain: SYNC_DOMAIN_SETTINGS.to_string(),
+            entity_key: "ui.zoom".to_string(),
+            operation: "set_text".to_string(),
+            payload: "110".to_string(),
+            device_id: "device-b".to_string(),
+            device_sequence: 1,
+            logical_clock: 3,
+            created_at: 110,
+            applied_at: Some(110),
+        };
+
+        let manifest = settings_sync_manifest_for_tail_changes(
+            DEFAULT_PROFILE_ID,
+            "settings/latest",
+            &[
+                ProfileSyncSettingsTailChangePublication {
+                    object_id: "change-object-1".to_string(),
+                    change: first.clone(),
+                },
+                ProfileSyncSettingsTailChangePublication {
+                    object_id: "change-object-2".to_string(),
+                    change: second.clone(),
+                },
+                ProfileSyncSettingsTailChangePublication {
+                    object_id: "change-object-3".to_string(),
+                    change: third.clone(),
+                },
+            ],
+            ProfileSyncRetentionPolicy::default(),
+        )
+        .unwrap();
+
+        assert_eq!(manifest.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(manifest.root_id, "settings/latest");
+        assert_eq!(
+            manifest.tail_change_object_ids,
+            vec!["change-object-1", "change-object-2", "change-object-3"]
+        );
+        assert_eq!(
+            manifest.included_domains,
+            vec![SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_SETTINGS]
+        );
+        assert_eq!(
+            manifest.device_frontiers,
+            vec![
+                ProfileSyncDeviceFrontier {
+                    device_id: "device-a".to_string(),
+                    latest_sequence: 2,
+                    latest_change_object_id: Some("change-object-2".to_string()),
+                },
+                ProfileSyncDeviceFrontier {
+                    device_id: "device-b".to_string(),
+                    latest_sequence: 1,
+                    latest_change_object_id: Some("change-object-3".to_string()),
+                },
+            ]
+        );
+        assert_eq!(manifest.created_at, 120);
+
+        assert!(matches!(
+            settings_sync_manifest_for_tail_changes(
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &[],
+                ProfileSyncRetentionPolicy::default(),
+            ),
+            Err(StorageError::InvalidProfileSyncManifest(_))
+        ));
+        assert!(matches!(
+            settings_sync_manifest_for_tail_changes(
+                "other-profile",
+                "settings/latest",
+                &[ProfileSyncSettingsTailChangePublication {
+                    object_id: "change-object-1".to_string(),
+                    change: first,
+                }],
+                ProfileSyncRetentionPolicy::default(),
+            ),
+            Err(StorageError::InvalidProfileSyncManifest(_))
+        ));
     }
 
     #[test]

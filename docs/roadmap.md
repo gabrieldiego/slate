@@ -330,6 +330,10 @@ Current baseline:
   include schema version, membership epoch, and retention-policy metadata so
   local fixtures can model account epoch and future compaction decisions without
   changing the encrypted object shape again.
+- Storage now owns a reusable tail-change manifest builder for publish flows.
+  It derives tail object order, included domains, created time, and per-device
+  frontiers from typed change records plus backend object ids, and the
+  broadwebd local fixture uses it instead of hand-assembling simple manifests.
 - Incoming synced settings now have an initial deterministic conflict policy:
   the highest logical clock wins, with device id and device sequence as stable
   tie-breakers. Losing setting changes are retained in `settings_changes`

@@ -17,10 +17,11 @@ use slate_storage::{
     ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner, ProfileSyncManifest,
     ProfileSyncObjectBytes, ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
     ProfileSyncRootCandidate, ProfileSyncSettingsPullApplyStatus, ProfileSyncSettingsSnapshot,
-    SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, SyncChangeRecord, SyncContentKeyEpochRegistration,
-    SyncDevicePublicKeyRegistration, SyncRevisionRecord, SyncSnapshotRegistration,
-    open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
-    open_signed_sync_setting_text,
+    ProfileSyncSettingsTailChangePublication, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase,
+    SyncChangeRecord, SyncContentKeyEpochRegistration, SyncDevicePublicKeyRegistration,
+    SyncRevisionRecord, SyncSnapshotRegistration, open_signed_profile_sync_manifest,
+    open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
+    settings_sync_manifest_for_tail_changes,
 };
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -1243,22 +1244,16 @@ fn sign_encrypted_manifest(
     content_key: &ProfileSyncContentKey,
     signer: &ProfileSyncDeviceSigner,
 ) -> Vec<u8> {
-    let manifest = ProfileSyncManifest {
-        profile: change.profile.clone(),
-        root_id: root_id.to_string(),
-        schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
-        membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
-        current_snapshot_object_id: None,
-        tail_change_object_ids: vec![change_object_id.to_string()],
-        included_domains: vec![change.domain.clone()],
-        device_frontiers: vec![ProfileSyncDeviceFrontier {
-            device_id: change.device_id.clone(),
-            latest_sequence: change.device_sequence,
-            latest_change_object_id: Some(change_object_id.to_string()),
+    let manifest = settings_sync_manifest_for_tail_changes(
+        change.profile.as_str(),
+        root_id,
+        &[ProfileSyncSettingsTailChangePublication {
+            object_id: change_object_id.to_string(),
+            change: change.clone(),
         }],
-        retention_policy: ProfileSyncRetentionPolicy::default(),
-        created_at: change.created_at,
-    };
+        ProfileSyncRetentionPolicy::default(),
+    )
+    .expect("build fixture manifest from tail change");
     sign_encrypted_manifest_payload(&manifest, content_key, signer)
 }
 
