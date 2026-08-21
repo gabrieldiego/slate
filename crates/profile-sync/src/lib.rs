@@ -7223,6 +7223,99 @@ mod tests {
     }
 
     #[test]
+    fn broadwebd_settings_sync_health_reports_delayed_object_transfer() {
+        let network = InProcessBroadwebNetwork::new();
+        let fixture = network.profile_sync();
+        let source_state_root = test_state_root("cycle-delayed-transfer-source");
+        let receiver_state_root = test_state_root("cycle-delayed-transfer-receiver");
+        let receiver_db_root = test_state_root("cycle-delayed-transfer-receiver-db");
+        let source_daemon = network
+            .daemon_for_device(
+                &source_state_root,
+                ResourceBudget::default(),
+                "runtime-delayed-transfer-source",
+            )
+            .expect("start in-process delayed-transfer source daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "runtime-delayed-transfer-receiver",
+            )
+            .expect("start in-process delayed-transfer receiver daemon");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-delayed-transfer-receiver",
+        )
+        .expect("open delayed-transfer receiver settings database");
+        let profile = "delayedtransferhealthprofile";
+        let settings_root_id = "settings/latest";
+        let object_id = BroadwebdProfileSyncPublisher::new(&source_daemon)
+            .put_retained_root(
+                profile,
+                settings_root_id,
+                b"encrypted delayed transfer settings root".to_vec(),
+            )
+            .expect("source publishes delayed-transfer settings root");
+        fixture
+            .set_device_transfer_available(
+                "runtime-delayed-transfer-source",
+                "runtime-delayed-transfer-receiver",
+                false,
+            )
+            .expect("delay object transfer from source to receiver");
+
+        let delayed_health = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
+            .settings_sync_health(&receiver_database, profile, settings_root_id, 1)
+            .expect("receiver reads delayed-transfer root health");
+        assert_eq!(delayed_health.settings_root_health.visible_candidates, 1);
+        assert_eq!(delayed_health.settings_root_health.delayed_candidates, 0);
+        assert_eq!(
+            delayed_health
+                .settings_root_health
+                .latest_object_id
+                .as_deref(),
+            Some(object_id.as_str())
+        );
+        assert!(!delayed_health.settings_root_health.latest_object_available);
+        assert_eq!(
+            delayed_health
+                .settings_root_health
+                .delayed_object_provider_ids,
+            vec!["local-fixture-device-runtime-delayed-transfer-source".to_string()]
+        );
+        assert!(delayed_health.settings_root_health.degraded);
+        assert!(
+            delayed_health
+                .settings_root_health
+                .message
+                .contains("delayed object-transfer")
+        );
+
+        fixture
+            .set_device_transfer_available(
+                "runtime-delayed-transfer-source",
+                "runtime-delayed-transfer-receiver",
+                true,
+            )
+            .expect("release object transfer from source to receiver");
+        let released_health = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
+            .settings_sync_health(&receiver_database, profile, settings_root_id, 1)
+            .expect("receiver reads released-transfer root health");
+        assert!(released_health.settings_root_health.latest_object_available);
+        assert!(
+            released_health
+                .settings_root_health
+                .delayed_object_provider_ids
+                .is_empty()
+        );
+
+        let _ = std::fs::remove_dir_all(source_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
     fn broadwebd_settings_sync_runner_wraps_cycle_with_health() {
         let network = InProcessBroadwebNetwork::new();
         let state_root = test_state_root("cycle-with-health");

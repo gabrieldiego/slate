@@ -423,6 +423,17 @@ impl ProfileSyncService {
             )
             .is_some()
         });
+        let delayed_object_provider_ids = latest_object_id
+            .as_deref()
+            .map(|object_id| {
+                delayed_object_provider_ids(
+                    &store,
+                    self.provider_id.as_str(),
+                    request.profile.as_str(),
+                    object_id,
+                )
+            })
+            .unwrap_or_default();
         let online_retaining_providers = latest_object_id
             .as_deref()
             .map(|object_id| {
@@ -433,6 +444,7 @@ impl ProfileSyncService {
             candidates.len(),
             delayed_candidates.len(),
             latest_object_available,
+            delayed_object_provider_ids.len(),
             online_retaining_providers,
             request.minimum_online_retaining_providers,
         );
@@ -446,6 +458,7 @@ impl ProfileSyncService {
                 delayed_publisher_provider_ids,
                 latest_object_id,
                 latest_object_available,
+                delayed_object_provider_ids,
                 online_retaining_providers,
                 minimum_online_retaining_providers: request.minimum_online_retaining_providers,
                 degraded,
@@ -1063,6 +1076,7 @@ fn profile_sync_root_health_message(
     visible_candidates: usize,
     delayed_candidates: usize,
     latest_object_available: bool,
+    delayed_object_providers: usize,
     online_retaining_providers: usize,
     minimum_online_retaining_providers: usize,
 ) -> (bool, String) {
@@ -1080,6 +1094,14 @@ fn profile_sync_root_health_message(
             "profile sync root has no visible candidates in the local fixture".to_string(),
         )
     } else if !latest_object_available {
+        if delayed_object_providers > 0 {
+            return (
+                true,
+                format!(
+                    "profile sync root object is blocked by {delayed_object_providers} delayed object-transfer provider(s) in the local fixture"
+                ),
+            );
+        }
         (
             true,
             "profile sync root object is not available from a fresh online provider in the local fixture"
@@ -1138,6 +1160,31 @@ fn find_online_object<'a>(
                 && transfer_available(store, provider_id, requester_provider_id)
         })
         .map(|(_, bytes)| bytes)
+}
+
+fn delayed_object_provider_ids(
+    store: &ProfileSyncStore,
+    requester_provider_id: &str,
+    profile: &str,
+    object_id: &str,
+) -> Vec<String> {
+    store
+        .objects
+        .keys()
+        .filter_map(|(provider_id, stored_profile, stored_object_id)| {
+            if stored_profile == profile
+                && stored_object_id == object_id
+                && provider_is_fresh_online_for_role(store, provider_id, |roles| {
+                    roles.object_transfer
+                })
+                && !transfer_available(store, provider_id, requester_provider_id)
+            {
+                Some(provider_id.clone())
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 fn transfer_available(
@@ -2671,6 +2718,16 @@ mod tests {
         let ProfileSyncResponse::PutEncryptedObject { object_id } = put else {
             panic!("unexpected put response");
         };
+        device_a
+            .profile_sync(
+                ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+                    "default",
+                    "settings/latest",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("device a can publish root for delayed object transfer");
         fixture
             .set_device_transfer_available("a", "b", false)
             .expect("delay transfer from device a to device b");
@@ -2706,6 +2763,28 @@ mod tests {
                 available: false,
             }
         );
+        let delayed_health = device_b
+            .profile_sync(
+                ProfileSyncRequest::RootHealth(ProfileSyncRootHealthRequest::new(
+                    "default",
+                    "settings/latest",
+                )),
+                &budget,
+            )
+            .expect("device b can inspect delayed object-transfer root health");
+        let ProfileSyncResponse::RootHealth { health } = delayed_health else {
+            panic!("unexpected root health response");
+        };
+        assert_eq!(health.visible_candidates, 1);
+        assert_eq!(health.delayed_candidates, 0);
+        assert_eq!(health.latest_object_id.as_deref(), Some(object_id.as_str()));
+        assert!(!health.latest_object_available);
+        assert_eq!(
+            health.delayed_object_provider_ids,
+            vec!["local-fixture-device-a".to_string()]
+        );
+        assert!(health.degraded);
+        assert!(health.message.contains("delayed object-transfer"));
         let retain_error = device_b
             .profile_sync(
                 ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
@@ -2741,6 +2820,21 @@ mod tests {
         fixture
             .set_device_transfer_available("a", "b", true)
             .expect("release delayed transfer from device a to device b");
+        let released_health = device_b
+            .profile_sync(
+                ProfileSyncRequest::RootHealth(ProfileSyncRootHealthRequest::new(
+                    "default",
+                    "settings/latest",
+                )),
+                &budget,
+            )
+            .expect("device b can inspect released object-transfer root health");
+        let ProfileSyncResponse::RootHealth { health } = released_health else {
+            panic!("unexpected root health response");
+        };
+        assert_eq!(health.visible_candidates, 1);
+        assert!(health.latest_object_available);
+        assert!(health.delayed_object_provider_ids.is_empty());
         device_b
             .profile_sync(
                 ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(

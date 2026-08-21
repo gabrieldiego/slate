@@ -390,6 +390,11 @@ Current baseline:
   those fields in scheduler-facing health reports, so delayed root propagation
   can be distinguished from a genuinely empty root without loopback sockets or
   external discovery.
+- Root health now also reports delayed object-transfer provider ids when the
+  latest visible root object is held by a fresh online provider but transfer to
+  the requester is paused. The profile-sync runner surfaces that signal so
+  scheduler-facing health can distinguish missing objects from local fixture
+  transfer delay without opening sockets or contacting external services.
 - `slate-profile-sync` now has a typed settings sync cycle policy carrying
   retention, publish-step, trusted-device, and retaining-provider quorum
   limits. The runtime-facing policy path checks provider health before touching
@@ -809,8 +814,7 @@ Current baseline:
 Next:
 
 - Continue extending the protocol-neutral `profile-sync` application service
-  with provider freshness policy for delayed object transfers and eventually
-  real protocol-backed provider materialization.
+  toward real protocol-backed provider materialization.
 - Continue splitting sync backends into discovery, connectivity, transfer,
   availability, and mutable-root implementations so different broadweb
   protocols can be combined behind the typed provider role records.
