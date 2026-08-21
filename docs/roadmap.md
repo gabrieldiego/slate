@@ -184,8 +184,9 @@ Current baseline:
   idempotent incoming setting-change application.
 - broadwebd has a protocol-neutral `profile-sync` application service with an
   in-memory local fixture backend. Unit tests cover object transfer, retention,
-  mutable root publish/resolve, provider discovery, and two local
-  `slate-settings.db` files syncing one setting through fixture bytes.
+  mutable root publish/resolve, provider discovery, per-object transfer
+  budgets, and two local `slate-settings.db` files syncing one setting through
+  fixture bytes.
 - The local profile-sync fixture can now mark simulated devices offline and
   online, allowing tests to verify unavailable devices fail closed without
   touching sockets, DNS, Tor, IPFS, or external relays.
