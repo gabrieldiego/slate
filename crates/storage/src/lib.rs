@@ -4,6 +4,7 @@ use ring::{aead, rand, signature};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::collections::BTreeMap;
 use std::fmt;
+use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -2107,6 +2108,76 @@ impl<T> TypedSyncSettingTextDomainPoll<T> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct TypedAppSyncDomainWatcher<T> {
+    database: SlateProfileDatabase,
+    profile: String,
+    domain: String,
+    batch_limit: u32,
+    payload: PhantomData<T>,
+}
+
+impl<T> TypedAppSyncDomainWatcher<T>
+where
+    T: DeserializeOwned,
+{
+    pub fn new(
+        database: SlateProfileDatabase,
+        profile: impl Into<String>,
+        domain: impl Into<String>,
+        batch_limit: u32,
+    ) -> Result<Self, StorageError> {
+        let profile = profile.into();
+        let domain = domain.into();
+        let batch_limit = batch_limit.max(1);
+        database.ensure_app_sync_domain_cursor_at_domain_head(profile.as_str(), domain.as_str())?;
+
+        Ok(Self {
+            database,
+            profile,
+            domain,
+            batch_limit,
+            payload: PhantomData,
+        })
+    }
+
+    pub fn profile(&self) -> &str {
+        self.profile.as_str()
+    }
+
+    pub fn domain(&self) -> &str {
+        self.domain.as_str()
+    }
+
+    pub fn batch_limit(&self) -> u32 {
+        self.batch_limit
+    }
+
+    pub fn current_revision(&self) -> Result<i64, StorageError> {
+        Ok(self
+            .database
+            .app_sync_domain_cursor(self.profile.as_str(), self.domain.as_str())?
+            .map(|cursor| cursor.latest_revision)
+            .unwrap_or(0))
+    }
+
+    pub fn poll_once(&self) -> Result<TypedSyncSettingTextDomainPoll<T>, StorageError> {
+        self.database
+            .poll_typed_sync_setting_text_events_for_app_domain::<T>(
+                self.profile.as_str(),
+                self.domain.as_str(),
+                self.batch_limit,
+            )
+    }
+
+    pub fn acknowledge(
+        &self,
+        poll: &TypedSyncSettingTextDomainPoll<T>,
+    ) -> Result<AppSyncDomainCursorRecord, StorageError> {
+        self.database.record_typed_app_sync_domain_poll_cursor(poll)
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SyncSnapshotRegistration {
     pub profile: String,
@@ -3892,15 +3963,22 @@ impl SlateProfileDatabase {
         domain: &str,
         limit: u32,
     ) -> Result<SyncSettingTextDomainPoll, StorageError> {
-        let previous_revision = match self.app_sync_domain_cursor(profile, domain)? {
-            Some(cursor) => cursor.latest_revision,
-            None => {
-                let revision = self.latest_sync_revision_for_domain(profile, domain)?;
-                self.record_app_sync_domain_cursor(profile, domain, revision)?;
-                revision
-            }
-        };
+        let previous_revision = self
+            .ensure_app_sync_domain_cursor_at_domain_head(profile, domain)?
+            .latest_revision;
         self.poll_sync_setting_text_events_for_domain(profile, domain, previous_revision, limit)
+    }
+
+    pub fn ensure_app_sync_domain_cursor_at_domain_head(
+        &self,
+        profile: &str,
+        domain: &str,
+    ) -> Result<AppSyncDomainCursorRecord, StorageError> {
+        if let Some(cursor) = self.app_sync_domain_cursor(profile, domain)? {
+            return Ok(cursor);
+        }
+        let revision = self.latest_sync_revision_for_domain(profile, domain)?;
+        self.record_app_sync_domain_cursor(profile, domain, revision)
     }
 
     pub fn poll_typed_sync_setting_text_events_for_app_domain<T>(
@@ -14618,6 +14696,132 @@ mod tests {
                 .map(|cursor| cursor.latest_revision),
             Some(initial_revision)
         );
+    }
+
+    #[test]
+    fn typed_app_sync_domain_watcher_polls_and_acknowledges_batches() {
+        let database_path =
+            test_dir("typed-app-sync-domain-watcher").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        database
+            .upsert_chat_conversation(&ChatConversationUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                conversation_id: "chat-watcher-history".to_string(),
+                provider_id: Some("whatsapp".to_string()),
+                external_thread_id: Some("history@example.test".to_string()),
+                display_name: "History".to_string(),
+                avatar_key: None,
+                last_message_at: Some(1_789_070_000),
+                unread_count: 0,
+                archived: false,
+                muted: false,
+            })
+            .unwrap();
+        let chat_head = database
+            .latest_sync_revision_for_domain(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CHAT)
+            .unwrap();
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_DOWNLOADS,
+                "last_filter",
+                "active",
+            )
+            .unwrap();
+        assert!(database.latest_sync_revision(DEFAULT_PROFILE_ID).unwrap() > chat_head);
+
+        let watcher = TypedAppSyncDomainWatcher::<ChatConversationSyncPayload>::new(
+            database.clone(),
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_CHAT,
+            1,
+        )
+        .unwrap();
+        assert_eq!(watcher.profile(), DEFAULT_PROFILE_ID);
+        assert_eq!(watcher.domain(), SYNC_DOMAIN_CHAT);
+        assert_eq!(watcher.batch_limit(), 1);
+        assert_eq!(watcher.current_revision().unwrap(), chat_head);
+        let idle = watcher.poll_once().unwrap();
+        assert_eq!(idle.previous_revision, chat_head);
+        assert_eq!(idle.latest_revision, chat_head);
+        assert_eq!(idle.event_count(), 0);
+
+        database
+            .upsert_chat_conversation(&ChatConversationUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                conversation_id: "chat-watcher-1".to_string(),
+                provider_id: Some("whatsapp".to_string()),
+                external_thread_id: Some("one@example.test".to_string()),
+                display_name: "One".to_string(),
+                avatar_key: None,
+                last_message_at: Some(1_789_070_100),
+                unread_count: 1,
+                archived: false,
+                muted: false,
+            })
+            .unwrap();
+        database
+            .upsert_chat_conversation(&ChatConversationUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                conversation_id: "chat-watcher-2".to_string(),
+                provider_id: Some("sms".to_string()),
+                external_thread_id: Some("+15550102020".to_string()),
+                display_name: "Two".to_string(),
+                avatar_key: None,
+                last_message_at: Some(1_789_070_200),
+                unread_count: 2,
+                archived: false,
+                muted: true,
+            })
+            .unwrap();
+
+        let first = watcher.poll_once().unwrap();
+        assert!(first.advanced());
+        assert_eq!(first.previous_revision, chat_head);
+        assert_eq!(first.event_count(), 1);
+        assert_eq!(first.events[0].value.conversation_id, "chat-watcher-1");
+        assert_eq!(first.events[0].value.display_name, "One");
+        assert_eq!(watcher.current_revision().unwrap(), chat_head);
+        let cursor = watcher.acknowledge(&first).unwrap();
+        assert_eq!(cursor.latest_revision, first.latest_revision);
+        assert_eq!(watcher.current_revision().unwrap(), first.latest_revision);
+
+        let second = watcher.poll_once().unwrap();
+        assert!(second.advanced());
+        assert_eq!(second.previous_revision, first.latest_revision);
+        assert_eq!(second.event_count(), 1);
+        assert_eq!(second.events[0].value.conversation_id, "chat-watcher-2");
+        assert_eq!(second.events[0].value.provider_id.as_deref(), Some("sms"));
+        assert!(second.events[0].value.muted);
+    }
+
+    #[test]
+    fn typed_app_sync_domain_watcher_decode_error_keeps_cursor() {
+        let database_path =
+            test_dir("typed-app-sync-domain-watcher-decode-error").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let watcher = TypedAppSyncDomainWatcher::<ChatConversationSyncPayload>::new(
+            database.clone(),
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_CHAT,
+            8,
+        )
+        .unwrap();
+        let initial_revision = watcher.current_revision().unwrap();
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CHAT,
+                "conversation.bad",
+                "{not-json",
+            )
+            .unwrap();
+
+        let error = watcher
+            .poll_once()
+            .expect_err("malformed watcher payload should fail before acknowledgement");
+        assert!(matches!(error, StorageError::DecodeSyncPayload(_)));
+        assert_eq!(watcher.current_revision().unwrap(), initial_revision);
     }
 
     #[test]

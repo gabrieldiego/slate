@@ -289,6 +289,10 @@ Current baseline:
   sync-domain JSON payloads before a watcher advances its persisted cursor. A
   malformed app payload fails the poll and leaves the app cursor unchanged, so
   runtime app watchers can avoid acknowledging a batch they did not apply.
+- Storage now also has a reusable typed app-domain watcher wrapper. Runtime app
+  code can initialize a domain cursor at the current domain head, poll bounded
+  decoded batches, and acknowledge the batch only after app-owned apply work
+  succeeds.
 - The `slate-profile-sync` runtime bridge now verifies received typed Chat,
   Files, and Storage metadata is visible through those typed app-domain watcher
   polls after a trusted broadwebd apply. The fixture initializes receiver
