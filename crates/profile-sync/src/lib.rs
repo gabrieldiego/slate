@@ -110,6 +110,53 @@ pub struct PublishedProfileSyncMembershipLog {
     pub log: ProfileSyncMembershipLog,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ProfileSyncMembershipLogPublicationPlanStatus {
+    Empty,
+    Publishable,
+    TooLarge,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncMembershipLogPublicationPlan {
+    pub profile: String,
+    pub root_id: String,
+    pub record_count: usize,
+    pub max_records: usize,
+    pub status: ProfileSyncMembershipLogPublicationPlanStatus,
+}
+
+impl ProfileSyncMembershipLogPublicationPlan {
+    pub fn for_record_count(profile: &str, root_id: &str, record_count: usize) -> Self {
+        let status = if record_count == 0 {
+            ProfileSyncMembershipLogPublicationPlanStatus::Empty
+        } else if record_count > PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS {
+            ProfileSyncMembershipLogPublicationPlanStatus::TooLarge
+        } else {
+            ProfileSyncMembershipLogPublicationPlanStatus::Publishable
+        };
+        Self {
+            profile: profile.to_string(),
+            root_id: root_id.to_string(),
+            record_count,
+            max_records: PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS,
+            status,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.status == ProfileSyncMembershipLogPublicationPlanStatus::Empty
+    }
+
+    pub fn is_publishable(&self) -> bool {
+        self.status == ProfileSyncMembershipLogPublicationPlanStatus::Publishable
+    }
+
+    pub fn requires_compaction(&self) -> bool {
+        self.status == ProfileSyncMembershipLogPublicationPlanStatus::TooLarge
+    }
+}
+
 impl PublishedProfileSyncMembershipLog {
     pub fn published_object_ids(&self) -> Vec<String> {
         let mut object_ids = Vec::new();
@@ -2702,6 +2749,20 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
         })
     }
 
+    pub fn plan_local_sync_account_membership_log(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        root_id: &str,
+    ) -> Result<ProfileSyncMembershipLogPublicationPlan, ProfileSyncPublishError> {
+        let record_count = database.sync_account_membership_records(profile)?.len();
+        Ok(ProfileSyncMembershipLogPublicationPlan::for_record_count(
+            profile,
+            root_id,
+            record_count,
+        ))
+    }
+
     pub fn publish_local_sync_account_membership_log(
         &self,
         database: &SlateProfileDatabase,
@@ -2709,14 +2770,19 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
         root_id: &str,
     ) -> Result<Option<PublishedProfileSyncMembershipLog>, ProfileSyncPublishError> {
         let records = database.sync_account_membership_records(profile)?;
-        if records.is_empty() {
+        let plan = ProfileSyncMembershipLogPublicationPlan::for_record_count(
+            profile,
+            root_id,
+            records.len(),
+        );
+        if plan.is_empty() {
             return Ok(None);
         }
-        if records.len() > PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS {
+        if plan.requires_compaction() {
             return Err(ProfileSyncPublishError::MembershipLogTooLarge {
-                profile: profile.to_string(),
-                max_records: PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS,
-                actual_records: records.len(),
+                profile: plan.profile,
+                max_records: plan.max_records,
+                actual_records: plan.record_count,
             });
         }
 
@@ -3933,10 +3999,11 @@ mod tests {
         BroadwebdTrustedDeviceHeadSyncStatus, LocalSettingsHeadPublishStatus,
         PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID, ProfileSyncCredentialError, ProfileSyncCycleError,
         ProfileSyncCycleWithHealthError, ProfileSyncMembershipLog, ProfileSyncMembershipLogEntry,
-        ProfileSyncMembershipLogPullStatus, ProfileSyncMembershipRecordPullStatus,
-        ProfileSyncPolicyError, ProfileSyncPublishError, ProfileSyncReceiveError,
-        SettingsSyncCyclePolicy, SettingsSyncRetentionProviderHandle, SettingsSyncRuntimeSecrets,
-        SettingsSyncSchedulerConfig, settings_device_head_root_id, sync_membership_record_root_id,
+        ProfileSyncMembershipLogPublicationPlanStatus, ProfileSyncMembershipLogPullStatus,
+        ProfileSyncMembershipRecordPullStatus, ProfileSyncPolicyError, ProfileSyncPublishError,
+        ProfileSyncReceiveError, SettingsSyncCyclePolicy, SettingsSyncRetentionProviderHandle,
+        SettingsSyncRuntimeSecrets, SettingsSyncSchedulerConfig, settings_device_head_root_id,
+        sync_membership_record_root_id,
     };
     use slate_broadwebd::{
         BroadwebdError, ProfileSyncProfileRequest as BroadwebdProfileSyncProfileRequest,
@@ -3993,6 +4060,45 @@ mod tests {
             .expect("sign membership record")
             .to_bytes()
             .expect("encode signed membership record")
+    }
+
+    #[test]
+    fn membership_log_publication_plan_classifies_record_counts() {
+        let empty =
+            super::ProfileSyncMembershipLogPublicationPlan::for_record_count("default", "root", 0);
+        assert_eq!(
+            empty.status,
+            ProfileSyncMembershipLogPublicationPlanStatus::Empty
+        );
+        assert!(empty.is_empty());
+        assert!(!empty.is_publishable());
+        assert!(!empty.requires_compaction());
+
+        let capped = super::ProfileSyncMembershipLogPublicationPlan::for_record_count(
+            "default",
+            "root",
+            super::PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS,
+        );
+        assert_eq!(
+            capped.status,
+            ProfileSyncMembershipLogPublicationPlanStatus::Publishable
+        );
+        assert!(!capped.is_empty());
+        assert!(capped.is_publishable());
+        assert!(!capped.requires_compaction());
+
+        let oversized = super::ProfileSyncMembershipLogPublicationPlan::for_record_count(
+            "default",
+            "root",
+            super::PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS + 1,
+        );
+        assert_eq!(
+            oversized.status,
+            ProfileSyncMembershipLogPublicationPlanStatus::TooLarge
+        );
+        assert!(!oversized.is_empty());
+        assert!(!oversized.is_publishable());
+        assert!(oversized.requires_compaction());
     }
 
     #[test]
@@ -4210,7 +4316,23 @@ mod tests {
             .apply_signed_sync_account_membership_record(signed_enroll_b.as_slice())
             .expect("publisher applies signer b membership");
 
-        let publication = BroadwebdProfileSyncPublisher::new(&publisher_daemon)
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+        let plan = publisher
+            .plan_local_sync_account_membership_log(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            )
+            .expect("plan local membership log publication");
+        assert_eq!(
+            plan.status,
+            ProfileSyncMembershipLogPublicationPlanStatus::Publishable
+        );
+        assert!(plan.is_publishable());
+        assert!(!plan.requires_compaction());
+        assert_eq!(plan.record_count, 2);
+
+        let publication = publisher
             .publish_local_sync_account_membership_log(
                 &publisher_database,
                 DEFAULT_PROFILE_ID,
@@ -4965,7 +5087,45 @@ mod tests {
                 .expect("record oversized membership history entry");
         }
 
-        let error = BroadwebdProfileSyncPublisher::new(&publisher_daemon)
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+        let plan = publisher
+            .plan_local_sync_account_membership_log(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            )
+            .expect("plan oversized local membership history");
+        assert_eq!(
+            plan.status,
+            ProfileSyncMembershipLogPublicationPlanStatus::TooLarge
+        );
+        assert!(plan.requires_compaction());
+        assert!(!plan.is_publishable());
+        assert_eq!(
+            plan.record_count,
+            super::PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS + 1
+        );
+        assert_eq!(
+            plan.max_records,
+            super::PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS
+        );
+        assert_eq!(
+            BroadwebdProfileSyncObjectSource::new(&publisher_daemon)
+                .resolve_profile_sync_root(DEFAULT_PROFILE_ID, PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID)
+                .expect("read planned oversized publisher membership log root"),
+            None
+        );
+        assert_eq!(
+            BroadwebdProfileSyncObjectSource::new(&publisher_daemon)
+                .resolve_profile_sync_root(
+                    DEFAULT_PROFILE_ID,
+                    sync_membership_record_root_id("epoch-1-enroll-publish-oversized-000").as_str(),
+                )
+                .expect("read planned oversized publisher first membership record root"),
+            None
+        );
+
+        let error = publisher
             .publish_local_sync_account_membership_log(
                 &publisher_database,
                 DEFAULT_PROFILE_ID,

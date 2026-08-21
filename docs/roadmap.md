@@ -769,6 +769,10 @@ Current baseline:
 - Membership-log publishing now enforces the same cap before writing any
   membership record objects or advancing the log root, so local history that
   needs compaction cannot create a distributed index receivers will reject.
+- Membership-log publishing now also has a read-only local plan that reports
+  empty, publishable, or too-large history before any broadwebd call or root
+  mutation. This is the first non-mutating preview primitive needed for
+  membership-aware scheduler planning.
 
 Next:
 
