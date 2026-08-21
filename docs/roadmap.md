@@ -211,7 +211,8 @@ Current baseline:
   the highest logical clock wins, with device id and device sequence as stable
   tie-breakers. Losing setting changes are retained in `settings_changes`
   without updating `settings_values`, the legacy settings view, or watcher
-  revisions.
+  revisions. The local two-device profile-sync fixture now covers signed
+  encrypted replay of a stale setting object against a newer local value.
 - IPFS/IPNS is the first concrete backend under consideration, but the product
   goal is protocol-neutral: approved Slate devices should find each other, move
   encrypted sync objects, and optionally use approved providers to keep those
