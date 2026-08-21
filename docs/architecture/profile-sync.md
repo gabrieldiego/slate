@@ -601,10 +601,17 @@ The runner exposes that work as an explicit read-only preflight: sample
 broadwebd health, apply before-cycle provider policy, load active key metadata,
 validate the local signer, and enforce trusted-device bounds. Preflight does
 not take the content key secret and does not publish, retain, pull, or mutate
-sync roots. It also returns discovered retention-capable providers, filtered to
-fresh online records with availability and object-transfer roles. That gives
-the future scheduler concrete provider candidates while keeping provider
-selection separate from mutable-root authority.
+sync roots. It also returns discovered online retention-capable providers with
+availability and object-transfer roles. Freshness is enforced through the
+provider health policy, while the provider records give the scheduler concrete
+selection candidates without granting those providers mutable-root authority.
+The first scheduler facade is deliberately explicit: one caller-triggered tick
+combines a profile/root config, caller-held content key and signer, the local
+broadwebd daemon, and selected retention-provider daemons. It runs the
+active-key shared-root candidate cycle, hands the verified object-id set to the
+selected providers, and returns the health/retention result. Cadence, platform
+key-store loading, enrollment flow, and real provider selection remain separate
+runtime layers.
 Object bytes are also provider-held: fetches require at least one online
 provider with the object, and retaining an object copies the bytes into the
 retaining provider's in-process store. Tests can pause object transfer from one

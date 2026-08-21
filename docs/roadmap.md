@@ -318,6 +318,12 @@ Current baseline:
   objects before checking shared settings-root health. Receive-only candidate
   cycles can keep local device-head health relaxed while still requiring the
   shared settings root to meet the selected retaining-provider quorum.
+- `slate-profile-sync` now has an initial runtime scheduler facade. One
+  explicit tick accepts a profile/root config, caller-held content key and
+  signer secret material, the selected broadwebd daemon, and explicit retention
+  provider daemons; it then runs the active-key shared-root candidate cycle,
+  hands verified object ids to providers, and returns the same health and
+  retention report used by fixture tests.
 - The local profile-sync fixture can now mark simulated devices offline and
   online, allowing tests to verify unavailable devices fail closed without
   touching sockets, DNS, Tor, IPFS, or external relays.
@@ -586,9 +592,9 @@ Next:
   backend, then point the profile mutable root at the newest manifest.
 - Use the storage compaction target to publish encrypted snapshots, trim
   manifest tails, and then enforce retention across broadwebd providers.
-- Wire the bounded settings sync cycle into the runtime scheduler with secret
-  material supplied by the platform key store or enrollment flow, active key
-  metadata loaded from `slate-settings.db`, and visible policy/health handling.
+- Extend the initial runtime scheduler facade with real provider selection,
+  platform key-store/enrollment secret loading, cadence control, visible
+  degraded-health handling, and UI status reporting.
 - Add device enrollment, revocation, and key rotation before syncing sensitive
   profile domains.
 - Expand local distributed-protocol fixtures to simulate offline devices,

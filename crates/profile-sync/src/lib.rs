@@ -49,6 +49,11 @@ pub struct BroadwebdSettingsSyncRunner<'a> {
     daemon: &'a BroadwebDaemon,
 }
 
+#[derive(Clone, Copy)]
+pub struct BroadwebdSettingsSyncScheduler<'a> {
+    daemon: &'a BroadwebDaemon,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BroadwebdProfileSyncRetentionStatus {
     pub object_id: String,
@@ -1067,6 +1072,45 @@ impl SettingsSyncCyclePolicy {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncSchedulerConfig {
+    pub profile: String,
+    pub settings_root_id: String,
+    pub policy: SettingsSyncCyclePolicy,
+}
+
+impl SettingsSyncSchedulerConfig {
+    pub fn new(
+        profile: impl Into<String>,
+        settings_root_id: impl Into<String>,
+        policy: SettingsSyncCyclePolicy,
+    ) -> Self {
+        Self {
+            profile: profile.into(),
+            settings_root_id: settings_root_id.into(),
+            policy,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct SettingsSyncRuntimeSecrets<'a> {
+    pub content_key: &'a ProfileSyncContentKey,
+    pub signer: &'a ProfileSyncDeviceSigner,
+}
+
+impl<'a> SettingsSyncRuntimeSecrets<'a> {
+    pub fn new(
+        content_key: &'a ProfileSyncContentKey,
+        signer: &'a ProfileSyncDeviceSigner,
+    ) -> Self {
+        Self {
+            content_key,
+            signer,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettingsSyncHealthReport {
     pub profile: String,
     pub settings_root_id: String,
@@ -1680,6 +1724,31 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
             publish,
             receive,
         })
+    }
+}
+
+impl<'a> BroadwebdSettingsSyncScheduler<'a> {
+    pub fn new(daemon: &'a BroadwebDaemon) -> Self {
+        Self { daemon }
+    }
+
+    pub fn run_once(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        secrets: SettingsSyncRuntimeSecrets<'_>,
+        retention_provider_daemons: &[&BroadwebDaemon],
+    ) -> Result<SettingsSyncCycleWithSharedRootRetentionRun, ProfileSyncCycleWithHealthError> {
+        BroadwebdSettingsSyncRunner::new(self.daemon)
+            .run_settings_sync_cycle_with_active_key_policy_shared_root_candidates_and_retention_providers(
+                database,
+                config.profile.as_str(),
+                config.settings_root_id.as_str(),
+                secrets.content_key,
+                secrets.signer,
+                &config.policy,
+                retention_provider_daemons,
+            )
     }
 }
 
@@ -2829,10 +2898,11 @@ impl ProfileSyncObjectSource for BroadwebdProfileSyncObjectSource<'_> {
 mod tests {
     use super::{
         BroadwebdProfileSyncObjectSource, BroadwebdProfileSyncPublisher,
-        BroadwebdSettingsSyncRunner, BroadwebdTrustedDeviceHeadSyncStatus,
-        LocalSettingsHeadPublishStatus, ProfileSyncCredentialError, ProfileSyncCycleError,
-        ProfileSyncCycleWithHealthError, ProfileSyncPolicyError, ProfileSyncReceiveError,
-        SettingsSyncCyclePolicy, settings_device_head_root_id,
+        BroadwebdSettingsSyncRunner, BroadwebdSettingsSyncScheduler,
+        BroadwebdTrustedDeviceHeadSyncStatus, LocalSettingsHeadPublishStatus,
+        ProfileSyncCredentialError, ProfileSyncCycleError, ProfileSyncCycleWithHealthError,
+        ProfileSyncPolicyError, ProfileSyncReceiveError, SettingsSyncCyclePolicy,
+        SettingsSyncRuntimeSecrets, SettingsSyncSchedulerConfig, settings_device_head_root_id,
     };
     use slate_broadwebd::{ResourceBudget, test_fixtures::InProcessBroadwebNetwork};
     use slate_storage::{
@@ -4855,6 +4925,101 @@ mod tests {
         assert_eq!(
             run.retention[0].object_count(),
             run.retention[0].available_count()
+        );
+        assert_eq!(run.retained_provider_count(), 1);
+        assert!(!run.degraded_after());
+        assert_eq!(
+            run.after_health
+                .settings_root_health
+                .online_retaining_providers,
+            2
+        );
+        assert_eq!(
+            run.after_health
+                .local_device_head_root_health
+                .online_retaining_providers,
+            2
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_scheduler_runs_one_retained_fixture_tick() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("scheduler-retention-device");
+        let provider_state_root = test_state_root("scheduler-retention-provider");
+        let db_root = test_state_root("scheduler-retention-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-a",
+            )
+            .expect("start in-process profile-sync scheduler device daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-pinner",
+            )
+            .expect("start in-process scheduler availability provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-scheduler-a",
+        )
+        .expect("open scheduler local settings database");
+        let profile = "schedulerprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([64; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-scheduler-a")
+            .expect("generate scheduler local device signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register scheduler local trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write scheduler local setting");
+
+        let config = SettingsSyncSchedulerConfig::new(
+            profile,
+            settings_root_id,
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
+        );
+        let run = BroadwebdSettingsSyncScheduler::new(&device_daemon)
+            .run_once(
+                &database,
+                &config,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                &[&provider_daemon],
+            )
+            .expect("scheduler tick publishes and retains settings state");
+
+        assert!(run.degraded_before());
+        assert!(!run.before_health.provider_health.degraded);
+        assert_eq!(run.cycle.published_step_count(), 1);
+        assert_eq!(run.cycle.applied_count(), 0);
+        assert_eq!(run.shared_root_candidate_application_count(), 0);
+        assert_eq!(run.retained_object_ids, run.cycle.published_object_ids());
+        assert_eq!(run.retention.len(), 1);
+        assert_eq!(
+            run.retention[0].object_count(),
+            run.retained_object_ids.len()
+        );
+        assert_eq!(
+            run.retention[0].retained_count(),
+            run.retained_object_ids.len()
+        );
+        assert_eq!(
+            run.retention[0].available_count(),
+            run.retained_object_ids.len()
         );
         assert_eq!(run.retained_provider_count(), 1);
         assert!(!run.degraded_after());
