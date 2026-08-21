@@ -310,6 +310,7 @@ impl From<ProfileSyncReceiveError> for ProfileSyncCycleError {
 #[derive(Debug)]
 pub enum ProfileSyncCycleWithHealthError {
     Health(BroadwebdError),
+    Retention(BroadwebdError),
     Policy(ProfileSyncPolicyError),
     Cycle(ProfileSyncCycleError),
 }
@@ -320,6 +321,7 @@ impl fmt::Display for ProfileSyncCycleWithHealthError {
             Self::Health(error) => {
                 write!(formatter, "profile sync health check failed: {error}")
             }
+            Self::Retention(error) => write!(formatter, "profile sync retention failed: {error}"),
             Self::Policy(error) => write!(formatter, "profile sync policy check failed: {error}"),
             Self::Cycle(error) => write!(formatter, "profile sync cycle failed: {error}"),
         }
@@ -330,6 +332,7 @@ impl std::error::Error for ProfileSyncCycleWithHealthError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Health(error) => Some(error),
+            Self::Retention(error) => Some(error),
             Self::Policy(error) => Some(error),
             Self::Cycle(error) => Some(error),
         }
@@ -686,6 +689,59 @@ impl SettingsSyncCycleWithHealthRun {
 
     pub fn degraded_after(&self) -> bool {
         self.after_health.degraded()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncCycleProviderRetentionRun {
+    pub provider_index: usize,
+    pub object_statuses: Vec<BroadwebdProfileSyncRetentionStatus>,
+}
+
+impl SettingsSyncCycleProviderRetentionRun {
+    pub fn object_count(&self) -> usize {
+        self.object_statuses.len()
+    }
+
+    pub fn retained_count(&self) -> usize {
+        self.object_statuses
+            .iter()
+            .filter(|status| status.retained)
+            .count()
+    }
+
+    pub fn available_count(&self) -> usize {
+        self.object_statuses
+            .iter()
+            .filter(|status| status.available)
+            .count()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncCycleWithRetentionRun {
+    pub before_health: SettingsSyncHealthReport,
+    pub cycle: SettingsSyncCycleRun,
+    pub retention: Vec<SettingsSyncCycleProviderRetentionRun>,
+    pub after_health: SettingsSyncHealthReport,
+}
+
+impl SettingsSyncCycleWithRetentionRun {
+    pub fn degraded_before(&self) -> bool {
+        self.before_health.degraded()
+    }
+
+    pub fn degraded_after(&self) -> bool {
+        self.after_health.degraded()
+    }
+
+    pub fn retained_provider_count(&self) -> usize {
+        self.retention
+            .iter()
+            .filter(|provider| {
+                provider.object_count() > 0 && provider.object_count() == provider.retained_count()
+            })
+            .count()
     }
 }
 
@@ -1144,6 +1200,60 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
         Ok(SettingsSyncCycleWithHealthRun {
             before_health: preflight.before_health,
             cycle,
+            after_health,
+        })
+    }
+
+    pub fn run_settings_sync_cycle_with_active_key_policy_and_retention_providers(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        settings_root_id: &str,
+        content_key: &ProfileSyncContentKey,
+        signer: &ProfileSyncDeviceSigner,
+        policy: &SettingsSyncCyclePolicy,
+        retention_provider_daemons: &[&BroadwebDaemon],
+    ) -> Result<SettingsSyncCycleWithRetentionRun, ProfileSyncCycleWithHealthError> {
+        let preflight = self.settings_sync_cycle_preflight_with_active_key_policy(
+            database,
+            profile,
+            settings_root_id,
+            signer,
+            policy,
+        )?;
+        let cycle = self.run_settings_sync_cycle(
+            database,
+            profile,
+            settings_root_id,
+            content_key,
+            preflight.active_key_id.as_str(),
+            signer,
+            policy.retention_policy.clone(),
+            policy.max_publish_steps,
+            policy.max_trusted_devices,
+        )?;
+        let mut retention = Vec::with_capacity(retention_provider_daemons.len());
+        for (provider_index, provider_daemon) in retention_provider_daemons.iter().enumerate() {
+            let object_statuses = BroadwebdProfileSyncPublisher::new(*provider_daemon)
+                .retain_settings_sync_cycle_objects(&cycle)
+                .map_err(ProfileSyncCycleWithHealthError::Retention)?;
+            retention.push(SettingsSyncCycleProviderRetentionRun {
+                provider_index,
+                object_statuses,
+            });
+        }
+        let after_health = self.settings_sync_health(
+            database,
+            profile,
+            settings_root_id,
+            policy.minimum_online_retaining_providers,
+        )?;
+        policy.check_after_cycle(&after_health)?;
+
+        Ok(SettingsSyncCycleWithRetentionRun {
+            before_health: preflight.before_health,
+            cycle,
+            retention,
             after_health,
         })
     }
@@ -3787,6 +3897,98 @@ mod tests {
         assert_eq!(health.settings_root_health.online_retaining_providers, 2);
         assert_eq!(
             health
+                .local_device_head_root_health
+                .online_retaining_providers,
+            2
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_cycle_retains_objects_before_strict_root_policy_check() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("cycle-policy-retention-device");
+        let provider_state_root = test_state_root("cycle-policy-retention-provider");
+        let db_root = test_state_root("cycle-policy-retention-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-policy-retain-a",
+            )
+            .expect("start in-process profile-sync device daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "runtime-policy-retain-pinner",
+            )
+            .expect("start in-process availability-provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-policy-retain-a",
+        )
+        .expect("open local settings database");
+        let profile = "policyretentionprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([61; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-policy-retain-a")
+            .expect("generate local device signer");
+        let policy = SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2);
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register local trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write local setting");
+
+        let run = BroadwebdSettingsSyncRunner::new(&device_daemon)
+            .run_settings_sync_cycle_with_active_key_policy_and_retention_providers(
+                &database,
+                profile,
+                settings_root_id,
+                &content_key,
+                &signer,
+                &policy,
+                &[&provider_daemon],
+            )
+            .expect("retention provider satisfies strict root policy after cycle");
+
+        assert!(run.degraded_before());
+        assert!(!run.before_health.provider_health.degraded);
+        assert_eq!(run.cycle.published_step_count(), 1);
+        assert_eq!(run.retention.len(), 1);
+        assert_eq!(run.retention[0].provider_index, 0);
+        assert_eq!(
+            run.retention[0].object_count(),
+            run.cycle.published_object_ids().len()
+        );
+        assert_eq!(
+            run.retention[0].object_count(),
+            run.retention[0].retained_count()
+        );
+        assert_eq!(
+            run.retention[0].object_count(),
+            run.retention[0].available_count()
+        );
+        assert_eq!(run.retained_provider_count(), 1);
+        assert!(!run.degraded_after());
+        assert_eq!(
+            run.after_health
+                .settings_root_health
+                .online_retaining_providers,
+            2
+        );
+        assert_eq!(
+            run.after_health
                 .local_device_head_root_health
                 .online_retaining_providers,
             2

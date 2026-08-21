@@ -285,6 +285,10 @@ Current baseline:
   set through the same fixture network, and the regression proves root quorum
   recovers without opening loopback ports or contacting external protocol
   services.
+- The active-key policy runner can now accept availability-provider daemons for
+  the same cycle. It publishes/pulls through the local device daemon, asks those
+  providers to retain the published object set, reports per-provider retention
+  status, and only then enforces the strict post-cycle root quorum.
 - The local profile-sync fixture can now mark simulated devices offline and
   online, allowing tests to verify unavailable devices fail closed without
   touching sockets, DNS, Tor, IPFS, or external relays.

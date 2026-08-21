@@ -545,6 +545,13 @@ broadwebd without gaining mutable-root authority. Fixture coverage uses an
 inside the test process and then re-check root health, so quorum recovery is
 validated without loopback sockets, OS DNS, Tor, IPFS/IPNS, public gateways, or
 external relays.
+The active-key policy runner can perform that retention handoff as part of the
+same bounded cycle: after local publish and trusted-device receive, it asks each
+supplied availability-provider daemon to retain the published object ids and
+returns a per-provider status report before enforcing the post-cycle root
+health policy. This is still a local fixture shape, but it gives the future
+runtime scheduler the right sequencing contract: publish encrypted state,
+handoff availability, then evaluate whether the profile is durable enough.
 After provider policy passes, the runtime-facing runner can load the active
 content-key id from `slate-settings.db` and use caller-supplied secret material
 for the actual encrypted publish/pull cycle. The database therefore stores
