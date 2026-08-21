@@ -190,6 +190,10 @@ Current baseline:
 - The rail app registry now maps visible apps to distinct sync domains:
   Web owns the Bookmarks domain and Settings owns the Settings domain. Storage
   remains a seeded future domain until its rail app surface exists.
+- Home bookmark slot saves now append structured JSON text changes in the
+  Bookmarks sync domain. First-run default bookmark seeding still updates only
+  local bookmark rows, so new profiles do not publish seed noise as user
+  bookmark changes.
 - Local settings/app-domain publishing now filters outgoing snapshots and tail
   manifests through the enabled app sync-domain table. Disabled domains can
   still be used as local typed state, but they are not published to broadweb

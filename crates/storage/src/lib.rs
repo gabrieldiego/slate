@@ -53,6 +53,7 @@ pub const DEFAULT_HOME_BOOKMARKS: [DefaultBookmark; 2] = [
 ];
 
 const DEFAULT_BOOKMARKS_SEEDED_SETTING_KEY: &str = "bookmarks.defaults_seeded";
+const BOOKMARK_HOME_SLOT_SYNC_KEY_PREFIX: &str = "home.slot.";
 const APP_SYNC_DOMAIN_CURSOR_KEY_PREFIX: &str = "app_sync.cursor.";
 const PROFILE_SYNC_ROOT_KEY_PREFIX: &str = "profile_sync.root.";
 const PROFILE_SYNC_SNAPSHOT_DEVICE_ID: &str = "snapshot";
@@ -1534,6 +1535,16 @@ pub struct BookmarkUpdate {
     pub favicon_key: Option<String>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct BookmarkSlotSyncPayload {
+    pub url: String,
+    pub title: Option<String>,
+    pub folder: Option<String>,
+    pub position: i64,
+    pub favicon_key: Option<String>,
+    pub replaced_url: Option<String>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BookmarkRecord {
     pub profile: String,
@@ -1959,6 +1970,7 @@ pub enum StorageError {
         path: PathBuf,
         source: rusqlite::Error,
     },
+    EncodeSyncPayload(serde_json::Error),
     EncodeSnapshotDomains(serde_json::Error),
     Clock(std::time::SystemTimeError),
     InvalidSyncDeviceId(String),
@@ -2001,6 +2013,9 @@ impl fmt::Display for StorageError {
                     "database operation failed for {}: {source}",
                     path.display()
                 )
+            }
+            Self::EncodeSyncPayload(error) => {
+                write!(formatter, "failed to encode sync payload: {error}")
             }
             Self::EncodeSnapshotDomains(error) => {
                 write!(formatter, "failed to encode sync snapshot domains: {error}")
@@ -2065,6 +2080,7 @@ impl std::error::Error for StorageError {
             Self::CurrentDirectory(error) => Some(error),
             Self::CreateDirectory { source, .. } => Some(source),
             Self::Database { source, .. } => Some(source),
+            Self::EncodeSyncPayload(error) => Some(error),
             Self::EncodeSnapshotDomains(error) => Some(error),
             Self::Clock(error) => Some(error),
             Self::InvalidSyncDeviceId(_) => None,
@@ -2247,6 +2263,8 @@ impl SlateProfileDatabase {
         bookmark: &BookmarkUpdate,
         replaced_url: Option<&str>,
     ) -> Result<(), StorageError> {
+        let sync_key = bookmark_home_slot_sync_key(bookmark.position);
+        let sync_payload = bookmark_home_slot_sync_payload(bookmark, replaced_url)?;
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction()
@@ -2285,6 +2303,16 @@ impl SlateProfileDatabase {
                 ],
             )
             .map_err(|source| self.database_error(source))?;
+        record_sync_setting_text_in_transaction(
+            &transaction,
+            bookmark.profile.as_str(),
+            SYNC_DOMAIN_BOOKMARKS,
+            sync_key.as_str(),
+            sync_payload.as_str(),
+            self.local_sync_device_id(),
+            now,
+        )
+        .map_err(|source| self.database_error(source))?;
         transaction
             .commit()
             .map_err(|source| self.database_error(source))?;
@@ -5179,6 +5207,25 @@ fn compaction_target_event_index(
 
 fn profile_sync_root_key(root_id: &str) -> String {
     format!("{PROFILE_SYNC_ROOT_KEY_PREFIX}{root_id}")
+}
+
+fn bookmark_home_slot_sync_key(position: i64) -> String {
+    format!("{BOOKMARK_HOME_SLOT_SYNC_KEY_PREFIX}{position}")
+}
+
+fn bookmark_home_slot_sync_payload(
+    bookmark: &BookmarkUpdate,
+    replaced_url: Option<&str>,
+) -> Result<String, StorageError> {
+    serde_json::to_string(&BookmarkSlotSyncPayload {
+        url: bookmark.url.clone(),
+        title: bookmark.title.clone(),
+        folder: bookmark.folder.clone(),
+        position: bookmark.position,
+        favicon_key: bookmark.favicon_key.clone(),
+        replaced_url: replaced_url.map(str::to_string),
+    })
+    .map_err(StorageError::EncodeSyncPayload)
 }
 
 fn validate_sync_domain(domain: &str) -> Result<(), StorageError> {
@@ -8531,6 +8578,17 @@ mod tests {
         );
         assert_eq!(default_bookmarks[1].title.as_deref(), Some("OpenStreetMap"));
         assert_eq!(default_bookmarks[1].url, "https://www.openstreetmap.org/");
+        assert!(
+            database
+                .sync_setting_text_events_after_for_domain(
+                    DEFAULT_PROFILE_ID,
+                    SYNC_DOMAIN_BOOKMARKS,
+                    0,
+                    10
+                )
+                .unwrap()
+                .is_empty()
+        );
 
         assert_eq!(
             database.ensure_setting_f32("chrome.zoom", 0.9).unwrap(),
@@ -10403,6 +10461,28 @@ mod tests {
         assert_eq!(bookmarks[0].url, "https://example.com/");
         assert_eq!(bookmarks[0].position, 0);
         assert_eq!(bookmarks[1].url, DEFAULT_HOME_BOOKMARKS[1].url);
+        let first_events = database
+            .sync_setting_text_events_after_for_domain(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_BOOKMARKS,
+                0,
+                10,
+            )
+            .unwrap();
+        assert_eq!(first_events.len(), 1);
+        assert_eq!(
+            first_events[0].change.entity_key,
+            bookmark_home_slot_sync_key(0)
+        );
+        let first_payload: BookmarkSlotSyncPayload =
+            serde_json::from_str(first_events[0].change.payload.as_str()).unwrap();
+        assert_eq!(first_payload.url, "https://example.com/");
+        assert_eq!(first_payload.title.as_deref(), Some("Example"));
+        assert_eq!(first_payload.position, 0);
+        assert_eq!(
+            first_payload.replaced_url,
+            Some(DEFAULT_HOME_BOOKMARKS[0].url.to_string())
+        );
 
         database
             .set_bookmark_slot(
@@ -10423,6 +10503,39 @@ mod tests {
         assert_eq!(bookmarks[0].url, "https://example.com/");
         assert_eq!(bookmarks[0].title.as_deref(), Some("Example moved"));
         assert_eq!(bookmarks[0].position, 1);
+        let all_events = database
+            .sync_setting_text_events_after_for_domain(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_BOOKMARKS,
+                0,
+                10,
+            )
+            .unwrap();
+        assert_eq!(all_events.len(), 2);
+        assert_eq!(
+            all_events[1].change.entity_key,
+            bookmark_home_slot_sync_key(1)
+        );
+        let second_payload: BookmarkSlotSyncPayload =
+            serde_json::from_str(all_events[1].change.payload.as_str()).unwrap();
+        assert_eq!(second_payload.url, "https://example.com/");
+        assert_eq!(second_payload.title.as_deref(), Some("Example moved"));
+        assert_eq!(second_payload.position, 1);
+        assert_eq!(
+            second_payload.replaced_url,
+            Some(DEFAULT_HOME_BOOKMARKS[1].url.to_string())
+        );
+        assert_eq!(
+            database
+                .get_sync_setting_text(
+                    DEFAULT_PROFILE_ID,
+                    SYNC_DOMAIN_BOOKMARKS,
+                    bookmark_home_slot_sync_key(1).as_str()
+                )
+                .unwrap()
+                .map(|record| record.value),
+            Some(all_events[1].change.payload.clone())
+        );
     }
 
     #[test]
