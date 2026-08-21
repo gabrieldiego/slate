@@ -527,6 +527,163 @@ fn two_local_devices_transfer_compacted_settings_snapshot_through_profile_fixtur
     let _ = std::fs::remove_dir_all(device_b_root);
 }
 
+#[test]
+fn two_local_devices_apply_snapshot_then_manifest_tail_changes() {
+    let fixture = LocalProfileSyncFixture::new();
+    let mut device_a_broadweb = PluginRegistry::new();
+    let mut device_b_broadweb = PluginRegistry::new();
+    let budget = ResourceBudget::default();
+
+    device_a_broadweb.register_service(fixture.service_for_device("tail-device-a"));
+    device_b_broadweb.register_service(fixture.service_for_device("tail-device-b"));
+
+    let device_a_root = test_dir("tail-device-a");
+    let device_b_root = test_dir("tail-device-b");
+    let device_a_db = SlateProfileDatabase::open_resolved_with_device_id(
+        device_a_root.join(DEFAULT_DATABASE_FILE_NAME),
+        "tail-device-a",
+    )
+    .expect("open tail fixture device a slate-settings.db");
+    let device_b_db = SlateProfileDatabase::open_resolved_with_device_id(
+        device_b_root.join(DEFAULT_DATABASE_FILE_NAME),
+        "tail-device-b",
+    )
+    .expect("open tail fixture device b slate-settings.db");
+    let device_a_signer =
+        ProfileSyncDeviceSigner::generate("tail-device-a").expect("create tail device a key");
+    let trusted_device_a_key = device_a_signer
+        .public_key()
+        .expect("read tail device a public key");
+    let content_key = fixture_content_key();
+
+    device_a_db
+        .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+        .expect("tail fixture device a writes snapshot setting");
+    let snapshot_revision = device_a_db
+        .latest_sync_revision(DEFAULT_PROFILE_ID)
+        .expect("read tail fixture snapshot revision");
+    let snapshot = device_a_db
+        .settings_sync_snapshot_payload(
+            DEFAULT_PROFILE_ID,
+            snapshot_revision,
+            &[SYNC_DOMAIN_SETTINGS.to_string()],
+        )
+        .expect("build tail fixture snapshot payload");
+    let tail_change = device_a_db
+        .set_sync_setting_text(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            "ui.theme",
+            "slate",
+        )
+        .expect("tail fixture device a writes retained tail setting");
+
+    let snapshot_object_id = put_object(
+        &device_a_broadweb,
+        DEFAULT_PROFILE_ID,
+        sign_encrypted_settings_snapshot(&snapshot, &content_key, &device_a_signer),
+        &budget,
+    );
+    let tail_change_object_id = put_object(
+        &device_a_broadweb,
+        DEFAULT_PROFILE_ID,
+        sign_encrypted_setting_change(&tail_change, &content_key, &device_a_signer),
+        &budget,
+    );
+    let manifest_object_id = put_and_publish_object(
+        &device_a_broadweb,
+        DEFAULT_PROFILE_ID,
+        SETTINGS_ROOT_ID,
+        sign_encrypted_manifest_with_snapshot_tail(
+            SETTINGS_ROOT_ID,
+            snapshot_object_id.as_str(),
+            tail_change_object_id.as_str(),
+            &snapshot,
+            &tail_change,
+            &content_key,
+            &device_a_signer,
+        ),
+        &budget,
+    );
+
+    let fetched_manifest = fetch_published_object(
+        &device_b_broadweb,
+        DEFAULT_PROFILE_ID,
+        SETTINGS_ROOT_ID,
+        &budget,
+    );
+    assert_eq!(fetched_manifest.object_id, manifest_object_id);
+    let manifest = verify_and_decrypt_manifest(
+        fetched_manifest.bytes.as_slice(),
+        &content_key,
+        &trusted_device_a_key,
+    );
+    assert_eq!(
+        manifest.current_snapshot_object_id,
+        Some(snapshot_object_id.clone())
+    );
+    assert_eq!(
+        manifest.tail_change_object_ids,
+        vec![tail_change_object_id.clone()]
+    );
+    assert_eq!(manifest.device_frontiers.len(), 1);
+    assert_eq!(
+        manifest.device_frontiers[0]
+            .latest_change_object_id
+            .as_deref(),
+        Some(tail_change_object_id.as_str())
+    );
+
+    let fetched_snapshot = fetch_object(
+        &device_b_broadweb,
+        DEFAULT_PROFILE_ID,
+        snapshot_object_id.as_str(),
+        &budget,
+    );
+    let verified_snapshot = verify_and_decrypt_settings_snapshot(
+        fetched_snapshot.bytes.as_slice(),
+        &content_key,
+        &trusted_device_a_key,
+    );
+    device_b_db
+        .apply_settings_snapshot(&verified_snapshot)
+        .expect("device b applies snapshot before manifest tail");
+    assert_eq!(
+        device_b_db
+            .get_setting_text("ui.theme")
+            .expect("read device b theme after snapshot")
+            .as_deref(),
+        Some("teal")
+    );
+
+    let fetched_tail = fetch_object(
+        &device_b_broadweb,
+        DEFAULT_PROFILE_ID,
+        tail_change_object_id.as_str(),
+        &budget,
+    );
+    let incoming_tail = verify_and_decrypt_setting_change(
+        fetched_tail.bytes.as_slice(),
+        &content_key,
+        &trusted_device_a_key,
+    );
+    let applied_tail = device_b_db
+        .apply_sync_setting_text(&incoming_tail)
+        .expect("device b applies manifest tail change");
+    assert_eq!(applied_tail.payload, "slate");
+    assert!(applied_tail.applied_at.is_some());
+    assert_eq!(
+        device_b_db
+            .get_setting_text("ui.theme")
+            .expect("read device b theme after tail")
+            .as_deref(),
+        Some("slate")
+    );
+
+    let _ = std::fs::remove_dir_all(device_a_root);
+    let _ = std::fs::remove_dir_all(device_b_root);
+}
+
 fn incoming_setting_from_change(change: &SyncChangeRecord) -> IncomingSyncSettingText {
     assert_eq!(change.operation, "set_text");
     IncomingSyncSettingText::new(
@@ -640,6 +797,38 @@ fn sign_encrypted_manifest_with_snapshot(
         }],
         retention_policy: ProfileSyncRetentionPolicy::default(),
         created_at: snapshot.created_at,
+    };
+    sign_encrypted_manifest_payload(&manifest, content_key, signer)
+}
+
+fn sign_encrypted_manifest_with_snapshot_tail(
+    root_id: &str,
+    snapshot_object_id: &str,
+    tail_change_object_id: &str,
+    snapshot: &ProfileSyncSettingsSnapshot,
+    tail_change: &SyncChangeRecord,
+    content_key: &ProfileSyncContentKey,
+    signer: &ProfileSyncDeviceSigner,
+) -> Vec<u8> {
+    let mut included_domains = snapshot.included_domains.clone();
+    included_domains.push(tail_change.domain.clone());
+    included_domains.sort();
+    included_domains.dedup();
+    let manifest = ProfileSyncManifest {
+        profile: snapshot.profile.clone(),
+        root_id: root_id.to_string(),
+        schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+        membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+        current_snapshot_object_id: Some(snapshot_object_id.to_string()),
+        tail_change_object_ids: vec![tail_change_object_id.to_string()],
+        included_domains,
+        device_frontiers: vec![ProfileSyncDeviceFrontier {
+            device_id: tail_change.device_id.clone(),
+            latest_sequence: tail_change.device_sequence,
+            latest_change_object_id: Some(tail_change_object_id.to_string()),
+        }],
+        retention_policy: ProfileSyncRetentionPolicy::default(),
+        created_at: tail_change.created_at,
     };
     sign_encrypted_manifest_payload(&manifest, content_key, signer)
 }
