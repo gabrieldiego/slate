@@ -194,7 +194,8 @@ Current baseline:
   Bookmarks sync domain. First-run default bookmark seeding still updates only
   local bookmark rows, so new profiles do not publish seed noise as user
   bookmark changes. Trusted incoming bookmark-slot changes now materialize into
-  the local bookmark rows during profile-sync apply.
+  the local bookmark rows during profile-sync apply, and existing bookmark
+  removals emit slot tombstones that delete stale rows on receiving devices.
 - Local settings/app-domain publishing now filters outgoing snapshots and tail
   manifests through the enabled app sync-domain table. Disabled domains can
   still be used as local typed state, but they are not published to broadweb

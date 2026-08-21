@@ -1543,6 +1543,8 @@ pub struct BookmarkSlotSyncPayload {
     pub position: i64,
     pub favicon_key: Option<String>,
     pub replaced_url: Option<String>,
+    #[serde(default)]
+    pub deleted: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -2352,12 +2354,54 @@ impl SlateProfileDatabase {
     }
 
     pub fn remove_bookmark(&self, profile: &str, url: &str) -> Result<(), StorageError> {
-        let connection = self.connection()?;
-        connection
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let now = unix_time_seconds()?;
+        let removed = transaction
+            .query_row(
+                "SELECT title, folder, position, favicon_key
+                 FROM bookmarks
+                 WHERE profile = ?1 AND url = ?2",
+                params![profile, url],
+                |row| {
+                    Ok(BookmarkSlotSyncPayload {
+                        url: url.to_string(),
+                        title: row.get(0)?,
+                        folder: row.get(1)?,
+                        position: row.get(2)?,
+                        favicon_key: row.get(3)?,
+                        replaced_url: None,
+                        deleted: true,
+                    })
+                },
+            )
+            .optional()
+            .map_err(|source| self.database_error(source))?;
+        transaction
             .execute(
                 "DELETE FROM bookmarks WHERE profile = ?1 AND url = ?2",
                 params![profile, url],
             )
+            .map_err(|source| self.database_error(source))?;
+        if let Some(payload) = removed {
+            let sync_key = bookmark_home_slot_sync_key(payload.position);
+            let sync_payload =
+                serde_json::to_string(&payload).map_err(StorageError::EncodeSyncPayload)?;
+            record_sync_setting_text_in_transaction(
+                &transaction,
+                profile,
+                SYNC_DOMAIN_BOOKMARKS,
+                sync_key.as_str(),
+                sync_payload.as_str(),
+                self.local_sync_device_id(),
+                now,
+            )
+            .map_err(|source| self.database_error(source))?;
+        }
+        transaction
+            .commit()
             .map_err(|source| self.database_error(source))?;
         Ok(())
     }
@@ -5224,6 +5268,7 @@ fn bookmark_home_slot_sync_payload(
         position: bookmark.position,
         favicon_key: bookmark.favicon_key.clone(),
         replaced_url: replaced_url.map(str::to_string),
+        deleted: false,
     })
     .map_err(StorageError::EncodeSyncPayload)
 }
@@ -5508,6 +5553,25 @@ fn apply_bookmark_slot_sync_payload_in_transaction(
     payload: &BookmarkSlotSyncPayload,
     now: i64,
 ) -> Result<(), rusqlite::Error> {
+    if payload.deleted {
+        transaction.execute(
+            "DELETE FROM bookmarks
+             WHERE profile = ?1
+               AND (
+                 position = ?2
+                 OR url = ?3
+                 OR (?4 IS NOT NULL AND url = ?4)
+               )",
+            params![
+                profile,
+                payload.position,
+                payload.url.as_str(),
+                payload.replaced_url.as_deref()
+            ],
+        )?;
+        return Ok(());
+    }
+
     transaction.execute(
         "DELETE FROM bookmarks
          WHERE profile = ?1
@@ -9250,6 +9314,7 @@ mod tests {
             position: 0,
             favicon_key: Some("favicon:https://example.com/".to_string()),
             replaced_url: Some(DEFAULT_HOME_BOOKMARKS[0].url.to_string()),
+            deleted: false,
         };
         let incoming = IncomingSyncSettingText::new(
             DEFAULT_PROFILE_ID,
@@ -9284,6 +9349,61 @@ mod tests {
     }
 
     #[test]
+    fn incoming_bookmark_slot_tombstone_removes_bookmark_row() {
+        let database_path =
+            test_dir("incoming-bookmark-slot-tombstone").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        database
+            .set_bookmark_slot(
+                &BookmarkUpdate {
+                    profile: DEFAULT_PROFILE_ID.to_string(),
+                    url: "https://example.com/".to_string(),
+                    title: Some("Example".to_string()),
+                    folder: None,
+                    position: 0,
+                    favicon_key: None,
+                },
+                Some(DEFAULT_HOME_BOOKMARKS[0].url),
+            )
+            .unwrap();
+        let payload = BookmarkSlotSyncPayload {
+            url: "https://example.com/".to_string(),
+            title: None,
+            folder: None,
+            position: 0,
+            favicon_key: None,
+            replaced_url: None,
+            deleted: true,
+        };
+        let incoming = IncomingSyncSettingText::new(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_BOOKMARKS,
+            bookmark_home_slot_sync_key(payload.position),
+            serde_json::to_string(&payload).unwrap(),
+            "zz-device",
+            1,
+            100,
+        );
+
+        let applied = database.apply_sync_setting_text(&incoming).unwrap();
+
+        assert!(applied.applied_at.is_some());
+        let bookmarks = database.bookmarks(DEFAULT_PROFILE_ID).unwrap();
+        assert!(
+            !bookmarks
+                .iter()
+                .any(|bookmark| bookmark.url == "https://example.com/")
+        );
+        assert!(!bookmarks.iter().any(|bookmark| bookmark.position == 0));
+        let value = database
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_BOOKMARKS, "home.slot.0")
+            .unwrap()
+            .unwrap();
+        let stored: BookmarkSlotSyncPayload = serde_json::from_str(value.value.as_str()).unwrap();
+        assert!(stored.deleted);
+    }
+
+    #[test]
     fn incoming_losing_bookmark_slot_change_does_not_replace_winner() {
         let database_path =
             test_dir("incoming-bookmark-slot-conflict").join(DEFAULT_DATABASE_FILE_NAME);
@@ -9295,6 +9415,7 @@ mod tests {
             position: 1,
             favicon_key: None,
             replaced_url: Some(DEFAULT_HOME_BOOKMARKS[1].url.to_string()),
+            deleted: false,
         };
         let losing_payload = BookmarkSlotSyncPayload {
             url: "https://loser.example/".to_string(),
@@ -9303,6 +9424,7 @@ mod tests {
             position: 1,
             favicon_key: None,
             replaced_url: Some(DEFAULT_HOME_BOOKMARKS[1].url.to_string()),
+            deleted: false,
         };
         let winning = database
             .apply_sync_setting_text(&IncomingSyncSettingText::new(
@@ -10674,6 +10796,7 @@ mod tests {
         assert_eq!(first_payload.url, "https://example.com/");
         assert_eq!(first_payload.title.as_deref(), Some("Example"));
         assert_eq!(first_payload.position, 0);
+        assert!(!first_payload.deleted);
         assert_eq!(
             first_payload.replaced_url,
             Some(DEFAULT_HOME_BOOKMARKS[0].url.to_string())
@@ -10716,6 +10839,7 @@ mod tests {
         assert_eq!(second_payload.url, "https://example.com/");
         assert_eq!(second_payload.title.as_deref(), Some("Example moved"));
         assert_eq!(second_payload.position, 1);
+        assert!(!second_payload.deleted);
         assert_eq!(
             second_payload.replaced_url,
             Some(DEFAULT_HOME_BOOKMARKS[1].url.to_string())
@@ -10730,6 +10854,59 @@ mod tests {
                 .unwrap()
                 .map(|record| record.value),
             Some(all_events[1].change.payload.clone())
+        );
+    }
+
+    #[test]
+    fn bookmark_removal_records_home_slot_tombstone() {
+        let database_path = test_dir("bookmark-slot-remove").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        database
+            .set_bookmark_slot(
+                &BookmarkUpdate {
+                    profile: DEFAULT_PROFILE_ID.into(),
+                    url: "https://example.com/".into(),
+                    title: Some("Example".into()),
+                    folder: None,
+                    position: 0,
+                    favicon_key: Some("favicon:https://example.com/".into()),
+                },
+                Some(DEFAULT_HOME_BOOKMARKS[0].url),
+            )
+            .unwrap();
+
+        database
+            .remove_bookmark(DEFAULT_PROFILE_ID, "https://example.com/")
+            .unwrap();
+        database
+            .remove_bookmark(DEFAULT_PROFILE_ID, "https://missing.example/")
+            .unwrap();
+
+        let bookmarks = database.bookmarks(DEFAULT_PROFILE_ID).unwrap();
+        assert!(
+            !bookmarks
+                .iter()
+                .any(|bookmark| bookmark.url == "https://example.com/")
+        );
+        let events = database
+            .sync_setting_text_events_after_for_domain(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_BOOKMARKS,
+                0,
+                10,
+            )
+            .unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[1].change.entity_key, bookmark_home_slot_sync_key(0));
+        let tombstone: BookmarkSlotSyncPayload =
+            serde_json::from_str(events[1].change.payload.as_str()).unwrap();
+        assert!(tombstone.deleted);
+        assert_eq!(tombstone.url, "https://example.com/");
+        assert_eq!(tombstone.title.as_deref(), Some("Example"));
+        assert_eq!(tombstone.position, 0);
+        assert_eq!(
+            tombstone.favicon_key.as_deref(),
+            Some("favicon:https://example.com/")
         );
     }
 

@@ -383,7 +383,9 @@ The initial Bookmarks-domain projection covers home bookmark slot saves as
 structured JSON text changes keyed by slot. Default first-run bookmarks are
 local seed data and should not be published as user bookmark changes. Trusted
 incoming bookmark slot changes materialize into local bookmark rows during
-profile-sync apply.
+profile-sync apply. Existing bookmark removals emit tombstone payloads for the
+affected home slot so receiving devices can delete stale rows without syncing
+file or cache data.
 
 `slate-settings.db` seeds these domains with privacy metadata so the sync UI can
 show what each app would share before the app has its full schema. Settings,

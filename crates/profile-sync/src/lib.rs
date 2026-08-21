@@ -6239,6 +6239,32 @@ mod tests {
                 None,
             )
             .expect("publisher writes bookmark slot");
+        publisher_database
+            .set_bookmark_slot(
+                &BookmarkUpdate {
+                    profile: DEFAULT_PROFILE_ID.to_string(),
+                    url: "https://old.example/".to_string(),
+                    title: Some("Old".to_string()),
+                    folder: None,
+                    position: 3,
+                    favicon_key: None,
+                },
+                None,
+            )
+            .expect("publisher writes removable bookmark slot");
+        publisher_database
+            .remove_bookmark(DEFAULT_PROFILE_ID, "https://old.example/")
+            .expect("publisher removes bookmark slot");
+        receiver_database
+            .upsert_bookmark(&BookmarkUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                url: "https://old.example/".to_string(),
+                title: Some("Old".to_string()),
+                folder: None,
+                position: 3,
+                favicon_key: None,
+            })
+            .expect("receiver has stale bookmark slot");
         let content_key = ProfileSyncContentKey::from_bytes([46; PROFILE_SYNC_CONTENT_KEY_BYTES]);
         let signer = ProfileSyncDeviceSigner::generate("runtime-i").expect("generate signer");
         let public_key = signer.public_key().expect("read signer public key");
@@ -6350,6 +6376,7 @@ mod tests {
         assert_eq!(bookmark_payload.url, "https://example.com/");
         assert_eq!(bookmark_payload.title.as_deref(), Some("Example"));
         assert_eq!(bookmark_payload.position, 2);
+        assert!(!bookmark_payload.deleted);
         assert_eq!(
             bookmark_payload.favicon_key.as_deref(),
             Some("favicon:https://example.com/")
@@ -6363,6 +6390,22 @@ mod tests {
                 && bookmark.title.as_deref() == Some("Example")
                 && bookmark.position == 2
         }));
+        assert!(
+            !bookmarks
+                .iter()
+                .any(|bookmark| bookmark.url == "https://old.example/")
+        );
+        let deleted_bookmark_value = receiver_database
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_BOOKMARKS, "home.slot.3")
+            .expect("read receiver deleted bookmark sync setting")
+            .expect("receiver deleted bookmark sync setting")
+            .value;
+        let deleted_bookmark_payload: BookmarkSlotSyncPayload =
+            serde_json::from_str(deleted_bookmark_value.as_str())
+                .expect("decode deleted bookmark payload");
+        assert!(deleted_bookmark_payload.deleted);
+        assert_eq!(deleted_bookmark_payload.url, "https://old.example/");
+        assert_eq!(deleted_bookmark_payload.position, 3);
 
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
