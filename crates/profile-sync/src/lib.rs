@@ -3169,7 +3169,12 @@ mod tests {
         SettingsSyncRetentionProviderHandle, SettingsSyncRuntimeSecrets,
         SettingsSyncSchedulerConfig, settings_device_head_root_id,
     };
-    use slate_broadwebd::{ResourceBudget, test_fixtures::InProcessBroadwebNetwork};
+    use slate_broadwebd::{
+        BroadwebdError, ProfileSyncProfileRequest as BroadwebdProfileSyncProfileRequest,
+        ProfileSyncRequest as BroadwebdProfileSyncRequest,
+        ProfileSyncResponse as BroadwebdProfileSyncResponse, ResourceBudget,
+        test_fixtures::InProcessBroadwebNetwork,
+    };
     use slate_storage::{
         AppSyncDomainRegistration, DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID,
         DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH, IncomingSyncSettingText,
@@ -5466,6 +5471,91 @@ mod tests {
                 .local_device_head_root_health
                 .online_retaining_providers,
             2
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_scheduler_surfaces_retention_quota_failure() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("scheduler-quota-device");
+        let provider_state_root = test_state_root("scheduler-quota-provider");
+        let db_root = test_state_root("scheduler-quota-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-quota-a",
+            )
+            .expect("start in-process profile-sync scheduler device daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-quota-pinner",
+            )
+            .expect("start in-process scheduler availability provider daemon");
+        network
+            .profile_sync()
+            .set_availability_provider_retention_quota("runtime-scheduler-quota-pinner", Some(0))
+            .expect("force provider quota failure");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-scheduler-quota-a",
+        )
+        .expect("open scheduler local settings database");
+        let profile = "schedulerquotaprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([68; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-scheduler-quota-a")
+            .expect("generate scheduler local device signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register scheduler local trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write scheduler local setting");
+
+        let selected_provider_id = "local-fixture-availability-runtime-scheduler-quota-pinner";
+        let error = BroadwebdSettingsSyncScheduler::new(&device_daemon)
+            .run_once_selecting_retention_providers(
+                &database,
+                &SettingsSyncSchedulerConfig::new(
+                    profile,
+                    settings_root_id,
+                    SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
+                ),
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                &[SettingsSyncRetentionProviderHandle::new(
+                    selected_provider_id,
+                    &provider_daemon,
+                )],
+            )
+            .expect_err("scheduler should surface selected provider quota failure");
+
+        assert!(matches!(
+            error,
+            ProfileSyncCycleWithHealthError::Retention(BroadwebdError::UnsupportedRequest(message))
+                if message.contains("retention quota exceeded")
+        ));
+        let retained = provider_daemon
+            .profile_sync(BroadwebdProfileSyncRequest::ListRetainedObjects(
+                BroadwebdProfileSyncProfileRequest::new(profile),
+            ))
+            .expect("quota-constrained provider can list retained objects");
+        assert_eq!(
+            retained,
+            BroadwebdProfileSyncResponse::RetainedObjects {
+                object_ids: Vec::new(),
+            }
         );
 
         let _ = std::fs::remove_dir_all(device_state_root);

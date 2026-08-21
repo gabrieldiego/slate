@@ -341,6 +341,9 @@ Current baseline:
   external discovery. The same selection logic is available as a read-only
   scheduler plan that reports selected, undiscovered, and duplicate handles
   before any publish, pull, retain, or root mutation occurs.
+- Scheduler-facing fixture coverage now includes retention quota failure from a
+  selected availability provider. The cycle surfaces the quota refusal as a
+  local retention error instead of reporting successful durability.
 - The local profile-sync fixture can now mark simulated devices offline and
   online, allowing tests to verify unavailable devices fail closed without
   touching sockets, DNS, Tor, IPFS, or external relays.
