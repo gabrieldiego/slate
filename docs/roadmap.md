@@ -296,7 +296,9 @@ Current baseline:
   app cursor only after the decoded payload batch is inspected. The same
   watcher path now covers post-snapshot update tails for all three domains, so
   apps can observe incremental metadata changes after acknowledging the
-  snapshot batch.
+  snapshot batch. Chat tombstone tails are covered through the same typed
+  watcher path, proving deletions are observable before the app advances its
+  cursor.
 - The profile-sync bridge can now publish post-snapshot local settings updates
   by reusing the latest retained `slate-settings.db` snapshot object, publishing
   only the new tail changes, moving the settings root, and publishing a fresh

@@ -7517,6 +7517,14 @@ mod tests {
             .expect("receiver trusts typed app tombstone tail publisher key");
         let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
         let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
+        let initial_chat_cursor = receiver_database
+            .poll_typed_sync_setting_text_events_for_app_domain::<ChatConversationSyncPayload>(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CHAT,
+                8,
+            )
+            .expect("initialize receiver chat cursor before tombstone tail snapshot");
+        assert_eq!(initial_chat_cursor.event_count(), 0);
 
         let full = publisher
             .publish_full_local_settings_snapshot_head(
@@ -7550,6 +7558,31 @@ mod tests {
                 .len(),
             1
         );
+        let snapshot_chat_poll = receiver_database
+            .poll_typed_sync_setting_text_events_for_app_domain::<ChatConversationSyncPayload>(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CHAT,
+                8,
+            )
+            .expect("receiver polls typed chat snapshot before tombstone tail");
+        assert!(snapshot_chat_poll.advanced());
+        assert_eq!(
+            snapshot_chat_poll.previous_revision,
+            initial_chat_cursor.latest_revision
+        );
+        assert_eq!(snapshot_chat_poll.event_count(), 1);
+        assert_eq!(
+            snapshot_chat_poll.events[0].value.conversation_id,
+            "runtime-chat-tail-delete"
+        );
+        assert_eq!(
+            snapshot_chat_poll.events[0].value.display_name,
+            "Tail Runtime Team"
+        );
+        assert!(!snapshot_chat_poll.events[0].value.deleted);
+        receiver_database
+            .record_typed_app_sync_domain_poll_cursor(&snapshot_chat_poll)
+            .expect("record receiver chat snapshot cursor before tombstone tail");
 
         publisher_database
             .remove_chat_conversation(DEFAULT_PROFILE_ID, chat_update.conversation_id.as_str())
@@ -7615,6 +7648,36 @@ mod tests {
             serde_json::from_str(chat_value.as_str()).expect("decode chat tombstone tail payload");
         assert!(chat_payload.deleted);
         assert_eq!(chat_payload.conversation_id, "runtime-chat-tail-delete");
+
+        let tombstone_chat_poll = receiver_database
+            .poll_typed_sync_setting_text_events_for_app_domain::<ChatConversationSyncPayload>(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CHAT,
+                8,
+            )
+            .expect("receiver polls typed chat tombstone tail payload");
+        assert!(tombstone_chat_poll.advanced());
+        assert_eq!(
+            tombstone_chat_poll.previous_revision,
+            snapshot_chat_poll.latest_revision
+        );
+        assert_eq!(tombstone_chat_poll.event_count(), 1);
+        assert_eq!(
+            tombstone_chat_poll.events[0].change.entity_key,
+            "conversation.runtime-chat-tail-delete"
+        );
+        assert!(tombstone_chat_poll.events[0].value.deleted);
+        assert_eq!(
+            tombstone_chat_poll.events[0].value.conversation_id,
+            "runtime-chat-tail-delete"
+        );
+        assert_eq!(
+            receiver_database
+                .record_typed_app_sync_domain_poll_cursor(&tombstone_chat_poll)
+                .expect("record receiver chat tombstone tail cursor")
+                .latest_revision,
+            tombstone_chat_poll.latest_revision
+        );
 
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);

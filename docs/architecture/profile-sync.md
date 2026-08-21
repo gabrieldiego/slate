@@ -265,6 +265,9 @@ decoded payload that the app can inspect before advancing its cursor.
 The update-tail fixture then records those snapshot cursors, applies a
 post-snapshot manifest tail, and verifies each app-domain poll returns only the
 incremental decoded payload for that domain.
+The tombstone-tail fixture uses the same cursor sequence for Chat deletions, so
+apps can observe a decoded deletion payload and only then acknowledge the tail
+revision.
 
 ## Data Objects
 
