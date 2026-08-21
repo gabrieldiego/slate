@@ -378,8 +378,12 @@ Planned domains:
   after the user enables the domain and profile-sync seals the changes into
   encrypted objects.
 - `chat`: account/provider configuration, local conversation metadata, and
-  aggregation preferences. Message contents, SMS/WhatsApp secrets, and provider
-  tokens require separate designs before sync.
+  aggregation preferences. The initial Chat projection stores conversation
+  metadata keyed by conversation id and emits tombstones for deletion. It may
+  include provider ID, provider thread ID, display name, avatar reference,
+  last-message timestamp, unread count, archive state, and mute state. Message
+  contents, SMS/WhatsApp secrets, provider tokens, and attachment bytes require
+  separate designs before sync.
 - `files`: file metadata, user-selected sync sets, directory manifests, content
   object references, integrity metadata, and retention policy. The initial
   Files projection stores metadata-only entries keyed by entry id and emits

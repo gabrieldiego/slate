@@ -55,6 +55,7 @@ pub const DEFAULT_HOME_BOOKMARKS: [DefaultBookmark; 2] = [
 const DEFAULT_BOOKMARKS_SEEDED_SETTING_KEY: &str = "bookmarks.defaults_seeded";
 const BOOKMARK_HOME_SLOT_SYNC_KEY_PREFIX: &str = "home.slot.";
 const CALENDAR_EVENT_SYNC_KEY_PREFIX: &str = "event.";
+const CHAT_CONVERSATION_SYNC_KEY_PREFIX: &str = "conversation.";
 const CONTACT_CARD_SYNC_KEY_PREFIX: &str = "contact.";
 const DOWNLOAD_METADATA_SYNC_KEY_PREFIX: &str = "download.";
 const FILE_ENTRY_SYNC_KEY_PREFIX: &str = "entry.";
@@ -1655,6 +1656,51 @@ pub struct CalendarEventSyncPayload {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ChatConversationUpdate {
+    pub profile: String,
+    pub conversation_id: String,
+    pub provider_id: Option<String>,
+    pub external_thread_id: Option<String>,
+    pub display_name: String,
+    pub avatar_key: Option<String>,
+    pub last_message_at: Option<i64>,
+    pub unread_count: u32,
+    pub archived: bool,
+    pub muted: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ChatConversationRecord {
+    pub profile: String,
+    pub conversation_id: String,
+    pub provider_id: Option<String>,
+    pub external_thread_id: Option<String>,
+    pub display_name: String,
+    pub avatar_key: Option<String>,
+    pub last_message_at: Option<i64>,
+    pub unread_count: u32,
+    pub archived: bool,
+    pub muted: bool,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ChatConversationSyncPayload {
+    pub conversation_id: String,
+    pub provider_id: Option<String>,
+    pub external_thread_id: Option<String>,
+    pub display_name: String,
+    pub avatar_key: Option<String>,
+    pub last_message_at: Option<i64>,
+    pub unread_count: u32,
+    pub archived: bool,
+    pub muted: bool,
+    #[serde(default)]
+    pub deleted: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ContactCardUpdate {
     pub profile: String,
     pub contact_id: String,
@@ -2171,6 +2217,8 @@ pub enum StorageError {
     InvalidSyncDomain(String),
     InvalidSyncRevision(i64),
     InvalidCalendarEventId(String),
+    InvalidChatConversationId(String),
+    InvalidChatProviderId(String),
     InvalidContactId(String),
     InvalidDownloadSize(u64),
     InvalidFileEntryId(String),
@@ -2234,6 +2282,12 @@ impl fmt::Display for StorageError {
             }
             Self::InvalidCalendarEventId(event_id) => {
                 write!(formatter, "invalid calendar event id: {event_id}")
+            }
+            Self::InvalidChatConversationId(conversation_id) => {
+                write!(formatter, "invalid chat conversation id: {conversation_id}")
+            }
+            Self::InvalidChatProviderId(provider_id) => {
+                write!(formatter, "invalid chat provider id: {provider_id}")
             }
             Self::InvalidContactId(contact_id) => {
                 write!(formatter, "invalid contact id: {contact_id}")
@@ -2311,6 +2365,8 @@ impl std::error::Error for StorageError {
             Self::InvalidSyncDomain(_) => None,
             Self::InvalidSyncRevision(_) => None,
             Self::InvalidCalendarEventId(_) => None,
+            Self::InvalidChatConversationId(_) => None,
+            Self::InvalidChatProviderId(_) => None,
             Self::InvalidContactId(_) => None,
             Self::InvalidDownloadSize(_) => None,
             Self::InvalidFileEntryId(_) => None,
@@ -2817,6 +2873,133 @@ impl SlateProfileDatabase {
                 &transaction,
                 profile,
                 SYNC_DOMAIN_CALENDAR,
+                sync_key.as_str(),
+                sync_payload.as_str(),
+                self.local_sync_device_id(),
+                now,
+            )
+            .map_err(|source| self.database_error(source))?;
+        }
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(())
+    }
+
+    pub fn upsert_chat_conversation(
+        &self,
+        conversation: &ChatConversationUpdate,
+    ) -> Result<ChatConversationRecord, StorageError> {
+        validate_chat_conversation_update(conversation)?;
+        let sync_key = chat_conversation_sync_key(conversation.conversation_id.as_str());
+        let sync_payload = chat_conversation_sync_payload(conversation)?;
+        let payload = ChatConversationSyncPayload {
+            conversation_id: conversation.conversation_id.clone(),
+            provider_id: conversation.provider_id.clone(),
+            external_thread_id: conversation.external_thread_id.clone(),
+            display_name: conversation.display_name.clone(),
+            avatar_key: conversation.avatar_key.clone(),
+            last_message_at: conversation.last_message_at,
+            unread_count: conversation.unread_count,
+            archived: conversation.archived,
+            muted: conversation.muted,
+            deleted: false,
+        };
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let now = unix_time_seconds()?;
+        upsert_chat_conversation_in_transaction(
+            &transaction,
+            conversation.profile.as_str(),
+            &payload,
+            now,
+        )
+        .map_err(|source| self.database_error(source))?;
+        record_sync_setting_text_in_transaction(
+            &transaction,
+            conversation.profile.as_str(),
+            SYNC_DOMAIN_CHAT,
+            sync_key.as_str(),
+            sync_payload.as_str(),
+            self.local_sync_device_id(),
+            now,
+        )
+        .map_err(|source| self.database_error(source))?;
+        let record = chat_conversation_record_by_id_in_transaction(
+            &transaction,
+            conversation.profile.as_str(),
+            conversation.conversation_id.as_str(),
+        )
+        .map_err(|source| self.database_error(source))?;
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(record)
+    }
+
+    pub fn chat_conversations(
+        &self,
+        profile: &str,
+        limit: u32,
+    ) -> Result<Vec<ChatConversationRecord>, StorageError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT profile, conversation_id, provider_id, external_thread_id,
+                        display_name, avatar_key, last_message_at, unread_count, archived,
+                        muted, created_at, updated_at
+                 FROM chat_conversations
+                 WHERE profile = ?1
+                 ORDER BY archived, last_message_at DESC, display_name, conversation_id
+                 LIMIT ?2",
+            )
+            .map_err(|source| self.database_error(source))?;
+        let records = statement
+            .query_map(
+                params![profile, i64::from(limit)],
+                chat_conversation_record_from_row,
+            )
+            .map_err(|source| self.database_error(source))?;
+
+        let mut conversations = Vec::new();
+        for record in records {
+            conversations.push(record.map_err(|source| self.database_error(source))?);
+        }
+        Ok(conversations)
+    }
+
+    pub fn remove_chat_conversation(
+        &self,
+        profile: &str,
+        conversation_id: &str,
+    ) -> Result<(), StorageError> {
+        validate_chat_conversation_id(conversation_id)?;
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let now = unix_time_seconds()?;
+        let removed = chat_conversation_record_by_id_optional_in_transaction(
+            &transaction,
+            profile,
+            conversation_id,
+        )
+        .map_err(|source| self.database_error(source))?;
+        transaction
+            .execute(
+                "DELETE FROM chat_conversations WHERE profile = ?1 AND conversation_id = ?2",
+                params![profile, conversation_id],
+            )
+            .map_err(|source| self.database_error(source))?;
+        if let Some(record) = removed {
+            let sync_key = chat_conversation_sync_key(record.conversation_id.as_str());
+            let sync_payload = chat_conversation_tombstone_sync_payload(&record)?;
+            record_sync_setting_text_in_transaction(
+                &transaction,
+                profile,
+                SYNC_DOMAIN_CHAT,
                 sync_key.as_str(),
                 sync_payload.as_str(),
                 self.local_sync_device_id(),
@@ -5460,6 +5643,28 @@ impl SlateProfileDatabase {
                 CREATE INDEX IF NOT EXISTS contact_cards_display_name
                     ON contact_cards(profile, display_name, contact_id);
 
+                CREATE TABLE IF NOT EXISTS chat_conversations (
+                    profile TEXT NOT NULL,
+                    conversation_id TEXT NOT NULL,
+                    provider_id TEXT,
+                    external_thread_id TEXT,
+                    display_name TEXT NOT NULL,
+                    avatar_key TEXT,
+                    last_message_at INTEGER,
+                    unread_count INTEGER NOT NULL,
+                    archived INTEGER NOT NULL DEFAULT 0,
+                    muted INTEGER NOT NULL DEFAULT 0,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    PRIMARY KEY(profile, conversation_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS chat_conversations_provider
+                    ON chat_conversations(profile, provider_id, conversation_id);
+
+                CREATE INDEX IF NOT EXISTS chat_conversations_activity
+                    ON chat_conversations(profile, archived, last_message_at DESC, conversation_id);
+
                 CREATE TABLE IF NOT EXISTS file_entries (
                     profile TEXT NOT NULL,
                     entry_id TEXT NOT NULL,
@@ -6072,6 +6277,46 @@ fn calendar_event_tombstone_sync_payload(
     .map_err(StorageError::EncodeSyncPayload)
 }
 
+fn chat_conversation_sync_key(conversation_id: &str) -> String {
+    format!("{CHAT_CONVERSATION_SYNC_KEY_PREFIX}{conversation_id}")
+}
+
+fn chat_conversation_sync_payload(
+    conversation: &ChatConversationUpdate,
+) -> Result<String, StorageError> {
+    serde_json::to_string(&ChatConversationSyncPayload {
+        conversation_id: conversation.conversation_id.clone(),
+        provider_id: conversation.provider_id.clone(),
+        external_thread_id: conversation.external_thread_id.clone(),
+        display_name: conversation.display_name.clone(),
+        avatar_key: conversation.avatar_key.clone(),
+        last_message_at: conversation.last_message_at,
+        unread_count: conversation.unread_count,
+        archived: conversation.archived,
+        muted: conversation.muted,
+        deleted: false,
+    })
+    .map_err(StorageError::EncodeSyncPayload)
+}
+
+fn chat_conversation_tombstone_sync_payload(
+    conversation: &ChatConversationRecord,
+) -> Result<String, StorageError> {
+    serde_json::to_string(&ChatConversationSyncPayload {
+        conversation_id: conversation.conversation_id.clone(),
+        provider_id: conversation.provider_id.clone(),
+        external_thread_id: conversation.external_thread_id.clone(),
+        display_name: conversation.display_name.clone(),
+        avatar_key: conversation.avatar_key.clone(),
+        last_message_at: conversation.last_message_at,
+        unread_count: conversation.unread_count,
+        archived: conversation.archived,
+        muted: conversation.muted,
+        deleted: true,
+    })
+    .map_err(StorageError::EncodeSyncPayload)
+}
+
 fn contact_card_sync_key(contact_id: &str) -> String {
     format!("{CONTACT_CARD_SYNC_KEY_PREFIX}{contact_id}")
 }
@@ -6162,6 +6407,32 @@ fn validate_calendar_event_id(event_id: &str) -> Result<(), StorageError> {
         return Ok(());
     }
     Err(StorageError::InvalidCalendarEventId(event_id.to_string()))
+}
+
+fn validate_chat_conversation_update(
+    conversation: &ChatConversationUpdate,
+) -> Result<(), StorageError> {
+    validate_chat_conversation_id(conversation.conversation_id.as_str())?;
+    if let Some(provider_id) = conversation.provider_id.as_deref() {
+        validate_chat_provider_id(provider_id)?;
+    }
+    Ok(())
+}
+
+fn validate_chat_conversation_id(conversation_id: &str) -> Result<(), StorageError> {
+    if is_valid_sync_identifier(conversation_id) {
+        return Ok(());
+    }
+    Err(StorageError::InvalidChatConversationId(
+        conversation_id.to_string(),
+    ))
+}
+
+fn validate_chat_provider_id(provider_id: &str) -> Result<(), StorageError> {
+    if is_valid_sync_identifier(provider_id) {
+        return Ok(());
+    }
+    Err(StorageError::InvalidChatProviderId(provider_id.to_string()))
 }
 
 fn validate_contact_id(contact_id: &str) -> Result<(), StorageError> {
@@ -6470,6 +6741,29 @@ fn apply_sync_setting_materialized_view_in_transaction(
         )?;
     }
 
+    if change.domain == SYNC_DOMAIN_CHAT
+        && change
+            .key
+            .as_str()
+            .starts_with(CHAT_CONVERSATION_SYNC_KEY_PREFIX)
+    {
+        let payload = chat_conversation_sync_payload_from_text(change.value.as_str())?;
+        validate_chat_conversation_sync_payload_for_sql(&payload)?;
+        let expected_key = chat_conversation_sync_key(payload.conversation_id.as_str());
+        if change.key != expected_key {
+            return Err(invalid_chat_conversation_sync_payload_error(format!(
+                "chat conversation sync key {} does not match payload id {}",
+                change.key, payload.conversation_id
+            )));
+        }
+        apply_chat_conversation_sync_payload_in_transaction(
+            transaction,
+            change.profile.as_str(),
+            &payload,
+            now,
+        )?;
+    }
+
     if change.domain == SYNC_DOMAIN_CONTACTS
         && change
             .key
@@ -6590,6 +6884,25 @@ fn calendar_event_sync_payload_from_text(
 }
 
 fn invalid_calendar_event_sync_payload_error(message: String) -> rusqlite::Error {
+    rusqlite::Error::FromSqlConversionFailure(
+        3,
+        Type::Text,
+        Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            message,
+        )),
+    )
+}
+
+fn chat_conversation_sync_payload_from_text(
+    value: &str,
+) -> Result<ChatConversationSyncPayload, rusqlite::Error> {
+    serde_json::from_str(value).map_err(|source| {
+        rusqlite::Error::FromSqlConversionFailure(3, Type::Text, Box::new(source))
+    })
+}
+
+fn invalid_chat_conversation_sync_payload_error(message: String) -> rusqlite::Error {
     rusqlite::Error::FromSqlConversionFailure(
         3,
         Type::Text,
@@ -6800,6 +7113,137 @@ fn calendar_event_record_from_row(
         created_at: row.get(11)?,
         updated_at: row.get(12)?,
     })
+}
+
+fn apply_chat_conversation_sync_payload_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    payload: &ChatConversationSyncPayload,
+    now: i64,
+) -> Result<(), rusqlite::Error> {
+    if payload.deleted {
+        transaction.execute(
+            "DELETE FROM chat_conversations WHERE profile = ?1 AND conversation_id = ?2",
+            params![profile, payload.conversation_id.as_str()],
+        )?;
+        return Ok(());
+    }
+
+    upsert_chat_conversation_in_transaction(transaction, profile, payload, now)
+}
+
+fn upsert_chat_conversation_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    payload: &ChatConversationSyncPayload,
+    now: i64,
+) -> Result<(), rusqlite::Error> {
+    transaction.execute(
+        "INSERT INTO chat_conversations
+           (profile, conversation_id, provider_id, external_thread_id, display_name,
+            avatar_key, last_message_at, unread_count, archived, muted, created_at,
+            updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11)
+         ON CONFLICT(profile, conversation_id) DO UPDATE SET
+           provider_id = excluded.provider_id,
+           external_thread_id = excluded.external_thread_id,
+           display_name = excluded.display_name,
+           avatar_key = excluded.avatar_key,
+           last_message_at = excluded.last_message_at,
+           unread_count = excluded.unread_count,
+           archived = excluded.archived,
+           muted = excluded.muted,
+           updated_at = excluded.updated_at",
+        params![
+            profile,
+            payload.conversation_id.as_str(),
+            payload.provider_id.as_deref(),
+            payload.external_thread_id.as_deref(),
+            payload.display_name.as_str(),
+            payload.avatar_key.as_deref(),
+            payload.last_message_at,
+            i64::from(payload.unread_count),
+            payload.archived,
+            payload.muted,
+            now
+        ],
+    )?;
+    Ok(())
+}
+
+fn chat_conversation_record_by_id_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    conversation_id: &str,
+) -> Result<ChatConversationRecord, rusqlite::Error> {
+    transaction.query_row(
+        "SELECT profile, conversation_id, provider_id, external_thread_id, display_name,
+                avatar_key, last_message_at, unread_count, archived, muted, created_at,
+                updated_at
+         FROM chat_conversations
+         WHERE profile = ?1 AND conversation_id = ?2",
+        params![profile, conversation_id],
+        chat_conversation_record_from_row,
+    )
+}
+
+fn chat_conversation_record_by_id_optional_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    conversation_id: &str,
+) -> Result<Option<ChatConversationRecord>, rusqlite::Error> {
+    transaction
+        .query_row(
+            "SELECT profile, conversation_id, provider_id, external_thread_id, display_name,
+                    avatar_key, last_message_at, unread_count, archived, muted, created_at,
+                    updated_at
+             FROM chat_conversations
+             WHERE profile = ?1 AND conversation_id = ?2",
+            params![profile, conversation_id],
+            chat_conversation_record_from_row,
+        )
+        .optional()
+}
+
+fn chat_conversation_record_from_row(
+    row: &rusqlite::Row<'_>,
+) -> Result<ChatConversationRecord, rusqlite::Error> {
+    let unread_count = u32::try_from(row.get::<_, i64>(7)?).map_err(|source| {
+        rusqlite::Error::FromSqlConversionFailure(7, Type::Integer, Box::new(source))
+    })?;
+    Ok(ChatConversationRecord {
+        profile: row.get(0)?,
+        conversation_id: row.get(1)?,
+        provider_id: row.get(2)?,
+        external_thread_id: row.get(3)?,
+        display_name: row.get(4)?,
+        avatar_key: row.get(5)?,
+        last_message_at: row.get(6)?,
+        unread_count,
+        archived: row.get(8)?,
+        muted: row.get(9)?,
+        created_at: row.get(10)?,
+        updated_at: row.get(11)?,
+    })
+}
+
+fn validate_chat_conversation_sync_payload_for_sql(
+    payload: &ChatConversationSyncPayload,
+) -> Result<(), rusqlite::Error> {
+    if !is_valid_sync_identifier(payload.conversation_id.as_str()) {
+        return Err(invalid_chat_conversation_sync_payload_error(format!(
+            "invalid chat conversation id: {}",
+            payload.conversation_id
+        )));
+    }
+    if let Some(provider_id) = payload.provider_id.as_deref()
+        && !is_valid_sync_identifier(provider_id)
+    {
+        return Err(invalid_chat_conversation_sync_payload_error(format!(
+            "invalid chat provider id: {provider_id}"
+        )));
+    }
+    Ok(())
 }
 
 fn apply_contact_card_sync_payload_in_transaction(
@@ -11536,6 +11980,320 @@ mod tests {
         assert!(
             database
                 .calendar_events(DEFAULT_PROFILE_ID, 10)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn chat_conversation_writes_metadata_sync_change_without_messages_or_tokens() {
+        let database_path = test_dir("chat-conversation-local").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let conversation = ChatConversationUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            conversation_id: "chat-1".to_string(),
+            provider_id: Some("whatsapp".to_string()),
+            external_thread_id: Some("family@example.test".to_string()),
+            display_name: "Family".to_string(),
+            avatar_key: Some("chat-avatar:chat-1".to_string()),
+            last_message_at: Some(1_788_950_000),
+            unread_count: 3,
+            archived: false,
+            muted: true,
+        };
+
+        let record = database.upsert_chat_conversation(&conversation).unwrap();
+
+        assert_eq!(record.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(record.conversation_id, "chat-1");
+        assert_eq!(record.provider_id.as_deref(), Some("whatsapp"));
+        assert_eq!(
+            record.external_thread_id.as_deref(),
+            Some("family@example.test")
+        );
+        assert_eq!(record.display_name, "Family");
+        assert_eq!(record.unread_count, 3);
+        assert!(record.muted);
+        assert_eq!(
+            database.chat_conversations(DEFAULT_PROFILE_ID, 10).unwrap(),
+            vec![record]
+        );
+        let events = database
+            .sync_setting_text_events_after_for_domain(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CHAT, 0, 10)
+            .unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].change.entity_key, "conversation.chat-1");
+        let payload: ChatConversationSyncPayload =
+            serde_json::from_str(events[0].change.payload.as_str()).unwrap();
+        assert_eq!(payload.conversation_id, "chat-1");
+        assert_eq!(payload.provider_id.as_deref(), Some("whatsapp"));
+        assert_eq!(payload.display_name, "Family");
+        assert!(!payload.deleted);
+        let payload_json: serde_json::Value =
+            serde_json::from_str(events[0].change.payload.as_str()).unwrap();
+        assert!(payload_json.get("message").is_none());
+        assert!(payload_json.get("message_body").is_none());
+        assert!(payload_json.get("messages").is_none());
+        assert!(payload_json.get("provider_token").is_none());
+        assert!(payload_json.get("sms_secret").is_none());
+        assert!(payload_json.get("whatsapp_secret").is_none());
+        let value = database
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CHAT, "conversation.chat-1")
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, events[0].change.payload);
+    }
+
+    #[test]
+    fn chat_conversation_removal_records_tombstone() {
+        let database_path =
+            test_dir("chat-conversation-tombstone").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        database
+            .upsert_chat_conversation(&ChatConversationUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                conversation_id: "chat-2".to_string(),
+                provider_id: Some("sms".to_string()),
+                external_thread_id: Some("+15550101000".to_string()),
+                display_name: "Alex".to_string(),
+                avatar_key: None,
+                last_message_at: Some(1_788_960_000),
+                unread_count: 1,
+                archived: false,
+                muted: false,
+            })
+            .unwrap();
+
+        database
+            .remove_chat_conversation(DEFAULT_PROFILE_ID, "chat-2")
+            .unwrap();
+
+        assert!(
+            database
+                .chat_conversations(DEFAULT_PROFILE_ID, 10)
+                .unwrap()
+                .is_empty()
+        );
+        let events = database
+            .sync_setting_text_events_after_for_domain(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CHAT, 0, 10)
+            .unwrap();
+        assert_eq!(events.len(), 2);
+        let tombstone: ChatConversationSyncPayload =
+            serde_json::from_str(events[1].change.payload.as_str()).unwrap();
+        assert!(tombstone.deleted);
+        assert_eq!(tombstone.conversation_id, "chat-2");
+        assert_eq!(tombstone.display_name, "Alex");
+        let value = database
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CHAT, "conversation.chat-2")
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, events[1].change.payload);
+    }
+
+    #[test]
+    fn incoming_chat_conversation_change_updates_rows() {
+        let database_path = test_dir("incoming-chat-conversation").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let payload = ChatConversationSyncPayload {
+            conversation_id: "chat-3".to_string(),
+            provider_id: Some("whatsapp".to_string()),
+            external_thread_id: Some("team@example.test".to_string()),
+            display_name: "Project Team".to_string(),
+            avatar_key: Some("chat-avatar:chat-3".to_string()),
+            last_message_at: Some(1_788_970_000),
+            unread_count: 5,
+            archived: false,
+            muted: false,
+            deleted: false,
+        };
+        let incoming = IncomingSyncSettingText::new(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_CHAT,
+            chat_conversation_sync_key(payload.conversation_id.as_str()),
+            serde_json::to_string(&payload).unwrap(),
+            "device-b",
+            1,
+            20,
+        );
+
+        let applied = database.apply_sync_setting_text(&incoming).unwrap();
+
+        assert_eq!(applied.domain, SYNC_DOMAIN_CHAT);
+        assert_eq!(applied.entity_key, "conversation.chat-3");
+        assert!(applied.applied_at.is_some());
+        let conversations = database.chat_conversations(DEFAULT_PROFILE_ID, 10).unwrap();
+        assert_eq!(conversations.len(), 1);
+        assert_eq!(conversations[0].conversation_id, "chat-3");
+        assert_eq!(conversations[0].provider_id.as_deref(), Some("whatsapp"));
+        assert_eq!(conversations[0].display_name, "Project Team");
+        assert_eq!(conversations[0].unread_count, 5);
+    }
+
+    #[test]
+    fn incoming_chat_conversation_tombstone_removes_row() {
+        let database_path =
+            test_dir("incoming-chat-conversation-tombstone").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        database
+            .upsert_chat_conversation(&ChatConversationUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                conversation_id: "chat-4".to_string(),
+                provider_id: Some("sms".to_string()),
+                external_thread_id: Some("+15550102000".to_string()),
+                display_name: "Temporary Thread".to_string(),
+                avatar_key: None,
+                last_message_at: None,
+                unread_count: 0,
+                archived: false,
+                muted: false,
+            })
+            .unwrap();
+        let tombstone = ChatConversationSyncPayload {
+            conversation_id: "chat-4".to_string(),
+            provider_id: Some("sms".to_string()),
+            external_thread_id: Some("+15550102000".to_string()),
+            display_name: "Temporary Thread".to_string(),
+            avatar_key: None,
+            last_message_at: None,
+            unread_count: 0,
+            archived: false,
+            muted: false,
+            deleted: true,
+        };
+
+        let applied = database
+            .apply_sync_setting_text(&IncomingSyncSettingText::new(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CHAT,
+                chat_conversation_sync_key("chat-4"),
+                serde_json::to_string(&tombstone).unwrap(),
+                "zz-device",
+                1,
+                100,
+            ))
+            .unwrap();
+
+        assert!(applied.applied_at.is_some());
+        assert!(
+            database
+                .chat_conversations(DEFAULT_PROFILE_ID, 10)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn incoming_losing_chat_conversation_change_does_not_replace_winner() {
+        let database_path =
+            test_dir("incoming-chat-conversation-conflict").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let winning_payload = ChatConversationSyncPayload {
+            conversation_id: "chat-5".to_string(),
+            provider_id: Some("whatsapp".to_string()),
+            external_thread_id: Some("winner@example.test".to_string()),
+            display_name: "Winner Thread".to_string(),
+            avatar_key: None,
+            last_message_at: Some(1_788_980_000),
+            unread_count: 7,
+            archived: false,
+            muted: true,
+            deleted: false,
+        };
+        let losing_payload = ChatConversationSyncPayload {
+            conversation_id: "chat-5".to_string(),
+            provider_id: Some("whatsapp".to_string()),
+            external_thread_id: Some("loser@example.test".to_string()),
+            display_name: "Loser Thread".to_string(),
+            avatar_key: None,
+            last_message_at: Some(1_788_990_000),
+            unread_count: 1,
+            archived: true,
+            muted: false,
+            deleted: false,
+        };
+
+        let winning = database
+            .apply_sync_setting_text(&IncomingSyncSettingText::new(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CHAT,
+                chat_conversation_sync_key("chat-5"),
+                serde_json::to_string(&winning_payload).unwrap(),
+                "device-b",
+                2,
+                40,
+            ))
+            .unwrap();
+        let losing = database
+            .apply_sync_setting_text(&IncomingSyncSettingText::new(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CHAT,
+                chat_conversation_sync_key("chat-5"),
+                serde_json::to_string(&losing_payload).unwrap(),
+                "device-c",
+                1,
+                30,
+            ))
+            .unwrap();
+
+        assert!(winning.applied_at.is_some());
+        assert_eq!(losing.applied_at, None);
+        let conversations = database.chat_conversations(DEFAULT_PROFILE_ID, 10).unwrap();
+        assert_eq!(conversations.len(), 1);
+        assert_eq!(conversations[0].display_name, "Winner Thread");
+        assert_eq!(
+            conversations[0].external_thread_id.as_deref(),
+            Some("winner@example.test")
+        );
+        assert_eq!(conversations[0].unread_count, 7);
+        assert!(conversations[0].muted);
+        let value = database
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CHAT, "conversation.chat-5")
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, winning.payload);
+    }
+
+    #[test]
+    fn chat_conversation_ids_and_provider_ids_are_validated() {
+        let database_path = test_dir("chat-conversation-invalid").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let invalid_conversation_id = ChatConversationUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            conversation_id: "../chat".to_string(),
+            provider_id: Some("sms".to_string()),
+            external_thread_id: None,
+            display_name: "Invalid".to_string(),
+            avatar_key: None,
+            last_message_at: None,
+            unread_count: 0,
+            archived: false,
+            muted: false,
+        };
+        let invalid_provider_id = ChatConversationUpdate {
+            conversation_id: "chat-6".to_string(),
+            provider_id: Some("../provider".to_string()),
+            ..invalid_conversation_id.clone()
+        };
+
+        let conversation_error = database
+            .upsert_chat_conversation(&invalid_conversation_id)
+            .unwrap_err();
+        let provider_error = database
+            .upsert_chat_conversation(&invalid_provider_id)
+            .unwrap_err();
+
+        assert!(matches!(
+            conversation_error,
+            StorageError::InvalidChatConversationId(conversation_id)
+                if conversation_id == "../chat"
+        ));
+        assert!(matches!(
+            provider_error,
+            StorageError::InvalidChatProviderId(provider_id) if provider_id == "../provider"
+        ));
+        assert!(
+            database
+                .chat_conversations(DEFAULT_PROFILE_ID, 10)
                 .unwrap()
                 .is_empty()
         );

@@ -28,7 +28,9 @@ Already covered:
   as a singleton app page, outside the Web tab preview list.
 - Chat now has an initial `slate://chat` aggregator mock for SMS, WhatsApp, and
   future provider adapters. The older `slate://messages` route remains an alias
-  while product terminology moves to Chat.
+  while product terminology moves to Chat. Its first sync projection stores
+  conversation metadata only; message contents and provider secrets stay out of
+  replicated settings payloads.
 - Browser-core no longer emits hardcoded app page bodies for rail apps; it maps
   app selection to internal `slate://` addresses and lets the renderer path load
   the page.
@@ -209,6 +211,12 @@ Current baseline:
   bookmark changes. Trusted incoming bookmark-slot changes now materialize into
   the local bookmark rows during profile-sync apply, and existing bookmark
   removals emit slot tombstones that delete stale rows on receiving devices.
+- Chat conversation metadata now has a local-first `slate-settings.db`
+  materialized table and sync-domain JSON projection with tombstones. The
+  initial projection tracks provider ID, provider thread ID, display name,
+  avatar reference, last-message timestamp, unread count, archive state, and
+  mute state. Message bodies, SMS/WhatsApp credentials, provider tokens, and
+  attachment bytes remain outside replicated settings payloads.
 - Files metadata now has a local-first `slate-settings.db` materialized table
   and sync-domain JSON projection with tombstones. The initial projection tracks
   sync-set membership, parent entry, name, entry kind, content object reference,
