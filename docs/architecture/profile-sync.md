@@ -457,6 +457,14 @@ incremental tail path, the full-snapshot bootstrap path, and explicit no-op
 states by inspecting `slate-settings.db`. This keeps the eventual scheduler from
 duplicating assumptions about whether the latest snapshot was retained, whether
 new rows exist after it, or whether a profile has no syncable settings yet.
+The first local scheduler loop is intentionally bounded and single-threaded:
+callers provide the maximum number of publish steps, and the loop stops at
+`NoLocalSettingsChanges` or `UpToDate`. Before publishing a post-snapshot tail
+it decodes the stored local device-head object through broadwebd and compares
+that signed frontier with the latest local-device setting sequence. Applied
+remote-device rows after the retained snapshot are not re-signed into the local
+tail; future merge work should publish those devices through their own trusted
+heads or through an explicit merged snapshot.
 
 The local fake backend must model provider availability inside the test process.
 Each simulated device registers as a provider, retained objects are scoped to

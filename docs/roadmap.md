@@ -216,6 +216,11 @@ Current baseline:
   profile has no changes, full snapshot for the first publish or unpublished
   snapshot state, no-op when the retained snapshot is current, and incremental
   tail publish when changes exist after that snapshot.
+- The first bounded local settings sync loop now wraps that publisher and runs
+  until an explicit idle state, with a caller-supplied maximum step count. It
+  reads the stored local device-head root as the published local frontier, so it
+  does not repeatedly publish the same post-snapshot tail and does not re-sign
+  remote-device rows as local tail changes.
 - The local profile-sync fixture can now mark simulated devices offline and
   online, allowing tests to verify unavailable devices fail closed without
   touching sockets, DNS, Tor, IPFS, or external relays.
@@ -483,9 +488,9 @@ Next:
   backend, then point the profile mutable root at the newest manifest.
 - Use the storage compaction target to publish encrypted snapshots, trim
   manifest tails, and then enforce retention across broadwebd providers.
-- Add the first explicit sync scheduler loop around the local settings head
-  publisher so changed `slate-settings.db` rows can move the local device head
-  without a manual publish call.
+- Wire the bounded local settings sync loop into the runtime scheduler with
+  trusted account keys loaded from `slate-settings.db` and visible policy/health
+  handling.
 - Add device enrollment, revocation, and key rotation before syncing sensitive
   profile domains.
 - Expand local distributed-protocol fixtures to simulate offline devices,

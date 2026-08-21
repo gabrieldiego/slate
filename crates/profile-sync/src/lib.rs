@@ -21,7 +21,7 @@ use slate_storage::{
     ProfileSyncSettingsSnapshotPublication, ProfileSyncSettingsTailChangePublication,
     ProfileSyncTrustedPullApplyError, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, StorageError,
     SyncChangeRecord, SyncCompactionTarget, SyncObjectError, SyncSnapshotRecord,
-    SyncSnapshotRegistration, VerifiedProfileSyncDeviceHead,
+    SyncSnapshotRegistration, VerifiedProfileSyncDeviceHead, open_signed_profile_sync_device_head,
     settings_sync_manifest_for_snapshot_and_tail_changes, settings_sync_manifest_for_tail_changes,
     settings_sync_snapshot_id,
 };
@@ -57,6 +57,11 @@ pub enum ProfileSyncPublishError {
     Broadwebd(BroadwebdError),
     Storage(StorageError),
     SyncObject(SyncObjectError),
+    LocalSyncLoopExhausted {
+        profile: String,
+        settings_root_id: String,
+        max_steps: u32,
+    },
 }
 
 impl fmt::Display for ProfileSyncPublishError {
@@ -65,6 +70,14 @@ impl fmt::Display for ProfileSyncPublishError {
             Self::Broadwebd(error) => write!(formatter, "profile sync backend error: {error}"),
             Self::Storage(error) => write!(formatter, "profile sync storage error: {error}"),
             Self::SyncObject(error) => write!(formatter, "profile sync object error: {error}"),
+            Self::LocalSyncLoopExhausted {
+                profile,
+                settings_root_id,
+                max_steps,
+            } => write!(
+                formatter,
+                "local settings sync loop for profile {profile} root {settings_root_id} did not reach idle after {max_steps} steps"
+            ),
         }
     }
 }
@@ -75,6 +88,7 @@ impl std::error::Error for ProfileSyncPublishError {
             Self::Broadwebd(error) => Some(error),
             Self::Storage(error) => Some(error),
             Self::SyncObject(error) => Some(error),
+            Self::LocalSyncLoopExhausted { .. } => None,
         }
     }
 }
@@ -150,6 +164,47 @@ pub enum LocalSettingsHeadPublishStatus {
     PublishedIncrementalTail(PublishedLocalSettingsTailHead),
     NoLocalSettingsChanges,
     UpToDate { snapshot_record: SyncSnapshotRecord },
+}
+
+impl LocalSettingsHeadPublishStatus {
+    pub fn is_idle(&self) -> bool {
+        matches!(self, Self::NoLocalSettingsChanges | Self::UpToDate { .. })
+    }
+
+    pub fn published_manifest_object_id(&self) -> Option<&str> {
+        match self {
+            Self::PublishedFullSnapshot(published) => {
+                Some(published.publication.manifest_object_id.as_str())
+            }
+            Self::PublishedIncrementalTail(published) => {
+                Some(published.publication.manifest_object_id.as_str())
+            }
+            Self::NoLocalSettingsChanges | Self::UpToDate { .. } => None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LocalSettingsSyncRun {
+    pub profile: String,
+    pub settings_root_id: String,
+    pub steps: Vec<LocalSettingsHeadPublishStatus>,
+}
+
+impl LocalSettingsSyncRun {
+    pub fn is_idle(&self) -> bool {
+        self.steps
+            .last()
+            .map(LocalSettingsHeadPublishStatus::is_idle)
+            .unwrap_or(false)
+    }
+
+    pub fn published_step_count(&self) -> usize {
+        self.steps
+            .iter()
+            .filter(|step| step.published_manifest_object_id().is_some())
+            .count()
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -763,33 +818,22 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
             snapshot_record.covers_revision,
             u32::MAX,
         )?;
-        if tail_events.is_empty() {
-            return Ok(None);
-        }
-        let all_events = database.sync_setting_text_events_after(profile, 0, u32::MAX)?;
-        let all_changes = all_events
+        let tail_changes = tail_events
             .iter()
+            .filter(|event| event.change.device_id == database.local_sync_device_id())
             .map(|event| event.change.clone())
             .collect::<Vec<_>>();
+        let Some(head_change) =
+            latest_local_device_change_for_head(database.local_sync_device_id(), &tail_changes)
+        else {
+            return Ok(None);
+        };
+        let all_events = database.sync_setting_text_events_after(profile, 0, u32::MAX)?;
         let covered_changes = all_events
             .iter()
             .take_while(|event| event.revision.revision <= snapshot_record.covers_revision)
             .map(|event| event.change.clone())
             .collect::<Vec<_>>();
-        let tail_changes = tail_events
-            .iter()
-            .map(|event| event.change.clone())
-            .collect::<Vec<_>>();
-        let Some(head_change) = latest_local_device_change_for_head(
-            database.local_sync_device_id(),
-            all_changes.as_slice(),
-        ) else {
-            return Err(StorageError::InvalidProfileSyncManifest(format!(
-                "no local settings change exists for device {}",
-                database.local_sync_device_id()
-            ))
-            .into());
-        };
         let snapshot = database.settings_sync_snapshot_payload(
             profile,
             snapshot_record.covers_revision,
@@ -873,6 +917,33 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
         let latest_snapshot = database.latest_sync_snapshot(profile)?;
         if let Some(snapshot_record) = latest_snapshot.as_ref() {
             if snapshot_record.backend_object_id.is_some() {
+                let local_tail_events = database.sync_setting_text_events_after(
+                    profile,
+                    snapshot_record.covers_revision,
+                    u32::MAX,
+                )?;
+                let local_tail_changes = local_tail_events
+                    .iter()
+                    .filter(|event| event.change.device_id == database.local_sync_device_id())
+                    .map(|event| event.change.clone())
+                    .collect::<Vec<_>>();
+                let Some(latest_local_tail_change) = latest_local_device_change_for_head(
+                    database.local_sync_device_id(),
+                    local_tail_changes.as_slice(),
+                ) else {
+                    return Ok(LocalSettingsHeadPublishStatus::UpToDate {
+                        snapshot_record: snapshot_record.clone(),
+                    });
+                };
+                if let Some(device_head) =
+                    self.local_settings_device_head(database, profile, content_key, key_id, signer)?
+                    && device_head.device_sequence >= latest_local_tail_change.device_sequence
+                {
+                    return Ok(LocalSettingsHeadPublishStatus::UpToDate {
+                        snapshot_record: snapshot_record.clone(),
+                    });
+                }
+
                 if let Some(publication) = self.publish_local_settings_tail_head(
                     database,
                     profile,
@@ -908,6 +979,80 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
         }
 
         Ok(LocalSettingsHeadPublishStatus::NoLocalSettingsChanges)
+    }
+
+    fn local_settings_device_head(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        content_key: &ProfileSyncContentKey,
+        key_id: &str,
+        signer: &ProfileSyncDeviceSigner,
+    ) -> Result<Option<ProfileSyncDeviceHead>, ProfileSyncPublishError> {
+        let root_id = settings_device_head_root_id(database.local_sync_device_id());
+        let Some(root) = database.profile_sync_root(profile, root_id.as_str())? else {
+            return Ok(None);
+        };
+        let source = BroadwebdProfileSyncObjectSource::new(self.daemon);
+        let object = source.get_profile_sync_object(profile, root.object_id.as_str())?;
+        if object.object_id != root.object_id {
+            return Err(StorageError::InvalidProfileSyncManifest(format!(
+                "stored local device head root {} resolved to mismatched object {}",
+                root.object_id, object.object_id
+            ))
+            .into());
+        }
+        let public_key = signer.public_key()?;
+        let device_head = open_signed_profile_sync_device_head(
+            object.bytes.as_slice(),
+            content_key,
+            &public_key,
+            profile,
+            key_id,
+        )?;
+        validate_device_head_for_publish(profile, root_id.as_str(), &device_head, signer)?;
+        Ok(Some(device_head))
+    }
+
+    pub fn run_pending_local_settings_sync(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        settings_root_id: &str,
+        content_key: &ProfileSyncContentKey,
+        key_id: &str,
+        signer: &ProfileSyncDeviceSigner,
+        retention_policy: ProfileSyncRetentionPolicy,
+        max_steps: u32,
+    ) -> Result<LocalSettingsSyncRun, ProfileSyncPublishError> {
+        let mut run = LocalSettingsSyncRun {
+            profile: profile.to_string(),
+            settings_root_id: settings_root_id.to_string(),
+            steps: Vec::new(),
+        };
+
+        for _ in 0..max_steps {
+            let step = self.publish_pending_local_settings_head(
+                database,
+                profile,
+                settings_root_id,
+                content_key,
+                key_id,
+                signer,
+                retention_policy.clone(),
+            )?;
+            let is_idle = step.is_idle();
+            run.steps.push(step);
+            if is_idle {
+                return Ok(run);
+            }
+        }
+
+        Err(ProfileSyncPublishError::LocalSyncLoopExhausted {
+            profile: profile.to_string(),
+            settings_root_id: settings_root_id.to_string(),
+            max_steps,
+        })
     }
 
     fn publish_settings_tail_change_publications(
@@ -1187,10 +1332,10 @@ mod tests {
     use slate_broadwebd::{ResourceBudget, test_fixtures::InProcessBroadwebNetwork};
     use slate_storage::{
         DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
-        PROFILE_SYNC_CONTENT_KEY_BYTES, PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
-        ProfileSyncContentKey, ProfileSyncDeviceHead, ProfileSyncDeviceSigner,
-        ProfileSyncObjectSource, ProfileSyncRetentionPolicy, SYNC_DOMAIN_CALENDAR,
-        SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, SyncChangeRecord,
+        IncomingSyncSettingText, PROFILE_SYNC_CONTENT_KEY_BYTES,
+        PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, ProfileSyncContentKey, ProfileSyncDeviceHead,
+        ProfileSyncDeviceSigner, ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
+        SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, SyncChangeRecord,
         SyncDevicePublicKeyRegistration, open_signed_profile_sync_device_head,
         open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
         open_signed_sync_setting_text, pull_signed_profile_sync_device_head,
@@ -2042,6 +2187,179 @@ mod tests {
                 .expect("read receiver zoom")
                 .as_deref(),
             Some("110")
+        );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_publisher_runs_pending_local_settings_sync_until_idle() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("sync-loop-publisher");
+        let receiver_state_root = test_state_root("sync-loop-receiver");
+        let publisher_db_root = test_state_root("sync-loop-publisher-db");
+        let receiver_db_root = test_state_root("sync-loop-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "runtime-o",
+            )
+            .expect("start publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(&receiver_state_root, ResourceBudget::default(), "runtime-p")
+            .expect("start receiver daemon");
+        let publisher_database = SlateProfileDatabase::open_resolved_with_device_id(
+            publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-o",
+        )
+        .expect("open publisher settings database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-p",
+        )
+        .expect("open receiver settings database");
+        let content_key = ProfileSyncContentKey::from_bytes([49; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-o").expect("generate signer");
+        let public_key = signer.public_key().expect("read signer public key");
+        receiver_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key,
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("receiver trusts publisher key");
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+
+        publisher_database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("publisher writes initial setting");
+        let first_run = publisher
+            .run_pending_local_settings_sync(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+            )
+            .expect("run pending local settings sync");
+        assert!(first_run.is_idle());
+        assert_eq!(first_run.published_step_count(), 1);
+        assert_eq!(first_run.steps.len(), 2);
+        let LocalSettingsHeadPublishStatus::PublishedFullSnapshot(first_publish) =
+            &first_run.steps[0]
+        else {
+            panic!("expected first loop step to publish a full snapshot: {first_run:?}");
+        };
+        let LocalSettingsHeadPublishStatus::UpToDate { snapshot_record } = &first_run.steps[1]
+        else {
+            panic!("expected first loop to settle as up to date: {first_run:?}");
+        };
+        assert_eq!(
+            snapshot_record.snapshot_id,
+            first_publish.snapshot_record.snapshot_id
+        );
+
+        publisher_database
+            .apply_sync_setting_text(&IncomingSyncSettingText::new(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "ui.remote",
+                "from-remote",
+                "runtime-q",
+                1,
+                50,
+            ))
+            .expect("publisher applies remote post-snapshot setting");
+        let remote_only_run = publisher
+            .run_pending_local_settings_sync(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+            )
+            .expect("run pending local settings sync after remote-only update");
+        assert!(remote_only_run.is_idle());
+        assert_eq!(remote_only_run.published_step_count(), 0);
+
+        publisher_database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.zoom", "110")
+            .expect("publisher writes post-snapshot setting");
+        let second_run = publisher
+            .run_pending_local_settings_sync(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+            )
+            .expect("run pending local settings sync after update");
+        assert!(second_run.is_idle());
+        assert_eq!(second_run.published_step_count(), 1);
+        assert_eq!(second_run.steps.len(), 2);
+        let LocalSettingsHeadPublishStatus::PublishedIncrementalTail(second_publish) =
+            &second_run.steps[0]
+        else {
+            panic!("expected second loop step to publish an incremental tail: {second_run:?}");
+        };
+        assert_eq!(
+            second_publish.publication.snapshot_object_id,
+            first_publish.publication.snapshot_object_id
+        );
+        assert_eq!(second_publish.publication.tail_change_object_ids.len(), 1);
+        assert!(second_run.steps[1].is_idle());
+
+        let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
+        let applied = source
+            .pull_record_and_apply_trusted_settings_from_device_head(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                second_publish.device_head.root_id.as_str(),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+            )
+            .expect("receiver applies sync-loop-selected tail head");
+        let BroadwebdTrustedDeviceHeadSyncStatus::Applied { application, .. } = applied else {
+            panic!("expected sync-loop-selected tail application, got {applied:?}");
+        };
+        assert_eq!(
+            application.manifest_object_id,
+            second_publish.publication.manifest_object_id
+        );
+        assert_eq!(application.tail_changes.len(), 1);
+        assert_eq!(
+            receiver_database
+                .get_setting_text("ui.theme")
+                .expect("read receiver theme")
+                .as_deref(),
+            Some("teal")
+        );
+        assert_eq!(
+            receiver_database
+                .get_setting_text("ui.zoom")
+                .expect("read receiver zoom")
+                .as_deref(),
+            Some("110")
+        );
+        assert_eq!(
+            receiver_database
+                .get_setting_text("ui.remote")
+                .expect("read receiver remote setting")
+                .as_deref(),
+            None
         );
 
         let _ = std::fs::remove_dir_all(publisher_state_root);
