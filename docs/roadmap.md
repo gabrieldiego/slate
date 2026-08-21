@@ -217,6 +217,11 @@ Current baseline:
   returns the verified settings object set without knowing which broadweb
   backend supplied the bytes. The broadwebd local fixture now exercises this
   source-based pull path.
+- `slate-settings.db` can now pull and apply a signed settings manifest in one
+  storage call once runtime provides an object source, trusted device public
+  key, content key, and content-key id. The helper returns `None` for an absent
+  published root, applies valid manifests through the existing validation path,
+  and surfaces manifest validation failures without advancing the stored root.
 - `slate-settings.db` now has typed snapshot metadata APIs for recording
   encrypted backend object ids, covered revisions, included domains, and latest
   snapshot lookup. This is metadata only; snapshot payloads stay in encrypted
@@ -287,9 +292,9 @@ Next:
   availability providers with no profile write authority.
 - Add Kubo RPC-backed operations for encrypted object add, pin, unpin, pin
   verification, IPNS publish, and IPNS resolve as the first IPFS/IPNS backend.
-- Wire the storage source-based settings pull helper into the actual runtime
-  sync loop with broadwebd as the object source, trusted account keys, and
-  explicit sync policy checks.
+- Implement the actual runtime sync loop that supplies a broadwebd-backed object
+  source, trusted account keys, and explicit sync policy checks to the storage
+  pull-and-apply helper.
 - Replace opportunistic chrome polling with a runtime watcher that applies
   externally synced changes through normal browser-core, chrome, routing, and
   privacy update paths instead of raw database replacement.

@@ -857,6 +857,33 @@ where
     }
 }
 
+#[derive(Debug)]
+pub enum ProfileSyncPullApplyError<SourceError> {
+    Pull(ProfileSyncPullError<SourceError>),
+    Storage(StorageError),
+}
+
+impl<SourceError: fmt::Display> fmt::Display for ProfileSyncPullApplyError<SourceError> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Pull(error) => write!(formatter, "failed to pull profile sync data: {error}"),
+            Self::Storage(error) => write!(formatter, "failed to apply profile sync data: {error}"),
+        }
+    }
+}
+
+impl<SourceError> std::error::Error for ProfileSyncPullApplyError<SourceError>
+where
+    SourceError: std::error::Error + 'static,
+{
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Pull(error) => Some(error),
+            Self::Storage(error) => Some(error),
+        }
+    }
+}
+
 pub fn pull_signed_profile_sync_settings_manifest_objects<Source>(
     source: &Source,
     profile: &str,
@@ -2378,6 +2405,38 @@ impl SlateProfileDatabase {
         )
     }
 
+    pub fn pull_and_apply_signed_settings_manifest_objects<Source>(
+        &self,
+        source: &Source,
+        profile: &str,
+        root_id: &str,
+        content_key: &ProfileSyncContentKey,
+        public_key: &ProfileSyncDevicePublicKey,
+        key_id: &str,
+    ) -> Result<
+        Option<ProfileSyncSettingsManifestApplication>,
+        ProfileSyncPullApplyError<Source::Error>,
+    >
+    where
+        Source: ProfileSyncObjectSource,
+    {
+        let Some(objects) = pull_signed_profile_sync_settings_manifest_objects(
+            source,
+            profile,
+            root_id,
+            content_key,
+            public_key,
+            key_id,
+        )
+        .map_err(ProfileSyncPullApplyError::Pull)?
+        else {
+            return Ok(None);
+        };
+        self.apply_verified_settings_manifest_objects(&objects)
+            .map(Some)
+            .map_err(ProfileSyncPullApplyError::Storage)
+    }
+
     pub fn sync_snapshot(
         &self,
         profile: &str,
@@ -3849,10 +3908,20 @@ mod tests {
         let destination =
             SlateProfileDatabase::open_resolved_with_device_id(destination_path, "device-b")
                 .unwrap();
-        destination
-            .apply_verified_settings_manifest_objects(&pulled)
-            .unwrap();
+        let applied = destination
+            .pull_and_apply_signed_settings_manifest_objects(
+                &source,
+                DEFAULT_PROFILE_ID,
+                root_id,
+                &content_key,
+                &trusted_public_key,
+                key_id,
+            )
+            .unwrap()
+            .expect("applied pulled settings root");
 
+        assert_eq!(applied.manifest_object_id, manifest_object_id);
+        assert_eq!(applied.tail_changes.len(), 1);
         assert_eq!(
             destination.get_setting_text("ui.theme").unwrap().as_deref(),
             Some("slate")
@@ -3864,6 +3933,125 @@ mod tests {
                 .expect("stored profile root")
                 .object_id,
             manifest_object_id
+        );
+    }
+
+    #[test]
+    fn profile_sync_pull_and_apply_returns_none_without_published_root() {
+        let content_key = ProfileSyncContentKey::from_bytes([14; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let trusted_public_key = signer.public_key().unwrap();
+        let source = InMemoryProfileSyncObjectSource::default();
+        let destination_path = test_dir("sync-pull-no-root").join(DEFAULT_DATABASE_FILE_NAME);
+        let destination =
+            SlateProfileDatabase::open_resolved_with_device_id(destination_path, "device-b")
+                .unwrap();
+
+        let applied = destination
+            .pull_and_apply_signed_settings_manifest_objects(
+                &source,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &content_key,
+                &trusted_public_key,
+                "content-key-epoch-1",
+            )
+            .unwrap();
+
+        assert_eq!(applied, None);
+        assert_eq!(
+            destination
+                .profile_sync_root(DEFAULT_PROFILE_ID, "settings/latest")
+                .unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn profile_sync_pull_and_apply_surfaces_manifest_validation_errors() {
+        let content_key = ProfileSyncContentKey::from_bytes([15; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let trusted_public_key = signer.public_key().unwrap();
+        let key_id = "content-key-epoch-1";
+        let root_id = "settings/latest";
+        let snapshot_object_id = "snapshot-object-1";
+        let manifest_object_id = "manifest-object-1";
+        let snapshot = ProfileSyncSettingsSnapshot {
+            profile: "other-profile".to_string(),
+            schema_version: PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION,
+            covers_revision: 1,
+            included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            values: Vec::new(),
+            created_at: 100,
+        };
+        let manifest = ProfileSyncManifest {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: root_id.to_string(),
+            schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            current_snapshot_object_id: Some(snapshot_object_id.to_string()),
+            tail_change_object_ids: Vec::new(),
+            included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            device_frontiers: Vec::new(),
+            retention_policy: ProfileSyncRetentionPolicy::default(),
+            created_at: 101,
+        };
+        let mut source = InMemoryProfileSyncObjectSource::default();
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            snapshot_object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND,
+                key_id,
+                serde_json::to_vec(&snapshot).unwrap().as_slice(),
+                &content_key,
+                &signer,
+                21,
+            ),
+        );
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            manifest_object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+                key_id,
+                serde_json::to_vec(&manifest).unwrap().as_slice(),
+                &content_key,
+                &signer,
+                22,
+            ),
+        );
+        source.publish_root(DEFAULT_PROFILE_ID, root_id, manifest_object_id);
+        let destination_path =
+            test_dir("sync-pull-invalid-manifest").join(DEFAULT_DATABASE_FILE_NAME);
+        let destination =
+            SlateProfileDatabase::open_resolved_with_device_id(destination_path, "device-b")
+                .unwrap();
+
+        let error = destination
+            .pull_and_apply_signed_settings_manifest_objects(
+                &source,
+                DEFAULT_PROFILE_ID,
+                root_id,
+                &content_key,
+                &trusted_public_key,
+                key_id,
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            ProfileSyncPullApplyError::Storage(StorageError::InvalidProfileSyncManifest(_))
+        ));
+        assert_eq!(
+            destination
+                .profile_sync_root(DEFAULT_PROFILE_ID, root_id)
+                .unwrap(),
+            None
         );
     }
 
