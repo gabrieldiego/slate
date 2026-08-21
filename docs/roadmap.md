@@ -488,6 +488,10 @@ Current baseline:
   in-process fixture endpoints, multiaddr and deferred protocol refs are
   tracked separately, and loopback-shaped `http://` or `https://` refs are
   unsupported so fixture tests cannot silently open sockets or rely on DNS.
+- Stored-provider runtime ticks now also exclude unsupported endpoint refs from
+  the materialized retention-provider quorum, even if the caller supplies a
+  daemon handle with the same socket-shaped endpoint string. This keeps
+  loopback metadata from satisfying socketless fixture runs.
 - The membership-aware scheduler now has the same stored-provider path. Its
   read-only plan keeps the existing no-mutation boundary and will not pull
   membership records to satisfy credentials, while the runtime path pulls the

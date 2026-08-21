@@ -1701,6 +1701,7 @@ pub struct SettingsSyncStoredRetentionProviderRun {
     pub stored_provider_plan: SettingsSyncStoredRetentionProviderPlan,
     pub unmaterialized_retention_provider_ids: Vec<String>,
     pub endpoint_mismatch_retention_provider_ids: Vec<String>,
+    pub unsupported_endpoint_retention_provider_ids: Vec<String>,
     pub cycle: SettingsSyncCycleWithSharedRootRetentionRun,
 }
 
@@ -1713,6 +1714,10 @@ impl SettingsSyncStoredRetentionProviderRun {
         self.endpoint_mismatch_retention_provider_ids.len()
     }
 
+    pub fn unsupported_endpoint_retention_provider_count(&self) -> usize {
+        self.unsupported_endpoint_retention_provider_ids.len()
+    }
+
     pub fn selected_retention_provider_count(&self) -> usize {
         self.stored_provider_plan
             .selected_retention_provider_count()
@@ -1722,6 +1727,7 @@ impl SettingsSyncStoredRetentionProviderRun {
         self.selected_retention_provider_count()
             .saturating_sub(self.unmaterialized_retention_provider_count())
             .saturating_sub(self.endpoint_mismatch_retention_provider_count())
+            .saturating_sub(self.unsupported_endpoint_retention_provider_count())
     }
 
     pub fn retained_provider_count(&self) -> usize {
@@ -1763,6 +1769,7 @@ pub struct SettingsSyncStoredRetentionProviderMembershipRun {
     pub stored_provider_plan: SettingsSyncStoredRetentionProviderPlan,
     pub unmaterialized_retention_provider_ids: Vec<String>,
     pub endpoint_mismatch_retention_provider_ids: Vec<String>,
+    pub unsupported_endpoint_retention_provider_ids: Vec<String>,
     pub cycle: SettingsSyncCycleWithMembershipLogRetentionRun,
 }
 
@@ -1779,6 +1786,10 @@ impl SettingsSyncStoredRetentionProviderMembershipRun {
         self.endpoint_mismatch_retention_provider_ids.len()
     }
 
+    pub fn unsupported_endpoint_retention_provider_count(&self) -> usize {
+        self.unsupported_endpoint_retention_provider_ids.len()
+    }
+
     pub fn selected_retention_provider_count(&self) -> usize {
         self.stored_provider_plan
             .selected_retention_provider_count()
@@ -1788,6 +1799,7 @@ impl SettingsSyncStoredRetentionProviderMembershipRun {
         self.selected_retention_provider_count()
             .saturating_sub(self.unmaterialized_retention_provider_count())
             .saturating_sub(self.endpoint_mismatch_retention_provider_count())
+            .saturating_sub(self.unsupported_endpoint_retention_provider_count())
     }
 
     pub fn retained_provider_count(&self) -> usize {
@@ -1982,15 +1994,35 @@ fn settings_sync_stored_retention_provider_plan(
     }
 }
 
+struct MaterializedStoredRetentionProviders<'a> {
+    unmaterialized_retention_provider_ids: Vec<String>,
+    endpoint_mismatch_retention_provider_ids: Vec<String>,
+    unsupported_endpoint_retention_provider_ids: Vec<String>,
+    daemons: Vec<&'a BroadwebDaemon>,
+}
+
+impl<'a> MaterializedStoredRetentionProviders<'a> {
+    fn materialized_retention_provider_count(&self) -> usize {
+        self.daemons.len()
+    }
+}
+
 fn materialize_stored_retention_provider_daemons<'a>(
     plan: &SettingsSyncStoredRetentionProviderPlan,
     retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'a>],
-) -> (Vec<String>, Vec<String>, Vec<&'a BroadwebDaemon>) {
+) -> MaterializedStoredRetentionProviders<'a> {
     let mut unmaterialized_retention_provider_ids = Vec::new();
     let mut endpoint_mismatch_retention_provider_ids = Vec::new();
+    let mut unsupported_endpoint_retention_provider_ids = Vec::new();
     let mut daemons = Vec::new();
 
     for provider_id in &plan.cycle.selected_retention_provider_ids {
+        if stored_provider_endpoint_status(plan, provider_id)
+            == SettingsSyncStoredProviderEndpointStatus::Unsupported
+        {
+            unsupported_endpoint_retention_provider_ids.push(provider_id.clone());
+            continue;
+        }
         if let Some(handle) = retention_provider_handles
             .iter()
             .find(|handle| handle.provider_id == provider_id)
@@ -2005,11 +2037,23 @@ fn materialize_stored_retention_provider_daemons<'a>(
         }
     }
 
-    (
+    MaterializedStoredRetentionProviders {
         unmaterialized_retention_provider_ids,
         endpoint_mismatch_retention_provider_ids,
+        unsupported_endpoint_retention_provider_ids,
         daemons,
-    )
+    }
+}
+
+fn stored_provider_endpoint_status(
+    plan: &SettingsSyncStoredRetentionProviderPlan,
+    provider_id: &str,
+) -> SettingsSyncStoredProviderEndpointStatus {
+    plan.enabled_retention_provider_endpoints
+        .iter()
+        .find(|endpoint| endpoint.provider_id == provider_id)
+        .map(|endpoint| endpoint.endpoint_status)
+        .unwrap_or(SettingsSyncStoredProviderEndpointStatus::Unsupported)
 }
 
 fn stored_provider_endpoint_matches_handle(
@@ -3207,20 +3251,12 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             stored_provider_plan.ineligible_retention_provider_count(),
             &stored_provider_plan.cycle.preflight.before_health,
         )?;
-        let (
-            unmaterialized_retention_provider_ids,
-            endpoint_mismatch_retention_provider_ids,
-            daemons,
-        ) = materialize_stored_retention_provider_daemons(
+        let materialized_providers = materialize_stored_retention_provider_daemons(
             &stored_provider_plan,
             retention_provider_handles,
         );
-        let materialized_retention_provider_count = stored_provider_plan
-            .selected_retention_provider_count()
-            .saturating_sub(unmaterialized_retention_provider_ids.len())
-            .saturating_sub(endpoint_mismatch_retention_provider_ids.len());
         config.policy.check_selected_retention_provider_count(
-            materialized_retention_provider_count,
+            materialized_providers.materialized_retention_provider_count(),
             &stored_provider_plan.cycle.preflight.before_health,
         )?;
         let cycle = runner
@@ -3229,14 +3265,18 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
                 secrets.content_key,
                 secrets.signer,
                 &config.policy,
-                daemons.as_slice(),
+                materialized_providers.daemons.as_slice(),
                 &stored_provider_plan.cycle.preflight,
             )?;
 
         Ok(SettingsSyncStoredRetentionProviderRun {
             stored_provider_plan,
-            unmaterialized_retention_provider_ids,
-            endpoint_mismatch_retention_provider_ids,
+            unmaterialized_retention_provider_ids: materialized_providers
+                .unmaterialized_retention_provider_ids,
+            endpoint_mismatch_retention_provider_ids: materialized_providers
+                .endpoint_mismatch_retention_provider_ids,
+            unsupported_endpoint_retention_provider_ids: materialized_providers
+                .unsupported_endpoint_retention_provider_ids,
             cycle,
         })
     }
@@ -3372,20 +3412,12 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             stored_provider_plan.ineligible_retention_provider_count(),
             &preflight.preflight.before_health,
         )?;
-        let (
-            unmaterialized_retention_provider_ids,
-            endpoint_mismatch_retention_provider_ids,
-            daemons,
-        ) = materialize_stored_retention_provider_daemons(
+        let materialized_providers = materialize_stored_retention_provider_daemons(
             &stored_provider_plan,
             retention_provider_handles,
         );
-        let materialized_retention_provider_count = stored_provider_plan
-            .selected_retention_provider_count()
-            .saturating_sub(unmaterialized_retention_provider_ids.len())
-            .saturating_sub(endpoint_mismatch_retention_provider_ids.len());
         config.policy.check_selected_retention_provider_count(
-            materialized_retention_provider_count,
+            materialized_providers.materialized_retention_provider_count(),
             &preflight.preflight.before_health,
         )?;
         let cycle = runner
@@ -3395,15 +3427,19 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
                 secrets.signer,
                 &config.policy,
                 membership_log_root_id,
-                daemons.as_slice(),
+                materialized_providers.daemons.as_slice(),
                 &preflight,
             )?;
 
         Ok(SettingsSyncStoredRetentionProviderMembershipRun {
             preflight,
             stored_provider_plan,
-            unmaterialized_retention_provider_ids,
-            endpoint_mismatch_retention_provider_ids,
+            unmaterialized_retention_provider_ids: materialized_providers
+                .unmaterialized_retention_provider_ids,
+            endpoint_mismatch_retention_provider_ids: materialized_providers
+                .endpoint_mismatch_retention_provider_ids,
+            unsupported_endpoint_retention_provider_ids: materialized_providers
+                .unsupported_endpoint_retention_provider_ids,
             cycle,
         })
     }
@@ -9783,6 +9819,7 @@ mod tests {
         assert_eq!(run.materialized_retention_provider_count(), 1);
         assert_eq!(run.unmaterialized_retention_provider_count(), 1);
         assert_eq!(run.endpoint_mismatch_retention_provider_count(), 0);
+        assert_eq!(run.unsupported_endpoint_retention_provider_count(), 0);
         assert!(run.degraded_before());
         assert_eq!(run.cycle.cycle.published_step_count(), 1);
         assert_eq!(run.cycle.retention.len(), 1);
@@ -9810,6 +9847,176 @@ mod tests {
         let _ = std::fs::remove_dir_all(device_state_root);
         let _ = std::fs::remove_dir_all(provider_state_root);
         let _ = std::fs::remove_dir_all(unmaterialized_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_scheduler_excludes_unsupported_stored_provider_endpoint_handles() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("scheduler-stored-unsupported-device");
+        let valid_provider_state_root = test_state_root("scheduler-stored-unsupported-valid");
+        let unsupported_provider_state_root =
+            test_state_root("scheduler-stored-unsupported-loopback");
+        let db_root = test_state_root("scheduler-stored-unsupported-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-stored-unsupported-a",
+            )
+            .expect("start in-process stored unsupported scheduler device daemon");
+        let valid_provider_daemon = network
+            .daemon_for_availability_provider(
+                &valid_provider_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-stored-unsupported-valid",
+            )
+            .expect("start in-process stored unsupported valid provider daemon");
+        let unsupported_provider_daemon = network
+            .daemon_for_availability_provider(
+                &unsupported_provider_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-stored-unsupported-loopback",
+            )
+            .expect("start in-process stored unsupported loopback provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-scheduler-stored-unsupported-a",
+        )
+        .expect("open scheduler stored unsupported settings database");
+        let profile = "schedulerstoredunsupportedprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([83; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-scheduler-stored-unsupported-a")
+            .expect("generate scheduler stored unsupported signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register scheduler stored unsupported local trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write scheduler stored unsupported local setting");
+        let valid_provider_id =
+            "local-fixture-availability-runtime-scheduler-stored-unsupported-valid";
+        let unsupported_provider_id =
+            "local-fixture-availability-runtime-scheduler-stored-unsupported-loopback";
+        let valid_provider_endpoint_ref = format!("fixture:{valid_provider_id}");
+        let unsupported_endpoint_ref = "http://127.0.0.1:5001";
+        let mut unsupported_provider = test_storage_provider_update(
+            profile,
+            unsupported_provider_id,
+            "local-fixture-availability",
+            "Unsupported loopback pinner",
+            true,
+            true,
+            true,
+        );
+        unsupported_provider.endpoint_ref = Some(unsupported_endpoint_ref.to_string());
+        for provider in [
+            test_storage_provider_update(
+                profile,
+                valid_provider_id,
+                "local-fixture-availability",
+                "Valid pinner",
+                true,
+                true,
+                true,
+            ),
+            unsupported_provider,
+        ] {
+            database
+                .upsert_storage_provider(&provider)
+                .expect("write unsupported endpoint retention provider metadata");
+        }
+
+        let scheduler = BroadwebdSettingsSyncScheduler::new(&device_daemon);
+        let materialized_provider_handles = [
+            SettingsSyncRetentionProviderHandle::with_endpoint_ref(
+                valid_provider_id,
+                valid_provider_endpoint_ref.as_str(),
+                &valid_provider_daemon,
+            ),
+            SettingsSyncRetentionProviderHandle::with_endpoint_ref(
+                unsupported_provider_id,
+                unsupported_endpoint_ref,
+                &unsupported_provider_daemon,
+            ),
+        ];
+        let strict_config = SettingsSyncSchedulerConfig::new(
+            profile,
+            settings_root_id,
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 3),
+        );
+        let strict_error = scheduler
+            .run_once_with_stored_retention_provider_handles(
+                &database,
+                &strict_config,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                8,
+                &materialized_provider_handles,
+            )
+            .expect_err("scheduler should exclude unsupported endpoint refs from quorum");
+        let ProfileSyncCycleWithHealthError::Policy(ProfileSyncPolicyError::ProviderMinimumUnmet {
+            provider_role,
+            minimum,
+            actual,
+            ..
+        }) = strict_error
+        else {
+            panic!("expected unsupported endpoint provider minimum error, got {strict_error:?}");
+        };
+        assert_eq!(provider_role, "selected retention providers");
+        assert_eq!(minimum, 2);
+        assert_eq!(actual, 1);
+        assert!(
+            database
+                .profile_sync_roots(profile)
+                .expect("read roots after unsupported endpoint quorum failure")
+                .is_empty()
+        );
+
+        let config = SettingsSyncSchedulerConfig::new(
+            profile,
+            settings_root_id,
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
+        );
+        let run = scheduler
+            .run_once_with_stored_retention_provider_handles(
+                &database,
+                &config,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                8,
+                &materialized_provider_handles,
+            )
+            .expect("scheduler should run with only the fixture-backed provider materialized");
+
+        assert_eq!(run.selected_retention_provider_count(), 2);
+        assert_eq!(run.materialized_retention_provider_count(), 1);
+        assert_eq!(run.unmaterialized_retention_provider_count(), 0);
+        assert_eq!(run.endpoint_mismatch_retention_provider_count(), 0);
+        assert_eq!(run.unsupported_endpoint_retention_provider_count(), 1);
+        assert_eq!(
+            run.unsupported_endpoint_retention_provider_ids,
+            vec![unsupported_provider_id.to_string()]
+        );
+        assert_eq!(
+            run.stored_provider_plan.unsupported_endpoint_provider_ids(),
+            vec![unsupported_provider_id.to_string()]
+        );
+        assert_eq!(run.cycle.retention.len(), 1);
+        assert_eq!(
+            run.cycle.retention[0].retained_count(),
+            run.cycle.retained_object_ids.len()
+        );
+        assert_eq!(run.retained_provider_count(), 1);
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(valid_provider_state_root);
+        let _ = std::fs::remove_dir_all(unsupported_provider_state_root);
         let _ = std::fs::remove_dir_all(db_root);
     }
 

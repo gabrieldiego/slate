@@ -830,7 +830,11 @@ fixture endpoint only when it matches the stored provider id, multiaddr-like
 and deferred protocol references are reported separately, and ordinary
 `http://`, `https://`, `localhost`, or stale fixture-shaped references are
 reported as unsupported. This keeps test fixtures from drifting back to
-loopback listeners or DNS-backed URLs before any daemon startup code runs. The
+loopback listeners or DNS-backed URLs before any daemon startup code runs.
+Stored-provider runtime ticks exclude unsupported endpoint refs from
+materialized provider quorum even when the caller supplies a daemon handle with
+the same unsupported string, so socket-shaped metadata cannot be laundered into
+an accepted fixture provider. The
 membership-aware scheduler has the same stored-provider path: its
 read-only plan preserves the no-mutation boundary and does not pull membership
 records to satisfy credential preflight, while its runtime path pulls the
