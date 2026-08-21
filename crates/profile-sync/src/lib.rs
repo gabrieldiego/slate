@@ -10,14 +10,14 @@ use slate_broadwebd::{
     ProfileSyncRootUpdate as BroadwebdProfileSyncRootUpdate,
 };
 use slate_storage::{
-    EncryptedSyncObject, IncomingSyncSettingText, PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
-    PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, PROFILE_SYNC_MANIFEST_OBJECT_KIND,
-    PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND, PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND,
-    PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION, ProfileSyncContentKey, ProfileSyncDeviceHead,
-    ProfileSyncDeviceHeadPullRecordStatus, ProfileSyncDeviceSigner, ProfileSyncManifest,
-    ProfileSyncObjectBytes, ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
-    ProfileSyncRootCandidate as StorageProfileSyncRootCandidate, ProfileSyncRootRecord,
-    ProfileSyncSettingsManifestApplication, ProfileSyncSettingsSnapshot,
+    DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH, EncryptedSyncObject, IncomingSyncSettingText,
+    PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND, PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
+    PROFILE_SYNC_MANIFEST_OBJECT_KIND, PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND,
+    PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND, PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION,
+    ProfileSyncContentKey, ProfileSyncDeviceHead, ProfileSyncDeviceHeadPullRecordStatus,
+    ProfileSyncDeviceSigner, ProfileSyncManifest, ProfileSyncObjectBytes, ProfileSyncObjectSource,
+    ProfileSyncRetentionPolicy, ProfileSyncRootCandidate as StorageProfileSyncRootCandidate,
+    ProfileSyncRootRecord, ProfileSyncSettingsManifestApplication, ProfileSyncSettingsSnapshot,
     ProfileSyncSettingsSnapshotPublication, ProfileSyncSettingsTailChangePublication,
     ProfileSyncTrustedPullApplyError, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, StorageError,
     SyncChangeRecord, SyncCompactionTarget, SyncObjectError, SyncSnapshotRecord,
@@ -124,6 +124,15 @@ pub struct PublishedProfileSyncDeviceHead {
     pub root_id: String,
     pub object_id: String,
     pub device_head: ProfileSyncDeviceHead,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PublishedLocalSettingsSnapshotHead {
+    pub publication: PublishedSettingsSnapshotManifest,
+    pub device_head: PublishedProfileSyncDeviceHead,
+    pub snapshot_record: SyncSnapshotRecord,
+    pub settings_root: ProfileSyncRootRecord,
+    pub device_head_root: ProfileSyncRootRecord,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -549,6 +558,106 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
         })
     }
 
+    pub fn publish_full_local_settings_snapshot_head(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        settings_root_id: &str,
+        content_key: &ProfileSyncContentKey,
+        key_id: &str,
+        signer: &ProfileSyncDeviceSigner,
+        retention_policy: ProfileSyncRetentionPolicy,
+    ) -> Result<Option<PublishedLocalSettingsSnapshotHead>, ProfileSyncPublishError> {
+        let events = database.sync_setting_text_events_after(profile, 0, u32::MAX)?;
+        if events.is_empty() {
+            return Ok(None);
+        }
+        let covered_changes = events
+            .iter()
+            .map(|event| event.change.clone())
+            .collect::<Vec<_>>();
+        let Some(head_change) =
+            latest_local_device_change_for_head(database.local_sync_device_id(), &covered_changes)
+        else {
+            return Err(StorageError::InvalidProfileSyncManifest(format!(
+                "no local settings change exists for device {}",
+                database.local_sync_device_id()
+            ))
+            .into());
+        };
+        let covers_revision = events
+            .last()
+            .expect("events emptiness was checked before reading latest revision")
+            .revision
+            .revision;
+        let included_domains = covered_changes
+            .iter()
+            .map(|change| change.domain.clone())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        let snapshot =
+            database.settings_sync_snapshot_payload(profile, covers_revision, &included_domains)?;
+        let publication = self.publish_signed_settings_snapshot_manifest(
+            profile,
+            settings_root_id,
+            &snapshot,
+            covered_changes.as_slice(),
+            &[],
+            content_key,
+            key_id,
+            signer,
+            retention_policy,
+        )?;
+        let snapshot_record = database.record_sync_snapshot(&SyncSnapshotRegistration {
+            profile: profile.to_string(),
+            snapshot_id: settings_sync_snapshot_id(covers_revision),
+            backend_object_id: Some(publication.snapshot_object_id.clone()),
+            covers_revision,
+            included_domains: snapshot.included_domains,
+        })?;
+        let settings_root = database.set_profile_sync_root(
+            profile,
+            settings_root_id,
+            publication.manifest_object_id.as_str(),
+        )?;
+
+        let device_head_root_id = settings_device_head_root_id(database.local_sync_device_id());
+        let device_head = ProfileSyncDeviceHead {
+            profile: profile.to_string(),
+            device_id: database.local_sync_device_id().to_string(),
+            root_id: device_head_root_id.clone(),
+            schema_version: PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            latest_manifest_object_id: publication.manifest_object_id.clone(),
+            latest_change_object_id: None,
+            device_sequence: head_change.device_sequence,
+            logical_clock: head_change.logical_clock,
+            created_at: head_change.created_at,
+        };
+        let device_head = self.publish_signed_profile_sync_device_head(
+            profile,
+            device_head_root_id.as_str(),
+            &device_head,
+            content_key,
+            key_id,
+            signer,
+        )?;
+        let device_head_root = database.set_profile_sync_root(
+            profile,
+            device_head.root_id.as_str(),
+            device_head.object_id.as_str(),
+        )?;
+
+        Ok(Some(PublishedLocalSettingsSnapshotHead {
+            publication,
+            device_head,
+            snapshot_record,
+            settings_root,
+            device_head_root,
+        }))
+    }
+
     fn publish_settings_tail_change_publications(
         &self,
         profile: &str,
@@ -699,6 +808,29 @@ fn validate_device_head_for_publish(
     Ok(())
 }
 
+fn latest_local_device_change_for_head<'a>(
+    device_id: &str,
+    changes: &'a [SyncChangeRecord],
+) -> Option<&'a SyncChangeRecord> {
+    changes
+        .iter()
+        .filter(|change| change.device_id == device_id)
+        .max_by(|left, right| {
+            (
+                left.device_sequence,
+                left.logical_clock,
+                left.created_at,
+                left.id,
+            )
+                .cmp(&(
+                    right.device_sequence,
+                    right.logical_clock,
+                    right.created_at,
+                    right.id,
+                ))
+        })
+}
+
 fn incoming_setting_from_change(change: &SyncChangeRecord) -> IncomingSyncSettingText {
     IncomingSyncSettingText::new(
         change.profile.clone(),
@@ -805,10 +937,11 @@ mod tests {
         PROFILE_SYNC_CONTENT_KEY_BYTES, PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
         ProfileSyncContentKey, ProfileSyncDeviceHead, ProfileSyncDeviceSigner,
         ProfileSyncObjectSource, ProfileSyncRetentionPolicy, SYNC_DOMAIN_CALENDAR,
-        SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, SyncDevicePublicKeyRegistration,
-        open_signed_profile_sync_device_head, open_signed_profile_sync_manifest,
-        open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
-        pull_signed_profile_sync_device_head, settings_sync_snapshot_id,
+        SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, SyncChangeRecord,
+        SyncDevicePublicKeyRegistration, open_signed_profile_sync_device_head,
+        open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
+        open_signed_sync_setting_text, pull_signed_profile_sync_device_head,
+        settings_sync_snapshot_id,
     };
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1235,6 +1368,144 @@ mod tests {
             BroadwebdTrustedDeviceHeadSyncStatus::Unchanged { object_id, .. }
                 if object_id == head_publication.object_id
         ));
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_publisher_publishes_full_local_settings_snapshot_head() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("full-snapshot-head-publisher");
+        let receiver_state_root = test_state_root("full-snapshot-head-receiver");
+        let publisher_db_root = test_state_root("full-snapshot-head-publisher-db");
+        let receiver_db_root = test_state_root("full-snapshot-head-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "runtime-i",
+            )
+            .expect("start publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(&receiver_state_root, ResourceBudget::default(), "runtime-j")
+            .expect("start receiver daemon");
+        let publisher_database = SlateProfileDatabase::open_resolved_with_device_id(
+            publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-i",
+        )
+        .expect("open publisher settings database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-j",
+        )
+        .expect("open receiver settings database");
+        publisher_database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("publisher writes theme setting");
+        publisher_database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                "default_view",
+                "month",
+            )
+            .expect("publisher writes calendar setting");
+        let content_key = ProfileSyncContentKey::from_bytes([46; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-i").expect("generate signer");
+        let public_key = signer.public_key().expect("read signer public key");
+        receiver_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key,
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("receiver trusts publisher key");
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+
+        let published = publisher
+            .publish_full_local_settings_snapshot_head(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish full local snapshot head")
+            .expect("local settings changes exist");
+
+        assert_eq!(published.publication.manifest.root_id, "settings/latest");
+        assert_eq!(
+            published
+                .publication
+                .manifest
+                .current_snapshot_object_id
+                .as_deref(),
+            Some(published.publication.snapshot_object_id.as_str())
+        );
+        assert_eq!(
+            published.publication.tail_change_object_ids,
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            published.settings_root.object_id,
+            published.publication.manifest_object_id
+        );
+        assert_eq!(
+            published.device_head_root.object_id,
+            published.device_head.object_id
+        );
+        assert_eq!(
+            published.snapshot_record.backend_object_id.as_deref(),
+            Some(published.publication.snapshot_object_id.as_str())
+        );
+        assert_eq!(
+            publisher_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, "settings/latest")
+                .expect("read local published settings root")
+                .expect("local settings root")
+                .object_id,
+            published.publication.manifest_object_id
+        );
+
+        let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
+        let applied = source
+            .pull_record_and_apply_trusted_settings_from_device_head(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                published.device_head.root_id.as_str(),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+            )
+            .expect("receiver applies full snapshot from trusted head");
+        let BroadwebdTrustedDeviceHeadSyncStatus::Applied { application, .. } = applied else {
+            panic!("expected full snapshot application, got {applied:?}");
+        };
+        assert_eq!(
+            application.manifest_object_id,
+            published.publication.manifest_object_id
+        );
+        assert!(application.snapshot.is_some());
+        assert_eq!(application.tail_changes, Vec::<SyncChangeRecord>::new());
+        assert_eq!(
+            receiver_database
+                .get_setting_text("ui.theme")
+                .expect("read receiver theme")
+                .as_deref(),
+            Some("teal")
+        );
+        assert_eq!(
+            receiver_database
+                .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CALENDAR, "default_view")
+                .expect("read receiver calendar sync setting")
+                .expect("receiver calendar sync setting")
+                .value,
+            "month"
+        );
 
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);

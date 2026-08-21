@@ -438,6 +438,11 @@ device head: resolve and verify the head, record the verified head root in
 `slate-settings.db`, apply the referenced settings manifest when the head is
 new, and return an unchanged status when the stored head root is already
 current.
+The first composed local publish helper emits a complete settings snapshot,
+publishes the snapshot manifest, publishes the local per-device head pointing at
+that manifest, and records both published roots locally. This favors a complete
+handoff for new trusted devices before the later incremental publish loop trims
+tails and reuses retained snapshots.
 
 The local fake backend must model provider availability inside the test process.
 Each simulated device registers as a provider, retained objects are scoped to
