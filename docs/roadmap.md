@@ -207,6 +207,11 @@ Current baseline:
   frontiers. The local two-device fixture now publishes `settings/latest` to a
   signed encrypted manifest object, then fetches and applies the signed
   encrypted tail setting-change object named by that manifest.
+- Incoming synced settings now have an initial deterministic conflict policy:
+  the highest logical clock wins, with device id and device sequence as stable
+  tie-breakers. Losing setting changes are retained in `settings_changes`
+  without updating `settings_values`, the legacy settings view, or watcher
+  revisions.
 - IPFS/IPNS is the first concrete backend under consideration, but the product
   goal is protocol-neutral: approved Slate devices should find each other, move
   encrypted sync objects, and optionally use approved providers to keep those
@@ -227,8 +232,8 @@ Next:
   profile write authority.
 - Add Kubo RPC-backed operations for encrypted object add, pin, unpin, pin
   verification, IPNS publish, and IPNS resolve as the first IPFS/IPNS backend.
-- Add snapshots, sync object metadata, conflict handling, and merge policy on
-  top of the initial `slate-settings.db` typed change and revision model.
+- Extend snapshot payloads, sync object metadata, conflict handling, and merge
+  policy beyond the initial settings text merge model.
 - Add a settings watcher so externally synced changes are applied through normal
   runtime update paths instead of raw database replacement.
 - Define the Slate Sync Secret hierarchy for manifest signing, mutable-root
