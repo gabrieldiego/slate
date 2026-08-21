@@ -37,6 +37,7 @@ struct ProfileSyncStore {
     delayed_transfers: BTreeSet<(String, String)>,
     delayed_roots: BTreeSet<(String, String, String, String)>,
     retention_blocked_providers: BTreeSet<String>,
+    retention_quota_by_provider: BTreeMap<String, usize>,
 }
 
 #[derive(Clone, Debug)]
@@ -198,6 +199,21 @@ impl ProfileSyncService {
                 self.provider_id
             )));
         }
+        let retained_key = (
+            self.provider_id.clone(),
+            request.profile.clone(),
+            request.object_id.clone(),
+        );
+        if !store.retained.contains(&retained_key)
+            && let Some(max_retained_objects) =
+                store.retention_quota_by_provider.get(&self.provider_id)
+            && retained_provider_object_count(&store, &self.provider_id) >= *max_retained_objects
+        {
+            return Err(BroadwebdError::UnsupportedRequest(format!(
+                "profile sync retention quota exceeded for provider {}: max {} retained objects",
+                self.provider_id, max_retained_objects
+            )));
+        }
         let Some(bytes) = find_online_object(
             &store,
             &self.provider_id,
@@ -218,11 +234,7 @@ impl ProfileSyncService {
             ),
             bytes,
         );
-        store.retained.insert((
-            self.provider_id.clone(),
-            request.profile,
-            request.object_id.clone(),
-        ));
+        store.retained.insert(retained_key);
         Ok(ProfileSyncResponse::RetainObject {
             object_id: request.object_id,
             retained: true,
@@ -688,6 +700,53 @@ impl LocalProfileSyncFixture {
         Ok(())
     }
 
+    pub fn set_device_retention_quota(
+        &self,
+        device_id: impl AsRef<str>,
+        max_retained_objects: Option<usize>,
+    ) -> Result<(), BroadwebdError> {
+        self.set_provider_retention_quota(
+            local_fixture_provider_id(device_id),
+            max_retained_objects,
+        )
+    }
+
+    pub fn set_availability_provider_retention_quota(
+        &self,
+        provider_id: impl AsRef<str>,
+        max_retained_objects: Option<usize>,
+    ) -> Result<(), BroadwebdError> {
+        self.set_provider_retention_quota(
+            local_fixture_availability_provider_id(provider_id),
+            max_retained_objects,
+        )
+    }
+
+    pub fn set_provider_retention_quota(
+        &self,
+        provider_id: impl AsRef<str>,
+        max_retained_objects: Option<usize>,
+    ) -> Result<(), BroadwebdError> {
+        let provider_id = provider_id.as_ref();
+        let mut store = self
+            .store
+            .lock()
+            .map_err(|_| BroadwebdError::Request("profile sync store lock poisoned".to_string()))?;
+        if !store.providers.contains_key(provider_id) {
+            return Err(BroadwebdError::UnsupportedRequest(format!(
+                "unknown profile sync provider: {provider_id}"
+            )));
+        }
+        if let Some(max_retained_objects) = max_retained_objects {
+            store
+                .retention_quota_by_provider
+                .insert(provider_id.to_string(), max_retained_objects);
+        } else {
+            store.retention_quota_by_provider.remove(provider_id);
+        }
+        Ok(())
+    }
+
     pub fn set_device_transfer_available(
         &self,
         source_device_id: impl AsRef<str>,
@@ -948,6 +1007,14 @@ fn retained_object_count(store: &ProfileSyncStore, provider_id: &str, profile: &
         .filter(|(retained_provider_id, retained_profile, _)| {
             retained_provider_id == provider_id && retained_profile == profile
         })
+        .count()
+}
+
+fn retained_provider_object_count(store: &ProfileSyncStore, provider_id: &str) -> usize {
+    store
+        .retained
+        .iter()
+        .filter(|(retained_provider_id, _, _)| retained_provider_id == provider_id)
         .count()
 }
 
@@ -2663,6 +2730,128 @@ mod tests {
                 object_id: local_object_id(b"encrypted object for policy-gated pinning"),
                 retained: true,
                 available: true,
+            }
+        );
+    }
+
+    #[test]
+    fn local_fixture_can_limit_retention_quota() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut device = PluginRegistry::new();
+        let mut provider = PluginRegistry::new();
+        let budget = ResourceBudget::default();
+
+        device.register_service(fixture.service_for_device("publisher"));
+        provider.register_service(fixture.service_for_availability_provider("quota-pinner"));
+        fixture
+            .set_availability_provider_retention_quota("quota-pinner", Some(1))
+            .expect("limit pinner quota");
+
+        let first = device
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"first encrypted object under quota".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("device can put first fixture object");
+        let ProfileSyncResponse::PutEncryptedObject {
+            object_id: first_object_id,
+        } = first
+        else {
+            panic!("unexpected first put response");
+        };
+        let second = device
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"second encrypted object over quota".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("device can put second fixture object");
+        let ProfileSyncResponse::PutEncryptedObject {
+            object_id: second_object_id,
+        } = second
+        else {
+            panic!("unexpected second put response");
+        };
+
+        provider
+            .profile_sync(
+                ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    first_object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("provider can retain first object inside quota");
+        provider
+            .profile_sync(
+                ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    first_object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("provider can idempotently retain existing object at quota");
+
+        let quota_error = provider
+            .profile_sync(
+                ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    second_object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect_err("provider quota blocks second retained object");
+        assert!(matches!(
+            quota_error,
+            BroadwebdError::UnsupportedRequest(message)
+                if message.contains("retention quota exceeded")
+        ));
+        let second_status = provider
+            .profile_sync(
+                ProfileSyncRequest::VerifyRetainedObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    second_object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("provider can verify over-quota object status");
+        assert_eq!(
+            second_status,
+            ProfileSyncResponse::RetainedObjectStatus {
+                object_id: second_object_id.clone(),
+                retained: false,
+                available: true,
+            }
+        );
+
+        provider
+            .profile_sync(
+                ProfileSyncRequest::ReleaseObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    first_object_id,
+                )),
+                &budget,
+            )
+            .expect("provider can release retained quota slot");
+        let second_retained = provider
+            .profile_sync(
+                ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    second_object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("provider can retain second object after releasing quota slot");
+        assert_eq!(
+            second_retained,
+            ProfileSyncResponse::RetainObject {
+                object_id: second_object_id,
+                retained: true,
             }
         );
     }

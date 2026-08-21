@@ -542,7 +542,10 @@ object-transfer role are not visible to other simulated devices. The fixture can
 also block retention for a selected provider through a simulated local pinning
 policy while leaving that provider online and able to transfer encrypted
 objects. This lets tests model "provider reachable, but not willing to pin"
-without binding sockets, sleeping, or changing provider roles.
+without binding sockets, sleeping, or changing provider roles. It can also cap
+retained object count per provider, so tests can model quota exhaustion and
+quota recovery after release without conflating those states with offline
+availability or transfer failure.
 The service boundary validates profile ids, mutable-root ids, and backend
 object ids before any fixture backend lookup, retain, or publish operation.
 Malformed identifiers fail locally instead of being interpreted as path-like

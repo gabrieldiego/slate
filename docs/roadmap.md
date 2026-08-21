@@ -361,6 +361,10 @@ Current baseline:
   provider through a simulated local pinning policy. The provider remains
   online and can still transfer encrypted objects, but new retain requests fail
   locally until the fixture policy is reopened.
+- The same fixture can also cap retained object count per provider, letting
+  tests model quota exhaustion separately from offline providers, transfer
+  failures, and role denial. Releasing a retained object frees capacity inside
+  the in-process fixture.
 - The fixture can also delay mutable-root propagation between two simulated
   devices. Root delay is independent from object transfer, so tests can model a
   device that can fetch a known encrypted object but has not seen the newest
