@@ -2,8 +2,8 @@
 
 Status: planning
 
-Slate profile sync should make profile state portable without turning the local
-settings database into an unsafe multi-writer database. The product goal is
+Slate profile sync should make profile state portable without turning
+`slate-settings.db` into an unsafe multi-writer database. The product goal is
 that every Slate device logged into the same account can safely discover,
 connect to, and sync with the user's other approved devices across the
 broadweb.
@@ -16,6 +16,8 @@ under consideration, not a hard product dependency.
 
 ## Goals
 
+- Start with `slate-settings.db` as the first local materialized view for
+  distributed profile state.
 - Sync selected profile state across trusted Slate devices.
 - Avoid any root node, central account server, or single always-hot device that
   can dictate profile state.
@@ -31,6 +33,8 @@ under consideration, not a hard product dependency.
 - Keep remote pinning, public gateways, relays, discovery, and provider behavior
   explicit.
 - Keep the same application service usable by multiple protocols.
+- Keep implementation progress recoverable through small commits and rerun
+  focused regression tests after each step.
 
 ## Non-Goals
 
@@ -341,8 +345,8 @@ contract when they prove useful.
 
 ## Implementation Slices
 
-1. Add local syncable settings DB migrations for values, changes, snapshots,
-   revisions, device state, and app sync domains.
+1. Add local syncable `slate-settings.db` migrations for values, changes,
+   snapshots, revisions, device state, and app sync domains.
 2. Make local settings writes produce typed `sync_change` records and update the
    materialized settings view in one transaction.
 3. Add a local runtime watcher that observes revisions and applies typed changes
@@ -373,12 +377,25 @@ contract when they prove useful.
   retention, and compaction.
 - Fake broadwebd tests cover publish, retain, resolve, discovery, transfer, and
   failure handling without external network access.
+- Local distributed-protocol fixtures model peer discovery, mutable records,
+  object transfer, pinning or availability, offline devices, delayed sync, and
+  conflicts without connecting to the real internet, Tor, public IPFS/IPNS, or
+  any external relay.
 - Kubo integration tests are ignored or environment-gated and run against
   loopback only.
 - Leak tests assert that sync never falls through to DNS, public gateways,
   relays, or discovery services outside the selected policy.
 - UI tests cover enabling sync, degraded sync state, and live application of
   externally synced settings.
+
+## Progress Discipline
+
+Work should move in small reviewable steps. Each coherent documentation,
+schema, service, fixture, or wiring change should be committed separately so
+progress is recoverable and easy to bisect. After each step, rerun the smallest
+relevant test set with memory-constrained build settings, then periodically
+revalidate previously touched storage, broadwebd, rail app, and chrome
+behaviors to catch regressions before larger integration work accumulates.
 
 ## References
 

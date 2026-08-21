@@ -619,6 +619,12 @@ The first daemon tests should use fake adapters before real IPFS/Tor/I2P:
 - fake adapter that requires background permission;
 - fake adapter that attempts forbidden fallback.
 
+Profile sync fixtures should model distributed-web protocol behavior locally:
+peer discovery, mutable root records, encrypted object transfer,
+pinning/availability, offline devices, delayed sync, and conflicts. These
+fixtures should run entirely inside the local test process or on loopback and
+must not contact the real internet, Tor, public IPFS/IPNS, or external relays.
+
 Real protocol tests should use local fixtures or mock daemons. Tests must not
 require live IPFS, Tor, I2P, public gateways, or external network availability
 unless they are explicitly marked as external/manual.

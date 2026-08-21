@@ -177,8 +177,8 @@ Current baseline:
 - broadwebd can retrieve `ipfs://` and `ipns://` resources through the local
   IPFS gateway and an opt-in Kubo RPC fetch path.
 - Slate stores local settings and bookmarks in profile-owned SQLite state.
-- Runtime settings are currently local-first and are not yet modeled as a sync
-  change stream.
+- `slate-settings.db` is the first target for local-first distributed profile
+  state and typed sync change streams.
 - IPFS/IPNS is the first concrete backend under consideration, but the product
   goal is protocol-neutral: approved Slate devices should find each other, move
   encrypted sync objects, and optionally use approved providers to keep those
@@ -199,7 +199,7 @@ Next:
   profile write authority.
 - Add Kubo RPC-backed operations for encrypted object add, pin, unpin, pin
   verification, IPNS publish, and IPNS resolve as the first IPFS/IPNS backend.
-- Redesign the settings database as a materialized local view over typed change
+- Redesign `slate-settings.db` as a materialized local view over typed change
   records, snapshots, device state, and revision notifications.
 - Add a settings watcher so externally synced changes are applied through normal
   runtime update paths instead of raw database replacement.
@@ -211,10 +211,16 @@ Next:
   changes, then squash older state into encrypted snapshots.
 - Add device enrollment, revocation, and key rotation before syncing sensitive
   profile domains.
-- Start implementation with the local syncable settings database as the minimum
+- Start implementation with syncable `slate-settings.db` state as the minimum
   requirement. It should work without any network backend at first, but its
   schema should already model typed changes, revisions, app domains, and future
   sync object metadata.
+- Build local distributed-protocol fixtures that simulate peer discovery,
+  mutable records, object transfer, pinning or availability, offline devices,
+  delayed sync, and conflicts without using the real internet, Tor, public
+  IPFS/IPNS, or external relays.
+- Commit each coherent step separately and rerun focused regression tests for
+  storage, broadwebd, rail apps, and chrome behavior as those areas are touched.
 
 Backlog:
 
@@ -256,7 +262,7 @@ Future protocol candidates:
 
 Priority order:
 
-1. Local syncable settings database: typed changes, snapshots, revisions,
+1. Local syncable `slate-settings.db` state: typed changes, snapshots, revisions,
    device state, app domains, and local-only application of updates.
 2. Runtime settings watcher that applies local typed changes through normal
    browser-core/chrome/routing paths.
