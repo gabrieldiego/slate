@@ -24,6 +24,7 @@ struct ProfileSyncStore {
     objects: BTreeMap<(String, String), Vec<u8>>,
     retained: BTreeSet<(String, String)>,
     roots: BTreeMap<(String, String), String>,
+    offline_providers: BTreeSet<String>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -53,6 +54,18 @@ impl ProfileSyncService {
             provider_id: provider_id.into(),
             provider_kind: "local-fixture".to_string(),
             privacy_boundary: LOCAL_PRIVACY_BOUNDARY.to_string(),
+        }
+    }
+
+    fn ensure_online(&self) -> Result<(), BroadwebdError> {
+        let store = self.store()?;
+        if store.offline_providers.contains(&self.provider_id) {
+            Err(BroadwebdError::Request(format!(
+                "profile sync provider is offline: {}",
+                self.provider_id
+            )))
+        } else {
+            Ok(())
         }
     }
 
@@ -235,10 +248,25 @@ impl LocalProfileSyncFixture {
     }
 
     pub fn service_for_device(&self, device_id: impl AsRef<str>) -> ProfileSyncService {
-        ProfileSyncService::local_fixture(
-            self.store.clone(),
-            format!("local-fixture-device-{}", device_id.as_ref()),
-        )
+        ProfileSyncService::local_fixture(self.store.clone(), local_fixture_provider_id(device_id))
+    }
+
+    pub fn set_device_online(
+        &self,
+        device_id: impl AsRef<str>,
+        online: bool,
+    ) -> Result<(), BroadwebdError> {
+        let provider_id = local_fixture_provider_id(device_id);
+        let mut store = self
+            .store
+            .lock()
+            .map_err(|_| BroadwebdError::Request("profile sync store lock poisoned".to_string()))?;
+        if online {
+            store.offline_providers.remove(provider_id.as_str());
+        } else {
+            store.offline_providers.insert(provider_id);
+        }
+        Ok(())
     }
 }
 
@@ -267,6 +295,8 @@ impl ApplicationServicePlugin for ProfileSyncService {
                 "profile-sync cannot handle non-profile-sync requests".to_string(),
             ));
         };
+
+        self.ensure_online()?;
 
         let response = match request {
             ProfileSyncRequest::PutEncryptedObject(request) => self.put_object(request)?,
@@ -299,6 +329,10 @@ fn validate_profile(profile: &str) -> Result<(), BroadwebdError> {
     }
 }
 
+fn local_fixture_provider_id(device_id: impl AsRef<str>) -> String {
+    format!("local-fixture-device-{}", device_id.as_ref())
+}
+
 fn local_object_id(bytes: &[u8]) -> String {
     let mut hash = 0xcbf29ce484222325_u64;
     for byte in bytes {
@@ -312,8 +346,9 @@ fn local_object_id(bytes: &[u8]) -> String {
 mod tests {
     use super::{LocalProfileSyncFixture, local_object_id};
     use crate::{
-        PluginRegistry, ProfileSyncObjectRequest, ProfileSyncPutObjectRequest, ProfileSyncRequest,
-        ProfileSyncResponse, ProfileSyncRootRequest, ProfileSyncRootUpdate, ResourceBudget,
+        BroadwebdError, PluginRegistry, ProfileSyncObjectRequest, ProfileSyncPutObjectRequest,
+        ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootRequest, ProfileSyncRootUpdate,
+        ResourceBudget,
     };
 
     #[test]
@@ -394,5 +429,78 @@ mod tests {
             panic!("unexpected get response");
         };
         assert_eq!(bytes, b"encrypted manifest from device a");
+    }
+
+    #[test]
+    fn local_fixture_can_model_offline_devices() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut device_a = PluginRegistry::new();
+        let mut device_b = PluginRegistry::new();
+        let budget = ResourceBudget::default();
+
+        device_a.register_service(fixture.service_for_device("a"));
+        device_b.register_service(fixture.service_for_device("b"));
+
+        let put = device_a
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"encrypted manifest from device a".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("device a can put object into fixture");
+        let ProfileSyncResponse::PutEncryptedObject { object_id } = put else {
+            panic!("unexpected put response");
+        };
+        device_a
+            .profile_sync(
+                ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+                    "default",
+                    "profile-root",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("device a can publish fixture root");
+
+        fixture
+            .set_device_online("b", false)
+            .expect("mark fixture device offline");
+        let offline_error = device_b
+            .profile_sync(
+                ProfileSyncRequest::ResolveRoot(ProfileSyncRootRequest::new(
+                    "default",
+                    "profile-root",
+                )),
+                &budget,
+            )
+            .unwrap_err();
+        assert!(matches!(
+            offline_error,
+            BroadwebdError::Request(message)
+                if message.contains("local-fixture-device-b")
+                    && message.contains("offline")
+        ));
+
+        fixture
+            .set_device_online("b", true)
+            .expect("mark fixture device online");
+        let resolved = device_b
+            .profile_sync(
+                ProfileSyncRequest::ResolveRoot(ProfileSyncRootRequest::new(
+                    "default",
+                    "profile-root",
+                )),
+                &budget,
+            )
+            .expect("device b can resolve after returning online");
+        assert_eq!(
+            resolved,
+            ProfileSyncResponse::Root {
+                root_id: "profile-root".to_string(),
+                object_id: Some(object_id)
+            }
+        );
     }
 }
