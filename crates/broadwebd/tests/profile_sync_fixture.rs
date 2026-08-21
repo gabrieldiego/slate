@@ -6,49 +6,15 @@ use slate_broadwebd::{
     ResourceBudget,
 };
 use slate_storage::{
-    DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, IncomingSyncSettingText, SYNC_DOMAIN_SETTINGS,
+    DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, EncryptedSyncObject, IncomingSyncSettingText,
+    PROFILE_SYNC_CONTENT_KEY_BYTES, ProfileSyncContentKey, SYNC_DOMAIN_SETTINGS,
     SlateProfileDatabase, SyncChangeRecord, SyncRevisionRecord,
 };
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[derive(serde::Deserialize, serde::Serialize)]
-struct FixtureSettingChangeObject {
-    profile: String,
-    domain: String,
-    key: String,
-    value: String,
-    device_id: String,
-    device_sequence: i64,
-    logical_clock: i64,
-}
-
-impl FixtureSettingChangeObject {
-    fn from_change(change: &SyncChangeRecord) -> Self {
-        assert_eq!(change.operation, "set_text");
-        Self {
-            profile: change.profile.clone(),
-            domain: change.domain.clone(),
-            key: change.entity_key.clone(),
-            value: change.payload.clone(),
-            device_id: change.device_id.clone(),
-            device_sequence: change.device_sequence,
-            logical_clock: change.logical_clock,
-        }
-    }
-
-    fn into_incoming(self) -> IncomingSyncSettingText {
-        IncomingSyncSettingText::new(
-            self.profile,
-            self.domain,
-            self.key,
-            self.value,
-            self.device_id,
-            self.device_sequence,
-            self.logical_clock,
-        )
-    }
-}
+const SETTINGS_CHANGE_OBJECT_KIND: &str = "setting-change";
+const FIXTURE_CONTENT_KEY_ID: &str = "content-key-epoch-1";
 
 #[test]
 fn two_local_slate_settings_databases_sync_through_profile_fixture() {
@@ -78,8 +44,13 @@ fn two_local_slate_settings_databases_sync_through_profile_fixture() {
         .expect("device a writes local setting");
     assert_eq!(local_change.device_id, "device-a");
 
-    let object_bytes = serde_json::to_vec(&FixtureSettingChangeObject::from_change(&local_change))
-        .expect("encode fixture sync object");
+    let content_key = fixture_content_key();
+    let object_bytes = encrypt_setting_change(&local_change, &content_key);
+    assert!(
+        !std::str::from_utf8(object_bytes.as_slice())
+            .expect("fixture object is JSON envelope")
+            .contains("teal")
+    );
     let object_id = put_object(
         &device_a_broadweb,
         DEFAULT_PROFILE_ID,
@@ -96,10 +67,9 @@ fn two_local_slate_settings_databases_sync_through_profile_fixture() {
     );
     assert_eq!(fetched.object_id, object_id);
 
-    let incoming: FixtureSettingChangeObject =
-        serde_json::from_slice(fetched.bytes.as_slice()).expect("decode fixture sync object");
+    let incoming = decrypt_setting_change(fetched.bytes.as_slice(), &content_key);
     let applied = device_b_db
-        .apply_sync_setting_text(&incoming.into_incoming())
+        .apply_sync_setting_text(&incoming)
         .expect("device b applies incoming setting");
 
     assert_eq!(applied.device_id, "device-a");
@@ -116,9 +86,7 @@ fn two_local_slate_settings_databases_sync_through_profile_fixture() {
         .expect("read device b sync value")
         .expect("device b sync value exists");
     let duplicate = device_b_db
-        .apply_sync_setting_text(
-            &FixtureSettingChangeObject::from_change(&local_change).into_incoming(),
-        )
+        .apply_sync_setting_text(&incoming_setting_from_change(&local_change))
         .expect("duplicate fixture replay is idempotent");
     assert_eq!(duplicate.id, applied.id);
     assert_eq!(
@@ -144,6 +112,59 @@ fn two_local_slate_settings_databases_sync_through_profile_fixture() {
 
     let _ = std::fs::remove_dir_all(device_a_root);
     let _ = std::fs::remove_dir_all(device_b_root);
+}
+
+fn incoming_setting_from_change(change: &SyncChangeRecord) -> IncomingSyncSettingText {
+    assert_eq!(change.operation, "set_text");
+    IncomingSyncSettingText::new(
+        change.profile.clone(),
+        change.domain.clone(),
+        change.entity_key.clone(),
+        change.payload.clone(),
+        change.device_id.clone(),
+        change.device_sequence,
+        change.logical_clock,
+    )
+}
+
+fn encrypt_setting_change(
+    change: &SyncChangeRecord,
+    content_key: &ProfileSyncContentKey,
+) -> Vec<u8> {
+    let incoming = incoming_setting_from_change(change);
+    let payload = serde_json::to_vec(&incoming).expect("encode fixture sync payload");
+    EncryptedSyncObject::seal(
+        incoming.profile.as_str(),
+        incoming.domain.as_str(),
+        SETTINGS_CHANGE_OBJECT_KIND,
+        FIXTURE_CONTENT_KEY_ID,
+        payload.as_slice(),
+        content_key,
+    )
+    .expect("encrypt fixture sync object")
+    .to_bytes()
+    .expect("encode fixture encrypted sync object")
+}
+
+fn decrypt_setting_change(
+    bytes: &[u8],
+    content_key: &ProfileSyncContentKey,
+) -> IncomingSyncSettingText {
+    let encrypted_object =
+        EncryptedSyncObject::from_bytes(bytes).expect("decode fixture encrypted sync object");
+    assert_eq!(encrypted_object.profile, DEFAULT_PROFILE_ID);
+    assert_eq!(encrypted_object.domain, SYNC_DOMAIN_SETTINGS);
+    assert_eq!(encrypted_object.object_kind, SETTINGS_CHANGE_OBJECT_KIND);
+    assert_eq!(encrypted_object.key_id, FIXTURE_CONTENT_KEY_ID);
+
+    let payload = encrypted_object
+        .open(content_key)
+        .expect("decrypt fixture sync object");
+    serde_json::from_slice(payload.as_slice()).expect("decode fixture sync payload")
+}
+
+fn fixture_content_key() -> ProfileSyncContentKey {
+    ProfileSyncContentKey::from_bytes([11; PROFILE_SYNC_CONTENT_KEY_BYTES])
 }
 
 struct FetchedObject {
