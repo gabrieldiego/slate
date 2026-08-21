@@ -6,6 +6,7 @@ members = [
     "crates/chrome",
     "crates/net",
     "crates/platform",
+    "crates/profile-sync",
     "crates/privacy",
     "crates/protocols",
     "crates/rendering",
@@ -43,6 +44,7 @@ slate-broadwebd = { path = "crates/broadwebd" }
 slate-chrome = { path = "crates/chrome" }
 slate-net = { path = "crates/net" }
 slate-platform = { path = "crates/platform" }
+slate-profile-sync = { path = "crates/profile-sync" }
 slate-privacy = { path = "crates/privacy" }
 slate-protocols = { path = "crates/protocols" }
 slate-rendering = { path = "crates/rendering" }

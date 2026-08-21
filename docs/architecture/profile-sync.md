@@ -404,6 +404,13 @@ Syncthing-like device providers, Tahoe-LAFS-style storage, Tor-reachable home
 daemons, and non-IPFS backends should fit behind the same application service
 contract when they prove useful.
 
+The `slate-profile-sync` crate owns runtime-facing sync glue that depends on
+both broadwebd and storage. Its first adapter implements storage's
+`ProfileSyncObjectSource` trait for a `BroadwebDaemon`, keeping storage
+protocol-neutral and keeping broadwebd independent from storage's encrypted
+object semantics. Sync-only tests should target this crate when possible so
+they do not compile the renderer.
+
 The local fake backend must model provider availability inside the test process.
 Each simulated device registers as a provider, retained objects are scoped to
 that provider, and discovery only reports providers that the fixture currently
@@ -481,15 +488,17 @@ discovery reports that boundary.
    IPNS resolve, restricted to local endpoints by default.
 8. Implement signed encrypted manifest, device-head, snapshot, and change
    encoding.
-9. Wire local publish, transfer, and retain flows from storage into broadwebd.
-10. Add mutable-root load and merge flow for a second local profile instance.
-11. Evaluate Iroh as an online trusted-device transfer and discovery backend.
-12. Implement retention and snapshot compaction heuristics.
-13. Add device enrollment, revocation, and key rotation.
-14. Add ignored/manual backend integration tests and leak tests that verify sync
+9. Add the `slate-profile-sync` runtime bridge that lets storage pull through
+   broadwebd without depending on protocol internals.
+10. Wire local publish, transfer, and retain flows from storage into broadwebd.
+11. Add mutable-root load and merge flow for a second local profile instance.
+12. Evaluate Iroh as an online trusted-device transfer and discovery backend.
+13. Implement retention and snapshot compaction heuristics.
+14. Add device enrollment, revocation, and key rotation.
+15. Add ignored/manual backend integration tests and leak tests that verify sync
     does not use OS DNS, public gateways, relays, or discovery services outside
     the selected policy.
-15. Generalize the service contract so future transports can back profile sync.
+16. Generalize the service contract so future transports can back profile sync.
 
 ## Testing Strategy
 

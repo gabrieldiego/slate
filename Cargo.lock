@@ -10948,6 +10948,14 @@ name = "slate-privacy"
 version = "0.0.1"
 
 [[package]]
+name = "slate-profile-sync"
+version = "0.0.1"
+dependencies = [
+ "slate-broadwebd",
+ "slate-storage",
+]
+
+[[package]]
 name = "slate-protocols"
 version = "0.0.1"
 dependencies = [
