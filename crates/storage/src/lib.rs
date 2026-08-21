@@ -284,6 +284,39 @@ pub struct SyncChangeRecord {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IncomingSyncSettingText {
+    pub profile: String,
+    pub domain: String,
+    pub key: String,
+    pub value: String,
+    pub device_id: String,
+    pub device_sequence: i64,
+    pub logical_clock: i64,
+}
+
+impl IncomingSyncSettingText {
+    pub fn new(
+        profile: impl Into<String>,
+        domain: impl Into<String>,
+        key: impl Into<String>,
+        value: impl Into<String>,
+        device_id: impl Into<String>,
+        device_sequence: i64,
+        logical_clock: i64,
+    ) -> Self {
+        Self {
+            profile: profile.into(),
+            domain: domain.into(),
+            key: key.into(),
+            value: value.into(),
+            device_id: device_id.into(),
+            device_sequence,
+            logical_clock,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SyncRevisionRecord {
     pub revision: i64,
     pub profile: String,
@@ -971,6 +1004,69 @@ impl SlateProfileDatabase {
         Ok(change)
     }
 
+    pub fn apply_sync_setting_text(
+        &self,
+        change: &IncomingSyncSettingText,
+    ) -> Result<SyncChangeRecord, StorageError> {
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let now = unix_time_seconds()?;
+
+        record_sync_device_seen_in_transaction(
+            &transaction,
+            change.profile.as_str(),
+            change.device_id.as_str(),
+            now,
+        )
+        .map_err(|source| self.database_error(source))?;
+
+        if let Some(existing) = sync_change_by_device_sequence_in_transaction(
+            &transaction,
+            change.profile.as_str(),
+            change.device_id.as_str(),
+            change.device_sequence,
+        )
+        .map_err(|source| self.database_error(source))?
+        {
+            transaction
+                .commit()
+                .map_err(|source| self.database_error(source))?;
+            return Ok(existing);
+        }
+
+        if change.profile == DEFAULT_PROFILE_ID && change.domain == SYNC_DOMAIN_SETTINGS {
+            transaction
+                .execute(
+                    "INSERT INTO settings (key, value, updated_at)
+                     VALUES (?1, ?2, ?3)
+                     ON CONFLICT(key) DO UPDATE SET
+                       value = excluded.value,
+                       updated_at = excluded.updated_at",
+                    params![change.key.as_str(), change.value.as_str(), now],
+                )
+                .map_err(|source| self.database_error(source))?;
+        }
+
+        let applied = insert_sync_setting_text_change_in_transaction(
+            &transaction,
+            change.profile.as_str(),
+            change.domain.as_str(),
+            change.key.as_str(),
+            change.value.as_str(),
+            change.device_id.as_str(),
+            change.device_sequence,
+            change.logical_clock,
+            now,
+        )
+        .map_err(|source| self.database_error(source))?;
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(applied)
+    }
+
     pub fn get_sync_setting_text(
         &self,
         profile: &str,
@@ -1361,6 +1457,60 @@ fn integer_to_bool(value: i64) -> bool {
     value != 0
 }
 
+fn record_sync_device_seen_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    device_id: &str,
+    now: i64,
+) -> Result<(), rusqlite::Error> {
+    transaction.execute(
+        "INSERT INTO sync_devices
+           (profile, device_id, label, membership_epoch, provider_authority,
+            created_at, last_seen_at)
+         VALUES (?1, ?2, NULL, 1, 0, ?3, ?3)
+         ON CONFLICT(profile, device_id) DO UPDATE SET
+           last_seen_at = excluded.last_seen_at",
+        params![profile, device_id, now],
+    )?;
+    Ok(())
+}
+
+fn sync_change_by_device_sequence_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    device_id: &str,
+    device_sequence: i64,
+) -> Result<Option<SyncChangeRecord>, rusqlite::Error> {
+    transaction
+        .query_row(
+            "SELECT id, profile, domain, entity_key, operation, payload, device_id,
+                    device_sequence, logical_clock, created_at, applied_at
+             FROM settings_changes
+             WHERE profile = ?1 AND device_id = ?2 AND device_sequence = ?3",
+            params![profile, device_id, device_sequence],
+            sync_change_record_from_row,
+        )
+        .optional()
+}
+
+fn sync_change_record_from_row(
+    row: &rusqlite::Row<'_>,
+) -> Result<SyncChangeRecord, rusqlite::Error> {
+    Ok(SyncChangeRecord {
+        id: row.get(0)?,
+        profile: row.get(1)?,
+        domain: row.get(2)?,
+        entity_key: row.get(3)?,
+        operation: row.get(4)?,
+        payload: row.get(5)?,
+        device_id: row.get(6)?,
+        device_sequence: row.get(7)?,
+        logical_clock: row.get(8)?,
+        created_at: row.get(9)?,
+        applied_at: row.get(10)?,
+    })
+}
+
 fn record_sync_setting_text_in_transaction(
     transaction: &rusqlite::Transaction<'_>,
     profile: &str,
@@ -1385,6 +1535,30 @@ fn record_sync_setting_text_in_transaction(
         |row| row.get::<_, i64>(0),
     )?;
 
+    insert_sync_setting_text_change_in_transaction(
+        transaction,
+        profile,
+        domain,
+        key,
+        value,
+        device_id,
+        device_sequence,
+        logical_clock,
+        now,
+    )
+}
+
+fn insert_sync_setting_text_change_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    domain: &str,
+    key: &str,
+    value: &str,
+    device_id: &str,
+    device_sequence: i64,
+    logical_clock: i64,
+    now: i64,
+) -> Result<SyncChangeRecord, rusqlite::Error> {
     transaction.execute(
         "INSERT INTO settings_changes
            (profile, domain, entity_key, operation, payload, device_id, device_sequence,
@@ -1752,6 +1926,59 @@ mod tests {
                     revision.revision == value.revision && revision.change_id == change.id
                 })
         );
+    }
+
+    #[test]
+    fn incoming_setting_change_updates_materialized_views_idempotently() {
+        let database_path = test_dir("incoming-sync-setting").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let baseline_revision = database
+            .sync_revisions_after(DEFAULT_PROFILE_ID, 0)
+            .unwrap()
+            .last()
+            .map(|revision| revision.revision)
+            .unwrap_or(0);
+
+        let incoming = IncomingSyncSettingText::new(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            "ui.theme",
+            "teal",
+            "device-b",
+            7,
+            42,
+        );
+        let applied = database.apply_sync_setting_text(&incoming).unwrap();
+
+        assert_eq!(applied.domain, SYNC_DOMAIN_SETTINGS);
+        assert_eq!(applied.entity_key, "ui.theme");
+        assert_eq!(applied.payload, "teal");
+        assert_eq!(applied.device_id, "device-b");
+        assert_eq!(applied.device_sequence, 7);
+        assert_eq!(applied.logical_clock, 42);
+        assert_eq!(
+            database.get_setting_text("ui.theme").unwrap().as_deref(),
+            Some("teal")
+        );
+
+        let value = database
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme")
+            .unwrap()
+            .unwrap();
+        assert_eq!(value.value, "teal");
+        assert!(value.revision > baseline_revision);
+
+        let duplicate = database.apply_sync_setting_text(&incoming).unwrap();
+        assert_eq!(duplicate.id, applied.id);
+        assert_eq!(
+            database
+                .sync_revisions_after(DEFAULT_PROFILE_ID, value.revision)
+                .unwrap(),
+            Vec::<SyncRevisionRecord>::new()
+        );
+
+        let devices = database.sync_devices(DEFAULT_PROFILE_ID).unwrap();
+        assert!(devices.iter().any(|device| device.device_id == "device-b"));
     }
 
     #[test]
