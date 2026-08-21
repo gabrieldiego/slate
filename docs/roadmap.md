@@ -277,7 +277,9 @@ Current baseline:
 - A verified device head can now drive trusted settings manifest sync directly:
   storage fetches the referenced manifest object id, verifies/decrypts its
   snapshot and tail objects through the trusted-key path, and can apply the
-  resulting settings manifest without resolving the global settings root.
+  resulting settings manifest without resolving the global settings root. The
+  manifest must include a matching frontier for the head device, sequence, and
+  latest change object before it can be consumed.
 - The local two-device broadwebd fixture now publishes and pulls a trusted
   signed encrypted device head through an in-process per-device root. The test
   retains the head object on the receiving provider before the publishing

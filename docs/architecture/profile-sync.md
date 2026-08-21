@@ -286,7 +286,9 @@ id. `slate-settings.db` can also record the verified head root and report
 missing, unchanged, or updated status; unchanged roots skip object fetch and
 decrypt work. Once a head is verified, storage can follow its referenced
 manifest object id, verify/decrypt that manifest's snapshot and tail objects,
-and apply the settings manifest without resolving the global settings root.
+require a matching manifest frontier for the head device, sequence, and latest
+change object, and apply the settings manifest without resolving the global
+settings root.
 Publishing per-device heads and merging multiple authorized heads are separate
 runtime and broadwebd wiring steps. The local two-device fixture already
 exercises the first handoff: a publishing provider writes a signed encrypted

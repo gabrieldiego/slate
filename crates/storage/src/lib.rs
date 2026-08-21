@@ -452,6 +452,13 @@ pub enum SyncObjectError {
         expected: String,
         actual: String,
     },
+    UnexpectedDeviceFrontier {
+        device_id: String,
+        expected_sequence: i64,
+        actual_sequence: Option<i64>,
+        expected_change_object_id: Option<String>,
+        actual_change_object_id: Option<String>,
+    },
     Encode(serde_json::Error),
     Decode(serde_json::Error),
 }
@@ -507,6 +514,16 @@ impl fmt::Display for SyncObjectError {
                 formatter,
                 "unexpected sync object root id: expected {expected}, got {actual}"
             ),
+            Self::UnexpectedDeviceFrontier {
+                device_id,
+                expected_sequence,
+                actual_sequence,
+                expected_change_object_id,
+                actual_change_object_id,
+            } => write!(
+                formatter,
+                "unexpected sync manifest frontier for device {device_id}: expected sequence {expected_sequence} and change {expected_change_object_id:?}, got sequence {actual_sequence:?} and change {actual_change_object_id:?}"
+            ),
             Self::Encode(error) => write!(formatter, "failed to encode sync object: {error}"),
             Self::Decode(error) => write!(formatter, "failed to decode sync object: {error}"),
         }
@@ -531,7 +548,8 @@ impl std::error::Error for SyncObjectError {
             | Self::UnexpectedDomain { .. }
             | Self::UnexpectedObjectKind { .. }
             | Self::UnexpectedKeyId { .. }
-            | Self::UnexpectedRootId { .. } => None,
+            | Self::UnexpectedRootId { .. }
+            | Self::UnexpectedDeviceFrontier { .. } => None,
         }
     }
 }
@@ -1223,6 +1241,38 @@ fn validate_profile_sync_device_head_root(
             actual: device_head.root_id.clone(),
         })
     }
+}
+
+fn validate_profile_sync_device_head_manifest(
+    device_head: &ProfileSyncDeviceHead,
+    manifest: &ProfileSyncManifest,
+) -> Result<(), SyncObjectError> {
+    let frontier = manifest
+        .device_frontiers
+        .iter()
+        .find(|frontier| frontier.device_id == device_head.device_id);
+    let Some(frontier) = frontier else {
+        return Err(SyncObjectError::UnexpectedDeviceFrontier {
+            device_id: device_head.device_id.clone(),
+            expected_sequence: device_head.device_sequence,
+            actual_sequence: None,
+            expected_change_object_id: device_head.latest_change_object_id.clone(),
+            actual_change_object_id: None,
+        });
+    };
+
+    if frontier.latest_sequence != device_head.device_sequence
+        || frontier.latest_change_object_id != device_head.latest_change_object_id
+    {
+        return Err(SyncObjectError::UnexpectedDeviceFrontier {
+            device_id: device_head.device_id.clone(),
+            expected_sequence: device_head.device_sequence,
+            actual_sequence: Some(frontier.latest_sequence),
+            expected_change_object_id: device_head.latest_change_object_id.clone(),
+            actual_change_object_id: frontier.latest_change_object_id.clone(),
+        });
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -3367,15 +3417,20 @@ impl SlateProfileDatabase {
             )?);
         }
 
-        self.open_trusted_signed_profile_sync_settings_manifest_objects(
-            &manifest_object,
-            snapshot_object.as_ref(),
-            tail_change_objects.as_slice(),
-            content_key,
-            profile,
-            key_id,
-        )
-        .map_err(ProfileSyncTrustedPullError::Open)
+        let objects = self
+            .open_trusted_signed_profile_sync_settings_manifest_objects(
+                &manifest_object,
+                snapshot_object.as_ref(),
+                tail_change_objects.as_slice(),
+                content_key,
+                profile,
+                key_id,
+            )
+            .map_err(ProfileSyncTrustedPullError::Open)?;
+        validate_profile_sync_device_head_manifest(&device_head.device_head, &objects.manifest)
+            .map_err(ProfileSyncTrustedOpenError::SyncObject)
+            .map_err(ProfileSyncTrustedPullError::Open)?;
+        Ok(objects)
     }
 
     pub fn pull_and_apply_trusted_signed_settings_manifest_objects_from_device_head<Source>(
@@ -5840,6 +5895,147 @@ mod tests {
                     SyncObjectError::UnexpectedProfile { expected, actual }
                 )
             )) if expected == DEFAULT_PROFILE_ID && actual == "other-profile"
+        ));
+    }
+
+    #[test]
+    fn profile_sync_trusted_pull_manifest_from_device_head_rejects_frontier_mismatch() {
+        let content_key = ProfileSyncContentKey::from_bytes([32; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let trusted_public_key = signer.public_key().unwrap();
+        let key_id = "content-key-epoch-1";
+        let manifest_without_frontier_object_id = "manifest-without-frontier";
+        let mismatched_manifest_object_id = "manifest-with-mismatched-frontier";
+        let manifest_without_frontier = ProfileSyncManifest {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: "settings/latest".to_string(),
+            schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            current_snapshot_object_id: None,
+            tail_change_object_ids: Vec::new(),
+            included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            device_frontiers: Vec::new(),
+            retention_policy: ProfileSyncRetentionPolicy::default(),
+            created_at: 1234,
+        };
+        let mismatched_manifest = ProfileSyncManifest {
+            device_frontiers: vec![ProfileSyncDeviceFrontier {
+                device_id: "device-a".to_string(),
+                latest_sequence: 2,
+                latest_change_object_id: None,
+            }],
+            ..manifest_without_frontier.clone()
+        };
+        let mut source = InMemoryProfileSyncObjectSource::default();
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            manifest_without_frontier_object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+                key_id,
+                serde_json::to_vec(&manifest_without_frontier)
+                    .unwrap()
+                    .as_slice(),
+                &content_key,
+                &signer,
+                34,
+            ),
+        );
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            mismatched_manifest_object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+                key_id,
+                serde_json::to_vec(&mismatched_manifest).unwrap().as_slice(),
+                &content_key,
+                &signer,
+                35,
+            ),
+        );
+        let destination_path =
+            test_dir("sync-trusted-device-head-frontier-mismatch").join(DEFAULT_DATABASE_FILE_NAME);
+        let destination =
+            SlateProfileDatabase::open_resolved_with_device_id(destination_path, "device-b")
+                .unwrap();
+        destination
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: trusted_public_key,
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .unwrap();
+
+        let head_without_frontier = VerifiedProfileSyncDeviceHead {
+            object_id: "device-head-object-1".to_string(),
+            device_head: ProfileSyncDeviceHead {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                device_id: "device-a".to_string(),
+                root_id: "settings/devices/device-a/head".to_string(),
+                schema_version: PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                latest_manifest_object_id: manifest_without_frontier_object_id.to_string(),
+                latest_change_object_id: Some("change-object-1".to_string()),
+                device_sequence: 1,
+                logical_clock: 1,
+                created_at: 1235,
+            },
+        };
+        assert!(matches!(
+            destination.pull_trusted_signed_profile_sync_settings_manifest_objects_from_device_head(
+                &source,
+                DEFAULT_PROFILE_ID,
+                &head_without_frontier,
+                &content_key,
+                key_id,
+            ),
+            Err(ProfileSyncTrustedPullError::Open(
+                ProfileSyncTrustedOpenError::SyncObject(
+                    SyncObjectError::UnexpectedDeviceFrontier {
+                        device_id,
+                        expected_sequence,
+                        actual_sequence: None,
+                        expected_change_object_id,
+                        actual_change_object_id: None,
+                    }
+                )
+            )) if device_id == "device-a"
+                && expected_sequence == 1
+                && expected_change_object_id.as_deref() == Some("change-object-1")
+        ));
+
+        let head_with_mismatch = VerifiedProfileSyncDeviceHead {
+            object_id: "device-head-object-2".to_string(),
+            device_head: ProfileSyncDeviceHead {
+                latest_manifest_object_id: mismatched_manifest_object_id.to_string(),
+                ..head_without_frontier.device_head
+            },
+        };
+        assert!(matches!(
+            destination.pull_trusted_signed_profile_sync_settings_manifest_objects_from_device_head(
+                &source,
+                DEFAULT_PROFILE_ID,
+                &head_with_mismatch,
+                &content_key,
+                key_id,
+            ),
+            Err(ProfileSyncTrustedPullError::Open(
+                ProfileSyncTrustedOpenError::SyncObject(
+                    SyncObjectError::UnexpectedDeviceFrontier {
+                        device_id,
+                        expected_sequence,
+                        actual_sequence: Some(2),
+                        expected_change_object_id,
+                        actual_change_object_id: None,
+                    }
+                )
+            )) if device_id == "device-a"
+                && expected_sequence == 1
+                && expected_change_object_id.as_deref() == Some("change-object-1")
         ));
     }
 
