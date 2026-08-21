@@ -448,6 +448,10 @@ pub enum SyncObjectError {
         expected: String,
         actual: String,
     },
+    UnexpectedRootId {
+        expected: String,
+        actual: String,
+    },
     Encode(serde_json::Error),
     Decode(serde_json::Error),
 }
@@ -499,6 +503,10 @@ impl fmt::Display for SyncObjectError {
                 formatter,
                 "unexpected sync object key id: expected {expected}, got {actual}"
             ),
+            Self::UnexpectedRootId { expected, actual } => write!(
+                formatter,
+                "unexpected sync object root id: expected {expected}, got {actual}"
+            ),
             Self::Encode(error) => write!(formatter, "failed to encode sync object: {error}"),
             Self::Decode(error) => write!(formatter, "failed to decode sync object: {error}"),
         }
@@ -522,7 +530,8 @@ impl std::error::Error for SyncObjectError {
             | Self::UnexpectedProfile { .. }
             | Self::UnexpectedDomain { .. }
             | Self::UnexpectedObjectKind { .. }
-            | Self::UnexpectedKeyId { .. } => None,
+            | Self::UnexpectedKeyId { .. }
+            | Self::UnexpectedRootId { .. } => None,
         }
     }
 }
@@ -1154,6 +1163,8 @@ where
         key_id,
     )
     .map_err(ProfileSyncPullError::SyncObject)?;
+    validate_profile_sync_device_head_root(&device_head, root_id)
+        .map_err(ProfileSyncPullError::SyncObject)?;
     Ok(Some(VerifiedProfileSyncDeviceHead {
         object_id: device_head_object.object_id,
         device_head,
@@ -1198,6 +1209,20 @@ where
         });
     }
     Ok(object)
+}
+
+fn validate_profile_sync_device_head_root(
+    device_head: &ProfileSyncDeviceHead,
+    root_id: &str,
+) -> Result<(), SyncObjectError> {
+    if device_head.root_id == root_id {
+        Ok(())
+    } else {
+        Err(SyncObjectError::UnexpectedRootId {
+            expected: root_id.to_string(),
+            actual: device_head.root_id.clone(),
+        })
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -3201,6 +3226,9 @@ impl SlateProfileDatabase {
                 key_id,
             )
             .map_err(ProfileSyncTrustedPullError::Open)?;
+        validate_profile_sync_device_head_root(&device_head, root_id)
+            .map_err(ProfileSyncTrustedOpenError::SyncObject)
+            .map_err(ProfileSyncTrustedPullError::Open)?;
         Ok(Some(VerifiedProfileSyncDeviceHead {
             object_id: device_head_object.object_id,
             device_head,
@@ -5144,7 +5172,7 @@ mod tests {
             pulled,
             VerifiedProfileSyncDeviceHead {
                 object_id: object_id.to_string(),
-                device_head,
+                device_head: device_head.clone(),
             }
         );
         assert_eq!(
@@ -5159,6 +5187,44 @@ mod tests {
             .unwrap(),
             None
         );
+
+        let mismatched_root_id = "settings/devices/device-a/other-head";
+        let mismatched_object_id = "device-head-object-2";
+        let mismatched_device_head = ProfileSyncDeviceHead {
+            root_id: "settings/devices/device-a/payload-head".to_string(),
+            ..device_head.clone()
+        };
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            mismatched_object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
+                key_id,
+                serde_json::to_vec(&mismatched_device_head)
+                    .unwrap()
+                    .as_slice(),
+                &content_key,
+                &signer,
+                29,
+            ),
+        );
+        source.publish_root(DEFAULT_PROFILE_ID, mismatched_root_id, mismatched_object_id);
+        assert!(matches!(
+            pull_signed_profile_sync_device_head(
+                &source,
+                DEFAULT_PROFILE_ID,
+                mismatched_root_id,
+                &content_key,
+                &trusted_public_key,
+                key_id,
+            ),
+            Err(ProfileSyncPullError::SyncObject(
+                SyncObjectError::UnexpectedRootId { expected, actual }
+            )) if expected == mismatched_root_id
+                && actual == "settings/devices/device-a/payload-head"
+        ));
     }
 
     #[test]
@@ -5224,7 +5290,7 @@ mod tests {
             pulled,
             VerifiedProfileSyncDeviceHead {
                 object_id: object_id.to_string(),
-                device_head,
+                device_head: device_head.clone(),
             }
         );
         assert_eq!(
@@ -5239,6 +5305,45 @@ mod tests {
                 .unwrap(),
             None
         );
+
+        let mismatched_root_id = "settings/devices/device-a/other-head";
+        let mismatched_object_id = "device-head-object-2";
+        let mismatched_device_head = ProfileSyncDeviceHead {
+            root_id: "settings/devices/device-a/payload-head".to_string(),
+            ..device_head.clone()
+        };
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            mismatched_object_id,
+            sign_test_sync_object(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
+                key_id,
+                serde_json::to_vec(&mismatched_device_head)
+                    .unwrap()
+                    .as_slice(),
+                &content_key,
+                &signer,
+                30,
+            ),
+        );
+        source.publish_root(DEFAULT_PROFILE_ID, mismatched_root_id, mismatched_object_id);
+        assert!(matches!(
+            destination.pull_trusted_signed_profile_sync_device_head(
+                &source,
+                DEFAULT_PROFILE_ID,
+                mismatched_root_id,
+                &content_key,
+                key_id,
+            ),
+            Err(ProfileSyncTrustedPullError::Open(
+                ProfileSyncTrustedOpenError::SyncObject(
+                    SyncObjectError::UnexpectedRootId { expected, actual }
+                )
+            )) if expected == mismatched_root_id
+                && actual == "settings/devices/device-a/payload-head"
+        ));
     }
 
     #[test]
