@@ -189,6 +189,9 @@ Current baseline:
 - Storage now provides `EncryptedSyncObject` envelopes using ChaCha20-Poly1305
   AEAD through `ring`, and the local two-device fixture moves encrypted setting
   change payloads through broadwebd instead of plaintext JSON.
+- Storage now also provides `SignedSyncObject` wrappers using Ed25519 device
+  keys, and the local two-device fixture verifies the signed encrypted payload
+  against device A's trusted public key before decryption and application.
 - IPFS/IPNS is the first concrete backend under consideration, but the product
   goal is protocol-neutral: approved Slate devices should find each other, move
   encrypted sync objects, and optionally use approved providers to keep those
@@ -278,8 +281,9 @@ Priority order:
    mutable roots.
 5. Equal-control account authority model with signed device heads and membership
    epochs.
-6. Signed manifest/snapshot/change encoding and key-epoch integration on top of
-   the implemented encrypted object envelope.
+6. Manifest/snapshot/change encoding, account membership signatures, and
+   key-epoch integration on top of the implemented encrypted object envelope and
+   device-signature wrapper.
 7. Kubo RPC add/pin/IPNS implementation with loopback-only validation.
 8. Two-device local sync flow and retention compaction.
 
