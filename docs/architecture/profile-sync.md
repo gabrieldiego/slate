@@ -422,6 +422,10 @@ object, sign and retain any post-snapshot tail objects, ask storage to build the
 snapshot-and-tail manifest, then publish the mutable root to the signed
 manifest object. Compaction policy and snapshot payload selection remain owned
 by storage.
+The bridge can also drive one storage-selected compaction step: ask
+`slate-settings.db` for a compaction target, derive snapshot domains from the
+covered change records, publish the signed snapshot manifest, and record the
+published snapshot object id back into storage.
 
 The local fake backend must model provider availability inside the test process.
 Each simulated device registers as a provider, retained objects are scoped to

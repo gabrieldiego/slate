@@ -385,6 +385,11 @@ Current baseline:
   settings snapshot manifests through broadwebd: it retains the snapshot object,
   retains any post-snapshot tail change objects, signs the storage-owned
   manifest, and publishes `settings/latest` to the manifest object id.
+- The runtime bridge can now ask `slate-settings.db` for the next settings
+  compaction target, derive the covered snapshot domains, publish the signed
+  encrypted snapshot manifest through broadwebd, and record the published
+  snapshot backend object id in storage so later compaction skips already
+  squashed revisions.
 - Incoming synced settings now have an initial deterministic conflict policy:
   the highest logical clock wins, with device id and device sequence as stable
   tie-breakers. Losing setting changes are retained in `settings_changes`

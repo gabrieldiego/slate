@@ -16,10 +16,12 @@ use slate_storage::{
     ProfileSyncManifest, ProfileSyncObjectBytes, ProfileSyncObjectSource,
     ProfileSyncRetentionPolicy, ProfileSyncRootCandidate as StorageProfileSyncRootCandidate,
     ProfileSyncSettingsSnapshot, ProfileSyncSettingsSnapshotPublication,
-    ProfileSyncSettingsTailChangePublication, SYNC_DOMAIN_SETTINGS, StorageError, SyncChangeRecord,
-    SyncObjectError, settings_sync_manifest_for_snapshot_and_tail_changes,
-    settings_sync_manifest_for_tail_changes,
+    ProfileSyncSettingsTailChangePublication, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase,
+    StorageError, SyncChangeRecord, SyncCompactionTarget, SyncObjectError, SyncSnapshotRecord,
+    SyncSnapshotRegistration, settings_sync_manifest_for_snapshot_and_tail_changes,
+    settings_sync_manifest_for_tail_changes, settings_sync_snapshot_id,
 };
+use std::collections::BTreeSet;
 
 #[derive(Clone, Copy)]
 pub struct BroadwebdProfileSyncObjectSource<'a> {
@@ -104,6 +106,13 @@ pub struct PublishedSettingsSnapshotManifest {
     pub manifest: ProfileSyncManifest,
     pub snapshot_object_id: String,
     pub tail_change_object_ids: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PublishedSettingsCompaction {
+    pub target: SyncCompactionTarget,
+    pub publication: PublishedSettingsSnapshotManifest,
+    pub snapshot_record: SyncSnapshotRecord,
 }
 
 impl<'a> BroadwebdProfileSyncObjectSource<'a> {
@@ -363,6 +372,74 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
         })
     }
 
+    pub fn compact_and_publish_settings(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        root_id: &str,
+        content_key: &ProfileSyncContentKey,
+        key_id: &str,
+        signer: &ProfileSyncDeviceSigner,
+        retention_policy: ProfileSyncRetentionPolicy,
+        now: i64,
+    ) -> Result<Option<PublishedSettingsCompaction>, ProfileSyncPublishError> {
+        let Some(target) =
+            database.settings_sync_compaction_target(profile, &retention_policy, now)?
+        else {
+            return Ok(None);
+        };
+        let events = database.sync_setting_text_events_after(
+            profile,
+            target.previous_snapshot_covers_revision,
+            u32::MAX,
+        )?;
+        let covered_changes = events
+            .iter()
+            .take(target.covered_change_count)
+            .map(|event| event.change.clone())
+            .collect::<Vec<_>>();
+        let tail_changes = events
+            .iter()
+            .skip(target.covered_change_count)
+            .map(|event| event.change.clone())
+            .collect::<Vec<_>>();
+        let included_domains = covered_changes
+            .iter()
+            .map(|change| change.domain.clone())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        let snapshot = database.settings_sync_snapshot_payload(
+            profile,
+            target.covers_revision,
+            &included_domains,
+        )?;
+        let publication = self.publish_signed_settings_snapshot_manifest(
+            profile,
+            root_id,
+            &snapshot,
+            covered_changes.as_slice(),
+            tail_changes.as_slice(),
+            content_key,
+            key_id,
+            signer,
+            retention_policy,
+        )?;
+        let snapshot_record = database.record_sync_snapshot(&SyncSnapshotRegistration {
+            profile: profile.to_string(),
+            snapshot_id: settings_sync_snapshot_id(target.covers_revision),
+            backend_object_id: Some(publication.snapshot_object_id.clone()),
+            covers_revision: target.covers_revision,
+            included_domains: snapshot.included_domains,
+        })?;
+
+        Ok(Some(PublishedSettingsCompaction {
+            target,
+            publication,
+            snapshot_record,
+        }))
+    }
+
     fn publish_settings_tail_change_publications(
         &self,
         profile: &str,
@@ -567,10 +644,12 @@ mod tests {
     use slate_storage::{
         DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, PROFILE_SYNC_CONTENT_KEY_BYTES,
         ProfileSyncContentKey, ProfileSyncDeviceSigner, ProfileSyncObjectSource,
-        ProfileSyncRetentionPolicy, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase,
-        open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
-        open_signed_sync_setting_text,
+        ProfileSyncRetentionPolicy, SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_SETTINGS,
+        SlateProfileDatabase, open_signed_profile_sync_manifest,
+        open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
+        settings_sync_snapshot_id,
     };
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     const TEST_CONTENT_KEY_ID: &str = "content-key-epoch-1";
 
@@ -888,6 +967,173 @@ mod tests {
         let _ = std::fs::remove_dir_all(db_root);
     }
 
+    #[test]
+    fn broadwebd_publisher_compacts_and_publishes_signed_settings_snapshot_manifest() {
+        let network = InProcessBroadwebNetwork::new();
+        let state_root = test_state_root("compact-snapshot-publish");
+        let db_root = test_state_root("compact-snapshot-db");
+        let daemon = network
+            .daemon_for_device(&state_root, ResourceBudget::default(), "runtime-e")
+            .expect("start in-process profile-sync daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-e",
+        )
+        .expect("open local settings database");
+        let baseline_revision = database
+            .latest_sync_revision(DEFAULT_PROFILE_ID)
+            .expect("read baseline revision");
+        database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write first compacted setting");
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                "default_view",
+                "month",
+            )
+            .expect("write second compacted setting");
+        database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.zoom", "110")
+            .expect("write retained tail setting");
+        let content_key = ProfileSyncContentKey::from_bytes([43; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-e").expect("generate signer");
+        let public_key = signer.public_key().expect("read signer public key");
+        let publisher = BroadwebdProfileSyncPublisher::new(&daemon);
+        let retention_policy = ProfileSyncRetentionPolicy {
+            min_tail_change_count: 1,
+            change_retention_seconds: 0,
+            ..ProfileSyncRetentionPolicy::default()
+        };
+
+        let compaction = publisher
+            .compact_and_publish_settings(
+                &database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                retention_policy,
+                i64::MAX,
+            )
+            .expect("publish compacted settings")
+            .expect("compaction target");
+
+        let expected_covered_change_count = if baseline_revision > 0 { 3 } else { 2 };
+        assert_eq!(
+            compaction.target.covered_change_count,
+            expected_covered_change_count
+        );
+        assert_eq!(compaction.target.retained_tail_change_count, 1);
+        assert_eq!(
+            compaction.snapshot_record.snapshot_id,
+            settings_sync_snapshot_id(compaction.target.covers_revision)
+        );
+        assert_eq!(
+            compaction.snapshot_record.backend_object_id.as_deref(),
+            Some(compaction.publication.snapshot_object_id.as_str())
+        );
+        assert_eq!(
+            database
+                .latest_sync_snapshot(DEFAULT_PROFILE_ID)
+                .expect("read latest sync snapshot")
+                .as_ref(),
+            Some(&compaction.snapshot_record)
+        );
+        assert_eq!(
+            database
+                .settings_sync_compaction_target(
+                    DEFAULT_PROFILE_ID,
+                    &ProfileSyncRetentionPolicy {
+                        min_tail_change_count: 1,
+                        change_retention_seconds: 0,
+                        ..ProfileSyncRetentionPolicy::default()
+                    },
+                    i64::MAX,
+                )
+                .expect("read compaction target after publish"),
+            None
+        );
+
+        let source = BroadwebdProfileSyncObjectSource::new(&daemon);
+        let manifest_object = source
+            .get_profile_sync_object(
+                DEFAULT_PROFILE_ID,
+                compaction.publication.manifest_object_id.as_str(),
+            )
+            .expect("fetch compacted manifest object");
+        let manifest = open_signed_profile_sync_manifest(
+            manifest_object.bytes.as_slice(),
+            &content_key,
+            &public_key,
+            DEFAULT_PROFILE_ID,
+            TEST_CONTENT_KEY_ID,
+        )
+        .expect("verify compacted manifest object");
+        assert_eq!(manifest, compaction.publication.manifest);
+        assert_eq!(
+            manifest.current_snapshot_object_id.as_deref(),
+            Some(compaction.publication.snapshot_object_id.as_str())
+        );
+        assert_eq!(manifest.tail_change_object_ids.len(), 1);
+
+        let snapshot_object = source
+            .get_profile_sync_object(
+                DEFAULT_PROFILE_ID,
+                compaction.publication.snapshot_object_id.as_str(),
+            )
+            .expect("fetch compacted snapshot object");
+        let snapshot = open_signed_profile_sync_settings_snapshot(
+            snapshot_object.bytes.as_slice(),
+            &content_key,
+            &public_key,
+            DEFAULT_PROFILE_ID,
+            TEST_CONTENT_KEY_ID,
+        )
+        .expect("verify compacted snapshot object");
+        assert_eq!(
+            snapshot.included_domains,
+            vec![
+                SYNC_DOMAIN_CALENDAR.to_string(),
+                SYNC_DOMAIN_SETTINGS.to_string()
+            ]
+        );
+        assert!(snapshot.values.iter().any(|value| {
+            value.domain == SYNC_DOMAIN_SETTINGS && value.key == "ui.theme" && value.value == "teal"
+        }));
+        assert!(snapshot.values.iter().any(|value| {
+            value.domain == SYNC_DOMAIN_CALENDAR
+                && value.key == "default_view"
+                && value.value == "month"
+        }));
+        assert!(snapshot.values.iter().all(|value| value.key != "ui.zoom"));
+
+        let tail_object_id = compaction
+            .publication
+            .tail_change_object_ids
+            .first()
+            .expect("tail object id");
+        let tail_object = source
+            .get_profile_sync_object(DEFAULT_PROFILE_ID, tail_object_id)
+            .expect("fetch compacted tail object");
+        let incoming = open_signed_sync_setting_text(
+            tail_object.bytes.as_slice(),
+            &content_key,
+            &public_key,
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            TEST_CONTENT_KEY_ID,
+        )
+        .expect("verify compacted tail object");
+        assert_eq!(incoming.key, "ui.zoom");
+        assert_eq!(incoming.value, "110");
+
+        let _ = std::fs::remove_dir_all(state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
     fn assert_retained(publisher: &BroadwebdProfileSyncPublisher<'_>, object_id: &str) {
         let status = publisher
             .verify_retained_object("default", object_id)
@@ -898,8 +1144,12 @@ mod tests {
     }
 
     fn test_state_root(name: &str) -> std::path::PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time should move forward")
+            .as_nanos();
         std::env::temp_dir().join(format!(
-            "slate-profile-sync-test-{}-{name}",
+            "slate-profile-sync-test-{}-{nanos}-{name}",
             std::process::id()
         ))
     }

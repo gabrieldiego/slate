@@ -3313,7 +3313,7 @@ impl SlateProfileDatabase {
             snapshot_changes = self.apply_settings_snapshot(&snapshot.snapshot)?;
             snapshot_record = Some(self.record_sync_snapshot(&SyncSnapshotRegistration {
                 profile: manifest.profile.clone(),
-                snapshot_id: settings_snapshot_id(snapshot.snapshot.covers_revision),
+                snapshot_id: settings_sync_snapshot_id(snapshot.snapshot.covers_revision),
                 backend_object_id: Some(snapshot.object_id.clone()),
                 covers_revision: snapshot.snapshot.covers_revision,
                 included_domains: snapshot.snapshot.included_domains.clone(),
@@ -4632,7 +4632,7 @@ fn normalized_snapshot_domains(domains: &[String]) -> Vec<String> {
         .collect()
 }
 
-fn settings_snapshot_id(covers_revision: i64) -> String {
+pub fn settings_sync_snapshot_id(covers_revision: i64) -> String {
     format!("settings-snapshot-r{covers_revision}")
 }
 
