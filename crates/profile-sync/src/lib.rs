@@ -345,6 +345,10 @@ pub enum ProfileSyncPolicyError {
     ProviderHealthDegraded {
         health: SettingsSyncHealthReport,
     },
+    RootHealthDegraded {
+        root_kind: &'static str,
+        health: SettingsSyncHealthReport,
+    },
     ProviderMinimumUnmet {
         provider_role: &'static str,
         minimum: usize,
@@ -360,6 +364,11 @@ impl fmt::Display for ProfileSyncPolicyError {
                 formatter,
                 "profile {} provider health is degraded: {}",
                 health.profile, health.provider_health.message
+            ),
+            Self::RootHealthDegraded { root_kind, health } => write!(
+                formatter,
+                "profile {} {} health is degraded",
+                health.profile, root_kind
             ),
             Self::ProviderMinimumUnmet {
                 provider_role,
@@ -564,6 +573,7 @@ pub struct SettingsSyncCyclePolicy {
     pub minimum_mutable_root_providers: usize,
     pub minimum_online_retaining_providers: usize,
     pub require_healthy_providers: bool,
+    pub require_healthy_roots_after_cycle: bool,
 }
 
 impl SettingsSyncCyclePolicy {
@@ -583,6 +593,7 @@ impl SettingsSyncCyclePolicy {
             minimum_mutable_root_providers: 1,
             minimum_online_retaining_providers,
             require_healthy_providers: true,
+            require_healthy_roots_after_cycle: true,
         }
     }
 
@@ -608,6 +619,11 @@ impl SettingsSyncCyclePolicy {
 
     pub fn with_provider_health_required(mut self, required: bool) -> Self {
         self.require_healthy_providers = required;
+        self
+    }
+
+    pub fn with_root_health_required_after_cycle(mut self, required: bool) -> Self {
+        self.require_healthy_roots_after_cycle = required;
         self
     }
 
@@ -662,6 +678,28 @@ impl SettingsSyncCyclePolicy {
                 provider_role,
                 minimum,
                 actual,
+                health: health.clone(),
+            });
+        }
+        Ok(())
+    }
+
+    pub fn check_after_cycle(
+        &self,
+        health: &SettingsSyncHealthReport,
+    ) -> Result<(), ProfileSyncPolicyError> {
+        if !self.require_healthy_roots_after_cycle {
+            return Ok(());
+        }
+        if health.settings_root_health.degraded {
+            return Err(ProfileSyncPolicyError::RootHealthDegraded {
+                root_kind: "settings root",
+                health: health.clone(),
+            });
+        }
+        if health.local_device_head_root_health.degraded {
+            return Err(ProfileSyncPolicyError::RootHealthDegraded {
+                root_kind: "local device-head root",
                 health: health.clone(),
             });
         }
@@ -874,7 +912,8 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
             max_trusted_devices,
             minimum_online_retaining_providers,
         )
-        .with_provider_health_required(false);
+        .with_provider_health_required(false)
+        .with_root_health_required_after_cycle(false);
         self.run_settings_sync_cycle_with_policy(
             database,
             profile,
@@ -920,6 +959,7 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
             settings_root_id,
             policy.minimum_online_retaining_providers,
         )?;
+        policy.check_after_cycle(&after_health)?;
 
         Ok(SettingsSyncCycleWithHealthRun {
             before_health,
@@ -963,6 +1003,7 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
             settings_root_id,
             policy.minimum_online_retaining_providers,
         )?;
+        policy.check_after_cycle(&after_health)?;
 
         Ok(SettingsSyncCycleWithHealthRun {
             before_health,
@@ -3337,6 +3378,90 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(first_state_root);
         let _ = std::fs::remove_dir_all(second_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_policy_checks_root_health_after_cycle() {
+        let network = InProcessBroadwebNetwork::new();
+        let state_root = test_state_root("cycle-policy-root-quorum");
+        let db_root = test_state_root("cycle-policy-root-quorum-db");
+        let daemon = network
+            .daemon_for_device(
+                &state_root,
+                ResourceBudget::default(),
+                "runtime-root-quorum",
+            )
+            .expect("start in-process profile-sync daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-root-quorum",
+        )
+        .expect("open local settings database");
+        let profile = "rootquorumprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([59; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer =
+            ProfileSyncDeviceSigner::generate("runtime-root-quorum").expect("generate signer");
+        let policy = SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2);
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register local trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write local setting");
+
+        let error = BroadwebdSettingsSyncRunner::new(&daemon)
+            .run_settings_sync_cycle_with_active_key_policy(
+                &database,
+                profile,
+                settings_root_id,
+                &content_key,
+                &signer,
+                &policy,
+            )
+            .expect_err("one retaining provider should fail the after-cycle root policy");
+
+        let ProfileSyncCycleWithHealthError::Policy(ProfileSyncPolicyError::RootHealthDegraded {
+            root_kind,
+            health,
+        }) = error
+        else {
+            panic!("expected root health policy error, got {error:?}");
+        };
+        assert_eq!(root_kind, "settings root");
+        assert_eq!(health.settings_root_health.visible_candidates, 1);
+        assert!(health.settings_root_health.latest_object_available);
+        assert_eq!(health.settings_root_health.online_retaining_providers, 1);
+        assert_eq!(
+            health
+                .settings_root_health
+                .minimum_online_retaining_providers,
+            2
+        );
+        assert!(health.settings_root_health.degraded);
+        assert!(
+            database
+                .profile_sync_root(profile, settings_root_id)
+                .expect("read local settings root")
+                .is_some()
+        );
+        assert!(
+            database
+                .profile_sync_root(
+                    profile,
+                    settings_device_head_root_id("runtime-root-quorum").as_str()
+                )
+                .expect("read local device-head root")
+                .is_some()
+        );
+
+        let _ = std::fs::remove_dir_all(state_root);
         let _ = std::fs::remove_dir_all(db_root);
     }
 

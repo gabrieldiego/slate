@@ -532,6 +532,11 @@ The same policy can require minimum fresh online, object-transfer,
 availability, and mutable-root provider counts. These thresholds are Slate
 scheduler decisions over broadwebd's reported health; broadwebd stays a
 protocol-neutral reporter and fixture host.
+After the bounded cycle runs, the policy-gated path checks whether the settings
+root and the local device-head root satisfy the configured online
+retaining-provider quorum. This lets a first publish recover from missing roots
+while still surfacing insufficient post-publish availability as a runtime policy
+failure.
 After provider policy passes, the runtime-facing runner can load the active
 content-key id from `slate-settings.db` and use caller-supplied secret material
 for the actual encrypted publish/pull cycle. The database therefore stores

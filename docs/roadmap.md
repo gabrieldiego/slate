@@ -264,6 +264,11 @@ Current baseline:
   in-process fixture covers a policy that refuses to run with only one fresh
   provider and then succeeds once a second simulated device provider is present,
   without opening sockets or contacting any external discovery service.
+- Policy-gated settings sync cycles now also check root health after the bounded
+  publish/pull attempt. Missing roots can still recover during an initial
+  healthy-provider cycle, but the runtime path reports a policy error if the
+  resulting settings root or local device-head root does not meet the configured
+  online retaining-provider quorum.
 - The local profile-sync fixture can now mark simulated devices offline and
   online, allowing tests to verify unavailable devices fail closed without
   touching sockets, DNS, Tor, IPFS, or external relays.
