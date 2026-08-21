@@ -3142,6 +3142,73 @@ impl SlateProfileDatabase {
         Ok(events)
     }
 
+    pub fn sync_setting_text_events_after_for_domain(
+        &self,
+        profile: &str,
+        domain: &str,
+        after_revision: i64,
+        limit: u32,
+    ) -> Result<Vec<SyncSettingTextEvent>, StorageError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT revisions.revision, revisions.profile, revisions.domain,
+                        revisions.change_id, revisions.created_at,
+                        changes.id, changes.profile, changes.domain, changes.entity_key,
+                        changes.operation, changes.payload, changes.device_id,
+                        changes.device_sequence, changes.logical_clock, changes.created_at,
+                        changes.applied_at
+                 FROM settings_revisions revisions
+                 JOIN settings_changes changes
+                   ON changes.id = revisions.change_id
+                  AND changes.profile = revisions.profile
+                 WHERE revisions.profile = ?1
+                   AND revisions.domain = ?2
+                   AND changes.domain = ?2
+                   AND revisions.revision > ?3
+                   AND changes.operation = 'set_text'
+                   AND changes.applied_at IS NOT NULL
+                 ORDER BY revisions.revision
+                 LIMIT ?4",
+            )
+            .map_err(|source| self.database_error(source))?;
+        let records = statement
+            .query_map(
+                params![profile, domain, after_revision, i64::from(limit)],
+                |row| {
+                    Ok(SyncSettingTextEvent {
+                        revision: SyncRevisionRecord {
+                            revision: row.get(0)?,
+                            profile: row.get(1)?,
+                            domain: row.get(2)?,
+                            change_id: row.get(3)?,
+                            created_at: row.get(4)?,
+                        },
+                        change: SyncChangeRecord {
+                            id: row.get(5)?,
+                            profile: row.get(6)?,
+                            domain: row.get(7)?,
+                            entity_key: row.get(8)?,
+                            operation: row.get(9)?,
+                            payload: row.get(10)?,
+                            device_id: row.get(11)?,
+                            device_sequence: row.get(12)?,
+                            logical_clock: row.get(13)?,
+                            created_at: row.get(14)?,
+                            applied_at: row.get(15)?,
+                        },
+                    })
+                },
+            )
+            .map_err(|source| self.database_error(source))?;
+
+        let mut events = Vec::new();
+        for record in records {
+            events.push(record.map_err(|source| self.database_error(source))?);
+        }
+        Ok(events)
+    }
+
     pub fn record_sync_snapshot(
         &self,
         snapshot: &SyncSnapshotRegistration,
@@ -8960,6 +9027,87 @@ mod tests {
             database.latest_sync_revision(DEFAULT_PROFILE_ID).unwrap(),
             events[1].revision.revision
         );
+    }
+
+    #[test]
+    fn sync_setting_text_events_can_be_scoped_to_one_app_domain() {
+        let database_path = test_dir("sync-setting-domain-events").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let baseline_revision = database.latest_sync_revision(DEFAULT_PROFILE_ID).unwrap();
+
+        let settings_change = database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "ui.theme",
+                "slate",
+            )
+            .unwrap();
+        let first_calendar_change = database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                "default_view",
+                "month",
+            )
+            .unwrap();
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_DOWNLOADS,
+                "last_filter",
+                "active",
+            )
+            .unwrap();
+        let second_calendar_change = database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_CALENDAR, "timezone", "UTC")
+            .unwrap();
+
+        let settings_events = database
+            .sync_setting_text_events_after_for_domain(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                baseline_revision,
+                10,
+            )
+            .unwrap();
+        assert_eq!(settings_events.len(), 1);
+        assert_eq!(settings_events[0].change, settings_change);
+
+        let calendar_events = database
+            .sync_setting_text_events_after_for_domain(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                baseline_revision,
+                10,
+            )
+            .unwrap();
+        assert_eq!(
+            calendar_events
+                .iter()
+                .map(|event| event.change.clone())
+                .collect::<Vec<_>>(),
+            vec![first_calendar_change.clone(), second_calendar_change]
+        );
+
+        let first_calendar_batch = database
+            .sync_setting_text_events_after_for_domain(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                baseline_revision,
+                1,
+            )
+            .unwrap();
+        assert_eq!(first_calendar_batch, vec![calendar_events[0].clone()]);
+        let after_first_calendar = database
+            .sync_setting_text_events_after_for_domain(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                calendar_events[0].revision.revision,
+                10,
+            )
+            .unwrap();
+        assert_eq!(after_first_calendar, vec![calendar_events[1].clone()]);
     }
 
     #[test]

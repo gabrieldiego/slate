@@ -202,8 +202,12 @@ pub(crate) fn apply_synced_chrome_settings_from_database(
     after_revision: i64,
     limit: u32,
 ) -> Result<i64, StorageError> {
-    let events =
-        database.sync_setting_text_events_after(DEFAULT_PROFILE_ID, after_revision, limit)?;
+    let events = database.sync_setting_text_events_after_for_domain(
+        DEFAULT_PROFILE_ID,
+        SYNC_DOMAIN_SETTINGS,
+        after_revision,
+        limit,
+    )?;
     Ok(apply_synced_chrome_settings_events(
         after_revision,
         events.as_slice(),
@@ -602,7 +606,8 @@ mod tests {
     use slate_broadwebd::FetchPurpose;
     use slate_broadwebd::TemporaryDownloadRecord;
     use slate_storage::{
-        DEFAULT_PROFILE_ID, IncomingSyncSettingText, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase,
+        DEFAULT_PROFILE_ID, IncomingSyncSettingText, SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_SETTINGS,
+        SlateProfileDatabase,
     };
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -925,6 +930,15 @@ mod tests {
             ))
             .unwrap();
         assert_eq!(losing_zoom.applied_at, None);
+        let calendar_change = database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                "default_view",
+                "month",
+            )
+            .unwrap();
+        assert!(calendar_change.id > zoom_change.id);
         let unchanged_revision =
             super::apply_synced_chrome_settings_from_database(&database, revision, 64).unwrap();
         assert_eq!(unchanged_revision, revision);

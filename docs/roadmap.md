@@ -569,6 +569,10 @@ Current baseline:
   `settings_revisions` and `settings_changes`, giving runtime code a typed
   polling surface for externally synced setting updates without reading raw
   change rows.
+- The applied-settings event feed now also has a domain-scoped query. The
+  chrome runtime watcher consumes only the `settings` domain, so future app
+  watchers can subscribe to Calendar, Contacts, Downloads, and other app
+  domains without scanning unrelated replicated payloads.
 - Chrome now has a runtime synced-settings watcher over that feed. The desktop
   app polls it during the normal Servo pump, applying recognized synced chrome
   zoom and key binding updates through the same in-memory runtime state used by

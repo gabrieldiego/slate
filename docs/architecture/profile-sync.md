@@ -237,6 +237,11 @@ unchanged already-verified roots, or applied manifests separately. If the
 published root object id matches the locally stored verified root, storage does
 not fetch, decrypt, or apply the object set again.
 
+Runtime watchers consume applied settings through bounded event feeds. The
+general feed remains available for sync internals, but app/runtime dispatch
+should prefer the domain-scoped feed so chrome, Calendar, Contacts, Downloads,
+and future apps only inspect replicated payloads for the sync domain they own.
+
 ## Data Objects
 
 The exact encoding can be CBOR, postcard, or another compact structured format.
