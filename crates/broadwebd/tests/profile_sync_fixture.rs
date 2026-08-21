@@ -176,6 +176,141 @@ fn two_local_slate_settings_databases_sync_through_profile_fixture() {
     let _ = std::fs::remove_dir_all(device_b_root);
 }
 
+#[test]
+fn two_local_devices_keep_newer_setting_when_fixture_replays_stale_change() {
+    let fixture = LocalProfileSyncFixture::new();
+    let mut device_a_broadweb = PluginRegistry::new();
+    let mut device_b_broadweb = PluginRegistry::new();
+    let budget = ResourceBudget::default();
+
+    device_a_broadweb.register_service(fixture.service_for_device("device-a"));
+    device_b_broadweb.register_service(fixture.service_for_device("device-b"));
+
+    let device_a_root = test_dir("stale-device-a");
+    let device_b_root = test_dir("stale-device-b");
+    let device_a_db = SlateProfileDatabase::open_resolved_with_device_id(
+        device_a_root.join(DEFAULT_DATABASE_FILE_NAME),
+        "device-a",
+    )
+    .expect("open stale fixture device a slate-settings.db");
+    let device_b_db = SlateProfileDatabase::open_resolved_with_device_id(
+        device_b_root.join(DEFAULT_DATABASE_FILE_NAME),
+        "device-b",
+    )
+    .expect("open stale fixture device b slate-settings.db");
+    let device_a_signer =
+        ProfileSyncDeviceSigner::generate("device-a").expect("create device a signing key");
+    let trusted_device_a_key = device_a_signer
+        .public_key()
+        .expect("read device a public key");
+
+    let stale_change = device_a_db
+        .set_sync_setting_text(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            "ui.theme",
+            "stale",
+        )
+        .expect("device a writes stale setting");
+    let _ = device_b_db
+        .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "seed")
+        .expect("device b writes seed setting");
+    let winning_local_change = device_b_db
+        .set_sync_setting_text(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            "ui.theme",
+            "local",
+        )
+        .expect("device b writes newer local setting");
+    assert!(winning_local_change.logical_clock > stale_change.logical_clock);
+    let winning_value = device_b_db
+        .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme")
+        .expect("read winning device b sync value")
+        .expect("winning device b sync value exists");
+
+    let content_key = fixture_content_key();
+    let change_bytes = sign_encrypted_setting_change(&stale_change, &content_key, &device_a_signer);
+    let change_object_id = put_object(
+        &device_a_broadweb,
+        DEFAULT_PROFILE_ID,
+        change_bytes,
+        &budget,
+    );
+    let manifest_bytes = sign_encrypted_manifest(
+        SETTINGS_ROOT_ID,
+        change_object_id.as_str(),
+        &stale_change,
+        &content_key,
+        &device_a_signer,
+    );
+    let manifest_object_id = put_and_publish_object(
+        &device_a_broadweb,
+        DEFAULT_PROFILE_ID,
+        SETTINGS_ROOT_ID,
+        manifest_bytes,
+        &budget,
+    );
+
+    let fetched = fetch_published_object(
+        &device_b_broadweb,
+        DEFAULT_PROFILE_ID,
+        SETTINGS_ROOT_ID,
+        &budget,
+    );
+    assert_eq!(fetched.object_id, manifest_object_id);
+    let manifest = verify_and_decrypt_manifest(
+        fetched.bytes.as_slice(),
+        &content_key,
+        &trusted_device_a_key,
+    );
+    let change_object = fetch_object(
+        &device_b_broadweb,
+        DEFAULT_PROFILE_ID,
+        manifest.tail_change_object_ids[0].as_str(),
+        &budget,
+    );
+    let incoming = verify_and_decrypt_setting_change(
+        change_object.bytes.as_slice(),
+        &content_key,
+        &trusted_device_a_key,
+    );
+    let replayed = device_b_db
+        .apply_sync_setting_text(&incoming)
+        .expect("device b records stale incoming setting");
+
+    assert_eq!(replayed.payload, "stale");
+    assert_eq!(replayed.applied_at, None);
+    assert_eq!(
+        device_b_db
+            .get_setting_text("ui.theme")
+            .expect("read device b legacy setting")
+            .as_deref(),
+        Some("local")
+    );
+    assert_eq!(
+        device_b_db
+            .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme")
+            .expect("read device b sync value after stale replay")
+            .expect("device b sync value remains present"),
+        winning_value
+    );
+    assert_eq!(
+        device_b_db
+            .sync_revisions_after(DEFAULT_PROFILE_ID, winning_value.revision)
+            .expect("read revisions after stale replay"),
+        Vec::<SyncRevisionRecord>::new()
+    );
+
+    let duplicate = device_b_db
+        .apply_sync_setting_text(&incoming)
+        .expect("duplicate stale fixture replay is idempotent");
+    assert_eq!(duplicate.id, replayed.id);
+
+    let _ = std::fs::remove_dir_all(device_a_root);
+    let _ = std::fs::remove_dir_all(device_b_root);
+}
+
 fn incoming_setting_from_change(change: &SyncChangeRecord) -> IncomingSyncSettingText {
     assert_eq!(change.operation, "set_text");
     IncomingSyncSettingText::new(
