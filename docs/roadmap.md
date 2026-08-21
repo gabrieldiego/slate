@@ -189,9 +189,10 @@ Current baseline:
   fixture bytes.
 - broadwebd's simulated HTTP gateway and Kubo RPC fixtures now use test-only
   `slate-fixture-http://` and `slate-fixture-kubo://` schemes that resolve
-  inside the test process instead of binding loopback ports. Missing simulated
-  fixtures fail as internal fixture errors instead of falling through to a real
-  socket, DNS lookup, public gateway, or local daemon.
+  through the `InProcessBroadwebNetwork` fixture layer inside the test process
+  instead of binding loopback ports. Missing simulated fixtures fail as
+  internal fixture errors instead of falling through to a real socket, DNS
+  lookup, public gateway, or local daemon.
 - Rendering broadweb smoke fixtures now consume that same `test-fixtures`
   layer, so IPFS/IPNS gateway and Kubo subresource tests record simulated
   requests without starting loopback HTTP servers.
@@ -372,8 +373,8 @@ Next:
   profile domains.
 - Expand local distributed-protocol fixtures to simulate offline devices,
   delayed sync, availability loss, pinning policy, and conflicts entirely
-  inside the test process, without loopback ports, the real internet, Tor,
-  public IPFS/IPNS, or external relays.
+  through in-process fixture transports, without loopback ports, the real
+  internet, Tor, public IPFS/IPNS, or external relays.
 - Commit each coherent step separately and rerun focused regression tests for
   storage, broadwebd, rail apps, and chrome behavior as those areas are touched.
 

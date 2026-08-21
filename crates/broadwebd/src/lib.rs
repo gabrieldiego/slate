@@ -75,26 +75,138 @@ pub use transports::direct_http::DirectHttpTransport;
 
 #[cfg(any(test, feature = "test-fixtures"))]
 pub mod test_fixtures {
-    pub use crate::http::{
-        InternalFixtureHttpResponse, register_internal_fixture_http_response,
-        register_internal_fixture_http_sequence, take_internal_fixture_http_requests,
-        unregistered_internal_fixture_http_url,
+    use crate::http::{
+        register_internal_fixture_http_response, register_internal_fixture_http_sequence,
+        take_internal_fixture_http_requests,
     };
-    pub use crate::protocols::ipfs::{
-        InternalKuboRpcResponse, register_internal_kubo_rpc_fixture,
-        take_internal_kubo_rpc_fixture_requests,
+    use crate::protocols::ipfs::{
+        register_internal_kubo_rpc_fixture, take_internal_kubo_rpc_fixture_requests,
     };
+
+    pub use crate::http::{InternalFixtureHttpResponse, unregistered_internal_fixture_http_url};
+    pub use crate::protocols::ipfs::InternalKuboRpcResponse;
+    pub use crate::services::profile_sync::LocalProfileSyncFixture;
+
+    /// In-process broadweb network fixture.
+    ///
+    /// Endpoints returned by this fixture use Slate-only synthetic URL schemes
+    /// such as `slate-fixture-http://` and `slate-fixture-kubo://`. They are
+    /// resolved through process-local registries and never bind loopback
+    /// sockets, start listeners, or contact external networks.
+    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+    pub struct InProcessBroadwebNetwork;
+
+    impl InProcessBroadwebNetwork {
+        pub fn new() -> Self {
+            Self
+        }
+
+        pub fn http_response(self, response: InternalFixtureHttpResponse) -> InProcessHttpFixture {
+            InProcessHttpFixture::new(register_internal_fixture_http_response(response))
+        }
+
+        pub fn http_sequence(
+            self,
+            responses: Vec<InternalFixtureHttpResponse>,
+        ) -> InProcessHttpFixture {
+            InProcessHttpFixture::new(register_internal_fixture_http_sequence(responses))
+        }
+
+        pub fn missing_http_url(self) -> String {
+            unregistered_internal_fixture_http_url()
+        }
+
+        pub fn kubo_rpc_response(
+            self,
+            response: InternalKuboRpcResponse,
+        ) -> InProcessKuboRpcFixture {
+            InProcessKuboRpcFixture::new(register_internal_kubo_rpc_fixture(vec![response]))
+        }
+
+        pub fn kubo_rpc_sequence(
+            self,
+            responses: Vec<InternalKuboRpcResponse>,
+        ) -> InProcessKuboRpcFixture {
+            InProcessKuboRpcFixture::new(register_internal_kubo_rpc_fixture(responses))
+        }
+
+        pub fn profile_sync(self) -> LocalProfileSyncFixture {
+            LocalProfileSyncFixture::new()
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct InProcessHttpFixture {
+        base_url: String,
+    }
+
+    impl InProcessHttpFixture {
+        fn new(base_url: String) -> Self {
+            Self { base_url }
+        }
+
+        pub fn base_url(&self) -> &str {
+            self.base_url.as_str()
+        }
+
+        pub fn finish(mut self) -> Vec<String> {
+            self.take_requests()
+        }
+
+        fn take_requests(&mut self) -> Vec<String> {
+            if self.base_url.is_empty() {
+                return Vec::new();
+            }
+            let base_url = std::mem::take(&mut self.base_url);
+            take_internal_fixture_http_requests(base_url.as_str())
+        }
+    }
+
+    impl Drop for InProcessHttpFixture {
+        fn drop(&mut self) {
+            let _ = self.take_requests();
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct InProcessKuboRpcFixture {
+        base_url: String,
+    }
+
+    impl InProcessKuboRpcFixture {
+        fn new(base_url: String) -> Self {
+            Self { base_url }
+        }
+
+        pub fn base_url(&self) -> &str {
+            self.base_url.as_str()
+        }
+
+        pub fn finish(mut self) -> Vec<String> {
+            self.take_requests()
+        }
+
+        fn take_requests(&mut self) -> Vec<String> {
+            if self.base_url.is_empty() {
+                return Vec::new();
+            }
+            let base_url = std::mem::take(&mut self.base_url);
+            take_internal_kubo_rpc_fixture_requests(base_url.as_str())
+        }
+    }
+
+    impl Drop for InProcessKuboRpcFixture {
+        fn drop(&mut self) {
+            let _ = self.take_requests();
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::http::{
-        InternalFixtureHttpResponse, register_internal_fixture_http_response,
-        take_internal_fixture_http_requests, unregistered_internal_fixture_http_url,
-    };
-    use super::protocols::ipfs::{
-        InternalKuboRpcResponse, register_internal_kubo_rpc_fixture,
-        take_internal_kubo_rpc_fixture_requests,
+    use super::test_fixtures::{
+        InProcessBroadwebNetwork, InProcessHttpFixture, InProcessKuboRpcFixture,
+        InternalFixtureHttpResponse, InternalKuboRpcResponse,
     };
     use super::{
         BroadwebDaemon, BroadwebStatusKind, BroadwebStatusReporter, BroadwebdError,
@@ -479,7 +591,7 @@ mod tests {
 
     #[test]
     fn http_fetch_uses_direct_http_transport() {
-        let (address, server) = local_http_fixture(
+        let (address, fixture) = in_process_http_fixture(
             "text/html; charset=utf-8",
             "<!doctype html><title>Broadwebd Fixture</title><h1>Fetched</h1>",
         );
@@ -487,7 +599,7 @@ mod tests {
         let response = daemon
             .fetch_http(HttpFetchRequest::default_profile(&address))
             .expect("fetch fixture");
-        server.join().expect("server");
+        fixture.finish();
 
         assert_eq!(response.status_code, 200);
         assert_eq!(response.disposition, FetchDisposition::RenderHtml);
@@ -498,7 +610,7 @@ mod tests {
 
     #[test]
     fn http_fetch_can_use_ipfs_gateway_transport_for_html() {
-        let (gateway, server) = local_http_fixture(
+        let (gateway, fixture) = in_process_http_fixture(
             "text/html; charset=utf-8",
             "<!doctype html><title>IPFS Fixture</title><h1>Fetched From IPFS</h1>",
         );
@@ -517,7 +629,7 @@ mod tests {
                     .through_transport("ipfs-gateway"),
             )
             .expect("fetch IPFS fixture");
-        server.join().expect("server");
+        fixture.finish();
 
         assert_eq!(response.disposition, FetchDisposition::RenderHtml);
         assert!(response.body_text_lossy().contains("IPFS Fixture"));
@@ -527,7 +639,7 @@ mod tests {
 
     #[test]
     fn http_fetch_routes_ipfs_through_protocol_service() {
-        let (gateway, server) = local_http_fixture(
+        let (gateway, fixture) = in_process_http_fixture(
             "text/html; charset=utf-8",
             "<!doctype html><title>IPFS Service Fixture</title><h1>Fetched From IPFS Service</h1>",
         );
@@ -547,7 +659,7 @@ mod tests {
                 "ipfs://bafybeigdyrzt/index.html",
             ))
             .expect("fetch IPFS fixture");
-        server.join().expect("server");
+        fixture.finish();
 
         assert_eq!(response.disposition, FetchDisposition::RenderHtml);
         assert!(response.body_text_lossy().contains("IPFS Service Fixture"));
@@ -557,7 +669,7 @@ mod tests {
 
     #[test]
     fn http_fetch_annotates_ipfs_gateway_profile_and_privacy_context() {
-        let (gateway, server) = local_http_fixture(
+        let (gateway, fixture) = in_process_http_fixture(
             "text/html; charset=utf-8",
             "<!doctype html><title>IPFS Profile Fixture</title>",
         );
@@ -578,7 +690,7 @@ mod tests {
                 "ipfs://bafybeigdyrzt/index.html",
             ))
             .expect("fetch IPFS fixture");
-        server.join().expect("server");
+        fixture.finish();
 
         let route = response.route.expect("route info");
         assert_eq!(route.profile, "research");
@@ -599,7 +711,7 @@ mod tests {
 
     #[test]
     fn http_fetch_can_use_ipfs_gateway_transport_for_downloads() {
-        let (gateway, server) = local_http_fixture("image/png", "png-ish");
+        let (gateway, fixture) = in_process_http_fixture("image/png", "png-ish");
         let mut registry = PluginRegistry::new();
         registry.register_transport(IpfsGatewayTransport::local(&gateway).expect("local gateway"));
         registry.register_service(super::HttpFetchService);
@@ -618,7 +730,7 @@ mod tests {
                     .through_transport("ipfs-gateway"),
             )
             .expect("fetch IPFS fixture");
-        server.join().expect("server");
+        fixture.finish();
 
         assert_eq!(
             response.disposition,
@@ -639,7 +751,7 @@ mod tests {
 
     #[test]
     fn http_fetch_does_not_record_subresource_downloads() {
-        let (gateway, server) = local_http_fixture("text/css", "body{color:#123}");
+        let (gateway, fixture) = in_process_http_fixture("text/css", "body{color:#123}");
         let mut registry = PluginRegistry::new();
         registry.register_transport(IpfsGatewayTransport::local(&gateway).expect("local gateway"));
         registry.register_service(super::HttpFetchService);
@@ -656,7 +768,7 @@ mod tests {
                     .through_transport("ipfs-gateway"),
             )
             .expect("fetch IPFS subresource fixture");
-        server.join().expect("server");
+        fixture.finish();
 
         assert_eq!(
             response.disposition,
@@ -681,7 +793,7 @@ mod tests {
 
     #[test]
     fn http_fetch_marks_ipfs_gateway_failures_as_error_pages() {
-        let (gateway, server) = local_http_status_fixture(
+        let (gateway, fixture) = in_process_http_status_fixture(
             "404 Not Found",
             "text/plain; charset=utf-8",
             "missing IPFS content",
@@ -701,7 +813,7 @@ mod tests {
                     .through_transport("ipfs-gateway"),
             )
             .expect("fetch IPFS error fixture");
-        server.join().expect("server");
+        fixture.finish();
 
         assert_eq!(response.status_code, 404);
         assert_eq!(
@@ -716,8 +828,8 @@ mod tests {
 
     #[test]
     fn ipfs_gateway_transport_falls_back_from_unavailable_local_gateway() {
-        let missing_gateway = missing_internal_http_fixture_url();
-        let (fallback_gateway, server) = local_http_fixture(
+        let missing_gateway = missing_in_process_http_fixture_url();
+        let (fallback_gateway, fixture) = in_process_http_fixture(
             "text/html; charset=utf-8",
             "<!doctype html><title>Fallback Gateway</title>",
         );
@@ -735,7 +847,7 @@ mod tests {
         let response = transport
             .fetch_http(&request, &ResourceBudget::default())
             .expect("fetch through fallback gateway");
-        server.join().expect("server");
+        fixture.finish();
 
         assert_eq!(response.status_code, 200);
         assert!(response.body_text_lossy().contains("Fallback Gateway"));
@@ -744,8 +856,8 @@ mod tests {
 
     #[test]
     fn ipfs_gateway_transport_reports_fallback_status() {
-        let missing_gateway = missing_internal_http_fixture_url();
-        let (fallback_gateway, server) = local_http_fixture(
+        let missing_gateway = missing_in_process_http_fixture_url();
+        let (fallback_gateway, fixture) = in_process_http_fixture(
             "text/html; charset=utf-8",
             "<!doctype html><title>Status Gateway</title>",
         );
@@ -767,7 +879,7 @@ mod tests {
         let response = transport
             .fetch_http(&request, &ResourceBudget::default())
             .expect("fetch through fallback gateway");
-        server.join().expect("server");
+        fixture.finish();
 
         let snapshot = status.snapshot();
         assert_eq!(response.status_code, 200);
@@ -780,11 +892,11 @@ mod tests {
 
     #[test]
     fn ipfs_gateway_transport_skips_service_worker_gateway_bootstrap() {
-        let (service_worker_gateway, service_worker_server) = local_http_fixture(
+        let (service_worker_gateway, service_worker_fixture) = in_process_http_fixture(
             "text/html; charset=utf-8",
             "<!doctype html><title>IPFS Service Worker Gateway</title><h1>Service Worker Required</h1>",
         );
-        let (fallback_gateway, fallback_server) = local_http_fixture(
+        let (fallback_gateway, fallback_fixture) = in_process_http_fixture(
             "text/html; charset=utf-8",
             "<!doctype html><title>Actual IPFS Page</title>",
         );
@@ -802,8 +914,8 @@ mod tests {
         let response = transport
             .fetch_http(&request, &ResourceBudget::default())
             .expect("fetch through fallback gateway");
-        service_worker_server.join().expect("service worker server");
-        fallback_server.join().expect("fallback server");
+        service_worker_fixture.finish();
+        fallback_fixture.finish();
 
         assert_eq!(response.status_code, 200);
         assert!(response.body_text_lossy().contains("Actual IPFS Page"));
@@ -812,8 +924,8 @@ mod tests {
 
     #[test]
     fn ipfs_gateway_transport_caches_success_and_resets_after_bounded_failure() {
-        let missing_gateway = missing_internal_http_fixture_url();
-        let (fallback_gateway, server) = local_http_fixture(
+        let missing_gateway = missing_in_process_http_fixture_url();
+        let (fallback_gateway, fixture) = in_process_http_fixture(
             "text/html; charset=utf-8",
             "<!doctype html><title>Cached Gateway</title>",
         );
@@ -831,7 +943,7 @@ mod tests {
         let response = transport
             .fetch_http(&request, &ResourceBudget::default())
             .expect("fetch through fallback gateway");
-        server.join().expect("server");
+        fixture.finish();
 
         assert_eq!(response.status_code, 200);
         assert_eq!(transport.cached_gateway_base(), fallback_gateway);
@@ -845,7 +957,7 @@ mod tests {
 
     #[test]
     fn http_fetch_infers_html_from_generic_content_type_and_body() {
-        let (address, server) = local_http_fixture(
+        let (address, fixture) = in_process_http_fixture(
             "application/octet-stream",
             "<!doctype html><title>Sniffed HTML Fixture</title><h1>Fetched</h1>",
         );
@@ -853,7 +965,7 @@ mod tests {
         let response = daemon
             .fetch_http(HttpFetchRequest::default_profile(&address))
             .expect("fetch fixture");
-        server.join().expect("server");
+        fixture.finish();
 
         assert_eq!(
             response.content_type,
@@ -866,13 +978,13 @@ mod tests {
 
     #[test]
     fn http_fetch_infers_html_fragment_from_generic_content_type() {
-        let (address, server) =
-            local_http_fixture("application/octet-stream", "<h2>Simple IPFS Fixture</h2>");
+        let (address, fixture) =
+            in_process_http_fixture("application/octet-stream", "<h2>Simple IPFS Fixture</h2>");
         let daemon = BroadwebDaemon::start(test_state_root("sniff-html-fragment")).expect("daemon");
         let response = daemon
             .fetch_http(HttpFetchRequest::default_profile(&address))
             .expect("fetch fixture");
-        server.join().expect("server");
+        fixture.finish();
 
         assert_eq!(
             response.content_type,
@@ -885,14 +997,14 @@ mod tests {
 
     #[test]
     fn http_fetch_infers_html_from_generic_content_type_and_path() {
-        let (address, server) =
-            local_http_fixture("application/octet-stream", "<h1>IPFS HTML Path</h1>");
+        let (address, fixture) =
+            in_process_http_fixture("application/octet-stream", "<h1>IPFS HTML Path</h1>");
         let address = format!("{address}/index.html");
         let daemon = BroadwebDaemon::start(test_state_root("sniff-html-path")).expect("daemon");
         let response = daemon
             .fetch_http(HttpFetchRequest::default_profile(&address))
             .expect("fetch fixture");
-        server.join().expect("server");
+        fixture.finish();
 
         assert_eq!(
             response.content_type,
@@ -905,7 +1017,7 @@ mod tests {
 
     #[test]
     fn non_html_http_fetch_is_marked_as_download() {
-        let (address, server) = local_http_fixture("application/octet-stream", "binary-ish");
+        let (address, fixture) = in_process_http_fixture("application/octet-stream", "binary-ish");
         let state_root = test_state_root("download");
         let download_root = test_download_root("download");
         let daemon =
@@ -913,7 +1025,7 @@ mod tests {
         let response = daemon
             .fetch_http(HttpFetchRequest::default_profile(&address))
             .expect("fetch fixture");
-        server.join().expect("server");
+        fixture.finish();
 
         assert_eq!(
             response.disposition,
@@ -934,7 +1046,7 @@ mod tests {
 
     #[test]
     fn content_disposition_attachment_sets_download_filename() {
-        let (address, server) = local_http_fixture_with_headers(
+        let (address, fixture) = in_process_http_fixture_with_headers(
             "text/html; charset=utf-8",
             &[r#"Content-Disposition: attachment; filename="report.html""#],
             "<!doctype html><title>Attachment</title>",
@@ -946,7 +1058,7 @@ mod tests {
         let response = daemon
             .fetch_http(HttpFetchRequest::default_profile(&address))
             .expect("fetch attachment fixture");
-        server.join().expect("server");
+        fixture.finish();
 
         assert_eq!(
             response.disposition,
@@ -964,7 +1076,7 @@ mod tests {
 
     #[test]
     fn explicit_download_request_saves_html_with_requested_filename() {
-        let (address, server) = local_http_fixture(
+        let (address, fixture) = in_process_http_fixture(
             "text/html; charset=utf-8",
             "<!doctype html><title>Download Me</title>",
         );
@@ -975,7 +1087,7 @@ mod tests {
         let response = daemon
             .fetch_http(HttpFetchRequest::default_profile(&address).download_as("page.html"))
             .expect("fetch explicit download fixture");
-        server.join().expect("server");
+        fixture.finish();
 
         assert_eq!(
             response.disposition,
@@ -998,7 +1110,7 @@ mod tests {
 
     #[test]
     fn response_size_budget_is_enforced() {
-        let (address, server) = local_http_fixture("text/html", "0123456789");
+        let (address, fixture) = in_process_http_fixture("text/html", "0123456789");
         let mut registry = PluginRegistry::new();
         registry.register_transport(super::DirectHttpTransport);
         registry.register_service(super::HttpFetchService);
@@ -1012,7 +1124,7 @@ mod tests {
         let error = daemon
             .fetch_http(HttpFetchRequest::default_profile(&address))
             .expect_err("budget exceeded");
-        server.join().expect("server");
+        fixture.finish();
 
         assert!(matches!(error, BroadwebdError::ResponseTooLarge { .. }));
 
@@ -1483,7 +1595,7 @@ mod tests {
 
     #[test]
     fn http_fetch_routes_ipfs_through_kubo_rpc_transport_for_html() {
-        let (rpc, server) = local_kubo_rpc_fixture(
+        let (rpc, fixture) = in_process_kubo_rpc_fixture(
             "application/octet-stream",
             "<!doctype html><title>Kubo Fixture</title><h1>Fetched From Kubo</h1>",
         );
@@ -1503,7 +1615,7 @@ mod tests {
                 "ipfs://bafybeigdyrzt/index.html",
             ))
             .expect("fetch Kubo fixture");
-        let request = server.join().expect("server");
+        let request = finish_single_kubo_request(fixture);
 
         assert!(
             request.contains("POST /api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Findex.html HTTP/1.1")
@@ -1520,7 +1632,7 @@ mod tests {
 
     #[test]
     fn http_fetch_annotates_kubo_rpc_profile_and_privacy_context() {
-        let (rpc, server) = local_kubo_rpc_fixture(
+        let (rpc, fixture) = in_process_kubo_rpc_fixture(
             "text/html; charset=utf-8",
             "<!doctype html><title>Kubo Profile Fixture</title>",
         );
@@ -1541,7 +1653,7 @@ mod tests {
                 "ipfs://bafybeigdyrzt/index.html",
             ))
             .expect("fetch Kubo fixture");
-        server.join().expect("server");
+        fixture.finish();
 
         let route = response.route.expect("route info");
         assert_eq!(route.profile, "research");
@@ -1554,7 +1666,7 @@ mod tests {
 
     #[test]
     fn http_fetch_does_not_record_kubo_rpc_subresource_downloads() {
-        let (rpc, server) = local_kubo_rpc_fixture("text/css", "body{color:#123}");
+        let (rpc, fixture) = in_process_kubo_rpc_fixture("text/css", "body{color:#123}");
         let mut registry = PluginRegistry::new();
         registry.register_protocol_service(IpfsService::new(
             IpfsConfig::with_kubo_rpc(&rpc).expect("Kubo RPC config"),
@@ -1572,7 +1684,7 @@ mod tests {
                     .for_subresource(),
             )
             .expect("fetch Kubo subresource fixture");
-        let request = server.join().expect("server");
+        let request = finish_single_kubo_request(fixture);
 
         assert!(
             request.contains("POST /api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzt%2Fstyle.css HTTP/1.1")
@@ -1602,7 +1714,7 @@ mod tests {
 
     #[test]
     fn http_fetch_routes_kubo_directory_to_index_after_failed_cat() {
-        let (rpc, server) = local_kubo_rpc_sequence_fixture(vec![
+        let (rpc, fixture) = in_process_kubo_rpc_sequence_fixture(vec![
             ("500 Internal Server Error", "text/plain", "directory"),
             (
                 "200 OK",
@@ -1626,7 +1738,7 @@ mod tests {
                 "ipfs://bafybeigdyrzt/docs/",
             ))
             .expect("fetch Kubo directory fixture");
-        let requests = server.join().expect("server");
+        let requests = fixture.finish();
 
         assert_eq!(requests.len(), 2);
         assert!(
@@ -1651,7 +1763,7 @@ mod tests {
 
     #[test]
     fn http_fetch_routes_kubo_ipns_root_to_index_after_failed_cat() {
-        let (rpc, server) = local_kubo_rpc_sequence_fixture(vec![
+        let (rpc, fixture) = in_process_kubo_rpc_sequence_fixture(vec![
             ("500 Internal Server Error", "text/plain", "directory"),
             (
                 "200 OK",
@@ -1673,7 +1785,7 @@ mod tests {
         let response = daemon
             .fetch_http(HttpFetchRequest::default_profile("ipns://example.net"))
             .expect("fetch Kubo IPNS root fixture");
-        let requests = server.join().expect("server");
+        let requests = fixture.finish();
 
         assert_eq!(requests.len(), 2);
         assert!(requests[0].contains("POST /api/v0/cat?arg=%2Fipns%2Fexample.net HTTP/1.1"));
@@ -1742,35 +1854,35 @@ mod tests {
         let _ = fs::remove_dir_all(daemon.state_root().path());
     }
 
-    fn local_http_fixture(
+    fn in_process_http_fixture(
         content_type: &'static str,
         body: &'static str,
-    ) -> (String, InternalHttpFixtureHandle) {
-        local_http_status_fixture("200 OK", content_type, body)
+    ) -> (String, InProcessHttpFixture) {
+        in_process_http_status_fixture("200 OK", content_type, body)
     }
 
-    fn local_http_fixture_with_headers(
+    fn in_process_http_fixture_with_headers(
         content_type: &'static str,
         extra_headers: &'static [&'static str],
         body: &'static str,
-    ) -> (String, InternalHttpFixtureHandle) {
-        local_http_status_fixture_with_headers("200 OK", content_type, extra_headers, body)
+    ) -> (String, InProcessHttpFixture) {
+        in_process_http_status_fixture_with_headers("200 OK", content_type, extra_headers, body)
     }
 
-    fn local_http_status_fixture(
+    fn in_process_http_status_fixture(
         status: &'static str,
         content_type: &'static str,
         body: &'static str,
-    ) -> (String, InternalHttpFixtureHandle) {
-        local_http_status_fixture_with_headers(status, content_type, &[], body)
+    ) -> (String, InProcessHttpFixture) {
+        in_process_http_status_fixture_with_headers(status, content_type, &[], body)
     }
 
-    fn local_http_status_fixture_with_headers(
+    fn in_process_http_status_fixture_with_headers(
         status: &'static str,
         content_type: &'static str,
         extra_headers: &'static [&'static str],
         body: &'static str,
-    ) -> (String, InternalHttpFixtureHandle) {
+    ) -> (String, InProcessHttpFixture) {
         let mut headers = vec![super::HttpHeader {
             name: "content-type".to_string(),
             value: content_type.to_string(),
@@ -1784,37 +1896,30 @@ mod tests {
                 value: value.trim().to_string(),
             }
         }));
-        let address = register_internal_fixture_http_response(InternalFixtureHttpResponse {
+        let fixture = InProcessBroadwebNetwork::new().http_response(InternalFixtureHttpResponse {
             status_code: status_code(status),
             content_type: Some(content_type.to_string()),
             headers,
             body: body.as_bytes().to_vec(),
         });
-        (address.clone(), InternalHttpFixtureHandle { address })
+        (fixture.base_url().to_string(), fixture)
     }
 
-    fn missing_internal_http_fixture_url() -> String {
-        unregistered_internal_fixture_http_url()
+    fn missing_in_process_http_fixture_url() -> String {
+        InProcessBroadwebNetwork::new().missing_http_url()
     }
 
-    fn local_kubo_rpc_fixture(
+    fn in_process_kubo_rpc_fixture(
         content_type: &'static str,
         body: &'static str,
-    ) -> (String, InternalKuboRpcSingleFixtureHandle) {
-        let (address, server) =
-            local_kubo_rpc_sequence_fixture(vec![("200 OK", content_type, body)]);
-        (
-            address,
-            InternalKuboRpcSingleFixtureHandle {
-                inner: server.address,
-            },
-        )
+    ) -> (String, InProcessKuboRpcFixture) {
+        in_process_kubo_rpc_sequence_fixture(vec![("200 OK", content_type, body)])
     }
 
-    fn local_kubo_rpc_sequence_fixture(
+    fn in_process_kubo_rpc_sequence_fixture(
         responses: Vec<(&'static str, &'static str, &'static str)>,
-    ) -> (String, InternalKuboRpcSequenceFixtureHandle) {
-        let address = register_internal_kubo_rpc_fixture(
+    ) -> (String, InProcessKuboRpcFixture) {
+        let fixture = InProcessBroadwebNetwork::new().kubo_rpc_sequence(
             responses
                 .into_iter()
                 .map(|(status, content_type, body)| InternalKuboRpcResponse {
@@ -1824,10 +1929,28 @@ mod tests {
                 })
                 .collect(),
         );
-        let server = InternalKuboRpcSequenceFixtureHandle {
-            address: address.clone(),
-        };
-        (address, server)
+        (fixture.base_url().to_string(), fixture)
+    }
+
+    fn finish_single_kubo_request(fixture: InProcessKuboRpcFixture) -> String {
+        fixture
+            .finish()
+            .into_iter()
+            .next()
+            .expect("expected one Kubo fixture request")
+    }
+
+    #[test]
+    fn in_process_fixture_layer_uses_synthetic_urls() {
+        let (http_url, http_fixture) =
+            in_process_http_fixture("text/plain", "synthetic HTTP fixture");
+        assert!(http_url.starts_with("slate-fixture-http://"));
+        http_fixture.finish();
+
+        let (kubo_url, kubo_fixture) =
+            in_process_kubo_rpc_fixture("text/plain", "synthetic Kubo fixture");
+        assert!(kubo_url.starts_with("slate-fixture-kubo://"));
+        kubo_fixture.finish();
     }
 
     fn status_code(status: &str) -> u16 {
@@ -1837,42 +1960,6 @@ mod tests {
             .expect("fixture status should include numeric code")
             .parse()
             .expect("fixture status code should be numeric")
-    }
-
-    struct InternalHttpFixtureHandle {
-        address: String,
-    }
-
-    impl InternalHttpFixtureHandle {
-        fn join(self) -> Result<(), String> {
-            take_internal_fixture_http_requests(self.address.as_str());
-            Ok(())
-        }
-    }
-
-    struct InternalKuboRpcSingleFixtureHandle {
-        inner: String,
-    }
-
-    impl InternalKuboRpcSingleFixtureHandle {
-        fn join(self) -> Result<String, String> {
-            Ok(take_internal_kubo_rpc_fixture_requests(self.inner.as_str())
-                .into_iter()
-                .next()
-                .expect("expected one Kubo fixture request"))
-        }
-    }
-
-    struct InternalKuboRpcSequenceFixtureHandle {
-        address: String,
-    }
-
-    impl InternalKuboRpcSequenceFixtureHandle {
-        fn join(self) -> Result<Vec<String>, String> {
-            Ok(take_internal_kubo_rpc_fixture_requests(
-                self.address.as_str(),
-            ))
-        }
     }
 
     fn test_state_root(name: &str) -> PathBuf {
