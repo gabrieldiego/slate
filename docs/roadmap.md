@@ -201,6 +201,11 @@ Current baseline:
 - Storage now also provides `SignedSyncObject` wrappers using Ed25519 device
   keys, and the local two-device fixture verifies the signed encrypted payload
   against device A's trusted public key before decryption and application.
+- Storage now exposes typed helpers for opening signed encrypted settings sync
+  objects. Runtime code can verify the device signature, decrypt the envelope,
+  require the expected profile, domain, object kind, and content-key id, and
+  decode manifests, settings snapshots, or setting-change payloads without
+  duplicating fixture-only verifier logic.
 - `slate-settings.db` now has typed snapshot metadata APIs for recording
   encrypted backend object ids, covered revisions, included domains, and latest
   snapshot lookup. This is metadata only; snapshot payloads stay in encrypted

@@ -8,19 +8,19 @@ use slate_broadwebd::{
 use slate_storage::{
     DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
     EncryptedSyncObject, IncomingSyncSettingText, PROFILE_SYNC_CONTENT_KEY_BYTES,
-    PROFILE_SYNC_MANIFEST_SCHEMA_VERSION, PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION,
-    ProfileSyncContentKey, ProfileSyncDeviceFrontier, ProfileSyncDevicePublicKey,
-    ProfileSyncDeviceSigner, ProfileSyncManifest, ProfileSyncRetentionPolicy,
-    ProfileSyncSettingsSnapshot, SYNC_DOMAIN_SETTINGS, SignedSyncObject, SlateProfileDatabase,
-    SyncChangeRecord, SyncRevisionRecord, SyncSnapshotRegistration,
-    VerifiedProfileSyncSettingsSnapshot, VerifiedProfileSyncSettingsTailChange,
+    PROFILE_SYNC_MANIFEST_OBJECT_KIND, PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+    PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND, PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND,
+    PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION, ProfileSyncContentKey,
+    ProfileSyncDeviceFrontier, ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner,
+    ProfileSyncManifest, ProfileSyncRetentionPolicy, ProfileSyncSettingsSnapshot,
+    SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, SyncChangeRecord, SyncRevisionRecord,
+    SyncSnapshotRegistration, VerifiedProfileSyncSettingsSnapshot,
+    VerifiedProfileSyncSettingsTailChange, open_signed_profile_sync_manifest,
+    open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
 };
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const SETTINGS_CHANGE_OBJECT_KIND: &str = "setting-change";
-const SETTINGS_SNAPSHOT_OBJECT_KIND: &str = "settings-snapshot";
-const MANIFEST_OBJECT_KIND: &str = "manifest";
 const FIXTURE_CONTENT_KEY_ID: &str = "content-key-epoch-1";
 const SETTINGS_ROOT_ID: &str = "settings/latest";
 
@@ -729,7 +729,7 @@ fn sign_encrypted_setting_change(
     let encrypted_object = EncryptedSyncObject::seal(
         incoming.profile.as_str(),
         incoming.domain.as_str(),
-        SETTINGS_CHANGE_OBJECT_KIND,
+        PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND,
         FIXTURE_CONTENT_KEY_ID,
         payload.as_slice(),
         content_key,
@@ -754,7 +754,7 @@ fn sign_encrypted_settings_snapshot(
     let encrypted_object = EncryptedSyncObject::seal(
         snapshot.profile.as_str(),
         SYNC_DOMAIN_SETTINGS,
-        SETTINGS_SNAPSHOT_OBJECT_KIND,
+        PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND,
         FIXTURE_CONTENT_KEY_ID,
         payload.as_slice(),
         content_key,
@@ -864,7 +864,7 @@ fn sign_encrypted_manifest_payload(
     let encrypted_object = EncryptedSyncObject::seal(
         manifest.profile.as_str(),
         SYNC_DOMAIN_SETTINGS,
-        MANIFEST_OBJECT_KIND,
+        PROFILE_SYNC_MANIFEST_OBJECT_KIND,
         FIXTURE_CONTENT_KEY_ID,
         payload.as_slice(),
         content_key,
@@ -885,21 +885,15 @@ fn verify_and_decrypt_setting_change(
     content_key: &ProfileSyncContentKey,
     public_key: &ProfileSyncDevicePublicKey,
 ) -> IncomingSyncSettingText {
-    let signed_object = SignedSyncObject::from_bytes(bytes).expect("decode fixture signed object");
-    let encrypted_bytes = signed_object
-        .verify_with(public_key)
-        .expect("verify fixture signed object");
-    let encrypted_object = EncryptedSyncObject::from_bytes(encrypted_bytes)
-        .expect("decode fixture encrypted sync object");
-    assert_eq!(encrypted_object.profile, DEFAULT_PROFILE_ID);
-    assert_eq!(encrypted_object.domain, SYNC_DOMAIN_SETTINGS);
-    assert_eq!(encrypted_object.object_kind, SETTINGS_CHANGE_OBJECT_KIND);
-    assert_eq!(encrypted_object.key_id, FIXTURE_CONTENT_KEY_ID);
-
-    let payload = encrypted_object
-        .open(content_key)
-        .expect("decrypt fixture sync object");
-    serde_json::from_slice(payload.as_slice()).expect("decode fixture sync payload")
+    open_signed_sync_setting_text(
+        bytes,
+        content_key,
+        public_key,
+        DEFAULT_PROFILE_ID,
+        SYNC_DOMAIN_SETTINGS,
+        FIXTURE_CONTENT_KEY_ID,
+    )
+    .expect("verify and decrypt fixture sync payload")
 }
 
 fn verify_and_decrypt_settings_snapshot(
@@ -907,22 +901,14 @@ fn verify_and_decrypt_settings_snapshot(
     content_key: &ProfileSyncContentKey,
     public_key: &ProfileSyncDevicePublicKey,
 ) -> ProfileSyncSettingsSnapshot {
-    let signed_object =
-        SignedSyncObject::from_bytes(bytes).expect("decode fixture signed snapshot object");
-    let encrypted_bytes = signed_object
-        .verify_with(public_key)
-        .expect("verify fixture signed snapshot object");
-    let encrypted_object = EncryptedSyncObject::from_bytes(encrypted_bytes)
-        .expect("decode fixture encrypted snapshot object");
-    assert_eq!(encrypted_object.profile, DEFAULT_PROFILE_ID);
-    assert_eq!(encrypted_object.domain, SYNC_DOMAIN_SETTINGS);
-    assert_eq!(encrypted_object.object_kind, SETTINGS_SNAPSHOT_OBJECT_KIND);
-    assert_eq!(encrypted_object.key_id, FIXTURE_CONTENT_KEY_ID);
-
-    let payload = encrypted_object
-        .open(content_key)
-        .expect("decrypt fixture snapshot object");
-    serde_json::from_slice(payload.as_slice()).expect("decode fixture snapshot payload")
+    open_signed_profile_sync_settings_snapshot(
+        bytes,
+        content_key,
+        public_key,
+        DEFAULT_PROFILE_ID,
+        FIXTURE_CONTENT_KEY_ID,
+    )
+    .expect("verify and decrypt fixture snapshot payload")
 }
 
 fn verify_and_decrypt_manifest(
@@ -930,22 +916,14 @@ fn verify_and_decrypt_manifest(
     content_key: &ProfileSyncContentKey,
     public_key: &ProfileSyncDevicePublicKey,
 ) -> ProfileSyncManifest {
-    let signed_object =
-        SignedSyncObject::from_bytes(bytes).expect("decode fixture signed manifest");
-    let encrypted_bytes = signed_object
-        .verify_with(public_key)
-        .expect("verify fixture signed manifest");
-    let encrypted_object = EncryptedSyncObject::from_bytes(encrypted_bytes)
-        .expect("decode fixture encrypted manifest");
-    assert_eq!(encrypted_object.profile, DEFAULT_PROFILE_ID);
-    assert_eq!(encrypted_object.domain, SYNC_DOMAIN_SETTINGS);
-    assert_eq!(encrypted_object.object_kind, MANIFEST_OBJECT_KIND);
-    assert_eq!(encrypted_object.key_id, FIXTURE_CONTENT_KEY_ID);
-
-    let payload = encrypted_object
-        .open(content_key)
-        .expect("decrypt fixture manifest");
-    serde_json::from_slice(payload.as_slice()).expect("decode fixture manifest payload")
+    open_signed_profile_sync_manifest(
+        bytes,
+        content_key,
+        public_key,
+        DEFAULT_PROFILE_ID,
+        FIXTURE_CONTENT_KEY_ID,
+    )
+    .expect("verify and decrypt fixture manifest payload")
 }
 
 fn fixture_content_key() -> ProfileSyncContentKey {

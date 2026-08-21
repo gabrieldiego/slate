@@ -22,6 +22,9 @@ pub const PROFILE_SYNC_NONCE_BYTES: usize = 12;
 pub const SYNC_OBJECT_VERSION: u8 = 1;
 pub const PROFILE_SYNC_MANIFEST_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION: u8 = 1;
+pub const PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND: &str = "setting-change";
+pub const PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND: &str = "settings-snapshot";
+pub const PROFILE_SYNC_MANIFEST_OBJECT_KIND: &str = "manifest";
 pub const DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH: i64 = 1;
 pub const DEFAULT_PROFILE_SYNC_MIN_TAIL_CHANGE_COUNT: u32 = 32;
 pub const DEFAULT_PROFILE_SYNC_CHANGE_RETENTION_SECONDS: i64 = 14 * 24 * 60 * 60;
@@ -402,6 +405,22 @@ pub enum SyncObjectError {
     InvalidNonceLength {
         actual: usize,
     },
+    UnexpectedProfile {
+        expected: String,
+        actual: String,
+    },
+    UnexpectedDomain {
+        expected: String,
+        actual: String,
+    },
+    UnexpectedObjectKind {
+        expected: String,
+        actual: String,
+    },
+    UnexpectedKeyId {
+        expected: String,
+        actual: String,
+    },
     Encode(serde_json::Error),
     Decode(serde_json::Error),
 }
@@ -430,6 +449,22 @@ impl fmt::Display for SyncObjectError {
             Self::InvalidNonceLength { actual } => {
                 write!(formatter, "invalid sync object nonce length: {actual}")
             }
+            Self::UnexpectedProfile { expected, actual } => write!(
+                formatter,
+                "unexpected sync object profile: expected {expected}, got {actual}"
+            ),
+            Self::UnexpectedDomain { expected, actual } => write!(
+                formatter,
+                "unexpected sync object domain: expected {expected}, got {actual}"
+            ),
+            Self::UnexpectedObjectKind { expected, actual } => write!(
+                formatter,
+                "unexpected sync object kind: expected {expected}, got {actual}"
+            ),
+            Self::UnexpectedKeyId { expected, actual } => write!(
+                formatter,
+                "unexpected sync object key id: expected {expected}, got {actual}"
+            ),
             Self::Encode(error) => write!(formatter, "failed to encode sync object: {error}"),
             Self::Decode(error) => write!(formatter, "failed to decode sync object: {error}"),
         }
@@ -448,7 +483,11 @@ impl std::error::Error for SyncObjectError {
             | Self::UnsupportedVersion(_)
             | Self::InvalidDeviceId(_)
             | Self::DeviceKeyMismatch { .. }
-            | Self::InvalidNonceLength { .. } => None,
+            | Self::InvalidNonceLength { .. }
+            | Self::UnexpectedProfile { .. }
+            | Self::UnexpectedDomain { .. }
+            | Self::UnexpectedObjectKind { .. }
+            | Self::UnexpectedKeyId { .. } => None,
         }
     }
 }
@@ -524,6 +563,23 @@ impl EncryptedSyncObject {
         )
     }
 
+    pub fn open_expected(
+        &self,
+        content_key: &ProfileSyncContentKey,
+        expected_profile: &str,
+        expected_domain: &str,
+        expected_object_kind: &str,
+        expected_key_id: &str,
+    ) -> Result<Vec<u8>, SyncObjectError> {
+        self.validate_expected(
+            expected_profile,
+            expected_domain,
+            expected_object_kind,
+            expected_key_id,
+        )?;
+        self.open(content_key)
+    }
+
     pub fn to_bytes(&self) -> Result<Vec<u8>, SyncObjectError> {
         serde_json::to_vec(self).map_err(SyncObjectError::Encode)
     }
@@ -538,6 +594,119 @@ impl EncryptedSyncObject {
             self.version, self.profile, self.domain, self.object_kind, self.key_id
         )
     }
+
+    fn validate_expected(
+        &self,
+        expected_profile: &str,
+        expected_domain: &str,
+        expected_object_kind: &str,
+        expected_key_id: &str,
+    ) -> Result<(), SyncObjectError> {
+        if self.profile != expected_profile {
+            return Err(SyncObjectError::UnexpectedProfile {
+                expected: expected_profile.to_string(),
+                actual: self.profile.clone(),
+            });
+        }
+        if self.domain != expected_domain {
+            return Err(SyncObjectError::UnexpectedDomain {
+                expected: expected_domain.to_string(),
+                actual: self.domain.clone(),
+            });
+        }
+        if self.object_kind != expected_object_kind {
+            return Err(SyncObjectError::UnexpectedObjectKind {
+                expected: expected_object_kind.to_string(),
+                actual: self.object_kind.clone(),
+            });
+        }
+        if self.key_id != expected_key_id {
+            return Err(SyncObjectError::UnexpectedKeyId {
+                expected: expected_key_id.to_string(),
+                actual: self.key_id.clone(),
+            });
+        }
+        Ok(())
+    }
+}
+
+pub fn open_signed_encrypted_sync_payload(
+    bytes: &[u8],
+    content_key: &ProfileSyncContentKey,
+    public_key: &ProfileSyncDevicePublicKey,
+    expected_profile: &str,
+    expected_domain: &str,
+    expected_object_kind: &str,
+    expected_key_id: &str,
+) -> Result<Vec<u8>, SyncObjectError> {
+    let signed_object = SignedSyncObject::from_bytes(bytes)?;
+    let encrypted_bytes = signed_object.verify_with(public_key)?;
+    let encrypted_object = EncryptedSyncObject::from_bytes(encrypted_bytes)?;
+    encrypted_object.open_expected(
+        content_key,
+        expected_profile,
+        expected_domain,
+        expected_object_kind,
+        expected_key_id,
+    )
+}
+
+pub fn open_signed_profile_sync_manifest(
+    bytes: &[u8],
+    content_key: &ProfileSyncContentKey,
+    public_key: &ProfileSyncDevicePublicKey,
+    profile: &str,
+    key_id: &str,
+) -> Result<ProfileSyncManifest, SyncObjectError> {
+    let payload = open_signed_encrypted_sync_payload(
+        bytes,
+        content_key,
+        public_key,
+        profile,
+        SYNC_DOMAIN_SETTINGS,
+        PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+        key_id,
+    )?;
+    serde_json::from_slice(payload.as_slice()).map_err(SyncObjectError::Decode)
+}
+
+pub fn open_signed_profile_sync_settings_snapshot(
+    bytes: &[u8],
+    content_key: &ProfileSyncContentKey,
+    public_key: &ProfileSyncDevicePublicKey,
+    profile: &str,
+    key_id: &str,
+) -> Result<ProfileSyncSettingsSnapshot, SyncObjectError> {
+    let payload = open_signed_encrypted_sync_payload(
+        bytes,
+        content_key,
+        public_key,
+        profile,
+        SYNC_DOMAIN_SETTINGS,
+        PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND,
+        key_id,
+    )?;
+    serde_json::from_slice(payload.as_slice()).map_err(SyncObjectError::Decode)
+}
+
+pub fn open_signed_sync_setting_text(
+    bytes: &[u8],
+    content_key: &ProfileSyncContentKey,
+    public_key: &ProfileSyncDevicePublicKey,
+    profile: &str,
+    domain: &str,
+    key_id: &str,
+) -> Result<IncomingSyncSettingText, SyncObjectError> {
+    let payload = open_signed_encrypted_sync_payload(
+        bytes,
+        content_key,
+        public_key,
+        profile,
+        domain,
+        PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND,
+        key_id,
+    )?;
+    serde_json::from_slice(payload.as_slice()).map_err(SyncObjectError::Decode)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -3065,7 +3234,7 @@ mod tests {
         let encrypted_object = EncryptedSyncObject::seal_with_nonce(
             DEFAULT_PROFILE_ID,
             SYNC_DOMAIN_SETTINGS,
-            "setting-change",
+            PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND,
             "content-key-epoch-1",
             payload.as_slice(),
             &content_key,
@@ -3169,7 +3338,7 @@ mod tests {
         let encrypted_manifest = EncryptedSyncObject::seal_with_nonce(
             DEFAULT_PROFILE_ID,
             SYNC_DOMAIN_SETTINGS,
-            "manifest",
+            PROFILE_SYNC_MANIFEST_OBJECT_KIND,
             "content-key-epoch-1",
             manifest_payload.as_slice(),
             &content_key,
@@ -3190,12 +3359,50 @@ mod tests {
         let decoded = SignedSyncObject::from_bytes(signed_bytes.as_slice()).unwrap();
         let encrypted_bytes = decoded.verify_with(&trusted_public_key).unwrap();
         let decoded_encrypted_manifest = EncryptedSyncObject::from_bytes(encrypted_bytes).unwrap();
-        assert_eq!(decoded_encrypted_manifest.object_kind, "manifest");
+        assert_eq!(
+            decoded_encrypted_manifest.object_kind,
+            PROFILE_SYNC_MANIFEST_OBJECT_KIND
+        );
 
         let decoded_payload = decoded_encrypted_manifest.open(&content_key).unwrap();
         let decoded_manifest: ProfileSyncManifest =
             serde_json::from_slice(decoded_payload.as_slice()).unwrap();
         assert_eq!(decoded_manifest, manifest);
+
+        assert_eq!(
+            open_signed_profile_sync_manifest(
+                signed_bytes.as_slice(),
+                &content_key,
+                &trusted_public_key,
+                DEFAULT_PROFILE_ID,
+                "content-key-epoch-1",
+            )
+            .unwrap(),
+            manifest
+        );
+        assert!(matches!(
+            open_signed_profile_sync_settings_snapshot(
+                signed_bytes.as_slice(),
+                &content_key,
+                &trusted_public_key,
+                DEFAULT_PROFILE_ID,
+                "content-key-epoch-1",
+            ),
+            Err(SyncObjectError::UnexpectedObjectKind { expected, actual })
+                if expected == PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND
+                    && actual == PROFILE_SYNC_MANIFEST_OBJECT_KIND
+        ));
+        assert!(matches!(
+            open_signed_profile_sync_manifest(
+                signed_bytes.as_slice(),
+                &content_key,
+                &trusted_public_key,
+                DEFAULT_PROFILE_ID,
+                "content-key-epoch-2",
+            ),
+            Err(SyncObjectError::UnexpectedKeyId { expected, actual })
+                if expected == "content-key-epoch-2" && actual == "content-key-epoch-1"
+        ));
     }
 
     #[test]
