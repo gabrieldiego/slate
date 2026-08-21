@@ -734,6 +734,10 @@ Current baseline:
   always-hot device. Authorized logged-in devices should have equal profile
   control; hot devices and contracted providers only improve encrypted object
   availability.
+- The profile-sync bridge can publish and receive signed account membership
+  records through broadwebd's `InProcessBroadwebNetwork`, using retained objects
+  and explicit `account/membership/<record-id>` roots so authority records move
+  between simulated devices without loopback ports or external protocols.
 
 Next:
 
