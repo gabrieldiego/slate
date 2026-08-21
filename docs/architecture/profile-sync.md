@@ -568,6 +568,10 @@ lists retained membership record objects in epoch order. The index is only a
 discovery layer: receivers validate each entry against the signed membership
 record payload and rely on storage authorization before changing trusted device
 state.
+An additive runner path can pull and apply that membership log before running
+the normal settings cycle. This lets a newly enrolled local device learn its
+own trusted key and remote trusted keys before credential preflight and before
+trusted device-head pulls.
 The broadwebd source bridge can also run the receive side for one trusted
 device head: resolve and verify the head, record the verified head root in
 `slate-settings.db`, apply the referenced settings manifest when the head is

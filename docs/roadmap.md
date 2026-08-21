@@ -743,6 +743,10 @@ Current baseline:
   in-process fixture transport. It is non-authoritative discovery metadata:
   each listed object is checked against its signed membership payload before
   storage applies enrollment or revocation.
+- A membership-aware settings runner can now pull and apply the membership log
+  before the existing settings sync cycle, so local fixture devices can be
+  enrolled and then immediately use trusted device-head settings sync without
+  loopback sockets or external protocol services.
 
 Next:
 

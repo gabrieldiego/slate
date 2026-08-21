@@ -109,6 +109,18 @@ pub struct PublishedProfileSyncMembershipLog {
     pub log: ProfileSyncMembershipLog,
 }
 
+impl PublishedProfileSyncMembershipLog {
+    pub fn published_object_ids(&self) -> Vec<String> {
+        let mut object_ids = Vec::new();
+        let mut seen = BTreeSet::new();
+        for entry in &self.log.records {
+            push_unique_object_id(&mut object_ids, &mut seen, entry.object_id.as_str());
+        }
+        push_unique_object_id(&mut object_ids, &mut seen, self.object_id.as_str());
+        object_ids
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ProfileSyncMembershipRecordPullStatus {
     NoPublishedRoot {
@@ -142,6 +154,15 @@ pub enum ProfileSyncMembershipLogPullStatus {
         log: ProfileSyncMembershipLog,
         applications: Vec<SyncAccountMembershipRecordApplication>,
     },
+}
+
+impl ProfileSyncMembershipLogPullStatus {
+    pub fn applied_count(&self) -> usize {
+        match self {
+            Self::Applied { applications, .. } => applications.len(),
+            Self::NoPublishedRoot { .. } | Self::Unchanged { .. } => 0,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -772,6 +793,32 @@ impl SettingsSyncCycleRun {
 
     pub fn published_object_ids(&self) -> Vec<String> {
         self.publish.published_object_ids()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncCycleWithMembershipLogRun {
+    pub pulled_membership_log: ProfileSyncMembershipLogPullStatus,
+    pub cycle: SettingsSyncCycleRun,
+    pub published_membership_log: Option<PublishedProfileSyncMembershipLog>,
+}
+
+impl SettingsSyncCycleWithMembershipLogRun {
+    pub fn pulled_membership_application_count(&self) -> usize {
+        self.pulled_membership_log.applied_count()
+    }
+
+    pub fn published_object_ids(&self) -> Vec<String> {
+        let mut object_ids = self.cycle.published_object_ids();
+        let mut seen = object_ids.iter().cloned().collect::<BTreeSet<_>>();
+        if let Some(published_membership_log) = &self.published_membership_log {
+            extend_unique_object_ids(
+                &mut object_ids,
+                &mut seen,
+                published_membership_log.published_object_ids(),
+            );
+        }
+        object_ids
     }
 }
 
@@ -2095,6 +2142,49 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
             settings_root_id: settings_root_id.to_string(),
             publish,
             receive,
+        })
+    }
+
+    pub fn run_settings_sync_cycle_with_membership_log(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        settings_root_id: &str,
+        membership_log_root_id: &str,
+        content_key: &ProfileSyncContentKey,
+        key_id: &str,
+        signer: &ProfileSyncDeviceSigner,
+        retention_policy: ProfileSyncRetentionPolicy,
+        max_publish_steps: u32,
+        max_trusted_devices: u32,
+    ) -> Result<SettingsSyncCycleWithMembershipLogRun, ProfileSyncCycleError> {
+        let source = BroadwebdProfileSyncObjectSource::new(self.daemon);
+        let pulled_membership_log = source
+            .pull_and_apply_sync_account_membership_log_if_changed(
+                database,
+                profile,
+                membership_log_root_id,
+            )
+            .map_err(ProfileSyncCycleError::from)?;
+        let cycle = self.run_settings_sync_cycle(
+            database,
+            profile,
+            settings_root_id,
+            content_key,
+            key_id,
+            signer,
+            retention_policy,
+            max_publish_steps,
+            max_trusted_devices,
+        )?;
+        let published_membership_log = BroadwebdProfileSyncPublisher::new(self.daemon)
+            .publish_local_sync_account_membership_log(database, profile, membership_log_root_id)
+            .map_err(ProfileSyncCycleError::from)?;
+
+        Ok(SettingsSyncCycleWithMembershipLogRun {
+            pulled_membership_log,
+            cycle,
+            published_membership_log,
         })
     }
 }
@@ -3934,6 +4024,149 @@ mod tests {
         let _ = std::fs::remove_dir_all(receiver_state_root);
         let _ = std::fs::remove_dir_all(publisher_db_root);
         let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn settings_cycle_pulls_membership_log_before_trusted_settings_heads_without_loopback() {
+        let network = InProcessBroadwebNetwork::new();
+        let first_state_root = test_state_root("membership-cycle-first");
+        let second_state_root = test_state_root("membership-cycle-second");
+        let first_db_root = test_state_root("membership-cycle-first-db");
+        let second_db_root = test_state_root("membership-cycle-second-db");
+        let first_daemon = network
+            .daemon_for_device(
+                &first_state_root,
+                ResourceBudget::default(),
+                "membership-cycle-device-a",
+            )
+            .expect("start first membership cycle daemon");
+        let second_daemon = network
+            .daemon_for_device(
+                &second_state_root,
+                ResourceBudget::default(),
+                "membership-cycle-device-b",
+            )
+            .expect("start second membership cycle daemon");
+        let first_database = SlateProfileDatabase::open_resolved_with_device_id(
+            first_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "membership-cycle-device-a",
+        )
+        .expect("open first membership cycle database");
+        let second_database = SlateProfileDatabase::open_resolved_with_device_id(
+            second_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "membership-cycle-device-b",
+        )
+        .expect("open second membership cycle database");
+        let content_key = ProfileSyncContentKey::from_bytes([76; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer_a = ProfileSyncDeviceSigner::generate("membership-cycle-device-a")
+            .expect("generate first membership cycle signer");
+        let signer_b = ProfileSyncDeviceSigner::generate("membership-cycle-device-b")
+            .expect("generate second membership cycle signer");
+        register_test_content_key_epoch(&first_database, DEFAULT_PROFILE_ID);
+        register_test_content_key_epoch(&second_database, DEFAULT_PROFILE_ID);
+
+        let enroll_a = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-membership-cycle-device-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-cycle-device-a".to_string(),
+            device_public_key: Some(signer_a.public_key().expect("read signer a public key")),
+            created_at: 10,
+        };
+        let signed_enroll_a = signed_membership_record_bytes(&signer_a, &enroll_a);
+        first_database
+            .apply_signed_sync_account_membership_record(signed_enroll_a.as_slice())
+            .expect("first device bootstraps signer a membership");
+        let enroll_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-enroll-membership-cycle-device-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-cycle-device-b".to_string(),
+            device_public_key: Some(signer_b.public_key().expect("read signer b public key")),
+            created_at: 20,
+        };
+        let signed_enroll_b = signed_membership_record_bytes(&signer_a, &enroll_b);
+        first_database
+            .apply_signed_sync_account_membership_record(signed_enroll_b.as_slice())
+            .expect("first device applies signer b membership");
+        first_database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("first device writes settings change");
+
+        let first_run = BroadwebdSettingsSyncRunner::new(&first_daemon)
+            .run_settings_sync_cycle_with_membership_log(
+                &first_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer_a,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+                4,
+            )
+            .expect("first device publishes settings and membership log");
+        assert!(matches!(
+            first_run.pulled_membership_log,
+            ProfileSyncMembershipLogPullStatus::NoPublishedRoot { .. }
+        ));
+        assert_eq!(first_run.cycle.published_step_count(), 1);
+        assert!(first_run.published_membership_log.is_some());
+        assert!(
+            second_database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "membership-cycle-device-b")
+                .expect("read second local key before membership pull")
+                .is_none()
+        );
+
+        let second_run = BroadwebdSettingsSyncRunner::new(&second_daemon)
+            .run_settings_sync_cycle_with_membership_log(
+                &second_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer_b,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+                4,
+            )
+            .expect("second device pulls membership before trusted settings heads");
+        assert_eq!(second_run.pulled_membership_application_count(), 2);
+        assert_eq!(second_run.cycle.applied_count(), 1);
+        assert!(second_run.published_membership_log.is_some());
+        assert_eq!(
+            second_database
+                .get_setting_text("ui.theme")
+                .expect("read synced setting")
+                .as_deref(),
+            Some("teal")
+        );
+        assert!(
+            second_database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "membership-cycle-device-a")
+                .expect("read second trusted key a")
+                .expect("second device trusts key a")
+                .trusted
+        );
+        assert!(
+            second_database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "membership-cycle-device-b")
+                .expect("read second trusted key b")
+                .expect("second device trusts key b")
+                .trusted
+        );
+
+        let _ = std::fs::remove_dir_all(first_state_root);
+        let _ = std::fs::remove_dir_all(second_state_root);
+        let _ = std::fs::remove_dir_all(first_db_root);
+        let _ = std::fs::remove_dir_all(second_db_root);
     }
 
     #[test]
