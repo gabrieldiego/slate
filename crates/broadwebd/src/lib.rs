@@ -146,7 +146,9 @@ pub mod test_fixtures {
     use std::path::PathBuf;
 
     pub use crate::http::InternalFixtureHttpResponse;
-    pub use crate::protocols::ipfs::InternalKuboRpcResponse;
+    pub use crate::protocols::ipfs::{
+        InternalKuboRpcResponse, fetch_internal_kubo_profile_sync_fixture,
+    };
     pub use crate::services::profile_sync::LocalProfileSyncFixture;
 
     #[derive(Clone, Debug, Eq, PartialEq)]
@@ -552,6 +554,7 @@ mod tests {
     use super::test_fixtures::{
         InProcessBroadwebNetwork, InProcessHttpFixture, InProcessKuboRpcFixture,
         InternalFixtureHttpResponse, InternalKuboRpcResponse,
+        fetch_internal_kubo_profile_sync_fixture,
     };
     use super::{
         BroadwebDaemon, BroadwebStatusKind, BroadwebStatusReporter, BroadwebdError,
@@ -2117,6 +2120,35 @@ mod tests {
         assert_eq!(
             resolve.url(),
             "http://127.0.0.1:5001/api/v0/name/resolve?arg=%2Fipns%2Fk51syncroot&recursive=false"
+        );
+    }
+
+    #[test]
+    fn ipfs_kubo_profile_sync_rpc_executes_against_socketless_fixture() {
+        let object_id = "bafybeigdyrztprofileobject";
+        let fixture = InProcessBroadwebNetwork::new().kubo_rpc_response(InternalKuboRpcResponse {
+            status_code: 200,
+            content_type: "application/json".to_string(),
+            body: br#"{"Name":"profile-object","Hash":"bafybeigdyrztprofileobject","Size":"128"}"#
+                .to_vec(),
+        });
+        let rpc = IpfsKuboProfileSyncRpc::local(fixture.base_url())
+            .expect("fixture Kubo profile sync RPC");
+        let request = rpc
+            .put_encrypted_object_request()
+            .expect("plan fixture Kubo object add");
+        let response =
+            fetch_internal_kubo_profile_sync_fixture(&request, &ResourceBudget::default())
+                .expect("execute fixture Kubo profile sync request");
+
+        assert_eq!(
+            ipfs_kubo_profile_sync_added_object_id(response.body.as_slice())
+                .expect("parse fixture Kubo add response"),
+            object_id
+        );
+        assert_eq!(
+            fixture.finish(),
+            vec!["POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1"]
         );
     }
 

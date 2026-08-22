@@ -311,7 +311,10 @@ publish, and resolve responses down to the object ids profile sync actually
 uses, rejecting malformed local-node data before any mutable root or retention
 state changes. A socketless request planner maps profile-sync verbs onto those
 Kubo RPC calls before any HTTP client is introduced, so the service wiring can
-be tested without opening loopback sockets.
+be tested without opening loopback sockets. The in-process Kubo fixture can
+execute those planned profile-sync requests and return raw fixture responses
+under the profile-sync object budget, while browsing-style Kubo fixture fetches
+continue to use the HTTP response budget.
 
 Pinning, publishing, providing, and reproviding are not part of the initial
 fetch contract. Pinning and publishing enter through `profile-sync` as explicit

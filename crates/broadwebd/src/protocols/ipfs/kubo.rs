@@ -425,6 +425,15 @@ pub fn ipfs_kubo_profile_sync_resolved_object_id(
     profile_sync_object_id_from_ipfs_path(response.path.as_str())
 }
 
+#[cfg(any(test, feature = "test-fixtures"))]
+pub fn fetch_internal_kubo_profile_sync_fixture(
+    request: &IpfsKuboProfileSyncRpcRequest,
+    budget: &ResourceBudget,
+) -> Result<InternalKuboRpcResponse, BroadwebdError> {
+    let url = parse_http_url(request.url())?;
+    fetch_internal_kubo_rpc_response(&url, budget.max_profile_sync_object_bytes)
+}
+
 fn kubo_cat_url_for_path(content_path: &str, api_base_url: &str) -> Result<String, BroadwebdError> {
     let mut url = kubo_rpc_api_url(api_base_url, "cat")?;
     url.query_pairs_mut().append_pair("arg", &content_path);
@@ -719,29 +728,7 @@ fn fetch_internal_kubo_rpc_fixture(
     document_url: &str,
     budget: &ResourceBudget,
 ) -> Result<HttpFetchResponse, BroadwebdError> {
-    let base_url = internal_kubo_rpc_base_url(url)?;
-    let request_target = match url.query() {
-        Some(query) => format!("POST /api/v0/cat?{query} HTTP/1.1"),
-        None => "POST /api/v0/cat HTTP/1.1".to_string(),
-    };
-
-    let mut fixtures = internal_kubo_rpc_fixtures()
-        .lock()
-        .expect("internal Kubo fixture registry should not be poisoned");
-    let fixture = fixtures.get_mut(base_url.as_str()).ok_or_else(|| {
-        BroadwebdError::Request(format!("missing internal Kubo fixture {base_url}"))
-    })?;
-    fixture.requests.push(request_target);
-    let response = fixture.responses.pop_front().ok_or_else(|| {
-        BroadwebdError::Request(format!("internal Kubo fixture {base_url} has no response"))
-    })?;
-
-    if response.body.len() > budget.max_http_response_bytes {
-        return Err(BroadwebdError::ResponseTooLarge {
-            limit: budget.max_http_response_bytes,
-            actual: response.body.len(),
-        });
-    }
+    let response = fetch_internal_kubo_rpc_response(url, budget.max_http_response_bytes)?;
 
     let headers = vec![HttpHeader {
         name: "content-type".to_string(),
@@ -759,6 +746,66 @@ fn fetch_internal_kubo_rpc_fixture(
         headers,
         response.body,
     ))
+}
+
+#[cfg(any(test, feature = "test-fixtures"))]
+fn fetch_internal_kubo_rpc_response(
+    url: &Url,
+    max_response_bytes: usize,
+) -> Result<InternalKuboRpcResponse, BroadwebdError> {
+    let base_url = internal_kubo_rpc_base_url(url)?;
+    let request_target = internal_kubo_rpc_request_target(url);
+
+    let mut fixtures = internal_kubo_rpc_fixtures()
+        .lock()
+        .expect("internal Kubo fixture registry should not be poisoned");
+    let fixture = fixtures.get_mut(base_url.as_str()).ok_or_else(|| {
+        BroadwebdError::Request(format!("missing internal Kubo fixture {base_url}"))
+    })?;
+    fixture.requests.push(request_target);
+    let response = fixture.responses.pop_front().ok_or_else(|| {
+        BroadwebdError::Request(format!("internal Kubo fixture {base_url} has no response"))
+    })?;
+
+    if response.body.len() > max_response_bytes {
+        return Err(BroadwebdError::ResponseTooLarge {
+            limit: max_response_bytes,
+            actual: response.body.len(),
+        });
+    }
+
+    Ok(response)
+}
+
+#[cfg(any(test, feature = "test-fixtures"))]
+fn internal_kubo_rpc_request_target(url: &Url) -> String {
+    let path = internal_kubo_rpc_request_path(url);
+    match url.query() {
+        Some(query) => format!("POST {path}?{query} HTTP/1.1"),
+        None => format!("POST {path} HTTP/1.1"),
+    }
+}
+
+#[cfg(any(test, feature = "test-fixtures"))]
+fn internal_kubo_rpc_request_path(url: &Url) -> String {
+    let Some(host) = url.host_str() else {
+        return url.path().to_string();
+    };
+    if host.starts_with("fixture-") {
+        return url.path().to_string();
+    }
+    let Some(segments) = url.path_segments() else {
+        return url.path().to_string();
+    };
+    let mut segments = segments.collect::<Vec<_>>();
+    if segments
+        .first()
+        .is_some_and(|segment| segment.starts_with("fixture-"))
+    {
+        segments.remove(0);
+        return format!("/{}", segments.join("/"));
+    }
+    url.path().to_string()
 }
 
 #[cfg(any(test, feature = "test-fixtures"))]

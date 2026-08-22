@@ -300,6 +300,10 @@ Current baseline:
   profile-sync verbs to Kubo add, pin, unpin, pin-status, IPNS publish, and
   IPNS resolve RPC calls. This gives the future backend client a typed boundary
   before it is allowed to issue local-node requests.
+- The in-process Kubo fixture can now execute planned profile-sync RPC requests
+  and return raw fixture responses under the profile-sync object budget. This
+  keeps backend-client tests socketless while preserving the existing HTTP
+  response budget for browsing-style Kubo fetches.
 - broadwebd's own HTTP fixture unit tests now start daemons with
   `InProcessBroadwebNetwork` fixture registries whenever they consume
   `slate-fixture-http://` URLs. That keeps the production default direct HTTP
