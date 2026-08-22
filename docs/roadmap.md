@@ -737,6 +737,11 @@ Current baseline:
 - The fixture targets can be validated into scheduler retention-provider
   handles from caller-supplied in-process fixture daemons. Missing, duplicate,
   or wrong-network providers are reported and excluded instead of being used.
+- In-process fixture materialization reports now also expose structured issues
+  for missing providers, fixture-network mismatches, and duplicate fixture
+  daemon refs. Stored-provider fixture-run wrappers forward those summaries, so
+  local-only scheduler/UI callers can explain fixture quorum failures without
+  opening loopback sockets.
 - The stored-provider scheduler can now run directly from those in-process
   fixture daemon refs, preserving socketless tests while exercising the normal
   stored-provider quorum and retention path.

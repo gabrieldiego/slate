@@ -2440,6 +2440,19 @@ pub struct SettingsSyncInProcessFixtureMaterialization<'a> {
     pub duplicate_provider_ids: Vec<String>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SettingsSyncInProcessFixtureMaterializationIssueKind {
+    Missing,
+    NetworkMismatch,
+    Duplicate,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncInProcessFixtureMaterializationIssue {
+    pub provider_id: String,
+    pub kind: SettingsSyncInProcessFixtureMaterializationIssueKind,
+}
+
 impl<'a> SettingsSyncInProcessFixtureMaterialization<'a> {
     pub fn materialized_provider_count(&self) -> usize {
         self.materialized_providers.len()
@@ -2457,11 +2470,62 @@ impl<'a> SettingsSyncInProcessFixtureMaterialization<'a> {
         self.duplicate_provider_ids.len()
     }
 
+    pub fn blocked_provider_count(&self) -> usize {
+        self.missing_provider_count()
+            + self.network_mismatch_provider_count()
+            + self.duplicate_provider_count()
+    }
+
+    pub fn materialization_issues(&self) -> Vec<SettingsSyncInProcessFixtureMaterializationIssue> {
+        let mut issues = Vec::with_capacity(self.blocked_provider_count());
+        append_in_process_fixture_materialization_issues(
+            &mut issues,
+            SettingsSyncInProcessFixtureMaterializationIssueKind::Missing,
+            self.missing_provider_ids.as_slice(),
+        );
+        append_in_process_fixture_materialization_issues(
+            &mut issues,
+            SettingsSyncInProcessFixtureMaterializationIssueKind::NetworkMismatch,
+            self.network_mismatch_provider_ids.as_slice(),
+        );
+        append_in_process_fixture_materialization_issues(
+            &mut issues,
+            SettingsSyncInProcessFixtureMaterializationIssueKind::Duplicate,
+            self.duplicate_provider_ids.as_slice(),
+        );
+        issues
+    }
+
+    pub fn materialization_issue_count(&self) -> usize {
+        self.blocked_provider_count()
+    }
+
+    pub fn has_materialization_issue(&self) -> bool {
+        self.materialization_issue_count() > 0
+    }
+
+    pub fn all_providers_materialized(&self) -> bool {
+        self.blocked_provider_count() == 0
+    }
+
     pub fn retention_provider_handles(&self) -> Vec<SettingsSyncRetentionProviderHandle<'_>> {
         self.materialized_providers
             .iter()
             .map(|provider| provider.retention_provider_handle())
             .collect()
+    }
+}
+
+fn append_in_process_fixture_materialization_issues(
+    issues: &mut Vec<SettingsSyncInProcessFixtureMaterializationIssue>,
+    kind: SettingsSyncInProcessFixtureMaterializationIssueKind,
+    provider_ids: &[String],
+) {
+    for provider_id in provider_ids {
+        issues.push(SettingsSyncInProcessFixtureMaterializationIssue {
+            provider_id: provider_id.clone(),
+            kind: kind.clone(),
+        });
     }
 }
 
@@ -3211,6 +3275,24 @@ impl SettingsSyncStoredInProcessFixtureRetentionProviderRun<'_> {
         self.run.retained_provider_count()
     }
 
+    pub fn fixture_materialization_issues(
+        &self,
+    ) -> Vec<SettingsSyncInProcessFixtureMaterializationIssue> {
+        self.fixture_materialization.materialization_issues()
+    }
+
+    pub fn fixture_materialization_issue_count(&self) -> usize {
+        self.fixture_materialization.materialization_issue_count()
+    }
+
+    pub fn has_fixture_materialization_issue(&self) -> bool {
+        self.fixture_materialization.has_materialization_issue()
+    }
+
+    pub fn all_fixture_providers_materialized(&self) -> bool {
+        self.fixture_materialization.all_providers_materialized()
+    }
+
     pub fn retention_provider_selection_issues(
         &self,
     ) -> Vec<SettingsSyncRetentionProviderSelectionIssue> {
@@ -3661,6 +3743,24 @@ impl SettingsSyncStoredInProcessFixtureRetentionProviderMembershipRun<'_> {
 
     pub fn retained_provider_count(&self) -> usize {
         self.run.retained_provider_count()
+    }
+
+    pub fn fixture_materialization_issues(
+        &self,
+    ) -> Vec<SettingsSyncInProcessFixtureMaterializationIssue> {
+        self.fixture_materialization.materialization_issues()
+    }
+
+    pub fn fixture_materialization_issue_count(&self) -> usize {
+        self.fixture_materialization.materialization_issue_count()
+    }
+
+    pub fn has_fixture_materialization_issue(&self) -> bool {
+        self.fixture_materialization.has_materialization_issue()
+    }
+
+    pub fn all_fixture_providers_materialized(&self) -> bool {
+        self.fixture_materialization.all_providers_materialized()
     }
 
     pub fn retention_provider_selection_issues(
@@ -16421,6 +16521,11 @@ mod tests {
         assert_eq!(fixture_materialization.missing_provider_count(), 0);
         assert_eq!(fixture_materialization.network_mismatch_provider_count(), 0);
         assert_eq!(fixture_materialization.duplicate_provider_count(), 0);
+        assert_eq!(fixture_materialization.blocked_provider_count(), 0);
+        assert_eq!(fixture_materialization.materialization_issue_count(), 0);
+        assert!(!fixture_materialization.has_materialization_issue());
+        assert!(fixture_materialization.all_providers_materialized());
+        assert!(fixture_materialization.materialization_issues().is_empty());
         let fixture_handles = fixture_materialization.retention_provider_handles();
         assert_eq!(fixture_handles.len(), 1);
         assert_eq!(fixture_handles[0].provider_id, selected_provider_id);
@@ -16536,6 +16641,14 @@ mod tests {
             missing_fixture_materialization.materialized_provider_count(),
             0
         );
+        assert_eq!(missing_fixture_materialization.blocked_provider_count(), 1);
+        assert_eq!(
+            missing_fixture_materialization.materialization_issues(),
+            vec![super::SettingsSyncInProcessFixtureMaterializationIssue {
+                provider_id: selected_provider_id.to_string(),
+                kind: super::SettingsSyncInProcessFixtureMaterializationIssueKind::Missing,
+            }]
+        );
 
         let wrong_network_materialization = plan
             .materialize_selected_in_process_fixture_retention_provider_handles(&[
@@ -16552,6 +16665,13 @@ mod tests {
         assert_eq!(
             wrong_network_materialization.materialized_provider_count(),
             0
+        );
+        assert_eq!(
+            wrong_network_materialization.materialization_issues(),
+            vec![super::SettingsSyncInProcessFixtureMaterializationIssue {
+                provider_id: selected_provider_id.to_string(),
+                kind: super::SettingsSyncInProcessFixtureMaterializationIssueKind::NetworkMismatch,
+            }]
         );
 
         let duplicate_fixture_materialization = plan
@@ -16574,6 +16694,13 @@ mod tests {
         assert_eq!(
             duplicate_fixture_materialization.materialized_provider_count(),
             0
+        );
+        assert_eq!(
+            duplicate_fixture_materialization.materialization_issues(),
+            vec![super::SettingsSyncInProcessFixtureMaterializationIssue {
+                provider_id: selected_provider_id.to_string(),
+                kind: super::SettingsSyncInProcessFixtureMaterializationIssueKind::Duplicate,
+            }]
         );
         assert_eq!(
             plan.cycle.selected_retention_provider_ids,
@@ -17034,6 +17161,16 @@ mod tests {
                 .fixture_materialization
                 .duplicate_provider_ids
                 .is_empty()
+        );
+        assert_eq!(fixture_run.fixture_materialization_issue_count(), 1);
+        assert!(fixture_run.has_fixture_materialization_issue());
+        assert!(!fixture_run.all_fixture_providers_materialized());
+        assert_eq!(
+            fixture_run.fixture_materialization_issues(),
+            vec![super::SettingsSyncInProcessFixtureMaterializationIssue {
+                provider_id: unmaterialized_provider_id.to_string(),
+                kind: super::SettingsSyncInProcessFixtureMaterializationIssueKind::Missing,
+            }]
         );
         let fixture_handles = fixture_run
             .fixture_materialization
