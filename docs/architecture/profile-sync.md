@@ -974,9 +974,13 @@ not mutate `slate-settings.db`, and then retain encrypted settings objects
 through the same scheduler path. A companion regression leaves the provider
 visible in broadwebd discovery but withholds the socketless materializer handle,
 proving that the scheduler blocks on provider quorum before publishing or
-mutating roots. This is an internal model of rendezvous and transfer behavior,
-not a live Iroh adapter; a production adapter must replace only the socket
-handoff while preserving the same scheduler and provider-role contracts.
+mutating roots. Another regression keeps the Iroh-modeled provider discoverable
+but delays transfer from the publishing device to that provider; the scheduler
+surfaces the retention failure, the provider retains no bytes, and a later run
+can recover after the fixture releases transfer. This is an internal model of
+rendezvous and transfer behavior, not a live Iroh adapter; a production adapter
+must replace only the socket handoff while preserving the same scheduler and
+provider-role contracts.
 For selected synthetic fixture endpoints, the plan also exposes
 materialization targets carrying the provider id, fixture network id, and
 endpoint ref. This lets local-only test fixtures bridge from stored metadata to

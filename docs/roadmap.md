@@ -388,7 +388,10 @@ Current baseline:
   published settings objects through the in-process provider without loopback
   sockets or a live Iroh network. The same checkpoint now covers a missing
   socketless materializer handle: selected Iroh endpoints remain blocked by
-  provider quorum before publishing or mutating sync roots.
+  provider quorum before publishing or mutating sync roots. It also models an
+  Iroh-like peer that is discoverable while transfer is delayed: the scheduler
+  surfaces a retention error, the provider retains no bytes, and a later run
+  succeeds after the fixture releases the transfer path.
 - The same bridge now publishes a real signed encrypted settings tail manifest
   through one Kubo fixture daemon, then verifies the manifest and tail bytes
   fetched by a second daemon through the shared stateful Kubo/IPNS model. The

@@ -21133,6 +21133,176 @@ mod tests {
     }
 
     #[test]
+    fn scheduler_surfaces_iroh_node_delayed_transfer_before_recovery() {
+        let network = InProcessBroadwebNetwork::new();
+        let fixture = network.profile_sync();
+        let device_state_root = test_state_root("scheduler-iroh-delayed-transfer-device");
+        let provider_state_root = test_state_root("scheduler-iroh-delayed-transfer-provider");
+        let db_root = test_state_root("scheduler-iroh-delayed-transfer-db");
+        let device_id = "runtime-scheduler-iroh-delayed-a";
+        let device_provider_id = "local-fixture-device-runtime-scheduler-iroh-delayed-a";
+        let provider_id = "iroh-delayed-transfer-provider";
+        let provider_endpoint_ref = "iroh-node:delayed-profile-sync-node";
+        let device_daemon = network
+            .daemon_for_device(&device_state_root, ResourceBudget::default(), device_id)
+            .expect("start in-process Iroh delayed-transfer device daemon");
+        let provider_daemon = network
+            .daemon_for_provider_with_roles(
+                &provider_state_root,
+                ResourceBudget::default(),
+                provider_id,
+                "socketless-iroh-model-provider",
+                BroadwebdProfileSyncProviderRoles::availability_provider(),
+            )
+            .expect("start in-process Iroh delayed-transfer provider daemon");
+        fixture
+            .set_provider_transfer_available(device_provider_id, provider_id, false)
+            .expect("delay Iroh-modeled transfer from device to provider");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            device_id,
+        )
+        .expect("open Iroh delayed-transfer settings database");
+        let profile = "schedulerirohdelayedtransferprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([95; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer =
+            ProfileSyncDeviceSigner::generate(device_id).expect("generate Iroh delayed signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register Iroh delayed local trusted public key");
+        authorize_test_storage_provider(&database, profile, provider_id);
+        database
+            .upsert_storage_provider(&StorageProviderUpdate {
+                endpoint_ref: Some(provider_endpoint_ref.to_string()),
+                ..test_storage_provider_update(
+                    &network,
+                    profile,
+                    provider_id,
+                    "socketless-iroh-model-provider",
+                    "Iroh delayed-transfer profile-sync provider",
+                    true,
+                    true,
+                    true,
+                )
+            })
+            .expect("write Iroh delayed-transfer provider metadata");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write Iroh delayed-transfer local setting");
+
+        let materializer = super::SettingsSyncSocketlessProtocolProviderMaterializer::new(
+            super::SettingsSyncProtocolProviderMaterializerPolicy::socketless_fixture_models(),
+            vec![super::SettingsSyncProtocolProviderDaemon::new(
+                provider_id,
+                provider_endpoint_ref,
+                &provider_daemon,
+            )],
+        );
+        let config = SettingsSyncSchedulerConfig::new(
+            profile,
+            settings_root_id,
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
+        );
+        let scheduler = BroadwebdSettingsSyncScheduler::new(&device_daemon);
+
+        let delayed_error = match scheduler
+            .run_once_with_stored_protocol_materializer_retention_provider_handles(
+                &database,
+                &config,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                4,
+                &materializer,
+            ) {
+            Ok(_) => panic!("delayed Iroh-modeled transfer should fail retention"),
+            Err(error) => error,
+        };
+        assert!(matches!(
+            delayed_error,
+            ProfileSyncCycleWithHealthError::Retention(BroadwebdError::UnsupportedRequest(message))
+                if message.contains("cannot retain unavailable")
+        ));
+        let retained_before_release = provider_daemon
+            .profile_sync(BroadwebdProfileSyncRequest::ListRetainedObjects(
+                BroadwebdProfileSyncProfileRequest::new(profile),
+            ))
+            .expect("Iroh delayed provider can list retained objects before release");
+        assert_eq!(
+            retained_before_release,
+            BroadwebdProfileSyncResponse::RetainedObjects {
+                object_ids: Vec::new(),
+            }
+        );
+        assert!(
+            database
+                .profile_sync_root(profile, settings_root_id)
+                .expect("read settings root after delayed retention failure")
+                .is_some()
+        );
+
+        fixture
+            .set_provider_transfer_available(device_provider_id, provider_id, true)
+            .expect("release Iroh-modeled transfer from device to provider");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "green")
+            .expect("write recovery setting after Iroh transfer release");
+
+        let recovered = scheduler
+            .run_once_with_stored_protocol_materializer_retention_provider_handles(
+                &database,
+                &config,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                4,
+                &materializer,
+            )
+            .expect("released Iroh-modeled transfer should retain settings objects");
+
+        assert_eq!(recovered.protocol_materialized_provider_count(), 1);
+        assert_eq!(recovered.protocol_blocked_provider_count(), 0);
+        assert_eq!(recovered.retained_provider_count(), 1);
+        assert_eq!(recovered.run.cycle.retention.len(), 1);
+        assert_eq!(
+            recovered.run.cycle.retention[0].object_count(),
+            recovered.run.cycle.retained_object_ids.len()
+        );
+        assert_eq!(
+            recovered.run.cycle.retention[0].retained_count(),
+            recovered.run.cycle.retained_object_ids.len()
+        );
+        assert_eq!(
+            recovered.run.cycle.retention[0].available_count(),
+            recovered.run.cycle.retained_object_ids.len()
+        );
+        assert!(!recovered.run.cycle.has_retention_issue());
+        assert!(
+            !recovered
+                .run
+                .cycle
+                .after_health
+                .settings_root_health
+                .degraded
+        );
+        assert_eq!(
+            recovered
+                .run
+                .cycle
+                .after_health
+                .settings_root_health
+                .online_retaining_providers,
+            2
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
     fn broadwebd_settings_sync_scheduler_runs_with_kubo_profile_sync_materialized_provider() {
         let network = InProcessBroadwebNetwork::new();
         let fixture = network.kubo_profile_sync_model();
