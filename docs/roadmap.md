@@ -1002,6 +1002,10 @@ Current baseline:
 - Direct trusted device-key registration now also materializes the matching
   `sync_devices` roster row transactionally. Updates preserve existing labels
   and provider-authority metadata while advancing the membership epoch.
+- Account membership authorization now also rejects trusted signers that are
+  explicitly marked with provider authority in `sync_devices`. Provider-backed
+  availability records can hold trusted keys for object retention without being
+  able to enroll, revoke, or rotate profile devices.
 
 Next:
 

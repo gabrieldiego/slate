@@ -4509,6 +4509,32 @@ impl SlateProfileDatabase {
         Ok(keys)
     }
 
+    fn sync_device_provider_authority_in_transaction(
+        &self,
+        transaction: &rusqlite::Transaction<'_>,
+        profile: &str,
+        device_id: &str,
+    ) -> Result<bool, StorageError> {
+        if !is_valid_sync_identifier(device_id) {
+            return Err(StorageError::InvalidSyncDeviceId(device_id.to_string()));
+        }
+
+        let provider_authority = transaction
+            .query_row(
+                "SELECT provider_authority
+                 FROM sync_devices
+                 WHERE profile = ?1 AND device_id = ?2",
+                params![profile, device_id],
+                |row| {
+                    let value: i64 = row.get(0)?;
+                    Ok(integer_to_bool(value))
+                },
+            )
+            .optional()
+            .map_err(|source| self.database_error(source))?;
+        Ok(provider_authority.unwrap_or(false))
+    }
+
     pub fn record_signed_sync_account_membership_record(
         &self,
         signed_record: &[u8],
@@ -4782,6 +4808,16 @@ impl SlateProfileDatabase {
                 profile: membership_record.profile.clone(),
                 device_id: signed_object.device_id.clone(),
             })?;
+        if self.sync_device_provider_authority_in_transaction(
+            transaction,
+            membership_record.profile.as_str(),
+            signed_object.device_id.as_str(),
+        )? {
+            return Err(StorageError::InvalidProfileSyncMembershipRecord(format!(
+                "membership signer {} is marked as provider authority and cannot authorize account membership records",
+                signed_object.device_id
+            )));
+        }
         if trusted_signer.membership_epoch > membership_record.membership_epoch {
             return Err(StorageError::InvalidProfileSyncMembershipRecord(format!(
                 "membership signer {} was trusted at epoch {}, after membership record epoch {}",
@@ -13843,6 +13879,108 @@ mod tests {
             StorageError::UntrustedSyncMembershipSigner { profile, device_id }
                 if profile == DEFAULT_PROFILE_ID && device_id == "device-c"
         ));
+    }
+
+    #[test]
+    fn signed_sync_account_membership_records_reject_provider_authority_signers() {
+        let database_path =
+            test_dir("sync-account-membership-provider-signer").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let signer_a = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let provider_signer = ProfileSyncDeviceSigner::generate("provider-device").unwrap();
+        let signer_c = ProfileSyncDeviceSigner::generate("device-c").unwrap();
+        let enroll_a = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-device-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-a".to_string(),
+            device_public_key: Some(signer_a.public_key().unwrap()),
+            created_at: 10,
+        };
+        database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_a).as_slice(),
+            )
+            .unwrap();
+
+        let enroll_provider = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-enroll-provider-device".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 2,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "provider-device".to_string(),
+            device_public_key: Some(provider_signer.public_key().unwrap()),
+            created_at: 20,
+        };
+        database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_provider).as_slice(),
+            )
+            .unwrap();
+        database
+            .register_sync_device(&SyncDeviceRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                device_id: "provider-device".to_string(),
+                label: Some("Availability Provider".to_string()),
+                membership_epoch: 2,
+                provider_authority: true,
+            })
+            .unwrap();
+
+        let provider_enrolls_c = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-3-provider-enrolls-device-c".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 3,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-c".to_string(),
+            device_public_key: Some(signer_c.public_key().unwrap()),
+            created_at: 30,
+        };
+        let error = database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&provider_signer, &provider_enrolls_c).as_slice(),
+            )
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            StorageError::InvalidProfileSyncMembershipRecord(reason)
+                if reason.contains("provider-device")
+                    && reason.contains("provider authority")
+        ));
+        assert!(
+            database
+                .sync_account_membership_record(
+                    DEFAULT_PROFILE_ID,
+                    "epoch-3-provider-enrolls-device-c"
+                )
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "device-c")
+                .unwrap()
+                .is_none()
+        );
+        let provider_device = database
+            .sync_devices(DEFAULT_PROFILE_ID)
+            .unwrap()
+            .into_iter()
+            .find(|device| device.device_id == "provider-device")
+            .expect("provider roster entry remains");
+        assert!(provider_device.provider_authority);
+        assert_eq!(provider_device.membership_epoch, 2);
+        assert!(
+            database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "provider-device")
+                .unwrap()
+                .expect("provider key remains trusted")
+                .trusted
+        );
     }
 
     #[test]
