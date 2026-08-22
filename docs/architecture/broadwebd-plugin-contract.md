@@ -324,7 +324,11 @@ The same fixture client now models retained-object lifecycle calls through
 verify Kubo-backed availability before a real HTTP client is wired in.
 Mutable-root fixture calls now compose IPNS `name/publish` and `name/resolve`
 through the same path; publish rejects a Kubo response that does not echo the
-requested profile-sync object id.
+requested profile-sync object id. `ProfileSyncService` can now be constructed
+with that socketless Kubo fixture backend, so normal `ProfileSyncRequest` calls
+can exercise put, retain, verify, release, publish, resolve, and provider
+discovery through the service contract before a production Kubo HTTP client is
+enabled.
 
 Pinning, publishing, providing, and reproviding are not part of the initial
 fetch contract. Pinning and publishing enter through `profile-sync` as explicit

@@ -1,3 +1,5 @@
+#[cfg(any(test, feature = "test-fixtures"))]
+use crate::IpfsKuboProfileSyncRpc;
 use crate::{
     ApplicationServicePlugin, BroadwebdError, PROFILE_SYNC_PLUGIN, PluginKind, PluginMetadata,
     PluginRegistry, ProfileSyncObjectRequest, ProfileSyncProfileRequest, ProfileSyncProviderHealth,
@@ -22,6 +24,8 @@ pub struct ProfileSyncService {
     provider_kind: String,
     privacy_boundary: String,
     roles: ProfileSyncProviderRoles,
+    #[cfg(any(test, feature = "test-fixtures"))]
+    kubo_rpc: Option<IpfsKuboProfileSyncRpc>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -68,6 +72,8 @@ impl Default for ProfileSyncService {
             provider_kind: LOCAL_PROVIDER_KIND.to_string(),
             privacy_boundary: LOCAL_PRIVACY_BOUNDARY.to_string(),
             roles: ProfileSyncProviderRoles::logged_in_device(),
+            #[cfg(any(test, feature = "test-fixtures"))]
+            kubo_rpc: None,
         }
     }
 }
@@ -125,7 +131,26 @@ impl ProfileSyncService {
             provider_kind,
             privacy_boundary,
             roles,
+            #[cfg(any(test, feature = "test-fixtures"))]
+            kubo_rpc: None,
         }
+    }
+
+    #[cfg(any(test, feature = "test-fixtures"))]
+    pub fn kubo_fixture(
+        api_base_url: impl Into<String>,
+        provider_id: impl Into<String>,
+    ) -> Result<Self, BroadwebdError> {
+        Ok(Self {
+            store: Arc::new(Mutex::new(ProfileSyncStore::default())),
+            provider_id: provider_id.into(),
+            provider_kind: "ipfs-kubo-fixture".to_string(),
+            privacy_boundary:
+                "in-process Kubo profile-sync fixture; no sockets, DNS, loopback listener, or external network"
+                    .to_string(),
+            roles: ProfileSyncProviderRoles::logged_in_device(),
+            kubo_rpc: Some(IpfsKuboProfileSyncRpc::local(api_base_url)?),
+        })
     }
 
     fn ensure_online(&self) -> Result<(), BroadwebdError> {
@@ -599,6 +624,151 @@ impl ProfileSyncService {
             )))
         }
     }
+
+    #[cfg(any(test, feature = "test-fixtures"))]
+    fn kubo_fixture_profile_sync(
+        &self,
+        kubo_rpc: &IpfsKuboProfileSyncRpc,
+        request: ProfileSyncRequest,
+        budget: &ResourceBudget,
+    ) -> Result<ProfileSyncResponse, BroadwebdError> {
+        match request {
+            ProfileSyncRequest::PutEncryptedObject(request) => {
+                validate_profile(&request.profile)?;
+                self.require_role(self.roles.object_transfer, "profile-sync/object-transfer")?;
+                let object_id = kubo_rpc.put_encrypted_object_fixture(&request.bytes, budget)?;
+                Ok(ProfileSyncResponse::PutEncryptedObject { object_id })
+            }
+            ProfileSyncRequest::GetEncryptedObject(request) => {
+                validate_profile(&request.profile)?;
+                validate_profile_sync_object_id(&request.object_id)?;
+                self.require_role(self.roles.object_transfer, "profile-sync/object-transfer")?;
+                Err(BroadwebdError::UnsupportedRequest(
+                    "Kubo profile-sync fixture backend does not fetch encrypted objects yet"
+                        .to_string(),
+                ))
+            }
+            ProfileSyncRequest::RetainObject(request) => {
+                validate_profile(&request.profile)?;
+                validate_profile_sync_object_id(&request.object_id)?;
+                self.require_role(self.roles.availability, "profile-sync/availability")?;
+                self.require_role(self.roles.object_transfer, "profile-sync/object-transfer")?;
+                kubo_rpc.retain_object_fixture(&request.object_id, budget)?;
+                Ok(ProfileSyncResponse::RetainObject {
+                    object_id: request.object_id,
+                    retained: true,
+                })
+            }
+            ProfileSyncRequest::ReleaseObject(request) => {
+                validate_profile(&request.profile)?;
+                validate_profile_sync_object_id(&request.object_id)?;
+                self.require_role(self.roles.availability, "profile-sync/availability")?;
+                kubo_rpc.release_object_fixture(&request.object_id, budget)?;
+                Ok(ProfileSyncResponse::ReleaseObject {
+                    object_id: request.object_id,
+                    retained: false,
+                })
+            }
+            ProfileSyncRequest::ListRetainedObjects(request) => {
+                validate_profile(&request.profile)?;
+                self.require_role(self.roles.availability, "profile-sync/availability")?;
+                Err(BroadwebdError::UnsupportedRequest(
+                    "Kubo profile-sync fixture backend does not list retained objects yet"
+                        .to_string(),
+                ))
+            }
+            ProfileSyncRequest::VerifyRetainedObject(request) => {
+                validate_profile(&request.profile)?;
+                validate_profile_sync_object_id(&request.object_id)?;
+                self.require_role(self.roles.availability, "profile-sync/availability")?;
+                let retained =
+                    kubo_rpc.verify_retained_object_fixture(&request.object_id, budget)?;
+                Ok(ProfileSyncResponse::RetainedObjectStatus {
+                    object_id: request.object_id,
+                    retained,
+                    available: retained,
+                })
+            }
+            ProfileSyncRequest::PublishRoot(request) => {
+                validate_profile(&request.profile)?;
+                validate_profile_sync_root_id(&request.root_id)?;
+                validate_profile_sync_object_id(&request.object_id)?;
+                self.require_role(self.roles.mutable_roots, "profile-sync/mutable-root")?;
+                let object_id =
+                    kubo_rpc.publish_root_fixture(&request.root_id, &request.object_id, budget)?;
+                Ok(ProfileSyncResponse::Root {
+                    root_id: request.root_id,
+                    object_id: Some(object_id),
+                })
+            }
+            ProfileSyncRequest::ResolveRoot(request) => {
+                validate_profile(&request.profile)?;
+                validate_profile_sync_root_id(&request.root_id)?;
+                self.require_role(self.roles.discovery, "profile-sync/provider-discovery")?;
+                let object_id = kubo_rpc.resolve_root_fixture(&request.root_id, budget)?;
+                Ok(ProfileSyncResponse::Root {
+                    root_id: request.root_id,
+                    object_id: Some(object_id),
+                })
+            }
+            ProfileSyncRequest::ListRootCandidates(request) => {
+                validate_profile(&request.profile)?;
+                validate_profile_sync_root_id(&request.root_id)?;
+                self.require_role(self.roles.discovery, "profile-sync/provider-discovery")?;
+                Err(BroadwebdError::UnsupportedRequest(
+                    "Kubo profile-sync fixture backend does not list root candidates yet"
+                        .to_string(),
+                ))
+            }
+            ProfileSyncRequest::DiscoverProviders(request) => {
+                validate_profile(&request.profile)?;
+                self.require_role(self.roles.discovery, "profile-sync/provider-discovery")?;
+                Ok(ProfileSyncResponse::Providers {
+                    providers: vec![ProfileSyncProviderRecord {
+                        provider_id: self.provider_id.clone(),
+                        provider_kind: self.provider_kind.clone(),
+                        privacy_boundary: self.privacy_boundary.clone(),
+                        retained_objects: 0,
+                        roles: self.roles,
+                        can_publish_roots: self.roles.mutable_roots,
+                    }],
+                })
+            }
+            ProfileSyncRequest::ProviderHealth(request) => {
+                validate_profile(&request.profile)?;
+                self.require_role(self.roles.discovery, "profile-sync/provider-discovery")?;
+                Ok(ProfileSyncResponse::ProviderHealth {
+                    health: ProfileSyncProviderHealth {
+                        profile: request.profile,
+                        known_providers: 1,
+                        online_providers: 1,
+                        offline_providers: 0,
+                        fresh_online_providers: 1,
+                        stale_online_providers: 0,
+                        fresh_online_provider_ids: vec![self.provider_id.clone()],
+                        stale_online_provider_ids: Vec::new(),
+                        offline_provider_ids: Vec::new(),
+                        minimum_provider_seen_sequence: 0,
+                        object_transfer_providers: usize::from(self.roles.object_transfer),
+                        availability_providers: usize::from(self.roles.availability),
+                        mutable_root_providers: usize::from(self.roles.mutable_roots),
+                        retained_objects: 0,
+                        degraded: false,
+                        message: "Kubo profile-sync fixture provider is ready".to_string(),
+                    },
+                })
+            }
+            ProfileSyncRequest::RootHealth(request) => {
+                validate_profile(&request.profile)?;
+                validate_profile_sync_root_id(&request.root_id)?;
+                self.require_role(self.roles.discovery, "profile-sync/provider-discovery")?;
+                Err(BroadwebdError::UnsupportedRequest(
+                    "Kubo profile-sync fixture backend does not inspect root health yet"
+                        .to_string(),
+                ))
+            }
+        }
+    }
 }
 
 impl LocalProfileSyncFixture {
@@ -839,6 +1009,22 @@ impl LocalProfileSyncFixture {
 
 impl ApplicationServicePlugin for ProfileSyncService {
     fn metadata(&self) -> PluginMetadata {
+        #[cfg(any(test, feature = "test-fixtures"))]
+        if self.kubo_rpc.is_some() {
+            let capabilities = [
+                "profile-sync/kubo-fixture",
+                "profile-sync/object-transfer",
+                "profile-sync/local-retention",
+                "profile-sync/mutable-root",
+                "profile-sync/provider-discovery",
+                "socketless-fixture",
+            ];
+            return PluginMetadata::new(PROFILE_SYNC_PLUGIN, PluginKind::ApplicationService)
+                .with_capabilities(&capabilities)
+                .with_privacy_boundary(self.privacy_boundary.as_str())
+                .with_resource_profile(ResourceProfile::Low);
+        }
+
         let mut capabilities = vec!["profile-sync/fake"];
         if self.roles.discovery {
             capabilities.push("profile-sync/provider-discovery");
@@ -878,6 +1064,13 @@ impl ApplicationServicePlugin for ProfileSyncService {
         };
 
         self.ensure_online()?;
+
+        #[cfg(any(test, feature = "test-fixtures"))]
+        if let Some(kubo_rpc) = &self.kubo_rpc {
+            return Ok(ServiceResponse::ProfileSync(
+                self.kubo_fixture_profile_sync(kubo_rpc, request, budget)?,
+            ));
+        }
 
         let response = match request {
             ProfileSyncRequest::PutEncryptedObject(request) => self.put_object(request, budget)?,

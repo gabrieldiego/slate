@@ -565,8 +565,8 @@ mod tests {
         PROFILE_SYNC_PLUGIN, PluginHealth, PluginKind, PluginMetadata, PluginRegistry,
         ProfileSyncObjectRequest, ProfileSyncProfileRequest, ProfileSyncProviderRoles,
         ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse,
-        ProfileSyncRootRequest, ProfileSyncRootUpdate, ProtocolService, ResourceBudget,
-        ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, StateRoot, TOR_ARTI_HTTP_PLUGIN,
+        ProfileSyncRootRequest, ProfileSyncRootUpdate, ProfileSyncService, ProtocolService,
+        ResourceBudget, ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, StateRoot, TOR_ARTI_HTTP_PLUGIN,
         TOR_PROTOCOL_SERVICE, TorService, TransportHttpRequest, TransportPlugin,
         ipfs_gateway_http_url, ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url,
         ipfs_kubo_profile_sync_added_object_id, ipfs_kubo_profile_sync_name_publish_url,
@@ -2346,6 +2346,169 @@ mod tests {
             fixture.finish(),
             vec![
                 "POST /api/v0/name/publish?arg=%2Fipfs%2Fbafybeigdyrztprofileobject&key=settings-latest&allow-offline=true HTTP/1.1"
+            ]
+        );
+    }
+
+    #[test]
+    fn profile_sync_service_uses_socketless_kubo_fixture_backend() {
+        let object_id = "bafybeigdyrztprofileobject";
+        let fixture = InProcessBroadwebNetwork::new().kubo_rpc_sequence(vec![
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body:
+                    br#"{"Name":"profile-object","Hash":"bafybeigdyrztprofileobject","Size":"128"}"#
+                        .to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body: br#"{"Pins":["bafybeigdyrztprofileobject"]}"#.to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body: br#"{"Keys":{"bafybeigdyrztprofileobject":{"Type":"recursive"}}}"#.to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body: br#"{"Name":"settings-latest","Value":"/ipfs/bafybeigdyrztprofileobject"}"#
+                    .to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body: br#"{"Path":"/ipfs/bafybeigdyrztprofileobject"}"#.to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body: br#"{"Pins":["bafybeigdyrztprofileobject"]}"#.to_vec(),
+            },
+        ]);
+        let mut registry = PluginRegistry::new();
+        registry.register_service(
+            ProfileSyncService::kubo_fixture(fixture.base_url(), "kubo-fixture-provider")
+                .expect("Kubo fixture profile-sync service"),
+        );
+        let budget = ResourceBudget::default();
+
+        let ProfileSyncResponse::Providers { providers } = registry
+            .profile_sync(
+                ProfileSyncRequest::DiscoverProviders(ProfileSyncProfileRequest::new("default")),
+                &budget,
+            )
+            .expect("discover Kubo fixture profile-sync provider")
+        else {
+            panic!("expected provider discovery response");
+        };
+        assert_eq!(providers.len(), 1);
+        assert_eq!(providers[0].provider_id, "kubo-fixture-provider");
+        assert_eq!(providers[0].provider_kind, "ipfs-kubo-fixture");
+        assert!(providers[0].can_publish_roots);
+
+        let ProfileSyncResponse::PutEncryptedObject {
+            object_id: put_object_id,
+        } = registry
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"encrypted slate-settings snapshot".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("put profile sync object through Kubo fixture service")
+        else {
+            panic!("expected put object response");
+        };
+        assert_eq!(put_object_id, object_id);
+
+        assert_eq!(
+            registry
+                .profile_sync(
+                    ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                        "default", object_id,
+                    )),
+                    &budget,
+                )
+                .expect("retain object through Kubo fixture service"),
+            ProfileSyncResponse::RetainObject {
+                object_id: object_id.to_string(),
+                retained: true,
+            }
+        );
+        assert_eq!(
+            registry
+                .profile_sync(
+                    ProfileSyncRequest::VerifyRetainedObject(ProfileSyncObjectRequest::new(
+                        "default", object_id,
+                    )),
+                    &budget,
+                )
+                .expect("verify object through Kubo fixture service"),
+            ProfileSyncResponse::RetainedObjectStatus {
+                object_id: object_id.to_string(),
+                retained: true,
+                available: true,
+            }
+        );
+        assert_eq!(
+            registry
+                .profile_sync(
+                    ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+                        "default",
+                        "settings-latest",
+                        object_id,
+                    )),
+                    &budget,
+                )
+                .expect("publish root through Kubo fixture service"),
+            ProfileSyncResponse::Root {
+                root_id: "settings-latest".to_string(),
+                object_id: Some(object_id.to_string()),
+            }
+        );
+        assert_eq!(
+            registry
+                .profile_sync(
+                    ProfileSyncRequest::ResolveRoot(ProfileSyncRootRequest::new(
+                        "default",
+                        "settings-latest",
+                    )),
+                    &budget,
+                )
+                .expect("resolve root through Kubo fixture service"),
+            ProfileSyncResponse::Root {
+                root_id: "settings-latest".to_string(),
+                object_id: Some(object_id.to_string()),
+            }
+        );
+        assert_eq!(
+            registry
+                .profile_sync(
+                    ProfileSyncRequest::ReleaseObject(ProfileSyncObjectRequest::new(
+                        "default", object_id,
+                    )),
+                    &budget,
+                )
+                .expect("release object through Kubo fixture service"),
+            ProfileSyncResponse::ReleaseObject {
+                object_id: object_id.to_string(),
+                retained: false,
+            }
+        );
+
+        assert_eq!(
+            fixture.finish(),
+            vec![
+                "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1",
+                "POST /api/v0/pin/add?arg=bafybeigdyrztprofileobject&recursive=true HTTP/1.1",
+                "POST /api/v0/pin/ls?arg=bafybeigdyrztprofileobject&type=recursive HTTP/1.1",
+                "POST /api/v0/name/publish?arg=%2Fipfs%2Fbafybeigdyrztprofileobject&key=settings-latest&allow-offline=true HTTP/1.1",
+                "POST /api/v0/name/resolve?arg=%2Fipns%2Fsettings-latest&recursive=false HTTP/1.1",
+                "POST /api/v0/pin/rm?arg=bafybeigdyrztprofileobject&recursive=true HTTP/1.1",
             ]
         );
     }
