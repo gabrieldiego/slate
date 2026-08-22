@@ -2577,6 +2577,59 @@ mod tests {
     }
 
     #[test]
+    fn registry_can_opt_into_kubo_profile_sync_without_fixture_transport() {
+        let registry = PluginRegistry::with_default_http_and_kubo_profile_sync(
+            "http://127.0.0.1:5001",
+            "local-kubo-profile",
+        )
+        .expect("construct registry with Kubo profile-sync");
+        let profile_sync_services = registry
+            .list_application_services()
+            .into_iter()
+            .filter(|metadata| metadata.id == PROFILE_SYNC_PLUGIN)
+            .collect::<Vec<_>>();
+
+        assert_eq!(profile_sync_services.len(), 1);
+        let metadata = &profile_sync_services[0];
+        assert!(
+            metadata
+                .capabilities
+                .iter()
+                .any(|capability| capability == "profile-sync/kubo-http")
+        );
+        assert!(
+            !metadata
+                .capabilities
+                .iter()
+                .any(|capability| capability == "profile-sync/fake")
+        );
+        assert!(
+            !metadata
+                .capabilities
+                .iter()
+                .any(|capability| capability == "socketless-fixture")
+        );
+        assert_eq!(metadata.resource_profile, ResourceProfile::Medium);
+    }
+
+    #[test]
+    fn registry_rejects_external_kubo_profile_sync_endpoint() {
+        let error = match PluginRegistry::with_default_http_and_kubo_profile_sync(
+            "https://kubo.example.test:5001",
+            "external-kubo-profile",
+        ) {
+            Ok(_) => panic!("external Kubo profile-sync endpoint must be rejected"),
+            Err(error) => error,
+        };
+
+        assert!(matches!(
+            error,
+            BroadwebdError::UnsupportedRequest(message)
+                if message.contains("Kubo RPC endpoint must be a numeric loopback address")
+        ));
+    }
+
+    #[test]
     fn kubo_profile_sync_get_uses_transport_bytes_not_local_upload_metadata() {
         let object_id = "bafybeigdyrztprofileobject";
         let fixture = InProcessBroadwebNetwork::new().kubo_rpc_sequence(vec![

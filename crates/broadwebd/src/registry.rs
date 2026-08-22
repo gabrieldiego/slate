@@ -106,6 +106,41 @@ impl PluginRegistry {
         registry
     }
 
+    pub fn with_default_http_and_kubo_profile_sync(
+        api_base_url: impl Into<String>,
+        provider_id: impl Into<String>,
+    ) -> Result<Self, BroadwebdError> {
+        Self::with_default_http_and_ipfs_config_and_kubo_profile_sync(
+            IpfsConfig::default(),
+            api_base_url,
+            provider_id,
+        )
+    }
+
+    pub fn with_default_http_and_ipfs_config_and_kubo_profile_sync(
+        ipfs_config: IpfsConfig,
+        api_base_url: impl Into<String>,
+        provider_id: impl Into<String>,
+    ) -> Result<Self, BroadwebdError> {
+        Self::with_default_http_and_ipfs_config_and_status_and_kubo_profile_sync(
+            ipfs_config,
+            BroadwebStatusReporter::new(),
+            api_base_url,
+            provider_id,
+        )
+    }
+
+    pub fn with_default_http_and_ipfs_config_and_status_and_kubo_profile_sync(
+        ipfs_config: IpfsConfig,
+        status: BroadwebStatusReporter,
+        api_base_url: impl Into<String>,
+        provider_id: impl Into<String>,
+    ) -> Result<Self, BroadwebdError> {
+        let mut registry = Self::with_default_http_and_ipfs_config_and_status(ipfs_config, status);
+        registry.install_service(ProfileSyncService::kubo(api_base_url, provider_id)?);
+        Ok(registry)
+    }
+
     pub fn status_reporter(&self) -> BroadwebStatusReporter {
         self.status.clone()
     }

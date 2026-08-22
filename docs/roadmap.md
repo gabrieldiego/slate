@@ -358,6 +358,11 @@ Current baseline:
   constructor. Production Kubo profile-sync uses the same request builders,
   response parsers, role checks, and resource budgets over HTTP; socketless
   tests swap only the executor with the internal transport shim.
+- The default broadwebd registry remains local-only, but callers can now opt in
+  to a local Kubo HTTP profile-sync backend through an explicit registry
+  constructor. That constructor replaces the fake profile-sync service, rejects
+  non-loopback Kubo endpoints up front, and advertises `profile-sync/kubo-http`
+  rather than fixture capabilities.
 - The same Kubo fixture service now records retained objects and published roots
   in its in-process profile-sync state after the corresponding Kubo RPC fixture
   calls succeed. Retained-object listing, provider health, root candidates, and
