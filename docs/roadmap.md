@@ -337,6 +337,11 @@ Current baseline:
   `BroadwebdProfileSyncObjectSource` bridge against that Kubo profile-sync
   fixture daemon: dependency objects, retained root publish, root resolve, and
   object fetch all flow through scripted in-process Kubo RPC responses.
+- The same bridge now publishes a real signed encrypted settings tail manifest
+  through the Kubo fixture daemon and verifies the fetched manifest and tail
+  bytes with the storage sync-object openers. Scripted Kubo `cat` responses are
+  empty in that test, so the verification exercises cached uploaded bytes rather
+  than hand-authored payloads.
 - broadwebd's own HTTP fixture unit tests now start daemons with
   `InProcessBroadwebNetwork` fixture registries whenever they consume
   `slate-fixture-http://` URLs. That keeps the production default direct HTTP

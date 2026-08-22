@@ -7853,17 +7853,17 @@ mod tests {
             InternalKuboRpcResponse {
                 status_code: 200,
                 content_type: "application/octet-stream".to_string(),
-                body: b"encrypted manifest root".to_vec(),
+                body: Vec::new(),
             },
             InternalKuboRpcResponse {
                 status_code: 200,
                 content_type: "application/octet-stream".to_string(),
-                body: b"encrypted dependency a".to_vec(),
+                body: Vec::new(),
             },
             InternalKuboRpcResponse {
                 status_code: 200,
                 content_type: "application/octet-stream".to_string(),
-                body: b"encrypted dependency b".to_vec(),
+                body: Vec::new(),
             },
         ]);
         let daemon = network
@@ -8024,6 +8024,153 @@ mod tests {
         assert_eq!(incoming.key, "ui.theme");
         assert_eq!(incoming.value, "teal");
         assert_eq!(incoming.device_id, "runtime-c");
+
+        let _ = std::fs::remove_dir_all(state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_publisher_publishes_signed_settings_tail_manifest_through_kubo_fixture() {
+        let network = InProcessBroadwebNetwork::new();
+        let state_root = test_state_root("signed-tail-kubo-publish");
+        let db_root = test_state_root("signed-tail-kubo-db");
+        let tail_object_id = "bafybeigdyrzttailchange";
+        let manifest_object_id = "bafybeigdyrztsettingsmanifest";
+        let fixture = network.kubo_rpc_sequence(vec![
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body: br#"{"Name":"profile-object","Hash":"bafybeigdyrzttailchange","Size":"128"}"#
+                    .to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body: br#"{"Pins":["bafybeigdyrzttailchange"]}"#.to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body:
+                    br#"{"Name":"profile-object","Hash":"bafybeigdyrztsettingsmanifest","Size":"128"}"#
+                        .to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body: br#"{"Pins":["bafybeigdyrztsettingsmanifest"]}"#.to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body:
+                    br#"{"Name":"settings/latest","Value":"/ipfs/bafybeigdyrztsettingsmanifest"}"#
+                        .to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body: br#"{"Path":"/ipfs/bafybeigdyrztsettingsmanifest"}"#.to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/octet-stream".to_string(),
+                body: Vec::new(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/octet-stream".to_string(),
+                body: Vec::new(),
+            },
+        ]);
+        let daemon = network
+            .daemon_for_kubo_profile_sync(
+                &state_root,
+                ResourceBudget::default(),
+                fixture.base_url(),
+                "kubo-profile-sync-provider",
+            )
+            .expect("start Kubo profile-sync fixture daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-kubo-tail",
+        )
+        .expect("open local settings database");
+        let change = database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write local sync setting");
+        let content_key = ProfileSyncContentKey::from_bytes([45; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer =
+            ProfileSyncDeviceSigner::generate("runtime-kubo-tail").expect("generate signer");
+        let public_key = signer.public_key().expect("read signer public key");
+        let publisher = BroadwebdProfileSyncPublisher::new(&daemon);
+
+        let publication = publisher
+            .publish_signed_settings_tail_changes(
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                std::slice::from_ref(&change),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish signed settings tail manifest through Kubo fixture");
+
+        assert_eq!(publication.manifest_object_id, manifest_object_id);
+        assert_eq!(
+            publication.tail_change_object_ids,
+            vec![tail_object_id.to_string()]
+        );
+        let source = BroadwebdProfileSyncObjectSource::new(&daemon);
+        assert_eq!(
+            source
+                .resolve_profile_sync_root(DEFAULT_PROFILE_ID, "settings/latest")
+                .expect("resolve signed manifest root through Kubo fixture")
+                .as_deref(),
+            Some(manifest_object_id)
+        );
+        let manifest_object = source
+            .get_profile_sync_object(DEFAULT_PROFILE_ID, manifest_object_id)
+            .expect("fetch signed manifest object from Kubo fixture cache");
+        let manifest = open_signed_profile_sync_manifest(
+            manifest_object.bytes.as_slice(),
+            &content_key,
+            &public_key,
+            DEFAULT_PROFILE_ID,
+            TEST_CONTENT_KEY_ID,
+        )
+        .expect("verify signed manifest object");
+        assert_eq!(manifest, publication.manifest);
+
+        let tail_object = source
+            .get_profile_sync_object(DEFAULT_PROFILE_ID, tail_object_id)
+            .expect("fetch signed tail object from Kubo fixture cache");
+        let incoming = open_signed_sync_setting_text(
+            tail_object.bytes.as_slice(),
+            &content_key,
+            &public_key,
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            TEST_CONTENT_KEY_ID,
+        )
+        .expect("verify signed tail object");
+        assert_eq!(incoming.key, "ui.theme");
+        assert_eq!(incoming.value, "teal");
+        assert_eq!(incoming.device_id, "runtime-kubo-tail");
+        assert_eq!(
+            fixture.finish(),
+            vec![
+                "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1",
+                "POST /api/v0/pin/add?arg=bafybeigdyrzttailchange&recursive=true HTTP/1.1",
+                "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1",
+                "POST /api/v0/pin/add?arg=bafybeigdyrztsettingsmanifest&recursive=true HTTP/1.1",
+                "POST /api/v0/name/publish?arg=%2Fipfs%2Fbafybeigdyrztsettingsmanifest&key=settings%2Flatest&allow-offline=true HTTP/1.1",
+                "POST /api/v0/name/resolve?arg=%2Fipns%2Fsettings%2Flatest&recursive=false HTTP/1.1",
+                "POST /api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrztsettingsmanifest HTTP/1.1",
+                "POST /api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzttailchange HTTP/1.1",
+            ]
+        );
 
         let _ = std::fs::remove_dir_all(state_root);
         let _ = std::fs::remove_dir_all(db_root);
