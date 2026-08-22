@@ -1738,6 +1738,18 @@ pub struct SettingsSyncSelectedMultiaddrMaterializationRequest {
 }
 
 impl SettingsSyncSelectedMultiaddrMaterializationRequest {
+    pub fn endpoint_ref(&self) -> String {
+        self.endpoint.as_str().to_string()
+    }
+
+    pub fn materialization_target(&self) -> SettingsSyncProtocolProviderMaterializationTarget {
+        SettingsSyncProtocolProviderMaterializationTarget {
+            provider_id: self.provider_id.clone(),
+            endpoint_ref: self.endpoint_ref(),
+            kind: SettingsSyncProtocolProviderMaterializationTargetKind::Multiaddr,
+        }
+    }
+
     pub fn routing_plan(&self) -> RoutingPlan {
         RoutingPlan::new(
             format!("profile-sync-provider:{}", self.provider_id),
@@ -1753,6 +1765,22 @@ pub struct SettingsSyncSelectedDeferredProtocolMaterializationRequest {
     pub provider_id: String,
     pub protocol: String,
     pub target: String,
+}
+
+impl SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+    pub fn endpoint_ref(&self) -> String {
+        format!("{}:{}", self.protocol, self.target)
+    }
+
+    pub fn materialization_target(&self) -> SettingsSyncProtocolProviderMaterializationTarget {
+        SettingsSyncProtocolProviderMaterializationTarget {
+            provider_id: self.provider_id.clone(),
+            endpoint_ref: self.endpoint_ref(),
+            kind: SettingsSyncProtocolProviderMaterializationTargetKind::DeferredProtocol {
+                protocol: self.protocol.clone(),
+            },
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1774,6 +1802,19 @@ impl SettingsSyncSelectedDeferredProtocolMaterializationBatch {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SettingsSyncProtocolProviderMaterializationTargetKind {
+    Multiaddr,
+    DeferredProtocol { protocol: String },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncProtocolProviderMaterializationTarget {
+    pub provider_id: String,
+    pub endpoint_ref: String,
+    pub kind: SettingsSyncProtocolProviderMaterializationTargetKind,
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SettingsSyncSelectedProtocolMaterializationPlan {
     pub multiaddr_requests: Vec<SettingsSyncSelectedMultiaddrMaterializationRequest>,
@@ -1783,6 +1824,18 @@ pub struct SettingsSyncSelectedProtocolMaterializationPlan {
 }
 
 impl SettingsSyncSelectedProtocolMaterializationPlan {
+    pub fn materialization_targets(
+        &self,
+    ) -> Vec<SettingsSyncProtocolProviderMaterializationTarget> {
+        self.multiaddr_requests
+            .iter()
+            .map(SettingsSyncSelectedMultiaddrMaterializationRequest::materialization_target)
+            .chain(self.deferred_protocol_requests.iter().map(
+                SettingsSyncSelectedDeferredProtocolMaterializationRequest::materialization_target,
+            ))
+            .collect()
+    }
+
     pub fn multiaddr_routing_plans(&self) -> Vec<RoutingPlan> {
         self.multiaddr_requests
             .iter()
@@ -2234,6 +2287,228 @@ impl<'a> SettingsSyncInProcessFixtureMaterialization<'a> {
             .iter()
             .map(|provider| provider.retention_provider_handle())
             .collect()
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct SettingsSyncProtocolProviderDaemon<'a> {
+    pub provider_id: &'a str,
+    pub endpoint_ref: &'a str,
+    pub daemon: &'a BroadwebDaemon,
+}
+
+impl<'a> SettingsSyncProtocolProviderDaemon<'a> {
+    pub fn new(provider_id: &'a str, endpoint_ref: &'a str, daemon: &'a BroadwebDaemon) -> Self {
+        Self {
+            provider_id,
+            endpoint_ref,
+            daemon,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct SettingsSyncProtocolMaterializedProvider<'a> {
+    pub provider_id: String,
+    pub endpoint_ref: String,
+    pub daemon: &'a BroadwebDaemon,
+}
+
+impl<'a> SettingsSyncProtocolMaterializedProvider<'a> {
+    pub fn retention_provider_handle(&self) -> SettingsSyncRetentionProviderHandle<'_> {
+        SettingsSyncRetentionProviderHandle::with_endpoint_ref(
+            self.provider_id.as_str(),
+            self.endpoint_ref.as_str(),
+            self.daemon,
+        )
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct SettingsSyncProtocolProviderMaterializationReport {
+    pub materialized_provider_ids: Vec<String>,
+    pub missing_provider_ids: Vec<String>,
+    pub endpoint_mismatch_provider_ids: Vec<String>,
+    pub duplicate_provider_ids: Vec<String>,
+    pub unsupported_provider_ids: Vec<String>,
+}
+
+#[derive(Clone, Default)]
+pub struct SettingsSyncProtocolProviderMaterialization<'a> {
+    pub materialized_providers: Vec<SettingsSyncProtocolMaterializedProvider<'a>>,
+    pub missing_provider_ids: Vec<String>,
+    pub endpoint_mismatch_provider_ids: Vec<String>,
+    pub duplicate_provider_ids: Vec<String>,
+    pub unsupported_provider_ids: Vec<String>,
+}
+
+impl<'a> SettingsSyncProtocolProviderMaterialization<'a> {
+    pub fn materialized_provider_count(&self) -> usize {
+        self.materialized_providers.len()
+    }
+
+    pub fn missing_provider_count(&self) -> usize {
+        self.missing_provider_ids.len()
+    }
+
+    pub fn endpoint_mismatch_provider_count(&self) -> usize {
+        self.endpoint_mismatch_provider_ids.len()
+    }
+
+    pub fn duplicate_provider_count(&self) -> usize {
+        self.duplicate_provider_ids.len()
+    }
+
+    pub fn unsupported_provider_count(&self) -> usize {
+        self.unsupported_provider_ids.len()
+    }
+
+    pub fn blocked_provider_count(&self) -> usize {
+        self.missing_provider_count()
+            + self.endpoint_mismatch_provider_count()
+            + self.duplicate_provider_count()
+            + self.unsupported_provider_count()
+    }
+
+    pub fn all_providers_materialized(&self) -> bool {
+        self.blocked_provider_count() == 0
+    }
+
+    pub fn retention_provider_handles(&self) -> Vec<SettingsSyncRetentionProviderHandle<'_>> {
+        self.materialized_providers
+            .iter()
+            .map(SettingsSyncProtocolMaterializedProvider::retention_provider_handle)
+            .collect()
+    }
+
+    pub fn report(&self) -> SettingsSyncProtocolProviderMaterializationReport {
+        SettingsSyncProtocolProviderMaterializationReport {
+            materialized_provider_ids: self
+                .materialized_providers
+                .iter()
+                .map(|provider| provider.provider_id.clone())
+                .collect(),
+            missing_provider_ids: self.missing_provider_ids.clone(),
+            endpoint_mismatch_provider_ids: self.endpoint_mismatch_provider_ids.clone(),
+            duplicate_provider_ids: self.duplicate_provider_ids.clone(),
+            unsupported_provider_ids: self.unsupported_provider_ids.clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct SettingsSyncProtocolProviderMaterializerPolicy {
+    pub supports_multiaddr: bool,
+    pub supported_deferred_protocols: Vec<String>,
+}
+
+impl SettingsSyncProtocolProviderMaterializerPolicy {
+    pub fn new(supports_multiaddr: bool, supported_deferred_protocols: Vec<String>) -> Self {
+        Self {
+            supports_multiaddr,
+            supported_deferred_protocols,
+        }
+    }
+
+    pub fn supports_target(
+        &self,
+        target: &SettingsSyncProtocolProviderMaterializationTarget,
+    ) -> bool {
+        match &target.kind {
+            SettingsSyncProtocolProviderMaterializationTargetKind::Multiaddr => {
+                self.supports_multiaddr
+            }
+            SettingsSyncProtocolProviderMaterializationTargetKind::DeferredProtocol {
+                protocol,
+            } => self.supported_deferred_protocols.contains(protocol),
+        }
+    }
+}
+
+pub trait SettingsSyncProtocolProviderMaterializer<'a> {
+    fn materialize_protocol_providers(
+        &self,
+        plan: &SettingsSyncSelectedProtocolMaterializationPlan,
+    ) -> SettingsSyncProtocolProviderMaterialization<'a>;
+}
+
+#[derive(Clone)]
+pub struct SettingsSyncSocketlessProtocolProviderMaterializer<'a> {
+    pub policy: SettingsSyncProtocolProviderMaterializerPolicy,
+    pub provider_daemons: Vec<SettingsSyncProtocolProviderDaemon<'a>>,
+}
+
+impl<'a> SettingsSyncSocketlessProtocolProviderMaterializer<'a> {
+    pub fn new(
+        policy: SettingsSyncProtocolProviderMaterializerPolicy,
+        provider_daemons: Vec<SettingsSyncProtocolProviderDaemon<'a>>,
+    ) -> Self {
+        Self {
+            policy,
+            provider_daemons,
+        }
+    }
+
+    pub fn materialize_protocol_providers(
+        &self,
+        plan: &SettingsSyncSelectedProtocolMaterializationPlan,
+    ) -> SettingsSyncProtocolProviderMaterialization<'a> {
+        let mut materialization = SettingsSyncProtocolProviderMaterialization::default();
+
+        for target in plan.materialization_targets() {
+            if !self.policy.supports_target(&target) {
+                materialization
+                    .unsupported_provider_ids
+                    .push(target.provider_id);
+                continue;
+            }
+
+            let mut matching_daemons = self
+                .provider_daemons
+                .iter()
+                .filter(|provider| provider.provider_id == target.provider_id);
+            let Some(provider) = matching_daemons.next() else {
+                materialization
+                    .missing_provider_ids
+                    .push(target.provider_id);
+                continue;
+            };
+            if matching_daemons.next().is_some() {
+                materialization
+                    .duplicate_provider_ids
+                    .push(target.provider_id);
+                continue;
+            }
+            if provider.endpoint_ref != target.endpoint_ref {
+                materialization
+                    .endpoint_mismatch_provider_ids
+                    .push(target.provider_id);
+                continue;
+            }
+
+            materialization
+                .materialized_providers
+                .push(SettingsSyncProtocolMaterializedProvider {
+                    provider_id: target.provider_id,
+                    endpoint_ref: target.endpoint_ref,
+                    daemon: provider.daemon,
+                });
+        }
+
+        materialization
+    }
+}
+
+impl<'a> SettingsSyncProtocolProviderMaterializer<'a>
+    for SettingsSyncSocketlessProtocolProviderMaterializer<'a>
+{
+    fn materialize_protocol_providers(
+        &self,
+        plan: &SettingsSyncSelectedProtocolMaterializationPlan,
+    ) -> SettingsSyncProtocolProviderMaterialization<'a> {
+        SettingsSyncSocketlessProtocolProviderMaterializer::materialize_protocol_providers(
+            self, plan,
+        )
     }
 }
 
@@ -6894,6 +7169,215 @@ mod tests {
             batches[1].provider_ids(),
             vec!["contracted-provider".to_string()]
         );
+    }
+
+    #[test]
+    fn protocol_provider_materializer_uses_socketless_handles_for_selected_targets() {
+        let network = InProcessBroadwebNetwork::new();
+        let multiaddr_state_root = test_state_root("protocol-materializer-multiaddr");
+        let iroh_state_root = test_state_root("protocol-materializer-iroh");
+        let mismatch_state_root = test_state_root("protocol-materializer-mismatch");
+        let duplicate_state_root = test_state_root("protocol-materializer-duplicate");
+        let multiaddr_provider_id = "protocol-multiaddr-provider";
+        let iroh_provider_id = "protocol-iroh-provider";
+        let missing_provider_id = "protocol-missing-provider";
+        let mismatch_provider_id = "protocol-mismatch-provider";
+        let duplicate_provider_id = "protocol-duplicate-provider";
+        let unsupported_provider_id = "protocol-unsupported-provider";
+        let multiaddr_endpoint = "/dnsaddr/sync.example.test/p2p/protocol-multiaddr-provider";
+        let iroh_endpoint = "iroh-node:node-a";
+        let mismatch_expected_endpoint = "iroh-node:expected-node";
+        let mismatch_actual_endpoint = "iroh-node:other-node";
+        let duplicate_endpoint = "iroh-node:duplicate-node";
+
+        let multiaddr_daemon = network
+            .daemon_for_availability_provider(
+                &multiaddr_state_root,
+                ResourceBudget::default(),
+                multiaddr_provider_id,
+            )
+            .expect("start multiaddr materializer daemon");
+        let iroh_daemon = network
+            .daemon_for_availability_provider(
+                &iroh_state_root,
+                ResourceBudget::default(),
+                iroh_provider_id,
+            )
+            .expect("start iroh materializer daemon");
+        let mismatch_daemon = network
+            .daemon_for_availability_provider(
+                &mismatch_state_root,
+                ResourceBudget::default(),
+                mismatch_provider_id,
+            )
+            .expect("start mismatch materializer daemon");
+        let duplicate_daemon = network
+            .daemon_for_availability_provider(
+                &duplicate_state_root,
+                ResourceBudget::default(),
+                duplicate_provider_id,
+            )
+            .expect("start duplicate materializer daemon");
+
+        let plan = super::SettingsSyncSelectedProtocolMaterializationPlan {
+            multiaddr_requests: vec![
+                super::SettingsSyncSelectedMultiaddrMaterializationRequest {
+                    provider_id: multiaddr_provider_id.to_string(),
+                    endpoint: slate_routing::Multiaddr::parse(multiaddr_endpoint)
+                        .expect("test multiaddr"),
+                },
+                super::SettingsSyncSelectedMultiaddrMaterializationRequest {
+                    provider_id: missing_provider_id.to_string(),
+                    endpoint: slate_routing::Multiaddr::parse(
+                        "/dnsaddr/missing.example.test/p2p/protocol-missing-provider",
+                    )
+                    .expect("missing test multiaddr"),
+                },
+            ],
+            deferred_protocol_requests: vec![
+                super::SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+                    provider_id: iroh_provider_id.to_string(),
+                    protocol: "iroh-node".to_string(),
+                    target: "node-a".to_string(),
+                },
+                super::SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+                    provider_id: mismatch_provider_id.to_string(),
+                    protocol: "iroh-node".to_string(),
+                    target: "expected-node".to_string(),
+                },
+                super::SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+                    provider_id: duplicate_provider_id.to_string(),
+                    protocol: "iroh-node".to_string(),
+                    target: "duplicate-node".to_string(),
+                },
+                super::SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+                    provider_id: unsupported_provider_id.to_string(),
+                    protocol: "provider".to_string(),
+                    target: "contracted-pinning".to_string(),
+                },
+            ],
+            ..super::SettingsSyncSelectedProtocolMaterializationPlan::default()
+        };
+        assert_eq!(
+            plan.materialization_targets(),
+            vec![
+                super::SettingsSyncProtocolProviderMaterializationTarget {
+                    provider_id: multiaddr_provider_id.to_string(),
+                    endpoint_ref: multiaddr_endpoint.to_string(),
+                    kind: super::SettingsSyncProtocolProviderMaterializationTargetKind::Multiaddr,
+                },
+                super::SettingsSyncProtocolProviderMaterializationTarget {
+                    provider_id: missing_provider_id.to_string(),
+                    endpoint_ref:
+                        "/dnsaddr/missing.example.test/p2p/protocol-missing-provider".to_string(),
+                    kind: super::SettingsSyncProtocolProviderMaterializationTargetKind::Multiaddr,
+                },
+                super::SettingsSyncProtocolProviderMaterializationTarget {
+                    provider_id: iroh_provider_id.to_string(),
+                    endpoint_ref: iroh_endpoint.to_string(),
+                    kind: super::SettingsSyncProtocolProviderMaterializationTargetKind::DeferredProtocol {
+                        protocol: "iroh-node".to_string(),
+                    },
+                },
+                super::SettingsSyncProtocolProviderMaterializationTarget {
+                    provider_id: mismatch_provider_id.to_string(),
+                    endpoint_ref: mismatch_expected_endpoint.to_string(),
+                    kind: super::SettingsSyncProtocolProviderMaterializationTargetKind::DeferredProtocol {
+                        protocol: "iroh-node".to_string(),
+                    },
+                },
+                super::SettingsSyncProtocolProviderMaterializationTarget {
+                    provider_id: duplicate_provider_id.to_string(),
+                    endpoint_ref: duplicate_endpoint.to_string(),
+                    kind: super::SettingsSyncProtocolProviderMaterializationTargetKind::DeferredProtocol {
+                        protocol: "iroh-node".to_string(),
+                    },
+                },
+                super::SettingsSyncProtocolProviderMaterializationTarget {
+                    provider_id: unsupported_provider_id.to_string(),
+                    endpoint_ref: "provider:contracted-pinning".to_string(),
+                    kind: super::SettingsSyncProtocolProviderMaterializationTargetKind::DeferredProtocol {
+                        protocol: "provider".to_string(),
+                    },
+                },
+            ]
+        );
+
+        let materializer = super::SettingsSyncSocketlessProtocolProviderMaterializer::new(
+            super::SettingsSyncProtocolProviderMaterializerPolicy::new(
+                true,
+                vec!["iroh-node".to_string()],
+            ),
+            vec![
+                super::SettingsSyncProtocolProviderDaemon::new(
+                    multiaddr_provider_id,
+                    multiaddr_endpoint,
+                    &multiaddr_daemon,
+                ),
+                super::SettingsSyncProtocolProviderDaemon::new(
+                    iroh_provider_id,
+                    iroh_endpoint,
+                    &iroh_daemon,
+                ),
+                super::SettingsSyncProtocolProviderDaemon::new(
+                    mismatch_provider_id,
+                    mismatch_actual_endpoint,
+                    &mismatch_daemon,
+                ),
+                super::SettingsSyncProtocolProviderDaemon::new(
+                    duplicate_provider_id,
+                    duplicate_endpoint,
+                    &duplicate_daemon,
+                ),
+                super::SettingsSyncProtocolProviderDaemon::new(
+                    duplicate_provider_id,
+                    duplicate_endpoint,
+                    &duplicate_daemon,
+                ),
+            ],
+        );
+
+        let materialization = materializer.materialize_protocol_providers(&plan);
+        assert_eq!(materialization.materialized_provider_count(), 2);
+        assert_eq!(materialization.missing_provider_count(), 1);
+        assert_eq!(materialization.endpoint_mismatch_provider_count(), 1);
+        assert_eq!(materialization.duplicate_provider_count(), 1);
+        assert_eq!(materialization.unsupported_provider_count(), 1);
+        assert_eq!(materialization.blocked_provider_count(), 4);
+        assert!(!materialization.all_providers_materialized());
+        assert_eq!(
+            materialization.report(),
+            super::SettingsSyncProtocolProviderMaterializationReport {
+                materialized_provider_ids: vec![
+                    multiaddr_provider_id.to_string(),
+                    iroh_provider_id.to_string(),
+                ],
+                missing_provider_ids: vec![missing_provider_id.to_string()],
+                endpoint_mismatch_provider_ids: vec![mismatch_provider_id.to_string()],
+                duplicate_provider_ids: vec![duplicate_provider_id.to_string()],
+                unsupported_provider_ids: vec![unsupported_provider_id.to_string()],
+            }
+        );
+        let retention_provider_handles = materialization.retention_provider_handles();
+        assert_eq!(retention_provider_handles.len(), 2);
+        assert_eq!(
+            retention_provider_handles[0].provider_id,
+            multiaddr_provider_id
+        );
+        assert_eq!(
+            retention_provider_handles[0].endpoint_ref,
+            Some(multiaddr_endpoint)
+        );
+        assert_eq!(retention_provider_handles[1].provider_id, iroh_provider_id);
+        assert_eq!(
+            retention_provider_handles[1].endpoint_ref,
+            Some(iroh_endpoint)
+        );
+
+        let _ = std::fs::remove_dir_all(multiaddr_state_root);
+        let _ = std::fs::remove_dir_all(iroh_state_root);
+        let _ = std::fs::remove_dir_all(mismatch_state_root);
+        let _ = std::fs::remove_dir_all(duplicate_state_root);
     }
 
     #[test]

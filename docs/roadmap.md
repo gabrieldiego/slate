@@ -598,6 +598,12 @@ Current baseline:
   protocol-keyed batches. Future `provider:` and `iroh-node:` adapters can
   consume only their own selected provider work queue without re-scanning the
   whole scheduler plan or opening any sockets during planning.
+- `slate-profile-sync` now has a socketless protocol provider materializer
+  boundary. It converts selected multiaddr and deferred-protocol provider work
+  into endpoint targets, accepts already-created provider daemons from a
+  fixture or future adapter, verifies provider id and endpoint-ref matches, and
+  reports missing, mismatched, duplicate, or unsupported providers before those
+  handles can feed the stored-provider scheduler path.
 - The selected endpoint materialization plan now exposes a combined protocol
   materialization summary that groups multiaddr work, deferred-protocol work,
   missing endpoints, and fail-closed endpoints. Scheduler/UI code can tell
