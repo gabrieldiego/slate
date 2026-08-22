@@ -910,7 +910,11 @@ tests can model provider selection through `InProcessBroadwebNetwork` without
 loopback sockets or external discovery. That selector is also exposed as a
 read-only scheduler plan: it runs preflight, reports selected, undiscovered,
 and duplicate handles, and does not publish, pull, retain, or mutate sync
-roots. A secret-backed retained tick now follows the same active-key
+roots. The same explicit handle selector can now drive a compaction-only tick:
+it publishes the storage-selected compacted snapshot manifest, hands the
+compacted object set to selected availability providers, and evaluates
+settings-root quorum without publishing a local device-head root.
+A secret-backed retained tick now follows the same active-key
 shared-root cycle but derives the content key from `SlateSyncSecret` after
 preflight, so runtime callers do not need to hand raw content-key bytes to the
 scheduler. The membership-aware selected-provider tick has the same shape after

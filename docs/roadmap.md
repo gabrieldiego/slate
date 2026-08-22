@@ -1129,6 +1129,10 @@ Current baseline:
   any post-snapshot tail objects, and the manifest on selected availability
   providers before strict settings-root quorum is evaluated, with socketless
   fixture coverage in the low-memory boundary gate.
+- The scheduler facade can now run that compaction handoff through explicit
+  selected provider handles as well, preserving the same stale/offline,
+  ineligible, unknown, and duplicate provider reporting used by regular sync
+  cycles while keeping the compaction test socketless.
 - `slate-profile-sync` now has an initial local publish-flow helper that
   creates a full settings snapshot from `slate-settings.db`, publishes the
   signed encrypted snapshot manifest, publishes the local per-device head

@@ -1937,6 +1937,82 @@ impl SettingsSyncScheduledCycleRun {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncScheduledCompactionRun {
+    pub preflight: SettingsSyncCyclePreflight,
+    pub selected_retention_provider_ids: Vec<String>,
+    pub stale_retention_provider_ids: Vec<String>,
+    pub offline_retention_provider_ids: Vec<String>,
+    pub ineligible_retention_provider_ids: Vec<String>,
+    pub undiscovered_retention_provider_ids: Vec<String>,
+    pub duplicate_retention_provider_ids: Vec<String>,
+    pub compaction: SettingsSyncCompactionWithRetentionRun,
+}
+
+impl SettingsSyncScheduledCompactionRun {
+    pub fn selected_retention_provider_count(&self) -> usize {
+        self.selected_retention_provider_ids.len()
+    }
+
+    pub fn undiscovered_retention_provider_count(&self) -> usize {
+        self.undiscovered_retention_provider_ids.len()
+    }
+
+    pub fn stale_retention_provider_count(&self) -> usize {
+        self.stale_retention_provider_ids.len()
+    }
+
+    pub fn offline_retention_provider_count(&self) -> usize {
+        self.offline_retention_provider_ids.len()
+    }
+
+    pub fn ineligible_retention_provider_count(&self) -> usize {
+        self.ineligible_retention_provider_ids.len()
+    }
+
+    pub fn duplicate_retention_provider_count(&self) -> usize {
+        self.duplicate_retention_provider_ids.len()
+    }
+
+    pub fn retention_provider_selection_issues(
+        &self,
+    ) -> Vec<SettingsSyncRetentionProviderSelectionIssue> {
+        retention_provider_selection_issues(
+            self.stale_retention_provider_ids.as_slice(),
+            self.offline_retention_provider_ids.as_slice(),
+            self.ineligible_retention_provider_ids.as_slice(),
+            self.undiscovered_retention_provider_ids.as_slice(),
+            self.duplicate_retention_provider_ids.as_slice(),
+        )
+    }
+
+    pub fn retention_provider_selection_issue_count(&self) -> usize {
+        retention_provider_selection_issue_count(
+            self.stale_retention_provider_ids.as_slice(),
+            self.offline_retention_provider_ids.as_slice(),
+            self.ineligible_retention_provider_ids.as_slice(),
+            self.undiscovered_retention_provider_ids.as_slice(),
+            self.duplicate_retention_provider_ids.as_slice(),
+        )
+    }
+
+    pub fn has_retention_provider_selection_issue(&self) -> bool {
+        self.retention_provider_selection_issue_count() > 0
+    }
+
+    pub fn retained_provider_count(&self) -> usize {
+        self.compaction.retained_provider_count()
+    }
+
+    pub fn degraded_before(&self) -> bool {
+        self.compaction.degraded_before()
+    }
+
+    pub fn degraded_after(&self) -> bool {
+        self.compaction.degraded_after()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettingsSyncScheduledMembershipCycleRun {
     pub preflight: SettingsSyncCyclePreflightWithMembershipLog,
     pub selected_retention_provider_ids: Vec<String>,
@@ -5915,11 +5991,32 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
             signer,
             policy,
         )?;
+        self.compact_settings_with_active_key_policy_and_retention_providers_after_preflight(
+            database,
+            content_key,
+            signer,
+            policy,
+            now,
+            retention_provider_daemons,
+            &preflight,
+        )
+    }
+
+    fn compact_settings_with_active_key_policy_and_retention_providers_after_preflight(
+        &self,
+        database: &SlateProfileDatabase,
+        content_key: &ProfileSyncContentKey,
+        signer: &ProfileSyncDeviceSigner,
+        policy: &SettingsSyncCyclePolicy,
+        now: i64,
+        retention_provider_daemons: &[&BroadwebDaemon],
+        preflight: &SettingsSyncCyclePreflight,
+    ) -> Result<SettingsSyncCompactionWithRetentionRun, ProfileSyncCycleWithHealthError> {
         let compaction = BroadwebdProfileSyncPublisher::new(self.daemon)
             .compact_and_publish_settings(
                 database,
-                profile,
-                settings_root_id,
+                preflight.profile.as_str(),
+                preflight.settings_root_id.as_str(),
                 content_key,
                 preflight.active_key_id.as_str(),
                 signer,
@@ -5934,7 +6031,10 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
         let mut retention = Vec::with_capacity(retention_provider_daemons.len());
         for (provider_index, provider_daemon) in retention_provider_daemons.iter().enumerate() {
             let object_statuses = BroadwebdProfileSyncPublisher::new(*provider_daemon)
-                .retain_profile_sync_objects(profile, retained_object_ids.as_slice())
+                .retain_profile_sync_objects(
+                    preflight.profile.as_str(),
+                    retained_object_ids.as_slice(),
+                )
                 .map_err(ProfileSyncCycleWithHealthError::Retention)?;
             retention.push(SettingsSyncCycleProviderRetentionRun {
                 provider_index,
@@ -5943,14 +6043,14 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
         }
         let after_health = self.settings_sync_health(
             database,
-            profile,
-            settings_root_id,
+            preflight.profile.as_str(),
+            preflight.settings_root_id.as_str(),
             policy.minimum_online_retaining_providers,
         )?;
         policy.check_after_cycle(&after_health)?;
 
         Ok(SettingsSyncCompactionWithRetentionRun {
-            before_health: preflight.before_health,
+            before_health: preflight.before_health.clone(),
             compaction,
             retained_object_ids,
             retention,
@@ -6728,6 +6828,61 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             undiscovered_retention_provider_ids: plan.undiscovered_retention_provider_ids,
             duplicate_retention_provider_ids: plan.duplicate_retention_provider_ids,
             cycle,
+        })
+    }
+
+    pub fn compact_once_selecting_retention_providers(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        secrets: SettingsSyncRuntimeSecrets<'_>,
+        now: i64,
+        retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'_>],
+    ) -> Result<SettingsSyncScheduledCompactionRun, ProfileSyncCycleWithHealthError> {
+        let runner = BroadwebdSettingsSyncRunner::new(self.daemon);
+        let preflight = runner.settings_sync_cycle_preflight_with_active_key_policy(
+            database,
+            config.profile.as_str(),
+            config.settings_root_id.as_str(),
+            secrets.signer,
+            &config.policy,
+        )?;
+        let selection =
+            select_settings_sync_retention_provider_handles(preflight, retention_provider_handles);
+        let plan = selection.plan;
+        config.policy.check_selected_retention_provider_freshness(
+            plan.stale_retention_provider_count(),
+            plan.offline_retention_provider_count(),
+            &plan.preflight.before_health,
+        )?;
+        config.policy.check_selected_retention_provider_roles(
+            plan.ineligible_retention_provider_count(),
+            &plan.preflight.before_health,
+        )?;
+        config.policy.check_selected_retention_provider_count(
+            plan.selected_retention_provider_count(),
+            &plan.preflight.before_health,
+        )?;
+        let compaction = runner
+            .compact_settings_with_active_key_policy_and_retention_providers_after_preflight(
+                database,
+                secrets.content_key,
+                secrets.signer,
+                &config.policy,
+                now,
+                selection.daemons.as_slice(),
+                &plan.preflight,
+            )?;
+
+        Ok(SettingsSyncScheduledCompactionRun {
+            preflight: plan.preflight,
+            selected_retention_provider_ids: plan.selected_retention_provider_ids,
+            stale_retention_provider_ids: plan.stale_retention_provider_ids,
+            offline_retention_provider_ids: plan.offline_retention_provider_ids,
+            ineligible_retention_provider_ids: plan.ineligible_retention_provider_ids,
+            undiscovered_retention_provider_ids: plan.undiscovered_retention_provider_ids,
+            duplicate_retention_provider_ids: plan.duplicate_retention_provider_ids,
+            compaction,
         })
     }
 
@@ -20330,6 +20485,167 @@ mod tests {
         assert_eq!(
             object_ids.into_iter().collect::<BTreeSet<_>>(),
             run.retained_object_ids
+                .iter()
+                .cloned()
+                .collect::<BTreeSet<_>>()
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_scheduler_compacts_with_selected_retention_provider_handles() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("scheduler-compaction-device");
+        let provider_state_root = test_state_root("scheduler-compaction-provider");
+        let db_root = test_state_root("scheduler-compaction-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-compaction-a",
+            )
+            .expect("start in-process scheduler compaction device daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-compaction-pinner",
+            )
+            .expect("start in-process scheduler compaction availability provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-scheduler-compaction-a",
+        )
+        .expect("open scheduler compaction local settings database");
+        let profile = "schedulercompactionprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([74; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-scheduler-compaction-a")
+            .expect("generate scheduler compaction local device signer");
+        let policy = SettingsSyncCyclePolicy::new(
+            ProfileSyncRetentionPolicy {
+                min_tail_change_count: 1,
+                change_retention_seconds: 0,
+                ..ProfileSyncRetentionPolicy::default()
+            },
+            4,
+            4,
+            2,
+        )
+        .with_local_device_head_root_health_required_after_cycle(false);
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register scheduler compaction trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write first scheduler compacted setting");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.zoom", "110")
+            .expect("write second scheduler compacted setting");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.font", "Inter")
+            .expect("write scheduler retained compaction tail setting");
+
+        let config = SettingsSyncSchedulerConfig::new(profile, settings_root_id, policy);
+        let selected_provider_id = "local-fixture-availability-runtime-scheduler-compaction-pinner";
+        let retention_provider_handles = [
+            SettingsSyncRetentionProviderHandle::new("not-a-discovered-provider", &provider_daemon),
+            SettingsSyncRetentionProviderHandle::new(selected_provider_id, &provider_daemon),
+            SettingsSyncRetentionProviderHandle::new(selected_provider_id, &provider_daemon),
+        ];
+
+        let run = BroadwebdSettingsSyncScheduler::new(&device_daemon)
+            .compact_once_selecting_retention_providers(
+                &database,
+                &config,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                i64::MAX,
+                &retention_provider_handles,
+            )
+            .expect("scheduler compaction selects and retains through provider handles");
+
+        assert_eq!(
+            run.selected_retention_provider_ids,
+            vec![selected_provider_id.to_string()]
+        );
+        assert_eq!(
+            run.undiscovered_retention_provider_ids,
+            vec!["not-a-discovered-provider".to_string()]
+        );
+        assert_eq!(
+            run.duplicate_retention_provider_ids,
+            vec![selected_provider_id.to_string()]
+        );
+        assert_eq!(run.selected_retention_provider_count(), 1);
+        assert_eq!(run.undiscovered_retention_provider_count(), 1);
+        assert_eq!(run.duplicate_retention_provider_count(), 1);
+        assert_eq!(run.retention_provider_selection_issue_count(), 2);
+        assert!(run.has_retention_provider_selection_issue());
+        assert!(run.degraded_before());
+        assert!(!run.preflight.before_health.provider_health.degraded);
+        assert!(run.compaction.compacted());
+        let compaction = run
+            .compaction
+            .compaction
+            .as_ref()
+            .expect("scheduler compaction was published");
+        assert_eq!(compaction.target.retained_tail_change_count, 1);
+        assert_eq!(
+            run.compaction.retained_object_ids,
+            compaction.published_object_ids()
+        );
+        assert_eq!(run.compaction.retained_object_ids.len(), 3);
+        assert_eq!(run.compaction.retention.len(), 1);
+        assert_eq!(
+            run.compaction.retention[0].object_count(),
+            run.compaction.retained_object_ids.len()
+        );
+        assert_eq!(
+            run.compaction.retention[0].retained_count(),
+            run.compaction.retained_object_ids.len()
+        );
+        assert_eq!(
+            run.compaction.retention[0].available_count(),
+            run.compaction.retained_object_ids.len()
+        );
+        assert_eq!(run.retained_provider_count(), 1);
+        assert!(!run.compaction.has_retention_issue());
+        assert!(run.degraded_after());
+        assert!(!run.compaction.after_health.settings_root_health.degraded);
+        assert_eq!(
+            run.compaction
+                .after_health
+                .settings_root_health
+                .online_retaining_providers,
+            2
+        );
+        assert!(
+            run.compaction
+                .after_health
+                .local_device_head_root_health
+                .degraded
+        );
+
+        let retained = provider_daemon
+            .profile_sync(BroadwebdProfileSyncRequest::ListRetainedObjects(
+                BroadwebdProfileSyncProfileRequest::new(profile),
+            ))
+            .expect("scheduler compaction provider can list retained objects");
+        let BroadwebdProfileSyncResponse::RetainedObjects { object_ids } = retained else {
+            panic!("expected retained object list");
+        };
+        assert_eq!(
+            object_ids.into_iter().collect::<BTreeSet<_>>(),
+            run.compaction
+                .retained_object_ids
                 .iter()
                 .cloned()
                 .collect::<BTreeSet<_>>()
