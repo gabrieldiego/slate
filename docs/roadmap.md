@@ -1467,11 +1467,19 @@ Next:
   delayed sync, availability loss, pinning policy, and conflicts entirely
   through in-process fixture transports, without loopback ports, the real
   internet, Tor, public IPFS/IPNS, or external relays.
+- Keep fixture behavior behind internal transport shims. Protocol adapters
+  should still build and parse production-shaped HTTP, Kubo, IPNS, Iroh-like,
+  Tor/I2P, LAN, or retention-provider messages; the test layer only swaps the
+  socket path for deterministic in-process delivery.
 - Commit each coherent step separately and rerun focused regression tests for
   storage, broadwebd, rail apps, and chrome behavior as those areas are touched.
 
 Backlog:
 
+- Add manual real-network probes after deterministic models are stable, then
+  compare observed IPFS/IPNS, Iroh-like, Tor/I2P, LAN, and retention-provider
+  behavior against the internal fixtures and refine the models where reality
+  differs.
 - Add ignored/manual loopback Kubo integration tests for add, pin, publish, and
   resolve.
 - Add leak tests proving profile sync does not use OS DNS, public gateways, or

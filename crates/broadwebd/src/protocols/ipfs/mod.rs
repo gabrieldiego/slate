@@ -7,9 +7,7 @@ mod service;
 pub use config::{IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, IpfsTransportKind};
 pub use gateway::{IpfsGatewayTransport, ipfs_gateway_http_url};
 #[cfg(any(test, feature = "test-fixtures"))]
-pub use kubo::InternalKuboRpcResponse;
-#[cfg(any(test, feature = "test-fixtures"))]
-pub use kubo::fetch_internal_kubo_profile_sync_fixture;
+pub use kubo::{InternalKuboRpcResponse, InternalKuboRpcTransportShim};
 pub use kubo::{
     IpfsKuboProfileSyncOperation, IpfsKuboProfileSyncRpc, IpfsKuboProfileSyncRpcRequest,
     IpfsKuboRpcEndpoint, IpfsKuboRpcTransport, ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url,

@@ -62,6 +62,11 @@ pub struct IpfsKuboProfileSyncRpc {
     endpoint: IpfsKuboRpcEndpoint,
 }
 
+/// Test-only socket substitute for Kubo-compatible HTTP RPC requests.
+#[cfg(any(test, feature = "test-fixtures"))]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct InternalKuboRpcTransportShim;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IpfsKuboProfileSyncRpcRequest {
     operation: IpfsKuboProfileSyncOperation,
@@ -174,12 +179,12 @@ impl IpfsKuboProfileSyncRpc {
     }
 
     #[cfg(any(test, feature = "test-fixtures"))]
-    pub fn put_encrypted_object_fixture(
+    pub fn put_encrypted_object_via_internal_transport(
         &self,
         object_bytes: &[u8],
         budget: &ResourceBudget,
     ) -> Result<String, BroadwebdError> {
-        self.require_internal_fixture_endpoint()?;
+        self.require_internal_transport_endpoint()?;
         if object_bytes.len() > budget.max_profile_sync_object_bytes {
             return Err(BroadwebdError::ResponseTooLarge {
                 limit: budget.max_profile_sync_object_bytes,
@@ -188,76 +193,83 @@ impl IpfsKuboProfileSyncRpc {
         }
 
         let request = self.put_encrypted_object_request()?;
-        let response = fetch_internal_kubo_profile_sync_fixture(&request, budget)?;
+        let response =
+            InternalKuboRpcTransportShim::execute_profile_sync_request(&request, budget)?;
         require_kubo_profile_sync_success("add", response.status_code)?;
         ipfs_kubo_profile_sync_added_object_id(response.body.as_slice())
     }
 
     #[cfg(any(test, feature = "test-fixtures"))]
-    pub fn get_encrypted_object_fixture(
+    pub fn get_encrypted_object_via_internal_transport(
         &self,
         object_id: &str,
         budget: &ResourceBudget,
     ) -> Result<Vec<u8>, BroadwebdError> {
-        self.require_internal_fixture_endpoint()?;
+        self.require_internal_transport_endpoint()?;
         validate_kubo_profile_sync_object_id(object_id)?;
         let content_path = format!("/ipfs/{object_id}");
         let url = parse_http_url(
             kubo_cat_url_for_path(content_path.as_str(), self.endpoint.api_base_url())?.as_str(),
         )?;
-        let response =
-            fetch_internal_kubo_rpc_response(&url, budget.max_profile_sync_object_bytes)?;
+        let response = InternalKuboRpcTransportShim::execute_content_request(
+            &url,
+            budget.max_profile_sync_object_bytes,
+        )?;
         require_kubo_profile_sync_success("cat", response.status_code)?;
         Ok(response.body)
     }
 
     #[cfg(any(test, feature = "test-fixtures"))]
-    pub fn retain_object_fixture(
+    pub fn retain_object_via_internal_transport(
         &self,
         object_id: &str,
         budget: &ResourceBudget,
     ) -> Result<(), BroadwebdError> {
-        self.require_internal_fixture_endpoint()?;
+        self.require_internal_transport_endpoint()?;
         let request = self.retain_object_request(object_id)?;
-        let response = fetch_internal_kubo_profile_sync_fixture(&request, budget)?;
+        let response =
+            InternalKuboRpcTransportShim::execute_profile_sync_request(&request, budget)?;
         require_kubo_profile_sync_success("pin/add", response.status_code)
     }
 
     #[cfg(any(test, feature = "test-fixtures"))]
-    pub fn release_object_fixture(
+    pub fn release_object_via_internal_transport(
         &self,
         object_id: &str,
         budget: &ResourceBudget,
     ) -> Result<(), BroadwebdError> {
-        self.require_internal_fixture_endpoint()?;
+        self.require_internal_transport_endpoint()?;
         let request = self.release_object_request(object_id)?;
-        let response = fetch_internal_kubo_profile_sync_fixture(&request, budget)?;
+        let response =
+            InternalKuboRpcTransportShim::execute_profile_sync_request(&request, budget)?;
         require_kubo_profile_sync_success("pin/rm", response.status_code)
     }
 
     #[cfg(any(test, feature = "test-fixtures"))]
-    pub fn verify_retained_object_fixture(
+    pub fn verify_retained_object_via_internal_transport(
         &self,
         object_id: &str,
         budget: &ResourceBudget,
     ) -> Result<bool, BroadwebdError> {
-        self.require_internal_fixture_endpoint()?;
+        self.require_internal_transport_endpoint()?;
         let request = self.verify_retained_object_request(object_id)?;
-        let response = fetch_internal_kubo_profile_sync_fixture(&request, budget)?;
+        let response =
+            InternalKuboRpcTransportShim::execute_profile_sync_request(&request, budget)?;
         require_kubo_profile_sync_success("pin/ls", response.status_code)?;
         ipfs_kubo_profile_sync_pin_ls_has_recursive_pin(object_id, response.body.as_slice())
     }
 
     #[cfg(any(test, feature = "test-fixtures"))]
-    pub fn publish_root_fixture(
+    pub fn publish_root_via_internal_transport(
         &self,
         key_id: &str,
         object_id: &str,
         budget: &ResourceBudget,
     ) -> Result<String, BroadwebdError> {
-        self.require_internal_fixture_endpoint()?;
+        self.require_internal_transport_endpoint()?;
         let request = self.publish_root_request(key_id, object_id)?;
-        let response = fetch_internal_kubo_profile_sync_fixture(&request, budget)?;
+        let response =
+            InternalKuboRpcTransportShim::execute_profile_sync_request(&request, budget)?;
         require_kubo_profile_sync_success("name/publish", response.status_code)?;
         let published_object_id =
             ipfs_kubo_profile_sync_published_object_id(response.body.as_slice())?;
@@ -271,27 +283,46 @@ impl IpfsKuboProfileSyncRpc {
     }
 
     #[cfg(any(test, feature = "test-fixtures"))]
-    pub fn resolve_root_fixture(
+    pub fn resolve_root_via_internal_transport(
         &self,
         name: &str,
         budget: &ResourceBudget,
     ) -> Result<String, BroadwebdError> {
-        self.require_internal_fixture_endpoint()?;
+        self.require_internal_transport_endpoint()?;
         let request = self.resolve_root_request(name)?;
-        let response = fetch_internal_kubo_profile_sync_fixture(&request, budget)?;
+        let response =
+            InternalKuboRpcTransportShim::execute_profile_sync_request(&request, budget)?;
         require_kubo_profile_sync_success("name/resolve", response.status_code)?;
         ipfs_kubo_profile_sync_resolved_object_id(response.body.as_slice())
     }
 
     #[cfg(any(test, feature = "test-fixtures"))]
-    fn require_internal_fixture_endpoint(&self) -> Result<(), BroadwebdError> {
+    fn require_internal_transport_endpoint(&self) -> Result<(), BroadwebdError> {
         if self.endpoint.is_internal_fixture() {
             return Ok(());
         }
 
         Err(BroadwebdError::UnsupportedRequest(
-            "Kubo profile-sync fixture client requires an in-process fixture endpoint".to_string(),
+            "Kubo profile-sync internal transport requires an in-process fixture endpoint"
+                .to_string(),
         ))
+    }
+}
+
+#[cfg(any(test, feature = "test-fixtures"))]
+impl InternalKuboRpcTransportShim {
+    pub fn execute_profile_sync_request(
+        request: &IpfsKuboProfileSyncRpcRequest,
+        budget: &ResourceBudget,
+    ) -> Result<InternalKuboRpcResponse, BroadwebdError> {
+        fetch_internal_kubo_profile_sync_fixture(request, budget)
+    }
+
+    pub fn execute_content_request(
+        url: &Url,
+        max_response_bytes: usize,
+    ) -> Result<InternalKuboRpcResponse, BroadwebdError> {
+        fetch_internal_kubo_rpc_response(url, max_response_bytes)
     }
 }
 
@@ -547,7 +578,7 @@ pub fn ipfs_kubo_profile_sync_resolved_object_id(
 }
 
 #[cfg(any(test, feature = "test-fixtures"))]
-pub fn fetch_internal_kubo_profile_sync_fixture(
+fn fetch_internal_kubo_profile_sync_fixture(
     request: &IpfsKuboProfileSyncRpcRequest,
     budget: &ResourceBudget,
 ) -> Result<InternalKuboRpcResponse, BroadwebdError> {

@@ -1148,6 +1148,32 @@ model and regression tests before relying on that behavior in production.
     the selected policy.
 16. Generalize the service contract so future transports can back profile sync.
 
+## Internal Protocol Models
+
+Deterministic broadweb tests should model external behavior behind transport
+shims, not inside the protocol implementation. The IPFS/IPNS path, for example,
+should still build Kubo-compatible HTTP RPC requests, parse Kubo-compatible
+responses, and enforce the same endpoint policy that a real local Kubo
+integration would use. Test fixtures may replace the socket layer with
+in-process delivery, but they should not replace the protocol contract with
+test-only shortcuts.
+
+This gives us three separate layers to keep honest:
+
+1. Protocol adapters describe real-web semantics: URLs, RPC paths, request
+   methods, response formats, identity material, retention behavior, and failure
+   surfaces.
+2. Transport shims decide whether bytes move through real sockets or an
+   internal fixture endpoint.
+3. Fixture models provide deterministic peer availability, delays, retention
+   loss, mutable-root visibility, and conflict timing.
+
+When Slate eventually taps IPFS/IPNS, Iroh-like transports, Tor/I2P-style
+routes, LAN discovery, or contracted retention providers on the real web, those
+manual probes should compare observed behavior against the same fixture model
+interfaces. Differences should refine the models, not leak test shortcuts back
+into production protocol adapters.
+
 ## Testing Strategy
 
 - Pure unit tests cover schema migration, merge policy, conflict handling,
