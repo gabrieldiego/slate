@@ -619,6 +619,11 @@ Current baseline:
   materializer which selected providers would become retention handles, compare
   that against the normal stored-provider handle materialization report, and
   prove the preview leaves revisions and profile-sync roots unchanged.
+- Membership-log stored-provider plan attempts now expose the same optional
+  protocol materialization preview. Credential-blocked attempts still return no
+  preview, while ready attempts can report whether selected multiaddr or
+  deferred-protocol providers would materialize before publishing settings,
+  membership-log objects, or roots.
 - The selected endpoint materialization plan now exposes a combined protocol
   materialization summary that groups multiaddr work, deferred-protocol work,
   missing endpoints, and fail-closed endpoints. Scheduler/UI code can tell

@@ -3070,6 +3070,23 @@ impl SettingsSyncStoredRetentionProviderMembershipPlanAttempt {
             } => None,
         }
     }
+
+    pub fn selected_protocol_provider_materialization_preview<'a, Materializer>(
+        &self,
+        materializer: &Materializer,
+    ) -> Option<SettingsSyncStoredProtocolProviderMaterializationPreview>
+    where
+        Materializer: SettingsSyncProtocolProviderMaterializer<'a>,
+    {
+        match &self.cycle {
+            SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::Ready(cycle) => {
+                Some(cycle.selected_protocol_provider_materialization_preview(materializer))
+            }
+            SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::CredentialBlocked {
+                ..
+            } => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -9328,6 +9345,40 @@ mod tests {
             ProfileSyncMembershipLogPublicationPlanStatus::Publishable
         );
         assert_eq!(membership_plan.selected_retention_provider_count(), 1);
+        let membership_attempt = scheduler
+            .try_plan_once_with_membership_log_and_stored_retention_providers(
+                &database,
+                &config,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                &signer,
+                4,
+            )
+            .expect("membership stored protocol plan attempt succeeds");
+        assert!(membership_attempt.cycle_ready());
+        assert_eq!(
+            membership_attempt.selected_protocol_provider_materialization_preview(&materializer),
+            Some(
+                super::SettingsSyncStoredProtocolProviderMaterializationPreview {
+                    protocol_materialization:
+                        super::SettingsSyncProtocolProviderMaterializationReport {
+                            materialized_provider_ids: vec![provider_id.to_string()],
+                            missing_provider_ids: Vec::new(),
+                            endpoint_mismatch_provider_ids: Vec::new(),
+                            duplicate_provider_ids: Vec::new(),
+                            unsupported_provider_ids: Vec::new(),
+                        },
+                    handle_materialization:
+                        super::SettingsSyncStoredRetentionProviderHandleMaterialization {
+                            materialized_retention_provider_ids: vec![provider_id.to_string()],
+                            unmaterialized_retention_provider_ids: Vec::new(),
+                            pending_endpoint_materialization_retention_provider_ids: Vec::new(),
+                            endpoint_mismatch_retention_provider_ids: Vec::new(),
+                            duplicate_handle_retention_provider_ids: Vec::new(),
+                            unsupported_endpoint_retention_provider_ids: Vec::new(),
+                        },
+                }
+            )
+        );
         let materialization_preview =
             membership_plan.selected_protocol_provider_materialization_preview(&materializer);
         assert_eq!(
@@ -10003,6 +10054,11 @@ mod tests {
                 selected_provider_endpoint_ref.as_str(),
                 &provider_daemon,
             )];
+        let empty_protocol_materializer =
+            super::SettingsSyncSocketlessProtocolProviderMaterializer::new(
+                super::SettingsSyncProtocolProviderMaterializerPolicy::new(true, Vec::new()),
+                Vec::new(),
+            );
         let scheduler = BroadwebdSettingsSyncScheduler::new(&receiver_daemon);
         let config = SettingsSyncSchedulerConfig::new(
             DEFAULT_PROFILE_ID,
@@ -10064,6 +10120,11 @@ mod tests {
         assert!(plan_attempt.credential_blocked());
         assert!(!plan_attempt.cycle_ready());
         assert_eq!(plan_attempt.selected_protocol_materialization_plan(), None);
+        assert_eq!(
+            plan_attempt
+                .selected_protocol_provider_materialization_preview(&empty_protocol_materializer),
+            None
+        );
         assert!(matches!(
             plan_attempt.cycle,
             SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::CredentialBlocked { ref reason }
@@ -10172,6 +10233,28 @@ mod tests {
         assert_eq!(
             ready_plan_attempt.selected_protocol_materialization_plan(),
             Some(super::SettingsSyncSelectedProtocolMaterializationPlan::default())
+        );
+        assert_eq!(
+            ready_plan_attempt
+                .selected_protocol_provider_materialization_preview(&empty_protocol_materializer),
+            Some(
+                super::SettingsSyncStoredProtocolProviderMaterializationPreview {
+                    protocol_materialization:
+                        super::SettingsSyncProtocolProviderMaterializationReport::default(),
+                    handle_materialization:
+                        super::SettingsSyncStoredRetentionProviderHandleMaterialization {
+                            materialized_retention_provider_ids: Vec::new(),
+                            unmaterialized_retention_provider_ids: vec![
+                                unmaterialized_provider_id.to_string(),
+                                selected_provider_id.to_string(),
+                            ],
+                            pending_endpoint_materialization_retention_provider_ids: Vec::new(),
+                            endpoint_mismatch_retention_provider_ids: Vec::new(),
+                            duplicate_handle_retention_provider_ids: Vec::new(),
+                            unsupported_endpoint_retention_provider_ids: Vec::new(),
+                        },
+                }
+            )
         );
         let SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::Ready(ready_stored_plan) =
             ready_plan_attempt.cycle
