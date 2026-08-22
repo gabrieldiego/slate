@@ -14415,6 +14415,7 @@ mod tests {
             (SYNC_DOMAIN_CHAT, "sensitive", false),
             (SYNC_DOMAIN_DOWNLOADS, "metadata", false),
             (SYNC_DOMAIN_FILES, "content", true),
+            (SYNC_DOMAIN_STORAGE, "sensitive", false),
         ] {
             publisher_database
                 .register_app_sync_domain(&AppSyncDomainRegistration {
@@ -14465,6 +14466,24 @@ mod tests {
             integrity: Some("sha256-file-tail-delete".to_string()),
             retention_policy: Some("keep-latest".to_string()),
         };
+        let provider_update = StorageProviderUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            provider_id: "runtime-provider-tail-delete".to_string(),
+            provider_kind: "ipfs".to_string(),
+            display_name: "Tail Runtime IPFS".to_string(),
+            endpoint_ref: Some(
+                "/dnsaddr/tail-runtime.example.test/p2p/runtime-provider-tail-delete".to_string(),
+            ),
+            discovery: true,
+            connectivity: true,
+            object_transfer: true,
+            availability: true,
+            mutable_roots: false,
+            quota_bytes: Some(8_192),
+            max_retained_objects: Some(16),
+            pinning_policy: Some("manual".to_string()),
+            enabled: true,
+        };
         publisher_database
             .upsert_chat_conversation(&chat_update)
             .expect("publisher writes typed chat metadata before snapshot");
@@ -14474,6 +14493,9 @@ mod tests {
         publisher_database
             .upsert_file_entry(&file_update)
             .expect("publisher writes typed file metadata before snapshot");
+        publisher_database
+            .upsert_storage_provider(&provider_update)
+            .expect("publisher writes typed storage provider metadata before snapshot");
 
         let content_key = ProfileSyncContentKey::from_bytes([73; PROFILE_SYNC_CONTENT_KEY_BYTES]);
         let signer = ProfileSyncDeviceSigner::generate("runtime-typed-app-tail-publisher")
@@ -14508,6 +14530,13 @@ mod tests {
             8,
         )
         .expect("initialize receiver files cursor before tombstone tail snapshot");
+        let storage_watcher = TypedAppSyncDomainWatcher::<StorageProviderSyncPayload>::new(
+            receiver_database.clone(),
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_STORAGE,
+            8,
+        )
+        .expect("initialize receiver storage cursor before tombstone tail snapshot");
         let initial_chat_revision = chat_watcher
             .current_revision()
             .expect("read initial receiver chat cursor before tombstone tail snapshot");
@@ -14517,6 +14546,9 @@ mod tests {
         let initial_file_revision = file_watcher
             .current_revision()
             .expect("read initial receiver files cursor before tombstone tail snapshot");
+        let initial_storage_revision = storage_watcher
+            .current_revision()
+            .expect("read initial receiver storage cursor before tombstone tail snapshot");
         assert_eq!(
             chat_watcher
                 .poll_once()
@@ -14535,6 +14567,13 @@ mod tests {
             download_watcher
                 .poll_once()
                 .expect("poll idle downloads before tombstone tail snapshot")
+                .event_count(),
+            0
+        );
+        assert_eq!(
+            storage_watcher
+                .poll_once()
+                .expect("poll idle storage before tombstone tail snapshot")
                 .event_count(),
             0
         );
@@ -14582,6 +14621,13 @@ mod tests {
             receiver_database
                 .file_entries(DEFAULT_PROFILE_ID, 10)
                 .expect("read receiver typed file metadata")
+                .len(),
+            1
+        );
+        assert_eq!(
+            receiver_database
+                .storage_providers(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver typed storage provider metadata")
                 .len(),
             1
         );
@@ -14690,6 +14736,47 @@ mod tests {
             snapshot_file_poll.latest_revision
         );
 
+        let snapshot_storage_applied = storage_watcher
+            .poll_apply_and_acknowledge(|snapshot_storage_poll| {
+                assert!(snapshot_storage_poll.advanced());
+                assert_eq!(
+                    snapshot_storage_poll.previous_revision,
+                    initial_storage_revision
+                );
+                assert_eq!(snapshot_storage_poll.event_count(), 1);
+                assert_eq!(
+                    snapshot_storage_poll.events[0].value.provider_id,
+                    "runtime-provider-tail-delete"
+                );
+                assert_eq!(
+                    snapshot_storage_poll.events[0].value.display_name,
+                    "Tail Runtime IPFS"
+                );
+                assert!(!snapshot_storage_poll.events[0].value.deleted);
+                Ok::<(), &'static str>(())
+            })
+            .expect("receiver applies typed storage snapshot before tombstone tail");
+        let snapshot_storage_poll = snapshot_storage_applied.poll;
+        assert!(snapshot_storage_poll.advanced());
+        assert_eq!(
+            snapshot_storage_poll.previous_revision,
+            initial_storage_revision
+        );
+        assert_eq!(snapshot_storage_poll.event_count(), 1);
+        assert_eq!(
+            snapshot_storage_poll.events[0].value.provider_id,
+            "runtime-provider-tail-delete"
+        );
+        assert_eq!(
+            snapshot_storage_poll.events[0].value.display_name,
+            "Tail Runtime IPFS"
+        );
+        assert!(!snapshot_storage_poll.events[0].value.deleted);
+        assert_eq!(
+            snapshot_storage_applied.cursor.latest_revision,
+            snapshot_storage_poll.latest_revision
+        );
+
         publisher_database
             .remove_chat_conversation(DEFAULT_PROFILE_ID, chat_update.conversation_id.as_str())
             .expect("publisher tombstones typed chat metadata after snapshot");
@@ -14699,6 +14786,9 @@ mod tests {
         publisher_database
             .remove_file_entry(DEFAULT_PROFILE_ID, file_update.entry_id.as_str())
             .expect("publisher tombstones typed file metadata after snapshot");
+        publisher_database
+            .remove_storage_provider(DEFAULT_PROFILE_ID, provider_update.provider_id.as_str())
+            .expect("publisher tombstones typed storage provider metadata after snapshot");
         let tail = publisher
             .publish_local_settings_tail_head(
                 &publisher_database,
@@ -14716,7 +14806,7 @@ mod tests {
             tail.publication.snapshot_object_id,
             full.publication.snapshot_object_id
         );
-        assert_eq!(tail.publication.tail_change_object_ids.len(), 3);
+        assert_eq!(tail.publication.tail_change_object_ids.len(), 4);
         assert_eq!(
             tail.device_head.device_head.latest_change_object_id,
             tail.publication.tail_change_object_ids.last().cloned()
@@ -14739,7 +14829,7 @@ mod tests {
             tail.publication.manifest_object_id
         );
         assert!(application.snapshot.is_some());
-        assert_eq!(application.tail_changes.len(), 3);
+        assert_eq!(application.tail_changes.len(), 4);
         assert!(
             receiver_database
                 .chat_conversations(DEFAULT_PROFILE_ID, 10)
@@ -14756,6 +14846,12 @@ mod tests {
             receiver_database
                 .file_entries(DEFAULT_PROFILE_ID, 10)
                 .expect("read receiver typed file metadata after tombstone tail")
+                .is_empty()
+        );
+        assert!(
+            receiver_database
+                .storage_providers(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver typed storage provider metadata after tombstone tail")
                 .is_empty()
         );
 
@@ -14801,6 +14897,21 @@ mod tests {
             serde_json::from_str(file_value.as_str()).expect("decode file tombstone tail payload");
         assert!(file_payload.deleted);
         assert_eq!(file_payload.entry_id, "runtime-file-tail-delete");
+
+        let provider_value = receiver_database
+            .get_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_STORAGE,
+                "provider.runtime-provider-tail-delete",
+            )
+            .expect("read receiver storage provider tombstone tail sync setting")
+            .expect("receiver storage provider tombstone tail sync setting")
+            .value;
+        let provider_payload: StorageProviderSyncPayload =
+            serde_json::from_str(provider_value.as_str())
+                .expect("decode storage provider tombstone tail payload");
+        assert!(provider_payload.deleted);
+        assert_eq!(provider_payload.provider_id, "runtime-provider-tail-delete");
 
         let tombstone_chat_applied = chat_watcher
             .poll_apply_and_acknowledge(|tombstone_chat_poll| {
@@ -14937,6 +15048,54 @@ mod tests {
         assert_eq!(
             tombstone_file_applied.cursor.latest_revision,
             tombstone_file_poll.latest_revision
+        );
+
+        let tombstone_storage_applied = storage_watcher
+            .poll_apply_and_acknowledge(|tombstone_storage_poll| {
+                assert!(tombstone_storage_poll.advanced());
+                assert_eq!(
+                    tombstone_storage_poll.previous_revision,
+                    snapshot_storage_poll.latest_revision
+                );
+                assert_eq!(tombstone_storage_poll.event_count(), 1);
+                assert_eq!(
+                    tombstone_storage_poll.events[0].change.entity_key,
+                    "provider.runtime-provider-tail-delete"
+                );
+                assert!(tombstone_storage_poll.events[0].value.deleted);
+                assert_eq!(
+                    tombstone_storage_poll.events[0].value.provider_id,
+                    "runtime-provider-tail-delete"
+                );
+                let payload_json: serde_json::Value =
+                    serde_json::from_str(tombstone_storage_poll.events[0].change.payload.as_str())
+                        .expect("decode replicated storage tombstone tail payload");
+                assert!(payload_json.get("credential").is_none());
+                assert!(payload_json.get("credentials").is_none());
+                assert!(payload_json.get("private_key").is_none());
+                assert!(payload_json.get("secret").is_none());
+                Ok::<(), &'static str>(())
+            })
+            .expect("receiver applies typed storage tombstone tail payload");
+        let tombstone_storage_poll = tombstone_storage_applied.poll;
+        assert!(tombstone_storage_poll.advanced());
+        assert_eq!(
+            tombstone_storage_poll.previous_revision,
+            snapshot_storage_poll.latest_revision
+        );
+        assert_eq!(tombstone_storage_poll.event_count(), 1);
+        assert_eq!(
+            tombstone_storage_poll.events[0].change.entity_key,
+            "provider.runtime-provider-tail-delete"
+        );
+        assert!(tombstone_storage_poll.events[0].value.deleted);
+        assert_eq!(
+            tombstone_storage_poll.events[0].value.provider_id,
+            "runtime-provider-tail-delete"
+        );
+        assert_eq!(
+            tombstone_storage_applied.cursor.latest_revision,
+            tombstone_storage_poll.latest_revision
         );
 
         let _ = std::fs::remove_dir_all(publisher_state_root);
