@@ -1747,6 +1747,106 @@ impl SettingsSyncSelectedEndpointMaterializationRequest {
     }
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct SettingsSyncSelectedEndpointMaterializationPlan {
+    pub requests: Vec<SettingsSyncSelectedEndpointMaterializationRequest>,
+}
+
+impl SettingsSyncSelectedEndpointMaterializationPlan {
+    pub fn new(requests: Vec<SettingsSyncSelectedEndpointMaterializationRequest>) -> Self {
+        Self { requests }
+    }
+
+    pub fn request_count(&self) -> usize {
+        self.requests.len()
+    }
+
+    pub fn fixture_ready_requests(
+        &self,
+    ) -> Vec<SettingsSyncSelectedEndpointMaterializationRequest> {
+        self.requests
+            .iter()
+            .filter(|request| request.fixture_ready())
+            .cloned()
+            .collect()
+    }
+
+    pub fn fixture_ready_request_count(&self) -> usize {
+        self.requests
+            .iter()
+            .filter(|request| request.fixture_ready())
+            .count()
+    }
+
+    pub fn fixture_ready_provider_ids(&self) -> Vec<String> {
+        self.requests
+            .iter()
+            .filter(|request| request.fixture_ready())
+            .map(|request| request.provider_id.clone())
+            .collect()
+    }
+
+    pub fn pending_requests(&self) -> Vec<SettingsSyncSelectedEndpointMaterializationRequest> {
+        self.requests
+            .iter()
+            .filter(|request| request.pending_materialization())
+            .cloned()
+            .collect()
+    }
+
+    pub fn pending_request_count(&self) -> usize {
+        self.requests
+            .iter()
+            .filter(|request| request.pending_materialization())
+            .count()
+    }
+
+    pub fn pending_provider_ids(&self) -> Vec<String> {
+        self.requests
+            .iter()
+            .filter(|request| request.pending_materialization())
+            .map(|request| request.provider_id.clone())
+            .collect()
+    }
+
+    pub fn fail_closed_requests(&self) -> Vec<SettingsSyncSelectedEndpointMaterializationRequest> {
+        self.requests
+            .iter()
+            .filter(|request| request.fail_closed())
+            .cloned()
+            .collect()
+    }
+
+    pub fn fail_closed_request_count(&self) -> usize {
+        self.requests
+            .iter()
+            .filter(|request| request.fail_closed())
+            .count()
+    }
+
+    pub fn fail_closed_provider_ids(&self) -> Vec<String> {
+        self.requests
+            .iter()
+            .filter(|request| request.fail_closed())
+            .map(|request| request.provider_id.clone())
+            .collect()
+    }
+
+    pub fn requires_protocol_materializer(&self) -> bool {
+        self.requests
+            .iter()
+            .any(|request| request.pending_materialization())
+    }
+
+    pub fn has_fail_closed_request(&self) -> bool {
+        self.requests.iter().any(|request| request.fail_closed())
+    }
+
+    pub fn ready_for_fixture_materialization_only(&self) -> bool {
+        !self.requires_protocol_materializer() && !self.has_fail_closed_request()
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SettingsSyncStoredProviderEndpointStatus {
     Missing,
@@ -2072,6 +2172,15 @@ impl SettingsSyncStoredRetentionProviderPlan {
         &self,
     ) -> Vec<SettingsSyncSelectedEndpointMaterializationRequest> {
         selected_endpoint_materialization_requests(
+            self.enabled_retention_provider_endpoints.as_slice(),
+            self.cycle.selected_retention_provider_ids.as_slice(),
+        )
+    }
+
+    pub fn selected_endpoint_materialization_plan(
+        &self,
+    ) -> SettingsSyncSelectedEndpointMaterializationPlan {
+        selected_endpoint_materialization_plan(
             self.enabled_retention_provider_endpoints.as_slice(),
             self.cycle.selected_retention_provider_ids.as_slice(),
         )
@@ -2530,6 +2639,15 @@ fn selected_endpoint_materialization_requests(
             })
         })
         .collect()
+}
+
+fn selected_endpoint_materialization_plan(
+    endpoints: &[SettingsSyncStoredRetentionProviderEndpoint],
+    selected_provider_ids: &[String],
+) -> SettingsSyncSelectedEndpointMaterializationPlan {
+    SettingsSyncSelectedEndpointMaterializationPlan::new(
+        selected_endpoint_materialization_requests(endpoints, selected_provider_ids),
+    )
 }
 
 fn selected_in_process_fixture_materialization_targets(
@@ -6608,6 +6726,70 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![unsupported_provider_id.to_string()]
         );
+        let materialization_plan = super::selected_endpoint_materialization_plan(
+            selected.enabled_retention_provider_endpoints.as_slice(),
+            materialization_provider_ids.as_slice(),
+        );
+        assert_eq!(materialization_plan.requests, materialization_requests);
+        assert_eq!(materialization_plan.request_count(), 5);
+        assert_eq!(materialization_plan.fixture_ready_request_count(), 1);
+        assert_eq!(
+            materialization_plan.fixture_ready_provider_ids(),
+            vec![fixture_provider_id.to_string()]
+        );
+        assert_eq!(
+            materialization_plan.fixture_ready_requests(),
+            vec![super::SettingsSyncSelectedEndpointMaterializationRequest {
+                provider_id: fixture_provider_id.to_string(),
+                endpoint_ref: Some(network.profile_sync_provider_endpoint_ref(fixture_provider_id)),
+                endpoint_status: SettingsSyncStoredProviderEndpointStatus::InProcessFixture,
+            }]
+        );
+        assert_eq!(materialization_plan.pending_request_count(), 3);
+        assert_eq!(
+            materialization_plan.pending_provider_ids(),
+            vec![
+                missing_provider_id.to_string(),
+                multiaddr_provider_id.to_string(),
+                deferred_provider_id.to_string(),
+            ]
+        );
+        assert_eq!(
+            materialization_plan.pending_requests(),
+            vec![
+                super::SettingsSyncSelectedEndpointMaterializationRequest {
+                    provider_id: missing_provider_id.to_string(),
+                    endpoint_ref: None,
+                    endpoint_status: SettingsSyncStoredProviderEndpointStatus::Missing,
+                },
+                super::SettingsSyncSelectedEndpointMaterializationRequest {
+                    provider_id: multiaddr_provider_id.to_string(),
+                    endpoint_ref: Some("/dnsaddr/home.example.test/p2p/provider-a".to_string()),
+                    endpoint_status: SettingsSyncStoredProviderEndpointStatus::Multiaddr,
+                },
+                super::SettingsSyncSelectedEndpointMaterializationRequest {
+                    provider_id: deferred_provider_id.to_string(),
+                    endpoint_ref: Some("iroh-node:provider-a".to_string()),
+                    endpoint_status: SettingsSyncStoredProviderEndpointStatus::DeferredProtocol,
+                },
+            ]
+        );
+        assert_eq!(materialization_plan.fail_closed_request_count(), 1);
+        assert_eq!(
+            materialization_plan.fail_closed_provider_ids(),
+            vec![unsupported_provider_id.to_string()]
+        );
+        assert_eq!(
+            materialization_plan.fail_closed_requests(),
+            vec![super::SettingsSyncSelectedEndpointMaterializationRequest {
+                provider_id: unsupported_provider_id.to_string(),
+                endpoint_ref: Some("http://127.0.0.1:5001".to_string()),
+                endpoint_status: SettingsSyncStoredProviderEndpointStatus::Unsupported,
+            }]
+        );
+        assert!(materialization_plan.requires_protocol_materializer());
+        assert!(materialization_plan.has_fail_closed_request());
+        assert!(!materialization_plan.ready_for_fixture_materialization_only());
 
         assert_eq!(
             super::selected_in_process_fixture_materialization_targets(
@@ -6620,6 +6802,18 @@ mod tests {
                 endpoint_ref: network.profile_sync_provider_endpoint_ref(fixture_provider_id),
             }]
         );
+        let fixture_only_provider_ids = vec![fixture_provider_id.to_string()];
+        let fixture_only_plan = super::selected_endpoint_materialization_plan(
+            selected.enabled_retention_provider_endpoints.as_slice(),
+            fixture_only_provider_ids.as_slice(),
+        );
+        assert_eq!(fixture_only_plan.request_count(), 1);
+        assert_eq!(fixture_only_plan.fixture_ready_request_count(), 1);
+        assert_eq!(fixture_only_plan.pending_request_count(), 0);
+        assert_eq!(fixture_only_plan.fail_closed_request_count(), 0);
+        assert!(!fixture_only_plan.requires_protocol_materializer());
+        assert!(!fixture_only_plan.has_fail_closed_request());
+        assert!(fixture_only_plan.ready_for_fixture_materialization_only());
     }
 
     #[test]

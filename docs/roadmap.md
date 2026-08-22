@@ -592,6 +592,11 @@ Current baseline:
   protocol-specific materializers can consume the scheduler handoff without
   re-reading `slate-settings.db`, reparsing provider metadata, or opening
   sockets during read-only planning.
+- The selected endpoint handoff now also has a socketless materialization plan
+  that partitions requests into fixture-ready, pending-protocol, and
+  fail-closed groups. Runtime code can decide whether in-process fixtures are
+  enough, whether a real protocol materializer is required, or whether the
+  selected provider set must fail closed before any adapter dials or binds.
 - Selected synthetic fixture endpoints now expose materialization targets with
   provider id, fixture network id, and endpoint ref so local-only fixtures can
   bridge stored metadata to in-process providers without opening sockets.
