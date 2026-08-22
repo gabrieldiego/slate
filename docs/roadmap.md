@@ -929,7 +929,9 @@ Current baseline:
   advancing verified roots. Explicit-provider and stored-provider membership
   plans now also have fail-soft attempt surfaces that carry that preview through
   local credential blocks, while still returning real errors for backend,
-  storage, or policy failures.
+  storage, or policy failures. Fixture coverage now checks both the
+  credential-blocked branch before enrollment is applied and the ready branch
+  after the membership log has been applied.
 - Membership-log receive fixtures now reject mismatched index entries before
   advancing the stored log root or writing trusted device keys.
 - Membership logs now have a fixed record-count cap enforced before entry

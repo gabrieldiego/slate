@@ -7224,6 +7224,34 @@ mod tests {
             run.cycle.retained_object_ids.len()
         );
         assert_eq!(run.retained_provider_count(), 1);
+        let ready_attempt = scheduler
+            .try_plan_once_with_membership_log_selecting_retention_providers(
+                &receiver_database,
+                &config,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                &signer_b,
+                &retention_provider_handles,
+            )
+            .expect("selected membership plan attempt is ready after membership apply");
+        assert!(ready_attempt.cycle_ready());
+        assert!(!ready_attempt.credential_blocked());
+        let SettingsSyncScheduledMembershipCyclePlanAttemptCycle::Ready(ready_cycle) =
+            ready_attempt.cycle
+        else {
+            panic!("expected selected membership plan attempt ready cycle");
+        };
+        assert_eq!(
+            ready_cycle.selected_retention_provider_ids,
+            vec![selected_provider_id.to_string()]
+        );
+        assert_eq!(
+            ready_cycle.undiscovered_retention_provider_ids,
+            vec!["not-discovered-membership-provider".to_string()]
+        );
+        assert_eq!(
+            ready_cycle.duplicate_retention_provider_ids,
+            vec![selected_provider_id.to_string()]
+        );
 
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
@@ -7518,6 +7546,30 @@ mod tests {
             run.cycle.retained_object_ids.len()
         );
         assert_eq!(run.retained_provider_count(), 1);
+        let ready_plan_attempt = scheduler
+            .try_plan_once_with_membership_log_and_stored_retention_providers(
+                &receiver_database,
+                &config,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                &signer_b,
+                8,
+            )
+            .expect("stored membership plan attempt is ready after membership apply");
+        assert!(ready_plan_attempt.cycle_ready());
+        assert!(!ready_plan_attempt.credential_blocked());
+        let SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::Ready(ready_stored_plan) =
+            ready_plan_attempt.cycle
+        else {
+            panic!("expected stored membership plan attempt ready cycle");
+        };
+        assert_eq!(ready_stored_plan.stored_provider_count, 2);
+        assert_eq!(
+            ready_stored_plan.cycle.selected_retention_provider_ids,
+            vec![
+                unmaterialized_provider_id.to_string(),
+                selected_provider_id.to_string()
+            ]
+        );
 
         receiver_database
             .set_sync_setting_text(
