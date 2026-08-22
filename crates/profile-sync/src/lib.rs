@@ -5556,18 +5556,19 @@ mod tests {
         CalendarEventSyncPayload, CalendarEventUpdate, ChatConversationSyncPayload,
         ChatConversationUpdate, ContactCardSyncPayload, ContactCardUpdate,
         DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
-        FileEntrySyncPayload, FileEntryUpdate, IncomingSyncSettingText,
-        PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305, PROFILE_SYNC_CONTENT_KEY_BYTES,
-        PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE,
+        DownloadMetadataSyncPayload, DownloadMetadataUpdate, FileEntrySyncPayload, FileEntryUpdate,
+        IncomingSyncSettingText, PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305,
+        PROFILE_SYNC_CONTENT_KEY_BYTES, PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
+        PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE,
         PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE,
         PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY,
         PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION, ProfileSyncContentKey,
         ProfileSyncDeviceHead, ProfileSyncDeviceSigner, ProfileSyncMembershipRecord,
         ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
         ProfileSyncSettingsCandidatePullApplyStatus, SYNC_DOMAIN_BOOKMARKS, SYNC_DOMAIN_CALENDAR,
-        SYNC_DOMAIN_CHAT, SYNC_DOMAIN_CONTACTS, SYNC_DOMAIN_FILES, SYNC_DOMAIN_SETTINGS,
-        SYNC_DOMAIN_STORAGE, SlateProfileDatabase, StorageError, StorageProviderRecord,
-        StorageProviderSyncPayload, StorageProviderUpdate, SyncChangeRecord,
+        SYNC_DOMAIN_CHAT, SYNC_DOMAIN_CONTACTS, SYNC_DOMAIN_DOWNLOADS, SYNC_DOMAIN_FILES,
+        SYNC_DOMAIN_SETTINGS, SYNC_DOMAIN_STORAGE, SlateProfileDatabase, StorageError,
+        StorageProviderRecord, StorageProviderSyncPayload, StorageProviderUpdate, SyncChangeRecord,
         SyncContentKeyEpochRegistration, SyncDevicePublicKeyRegistration, SyncSnapshotRegistration,
         TypedAppSyncDomainWatcher, open_signed_profile_sync_device_head,
         open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
@@ -12478,6 +12479,7 @@ mod tests {
             (SYNC_DOMAIN_CALENDAR, "sensitive", false),
             (SYNC_DOMAIN_CHAT, "sensitive", false),
             (SYNC_DOMAIN_CONTACTS, "sensitive", false),
+            (SYNC_DOMAIN_DOWNLOADS, "metadata", false),
             (SYNC_DOMAIN_FILES, "content", true),
             (SYNC_DOMAIN_STORAGE, "sensitive", false),
         ] {
@@ -12535,6 +12537,20 @@ mod tests {
                 avatar_key: Some("contact-avatar:runtime-contact-1".to_string()),
             })
             .expect("publisher writes typed contact metadata");
+        publisher_database
+            .record_download_metadata(&DownloadMetadataUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                download_id: "runtime-download-1".to_string(),
+                source_url: "ipfs://bafy-runtime-download".to_string(),
+                final_url: "ipfs://bafy-runtime-download".to_string(),
+                route: Some("ipfs://bafy-runtime-download".to_string()),
+                transport_id: Some("ipfs-fixture".to_string()),
+                filename: "runtime-download.png".to_string(),
+                content_type: Some("image/png".to_string()),
+                size_bytes: 4096,
+                integrity: Some("sha256-runtime-download".to_string()),
+            })
+            .expect("publisher writes typed download metadata");
         publisher_database
             .upsert_file_entry(&FileEntryUpdate {
                 profile: DEFAULT_PROFILE_ID.to_string(),
@@ -12604,6 +12620,13 @@ mod tests {
             8,
         )
         .expect("initialize receiver contacts watcher cursor");
+        let download_watcher = TypedAppSyncDomainWatcher::<DownloadMetadataSyncPayload>::new(
+            receiver_database.clone(),
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_DOWNLOADS,
+            8,
+        )
+        .expect("initialize receiver downloads watcher cursor");
         let file_watcher = TypedAppSyncDomainWatcher::<FileEntrySyncPayload>::new(
             receiver_database.clone(),
             DEFAULT_PROFILE_ID,
@@ -12627,6 +12650,9 @@ mod tests {
         let initial_contact_revision = contact_watcher
             .current_revision()
             .expect("read initial receiver contacts watcher cursor");
+        let initial_download_revision = download_watcher
+            .current_revision()
+            .expect("read initial receiver downloads watcher cursor");
         let initial_file_revision = file_watcher
             .current_revision()
             .expect("read initial receiver files watcher cursor");
@@ -12651,6 +12677,13 @@ mod tests {
             contact_watcher
                 .poll_once()
                 .expect("poll idle contacts")
+                .event_count(),
+            0
+        );
+        assert_eq!(
+            download_watcher
+                .poll_once()
+                .expect("poll idle downloads")
                 .event_count(),
             0
         );
@@ -12689,6 +12722,7 @@ mod tests {
                 SYNC_DOMAIN_CALENDAR.to_string(),
                 SYNC_DOMAIN_CHAT.to_string(),
                 SYNC_DOMAIN_CONTACTS.to_string(),
+                SYNC_DOMAIN_DOWNLOADS.to_string(),
                 SYNC_DOMAIN_FILES.to_string(),
                 SYNC_DOMAIN_SETTINGS.to_string(),
                 SYNC_DOMAIN_STORAGE.to_string()
@@ -12755,6 +12789,16 @@ mod tests {
             contacts[0].avatar_key.as_deref(),
             Some("contact-avatar:runtime-contact-1")
         );
+
+        let downloads = receiver_database
+            .downloads(DEFAULT_PROFILE_ID, 10)
+            .expect("read receiver typed download metadata");
+        assert_eq!(downloads.len(), 1);
+        assert_eq!(downloads[0].download_id, "runtime-download-1");
+        assert_eq!(downloads[0].source_url, "ipfs://bafy-runtime-download");
+        assert_eq!(downloads[0].filename, "runtime-download.png");
+        assert_eq!(downloads[0].transport_id.as_deref(), Some("ipfs-fixture"));
+        assert_eq!(downloads[0].size_bytes, 4096);
 
         let files = receiver_database
             .file_entries(DEFAULT_PROFILE_ID, 10)
@@ -12883,6 +12927,56 @@ mod tests {
         assert_eq!(
             contact_applied.cursor.latest_revision,
             contact_poll.latest_revision
+        );
+
+        let download_applied = download_watcher
+            .poll_apply_and_acknowledge(|download_poll| {
+                assert!(download_poll.advanced());
+                assert_eq!(download_poll.previous_revision, initial_download_revision);
+                assert_eq!(download_poll.event_count(), 1);
+                assert_eq!(
+                    download_poll.events[0].change.entity_key,
+                    "download.runtime-download-1"
+                );
+                assert_eq!(
+                    download_poll.events[0].value.download_id,
+                    "runtime-download-1"
+                );
+                assert_eq!(
+                    download_poll.events[0].value.filename,
+                    "runtime-download.png"
+                );
+                assert_eq!(download_poll.events[0].value.size_bytes, 4096);
+                let payload_json: serde_json::Value =
+                    serde_json::from_str(download_poll.events[0].change.payload.as_str())
+                        .expect("decode replicated download metadata payload");
+                assert!(payload_json.get("path").is_none());
+                assert!(payload_json.get("local_path").is_none());
+                assert!(payload_json.get("file_bytes").is_none());
+                assert!(payload_json.get("contents").is_none());
+                Ok::<(), &'static str>(())
+            })
+            .expect("apply and acknowledge receiver downloads typed app events after sync apply");
+        let download_poll = download_applied.poll;
+        assert!(download_poll.advanced());
+        assert_eq!(download_poll.previous_revision, initial_download_revision);
+        assert_eq!(download_poll.event_count(), 1);
+        assert_eq!(
+            download_poll.events[0].change.entity_key,
+            "download.runtime-download-1"
+        );
+        assert_eq!(
+            download_poll.events[0].value.download_id,
+            "runtime-download-1"
+        );
+        assert_eq!(
+            download_poll.events[0].value.filename,
+            "runtime-download.png"
+        );
+        assert_eq!(download_poll.events[0].value.size_bytes, 4096);
+        assert_eq!(
+            download_applied.cursor.latest_revision,
+            download_poll.latest_revision
         );
 
         let file_applied = file_watcher
