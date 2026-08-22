@@ -420,6 +420,25 @@
         <button id="profile-sync-enrollment-download">Download enrollment file</button>
         <button id="profile-sync-enrollment-import">Import enrollment file</button>
       </div>
+      <input
+        id="profile-sync-handoff-file"
+        class="profile-sync-file"
+        type="file"
+        accept="application/json,.json"
+        aria-label="Profile sync handoff file"
+      />
+      <textarea
+        id="profile-sync-handoff"
+        class="profile-sync-secret"
+        spellcheck="false"
+        autocomplete="off"
+        aria-label="Profile sync handoff bundle"
+      ></textarea>
+      <div class="actions">
+        <button id="profile-sync-handoff-create">Create handoff file</button>
+        <button id="profile-sync-handoff-download">Download handoff file</button>
+        <button id="profile-sync-handoff-import">Import handoff file</button>
+      </div>
     </section>
 
     <section>
@@ -524,6 +543,11 @@
     const profileSyncEnrollmentCreateButton = document.getElementById("profile-sync-enrollment-create");
     const profileSyncEnrollmentDownloadButton = document.getElementById("profile-sync-enrollment-download");
     const profileSyncEnrollmentImportButton = document.getElementById("profile-sync-enrollment-import");
+    const profileSyncHandoffFile = document.getElementById("profile-sync-handoff-file");
+    const profileSyncHandoff = document.getElementById("profile-sync-handoff");
+    const profileSyncHandoffCreateButton = document.getElementById("profile-sync-handoff-create");
+    const profileSyncHandoffDownloadButton = document.getElementById("profile-sync-handoff-download");
+    const profileSyncHandoffImportButton = document.getElementById("profile-sync-handoff-import");
     const params = new URLSearchParams(window.location.search);
     const initial = Number.parseFloat(params.get("chrome_zoom"));
     const fallbackImage = new Image();
@@ -952,6 +976,12 @@
         "slate-profile-enrollment.json";
     }
 
+    function handoffFilename(state) {
+      return state && state.handoff_export_filename ?
+        state.handoff_export_filename :
+        "slate-profile-handoff.json";
+    }
+
     function deviceRequestFilename(state) {
       return state && state.device_request_export_filename ?
         state.device_request_export_filename :
@@ -989,6 +1019,12 @@
         profileSyncEnrollmentDevice.value = state.enrollment_target_device_id;
       } else if (!profileSyncEnrollmentDevice.value && state.local_device_id) {
         profileSyncEnrollmentDevice.value = state.local_device_id;
+      }
+      if (state.handoff_export_text) {
+        profileSyncHandoff.value = state.handoff_export_text;
+      }
+      if (state.handoff_target_device_id) {
+        profileSyncEnrollmentDevice.value = state.handoff_target_device_id;
       }
     }
 
@@ -1062,6 +1098,7 @@
         ["App domains", localSync ? profileSyncCount(localSync.app_domain_count) : "0"],
         ["Device request", profileSyncText(state && state.device_request_device_id, "none")],
         ["Enrollment", profileSyncText(state && state.enrollment_target_device_id, "none")],
+        ["Handoff", profileSyncText(state && state.handoff_target_device_id, "none")],
         ["Current sync", profileSyncCurrentSyncStatus(state)],
         ["Local trial", profileSyncLocalTrialStatus(state)],
         ["Two-device trial", profileSyncTwoDeviceTrialStatus(state)]
@@ -1098,6 +1135,9 @@
       const enrollmentStatus = state.enrollment_target_device_id ?
         `; enrollment bundle for ${state.enrollment_target_device_id}` :
         "";
+      const handoffStatus = state.handoff_target_device_id ?
+        `; handoff file for ${state.handoff_target_device_id}` :
+        "";
       const deviceRequestStatus = state.device_request_device_id ?
         `; device request for ${state.device_request_device_id}` :
         "";
@@ -1108,7 +1148,7 @@
         profileSyncStatus.textContent = `Error: ${state.last_error}`;
       } else if (state.has_secret && state.local_sync && state.local_sync.ready_for_manual_sync) {
         profileSyncStatus.textContent =
-          `Ready for ${state.profile}${deviceStatus} - local device trusted, local sync preflight passed${currentSyncStatus}${trialStatus}${twoDeviceStatus}${deviceRequestStatus}${enrollmentStatus}`;
+          `Ready for ${state.profile}${deviceStatus} - local device trusted, local sync preflight passed${currentSyncStatus}${trialStatus}${twoDeviceStatus}${deviceRequestStatus}${enrollmentStatus}${handoffStatus}`;
       } else if (state.has_secret) {
         const trusted = state.local_sync && state.local_sync.local_device_trusted ?
           " - local device trusted" :
@@ -1119,7 +1159,7 @@
         const syncGap = state.local_sync && state.local_sync.blocked_reason ?
           ` - ${state.local_sync.blocked_reason}` :
           "";
-        profileSyncStatus.textContent = `Ready for ${state.profile}${deviceStatus}${suffix}${syncGap}${currentSyncStatus}${trialStatus}${twoDeviceStatus}${deviceRequestStatus}${enrollmentStatus}`;
+        profileSyncStatus.textContent = `Ready for ${state.profile}${deviceStatus}${suffix}${syncGap}${currentSyncStatus}${trialStatus}${twoDeviceStatus}${deviceRequestStatus}${enrollmentStatus}${handoffStatus}`;
       } else if (state.metadata_ready) {
         const syncGap = state.local_sync && state.local_sync.blocked_reason ?
           `; ${state.local_sync.blocked_reason}` :
@@ -1224,6 +1264,25 @@
       });
     }
 
+    function createProfileSyncHandoffBundle() {
+      fetchProfileSyncState("handoff/create", {
+        target_device: profileSyncEnrollmentDevice.value.trim()
+      });
+    }
+
+    function importProfileSyncHandoffBundle() {
+      readSelectedProfileSyncFile(profileSyncHandoffFile, "handoff file").then((fileText) => {
+        if (fileText) {
+          profileSyncHandoff.value = fileText.trim();
+        }
+        return fetchProfileSyncState("handoff/import", {
+          handoff: profileSyncHandoff.value.trim()
+        });
+      }).catch((error) => {
+        setProfileSyncState({ last_error: String(error) });
+      });
+    }
+
     function readSelectedProfileSyncFile(input, label) {
       const file = input.files && input.files[0];
       if (!file) {
@@ -1294,6 +1353,28 @@
       URL.revokeObjectURL(link.href);
     }
 
+    function downloadProfileSyncHandoffBundle() {
+      const text = profileSyncHandoff.value.trim();
+      if (!text) {
+        fetchProfileSyncState("handoff/create", {
+          target_device: profileSyncEnrollmentDevice.value.trim()
+        }).then((state) => {
+          if (state && state.handoff_export_text) {
+            downloadProfileSyncHandoffBundle();
+          }
+        });
+        return;
+      }
+      const blob = new Blob([text], { type: "application/json" });
+      const link = document.createElement("a");
+      link.download = handoffFilename({
+        handoff_export_filename: `slate-profile-handoff-${profileSyncEnrollmentDevice.value.trim() || "device"}.json`
+      });
+      link.href = URL.createObjectURL(blob);
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }
+
     function saveSettings() {
       sendSetting("save", sliderValue, true, true);
       setSaveButtons("Saved");
@@ -1352,6 +1433,20 @@
         .then((fileText) => {
           if (fileText) {
             profileSyncEnrollment.value = fileText.trim();
+          }
+        })
+        .catch((error) => {
+          setProfileSyncState({ last_error: String(error) });
+        });
+    });
+    profileSyncHandoffCreateButton.addEventListener("click", createProfileSyncHandoffBundle);
+    profileSyncHandoffImportButton.addEventListener("click", importProfileSyncHandoffBundle);
+    profileSyncHandoffDownloadButton.addEventListener("click", downloadProfileSyncHandoffBundle);
+    profileSyncHandoffFile.addEventListener("change", () => {
+      readSelectedProfileSyncFile(profileSyncHandoffFile, "handoff file")
+        .then((fileText) => {
+          if (fileText) {
+            profileSyncHandoff.value = fileText.trim();
           }
         })
         .catch((error) => {

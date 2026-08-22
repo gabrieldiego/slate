@@ -30,7 +30,8 @@ use slate_profile_sync::{
 use slate_storage::{
     DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
     ProfileSyncDeviceEnrollmentRequest, ProfileSyncEnrollmentBundle,
-    ProfileSyncLocalReadinessReport, ProfileSyncLocalSecretActivationRecord, SYNC_DOMAIN_SETTINGS,
+    ProfileSyncLocalReadinessReport, ProfileSyncLocalSecretActivationRecord,
+    ProfileSyncSecretHandoffApplication, ProfileSyncSecretHandoffBundle, SYNC_DOMAIN_SETTINGS,
     SlateProfileDatabase, SlateSyncSecret, SlateSyncSecretExport, StorageError, SyncObjectError,
     SyncSettingTextEvent,
 };
@@ -106,6 +107,8 @@ impl ProtocolHandler for SlateProtocolHandler {
             "settings/profile-sync/device-request/import",
             "settings/profile-sync/enrollment/create",
             "settings/profile-sync/enrollment/import",
+            "settings/profile-sync/handoff/create",
+            "settings/profile-sync/handoff/import",
             "settings/profile-sync/run-current",
             "settings/profile-sync/run-local",
             "settings/profile-sync/run-local-two-device",
@@ -164,6 +167,14 @@ impl ProtocolHandler for SlateProtocolHandler {
 
         if is_slate_settings_profile_sync_enrollment_import_url(url.as_url()) {
             return self.import_profile_sync_enrollment_bundle_response(request, url.as_url());
+        }
+
+        if is_slate_settings_profile_sync_handoff_create_url(url.as_url()) {
+            return self.create_profile_sync_secret_handoff_bundle_response(request, url.as_url());
+        }
+
+        if is_slate_settings_profile_sync_handoff_import_url(url.as_url()) {
+            return self.import_profile_sync_secret_handoff_bundle_response(request, url.as_url());
         }
 
         if is_slate_settings_profile_sync_run_current_url(url.as_url()) {
@@ -551,6 +562,97 @@ impl SlateProtocolHandler {
         }
     }
 
+    fn create_profile_sync_secret_handoff_bundle_response(
+        &self,
+        request: &Request,
+        url: &Url,
+    ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
+        let target_device_id = profile_sync_handoff_target_device_id_from_url(url);
+        let sync_secret = {
+            let mut state = self.profile_sync_preview.lock().unwrap();
+            self.refresh_profile_sync_preview_metadata(&mut state);
+            match (
+                target_device_id.as_deref(),
+                state.active_sync_secret(DEFAULT_PROFILE_ID),
+            ) {
+                (None, _) => {
+                    state.last_error =
+                        Some("enter a target device id before creating a handoff file".to_string());
+                    let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+                    return json_response(request, 400, state.to_json(readiness.as_ref()));
+                }
+                (_, Ok(Some(sync_secret))) => sync_secret,
+                (_, Ok(None)) => {
+                    state.last_error = Some(
+                        "create or import a profile sync key before creating a handoff file"
+                            .to_string(),
+                    );
+                    let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+                    return json_response(request, 400, state.to_json(readiness.as_ref()));
+                }
+                (_, Err(error)) => {
+                    state.last_error = Some(error.to_string());
+                    return json_response(request, 400, state.to_json(None));
+                }
+            }
+        };
+        let target_device_id = target_device_id.expect("validated target device id");
+        let bundle = SlateProfileDatabase::profile_sync_secret_handoff_bundle_from_secret(
+            DEFAULT_PROFILE_ID,
+            &sync_secret,
+            target_device_id.as_str(),
+        );
+        let mut state = self.profile_sync_preview.lock().unwrap();
+        match bundle {
+            Ok(bundle) => {
+                state.mark_secret_handoff_bundle(&bundle);
+                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+                json_response(request, 200, state.to_json(readiness.as_ref()))
+            }
+            Err(error) => {
+                state.last_error = Some(error.to_string());
+                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+                json_response(request, 400, state.to_json(readiness.as_ref()))
+            }
+        }
+    }
+
+    fn import_profile_sync_secret_handoff_bundle_response(
+        &self,
+        request: &Request,
+        url: &Url,
+    ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
+        let Some(bundle_text) = profile_sync_handoff_bundle_text_from_url(url) else {
+            let mut state = self.profile_sync_preview.lock().unwrap();
+            state.last_error = Some("missing profile sync handoff file contents".to_string());
+            let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+            return json_response(request, 400, state.to_json(readiness.as_ref()));
+        };
+        let bundle = match ProfileSyncSecretHandoffBundle::from_bytes(bundle_text.as_bytes()) {
+            Ok(bundle) => bundle,
+            Err(error) => {
+                let mut state = self.profile_sync_preview.lock().unwrap();
+                state.last_error = Some(error.to_string());
+                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+                return json_response(request, 400, state.to_json(readiness.as_ref()));
+            }
+        };
+        match self.apply_profile_sync_secret_handoff_bundle(&bundle) {
+            Ok(application) => {
+                let mut state = self.profile_sync_preview.lock().unwrap();
+                state.mark_secret_handoff_application(&bundle, &application);
+                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+                json_response(request, 200, state.to_json(readiness.as_ref()))
+            }
+            Err(error) => {
+                let mut state = self.profile_sync_preview.lock().unwrap();
+                state.last_error = Some(error.to_string());
+                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+                json_response(request, 400, state.to_json(readiness.as_ref()))
+            }
+        }
+    }
+
     fn run_profile_sync_preview_current_sync_response(
         &self,
         request: &Request,
@@ -719,6 +821,20 @@ impl SlateProtocolHandler {
         Ok(())
     }
 
+    fn apply_profile_sync_secret_handoff_bundle(
+        &self,
+        bundle: &ProfileSyncSecretHandoffBundle,
+    ) -> Result<ProfileSyncSecretHandoffApplication, StorageError> {
+        self.database
+            .as_ref()
+            .map(|database| database.apply_profile_sync_secret_handoff_bundle(bundle))
+            .unwrap_or_else(|| {
+                Err(StorageError::InvalidProfileSyncSecretHandoffBundle(
+                    "settings database is not available".to_string(),
+                ))
+            })
+    }
+
     fn run_profile_sync_preview_current_sync(
         &self,
         sync_secret: &SlateSyncSecret,
@@ -807,6 +923,7 @@ struct ProfileSyncPreviewState {
     local_device_id: Option<String>,
     active_device_request: Option<ProfileSyncDeviceEnrollmentRequest>,
     active_enrollment_bundle: Option<ProfileSyncEnrollmentBundle>,
+    active_handoff_bundle: Option<ProfileSyncSecretHandoffBundle>,
     last_current_sync: Option<ProfileSyncPreviewCurrentSyncState>,
     last_trial: Option<ProfileSyncPreviewTrialState>,
     last_two_device_trial: Option<ProfileSyncPreviewTwoDeviceTrialState>,
@@ -1045,6 +1162,7 @@ impl ProfileSyncPreviewState {
         self.local_device_id = None;
         self.active_device_request = None;
         self.active_enrollment_bundle = None;
+        self.active_handoff_bundle = None;
         self.last_current_sync = None;
         self.last_trial = None;
         self.last_two_device_trial = None;
@@ -1065,6 +1183,7 @@ impl ProfileSyncPreviewState {
         self.local_device_id = None;
         self.active_device_request = None;
         self.active_enrollment_bundle = None;
+        self.active_handoff_bundle = None;
         self.last_current_sync = None;
         self.last_trial = None;
         self.last_two_device_trial = None;
@@ -1139,6 +1258,23 @@ impl ProfileSyncPreviewState {
         self.last_error = None;
     }
 
+    fn mark_secret_handoff_bundle(&mut self, bundle: &ProfileSyncSecretHandoffBundle) {
+        self.active_handoff_bundle = Some(bundle.clone());
+        self.active_enrollment_bundle = Some(bundle.enrollment_bundle.clone());
+        self.last_error = None;
+    }
+
+    fn mark_secret_handoff_application(
+        &mut self,
+        bundle: &ProfileSyncSecretHandoffBundle,
+        application: &ProfileSyncSecretHandoffApplication,
+    ) {
+        self.active_export = Some(bundle.sync_secret_export.clone());
+        self.active_handoff_bundle = Some(bundle.clone());
+        self.active_enrollment_bundle = Some(bundle.enrollment_bundle.clone());
+        self.mark_secret_activation_ready(&application.activation);
+    }
+
     fn mark_device_request(&mut self, request: &ProfileSyncDeviceEnrollmentRequest) {
         self.active_device_request = Some(request.clone());
         self.last_error = None;
@@ -1180,6 +1316,19 @@ impl ProfileSyncPreviewState {
             .active_enrollment_bundle
             .as_ref()
             .map(|bundle| profile_sync_enrollment_filename(bundle.target_device_id.as_str()));
+        let handoff_export_text = self
+            .active_handoff_bundle
+            .as_ref()
+            .and_then(|bundle| bundle.to_bytes().ok())
+            .and_then(|bytes| String::from_utf8(bytes).ok());
+        let handoff_target_device_id = self
+            .active_handoff_bundle
+            .as_ref()
+            .map(|bundle| bundle.target_device_id.as_str());
+        let handoff_filename = self
+            .active_handoff_bundle
+            .as_ref()
+            .map(|bundle| profile_sync_handoff_filename(bundle.target_device_id.as_str()));
         serde_json::json!({
             "profile": DEFAULT_PROFILE_ID,
             "status": if self.active_export.is_some() {
@@ -1206,6 +1355,9 @@ impl ProfileSyncPreviewState {
             "enrollment_export_text": enrollment_export_text,
             "enrollment_target_device_id": enrollment_target_device_id,
             "enrollment_signed_record_count": enrollment_signed_record_count,
+            "handoff_export_filename": handoff_filename.as_deref(),
+            "handoff_export_text": handoff_export_text,
+            "handoff_target_device_id": handoff_target_device_id,
             "last_error": self.last_error.as_deref(),
         })
         .to_string()
@@ -1705,6 +1857,18 @@ fn is_slate_settings_profile_sync_enrollment_import_url(url: &Url) -> bool {
         && url.path().trim_start_matches('/') == "profile-sync/enrollment/import"
 }
 
+fn is_slate_settings_profile_sync_handoff_create_url(url: &Url) -> bool {
+    url.scheme() == "slate"
+        && url.host_str() == Some("settings")
+        && url.path().trim_start_matches('/') == "profile-sync/handoff/create"
+}
+
+fn is_slate_settings_profile_sync_handoff_import_url(url: &Url) -> bool {
+    url.scheme() == "slate"
+        && url.host_str() == Some("settings")
+        && url.path().trim_start_matches('/') == "profile-sync/handoff/import"
+}
+
 fn is_slate_settings_profile_sync_run_current_url(url: &Url) -> bool {
     url.scheme() == "slate"
         && url.host_str() == Some("settings")
@@ -1771,8 +1935,34 @@ fn profile_sync_enrollment_bundle_text_from_url(url: &Url) -> Option<String> {
         .filter(|value| !value.trim().is_empty())
 }
 
+fn profile_sync_handoff_target_device_id_from_url(url: &Url) -> Option<String> {
+    if !is_slate_settings_profile_sync_handoff_create_url(url) {
+        return None;
+    }
+
+    url.query_pairs()
+        .find(|(name, _)| name == "target_device")
+        .map(|(_, value)| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn profile_sync_handoff_bundle_text_from_url(url: &Url) -> Option<String> {
+    if !is_slate_settings_profile_sync_handoff_import_url(url) {
+        return None;
+    }
+
+    url.query_pairs()
+        .find(|(name, _)| name == "handoff")
+        .map(|(_, value)| value.into_owned())
+        .filter(|value| !value.trim().is_empty())
+}
+
 fn profile_sync_enrollment_filename(target_device_id: &str) -> String {
     format!("slate-profile-enrollment-{target_device_id}.json")
+}
+
+fn profile_sync_handoff_filename(target_device_id: &str) -> String {
+    format!("slate-profile-handoff-{target_device_id}.json")
 }
 
 fn unix_time_seconds() -> i64 {
@@ -1796,12 +1986,15 @@ mod tests {
         is_slate_settings_profile_sync_device_request_import_url,
         is_slate_settings_profile_sync_enrollment_create_url,
         is_slate_settings_profile_sync_enrollment_import_url,
+        is_slate_settings_profile_sync_handoff_create_url,
+        is_slate_settings_profile_sync_handoff_import_url,
         is_slate_settings_profile_sync_import_url,
         is_slate_settings_profile_sync_local_provider_url,
         is_slate_settings_profile_sync_run_current_url, is_slate_settings_profile_sync_state_url,
         is_slate_settings_save_url, is_slate_settings_url, is_slate_web_url,
         profile_sync_device_request_text_from_url, profile_sync_enrollment_bundle_text_from_url,
         profile_sync_enrollment_target_device_id_from_url,
+        profile_sync_handoff_bundle_text_from_url, profile_sync_handoff_target_device_id_from_url,
         profile_sync_secret_export_text_from_url, slate_download_error_html,
     };
     use crate::desktop::key_bindings::{
@@ -2078,6 +2271,11 @@ mod tests {
                 .unwrap();
         let enrollment_import =
             Url::parse("slate://settings/profile-sync/enrollment/import?bundle=%7B%7D").unwrap();
+        let handoff_create =
+            Url::parse("slate://settings/profile-sync/handoff/create?target_device=device-b")
+                .unwrap();
+        let handoff_import =
+            Url::parse("slate://settings/profile-sync/handoff/import?handoff=%7B%7D").unwrap();
         let run_current = Url::parse("slate://settings/profile-sync/run-current").unwrap();
         let run_local = Url::parse("slate://settings/profile-sync/run-local").unwrap();
         let run_two_device =
@@ -2102,6 +2300,12 @@ mod tests {
         assert!(is_slate_settings_profile_sync_enrollment_import_url(
             &enrollment_import
         ));
+        assert!(is_slate_settings_profile_sync_handoff_create_url(
+            &handoff_create
+        ));
+        assert!(is_slate_settings_profile_sync_handoff_import_url(
+            &handoff_import
+        ));
         assert!(is_slate_settings_profile_sync_run_current_url(&run_current));
         assert!(is_slate_settings_profile_sync_run_local_url(&run_local));
         assert!(is_slate_settings_profile_sync_run_local_two_device_url(
@@ -2122,6 +2326,12 @@ mod tests {
         ));
         assert!(!is_slate_settings_profile_sync_enrollment_import_url(
             &enrollment_create
+        ));
+        assert!(!is_slate_settings_profile_sync_handoff_create_url(
+            &enrollment_create
+        ));
+        assert!(!is_slate_settings_profile_sync_handoff_import_url(
+            &handoff_create
         ));
         assert!(!is_slate_settings_profile_sync_run_local_url(
             &local_provider
@@ -2147,6 +2357,14 @@ mod tests {
             Some("{}")
         );
         assert_eq!(
+            profile_sync_handoff_target_device_id_from_url(&handoff_create).as_deref(),
+            Some("device-b")
+        );
+        assert_eq!(
+            profile_sync_handoff_bundle_text_from_url(&handoff_import).as_deref(),
+            Some("{}")
+        );
+        assert_eq!(
             profile_sync_secret_export_text_from_url(
                 &Url::parse("slate://settings/profile-sync/import?secret=").unwrap()
             ),
@@ -2168,14 +2386,22 @@ mod tests {
             "device-b",
         )
         .unwrap();
+        let handoff_bundle = SlateProfileDatabase::profile_sync_secret_handoff_bundle_from_secret(
+            DEFAULT_PROFILE_ID,
+            &sync_secret,
+            "device-b",
+        )
+        .unwrap();
         let device_request =
             ProfileSyncDeviceEnrollmentRequest::new(DEFAULT_PROFILE_ID, "device-b", 124).unwrap();
         source.mark_device_request(&device_request);
         source.mark_enrollment_bundle(&enrollment_bundle);
+        source.mark_secret_handoff_bundle(&handoff_bundle);
         let source_json: serde_json::Value = serde_json::from_str(&source.to_json(None)).unwrap();
         let export_text = source_json["export_text"].as_str().unwrap();
         let device_request_text = source_json["device_request_export_text"].as_str().unwrap();
         let enrollment_export_text = source_json["enrollment_export_text"].as_str().unwrap();
+        let handoff_export_text = source_json["handoff_export_text"].as_str().unwrap();
 
         assert_eq!(source_json["profile"], DEFAULT_PROFILE_ID);
         assert_eq!(source_json["status"], "ready");
@@ -2194,6 +2420,13 @@ mod tests {
             "slate-profile-enrollment-device-b.json"
         );
         assert_eq!(source_json["enrollment_signed_record_count"], 2);
+        assert!(handoff_export_text.contains("device-b"));
+        assert!(handoff_export_text.contains("sync_secret_export"));
+        assert_eq!(
+            source_json["handoff_export_filename"],
+            "slate-profile-handoff-device-b.json"
+        );
+        assert_eq!(source_json["handoff_target_device_id"], "device-b");
 
         let mut destination = super::ProfileSyncPreviewState::default();
         destination
@@ -2466,6 +2699,11 @@ mod tests {
         assert!(settings_page.contains("id=\"profile-sync-enrollment-create\""));
         assert!(settings_page.contains("id=\"profile-sync-enrollment-download\""));
         assert!(settings_page.contains("id=\"profile-sync-enrollment-import\""));
+        assert!(settings_page.contains("id=\"profile-sync-handoff-file\""));
+        assert!(settings_page.contains("id=\"profile-sync-handoff\""));
+        assert!(settings_page.contains("id=\"profile-sync-handoff-create\""));
+        assert!(settings_page.contains("id=\"profile-sync-handoff-download\""));
+        assert!(settings_page.contains("id=\"profile-sync-handoff-import\""));
         assert!(settings_page.contains("Current sync"));
         assert!(settings_page.contains("Two-device trial"));
         assert!(settings_page.contains("slate://settings/profile-sync/"));

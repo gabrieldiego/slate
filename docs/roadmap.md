@@ -1414,6 +1414,13 @@ Current baseline:
   the raw root secret in the database. The file itself is sensitive login
   material and still needs encrypted recovery/handoff policy before production
   use.
+- `slate://settings` now exposes that handoff primitive in the Profile Sync
+  Preview. An enrolled session can create and download a target-specific
+  `slate-profile-handoff-<device>.json` file, and a target device can import a
+  selected or pasted handoff file to apply membership and activate the session
+  key-derived local metadata in one step. This remains a sensitive local preview
+  flow and still uses the existing query-string internal action transport until
+  POST/body-capable Slate protocol imports are added.
 - The socketless two-device Profile Sync Preview now uses the same request
   shape: the receiver emits a `ProfileSyncDeviceEnrollmentRequest`, the
   publisher derives the enrollment bundle from that request, and the normal
