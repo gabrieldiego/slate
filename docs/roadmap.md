@@ -549,6 +549,11 @@ Current baseline:
   external discovery. The same selection logic is available as a read-only
   scheduler plan that reports selected, undiscovered, and duplicate handles
   before any publish, pull, retain, or root mutation occurs.
+- Scheduler selected-provider plans and runs now expose structured selection
+  issues for stale, offline, ineligible, undiscovered, and duplicate retention
+  providers. UI and scheduler callers can render degraded provider selection
+  without reinterpreting the raw id buckets, while policy quorum checks remain
+  responsible for deciding whether a cycle can proceed.
 - The scheduler can now also build a read-only retention-provider plan from
   enabled storage-provider metadata in `slate-settings.db`. Stored providers
   must locally advertise object-transfer and availability before they are

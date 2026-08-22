@@ -1493,6 +1493,21 @@ impl SettingsSyncSchedulerConfig {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SettingsSyncRetentionProviderSelectionIssueKind {
+    Stale,
+    Offline,
+    Ineligible,
+    Undiscovered,
+    Duplicate,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncRetentionProviderSelectionIssue {
+    pub provider_id: String,
+    pub kind: SettingsSyncRetentionProviderSelectionIssueKind,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettingsSyncScheduledCycleRun {
     pub preflight: SettingsSyncCyclePreflight,
     pub selected_retention_provider_ids: Vec<String>,
@@ -1527,6 +1542,32 @@ impl SettingsSyncScheduledCycleRun {
 
     pub fn duplicate_retention_provider_count(&self) -> usize {
         self.duplicate_retention_provider_ids.len()
+    }
+
+    pub fn retention_provider_selection_issues(
+        &self,
+    ) -> Vec<SettingsSyncRetentionProviderSelectionIssue> {
+        retention_provider_selection_issues(
+            self.stale_retention_provider_ids.as_slice(),
+            self.offline_retention_provider_ids.as_slice(),
+            self.ineligible_retention_provider_ids.as_slice(),
+            self.undiscovered_retention_provider_ids.as_slice(),
+            self.duplicate_retention_provider_ids.as_slice(),
+        )
+    }
+
+    pub fn retention_provider_selection_issue_count(&self) -> usize {
+        retention_provider_selection_issue_count(
+            self.stale_retention_provider_ids.as_slice(),
+            self.offline_retention_provider_ids.as_slice(),
+            self.ineligible_retention_provider_ids.as_slice(),
+            self.undiscovered_retention_provider_ids.as_slice(),
+            self.duplicate_retention_provider_ids.as_slice(),
+        )
+    }
+
+    pub fn has_retention_provider_selection_issue(&self) -> bool {
+        self.retention_provider_selection_issue_count() > 0
     }
 
     pub fn retained_provider_count(&self) -> usize {
@@ -1579,6 +1620,32 @@ impl SettingsSyncScheduledMembershipCycleRun {
         self.duplicate_retention_provider_ids.len()
     }
 
+    pub fn retention_provider_selection_issues(
+        &self,
+    ) -> Vec<SettingsSyncRetentionProviderSelectionIssue> {
+        retention_provider_selection_issues(
+            self.stale_retention_provider_ids.as_slice(),
+            self.offline_retention_provider_ids.as_slice(),
+            self.ineligible_retention_provider_ids.as_slice(),
+            self.undiscovered_retention_provider_ids.as_slice(),
+            self.duplicate_retention_provider_ids.as_slice(),
+        )
+    }
+
+    pub fn retention_provider_selection_issue_count(&self) -> usize {
+        retention_provider_selection_issue_count(
+            self.stale_retention_provider_ids.as_slice(),
+            self.offline_retention_provider_ids.as_slice(),
+            self.ineligible_retention_provider_ids.as_slice(),
+            self.undiscovered_retention_provider_ids.as_slice(),
+            self.duplicate_retention_provider_ids.as_slice(),
+        )
+    }
+
+    pub fn has_retention_provider_selection_issue(&self) -> bool {
+        self.retention_provider_selection_issue_count() > 0
+    }
+
     pub fn retained_provider_count(&self) -> usize {
         self.cycle.retained_provider_count()
     }
@@ -1624,6 +1691,32 @@ impl SettingsSyncScheduledCyclePlan {
         self.duplicate_retention_provider_ids.len()
     }
 
+    pub fn retention_provider_selection_issues(
+        &self,
+    ) -> Vec<SettingsSyncRetentionProviderSelectionIssue> {
+        retention_provider_selection_issues(
+            self.stale_retention_provider_ids.as_slice(),
+            self.offline_retention_provider_ids.as_slice(),
+            self.ineligible_retention_provider_ids.as_slice(),
+            self.undiscovered_retention_provider_ids.as_slice(),
+            self.duplicate_retention_provider_ids.as_slice(),
+        )
+    }
+
+    pub fn retention_provider_selection_issue_count(&self) -> usize {
+        retention_provider_selection_issue_count(
+            self.stale_retention_provider_ids.as_slice(),
+            self.offline_retention_provider_ids.as_slice(),
+            self.ineligible_retention_provider_ids.as_slice(),
+            self.undiscovered_retention_provider_ids.as_slice(),
+            self.duplicate_retention_provider_ids.as_slice(),
+        )
+    }
+
+    pub fn has_retention_provider_selection_issue(&self) -> bool {
+        self.retention_provider_selection_issue_count() > 0
+    }
+
     pub fn degraded_before(&self) -> bool {
         self.preflight.before_health.degraded()
     }
@@ -1663,6 +1756,20 @@ impl SettingsSyncScheduledMembershipCyclePlan {
 
     pub fn duplicate_retention_provider_count(&self) -> usize {
         self.cycle.duplicate_retention_provider_count()
+    }
+
+    pub fn retention_provider_selection_issues(
+        &self,
+    ) -> Vec<SettingsSyncRetentionProviderSelectionIssue> {
+        self.cycle.retention_provider_selection_issues()
+    }
+
+    pub fn retention_provider_selection_issue_count(&self) -> usize {
+        self.cycle.retention_provider_selection_issue_count()
+    }
+
+    pub fn has_retention_provider_selection_issue(&self) -> bool {
+        self.cycle.has_retention_provider_selection_issue()
     }
 
     pub fn degraded_before(&self) -> bool {
@@ -3340,6 +3447,75 @@ impl SettingsSyncStoredProtocolProviderRetentionProviderMembershipRun<'_> {
 struct SelectedSettingsSyncRetentionProviders<'a> {
     plan: SettingsSyncScheduledCyclePlan,
     daemons: Vec<&'a BroadwebDaemon>,
+}
+
+fn retention_provider_selection_issues(
+    stale_provider_ids: &[String],
+    offline_provider_ids: &[String],
+    ineligible_provider_ids: &[String],
+    undiscovered_provider_ids: &[String],
+    duplicate_provider_ids: &[String],
+) -> Vec<SettingsSyncRetentionProviderSelectionIssue> {
+    let mut issues = Vec::with_capacity(retention_provider_selection_issue_count(
+        stale_provider_ids,
+        offline_provider_ids,
+        ineligible_provider_ids,
+        undiscovered_provider_ids,
+        duplicate_provider_ids,
+    ));
+    append_retention_provider_selection_issues(
+        &mut issues,
+        SettingsSyncRetentionProviderSelectionIssueKind::Stale,
+        stale_provider_ids,
+    );
+    append_retention_provider_selection_issues(
+        &mut issues,
+        SettingsSyncRetentionProviderSelectionIssueKind::Offline,
+        offline_provider_ids,
+    );
+    append_retention_provider_selection_issues(
+        &mut issues,
+        SettingsSyncRetentionProviderSelectionIssueKind::Ineligible,
+        ineligible_provider_ids,
+    );
+    append_retention_provider_selection_issues(
+        &mut issues,
+        SettingsSyncRetentionProviderSelectionIssueKind::Undiscovered,
+        undiscovered_provider_ids,
+    );
+    append_retention_provider_selection_issues(
+        &mut issues,
+        SettingsSyncRetentionProviderSelectionIssueKind::Duplicate,
+        duplicate_provider_ids,
+    );
+    issues
+}
+
+fn append_retention_provider_selection_issues(
+    issues: &mut Vec<SettingsSyncRetentionProviderSelectionIssue>,
+    kind: SettingsSyncRetentionProviderSelectionIssueKind,
+    provider_ids: &[String],
+) {
+    for provider_id in provider_ids {
+        issues.push(SettingsSyncRetentionProviderSelectionIssue {
+            provider_id: provider_id.clone(),
+            kind: kind.clone(),
+        });
+    }
+}
+
+fn retention_provider_selection_issue_count(
+    stale_provider_ids: &[String],
+    offline_provider_ids: &[String],
+    ineligible_provider_ids: &[String],
+    undiscovered_provider_ids: &[String],
+    duplicate_provider_ids: &[String],
+) -> usize {
+    stale_provider_ids.len()
+        + offline_provider_ids.len()
+        + ineligible_provider_ids.len()
+        + undiscovered_provider_ids.len()
+        + duplicate_provider_ids.len()
 }
 
 fn select_settings_sync_retention_provider_ids(
@@ -15451,6 +15627,21 @@ mod tests {
         assert_eq!(plan.ineligible_retention_provider_count(), 0);
         assert_eq!(plan.undiscovered_retention_provider_count(), 1);
         assert_eq!(plan.duplicate_retention_provider_count(), 1);
+        assert_eq!(plan.retention_provider_selection_issue_count(), 2);
+        assert!(plan.has_retention_provider_selection_issue());
+        assert_eq!(
+            plan.retention_provider_selection_issues(),
+            vec![
+                super::SettingsSyncRetentionProviderSelectionIssue {
+                    provider_id: "not-a-discovered-provider".to_string(),
+                    kind: super::SettingsSyncRetentionProviderSelectionIssueKind::Undiscovered,
+                },
+                super::SettingsSyncRetentionProviderSelectionIssue {
+                    provider_id: selected_provider_id.to_string(),
+                    kind: super::SettingsSyncRetentionProviderSelectionIssueKind::Duplicate,
+                },
+            ]
+        );
         assert!(plan.degraded_before());
         assert!(!plan.preflight.before_health.provider_health.degraded);
         assert_eq!(
@@ -15503,6 +15694,15 @@ mod tests {
         assert_eq!(membership_plan.ineligible_retention_provider_count(), 0);
         assert_eq!(membership_plan.undiscovered_retention_provider_count(), 1);
         assert_eq!(membership_plan.duplicate_retention_provider_count(), 1);
+        assert_eq!(
+            membership_plan.retention_provider_selection_issues(),
+            plan.retention_provider_selection_issues()
+        );
+        assert_eq!(
+            membership_plan.retention_provider_selection_issue_count(),
+            2
+        );
+        assert!(membership_plan.has_retention_provider_selection_issue());
         assert!(membership_plan.membership_log_publication.is_publishable());
         assert_eq!(
             database
@@ -15558,6 +15758,12 @@ mod tests {
         assert_eq!(run.ineligible_retention_provider_count(), 0);
         assert_eq!(run.undiscovered_retention_provider_count(), 1);
         assert_eq!(run.duplicate_retention_provider_count(), 1);
+        assert_eq!(
+            run.retention_provider_selection_issues(),
+            plan.retention_provider_selection_issues()
+        );
+        assert_eq!(run.retention_provider_selection_issue_count(), 2);
+        assert!(run.has_retention_provider_selection_issue());
         assert!(run.degraded_before());
         assert_eq!(run.cycle.cycle.published_step_count(), 1);
         assert_eq!(run.cycle.retention.len(), 1);
@@ -17025,6 +17231,21 @@ mod tests {
             ]
         );
         assert_eq!(plan.ineligible_retention_provider_count(), 2);
+        assert_eq!(plan.retention_provider_selection_issue_count(), 2);
+        assert!(plan.has_retention_provider_selection_issue());
+        assert_eq!(
+            plan.retention_provider_selection_issues(),
+            vec![
+                super::SettingsSyncRetentionProviderSelectionIssue {
+                    provider_id: no_availability_provider_id.to_string(),
+                    kind: super::SettingsSyncRetentionProviderSelectionIssueKind::Ineligible,
+                },
+                super::SettingsSyncRetentionProviderSelectionIssue {
+                    provider_id: no_transfer_provider_id.to_string(),
+                    kind: super::SettingsSyncRetentionProviderSelectionIssueKind::Ineligible,
+                },
+            ]
+        );
         assert!(plan.undiscovered_retention_provider_ids.is_empty());
         assert_eq!(
             database
