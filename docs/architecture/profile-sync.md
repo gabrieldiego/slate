@@ -1019,7 +1019,11 @@ binding loopback ports or passing raw content-key bytes into scheduler calls.
 Stored-provider runtime ticks exclude unsupported endpoint refs from
 materialized provider quorum even when the caller supplies a daemon handle with
 the same unsupported string, so socket-shaped metadata cannot be laundered into
-an accepted fixture provider. The
+an accepted fixture provider. Stale synthetic fixture refs are treated the same
+way: if the `slate-fixture-profile-sync://` provider component does not match
+the stored provider id, the read-only plan exposes a fail-closed endpoint, no
+in-process fixture materialization target is produced, and a supplied fixture
+daemon cannot satisfy selected-provider quorum or mutate sync roots. The
 membership-aware scheduler has the same stored-provider path: its
 read-only plan preserves the no-mutation boundary and does not pull membership
 records to satisfy credential preflight, while its runtime path pulls the

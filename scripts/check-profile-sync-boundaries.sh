@@ -122,6 +122,7 @@ run_test slate-profile-sync scheduler_membership_fixture_stored_provider_derives
 run_test slate-profile-sync local_settings_sync_current_cycle_publishes_existing_settings_without_preview_write
 run_test slate-profile-sync local_settings_sync_preview_cycle_publishes_and_retains_without_loopback
 run_test slate-profile-sync local_settings_sync_two_device_preview_cycle_applies_on_receiver_without_loopback
+run_test slate-profile-sync broadwebd_settings_sync_scheduler_rejects_stale_fixture_endpoint_provider_refs
 
 case "$check_chrome" in
     1 | true | yes)

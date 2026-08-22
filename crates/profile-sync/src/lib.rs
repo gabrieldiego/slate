@@ -23366,6 +23366,147 @@ mod tests {
     }
 
     #[test]
+    fn broadwebd_settings_sync_scheduler_rejects_stale_fixture_endpoint_provider_refs() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("scheduler-stale-fixture-endpoint-device");
+        let provider_state_root = test_state_root("scheduler-stale-fixture-endpoint-provider");
+        let db_root = test_state_root("scheduler-stale-fixture-endpoint-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-stale-fixture-endpoint-device",
+            )
+            .expect("start stale fixture endpoint scheduler device daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-stale-fixture-endpoint-provider",
+            )
+            .expect("start stale fixture endpoint provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-scheduler-stale-fixture-endpoint-device",
+        )
+        .expect("open stale fixture endpoint settings database");
+        let profile = "schedulerstalefixtureendpointprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([105; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer =
+            ProfileSyncDeviceSigner::generate("runtime-scheduler-stale-fixture-endpoint-device")
+                .expect("generate stale fixture endpoint signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer
+                    .public_key()
+                    .expect("stale fixture endpoint local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register stale fixture endpoint local trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write stale fixture endpoint local setting");
+
+        let provider_id =
+            "local-fixture-availability-runtime-scheduler-stale-fixture-endpoint-provider";
+        let stale_endpoint_ref = network.profile_sync_provider_endpoint_ref(
+            "local-fixture-availability-runtime-scheduler-stale-fixture-endpoint-other",
+        );
+        let mut provider = test_storage_provider_update(
+            &network,
+            profile,
+            provider_id,
+            "local-fixture-availability",
+            "Stale fixture endpoint pinner",
+            true,
+            true,
+            true,
+        );
+        provider.endpoint_ref = Some(stale_endpoint_ref.clone());
+        database
+            .upsert_storage_provider(&provider)
+            .expect("write stale fixture endpoint provider metadata");
+        authorize_test_storage_provider(&database, profile, provider_id);
+
+        let config = SettingsSyncSchedulerConfig::new(
+            profile,
+            settings_root_id,
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
+        );
+        let scheduler = BroadwebdSettingsSyncScheduler::new(&device_daemon);
+        let plan = scheduler
+            .plan_once_with_stored_retention_providers(&database, &config, &signer, 8)
+            .expect("plan stale fixture endpoint stored provider");
+        assert_eq!(plan.selected_retention_provider_count(), 1);
+        assert_eq!(
+            plan.selected_unsupported_endpoint_provider_ids(),
+            vec![provider_id.to_string()]
+        );
+        assert!(
+            plan.selected_in_process_fixture_endpoint_provider_ids()
+                .is_empty()
+        );
+        assert!(
+            plan.selected_in_process_fixture_materialization_targets()
+                .is_empty()
+        );
+        let endpoint_plan = plan.selected_protocol_materialization_plan();
+        assert_eq!(endpoint_plan.protocol_request_count(), 0);
+        assert_eq!(endpoint_plan.fail_closed_provider_count(), 1);
+        assert!(endpoint_plan.has_fail_closed_endpoint());
+        assert_eq!(
+            endpoint_plan.fail_closed_provider_ids,
+            vec![provider_id.to_string()]
+        );
+
+        let roots_before = database
+            .profile_sync_roots(profile)
+            .expect("read roots before stale fixture endpoint run");
+        let error = match scheduler
+            .run_once_with_stored_in_process_fixture_retention_provider_daemons(
+                &database,
+                &config,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                8,
+                &[super::SettingsSyncInProcessFixtureProviderDaemon::new(
+                    provider_id,
+                    network.network_id(),
+                    &provider_daemon,
+                )],
+            ) {
+            Ok(_) => {
+                panic!("stale fixture endpoint should fail closed before materialization")
+            }
+            Err(error) => error,
+        };
+        let ProfileSyncCycleWithHealthError::Policy(ProfileSyncPolicyError::ProviderMinimumUnmet {
+            provider_role,
+            minimum,
+            actual,
+            ..
+        }) = error
+        else {
+            panic!("expected stale fixture endpoint provider minimum error, got {error:?}");
+        };
+        assert_eq!(provider_role, "selected retention providers");
+        assert_eq!(minimum, 1);
+        assert_eq!(actual, 0);
+        assert_eq!(
+            database
+                .profile_sync_roots(profile)
+                .expect("read roots after stale fixture endpoint run"),
+            roots_before
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
     fn broadwebd_settings_sync_scheduler_classifies_ineligible_retention_provider_handles() {
         let network = InProcessBroadwebNetwork::new();
         let device_state_root = test_state_root("scheduler-ineligible-device");

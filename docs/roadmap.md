@@ -863,6 +863,11 @@ Current baseline:
   the materialized retention-provider quorum, even if the caller supplies a
   daemon handle with the same socket-shaped endpoint string. This keeps
   loopback metadata from satisfying socketless fixture runs.
+- Stale synthetic fixture refs now fail closed at the same boundary. If a
+  stored `slate-fixture-profile-sync://` endpoint names a different provider,
+  the selected-provider plan creates no in-process fixture materialization
+  target, the protocol materialization plan reports a fail-closed endpoint, and
+  supplied fixture daemons cannot publish settings or mutate sync roots.
 - The in-process fixture-daemon stored-provider path now covers that
   unsupported-endpoint boundary too: a matching fixture daemon cannot
   materialize a provider whose stored endpoint is loopback-shaped, and strict
