@@ -984,7 +984,11 @@ providers are reported before retention, and the fixture model remains behind
 the daemon transport handle rather than being visible to scheduler logic.
 It also has a `SlateSyncSecret` entry point that derives the active content key
 after preflight, so runtime callers can compact encrypted settings through
-stored providers without passing raw content-key bytes.
+stored providers without passing raw content-key bytes. Local-only fixture
+callers can drive that compaction from stored synthetic fixture endpoints by
+supplying in-process fixture daemon refs; the scheduler materializes those
+refs into normal retention-provider handles and reports missing or mismatched
+fixtures before retention.
 The first `iroh-node:<node>` checkpoint stays at this materializer boundary:
 tests treat the endpoint as a deferred protocol target, materialize it through
 a caller-supplied socketless provider daemon, verify that read-only previews do

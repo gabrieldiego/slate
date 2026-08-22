@@ -676,6 +676,11 @@ Current baseline:
   `SlateSyncSecret` after scheduler preflight. A socketless fixture decrypts
   the published compaction manifest with the derived key, proving callers do
   not need to pass raw content-key bytes for this compaction path.
+- Stored-provider compaction can now also run from in-process fixture daemon
+  refs. The local-only path materializes stored synthetic fixture endpoints
+  into normal retention-provider handles, reports missing fixture providers,
+  and compacts through `SlateSyncSecret` without exposing fixture model state
+  to scheduler logic.
 - Internal protocol models are constrained to transport/test boundaries:
   protocol implementations must keep real-web request/response semantics and
   can only swap socket IO for internal shims in local deterministic fixtures.

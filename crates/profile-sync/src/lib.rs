@@ -3992,6 +3992,85 @@ impl SettingsSyncStoredInProcessFixtureRetentionProviderRun<'_> {
     }
 }
 
+pub struct SettingsSyncStoredInProcessFixtureCompactionRun<'a> {
+    pub fixture_materialization: SettingsSyncInProcessFixtureMaterialization<'a>,
+    pub run: SettingsSyncStoredCompactionRun,
+}
+
+impl SettingsSyncStoredInProcessFixtureCompactionRun<'_> {
+    pub fn selected_protocol_materialization_plan(
+        &self,
+    ) -> SettingsSyncSelectedProtocolMaterializationPlan {
+        self.run.selected_protocol_materialization_plan()
+    }
+
+    pub fn selected_retention_provider_count(&self) -> usize {
+        self.run.selected_retention_provider_count()
+    }
+
+    pub fn materialized_retention_provider_count(&self) -> usize {
+        self.run.materialized_retention_provider_count()
+    }
+
+    pub fn retained_provider_count(&self) -> usize {
+        self.run.retained_provider_count()
+    }
+
+    pub fn fixture_materialization_issues(
+        &self,
+    ) -> Vec<SettingsSyncInProcessFixtureMaterializationIssue> {
+        self.fixture_materialization.materialization_issues()
+    }
+
+    pub fn fixture_materialization_issue_count(&self) -> usize {
+        self.fixture_materialization.materialization_issue_count()
+    }
+
+    pub fn has_fixture_materialization_issue(&self) -> bool {
+        self.fixture_materialization.has_materialization_issue()
+    }
+
+    pub fn all_fixture_providers_materialized(&self) -> bool {
+        self.fixture_materialization.all_providers_materialized()
+    }
+
+    pub fn retention_provider_selection_issues(
+        &self,
+    ) -> Vec<SettingsSyncRetentionProviderSelectionIssue> {
+        self.run.retention_provider_selection_issues()
+    }
+
+    pub fn retention_provider_selection_issue_count(&self) -> usize {
+        self.run.retention_provider_selection_issue_count()
+    }
+
+    pub fn has_retention_provider_selection_issue(&self) -> bool {
+        self.run.has_retention_provider_selection_issue()
+    }
+
+    pub fn stored_provider_metadata_issues(
+        &self,
+    ) -> Vec<SettingsSyncStoredRetentionProviderMetadataIssue> {
+        self.run.stored_provider_metadata_issues()
+    }
+
+    pub fn stored_provider_metadata_issue_count(&self) -> usize {
+        self.run.stored_provider_metadata_issue_count()
+    }
+
+    pub fn has_stored_provider_metadata_issue(&self) -> bool {
+        self.run.has_stored_provider_metadata_issue()
+    }
+
+    pub fn degraded_before(&self) -> bool {
+        self.run.degraded_before()
+    }
+
+    pub fn degraded_after(&self) -> bool {
+        self.run.degraded_after()
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettingsSyncStoredProtocolProviderMaterializationPreview {
     pub protocol_materialization: SettingsSyncProtocolProviderMaterializationReport,
@@ -7207,6 +7286,161 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             unsupported_endpoint_retention_provider_ids: materialized_providers
                 .unsupported_endpoint_retention_provider_ids,
             compaction,
+        })
+    }
+
+    pub fn compact_once_with_stored_in_process_fixture_retention_provider_daemons<'provider>(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        secrets: SettingsSyncRuntimeSecrets<'_>,
+        max_stored_providers: u32,
+        now: i64,
+        provider_daemons: &[SettingsSyncInProcessFixtureProviderDaemon<'provider>],
+    ) -> Result<
+        SettingsSyncStoredInProcessFixtureCompactionRun<'provider>,
+        ProfileSyncCycleWithHealthError,
+    > {
+        let runner = BroadwebdSettingsSyncRunner::new(self.daemon);
+        let stored_provider_plan = self.plan_once_with_stored_retention_providers(
+            database,
+            config,
+            secrets.signer,
+            max_stored_providers,
+        )?;
+        config.policy.check_selected_retention_provider_freshness(
+            stored_provider_plan.stale_retention_provider_count(),
+            stored_provider_plan.offline_retention_provider_count(),
+            &stored_provider_plan.cycle.preflight.before_health,
+        )?;
+        config.policy.check_selected_retention_provider_roles(
+            stored_provider_plan.ineligible_retention_provider_count(),
+            &stored_provider_plan.cycle.preflight.before_health,
+        )?;
+        let fixture_materialization = stored_provider_plan
+            .materialize_selected_in_process_fixture_retention_provider_handles(provider_daemons);
+        let run = {
+            let retention_provider_handles = fixture_materialization.retention_provider_handles();
+            let materialized_providers = materialize_stored_retention_provider_daemons(
+                &stored_provider_plan,
+                retention_provider_handles.as_slice(),
+            );
+            config.policy.check_selected_retention_provider_count(
+                materialized_providers.materialized_retention_provider_count(),
+                &stored_provider_plan.cycle.preflight.before_health,
+            )?;
+            let compaction = runner
+                .compact_settings_with_active_key_policy_and_retention_providers_after_preflight(
+                    database,
+                    secrets.content_key,
+                    secrets.signer,
+                    &config.policy,
+                    now,
+                    materialized_providers.daemons.as_slice(),
+                    &stored_provider_plan.cycle.preflight,
+                )?;
+
+            SettingsSyncStoredCompactionRun {
+                stored_provider_plan,
+                unmaterialized_retention_provider_ids: materialized_providers
+                    .unmaterialized_retention_provider_ids,
+                pending_endpoint_materialization_retention_provider_ids: materialized_providers
+                    .pending_endpoint_materialization_retention_provider_ids,
+                endpoint_mismatch_retention_provider_ids: materialized_providers
+                    .endpoint_mismatch_retention_provider_ids,
+                duplicate_handle_retention_provider_ids: materialized_providers
+                    .duplicate_handle_retention_provider_ids,
+                unsupported_endpoint_retention_provider_ids: materialized_providers
+                    .unsupported_endpoint_retention_provider_ids,
+                compaction,
+            }
+        };
+
+        Ok(SettingsSyncStoredInProcessFixtureCompactionRun {
+            fixture_materialization,
+            run,
+        })
+    }
+
+    pub fn compact_once_with_stored_in_process_fixture_retention_provider_daemons_and_sync_secret<
+        'provider,
+    >(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        sync_secret: &SlateSyncSecret,
+        signer: &ProfileSyncDeviceSigner,
+        max_stored_providers: u32,
+        now: i64,
+        provider_daemons: &[SettingsSyncInProcessFixtureProviderDaemon<'provider>],
+    ) -> Result<
+        SettingsSyncStoredInProcessFixtureCompactionRun<'provider>,
+        ProfileSyncCycleWithHealthError,
+    > {
+        let runner = BroadwebdSettingsSyncRunner::new(self.daemon);
+        let stored_provider_plan = self.plan_once_with_stored_retention_providers(
+            database,
+            config,
+            signer,
+            max_stored_providers,
+        )?;
+        let content_key = derive_settings_sync_content_key_from_secret(
+            config.profile.as_str(),
+            stored_provider_plan.cycle.preflight.active_key_id.as_str(),
+            sync_secret,
+        )
+        .map_err(ProfileSyncCycleError::from)?;
+        config.policy.check_selected_retention_provider_freshness(
+            stored_provider_plan.stale_retention_provider_count(),
+            stored_provider_plan.offline_retention_provider_count(),
+            &stored_provider_plan.cycle.preflight.before_health,
+        )?;
+        config.policy.check_selected_retention_provider_roles(
+            stored_provider_plan.ineligible_retention_provider_count(),
+            &stored_provider_plan.cycle.preflight.before_health,
+        )?;
+        let fixture_materialization = stored_provider_plan
+            .materialize_selected_in_process_fixture_retention_provider_handles(provider_daemons);
+        let run = {
+            let retention_provider_handles = fixture_materialization.retention_provider_handles();
+            let materialized_providers = materialize_stored_retention_provider_daemons(
+                &stored_provider_plan,
+                retention_provider_handles.as_slice(),
+            );
+            config.policy.check_selected_retention_provider_count(
+                materialized_providers.materialized_retention_provider_count(),
+                &stored_provider_plan.cycle.preflight.before_health,
+            )?;
+            let compaction = runner
+                .compact_settings_with_active_key_policy_and_retention_providers_after_preflight(
+                    database,
+                    &content_key,
+                    signer,
+                    &config.policy,
+                    now,
+                    materialized_providers.daemons.as_slice(),
+                    &stored_provider_plan.cycle.preflight,
+                )?;
+
+            SettingsSyncStoredCompactionRun {
+                stored_provider_plan,
+                unmaterialized_retention_provider_ids: materialized_providers
+                    .unmaterialized_retention_provider_ids,
+                pending_endpoint_materialization_retention_provider_ids: materialized_providers
+                    .pending_endpoint_materialization_retention_provider_ids,
+                endpoint_mismatch_retention_provider_ids: materialized_providers
+                    .endpoint_mismatch_retention_provider_ids,
+                duplicate_handle_retention_provider_ids: materialized_providers
+                    .duplicate_handle_retention_provider_ids,
+                unsupported_endpoint_retention_provider_ids: materialized_providers
+                    .unsupported_endpoint_retention_provider_ids,
+                compaction,
+            }
+        };
+
+        Ok(SettingsSyncStoredInProcessFixtureCompactionRun {
+            fixture_materialization,
+            run,
         })
     }
 
@@ -21260,6 +21494,190 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(device_state_root);
         let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn scheduler_stored_fixture_compaction_derives_active_key_from_sync_secret() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("scheduler-fixture-secret-compaction-device");
+        let provider_state_root = test_state_root("scheduler-fixture-secret-compaction-provider");
+        let unmaterialized_state_root =
+            test_state_root("scheduler-fixture-secret-compaction-unmaterialized");
+        let db_root = test_state_root("scheduler-fixture-secret-compaction-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-fixture-secret-compaction-a",
+            )
+            .expect("start in-process fixture secret compaction device daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-fixture-secret-compaction-pinner",
+            )
+            .expect("start in-process fixture secret compaction provider daemon");
+        let _unmaterialized_provider_daemon = network
+            .daemon_for_availability_provider(
+                &unmaterialized_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-fixture-secret-compaction-extra",
+            )
+            .expect("start in-process unmaterialized fixture secret compaction provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-scheduler-fixture-secret-compaction-a",
+        )
+        .expect("open fixture secret compaction settings database");
+        let profile = "schedulerfixturesecretcompactionprofile";
+        let settings_root_id = "settings/latest";
+        let sync_secret = SlateSyncSecret::from_bytes([105; SLATE_SYNC_SECRET_BYTES]);
+        let signer =
+            ProfileSyncDeviceSigner::generate("runtime-scheduler-fixture-secret-compaction-a")
+                .expect("generate fixture secret compaction signer");
+        let policy = SettingsSyncCyclePolicy::new(
+            ProfileSyncRetentionPolicy {
+                min_tail_change_count: 1,
+                change_retention_seconds: 0,
+                ..ProfileSyncRetentionPolicy::default()
+            },
+            4,
+            4,
+            2,
+        )
+        .with_local_device_head_root_health_required_after_cycle(false);
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register fixture secret compaction local trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write first fixture secret compacted setting");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.zoom", "110")
+            .expect("write second fixture secret compacted setting");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.font", "Inter")
+            .expect("write fixture secret retained compaction tail setting");
+
+        let selected_provider_id =
+            "local-fixture-availability-runtime-scheduler-fixture-secret-compaction-pinner";
+        let unmaterialized_provider_id =
+            "local-fixture-availability-runtime-scheduler-fixture-secret-compaction-extra";
+        for provider in [
+            test_storage_provider_update(
+                &network,
+                profile,
+                selected_provider_id,
+                "local-fixture-availability",
+                "Selected fixture secret compaction pinner",
+                true,
+                true,
+                true,
+            ),
+            test_storage_provider_update(
+                &network,
+                profile,
+                unmaterialized_provider_id,
+                "local-fixture-availability",
+                "Unmaterialized fixture secret compaction pinner",
+                true,
+                true,
+                true,
+            ),
+        ] {
+            database
+                .upsert_storage_provider(&provider)
+                .expect("write fixture secret compaction provider metadata");
+        }
+        authorize_test_storage_providers(
+            &database,
+            profile,
+            &[selected_provider_id, unmaterialized_provider_id],
+        );
+
+        let config = SettingsSyncSchedulerConfig::new(profile, settings_root_id, policy);
+        let run = BroadwebdSettingsSyncScheduler::new(&device_daemon)
+            .compact_once_with_stored_in_process_fixture_retention_provider_daemons_and_sync_secret(
+                &database,
+                &config,
+                &sync_secret,
+                &signer,
+                8,
+                i64::MAX,
+                &[super::SettingsSyncInProcessFixtureProviderDaemon::new(
+                    selected_provider_id,
+                    network.network_id(),
+                    &provider_daemon,
+                )],
+            )
+            .expect("secret fixture stored-provider scheduler compacts settings state");
+
+        assert_eq!(run.selected_retention_provider_count(), 2);
+        assert_eq!(run.materialized_retention_provider_count(), 1);
+        assert_eq!(run.retained_provider_count(), 1);
+        assert_eq!(
+            run.fixture_materialization.missing_provider_ids,
+            vec![unmaterialized_provider_id.to_string()]
+        );
+        assert_eq!(run.fixture_materialization_issue_count(), 1);
+        assert!(run.has_fixture_materialization_issue());
+        assert!(!run.all_fixture_providers_materialized());
+        assert_eq!(
+            run.fixture_materialization_issues(),
+            vec![super::SettingsSyncInProcessFixtureMaterializationIssue {
+                provider_id: unmaterialized_provider_id.to_string(),
+                kind: super::SettingsSyncInProcessFixtureMaterializationIssueKind::Missing,
+            }]
+        );
+        assert_eq!(
+            run.run.unmaterialized_retention_provider_ids,
+            vec![unmaterialized_provider_id.to_string()]
+        );
+        assert!(run.run.compaction.compacted());
+        let compaction = run
+            .run
+            .compaction
+            .compaction
+            .as_ref()
+            .expect("fixture secret stored scheduler compaction was published");
+        assert_eq!(compaction.target.retained_tail_change_count, 1);
+        assert!(run.degraded_after());
+        assert!(
+            !run.run
+                .compaction
+                .after_health
+                .settings_root_health
+                .degraded
+        );
+
+        let derived_content_key = sync_secret
+            .derive_profile_sync_content_key(profile, TEST_CONTENT_KEY_ID)
+            .expect("derive fixture test compaction content key");
+        let public_key = signer.public_key().expect("local public key");
+        let source = BroadwebdProfileSyncObjectSource::new(&device_daemon);
+        let manifest_object = source
+            .get_profile_sync_object(profile, compaction.publication.manifest_object_id.as_str())
+            .expect("fetch fixture secret compaction manifest");
+        let manifest = open_signed_profile_sync_manifest(
+            manifest_object.bytes.as_slice(),
+            &derived_content_key,
+            &public_key,
+            profile,
+            TEST_CONTENT_KEY_ID,
+        )
+        .expect("decrypt fixture secret compaction manifest");
+        assert_eq!(manifest, compaction.publication.manifest);
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(unmaterialized_state_root);
         let _ = std::fs::remove_dir_all(db_root);
     }
 
