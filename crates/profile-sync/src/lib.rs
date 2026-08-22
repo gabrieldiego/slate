@@ -41,7 +41,7 @@ use slate_storage::{
     open_signed_profile_sync_device_head, settings_sync_manifest_for_snapshot_and_tail_changes,
     settings_sync_manifest_for_tail_changes, settings_sync_snapshot_id,
 };
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub const PROFILE_SYNC_MEMBERSHIP_LOG_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID: &str = "account/membership/log";
@@ -1755,6 +1755,25 @@ pub struct SettingsSyncSelectedDeferredProtocolMaterializationRequest {
     pub target: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncSelectedDeferredProtocolMaterializationBatch {
+    pub protocol: String,
+    pub requests: Vec<SettingsSyncSelectedDeferredProtocolMaterializationRequest>,
+}
+
+impl SettingsSyncSelectedDeferredProtocolMaterializationBatch {
+    pub fn request_count(&self) -> usize {
+        self.requests.len()
+    }
+
+    pub fn provider_ids(&self) -> Vec<String> {
+        self.requests
+            .iter()
+            .map(|request| request.provider_id.clone())
+            .collect()
+    }
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SettingsSyncSelectedProtocolMaterializationPlan {
     pub multiaddr_requests: Vec<SettingsSyncSelectedMultiaddrMaterializationRequest>,
@@ -1769,6 +1788,35 @@ impl SettingsSyncSelectedProtocolMaterializationPlan {
             .iter()
             .map(SettingsSyncSelectedMultiaddrMaterializationRequest::routing_plan)
             .collect()
+    }
+
+    pub fn deferred_protocol_batches(
+        &self,
+    ) -> Vec<SettingsSyncSelectedDeferredProtocolMaterializationBatch> {
+        let mut batches = BTreeMap::<
+            String,
+            Vec<SettingsSyncSelectedDeferredProtocolMaterializationRequest>,
+        >::new();
+        for request in &self.deferred_protocol_requests {
+            batches
+                .entry(request.protocol.clone())
+                .or_default()
+                .push(request.clone());
+        }
+
+        batches
+            .into_iter()
+            .map(
+                |(protocol, requests)| SettingsSyncSelectedDeferredProtocolMaterializationBatch {
+                    protocol,
+                    requests,
+                },
+            )
+            .collect()
+    }
+
+    pub fn deferred_protocol_batch_count(&self) -> usize {
+        self.deferred_protocol_batches().len()
     }
 
     pub fn protocol_request_count(&self) -> usize {
@@ -6778,6 +6826,73 @@ mod tests {
         assert_eq!(
             super::classify_stored_provider_endpoint("provider-a", None),
             SettingsSyncStoredProviderEndpointStatus::Missing
+        );
+    }
+
+    #[test]
+    fn protocol_materialization_plan_groups_deferred_protocol_batches() {
+        let plan = super::SettingsSyncSelectedProtocolMaterializationPlan {
+            deferred_protocol_requests: vec![
+                super::SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+                    provider_id: "iroh-provider-a".to_string(),
+                    protocol: "iroh-node".to_string(),
+                    target: "node-a".to_string(),
+                },
+                super::SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+                    provider_id: "contracted-provider".to_string(),
+                    protocol: "provider".to_string(),
+                    target: "contracted-pinning".to_string(),
+                },
+                super::SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+                    provider_id: "iroh-provider-b".to_string(),
+                    protocol: "iroh-node".to_string(),
+                    target: "node-b".to_string(),
+                },
+            ],
+            ..super::SettingsSyncSelectedProtocolMaterializationPlan::default()
+        };
+
+        let batches = plan.deferred_protocol_batches();
+        assert_eq!(plan.deferred_protocol_batch_count(), 2);
+        assert_eq!(
+            batches,
+            vec![
+                super::SettingsSyncSelectedDeferredProtocolMaterializationBatch {
+                    protocol: "iroh-node".to_string(),
+                    requests: vec![
+                        super::SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+                            provider_id: "iroh-provider-a".to_string(),
+                            protocol: "iroh-node".to_string(),
+                            target: "node-a".to_string(),
+                        },
+                        super::SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+                            provider_id: "iroh-provider-b".to_string(),
+                            protocol: "iroh-node".to_string(),
+                            target: "node-b".to_string(),
+                        },
+                    ],
+                },
+                super::SettingsSyncSelectedDeferredProtocolMaterializationBatch {
+                    protocol: "provider".to_string(),
+                    requests: vec![
+                        super::SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+                            provider_id: "contracted-provider".to_string(),
+                            protocol: "provider".to_string(),
+                            target: "contracted-pinning".to_string(),
+                        },
+                    ],
+                },
+            ]
+        );
+        assert_eq!(batches[0].request_count(), 2);
+        assert_eq!(
+            batches[0].provider_ids(),
+            vec!["iroh-provider-a".to_string(), "iroh-provider-b".to_string()]
+        );
+        assert_eq!(batches[1].request_count(), 1);
+        assert_eq!(
+            batches[1].provider_ids(),
+            vec!["contracted-provider".to_string()]
         );
     }
 

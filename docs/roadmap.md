@@ -594,6 +594,10 @@ Current baseline:
   `provider:` and `iroh-node:` refs: invalid deferred targets fail closed, and
   valid refs are grouped into provider-id, protocol, and target records for
   future protocol materializers.
+- Deferred protocol materialization requests now also group into stable
+  protocol-keyed batches. Future `provider:` and `iroh-node:` adapters can
+  consume only their own selected provider work queue without re-scanning the
+  whole scheduler plan or opening any sockets during planning.
 - The selected endpoint materialization plan now exposes a combined protocol
   materialization summary that groups multiaddr work, deferred-protocol work,
   missing endpoints, and fail-closed endpoints. Scheduler/UI code can tell
