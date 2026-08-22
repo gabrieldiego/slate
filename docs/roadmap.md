@@ -649,6 +649,11 @@ Current baseline:
   materialization reports and count helpers. Scheduler/UI callers can inspect
   materialized, missing, mismatched, duplicate, and unsupported provider
   outcomes after a run without borrowing the live materializer result.
+- Protocol-materialized stored-provider previews and read-only plans now expose
+  the same protocol blocked/ready helpers. UI or scheduler code can distinguish
+  missing/fail-closed endpoint metadata from materializer-blocked provider
+  handles before any publish, retain, root mutation, socket dial, or fixture
+  daemon handoff.
 - Legacy `fixture:<provider>` endpoint refs now also fail closed. They do not
   carry a fixture network id, so they cannot safely satisfy stored-provider
   materialization or quorum checks.

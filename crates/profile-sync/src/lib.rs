@@ -2957,6 +2957,14 @@ impl SettingsSyncStoredProtocolProviderMaterializationPreview {
         self.protocol_materialization.materialized_provider_count()
     }
 
+    pub fn protocol_blocked_provider_count(&self) -> usize {
+        self.protocol_materialization.blocked_provider_count()
+    }
+
+    pub fn all_protocol_providers_materialized(&self) -> bool {
+        self.protocol_materialization.all_providers_materialized()
+    }
+
     pub fn materialized_retention_provider_count(&self) -> usize {
         self.handle_materialization
             .materialized_retention_provider_count()
@@ -2987,14 +2995,59 @@ impl SettingsSyncStoredProtocolProviderRetentionProviderPlan {
             .selected_protocol_materialization_plan()
     }
 
+    pub fn requires_protocol_materializer(&self) -> bool {
+        self.selected_protocol_materialization_plan()
+            .requires_protocol_materializer()
+    }
+
+    pub fn has_missing_protocol_endpoint(&self) -> bool {
+        self.selected_protocol_materialization_plan()
+            .has_missing_endpoint()
+    }
+
+    pub fn has_fail_closed_protocol_endpoint(&self) -> bool {
+        self.selected_protocol_materialization_plan()
+            .has_fail_closed_endpoint()
+    }
+
+    pub fn ready_for_protocol_materialization(&self) -> bool {
+        self.selected_protocol_materialization_plan()
+            .ready_for_protocol_materialization()
+    }
+
     pub fn selected_retention_provider_count(&self) -> usize {
         self.stored_provider_plan
             .selected_retention_provider_count()
     }
 
+    pub fn protocol_materialized_provider_count(&self) -> usize {
+        self.materialization_preview
+            .protocol_materialized_provider_count()
+    }
+
+    pub fn protocol_blocked_provider_count(&self) -> usize {
+        self.materialization_preview
+            .protocol_blocked_provider_count()
+    }
+
+    pub fn all_protocol_providers_materialized(&self) -> bool {
+        self.materialization_preview
+            .all_protocol_providers_materialized()
+    }
+
     pub fn materialized_retention_provider_count(&self) -> usize {
         self.materialization_preview
             .materialized_retention_provider_count()
+    }
+
+    pub fn blocked_retention_provider_count(&self) -> usize {
+        self.materialization_preview
+            .blocked_retention_provider_count()
+    }
+
+    pub fn all_selected_providers_materialized(&self) -> bool {
+        self.materialization_preview
+            .all_selected_providers_materialized()
     }
 }
 
@@ -8569,6 +8622,47 @@ mod tests {
         assert!(!materialization_report.has_ambiguous_handle());
         assert!(materialization_report.has_fail_closed_endpoint());
         assert!(!materialization_report.all_selected_providers_materialized());
+        let protocol_materializer = super::SettingsSyncSocketlessProtocolProviderMaterializer::new(
+            super::SettingsSyncProtocolProviderMaterializerPolicy::new(true, Vec::new()),
+            Vec::new(),
+        );
+        let protocol_preview = stored_materialization_plan
+            .selected_protocol_provider_materialization_preview(&protocol_materializer);
+        assert_eq!(
+            protocol_preview.protocol_materialization,
+            super::SettingsSyncProtocolProviderMaterializationReport {
+                materialized_provider_ids: Vec::new(),
+                missing_provider_ids: vec![multiaddr_provider_id.to_string()],
+                endpoint_mismatch_provider_ids: Vec::new(),
+                duplicate_provider_ids: Vec::new(),
+                unsupported_provider_ids: vec![deferred_provider_id.to_string()],
+            }
+        );
+        assert_eq!(protocol_preview.protocol_materialized_provider_count(), 0);
+        assert_eq!(protocol_preview.protocol_blocked_provider_count(), 2);
+        assert!(!protocol_preview.all_protocol_providers_materialized());
+        assert_eq!(protocol_preview.blocked_retention_provider_count(), 5);
+        assert!(!protocol_preview.all_selected_providers_materialized());
+        let protocol_stored_plan = super::SettingsSyncStoredProtocolProviderRetentionProviderPlan {
+            stored_provider_plan: stored_materialization_plan.clone(),
+            materialization_preview: protocol_preview,
+        };
+        assert!(protocol_stored_plan.requires_protocol_materializer());
+        assert!(protocol_stored_plan.has_missing_protocol_endpoint());
+        assert!(protocol_stored_plan.has_fail_closed_protocol_endpoint());
+        assert!(!protocol_stored_plan.ready_for_protocol_materialization());
+        assert_eq!(
+            protocol_stored_plan.protocol_materialized_provider_count(),
+            0
+        );
+        assert_eq!(protocol_stored_plan.protocol_blocked_provider_count(), 2);
+        assert!(!protocol_stored_plan.all_protocol_providers_materialized());
+        assert_eq!(
+            protocol_stored_plan.materialized_retention_provider_count(),
+            0
+        );
+        assert_eq!(protocol_stored_plan.blocked_retention_provider_count(), 5);
+        assert!(!protocol_stored_plan.all_selected_providers_materialized());
         assert_eq!(
             materialized.unmaterialized_retention_provider_ids,
             vec![fixture_provider_id.to_string()]
@@ -9477,6 +9571,8 @@ mod tests {
             materialization_preview.protocol_materialized_provider_count(),
             1
         );
+        assert_eq!(materialization_preview.protocol_blocked_provider_count(), 0);
+        assert!(materialization_preview.all_protocol_providers_materialized());
         assert_eq!(
             materialization_preview.materialized_retention_provider_count(),
             1
@@ -16324,7 +16420,16 @@ mod tests {
             )
             .expect("stored protocol materializer preview succeeds");
         assert_eq!(preview.selected_retention_provider_count(), 1);
+        assert!(preview.requires_protocol_materializer());
+        assert!(!preview.has_missing_protocol_endpoint());
+        assert!(!preview.has_fail_closed_protocol_endpoint());
+        assert!(preview.ready_for_protocol_materialization());
         assert_eq!(preview.materialized_retention_provider_count(), 1);
+        assert_eq!(preview.protocol_materialized_provider_count(), 1);
+        assert_eq!(preview.protocol_blocked_provider_count(), 0);
+        assert!(preview.all_protocol_providers_materialized());
+        assert_eq!(preview.blocked_retention_provider_count(), 0);
+        assert!(preview.all_selected_providers_materialized());
         assert_eq!(
             preview.materialization_preview.protocol_materialization,
             super::SettingsSyncProtocolProviderMaterializationReport {
@@ -16345,6 +16450,17 @@ mod tests {
                 .materialization_preview
                 .protocol_materialized_provider_count(),
             1
+        );
+        assert_eq!(
+            preview
+                .materialization_preview
+                .protocol_blocked_provider_count(),
+            0
+        );
+        assert!(
+            preview
+                .materialization_preview
+                .all_protocol_providers_materialized()
         );
         assert_eq!(
             preview
