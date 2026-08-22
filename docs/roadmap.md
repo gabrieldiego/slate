@@ -951,6 +951,10 @@ Current baseline:
   rule over in-process object transfer: a stale older-epoch record is rejected
   without storing it, re-trusting the device, or advancing the membership-log
   root.
+- The same socketless membership-log receive path now covers duplicate
+  enrollment rejection: a later `enroll-device` record for an already trusted
+  target device fails without replacing that device key or advancing the
+  membership-log root.
 
 Next:
 

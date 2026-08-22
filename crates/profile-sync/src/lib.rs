@@ -7356,6 +7356,150 @@ mod tests {
     }
 
     #[test]
+    fn broadwebd_membership_log_rejects_duplicate_trusted_enrollment_without_loopback() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("membership-log-duplicate-enroll-publisher");
+        let receiver_state_root = test_state_root("membership-log-duplicate-enroll-receiver");
+        let receiver_db_root = test_state_root("membership-log-duplicate-enroll-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "membership-log-duplicate-enroll-publisher",
+            )
+            .expect("start in-process duplicate enrollment publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "membership-log-duplicate-enroll-receiver",
+            )
+            .expect("start in-process duplicate enrollment receiver daemon");
+        let receiver_database =
+            SlateProfileDatabase::open_resolved(receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME))
+                .expect("open duplicate enrollment receiver database");
+        let signer_a = ProfileSyncDeviceSigner::generate("membership-log-duplicate-a")
+            .expect("generate duplicate enrollment signer a");
+        let signer_b = ProfileSyncDeviceSigner::generate("membership-log-duplicate-b")
+            .expect("generate duplicate enrollment signer b");
+        let replacement_b = ProfileSyncDeviceSigner::generate("membership-log-duplicate-b")
+            .expect("generate duplicate enrollment replacement signer b");
+        let enroll_a = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-membership-log-duplicate-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-log-duplicate-a".to_string(),
+            device_public_key: Some(signer_a.public_key().expect("read signer a public key")),
+            created_at: 10,
+        };
+        receiver_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_a).as_slice(),
+            )
+            .expect("bootstrap duplicate enrollment receiver signer a");
+        let enroll_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-enroll-membership-log-duplicate-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-log-duplicate-b".to_string(),
+            device_public_key: Some(signer_b.public_key().expect("read signer b public key")),
+            created_at: 20,
+        };
+        receiver_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_b).as_slice(),
+            )
+            .expect("apply duplicate enrollment receiver signer b enrollment");
+
+        let duplicate_enroll_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-3-enroll-membership-log-duplicate-b-again".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 2,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-log-duplicate-b".to_string(),
+            device_public_key: Some(
+                replacement_b
+                    .public_key()
+                    .expect("read replacement signer b public key"),
+            ),
+            created_at: 30,
+        };
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+        let duplicate_object_id = publisher
+            .put_retained_object(
+                DEFAULT_PROFILE_ID,
+                signed_membership_record_bytes(&signer_a, &duplicate_enroll_b),
+            )
+            .expect("put duplicate signed membership record object");
+        let log = ProfileSyncMembershipLog {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            schema_version: super::PROFILE_SYNC_MEMBERSHIP_LOG_SCHEMA_VERSION,
+            records: vec![ProfileSyncMembershipLogEntry {
+                record_id: duplicate_enroll_b.record_id.clone(),
+                root_id: sync_membership_record_root_id(duplicate_enroll_b.record_id.as_str()),
+                object_id: duplicate_object_id,
+                membership_epoch: duplicate_enroll_b.membership_epoch,
+                record_kind: duplicate_enroll_b.record_kind.clone(),
+                device_id: duplicate_enroll_b.device_id.clone(),
+                signer_device_id: signer_a.device_id().to_string(),
+            }],
+        };
+        publisher
+            .put_retained_root(
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                serde_json::to_vec(&log).expect("encode duplicate membership log"),
+            )
+            .expect("publish duplicate membership log");
+
+        let error = BroadwebdProfileSyncObjectSource::new(&receiver_daemon)
+            .pull_and_apply_sync_account_membership_log_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            )
+            .expect_err("duplicate enrollment log record should be rejected");
+        assert!(matches!(
+            error,
+            ProfileSyncReceiveError::Storage(StorageError::InvalidProfileSyncMembershipRecord(reason))
+                if reason.contains("cannot replace already trusted device membership-log-duplicate-b")
+        ));
+        assert!(
+            receiver_database
+                .sync_account_membership_record(
+                    DEFAULT_PROFILE_ID,
+                    "epoch-3-enroll-membership-log-duplicate-b-again",
+                )
+                .expect("read duplicate log record")
+                .is_none()
+        );
+        let device_b_key = receiver_database
+            .sync_device_public_key(DEFAULT_PROFILE_ID, "membership-log-duplicate-b")
+            .expect("read duplicate log signer b key")
+            .expect("duplicate log signer b key");
+        assert!(device_b_key.trusted);
+        assert_eq!(
+            device_b_key.public_key,
+            signer_b.public_key().expect("read original signer b key")
+        );
+        assert!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID)
+                .expect("read duplicate enrollment membership log root")
+                .is_none()
+        );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
     fn broadwebd_membership_log_rejects_oversized_indexes_without_loopback() {
         let network = InProcessBroadwebNetwork::new();
         let publisher_state_root = test_state_root("membership-log-oversized-publisher");
