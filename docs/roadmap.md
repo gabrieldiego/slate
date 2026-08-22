@@ -614,6 +614,10 @@ Current baseline:
 - The stored-provider runtime regression now covers that duplicate-handle path:
   a selected provider with two supplied handles fails the materialized-provider
   quorum check and leaves profile-sync roots unchanged.
+- The membership-aware stored-provider runtime now covers the same
+  duplicate-handle failure after membership trust has been established: the
+  duplicate handles fail quorum and the existing profile-sync roots remain
+  unchanged.
 - Selected synthetic fixture endpoints now expose materialization targets with
   provider id, fixture network id, and endpoint ref so local-only fixtures can
   bridge stored metadata to in-process providers without opening sockets.

@@ -8561,6 +8561,52 @@ mod tests {
             ]
         );
 
+        let roots_before_duplicate_handles = receiver_database
+            .profile_sync_roots(DEFAULT_PROFILE_ID)
+            .expect("read roots before stored membership duplicate handles");
+        let duplicate_materialized_provider_handles = [
+            SettingsSyncRetentionProviderHandle::with_endpoint_ref(
+                selected_provider_id,
+                selected_provider_endpoint_ref.as_str(),
+                &provider_daemon,
+            ),
+            SettingsSyncRetentionProviderHandle::with_endpoint_ref(
+                selected_provider_id,
+                selected_provider_endpoint_ref.as_str(),
+                &provider_daemon,
+            ),
+        ];
+        let duplicate_error = scheduler
+            .run_once_with_membership_log_and_stored_retention_provider_handles(
+                &receiver_database,
+                &config,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer_b),
+                8,
+                &duplicate_materialized_provider_handles,
+            )
+            .expect_err("stored membership scheduler rejects duplicate provider handles");
+        let ProfileSyncCycleWithHealthError::Policy(ProfileSyncPolicyError::ProviderMinimumUnmet {
+            provider_role,
+            minimum,
+            actual,
+            ..
+        }) = duplicate_error
+        else {
+            panic!(
+                "expected stored membership duplicate handle quorum error, got {duplicate_error:?}"
+            );
+        };
+        assert_eq!(provider_role, "selected retention providers");
+        assert_eq!(minimum, 1);
+        assert_eq!(actual, 0);
+        assert_eq!(
+            receiver_database
+                .profile_sync_roots(DEFAULT_PROFILE_ID)
+                .expect("read roots after stored membership duplicate handles"),
+            roots_before_duplicate_handles
+        );
+
         receiver_database
             .set_sync_setting_text(
                 DEFAULT_PROFILE_ID,
