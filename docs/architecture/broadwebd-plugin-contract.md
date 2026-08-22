@@ -400,7 +400,7 @@ Required coverage:
 - resource-budget failures;
 - fixture-backed fetch success;
 - download-vs-render disposition.
-- fake profile-sync publish, pin, resolve, and backend failure behavior.
+- local-preview profile-sync publish, pin, resolve, and backend failure behavior.
 
 External network tests must stay ignored by default and be gated by
 `SLATE_EXTERNAL_NETWORK_TESTS=1`.

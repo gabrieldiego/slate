@@ -1049,8 +1049,32 @@ mod tests {
     }
 
     #[test]
-    fn fake_profile_sync_service_stores_retains_and_resolves_local_objects() {
+    fn local_preview_profile_sync_service_stores_retains_and_resolves_local_objects() {
         let daemon = BroadwebDaemon::start(test_state_root("profile-sync")).expect("daemon");
+        let metadata = daemon
+            .health()
+            .plugins
+            .into_iter()
+            .find(|status| status.metadata.id == PROFILE_SYNC_PLUGIN)
+            .expect("profile-sync plugin status")
+            .metadata;
+        assert_eq!(
+            metadata.privacy_boundary,
+            "local in-memory profile-sync preview backend; no sockets or external network"
+        );
+        assert!(
+            metadata
+                .capabilities
+                .iter()
+                .any(|capability| capability == "profile-sync/local-preview")
+        );
+        assert!(
+            !metadata
+                .capabilities
+                .iter()
+                .any(|capability| capability == "profile-sync/fake")
+        );
+
         let put = daemon
             .profile_sync(ProfileSyncRequest::PutEncryptedObject(
                 ProfileSyncPutObjectRequest::new("default", b"encrypted manifest".to_vec()),
@@ -1149,7 +1173,7 @@ mod tests {
             panic!("unexpected providers response");
         };
         assert_eq!(providers.len(), 1);
-        assert_eq!(providers[0].provider_kind, "local-fake");
+        assert_eq!(providers[0].provider_kind, "local-preview");
         assert_eq!(providers[0].retained_objects, 1);
         assert_eq!(
             providers[0].roles,
@@ -3117,7 +3141,7 @@ mod tests {
             !metadata
                 .capabilities
                 .iter()
-                .any(|capability| capability == "profile-sync/fake")
+                .any(|capability| capability == "profile-sync/local-preview")
         );
         assert!(
             !metadata
@@ -3158,7 +3182,7 @@ mod tests {
             !metadata
                 .capabilities
                 .iter()
-                .any(|capability| capability == "profile-sync/fake")
+                .any(|capability| capability == "profile-sync/local-preview")
         );
     }
 

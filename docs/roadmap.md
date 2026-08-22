@@ -262,8 +262,8 @@ Current baseline:
   coverage now includes disabled typed Chat metadata, proving sensitive
   app-domain rows stay local across both snapshot and tail publish checks while
   the domain is disabled.
-- broadwebd has a protocol-neutral `profile-sync` application service with an
-  in-memory local fixture backend. Unit tests cover object transfer, retention,
+- broadwebd has a protocol-neutral `profile-sync` application service with a
+  local in-memory preview backend. Unit tests cover object transfer, retention,
   mutable root publish/resolve, provider discovery, per-object transfer
   budgets, and two local `slate-settings.db` files syncing one setting through
   fixture bytes.
@@ -370,9 +370,9 @@ Current baseline:
   fixture layer after validating same-network synthetic endpoints.
 - The default broadwebd registry remains local-only, but callers can now opt in
   to a local Kubo HTTP profile-sync backend through an explicit registry
-  constructor. That constructor replaces the fake profile-sync service, rejects
-  non-loopback Kubo endpoints up front, and advertises `profile-sync/kubo-http`
-  rather than fixture capabilities.
+  constructor. That constructor replaces the local preview profile-sync service,
+  rejects non-loopback Kubo endpoints up front, and advertises
+  `profile-sync/kubo-http` rather than fixture capabilities.
 - `BroadwebDaemon::start_default_session` now reads an explicit profile-sync
   runtime backend config. With no profile-sync backend settings it keeps the
   local in-memory service; `kubo-rpc` selection or a profile-sync Kubo endpoint

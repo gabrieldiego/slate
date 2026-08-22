@@ -99,6 +99,10 @@ reject_protocol_model_leak \
     crates/broadwebd/src/services/profile_sync.rs \
     'InternalKuboRpcTransportShim|KuboProfileSyncTransport|kubo_fixture|from_prevalidated_api_base_url|ipfs-kubo-fixture|socketless-fixture' \
     'broadwebd profile-sync service must stay fixture-blind; in-process Kubo fixtures inject executor factories from the fixture layer.'
+reject_protocol_model_leak \
+    crates/broadwebd/src/services/profile_sync.rs \
+    'profile-sync/fake|local-fake|local in-memory fake|local test backend' \
+    'runtime-visible local profile-sync service must be named as a local preview backend, not a fake/test fixture.'
 
 require_text \
     crates/broadwebd/src/protocols/ipfs/kubo_fixtures.rs \
@@ -123,6 +127,10 @@ require_text \
     crates/broadwebd/src/services/profile_sync.rs \
     'KuboProfileSyncExecutorFactory' \
     'Kubo profile-sync services must choose socket behavior through an injected executor factory.'
+require_text \
+    crates/broadwebd/src/services/profile_sync.rs \
+    'profile-sync/local-preview' \
+    'runtime local profile-sync service must advertise the local preview backend capability.'
 require_text \
     crates/broadwebd/src/lib.rs \
     'impl KuboProfileSyncExecutorFactory for InProcessKuboProfileSyncExecutorFactory' \

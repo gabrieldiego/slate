@@ -15,9 +15,10 @@ use crate::{
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
-const LOCAL_PROVIDER_ID: &str = "local-fake-profile-sync";
-const LOCAL_PROVIDER_KIND: &str = "local-fake";
-const LOCAL_PRIVACY_BOUNDARY: &str = "in-memory local test backend; no sockets or external network";
+const LOCAL_PROVIDER_ID: &str = "local-preview-profile-sync";
+const LOCAL_PROVIDER_KIND: &str = "local-preview";
+const LOCAL_PRIVACY_BOUNDARY: &str =
+    "local in-memory profile-sync preview backend; no sockets or external network";
 const MAX_PROFILE_SYNC_OBJECT_ID_BYTES: usize = 2048;
 const MAX_PROFILE_SYNC_ROOT_ID_BYTES: usize = 256;
 
@@ -1221,7 +1222,7 @@ impl ApplicationServicePlugin for ProfileSyncService {
                 .with_resource_profile(backend.resource_profile);
         }
 
-        let mut capabilities = vec!["profile-sync/fake"];
+        let mut capabilities = vec!["profile-sync/local-preview"];
         if self.roles.discovery {
             capabilities.push("profile-sync/provider-discovery");
         }
@@ -1241,9 +1242,7 @@ impl ApplicationServicePlugin for ProfileSyncService {
         }
         PluginMetadata::new(PROFILE_SYNC_PLUGIN, PluginKind::ApplicationService)
             .with_capabilities(capabilities.as_slice())
-            .with_privacy_boundary(
-                "local in-memory fake profile-sync backend for tests; no sockets or external network",
-            )
+            .with_privacy_boundary(self.privacy_boundary.as_str())
             .with_resource_profile(ResourceProfile::Low)
     }
 
