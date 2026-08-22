@@ -1124,6 +1124,11 @@ Current baseline:
   snapshot backend object id plus local settings root in one storage
   transaction so later compaction skips already squashed revisions and local
   verified-root state matches the published manifest.
+- Compaction can now run through the same selected-provider retention handoff
+  used by regular settings cycles. The runner retains the compacted snapshot,
+  any post-snapshot tail objects, and the manifest on selected availability
+  providers before strict settings-root quorum is evaluated, with socketless
+  fixture coverage in the low-memory boundary gate.
 - `slate-profile-sync` now has an initial local publish-flow helper that
   creates a full settings snapshot from `slate-settings.db`, publishes the
   signed encrypted snapshot manifest, publishes the local per-device head

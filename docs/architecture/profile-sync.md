@@ -635,6 +635,11 @@ The bridge can also drive one storage-selected compaction step: ask
 covered change records, publish the signed snapshot manifest, and record the
 published snapshot object id plus local verified settings root back into
 storage in one transaction.
+The compaction runner can now hand the compacted snapshot, retained tail
+changes, and manifest object set to selected availability providers before the
+strict settings-root health check runs. The fixture test keeps that provider
+handoff socketless through `InProcessBroadwebNetwork`, so root quorum depends on
+modeled provider retention rather than loopback ports or live pinning services.
 For per-device heads, the bridge signs and publishes storage-owned
 `ProfileSyncDeviceHead` payloads while keeping the head schema and trust checks
 in storage.

@@ -928,6 +928,15 @@ pub struct PublishedSettingsCompaction {
     pub settings_root: ProfileSyncRootRecord,
 }
 
+impl PublishedSettingsCompaction {
+    pub fn published_object_ids(&self) -> Vec<String> {
+        let mut object_ids = self.publication.published_object_ids();
+        let mut seen = object_ids.iter().cloned().collect::<BTreeSet<_>>();
+        push_unique_object_id(&mut object_ids, &mut seen, &self.settings_root.object_id);
+        object_ids
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PublishedProfileSyncDeviceHead {
     pub root_id: String,
@@ -1320,6 +1329,50 @@ pub struct SettingsSyncCycleWithRetentionRun {
 }
 
 impl SettingsSyncCycleWithRetentionRun {
+    pub fn degraded_before(&self) -> bool {
+        self.before_health.degraded()
+    }
+
+    pub fn degraded_after(&self) -> bool {
+        self.after_health.degraded()
+    }
+
+    pub fn retained_provider_count(&self) -> usize {
+        self.retention
+            .iter()
+            .filter(|provider| {
+                provider.object_count() > 0 && provider.object_count() == provider.retained_count()
+            })
+            .count()
+    }
+
+    pub fn retention_issues(&self) -> Vec<SettingsSyncCycleProviderRetentionIssue> {
+        cycle_provider_retention_issues(self.retention.as_slice())
+    }
+
+    pub fn retention_issue_count(&self) -> usize {
+        cycle_provider_retention_issue_count(self.retention.as_slice())
+    }
+
+    pub fn has_retention_issue(&self) -> bool {
+        self.retention_issue_count() > 0
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncCompactionWithRetentionRun {
+    pub before_health: SettingsSyncHealthReport,
+    pub compaction: Option<PublishedSettingsCompaction>,
+    pub retained_object_ids: Vec<String>,
+    pub retention: Vec<SettingsSyncCycleProviderRetentionRun>,
+    pub after_health: SettingsSyncHealthReport,
+}
+
+impl SettingsSyncCompactionWithRetentionRun {
+    pub fn compacted(&self) -> bool {
+        self.compaction.is_some()
+    }
+
     pub fn degraded_before(&self) -> bool {
         self.before_health.degraded()
     }
@@ -5844,6 +5897,67 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
         })
     }
 
+    pub fn compact_settings_with_active_key_policy_and_retention_providers(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        settings_root_id: &str,
+        content_key: &ProfileSyncContentKey,
+        signer: &ProfileSyncDeviceSigner,
+        policy: &SettingsSyncCyclePolicy,
+        now: i64,
+        retention_provider_daemons: &[&BroadwebDaemon],
+    ) -> Result<SettingsSyncCompactionWithRetentionRun, ProfileSyncCycleWithHealthError> {
+        let preflight = self.settings_sync_cycle_preflight_with_active_key_policy(
+            database,
+            profile,
+            settings_root_id,
+            signer,
+            policy,
+        )?;
+        let compaction = BroadwebdProfileSyncPublisher::new(self.daemon)
+            .compact_and_publish_settings(
+                database,
+                profile,
+                settings_root_id,
+                content_key,
+                preflight.active_key_id.as_str(),
+                signer,
+                policy.retention_policy.clone(),
+                now,
+            )
+            .map_err(ProfileSyncCycleError::from)?;
+        let retained_object_ids = compaction
+            .as_ref()
+            .map(PublishedSettingsCompaction::published_object_ids)
+            .unwrap_or_default();
+        let mut retention = Vec::with_capacity(retention_provider_daemons.len());
+        for (provider_index, provider_daemon) in retention_provider_daemons.iter().enumerate() {
+            let object_statuses = BroadwebdProfileSyncPublisher::new(*provider_daemon)
+                .retain_profile_sync_objects(profile, retained_object_ids.as_slice())
+                .map_err(ProfileSyncCycleWithHealthError::Retention)?;
+            retention.push(SettingsSyncCycleProviderRetentionRun {
+                provider_index,
+                object_statuses,
+            });
+        }
+        let after_health = self.settings_sync_health(
+            database,
+            profile,
+            settings_root_id,
+            policy.minimum_online_retaining_providers,
+        )?;
+        policy.check_after_cycle(&after_health)?;
+
+        Ok(SettingsSyncCompactionWithRetentionRun {
+            before_health: preflight.before_health,
+            compaction,
+            retained_object_ids,
+            retention,
+            after_health,
+        })
+    }
+
     pub fn run_settings_sync_cycle_with_active_key_policy_and_shared_root_candidates(
         &self,
         database: &SlateProfileDatabase,
@@ -8452,6 +8566,15 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
     ) -> Result<Vec<BroadwebdProfileSyncRetentionStatus>, BroadwebdError> {
         let object_ids = cycle.published_object_ids();
         self.retain_profile_sync_objects(cycle.profile.as_str(), object_ids.as_slice())
+    }
+
+    pub fn retain_settings_compaction_objects(
+        &self,
+        profile: &str,
+        compaction: &PublishedSettingsCompaction,
+    ) -> Result<Vec<BroadwebdProfileSyncRetentionStatus>, BroadwebdError> {
+        let object_ids = compaction.published_object_ids();
+        self.retain_profile_sync_objects(profile, object_ids.as_slice())
     }
 
     pub fn retain_profile_sync_membership_log_objects(
@@ -20086,6 +20209,130 @@ mod tests {
                 .local_device_head_root_health
                 .online_retaining_providers,
             2
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_compaction_retains_objects_before_strict_root_policy_check() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("compaction-policy-retention-device");
+        let provider_state_root = test_state_root("compaction-policy-retention-provider");
+        let db_root = test_state_root("compaction-policy-retention-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-compaction-retain-a",
+            )
+            .expect("start in-process profile-sync compaction device daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "runtime-compaction-retain-pinner",
+            )
+            .expect("start in-process compaction availability provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-compaction-retain-a",
+        )
+        .expect("open compaction local settings database");
+        let profile = "compactionretentionprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([73; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-compaction-retain-a")
+            .expect("generate compaction local device signer");
+        let policy = SettingsSyncCyclePolicy::new(
+            ProfileSyncRetentionPolicy {
+                min_tail_change_count: 1,
+                change_retention_seconds: 0,
+                ..ProfileSyncRetentionPolicy::default()
+            },
+            4,
+            4,
+            2,
+        )
+        .with_local_device_head_root_health_required_after_cycle(false);
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register compaction local trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write first compacted setting");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.zoom", "110")
+            .expect("write second compacted setting");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.font", "Inter")
+            .expect("write retained compaction tail setting");
+
+        let run = BroadwebdSettingsSyncRunner::new(&device_daemon)
+            .compact_settings_with_active_key_policy_and_retention_providers(
+                &database,
+                profile,
+                settings_root_id,
+                &content_key,
+                &signer,
+                &policy,
+                i64::MAX,
+                &[&provider_daemon],
+            )
+            .expect("retention provider satisfies strict settings-root policy after compaction");
+
+        assert!(run.compacted());
+        let compaction = run.compaction.as_ref().expect("compaction was published");
+        assert_eq!(compaction.target.retained_tail_change_count, 1);
+        assert_eq!(compaction.publication.tail_change_object_ids.len(), 1);
+        assert_eq!(run.retained_object_ids, compaction.published_object_ids());
+        assert_eq!(run.retained_object_ids.len(), 3);
+        assert_eq!(run.retention.len(), 1);
+        assert_eq!(run.retention[0].provider_index, 0);
+        assert_eq!(
+            run.retention[0].object_count(),
+            run.retained_object_ids.len()
+        );
+        assert_eq!(
+            run.retention[0].object_count(),
+            run.retention[0].retained_count()
+        );
+        assert_eq!(
+            run.retention[0].object_count(),
+            run.retention[0].available_count()
+        );
+        assert_eq!(run.retained_provider_count(), 1);
+        assert!(!run.has_retention_issue());
+        assert!(!run.after_health.settings_root_health.degraded);
+        assert_eq!(
+            run.after_health
+                .settings_root_health
+                .online_retaining_providers,
+            2
+        );
+        assert!(run.after_health.local_device_head_root_health.degraded);
+
+        let retained = provider_daemon
+            .profile_sync(BroadwebdProfileSyncRequest::ListRetainedObjects(
+                BroadwebdProfileSyncProfileRequest::new(profile),
+            ))
+            .expect("compaction provider can list retained objects");
+        let BroadwebdProfileSyncResponse::RetainedObjects { object_ids } = retained else {
+            panic!("expected retained object list");
+        };
+        assert_eq!(
+            object_ids.into_iter().collect::<BTreeSet<_>>(),
+            run.retained_object_ids
+                .iter()
+                .cloned()
+                .collect::<BTreeSet<_>>()
         );
 
         let _ = std::fs::remove_dir_all(device_state_root);
