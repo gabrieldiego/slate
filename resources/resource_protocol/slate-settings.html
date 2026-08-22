@@ -211,6 +211,31 @@
       outline: 3px solid rgba(11, 126, 121, 0.18);
     }
 
+    .profile-sync-input {
+      box-sizing: border-box;
+      width: 100%;
+      margin-top: 14px;
+      border: 1px solid #c8c5bd;
+      border-radius: 6px;
+      background: #fffefa;
+      color: #242421;
+      padding: 10px;
+      font: 14px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .profile-sync-input:focus {
+      border-color: #0b7e79;
+      outline: 3px solid rgba(11, 126, 121, 0.18);
+    }
+
+    .profile-sync-file {
+      box-sizing: border-box;
+      width: 100%;
+      margin-top: 10px;
+      color: #393a37;
+      font: 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
     .shortcut-row {
       display: grid;
       grid-template-columns: minmax(140px, 1fr) minmax(180px, 260px);
@@ -302,6 +327,33 @@
         <button id="profile-sync-run-local">Run local trial</button>
         <button id="profile-sync-run-local-two-device">Run two-device trial</button>
       </div>
+      <input
+        id="profile-sync-enrollment-device"
+        class="profile-sync-input"
+        placeholder="local-device"
+        spellcheck="false"
+        autocomplete="off"
+        aria-label="Enrollment target device id"
+      />
+      <input
+        id="profile-sync-enrollment-file"
+        class="profile-sync-file"
+        type="file"
+        accept="application/json,.json"
+        aria-label="Profile sync enrollment file"
+      />
+      <textarea
+        id="profile-sync-enrollment"
+        class="profile-sync-secret"
+        spellcheck="false"
+        autocomplete="off"
+        aria-label="Profile sync enrollment bundle"
+      ></textarea>
+      <div class="actions">
+        <button id="profile-sync-enrollment-create">Create enrollment file</button>
+        <button id="profile-sync-enrollment-download">Download enrollment file</button>
+        <button id="profile-sync-enrollment-import">Import enrollment file</button>
+      </div>
     </section>
 
     <section>
@@ -392,6 +444,12 @@
     const profileSyncCheckButton = document.getElementById("profile-sync-check");
     const profileSyncRunLocalButton = document.getElementById("profile-sync-run-local");
     const profileSyncRunLocalTwoDeviceButton = document.getElementById("profile-sync-run-local-two-device");
+    const profileSyncEnrollmentDevice = document.getElementById("profile-sync-enrollment-device");
+    const profileSyncEnrollmentFile = document.getElementById("profile-sync-enrollment-file");
+    const profileSyncEnrollment = document.getElementById("profile-sync-enrollment");
+    const profileSyncEnrollmentCreateButton = document.getElementById("profile-sync-enrollment-create");
+    const profileSyncEnrollmentDownloadButton = document.getElementById("profile-sync-enrollment-download");
+    const profileSyncEnrollmentImportButton = document.getElementById("profile-sync-enrollment-import");
     const params = new URLSearchParams(window.location.search);
     const initial = Number.parseFloat(params.get("chrome_zoom"));
     const fallbackImage = new Image();
@@ -803,13 +861,35 @@
         });
     }
 
-    function profileSyncUrl(path, secret) {
+    function profileSyncUrl(path, values) {
       const query = new URLSearchParams();
       query.set("nonce", String(Date.now()));
-      if (secret) {
-        query.set("secret", secret);
-      }
+      Object.entries(values || {}).forEach(([name, value]) => {
+        if (value) {
+          query.set(name, value);
+        }
+      });
       return `slate://settings/profile-sync/${path}?${query.toString()}`;
+    }
+
+    function enrollmentFilename(state) {
+      return state && state.enrollment_export_filename ?
+        state.enrollment_export_filename :
+        "slate-profile-enrollment.json";
+    }
+
+    function updateProfileSyncEnrollmentState(state) {
+      if (!state) {
+        return;
+      }
+      if (state.enrollment_export_text) {
+        profileSyncEnrollment.value = state.enrollment_export_text;
+      }
+      if (state.enrollment_target_device_id) {
+        profileSyncEnrollmentDevice.value = state.enrollment_target_device_id;
+      } else if (!profileSyncEnrollmentDevice.value && state.local_device_id) {
+        profileSyncEnrollmentDevice.value = state.local_device_id;
+      }
     }
 
     function setProfileSyncState(state) {
@@ -823,11 +903,17 @@
       const twoDeviceStatus = state.last_two_device_trial ?
         `; receiver applied ${state.last_two_device_trial.receiver_applied_setting_count} setting` :
         "";
+      const enrollmentStatus = state.enrollment_target_device_id ?
+        `; enrollment bundle for ${state.enrollment_target_device_id}` :
+        "";
+      const deviceStatus = state.local_device_id ?
+        ` (${state.local_device_id})` :
+        "";
       if (state.last_error) {
         profileSyncStatus.textContent = `Error: ${state.last_error}`;
       } else if (state.has_secret && state.local_sync && state.local_sync.ready_for_manual_sync) {
         profileSyncStatus.textContent =
-          `Ready for ${state.profile} - local device trusted, local sync preflight passed${trialStatus}${twoDeviceStatus}`;
+          `Ready for ${state.profile}${deviceStatus} - local device trusted, local sync preflight passed${trialStatus}${twoDeviceStatus}${enrollmentStatus}`;
       } else if (state.has_secret) {
         const trusted = state.local_sync && state.local_sync.local_device_trusted ?
           " - local device trusted" :
@@ -838,26 +924,27 @@
         const syncGap = state.local_sync && state.local_sync.blocked_reason ?
           ` - ${state.local_sync.blocked_reason}` :
           "";
-        profileSyncStatus.textContent = `Ready for ${state.profile}${suffix}${syncGap}${trialStatus}${twoDeviceStatus}`;
+        profileSyncStatus.textContent = `Ready for ${state.profile}${deviceStatus}${suffix}${syncGap}${trialStatus}${twoDeviceStatus}${enrollmentStatus}`;
       } else if (state.metadata_ready) {
         const syncGap = state.local_sync && state.local_sync.blocked_reason ?
           `; ${state.local_sync.blocked_reason}` :
           "";
-        profileSyncStatus.textContent = `Local sync metadata ready; import key file${syncGap}`;
+        profileSyncStatus.textContent = `Local sync metadata ready${deviceStatus}; import key file${syncGap}`;
       } else {
-        profileSyncStatus.textContent = "Not enrolled";
+        profileSyncStatus.textContent = `Not enrolled${deviceStatus}`;
       }
       if (state.export_text) {
         profileSyncSecret.value = state.export_text;
       }
+      updateProfileSyncEnrollmentState(state);
     }
 
-    function fetchProfileSyncState(path, secret) {
+    function fetchProfileSyncState(path, values) {
       if (!window.fetch) {
         setProfileSyncState(null);
         return Promise.resolve(null);
       }
-      return window.fetch(profileSyncUrl(path, secret), { cache: "no-store" })
+      return window.fetch(profileSyncUrl(path, values), { cache: "no-store" })
         .then((response) => response.json())
         .then((state) => {
           setProfileSyncState(state);
@@ -874,7 +961,7 @@
     }
 
     function importProfileSyncSecret() {
-      fetchProfileSyncState("import", profileSyncSecret.value.trim());
+      fetchProfileSyncState("import", { secret: profileSyncSecret.value.trim() });
     }
 
     function checkProfileSyncReadiness() {
@@ -893,6 +980,41 @@
       fetchProfileSyncState("run-local-two-device");
     }
 
+    function createProfileSyncEnrollmentBundle() {
+      fetchProfileSyncState("enrollment/create", {
+        target_device: profileSyncEnrollmentDevice.value.trim()
+      });
+    }
+
+    function importProfileSyncEnrollmentBundle() {
+      readSelectedProfileSyncEnrollmentFile().then((fileText) => {
+        if (fileText) {
+          profileSyncEnrollment.value = fileText.trim();
+        }
+        return fetchProfileSyncState("enrollment/import", {
+          bundle: profileSyncEnrollment.value.trim()
+        });
+      }).catch((error) => {
+        setProfileSyncState({ last_error: String(error) });
+      });
+    }
+
+    function readSelectedProfileSyncEnrollmentFile() {
+      const file = profileSyncEnrollmentFile.files && profileSyncEnrollmentFile.files[0];
+      if (!file) {
+        return Promise.resolve(null);
+      }
+      if (file.text) {
+        return file.text();
+      }
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.addEventListener("load", () => resolve(String(reader.result || "")));
+        reader.addEventListener("error", () => reject(reader.error || new Error("Could not read enrollment file")));
+        reader.readAsText(file);
+      });
+    }
+
     function downloadProfileSyncSecret() {
       const text = profileSyncSecret.value.trim();
       if (!text) {
@@ -902,6 +1024,28 @@
       const blob = new Blob([text], { type: "application/json" });
       const link = document.createElement("a");
       link.download = "slate-sync-secret.json";
+      link.href = URL.createObjectURL(blob);
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }
+
+    function downloadProfileSyncEnrollmentBundle() {
+      const text = profileSyncEnrollment.value.trim();
+      if (!text) {
+        fetchProfileSyncState("enrollment/create", {
+          target_device: profileSyncEnrollmentDevice.value.trim()
+        }).then((state) => {
+          if (state && state.enrollment_export_text) {
+            downloadProfileSyncEnrollmentBundle();
+          }
+        });
+        return;
+      }
+      const blob = new Blob([text], { type: "application/json" });
+      const link = document.createElement("a");
+      link.download = enrollmentFilename({
+        enrollment_export_filename: `slate-profile-enrollment-${profileSyncEnrollmentDevice.value.trim() || "device"}.json`
+      });
       link.href = URL.createObjectURL(blob);
       link.click();
       URL.revokeObjectURL(link.href);
@@ -931,6 +1075,20 @@
     profileSyncCheckButton.addEventListener("click", checkProfileSyncReadiness);
     profileSyncRunLocalButton.addEventListener("click", runProfileSyncLocalTrial);
     profileSyncRunLocalTwoDeviceButton.addEventListener("click", runProfileSyncLocalTwoDeviceTrial);
+    profileSyncEnrollmentCreateButton.addEventListener("click", createProfileSyncEnrollmentBundle);
+    profileSyncEnrollmentImportButton.addEventListener("click", importProfileSyncEnrollmentBundle);
+    profileSyncEnrollmentDownloadButton.addEventListener("click", downloadProfileSyncEnrollmentBundle);
+    profileSyncEnrollmentFile.addEventListener("change", () => {
+      readSelectedProfileSyncEnrollmentFile()
+        .then((fileText) => {
+          if (fileText) {
+            profileSyncEnrollment.value = fileText.trim();
+          }
+        })
+        .catch((error) => {
+          setProfileSyncState({ last_error: String(error) });
+        });
+    });
     document.getElementById("reset").addEventListener("click", () => {
       setSliderValue(DEFAULT_ZOOM, true);
     });

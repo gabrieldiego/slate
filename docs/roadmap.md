@@ -1356,8 +1356,16 @@ Current baseline:
   pulls it into the receiver through socketless broadwebd fixture daemons, and
   reports the receiver-applied setting count. This models file/QR-style
   enrollment and remote application without opening ports or using a public
-  protocol. Actual QR rendering, handoff-file import/export UI, real provider
-  daemons, conflict handling, and production cadence policy remain future work.
+  protocol.
+- `slate://settings` now exposes the first manual enrollment-file preview. A
+  session key file can derive a non-secret `ProfileSyncEnrollmentBundle` for a
+  target device id, show the JSON for paste/debugging, download it as a small
+  file, and import a selected or pasted bundle through the same local
+  transactional membership path. This is enough to exercise the expected
+  onboarding shape, but normal app launches still use the preview
+  `local-device` id, so production multi-device use still needs durable
+  per-install device identity, QR rendering, encrypted handoff/recovery files,
+  real provider daemons, conflict handling, and cadence policy.
 - `make profile-sync-boundary-check` now provides a low-memory regression gate
   for the sync work. It runs focused rail-app sync-domain checks, verifies that
   visible rail app sync descriptors match the seeded `slate-settings.db`
@@ -1392,10 +1400,10 @@ Next:
   externally synced routing, privacy, app, and browser-core changes are applied
   through their normal update paths instead of raw database replacement.
 - Extend the Settings-based `Profile Sync Preview` with QR-code rendering,
-  platform key-store loading, trusted-device/provider status, encrypted
-  handoff-file export/import, multi-device local trial execution, and app-domain
-  status for Settings and Bookmarks before exposing real IPFS/IPNS or
-  internet-backed providers.
+  platform key-store loading, durable per-install device identity,
+  trusted-device/provider status, encrypted recovery/handoff-file flows,
+  richer multi-device local trial execution, and app-domain status for Settings
+  and Bookmarks before exposing real IPFS/IPNS or internet-backed providers.
 - Add runtime policy for when derived manifest, mutable-root, enrollment,
   bootstrap, and content-key material can be used.
 - Publish encrypted profile manifests and snapshots through the selected
