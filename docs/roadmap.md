@@ -1006,6 +1006,10 @@ Current baseline:
   explicitly marked with provider authority in `sync_devices`. Provider-backed
   availability records can hold trusted keys for object retention without being
   able to enroll, revoke, or rotate profile devices.
+- Trusted profile-state opens now also reject provider-authority signers before
+  accepting device heads, manifests, snapshots, or tail changes. This closes the
+  direct storage path so availability providers can retain encrypted bytes
+  without being able to publish or apply signed settings state.
 
 Next:
 

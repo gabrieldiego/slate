@@ -1273,6 +1273,10 @@ pub enum ProfileSyncTrustedOpenError {
         profile: String,
         device_id: String,
     },
+    ProviderAuthoritySigner {
+        profile: String,
+        device_id: String,
+    },
     UnauthorizedDeviceEpoch {
         profile: String,
         device_id: String,
@@ -1295,6 +1299,10 @@ impl fmt::Display for ProfileSyncTrustedOpenError {
                 formatter,
                 "profile {profile} has no trusted public key for sync device {device_id}"
             ),
+            Self::ProviderAuthoritySigner { profile, device_id } => write!(
+                formatter,
+                "profile {profile} sync device {device_id} is marked as provider authority and cannot authorize profile sync state"
+            ),
             Self::UnauthorizedDeviceEpoch {
                 profile,
                 device_id,
@@ -1313,7 +1321,9 @@ impl std::error::Error for ProfileSyncTrustedOpenError {
         match self {
             Self::Storage(error) => Some(error),
             Self::SyncObject(error) => Some(error),
-            Self::UntrustedDevice { .. } | Self::UnauthorizedDeviceEpoch { .. } => None,
+            Self::UntrustedDevice { .. }
+            | Self::ProviderAuthoritySigner { .. }
+            | Self::UnauthorizedDeviceEpoch { .. } => None,
         }
     }
 }
@@ -4535,6 +4545,32 @@ impl SlateProfileDatabase {
         Ok(provider_authority.unwrap_or(false))
     }
 
+    fn sync_device_provider_authority(
+        &self,
+        profile: &str,
+        device_id: &str,
+    ) -> Result<bool, StorageError> {
+        if !is_valid_sync_identifier(device_id) {
+            return Err(StorageError::InvalidSyncDeviceId(device_id.to_string()));
+        }
+
+        let connection = self.connection()?;
+        let provider_authority = connection
+            .query_row(
+                "SELECT provider_authority
+                 FROM sync_devices
+                 WHERE profile = ?1 AND device_id = ?2",
+                params![profile, device_id],
+                |row| {
+                    let value: i64 = row.get(0)?;
+                    Ok(integer_to_bool(value))
+                },
+            )
+            .optional()
+            .map_err(|source| self.database_error(source))?;
+        Ok(provider_authority.unwrap_or(false))
+    }
+
     pub fn record_signed_sync_account_membership_record(
         &self,
         signed_record: &[u8],
@@ -6137,8 +6173,8 @@ impl SlateProfileDatabase {
     ) -> Result<Vec<u8>, ProfileSyncTrustedOpenError> {
         let signed_object =
             SignedSyncObject::from_bytes(bytes).map_err(ProfileSyncTrustedOpenError::SyncObject)?;
-        let public_key =
-            self.trusted_public_key_for_signed_object(expected_profile, &signed_object)?;
+        let public_key = self
+            .trusted_profile_state_public_key_for_signed_object(expected_profile, &signed_object)?;
         let encrypted_bytes = signed_object
             .verify_with(&public_key)
             .map_err(ProfileSyncTrustedOpenError::SyncObject)?;
@@ -6184,7 +6220,8 @@ impl SlateProfileDatabase {
     ) -> Result<ProfileSyncDeviceHead, ProfileSyncTrustedOpenError> {
         let signed_object =
             SignedSyncObject::from_bytes(bytes).map_err(ProfileSyncTrustedOpenError::SyncObject)?;
-        let public_key = self.trusted_public_key_for_signed_object(profile, &signed_object)?;
+        let public_key =
+            self.trusted_profile_state_public_key_for_signed_object(profile, &signed_object)?;
         let device_head =
             open_signed_profile_sync_device_head(bytes, content_key, &public_key, profile, key_id)
                 .map_err(ProfileSyncTrustedOpenError::SyncObject)?;
@@ -6221,7 +6258,8 @@ impl SlateProfileDatabase {
     ) -> Result<IncomingSyncSettingText, ProfileSyncTrustedOpenError> {
         let signed_object =
             SignedSyncObject::from_bytes(bytes).map_err(ProfileSyncTrustedOpenError::SyncObject)?;
-        let public_key = self.trusted_public_key_for_signed_object(profile, &signed_object)?;
+        let public_key =
+            self.trusted_profile_state_public_key_for_signed_object(profile, &signed_object)?;
         let encrypted_bytes = signed_object
             .verify_with(&public_key)
             .map_err(ProfileSyncTrustedOpenError::SyncObject)?;
@@ -6899,14 +6937,22 @@ impl SlateProfileDatabase {
             .map_err(ProfileSyncPullApplyError::Storage)
     }
 
-    fn trusted_public_key_for_signed_object(
+    fn trusted_profile_state_public_key_for_signed_object(
         &self,
         profile: &str,
         signed_object: &SignedSyncObject,
     ) -> Result<ProfileSyncDevicePublicKey, ProfileSyncTrustedOpenError> {
-        Ok(self
-            .trusted_public_key_record_for_signed_object(profile, signed_object)?
-            .public_key)
+        let record = self.trusted_public_key_record_for_signed_object(profile, signed_object)?;
+        if self
+            .sync_device_provider_authority(profile, signed_object.device_id.as_str())
+            .map_err(ProfileSyncTrustedOpenError::Storage)?
+        {
+            return Err(ProfileSyncTrustedOpenError::ProviderAuthoritySigner {
+                profile: profile.to_string(),
+                device_id: signed_object.device_id.clone(),
+            });
+        }
+        Ok(record.public_key)
     }
 
     fn trusted_public_key_record_for_signed_object(
@@ -11037,6 +11083,148 @@ mod tests {
                 && key_membership_epoch == DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1
                 && manifest_membership_epoch == DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH
         ));
+    }
+
+    #[test]
+    fn profile_sync_provider_authority_signers_cannot_authorize_profile_state() {
+        let content_key = ProfileSyncContentKey::from_bytes([25; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let provider_signer = ProfileSyncDeviceSigner::generate("provider-device").unwrap();
+        let provider_public_key = provider_signer.public_key().unwrap();
+        let key_id = "content-key-epoch-1";
+        let root_id = "settings/devices/provider-device/head";
+        let device_head_object_id = "provider-device-head-object-1";
+        let device_head = ProfileSyncDeviceHead {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            device_id: "provider-device".to_string(),
+            root_id: root_id.to_string(),
+            schema_version: PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            latest_manifest_object_id: "provider-manifest-object-1".to_string(),
+            latest_change_object_id: None,
+            device_sequence: 1,
+            logical_clock: 1,
+            created_at: 1234,
+        };
+        let signed_device_head = sign_test_sync_object(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
+            key_id,
+            serde_json::to_vec(&device_head).unwrap().as_slice(),
+            &content_key,
+            &provider_signer,
+            26,
+        );
+        let database_path =
+            test_dir("sync-provider-authority-profile-state").join(DEFAULT_DATABASE_FILE_NAME);
+        let database =
+            SlateProfileDatabase::open_resolved_with_device_id(database_path, "device-b").unwrap();
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: provider_public_key,
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .unwrap();
+        database
+            .register_sync_device(&SyncDeviceRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                device_id: "provider-device".to_string(),
+                label: Some("Availability Provider".to_string()),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                provider_authority: true,
+            })
+            .unwrap();
+
+        assert!(matches!(
+            database.open_trusted_signed_profile_sync_device_head(
+                signed_device_head.as_slice(),
+                &content_key,
+                DEFAULT_PROFILE_ID,
+                key_id,
+            ),
+            Err(ProfileSyncTrustedOpenError::ProviderAuthoritySigner { profile, device_id })
+                if profile == DEFAULT_PROFILE_ID && device_id == "provider-device"
+        ));
+
+        let mut source = InMemoryProfileSyncObjectSource::default();
+        source.insert_object(
+            DEFAULT_PROFILE_ID,
+            device_head_object_id,
+            signed_device_head.clone(),
+        );
+        source.publish_root(DEFAULT_PROFILE_ID, root_id, device_head_object_id);
+        assert!(matches!(
+            database.pull_and_record_trusted_signed_profile_sync_device_head_if_changed(
+                &source,
+                DEFAULT_PROFILE_ID,
+                root_id,
+                &content_key,
+                key_id,
+            ),
+            Err(ProfileSyncTrustedPullApplyError::Pull(ProfileSyncTrustedPullError::Open(
+                ProfileSyncTrustedOpenError::ProviderAuthoritySigner { profile, device_id }
+            ))) if profile == DEFAULT_PROFILE_ID && device_id == "provider-device"
+        ));
+        assert!(
+            database
+                .profile_sync_root(DEFAULT_PROFILE_ID, root_id)
+                .unwrap()
+                .is_none()
+        );
+
+        let manifest = ProfileSyncManifest {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: "settings/root".to_string(),
+            schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            current_snapshot_object_id: None,
+            tail_change_object_ids: Vec::new(),
+            included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            device_frontiers: vec![ProfileSyncDeviceFrontier {
+                device_id: "provider-device".to_string(),
+                latest_sequence: 1,
+                latest_change_object_id: None,
+            }],
+            retention_policy: ProfileSyncRetentionPolicy::default(),
+            created_at: 1234,
+        };
+        let signed_manifest = sign_test_sync_object(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+            key_id,
+            serde_json::to_vec(&manifest).unwrap().as_slice(),
+            &content_key,
+            &provider_signer,
+            27,
+        );
+        assert!(matches!(
+            database.open_trusted_signed_profile_sync_manifest(
+                signed_manifest.as_slice(),
+                &content_key,
+                DEFAULT_PROFILE_ID,
+                key_id,
+            ),
+            Err(ProfileSyncTrustedOpenError::ProviderAuthoritySigner { profile, device_id })
+                if profile == DEFAULT_PROFILE_ID && device_id == "provider-device"
+        ));
+        assert!(
+            database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "provider-device")
+                .unwrap()
+                .expect("provider key remains trusted")
+                .trusted
+        );
+        assert!(
+            database
+                .sync_devices(DEFAULT_PROFILE_ID)
+                .unwrap()
+                .into_iter()
+                .find(|device| device.device_id == "provider-device")
+                .expect("provider roster entry remains")
+                .provider_authority
+        );
     }
 
     #[test]
