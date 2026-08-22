@@ -188,19 +188,20 @@
     <header>
       <div>
         <h1>Files</h1>
-        <p>Storage mockup for downloads, saved broadweb content, and local profile data.</p>
+        <p>File browser mockup for downloads, documents, media, and synced folders.</p>
       </div>
       <div class="toolbar">
         <button>Reveal Folder</button>
         <button class="primary">Import File</button>
+        <button>Storage Settings</button>
       </div>
     </header>
 
     <section class="summary">
-      <div class="metric"><span>Storage</span><strong>4.8 GB</strong></div>
-      <div class="metric"><span>Downloads</span><strong>18</strong></div>
-      <div class="metric"><span>Saved CARs</span><strong>3</strong></div>
-      <div class="metric"><span>Profiles</span><strong>1</strong></div>
+      <div class="metric"><span>Files</span><strong>126</strong></div>
+      <div class="metric"><span>Folders</span><strong>24</strong></div>
+      <div class="metric"><span>Sync sets</span><strong>3</strong></div>
+      <div class="metric"><span>Available offline</span><strong>4.8 GB</strong></div>
     </section>
 
     <section class="layout">
@@ -209,10 +210,10 @@
           <h2>Locations</h2>
         </div>
         <div class="folder">Downloads</div>
-        <div class="folder">Saved Pages</div>
-        <div class="folder">IPFS Cache</div>
-        <div class="folder">Profile Data</div>
-        <div class="folder">Temporary Files</div>
+        <div class="folder">Documents</div>
+        <div class="folder">Media</div>
+        <div class="folder">Shared</div>
+        <div class="folder">Offline</div>
       </aside>
 
       <section class="panel">
@@ -231,27 +232,27 @@
           <tbody>
             <tr>
               <td>servo-book.pdf</td>
-              <td>Download</td>
+              <td>PDF document</td>
               <td>12.4 MB</td>
-              <td class="status">Saved</td>
+              <td class="status">Available</td>
             </tr>
             <tr>
-              <td>site-archive.car</td>
-              <td>Broadweb archive</td>
+              <td>research-notes.md</td>
+              <td>Markdown</td>
+              <td>28 KB</td>
+              <td class="status">Synced</td>
+            </tr>
+            <tr>
+              <td>project-assets</td>
+              <td>Folder</td>
               <td>842 MB</td>
-              <td class="status">Pinned</td>
+              <td class="status">Offline</td>
             </tr>
             <tr>
               <td>profile-bookmarks.json</td>
-              <td>Export</td>
+              <td>JSON document</td>
               <td>48 KB</td>
               <td class="status">Local</td>
-            </tr>
-            <tr>
-              <td>media-cache</td>
-              <td>Cache group</td>
-              <td>1.9 GB</td>
-              <td class="status">Managed</td>
             </tr>
           </tbody>
         </table>

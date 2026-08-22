@@ -1029,7 +1029,10 @@ mod tests {
 
         assert!(files_page.contains("<title>Slate Files</title>"));
         assert!(files_page.contains("<h1>Files</h1>"));
-        assert!(files_page.contains("Storage"));
+        assert!(files_page.contains("File browser mockup"));
+        assert!(files_page.contains("Storage Settings"));
+        assert!(!files_page.contains("IPFS Cache"));
+        assert!(!files_page.contains("Saved CARs"));
         assert!(!files_page.contains("<script"));
         assert!(!files_page.contains("http://"));
         assert!(!files_page.contains("https://"));
