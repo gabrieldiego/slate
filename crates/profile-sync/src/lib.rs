@@ -1665,6 +1665,35 @@ impl SettingsSyncScheduledMembershipCyclePlan {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncScheduledMembershipCyclePlanAttempt {
+    pub membership_log_publication: ProfileSyncMembershipLogPublicationPlan,
+    pub membership_log_preview: ProfileSyncMembershipLogPreview,
+    pub cycle: SettingsSyncScheduledMembershipCyclePlanAttemptCycle,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SettingsSyncScheduledMembershipCyclePlanAttemptCycle {
+    Ready(SettingsSyncScheduledCyclePlan),
+    CredentialBlocked { reason: String },
+}
+
+impl SettingsSyncScheduledMembershipCyclePlanAttempt {
+    pub fn cycle_ready(&self) -> bool {
+        matches!(
+            self.cycle,
+            SettingsSyncScheduledMembershipCyclePlanAttemptCycle::Ready(_)
+        )
+    }
+
+    pub fn credential_blocked(&self) -> bool {
+        matches!(
+            self.cycle,
+            SettingsSyncScheduledMembershipCyclePlanAttemptCycle::CredentialBlocked { .. }
+        )
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettingsSyncMembershipLogPlan {
     pub local_publication: ProfileSyncMembershipLogPublicationPlan,
     pub remote_preview: ProfileSyncMembershipLogPreview,
@@ -3770,6 +3799,41 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         })
     }
 
+    pub fn try_plan_once_with_membership_log_selecting_retention_providers(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        membership_log_root_id: &str,
+        signer: &ProfileSyncDeviceSigner,
+        retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'_>],
+    ) -> Result<SettingsSyncScheduledMembershipCyclePlanAttempt, ProfileSyncCycleWithHealthError>
+    {
+        let membership_log_plan =
+            self.plan_membership_log(database, config.profile.as_str(), membership_log_root_id)?;
+        let cycle = match self.plan_once_selecting_retention_providers(
+            database,
+            config,
+            signer,
+            retention_provider_handles,
+        ) {
+            Ok(cycle) => SettingsSyncScheduledMembershipCyclePlanAttemptCycle::Ready(cycle),
+            Err(
+                error @ ProfileSyncCycleWithHealthError::Cycle(ProfileSyncCycleError::Credentials(
+                    _,
+                )),
+            ) => SettingsSyncScheduledMembershipCyclePlanAttemptCycle::CredentialBlocked {
+                reason: error.to_string(),
+            },
+            Err(error) => return Err(error),
+        };
+
+        Ok(SettingsSyncScheduledMembershipCyclePlanAttempt {
+            membership_log_publication: membership_log_plan.local_publication,
+            membership_log_preview: membership_log_plan.remote_preview,
+            cycle,
+        })
+    }
+
     pub fn plan_once_with_membership_log_and_stored_retention_providers(
         &self,
         database: &SlateProfileDatabase,
@@ -5792,7 +5856,8 @@ mod tests {
         ProfileSyncMembershipLogPullStatus, ProfileSyncMembershipRecordPullStatus,
         ProfileSyncPolicyError, ProfileSyncPublishError, ProfileSyncReceiveError,
         SettingsSyncCyclePolicy, SettingsSyncRetentionProviderHandle, SettingsSyncRuntimeSecrets,
-        SettingsSyncSchedulerConfig, SettingsSyncStoredProviderEndpointStatus,
+        SettingsSyncScheduledMembershipCyclePlanAttemptCycle, SettingsSyncSchedulerConfig,
+        SettingsSyncStoredProviderEndpointStatus,
         SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle,
         settings_device_head_root_id, sign_encrypted_json_object, sync_membership_record_root_id,
     };
@@ -7033,7 +7098,7 @@ mod tests {
         publisher_database
             .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
             .expect("publisher writes membership scheduler setting");
-        BroadwebdSettingsSyncRunner::new(&publisher_daemon)
+        let publisher_run = BroadwebdSettingsSyncRunner::new(&publisher_daemon)
             .run_settings_sync_cycle_with_membership_log(
                 &publisher_database,
                 DEFAULT_PROFILE_ID,
@@ -7047,6 +7112,12 @@ mod tests {
                 4,
             )
             .expect("publisher publishes membership and settings state");
+        let published_membership_log_object_id = publisher_run
+            .published_membership_log
+            .as_ref()
+            .expect("publisher published scheduler membership log")
+            .object_id
+            .clone();
         assert!(
             receiver_database
                 .sync_device_public_key(DEFAULT_PROFILE_ID, "membership-scheduler-device-b")
@@ -7070,7 +7141,49 @@ mod tests {
                 .with_provider_health_required(false)
                 .with_root_health_required_after_cycle(false),
         );
-        let run = BroadwebdSettingsSyncScheduler::new(&receiver_daemon)
+        let scheduler = BroadwebdSettingsSyncScheduler::new(&receiver_daemon);
+        let plan_attempt = scheduler
+            .try_plan_once_with_membership_log_selecting_retention_providers(
+                &receiver_database,
+                &config,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                &signer_b,
+                &retention_provider_handles,
+            )
+            .expect("selected membership plan attempt reports credential block");
+        assert_eq!(
+            plan_attempt.membership_log_publication.status,
+            ProfileSyncMembershipLogPublicationPlanStatus::Empty
+        );
+        assert_eq!(
+            plan_attempt.membership_log_preview.status,
+            ProfileSyncMembershipLogPreviewStatus::Available
+        );
+        assert!(plan_attempt.credential_blocked());
+        assert!(!plan_attempt.cycle_ready());
+        assert_eq!(
+            plan_attempt.membership_log_preview.object_id.as_deref(),
+            Some(published_membership_log_object_id.as_str())
+        );
+        assert!(matches!(
+            plan_attempt.cycle,
+            SettingsSyncScheduledMembershipCyclePlanAttemptCycle::CredentialBlocked { ref reason }
+                if reason.contains("has no trusted public key for local sync device membership-scheduler-device-b")
+        ));
+        assert!(
+            receiver_database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "membership-scheduler-device-b")
+                .expect("read receiver local key after selected plan attempt")
+                .is_none()
+        );
+        assert!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID)
+                .expect("read membership log root after selected plan attempt")
+                .is_none()
+        );
+
+        let run = scheduler
             .run_once_with_membership_log_selecting_retention_providers(
                 &receiver_database,
                 &config,
