@@ -312,7 +312,7 @@ impl IpfsKuboProfileSyncRpc {
 
     pub fn put_encrypted_object(
         &self,
-        executor: &impl IpfsKuboProfileSyncRpcExecutor,
+        executor: &(impl IpfsKuboProfileSyncRpcExecutor + ?Sized),
         object_bytes: &[u8],
         budget: &ResourceBudget,
     ) -> Result<String, BroadwebdError> {
@@ -332,7 +332,7 @@ impl IpfsKuboProfileSyncRpc {
 
     pub fn get_encrypted_object(
         &self,
-        executor: &impl IpfsKuboProfileSyncRpcExecutor,
+        executor: &(impl IpfsKuboProfileSyncRpcExecutor + ?Sized),
         object_id: &str,
         budget: &ResourceBudget,
     ) -> Result<Vec<u8>, BroadwebdError> {
@@ -350,7 +350,7 @@ impl IpfsKuboProfileSyncRpc {
 
     pub fn retain_object(
         &self,
-        executor: &impl IpfsKuboProfileSyncRpcExecutor,
+        executor: &(impl IpfsKuboProfileSyncRpcExecutor + ?Sized),
         object_id: &str,
         budget: &ResourceBudget,
     ) -> Result<(), BroadwebdError> {
@@ -361,7 +361,7 @@ impl IpfsKuboProfileSyncRpc {
 
     pub fn release_object(
         &self,
-        executor: &impl IpfsKuboProfileSyncRpcExecutor,
+        executor: &(impl IpfsKuboProfileSyncRpcExecutor + ?Sized),
         object_id: &str,
         budget: &ResourceBudget,
     ) -> Result<(), BroadwebdError> {
@@ -372,7 +372,7 @@ impl IpfsKuboProfileSyncRpc {
 
     pub fn verify_retained_object(
         &self,
-        executor: &impl IpfsKuboProfileSyncRpcExecutor,
+        executor: &(impl IpfsKuboProfileSyncRpcExecutor + ?Sized),
         object_id: &str,
         budget: &ResourceBudget,
     ) -> Result<bool, BroadwebdError> {
@@ -384,7 +384,7 @@ impl IpfsKuboProfileSyncRpc {
 
     pub fn publish_root(
         &self,
-        executor: &impl IpfsKuboProfileSyncRpcExecutor,
+        executor: &(impl IpfsKuboProfileSyncRpcExecutor + ?Sized),
         key_id: &str,
         object_id: &str,
         budget: &ResourceBudget,
@@ -405,7 +405,7 @@ impl IpfsKuboProfileSyncRpc {
 
     pub fn resolve_root(
         &self,
-        executor: &impl IpfsKuboProfileSyncRpcExecutor,
+        executor: &(impl IpfsKuboProfileSyncRpcExecutor + ?Sized),
         name: &str,
         budget: &ResourceBudget,
     ) -> Result<String, BroadwebdError> {

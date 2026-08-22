@@ -1,7 +1,3 @@
-#[cfg(any(test, feature = "test-fixtures"))]
-use crate::IpfsKuboRpcEndpoint;
-#[cfg(any(test, feature = "test-fixtures"))]
-use crate::protocols::ipfs::InternalKuboRpcTransportShim;
 use crate::{
     ApplicationServicePlugin, BroadwebdError, PROFILE_SYNC_PLUGIN, PluginKind, PluginMetadata,
     PluginRegistry, ProfileSyncObjectRequest, ProfileSyncProfileRequest, ProfileSyncProviderHealth,
@@ -35,17 +31,25 @@ pub struct ProfileSyncService {
     kubo_backend: Option<KuboProfileSyncBackend>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 struct KuboProfileSyncBackend {
     rpc: IpfsKuboProfileSyncRpc,
-    transport: KuboProfileSyncTransport,
+    executor_factory: Arc<dyn KuboProfileSyncExecutorFactory>,
+    capabilities: Vec<String>,
+    resource_profile: ResourceProfile,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum KuboProfileSyncTransport {
-    Http,
-    #[cfg(any(test, feature = "test-fixtures"))]
-    Fixture,
+pub(crate) trait KuboProfileSyncExecutorFactory: std::fmt::Debug + Send + Sync {
+    fn create_executor(&self) -> Result<Box<dyn IpfsKuboProfileSyncRpcExecutor>, BroadwebdError>;
+}
+
+#[derive(Debug)]
+struct ReqwestKuboProfileSyncExecutorFactory;
+
+impl KuboProfileSyncExecutorFactory for ReqwestKuboProfileSyncExecutorFactory {
+    fn create_executor(&self) -> Result<Box<dyn IpfsKuboProfileSyncRpcExecutor>, BroadwebdError> {
+        Ok(Box::new(IpfsKuboReqwestProfileSyncRpcExecutor::new()?))
+    }
 }
 
 impl KuboProfileSyncBackend {
@@ -257,38 +261,29 @@ impl ProfileSyncService {
         api_base_url: impl Into<String>,
         provider_id: impl Into<String>,
     ) -> Result<Self, BroadwebdError> {
-        Self::kubo_with_transport(
-            api_base_url,
+        let rpc = IpfsKuboProfileSyncRpc::local(api_base_url)?;
+        Self::kubo_with_rpc_executor_factory(
+            rpc,
             provider_id,
             "ipfs-kubo",
             "local Kubo RPC over HTTP; sends encrypted profile-sync object bytes, CIDs, and IPNS names to the configured local node",
-            KuboProfileSyncTransport::Http,
+            ResourceProfile::Medium,
+            &["profile-sync/kubo-http"],
+            Arc::new(ReqwestKuboProfileSyncExecutorFactory),
         )
     }
 
-    #[cfg(any(test, feature = "test-fixtures"))]
-    pub fn kubo_fixture(
-        api_base_url: impl Into<String>,
-        provider_id: impl Into<String>,
-    ) -> Result<Self, BroadwebdError> {
-        Self::kubo_with_transport(
-            api_base_url,
-            provider_id,
-            "ipfs-kubo-fixture",
-            "in-process Kubo profile-sync fixture; no sockets, DNS, loopback listener, or external network",
-            KuboProfileSyncTransport::Fixture,
-        )
-    }
-
-    fn kubo_with_transport(
-        api_base_url: impl Into<String>,
+    pub(crate) fn kubo_with_rpc_executor_factory(
+        rpc: IpfsKuboProfileSyncRpc,
         provider_id: impl Into<String>,
         provider_kind: impl Into<String>,
         privacy_boundary: impl Into<String>,
-        transport: KuboProfileSyncTransport,
+        resource_profile: ResourceProfile,
+        capabilities: &[&str],
+        executor_factory: Arc<dyn KuboProfileSyncExecutorFactory>,
     ) -> Result<Self, BroadwebdError> {
-        let api_base_url = api_base_url.into();
         let provider_id = provider_id.into();
+        validate_profile_sync_provider_id(provider_id.as_str())?;
         let provider_kind = provider_kind.into();
         let privacy_boundary = privacy_boundary.into();
         let roles = ProfileSyncProviderRoles::logged_in_device();
@@ -310,8 +305,13 @@ impl ProfileSyncService {
             privacy_boundary,
             roles,
             kubo_backend: Some(KuboProfileSyncBackend {
-                rpc: kubo_profile_sync_rpc_for_transport(api_base_url, transport)?,
-                transport,
+                rpc,
+                executor_factory,
+                capabilities: capabilities
+                    .iter()
+                    .map(|capability| (*capability).to_string())
+                    .collect(),
+                resource_profile,
             }),
         })
     }
@@ -791,7 +791,7 @@ impl ProfileSyncService {
     fn kubo_profile_sync_via_executor(
         &self,
         kubo_rpc: &IpfsKuboProfileSyncRpc,
-        executor: &impl IpfsKuboProfileSyncRpcExecutor,
+        executor: &(impl IpfsKuboProfileSyncRpcExecutor + ?Sized),
         request: ProfileSyncRequest,
         budget: &ResourceBudget,
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
@@ -1214,23 +1214,11 @@ impl ApplicationServicePlugin for ProfileSyncService {
                 "profile-sync/mutable-root",
                 "profile-sync/provider-discovery",
             ];
-            let resource_profile = match backend.transport {
-                KuboProfileSyncTransport::Http => {
-                    capabilities.push("profile-sync/kubo-http");
-                    ResourceProfile::Medium
-                }
-                #[cfg(any(test, feature = "test-fixtures"))]
-                KuboProfileSyncTransport::Fixture => {
-                    capabilities.push("profile-sync/kubo-fixture");
-                    capabilities.push("profile-sync/internal-transport-shim");
-                    capabilities.push("socketless-fixture");
-                    ResourceProfile::Low
-                }
-            };
+            capabilities.extend(backend.capabilities.iter().map(String::as_str));
             return PluginMetadata::new(PROFILE_SYNC_PLUGIN, PluginKind::ApplicationService)
                 .with_capabilities(capabilities.as_slice())
                 .with_privacy_boundary(self.privacy_boundary.as_str())
-                .with_resource_profile(resource_profile);
+                .with_resource_profile(backend.resource_profile);
         }
 
         let mut capabilities = vec!["profile-sync/fake"];
@@ -1274,17 +1262,13 @@ impl ApplicationServicePlugin for ProfileSyncService {
         self.ensure_online()?;
 
         if let Some(backend) = &self.kubo_backend {
-            let response = match backend.transport {
-                KuboProfileSyncTransport::Http => {
-                    let executor = IpfsKuboReqwestProfileSyncRpcExecutor::new()?;
-                    self.kubo_profile_sync_via_executor(backend.rpc(), &executor, request, budget)?
-                }
-                #[cfg(any(test, feature = "test-fixtures"))]
-                KuboProfileSyncTransport::Fixture => {
-                    let executor = InternalKuboRpcTransportShim;
-                    self.kubo_profile_sync_via_executor(backend.rpc(), &executor, request, budget)?
-                }
-            };
+            let executor = backend.executor_factory.create_executor()?;
+            let response = self.kubo_profile_sync_via_executor(
+                backend.rpc(),
+                executor.as_ref(),
+                request,
+                budget,
+            )?;
             return Ok(ServiceResponse::ProfileSync(response));
         }
 
@@ -1309,19 +1293,6 @@ impl ApplicationServicePlugin for ProfileSyncService {
             ProfileSyncRequest::RootHealth(request) => self.root_health(request)?,
         };
         Ok(ServiceResponse::ProfileSync(response))
-    }
-}
-
-fn kubo_profile_sync_rpc_for_transport(
-    api_base_url: String,
-    transport: KuboProfileSyncTransport,
-) -> Result<IpfsKuboProfileSyncRpc, BroadwebdError> {
-    match transport {
-        KuboProfileSyncTransport::Http => IpfsKuboProfileSyncRpc::local(api_base_url),
-        #[cfg(any(test, feature = "test-fixtures"))]
-        KuboProfileSyncTransport::Fixture => Ok(IpfsKuboProfileSyncRpc::from_endpoint(
-            IpfsKuboRpcEndpoint::from_prevalidated_api_base_url(api_base_url),
-        )),
     }
 }
 

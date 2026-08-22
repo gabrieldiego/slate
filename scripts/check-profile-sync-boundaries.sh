@@ -95,6 +95,10 @@ reject_protocol_model_leak \
     crates/broadwebd/src/services/profile_sync.rs \
     'InProcessBroadwebNetwork|InternalKubo(ProfileSyncModel|RpcFixture)|fetch_internal_kubo|internal_kubo_rpc_fixtures|register_internal_kubo|take_internal_kubo' \
     'broadwebd profile-sync service code must not call Kubo fixture models directly; route through transport executors or shims.'
+reject_protocol_model_leak \
+    crates/broadwebd/src/services/profile_sync.rs \
+    'InternalKuboRpcTransportShim|KuboProfileSyncTransport|kubo_fixture|from_prevalidated_api_base_url|ipfs-kubo-fixture|socketless-fixture' \
+    'broadwebd profile-sync service must stay fixture-blind; in-process Kubo fixtures inject executor factories from the fixture layer.'
 
 require_text \
     crates/broadwebd/src/protocols/ipfs/kubo_fixtures.rs \
@@ -115,6 +119,14 @@ require_text \
     crates/broadwebd/src/protocols/ipfs/kubo.rs \
     'impl IpfsKuboProfileSyncRpcExecutor for IpfsKuboReqwestProfileSyncRpcExecutor' \
     'Kubo profile-sync must keep a real HTTP executor so fixtures only swap transport.'
+require_text \
+    crates/broadwebd/src/services/profile_sync.rs \
+    'KuboProfileSyncExecutorFactory' \
+    'Kubo profile-sync services must choose socket behavior through an injected executor factory.'
+require_text \
+    crates/broadwebd/src/lib.rs \
+    'impl KuboProfileSyncExecutorFactory for InProcessKuboProfileSyncExecutorFactory' \
+    'In-process Kubo profile-sync fixtures must inject the socketless executor from the fixture layer.'
 
 require_text \
     crates/broadwebd/src/protocols/ipfs/gateway.rs \

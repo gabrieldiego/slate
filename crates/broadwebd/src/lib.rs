@@ -143,11 +143,15 @@ pub mod test_fixtures {
     };
     use crate::protocols::ipfs::{
         InternalKuboRpcFixtureTransport, IpfsGatewayEndpoint, IpfsGatewayHttpExecutor,
-        IpfsGatewayTransport, internal_kubo_rpc_url_belongs_to_network,
+        IpfsGatewayTransport, IpfsKuboProfileSyncRpc, IpfsKuboProfileSyncRpcExecutor,
+        IpfsKuboRpcEndpoint, internal_kubo_rpc_url_belongs_to_network,
         register_internal_kubo_profile_sync_model_for_network,
         register_internal_kubo_rpc_fixture_for_network, take_internal_kubo_rpc_fixture_requests,
     };
-    use crate::services::{http_fetch::HttpFetchService, profile_sync::ProfileSyncService};
+    use crate::services::{
+        http_fetch::HttpFetchService,
+        profile_sync::{KuboProfileSyncExecutorFactory, ProfileSyncService},
+    };
     use crate::{
         BroadwebDaemon, BroadwebStatusReporter, BroadwebdError, DIRECT_HTTP_PLUGIN,
         IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX, IPFS_GATEWAY_PLUGIN, IpfsConfig,
@@ -156,10 +160,53 @@ pub mod test_fixtures {
         TransportHttpRequest, TransportPlugin,
     };
     use std::path::PathBuf;
+    use std::sync::Arc;
 
     pub use crate::http::InternalFixtureHttpResponse;
     pub use crate::protocols::ipfs::{InternalKuboRpcResponse, InternalKuboRpcTransportShim};
     pub use crate::services::profile_sync::LocalProfileSyncFixture;
+
+    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+    struct InProcessKuboProfileSyncExecutorFactory;
+
+    impl KuboProfileSyncExecutorFactory for InProcessKuboProfileSyncExecutorFactory {
+        fn create_executor(
+            &self,
+        ) -> Result<Box<dyn IpfsKuboProfileSyncRpcExecutor>, BroadwebdError> {
+            Ok(Box::new(InternalKuboRpcTransportShim))
+        }
+    }
+
+    pub(crate) fn kubo_profile_sync_fixture_service(
+        api_base_url: impl Into<String>,
+        provider_id: impl Into<String>,
+        network_id: &str,
+    ) -> Result<ProfileSyncService, BroadwebdError> {
+        let api_base_url = api_base_url.into();
+        let api_url = parse_http_url(api_base_url.as_str())?;
+        if !internal_kubo_rpc_url_belongs_to_network(&api_url, network_id) {
+            return Err(BroadwebdError::UnsupportedRequest(format!(
+                "in-process Kubo profile-sync fixtures must use a URL created by network {network_id}: {api_base_url}"
+            )));
+        }
+
+        let rpc = IpfsKuboProfileSyncRpc::from_endpoint(
+            IpfsKuboRpcEndpoint::from_prevalidated_api_base_url(api_base_url),
+        );
+        ProfileSyncService::kubo_with_rpc_executor_factory(
+            rpc,
+            provider_id,
+            "ipfs-kubo-fixture",
+            "in-process Kubo profile-sync fixture; no sockets, DNS, loopback listener, or external network",
+            ResourceProfile::Low,
+            &[
+                "profile-sync/kubo-fixture",
+                "profile-sync/internal-transport-shim",
+                "socketless-fixture",
+            ],
+            Arc::new(InProcessKuboProfileSyncExecutorFactory),
+        )
+    }
 
     #[derive(Clone, Debug, Eq, PartialEq)]
     pub struct InProcessFixtureHttpTransport {
@@ -563,7 +610,11 @@ pub mod test_fixtures {
                 )));
             }
             let mut registry = self.fixture_registry();
-            registry.register_service(ProfileSyncService::kubo_fixture(api_base_url, provider_id)?);
+            registry.register_service(kubo_profile_sync_fixture_service(
+                api_base_url,
+                provider_id,
+                self.network_id.as_str(),
+            )?);
             Ok(registry)
         }
 
@@ -673,26 +724,30 @@ pub mod test_fixtures {
             &self,
             response: InternalKuboRpcResponse,
         ) -> InProcessKuboRpcFixture {
-            InProcessKuboRpcFixture::new(register_internal_kubo_rpc_fixture_for_network(
-                self.network_id.as_str(),
-                vec![response],
-            ))
+            InProcessKuboRpcFixture::new(
+                register_internal_kubo_rpc_fixture_for_network(
+                    self.network_id.as_str(),
+                    vec![response],
+                ),
+                self.network_id.clone(),
+            )
         }
 
         pub fn kubo_rpc_sequence(
             &self,
             responses: Vec<InternalKuboRpcResponse>,
         ) -> InProcessKuboRpcFixture {
-            InProcessKuboRpcFixture::new(register_internal_kubo_rpc_fixture_for_network(
-                self.network_id.as_str(),
-                responses,
-            ))
+            InProcessKuboRpcFixture::new(
+                register_internal_kubo_rpc_fixture_for_network(self.network_id.as_str(), responses),
+                self.network_id.clone(),
+            )
         }
 
         pub fn kubo_profile_sync_model(&self) -> InProcessKuboRpcFixture {
-            InProcessKuboRpcFixture::new(register_internal_kubo_profile_sync_model_for_network(
-                self.network_id.as_str(),
-            ))
+            InProcessKuboRpcFixture::new(
+                register_internal_kubo_profile_sync_model_for_network(self.network_id.as_str()),
+                self.network_id.clone(),
+            )
         }
 
         pub fn profile_sync(&self) -> LocalProfileSyncFixture {
@@ -745,15 +800,47 @@ pub mod test_fixtures {
     #[derive(Debug)]
     pub struct InProcessKuboRpcFixture {
         base_url: String,
+        network_id: String,
     }
 
     impl InProcessKuboRpcFixture {
-        fn new(base_url: String) -> Self {
-            Self { base_url }
+        fn new(base_url: String, network_id: impl Into<String>) -> Self {
+            Self {
+                base_url,
+                network_id: network_id.into(),
+            }
         }
 
         pub fn base_url(&self) -> &str {
             self.base_url.as_str()
+        }
+
+        pub fn network_id(&self) -> &str {
+            self.network_id.as_str()
+        }
+
+        pub fn profile_sync_rpc(&self) -> Result<IpfsKuboProfileSyncRpc, BroadwebdError> {
+            let api_url = parse_http_url(self.base_url.as_str())?;
+            if !internal_kubo_rpc_url_belongs_to_network(&api_url, self.network_id.as_str()) {
+                return Err(BroadwebdError::UnsupportedRequest(format!(
+                    "in-process Kubo profile-sync fixture RPC must use a URL created by network {}: {}",
+                    self.network_id, self.base_url
+                )));
+            }
+            Ok(IpfsKuboProfileSyncRpc::from_endpoint(
+                IpfsKuboRpcEndpoint::from_prevalidated_api_base_url(self.base_url.clone()),
+            ))
+        }
+
+        pub fn profile_sync_service(
+            &self,
+            provider_id: impl Into<String>,
+        ) -> Result<ProfileSyncService, BroadwebdError> {
+            kubo_profile_sync_fixture_service(
+                self.base_url.as_str(),
+                provider_id,
+                self.network_id.as_str(),
+            )
         }
 
         pub fn finish(mut self) -> Vec<String> {
@@ -2593,7 +2680,8 @@ mod tests {
             body: br#"{"Name":"profile-object","Hash":"bafybeigdyrztprofileobject","Size":"128"}"#
                 .to_vec(),
         });
-        let rpc = IpfsKuboProfileSyncRpc::local(fixture.base_url())
+        let rpc = fixture
+            .profile_sync_rpc()
             .expect("fixture Kubo profile sync RPC");
         let request = rpc
             .put_encrypted_object_request()
@@ -2639,7 +2727,8 @@ mod tests {
             body: br#"{"Name":"profile-object","Hash":"bafybeigdyrztprofileobject","Size":"128"}"#
                 .to_vec(),
         });
-        let rpc = IpfsKuboProfileSyncRpc::local(fixture.base_url())
+        let rpc = fixture
+            .profile_sync_rpc()
             .expect("fixture Kubo profile sync RPC");
 
         assert_eq!(
@@ -2665,7 +2754,8 @@ mod tests {
             body: br#"{"Name":"profile-object","Hash":"bafybeigdyrztprofileobject","Size":"128"}"#
                 .to_vec(),
         });
-        let rpc = IpfsKuboProfileSyncRpc::local(fixture.base_url())
+        let rpc = fixture
+            .profile_sync_rpc()
             .expect("fixture Kubo profile sync RPC");
         let budget = ResourceBudget {
             max_profile_sync_object_bytes: 4,
@@ -2689,7 +2779,8 @@ mod tests {
             content_type: "application/json".to_string(),
             body: br#"{"Message":"add failed"}"#.to_vec(),
         });
-        let rpc = IpfsKuboProfileSyncRpc::local(fixture.base_url())
+        let rpc = fixture
+            .profile_sync_rpc()
             .expect("fixture Kubo profile sync RPC");
 
         assert!(matches!(
@@ -2711,7 +2802,8 @@ mod tests {
             content_type: "application/octet-stream".to_string(),
             body: b"encrypted slate-settings snapshot".to_vec(),
         });
-        let rpc = IpfsKuboProfileSyncRpc::local(fixture.base_url())
+        let rpc = fixture
+            .profile_sync_rpc()
             .expect("fixture Kubo profile sync RPC");
 
         assert_eq!(
@@ -2749,7 +2841,8 @@ mod tests {
                 body: br#"{"Pins":["bafybeigdyrztprofileobject"]}"#.to_vec(),
             },
         ]);
-        let rpc = IpfsKuboProfileSyncRpc::local(fixture.base_url())
+        let rpc = fixture
+            .profile_sync_rpc()
             .expect("fixture Kubo profile sync RPC");
 
         rpc.retain_object(
@@ -2791,7 +2884,8 @@ mod tests {
             content_type: "application/json".to_string(),
             body: br#"{"Keys":{}}"#.to_vec(),
         });
-        let rpc = IpfsKuboProfileSyncRpc::local(fixture.base_url())
+        let rpc = fixture
+            .profile_sync_rpc()
             .expect("fixture Kubo profile sync RPC");
 
         assert!(
@@ -2824,7 +2918,8 @@ mod tests {
                 body: br#"{"Path":"/ipfs/bafybeigdyrztprofileobject"}"#.to_vec(),
             },
         ]);
-        let rpc = IpfsKuboProfileSyncRpc::local(fixture.base_url())
+        let rpc = fixture
+            .profile_sync_rpc()
             .expect("fixture Kubo profile sync RPC");
 
         assert_eq!(
@@ -2864,7 +2959,8 @@ mod tests {
             body: br#"{"Name":"k51syncroot","Value":"/ipfs/bafybeigdyrztdifferentobject"}"#
                 .to_vec(),
         });
-        let rpc = IpfsKuboProfileSyncRpc::local(fixture.base_url())
+        let rpc = fixture
+            .profile_sync_rpc()
             .expect("fixture Kubo profile sync RPC");
 
         assert!(matches!(
@@ -3102,7 +3198,8 @@ mod tests {
         ]);
         let mut registry = PluginRegistry::new();
         registry.register_service(
-            ProfileSyncService::kubo_fixture(fixture.base_url(), "kubo-fixture-provider")
+            fixture
+                .profile_sync_service("kubo-fixture-provider")
                 .expect("Kubo fixture profile-sync service"),
         );
         let budget = ResourceBudget::default();
@@ -3419,7 +3516,8 @@ mod tests {
         ]);
         let mut registry = PluginRegistry::new();
         registry.register_service(
-            ProfileSyncService::kubo_fixture(fixture.base_url(), "kubo-fixture-provider")
+            fixture
+                .profile_sync_service("kubo-fixture-provider")
                 .expect("Kubo fixture profile-sync service"),
         );
         let budget = ResourceBudget::default();

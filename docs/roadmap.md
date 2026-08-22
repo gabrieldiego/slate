@@ -363,6 +363,11 @@ Current baseline:
   constructor. Production Kubo profile-sync uses the same request builders,
   response parsers, role checks, and resource budgets over HTTP; socketless
   tests swap only the executor with the internal transport shim.
+- The Kubo profile-sync service no longer contains a fixture transport enum or
+  a direct internal-shim branch. It stores an injected executor factory: runtime
+  construction supplies the reqwest HTTP executor, while
+  `InProcessBroadwebNetwork` supplies the socketless fixture executor from the
+  fixture layer after validating same-network synthetic endpoints.
 - The default broadwebd registry remains local-only, but callers can now opt in
   to a local Kubo HTTP profile-sync backend through an explicit registry
   constructor. That constructor replaces the fake profile-sync service, rejects
