@@ -277,6 +277,17 @@ impl SlateSyncSecret {
         ))
     }
 
+    pub fn derive_profile_sync_device_signer(
+        &self,
+        profile: &str,
+        device_id: &str,
+        membership_epoch: i64,
+    ) -> Result<ProfileSyncDeviceSigner, SyncObjectError> {
+        let signing_secret =
+            self.derive_profile_sync_manifest_signing_secret(profile, device_id, membership_epoch)?;
+        ProfileSyncDeviceSigner::from_manifest_signing_secret(device_id, &signing_secret)
+    }
+
     pub fn derive_profile_sync_mutable_root_secret(
         &self,
         profile: &str,
@@ -503,7 +514,13 @@ impl fmt::Debug for ProfileSyncContentKey {
 #[derive(Clone, Eq, PartialEq)]
 pub struct ProfileSyncDeviceSigner {
     device_id: String,
-    pkcs8: Vec<u8>,
+    key_material: ProfileSyncDeviceSigningKeyMaterial,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+enum ProfileSyncDeviceSigningKeyMaterial {
+    Pkcs8(Vec<u8>),
+    Seed([u8; PROFILE_SYNC_DERIVED_SECRET_BYTES]),
 }
 
 impl ProfileSyncDeviceSigner {
@@ -517,7 +534,7 @@ impl ProfileSyncDeviceSigner {
             .map_err(|_| SyncObjectError::Random)?;
         Ok(Self {
             device_id,
-            pkcs8: pkcs8.as_ref().to_vec(),
+            key_material: ProfileSyncDeviceSigningKeyMaterial::Pkcs8(pkcs8.as_ref().to_vec()),
         })
     }
 
@@ -531,7 +548,36 @@ impl ProfileSyncDeviceSigner {
         }
         let signer = Self {
             device_id,
-            pkcs8: pkcs8.into(),
+            key_material: ProfileSyncDeviceSigningKeyMaterial::Pkcs8(pkcs8.into()),
+        };
+        signer.key_pair()?;
+        Ok(signer)
+    }
+
+    pub fn from_manifest_signing_secret(
+        device_id: impl Into<String>,
+        signing_secret: &ProfileSyncDerivedSecret,
+    ) -> Result<Self, SyncObjectError> {
+        if signing_secret.purpose != ProfileSyncDerivedSecretPurpose::ManifestSigning {
+            return Err(SyncObjectError::UnexpectedDerivedSecretPurpose {
+                expected: ProfileSyncDerivedSecretPurpose::ManifestSigning,
+                actual: signing_secret.purpose,
+            });
+        }
+        Self::from_seed(device_id, signing_secret.bytes)
+    }
+
+    fn from_seed(
+        device_id: impl Into<String>,
+        seed: [u8; PROFILE_SYNC_DERIVED_SECRET_BYTES],
+    ) -> Result<Self, SyncObjectError> {
+        let device_id = device_id.into();
+        if !is_valid_sync_identifier(device_id.as_str()) {
+            return Err(SyncObjectError::InvalidDeviceId(device_id));
+        }
+        let signer = Self {
+            device_id,
+            key_material: ProfileSyncDeviceSigningKeyMaterial::Seed(seed),
         };
         signer.key_pair()?;
         Ok(signer)
@@ -560,8 +606,17 @@ impl ProfileSyncDeviceSigner {
     }
 
     fn key_pair(&self) -> Result<signature::Ed25519KeyPair, SyncObjectError> {
-        signature::Ed25519KeyPair::from_pkcs8(self.pkcs8.as_slice())
-            .map_err(|_| SyncObjectError::Key)
+        match &self.key_material {
+            ProfileSyncDeviceSigningKeyMaterial::Pkcs8(pkcs8) => {
+                signature::Ed25519KeyPair::from_pkcs8(pkcs8.as_slice())
+                    .map_err(|_| SyncObjectError::Key)
+            }
+            ProfileSyncDeviceSigningKeyMaterial::Seed(seed) => {
+                // The seed is HKDF-derived for this profile/device/epoch and fixed-size by type.
+                signature::Ed25519KeyPair::from_seed_unchecked(seed.as_slice())
+                    .map_err(|_| SyncObjectError::Key)
+            }
+        }
     }
 }
 
@@ -570,7 +625,7 @@ impl fmt::Debug for ProfileSyncDeviceSigner {
         formatter
             .debug_struct("ProfileSyncDeviceSigner")
             .field("device_id", &self.device_id)
-            .field("pkcs8", &"<redacted>")
+            .field("key_material", &"<redacted>")
             .finish()
     }
 }
@@ -831,6 +886,10 @@ pub enum SyncObjectError {
         expected: String,
         actual: String,
     },
+    UnexpectedDerivedSecretPurpose {
+        expected: ProfileSyncDerivedSecretPurpose,
+        actual: ProfileSyncDerivedSecretPurpose,
+    },
     UnexpectedRootId {
         expected: String,
         actual: String,
@@ -898,6 +957,10 @@ impl fmt::Display for SyncObjectError {
                 formatter,
                 "unexpected sync object key id: expected {expected}, got {actual}"
             ),
+            Self::UnexpectedDerivedSecretPurpose { expected, actual } => write!(
+                formatter,
+                "unexpected profile sync derived secret purpose: expected {expected:?}, got {actual:?}"
+            ),
             Self::UnexpectedRootId { expected, actual } => write!(
                 formatter,
                 "unexpected sync object root id: expected {expected}, got {actual}"
@@ -944,6 +1007,7 @@ impl std::error::Error for SyncObjectError {
             | Self::UnexpectedDomain { .. }
             | Self::UnexpectedObjectKind { .. }
             | Self::UnexpectedKeyId { .. }
+            | Self::UnexpectedDerivedSecretPurpose { .. }
             | Self::UnexpectedRootId { .. }
             | Self::UnexpectedDeviceFrontier { .. }
             | Self::UnexpectedDeviceHeadManifestEpoch { .. } => None,
@@ -11494,6 +11558,50 @@ mod tests {
         assert!(matches!(
             secret.derive_profile_sync_enrollment_secret(DEFAULT_PROFILE_ID, "", 1),
             Err(SyncObjectError::InvalidDeviceId(device_id)) if device_id.is_empty()
+        ));
+    }
+
+    #[test]
+    fn slate_sync_secret_derives_stable_profile_device_signers() {
+        let secret = SlateSyncSecret::from_bytes([46; SLATE_SYNC_SECRET_BYTES]);
+        let signer = secret
+            .derive_profile_sync_device_signer(DEFAULT_PROFILE_ID, "device-a", 1)
+            .unwrap();
+        let repeated_signer = secret
+            .derive_profile_sync_device_signer(DEFAULT_PROFILE_ID, "device-a", 1)
+            .unwrap();
+        let other_device_signer = secret
+            .derive_profile_sync_device_signer(DEFAULT_PROFILE_ID, "device-b", 1)
+            .unwrap();
+        let other_epoch_signer = secret
+            .derive_profile_sync_device_signer(DEFAULT_PROFILE_ID, "device-a", 2)
+            .unwrap();
+
+        let public_key = signer.public_key().unwrap();
+        assert_eq!(signer.device_id(), "device-a");
+        assert_eq!(public_key, repeated_signer.public_key().unwrap());
+        assert_ne!(public_key, other_device_signer.public_key().unwrap());
+        assert_ne!(public_key, other_epoch_signer.public_key().unwrap());
+
+        let payload = b"local settings handoff preview";
+        let signed = signer.sign(payload).unwrap();
+        let repeated_signed = repeated_signer.sign(payload).unwrap();
+        assert_eq!(signed, repeated_signed);
+        assert_eq!(signed.verify_with(&public_key).unwrap(), payload);
+
+        let debug = format!("{signer:?}");
+        assert!(debug.contains("device-a"));
+        assert!(debug.contains("<redacted>"));
+        assert!(!debug.contains("46"));
+
+        let recovery_secret = secret
+            .derive_profile_sync_account_recovery_secret(DEFAULT_PROFILE_ID)
+            .unwrap();
+        assert!(matches!(
+            ProfileSyncDeviceSigner::from_manifest_signing_secret("device-a", &recovery_secret),
+            Err(SyncObjectError::UnexpectedDerivedSecretPurpose { expected, actual })
+                if expected == ProfileSyncDerivedSecretPurpose::ManifestSigning
+                    && actual == ProfileSyncDerivedSecretPurpose::AccountRecovery
         ));
     }
 

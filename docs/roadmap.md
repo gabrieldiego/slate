@@ -1306,6 +1306,11 @@ Current baseline:
   publishing, enrollment, device bootstrap, and content-key epoch material.
   The derived material is purpose-typed and debug-redacted; user-facing QR/file
   transport and runtime backend policy are still future work.
+- `SlateSyncSecret` can now derive stable profile device signers for signed
+  profile-state objects from the same manifest-signing material, without
+  storing signer private keys in `slate-settings.db`. This gives the upcoming
+  encrypted handoff-file and local-only provider paths a persistent signing
+  identity tied to the key file instead of temporary generated signers.
 - `SlateSyncSecretExport` now provides the first local JSON envelope for future
   QR-code or file-based device login. It carries profile id, schema version,
   URL-safe base64 root-secret bytes, and creation time; import validates the
@@ -1335,13 +1340,13 @@ Current baseline:
   for the sync work. It runs focused rail-app sync-domain checks, verifies that
   visible rail app sync descriptors match the seeded `slate-settings.db`
   storage domain table, checks Slate Sync Secret domain separation, export
-  round-trip behavior, profile-bound import, and non-secret local activation
-  metadata, then covers local readiness reports, preview provider activation,
-  storage/provider metadata, typed app-domain cursors, the broadwebd app-domain
-  fixture, and the profile-sync scheduler fixture through the build-limits
-  wrapper. Chrome settings watcher coverage is opt-in because compiling
-  `slate-chrome` currently pulls Servo script bindings and exceeded the 2 GiB
-  low-memory profile during verification.
+  round-trip behavior, stable signer derivation, profile-bound import, and
+  non-secret local activation metadata, then covers local readiness reports,
+  preview provider activation, storage/provider metadata, typed app-domain
+  cursors, the broadwebd app-domain fixture, and the profile-sync scheduler
+  fixture through the build-limits wrapper. Chrome settings watcher coverage is
+  opt-in because compiling `slate-chrome` currently pulls Servo script bindings
+  and exceeded the 2 GiB low-memory profile during verification.
 
 Next:
 
