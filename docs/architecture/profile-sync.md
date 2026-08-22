@@ -825,11 +825,13 @@ can be used for retention. Endpoint mismatches are tracked separately from
 missing handles and excluded from quorum, so runtime code cannot satisfy a
 stored provider selection with the wrong local fixture or future protocol
 endpoint. The stored-provider plan also classifies endpoint references before
-runtime materialization: `fixture:<provider-id>` is treated as an in-process
-fixture endpoint only when it matches the stored provider id, multiaddr-like
-and deferred protocol references are reported separately, and ordinary
-`http://`, `https://`, `localhost`, or stale fixture-shaped references are
-reported as unsupported. This keeps test fixtures from drifting back to
+runtime materialization: `InProcessBroadwebNetwork` mints
+`slate-fixture-profile-sync://<network>/<provider>` endpoint refs for
+socketless profile-sync tests, and those refs are treated as in-process fixture
+endpoints only when the provider component matches the stored provider id.
+Multiaddr-like and deferred protocol references are reported separately, and
+ordinary `http://`, `https://`, `localhost`, or stale fixture-shaped references
+are reported as unsupported. This keeps test fixtures from drifting back to
 loopback listeners or DNS-backed URLs before any daemon startup code runs.
 Stored-provider runtime ticks exclude unsupported endpoint refs from
 materialized provider quorum even when the caller supplies a daemon handle with

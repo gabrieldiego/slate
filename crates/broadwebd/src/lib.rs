@@ -158,13 +158,42 @@ pub mod test_fixtures {
     /// In-process broadweb network fixture.
     ///
     /// Endpoints returned by this fixture use Slate-only synthetic URL schemes
-    /// such as `slate-fixture-http://` and `slate-fixture-kubo://`. They are
+    /// such as `slate-fixture-http://`, `slate-fixture-kubo://`, and
+    /// `slate-fixture-profile-sync://`. They are
     /// resolved through process-local registries and never bind loopback
     /// sockets, start listeners, or contact external networks.
     #[derive(Clone, Debug)]
     pub struct InProcessBroadwebNetwork {
         network_id: String,
         profile_sync: LocalProfileSyncFixture,
+    }
+
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    pub struct InProcessProfileSyncProviderEndpoint {
+        provider_id: String,
+        endpoint_ref: String,
+    }
+
+    impl InProcessProfileSyncProviderEndpoint {
+        fn new(network_id: &str, provider_id: impl Into<String>) -> Self {
+            let provider_id = provider_id.into();
+            Self {
+                endpoint_ref: format!("slate-fixture-profile-sync://{network_id}/{provider_id}"),
+                provider_id,
+            }
+        }
+
+        pub fn provider_id(&self) -> &str {
+            self.provider_id.as_str()
+        }
+
+        pub fn endpoint_ref(&self) -> &str {
+            self.endpoint_ref.as_str()
+        }
+
+        pub fn into_endpoint_ref(self) -> String {
+            self.endpoint_ref
+        }
     }
 
     impl Default for InProcessBroadwebNetwork {
@@ -192,6 +221,18 @@ pub mod test_fixtures {
 
         pub fn network_id(&self) -> &str {
             self.network_id.as_str()
+        }
+
+        pub fn profile_sync_provider_endpoint(
+            &self,
+            provider_id: impl Into<String>,
+        ) -> InProcessProfileSyncProviderEndpoint {
+            InProcessProfileSyncProviderEndpoint::new(self.network_id.as_str(), provider_id)
+        }
+
+        pub fn profile_sync_provider_endpoint_ref(&self, provider_id: impl Into<String>) -> String {
+            self.profile_sync_provider_endpoint(provider_id)
+                .into_endpoint_ref()
         }
 
         pub fn registry_for_device(&self, device_id: impl AsRef<str>) -> PluginRegistry {
@@ -2302,6 +2343,15 @@ mod tests {
             in_process_kubo_rpc_fixture("text/plain", "synthetic Kubo fixture");
         assert!(kubo_url.starts_with("slate-fixture-kubo://"));
         kubo_fixture.finish();
+
+        let network = InProcessBroadwebNetwork::new();
+        let profile_sync_endpoint = network.profile_sync_provider_endpoint("provider-a");
+        assert_eq!(profile_sync_endpoint.provider_id(), "provider-a");
+        assert!(
+            profile_sync_endpoint
+                .endpoint_ref()
+                .starts_with("slate-fixture-profile-sync://")
+        );
     }
 
     fn status_code(status: &str) -> u16 {

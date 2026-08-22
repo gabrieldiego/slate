@@ -40,6 +40,7 @@ use std::collections::BTreeSet;
 pub const PROFILE_SYNC_MEMBERSHIP_LOG_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID: &str = "account/membership/log";
 pub const PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS: usize = 512;
+const IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX: &str = "slate-fixture-profile-sync://";
 
 #[derive(Clone, Copy)]
 pub struct BroadwebdProfileSyncObjectSource<'a> {
@@ -2083,6 +2084,16 @@ fn classify_stored_provider_endpoint(
         return SettingsSyncStoredProviderEndpointStatus::Missing;
     };
 
+    if endpoint_ref.starts_with(IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX) {
+        return if in_process_profile_sync_fixture_endpoint_matches_provider(
+            provider_id,
+            endpoint_ref,
+        ) {
+            SettingsSyncStoredProviderEndpointStatus::InProcessFixture
+        } else {
+            SettingsSyncStoredProviderEndpointStatus::Unsupported
+        };
+    }
     if endpoint_ref.strip_prefix("fixture:") == Some(provider_id) {
         return SettingsSyncStoredProviderEndpointStatus::InProcessFixture;
     }
@@ -2097,6 +2108,23 @@ fn classify_stored_provider_endpoint(
     }
 
     SettingsSyncStoredProviderEndpointStatus::Unsupported
+}
+
+fn in_process_profile_sync_fixture_endpoint_matches_provider(
+    provider_id: &str,
+    endpoint_ref: &str,
+) -> bool {
+    let Some(endpoint) = endpoint_ref.strip_prefix(IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX)
+    else {
+        return false;
+    };
+    let Some((network_id, endpoint_provider_id)) = endpoint.split_once('/') else {
+        return false;
+    };
+
+    is_endpoint_token(network_id)
+        && is_endpoint_token(endpoint_provider_id)
+        && endpoint_provider_id == provider_id
 }
 
 fn is_deferred_protocol_endpoint(endpoint_ref: &str) -> bool {
@@ -4969,6 +4997,7 @@ mod tests {
     }
 
     fn test_storage_provider_update(
+        network: &InProcessBroadwebNetwork,
         profile: &str,
         provider_id: &str,
         provider_kind: &str,
@@ -4982,7 +5011,7 @@ mod tests {
             provider_id: provider_id.to_string(),
             provider_kind: provider_kind.to_string(),
             display_name: display_name.to_string(),
-            endpoint_ref: Some(format!("fixture:{provider_id}")),
+            endpoint_ref: Some(network.profile_sync_provider_endpoint_ref(provider_id)),
             discovery: false,
             connectivity: true,
             object_transfer,
@@ -4997,6 +5026,20 @@ mod tests {
 
     #[test]
     fn stored_provider_endpoint_classification_keeps_fixtures_socketless() {
+        assert_eq!(
+            super::classify_stored_provider_endpoint(
+                "provider-a",
+                Some("slate-fixture-profile-sync://network-1/provider-a")
+            ),
+            SettingsSyncStoredProviderEndpointStatus::InProcessFixture
+        );
+        assert_eq!(
+            super::classify_stored_provider_endpoint(
+                "provider-a",
+                Some("slate-fixture-profile-sync://network-1/provider-b")
+            ),
+            SettingsSyncStoredProviderEndpointStatus::Unsupported
+        );
         assert_eq!(
             super::classify_stored_provider_endpoint("provider-a", Some("fixture:provider-a")),
             SettingsSyncStoredProviderEndpointStatus::InProcessFixture
@@ -5951,11 +5994,13 @@ mod tests {
             .expect("publisher publishes stored membership and settings state");
 
         let selected_provider_id = "local-fixture-availability-membership-stored-scheduler-pinner";
-        let selected_provider_endpoint_ref = format!("fixture:{selected_provider_id}");
+        let selected_provider_endpoint_ref =
+            network.profile_sync_provider_endpoint_ref(selected_provider_id);
         let unmaterialized_provider_id =
             "local-fixture-availability-membership-stored-scheduler-extra";
         for provider in [
             test_storage_provider_update(
+                &network,
                 DEFAULT_PROFILE_ID,
                 selected_provider_id,
                 "local-fixture-availability",
@@ -5965,6 +6010,7 @@ mod tests {
                 true,
             ),
             test_storage_provider_update(
+                &network,
                 DEFAULT_PROFILE_ID,
                 unmaterialized_provider_id,
                 "local-fixture-availability",
@@ -9470,6 +9516,7 @@ mod tests {
             .expect("register scheduler stored-provider local trusted public key");
         for provider in [
             test_storage_provider_update(
+                &network,
                 profile,
                 selected_provider_id,
                 "local-fixture-availability",
@@ -9479,6 +9526,7 @@ mod tests {
                 true,
             ),
             test_storage_provider_update(
+                &network,
                 profile,
                 stale_provider_id,
                 "local-fixture-availability",
@@ -9488,6 +9536,7 @@ mod tests {
                 true,
             ),
             test_storage_provider_update(
+                &network,
                 profile,
                 offline_provider_id,
                 "local-fixture-availability",
@@ -9497,6 +9546,7 @@ mod tests {
                 true,
             ),
             test_storage_provider_update(
+                &network,
                 profile,
                 no_transfer_provider_id,
                 "local-fixture-custom",
@@ -9506,6 +9556,7 @@ mod tests {
                 true,
             ),
             test_storage_provider_update(
+                &network,
                 profile,
                 "stored-provider-no-local-retention-role",
                 "local-fixture",
@@ -9515,6 +9566,7 @@ mod tests {
                 true,
             ),
             test_storage_provider_update(
+                &network,
                 profile,
                 "stored-provider-disabled",
                 "local-fixture",
@@ -9524,6 +9576,7 @@ mod tests {
                 false,
             ),
             test_storage_provider_update(
+                &network,
                 profile,
                 "stored-provider-undiscovered",
                 "local-fixture-availability",
@@ -9676,11 +9729,13 @@ mod tests {
             .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
             .expect("write scheduler stored-run local setting");
         let selected_provider_id = "local-fixture-availability-runtime-scheduler-stored-run-pinner";
-        let selected_provider_endpoint_ref = format!("fixture:{selected_provider_id}");
+        let selected_provider_endpoint_ref =
+            network.profile_sync_provider_endpoint_ref(selected_provider_id);
         let unmaterialized_provider_id =
             "local-fixture-availability-runtime-scheduler-stored-run-extra";
         for provider in [
             test_storage_provider_update(
+                &network,
                 profile,
                 selected_provider_id,
                 "local-fixture-availability",
@@ -9690,6 +9745,7 @@ mod tests {
                 true,
             ),
             test_storage_provider_update(
+                &network,
                 profile,
                 unmaterialized_provider_id,
                 "local-fixture-availability",
@@ -9744,10 +9800,12 @@ mod tests {
                 .is_empty()
         );
 
+        let endpoint_mismatch_ref =
+            network.profile_sync_provider_endpoint_ref("wrong-stored-provider");
         let endpoint_mismatch_provider_handles =
             [SettingsSyncRetentionProviderHandle::with_endpoint_ref(
                 selected_provider_id,
-                "fixture:wrong-stored-provider",
+                endpoint_mismatch_ref.as_str(),
                 &provider_daemon,
             )];
         let config = SettingsSyncSchedulerConfig::new(
@@ -9904,9 +9962,11 @@ mod tests {
             "local-fixture-availability-runtime-scheduler-stored-unsupported-valid";
         let unsupported_provider_id =
             "local-fixture-availability-runtime-scheduler-stored-unsupported-loopback";
-        let valid_provider_endpoint_ref = format!("fixture:{valid_provider_id}");
+        let valid_provider_endpoint_ref =
+            network.profile_sync_provider_endpoint_ref(valid_provider_id);
         let unsupported_endpoint_ref = "http://127.0.0.1:5001";
         let mut unsupported_provider = test_storage_provider_update(
+            &network,
             profile,
             unsupported_provider_id,
             "local-fixture-availability",
@@ -9918,6 +9978,7 @@ mod tests {
         unsupported_provider.endpoint_ref = Some(unsupported_endpoint_ref.to_string());
         for provider in [
             test_storage_provider_update(
+                &network,
                 profile,
                 valid_provider_id,
                 "local-fixture-availability",
