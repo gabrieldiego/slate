@@ -2793,6 +2793,26 @@ impl SettingsSyncStoredRetentionProviderPlan {
         materializer.materialize_protocol_providers(&self.selected_protocol_materialization_plan())
     }
 
+    pub fn selected_protocol_provider_materialization_preview<'a, Materializer>(
+        &self,
+        materializer: &Materializer,
+    ) -> SettingsSyncStoredProtocolProviderMaterializationPreview
+    where
+        Materializer: SettingsSyncProtocolProviderMaterializer<'a>,
+    {
+        let protocol_materialization =
+            self.materialize_selected_protocol_retention_provider_handles(materializer);
+        let retention_provider_handles = protocol_materialization.retention_provider_handles();
+        let handle_materialization = self.selected_retention_provider_handle_materialization(
+            retention_provider_handles.as_slice(),
+        );
+
+        SettingsSyncStoredProtocolProviderMaterializationPreview {
+            protocol_materialization: protocol_materialization.report(),
+            handle_materialization,
+        }
+    }
+
     pub fn selected_retention_provider_handle_materialization(
         &self,
         retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'_>],
@@ -2893,6 +2913,60 @@ impl SettingsSyncStoredInProcessFixtureRetentionProviderRun<'_> {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncStoredProtocolProviderMaterializationPreview {
+    pub protocol_materialization: SettingsSyncProtocolProviderMaterializationReport,
+    pub handle_materialization: SettingsSyncStoredRetentionProviderHandleMaterialization,
+}
+
+impl SettingsSyncStoredProtocolProviderMaterializationPreview {
+    pub fn protocol_materialized_provider_count(&self) -> usize {
+        self.protocol_materialization
+            .materialized_provider_ids
+            .len()
+    }
+
+    pub fn materialized_retention_provider_count(&self) -> usize {
+        self.handle_materialization
+            .materialized_retention_provider_count()
+    }
+
+    pub fn blocked_retention_provider_count(&self) -> usize {
+        self.handle_materialization
+            .blocked_retention_provider_count()
+    }
+
+    pub fn all_selected_providers_materialized(&self) -> bool {
+        self.handle_materialization
+            .all_selected_providers_materialized()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncStoredProtocolProviderRetentionProviderPlan {
+    pub stored_provider_plan: SettingsSyncStoredRetentionProviderPlan,
+    pub materialization_preview: SettingsSyncStoredProtocolProviderMaterializationPreview,
+}
+
+impl SettingsSyncStoredProtocolProviderRetentionProviderPlan {
+    pub fn selected_protocol_materialization_plan(
+        &self,
+    ) -> SettingsSyncSelectedProtocolMaterializationPlan {
+        self.stored_provider_plan
+            .selected_protocol_materialization_plan()
+    }
+
+    pub fn selected_retention_provider_count(&self) -> usize {
+        self.stored_provider_plan
+            .selected_retention_provider_count()
+    }
+
+    pub fn materialized_retention_provider_count(&self) -> usize {
+        self.materialization_preview
+            .materialized_retention_provider_count()
+    }
+}
+
 pub struct SettingsSyncStoredProtocolProviderRetentionProviderRun<'a> {
     pub protocol_materialization: SettingsSyncProtocolProviderMaterialization<'a>,
     pub run: SettingsSyncStoredRetentionProviderRun,
@@ -2938,6 +3012,17 @@ impl SettingsSyncStoredRetentionProviderMembershipPlan {
         &self,
     ) -> SettingsSyncSelectedProtocolMaterializationPlan {
         self.cycle.selected_protocol_materialization_plan()
+    }
+
+    pub fn selected_protocol_provider_materialization_preview<'a, Materializer>(
+        &self,
+        materializer: &Materializer,
+    ) -> SettingsSyncStoredProtocolProviderMaterializationPreview
+    where
+        Materializer: SettingsSyncProtocolProviderMaterializer<'a>,
+    {
+        self.cycle
+            .selected_protocol_provider_materialization_preview(materializer)
     }
 
     pub fn unpublishable_membership_log(&self) -> bool {
@@ -4744,6 +4829,38 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             max_stored_providers,
             stored_selection,
         ))
+    }
+
+    pub fn plan_once_with_stored_protocol_materializer_retention_provider_handles<
+        'provider,
+        Materializer,
+    >(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        signer: &ProfileSyncDeviceSigner,
+        max_stored_providers: u32,
+        materializer: &Materializer,
+    ) -> Result<
+        SettingsSyncStoredProtocolProviderRetentionProviderPlan,
+        ProfileSyncCycleWithHealthError,
+    >
+    where
+        Materializer: SettingsSyncProtocolProviderMaterializer<'provider>,
+    {
+        let stored_provider_plan = self.plan_once_with_stored_retention_providers(
+            database,
+            config,
+            signer,
+            max_stored_providers,
+        )?;
+        let materialization_preview =
+            stored_provider_plan.selected_protocol_provider_materialization_preview(materializer);
+
+        Ok(SettingsSyncStoredProtocolProviderRetentionProviderPlan {
+            stored_provider_plan,
+            materialization_preview,
+        })
     }
 
     pub fn plan_membership_log(
@@ -9190,7 +9307,72 @@ mod tests {
                 &provider_daemon,
             )],
         );
-        let run = BroadwebdSettingsSyncScheduler::new(&device_daemon)
+        let scheduler = BroadwebdSettingsSyncScheduler::new(&device_daemon);
+        let latest_revision_before_preview = database
+            .latest_sync_revision(DEFAULT_PROFILE_ID)
+            .expect("read membership protocol preview latest revision");
+        let roots_before_preview = database
+            .profile_sync_roots(DEFAULT_PROFILE_ID)
+            .expect("read roots before membership protocol preview");
+        let membership_plan = scheduler
+            .plan_once_with_membership_log_and_stored_retention_providers(
+                &database,
+                &config,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                &signer,
+                4,
+            )
+            .expect("membership stored protocol plan succeeds");
+        assert_eq!(
+            membership_plan.membership_log_publication.status,
+            ProfileSyncMembershipLogPublicationPlanStatus::Publishable
+        );
+        assert_eq!(membership_plan.selected_retention_provider_count(), 1);
+        let materialization_preview =
+            membership_plan.selected_protocol_provider_materialization_preview(&materializer);
+        assert_eq!(
+            materialization_preview.protocol_materialization,
+            super::SettingsSyncProtocolProviderMaterializationReport {
+                materialized_provider_ids: vec![provider_id.to_string()],
+                missing_provider_ids: Vec::new(),
+                endpoint_mismatch_provider_ids: Vec::new(),
+                duplicate_provider_ids: Vec::new(),
+                unsupported_provider_ids: Vec::new(),
+            }
+        );
+        assert!(materialization_preview.all_selected_providers_materialized());
+        assert_eq!(
+            materialization_preview.protocol_materialized_provider_count(),
+            1
+        );
+        assert_eq!(
+            materialization_preview.materialized_retention_provider_count(),
+            1
+        );
+        assert_eq!(
+            membership_plan
+                .selected_protocol_materialization_plan()
+                .multiaddr_requests,
+            vec![super::SettingsSyncSelectedMultiaddrMaterializationRequest {
+                provider_id: provider_id.to_string(),
+                endpoint: slate_routing::Multiaddr::parse(provider_endpoint)
+                    .expect("preview membership stored provider multiaddr"),
+            }]
+        );
+        assert_eq!(
+            database
+                .latest_sync_revision(DEFAULT_PROFILE_ID)
+                .expect("read latest revision after membership protocol preview"),
+            latest_revision_before_preview
+        );
+        assert_eq!(
+            database
+                .profile_sync_roots(DEFAULT_PROFILE_ID)
+                .expect("read roots after membership protocol preview"),
+            roots_before_preview
+        );
+
+        let run = scheduler
             .run_once_with_membership_log_and_stored_protocol_materializer_retention_provider_handles(
                 &database,
                 &config,
@@ -15945,7 +16127,72 @@ mod tests {
                 &provider_daemon,
             )],
         );
-        let run = BroadwebdSettingsSyncScheduler::new(&device_daemon)
+        let scheduler = BroadwebdSettingsSyncScheduler::new(&device_daemon);
+        let latest_revision_before_preview = database
+            .latest_sync_revision(profile)
+            .expect("read protocol preview latest revision");
+        assert!(
+            database
+                .profile_sync_roots(profile)
+                .expect("read roots before protocol materializer preview")
+                .is_empty()
+        );
+        let preview = scheduler
+            .plan_once_with_stored_protocol_materializer_retention_provider_handles(
+                &database,
+                &config,
+                &signer,
+                4,
+                &materializer,
+            )
+            .expect("stored protocol materializer preview succeeds");
+        assert_eq!(preview.selected_retention_provider_count(), 1);
+        assert_eq!(preview.materialized_retention_provider_count(), 1);
+        assert_eq!(
+            preview.materialization_preview.protocol_materialization,
+            super::SettingsSyncProtocolProviderMaterializationReport {
+                materialized_provider_ids: vec![provider_id.to_string()],
+                missing_provider_ids: Vec::new(),
+                endpoint_mismatch_provider_ids: Vec::new(),
+                duplicate_provider_ids: Vec::new(),
+                unsupported_provider_ids: Vec::new(),
+            }
+        );
+        assert!(
+            preview
+                .materialization_preview
+                .all_selected_providers_materialized()
+        );
+        assert_eq!(
+            preview
+                .materialization_preview
+                .protocol_materialized_provider_count(),
+            1
+        );
+        assert_eq!(
+            preview
+                .selected_protocol_materialization_plan()
+                .multiaddr_requests,
+            vec![super::SettingsSyncSelectedMultiaddrMaterializationRequest {
+                provider_id: provider_id.to_string(),
+                endpoint: slate_routing::Multiaddr::parse(provider_endpoint)
+                    .expect("preview stored protocol provider multiaddr"),
+            }]
+        );
+        assert_eq!(
+            database
+                .latest_sync_revision(profile)
+                .expect("read latest revision after protocol materializer preview"),
+            latest_revision_before_preview
+        );
+        assert!(
+            database
+                .profile_sync_roots(profile)
+                .expect("read roots after protocol materializer preview")
+                .is_empty()
+        );
+
+        let run = scheduler
             .run_once_with_stored_protocol_materializer_retention_provider_handles(
                 &database,
                 &config,

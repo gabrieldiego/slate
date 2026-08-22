@@ -614,6 +614,11 @@ Current baseline:
   stored with a multiaddr endpoint can be materialized through the socketless
   boundary, then retain both settings and membership-log publications without
   opening loopback sockets or contacting live protocol networks.
+- Stored-provider plans now also expose read-only protocol materialization
+  previews. Scheduler/UI callers can ask a socketless or future real
+  materializer which selected providers would become retention handles, compare
+  that against the normal stored-provider handle materialization report, and
+  prove the preview leaves revisions and profile-sync roots unchanged.
 - The selected endpoint materialization plan now exposes a combined protocol
   materialization summary that groups multiaddr work, deferred-protocol work,
   missing endpoints, and fail-closed endpoints. Scheduler/UI code can tell
