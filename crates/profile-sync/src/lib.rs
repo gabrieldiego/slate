@@ -26,11 +26,12 @@ use slate_storage::{
     ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner, ProfileSyncManifest,
     ProfileSyncMembershipRecord, ProfileSyncObjectBytes, ProfileSyncObjectSource,
     ProfileSyncRetentionPolicy, ProfileSyncRootCandidate as StorageProfileSyncRootCandidate,
-    ProfileSyncRootRecord, ProfileSyncSettingsCandidatePullApplyStatus,
-    ProfileSyncSettingsManifestApplication, ProfileSyncSettingsSnapshot,
-    ProfileSyncSettingsSnapshotPublication, ProfileSyncSettingsTailChangePublication,
-    ProfileSyncTrustedPullApplyError, SYNC_DOMAIN_SETTINGS, SignedSyncObject, SlateProfileDatabase,
-    StorageError, StorageProviderRecord, SyncAccountMembershipRecordApplication, SyncChangeRecord,
+    ProfileSyncRootRecord, ProfileSyncRootRegistration,
+    ProfileSyncSettingsCandidatePullApplyStatus, ProfileSyncSettingsManifestApplication,
+    ProfileSyncSettingsSnapshot, ProfileSyncSettingsSnapshotPublication,
+    ProfileSyncSettingsTailChangePublication, ProfileSyncTrustedPullApplyError,
+    SYNC_DOMAIN_SETTINGS, SignedSyncObject, SlateProfileDatabase, StorageError,
+    StorageProviderRecord, SyncAccountMembershipRecordApplication, SyncChangeRecord,
     SyncCompactionTarget, SyncDevicePublicKeyRecord, SyncObjectError, SyncSettingTextEvent,
     SyncSnapshotRecord, SyncSnapshotRegistration, VerifiedProfileSyncDeviceHead,
     open_signed_profile_sync_device_head, settings_sync_manifest_for_snapshot_and_tail_changes,
@@ -4728,19 +4729,6 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
             signer,
             retention_policy,
         )?;
-        let snapshot_record = database.record_sync_snapshot(&SyncSnapshotRegistration {
-            profile: profile.to_string(),
-            snapshot_id: settings_sync_snapshot_id(covers_revision),
-            backend_object_id: Some(publication.snapshot_object_id.clone()),
-            covers_revision,
-            included_domains: snapshot.included_domains,
-        })?;
-        let settings_root = database.set_profile_sync_root(
-            profile,
-            settings_root_id,
-            publication.manifest_object_id.as_str(),
-        )?;
-
         let device_head_root_id = settings_device_head_root_id(database.local_sync_device_id());
         let device_head = ProfileSyncDeviceHead {
             profile: profile.to_string(),
@@ -4762,11 +4750,41 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
             key_id,
             signer,
         )?;
-        let device_head_root = database.set_profile_sync_root(
-            profile,
-            device_head.root_id.as_str(),
-            device_head.object_id.as_str(),
-        )?;
+        let snapshot_registration = SyncSnapshotRegistration {
+            profile: profile.to_string(),
+            snapshot_id: settings_sync_snapshot_id(covers_revision),
+            backend_object_id: Some(publication.snapshot_object_id.clone()),
+            covers_revision,
+            included_domains: snapshot.included_domains,
+        };
+        let root_registrations = [
+            ProfileSyncRootRegistration {
+                profile: profile.to_string(),
+                root_id: settings_root_id.to_string(),
+                object_id: publication.manifest_object_id.clone(),
+            },
+            ProfileSyncRootRegistration {
+                profile: profile.to_string(),
+                root_id: device_head.root_id.clone(),
+                object_id: device_head.object_id.clone(),
+            },
+        ];
+        let (snapshot_record, mut root_records) = database
+            .record_sync_snapshot_and_set_profile_sync_roots(
+                &snapshot_registration,
+                &root_registrations,
+            )?;
+        let mut roots = root_records.drain(..);
+        let settings_root = roots.next().ok_or_else(|| {
+            StorageError::InvalidProfileSyncManifest(
+                "published full snapshot did not record settings root".to_string(),
+            )
+        })?;
+        let device_head_root = roots.next().ok_or_else(|| {
+            StorageError::InvalidProfileSyncManifest(
+                "published full snapshot did not record device-head root".to_string(),
+            )
+        })?;
 
         Ok(Some(PublishedLocalSettingsSnapshotHead {
             publication,
@@ -4836,11 +4854,6 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
             signer,
             retention_policy,
         )?;
-        let settings_root = database.set_profile_sync_root(
-            profile,
-            settings_root_id,
-            publication.manifest_object_id.as_str(),
-        )?;
         let device_head_frontier = publication
             .manifest
             .device_frontiers
@@ -4874,11 +4887,30 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
             key_id,
             signer,
         )?;
-        let device_head_root = database.set_profile_sync_root(
-            profile,
-            device_head.root_id.as_str(),
-            device_head.object_id.as_str(),
-        )?;
+        let root_registrations = [
+            ProfileSyncRootRegistration {
+                profile: profile.to_string(),
+                root_id: settings_root_id.to_string(),
+                object_id: publication.manifest_object_id.clone(),
+            },
+            ProfileSyncRootRegistration {
+                profile: profile.to_string(),
+                root_id: device_head.root_id.clone(),
+                object_id: device_head.object_id.clone(),
+            },
+        ];
+        let mut root_records = database.set_profile_sync_roots(&root_registrations)?;
+        let mut roots = root_records.drain(..);
+        let settings_root = roots.next().ok_or_else(|| {
+            StorageError::InvalidProfileSyncManifest(
+                "published settings tail did not record settings root".to_string(),
+            )
+        })?;
+        let device_head_root = roots.next().ok_or_else(|| {
+            StorageError::InvalidProfileSyncManifest(
+                "published settings tail did not record device-head root".to_string(),
+            )
+        })?;
 
         Ok(Some(PublishedLocalSettingsTailHead {
             publication,

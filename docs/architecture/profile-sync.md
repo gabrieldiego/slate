@@ -655,7 +655,8 @@ manifest, apply that manifest with the per-device head root in one
 unchanged status only when both roots are already current.
 The first composed local publish helper emits a complete settings snapshot,
 publishes the snapshot manifest, publishes the local per-device head pointing at
-that manifest, and records both published roots locally. This favors a complete
+that manifest, then records the snapshot backend metadata plus both published
+roots in one local `slate-settings.db` transaction. This favors a complete
 handoff for new trusted devices before the later incremental publish loop trims
 tails and reuses retained snapshots.
 The next publish helper reuses the latest retained local
@@ -663,9 +664,10 @@ The next publish helper reuses the latest retained local
 snapshot. It rebuilds the covered snapshot payload from storage for validation,
 retains the existing backend object, publishes only the post-snapshot tail
 changes, moves the settings mutable root to the new manifest, publishes a fresh
-local device head, and records both roots locally. Tests run the handoff between
-two simulated devices through `InProcessBroadwebNetwork`, so this path does not
-bind loopback sockets or rely on external IPFS/IPNS, Tor, DNS, or relay
+local device head, and records both roots in one local transaction. Tests run
+the handoff between two simulated devices through `InProcessBroadwebNetwork`,
+so this path does not bind loopback sockets or rely on external IPFS/IPNS, Tor,
+DNS, or relay
 services.
 The scheduler-facing local publish entry point now chooses between that
 incremental tail path, the full-snapshot bootstrap path, and explicit no-op

@@ -2403,6 +2403,13 @@ pub struct ProfileSyncRootRecord {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncRootRegistration {
+    pub profile: String,
+    pub root_id: String,
+    pub object_id: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ProfileSyncSettingsPullApplyStatus {
     NoPublishedRoot {
         profile: String,
@@ -5672,6 +5679,25 @@ impl SlateProfileDatabase {
             .ok_or_else(|| self.database_error(rusqlite::Error::QueryReturnedNoRows))
     }
 
+    pub fn record_sync_snapshot_and_set_profile_sync_roots(
+        &self,
+        snapshot: &SyncSnapshotRegistration,
+        roots: &[ProfileSyncRootRegistration],
+    ) -> Result<(SyncSnapshotRecord, Vec<ProfileSyncRootRecord>), StorageError> {
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let now = unix_time_seconds()?;
+        let snapshot_record =
+            self.record_sync_snapshot_in_transaction(&transaction, snapshot, now)?;
+        let root_records = self.set_profile_sync_roots_in_transaction(&transaction, roots)?;
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok((snapshot_record, root_records))
+    }
+
     pub fn sync_snapshots_after(
         &self,
         profile: &str,
@@ -6929,6 +6955,38 @@ impl SlateProfileDatabase {
             .commit()
             .map_err(|source| self.database_error(source))?;
         Ok(root)
+    }
+
+    pub fn set_profile_sync_roots(
+        &self,
+        roots: &[ProfileSyncRootRegistration],
+    ) -> Result<Vec<ProfileSyncRootRecord>, StorageError> {
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let root_records = self.set_profile_sync_roots_in_transaction(&transaction, roots)?;
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(root_records)
+    }
+
+    fn set_profile_sync_roots_in_transaction(
+        &self,
+        transaction: &rusqlite::Transaction<'_>,
+        roots: &[ProfileSyncRootRegistration],
+    ) -> Result<Vec<ProfileSyncRootRecord>, StorageError> {
+        let mut records = Vec::with_capacity(roots.len());
+        for root in roots {
+            records.push(self.set_profile_sync_root_in_transaction(
+                transaction,
+                root.profile.as_str(),
+                root.root_id.as_str(),
+                root.object_id.as_str(),
+            )?);
+        }
+        Ok(records)
     }
 
     fn set_profile_sync_root_in_transaction(
@@ -18235,6 +18293,136 @@ mod tests {
             .profile_sync_root(DEFAULT_PROFILE_ID, "")
             .unwrap_err();
         assert!(matches!(error, StorageError::InvalidSyncRootId(root_id) if root_id.is_empty()));
+    }
+
+    #[test]
+    fn profile_sync_roots_batch_rolls_back_on_invalid_root() {
+        let database_path = test_dir("sync-root-batch").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let roots = [
+            ProfileSyncRootRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                root_id: "settings/latest".to_string(),
+                object_id: "manifest-object-1".to_string(),
+            },
+            ProfileSyncRootRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                root_id: String::new(),
+                object_id: "device-head-object-1".to_string(),
+            },
+        ];
+
+        let error = database.set_profile_sync_roots(&roots).unwrap_err();
+
+        assert!(matches!(error, StorageError::InvalidSyncRootId(root_id) if root_id.is_empty()));
+        assert!(
+            database
+                .profile_sync_root(DEFAULT_PROFILE_ID, "settings/latest")
+                .unwrap()
+                .is_none()
+        );
+
+        let valid_roots = [
+            ProfileSyncRootRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                root_id: "settings/latest".to_string(),
+                object_id: "manifest-object-1".to_string(),
+            },
+            ProfileSyncRootRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                root_id: "settings/devices/device-a/head".to_string(),
+                object_id: "device-head-object-1".to_string(),
+            },
+        ];
+        let records = database.set_profile_sync_roots(&valid_roots).unwrap();
+
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0].root_id, "settings/latest");
+        assert_eq!(records[1].root_id, "settings/devices/device-a/head");
+        assert_eq!(records[0].object_id, "manifest-object-1");
+        assert_eq!(records[1].object_id, "device-head-object-1");
+    }
+
+    #[test]
+    fn sync_snapshot_and_roots_record_atomically() {
+        let database_path = test_dir("sync-snapshot-root-batch").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let snapshot = SyncSnapshotRegistration {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            snapshot_id: "settings-snapshot-r1".to_string(),
+            backend_object_id: Some("snapshot-object-1".to_string()),
+            covers_revision: 1,
+            included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+        };
+        let roots = [
+            ProfileSyncRootRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                root_id: "settings/latest".to_string(),
+                object_id: "manifest-object-1".to_string(),
+            },
+            ProfileSyncRootRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                root_id: String::new(),
+                object_id: "device-head-object-1".to_string(),
+            },
+        ];
+
+        let error = database
+            .record_sync_snapshot_and_set_profile_sync_roots(&snapshot, &roots)
+            .unwrap_err();
+
+        assert!(matches!(error, StorageError::InvalidSyncRootId(root_id) if root_id.is_empty()));
+        assert!(
+            database
+                .sync_snapshot(DEFAULT_PROFILE_ID, "settings-snapshot-r1")
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            database
+                .profile_sync_root(DEFAULT_PROFILE_ID, "settings/latest")
+                .unwrap()
+                .is_none()
+        );
+
+        let valid_roots = [
+            ProfileSyncRootRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                root_id: "settings/latest".to_string(),
+                object_id: "manifest-object-1".to_string(),
+            },
+            ProfileSyncRootRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                root_id: "settings/devices/device-a/head".to_string(),
+                object_id: "device-head-object-1".to_string(),
+            },
+        ];
+        let (record, root_records) = database
+            .record_sync_snapshot_and_set_profile_sync_roots(&snapshot, &valid_roots)
+            .unwrap();
+
+        assert_eq!(record.snapshot_id, "settings-snapshot-r1");
+        assert_eq!(
+            record.backend_object_id.as_deref(),
+            Some("snapshot-object-1")
+        );
+        assert_eq!(root_records.len(), 2);
+        assert_eq!(
+            database
+                .profile_sync_root(DEFAULT_PROFILE_ID, "settings/latest")
+                .unwrap()
+                .expect("settings root")
+                .object_id,
+            "manifest-object-1"
+        );
+        assert_eq!(
+            database
+                .profile_sync_root(DEFAULT_PROFILE_ID, "settings/devices/device-a/head")
+                .unwrap()
+                .expect("device head root")
+                .object_id,
+            "device-head-object-1"
+        );
     }
 
     #[test]

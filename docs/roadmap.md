@@ -829,9 +829,9 @@ Current baseline:
 - `slate-profile-sync` now has an initial local publish-flow helper that
   creates a full settings snapshot from `slate-settings.db`, publishes the
   signed encrypted snapshot manifest, publishes the local per-device head
-  pointing at that manifest, and records both published roots locally. This
-  gives new trusted devices a complete state handoff without requiring prior
-  snapshot context.
+  pointing at that manifest, and records the snapshot metadata plus both
+  published roots in one local transaction. This gives new trusted devices a
+  complete state handoff without requiring prior snapshot context.
 - Incoming synced settings now have an initial deterministic conflict policy:
   the highest logical clock wins, with device id and device sequence as stable
   tie-breakers. Losing setting changes are retained in `settings_changes`
