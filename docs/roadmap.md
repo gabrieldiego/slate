@@ -977,6 +977,10 @@ Current baseline:
   The receiver fetches and validates every signed record object first, then
   applies the whole log in one storage transaction; if any record fails, earlier
   records in that log do not leave partial trusted-key mutations behind.
+- Applying signed membership records now also materializes the target device in
+  `sync_devices` with the applied membership epoch and no provider authority by
+  default. That device-roster write is part of the same membership transaction,
+  so invalid roots or failed records cannot leave orphaned device metadata.
 
 Next:
 

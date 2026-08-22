@@ -4748,6 +4748,7 @@ impl SlateProfileDatabase {
                 ));
             }
         };
+        self.record_sync_membership_device_in_transaction(transaction, membership_record)?;
 
         let applied_record = self.mark_sync_account_membership_record_applied_in_transaction(
             transaction,
@@ -4809,6 +4810,32 @@ impl SlateProfileDatabase {
             .verify_with(&trusted_signer.public_key)
             .map_err(|error| StorageError::InvalidProfileSyncMembershipRecord(error.to_string()))?;
         Ok(false)
+    }
+
+    fn record_sync_membership_device_in_transaction(
+        &self,
+        transaction: &rusqlite::Transaction<'_>,
+        membership_record: &ProfileSyncMembershipRecord,
+    ) -> Result<(), StorageError> {
+        let now = unix_time_seconds()?;
+        transaction
+            .execute(
+                "INSERT INTO sync_devices
+                   (profile, device_id, label, membership_epoch, provider_authority,
+                    created_at, last_seen_at)
+                 VALUES (?1, ?2, NULL, ?3, 0, ?4, ?4)
+                 ON CONFLICT(profile, device_id) DO UPDATE SET
+                   membership_epoch = excluded.membership_epoch,
+                   last_seen_at = excluded.last_seen_at",
+                params![
+                    membership_record.profile.as_str(),
+                    membership_record.device_id.as_str(),
+                    membership_record.membership_epoch,
+                    now,
+                ],
+            )
+            .map_err(|source| self.database_error(source))?;
+        Ok(())
     }
 
     fn reject_stale_sync_account_membership_record_in_transaction(
@@ -13568,6 +13595,19 @@ mod tests {
                 .expect("device b should stay revoked after replay")
                 .trusted
         );
+        let devices = database.sync_devices(DEFAULT_PROFILE_ID).unwrap();
+        let device_a = devices
+            .iter()
+            .find(|device| device.device_id == "device-a")
+            .expect("membership applies device a metadata");
+        assert_eq!(device_a.membership_epoch, 1);
+        assert!(!device_a.provider_authority);
+        let device_b = devices
+            .iter()
+            .find(|device| device.device_id == "device-b")
+            .expect("membership applies device b metadata");
+        assert_eq!(device_b.membership_epoch, 3);
+        assert!(!device_b.provider_authority);
 
         let stale_signer_b = ProfileSyncDeviceSigner::generate("device-b").unwrap();
         let stale_rotate_b = ProfileSyncMembershipRecord {
@@ -13690,6 +13730,13 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+        assert!(
+            !database
+                .sync_devices(DEFAULT_PROFILE_ID)
+                .unwrap()
+                .iter()
+                .any(|device| device.device_id == "device-a")
+        );
 
         let (root, applications) = database
             .apply_signed_sync_account_membership_records_and_set_profile_sync_root(
@@ -13719,6 +13766,14 @@ mod tests {
                 .expect("membership log root"),
             root
         );
+        let device_a = database
+            .sync_devices(DEFAULT_PROFILE_ID)
+            .unwrap()
+            .into_iter()
+            .find(|device| device.device_id == "device-a")
+            .expect("atomic membership apply records sync device");
+        assert_eq!(device_a.membership_epoch, 1);
+        assert!(!device_a.provider_authority);
     }
 
     #[test]
