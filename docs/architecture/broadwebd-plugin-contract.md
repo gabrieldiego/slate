@@ -329,7 +329,10 @@ with that socketless Kubo fixture backend, so normal `ProfileSyncRequest` calls
 can exercise put, get, retain, verify, release, publish, resolve, and provider
 discovery through the service contract before a production Kubo HTTP client is
 enabled. Fixture get uses Kubo `cat` under the profile-sync object budget rather
-than the browsing response budget.
+than the browsing response budget. `InProcessBroadwebNetwork` provides
+registry and daemon helpers for this backend and rejects Kubo fixture URLs
+minted by a different simulated network, preserving the no-socket fixture
+boundary for downstream settings-sync tests.
 
 Pinning, publishing, providing, and reproviding are not part of the initial
 fetch contract. Pinning and publishing enter through `profile-sync` as explicit

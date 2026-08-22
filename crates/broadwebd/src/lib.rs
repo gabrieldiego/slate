@@ -360,6 +360,24 @@ pub mod test_fixtures {
             Ok(registry)
         }
 
+        pub fn registry_for_kubo_profile_sync(
+            &self,
+            api_base_url: impl Into<String>,
+            provider_id: impl Into<String>,
+        ) -> Result<PluginRegistry, BroadwebdError> {
+            let api_base_url = api_base_url.into();
+            let api_url = parse_http_url(&api_base_url)?;
+            if !internal_kubo_rpc_url_belongs_to_network(&api_url, self.network_id.as_str()) {
+                return Err(BroadwebdError::UnsupportedRequest(format!(
+                    "in-process Kubo profile-sync fixtures must use a URL created by network {}: {}",
+                    self.network_id, api_base_url
+                )));
+            }
+            let mut registry = self.fixture_registry();
+            registry.register_service(ProfileSyncService::kubo_fixture(api_base_url, provider_id)?);
+            Ok(registry)
+        }
+
         pub fn daemon_for_device(
             &self,
             state_root: impl Into<PathBuf>,
@@ -409,6 +427,20 @@ pub mod test_fixtures {
                 state_root,
                 budget,
                 self.registry_for_kubo_rpc(api_base_url)?,
+            )
+        }
+
+        pub fn daemon_for_kubo_profile_sync(
+            &self,
+            state_root: impl Into<PathBuf>,
+            budget: ResourceBudget,
+            api_base_url: impl Into<String>,
+            provider_id: impl Into<String>,
+        ) -> Result<BroadwebDaemon, BroadwebdError> {
+            BroadwebDaemon::start_with_registry(
+                state_root,
+                budget,
+                self.registry_for_kubo_profile_sync(api_base_url, provider_id)?,
             )
         }
 
@@ -2553,6 +2585,94 @@ mod tests {
                 "POST /api/v0/pin/rm?arg=bafybeigdyrztprofileobject&recursive=true HTTP/1.1",
             ]
         );
+    }
+
+    #[test]
+    fn in_process_network_builds_kubo_profile_sync_daemon_without_sockets() {
+        let object_id = "bafybeigdyrztprofileobject";
+        let network = InProcessBroadwebNetwork::new();
+        let fixture = network.kubo_rpc_sequence(vec![
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body:
+                    br#"{"Name":"profile-object","Hash":"bafybeigdyrztprofileobject","Size":"128"}"#
+                        .to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/octet-stream".to_string(),
+                body: b"encrypted slate-settings snapshot".to_vec(),
+            },
+        ]);
+        let state_root = test_state_root("kubo-profile-sync-daemon");
+        let daemon = network
+            .daemon_for_kubo_profile_sync(
+                &state_root,
+                ResourceBudget::default(),
+                fixture.base_url(),
+                "kubo-profile-sync-provider",
+            )
+            .expect("start Kubo profile-sync fixture daemon");
+
+        let ProfileSyncResponse::PutEncryptedObject {
+            object_id: put_object_id,
+        } = daemon
+            .profile_sync(ProfileSyncRequest::PutEncryptedObject(
+                ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"encrypted slate-settings snapshot".to_vec(),
+                ),
+            ))
+            .expect("put through Kubo profile-sync fixture daemon")
+        else {
+            panic!("expected put response");
+        };
+        assert_eq!(put_object_id, object_id);
+        assert_eq!(
+            daemon
+                .profile_sync(ProfileSyncRequest::GetEncryptedObject(
+                    ProfileSyncObjectRequest::new("default", object_id),
+                ))
+                .expect("get through Kubo profile-sync fixture daemon"),
+            ProfileSyncResponse::GetEncryptedObject {
+                object_id: object_id.to_string(),
+                bytes: b"encrypted slate-settings snapshot".to_vec(),
+            }
+        );
+        assert_eq!(
+            fixture.finish(),
+            vec![
+                "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1",
+                "POST /api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrztprofileobject HTTP/1.1",
+            ]
+        );
+
+        let _ = std::fs::remove_dir_all(state_root);
+    }
+
+    #[test]
+    fn in_process_network_rejects_foreign_kubo_profile_sync_fixture() {
+        let source_network = InProcessBroadwebNetwork::new();
+        let target_network = InProcessBroadwebNetwork::new();
+        let fixture = source_network.kubo_rpc_response(InternalKuboRpcResponse {
+            status_code: 200,
+            content_type: "application/json".to_string(),
+            body: br#"{"Name":"profile-object","Hash":"bafybeigdyrztprofileobject","Size":"128"}"#
+                .to_vec(),
+        });
+
+        let error = match target_network
+            .registry_for_kubo_profile_sync(fixture.base_url(), "foreign-provider")
+        {
+            Ok(_) => panic!("foreign Kubo fixture URL should be rejected"),
+            Err(error) => error,
+        };
+        assert!(matches!(
+            error,
+            BroadwebdError::UnsupportedRequest(message)
+                if message.contains("in-process Kubo profile-sync fixtures must use a URL created by network")
+        ));
     }
 
     #[test]

@@ -323,6 +323,11 @@ Current baseline:
   the same in-process Kubo RPC fixture calls. Object fetch uses Kubo `cat` under
   the profile-sync object budget, giving the runtime service contract a
   protocol-shaped backend path without opening sockets.
+- `InProcessBroadwebNetwork` now has Kubo profile-sync registry and daemon
+  helpers that install the socketless Kubo-backed `profile-sync` service only
+  when the Kubo fixture URL belongs to the same simulated network. Downstream
+  settings-sync tests can use those helpers without manually assembling a
+  registry or opening loopback ports.
 - broadwebd's own HTTP fixture unit tests now start daemons with
   `InProcessBroadwebNetwork` fixture registries whenever they consume
   `slate-fixture-http://` URLs. That keeps the production default direct HTTP
