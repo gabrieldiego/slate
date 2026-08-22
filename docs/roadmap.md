@@ -611,6 +611,9 @@ Current baseline:
   for the same selected provider instead of choosing the first one. The preview
   and runtime result report ambiguous provider ids separately, and those
   duplicates are excluded from materialized quorum before any sync mutation.
+- The stored-provider runtime regression now covers that duplicate-handle path:
+  a selected provider with two supplied handles fails the materialized-provider
+  quorum check and leaves profile-sync roots unchanged.
 - Selected synthetic fixture endpoints now expose materialization targets with
   provider id, fixture network id, and endpoint ref so local-only fixtures can
   bridge stored metadata to in-process providers without opening sockets.

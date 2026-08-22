@@ -13928,6 +13928,46 @@ mod tests {
                 .is_empty()
         );
 
+        let duplicate_provider_handles = [
+            SettingsSyncRetentionProviderHandle::with_endpoint_ref(
+                selected_provider_id,
+                selected_provider_endpoint_ref.as_str(),
+                &provider_daemon,
+            ),
+            SettingsSyncRetentionProviderHandle::with_endpoint_ref(
+                selected_provider_id,
+                selected_provider_endpoint_ref.as_str(),
+                &provider_daemon,
+            ),
+        ];
+        let duplicate_error = scheduler
+            .run_once_with_stored_retention_provider_handles(
+                &database,
+                &config,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                8,
+                &duplicate_provider_handles,
+            )
+            .expect_err("scheduler should reject duplicate stored provider handles");
+        let ProfileSyncCycleWithHealthError::Policy(ProfileSyncPolicyError::ProviderMinimumUnmet {
+            provider_role,
+            minimum,
+            actual,
+            ..
+        }) = duplicate_error
+        else {
+            panic!("expected duplicate handle provider minimum error, got {duplicate_error:?}");
+        };
+        assert_eq!(provider_role, "selected retention providers");
+        assert_eq!(minimum, 1);
+        assert_eq!(actual, 0);
+        assert!(
+            database
+                .profile_sync_roots(profile)
+                .expect("read roots after duplicate handle failure")
+                .is_empty()
+        );
+
         let run = scheduler
             .run_once_with_stored_retention_provider_handles(
                 &database,
