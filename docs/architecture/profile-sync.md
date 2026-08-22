@@ -269,6 +269,10 @@ as object encryption material. The helper redacts its root bytes from debug
 output and does not yet define the persisted/exported recovery-secret format,
 mutable-root delegation keys, device signing-key derivation, or QR/file secret
 transport.
+The broadwebd settings-sync runner can use the same helper after active-key
+preflight: the database supplies only active key metadata, the caller supplies
+the in-memory secret, and the derived key is passed into the existing encrypted
+publish/pull cycle.
 
 The local trust store can also mark a stored device signing key as distrusted.
 Runtime trusted-device enumeration skips distrusted remote keys, trusted object
@@ -840,7 +844,9 @@ After provider policy passes, the runtime-facing runner can load the active
 content-key id from `slate-settings.db` and use caller-supplied secret material
 for the actual encrypted publish/pull cycle. The database therefore stores
 active key metadata and trusted public keys, not plaintext content keys or
-device signing keys.
+device signing keys. The first secret-backed runner path derives that content
+key from `SlateSyncSecret` after preflight and then delegates to the same
+encrypted settings cycle used by explicit content-key callers.
 The local device signer must match the database's local sync device id before a
 cycle can publish local device-head state. Trusted remote public keys remain
 valid receive-side trust anchors, but they cannot be reused as the local

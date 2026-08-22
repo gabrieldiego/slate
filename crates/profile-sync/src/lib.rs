@@ -35,11 +35,12 @@ use slate_storage::{
     ProfileSyncSettingsManifestApplication, ProfileSyncSettingsSnapshot,
     ProfileSyncSettingsSnapshotPublication, ProfileSyncSettingsTailChangePublication,
     ProfileSyncTrustedPullApplyError, SYNC_DOMAIN_SETTINGS, SignedSyncObject, SlateProfileDatabase,
-    StorageError, StorageProviderRecord, SyncAccountMembershipRecordApplication, SyncChangeRecord,
-    SyncCompactionTarget, SyncDevicePublicKeyRecord, SyncObjectError, SyncSettingTextEvent,
-    SyncSnapshotRecord, SyncSnapshotRegistration, VerifiedProfileSyncDeviceHead,
-    open_signed_profile_sync_device_head, settings_sync_manifest_for_snapshot_and_tail_changes,
-    settings_sync_manifest_for_tail_changes, settings_sync_snapshot_id,
+    SlateSyncSecret, StorageError, StorageProviderRecord, SyncAccountMembershipRecordApplication,
+    SyncChangeRecord, SyncCompactionTarget, SyncDevicePublicKeyRecord, SyncObjectError,
+    SyncSettingTextEvent, SyncSnapshotRecord, SyncSnapshotRegistration,
+    VerifiedProfileSyncDeviceHead, open_signed_profile_sync_device_head,
+    settings_sync_manifest_for_snapshot_and_tail_changes, settings_sync_manifest_for_tail_changes,
+    settings_sync_snapshot_id,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -5503,6 +5504,52 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
         })
     }
 
+    pub fn run_settings_sync_cycle_with_sync_secret_active_key_policy(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        settings_root_id: &str,
+        sync_secret: &SlateSyncSecret,
+        signer: &ProfileSyncDeviceSigner,
+        policy: &SettingsSyncCyclePolicy,
+    ) -> Result<SettingsSyncCycleWithHealthRun, ProfileSyncCycleWithHealthError> {
+        let preflight = self.settings_sync_cycle_preflight_with_active_key_policy(
+            database,
+            profile,
+            settings_root_id,
+            signer,
+            policy,
+        )?;
+        let content_key = sync_secret
+            .derive_profile_sync_content_key(profile, preflight.active_key_id.as_str())
+            .map_err(ProfileSyncCredentialError::from)
+            .map_err(ProfileSyncCycleError::from)?;
+        let cycle = self.run_settings_sync_cycle(
+            database,
+            profile,
+            settings_root_id,
+            &content_key,
+            preflight.active_key_id.as_str(),
+            signer,
+            policy.retention_policy.clone(),
+            policy.max_publish_steps,
+            policy.max_trusted_devices,
+        )?;
+        let after_health = self.settings_sync_health(
+            database,
+            profile,
+            settings_root_id,
+            policy.minimum_online_retaining_providers,
+        )?;
+        policy.check_after_cycle(&after_health)?;
+
+        Ok(SettingsSyncCycleWithHealthRun {
+            before_health: preflight.before_health,
+            cycle,
+            after_health,
+        })
+    }
+
     pub fn run_settings_sync_cycle_with_active_key_policy_and_retention_providers(
         &self,
         database: &SlateProfileDatabase,
@@ -8466,15 +8513,16 @@ mod tests {
         ProfileSyncDeviceSigner, ProfileSyncManifest, ProfileSyncMembershipRecord,
         ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
         ProfileSyncSettingsCandidatePullApplyStatus, ProfileSyncTrustedOpenError,
-        ProfileSyncTrustedPullApplyError, ProfileSyncTrustedPullError, SYNC_DOMAIN_BOOKMARKS,
-        SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_CHAT, SYNC_DOMAIN_CONTACTS, SYNC_DOMAIN_DOWNLOADS,
-        SYNC_DOMAIN_FILES, SYNC_DOMAIN_SETTINGS, SYNC_DOMAIN_STORAGE, SlateProfileDatabase,
-        StorageError, StorageProviderRecord, StorageProviderSyncPayload, StorageProviderUpdate,
-        SyncChangeRecord, SyncContentKeyEpochRegistration, SyncDevicePublicKeyRegistration,
-        SyncDeviceRegistration, SyncSnapshotRegistration, TypedAppSyncDomainWatcher,
-        open_signed_profile_sync_device_head, open_signed_profile_sync_manifest,
-        open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
-        pull_signed_profile_sync_device_head, settings_sync_snapshot_id,
+        ProfileSyncTrustedPullApplyError, ProfileSyncTrustedPullError, SLATE_SYNC_SECRET_BYTES,
+        SYNC_DOMAIN_BOOKMARKS, SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_CHAT, SYNC_DOMAIN_CONTACTS,
+        SYNC_DOMAIN_DOWNLOADS, SYNC_DOMAIN_FILES, SYNC_DOMAIN_SETTINGS, SYNC_DOMAIN_STORAGE,
+        SlateProfileDatabase, SlateSyncSecret, StorageError, StorageProviderRecord,
+        StorageProviderSyncPayload, StorageProviderUpdate, SyncChangeRecord,
+        SyncContentKeyEpochRegistration, SyncDevicePublicKeyRegistration, SyncDeviceRegistration,
+        SyncSnapshotRegistration, TypedAppSyncDomainWatcher, open_signed_profile_sync_device_head,
+        open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
+        open_signed_sync_setting_text, pull_signed_profile_sync_device_head,
+        settings_sync_snapshot_id,
     };
     use std::{
         collections::BTreeSet,
@@ -19341,6 +19389,104 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(state_root);
         let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_cycle_derives_active_key_from_sync_secret() {
+        let network = InProcessBroadwebNetwork::new();
+        let source_state_root = test_state_root("cycle-sync-secret-source");
+        let receiver_state_root = test_state_root("cycle-sync-secret-receiver");
+        let source_db_root = test_state_root("cycle-sync-secret-source-db");
+        let receiver_db_root = test_state_root("cycle-sync-secret-receiver-db");
+        let source_daemon = network
+            .daemon_for_device(
+                &source_state_root,
+                ResourceBudget::default(),
+                "runtime-secret-source",
+            )
+            .expect("start source in-process profile-sync daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "runtime-secret-receiver",
+            )
+            .expect("start receiver in-process profile-sync daemon");
+        let source_database = SlateProfileDatabase::open_resolved_with_device_id(
+            source_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-secret-source",
+        )
+        .expect("open source settings database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-secret-receiver",
+        )
+        .expect("open receiver settings database");
+        let profile = "syncsecretprofile";
+        let settings_root_id = "settings/latest";
+        let sync_secret = SlateSyncSecret::from_bytes([94; SLATE_SYNC_SECRET_BYTES]);
+        let source_signer = ProfileSyncDeviceSigner::generate("runtime-secret-source")
+            .expect("generate source signer");
+        register_test_content_key_epoch(&source_database, profile);
+        register_test_content_key_epoch(&receiver_database, profile);
+        source_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: source_signer.public_key().expect("source public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("source trusts local signer");
+        receiver_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: source_signer.public_key().expect("source public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("receiver trusts source signer");
+        source_database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write source setting");
+
+        let run = BroadwebdSettingsSyncRunner::new(&source_daemon)
+            .run_settings_sync_cycle_with_sync_secret_active_key_policy(
+                &source_database,
+                profile,
+                settings_root_id,
+                &sync_secret,
+                &source_signer,
+                &SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 1),
+            )
+            .expect("sync secret derives active key for publish cycle");
+
+        assert_eq!(run.cycle.published_step_count(), 1);
+        assert!(!run.degraded_after());
+        let derived_content_key = sync_secret
+            .derive_profile_sync_content_key(profile, TEST_CONTENT_KEY_ID)
+            .expect("derive receiver content key");
+        let receive = BroadwebdProfileSyncObjectSource::new(&receiver_daemon)
+            .pull_and_apply_trusted_settings_from_registered_devices(
+                &receiver_database,
+                profile,
+                &derived_content_key,
+                TEST_CONTENT_KEY_ID,
+                4,
+            )
+            .expect("receiver applies settings published with sync-secret key");
+        assert_eq!(receive.applied_count(), 1);
+        assert_eq!(
+            receiver_database
+                .get_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme")
+                .expect("read receiver setting")
+                .expect("receiver sync setting")
+                .value
+                .as_str(),
+            "teal"
+        );
+
+        let _ = std::fs::remove_dir_all(source_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(source_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
     }
 
     #[test]

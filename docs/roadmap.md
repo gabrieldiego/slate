@@ -1243,6 +1243,12 @@ Current baseline:
   and is covered by a local sync-object encryption regression. This does not yet
   define the persisted/exported recovery-secret format or mutable-root
   delegation keys.
+- The broadwebd settings-sync runner can now use that `SlateSyncSecret` after
+  active-key preflight: it loads the active content-key id from
+  `slate-settings.db`, derives the content key in memory, publishes through the
+  normal encrypted settings cycle, and a second socketless fixture device can
+  derive the same key and apply the signed encrypted device head. Plaintext
+  keys still stay out of `slate-settings.db`.
 
 Next:
 
