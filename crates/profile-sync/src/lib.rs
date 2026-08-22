@@ -20794,25 +20794,7 @@ mod tests {
     #[test]
     fn broadwebd_settings_sync_scheduler_runs_with_kubo_profile_sync_materialized_provider() {
         let network = InProcessBroadwebNetwork::new();
-        let fixture = network.kubo_rpc_sequence(vec![
-            kubo_add_response("bafykubosnapshotobject"),
-            kubo_pin_response("bafykubosnapshotobject"),
-            kubo_add_response("bafykubomanifestobject"),
-            kubo_pin_response("bafykubomanifestobject"),
-            kubo_publish_response("settings/latest", "bafykubomanifestobject"),
-            kubo_add_response("bafykubodeviceheadobject"),
-            kubo_pin_response("bafykubodeviceheadobject"),
-            kubo_publish_response(
-                "settings/devices/runtime-scheduler-kubo-a/head",
-                "bafykubodeviceheadobject",
-            ),
-            kubo_pin_response("bafykubosnapshotobject"),
-            kubo_pin_ls_response("bafykubosnapshotobject"),
-            kubo_pin_response("bafykubomanifestobject"),
-            kubo_pin_ls_response("bafykubomanifestobject"),
-            kubo_pin_response("bafykubodeviceheadobject"),
-            kubo_pin_ls_response("bafykubodeviceheadobject"),
-        ]);
+        let fixture = network.kubo_profile_sync_model();
         let kubo_state_root = test_state_root("scheduler-kubo-provider-daemon");
         let db_root = test_state_root("scheduler-kubo-provider-db");
         let provider_id = "kubo-profile-sync-provider";
@@ -20926,13 +20908,22 @@ mod tests {
         assert_eq!(run.materialized_retention_provider_count(), 1);
         assert_eq!(run.retained_provider_count(), 1);
         assert_eq!(run.run.cycle.cycle.published_step_count(), 1);
+        assert_eq!(run.run.cycle.retained_object_ids.len(), 3);
+        assert!(
+            run.run
+                .cycle
+                .retained_object_ids
+                .iter()
+                .all(|object_id| object_id.starts_with("bafyfixture"))
+        );
         assert_eq!(
-            run.run.cycle.retained_object_ids,
-            vec![
-                "bafykubosnapshotobject".to_string(),
-                "bafykubomanifestobject".to_string(),
-                "bafykubodeviceheadobject".to_string(),
-            ]
+            run.run
+                .cycle
+                .retained_object_ids
+                .iter()
+                .collect::<BTreeSet<_>>()
+                .len(),
+            3
         );
         assert_eq!(run.run.cycle.retention.len(), 1);
         assert_eq!(run.run.cycle.retention[0].object_count(), 3);
@@ -20963,13 +20954,18 @@ mod tests {
                 .online_retaining_providers,
             1
         );
-        assert_eq!(
-            database
-                .profile_sync_root(profile, settings_root_id)
-                .expect("read Kubo settings root")
-                .expect("Kubo settings root exists")
-                .object_id,
-            "bafykubomanifestobject"
+        let stored_settings_root = database
+            .profile_sync_root(profile, settings_root_id)
+            .expect("read Kubo settings root")
+            .expect("Kubo settings root exists")
+            .object_id;
+        assert!(stored_settings_root.starts_with("bafyfixture"));
+        assert!(
+            run.run
+                .cycle
+                .retained_object_ids
+                .iter()
+                .any(|object_id| object_id == &stored_settings_root)
         );
 
         let requests = fixture.finish();

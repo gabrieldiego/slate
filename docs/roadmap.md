@@ -368,6 +368,11 @@ Current baseline:
   the root and fetches the object bytes through the shared in-process model.
   This keeps the current cross-device simulation socketless while exercising a
   protocol-shaped shared backend instead of the writer daemon's local cache.
+- The Kubo-backed settings scheduler happy path now uses the same stateful
+  Kubo/IPNS fixture model. Published snapshot, manifest, and local device-head
+  objects get model-derived fixture CIDs, retention is verified through Kubo
+  `pin/ls`, and settings root storage no longer depends on pre-scripted object
+  identifiers.
 - The same bridge now publishes a real signed encrypted settings tail manifest
   through the Kubo fixture daemon and verifies the fetched manifest and tail
   bytes with the storage sync-object openers. Scripted Kubo `cat` responses are
