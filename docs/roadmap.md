@@ -296,6 +296,10 @@ Current baseline:
   pin-status, IPNS publish, and IPNS resolve responses, and fails malformed
   local-node data before it can update a profile-sync root or retained-object
   state.
+- Kubo profile-sync now has a socketless request planner that maps broadwebd's
+  profile-sync verbs to Kubo add, pin, unpin, pin-status, IPNS publish, and
+  IPNS resolve RPC calls. This gives the future backend client a typed boundary
+  before it is allowed to issue local-node requests.
 - broadwebd's own HTTP fixture unit tests now start daemons with
   `InProcessBroadwebNetwork` fixture registries whenever they consume
   `slate-fixture-http://` URLs. That keeps the production default direct HTTP

@@ -97,13 +97,15 @@ pub use http::{
     ProfileSyncRootUpdate, ServiceRequest, ServiceResponse, TransportHttpRequest,
 };
 pub use protocols::ipfs::{
-    IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport, IpfsKuboRpcEndpoint,
-    IpfsKuboRpcTransport, IpfsService, IpfsTransportKind, ipfs_gateway_http_url, ipfs_kubo_cat_url,
-    ipfs_kubo_profile_sync_add_url, ipfs_kubo_profile_sync_added_object_id,
-    ipfs_kubo_profile_sync_name_publish_url, ipfs_kubo_profile_sync_name_resolve_url,
-    ipfs_kubo_profile_sync_pin_add_url, ipfs_kubo_profile_sync_pin_ls_has_recursive_pin,
-    ipfs_kubo_profile_sync_pin_ls_url, ipfs_kubo_profile_sync_pin_rm_url,
-    ipfs_kubo_profile_sync_published_object_id, ipfs_kubo_profile_sync_resolved_object_id,
+    IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport,
+    IpfsKuboProfileSyncOperation, IpfsKuboProfileSyncRpc, IpfsKuboProfileSyncRpcRequest,
+    IpfsKuboRpcEndpoint, IpfsKuboRpcTransport, IpfsService, IpfsTransportKind,
+    ipfs_gateway_http_url, ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url,
+    ipfs_kubo_profile_sync_added_object_id, ipfs_kubo_profile_sync_name_publish_url,
+    ipfs_kubo_profile_sync_name_resolve_url, ipfs_kubo_profile_sync_pin_add_url,
+    ipfs_kubo_profile_sync_pin_ls_has_recursive_pin, ipfs_kubo_profile_sync_pin_ls_url,
+    ipfs_kubo_profile_sync_pin_rm_url, ipfs_kubo_profile_sync_published_object_id,
+    ipfs_kubo_profile_sync_resolved_object_id,
 };
 pub use protocols::tor::{
     TOR_HTTP_SCHEME, TOR_HTTPS_SCHEME, TorArtiHttpTransport, TorHttpTarget, TorNetworkScheme,
@@ -555,12 +557,13 @@ mod tests {
         BroadwebDaemon, BroadwebStatusKind, BroadwebStatusReporter, BroadwebdError,
         DEFAULT_IPFS_KUBO_RPC_API, DIRECT_HTTP_PLUGIN, FetchDisposition, FetchPurpose,
         HttpFetchRequest, HttpFetchResponse, IPFS_GATEWAY_PLUGIN, IPFS_KUBO_RPC_PLUGIN, IpfsConfig,
-        IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport, IpfsKuboRpcEndpoint,
-        IpfsService, IpfsTransportKind, PROFILE_SYNC_PLUGIN, PluginHealth, PluginKind,
-        PluginMetadata, PluginRegistry, ProfileSyncObjectRequest, ProfileSyncProfileRequest,
-        ProfileSyncProviderRoles, ProfileSyncPutObjectRequest, ProfileSyncRequest,
-        ProfileSyncResponse, ProfileSyncRootRequest, ProfileSyncRootUpdate, ProtocolService,
-        ResourceBudget, ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, StateRoot, TOR_ARTI_HTTP_PLUGIN,
+        IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport, IpfsKuboProfileSyncOperation,
+        IpfsKuboProfileSyncRpc, IpfsKuboRpcEndpoint, IpfsService, IpfsTransportKind,
+        PROFILE_SYNC_PLUGIN, PluginHealth, PluginKind, PluginMetadata, PluginRegistry,
+        ProfileSyncObjectRequest, ProfileSyncProfileRequest, ProfileSyncProviderRoles,
+        ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse,
+        ProfileSyncRootRequest, ProfileSyncRootUpdate, ProtocolService, ResourceBudget,
+        ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, StateRoot, TOR_ARTI_HTTP_PLUGIN,
         TOR_PROTOCOL_SERVICE, TorService, TransportHttpRequest, TransportPlugin,
         ipfs_gateway_http_url, ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url,
         ipfs_kubo_profile_sync_added_object_id, ipfs_kubo_profile_sync_name_publish_url,
@@ -2036,6 +2039,85 @@ mod tests {
             ipfs_kubo_profile_sync_add_url("https://ipfs.example.test:5001"),
             Err(BroadwebdError::UnsupportedRequest(_))
         ));
+    }
+
+    #[test]
+    fn ipfs_kubo_profile_sync_rpc_plans_profile_sync_requests() {
+        let rpc =
+            IpfsKuboProfileSyncRpc::local("http://127.0.0.1:5001").expect("Kubo profile sync RPC");
+        let object_id = "bafybeigdyrztprofileobject";
+
+        let put = rpc
+            .put_encrypted_object_request()
+            .expect("plan Kubo profile sync object add");
+        assert_eq!(
+            put.operation(),
+            IpfsKuboProfileSyncOperation::PutEncryptedObject
+        );
+        assert_eq!(
+            put.url(),
+            "http://127.0.0.1:5001/api/v0/add?cid-version=1&raw-leaves=true&pin=false"
+        );
+
+        let retain = rpc
+            .retain_object_request(object_id)
+            .expect("plan Kubo profile sync pin");
+        assert_eq!(
+            retain.operation(),
+            IpfsKuboProfileSyncOperation::RetainObject
+        );
+        assert_eq!(
+            retain.url(),
+            "http://127.0.0.1:5001/api/v0/pin/add?arg=bafybeigdyrztprofileobject&recursive=true"
+        );
+
+        let release = rpc
+            .release_object_request(object_id)
+            .expect("plan Kubo profile sync unpin");
+        assert_eq!(
+            release.operation(),
+            IpfsKuboProfileSyncOperation::ReleaseObject
+        );
+        assert_eq!(
+            release.url(),
+            "http://127.0.0.1:5001/api/v0/pin/rm?arg=bafybeigdyrztprofileobject&recursive=true"
+        );
+
+        let verify = rpc
+            .verify_retained_object_request(object_id)
+            .expect("plan Kubo profile sync pin status");
+        assert_eq!(
+            verify.operation(),
+            IpfsKuboProfileSyncOperation::VerifyRetainedObject
+        );
+        assert_eq!(
+            verify.url(),
+            "http://127.0.0.1:5001/api/v0/pin/ls?arg=bafybeigdyrztprofileobject&type=recursive"
+        );
+
+        let publish = rpc
+            .publish_root_request("settings-latest", object_id)
+            .expect("plan Kubo profile sync IPNS publish");
+        assert_eq!(
+            publish.operation(),
+            IpfsKuboProfileSyncOperation::PublishRoot
+        );
+        assert_eq!(
+            publish.url(),
+            "http://127.0.0.1:5001/api/v0/name/publish?arg=%2Fipfs%2Fbafybeigdyrztprofileobject&key=settings-latest&allow-offline=true"
+        );
+
+        let resolve = rpc
+            .resolve_root_request("k51syncroot")
+            .expect("plan Kubo profile sync IPNS resolve");
+        assert_eq!(
+            resolve.operation(),
+            IpfsKuboProfileSyncOperation::ResolveRoot
+        );
+        assert_eq!(
+            resolve.url(),
+            "http://127.0.0.1:5001/api/v0/name/resolve?arg=%2Fipns%2Fk51syncroot&recursive=false"
+        );
     }
 
     #[test]

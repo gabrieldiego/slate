@@ -9,6 +9,7 @@ pub use gateway::{IpfsGatewayTransport, ipfs_gateway_http_url};
 #[cfg(any(test, feature = "test-fixtures"))]
 pub use kubo::InternalKuboRpcResponse;
 pub use kubo::{
+    IpfsKuboProfileSyncOperation, IpfsKuboProfileSyncRpc, IpfsKuboProfileSyncRpcRequest,
     IpfsKuboRpcEndpoint, IpfsKuboRpcTransport, ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url,
     ipfs_kubo_profile_sync_added_object_id, ipfs_kubo_profile_sync_name_publish_url,
     ipfs_kubo_profile_sync_name_resolve_url, ipfs_kubo_profile_sync_pin_add_url,

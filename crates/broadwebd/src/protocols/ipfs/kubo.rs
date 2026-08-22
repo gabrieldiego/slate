@@ -57,6 +57,27 @@ pub struct IpfsKuboRpcTransport {
     endpoint: IpfsKuboRpcEndpoint,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IpfsKuboProfileSyncRpc {
+    endpoint: IpfsKuboRpcEndpoint,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IpfsKuboProfileSyncRpcRequest {
+    operation: IpfsKuboProfileSyncOperation,
+    url: String,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum IpfsKuboProfileSyncOperation {
+    PutEncryptedObject,
+    RetainObject,
+    ReleaseObject,
+    VerifyRetainedObject,
+    PublishRoot,
+    ResolveRoot,
+}
+
 impl IpfsKuboRpcTransport {
     pub fn local(api_base_url: impl Into<String>) -> Result<Self, BroadwebdError> {
         Ok(Self::from_endpoint(IpfsKuboRpcEndpoint::local(
@@ -70,6 +91,100 @@ impl IpfsKuboRpcTransport {
 
     pub fn endpoint(&self) -> &IpfsKuboRpcEndpoint {
         &self.endpoint
+    }
+}
+
+impl IpfsKuboProfileSyncRpc {
+    pub fn local(api_base_url: impl Into<String>) -> Result<Self, BroadwebdError> {
+        Ok(Self::from_endpoint(IpfsKuboRpcEndpoint::local(
+            api_base_url,
+        )?))
+    }
+
+    pub fn from_endpoint(endpoint: IpfsKuboRpcEndpoint) -> Self {
+        Self { endpoint }
+    }
+
+    pub fn endpoint(&self) -> &IpfsKuboRpcEndpoint {
+        &self.endpoint
+    }
+
+    pub fn put_encrypted_object_request(
+        &self,
+    ) -> Result<IpfsKuboProfileSyncRpcRequest, BroadwebdError> {
+        Ok(IpfsKuboProfileSyncRpcRequest::new(
+            IpfsKuboProfileSyncOperation::PutEncryptedObject,
+            ipfs_kubo_profile_sync_add_url(self.endpoint.api_base_url())?,
+        ))
+    }
+
+    pub fn retain_object_request(
+        &self,
+        object_id: &str,
+    ) -> Result<IpfsKuboProfileSyncRpcRequest, BroadwebdError> {
+        Ok(IpfsKuboProfileSyncRpcRequest::new(
+            IpfsKuboProfileSyncOperation::RetainObject,
+            ipfs_kubo_profile_sync_pin_add_url(object_id, self.endpoint.api_base_url())?,
+        ))
+    }
+
+    pub fn release_object_request(
+        &self,
+        object_id: &str,
+    ) -> Result<IpfsKuboProfileSyncRpcRequest, BroadwebdError> {
+        Ok(IpfsKuboProfileSyncRpcRequest::new(
+            IpfsKuboProfileSyncOperation::ReleaseObject,
+            ipfs_kubo_profile_sync_pin_rm_url(object_id, self.endpoint.api_base_url())?,
+        ))
+    }
+
+    pub fn verify_retained_object_request(
+        &self,
+        object_id: &str,
+    ) -> Result<IpfsKuboProfileSyncRpcRequest, BroadwebdError> {
+        Ok(IpfsKuboProfileSyncRpcRequest::new(
+            IpfsKuboProfileSyncOperation::VerifyRetainedObject,
+            ipfs_kubo_profile_sync_pin_ls_url(object_id, self.endpoint.api_base_url())?,
+        ))
+    }
+
+    pub fn publish_root_request(
+        &self,
+        key_id: &str,
+        object_id: &str,
+    ) -> Result<IpfsKuboProfileSyncRpcRequest, BroadwebdError> {
+        Ok(IpfsKuboProfileSyncRpcRequest::new(
+            IpfsKuboProfileSyncOperation::PublishRoot,
+            ipfs_kubo_profile_sync_name_publish_url(
+                key_id,
+                object_id,
+                self.endpoint.api_base_url(),
+            )?,
+        ))
+    }
+
+    pub fn resolve_root_request(
+        &self,
+        name: &str,
+    ) -> Result<IpfsKuboProfileSyncRpcRequest, BroadwebdError> {
+        Ok(IpfsKuboProfileSyncRpcRequest::new(
+            IpfsKuboProfileSyncOperation::ResolveRoot,
+            ipfs_kubo_profile_sync_name_resolve_url(name, self.endpoint.api_base_url())?,
+        ))
+    }
+}
+
+impl IpfsKuboProfileSyncRpcRequest {
+    fn new(operation: IpfsKuboProfileSyncOperation, url: String) -> Self {
+        Self { operation, url }
+    }
+
+    pub fn operation(&self) -> IpfsKuboProfileSyncOperation {
+        self.operation
+    }
+
+    pub fn url(&self) -> &str {
+        self.url.as_str()
     }
 }
 

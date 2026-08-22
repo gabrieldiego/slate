@@ -309,7 +309,9 @@ tests can prove the command surface before broadwebd wires a networked backend
 client into `profile-sync`. The same boundary parses Kubo add, pin-status,
 publish, and resolve responses down to the object ids profile sync actually
 uses, rejecting malformed local-node data before any mutable root or retention
-state changes.
+state changes. A socketless request planner maps profile-sync verbs onto those
+Kubo RPC calls before any HTTP client is introduced, so the service wiring can
+be tested without opening loopback sockets.
 
 Pinning, publishing, providing, and reproviding are not part of the initial
 fetch contract. Pinning and publishing enter through `profile-sync` as explicit
