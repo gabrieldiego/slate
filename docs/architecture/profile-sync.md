@@ -262,13 +262,15 @@ after the manifest membership epoch before applying profile state. It does not
 store raw content encryption keys. Key bytes should come from a keychain entry,
 recovery-secret derivation, or an enrollment flow before being passed into the
 decrypt/apply path.
-Storage now exposes the first in-memory `SlateSyncSecret` helper for that
-derivation path. It uses HKDF to derive a profile-sync content key from the root
-secret, profile id, and content-key id, so one raw secret is not reused directly
-as object encryption material. The helper redacts its root bytes from debug
-output and does not yet define the persisted/exported recovery-secret format,
-mutable-root delegation keys, device signing-key derivation, or QR/file secret
-transport.
+Storage now exposes the first in-memory `SlateSyncSecret` hierarchy for that
+derivation path. It uses HKDF with profile-scoped salts and purpose-specific
+labels to derive content-key epochs, account-recovery material, enrollment
+material, mutable-root publishing material, manifest-signing delegation
+material, and device-bootstrap material from the root secret, so one raw secret
+is not reused directly across profile-sync purposes. The helper redacts root and
+derived bytes from debug output. It still does not define the persisted/exported
+recovery-secret format, QR/file secret transport, platform key-store loading, or
+the runtime policy that decides which derived material a backend may use.
 The broadwebd settings-sync runner can use the same helper after active-key
 preflight: the database supplies only active key metadata, the caller supplies
 the in-memory secret, and the derived key is passed into the existing encrypted

@@ -1295,14 +1295,20 @@ Current baseline:
   same secret-backed path. A local-only fixture publishes membership/settings
   state through a stored synthetic fixture endpoint and retains the combined
   object set without passing raw content-key bytes into scheduler calls.
+- `SlateSyncSecret` now has a domain-separated in-memory hierarchy for
+  profile-scoped recovery, manifest-signing delegation, mutable-root
+  publishing, enrollment, device bootstrap, and content-key epoch material.
+  The derived material is purpose-typed and debug-redacted; persisted/exported
+  QR/file transport and runtime backend policy are still future work.
 - `make profile-sync-boundary-check` now provides a low-memory regression gate
   for the sync work. It runs focused rail-app sync-domain checks, verifies that
   visible rail app sync descriptors match the seeded `slate-settings.db`
-  storage domain table, then covers storage/provider metadata, typed app-domain
-  cursors, the broadwebd app-domain fixture, and the profile-sync scheduler
-  fixture through the build-limits wrapper. Chrome settings watcher coverage is
-  opt-in because compiling `slate-chrome` currently pulls Servo script bindings
-  and exceeded the 2 GiB low-memory profile during verification.
+  storage domain table, checks Slate Sync Secret domain separation, then covers
+  storage/provider metadata, typed app-domain cursors, the broadwebd app-domain
+  fixture, and the profile-sync scheduler fixture through the build-limits
+  wrapper. Chrome settings watcher coverage is opt-in because compiling
+  `slate-chrome` currently pulls Servo script bindings and exceeded the 2 GiB
+  low-memory profile during verification.
 
 Next:
 
@@ -1323,8 +1329,9 @@ Next:
 - Extend the runtime watcher beyond the first chrome settings path so
   externally synced routing, privacy, app, and browser-core changes are applied
   through their normal update paths instead of raw database replacement.
-- Define the Slate Sync Secret hierarchy for manifest signing, mutable-root
-  publishing, content encryption epochs, and device enrollment.
+- Define the persisted/exported Slate Sync Secret format, QR/file transport,
+  platform key-store loading, and runtime policy for when derived manifest,
+  mutable-root, enrollment, bootstrap, and content-key material can be used.
 - Publish encrypted profile manifests and snapshots through the selected
   backend, then point the profile mutable root at the newest manifest.
 - Use the storage compaction target to publish encrypted snapshots, trim

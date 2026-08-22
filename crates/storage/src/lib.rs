@@ -19,6 +19,7 @@ pub const DEFAULT_HOME_DIRECTORY_NAME: &str = ".slate";
 pub const DEFAULT_PROFILE_ID: &str = "default";
 pub const DEFAULT_SYNC_DEVICE_ID: &str = "local-device";
 pub const SLATE_SYNC_SECRET_BYTES: usize = 32;
+pub const PROFILE_SYNC_DERIVED_SECRET_BYTES: usize = 32;
 pub const PROFILE_SYNC_CONTENT_KEY_BYTES: usize = 32;
 pub const PROFILE_SYNC_NONCE_BYTES: usize = 12;
 pub const SYNC_OBJECT_VERSION: u8 = 1;
@@ -218,18 +219,100 @@ impl SlateSyncSecret {
         profile: &str,
         key_id: &str,
     ) -> Result<ProfileSyncContentKey, SyncObjectError> {
+        let info = format!("content-key/v1/{key_id}");
+        Ok(ProfileSyncContentKey::from_bytes(
+            self.derive_profile_sync_secret_bytes(profile, info.as_str())?,
+        ))
+    }
+
+    pub fn derive_profile_sync_account_recovery_secret(
+        &self,
+        profile: &str,
+    ) -> Result<ProfileSyncDerivedSecret, SyncObjectError> {
+        Ok(ProfileSyncDerivedSecret::new(
+            ProfileSyncDerivedSecretPurpose::AccountRecovery,
+            self.derive_profile_sync_secret_bytes(profile, "account-recovery/v1")?,
+        ))
+    }
+
+    pub fn derive_profile_sync_manifest_signing_secret(
+        &self,
+        profile: &str,
+        device_id: &str,
+        membership_epoch: i64,
+    ) -> Result<ProfileSyncDerivedSecret, SyncObjectError> {
+        if !is_valid_sync_identifier(device_id) {
+            return Err(SyncObjectError::InvalidDeviceId(device_id.to_string()));
+        }
+        let info = format!("manifest-signing/v1/{membership_epoch}/{device_id}");
+        Ok(ProfileSyncDerivedSecret::new(
+            ProfileSyncDerivedSecretPurpose::ManifestSigning,
+            self.derive_profile_sync_secret_bytes(profile, info.as_str())?,
+        ))
+    }
+
+    pub fn derive_profile_sync_mutable_root_secret(
+        &self,
+        profile: &str,
+        root_id: &str,
+        membership_epoch: i64,
+    ) -> Result<ProfileSyncDerivedSecret, SyncObjectError> {
+        let info = format!("mutable-root/v1/{membership_epoch}/{root_id}");
+        Ok(ProfileSyncDerivedSecret::new(
+            ProfileSyncDerivedSecretPurpose::MutableRootPublishing,
+            self.derive_profile_sync_secret_bytes(profile, info.as_str())?,
+        ))
+    }
+
+    pub fn derive_profile_sync_enrollment_secret(
+        &self,
+        profile: &str,
+        target_device_id: &str,
+        membership_epoch: i64,
+    ) -> Result<ProfileSyncDerivedSecret, SyncObjectError> {
+        if !is_valid_sync_identifier(target_device_id) {
+            return Err(SyncObjectError::InvalidDeviceId(
+                target_device_id.to_string(),
+            ));
+        }
+        let info = format!("enrollment/v1/{membership_epoch}/{target_device_id}");
+        Ok(ProfileSyncDerivedSecret::new(
+            ProfileSyncDerivedSecretPurpose::DeviceEnrollment,
+            self.derive_profile_sync_secret_bytes(profile, info.as_str())?,
+        ))
+    }
+
+    pub fn derive_profile_sync_device_bootstrap_secret(
+        &self,
+        profile: &str,
+        device_id: &str,
+        membership_epoch: i64,
+    ) -> Result<ProfileSyncDerivedSecret, SyncObjectError> {
+        if !is_valid_sync_identifier(device_id) {
+            return Err(SyncObjectError::InvalidDeviceId(device_id.to_string()));
+        }
+        let info = format!("device-bootstrap/v1/{membership_epoch}/{device_id}");
+        Ok(ProfileSyncDerivedSecret::new(
+            ProfileSyncDerivedSecretPurpose::DeviceBootstrap,
+            self.derive_profile_sync_secret_bytes(profile, info.as_str())?,
+        ))
+    }
+
+    fn derive_profile_sync_secret_bytes(
+        &self,
+        profile: &str,
+        info_label: &str,
+    ) -> Result<[u8; PROFILE_SYNC_DERIVED_SECRET_BYTES], SyncObjectError> {
         let salt_bytes = format!("slate/profile-sync/{profile}").into_bytes();
         let salt = hkdf::Salt::new(hkdf::HKDF_SHA256, salt_bytes.as_slice());
         let prk = salt.extract(self.bytes.as_slice());
-        let info_bytes = format!("content-key/v1/{key_id}").into_bytes();
-        let info = [info_bytes.as_slice()];
+        let info = [info_label.as_bytes()];
         let okm = prk
             .expand(&info, hkdf::HKDF_SHA256)
             .map_err(|_| SyncObjectError::Key)?;
-        let mut content_key = [0_u8; PROFILE_SYNC_CONTENT_KEY_BYTES];
-        okm.fill(&mut content_key)
-            .map_err(|_| SyncObjectError::Key)?;
-        Ok(ProfileSyncContentKey::from_bytes(content_key))
+        let mut secret = [0_u8; PROFILE_SYNC_DERIVED_SECRET_BYTES];
+        okm.fill(&mut secret).map_err(|_| SyncObjectError::Key)?;
+        Ok(secret)
     }
 }
 
@@ -237,6 +320,49 @@ impl fmt::Debug for SlateSyncSecret {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("SlateSyncSecret")
+            .field("bytes", &"<redacted>")
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ProfileSyncDerivedSecretPurpose {
+    AccountRecovery,
+    ManifestSigning,
+    MutableRootPublishing,
+    DeviceEnrollment,
+    DeviceBootstrap,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct ProfileSyncDerivedSecret {
+    purpose: ProfileSyncDerivedSecretPurpose,
+    bytes: [u8; PROFILE_SYNC_DERIVED_SECRET_BYTES],
+}
+
+impl ProfileSyncDerivedSecret {
+    fn new(
+        purpose: ProfileSyncDerivedSecretPurpose,
+        bytes: [u8; PROFILE_SYNC_DERIVED_SECRET_BYTES],
+    ) -> Self {
+        Self { purpose, bytes }
+    }
+
+    pub fn purpose(&self) -> ProfileSyncDerivedSecretPurpose {
+        self.purpose
+    }
+
+    #[cfg(test)]
+    fn as_bytes(&self) -> &[u8] {
+        self.bytes.as_slice()
+    }
+}
+
+impl fmt::Debug for ProfileSyncDerivedSecret {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ProfileSyncDerivedSecret")
+            .field("purpose", &self.purpose)
             .field("bytes", &"<redacted>")
             .finish()
     }
@@ -10891,6 +11017,86 @@ mod tests {
         assert!(matches!(
             object.open(&other_epoch_key),
             Err(SyncObjectError::Decrypt)
+        ));
+    }
+
+    #[test]
+    fn slate_sync_secret_derives_domain_separated_profile_material() {
+        let secret = SlateSyncSecret::from_bytes([43; SLATE_SYNC_SECRET_BYTES]);
+        let manifest_secret = secret
+            .derive_profile_sync_manifest_signing_secret(DEFAULT_PROFILE_ID, "device-a", 1)
+            .unwrap();
+        let repeated_manifest_secret = secret
+            .derive_profile_sync_manifest_signing_secret(DEFAULT_PROFILE_ID, "device-a", 1)
+            .unwrap();
+        let other_device_manifest_secret = secret
+            .derive_profile_sync_manifest_signing_secret(DEFAULT_PROFILE_ID, "device-b", 1)
+            .unwrap();
+        let other_epoch_manifest_secret = secret
+            .derive_profile_sync_manifest_signing_secret(DEFAULT_PROFILE_ID, "device-a", 2)
+            .unwrap();
+        let other_profile_manifest_secret = secret
+            .derive_profile_sync_manifest_signing_secret("work", "device-a", 1)
+            .unwrap();
+        let mutable_root_secret = secret
+            .derive_profile_sync_mutable_root_secret(DEFAULT_PROFILE_ID, "settings/latest", 1)
+            .unwrap();
+        let enrollment_secret = secret
+            .derive_profile_sync_enrollment_secret(DEFAULT_PROFILE_ID, "device-a", 1)
+            .unwrap();
+        let bootstrap_secret = secret
+            .derive_profile_sync_device_bootstrap_secret(DEFAULT_PROFILE_ID, "device-a", 1)
+            .unwrap();
+        let recovery_secret = secret
+            .derive_profile_sync_account_recovery_secret(DEFAULT_PROFILE_ID)
+            .unwrap();
+        let content_key = secret
+            .derive_profile_sync_content_key(DEFAULT_PROFILE_ID, "content-key-epoch-1")
+            .unwrap();
+
+        assert_eq!(manifest_secret, repeated_manifest_secret);
+        assert_eq!(
+            manifest_secret.purpose(),
+            ProfileSyncDerivedSecretPurpose::ManifestSigning
+        );
+        assert_eq!(
+            mutable_root_secret.purpose(),
+            ProfileSyncDerivedSecretPurpose::MutableRootPublishing
+        );
+        assert_eq!(
+            enrollment_secret.purpose(),
+            ProfileSyncDerivedSecretPurpose::DeviceEnrollment
+        );
+        assert_eq!(
+            bootstrap_secret.purpose(),
+            ProfileSyncDerivedSecretPurpose::DeviceBootstrap
+        );
+        assert_eq!(
+            recovery_secret.purpose(),
+            ProfileSyncDerivedSecretPurpose::AccountRecovery
+        );
+
+        assert_ne!(manifest_secret, other_device_manifest_secret);
+        assert_ne!(manifest_secret, other_epoch_manifest_secret);
+        assert_ne!(manifest_secret, other_profile_manifest_secret);
+        assert_ne!(manifest_secret.as_bytes(), mutable_root_secret.as_bytes());
+        assert_ne!(manifest_secret.as_bytes(), enrollment_secret.as_bytes());
+        assert_ne!(manifest_secret.as_bytes(), bootstrap_secret.as_bytes());
+        assert_ne!(manifest_secret.as_bytes(), recovery_secret.as_bytes());
+        assert_ne!(manifest_secret.as_bytes(), content_key.as_bytes());
+
+        let debug = format!("{manifest_secret:?}");
+        assert!(debug.contains("ManifestSigning"));
+        assert!(debug.contains("<redacted>"));
+        assert!(!debug.contains("43"));
+
+        assert!(matches!(
+            secret.derive_profile_sync_manifest_signing_secret(DEFAULT_PROFILE_ID, "../bad", 1),
+            Err(SyncObjectError::InvalidDeviceId(device_id)) if device_id == "../bad"
+        ));
+        assert!(matches!(
+            secret.derive_profile_sync_enrollment_secret(DEFAULT_PROFILE_ID, "", 1),
+            Err(SyncObjectError::InvalidDeviceId(device_id)) if device_id.is_empty()
         ));
     }
 
