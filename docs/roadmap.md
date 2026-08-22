@@ -507,6 +507,9 @@ Current baseline:
 - Selected synthetic fixture endpoints now expose materialization targets with
   provider id, fixture network id, and endpoint ref so local-only fixtures can
   bridge stored metadata to in-process providers without opening sockets.
+- The fixture targets can be validated into scheduler retention-provider
+  handles from caller-supplied in-process fixture daemons. Missing, duplicate,
+  or wrong-network providers are reported and excluded instead of being used.
 - Stored-provider runtime ticks now also exclude unsupported endpoint refs from
   the materialized retention-provider quorum, even if the caller supplies a
   daemon handle with the same socket-shaped endpoint string. This keeps

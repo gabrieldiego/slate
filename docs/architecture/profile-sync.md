@@ -854,6 +854,10 @@ materialization targets carrying the provider id, fixture network id, and
 endpoint ref. This lets local-only test fixtures bridge from stored metadata to
 in-process providers without opening sockets, while legacy fixture refs and
 future protocol refs still require explicit materializers.
+Those targets can now be materialized into existing scheduler retention-provider
+handles from caller-supplied in-process fixture daemons only when the provider
+id is present exactly once and the fixture network id matches. Missing,
+duplicate, or wrong-network providers are reported instead of being used.
 Stored-provider runtime ticks exclude unsupported endpoint refs from
 materialized provider quorum even when the caller supplies a daemon handle with
 the same unsupported string, so socket-shaped metadata cannot be laundered into

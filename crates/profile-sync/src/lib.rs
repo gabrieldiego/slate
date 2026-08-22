@@ -1661,6 +1661,78 @@ pub struct SettingsSyncInProcessFixtureMaterializationTarget {
     pub endpoint_ref: String,
 }
 
+#[derive(Clone, Copy)]
+pub struct SettingsSyncInProcessFixtureProviderDaemon<'a> {
+    pub provider_id: &'a str,
+    pub fixture_network_id: &'a str,
+    pub daemon: &'a BroadwebDaemon,
+}
+
+impl<'a> SettingsSyncInProcessFixtureProviderDaemon<'a> {
+    pub fn new(
+        provider_id: &'a str,
+        fixture_network_id: &'a str,
+        daemon: &'a BroadwebDaemon,
+    ) -> Self {
+        Self {
+            provider_id,
+            fixture_network_id,
+            daemon,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct SettingsSyncInProcessFixtureMaterializedProvider<'a> {
+    pub provider_id: String,
+    pub fixture_network_id: String,
+    pub endpoint_ref: String,
+    pub daemon: &'a BroadwebDaemon,
+}
+
+impl<'a> SettingsSyncInProcessFixtureMaterializedProvider<'a> {
+    pub fn retention_provider_handle(&self) -> SettingsSyncRetentionProviderHandle<'_> {
+        SettingsSyncRetentionProviderHandle::with_endpoint_ref(
+            self.provider_id.as_str(),
+            self.endpoint_ref.as_str(),
+            self.daemon,
+        )
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct SettingsSyncInProcessFixtureMaterialization<'a> {
+    pub materialized_providers: Vec<SettingsSyncInProcessFixtureMaterializedProvider<'a>>,
+    pub missing_provider_ids: Vec<String>,
+    pub network_mismatch_provider_ids: Vec<String>,
+    pub duplicate_provider_ids: Vec<String>,
+}
+
+impl<'a> SettingsSyncInProcessFixtureMaterialization<'a> {
+    pub fn materialized_provider_count(&self) -> usize {
+        self.materialized_providers.len()
+    }
+
+    pub fn missing_provider_count(&self) -> usize {
+        self.missing_provider_ids.len()
+    }
+
+    pub fn network_mismatch_provider_count(&self) -> usize {
+        self.network_mismatch_provider_ids.len()
+    }
+
+    pub fn duplicate_provider_count(&self) -> usize {
+        self.duplicate_provider_ids.len()
+    }
+
+    pub fn retention_provider_handles(&self) -> Vec<SettingsSyncRetentionProviderHandle<'_>> {
+        self.materialized_providers
+            .iter()
+            .map(|provider| provider.retention_provider_handle())
+            .collect()
+    }
+}
+
 impl SettingsSyncStoredRetentionProviderPlan {
     pub fn enabled_retention_provider_count(&self) -> usize {
         self.enabled_retention_provider_ids.len()
@@ -1871,6 +1943,17 @@ impl SettingsSyncStoredRetentionProviderPlan {
         selected_in_process_fixture_materialization_targets(
             self.enabled_retention_provider_endpoints.as_slice(),
             self.cycle.selected_retention_provider_ids.as_slice(),
+        )
+    }
+
+    pub fn materialize_selected_in_process_fixture_retention_provider_handles<'a>(
+        &self,
+        provider_daemons: &[SettingsSyncInProcessFixtureProviderDaemon<'a>],
+    ) -> SettingsSyncInProcessFixtureMaterialization<'a> {
+        materialize_selected_in_process_fixture_retention_provider_handles(
+            self.selected_in_process_fixture_materialization_targets()
+                .as_slice(),
+            provider_daemons,
         )
     }
 }
@@ -2224,6 +2307,47 @@ fn selected_in_process_fixture_materialization_targets(
             })
         })
         .collect()
+}
+
+fn materialize_selected_in_process_fixture_retention_provider_handles<'a>(
+    targets: &[SettingsSyncInProcessFixtureMaterializationTarget],
+    provider_daemons: &[SettingsSyncInProcessFixtureProviderDaemon<'a>],
+) -> SettingsSyncInProcessFixtureMaterialization<'a> {
+    let mut materialized_providers = Vec::new();
+    let mut missing_provider_ids = Vec::new();
+    let mut network_mismatch_provider_ids = Vec::new();
+    let mut duplicate_provider_ids = Vec::new();
+
+    for target in targets {
+        let mut matching_daemons = provider_daemons
+            .iter()
+            .filter(|provider| provider.provider_id == target.provider_id);
+        let Some(provider) = matching_daemons.next() else {
+            missing_provider_ids.push(target.provider_id.clone());
+            continue;
+        };
+        if matching_daemons.next().is_some() {
+            duplicate_provider_ids.push(target.provider_id.clone());
+            continue;
+        }
+        if provider.fixture_network_id != target.fixture_network_id {
+            network_mismatch_provider_ids.push(target.provider_id.clone());
+            continue;
+        }
+        materialized_providers.push(SettingsSyncInProcessFixtureMaterializedProvider {
+            provider_id: target.provider_id.clone(),
+            fixture_network_id: target.fixture_network_id.clone(),
+            endpoint_ref: target.endpoint_ref.clone(),
+            daemon: provider.daemon,
+        });
+    }
+
+    SettingsSyncInProcessFixtureMaterialization {
+        materialized_providers,
+        missing_provider_ids,
+        network_mismatch_provider_ids,
+        duplicate_provider_ids,
+    }
 }
 
 fn select_stored_retention_provider_ids(
@@ -10034,7 +10158,7 @@ mod tests {
             )
             .expect("start in-process stored-provider scheduler device daemon");
         let selected_provider_id = "local-fixture-availability-runtime-scheduler-stored-pinner";
-        let _selected_provider_daemon = network
+        let selected_provider_daemon = network
             .daemon_for_availability_provider(
                 &selected_state_root,
                 ResourceBudget::default(),
@@ -10250,6 +10374,79 @@ mod tests {
                 fixture_network_id: network.network_id().to_string(),
                 endpoint_ref: network.profile_sync_provider_endpoint_ref(selected_provider_id),
             }]
+        );
+        let fixture_materialization = plan
+            .materialize_selected_in_process_fixture_retention_provider_handles(&[
+                super::SettingsSyncInProcessFixtureProviderDaemon::new(
+                    selected_provider_id,
+                    network.network_id(),
+                    &selected_provider_daemon,
+                ),
+            ]);
+        assert_eq!(fixture_materialization.materialized_provider_count(), 1);
+        assert_eq!(fixture_materialization.missing_provider_count(), 0);
+        assert_eq!(fixture_materialization.network_mismatch_provider_count(), 0);
+        assert_eq!(fixture_materialization.duplicate_provider_count(), 0);
+        let fixture_handles = fixture_materialization.retention_provider_handles();
+        assert_eq!(fixture_handles.len(), 1);
+        assert_eq!(fixture_handles[0].provider_id, selected_provider_id);
+        assert_eq!(
+            fixture_handles[0].endpoint_ref,
+            Some(
+                network
+                    .profile_sync_provider_endpoint_ref(selected_provider_id)
+                    .as_str()
+            )
+        );
+
+        let missing_fixture_materialization =
+            plan.materialize_selected_in_process_fixture_retention_provider_handles(&[]);
+        assert_eq!(
+            missing_fixture_materialization.missing_provider_ids,
+            vec![selected_provider_id.to_string()]
+        );
+        assert_eq!(
+            missing_fixture_materialization.materialized_provider_count(),
+            0
+        );
+
+        let wrong_network_materialization = plan
+            .materialize_selected_in_process_fixture_retention_provider_handles(&[
+                super::SettingsSyncInProcessFixtureProviderDaemon::new(
+                    selected_provider_id,
+                    "different-fixture-network",
+                    &selected_provider_daemon,
+                ),
+            ]);
+        assert_eq!(
+            wrong_network_materialization.network_mismatch_provider_ids,
+            vec![selected_provider_id.to_string()]
+        );
+        assert_eq!(
+            wrong_network_materialization.materialized_provider_count(),
+            0
+        );
+
+        let duplicate_fixture_materialization = plan
+            .materialize_selected_in_process_fixture_retention_provider_handles(&[
+                super::SettingsSyncInProcessFixtureProviderDaemon::new(
+                    selected_provider_id,
+                    network.network_id(),
+                    &selected_provider_daemon,
+                ),
+                super::SettingsSyncInProcessFixtureProviderDaemon::new(
+                    selected_provider_id,
+                    network.network_id(),
+                    &selected_provider_daemon,
+                ),
+            ]);
+        assert_eq!(
+            duplicate_fixture_materialization.duplicate_provider_ids,
+            vec![selected_provider_id.to_string()]
+        );
+        assert_eq!(
+            duplicate_fixture_materialization.materialized_provider_count(),
+            0
         );
         assert_eq!(
             plan.cycle.selected_retention_provider_ids,
