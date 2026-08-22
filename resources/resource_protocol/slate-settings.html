@@ -812,7 +812,12 @@
       if (state.last_error) {
         profileSyncStatus.textContent = `Error: ${state.last_error}`;
       } else if (state.has_secret) {
-        profileSyncStatus.textContent = `Ready for ${state.profile}`;
+        const suffix = state.metadata_ready && state.active_key_id ?
+          ` - local metadata ready (${state.active_key_id})` :
+          "";
+        profileSyncStatus.textContent = `Ready for ${state.profile}${suffix}`;
+      } else if (state.metadata_ready) {
+        profileSyncStatus.textContent = "Local sync metadata ready; import key file";
       } else {
         profileSyncStatus.textContent = "Not enrolled";
       }

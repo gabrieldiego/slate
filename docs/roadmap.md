@@ -1317,16 +1317,21 @@ Current baseline:
   after profile-bound validation. This is deliberately local and rough: it does
   not persist the root secret, render QR codes yet, or contact broadweb
   providers.
+- Creating or importing a Profile Sync Preview key file now activates local
+  non-secret sync metadata in `slate-settings.db`: the local device record,
+  default app sync domains, and the active content-key epoch id. The preview can
+  report that local metadata is ready after restart, but the root secret still
+  remains session/key-file material rather than plaintext database state.
 - `make profile-sync-boundary-check` now provides a low-memory regression gate
   for the sync work. It runs focused rail-app sync-domain checks, verifies that
   visible rail app sync descriptors match the seeded `slate-settings.db`
   storage domain table, checks Slate Sync Secret domain separation, export
-  round-trip behavior, and profile-bound import, then covers storage/provider
-  metadata, typed app-domain cursors, the broadwebd app-domain fixture, and the
-  profile-sync scheduler fixture through the build-limits wrapper. Chrome
-  settings watcher coverage is opt-in because compiling `slate-chrome`
-  currently pulls Servo script bindings and exceeded the 2 GiB low-memory
-  profile during verification.
+  round-trip behavior, profile-bound import, and non-secret local activation
+  metadata, then covers storage/provider metadata, typed app-domain cursors, the
+  broadwebd app-domain fixture, and the profile-sync scheduler fixture through
+  the build-limits wrapper. Chrome settings watcher coverage is opt-in because
+  compiling `slate-chrome` currently pulls Servo script bindings and exceeded
+  the 2 GiB low-memory profile during verification.
 
 Next:
 

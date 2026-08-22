@@ -22,8 +22,9 @@ use slate_broadwebd::{
     default_session_state_root,
 };
 use slate_storage::{
-    DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, SlateSyncSecret,
-    SlateSyncSecretExport, StorageError, SyncObjectError, SyncSettingTextEvent,
+    DEFAULT_PROFILE_ID, ProfileSyncLocalActivationRecord, SYNC_DOMAIN_SETTINGS,
+    SlateProfileDatabase, SlateSyncSecret, SlateSyncSecretExport, StorageError, SyncObjectError,
+    SyncSettingTextEvent,
 };
 use url::Url;
 
@@ -207,7 +208,8 @@ impl SlateProtocolHandler {
         &self,
         request: &Request,
     ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
-        let state = self.profile_sync_preview.lock().unwrap();
+        let mut state = self.profile_sync_preview.lock().unwrap();
+        self.refresh_profile_sync_preview_metadata(&mut state);
         json_response(request, 200, state.to_json())
     }
 
@@ -217,7 +219,17 @@ impl SlateProtocolHandler {
     ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
         let mut state = self.profile_sync_preview.lock().unwrap();
         match state.create_secret(DEFAULT_PROFILE_ID, unix_time_seconds()) {
-            Ok(()) => json_response(request, 200, state.to_json()),
+            Ok(()) => match self.activate_profile_sync_preview_metadata() {
+                Ok(Some(activation)) => {
+                    state.mark_metadata_ready(&activation);
+                    json_response(request, 200, state.to_json())
+                }
+                Ok(None) => json_response(request, 200, state.to_json()),
+                Err(error) => {
+                    state.last_error = Some(error.to_string());
+                    json_response(request, 500, state.to_json())
+                }
+            },
             Err(error) => {
                 state.last_error = Some(error.to_string());
                 json_response(request, 500, state.to_json())
@@ -235,7 +247,17 @@ impl SlateProtocolHandler {
         match export_text {
             Some(export_text) => {
                 match state.import_secret(DEFAULT_PROFILE_ID, export_text.as_str()) {
-                    Ok(()) => json_response(request, 200, state.to_json()),
+                    Ok(()) => match self.activate_profile_sync_preview_metadata() {
+                        Ok(Some(activation)) => {
+                            state.mark_metadata_ready(&activation);
+                            json_response(request, 200, state.to_json())
+                        }
+                        Ok(None) => json_response(request, 200, state.to_json()),
+                        Err(error) => {
+                            state.last_error = Some(error.to_string());
+                            json_response(request, 500, state.to_json())
+                        }
+                    },
                     Err(error) => {
                         state.last_error = Some(error.to_string());
                         json_response(request, 400, state.to_json())
@@ -248,11 +270,40 @@ impl SlateProtocolHandler {
             }
         }
     }
+
+    fn activate_profile_sync_preview_metadata(
+        &self,
+    ) -> Result<Option<ProfileSyncLocalActivationRecord>, StorageError> {
+        self.database
+            .as_ref()
+            .map(|database| database.activate_local_profile_sync_metadata(DEFAULT_PROFILE_ID))
+            .transpose()
+    }
+
+    fn refresh_profile_sync_preview_metadata(&self, state: &mut ProfileSyncPreviewState) {
+        if state.metadata_ready {
+            return;
+        }
+        let Some(database) = &self.database else {
+            return;
+        };
+        let Ok(Some(content_key_epoch)) =
+            database.active_sync_content_key_epoch(DEFAULT_PROFILE_ID)
+        else {
+            return;
+        };
+        state.metadata_ready = true;
+        state.active_key_id = Some(content_key_epoch.key_id);
+        state.local_device_id = Some(database.local_sync_device_id().to_string());
+    }
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct ProfileSyncPreviewState {
     active_export: Option<SlateSyncSecretExport>,
+    metadata_ready: bool,
+    active_key_id: Option<String>,
+    local_device_id: Option<String>,
     last_error: Option<String>,
 }
 
@@ -260,6 +311,9 @@ impl ProfileSyncPreviewState {
     fn create_secret(&mut self, profile: &str, created_at: i64) -> Result<(), SyncObjectError> {
         let secret = SlateSyncSecret::generate()?;
         self.active_export = Some(secret.export_for_profile(profile, created_at));
+        self.metadata_ready = false;
+        self.active_key_id = None;
+        self.local_device_id = None;
         self.last_error = None;
         Ok(())
     }
@@ -272,8 +326,18 @@ impl ProfileSyncPreviewState {
         let export = SlateSyncSecretExport::from_bytes(export_text.as_bytes())?;
         let _ = SlateSyncSecret::from_export_for_profile(&export, expected_profile)?;
         self.active_export = Some(export);
+        self.metadata_ready = false;
+        self.active_key_id = None;
+        self.local_device_id = None;
         self.last_error = None;
         Ok(())
+    }
+
+    fn mark_metadata_ready(&mut self, activation: &ProfileSyncLocalActivationRecord) {
+        self.metadata_ready = true;
+        self.active_key_id = Some(activation.content_key_epoch.key_id.clone());
+        self.local_device_id = Some(activation.device_id.clone());
+        self.last_error = None;
     }
 
     fn to_json(&self) -> String {
@@ -284,11 +348,20 @@ impl ProfileSyncPreviewState {
             .and_then(|bytes| String::from_utf8(bytes).ok());
         serde_json::json!({
             "profile": DEFAULT_PROFILE_ID,
-            "status": if self.active_export.is_some() { "ready" } else { "not_enrolled" },
+            "status": if self.active_export.is_some() {
+                "ready"
+            } else if self.metadata_ready {
+                "metadata_ready"
+            } else {
+                "not_enrolled"
+            },
             "has_secret": self.active_export.is_some(),
+            "metadata_ready": self.metadata_ready,
+            "active_key_id": self.active_key_id.as_deref(),
+            "local_device_id": self.local_device_id.as_deref(),
             "export_filename": "slate-sync-secret.json",
             "export_text": active_export_text,
-            "last_error": self.last_error,
+            "last_error": self.last_error.as_deref(),
         })
         .to_string()
     }

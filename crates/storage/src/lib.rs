@@ -20,6 +20,7 @@ pub const DEFAULT_DATABASE_FILE_NAME: &str = "slate-settings.db";
 pub const DEFAULT_HOME_DIRECTORY_NAME: &str = ".slate";
 pub const DEFAULT_PROFILE_ID: &str = "default";
 pub const DEFAULT_SYNC_DEVICE_ID: &str = "local-device";
+pub const DEFAULT_PROFILE_SYNC_CONTENT_KEY_ID: &str = "content-key-epoch-1";
 pub const SLATE_SYNC_SECRET_BYTES: usize = 32;
 pub const PROFILE_SYNC_DERIVED_SECRET_BYTES: usize = 32;
 pub const PROFILE_SYNC_CONTENT_KEY_BYTES: usize = 32;
@@ -2394,6 +2395,13 @@ pub struct SyncContentKeyEpochRecord {
     pub active: bool,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncLocalActivationRecord {
+    pub profile: String,
+    pub device_id: String,
+    pub content_key_epoch: SyncContentKeyEpochRecord,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -5738,6 +5746,47 @@ impl SlateProfileDatabase {
             )
             .optional()
             .map_err(|source| self.database_error(source))
+    }
+
+    pub fn activate_local_profile_sync_metadata(
+        &self,
+        profile: &str,
+    ) -> Result<ProfileSyncLocalActivationRecord, StorageError> {
+        self.activate_local_profile_sync_metadata_with_key(
+            profile,
+            DEFAULT_PROFILE_SYNC_CONTENT_KEY_ID,
+            DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+        )
+    }
+
+    pub fn activate_local_profile_sync_metadata_with_key(
+        &self,
+        profile: &str,
+        key_id: &str,
+        membership_epoch: i64,
+    ) -> Result<ProfileSyncLocalActivationRecord, StorageError> {
+        self.register_sync_device(&SyncDeviceRegistration {
+            profile: profile.to_string(),
+            device_id: self.local_sync_device_id().to_string(),
+            label: Some("Local Device".to_string()),
+            membership_epoch,
+            provider_authority: false,
+        })?;
+        self.ensure_default_app_sync_domains(profile)?;
+        let content_key_epoch =
+            self.register_sync_content_key_epoch(&SyncContentKeyEpochRegistration {
+                profile: profile.to_string(),
+                key_id: key_id.to_string(),
+                membership_epoch,
+                algorithm: PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305.to_string(),
+                active: true,
+            })?;
+
+        Ok(ProfileSyncLocalActivationRecord {
+            profile: profile.to_string(),
+            device_id: self.local_sync_device_id().to_string(),
+            content_key_epoch,
+        })
     }
 
     pub fn set_sync_setting_text(
@@ -15740,6 +15789,59 @@ mod tests {
             database.sync_content_key_epoch(DEFAULT_PROFILE_ID, "../content-key"),
             Err(StorageError::InvalidSyncContentKeyId(key_id)) if key_id == "../content-key"
         ));
+    }
+
+    #[test]
+    fn profile_sync_local_activation_records_non_secret_metadata() {
+        let database_path =
+            test_dir("profile-sync-local-activation").join(DEFAULT_DATABASE_FILE_NAME);
+        let database =
+            SlateProfileDatabase::open_resolved_with_device_id(database_path, "device-preview")
+                .unwrap();
+        let activation = database
+            .activate_local_profile_sync_metadata(DEFAULT_PROFILE_ID)
+            .unwrap();
+
+        assert_eq!(activation.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(activation.device_id, "device-preview");
+        assert_eq!(
+            activation.content_key_epoch.key_id,
+            DEFAULT_PROFILE_SYNC_CONTENT_KEY_ID
+        );
+        assert_eq!(
+            activation.content_key_epoch.algorithm,
+            PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305
+        );
+        assert!(activation.content_key_epoch.active);
+
+        let active_key = database
+            .active_sync_content_key_epoch(DEFAULT_PROFILE_ID)
+            .unwrap()
+            .expect("active local preview key metadata");
+        assert_eq!(active_key.key_id, DEFAULT_PROFILE_SYNC_CONTENT_KEY_ID);
+
+        let devices = database.sync_devices(DEFAULT_PROFILE_ID).unwrap();
+        assert!(
+            devices
+                .iter()
+                .any(|device| device.device_id == "device-preview" && !device.provider_authority)
+        );
+        assert!(
+            database
+                .get_blob(DEFAULT_PROFILE_ID, "slate-sync-secret")
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            database
+                .get_sync_setting_text(
+                    DEFAULT_PROFILE_ID,
+                    SYNC_DOMAIN_SETTINGS,
+                    "slate-sync-secret"
+                )
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
