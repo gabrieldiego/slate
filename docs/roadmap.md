@@ -1019,6 +1019,11 @@ Current baseline:
   provider public key and materializes `sync_devices.provider_authority = true`
   transactionally, so providers can be distributed through the membership log
   without gaining membership-signing or profile-state authority.
+- The socketless broadwebd membership-log bridge now covers provider enrollment
+  end to end: a publisher emits `enroll-provider` through the aggregate log, the
+  receiver validates and applies the signed provider record, records the
+  provider-authority roster row, and still excludes that provider from trusted
+  settings-head pulls.
 
 Next:
 

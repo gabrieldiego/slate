@@ -5883,6 +5883,7 @@ mod tests {
         PROFILE_SYNC_CONTENT_KEY_BYTES, PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
         PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, PROFILE_SYNC_MANIFEST_OBJECT_KIND,
         PROFILE_SYNC_MANIFEST_SCHEMA_VERSION, PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE,
+        PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER,
         PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE,
         PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY,
         PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION, PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND,
@@ -6732,6 +6733,156 @@ mod tests {
         assert_eq!(
             unchanged_preview.object_id.as_deref(),
             Some(publication.object_id.as_str())
+        );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_membership_log_applies_provider_enrollment_without_loopback() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("membership-log-provider-publisher");
+        let receiver_state_root = test_state_root("membership-log-provider-receiver");
+        let publisher_db_root = test_state_root("membership-log-provider-publisher-db");
+        let receiver_db_root = test_state_root("membership-log-provider-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "membership-log-provider-publisher-device",
+            )
+            .expect("start in-process provider membership log publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "membership-log-provider-receiver-device",
+            )
+            .expect("start in-process provider membership log receiver daemon");
+        let publisher_database =
+            SlateProfileDatabase::open_resolved(publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME))
+                .expect("open provider publisher settings database");
+        let receiver_database =
+            SlateProfileDatabase::open_resolved(receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME))
+                .expect("open provider receiver settings database");
+        let signer_a = ProfileSyncDeviceSigner::generate("membership-log-provider-device-a")
+            .expect("generate provider membership log signer a");
+        let provider_signer =
+            ProfileSyncDeviceSigner::generate("membership-log-availability-provider")
+                .expect("generate membership log availability provider signer");
+        let enroll_a = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-provider-log-device-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: signer_a.device_id().to_string(),
+            device_public_key: Some(signer_a.public_key().expect("read signer a public key")),
+            created_at: 10,
+        };
+        publisher_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_a).as_slice(),
+            )
+            .expect("publisher bootstraps account device membership");
+        let enroll_provider = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-enroll-provider-log-availability".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER.to_string(),
+            device_id: provider_signer.device_id().to_string(),
+            device_public_key: Some(
+                provider_signer
+                    .public_key()
+                    .expect("read provider public key"),
+            ),
+            created_at: 20,
+        };
+        publisher_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_provider).as_slice(),
+            )
+            .expect("publisher applies provider enrollment");
+
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+        let publication = publisher
+            .publish_local_sync_account_membership_log(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            )
+            .expect("publish provider membership log through in-process broadwebd")
+            .expect("provider membership log has records");
+        assert_eq!(publication.log.records.len(), 2);
+        assert_eq!(
+            publication.log.records[1].record_kind,
+            PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER
+        );
+
+        let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
+        let applied = source
+            .pull_and_apply_sync_account_membership_log_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            )
+            .expect("pull and apply provider membership log through in-process broadwebd");
+        let ProfileSyncMembershipLogPullStatus::Applied {
+            root,
+            log,
+            applications,
+        } = applied
+        else {
+            panic!("expected provider membership log application");
+        };
+        assert_eq!(root.object_id, publication.object_id);
+        assert_eq!(log, publication.log);
+        assert_eq!(applications.len(), 2);
+        assert!(applications[0].bootstrapped);
+        assert!(applications[0].applied);
+        assert!(!applications[1].bootstrapped);
+        assert!(applications[1].applied);
+        assert_eq!(
+            applications[1].membership_record.record_kind,
+            PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER
+        );
+        assert!(
+            receiver_database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, provider_signer.device_id())
+                .expect("read receiver provider key")
+                .expect("receiver has provider key")
+                .trusted
+        );
+        let provider_device = receiver_database
+            .sync_devices(DEFAULT_PROFILE_ID)
+            .expect("read receiver sync device roster")
+            .into_iter()
+            .find(|device| device.device_id == provider_signer.device_id())
+            .expect("receiver has provider roster entry");
+        assert_eq!(
+            provider_device.membership_epoch,
+            DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1
+        );
+        assert!(provider_device.provider_authority);
+        let trusted_remote_devices =
+            super::trusted_remote_device_public_keys(&receiver_database, DEFAULT_PROFILE_ID, 16)
+                .expect("enumerate trusted remote devices");
+        assert!(
+            !trusted_remote_devices
+                .iter()
+                .any(|record| record.public_key.device_id == provider_signer.device_id())
+        );
+        assert_eq!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID)
+                .expect("read stored provider membership log root")
+                .expect("provider membership log root")
+                .object_id,
+            publication.object_id
         );
 
         let _ = std::fs::remove_dir_all(publisher_state_root);
