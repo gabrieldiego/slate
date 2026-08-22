@@ -14411,9 +14411,10 @@ mod tests {
             "runtime-typed-app-tail-receiver",
         )
         .expect("open typed app tombstone tail receiver settings database");
-        for (domain, privacy_classification) in [
-            (SYNC_DOMAIN_CHAT, "sensitive"),
-            (SYNC_DOMAIN_DOWNLOADS, "metadata"),
+        for (domain, privacy_classification, sync_content) in [
+            (SYNC_DOMAIN_CHAT, "sensitive", false),
+            (SYNC_DOMAIN_DOWNLOADS, "metadata", false),
+            (SYNC_DOMAIN_FILES, "content", true),
         ] {
             publisher_database
                 .register_app_sync_domain(&AppSyncDomainRegistration {
@@ -14422,7 +14423,7 @@ mod tests {
                     schema_version: 1,
                     enabled: true,
                     privacy_classification: privacy_classification.to_string(),
-                    sync_content: false,
+                    sync_content,
                 })
                 .expect("enable app sync domain for tombstone tail test profile");
         }
@@ -14450,12 +14451,29 @@ mod tests {
             size_bytes: 256,
             integrity: Some("sha256-tail-delete".to_string()),
         };
+        let file_update = FileEntryUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            entry_id: "runtime-file-tail-delete".to_string(),
+            sync_set_id: Some("runtime-set".to_string()),
+            parent_id: None,
+            name: "tail-delete.txt".to_string(),
+            entry_kind: "file".to_string(),
+            content_ref: Some("bafy-runtime-file-tail-delete".to_string()),
+            mime_type: Some("text/plain".to_string()),
+            size_bytes: Some(512),
+            modified_at: Some(1_789_030_100),
+            integrity: Some("sha256-file-tail-delete".to_string()),
+            retention_policy: Some("keep-latest".to_string()),
+        };
         publisher_database
             .upsert_chat_conversation(&chat_update)
             .expect("publisher writes typed chat metadata before snapshot");
         publisher_database
             .record_download_metadata(&download_update)
             .expect("publisher writes typed download metadata before snapshot");
+        publisher_database
+            .upsert_file_entry(&file_update)
+            .expect("publisher writes typed file metadata before snapshot");
 
         let content_key = ProfileSyncContentKey::from_bytes([73; PROFILE_SYNC_CONTENT_KEY_BYTES]);
         let signer = ProfileSyncDeviceSigner::generate("runtime-typed-app-tail-publisher")
@@ -14483,16 +14501,33 @@ mod tests {
             8,
         )
         .expect("initialize receiver downloads cursor before tombstone tail snapshot");
+        let file_watcher = TypedAppSyncDomainWatcher::<FileEntrySyncPayload>::new(
+            receiver_database.clone(),
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_FILES,
+            8,
+        )
+        .expect("initialize receiver files cursor before tombstone tail snapshot");
         let initial_chat_revision = chat_watcher
             .current_revision()
             .expect("read initial receiver chat cursor before tombstone tail snapshot");
         let initial_download_revision = download_watcher
             .current_revision()
             .expect("read initial receiver downloads cursor before tombstone tail snapshot");
+        let initial_file_revision = file_watcher
+            .current_revision()
+            .expect("read initial receiver files cursor before tombstone tail snapshot");
         assert_eq!(
             chat_watcher
                 .poll_once()
                 .expect("poll idle chat before tombstone tail snapshot")
+                .event_count(),
+            0
+        );
+        assert_eq!(
+            file_watcher
+                .poll_once()
+                .expect("poll idle files before tombstone tail snapshot")
                 .event_count(),
             0
         );
@@ -14540,6 +14575,13 @@ mod tests {
             receiver_database
                 .downloads(DEFAULT_PROFILE_ID, 10)
                 .expect("read receiver typed download metadata")
+                .len(),
+            1
+        );
+        assert_eq!(
+            receiver_database
+                .file_entries(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver typed file metadata")
                 .len(),
             1
         );
@@ -14619,12 +14661,44 @@ mod tests {
             snapshot_download_poll.latest_revision
         );
 
+        let snapshot_file_applied = file_watcher
+            .poll_apply_and_acknowledge(|snapshot_file_poll| {
+                assert!(snapshot_file_poll.advanced());
+                assert_eq!(snapshot_file_poll.previous_revision, initial_file_revision);
+                assert_eq!(snapshot_file_poll.event_count(), 1);
+                assert_eq!(
+                    snapshot_file_poll.events[0].value.entry_id,
+                    "runtime-file-tail-delete"
+                );
+                assert_eq!(snapshot_file_poll.events[0].value.name, "tail-delete.txt");
+                assert!(!snapshot_file_poll.events[0].value.deleted);
+                Ok::<(), &'static str>(())
+            })
+            .expect("receiver applies typed file snapshot before tombstone tail");
+        let snapshot_file_poll = snapshot_file_applied.poll;
+        assert!(snapshot_file_poll.advanced());
+        assert_eq!(snapshot_file_poll.previous_revision, initial_file_revision);
+        assert_eq!(snapshot_file_poll.event_count(), 1);
+        assert_eq!(
+            snapshot_file_poll.events[0].value.entry_id,
+            "runtime-file-tail-delete"
+        );
+        assert_eq!(snapshot_file_poll.events[0].value.name, "tail-delete.txt");
+        assert!(!snapshot_file_poll.events[0].value.deleted);
+        assert_eq!(
+            snapshot_file_applied.cursor.latest_revision,
+            snapshot_file_poll.latest_revision
+        );
+
         publisher_database
             .remove_chat_conversation(DEFAULT_PROFILE_ID, chat_update.conversation_id.as_str())
             .expect("publisher tombstones typed chat metadata after snapshot");
         publisher_database
             .remove_download_metadata(DEFAULT_PROFILE_ID, download_update.download_id.as_str())
             .expect("publisher tombstones typed download metadata after snapshot");
+        publisher_database
+            .remove_file_entry(DEFAULT_PROFILE_ID, file_update.entry_id.as_str())
+            .expect("publisher tombstones typed file metadata after snapshot");
         let tail = publisher
             .publish_local_settings_tail_head(
                 &publisher_database,
@@ -14642,7 +14716,7 @@ mod tests {
             tail.publication.snapshot_object_id,
             full.publication.snapshot_object_id
         );
-        assert_eq!(tail.publication.tail_change_object_ids.len(), 2);
+        assert_eq!(tail.publication.tail_change_object_ids.len(), 3);
         assert_eq!(
             tail.device_head.device_head.latest_change_object_id,
             tail.publication.tail_change_object_ids.last().cloned()
@@ -14665,7 +14739,7 @@ mod tests {
             tail.publication.manifest_object_id
         );
         assert!(application.snapshot.is_some());
-        assert_eq!(application.tail_changes.len(), 2);
+        assert_eq!(application.tail_changes.len(), 3);
         assert!(
             receiver_database
                 .chat_conversations(DEFAULT_PROFILE_ID, 10)
@@ -14676,6 +14750,12 @@ mod tests {
             receiver_database
                 .downloads(DEFAULT_PROFILE_ID, 10)
                 .expect("read receiver typed download metadata after tombstone tail")
+                .is_empty()
+        );
+        assert!(
+            receiver_database
+                .file_entries(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver typed file metadata after tombstone tail")
                 .is_empty()
         );
 
@@ -14707,6 +14787,20 @@ mod tests {
                 .expect("decode download tombstone tail payload");
         assert!(download_payload.deleted);
         assert_eq!(download_payload.download_id, "runtime-download-tail-delete");
+
+        let file_value = receiver_database
+            .get_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_FILES,
+                "entry.runtime-file-tail-delete",
+            )
+            .expect("read receiver file tombstone tail sync setting")
+            .expect("receiver file tombstone tail sync setting")
+            .value;
+        let file_payload: FileEntrySyncPayload =
+            serde_json::from_str(file_value.as_str()).expect("decode file tombstone tail payload");
+        assert!(file_payload.deleted);
+        assert_eq!(file_payload.entry_id, "runtime-file-tail-delete");
 
         let tombstone_chat_applied = chat_watcher
             .poll_apply_and_acknowledge(|tombstone_chat_poll| {
@@ -14795,6 +14889,54 @@ mod tests {
         assert_eq!(
             tombstone_download_applied.cursor.latest_revision,
             tombstone_download_poll.latest_revision
+        );
+
+        let tombstone_file_applied = file_watcher
+            .poll_apply_and_acknowledge(|tombstone_file_poll| {
+                assert!(tombstone_file_poll.advanced());
+                assert_eq!(
+                    tombstone_file_poll.previous_revision,
+                    snapshot_file_poll.latest_revision
+                );
+                assert_eq!(tombstone_file_poll.event_count(), 1);
+                assert_eq!(
+                    tombstone_file_poll.events[0].change.entity_key,
+                    "entry.runtime-file-tail-delete"
+                );
+                assert!(tombstone_file_poll.events[0].value.deleted);
+                assert_eq!(
+                    tombstone_file_poll.events[0].value.entry_id,
+                    "runtime-file-tail-delete"
+                );
+                let payload_json: serde_json::Value =
+                    serde_json::from_str(tombstone_file_poll.events[0].change.payload.as_str())
+                        .expect("decode replicated file tombstone tail payload");
+                assert!(payload_json.get("path").is_none());
+                assert!(payload_json.get("local_path").is_none());
+                assert!(payload_json.get("file_bytes").is_none());
+                assert!(payload_json.get("contents").is_none());
+                Ok::<(), &'static str>(())
+            })
+            .expect("receiver applies typed file tombstone tail payload");
+        let tombstone_file_poll = tombstone_file_applied.poll;
+        assert!(tombstone_file_poll.advanced());
+        assert_eq!(
+            tombstone_file_poll.previous_revision,
+            snapshot_file_poll.latest_revision
+        );
+        assert_eq!(tombstone_file_poll.event_count(), 1);
+        assert_eq!(
+            tombstone_file_poll.events[0].change.entity_key,
+            "entry.runtime-file-tail-delete"
+        );
+        assert!(tombstone_file_poll.events[0].value.deleted);
+        assert_eq!(
+            tombstone_file_poll.events[0].value.entry_id,
+            "runtime-file-tail-delete"
+        );
+        assert_eq!(
+            tombstone_file_applied.cursor.latest_revision,
+            tombstone_file_poll.latest_revision
         );
 
         let _ = std::fs::remove_dir_all(publisher_state_root);
