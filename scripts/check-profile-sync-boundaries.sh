@@ -26,7 +26,22 @@ run_test() {
         "$cargo_bin" test -p "$package" "$filter" -j "$jobs" -- --test-threads="$threads"
 }
 
+reject_protocol_model_leak() {
+    file=$1
+    pattern=$2
+    message=$3
+    if rg -n "$pattern" "$file"; then
+        printf '\nprofile-sync boundary violation: %s\n' "$message" >&2
+        exit 1
+    fi
+}
+
 cd "$repo_root"
+
+reject_protocol_model_leak \
+    crates/broadwebd/src/protocols/ipfs/kubo.rs \
+    'InternalKubo(ProfileSyncModel|RpcFixture)|fetch_internal_kubo_rpc_fixture|internal_kubo_rpc_fixtures' \
+    'Kubo protocol code must not call fixture models directly; route through transport executors or shims.'
 
 run_test slate-apps sync_domains
 run_test slate-storage rail_app_sync_domains_match_seeded_storage_domains

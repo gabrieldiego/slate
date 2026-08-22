@@ -1,6 +1,6 @@
 use super::address::ipfs_url_parts;
 #[cfg(any(test, feature = "test-fixtures"))]
-use super::kubo_fixtures::{fetch_internal_kubo_rpc_fixture, is_internal_kubo_rpc_fixture_url};
+use super::kubo_fixtures::is_internal_kubo_rpc_fixture_url;
 use crate::http::{infer_content_type, parse_http_url};
 use crate::{
     BroadwebdError, DEFAULT_IPFS_KUBO_RPC_API, HttpFetchResponse, HttpHeader, IPFS_KUBO_RPC_PLUGIN,
@@ -88,6 +88,70 @@ pub trait IpfsKuboProfileSyncRpcExecutor {
         url: &Url,
         max_response_bytes: usize,
     ) -> Result<IpfsKuboRpcResponse, BroadwebdError>;
+}
+
+pub(super) trait IpfsKuboHttpContentExecutor {
+    fn execute_http_content_request(
+        &self,
+        url: &Url,
+        document_url: &str,
+        budget: &ResourceBudget,
+    ) -> Result<HttpFetchResponse, BroadwebdError>;
+}
+
+#[derive(Debug)]
+struct IpfsKuboReqwestHttpContentExecutor {
+    client: reqwest::blocking::Client,
+}
+
+impl IpfsKuboReqwestHttpContentExecutor {
+    fn new() -> Result<Self, BroadwebdError> {
+        let client = reqwest::blocking::Client::builder()
+            .timeout(REQUEST_TIMEOUT)
+            .user_agent(USER_AGENT)
+            .build()
+            .map_err(request_error)?;
+        Ok(Self { client })
+    }
+}
+
+impl IpfsKuboHttpContentExecutor for IpfsKuboReqwestHttpContentExecutor {
+    fn execute_http_content_request(
+        &self,
+        url: &Url,
+        document_url: &str,
+        budget: &ResourceBudget,
+    ) -> Result<HttpFetchResponse, BroadwebdError> {
+        let response = self
+            .client
+            .post(url.clone())
+            .send()
+            .map_err(request_error)?;
+        let status_code = response.status().as_u16();
+        let headers = response_headers(response.headers());
+        let body = response.bytes().map_err(request_error)?.to_vec();
+        if body.len() > budget.max_http_response_bytes {
+            return Err(BroadwebdError::ResponseTooLarge {
+                limit: budget.max_http_response_bytes,
+                actual: body.len(),
+            });
+        }
+        let content_type = infer_content_type(
+            document_url,
+            headers
+                .iter()
+                .find(|header| header.name.eq_ignore_ascii_case("content-type"))
+                .map(|header| header.value.as_str()),
+            &body,
+        );
+        Ok(HttpFetchResponse::new(
+            document_url.to_string(),
+            status_code,
+            content_type,
+            headers,
+            body,
+        ))
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -353,65 +417,32 @@ impl TransportPlugin for IpfsKuboRpcTransport {
         request: &TransportHttpRequest,
         budget: &ResourceBudget,
     ) -> Result<HttpFetchResponse, BroadwebdError> {
-        let client = if self.endpoint.is_internal_fixture() {
-            None
-        } else {
-            Some(
-                reqwest::blocking::Client::builder()
-                    .timeout(REQUEST_TIMEOUT)
-                    .user_agent(USER_AGENT)
-                    .build()
-                    .map_err(request_error)?,
-            )
-        };
+        #[cfg(any(test, feature = "test-fixtures"))]
+        if self.endpoint.is_internal_fixture() {
+            let executor = super::kubo_fixtures::InternalKuboRpcTransportShim;
+            return self.fetch_http_with_executor(request, budget, &executor);
+        }
 
+        let executor = IpfsKuboReqwestHttpContentExecutor::new()?;
+        self.fetch_http_with_executor(request, budget, &executor)
+    }
+}
+
+impl IpfsKuboRpcTransport {
+    fn fetch_http_with_executor(
+        &self,
+        request: &TransportHttpRequest,
+        budget: &ResourceBudget,
+        executor: &impl IpfsKuboHttpContentExecutor,
+    ) -> Result<HttpFetchResponse, BroadwebdError> {
         let mut last_response = None;
         for candidate in ipfs_content_path_candidates(&request.url)? {
             let cat_url =
                 kubo_cat_url_for_path(&candidate.content_path, self.endpoint.api_base_url())?;
             let url = parse_http_url(&cat_url)?;
 
-            #[cfg(any(test, feature = "test-fixtures"))]
-            if is_internal_kubo_rpc_fixture_url(&url) {
-                let fetch_response =
-                    fetch_internal_kubo_rpc_fixture(&url, &candidate.document_url, budget)?;
-                if (200..=299).contains(&fetch_response.status_code) {
-                    return Ok(fetch_response);
-                }
-                last_response = Some(fetch_response);
-                continue;
-            }
-
-            let response = client
-                .as_ref()
-                .expect("non-fixture Kubo RPC fetch should have an HTTP client")
-                .post(url)
-                .send()
-                .map_err(request_error)?;
-            let status_code = response.status().as_u16();
-            let headers = response_headers(response.headers());
-            let body = response.bytes().map_err(request_error)?.to_vec();
-            if body.len() > budget.max_http_response_bytes {
-                return Err(BroadwebdError::ResponseTooLarge {
-                    limit: budget.max_http_response_bytes,
-                    actual: body.len(),
-                });
-            }
-            let content_type = infer_content_type(
-                &candidate.document_url,
-                headers
-                    .iter()
-                    .find(|header| header.name.eq_ignore_ascii_case("content-type"))
-                    .map(|header| header.value.as_str()),
-                &body,
-            );
-            let fetch_response = HttpFetchResponse::new(
-                candidate.document_url,
-                status_code,
-                content_type,
-                headers,
-                body,
-            );
+            let fetch_response =
+                executor.execute_http_content_request(&url, &candidate.document_url, budget)?;
             if (200..=299).contains(&fetch_response.status_code) {
                 return Ok(fetch_response);
             }

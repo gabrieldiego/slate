@@ -1497,6 +1497,10 @@ Next:
   should still build and parse production-shaped HTTP, Kubo, IPNS, Iroh-like,
   Tor/I2P, LAN, or retention-provider messages; the test layer only swaps the
   socket path for deterministic in-process delivery.
+- The Kubo fixture state model must remain private to the fixture layer.
+  `kubo.rs` may plan production Kubo requests and select a transport executor,
+  but direct fixture model or registry access from the protocol implementation
+  is a boundary violation covered by `profile-sync-boundary-check`.
 - Commit each coherent step separately and rerun focused regression tests for
   storage, broadwebd, rail apps, and chrome behavior as those areas are touched.
 

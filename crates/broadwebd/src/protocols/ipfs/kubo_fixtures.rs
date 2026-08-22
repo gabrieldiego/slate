@@ -1,7 +1,7 @@
 use super::kubo::{
-    IpfsKuboProfileSyncRpcExecutor, IpfsKuboProfileSyncRpcRequest, IpfsKuboRpcResponse,
-    profile_sync_object_id_from_ipfs_path, validate_kubo_profile_sync_name_token,
-    validate_kubo_profile_sync_object_id,
+    IpfsKuboHttpContentExecutor, IpfsKuboProfileSyncRpcExecutor, IpfsKuboProfileSyncRpcRequest,
+    IpfsKuboRpcResponse, profile_sync_object_id_from_ipfs_path,
+    validate_kubo_profile_sync_name_token, validate_kubo_profile_sync_object_id,
 };
 use crate::http::{infer_content_type, parse_http_url};
 use crate::{BroadwebdError, HttpFetchResponse, HttpHeader, ResourceBudget};
@@ -37,6 +37,17 @@ impl IpfsKuboProfileSyncRpcExecutor for InternalKuboRpcTransportShim {
         max_response_bytes: usize,
     ) -> Result<InternalKuboRpcResponse, BroadwebdError> {
         fetch_internal_kubo_rpc_response(url, max_response_bytes, None)
+    }
+}
+
+impl IpfsKuboHttpContentExecutor for InternalKuboRpcTransportShim {
+    fn execute_http_content_request(
+        &self,
+        url: &Url,
+        document_url: &str,
+        budget: &ResourceBudget,
+    ) -> Result<HttpFetchResponse, BroadwebdError> {
+        fetch_internal_kubo_rpc_fixture(url, document_url, budget)
     }
 }
 
@@ -101,7 +112,7 @@ pub(crate) fn internal_kubo_rpc_url_belongs_to_network(url: &Url, network_id: &s
     url_network_id == network_id
 }
 
-pub(super) fn fetch_internal_kubo_rpc_fixture(
+fn fetch_internal_kubo_rpc_fixture(
     url: &Url,
     document_url: &str,
     budget: &ResourceBudget,

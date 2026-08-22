@@ -1163,6 +1163,13 @@ integration would use. Test fixtures may replace the socket layer with
 in-process delivery, but they should not replace the protocol contract with
 test-only shortcuts.
 
+For the Kubo path, `kubo.rs` owns production-shaped URL planning, response
+parsing, status handling, and endpoint policy. The in-process Kubo state model
+must stay in `kubo_fixtures.rs` and be reached only through transport executor
+or shim traits. The profile-sync boundary check rejects direct fixture-model
+references from the Kubo protocol implementation so deterministic tests cannot
+quietly bypass the same request/response contract used by live adapters.
+
 This gives us three separate layers to keep honest:
 
 1. Protocol adapters describe real-web semantics: URLs, RPC paths, request
