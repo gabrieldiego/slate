@@ -14414,6 +14414,7 @@ mod tests {
         for (domain, privacy_classification, sync_content) in [
             (SYNC_DOMAIN_CALENDAR, "sensitive", false),
             (SYNC_DOMAIN_CHAT, "sensitive", false),
+            (SYNC_DOMAIN_CONTACTS, "sensitive", false),
             (SYNC_DOMAIN_DOWNLOADS, "metadata", false),
             (SYNC_DOMAIN_FILES, "content", true),
             (SYNC_DOMAIN_STORAGE, "sensitive", false),
@@ -14453,6 +14454,18 @@ mod tests {
             unread_count: 1,
             archived: false,
             muted: false,
+        };
+        let contact_update = ContactCardUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            contact_id: "runtime-contact-tail-delete".to_string(),
+            display_name: "Tail Runtime Contact".to_string(),
+            given_name: Some("Tail".to_string()),
+            family_name: Some("Contact".to_string()),
+            organization: Some("Slate Sync".to_string()),
+            primary_email: Some("tail-contact@example.test".to_string()),
+            primary_phone: Some("+15550104000".to_string()),
+            notes: Some("Delete through tombstone tail".to_string()),
+            avatar_key: Some("contact-avatar:runtime-contact-tail-delete".to_string()),
         };
         let download_update = DownloadMetadataUpdate {
             profile: DEFAULT_PROFILE_ID.to_string(),
@@ -14505,6 +14518,9 @@ mod tests {
             .upsert_chat_conversation(&chat_update)
             .expect("publisher writes typed chat metadata before snapshot");
         publisher_database
+            .upsert_contact_card(&contact_update)
+            .expect("publisher writes typed contact metadata before snapshot");
+        publisher_database
             .record_download_metadata(&download_update)
             .expect("publisher writes typed download metadata before snapshot");
         publisher_database
@@ -14540,6 +14556,13 @@ mod tests {
             8,
         )
         .expect("initialize receiver chat cursor before tombstone tail snapshot");
+        let contact_watcher = TypedAppSyncDomainWatcher::<ContactCardSyncPayload>::new(
+            receiver_database.clone(),
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_CONTACTS,
+            8,
+        )
+        .expect("initialize receiver contacts cursor before tombstone tail snapshot");
         let download_watcher = TypedAppSyncDomainWatcher::<DownloadMetadataSyncPayload>::new(
             receiver_database.clone(),
             DEFAULT_PROFILE_ID,
@@ -14567,6 +14590,9 @@ mod tests {
         let initial_chat_revision = chat_watcher
             .current_revision()
             .expect("read initial receiver chat cursor before tombstone tail snapshot");
+        let initial_contact_revision = contact_watcher
+            .current_revision()
+            .expect("read initial receiver contacts cursor before tombstone tail snapshot");
         let initial_download_revision = download_watcher
             .current_revision()
             .expect("read initial receiver downloads cursor before tombstone tail snapshot");
@@ -14587,6 +14613,13 @@ mod tests {
             chat_watcher
                 .poll_once()
                 .expect("poll idle chat before tombstone tail snapshot")
+                .event_count(),
+            0
+        );
+        assert_eq!(
+            contact_watcher
+                .poll_once()
+                .expect("poll idle contacts before tombstone tail snapshot")
                 .event_count(),
             0
         );
@@ -14648,6 +14681,13 @@ mod tests {
             receiver_database
                 .chat_conversations(DEFAULT_PROFILE_ID, 10)
                 .expect("read receiver typed chat metadata")
+                .len(),
+            1
+        );
+        assert_eq!(
+            receiver_database
+                .contact_cards(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver typed contact metadata")
                 .len(),
             1
         );
@@ -14746,6 +14786,47 @@ mod tests {
         assert_eq!(
             snapshot_chat_applied.cursor.latest_revision,
             snapshot_chat_poll.latest_revision
+        );
+
+        let snapshot_contact_applied = contact_watcher
+            .poll_apply_and_acknowledge(|snapshot_contact_poll| {
+                assert!(snapshot_contact_poll.advanced());
+                assert_eq!(
+                    snapshot_contact_poll.previous_revision,
+                    initial_contact_revision
+                );
+                assert_eq!(snapshot_contact_poll.event_count(), 1);
+                assert_eq!(
+                    snapshot_contact_poll.events[0].value.contact_id,
+                    "runtime-contact-tail-delete"
+                );
+                assert_eq!(
+                    snapshot_contact_poll.events[0].value.display_name,
+                    "Tail Runtime Contact"
+                );
+                assert!(!snapshot_contact_poll.events[0].value.deleted);
+                Ok::<(), &'static str>(())
+            })
+            .expect("receiver applies typed contact snapshot before tombstone tail");
+        let snapshot_contact_poll = snapshot_contact_applied.poll;
+        assert!(snapshot_contact_poll.advanced());
+        assert_eq!(
+            snapshot_contact_poll.previous_revision,
+            initial_contact_revision
+        );
+        assert_eq!(snapshot_contact_poll.event_count(), 1);
+        assert_eq!(
+            snapshot_contact_poll.events[0].value.contact_id,
+            "runtime-contact-tail-delete"
+        );
+        assert_eq!(
+            snapshot_contact_poll.events[0].value.display_name,
+            "Tail Runtime Contact"
+        );
+        assert!(!snapshot_contact_poll.events[0].value.deleted);
+        assert_eq!(
+            snapshot_contact_applied.cursor.latest_revision,
+            snapshot_contact_poll.latest_revision
         );
 
         let snapshot_download_applied = download_watcher
@@ -14866,6 +14947,9 @@ mod tests {
             .remove_chat_conversation(DEFAULT_PROFILE_ID, chat_update.conversation_id.as_str())
             .expect("publisher tombstones typed chat metadata after snapshot");
         publisher_database
+            .remove_contact_card(DEFAULT_PROFILE_ID, contact_update.contact_id.as_str())
+            .expect("publisher tombstones typed contact metadata after snapshot");
+        publisher_database
             .remove_download_metadata(DEFAULT_PROFILE_ID, download_update.download_id.as_str())
             .expect("publisher tombstones typed download metadata after snapshot");
         publisher_database
@@ -14891,7 +14975,7 @@ mod tests {
             tail.publication.snapshot_object_id,
             full.publication.snapshot_object_id
         );
-        assert_eq!(tail.publication.tail_change_object_ids.len(), 5);
+        assert_eq!(tail.publication.tail_change_object_ids.len(), 6);
         assert_eq!(
             tail.device_head.device_head.latest_change_object_id,
             tail.publication.tail_change_object_ids.last().cloned()
@@ -14914,7 +14998,7 @@ mod tests {
             tail.publication.manifest_object_id
         );
         assert!(application.snapshot.is_some());
-        assert_eq!(application.tail_changes.len(), 5);
+        assert_eq!(application.tail_changes.len(), 6);
         assert!(
             receiver_database
                 .calendar_events(DEFAULT_PROFILE_ID, 10)
@@ -14925,6 +15009,12 @@ mod tests {
             receiver_database
                 .chat_conversations(DEFAULT_PROFILE_ID, 10)
                 .expect("read receiver typed chat metadata after tombstone tail")
+                .is_empty()
+        );
+        assert!(
+            receiver_database
+                .contact_cards(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver typed contact metadata after tombstone tail")
                 .is_empty()
         );
         assert!(
@@ -14974,6 +15064,20 @@ mod tests {
             serde_json::from_str(chat_value.as_str()).expect("decode chat tombstone tail payload");
         assert!(chat_payload.deleted);
         assert_eq!(chat_payload.conversation_id, "runtime-chat-tail-delete");
+
+        let contact_value = receiver_database
+            .get_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CONTACTS,
+                "contact.runtime-contact-tail-delete",
+            )
+            .expect("read receiver contact tombstone tail sync setting")
+            .expect("receiver contact tombstone tail sync setting")
+            .value;
+        let contact_payload: ContactCardSyncPayload = serde_json::from_str(contact_value.as_str())
+            .expect("decode contact tombstone tail payload");
+        assert!(contact_payload.deleted);
+        assert_eq!(contact_payload.contact_id, "runtime-contact-tail-delete");
 
         let download_value = receiver_database
             .get_sync_setting_text(
@@ -15099,6 +15203,47 @@ mod tests {
         assert_eq!(
             tombstone_chat_applied.cursor.latest_revision,
             tombstone_chat_poll.latest_revision
+        );
+
+        let tombstone_contact_applied = contact_watcher
+            .poll_apply_and_acknowledge(|tombstone_contact_poll| {
+                assert!(tombstone_contact_poll.advanced());
+                assert_eq!(
+                    tombstone_contact_poll.previous_revision,
+                    snapshot_contact_poll.latest_revision
+                );
+                assert_eq!(tombstone_contact_poll.event_count(), 1);
+                assert_eq!(
+                    tombstone_contact_poll.events[0].change.entity_key,
+                    "contact.runtime-contact-tail-delete"
+                );
+                assert!(tombstone_contact_poll.events[0].value.deleted);
+                assert_eq!(
+                    tombstone_contact_poll.events[0].value.contact_id,
+                    "runtime-contact-tail-delete"
+                );
+                Ok::<(), &'static str>(())
+            })
+            .expect("receiver applies typed contact tombstone tail payload");
+        let tombstone_contact_poll = tombstone_contact_applied.poll;
+        assert!(tombstone_contact_poll.advanced());
+        assert_eq!(
+            tombstone_contact_poll.previous_revision,
+            snapshot_contact_poll.latest_revision
+        );
+        assert_eq!(tombstone_contact_poll.event_count(), 1);
+        assert_eq!(
+            tombstone_contact_poll.events[0].change.entity_key,
+            "contact.runtime-contact-tail-delete"
+        );
+        assert!(tombstone_contact_poll.events[0].value.deleted);
+        assert_eq!(
+            tombstone_contact_poll.events[0].value.contact_id,
+            "runtime-contact-tail-delete"
+        );
+        assert_eq!(
+            tombstone_contact_applied.cursor.latest_revision,
+            tombstone_contact_poll.latest_revision
         );
 
         let tombstone_download_applied = download_watcher

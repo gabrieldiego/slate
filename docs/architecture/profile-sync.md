@@ -299,8 +299,8 @@ The update-tail fixture then records those snapshot cursors, applies a
 post-snapshot manifest tail, and verifies each app-domain poll returns only the
 incremental decoded payload for that domain.
 The tombstone-tail fixture uses the same cursor sequence for Calendar, Chat,
-Downloads, Files, and Storage deletions, so apps can observe decoded deletion
-payloads and only then acknowledge the tail revision.
+Contacts, Downloads, Files, and Storage deletions, so apps can observe decoded
+deletion payloads and only then acknowledge the tail revision.
 
 ## Data Objects
 
@@ -493,9 +493,9 @@ handoffs for Calendar, Chat, Contacts, Downloads, Files, and Storage metadata.
 It also covers tombstone snapshots that remove stale Chat, Downloads, Files,
 and Storage typed rows from a receiver, post-snapshot update tails for Calendar,
 Chat, Contacts, Downloads, Files, and Storage, and
-Calendar/Chat/Downloads/Files/Storage tombstone tails to verify incremental
-typed changes use the same trusted device-head path. These tests use
-`InProcessBroadwebNetwork`, so app-domain create, update, and delete
+Calendar/Chat/Contacts/Downloads/Files/Storage tombstone tails to verify
+incremental typed changes use the same trusted device-head path. These tests
+use `InProcessBroadwebNetwork`, so app-domain create, update, and delete
 propagation is verified without
 loopback sockets or external protocols.
 

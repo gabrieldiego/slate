@@ -242,8 +242,8 @@ Current baseline:
   in-process fixture, verify the receiver materializes typed rows, verify
   post-snapshot update tails for Calendar, Chat, Contacts, Downloads, Files,
   and Storage, verify tombstone snapshots for Chat, Downloads, Files, and
-  Storage, and verify Calendar/Chat/Downloads/Files/Storage post-snapshot
-  tombstone tails delete stale typed rows on the receiver.
+  Storage, and verify Calendar/Chat/Contacts/Downloads/Files/Storage
+  post-snapshot tombstone tails delete stale typed rows on the receiver.
 - Local settings/app-domain publishing now filters outgoing snapshots and tail
   manifests through the enabled app sync-domain table. Disabled domains can
   still be used as local typed state, but they are not published to broadweb
@@ -317,9 +317,9 @@ Current baseline:
   decoded payload batch. The same watcher path now covers post-snapshot update
   tails for Calendar, Chat, Contacts, Downloads, Files, and Storage, so apps
   can observe incremental metadata changes after acknowledging the snapshot
-  batch. Calendar, Chat, Downloads, Files, and Storage tombstone tails are
-  covered through the same typed watcher path, proving deletions are observable
-  before the app advances its cursor.
+  batch. Calendar, Chat, Contacts, Downloads, Files, and Storage tombstone
+  tails are covered through the same typed watcher path, proving deletions are
+  observable before the app advances its cursor.
 - The profile-sync bridge can now publish post-snapshot local settings updates
   by reusing the latest retained `slate-settings.db` snapshot object, publishing
   only the new tail changes, moving the settings root, and publishing a fresh
