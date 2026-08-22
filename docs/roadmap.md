@@ -304,6 +304,11 @@ Current baseline:
   and return raw fixture responses under the profile-sync object budget. This
   keeps backend-client tests socketless while preserving the existing HTTP
   response budget for browsing-style Kubo fetches.
+- The Kubo profile-sync fixture client can now put one encrypted profile object
+  through that socketless add path, enforce the profile-sync object budget
+  before issuing the simulated request, require a successful Kubo status, and
+  return the parsed object id. This is still a local fixture backend, not a
+  live Kubo HTTP client.
 - broadwebd's own HTTP fixture unit tests now start daemons with
   `InProcessBroadwebNetwork` fixture registries whenever they consume
   `slate-fixture-http://` URLs. That keeps the production default direct HTTP

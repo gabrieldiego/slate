@@ -314,7 +314,11 @@ Kubo RPC calls before any HTTP client is introduced, so the service wiring can
 be tested without opening loopback sockets. The in-process Kubo fixture can
 execute those planned profile-sync requests and return raw fixture responses
 under the profile-sync object budget, while browsing-style Kubo fixture fetches
-continue to use the HTTP response budget.
+continue to use the HTTP response budget. The first composed fixture client
+operation puts an encrypted profile-sync object through the planned add request,
+checks the profile-sync object budget before consuming a fixture response,
+requires a successful Kubo status, and returns only the parsed object id. That
+keeps the test backend shaped like the future client while staying socketless.
 
 Pinning, publishing, providing, and reproviding are not part of the initial
 fetch contract. Pinning and publishing enter through `profile-sync` as explicit

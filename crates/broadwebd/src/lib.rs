@@ -2153,6 +2153,78 @@ mod tests {
     }
 
     #[test]
+    fn ipfs_kubo_profile_sync_fixture_puts_encrypted_object() {
+        let object_id = "bafybeigdyrztprofileobject";
+        let fixture = InProcessBroadwebNetwork::new().kubo_rpc_response(InternalKuboRpcResponse {
+            status_code: 200,
+            content_type: "application/json".to_string(),
+            body: br#"{"Name":"profile-object","Hash":"bafybeigdyrztprofileobject","Size":"128"}"#
+                .to_vec(),
+        });
+        let rpc = IpfsKuboProfileSyncRpc::local(fixture.base_url())
+            .expect("fixture Kubo profile sync RPC");
+
+        assert_eq!(
+            rpc.put_encrypted_object_fixture(
+                b"encrypted slate-settings snapshot",
+                &ResourceBudget::default()
+            )
+            .expect("put encrypted object through fixture Kubo RPC"),
+            object_id
+        );
+        assert_eq!(
+            fixture.finish(),
+            vec!["POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1"]
+        );
+    }
+
+    #[test]
+    fn ipfs_kubo_profile_sync_fixture_rejects_oversized_object_before_request() {
+        let fixture = InProcessBroadwebNetwork::new().kubo_rpc_response(InternalKuboRpcResponse {
+            status_code: 200,
+            content_type: "application/json".to_string(),
+            body: br#"{"Name":"profile-object","Hash":"bafybeigdyrztprofileobject","Size":"128"}"#
+                .to_vec(),
+        });
+        let rpc = IpfsKuboProfileSyncRpc::local(fixture.base_url())
+            .expect("fixture Kubo profile sync RPC");
+        let budget = ResourceBudget {
+            max_profile_sync_object_bytes: 4,
+            ..ResourceBudget::default()
+        };
+
+        assert!(matches!(
+            rpc.put_encrypted_object_fixture(b"encrypted object", &budget),
+            Err(BroadwebdError::ResponseTooLarge {
+                limit: 4,
+                actual: 16
+            })
+        ));
+        assert!(fixture.finish().is_empty());
+    }
+
+    #[test]
+    fn ipfs_kubo_profile_sync_fixture_rejects_kubo_error_status() {
+        let fixture = InProcessBroadwebNetwork::new().kubo_rpc_response(InternalKuboRpcResponse {
+            status_code: 500,
+            content_type: "application/json".to_string(),
+            body: br#"{"Message":"add failed"}"#.to_vec(),
+        });
+        let rpc = IpfsKuboProfileSyncRpc::local(fixture.base_url())
+            .expect("fixture Kubo profile sync RPC");
+
+        assert!(matches!(
+            rpc.put_encrypted_object_fixture(b"encrypted object", &ResourceBudget::default()),
+            Err(BroadwebdError::Request(message))
+                if message == "Kubo profile-sync add returned HTTP status 500"
+        ));
+        assert_eq!(
+            fixture.finish(),
+            vec!["POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1"]
+        );
+    }
+
+    #[test]
     fn ipfs_kubo_profile_sync_response_parsers_extract_object_ids() {
         let object_id = "bafybeigdyrztprofileobject";
 

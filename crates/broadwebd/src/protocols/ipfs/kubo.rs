@@ -172,6 +172,31 @@ impl IpfsKuboProfileSyncRpc {
             ipfs_kubo_profile_sync_name_resolve_url(name, self.endpoint.api_base_url())?,
         ))
     }
+
+    #[cfg(any(test, feature = "test-fixtures"))]
+    pub fn put_encrypted_object_fixture(
+        &self,
+        object_bytes: &[u8],
+        budget: &ResourceBudget,
+    ) -> Result<String, BroadwebdError> {
+        if !self.endpoint.is_internal_fixture() {
+            return Err(BroadwebdError::UnsupportedRequest(
+                "Kubo profile-sync fixture client requires an in-process fixture endpoint"
+                    .to_string(),
+            ));
+        }
+        if object_bytes.len() > budget.max_profile_sync_object_bytes {
+            return Err(BroadwebdError::ResponseTooLarge {
+                limit: budget.max_profile_sync_object_bytes,
+                actual: object_bytes.len(),
+            });
+        }
+
+        let request = self.put_encrypted_object_request()?;
+        let response = fetch_internal_kubo_profile_sync_fixture(&request, budget)?;
+        require_kubo_profile_sync_success("add", response.status_code)?;
+        ipfs_kubo_profile_sync_added_object_id(response.body.as_slice())
+    }
 }
 
 impl IpfsKuboProfileSyncRpcRequest {
@@ -432,6 +457,20 @@ pub fn fetch_internal_kubo_profile_sync_fixture(
 ) -> Result<InternalKuboRpcResponse, BroadwebdError> {
     let url = parse_http_url(request.url())?;
     fetch_internal_kubo_rpc_response(&url, budget.max_profile_sync_object_bytes)
+}
+
+#[cfg(any(test, feature = "test-fixtures"))]
+fn require_kubo_profile_sync_success(
+    operation: &str,
+    status_code: u16,
+) -> Result<(), BroadwebdError> {
+    if (200..=299).contains(&status_code) {
+        return Ok(());
+    }
+
+    Err(BroadwebdError::Request(format!(
+        "Kubo profile-sync {operation} returned HTTP status {status_code}"
+    )))
 }
 
 fn kubo_cat_url_for_path(content_path: &str, api_base_url: &str) -> Result<String, BroadwebdError> {
