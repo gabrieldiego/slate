@@ -1028,6 +1028,9 @@ Current baseline:
   kinds before preview or pull paths fetch individual signed records. The
   accepted set is limited to device enrollment, provider enrollment, revocation,
   and device-key rotation.
+- Aggregate membership-log validation now also checks record, target-device,
+  and signer-device identifiers before object fetch. Malformed ids fail during
+  socketless preview without advancing the local membership-log root.
 
 Next:
 

@@ -5708,6 +5708,12 @@ fn validate_profile_sync_membership_log(
                 "record id must not be empty".to_string(),
             ));
         }
+        if !is_valid_membership_log_identifier(entry.record_id.as_str()) {
+            return Err(ProfileSyncReceiveError::InvalidMembershipLog(format!(
+                "record id {} is invalid",
+                entry.record_id
+            )));
+        }
         if entry.root_id != sync_membership_record_root_id(entry.record_id.as_str()) {
             return Err(ProfileSyncReceiveError::InvalidMembershipLog(format!(
                 "record {} has unexpected root {}",
@@ -5730,6 +5736,18 @@ fn validate_profile_sync_membership_log(
             return Err(ProfileSyncReceiveError::InvalidMembershipLog(format!(
                 "record {} has unsupported record kind {}",
                 entry.record_id, entry.record_kind
+            )));
+        }
+        if !is_valid_membership_log_identifier(entry.device_id.as_str()) {
+            return Err(ProfileSyncReceiveError::InvalidMembershipLog(format!(
+                "record {} has invalid device id {}",
+                entry.record_id, entry.device_id
+            )));
+        }
+        if !is_valid_membership_log_identifier(entry.signer_device_id.as_str()) {
+            return Err(ProfileSyncReceiveError::InvalidMembershipLog(format!(
+                "record {} has invalid signer device id {}",
+                entry.record_id, entry.signer_device_id
             )));
         }
         if !seen_record_ids.insert(entry.record_id.clone()) {
@@ -5762,6 +5780,13 @@ fn is_supported_membership_log_record_kind(record_kind: &str) -> bool {
             | PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE
             | PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY
     )
+}
+
+fn is_valid_membership_log_identifier(value: &str) -> bool {
+    !value.is_empty()
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
 }
 
 fn validate_membership_log_entry_object(
@@ -7872,6 +7897,98 @@ mod tests {
                 .expect("read unknown-kind membership log root")
                 .is_none()
         );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_membership_log_rejects_invalid_identifiers_without_loopback() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("membership-log-identifier-publisher");
+        let receiver_state_root = test_state_root("membership-log-identifier-receiver");
+        let receiver_db_root = test_state_root("membership-log-identifier-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "membership-log-identifier-publisher",
+            )
+            .expect("start in-process membership log identifier publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "membership-log-identifier-receiver",
+            )
+            .expect("start in-process membership log identifier receiver daemon");
+        let receiver_database =
+            SlateProfileDatabase::open_resolved(receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME))
+                .expect("open membership log identifier receiver database");
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+        let invalid_logs = [
+            (
+                "epoch-1-enroll-membership-log/invalid-record",
+                "membership-log-invalid-record-device",
+                "membership-log-identifier-publisher",
+                "record id epoch-1-enroll-membership-log/invalid-record is invalid",
+            ),
+            (
+                "epoch-1-enroll-membership-log-invalid-device",
+                "../membership-log-invalid-device",
+                "membership-log-identifier-publisher",
+                "has invalid device id ../membership-log-invalid-device",
+            ),
+            (
+                "epoch-1-enroll-membership-log-invalid-signer",
+                "membership-log-invalid-signer-device",
+                "../membership-log-invalid-signer",
+                "has invalid signer device id ../membership-log-invalid-signer",
+            ),
+        ];
+
+        for (record_id, device_id, signer_device_id, expected_reason) in invalid_logs {
+            let log = ProfileSyncMembershipLog {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                schema_version: super::PROFILE_SYNC_MEMBERSHIP_LOG_SCHEMA_VERSION,
+                records: vec![ProfileSyncMembershipLogEntry {
+                    record_id: record_id.to_string(),
+                    root_id: sync_membership_record_root_id(record_id),
+                    object_id: format!("{record_id}-missing-object"),
+                    membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                    record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+                    device_id: device_id.to_string(),
+                    signer_device_id: signer_device_id.to_string(),
+                }],
+            };
+            publisher
+                .put_retained_root(
+                    DEFAULT_PROFILE_ID,
+                    PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                    serde_json::to_vec(&log).expect("encode invalid-identifier membership log"),
+                )
+                .expect("publish invalid-identifier membership log");
+
+            let error = BroadwebdProfileSyncObjectSource::new(&receiver_daemon)
+                .preview_sync_account_membership_log(
+                    &receiver_database,
+                    DEFAULT_PROFILE_ID,
+                    PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                )
+                .expect_err("invalid membership log identifier should be rejected");
+            assert!(matches!(
+                error,
+                ProfileSyncReceiveError::InvalidMembershipLog(reason)
+                    if reason.contains(expected_reason)
+            ));
+            assert!(
+                receiver_database
+                    .profile_sync_root(DEFAULT_PROFILE_ID, PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID)
+                    .expect("read invalid-identifier membership log root")
+                    .is_none()
+            );
+        }
 
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
