@@ -645,6 +645,10 @@ Current baseline:
   protocol materialization summary as their wrapped runtime result. Local-only
   fixture callers can inspect follow-up protocol work without bypassing the
   fixture-specific result type.
+- Protocol-materialized stored-provider run wrappers now expose owned
+  materialization reports and count helpers. Scheduler/UI callers can inspect
+  materialized, missing, mismatched, duplicate, and unsupported provider
+  outcomes after a run without borrowing the live materializer result.
 - Legacy `fixture:<provider>` endpoint refs now also fail closed. They do not
   carry a fixture network id, so they cannot safely satisfy stored-provider
   materialization or quorum checks.

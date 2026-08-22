@@ -2333,6 +2333,39 @@ pub struct SettingsSyncProtocolProviderMaterializationReport {
     pub unsupported_provider_ids: Vec<String>,
 }
 
+impl SettingsSyncProtocolProviderMaterializationReport {
+    pub fn materialized_provider_count(&self) -> usize {
+        self.materialized_provider_ids.len()
+    }
+
+    pub fn missing_provider_count(&self) -> usize {
+        self.missing_provider_ids.len()
+    }
+
+    pub fn endpoint_mismatch_provider_count(&self) -> usize {
+        self.endpoint_mismatch_provider_ids.len()
+    }
+
+    pub fn duplicate_provider_count(&self) -> usize {
+        self.duplicate_provider_ids.len()
+    }
+
+    pub fn unsupported_provider_count(&self) -> usize {
+        self.unsupported_provider_ids.len()
+    }
+
+    pub fn blocked_provider_count(&self) -> usize {
+        self.missing_provider_count()
+            + self.endpoint_mismatch_provider_count()
+            + self.duplicate_provider_count()
+            + self.unsupported_provider_count()
+    }
+
+    pub fn all_providers_materialized(&self) -> bool {
+        self.blocked_provider_count() == 0
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct SettingsSyncProtocolProviderMaterialization<'a> {
     pub materialized_providers: Vec<SettingsSyncProtocolMaterializedProvider<'a>>,
@@ -2921,9 +2954,7 @@ pub struct SettingsSyncStoredProtocolProviderMaterializationPreview {
 
 impl SettingsSyncStoredProtocolProviderMaterializationPreview {
     pub fn protocol_materialized_provider_count(&self) -> usize {
-        self.protocol_materialization
-            .materialized_provider_ids
-            .len()
+        self.protocol_materialization.materialized_provider_count()
     }
 
     pub fn materialized_retention_provider_count(&self) -> usize {
@@ -2973,6 +3004,27 @@ pub struct SettingsSyncStoredProtocolProviderRetentionProviderRun<'a> {
 }
 
 impl SettingsSyncStoredProtocolProviderRetentionProviderRun<'_> {
+    pub fn protocol_materialization_report(
+        &self,
+    ) -> SettingsSyncProtocolProviderMaterializationReport {
+        self.protocol_materialization.report()
+    }
+
+    pub fn protocol_materialized_provider_count(&self) -> usize {
+        self.protocol_materialization_report()
+            .materialized_provider_count()
+    }
+
+    pub fn protocol_blocked_provider_count(&self) -> usize {
+        self.protocol_materialization_report()
+            .blocked_provider_count()
+    }
+
+    pub fn all_protocol_providers_materialized(&self) -> bool {
+        self.protocol_materialization_report()
+            .all_providers_materialized()
+    }
+
     pub fn selected_protocol_materialization_plan(
         &self,
     ) -> SettingsSyncSelectedProtocolMaterializationPlan {
@@ -3188,6 +3240,27 @@ pub struct SettingsSyncStoredProtocolProviderRetentionProviderMembershipRun<'a> 
 }
 
 impl SettingsSyncStoredProtocolProviderRetentionProviderMembershipRun<'_> {
+    pub fn protocol_materialization_report(
+        &self,
+    ) -> SettingsSyncProtocolProviderMaterializationReport {
+        self.protocol_materialization.report()
+    }
+
+    pub fn protocol_materialized_provider_count(&self) -> usize {
+        self.protocol_materialization_report()
+            .materialized_provider_count()
+    }
+
+    pub fn protocol_blocked_provider_count(&self) -> usize {
+        self.protocol_materialization_report()
+            .blocked_provider_count()
+    }
+
+    pub fn all_protocol_providers_materialized(&self) -> bool {
+        self.protocol_materialization_report()
+            .all_providers_materialized()
+    }
+
     pub fn pulled_membership_application_count(&self) -> usize {
         self.run.pulled_membership_application_count()
     }
@@ -7747,6 +7820,14 @@ mod tests {
                 unsupported_provider_ids: vec![unsupported_provider_id.to_string()],
             }
         );
+        let materialization_report = materialization.report();
+        assert_eq!(materialization_report.materialized_provider_count(), 2);
+        assert_eq!(materialization_report.missing_provider_count(), 1);
+        assert_eq!(materialization_report.endpoint_mismatch_provider_count(), 1);
+        assert_eq!(materialization_report.duplicate_provider_count(), 1);
+        assert_eq!(materialization_report.unsupported_provider_count(), 1);
+        assert_eq!(materialization_report.blocked_provider_count(), 4);
+        assert!(!materialization_report.all_providers_materialized());
         let retention_provider_handles = materialization.retention_provider_handles();
         assert_eq!(retention_provider_handles.len(), 2);
         assert_eq!(
@@ -9445,6 +9526,19 @@ mod tests {
                 unsupported_provider_ids: Vec::new(),
             }
         );
+        assert_eq!(
+            run.protocol_materialization_report(),
+            super::SettingsSyncProtocolProviderMaterializationReport {
+                materialized_provider_ids: vec![provider_id.to_string()],
+                missing_provider_ids: Vec::new(),
+                endpoint_mismatch_provider_ids: Vec::new(),
+                duplicate_provider_ids: Vec::new(),
+                unsupported_provider_ids: Vec::new(),
+            }
+        );
+        assert_eq!(run.protocol_materialized_provider_count(), 1);
+        assert_eq!(run.protocol_blocked_provider_count(), 0);
+        assert!(run.all_protocol_providers_materialized());
         assert!(run.protocol_materialization.all_providers_materialized());
         assert_eq!(run.selected_retention_provider_count(), 1);
         assert_eq!(run.materialized_retention_provider_count(), 1);
@@ -16295,6 +16389,19 @@ mod tests {
                 unsupported_provider_ids: Vec::new(),
             }
         );
+        assert_eq!(
+            run.protocol_materialization_report(),
+            super::SettingsSyncProtocolProviderMaterializationReport {
+                materialized_provider_ids: vec![provider_id.to_string()],
+                missing_provider_ids: Vec::new(),
+                endpoint_mismatch_provider_ids: Vec::new(),
+                duplicate_provider_ids: Vec::new(),
+                unsupported_provider_ids: Vec::new(),
+            }
+        );
+        assert_eq!(run.protocol_materialized_provider_count(), 1);
+        assert_eq!(run.protocol_blocked_provider_count(), 0);
+        assert!(run.all_protocol_providers_materialized());
         assert!(run.protocol_materialization.all_providers_materialized());
         assert_eq!(
             run.protocol_materialization.materialized_provider_count(),
