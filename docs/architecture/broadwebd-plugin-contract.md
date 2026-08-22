@@ -319,6 +319,9 @@ operation puts an encrypted profile-sync object through the planned add request,
 checks the profile-sync object budget before consuming a fixture response,
 requires a successful Kubo status, and returns only the parsed object id. That
 keeps the test backend shaped like the future client while staying socketless.
+The same fixture client now models retained-object lifecycle calls through
+`pin/add`, `pin/ls`, and `pin/rm`, giving profile-sync tests a socketless way to
+verify Kubo-backed availability before a real HTTP client is wired in.
 
 Pinning, publishing, providing, and reproviding are not part of the initial
 fetch contract. Pinning and publishing enter through `profile-sync` as explicit

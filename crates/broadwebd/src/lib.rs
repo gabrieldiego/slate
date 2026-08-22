@@ -2225,6 +2225,69 @@ mod tests {
     }
 
     #[test]
+    fn ipfs_kubo_profile_sync_fixture_retains_verifies_and_releases_object() {
+        let object_id = "bafybeigdyrztprofileobject";
+        let fixture = InProcessBroadwebNetwork::new().kubo_rpc_sequence(vec![
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body: br#"{"Pins":["bafybeigdyrztprofileobject"]}"#.to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body: br#"{"Keys":{"bafybeigdyrztprofileobject":{"Type":"recursive"}}}"#.to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body: br#"{"Pins":["bafybeigdyrztprofileobject"]}"#.to_vec(),
+            },
+        ]);
+        let rpc = IpfsKuboProfileSyncRpc::local(fixture.base_url())
+            .expect("fixture Kubo profile sync RPC");
+
+        rpc.retain_object_fixture(object_id, &ResourceBudget::default())
+            .expect("retain profile object through fixture Kubo RPC");
+        assert!(
+            rpc.verify_retained_object_fixture(object_id, &ResourceBudget::default())
+                .expect("verify retained profile object through fixture Kubo RPC")
+        );
+        rpc.release_object_fixture(object_id, &ResourceBudget::default())
+            .expect("release profile object through fixture Kubo RPC");
+
+        assert_eq!(
+            fixture.finish(),
+            vec![
+                "POST /api/v0/pin/add?arg=bafybeigdyrztprofileobject&recursive=true HTTP/1.1",
+                "POST /api/v0/pin/ls?arg=bafybeigdyrztprofileobject&type=recursive HTTP/1.1",
+                "POST /api/v0/pin/rm?arg=bafybeigdyrztprofileobject&recursive=true HTTP/1.1",
+            ]
+        );
+    }
+
+    #[test]
+    fn ipfs_kubo_profile_sync_fixture_verify_reports_unretained_object() {
+        let object_id = "bafybeigdyrztprofileobject";
+        let fixture = InProcessBroadwebNetwork::new().kubo_rpc_response(InternalKuboRpcResponse {
+            status_code: 200,
+            content_type: "application/json".to_string(),
+            body: br#"{"Keys":{}}"#.to_vec(),
+        });
+        let rpc = IpfsKuboProfileSyncRpc::local(fixture.base_url())
+            .expect("fixture Kubo profile sync RPC");
+
+        assert!(
+            !rpc.verify_retained_object_fixture(object_id, &ResourceBudget::default())
+                .expect("verify missing retained profile object through fixture Kubo RPC")
+        );
+        assert_eq!(
+            fixture.finish(),
+            vec!["POST /api/v0/pin/ls?arg=bafybeigdyrztprofileobject&type=recursive HTTP/1.1"]
+        );
+    }
+
+    #[test]
     fn ipfs_kubo_profile_sync_response_parsers_extract_object_ids() {
         let object_id = "bafybeigdyrztprofileobject";
 

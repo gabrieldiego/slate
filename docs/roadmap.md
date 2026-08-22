@@ -309,6 +309,10 @@ Current baseline:
   before issuing the simulated request, require a successful Kubo status, and
   return the parsed object id. This is still a local fixture backend, not a
   live Kubo HTTP client.
+- The same Kubo fixture client now covers the retained-object lifecycle for
+  encrypted profile-sync objects: retain through `pin/add`, verify recursive
+  retention through `pin/ls`, and release through `pin/rm`. The tests still run
+  entirely inside the in-process fixture and do not open loopback sockets.
 - broadwebd's own HTTP fixture unit tests now start daemons with
   `InProcessBroadwebNetwork` fixture registries whenever they consume
   `slate-fixture-http://` URLs. That keeps the production default direct HTTP

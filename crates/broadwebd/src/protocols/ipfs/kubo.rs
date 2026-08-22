@@ -179,12 +179,7 @@ impl IpfsKuboProfileSyncRpc {
         object_bytes: &[u8],
         budget: &ResourceBudget,
     ) -> Result<String, BroadwebdError> {
-        if !self.endpoint.is_internal_fixture() {
-            return Err(BroadwebdError::UnsupportedRequest(
-                "Kubo profile-sync fixture client requires an in-process fixture endpoint"
-                    .to_string(),
-            ));
-        }
+        self.require_internal_fixture_endpoint()?;
         if object_bytes.len() > budget.max_profile_sync_object_bytes {
             return Err(BroadwebdError::ResponseTooLarge {
                 limit: budget.max_profile_sync_object_bytes,
@@ -196,6 +191,54 @@ impl IpfsKuboProfileSyncRpc {
         let response = fetch_internal_kubo_profile_sync_fixture(&request, budget)?;
         require_kubo_profile_sync_success("add", response.status_code)?;
         ipfs_kubo_profile_sync_added_object_id(response.body.as_slice())
+    }
+
+    #[cfg(any(test, feature = "test-fixtures"))]
+    pub fn retain_object_fixture(
+        &self,
+        object_id: &str,
+        budget: &ResourceBudget,
+    ) -> Result<(), BroadwebdError> {
+        self.require_internal_fixture_endpoint()?;
+        let request = self.retain_object_request(object_id)?;
+        let response = fetch_internal_kubo_profile_sync_fixture(&request, budget)?;
+        require_kubo_profile_sync_success("pin/add", response.status_code)
+    }
+
+    #[cfg(any(test, feature = "test-fixtures"))]
+    pub fn release_object_fixture(
+        &self,
+        object_id: &str,
+        budget: &ResourceBudget,
+    ) -> Result<(), BroadwebdError> {
+        self.require_internal_fixture_endpoint()?;
+        let request = self.release_object_request(object_id)?;
+        let response = fetch_internal_kubo_profile_sync_fixture(&request, budget)?;
+        require_kubo_profile_sync_success("pin/rm", response.status_code)
+    }
+
+    #[cfg(any(test, feature = "test-fixtures"))]
+    pub fn verify_retained_object_fixture(
+        &self,
+        object_id: &str,
+        budget: &ResourceBudget,
+    ) -> Result<bool, BroadwebdError> {
+        self.require_internal_fixture_endpoint()?;
+        let request = self.verify_retained_object_request(object_id)?;
+        let response = fetch_internal_kubo_profile_sync_fixture(&request, budget)?;
+        require_kubo_profile_sync_success("pin/ls", response.status_code)?;
+        ipfs_kubo_profile_sync_pin_ls_has_recursive_pin(object_id, response.body.as_slice())
+    }
+
+    #[cfg(any(test, feature = "test-fixtures"))]
+    fn require_internal_fixture_endpoint(&self) -> Result<(), BroadwebdError> {
+        if self.endpoint.is_internal_fixture() {
+            return Ok(());
+        }
+
+        Err(BroadwebdError::UnsupportedRequest(
+            "Kubo profile-sync fixture client requires an in-process fixture endpoint".to_string(),
+        ))
     }
 }
 
