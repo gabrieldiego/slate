@@ -21303,6 +21303,169 @@ mod tests {
     }
 
     #[test]
+    fn scheduler_rejects_iroh_node_live_transfer_without_retention_role() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("scheduler-iroh-live-transfer-only-device");
+        let provider_state_root = test_state_root("scheduler-iroh-live-transfer-only-provider");
+        let db_root = test_state_root("scheduler-iroh-live-transfer-only-db");
+        let device_id = "runtime-scheduler-iroh-live-transfer-only-a";
+        let provider_id = "iroh-live-transfer-only-provider";
+        let provider_endpoint_ref = "iroh-node:live-transfer-only-node";
+        let device_daemon = network
+            .daemon_for_device(&device_state_root, ResourceBudget::default(), device_id)
+            .expect("start in-process Iroh live-transfer-only device daemon");
+        let provider_daemon = network
+            .daemon_for_provider_with_roles(
+                &provider_state_root,
+                ResourceBudget::default(),
+                provider_id,
+                "socketless-iroh-model-provider",
+                BroadwebdProfileSyncProviderRoles {
+                    availability: false,
+                    mutable_roots: false,
+                    ..BroadwebdProfileSyncProviderRoles::logged_in_device()
+                },
+            )
+            .expect("start in-process Iroh live-transfer-only provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            device_id,
+        )
+        .expect("open Iroh live-transfer-only settings database");
+        let profile = "schedulerirohlivetransferonlyprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([96; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate(device_id)
+            .expect("generate Iroh live-transfer-only signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register Iroh live-transfer-only local trusted public key");
+        authorize_test_storage_provider(&database, profile, provider_id);
+        database
+            .upsert_storage_provider(&StorageProviderUpdate {
+                endpoint_ref: Some(provider_endpoint_ref.to_string()),
+                ..test_storage_provider_update(
+                    &network,
+                    profile,
+                    provider_id,
+                    "socketless-iroh-model-provider",
+                    "Iroh live-transfer-only profile-sync provider",
+                    true,
+                    true,
+                    true,
+                )
+            })
+            .expect("write Iroh live-transfer-only provider metadata");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write Iroh live-transfer-only local setting");
+
+        let materializer = super::SettingsSyncSocketlessProtocolProviderMaterializer::new(
+            super::SettingsSyncProtocolProviderMaterializerPolicy::socketless_fixture_models(),
+            vec![super::SettingsSyncProtocolProviderDaemon::new(
+                provider_id,
+                provider_endpoint_ref,
+                &provider_daemon,
+            )],
+        );
+        let config = SettingsSyncSchedulerConfig::new(
+            profile,
+            settings_root_id,
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
+        );
+        let scheduler = BroadwebdSettingsSyncScheduler::new(&device_daemon);
+        let latest_revision_before_run = database
+            .latest_sync_revision(profile)
+            .expect("read Iroh live-transfer-only latest revision");
+
+        let preview = scheduler
+            .plan_once_with_stored_protocol_materializer_retention_provider_handles(
+                &database,
+                &config,
+                &signer,
+                4,
+                &materializer,
+            )
+            .expect("preview Iroh live-transfer-only stored provider");
+
+        assert_eq!(preview.selected_retention_provider_count(), 0);
+        assert_eq!(
+            preview
+                .stored_provider_plan
+                .cycle
+                .ineligible_retention_provider_ids,
+            vec![provider_id.to_string()]
+        );
+        assert_eq!(
+            preview
+                .stored_provider_plan
+                .ineligible_retention_provider_count(),
+            1
+        );
+        assert_eq!(
+            preview
+                .stored_provider_plan
+                .deferred_protocol_endpoint_provider_ids(),
+            vec![provider_id.to_string()]
+        );
+        assert_eq!(
+            preview
+                .selected_protocol_materialization_plan()
+                .protocol_request_count(),
+            0
+        );
+        assert_eq!(preview.protocol_materialized_provider_count(), 0);
+        assert_eq!(preview.materialized_retention_provider_count(), 0);
+
+        let error = match scheduler
+            .run_once_with_stored_protocol_materializer_retention_provider_handles(
+                &database,
+                &config,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                4,
+                &materializer,
+            ) {
+            Ok(_) => panic!("live-transfer-only Iroh model must not satisfy retention quorum"),
+            Err(error) => error,
+        };
+        let ProfileSyncCycleWithHealthError::Policy(
+            ProfileSyncPolicyError::ProviderMaximumExceeded {
+                provider_role,
+                maximum,
+                actual,
+                ..
+            },
+        ) = error
+        else {
+            panic!("expected Iroh live-transfer-only provider role error, got {error:?}");
+        };
+        assert_eq!(provider_role, "ineligible selected retention providers");
+        assert_eq!(maximum, 0);
+        assert_eq!(actual, 1);
+        assert_eq!(
+            database
+                .latest_sync_revision(profile)
+                .expect("read latest revision after Iroh live-transfer-only failure"),
+            latest_revision_before_run
+        );
+        assert!(
+            database
+                .profile_sync_roots(profile)
+                .expect("read roots after Iroh live-transfer-only failure")
+                .is_empty()
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
     fn broadwebd_settings_sync_scheduler_runs_with_kubo_profile_sync_materialized_provider() {
         let network = InProcessBroadwebNetwork::new();
         let fixture = network.kubo_profile_sync_model();

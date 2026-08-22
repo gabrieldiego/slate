@@ -391,7 +391,16 @@ Current baseline:
   provider quorum before publishing or mutating sync roots. It also models an
   Iroh-like peer that is discoverable while transfer is delayed: the scheduler
   surfaces a retention error, the provider retains no bytes, and a later run
-  succeeds after the fixture releases the transfer path.
+  succeeds after the fixture releases the transfer path. A live-transfer-only
+  Iroh-shaped peer is still rejected for durable retention when broadwebd health
+  does not advertise the availability role, even if local stored metadata claims
+  it can retain data.
+- Internal broadweb models must remain socket substitutes, not protocol
+  implementations. IPFS/IPNS, Iroh, Tor, I2P, and future adapters should keep
+  building their normal routing plans, requests, responses, parsers, privacy
+  boundaries, and provider-role checks. The deterministic fixture layer only
+  swaps the socket transport with in-process modeled behavior such as delayed
+  discovery, unavailable transfer, stale roots, or malformed protocol responses.
 - The same bridge now publishes a real signed encrypted settings tail manifest
   through one Kubo fixture daemon, then verifies the manifest and tail bytes
   fetched by a second daemon through the shared stateful Kubo/IPNS model. The

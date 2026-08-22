@@ -980,7 +980,18 @@ surfaces the retention failure, the provider retains no bytes, and a later run
 can recover after the fixture releases transfer. This is an internal model of
 rendezvous and transfer behavior, not a live Iroh adapter; a production adapter
 must replace only the socket handoff while preserving the same scheduler and
-provider-role contracts.
+provider-role contracts. The model also treats an Iroh-shaped live-transfer
+peer without the durable availability role as ineligible for retention even
+when stored metadata claims it can retain data. That keeps simulated discovery
+and transfer behavior from bypassing the real provider-role contract.
+The rule for these internal broadweb models is strict: they may replace socket
+I/O with deterministic in-process communication shims, but they must not
+replace the protocol implementation itself. Protocol adapters should still
+construct normal URLs, RPC requests, routing plans, response parsers, privacy
+boundaries, provider-role checks, and error paths exactly as the real network
+adapter would. The socketless fixture sits underneath that boundary and feeds
+the adapter modeled responses for unavailable peers, delayed transfer,
+retention failures, malformed responses, or stale roots.
 For selected synthetic fixture endpoints, the plan also exposes
 materialization targets carrying the provider id, fixture network id, and
 endpoint ref. This lets local-only test fixtures bridge from stored metadata to
