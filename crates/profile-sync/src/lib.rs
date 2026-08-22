@@ -2550,6 +2550,12 @@ impl SettingsSyncStoredRetentionProviderMembershipPlan {
         self.cycle.selected_retention_provider_count()
     }
 
+    pub fn selected_protocol_materialization_plan(
+        &self,
+    ) -> SettingsSyncSelectedProtocolMaterializationPlan {
+        self.cycle.selected_protocol_materialization_plan()
+    }
+
     pub fn unpublishable_membership_log(&self) -> bool {
         self.membership_log_publication.requires_compaction()
     }
@@ -2581,6 +2587,19 @@ impl SettingsSyncStoredRetentionProviderMembershipPlanAttempt {
             self.cycle,
             SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::CredentialBlocked { .. }
         )
+    }
+
+    pub fn selected_protocol_materialization_plan(
+        &self,
+    ) -> Option<SettingsSyncSelectedProtocolMaterializationPlan> {
+        match &self.cycle {
+            SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::Ready(cycle) => {
+                Some(cycle.selected_protocol_materialization_plan())
+            }
+            SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::CredentialBlocked {
+                ..
+            } => None,
+        }
     }
 }
 
@@ -8782,6 +8801,7 @@ mod tests {
         );
         assert!(plan_attempt.credential_blocked());
         assert!(!plan_attempt.cycle_ready());
+        assert_eq!(plan_attempt.selected_protocol_materialization_plan(), None);
         assert!(matches!(
             plan_attempt.cycle,
             SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::CredentialBlocked { ref reason }
@@ -8887,6 +8907,10 @@ mod tests {
             .expect("stored membership plan attempt is ready after membership apply");
         assert!(ready_plan_attempt.cycle_ready());
         assert!(!ready_plan_attempt.credential_blocked());
+        assert_eq!(
+            ready_plan_attempt.selected_protocol_materialization_plan(),
+            Some(super::SettingsSyncSelectedProtocolMaterializationPlan::default())
+        );
         let SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::Ready(ready_stored_plan) =
             ready_plan_attempt.cycle
         else {
@@ -9075,6 +9099,23 @@ mod tests {
                 8,
             )
             .expect("stored membership unsupported endpoint plan attempt succeeds");
+        let unsupported_protocol_plan = unsupported_plan_attempt
+            .selected_protocol_materialization_plan()
+            .expect("unsupported endpoint plan attempt is ready");
+        assert_eq!(unsupported_protocol_plan.protocol_request_count(), 0);
+        assert_eq!(
+            unsupported_protocol_plan.missing_endpoint_provider_count(),
+            0
+        );
+        assert_eq!(unsupported_protocol_plan.fail_closed_provider_count(), 1);
+        assert!(!unsupported_protocol_plan.requires_protocol_materializer());
+        assert!(!unsupported_protocol_plan.has_missing_endpoint());
+        assert!(unsupported_protocol_plan.has_fail_closed_endpoint());
+        assert!(!unsupported_protocol_plan.ready_for_protocol_materialization());
+        assert_eq!(
+            unsupported_protocol_plan.fail_closed_provider_ids,
+            vec![unmaterialized_provider_id.to_string()]
+        );
         let SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::Ready(unsupported_plan) =
             unsupported_plan_attempt.cycle
         else {

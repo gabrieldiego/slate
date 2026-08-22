@@ -601,6 +601,11 @@ Current baseline:
   materialization summary. Successful runs can still report fail-closed or
   pending protocol endpoints that were excluded from quorum, letting callers
   surface follow-up materialization work without inferring it from raw ids.
+- Membership-aware stored-provider plan and plan-attempt previews now expose
+  selected protocol materialization summaries too. Credential-blocked attempts
+  report no protocol summary, while ready attempts expose missing,
+  fail-closed, multiaddr, and deferred-protocol work before membership-aware
+  runtime mutation.
 - Legacy `fixture:<provider>` endpoint refs now also fail closed. They do not
   carry a fixture network id, so they cannot safely satisfy stored-provider
   materialization or quorum checks.
