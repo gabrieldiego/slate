@@ -5960,6 +5960,73 @@ impl SlateProfileDatabase {
         )
     }
 
+    pub fn profile_sync_enrollment_bundle_from_secret(
+        profile: &str,
+        sync_secret: &SlateSyncSecret,
+        target_device_id: &str,
+    ) -> Result<ProfileSyncEnrollmentBundle, StorageError> {
+        Self::profile_sync_enrollment_bundle_from_secret_with_epoch(
+            profile,
+            sync_secret,
+            target_device_id,
+            DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            unix_time_seconds()?,
+        )
+    }
+
+    pub fn profile_sync_enrollment_bundle_from_secret_with_epoch(
+        profile: &str,
+        sync_secret: &SlateSyncSecret,
+        target_device_id: &str,
+        membership_epoch: i64,
+        created_at: i64,
+    ) -> Result<ProfileSyncEnrollmentBundle, StorageError> {
+        let account_authority_signer = sync_secret
+            .derive_profile_sync_device_signer(
+                profile,
+                DEFAULT_PROFILE_SYNC_ACCOUNT_AUTHORITY_DEVICE_ID,
+                membership_epoch,
+            )
+            .map_err(profile_sync_membership_record_error)?;
+        let account_authority_record = profile_sync_enroll_device_record(
+            profile,
+            DEFAULT_PROFILE_SYNC_ACCOUNT_AUTHORITY_DEVICE_ID,
+            membership_epoch,
+            account_authority_signer
+                .public_key()
+                .map_err(profile_sync_membership_record_error)?,
+        );
+        let mut signed_records = vec![signed_profile_sync_membership_record_bytes(
+            &account_authority_signer,
+            &account_authority_record,
+        )?];
+
+        if target_device_id != DEFAULT_PROFILE_SYNC_ACCOUNT_AUTHORITY_DEVICE_ID {
+            let target_signer = sync_secret
+                .derive_profile_sync_device_signer(profile, target_device_id, membership_epoch)
+                .map_err(profile_sync_membership_record_error)?;
+            let target_record = profile_sync_enroll_device_record(
+                profile,
+                target_device_id,
+                membership_epoch,
+                target_signer
+                    .public_key()
+                    .map_err(profile_sync_membership_record_error)?,
+            );
+            signed_records.push(signed_profile_sync_membership_record_bytes(
+                &account_authority_signer,
+                &target_record,
+            )?);
+        }
+
+        ProfileSyncEnrollmentBundle::new_device_enrollment(
+            profile,
+            target_device_id,
+            signed_records,
+            created_at,
+        )
+    }
+
     pub fn activate_local_profile_sync_from_secret_with_key(
         &self,
         profile: &str,
@@ -15254,6 +15321,84 @@ mod tests {
             .unwrap();
         assert_eq!(replay.len(), 2);
         assert!(replay.iter().all(|application| !application.applied));
+    }
+
+    #[test]
+    fn profile_sync_enrollment_bundle_can_be_derived_from_sync_secret() {
+        let secret = SlateSyncSecret::from_bytes([49; SLATE_SYNC_SECRET_BYTES]);
+        let bundle = SlateProfileDatabase::profile_sync_enrollment_bundle_from_secret_with_epoch(
+            DEFAULT_PROFILE_ID,
+            &secret,
+            "device-b",
+            DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            40,
+        )
+        .unwrap();
+
+        assert_eq!(bundle.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(bundle.target_device_id, "device-b");
+        assert_eq!(bundle.created_at, 40);
+        assert_eq!(bundle.signed_membership_records.len(), 2);
+
+        let database_path =
+            test_dir("sync-secret-enrollment-bundle").join(DEFAULT_DATABASE_FILE_NAME);
+        let database =
+            SlateProfileDatabase::open_resolved_with_device_id(database_path, "device-b").unwrap();
+        database
+            .activate_local_profile_sync_metadata(DEFAULT_PROFILE_ID)
+            .unwrap();
+        let applications = database
+            .apply_profile_sync_enrollment_bundle(&bundle)
+            .unwrap();
+
+        assert_eq!(applications.len(), 2);
+        assert!(applications[0].bootstrapped);
+        assert!(!applications[1].bootstrapped);
+        assert!(applications.iter().all(|application| application.applied));
+
+        let account_authority_signer = secret
+            .derive_profile_sync_device_signer(
+                DEFAULT_PROFILE_ID,
+                DEFAULT_PROFILE_SYNC_ACCOUNT_AUTHORITY_DEVICE_ID,
+                DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            )
+            .unwrap();
+        let target_signer = secret
+            .derive_profile_sync_device_signer(
+                DEFAULT_PROFILE_ID,
+                "device-b",
+                DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            )
+            .unwrap();
+        assert_eq!(
+            database
+                .sync_device_public_key(
+                    DEFAULT_PROFILE_ID,
+                    DEFAULT_PROFILE_SYNC_ACCOUNT_AUTHORITY_DEVICE_ID
+                )
+                .unwrap()
+                .expect("derived account authority key")
+                .public_key,
+            account_authority_signer.public_key().unwrap()
+        );
+        assert_eq!(
+            database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "device-b")
+                .unwrap()
+                .expect("derived target key")
+                .public_key,
+            target_signer.public_key().unwrap()
+        );
+        assert!(
+            database
+                .get_sync_setting_text(
+                    DEFAULT_PROFILE_ID,
+                    SYNC_DOMAIN_SETTINGS,
+                    "slate-sync-secret"
+                )
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]

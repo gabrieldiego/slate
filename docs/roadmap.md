@@ -1349,19 +1349,21 @@ Current baseline:
   objects, retains them on the simulated provider, and reports the object
   counts back to the page.
 - The Profile Sync Preview can also run a two-device local simulation. The
-  preview creates a temporary receiver `slate-settings.db`, derives its signer
-  from the same session key-file secret, signs that receiver into the
-  publisher's membership log, publishes one encrypted setting from the real
-  local database, pulls it into the receiver through socketless broadwebd
-  fixture daemons, and reports the receiver-applied setting count. This models
+  preview creates a temporary receiver `slate-settings.db`, derives a
+  `ProfileSyncEnrollmentBundle` from the same session key-file secret, applies
+  that bundle to the receiver, signs the receiver into the publisher's
+  membership log, publishes one encrypted setting from the real local database,
+  pulls it into the receiver through socketless broadwebd fixture daemons, and
+  reports the receiver-applied setting count. This models file/QR-style
   enrollment and remote application without opening ports or using a public
-  protocol. QR enrollment, handoff-file import/export, real provider daemons,
-  conflict handling, and production cadence policy remain future work.
+  protocol. Actual QR rendering, handoff-file import/export UI, real provider
+  daemons, conflict handling, and production cadence policy remain future work.
 - `make profile-sync-boundary-check` now provides a low-memory regression gate
   for the sync work. It runs focused rail-app sync-domain checks, verifies that
   visible rail app sync descriptors match the seeded `slate-settings.db`
   storage domain table, checks Slate Sync Secret domain separation, export
   round-trip behavior, stable signer derivation, profile-bound import,
+  secret-backed enrollment bundle derivation,
   secret-backed local signer enrollment, and non-secret local activation
   metadata, then covers local readiness reports, preview provider activation,
   storage/provider metadata, typed app-domain cursors, the broadwebd app-domain

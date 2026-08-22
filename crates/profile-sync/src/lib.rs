@@ -100,6 +100,7 @@ pub struct LocalSettingsSyncTwoDevicePreviewCycleReport {
     pub publisher_published_object_count: usize,
     pub publisher_retained_object_count: usize,
     pub publisher_retained_provider_count: usize,
+    pub receiver_enrollment_bundle_record_count: usize,
     pub receiver_pulled_membership_application_count: usize,
     pub receiver_applied_setting_count: usize,
     pub receiver_published_step_count: usize,
@@ -8013,12 +8014,16 @@ pub fn run_local_settings_sync_two_device_preview_cycle(
         state_root.receiver_database_path(),
         LOCAL_SETTINGS_SYNC_PREVIEW_RECEIVER_DEVICE_ID,
     )?;
-    let receiver_activation =
-        receiver_database.activate_local_profile_sync_from_secret(profile, sync_secret)?;
-    for application in &receiver_activation.membership_applications {
-        database.apply_signed_sync_account_membership_record(
-            application.membership_record.signed_record.as_slice(),
+    receiver_database.activate_local_profile_sync_metadata(profile)?;
+    let receiver_enrollment_bundle =
+        SlateProfileDatabase::profile_sync_enrollment_bundle_from_secret(
+            profile,
+            sync_secret,
+            LOCAL_SETTINGS_SYNC_PREVIEW_RECEIVER_DEVICE_ID,
         )?;
+    receiver_database.apply_profile_sync_enrollment_bundle(&receiver_enrollment_bundle)?;
+    for signed_record in &receiver_enrollment_bundle.signed_membership_records {
+        database.apply_signed_sync_account_membership_record(signed_record.as_slice())?;
     }
 
     let preview_setting_value = format!("two-device-preview-run-{}", unix_time_seconds());
@@ -8124,6 +8129,9 @@ pub fn run_local_settings_sync_two_device_preview_cycle(
             .len(),
         publisher_retained_object_count: publisher_run.run.cycle.retained_object_ids.len(),
         publisher_retained_provider_count: publisher_run.retained_provider_count(),
+        receiver_enrollment_bundle_record_count: receiver_enrollment_bundle
+            .signed_membership_records
+            .len(),
         receiver_pulled_membership_application_count: receiver_run
             .pulled_membership_application_count(),
         receiver_applied_setting_count: receiver_run.cycle.applied_count(),
@@ -13385,6 +13393,7 @@ mod tests {
             report.publisher_published_object_count
         );
         assert_eq!(report.publisher_retained_provider_count, 1);
+        assert_eq!(report.receiver_enrollment_bundle_record_count, 2);
         assert!(report.receiver_pulled_membership_application_count >= 2);
         assert_eq!(report.receiver_applied_setting_count, 1);
         assert_eq!(report.receiver_published_step_count, 1);

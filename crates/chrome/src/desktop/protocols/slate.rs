@@ -641,6 +641,7 @@ struct ProfileSyncPreviewTwoDeviceTrialState {
     publisher_published_object_count: usize,
     publisher_retained_object_count: usize,
     publisher_retained_provider_count: usize,
+    receiver_enrollment_bundle_record_count: usize,
     receiver_pulled_membership_application_count: usize,
     receiver_applied_setting_count: usize,
     receiver_published_step_count: usize,
@@ -666,6 +667,7 @@ impl ProfileSyncPreviewTwoDeviceTrialState {
             publisher_published_object_count: report.publisher_published_object_count,
             publisher_retained_object_count: report.publisher_retained_object_count,
             publisher_retained_provider_count: report.publisher_retained_provider_count,
+            receiver_enrollment_bundle_record_count: report.receiver_enrollment_bundle_record_count,
             receiver_pulled_membership_application_count: report
                 .receiver_pulled_membership_application_count,
             receiver_applied_setting_count: report.receiver_applied_setting_count,
@@ -689,6 +691,7 @@ impl ProfileSyncPreviewTwoDeviceTrialState {
             "publisher_published_object_count": self.publisher_published_object_count,
             "publisher_retained_object_count": self.publisher_retained_object_count,
             "publisher_retained_provider_count": self.publisher_retained_provider_count,
+            "receiver_enrollment_bundle_record_count": self.receiver_enrollment_bundle_record_count,
             "receiver_pulled_membership_application_count": self.receiver_pulled_membership_application_count,
             "receiver_applied_setting_count": self.receiver_applied_setting_count,
             "receiver_published_step_count": self.receiver_published_step_count,
