@@ -840,7 +840,11 @@ The stored-provider plan exposes provider-id buckets and counts for each
 endpoint status: in-process fixture, missing, multiaddr, deferred protocol, and
 unsupported. That gives runtime and UI code a structured preview of which
 providers can use local fixtures, which need future protocol materialization,
-and which fail closed before any provider daemon is started.
+and which fail closed before any provider daemon is started. The same buckets
+are available for only the selected retention providers after preflight, so
+runtime code can distinguish selected fixture providers from selected future
+protocol endpoints without re-filtering disabled, stale, offline, or
+undiscovered providers.
 Stored-provider runtime ticks exclude unsupported endpoint refs from
 materialized provider quorum even when the caller supplies a daemon handle with
 the same unsupported string, so socket-shaped metadata cannot be laundered into

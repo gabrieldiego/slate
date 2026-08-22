@@ -1688,6 +1688,22 @@ impl SettingsSyncStoredRetentionProviderPlan {
         )
     }
 
+    pub fn selected_in_process_fixture_endpoint_provider_ids(&self) -> Vec<String> {
+        selected_endpoint_provider_ids_with_status(
+            self.enabled_retention_provider_endpoints.as_slice(),
+            self.cycle.selected_retention_provider_ids.as_slice(),
+            SettingsSyncStoredProviderEndpointStatus::InProcessFixture,
+        )
+    }
+
+    pub fn selected_in_process_fixture_endpoint_provider_count(&self) -> usize {
+        selected_endpoint_provider_count_with_status(
+            self.enabled_retention_provider_endpoints.as_slice(),
+            self.cycle.selected_retention_provider_ids.as_slice(),
+            SettingsSyncStoredProviderEndpointStatus::InProcessFixture,
+        )
+    }
+
     pub fn missing_endpoint_provider_ids(&self) -> Vec<String> {
         endpoint_provider_ids_with_status(
             self.enabled_retention_provider_endpoints.as_slice(),
@@ -1698,6 +1714,22 @@ impl SettingsSyncStoredRetentionProviderPlan {
     pub fn missing_endpoint_provider_count(&self) -> usize {
         endpoint_provider_count_with_status(
             self.enabled_retention_provider_endpoints.as_slice(),
+            SettingsSyncStoredProviderEndpointStatus::Missing,
+        )
+    }
+
+    pub fn selected_missing_endpoint_provider_ids(&self) -> Vec<String> {
+        selected_endpoint_provider_ids_with_status(
+            self.enabled_retention_provider_endpoints.as_slice(),
+            self.cycle.selected_retention_provider_ids.as_slice(),
+            SettingsSyncStoredProviderEndpointStatus::Missing,
+        )
+    }
+
+    pub fn selected_missing_endpoint_provider_count(&self) -> usize {
+        selected_endpoint_provider_count_with_status(
+            self.enabled_retention_provider_endpoints.as_slice(),
+            self.cycle.selected_retention_provider_ids.as_slice(),
             SettingsSyncStoredProviderEndpointStatus::Missing,
         )
     }
@@ -1716,6 +1748,22 @@ impl SettingsSyncStoredRetentionProviderPlan {
         )
     }
 
+    pub fn selected_multiaddr_endpoint_provider_ids(&self) -> Vec<String> {
+        selected_endpoint_provider_ids_with_status(
+            self.enabled_retention_provider_endpoints.as_slice(),
+            self.cycle.selected_retention_provider_ids.as_slice(),
+            SettingsSyncStoredProviderEndpointStatus::Multiaddr,
+        )
+    }
+
+    pub fn selected_multiaddr_endpoint_provider_count(&self) -> usize {
+        selected_endpoint_provider_count_with_status(
+            self.enabled_retention_provider_endpoints.as_slice(),
+            self.cycle.selected_retention_provider_ids.as_slice(),
+            SettingsSyncStoredProviderEndpointStatus::Multiaddr,
+        )
+    }
+
     pub fn deferred_protocol_endpoint_provider_ids(&self) -> Vec<String> {
         endpoint_provider_ids_with_status(
             self.enabled_retention_provider_endpoints.as_slice(),
@@ -1730,6 +1778,22 @@ impl SettingsSyncStoredRetentionProviderPlan {
         )
     }
 
+    pub fn selected_deferred_protocol_endpoint_provider_ids(&self) -> Vec<String> {
+        selected_endpoint_provider_ids_with_status(
+            self.enabled_retention_provider_endpoints.as_slice(),
+            self.cycle.selected_retention_provider_ids.as_slice(),
+            SettingsSyncStoredProviderEndpointStatus::DeferredProtocol,
+        )
+    }
+
+    pub fn selected_deferred_protocol_endpoint_provider_count(&self) -> usize {
+        selected_endpoint_provider_count_with_status(
+            self.enabled_retention_provider_endpoints.as_slice(),
+            self.cycle.selected_retention_provider_ids.as_slice(),
+            SettingsSyncStoredProviderEndpointStatus::DeferredProtocol,
+        )
+    }
+
     pub fn unsupported_endpoint_provider_ids(&self) -> Vec<String> {
         endpoint_provider_ids_with_status(
             self.enabled_retention_provider_endpoints.as_slice(),
@@ -1740,6 +1804,22 @@ impl SettingsSyncStoredRetentionProviderPlan {
     pub fn unsupported_endpoint_provider_count(&self) -> usize {
         endpoint_provider_count_with_status(
             self.enabled_retention_provider_endpoints.as_slice(),
+            SettingsSyncStoredProviderEndpointStatus::Unsupported,
+        )
+    }
+
+    pub fn selected_unsupported_endpoint_provider_ids(&self) -> Vec<String> {
+        selected_endpoint_provider_ids_with_status(
+            self.enabled_retention_provider_endpoints.as_slice(),
+            self.cycle.selected_retention_provider_ids.as_slice(),
+            SettingsSyncStoredProviderEndpointStatus::Unsupported,
+        )
+    }
+
+    pub fn selected_unsupported_endpoint_provider_count(&self) -> usize {
+        selected_endpoint_provider_count_with_status(
+            self.enabled_retention_provider_endpoints.as_slice(),
+            self.cycle.selected_retention_provider_ids.as_slice(),
             SettingsSyncStoredProviderEndpointStatus::Unsupported,
         )
     }
@@ -2002,6 +2082,37 @@ fn endpoint_provider_count_with_status(
     endpoints
         .iter()
         .filter(|endpoint| endpoint.endpoint_status == endpoint_status)
+        .count()
+}
+
+fn selected_endpoint_provider_ids_with_status(
+    endpoints: &[SettingsSyncStoredRetentionProviderEndpoint],
+    selected_provider_ids: &[String],
+    endpoint_status: SettingsSyncStoredProviderEndpointStatus,
+) -> Vec<String> {
+    selected_provider_ids
+        .iter()
+        .filter(|provider_id| {
+            endpoints.iter().any(|endpoint| {
+                endpoint.provider_id == **provider_id && endpoint.endpoint_status == endpoint_status
+            })
+        })
+        .cloned()
+        .collect()
+}
+
+fn selected_endpoint_provider_count_with_status(
+    endpoints: &[SettingsSyncStoredRetentionProviderEndpoint],
+    selected_provider_ids: &[String],
+    endpoint_status: SettingsSyncStoredProviderEndpointStatus,
+) -> usize {
+    selected_provider_ids
+        .iter()
+        .filter(|provider_id| {
+            endpoints.iter().any(|endpoint| {
+                endpoint.provider_id == **provider_id && endpoint.endpoint_status == endpoint_status
+            })
+        })
         .count()
 }
 
@@ -5310,6 +5421,92 @@ mod tests {
         assert_eq!(
             super::endpoint_provider_count_with_status(
                 selected.enabled_retention_provider_endpoints.as_slice(),
+                SettingsSyncStoredProviderEndpointStatus::Unsupported,
+            ),
+            1
+        );
+
+        let selected_provider_ids = vec![
+            fixture_provider_id.to_string(),
+            multiaddr_provider_id.to_string(),
+            unsupported_provider_id.to_string(),
+        ];
+        assert_eq!(
+            super::selected_endpoint_provider_ids_with_status(
+                selected.enabled_retention_provider_endpoints.as_slice(),
+                selected_provider_ids.as_slice(),
+                SettingsSyncStoredProviderEndpointStatus::InProcessFixture,
+            ),
+            vec![fixture_provider_id.to_string()]
+        );
+        assert_eq!(
+            super::selected_endpoint_provider_count_with_status(
+                selected.enabled_retention_provider_endpoints.as_slice(),
+                selected_provider_ids.as_slice(),
+                SettingsSyncStoredProviderEndpointStatus::InProcessFixture,
+            ),
+            1
+        );
+        assert!(
+            super::selected_endpoint_provider_ids_with_status(
+                selected.enabled_retention_provider_endpoints.as_slice(),
+                selected_provider_ids.as_slice(),
+                SettingsSyncStoredProviderEndpointStatus::Missing,
+            )
+            .is_empty()
+        );
+        assert_eq!(
+            super::selected_endpoint_provider_count_with_status(
+                selected.enabled_retention_provider_endpoints.as_slice(),
+                selected_provider_ids.as_slice(),
+                SettingsSyncStoredProviderEndpointStatus::Missing,
+            ),
+            0
+        );
+        assert_eq!(
+            super::selected_endpoint_provider_ids_with_status(
+                selected.enabled_retention_provider_endpoints.as_slice(),
+                selected_provider_ids.as_slice(),
+                SettingsSyncStoredProviderEndpointStatus::Multiaddr,
+            ),
+            vec![multiaddr_provider_id.to_string()]
+        );
+        assert_eq!(
+            super::selected_endpoint_provider_count_with_status(
+                selected.enabled_retention_provider_endpoints.as_slice(),
+                selected_provider_ids.as_slice(),
+                SettingsSyncStoredProviderEndpointStatus::Multiaddr,
+            ),
+            1
+        );
+        assert!(
+            super::selected_endpoint_provider_ids_with_status(
+                selected.enabled_retention_provider_endpoints.as_slice(),
+                selected_provider_ids.as_slice(),
+                SettingsSyncStoredProviderEndpointStatus::DeferredProtocol,
+            )
+            .is_empty()
+        );
+        assert_eq!(
+            super::selected_endpoint_provider_count_with_status(
+                selected.enabled_retention_provider_endpoints.as_slice(),
+                selected_provider_ids.as_slice(),
+                SettingsSyncStoredProviderEndpointStatus::DeferredProtocol,
+            ),
+            0
+        );
+        assert_eq!(
+            super::selected_endpoint_provider_ids_with_status(
+                selected.enabled_retention_provider_endpoints.as_slice(),
+                selected_provider_ids.as_slice(),
+                SettingsSyncStoredProviderEndpointStatus::Unsupported,
+            ),
+            vec![unsupported_provider_id.to_string()]
+        );
+        assert_eq!(
+            super::selected_endpoint_provider_count_with_status(
+                selected.enabled_retention_provider_endpoints.as_slice(),
+                selected_provider_ids.as_slice(),
                 SettingsSyncStoredProviderEndpointStatus::Unsupported,
             ),
             1
@@ -9857,6 +10054,25 @@ mod tests {
             fixture_endpoint_provider_ids,
             expected_fixture_endpoint_provider_ids
         );
+        assert_eq!(
+            plan.selected_in_process_fixture_endpoint_provider_ids(),
+            vec![selected_provider_id.to_string()]
+        );
+        assert_eq!(
+            plan.selected_in_process_fixture_endpoint_provider_count(),
+            1
+        );
+        assert!(plan.selected_missing_endpoint_provider_ids().is_empty());
+        assert_eq!(plan.selected_missing_endpoint_provider_count(), 0);
+        assert!(plan.selected_multiaddr_endpoint_provider_ids().is_empty());
+        assert_eq!(plan.selected_multiaddr_endpoint_provider_count(), 0);
+        assert!(
+            plan.selected_deferred_protocol_endpoint_provider_ids()
+                .is_empty()
+        );
+        assert_eq!(plan.selected_deferred_protocol_endpoint_provider_count(), 0);
+        assert!(plan.selected_unsupported_endpoint_provider_ids().is_empty());
+        assert_eq!(plan.selected_unsupported_endpoint_provider_count(), 0);
         assert!(plan.unsupported_endpoint_provider_ids().is_empty());
         assert_eq!(
             plan.cycle.selected_retention_provider_ids,

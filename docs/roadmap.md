@@ -497,6 +497,9 @@ Current baseline:
   endpoint materialization status: in-process fixture, missing, multiaddr,
   deferred protocol, and unsupported. This gives runtime and UI code a
   structured preview before starting or selecting any provider daemon.
+- The same endpoint buckets are also available for selected retention
+  providers after preflight, so materialization code can focus on the providers
+  that are actually eligible for the next scheduler run.
 - Stored-provider runtime ticks now also exclude unsupported endpoint refs from
   the materialized retention-provider quorum, even if the caller supplies a
   daemon handle with the same socket-shaped endpoint string. This keeps
