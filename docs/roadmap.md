@@ -926,7 +926,10 @@ Current baseline:
   in-process availability provider. A separate read-only membership-log preview
   can now report missing, unchanged, or available remote log roots by resolving
   and decoding only the aggregate log object, without applying trust records or
-  advancing verified roots.
+  advancing verified roots. Stored-provider membership plans now also have a
+  fail-soft attempt surface that carries that preview through local credential
+  blocks, while still returning real errors for backend, storage, or policy
+  failures.
 - Membership-log receive fixtures now reject mismatched index entries before
   advancing the stored log root or writing trusted device keys.
 - Membership logs now have a fixed record-count cap enforced before entry
