@@ -2418,7 +2418,7 @@ mod tests {
             InternalKuboRpcResponse {
                 status_code: 200,
                 content_type: "application/octet-stream".to_string(),
-                body: b"encrypted slate-settings snapshot".to_vec(),
+                body: Vec::new(),
             },
             InternalKuboRpcResponse {
                 status_code: 200,
@@ -2602,7 +2602,7 @@ mod tests {
             InternalKuboRpcResponse {
                 status_code: 200,
                 content_type: "application/octet-stream".to_string(),
-                body: b"encrypted slate-settings snapshot".to_vec(),
+                body: Vec::new(),
             },
         ]);
         let state_root = test_state_root("kubo-profile-sync-daemon");

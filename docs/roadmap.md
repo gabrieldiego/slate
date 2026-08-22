@@ -323,6 +323,11 @@ Current baseline:
   the same in-process Kubo RPC fixture calls. Object fetch uses Kubo `cat` under
   the profile-sync object budget, giving the runtime service contract a
   protocol-shaped backend path without opening sockets.
+- The Kubo-backed fixture service now records bytes uploaded through
+  `PutEncryptedObject` and returns those cached bytes for later
+  `GetEncryptedObject` calls after still exercising the scripted Kubo `cat`
+  request. This lets higher-level settings-sync tests validate real signed
+  payload bytes without hand-scripting every fetched body.
 - `InProcessBroadwebNetwork` now has Kubo profile-sync registry and daemon
   helpers that install the socketless Kubo-backed `profile-sync` service only
   when the Kubo fixture URL belongs to the same simulated network. Downstream

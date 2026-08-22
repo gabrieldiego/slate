@@ -637,6 +637,11 @@ impl ProfileSyncService {
                 validate_profile(&request.profile)?;
                 self.require_role(self.roles.object_transfer, "profile-sync/object-transfer")?;
                 let object_id = kubo_rpc.put_encrypted_object_fixture(&request.bytes, budget)?;
+                let mut store = self.store()?;
+                store.objects.insert(
+                    (self.provider_id.clone(), request.profile, object_id.clone()),
+                    request.bytes,
+                );
                 Ok(ProfileSyncResponse::PutEncryptedObject { object_id })
             }
             ProfileSyncRequest::GetEncryptedObject(request) => {
@@ -644,7 +649,16 @@ impl ProfileSyncService {
                 validate_profile_sync_object_id(&request.object_id)?;
                 self.require_role(self.roles.object_transfer, "profile-sync/object-transfer")?;
                 let object_id = request.object_id;
-                let bytes = kubo_rpc.get_encrypted_object_fixture(&object_id, budget)?;
+                let fetched_bytes = kubo_rpc.get_encrypted_object_fixture(&object_id, budget)?;
+                let cached_bytes = {
+                    let store = self.store()?;
+                    store
+                        .objects
+                        .get(&(self.provider_id.clone(), request.profile, object_id.clone()))
+                        .cloned()
+                };
+                let bytes = cached_bytes.unwrap_or(fetched_bytes);
+                validate_object_budget(bytes.len(), budget)?;
                 Ok(ProfileSyncResponse::GetEncryptedObject { object_id, bytes })
             }
             ProfileSyncRequest::RetainObject(request) => {

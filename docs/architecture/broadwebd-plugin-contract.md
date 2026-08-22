@@ -332,7 +332,10 @@ enabled. Fixture get uses Kubo `cat` under the profile-sync object budget rather
 than the browsing response budget. `InProcessBroadwebNetwork` provides
 registry and daemon helpers for this backend and rejects Kubo fixture URLs
 minted by a different simulated network, preserving the no-socket fixture
-boundary for downstream settings-sync tests.
+boundary for downstream settings-sync tests. For objects uploaded through that
+service, later get requests still exercise Kubo `cat` but return the cached
+uploaded bytes; this keeps the fixture protocol-shaped while allowing
+higher-level tests to verify real signed payload bytes.
 
 Pinning, publishing, providing, and reproviding are not part of the initial
 fetch contract. Pinning and publishing enter through `profile-sync` as explicit
