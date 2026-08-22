@@ -1264,6 +1264,11 @@ Current baseline:
   the scheduler derives the active content key from `SlateSyncSecret`, applies
   the trusted remote device head, and retains the published membership/settings
   object set through a selected in-process provider.
+- Stored-provider scheduler runs can now derive the active content key from
+  `SlateSyncSecret` too. A local-only fixture stores one authorized provider in
+  `slate-settings.db`, materializes the matching endpoint handle, publishes
+  encrypted settings, and retains the object set without exposing raw
+  content-key bytes to scheduler callers.
 
 Next:
 

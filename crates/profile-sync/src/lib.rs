@@ -6450,6 +6450,84 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         })
     }
 
+    pub fn run_once_with_stored_retention_provider_handles_and_sync_secret(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        sync_secret: &SlateSyncSecret,
+        signer: &ProfileSyncDeviceSigner,
+        max_stored_providers: u32,
+        retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'_>],
+    ) -> Result<SettingsSyncStoredRetentionProviderRun, ProfileSyncCycleWithHealthError> {
+        let runner = BroadwebdSettingsSyncRunner::new(self.daemon);
+        let preflight = runner.settings_sync_cycle_preflight_with_active_key_policy(
+            database,
+            config.profile.as_str(),
+            config.settings_root_id.as_str(),
+            signer,
+            &config.policy,
+        )?;
+        let content_key = derive_settings_sync_content_key_from_secret(
+            config.profile.as_str(),
+            preflight.active_key_id.as_str(),
+            sync_secret,
+        )
+        .map_err(ProfileSyncCycleError::from)?;
+        let stored_selection = load_stored_retention_provider_selection(
+            database,
+            config.profile.as_str(),
+            max_stored_providers,
+        )
+        .map_err(ProfileSyncCredentialError::from)
+        .map_err(ProfileSyncCycleError::from)?;
+        let stored_provider_plan = settings_sync_stored_retention_provider_plan(
+            preflight,
+            max_stored_providers,
+            stored_selection,
+        );
+        config.policy.check_selected_retention_provider_freshness(
+            stored_provider_plan.stale_retention_provider_count(),
+            stored_provider_plan.offline_retention_provider_count(),
+            &stored_provider_plan.cycle.preflight.before_health,
+        )?;
+        config.policy.check_selected_retention_provider_roles(
+            stored_provider_plan.ineligible_retention_provider_count(),
+            &stored_provider_plan.cycle.preflight.before_health,
+        )?;
+        let materialized_providers = materialize_stored_retention_provider_daemons(
+            &stored_provider_plan,
+            retention_provider_handles,
+        );
+        config.policy.check_selected_retention_provider_count(
+            materialized_providers.materialized_retention_provider_count(),
+            &stored_provider_plan.cycle.preflight.before_health,
+        )?;
+        let cycle = runner
+            .run_settings_sync_cycle_with_active_key_policy_shared_root_candidates_and_retention_providers_after_preflight(
+                database,
+                &content_key,
+                signer,
+                &config.policy,
+                materialized_providers.daemons.as_slice(),
+                &stored_provider_plan.cycle.preflight,
+            )?;
+
+        Ok(SettingsSyncStoredRetentionProviderRun {
+            stored_provider_plan,
+            unmaterialized_retention_provider_ids: materialized_providers
+                .unmaterialized_retention_provider_ids,
+            pending_endpoint_materialization_retention_provider_ids: materialized_providers
+                .pending_endpoint_materialization_retention_provider_ids,
+            endpoint_mismatch_retention_provider_ids: materialized_providers
+                .endpoint_mismatch_retention_provider_ids,
+            duplicate_handle_retention_provider_ids: materialized_providers
+                .duplicate_handle_retention_provider_ids,
+            unsupported_endpoint_retention_provider_ids: materialized_providers
+                .unsupported_endpoint_retention_provider_ids,
+            cycle,
+        })
+    }
+
     pub fn run_once_with_stored_in_process_fixture_retention_provider_daemons<'provider>(
         &self,
         database: &SlateProfileDatabase,
@@ -18363,6 +18441,108 @@ mod tests {
         let _ = std::fs::remove_dir_all(device_state_root);
         let _ = std::fs::remove_dir_all(provider_state_root);
         let _ = std::fs::remove_dir_all(unmaterialized_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_scheduler_stored_provider_derives_active_key_from_sync_secret() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("scheduler-stored-secret-device");
+        let provider_state_root = test_state_root("scheduler-stored-secret-provider");
+        let db_root = test_state_root("scheduler-stored-secret-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-stored-secret-a",
+            )
+            .expect("start in-process stored secret scheduler device daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-stored-secret-pinner",
+            )
+            .expect("start in-process stored secret provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-scheduler-stored-secret-a",
+        )
+        .expect("open scheduler stored secret settings database");
+        let profile = "schedulerstoredsecretprofile";
+        let settings_root_id = "settings/latest";
+        let sync_secret = SlateSyncSecret::from_bytes([98; SLATE_SYNC_SECRET_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-scheduler-stored-secret-a")
+            .expect("generate scheduler stored secret signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register scheduler stored secret local trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write scheduler stored secret local setting");
+        let provider_id = "local-fixture-availability-runtime-scheduler-stored-secret-pinner";
+        let provider_endpoint_ref = network.profile_sync_provider_endpoint_ref(provider_id);
+        database
+            .upsert_storage_provider(&test_storage_provider_update(
+                &network,
+                profile,
+                provider_id,
+                "local-fixture-availability",
+                "Selected stored secret pinner",
+                true,
+                true,
+                true,
+            ))
+            .expect("write stored secret provider metadata");
+        authorize_test_storage_providers(&database, profile, &[provider_id]);
+
+        let config = SettingsSyncSchedulerConfig::new(
+            profile,
+            settings_root_id,
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
+        );
+        let run = BroadwebdSettingsSyncScheduler::new(&device_daemon)
+            .run_once_with_stored_retention_provider_handles_and_sync_secret(
+                &database,
+                &config,
+                &sync_secret,
+                &signer,
+                4,
+                &[SettingsSyncRetentionProviderHandle::with_endpoint_ref(
+                    provider_id,
+                    provider_endpoint_ref.as_str(),
+                    &provider_daemon,
+                )],
+            )
+            .expect("secret stored-provider scheduler tick retains settings state");
+
+        assert_eq!(run.stored_provider_plan.stored_provider_count, 1);
+        assert_eq!(
+            run.stored_provider_plan
+                .cycle
+                .selected_retention_provider_ids,
+            vec![provider_id.to_string()]
+        );
+        assert_eq!(run.materialized_retention_provider_count(), 1);
+        assert!(run.unmaterialized_retention_provider_ids.is_empty());
+        assert_eq!(run.cycle.cycle.published_step_count(), 1);
+        assert_eq!(run.retained_provider_count(), 1);
+        assert!(!run.degraded_after());
+        assert_eq!(
+            run.cycle
+                .after_health
+                .settings_root_health
+                .online_retaining_providers,
+            2
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
         let _ = std::fs::remove_dir_all(db_root);
     }
 

@@ -886,20 +886,23 @@ preflight, so runtime callers do not need to hand raw content-key bytes to the
 scheduler. The membership-aware selected-provider tick has the same shape after
 membership-log preflight, letting enrollment, active-key derivation, remote head
 receive, and selected-provider retention run without exposing raw content-key
-bytes to scheduler callers. The scheduler can also derive that read-only plan
-from enabled storage-provider metadata in `slate-settings.db`: stored providers must locally
-advertise object-transfer and availability before they are compared with
-broadwebd discovery, and disabled, locally role-ineligible, stale, offline,
-broadweb-role-ineligible, and undiscovered providers are reported separately.
-That gives runtime/UI code a bounded provider-materialization preview without
-starting protocol daemons, publishing, retaining, or opening sockets. A stored
-provider scheduler tick can then run only against already-materialized daemon
-handles supplied by runtime code. Stored selected providers without a matching
-handle are reported as unmaterialized, and only materialized selected providers
-count toward the retaining-provider quorum. When a stored row has an
-`endpoint_ref`, the materialized handle must report the same endpoint before it
-can be used for retention. Endpoint mismatches are tracked separately from
-missing handles and excluded from quorum, so runtime code cannot satisfy a
+bytes to scheduler callers. Stored-provider retained ticks now have the same
+secret-backed entry point for provider metadata loaded from
+`slate-settings.db`. The scheduler can also derive that read-only plan from
+enabled storage-provider metadata in `slate-settings.db`: stored providers must
+locally advertise object-transfer and availability before they are compared
+with broadwebd discovery, and disabled, locally role-ineligible, stale,
+offline, broadweb-role-ineligible, and undiscovered providers are reported
+separately. That gives runtime/UI code a bounded provider-materialization
+preview without starting protocol daemons, publishing, retaining, or opening
+sockets. A stored provider scheduler tick can then run only against
+already-materialized daemon handles supplied by runtime code. Stored selected
+providers without a matching handle are reported as unmaterialized, and only
+materialized selected providers count toward the retaining-provider quorum.
+When a stored row has an `endpoint_ref`, the materialized handle must report
+the same endpoint before it can be used for retention. Endpoint mismatches are
+tracked separately from missing handles and excluded from quorum, so runtime
+code cannot satisfy a
 stored provider selection with the wrong local fixture or future protocol
 endpoint. The stored-provider plan also classifies endpoint references before
 runtime materialization: `InProcessBroadwebNetwork` mints
