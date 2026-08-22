@@ -5617,11 +5617,27 @@ impl SlateProfileDatabase {
         &self,
         snapshot: &SyncSnapshotRegistration,
     ) -> Result<SyncSnapshotRecord, StorageError> {
-        let connection = self.connection()?;
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
         let now = unix_time_seconds()?;
+        let record = self.record_sync_snapshot_in_transaction(&transaction, snapshot, now)?;
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(record)
+    }
+
+    fn record_sync_snapshot_in_transaction(
+        &self,
+        transaction: &rusqlite::Transaction<'_>,
+        snapshot: &SyncSnapshotRegistration,
+        now: i64,
+    ) -> Result<SyncSnapshotRecord, StorageError> {
         let normalized_domains = normalized_snapshot_domains(snapshot.included_domains.as_slice());
         let included_domains = encode_snapshot_domains(normalized_domains.as_slice())?;
-        connection
+        transaction
             .execute(
                 "INSERT INTO settings_snapshots
                    (profile, snapshot_id, backend_object_id, covers_revision, included_domains,
@@ -5642,7 +5658,17 @@ impl SlateProfileDatabase {
             )
             .map_err(|source| self.database_error(source))?;
 
-        self.sync_snapshot(snapshot.profile.as_str(), snapshot.snapshot_id.as_str())?
+        transaction
+            .query_row(
+                "SELECT profile, snapshot_id, backend_object_id, covers_revision,
+                        included_domains, created_at
+                 FROM settings_snapshots
+                 WHERE profile = ?1 AND snapshot_id = ?2",
+                params![snapshot.profile.as_str(), snapshot.snapshot_id.as_str()],
+                sync_snapshot_record_from_row,
+            )
+            .optional()
+            .map_err(|source| self.database_error(source))?
             .ok_or_else(|| self.database_error(rusqlite::Error::QueryReturnedNoRows))
     }
 
@@ -5807,6 +5833,24 @@ impl SlateProfileDatabase {
         &self,
         snapshot: &ProfileSyncSettingsSnapshot,
     ) -> Result<Vec<SyncChangeRecord>, StorageError> {
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let now = unix_time_seconds()?;
+        let changes = self.apply_settings_snapshot_in_transaction(&transaction, snapshot, now)?;
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(changes)
+    }
+
+    fn apply_settings_snapshot_in_transaction(
+        &self,
+        transaction: &rusqlite::Transaction<'_>,
+        snapshot: &ProfileSyncSettingsSnapshot,
+        now: i64,
+    ) -> Result<Vec<SyncChangeRecord>, StorageError> {
         if snapshot.schema_version != PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION {
             return Err(StorageError::UnsupportedSyncSnapshotSchema(
                 snapshot.schema_version,
@@ -5830,11 +5874,6 @@ impl SlateProfileDatabase {
                 ))
         });
 
-        let mut connection = self.connection()?;
-        let transaction = connection
-            .transaction()
-            .map_err(|source| self.database_error(source))?;
-        let now = unix_time_seconds()?;
         let mut changes = Vec::new();
         for value in values {
             if value.value_kind != "text" || !included_domains.contains(&value.domain) {
@@ -5849,13 +5888,10 @@ impl SlateProfileDatabase {
                 value.revision,
                 value.revision,
             );
-            let applied = apply_sync_setting_text_in_transaction(&transaction, &change, now)
+            let applied = apply_sync_setting_text_in_transaction(transaction, &change, now)
                 .map_err(|source| self.database_error(source))?;
             changes.push(applied);
         }
-        transaction
-            .commit()
-            .map_err(|source| self.database_error(source))?;
         Ok(changes)
     }
 
@@ -5880,29 +5916,46 @@ impl SlateProfileDatabase {
                 .map(|tail_change| tail_change.object_id.clone()),
         );
 
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let now = unix_time_seconds()?;
         let mut snapshot_record = None;
         let mut snapshot_changes = Vec::new();
         if let Some(snapshot) = snapshot {
-            snapshot_changes = self.apply_settings_snapshot(&snapshot.snapshot)?;
-            snapshot_record = Some(self.record_sync_snapshot(&SyncSnapshotRegistration {
-                profile: manifest.profile.clone(),
-                snapshot_id: settings_sync_snapshot_id(snapshot.snapshot.covers_revision),
-                backend_object_id: Some(snapshot.object_id.clone()),
-                covers_revision: snapshot.snapshot.covers_revision,
-                included_domains: snapshot.snapshot.included_domains.clone(),
-            })?);
+            snapshot_changes =
+                self.apply_settings_snapshot_in_transaction(&transaction, &snapshot.snapshot, now)?;
+            snapshot_record = Some(self.record_sync_snapshot_in_transaction(
+                &transaction,
+                &SyncSnapshotRegistration {
+                    profile: manifest.profile.clone(),
+                    snapshot_id: settings_sync_snapshot_id(snapshot.snapshot.covers_revision),
+                    backend_object_id: Some(snapshot.object_id.clone()),
+                    covers_revision: snapshot.snapshot.covers_revision,
+                    included_domains: snapshot.snapshot.included_domains.clone(),
+                },
+                now,
+            )?);
         }
 
         let mut applied_tail_changes = Vec::new();
         for tail_change in tail_changes {
-            applied_tail_changes.push(self.apply_sync_setting_text(&tail_change.change)?);
+            applied_tail_changes.push(
+                apply_sync_setting_text_in_transaction(&transaction, &tail_change.change, now)
+                    .map_err(|source| self.database_error(source))?,
+            );
         }
 
-        self.set_profile_sync_root(
+        self.set_profile_sync_root_in_transaction(
+            &transaction,
             manifest.profile.as_str(),
             manifest.root_id.as_str(),
             manifest_object_id,
         )?;
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
 
         Ok(ProfileSyncSettingsManifestApplication {
             profile: manifest.profile.clone(),
@@ -17977,6 +18030,99 @@ mod tests {
                 .profile_sync_root(DEFAULT_PROFILE_ID, "settings/latest")
                 .unwrap(),
             None
+        );
+    }
+
+    #[test]
+    fn verified_settings_manifest_apply_is_atomic_after_snapshot_writes() {
+        let database_path = test_dir("sync-manifest-atomic-tail").join(DEFAULT_DATABASE_FILE_NAME);
+        let database =
+            SlateProfileDatabase::open_resolved_with_device_id(database_path, "device-b").unwrap();
+        let snapshot = ProfileSyncSettingsSnapshot {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            schema_version: PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION,
+            covers_revision: 1,
+            included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            values: vec![ProfileSyncSettingsSnapshotValue {
+                domain: SYNC_DOMAIN_SETTINGS.to_string(),
+                key: "ui.theme".to_string(),
+                value: "teal".to_string(),
+                value_kind: "text".to_string(),
+                revision: 1,
+            }],
+            created_at: 10,
+        };
+        let manifest = ProfileSyncManifest {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: "settings/latest".to_string(),
+            schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            current_snapshot_object_id: Some("snapshot-object-atomic".to_string()),
+            tail_change_object_ids: vec!["tail-object-invalid-bookmark".to_string()],
+            included_domains: vec![
+                SYNC_DOMAIN_SETTINGS.to_string(),
+                SYNC_DOMAIN_BOOKMARKS.to_string(),
+            ],
+            device_frontiers: Vec::new(),
+            retention_policy: ProfileSyncRetentionPolicy::default(),
+            created_at: 20,
+        };
+
+        let error = database
+            .apply_verified_settings_manifest(
+                "manifest-object-atomic",
+                &manifest,
+                Some(&VerifiedProfileSyncSettingsSnapshot {
+                    object_id: "snapshot-object-atomic".to_string(),
+                    snapshot,
+                }),
+                &[VerifiedProfileSyncSettingsTailChange {
+                    object_id: "tail-object-invalid-bookmark".to_string(),
+                    change: IncomingSyncSettingText::new(
+                        DEFAULT_PROFILE_ID,
+                        SYNC_DOMAIN_BOOKMARKS,
+                        "home.slot.99",
+                        "{not valid json",
+                        "manifest-tail-device",
+                        1,
+                        2,
+                    ),
+                }],
+            )
+            .unwrap_err();
+
+        assert!(matches!(error, StorageError::Database { .. }));
+        assert_eq!(database.get_setting_text("ui.theme").unwrap(), None);
+        assert!(
+            database
+                .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme")
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            database
+                .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_BOOKMARKS, "home.slot.99")
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            database
+                .sync_snapshot(DEFAULT_PROFILE_ID, "settings-snapshot-r1")
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            database
+                .profile_sync_root(DEFAULT_PROFILE_ID, "settings/latest")
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            !database
+                .sync_devices(DEFAULT_PROFILE_ID)
+                .unwrap()
+                .iter()
+                .any(|device| device.device_id == "manifest-tail-device")
         );
     }
 

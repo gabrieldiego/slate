@@ -872,7 +872,9 @@ Current baseline:
   that validates manifest schema, snapshot object id, tail object ids, profile,
   and included domains before applying the current snapshot, replaying the
   manifest tail in order, recording snapshot backend metadata, and advancing the
-  stored `settings/latest` root.
+  stored `settings/latest` root. Those writes now happen in one
+  `slate-settings.db` transaction, so a bad tail payload cannot leave a
+  snapshot or materialized setting applied without the verified root.
 - Storage can now apply a verified settings snapshot by replaying its text
   values through the same conflict policy used for incoming tail changes:
   snapshot values materialize in `settings_values` and the legacy settings view

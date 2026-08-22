@@ -286,6 +286,10 @@ polling. It resolves the published root first and reports missing roots,
 unchanged already-verified roots, or applied manifests separately. If the
 published root object id matches the locally stored verified root, storage does
 not fetch, decrypt, or apply the object set again.
+Verified settings manifest application now treats the snapshot values,
+snapshot metadata row, retained tail changes, and verified settings root as one
+`slate-settings.db` transaction. A malformed app-domain tail payload therefore
+rolls back any earlier snapshot materialization from the same manifest.
 
 Runtime watchers consume applied settings through bounded event feeds. The
 general feed remains available for sync internals, but app/runtime dispatch
