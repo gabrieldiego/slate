@@ -296,6 +296,11 @@ Current baseline:
   in-process registry before constructing any real HTTP client. This keeps the
   default profile-sync and rendering fixture loops independent from loopback
   listeners, firewall state, DNS, public gateways, or escalation prompts.
+- The profile-sync boundary gate now rejects direct fixture-model or fixture
+  registry calls from the Kubo protocol implementation and broadwebd
+  profile-sync service. Local models stay behind transport executor shims, so
+  the adapters keep the same request/response shape expected from real Kubo,
+  IPFS/IPNS, and future broadweb backends.
 - The opt-in Kubo RPC endpoint validator and local IPFS gateway validator now
   accept only numeric loopback addresses, plus synthetic in-process fixture URLs
   in tests. Hostname-shaped endpoints such as `localhost` are rejected before

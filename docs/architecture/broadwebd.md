@@ -663,7 +663,10 @@ Fixture transports must advertise the `socketless-fixture` capability and a
 privacy boundary that explicitly says no sockets are used, so test health output
 does not imply that loopback HTTP is active. The Kubo fixture path should resolve
 synthetic `slate-fixture-kubo://` URLs inside the in-memory registry before any
-real HTTP client is created.
+real HTTP client is created. Production-shaped Kubo protocol and profile-sync
+service code must still talk through Kubo request/response executors; direct
+access to fixture model registries or internal stores belongs only in the
+fixture modules.
 
 Real protocol tests should use local fixtures or mock daemons. Tests must not
 require live IPFS, Tor, I2P, public gateways, or external network availability

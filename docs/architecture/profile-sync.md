@@ -1254,6 +1254,9 @@ must stay in `kubo_fixtures.rs` and be reached only through transport executor
 or shim traits. The profile-sync boundary check rejects direct fixture-model
 references from the Kubo protocol implementation so deterministic tests cannot
 quietly bypass the same request/response contract used by live adapters.
+The same boundary applies to the broadwebd profile-sync service: it may choose
+a socketless executor for local tests, but it must not inspect fixture stores,
+registries, queued responses, mutable-root maps, or model state directly.
 
 This gives us three separate layers to keep honest:
 

@@ -51,8 +51,23 @@ cd "$repo_root"
 
 reject_protocol_model_leak \
     crates/broadwebd/src/protocols/ipfs/kubo.rs \
-    'InternalKubo(ProfileSyncModel|RpcFixture)|fetch_internal_kubo_rpc_fixture|internal_kubo_rpc_fixtures' \
+    'InternalKubo(ProfileSyncModel|RpcFixture)|fetch_internal_kubo|internal_kubo_rpc_fixtures|register_internal_kubo|take_internal_kubo' \
     'Kubo protocol code must not call fixture models directly; route through transport executors or shims.'
+
+reject_protocol_model_leak \
+    crates/broadwebd/src/services/profile_sync.rs \
+    'InternalKubo(ProfileSyncModel|RpcFixture)|fetch_internal_kubo|internal_kubo_rpc_fixtures|register_internal_kubo|take_internal_kubo' \
+    'broadwebd profile-sync service code must not call Kubo fixture models directly; route through transport executors or shims.'
+
+require_text \
+    crates/broadwebd/src/protocols/ipfs/kubo_fixtures.rs \
+    'impl IpfsKuboProfileSyncRpcExecutor for InternalKuboRpcTransportShim' \
+    'Kubo fixture models must be reachable through the profile-sync RPC executor shim.'
+
+require_text \
+    crates/broadwebd/src/protocols/ipfs/kubo_fixtures.rs \
+    'impl IpfsKuboHttpContentExecutor for InternalKuboRpcTransportShim' \
+    'Kubo fixture models must be reachable through the HTTP content executor shim.'
 
 require_text \
     crates/chrome/src/desktop/protocols/slate.rs \
