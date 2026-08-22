@@ -602,6 +602,11 @@ Current baseline:
   still need protocol materialization, such as missing, multiaddr, or deferred
   protocol endpoints. The materialized quorum count subtracts that pending
   bucket separately from endpoint mismatches and fail-closed endpoints.
+- Stored-provider plans now also expose a read-only handle materialization
+  report before a runtime cycle starts. Runtime and UI code can compare selected
+  providers with supplied handles, see materialized provider ids, pending
+  protocol work, endpoint mismatches, and fail-closed endpoints, then decide
+  whether it is safe to proceed without publishing or retaining anything.
 - Selected synthetic fixture endpoints now expose materialization targets with
   provider id, fixture network id, and endpoint ref so local-only fixtures can
   bridge stored metadata to in-process providers without opening sockets.
