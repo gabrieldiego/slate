@@ -17,7 +17,7 @@ use slate_broadwebd::{
     ProfileSyncRootUpdate as BroadwebdProfileSyncRootUpdate,
     parse_in_process_profile_sync_fixture_endpoint_ref,
 };
-use slate_routing::Multiaddr;
+use slate_routing::{Multiaddr, RoutingMode, RoutingPlan};
 use slate_storage::{
     DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH, EncryptedSyncObject, IncomingSyncSettingText,
     PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305, PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
@@ -46,6 +46,8 @@ use std::collections::BTreeSet;
 pub const PROFILE_SYNC_MEMBERSHIP_LOG_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID: &str = "account/membership/log";
 pub const PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS: usize = 512;
+const PROFILE_SYNC_PROVIDER_MULTIADDR_PRIVACY_BOUNDARY: &str =
+    "profile-sync provider endpoint; no browser navigation or public gateway fallback";
 
 #[derive(Clone, Copy)]
 pub struct BroadwebdProfileSyncObjectSource<'a> {
@@ -1735,6 +1737,17 @@ pub struct SettingsSyncSelectedMultiaddrMaterializationRequest {
     pub endpoint: Multiaddr,
 }
 
+impl SettingsSyncSelectedMultiaddrMaterializationRequest {
+    pub fn routing_plan(&self) -> RoutingPlan {
+        RoutingPlan::new(
+            format!("profile-sync-provider:{}", self.provider_id),
+            self.endpoint.clone(),
+            RoutingMode::Direct,
+            PROFILE_SYNC_PROVIDER_MULTIADDR_PRIVACY_BOUNDARY,
+        )
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettingsSyncSelectedDeferredProtocolMaterializationRequest {
     pub provider_id: String,
@@ -1751,6 +1764,13 @@ pub struct SettingsSyncSelectedProtocolMaterializationPlan {
 }
 
 impl SettingsSyncSelectedProtocolMaterializationPlan {
+    pub fn multiaddr_routing_plans(&self) -> Vec<RoutingPlan> {
+        self.multiaddr_requests
+            .iter()
+            .map(SettingsSyncSelectedMultiaddrMaterializationRequest::routing_plan)
+            .collect()
+    }
+
     pub fn protocol_request_count(&self) -> usize {
         self.multiaddr_requests.len() + self.deferred_protocol_requests.len()
     }
@@ -7109,6 +7129,19 @@ mod tests {
                 .expect("expected test multiaddr")
             })
         );
+        assert_eq!(
+            materialization_requests[2]
+                .multiaddr_materialization_request()
+                .expect("multiaddr materialization request")
+                .routing_plan(),
+            slate_routing::RoutingPlan::new(
+                format!("profile-sync-provider:{multiaddr_provider_id}"),
+                slate_routing::Multiaddr::parse("/dnsaddr/home.example.test/p2p/provider-a")
+                    .expect("expected routing plan test multiaddr"),
+                slate_routing::RoutingMode::Direct,
+                "profile-sync provider endpoint; no browser navigation or public gateway fallback",
+            )
+        );
         assert!(materialization_requests[3].parsed_multiaddr().is_none());
         assert!(materialization_requests[4].parsed_multiaddr().is_none());
         assert!(
@@ -7244,6 +7277,16 @@ mod tests {
             }
         );
         assert_eq!(protocol_materialization_plan.protocol_request_count(), 2);
+        assert_eq!(
+            protocol_materialization_plan.multiaddr_routing_plans(),
+            vec![slate_routing::RoutingPlan::new(
+                format!("profile-sync-provider:{multiaddr_provider_id}"),
+                slate_routing::Multiaddr::parse("/dnsaddr/home.example.test/p2p/provider-a")
+                    .expect("expected protocol routing plan test multiaddr"),
+                slate_routing::RoutingMode::Direct,
+                "profile-sync provider endpoint; no browser navigation or public gateway fallback",
+            )]
+        );
         assert_eq!(
             protocol_materialization_plan.missing_endpoint_provider_count(),
             1

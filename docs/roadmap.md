@@ -585,6 +585,11 @@ Current baseline:
   endpoints into provider-id plus parsed-`Multiaddr` request records. This
   gives future profile-sync protocol adapters a direct typed work queue while
   missing and deferred-protocol endpoints remain pending materialization.
+- Multiaddr provider materialization requests now also expose `RoutingPlan`
+  records with an explicit profile-sync privacy boundary. Future protocol
+  materializers can consume the same routing-layer type used by broadweb
+  navigation without treating stored provider endpoints as normal browser
+  visits or falling back to public gateways.
 - Deferred protocol endpoints now have the same typed scheduler handoff for
   `provider:` and `iroh-node:` refs: invalid deferred targets fail closed, and
   valid refs are grouped into provider-id, protocol, and target records for
