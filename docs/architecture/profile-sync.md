@@ -858,6 +858,11 @@ Those targets can now be materialized into existing scheduler retention-provider
 handles from caller-supplied in-process fixture daemons only when the provider
 id is present exactly once and the fixture network id matches. Missing,
 duplicate, or wrong-network providers are reported instead of being used.
+The scheduler also has a local-only stored-provider run path that accepts those
+in-process fixture daemon refs directly, materializes selected fixture handles,
+and then runs the existing stored-provider quorum and retention logic. That
+keeps test runs socketless while exercising the same scheduler behavior as
+future protocol materializers.
 Stored-provider runtime ticks exclude unsupported endpoint refs from
 materialized provider quorum even when the caller supplies a daemon handle with
 the same unsupported string, so socket-shaped metadata cannot be laundered into

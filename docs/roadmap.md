@@ -510,6 +510,9 @@ Current baseline:
 - The fixture targets can be validated into scheduler retention-provider
   handles from caller-supplied in-process fixture daemons. Missing, duplicate,
   or wrong-network providers are reported and excluded instead of being used.
+- The stored-provider scheduler can now run directly from those in-process
+  fixture daemon refs, preserving socketless tests while exercising the normal
+  stored-provider quorum and retention path.
 - Stored-provider runtime ticks now also exclude unsupported endpoint refs from
   the materialized retention-provider quorum, even if the caller supplies a
   daemon handle with the same socket-shaped endpoint string. This keeps

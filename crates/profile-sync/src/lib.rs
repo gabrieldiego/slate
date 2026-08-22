@@ -2005,6 +2005,25 @@ impl SettingsSyncStoredRetentionProviderRun {
     }
 }
 
+pub struct SettingsSyncStoredInProcessFixtureRetentionProviderRun<'a> {
+    pub fixture_materialization: SettingsSyncInProcessFixtureMaterialization<'a>,
+    pub run: SettingsSyncStoredRetentionProviderRun,
+}
+
+impl SettingsSyncStoredInProcessFixtureRetentionProviderRun<'_> {
+    pub fn selected_retention_provider_count(&self) -> usize {
+        self.run.selected_retention_provider_count()
+    }
+
+    pub fn materialized_retention_provider_count(&self) -> usize {
+        self.run.materialized_retention_provider_count()
+    }
+
+    pub fn retained_provider_count(&self) -> usize {
+        self.run.retained_provider_count()
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettingsSyncStoredRetentionProviderMembershipPlan {
     pub membership_log_publication: ProfileSyncMembershipLogPublicationPlan,
@@ -3702,6 +3721,73 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             unsupported_endpoint_retention_provider_ids: materialized_providers
                 .unsupported_endpoint_retention_provider_ids,
             cycle,
+        })
+    }
+
+    pub fn run_once_with_stored_in_process_fixture_retention_provider_daemons<'provider>(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        secrets: SettingsSyncRuntimeSecrets<'_>,
+        max_stored_providers: u32,
+        provider_daemons: &[SettingsSyncInProcessFixtureProviderDaemon<'provider>],
+    ) -> Result<
+        SettingsSyncStoredInProcessFixtureRetentionProviderRun<'provider>,
+        ProfileSyncCycleWithHealthError,
+    > {
+        let runner = BroadwebdSettingsSyncRunner::new(self.daemon);
+        let stored_provider_plan = self.plan_once_with_stored_retention_providers(
+            database,
+            config,
+            secrets.signer,
+            max_stored_providers,
+        )?;
+        config.policy.check_selected_retention_provider_freshness(
+            stored_provider_plan.stale_retention_provider_count(),
+            stored_provider_plan.offline_retention_provider_count(),
+            &stored_provider_plan.cycle.preflight.before_health,
+        )?;
+        config.policy.check_selected_retention_provider_roles(
+            stored_provider_plan.ineligible_retention_provider_count(),
+            &stored_provider_plan.cycle.preflight.before_health,
+        )?;
+        let fixture_materialization = stored_provider_plan
+            .materialize_selected_in_process_fixture_retention_provider_handles(provider_daemons);
+        let run = {
+            let retention_provider_handles = fixture_materialization.retention_provider_handles();
+            let materialized_providers = materialize_stored_retention_provider_daemons(
+                &stored_provider_plan,
+                retention_provider_handles.as_slice(),
+            );
+            config.policy.check_selected_retention_provider_count(
+                materialized_providers.materialized_retention_provider_count(),
+                &stored_provider_plan.cycle.preflight.before_health,
+            )?;
+            let cycle = runner
+                .run_settings_sync_cycle_with_active_key_policy_shared_root_candidates_and_retention_providers_after_preflight(
+                    database,
+                    secrets.content_key,
+                    secrets.signer,
+                    &config.policy,
+                    materialized_providers.daemons.as_slice(),
+                    &stored_provider_plan.cycle.preflight,
+                )?;
+
+            SettingsSyncStoredRetentionProviderRun {
+                stored_provider_plan,
+                unmaterialized_retention_provider_ids: materialized_providers
+                    .unmaterialized_retention_provider_ids,
+                endpoint_mismatch_retention_provider_ids: materialized_providers
+                    .endpoint_mismatch_retention_provider_ids,
+                unsupported_endpoint_retention_provider_ids: materialized_providers
+                    .unsupported_endpoint_retention_provider_ids,
+                cycle,
+            }
+        };
+
+        Ok(SettingsSyncStoredInProcessFixtureRetentionProviderRun {
+            fixture_materialization,
+            run,
         })
     }
 
@@ -10727,6 +10813,57 @@ mod tests {
                 .online_retaining_providers,
             2
         );
+
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.accent", "mint")
+            .expect("write second scheduler stored-run local setting");
+        let fixture_run = scheduler
+            .run_once_with_stored_in_process_fixture_retention_provider_daemons(
+                &database,
+                &config,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                8,
+                &[super::SettingsSyncInProcessFixtureProviderDaemon::new(
+                    selected_provider_id,
+                    network.network_id(),
+                    &provider_daemon,
+                )],
+            )
+            .expect("scheduler tick materializes selected fixture daemon handles");
+        assert_eq!(
+            fixture_run
+                .fixture_materialization
+                .materialized_provider_count(),
+            1
+        );
+        assert_eq!(
+            fixture_run.fixture_materialization.missing_provider_ids,
+            vec![unmaterialized_provider_id.to_string()]
+        );
+        assert!(
+            fixture_run
+                .fixture_materialization
+                .network_mismatch_provider_ids
+                .is_empty()
+        );
+        assert!(
+            fixture_run
+                .fixture_materialization
+                .duplicate_provider_ids
+                .is_empty()
+        );
+        let fixture_handles = fixture_run
+            .fixture_materialization
+            .retention_provider_handles();
+        assert_eq!(fixture_handles.len(), 1);
+        assert_eq!(fixture_handles[0].provider_id, selected_provider_id);
+        assert_eq!(
+            fixture_run.run.unmaterialized_retention_provider_ids,
+            vec![unmaterialized_provider_id.to_string()]
+        );
+        assert_eq!(fixture_run.selected_retention_provider_count(), 2);
+        assert_eq!(fixture_run.materialized_retention_provider_count(), 1);
+        assert_eq!(fixture_run.retained_provider_count(), 1);
 
         let _ = std::fs::remove_dir_all(device_state_root);
         let _ = std::fs::remove_dir_all(provider_state_root);
