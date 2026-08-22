@@ -3821,6 +3821,106 @@ impl SettingsSyncStoredRetentionProviderRun {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncStoredCompactionRun {
+    pub stored_provider_plan: SettingsSyncStoredRetentionProviderPlan,
+    pub unmaterialized_retention_provider_ids: Vec<String>,
+    pub pending_endpoint_materialization_retention_provider_ids: Vec<String>,
+    pub endpoint_mismatch_retention_provider_ids: Vec<String>,
+    pub duplicate_handle_retention_provider_ids: Vec<String>,
+    pub unsupported_endpoint_retention_provider_ids: Vec<String>,
+    pub compaction: SettingsSyncCompactionWithRetentionRun,
+}
+
+impl SettingsSyncStoredCompactionRun {
+    pub fn unmaterialized_retention_provider_count(&self) -> usize {
+        self.unmaterialized_retention_provider_ids.len()
+    }
+
+    pub fn pending_endpoint_materialization_retention_provider_count(&self) -> usize {
+        self.pending_endpoint_materialization_retention_provider_ids
+            .len()
+    }
+
+    pub fn endpoint_mismatch_retention_provider_count(&self) -> usize {
+        self.endpoint_mismatch_retention_provider_ids.len()
+    }
+
+    pub fn duplicate_handle_retention_provider_count(&self) -> usize {
+        self.duplicate_handle_retention_provider_ids.len()
+    }
+
+    pub fn unsupported_endpoint_retention_provider_count(&self) -> usize {
+        self.unsupported_endpoint_retention_provider_ids.len()
+    }
+
+    pub fn selected_protocol_materialization_plan(
+        &self,
+    ) -> SettingsSyncSelectedProtocolMaterializationPlan {
+        self.stored_provider_plan
+            .selected_protocol_materialization_plan()
+    }
+
+    pub fn selected_retention_provider_count(&self) -> usize {
+        self.stored_provider_plan
+            .selected_retention_provider_count()
+    }
+
+    pub fn materialized_retention_provider_count(&self) -> usize {
+        self.selected_retention_provider_count()
+            .saturating_sub(self.unmaterialized_retention_provider_count())
+            .saturating_sub(self.pending_endpoint_materialization_retention_provider_count())
+            .saturating_sub(self.endpoint_mismatch_retention_provider_count())
+            .saturating_sub(self.duplicate_handle_retention_provider_count())
+            .saturating_sub(self.unsupported_endpoint_retention_provider_count())
+    }
+
+    pub fn retained_provider_count(&self) -> usize {
+        self.compaction.retained_provider_count()
+    }
+
+    pub fn retention_provider_selection_issues(
+        &self,
+    ) -> Vec<SettingsSyncRetentionProviderSelectionIssue> {
+        self.stored_provider_plan
+            .retention_provider_selection_issues()
+    }
+
+    pub fn retention_provider_selection_issue_count(&self) -> usize {
+        self.stored_provider_plan
+            .retention_provider_selection_issue_count()
+    }
+
+    pub fn has_retention_provider_selection_issue(&self) -> bool {
+        self.stored_provider_plan
+            .has_retention_provider_selection_issue()
+    }
+
+    pub fn stored_provider_metadata_issues(
+        &self,
+    ) -> Vec<SettingsSyncStoredRetentionProviderMetadataIssue> {
+        self.stored_provider_plan.stored_provider_metadata_issues()
+    }
+
+    pub fn stored_provider_metadata_issue_count(&self) -> usize {
+        self.stored_provider_plan
+            .stored_provider_metadata_issue_count()
+    }
+
+    pub fn has_stored_provider_metadata_issue(&self) -> bool {
+        self.stored_provider_plan
+            .has_stored_provider_metadata_issue()
+    }
+
+    pub fn degraded_before(&self) -> bool {
+        self.compaction.degraded_before()
+    }
+
+    pub fn degraded_after(&self) -> bool {
+        self.compaction.degraded_after()
+    }
+}
+
 pub struct SettingsSyncStoredInProcessFixtureRetentionProviderRun<'a> {
     pub fixture_materialization: SettingsSyncInProcessFixtureMaterialization<'a>,
     pub run: SettingsSyncStoredRetentionProviderRun,
@@ -6954,6 +7054,79 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             unsupported_endpoint_retention_provider_ids: materialized_providers
                 .unsupported_endpoint_retention_provider_ids,
             cycle,
+        })
+    }
+
+    pub fn compact_once_with_stored_retention_provider_handles(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        secrets: SettingsSyncRuntimeSecrets<'_>,
+        max_stored_providers: u32,
+        now: i64,
+        retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'_>],
+    ) -> Result<SettingsSyncStoredCompactionRun, ProfileSyncCycleWithHealthError> {
+        let runner = BroadwebdSettingsSyncRunner::new(self.daemon);
+        let preflight = runner.settings_sync_cycle_preflight_with_active_key_policy(
+            database,
+            config.profile.as_str(),
+            config.settings_root_id.as_str(),
+            secrets.signer,
+            &config.policy,
+        )?;
+        let stored_selection = load_stored_retention_provider_selection(
+            database,
+            config.profile.as_str(),
+            max_stored_providers,
+        )
+        .map_err(ProfileSyncCredentialError::from)
+        .map_err(ProfileSyncCycleError::from)?;
+        let stored_provider_plan = settings_sync_stored_retention_provider_plan(
+            preflight,
+            max_stored_providers,
+            stored_selection,
+        );
+        config.policy.check_selected_retention_provider_freshness(
+            stored_provider_plan.stale_retention_provider_count(),
+            stored_provider_plan.offline_retention_provider_count(),
+            &stored_provider_plan.cycle.preflight.before_health,
+        )?;
+        config.policy.check_selected_retention_provider_roles(
+            stored_provider_plan.ineligible_retention_provider_count(),
+            &stored_provider_plan.cycle.preflight.before_health,
+        )?;
+        let materialized_providers = materialize_stored_retention_provider_daemons(
+            &stored_provider_plan,
+            retention_provider_handles,
+        );
+        config.policy.check_selected_retention_provider_count(
+            materialized_providers.materialized_retention_provider_count(),
+            &stored_provider_plan.cycle.preflight.before_health,
+        )?;
+        let compaction = runner
+            .compact_settings_with_active_key_policy_and_retention_providers_after_preflight(
+                database,
+                secrets.content_key,
+                secrets.signer,
+                &config.policy,
+                now,
+                materialized_providers.daemons.as_slice(),
+                &stored_provider_plan.cycle.preflight,
+            )?;
+
+        Ok(SettingsSyncStoredCompactionRun {
+            stored_provider_plan,
+            unmaterialized_retention_provider_ids: materialized_providers
+                .unmaterialized_retention_provider_ids,
+            pending_endpoint_materialization_retention_provider_ids: materialized_providers
+                .pending_endpoint_materialization_retention_provider_ids,
+            endpoint_mismatch_retention_provider_ids: materialized_providers
+                .endpoint_mismatch_retention_provider_ids,
+            duplicate_handle_retention_provider_ids: materialized_providers
+                .duplicate_handle_retention_provider_ids,
+            unsupported_endpoint_retention_provider_ids: materialized_providers
+                .unsupported_endpoint_retention_provider_ids,
+            compaction,
         })
     }
 
@@ -20653,6 +20826,229 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(device_state_root);
         let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_scheduler_compacts_with_stored_retention_provider_handles() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("scheduler-stored-compaction-device");
+        let provider_state_root = test_state_root("scheduler-stored-compaction-provider");
+        let unmaterialized_state_root =
+            test_state_root("scheduler-stored-compaction-unmaterialized");
+        let db_root = test_state_root("scheduler-stored-compaction-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-stored-compaction-a",
+            )
+            .expect("start in-process stored compaction device daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-stored-compaction-pinner",
+            )
+            .expect("start in-process stored compaction availability provider daemon");
+        let _unmaterialized_provider_daemon = network
+            .daemon_for_availability_provider(
+                &unmaterialized_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-stored-compaction-extra",
+            )
+            .expect("start in-process unmaterialized stored compaction provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-scheduler-stored-compaction-a",
+        )
+        .expect("open scheduler stored compaction settings database");
+        let profile = "schedulerstoredcompactionprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([75; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-scheduler-stored-compaction-a")
+            .expect("generate scheduler stored compaction local device signer");
+        let policy = SettingsSyncCyclePolicy::new(
+            ProfileSyncRetentionPolicy {
+                min_tail_change_count: 1,
+                change_retention_seconds: 0,
+                ..ProfileSyncRetentionPolicy::default()
+            },
+            4,
+            4,
+            2,
+        )
+        .with_local_device_head_root_health_required_after_cycle(false);
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register scheduler stored compaction trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write first stored scheduler compacted setting");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.zoom", "110")
+            .expect("write second stored scheduler compacted setting");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.font", "Inter")
+            .expect("write stored scheduler retained compaction tail setting");
+
+        let selected_provider_id =
+            "local-fixture-availability-runtime-scheduler-stored-compaction-pinner";
+        let selected_provider_endpoint_ref =
+            network.profile_sync_provider_endpoint_ref(selected_provider_id);
+        let unmaterialized_provider_id =
+            "local-fixture-availability-runtime-scheduler-stored-compaction-extra";
+        for provider in [
+            test_storage_provider_update(
+                &network,
+                profile,
+                selected_provider_id,
+                "local-fixture-availability",
+                "Selected compaction pinner",
+                true,
+                true,
+                true,
+            ),
+            test_storage_provider_update(
+                &network,
+                profile,
+                unmaterialized_provider_id,
+                "local-fixture-availability",
+                "Unmaterialized compaction pinner",
+                true,
+                true,
+                true,
+            ),
+        ] {
+            database
+                .upsert_storage_provider(&provider)
+                .expect("write stored compaction retention provider metadata");
+        }
+        authorize_test_storage_providers(
+            &database,
+            profile,
+            &[selected_provider_id, unmaterialized_provider_id],
+        );
+
+        let config = SettingsSyncSchedulerConfig::new(profile, settings_root_id, policy);
+        let materialized_provider_handles =
+            [SettingsSyncRetentionProviderHandle::with_endpoint_ref(
+                selected_provider_id,
+                selected_provider_endpoint_ref.as_str(),
+                &provider_daemon,
+            )];
+
+        let run = BroadwebdSettingsSyncScheduler::new(&device_daemon)
+            .compact_once_with_stored_retention_provider_handles(
+                &database,
+                &config,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                8,
+                i64::MAX,
+                &materialized_provider_handles,
+            )
+            .expect("scheduler compaction uses stored retention provider metadata");
+
+        assert_eq!(run.stored_provider_plan.stored_provider_count, 2);
+        assert_eq!(
+            run.stored_provider_plan.enabled_retention_provider_ids,
+            vec![
+                selected_provider_id.to_string(),
+                unmaterialized_provider_id.to_string()
+            ]
+        );
+        assert_eq!(
+            run.stored_provider_plan
+                .cycle
+                .selected_retention_provider_ids,
+            vec![
+                selected_provider_id.to_string(),
+                unmaterialized_provider_id.to_string()
+            ]
+        );
+        assert_eq!(run.selected_retention_provider_count(), 2);
+        assert_eq!(run.materialized_retention_provider_count(), 1);
+        assert_eq!(
+            run.unmaterialized_retention_provider_ids,
+            vec![unmaterialized_provider_id.to_string()]
+        );
+        assert_eq!(run.unmaterialized_retention_provider_count(), 1);
+        assert_eq!(
+            run.pending_endpoint_materialization_retention_provider_count(),
+            0
+        );
+        assert_eq!(run.endpoint_mismatch_retention_provider_count(), 0);
+        assert_eq!(run.duplicate_handle_retention_provider_count(), 0);
+        assert_eq!(run.unsupported_endpoint_retention_provider_count(), 0);
+        assert!(!run.has_retention_provider_selection_issue());
+        assert!(!run.has_stored_provider_metadata_issue());
+        assert!(run.compaction.compacted());
+        let compaction = run
+            .compaction
+            .compaction
+            .as_ref()
+            .expect("stored scheduler compaction was published");
+        assert_eq!(compaction.target.retained_tail_change_count, 1);
+        assert_eq!(
+            run.compaction.retained_object_ids,
+            compaction.published_object_ids()
+        );
+        assert_eq!(run.compaction.retained_object_ids.len(), 3);
+        assert_eq!(run.compaction.retention.len(), 1);
+        assert_eq!(
+            run.compaction.retention[0].object_count(),
+            run.compaction.retained_object_ids.len()
+        );
+        assert_eq!(
+            run.compaction.retention[0].retained_count(),
+            run.compaction.retained_object_ids.len()
+        );
+        assert_eq!(
+            run.compaction.retention[0].available_count(),
+            run.compaction.retained_object_ids.len()
+        );
+        assert_eq!(run.retained_provider_count(), 1);
+        assert!(run.degraded_after());
+        assert!(!run.compaction.after_health.settings_root_health.degraded);
+        assert_eq!(
+            run.compaction
+                .after_health
+                .settings_root_health
+                .online_retaining_providers,
+            2
+        );
+        assert!(
+            run.compaction
+                .after_health
+                .local_device_head_root_health
+                .degraded
+        );
+
+        let retained = provider_daemon
+            .profile_sync(BroadwebdProfileSyncRequest::ListRetainedObjects(
+                BroadwebdProfileSyncProfileRequest::new(profile),
+            ))
+            .expect("stored compaction provider can list retained objects");
+        let BroadwebdProfileSyncResponse::RetainedObjects { object_ids } = retained else {
+            panic!("expected retained object list");
+        };
+        assert_eq!(
+            object_ids.into_iter().collect::<BTreeSet<_>>(),
+            run.compaction
+                .retained_object_ids
+                .iter()
+                .cloned()
+                .collect::<BTreeSet<_>>()
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(unmaterialized_state_root);
         let _ = std::fs::remove_dir_all(db_root);
     }
 

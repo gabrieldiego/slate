@@ -667,6 +667,14 @@ Current baseline:
   counts only materialized selected providers toward the retention quorum, and
   performs the publish/retain/root-health sequence entirely through
   `InProcessBroadwebNetwork` fixture daemons in tests.
+- Stored retention-provider metadata can now also drive the compaction-only
+  scheduler tick. The scheduler loads authorized providers from
+  `slate-settings.db`, reports unmaterialized or pending endpoint providers
+  before retention, and still hands compaction objects only to daemon handles
+  supplied by runtime code.
+- Internal protocol models are constrained to transport/test boundaries:
+  protocol implementations must keep real-web request/response semantics and
+  can only swap socket IO for internal shims in local deterministic fixtures.
 - Stored-provider runtime ticks now require supplied materialized provider
   handles to match the stored `endpoint_ref` when one is configured. Endpoint
   mismatches are excluded from the materialized provider quorum, preventing a

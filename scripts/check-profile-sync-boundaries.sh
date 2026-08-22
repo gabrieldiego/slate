@@ -51,12 +51,12 @@ cd "$repo_root"
 
 reject_protocol_model_leak \
     crates/broadwebd/src/protocols/ipfs/kubo.rs \
-    'InternalKubo(ProfileSyncModel|RpcFixture)|fetch_internal_kubo|internal_kubo_rpc_fixtures|register_internal_kubo|take_internal_kubo' \
+    'InProcessBroadwebNetwork|InternalKubo(ProfileSyncModel|RpcFixture)|fetch_internal_kubo|internal_kubo_rpc_fixtures|register_internal_kubo|take_internal_kubo' \
     'Kubo protocol code must not call fixture models directly; route through transport executors or shims.'
 
 reject_protocol_model_leak \
     crates/broadwebd/src/services/profile_sync.rs \
-    'InternalKubo(ProfileSyncModel|RpcFixture)|fetch_internal_kubo|internal_kubo_rpc_fixtures|register_internal_kubo|take_internal_kubo' \
+    'InProcessBroadwebNetwork|InternalKubo(ProfileSyncModel|RpcFixture)|fetch_internal_kubo|internal_kubo_rpc_fixtures|register_internal_kubo|take_internal_kubo' \
     'broadwebd profile-sync service code must not call Kubo fixture models directly; route through transport executors or shims.'
 
 require_text \
@@ -134,6 +134,7 @@ run_test slate-profile-sync broadwebd_source_rejects_missing_tail_object_shared_
 run_test slate-profile-sync iroh_node
 run_test slate-profile-sync broadwebd_settings_compaction_retains_objects_before_strict_root_policy_check
 run_test slate-profile-sync broadwebd_settings_sync_scheduler_compacts_with_selected_retention_provider_handles
+run_test slate-profile-sync broadwebd_settings_sync_scheduler_compacts_with_stored_retention_provider_handles
 run_test slate-profile-sync broadwebd_settings_sync_scheduler_runs_with_kubo_profile_sync_materialized_provider
 run_test slate-profile-sync scheduler_membership_fixture_stored_provider_derives_active_key_from_sync_secret
 run_test slate-profile-sync local_settings_sync_current_cycle_publishes_existing_settings_without_preview_write

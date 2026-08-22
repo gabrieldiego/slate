@@ -976,6 +976,12 @@ Selected endpoint buckets are also folded into a compact materialization
 preview: fixture-ready providers can run against local in-process handles,
 missing, multiaddr, and deferred-protocol providers remain pending
 materialization work, and unsupported providers fail closed.
+The stored-provider compaction path now uses the same boundary: it loads
+authorized provider metadata from `slate-settings.db`, filters it through
+preflight and endpoint materialization state, then hands only materialized
+daemon handles to the compaction/retention runner. Missing or pending
+providers are reported before retention, and the fixture model remains behind
+the daemon transport handle rather than being visible to scheduler logic.
 The first `iroh-node:<node>` checkpoint stays at this materializer boundary:
 tests treat the endpoint as a deferred protocol target, materialize it through
 a caller-supplied socketless provider daemon, verify that read-only previews do
@@ -1266,6 +1272,10 @@ quietly bypass the same request/response contract used by live adapters.
 The same boundary applies to the broadwebd profile-sync service: it may choose
 a socketless executor for local tests, but it must not inspect fixture stores,
 registries, queued responses, mutable-root maps, or model state directly.
+The simulator models peer behavior at the transport boundary only. Protocol
+and application-service code should still behave as if bytes came from the real
+broadweb, with tests swapping socket IO for internal delivery rather than
+swapping out protocol semantics.
 
 This gives us three separate layers to keep honest:
 
