@@ -15839,6 +15839,99 @@ mod tests {
     }
 
     #[test]
+    fn broadwebd_stateful_kubo_model_shares_roots_and_objects_across_daemons() {
+        let network = InProcessBroadwebNetwork::new();
+        let fixture = network.kubo_profile_sync_model();
+        let writer_state_root = test_state_root("kubo-profile-sync-model-writer");
+        let reader_state_root = test_state_root("kubo-profile-sync-model-reader");
+        let writer_daemon = network
+            .daemon_for_kubo_profile_sync(
+                &writer_state_root,
+                ResourceBudget::default(),
+                fixture.base_url(),
+                "shared-kubo-profile-sync-provider",
+            )
+            .expect("start writer Kubo profile-sync model daemon");
+        let reader_daemon = network
+            .daemon_for_kubo_profile_sync(
+                &reader_state_root,
+                ResourceBudget::default(),
+                fixture.base_url(),
+                "shared-kubo-profile-sync-provider",
+            )
+            .expect("start reader Kubo profile-sync model daemon");
+        let writer = BroadwebdProfileSyncPublisher::new(&writer_daemon);
+        let reader = BroadwebdProfileSyncObjectSource::new(&reader_daemon);
+
+        let publication = writer
+            .put_retained_root_with_dependencies(
+                DEFAULT_PROFILE_ID,
+                "settings-latest",
+                vec![
+                    b"writer encrypted dependency a".to_vec(),
+                    b"writer encrypted dependency b".to_vec(),
+                ],
+                b"writer encrypted manifest root".to_vec(),
+            )
+            .expect("publish object set through writer daemon");
+        let root_object_id = publication.root_object_id.as_str();
+        let dep_a_object_id = publication.dependency_object_ids[0].as_str();
+        let dep_b_object_id = publication.dependency_object_ids[1].as_str();
+
+        assert_eq!(
+            reader
+                .resolve_profile_sync_root(DEFAULT_PROFILE_ID, "settings-latest")
+                .expect("resolve writer root from reader daemon")
+                .as_deref(),
+            Some(root_object_id)
+        );
+        assert_eq!(
+            reader
+                .get_profile_sync_object(DEFAULT_PROFILE_ID, root_object_id)
+                .expect("fetch writer root from reader daemon")
+                .bytes,
+            b"writer encrypted manifest root".to_vec()
+        );
+        assert_eq!(
+            reader
+                .get_profile_sync_object(DEFAULT_PROFILE_ID, dep_a_object_id)
+                .expect("fetch writer dependency a from reader daemon")
+                .bytes,
+            b"writer encrypted dependency a".to_vec()
+        );
+        assert_eq!(
+            reader
+                .get_profile_sync_object(DEFAULT_PROFILE_ID, dep_b_object_id)
+                .expect("fetch writer dependency b from reader daemon")
+                .bytes,
+            b"writer encrypted dependency b".to_vec()
+        );
+
+        assert_eq!(
+            fixture.finish(),
+            vec![
+                "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1".to_string(),
+                format!("POST /api/v0/pin/add?arg={dep_a_object_id}&recursive=true HTTP/1.1"),
+                "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1".to_string(),
+                format!("POST /api/v0/pin/add?arg={dep_b_object_id}&recursive=true HTTP/1.1"),
+                "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1".to_string(),
+                format!("POST /api/v0/pin/add?arg={root_object_id}&recursive=true HTTP/1.1"),
+                format!(
+                    "POST /api/v0/name/publish?arg=%2Fipfs%2F{root_object_id}&key=settings-latest&allow-offline=true HTTP/1.1"
+                ),
+                "POST /api/v0/name/resolve?arg=%2Fipns%2Fsettings-latest&recursive=false HTTP/1.1"
+                    .to_string(),
+                format!("POST /api/v0/cat?arg=%2Fipfs%2F{root_object_id} HTTP/1.1"),
+                format!("POST /api/v0/cat?arg=%2Fipfs%2F{dep_a_object_id} HTTP/1.1"),
+                format!("POST /api/v0/cat?arg=%2Fipfs%2F{dep_b_object_id} HTTP/1.1"),
+            ]
+        );
+
+        let _ = std::fs::remove_dir_all(writer_state_root);
+        let _ = std::fs::remove_dir_all(reader_state_root);
+    }
+
+    #[test]
     fn broadwebd_publisher_publishes_signed_settings_tail_manifest() {
         let network = InProcessBroadwebNetwork::new();
         let state_root = test_state_root("signed-tail-publish");

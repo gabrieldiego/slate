@@ -1197,6 +1197,9 @@ into production protocol adapters.
   specific HTTP failures, and retry/fallback cases, but ordinary object, pin,
   publish, and resolve behavior should come from model state behind the transport
   shim.
+- Cross-device tests should include at least two daemon instances using the same
+  fixture model endpoint, so root resolution and object fetches prove shared
+  protocol state rather than one daemon's local profile-sync cache.
 - App-owned sync watchers should persist profile/domain-scoped cursors in
   `slate-settings.db` after applying a batch, and cursor advancement should be
   monotonic so duplicate or stale fixture deliveries cannot rewind app state.

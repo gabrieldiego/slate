@@ -363,6 +363,11 @@ Current baseline:
   fixture daemon: dependency objects, retained root publish, root resolve, and
   object fetch all flow through Kubo-shaped RPC requests handled by the
   in-process model.
+- The same bridge now has a two-daemon stateful Kubo/IPNS fixture test: one
+  daemon publishes retained objects and a root, while a second daemon resolves
+  the root and fetches the object bytes through the shared in-process model.
+  This keeps the current cross-device simulation socketless while exercising a
+  protocol-shaped shared backend instead of the writer daemon's local cache.
 - The same bridge now publishes a real signed encrypted settings tail manifest
   through the Kubo fixture daemon and verifies the fetched manifest and tail
   bytes with the storage sync-object openers. Scripted Kubo `cat` responses are
