@@ -2283,6 +2283,7 @@ mod tests {
         assert!(settings_page.contains("Primary+R, F5"));
         assert!(settings_page.contains("Ctrl+F12"));
         assert!(settings_page.contains("Profile Sync Preview"));
+        assert!(settings_page.contains("id=\"profile-sync-details\""));
         assert!(settings_page.contains("id=\"profile-sync-secret\""));
         assert!(settings_page.contains("id=\"profile-sync-create\""));
         assert!(settings_page.contains("id=\"profile-sync-download\""));
@@ -2302,6 +2303,7 @@ mod tests {
         assert!(settings_page.contains("id=\"profile-sync-enrollment-create\""));
         assert!(settings_page.contains("id=\"profile-sync-enrollment-download\""));
         assert!(settings_page.contains("id=\"profile-sync-enrollment-import\""));
+        assert!(settings_page.contains("Two-device trial"));
         assert!(settings_page.contains("slate://settings/profile-sync/"));
         assert!(settings_page.contains("slate-sync-secret.json"));
         assert!(!settings_page.contains("replaceState"));

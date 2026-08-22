@@ -1386,6 +1386,11 @@ Current baseline:
   signed membership import path applies the result before encrypted settings
   sync runs. This keeps the local-only broadweb fixture aligned with the
   user-facing handoff flow.
+- `slate://settings` now renders a compact Profile Sync Preview checkpoint
+  panel from the same local JSON state. The manual trial surface shows the
+  local device, key state, provider readiness, trusted-device count, app-domain
+  count, device-request target, enrollment target, and last local/two-device
+  trial result without adding any protocol endpoints.
   Production multi-device use still needs QR rendering, encrypted
   handoff/recovery files, real provider daemons, conflict handling, and cadence
   policy.

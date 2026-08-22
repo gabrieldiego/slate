@@ -191,6 +191,34 @@
       font-variant-numeric: tabular-nums;
     }
 
+    .profile-sync-details {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 22px;
+      margin-top: 14px;
+      border-top: 1px solid #eeeae3;
+    }
+
+    .profile-sync-detail {
+      display: grid;
+      grid-template-columns: minmax(110px, 0.65fr) minmax(0, 1fr);
+      gap: 12px;
+      align-items: baseline;
+      padding: 8px 0;
+      border-bottom: 1px solid #eeeae3;
+    }
+
+    .profile-sync-detail span:first-child {
+      color: #696966;
+      font-size: 13px;
+    }
+
+    .profile-sync-detail span:last-child {
+      color: #393a37;
+      font-variant-numeric: tabular-nums;
+      overflow-wrap: anywhere;
+    }
+
     .profile-sync-secret {
       box-sizing: border-box;
       width: 100%;
@@ -260,10 +288,16 @@
     }
 
     @media (max-width: 560px) {
+      .profile-sync-details,
       .keybinding-row,
       .shortcut-row {
         grid-template-columns: 1fr;
         gap: 8px;
+      }
+
+      .profile-sync-detail {
+        grid-template-columns: 1fr;
+        gap: 2px;
       }
     }
   </style>
@@ -311,6 +345,11 @@
     <section>
       <h2>Profile Sync Preview</h2>
       <div id="profile-sync-status" class="profile-sync-status">Not enrolled</div>
+      <div
+        id="profile-sync-details"
+        class="profile-sync-details"
+        aria-live="polite"
+      ></div>
       <textarea
         id="profile-sync-secret"
         class="profile-sync-secret"
@@ -455,6 +494,7 @@
     const keyBindings = document.getElementById("key-bindings");
     const resetShortcutsButton = document.getElementById("reset-shortcuts");
     const profileSyncStatus = document.getElementById("profile-sync-status");
+    const profileSyncDetails = document.getElementById("profile-sync-details");
     const profileSyncSecret = document.getElementById("profile-sync-secret");
     const profileSyncCreateButton = document.getElementById("profile-sync-create");
     const profileSyncDownloadButton = document.getElementById("profile-sync-download");
@@ -942,11 +982,91 @@
       }
     }
 
+    function profileSyncText(value, fallback) {
+      if (value === null || value === undefined || value === "") {
+        return fallback;
+      }
+      return String(value);
+    }
+
+    function profileSyncCount(value) {
+      return Number.isFinite(value) ? String(value) : "0";
+    }
+
+    function profileSyncProviderStatus(state) {
+      if (!state || !state.local_sync) {
+        return "not configured";
+      }
+      if (state.local_sync.ready_for_manual_sync) {
+        return "ready";
+      }
+      return profileSyncText(state.local_sync.blocked_reason, "not ready");
+    }
+
+    function profileSyncKeyStatus(state) {
+      if (!state) {
+        return "unavailable";
+      }
+      if (state.has_secret) {
+        return "loaded";
+      }
+      if (state.metadata_ready) {
+        return "metadata only";
+      }
+      return "missing";
+    }
+
+    function profileSyncLocalTrialStatus(state) {
+      if (!state || !state.last_trial) {
+        return "not run";
+      }
+      const trial = state.last_trial;
+      return `${trial.retained_object_count}/${trial.published_object_count} objects retained`;
+    }
+
+    function profileSyncTwoDeviceTrialStatus(state) {
+      if (!state || !state.last_two_device_trial) {
+        return "not run";
+      }
+      const trial = state.last_two_device_trial;
+      const received = profileSyncText(trial.receiver_received_value, "no value");
+      return `${trial.receiver_applied_setting_count} applied; ${received}`;
+    }
+
+    function renderProfileSyncDetails(state) {
+      profileSyncDetails.textContent = "";
+      const localSync = state && state.local_sync ? state.local_sync : null;
+      const rows = [
+        ["Device", profileSyncText(state && state.local_device_id, "none")],
+        ["Key", profileSyncKeyStatus(state)],
+        ["Provider", profileSyncProviderStatus(state)],
+        ["Trusted devices", localSync ? profileSyncCount(localSync.trusted_device_count) : "0"],
+        ["App domains", localSync ? profileSyncCount(localSync.app_domain_count) : "0"],
+        ["Device request", profileSyncText(state && state.device_request_device_id, "none")],
+        ["Enrollment", profileSyncText(state && state.enrollment_target_device_id, "none")],
+        ["Local trial", profileSyncLocalTrialStatus(state)],
+        ["Two-device trial", profileSyncTwoDeviceTrialStatus(state)]
+      ];
+      rows.forEach(([label, value]) => {
+        const row = document.createElement("div");
+        const labelElement = document.createElement("span");
+        const valueElement = document.createElement("span");
+        row.className = "profile-sync-detail";
+        labelElement.textContent = label;
+        valueElement.textContent = value;
+        row.appendChild(labelElement);
+        row.appendChild(valueElement);
+        profileSyncDetails.appendChild(row);
+      });
+    }
+
     function setProfileSyncState(state) {
       if (!state) {
         profileSyncStatus.textContent = "Unavailable";
+        renderProfileSyncDetails(null);
         return;
       }
+      renderProfileSyncDetails(state);
       const trialStatus = state.last_trial ?
         `; last trial retained ${state.last_trial.retained_object_count}/${state.last_trial.published_object_count} objects` :
         "";
