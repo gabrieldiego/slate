@@ -4300,40 +4300,16 @@ impl SlateProfileDatabase {
         &self,
         registration: &SyncDevicePublicKeyRegistration,
     ) -> Result<SyncDevicePublicKeyRecord, StorageError> {
-        if !is_valid_sync_identifier(registration.public_key.device_id.as_str()) {
-            return Err(StorageError::InvalidSyncDeviceId(
-                registration.public_key.device_id.clone(),
-            ));
-        }
-
-        let connection = self.connection()?;
-        let now = unix_time_seconds()?;
-        connection
-            .execute(
-                "INSERT INTO sync_device_public_keys
-                   (profile, device_id, public_key, membership_epoch, trusted, created_at,
-                    updated_at)
-                 VALUES (?1, ?2, ?3, ?4, 1, ?5, ?5)
-                 ON CONFLICT(profile, device_id) DO UPDATE SET
-                   public_key = excluded.public_key,
-                   membership_epoch = excluded.membership_epoch,
-                   trusted = 1,
-                   updated_at = excluded.updated_at",
-                params![
-                    registration.profile.as_str(),
-                    registration.public_key.device_id.as_str(),
-                    registration.public_key.bytes.as_slice(),
-                    registration.membership_epoch,
-                    now
-                ],
-            )
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
             .map_err(|source| self.database_error(source))?;
-
-        self.sync_device_public_key(
-            registration.profile.as_str(),
-            registration.public_key.device_id.as_str(),
-        )?
-        .ok_or_else(|| self.database_error(rusqlite::Error::QueryReturnedNoRows))
+        let record =
+            self.register_sync_device_public_key_in_transaction(&transaction, registration)?;
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(record)
     }
 
     pub fn set_sync_device_public_key_trusted(
@@ -4442,6 +4418,14 @@ impl SlateProfileDatabase {
                 ],
             )
             .map_err(|source| self.database_error(source))?;
+        record_sync_device_roster_entry_in_transaction(
+            transaction,
+            registration.profile.as_str(),
+            registration.public_key.device_id.as_str(),
+            registration.membership_epoch,
+            now,
+        )
+        .map_err(|source| self.database_error(source))?;
 
         self.sync_device_public_key_in_transaction(
             transaction,
@@ -4818,23 +4802,14 @@ impl SlateProfileDatabase {
         membership_record: &ProfileSyncMembershipRecord,
     ) -> Result<(), StorageError> {
         let now = unix_time_seconds()?;
-        transaction
-            .execute(
-                "INSERT INTO sync_devices
-                   (profile, device_id, label, membership_epoch, provider_authority,
-                    created_at, last_seen_at)
-                 VALUES (?1, ?2, NULL, ?3, 0, ?4, ?4)
-                 ON CONFLICT(profile, device_id) DO UPDATE SET
-                   membership_epoch = excluded.membership_epoch,
-                   last_seen_at = excluded.last_seen_at",
-                params![
-                    membership_record.profile.as_str(),
-                    membership_record.device_id.as_str(),
-                    membership_record.membership_epoch,
-                    now,
-                ],
-            )
-            .map_err(|source| self.database_error(source))?;
+        record_sync_device_roster_entry_in_transaction(
+            transaction,
+            membership_record.profile.as_str(),
+            membership_record.device_id.as_str(),
+            membership_record.membership_epoch,
+            now,
+        )
+        .map_err(|source| self.database_error(source))?;
         Ok(())
     }
 
@@ -8528,6 +8503,26 @@ fn record_sync_device_seen_in_transaction(
          ON CONFLICT(profile, device_id) DO UPDATE SET
            last_seen_at = excluded.last_seen_at",
         params![profile, device_id, now],
+    )?;
+    Ok(())
+}
+
+fn record_sync_device_roster_entry_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    device_id: &str,
+    membership_epoch: i64,
+    now: i64,
+) -> Result<(), rusqlite::Error> {
+    transaction.execute(
+        "INSERT INTO sync_devices
+           (profile, device_id, label, membership_epoch, provider_authority,
+            created_at, last_seen_at)
+         VALUES (?1, ?2, NULL, ?3, 0, ?4, ?4)
+         ON CONFLICT(profile, device_id) DO UPDATE SET
+           membership_epoch = excluded.membership_epoch,
+           last_seen_at = excluded.last_seen_at",
+        params![profile, device_id, membership_epoch, now],
     )?;
     Ok(())
 }
@@ -13286,6 +13281,25 @@ mod tests {
                 .len(),
             1
         );
+        let first_device = database
+            .sync_devices(DEFAULT_PROFILE_ID)
+            .unwrap()
+            .into_iter()
+            .find(|device| device.device_id == "device-a")
+            .expect("trusted key registration records sync device");
+        assert_eq!(first_device.membership_epoch, 1);
+        assert_eq!(first_device.label, None);
+        assert!(!first_device.provider_authority);
+
+        database
+            .register_sync_device(&SyncDeviceRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                device_id: "device-a".to_string(),
+                label: Some("Pinned provider".to_string()),
+                membership_epoch: 1,
+                provider_authority: true,
+            })
+            .unwrap();
 
         let second_key = ProfileSyncDeviceSigner::generate("device-a")
             .unwrap()
@@ -13311,6 +13325,15 @@ mod tests {
                 .len(),
             1
         );
+        let updated_device = database
+            .sync_devices(DEFAULT_PROFILE_ID)
+            .unwrap()
+            .into_iter()
+            .find(|device| device.device_id == "device-a")
+            .expect("trusted key update keeps sync device metadata");
+        assert_eq!(updated_device.membership_epoch, 2);
+        assert_eq!(updated_device.label.as_deref(), Some("Pinned provider"));
+        assert!(updated_device.provider_authority);
 
         let revoked = database
             .set_sync_device_public_key_trusted(DEFAULT_PROFILE_ID, "device-a", false)

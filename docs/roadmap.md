@@ -985,6 +985,9 @@ Current baseline:
   devices explicitly marked with provider authority from settings-head pulls.
   This keeps future provider records from gaining profile write authority merely
   because they have a trusted key record.
+- Direct trusted device-key registration now also materializes the matching
+  `sync_devices` roster row transactionally. Updates preserve existing labels
+  and provider-authority metadata while advancing the membership epoch.
 
 Next:
 
