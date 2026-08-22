@@ -354,6 +354,10 @@ Current baseline:
   The protocol methods remain production-shaped (`put`, `cat`, `pin`,
   `name/publish`, and `name/resolve`), while the in-process fixture implements
   the executor and rejects non-fixture URLs before any socket can be touched.
+- broadwebd now also has a real HTTP Kubo profile-sync executor and service
+  constructor. Production Kubo profile-sync uses the same request builders,
+  response parsers, role checks, and resource budgets over HTTP; socketless
+  tests swap only the executor with the internal transport shim.
 - The same Kubo fixture service now records retained objects and published roots
   in its in-process profile-sync state after the corresponding Kubo RPC fixture
   calls succeed. Retained-object listing, provider health, root candidates, and

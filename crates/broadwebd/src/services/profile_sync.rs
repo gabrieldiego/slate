@@ -1,3 +1,5 @@
+#[cfg(any(test, feature = "test-fixtures"))]
+use crate::protocols::ipfs::InternalKuboRpcTransportShim;
 use crate::{
     ApplicationServicePlugin, BroadwebdError, PROFILE_SYNC_PLUGIN, PluginKind, PluginMetadata,
     PluginRegistry, ProfileSyncObjectRequest, ProfileSyncProfileRequest, ProfileSyncProviderHealth,
@@ -6,8 +8,9 @@ use crate::{
     ProfileSyncRootHealthRequest, ProfileSyncRootRequest, ProfileSyncRootUpdate, ResourceBudget,
     ResourceProfile, ServiceRequest, ServiceResponse,
 };
-#[cfg(any(test, feature = "test-fixtures"))]
-use crate::{IpfsKuboProfileSyncRpc, protocols::ipfs::InternalKuboRpcTransportShim};
+use crate::{
+    IpfsKuboProfileSyncRpc, IpfsKuboProfileSyncRpcExecutor, IpfsKuboReqwestProfileSyncRpcExecutor,
+};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
@@ -24,8 +27,26 @@ pub struct ProfileSyncService {
     provider_kind: String,
     privacy_boundary: String,
     roles: ProfileSyncProviderRoles,
+    kubo_backend: Option<KuboProfileSyncBackend>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct KuboProfileSyncBackend {
+    rpc: IpfsKuboProfileSyncRpc,
+    transport: KuboProfileSyncTransport,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum KuboProfileSyncTransport {
+    Http,
     #[cfg(any(test, feature = "test-fixtures"))]
-    kubo_rpc: Option<IpfsKuboProfileSyncRpc>,
+    Fixture,
+}
+
+impl KuboProfileSyncBackend {
+    fn rpc(&self) -> &IpfsKuboProfileSyncRpc {
+        &self.rpc
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -72,8 +93,7 @@ impl Default for ProfileSyncService {
             provider_kind: LOCAL_PROVIDER_KIND.to_string(),
             privacy_boundary: LOCAL_PRIVACY_BOUNDARY.to_string(),
             roles: ProfileSyncProviderRoles::logged_in_device(),
-            #[cfg(any(test, feature = "test-fixtures"))]
-            kubo_rpc: None,
+            kubo_backend: None,
         }
     }
 }
@@ -131,9 +151,21 @@ impl ProfileSyncService {
             provider_kind,
             privacy_boundary,
             roles,
-            #[cfg(any(test, feature = "test-fixtures"))]
-            kubo_rpc: None,
+            kubo_backend: None,
         }
+    }
+
+    pub fn kubo(
+        api_base_url: impl Into<String>,
+        provider_id: impl Into<String>,
+    ) -> Result<Self, BroadwebdError> {
+        Self::kubo_with_transport(
+            api_base_url,
+            provider_id,
+            "ipfs-kubo",
+            "local Kubo RPC over HTTP; sends encrypted profile-sync object bytes, CIDs, and IPNS names to the configured local node",
+            KuboProfileSyncTransport::Http,
+        )
     }
 
     #[cfg(any(test, feature = "test-fixtures"))]
@@ -141,11 +173,25 @@ impl ProfileSyncService {
         api_base_url: impl Into<String>,
         provider_id: impl Into<String>,
     ) -> Result<Self, BroadwebdError> {
+        Self::kubo_with_transport(
+            api_base_url,
+            provider_id,
+            "ipfs-kubo-fixture",
+            "in-process Kubo profile-sync fixture; no sockets, DNS, loopback listener, or external network",
+            KuboProfileSyncTransport::Fixture,
+        )
+    }
+
+    fn kubo_with_transport(
+        api_base_url: impl Into<String>,
+        provider_id: impl Into<String>,
+        provider_kind: impl Into<String>,
+        privacy_boundary: impl Into<String>,
+        transport: KuboProfileSyncTransport,
+    ) -> Result<Self, BroadwebdError> {
         let provider_id = provider_id.into();
-        let provider_kind = "ipfs-kubo-fixture".to_string();
-        let privacy_boundary =
-            "in-process Kubo profile-sync fixture; no sockets, DNS, loopback listener, or external network"
-                .to_string();
+        let provider_kind = provider_kind.into();
+        let privacy_boundary = privacy_boundary.into();
         let roles = ProfileSyncProviderRoles::logged_in_device();
         let mut store = ProfileSyncStore::default();
         let last_seen_sequence = next_provider_seen_sequence(&mut store);
@@ -164,7 +210,10 @@ impl ProfileSyncService {
             provider_kind,
             privacy_boundary,
             roles,
-            kubo_rpc: Some(IpfsKuboProfileSyncRpc::local(api_base_url)?),
+            kubo_backend: Some(KuboProfileSyncBackend {
+                rpc: IpfsKuboProfileSyncRpc::local(api_base_url)?,
+                transport,
+            }),
         })
     }
 
@@ -640,19 +689,18 @@ impl ProfileSyncService {
         }
     }
 
-    #[cfg(any(test, feature = "test-fixtures"))]
-    fn kubo_profile_sync_via_fixture_executor(
+    fn kubo_profile_sync_via_executor(
         &self,
         kubo_rpc: &IpfsKuboProfileSyncRpc,
+        executor: &impl IpfsKuboProfileSyncRpcExecutor,
         request: ProfileSyncRequest,
         budget: &ResourceBudget,
     ) -> Result<ProfileSyncResponse, BroadwebdError> {
-        let executor = InternalKuboRpcTransportShim;
         match request {
             ProfileSyncRequest::PutEncryptedObject(request) => {
                 validate_profile(&request.profile)?;
                 self.require_role(self.roles.object_transfer, "profile-sync/object-transfer")?;
-                let object_id = kubo_rpc.put_encrypted_object(&executor, &request.bytes, budget)?;
+                let object_id = kubo_rpc.put_encrypted_object(executor, &request.bytes, budget)?;
                 let mut store = self.store()?;
                 store.objects.insert(
                     (self.provider_id.clone(), request.profile, object_id.clone()),
@@ -665,7 +713,7 @@ impl ProfileSyncService {
                 validate_profile_sync_object_id(&request.object_id)?;
                 self.require_role(self.roles.object_transfer, "profile-sync/object-transfer")?;
                 let object_id = request.object_id;
-                let bytes = kubo_rpc.get_encrypted_object(&executor, &object_id, budget)?;
+                let bytes = kubo_rpc.get_encrypted_object(executor, &object_id, budget)?;
                 validate_object_budget(bytes.len(), budget)?;
                 Ok(ProfileSyncResponse::GetEncryptedObject { object_id, bytes })
             }
@@ -674,7 +722,7 @@ impl ProfileSyncService {
                 validate_profile_sync_object_id(&request.object_id)?;
                 self.require_role(self.roles.availability, "profile-sync/availability")?;
                 self.require_role(self.roles.object_transfer, "profile-sync/object-transfer")?;
-                kubo_rpc.retain_object(&executor, &request.object_id, budget)?;
+                kubo_rpc.retain_object(executor, &request.object_id, budget)?;
                 let mut store = self.store()?;
                 store.retained.insert((
                     self.provider_id.clone(),
@@ -690,7 +738,7 @@ impl ProfileSyncService {
                 validate_profile(&request.profile)?;
                 validate_profile_sync_object_id(&request.object_id)?;
                 self.require_role(self.roles.availability, "profile-sync/availability")?;
-                kubo_rpc.release_object(&executor, &request.object_id, budget)?;
+                kubo_rpc.release_object(executor, &request.object_id, budget)?;
                 let mut store = self.store()?;
                 store.retained.remove(&(
                     self.provider_id.clone(),
@@ -708,7 +756,7 @@ impl ProfileSyncService {
                 validate_profile_sync_object_id(&request.object_id)?;
                 self.require_role(self.roles.availability, "profile-sync/availability")?;
                 let retained =
-                    kubo_rpc.verify_retained_object(&executor, &request.object_id, budget)?;
+                    kubo_rpc.verify_retained_object(executor, &request.object_id, budget)?;
                 let mut store = self.store()?;
                 let retained_key = (
                     self.provider_id.clone(),
@@ -732,7 +780,7 @@ impl ProfileSyncService {
                 validate_profile_sync_object_id(&request.object_id)?;
                 self.require_role(self.roles.mutable_roots, "profile-sync/mutable-root")?;
                 let object_id = kubo_rpc.publish_root(
-                    &executor,
+                    executor,
                     &request.root_id,
                     &request.object_id,
                     budget,
@@ -761,7 +809,7 @@ impl ProfileSyncService {
                 validate_profile(&request.profile)?;
                 validate_profile_sync_root_id(&request.root_id)?;
                 self.require_role(self.roles.discovery, "profile-sync/provider-discovery")?;
-                let object_id = kubo_rpc.resolve_root(&executor, &request.root_id, budget)?;
+                let object_id = kubo_rpc.resolve_root(executor, &request.root_id, budget)?;
                 Ok(ProfileSyncResponse::Root {
                     root_id: request.root_id,
                     object_id: Some(object_id),
@@ -1059,22 +1107,31 @@ impl LocalProfileSyncFixture {
 
 impl ApplicationServicePlugin for ProfileSyncService {
     fn metadata(&self) -> PluginMetadata {
-        #[cfg(any(test, feature = "test-fixtures"))]
-        if self.kubo_rpc.is_some() {
-            let capabilities = [
+        if let Some(backend) = &self.kubo_backend {
+            let mut capabilities = vec![
                 "profile-sync/kubo-rpc",
-                "profile-sync/kubo-fixture",
-                "profile-sync/internal-transport-shim",
                 "profile-sync/object-transfer",
                 "profile-sync/local-retention",
                 "profile-sync/mutable-root",
                 "profile-sync/provider-discovery",
-                "socketless-fixture",
             ];
+            let resource_profile = match backend.transport {
+                KuboProfileSyncTransport::Http => {
+                    capabilities.push("profile-sync/kubo-http");
+                    ResourceProfile::Medium
+                }
+                #[cfg(any(test, feature = "test-fixtures"))]
+                KuboProfileSyncTransport::Fixture => {
+                    capabilities.push("profile-sync/kubo-fixture");
+                    capabilities.push("profile-sync/internal-transport-shim");
+                    capabilities.push("socketless-fixture");
+                    ResourceProfile::Low
+                }
+            };
             return PluginMetadata::new(PROFILE_SYNC_PLUGIN, PluginKind::ApplicationService)
-                .with_capabilities(&capabilities)
+                .with_capabilities(capabilities.as_slice())
                 .with_privacy_boundary(self.privacy_boundary.as_str())
-                .with_resource_profile(ResourceProfile::Low);
+                .with_resource_profile(resource_profile);
         }
 
         let mut capabilities = vec!["profile-sync/fake"];
@@ -1117,11 +1174,19 @@ impl ApplicationServicePlugin for ProfileSyncService {
 
         self.ensure_online()?;
 
-        #[cfg(any(test, feature = "test-fixtures"))]
-        if let Some(kubo_rpc) = &self.kubo_rpc {
-            return Ok(ServiceResponse::ProfileSync(
-                self.kubo_profile_sync_via_fixture_executor(kubo_rpc, request, budget)?,
-            ));
+        if let Some(backend) = &self.kubo_backend {
+            let response = match backend.transport {
+                KuboProfileSyncTransport::Http => {
+                    let executor = IpfsKuboReqwestProfileSyncRpcExecutor::new()?;
+                    self.kubo_profile_sync_via_executor(backend.rpc(), &executor, request, budget)?
+                }
+                #[cfg(any(test, feature = "test-fixtures"))]
+                KuboProfileSyncTransport::Fixture => {
+                    let executor = InternalKuboRpcTransportShim;
+                    self.kubo_profile_sync_via_executor(backend.rpc(), &executor, request, budget)?
+                }
+            };
+            return Ok(ServiceResponse::ProfileSync(response));
         }
 
         let response = match request {

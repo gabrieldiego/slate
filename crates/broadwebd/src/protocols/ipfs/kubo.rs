@@ -100,6 +100,52 @@ pub(super) trait IpfsKuboHttpContentExecutor {
 }
 
 #[derive(Debug)]
+pub struct IpfsKuboReqwestProfileSyncRpcExecutor {
+    client: reqwest::blocking::Client,
+}
+
+impl IpfsKuboReqwestProfileSyncRpcExecutor {
+    pub fn new() -> Result<Self, BroadwebdError> {
+        let client = reqwest::blocking::Client::builder()
+            .timeout(REQUEST_TIMEOUT)
+            .user_agent(USER_AGENT)
+            .build()
+            .map_err(request_error)?;
+        Ok(Self { client })
+    }
+}
+
+impl IpfsKuboProfileSyncRpcExecutor for IpfsKuboReqwestProfileSyncRpcExecutor {
+    fn execute_profile_sync_request(
+        &self,
+        request: &IpfsKuboProfileSyncRpcRequest,
+        budget: &ResourceBudget,
+        body: Option<&[u8]>,
+    ) -> Result<IpfsKuboRpcResponse, BroadwebdError> {
+        let url = parse_http_url(request.url())?;
+        let mut builder = self.client.post(url);
+        if let Some(bytes) = body {
+            builder = builder.body(bytes.to_vec());
+        }
+        let response = builder.send().map_err(request_error)?;
+        kubo_rpc_response_from_reqwest(response, budget.max_profile_sync_object_bytes)
+    }
+
+    fn execute_content_request(
+        &self,
+        url: &Url,
+        max_response_bytes: usize,
+    ) -> Result<IpfsKuboRpcResponse, BroadwebdError> {
+        let response = self
+            .client
+            .post(url.clone())
+            .send()
+            .map_err(request_error)?;
+        kubo_rpc_response_from_reqwest(response, max_response_bytes)
+    }
+}
+
+#[derive(Debug)]
 struct IpfsKuboReqwestHttpContentExecutor {
     client: reqwest::blocking::Client,
 }
@@ -792,6 +838,31 @@ fn validate_kubo_rpc_url(api_base_url: &str) -> Result<(), BroadwebdError> {
 
 fn request_error(error: reqwest::Error) -> BroadwebdError {
     BroadwebdError::Request(error.to_string())
+}
+
+fn kubo_rpc_response_from_reqwest(
+    response: reqwest::blocking::Response,
+    max_response_bytes: usize,
+) -> Result<IpfsKuboRpcResponse, BroadwebdError> {
+    let status_code = response.status().as_u16();
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("application/octet-stream")
+        .to_string();
+    let body = response.bytes().map_err(request_error)?.to_vec();
+    if body.len() > max_response_bytes {
+        return Err(BroadwebdError::ResponseTooLarge {
+            limit: max_response_bytes,
+            actual: body.len(),
+        });
+    }
+    Ok(IpfsKuboRpcResponse {
+        status_code,
+        content_type,
+        body,
+    })
 }
 
 fn response_headers(headers: &reqwest::header::HeaderMap) -> Vec<HttpHeader> {

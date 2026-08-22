@@ -99,13 +99,14 @@ pub use http::{
 pub use protocols::ipfs::{
     IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport,
     IpfsKuboProfileSyncOperation, IpfsKuboProfileSyncRpc, IpfsKuboProfileSyncRpcExecutor,
-    IpfsKuboProfileSyncRpcRequest, IpfsKuboRpcEndpoint, IpfsKuboRpcResponse, IpfsKuboRpcTransport,
-    IpfsService, IpfsTransportKind, ipfs_gateway_http_url, ipfs_kubo_cat_url,
-    ipfs_kubo_profile_sync_add_url, ipfs_kubo_profile_sync_added_object_id,
-    ipfs_kubo_profile_sync_name_publish_url, ipfs_kubo_profile_sync_name_resolve_url,
-    ipfs_kubo_profile_sync_pin_add_url, ipfs_kubo_profile_sync_pin_ls_has_recursive_pin,
-    ipfs_kubo_profile_sync_pin_ls_url, ipfs_kubo_profile_sync_pin_rm_url,
-    ipfs_kubo_profile_sync_published_object_id, ipfs_kubo_profile_sync_resolved_object_id,
+    IpfsKuboProfileSyncRpcRequest, IpfsKuboReqwestProfileSyncRpcExecutor, IpfsKuboRpcEndpoint,
+    IpfsKuboRpcResponse, IpfsKuboRpcTransport, IpfsService, IpfsTransportKind,
+    ipfs_gateway_http_url, ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url,
+    ipfs_kubo_profile_sync_added_object_id, ipfs_kubo_profile_sync_name_publish_url,
+    ipfs_kubo_profile_sync_name_resolve_url, ipfs_kubo_profile_sync_pin_add_url,
+    ipfs_kubo_profile_sync_pin_ls_has_recursive_pin, ipfs_kubo_profile_sync_pin_ls_url,
+    ipfs_kubo_profile_sync_pin_rm_url, ipfs_kubo_profile_sync_published_object_id,
+    ipfs_kubo_profile_sync_resolved_object_id,
 };
 pub use protocols::tor::{
     TOR_HTTP_SCHEME, TOR_HTTPS_SCHEME, TorArtiHttpTransport, TorHttpTarget, TorNetworkScheme,
@@ -2526,6 +2527,53 @@ mod tests {
         );
         assert!(fixture.finish().is_empty());
         let _ = std::fs::remove_dir_all(state_root);
+    }
+
+    #[test]
+    fn kubo_profile_sync_http_service_advertises_real_http_boundary() {
+        let mut registry = PluginRegistry::new();
+        let metadata = registry
+            .install_service(
+                ProfileSyncService::kubo("http://127.0.0.1:5001", "local-kubo-profile")
+                    .expect("construct local Kubo profile-sync service"),
+            )
+            .metadata;
+
+        assert_eq!(metadata.id, PROFILE_SYNC_PLUGIN);
+        for capability in [
+            "profile-sync/kubo-rpc",
+            "profile-sync/kubo-http",
+            "profile-sync/object-transfer",
+            "profile-sync/local-retention",
+            "profile-sync/mutable-root",
+            "profile-sync/provider-discovery",
+        ] {
+            assert!(
+                metadata
+                    .capabilities
+                    .iter()
+                    .any(|candidate| candidate == capability),
+                "profile-sync should advertise {capability}"
+            );
+        }
+        assert!(
+            !metadata
+                .capabilities
+                .iter()
+                .any(|capability| capability == "socketless-fixture")
+        );
+        assert!(
+            !metadata
+                .capabilities
+                .iter()
+                .any(|capability| capability == "profile-sync/internal-transport-shim")
+        );
+        assert_eq!(metadata.resource_profile, ResourceProfile::Medium);
+        assert!(
+            metadata
+                .privacy_boundary
+                .contains("local Kubo RPC over HTTP")
+        );
     }
 
     #[test]
