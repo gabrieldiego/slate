@@ -19,7 +19,8 @@ pub use kubo::{
 };
 #[cfg(any(test, feature = "test-fixtures"))]
 pub(crate) use kubo::{
-    internal_kubo_rpc_url_belongs_to_network, register_internal_kubo_rpc_fixture_for_network,
-    take_internal_kubo_rpc_fixture_requests,
+    internal_kubo_rpc_url_belongs_to_network,
+    register_internal_kubo_profile_sync_model_for_network,
+    register_internal_kubo_rpc_fixture_for_network, take_internal_kubo_rpc_fixture_requests,
 };
 pub use service::IpfsService;

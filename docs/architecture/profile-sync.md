@@ -1192,6 +1192,11 @@ into production protocol adapters.
   HTTP, IPFS gateway, and Kubo RPC transports. Synthetic Kubo fixture fetches
   must resolve through the in-process registry before constructing a real HTTP
   client, so default tests never depend on loopback listeners or firewall state.
+- Kubo/IPNS fixture happy paths should prefer the stateful in-process Kubo model
+  over queued responses. Queued responses remain useful for malformed payloads,
+  specific HTTP failures, and retry/fallback cases, but ordinary object, pin,
+  publish, and resolve behavior should come from model state behind the transport
+  shim.
 - App-owned sync watchers should persist profile/domain-scoped cursors in
   `slate-settings.db` after applying a batch, and cursor advancement should be
   monotonic so duplicate or stale fixture deliveries cannot rewind app state.

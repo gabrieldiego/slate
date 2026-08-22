@@ -133,8 +133,9 @@ pub mod test_fixtures {
         unregistered_internal_fixture_http_url_for_network,
     };
     use crate::protocols::ipfs::{
-        internal_kubo_rpc_url_belongs_to_network, register_internal_kubo_rpc_fixture_for_network,
-        take_internal_kubo_rpc_fixture_requests,
+        internal_kubo_rpc_url_belongs_to_network,
+        register_internal_kubo_profile_sync_model_for_network,
+        register_internal_kubo_rpc_fixture_for_network, take_internal_kubo_rpc_fixture_requests,
     };
     use crate::services::{http_fetch::HttpFetchService, profile_sync::ProfileSyncService};
     use crate::{
@@ -495,6 +496,12 @@ pub mod test_fixtures {
             InProcessKuboRpcFixture::new(register_internal_kubo_rpc_fixture_for_network(
                 self.network_id.as_str(),
                 responses,
+            ))
+        }
+
+        pub fn kubo_profile_sync_model(&self) -> InProcessKuboRpcFixture {
+            InProcessKuboRpcFixture::new(register_internal_kubo_profile_sync_model_for_network(
+                self.network_id.as_str(),
             ))
         }
 
@@ -2170,6 +2177,7 @@ mod tests {
         let response = InternalKuboRpcTransportShim::execute_profile_sync_request(
             &request,
             &ResourceBudget::default(),
+            None,
         )
         .expect("execute Kubo profile sync request through internal transport");
 
@@ -2480,6 +2488,133 @@ mod tests {
                 .contains("no sockets, DNS, loopback listener, or external network")
         );
         assert!(fixture.finish().is_empty());
+        let _ = std::fs::remove_dir_all(state_root);
+    }
+
+    #[test]
+    fn kubo_profile_sync_model_round_trips_state_without_canned_responses() {
+        let network = InProcessBroadwebNetwork::new();
+        let fixture = network.kubo_profile_sync_model();
+        let state_root = test_state_root("kubo-profile-sync-model");
+        let daemon = network
+            .daemon_for_kubo_profile_sync(
+                &state_root,
+                ResourceBudget::default(),
+                fixture.base_url(),
+                "kubo-model-provider",
+            )
+            .expect("start Kubo profile-sync model daemon");
+        let payload = b"encrypted slate-settings snapshot".to_vec();
+
+        let ProfileSyncResponse::PutEncryptedObject { object_id } = daemon
+            .profile_sync(ProfileSyncRequest::PutEncryptedObject(
+                ProfileSyncPutObjectRequest::new("default", payload.clone()),
+            ))
+            .expect("put through Kubo profile-sync model")
+        else {
+            panic!("expected put response");
+        };
+        assert!(object_id.starts_with("bafyfixture"));
+
+        assert_eq!(
+            daemon
+                .profile_sync(ProfileSyncRequest::GetEncryptedObject(
+                    ProfileSyncObjectRequest::new("default", object_id.as_str()),
+                ))
+                .expect("get through Kubo profile-sync model"),
+            ProfileSyncResponse::GetEncryptedObject {
+                object_id: object_id.clone(),
+                bytes: payload,
+            }
+        );
+        assert_eq!(
+            daemon
+                .profile_sync(ProfileSyncRequest::RetainObject(
+                    ProfileSyncObjectRequest::new("default", object_id.as_str()),
+                ))
+                .expect("pin through Kubo profile-sync model"),
+            ProfileSyncResponse::RetainObject {
+                object_id: object_id.clone(),
+                retained: true,
+            }
+        );
+        assert_eq!(
+            daemon
+                .profile_sync(ProfileSyncRequest::VerifyRetainedObject(
+                    ProfileSyncObjectRequest::new("default", object_id.as_str()),
+                ))
+                .expect("verify pin through Kubo profile-sync model"),
+            ProfileSyncResponse::RetainedObjectStatus {
+                object_id: object_id.clone(),
+                retained: true,
+                available: true,
+            }
+        );
+        assert_eq!(
+            daemon
+                .profile_sync(ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+                    "default",
+                    "settings-latest",
+                    object_id.as_str()
+                ),))
+                .expect("publish IPNS root through Kubo profile-sync model"),
+            ProfileSyncResponse::Root {
+                root_id: "settings-latest".to_string(),
+                object_id: Some(object_id.clone()),
+            }
+        );
+        assert_eq!(
+            daemon
+                .profile_sync(ProfileSyncRequest::ResolveRoot(
+                    ProfileSyncRootRequest::new("default", "settings-latest"),
+                ))
+                .expect("resolve IPNS root through Kubo profile-sync model"),
+            ProfileSyncResponse::Root {
+                root_id: "settings-latest".to_string(),
+                object_id: Some(object_id.clone()),
+            }
+        );
+        assert_eq!(
+            daemon
+                .profile_sync(ProfileSyncRequest::ReleaseObject(
+                    ProfileSyncObjectRequest::new("default", object_id.as_str()),
+                ))
+                .expect("unpin through Kubo profile-sync model"),
+            ProfileSyncResponse::ReleaseObject {
+                object_id: object_id.clone(),
+                retained: false,
+            }
+        );
+        assert_eq!(
+            daemon
+                .profile_sync(ProfileSyncRequest::VerifyRetainedObject(
+                    ProfileSyncObjectRequest::new("default", object_id.as_str()),
+                ))
+                .expect("verify unpinned object through Kubo profile-sync model"),
+            ProfileSyncResponse::RetainedObjectStatus {
+                object_id: object_id.clone(),
+                retained: false,
+                available: false,
+            }
+        );
+
+        assert_eq!(
+            fixture.finish(),
+            vec![
+                "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1".to_string(),
+                format!("POST /api/v0/cat?arg=%2Fipfs%2F{object_id} HTTP/1.1"),
+                format!("POST /api/v0/pin/add?arg={object_id}&recursive=true HTTP/1.1"),
+                format!("POST /api/v0/pin/ls?arg={object_id}&type=recursive HTTP/1.1"),
+                format!(
+                    "POST /api/v0/name/publish?arg=%2Fipfs%2F{object_id}&key=settings-latest&allow-offline=true HTTP/1.1"
+                ),
+                "POST /api/v0/name/resolve?arg=%2Fipns%2Fsettings-latest&recursive=false HTTP/1.1"
+                    .to_string(),
+                format!("POST /api/v0/pin/rm?arg={object_id}&recursive=true HTTP/1.1"),
+                format!("POST /api/v0/pin/ls?arg={object_id}&type=recursive HTTP/1.1"),
+            ]
+        );
+
         let _ = std::fs::remove_dir_all(state_root);
     }
 

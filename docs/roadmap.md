@@ -351,6 +351,13 @@ Current baseline:
   when the Kubo fixture URL belongs to the same simulated network. Downstream
   settings-sync tests can use those helpers without manually assembling a
   registry or opening loopback ports.
+- `InProcessBroadwebNetwork` now also exposes a stateful socketless Kubo
+  profile-sync model. The protocol adapter still builds normal Kubo RPC URLs
+  and parses normal Kubo JSON responses, while the internal transport shim
+  delivers those requests to a deterministic in-process model for `add`, `cat`,
+  `pin/add`, `pin/rm`, `pin/ls`, `name/publish`, and `name/resolve`. Queued
+  Kubo responses remain available for explicit error and malformed-response
+  tests.
 - `slate-profile-sync` now verifies its `BroadwebdProfileSyncPublisher` and
   `BroadwebdProfileSyncObjectSource` bridge against that Kubo profile-sync
   fixture daemon: dependency objects, retained root publish, root resolve, and
