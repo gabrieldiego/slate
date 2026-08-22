@@ -1675,26 +1675,73 @@ impl SettingsSyncStoredRetentionProviderPlan {
     }
 
     pub fn in_process_fixture_endpoint_provider_ids(&self) -> Vec<String> {
-        self.endpoint_provider_ids_with_status(
+        endpoint_provider_ids_with_status(
+            self.enabled_retention_provider_endpoints.as_slice(),
             SettingsSyncStoredProviderEndpointStatus::InProcessFixture,
         )
     }
 
+    pub fn in_process_fixture_endpoint_provider_count(&self) -> usize {
+        endpoint_provider_count_with_status(
+            self.enabled_retention_provider_endpoints.as_slice(),
+            SettingsSyncStoredProviderEndpointStatus::InProcessFixture,
+        )
+    }
+
+    pub fn missing_endpoint_provider_ids(&self) -> Vec<String> {
+        endpoint_provider_ids_with_status(
+            self.enabled_retention_provider_endpoints.as_slice(),
+            SettingsSyncStoredProviderEndpointStatus::Missing,
+        )
+    }
+
+    pub fn missing_endpoint_provider_count(&self) -> usize {
+        endpoint_provider_count_with_status(
+            self.enabled_retention_provider_endpoints.as_slice(),
+            SettingsSyncStoredProviderEndpointStatus::Missing,
+        )
+    }
+
+    pub fn multiaddr_endpoint_provider_ids(&self) -> Vec<String> {
+        endpoint_provider_ids_with_status(
+            self.enabled_retention_provider_endpoints.as_slice(),
+            SettingsSyncStoredProviderEndpointStatus::Multiaddr,
+        )
+    }
+
+    pub fn multiaddr_endpoint_provider_count(&self) -> usize {
+        endpoint_provider_count_with_status(
+            self.enabled_retention_provider_endpoints.as_slice(),
+            SettingsSyncStoredProviderEndpointStatus::Multiaddr,
+        )
+    }
+
+    pub fn deferred_protocol_endpoint_provider_ids(&self) -> Vec<String> {
+        endpoint_provider_ids_with_status(
+            self.enabled_retention_provider_endpoints.as_slice(),
+            SettingsSyncStoredProviderEndpointStatus::DeferredProtocol,
+        )
+    }
+
+    pub fn deferred_protocol_endpoint_provider_count(&self) -> usize {
+        endpoint_provider_count_with_status(
+            self.enabled_retention_provider_endpoints.as_slice(),
+            SettingsSyncStoredProviderEndpointStatus::DeferredProtocol,
+        )
+    }
+
     pub fn unsupported_endpoint_provider_ids(&self) -> Vec<String> {
-        self.endpoint_provider_ids_with_status(
+        endpoint_provider_ids_with_status(
+            self.enabled_retention_provider_endpoints.as_slice(),
             SettingsSyncStoredProviderEndpointStatus::Unsupported,
         )
     }
 
-    fn endpoint_provider_ids_with_status(
-        &self,
-        endpoint_status: SettingsSyncStoredProviderEndpointStatus,
-    ) -> Vec<String> {
-        self.enabled_retention_provider_endpoints
-            .iter()
-            .filter(|endpoint| endpoint.endpoint_status == endpoint_status)
-            .map(|endpoint| endpoint.provider_id.clone())
-            .collect()
+    pub fn unsupported_endpoint_provider_count(&self) -> usize {
+        endpoint_provider_count_with_status(
+            self.enabled_retention_provider_endpoints.as_slice(),
+            SettingsSyncStoredProviderEndpointStatus::Unsupported,
+        )
     }
 }
 
@@ -1935,6 +1982,27 @@ struct StoredRetentionProviderSelection {
     enabled_retention_provider_endpoints: Vec<SettingsSyncStoredRetentionProviderEndpoint>,
     disabled_provider_ids: Vec<String>,
     stored_role_ineligible_provider_ids: Vec<String>,
+}
+
+fn endpoint_provider_ids_with_status(
+    endpoints: &[SettingsSyncStoredRetentionProviderEndpoint],
+    endpoint_status: SettingsSyncStoredProviderEndpointStatus,
+) -> Vec<String> {
+    endpoints
+        .iter()
+        .filter(|endpoint| endpoint.endpoint_status == endpoint_status)
+        .map(|endpoint| endpoint.provider_id.clone())
+        .collect()
+}
+
+fn endpoint_provider_count_with_status(
+    endpoints: &[SettingsSyncStoredRetentionProviderEndpoint],
+    endpoint_status: SettingsSyncStoredProviderEndpointStatus,
+) -> usize {
+    endpoints
+        .iter()
+        .filter(|endpoint| endpoint.endpoint_status == endpoint_status)
+        .count()
 }
 
 fn select_stored_retention_provider_ids(
@@ -4940,12 +5008,12 @@ mod tests {
         ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
         ProfileSyncSettingsCandidatePullApplyStatus, SYNC_DOMAIN_BOOKMARKS, SYNC_DOMAIN_CALENDAR,
         SYNC_DOMAIN_CHAT, SYNC_DOMAIN_FILES, SYNC_DOMAIN_SETTINGS, SYNC_DOMAIN_STORAGE,
-        SlateProfileDatabase, StorageError, StorageProviderSyncPayload, StorageProviderUpdate,
-        SyncChangeRecord, SyncContentKeyEpochRegistration, SyncDevicePublicKeyRegistration,
-        SyncSnapshotRegistration, TypedAppSyncDomainWatcher, open_signed_profile_sync_device_head,
-        open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
-        open_signed_sync_setting_text, pull_signed_profile_sync_device_head,
-        settings_sync_snapshot_id,
+        SlateProfileDatabase, StorageError, StorageProviderRecord, StorageProviderSyncPayload,
+        StorageProviderUpdate, SyncChangeRecord, SyncContentKeyEpochRegistration,
+        SyncDevicePublicKeyRegistration, SyncSnapshotRegistration, TypedAppSyncDomainWatcher,
+        open_signed_profile_sync_device_head, open_signed_profile_sync_manifest,
+        open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
+        pull_signed_profile_sync_device_head, settings_sync_snapshot_id,
     };
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -5004,6 +5072,27 @@ mod tests {
             max_retained_objects: Some(64),
             pinning_policy: Some("auto".to_string()),
             enabled,
+        }
+    }
+
+    fn test_storage_provider_record(update: StorageProviderUpdate) -> StorageProviderRecord {
+        StorageProviderRecord {
+            profile: update.profile,
+            provider_id: update.provider_id,
+            provider_kind: update.provider_kind,
+            display_name: update.display_name,
+            endpoint_ref: update.endpoint_ref,
+            discovery: update.discovery,
+            connectivity: update.connectivity,
+            object_transfer: update.object_transfer,
+            availability: update.availability,
+            mutable_roots: update.mutable_roots,
+            quota_bytes: update.quota_bytes,
+            max_retained_objects: update.max_retained_objects,
+            pinning_policy: update.pinning_policy,
+            enabled: update.enabled,
+            created_at: 1,
+            updated_at: 1,
         }
     }
 
@@ -5067,6 +5156,163 @@ mod tests {
         assert_eq!(
             super::classify_stored_provider_endpoint("provider-a", None),
             SettingsSyncStoredProviderEndpointStatus::Missing
+        );
+    }
+
+    #[test]
+    fn stored_provider_endpoint_buckets_cover_all_materialization_statuses() {
+        let network = InProcessBroadwebNetwork::new();
+        let profile = "endpointbucketprofile";
+        let fixture_provider_id = "bucket-fixture-provider";
+        let missing_provider_id = "bucket-missing-provider";
+        let multiaddr_provider_id = "bucket-multiaddr-provider";
+        let deferred_provider_id = "bucket-deferred-provider";
+        let unsupported_provider_id = "bucket-unsupported-provider";
+
+        let missing_provider = StorageProviderUpdate {
+            endpoint_ref: None,
+            ..test_storage_provider_update(
+                &network,
+                profile,
+                missing_provider_id,
+                "local-fixture-availability",
+                "Missing endpoint",
+                true,
+                true,
+                true,
+            )
+        };
+        let multiaddr_provider = StorageProviderUpdate {
+            endpoint_ref: Some("/dnsaddr/home.example.test/p2p/provider-a".to_string()),
+            ..test_storage_provider_update(
+                &network,
+                profile,
+                multiaddr_provider_id,
+                "ipfs-provider",
+                "Multiaddr endpoint",
+                true,
+                true,
+                true,
+            )
+        };
+        let deferred_provider = StorageProviderUpdate {
+            endpoint_ref: Some("iroh-node:provider-a".to_string()),
+            ..test_storage_provider_update(
+                &network,
+                profile,
+                deferred_provider_id,
+                "iroh-provider",
+                "Deferred endpoint",
+                true,
+                true,
+                true,
+            )
+        };
+        let unsupported_provider = StorageProviderUpdate {
+            endpoint_ref: Some("http://127.0.0.1:5001".to_string()),
+            ..test_storage_provider_update(
+                &network,
+                profile,
+                unsupported_provider_id,
+                "loopback-provider",
+                "Unsupported endpoint",
+                true,
+                true,
+                true,
+            )
+        };
+
+        let selected = super::select_stored_retention_provider_ids(
+            [
+                test_storage_provider_update(
+                    &network,
+                    profile,
+                    fixture_provider_id,
+                    "local-fixture-availability",
+                    "Fixture endpoint",
+                    true,
+                    true,
+                    true,
+                ),
+                missing_provider,
+                multiaddr_provider,
+                deferred_provider,
+                unsupported_provider,
+            ]
+            .into_iter()
+            .map(test_storage_provider_record)
+            .collect(),
+        );
+
+        assert_eq!(
+            super::endpoint_provider_ids_with_status(
+                selected.enabled_retention_provider_endpoints.as_slice(),
+                SettingsSyncStoredProviderEndpointStatus::InProcessFixture,
+            ),
+            vec![fixture_provider_id.to_string()]
+        );
+        assert_eq!(
+            super::endpoint_provider_count_with_status(
+                selected.enabled_retention_provider_endpoints.as_slice(),
+                SettingsSyncStoredProviderEndpointStatus::InProcessFixture,
+            ),
+            1
+        );
+        assert_eq!(
+            super::endpoint_provider_ids_with_status(
+                selected.enabled_retention_provider_endpoints.as_slice(),
+                SettingsSyncStoredProviderEndpointStatus::Missing,
+            ),
+            vec![missing_provider_id.to_string()]
+        );
+        assert_eq!(
+            super::endpoint_provider_count_with_status(
+                selected.enabled_retention_provider_endpoints.as_slice(),
+                SettingsSyncStoredProviderEndpointStatus::Missing,
+            ),
+            1
+        );
+        assert_eq!(
+            super::endpoint_provider_ids_with_status(
+                selected.enabled_retention_provider_endpoints.as_slice(),
+                SettingsSyncStoredProviderEndpointStatus::Multiaddr,
+            ),
+            vec![multiaddr_provider_id.to_string()]
+        );
+        assert_eq!(
+            super::endpoint_provider_count_with_status(
+                selected.enabled_retention_provider_endpoints.as_slice(),
+                SettingsSyncStoredProviderEndpointStatus::Multiaddr,
+            ),
+            1
+        );
+        assert_eq!(
+            super::endpoint_provider_ids_with_status(
+                selected.enabled_retention_provider_endpoints.as_slice(),
+                SettingsSyncStoredProviderEndpointStatus::DeferredProtocol,
+            ),
+            vec![deferred_provider_id.to_string()]
+        );
+        assert_eq!(
+            super::endpoint_provider_count_with_status(
+                selected.enabled_retention_provider_endpoints.as_slice(),
+                SettingsSyncStoredProviderEndpointStatus::DeferredProtocol,
+            ),
+            1
+        );
+        assert_eq!(
+            super::endpoint_provider_ids_with_status(
+                selected.enabled_retention_provider_endpoints.as_slice(),
+                SettingsSyncStoredProviderEndpointStatus::Unsupported,
+            ),
+            vec![unsupported_provider_id.to_string()]
+        );
+        assert_eq!(
+            super::endpoint_provider_count_with_status(
+                selected.enabled_retention_provider_endpoints.as_slice(),
+                SettingsSyncStoredProviderEndpointStatus::Unsupported,
+            ),
+            1
         );
     }
 

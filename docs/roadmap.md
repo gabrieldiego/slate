@@ -493,6 +493,10 @@ Current baseline:
   multiaddr and deferred protocol refs are tracked separately, and
   loopback-shaped `http://` or `https://` refs are unsupported so fixture tests
   cannot silently open sockets or rely on DNS.
+- Stored-provider plans now expose provider-id buckets and counts for each
+  endpoint materialization status: in-process fixture, missing, multiaddr,
+  deferred protocol, and unsupported. This gives runtime and UI code a
+  structured preview before starting or selecting any provider daemon.
 - Stored-provider runtime ticks now also exclude unsupported endpoint refs from
   the materialized retention-provider quorum, even if the caller supplies a
   daemon handle with the same socket-shaped endpoint string. This keeps
