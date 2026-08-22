@@ -13003,7 +13003,9 @@ mod tests {
         )
         .expect("open typed app upsert tail receiver settings database");
         for (domain, privacy_classification, sync_content) in [
+            (SYNC_DOMAIN_CALENDAR, "sensitive", false),
             (SYNC_DOMAIN_CHAT, "sensitive", false),
+            (SYNC_DOMAIN_CONTACTS, "sensitive", false),
             (SYNC_DOMAIN_FILES, "content", true),
             (SYNC_DOMAIN_STORAGE, "sensitive", false),
         ] {
@@ -13020,6 +13022,21 @@ mod tests {
         }
 
         publisher_database
+            .upsert_calendar_event(&CalendarEventUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                event_id: "runtime-event-tail-1".to_string(),
+                calendar_id: Some("work".to_string()),
+                title: "Runtime planning".to_string(),
+                starts_at: 1_789_039_000,
+                ends_at: Some(1_789_042_600),
+                time_zone: Some("UTC".to_string()),
+                location: Some("Slate workspace".to_string()),
+                notes: Some("Initial tail fixture meeting".to_string()),
+                recurrence_rule: None,
+                reminder_minutes: Some(10),
+            })
+            .expect("publisher writes initial typed calendar metadata");
+        publisher_database
             .upsert_chat_conversation(&ChatConversationUpdate {
                 profile: DEFAULT_PROFILE_ID.to_string(),
                 conversation_id: "runtime-chat-tail-1".to_string(),
@@ -13033,6 +13050,20 @@ mod tests {
                 muted: false,
             })
             .expect("publisher writes initial typed chat metadata");
+        publisher_database
+            .upsert_contact_card(&ContactCardUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                contact_id: "runtime-contact-tail-1".to_string(),
+                display_name: "Runtime Contact".to_string(),
+                given_name: Some("Runtime".to_string()),
+                family_name: Some("Contact".to_string()),
+                organization: Some("Slate".to_string()),
+                primary_email: Some("runtime@example.test".to_string()),
+                primary_phone: None,
+                notes: Some("Initial tail fixture contact".to_string()),
+                avatar_key: Some("contact-avatar:runtime-contact-tail-1".to_string()),
+            })
+            .expect("publisher writes initial typed contact metadata");
         publisher_database
             .upsert_file_entry(&FileEntryUpdate {
                 profile: DEFAULT_PROFILE_ID.to_string(),
@@ -13082,6 +13113,13 @@ mod tests {
             .expect("receiver trusts typed app upsert tail publisher key");
         let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
         let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
+        let calendar_watcher = TypedAppSyncDomainWatcher::<CalendarEventSyncPayload>::new(
+            receiver_database.clone(),
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_CALENDAR,
+            8,
+        )
+        .expect("initialize receiver calendar cursor before typed app snapshot");
         let chat_watcher = TypedAppSyncDomainWatcher::<ChatConversationSyncPayload>::new(
             receiver_database.clone(),
             DEFAULT_PROFILE_ID,
@@ -13089,6 +13127,13 @@ mod tests {
             8,
         )
         .expect("initialize receiver chat cursor before typed app snapshot");
+        let contact_watcher = TypedAppSyncDomainWatcher::<ContactCardSyncPayload>::new(
+            receiver_database.clone(),
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_CONTACTS,
+            8,
+        )
+        .expect("initialize receiver contacts cursor before typed app snapshot");
         let file_watcher = TypedAppSyncDomainWatcher::<FileEntrySyncPayload>::new(
             receiver_database.clone(),
             DEFAULT_PROFILE_ID,
@@ -13103,9 +13148,15 @@ mod tests {
             8,
         )
         .expect("initialize receiver storage cursor before typed app snapshot");
+        let initial_calendar_revision = calendar_watcher
+            .current_revision()
+            .expect("read initial calendar cursor before typed app snapshot");
         let initial_chat_revision = chat_watcher
             .current_revision()
             .expect("read initial chat cursor before typed app snapshot");
+        let initial_contact_revision = contact_watcher
+            .current_revision()
+            .expect("read initial contacts cursor before typed app snapshot");
         let initial_file_revision = file_watcher
             .current_revision()
             .expect("read initial files cursor before typed app snapshot");
@@ -13113,9 +13164,23 @@ mod tests {
             .current_revision()
             .expect("read initial storage cursor before typed app snapshot");
         assert_eq!(
+            calendar_watcher
+                .poll_once()
+                .expect("poll idle calendar before typed app snapshot")
+                .event_count(),
+            0
+        );
+        assert_eq!(
             chat_watcher
                 .poll_once()
                 .expect("poll idle chat before typed app snapshot")
+                .event_count(),
+            0
+        );
+        assert_eq!(
+            contact_watcher
+                .poll_once()
+                .expect("poll idle contacts before typed app snapshot")
                 .event_count(),
             0
         );
@@ -13161,10 +13226,24 @@ mod tests {
         ));
         assert_eq!(
             receiver_database
+                .calendar_events(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver initial typed calendar metadata")[0]
+                .title,
+            "Runtime planning"
+        );
+        assert_eq!(
+            receiver_database
                 .chat_conversations(DEFAULT_PROFILE_ID, 10)
                 .expect("read receiver initial typed chat metadata")[0]
                 .display_name,
             "Runtime Team"
+        );
+        assert_eq!(
+            receiver_database
+                .contact_cards(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver initial typed contact metadata")[0]
+                .display_name,
+            "Runtime Contact"
         );
         assert_eq!(
             receiver_database
@@ -13179,6 +13258,44 @@ mod tests {
                 .expect("read receiver initial typed storage provider metadata")[0]
                 .availability,
             false
+        );
+        let snapshot_calendar_applied = calendar_watcher
+            .poll_apply_and_acknowledge(|snapshot_calendar_poll| {
+                assert!(snapshot_calendar_poll.advanced());
+                assert_eq!(
+                    snapshot_calendar_poll.previous_revision,
+                    initial_calendar_revision
+                );
+                assert_eq!(snapshot_calendar_poll.event_count(), 1);
+                assert_eq!(
+                    snapshot_calendar_poll.events[0].value.event_id,
+                    "runtime-event-tail-1"
+                );
+                assert_eq!(
+                    snapshot_calendar_poll.events[0].value.title,
+                    "Runtime planning"
+                );
+                Ok::<(), &'static str>(())
+            })
+            .expect("receiver applies initial typed calendar snapshot payload");
+        let snapshot_calendar_poll = snapshot_calendar_applied.poll;
+        assert!(snapshot_calendar_poll.advanced());
+        assert_eq!(
+            snapshot_calendar_poll.previous_revision,
+            initial_calendar_revision
+        );
+        assert_eq!(snapshot_calendar_poll.event_count(), 1);
+        assert_eq!(
+            snapshot_calendar_poll.events[0].value.event_id,
+            "runtime-event-tail-1"
+        );
+        assert_eq!(
+            snapshot_calendar_poll.events[0].value.title,
+            "Runtime planning"
+        );
+        assert_eq!(
+            snapshot_calendar_applied.cursor.latest_revision,
+            snapshot_calendar_poll.latest_revision
         );
         let snapshot_chat_applied = chat_watcher
             .poll_apply_and_acknowledge(|snapshot_chat_poll| {
@@ -13211,6 +13328,45 @@ mod tests {
         assert_eq!(
             snapshot_chat_applied.cursor.latest_revision,
             snapshot_chat_poll.latest_revision
+        );
+
+        let snapshot_contact_applied = contact_watcher
+            .poll_apply_and_acknowledge(|snapshot_contact_poll| {
+                assert!(snapshot_contact_poll.advanced());
+                assert_eq!(
+                    snapshot_contact_poll.previous_revision,
+                    initial_contact_revision
+                );
+                assert_eq!(snapshot_contact_poll.event_count(), 1);
+                assert_eq!(
+                    snapshot_contact_poll.events[0].value.contact_id,
+                    "runtime-contact-tail-1"
+                );
+                assert_eq!(
+                    snapshot_contact_poll.events[0].value.display_name,
+                    "Runtime Contact"
+                );
+                Ok::<(), &'static str>(())
+            })
+            .expect("receiver applies initial typed contact snapshot payload");
+        let snapshot_contact_poll = snapshot_contact_applied.poll;
+        assert!(snapshot_contact_poll.advanced());
+        assert_eq!(
+            snapshot_contact_poll.previous_revision,
+            initial_contact_revision
+        );
+        assert_eq!(snapshot_contact_poll.event_count(), 1);
+        assert_eq!(
+            snapshot_contact_poll.events[0].value.contact_id,
+            "runtime-contact-tail-1"
+        );
+        assert_eq!(
+            snapshot_contact_poll.events[0].value.display_name,
+            "Runtime Contact"
+        );
+        assert_eq!(
+            snapshot_contact_applied.cursor.latest_revision,
+            snapshot_contact_poll.latest_revision
         );
 
         let snapshot_file_applied = file_watcher
@@ -13280,6 +13436,21 @@ mod tests {
         );
 
         publisher_database
+            .upsert_calendar_event(&CalendarEventUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                event_id: "runtime-event-tail-1".to_string(),
+                calendar_id: Some("work".to_string()),
+                title: "Runtime planning updated".to_string(),
+                starts_at: 1_789_043_000,
+                ends_at: Some(1_789_046_600),
+                time_zone: Some("UTC".to_string()),
+                location: Some("Slate workspace".to_string()),
+                notes: Some("Updated through incremental tail".to_string()),
+                recurrence_rule: Some("FREQ=WEEKLY;COUNT=2".to_string()),
+                reminder_minutes: Some(5),
+            })
+            .expect("publisher writes typed calendar metadata tail update");
+        publisher_database
             .upsert_chat_conversation(&ChatConversationUpdate {
                 profile: DEFAULT_PROFILE_ID.to_string(),
                 conversation_id: "runtime-chat-tail-1".to_string(),
@@ -13293,6 +13464,20 @@ mod tests {
                 muted: true,
             })
             .expect("publisher writes typed chat metadata tail update");
+        publisher_database
+            .upsert_contact_card(&ContactCardUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                contact_id: "runtime-contact-tail-1".to_string(),
+                display_name: "Runtime Contact Updated".to_string(),
+                given_name: Some("Runtime".to_string()),
+                family_name: Some("Contact".to_string()),
+                organization: Some("Slate Sync".to_string()),
+                primary_email: Some("runtime-updated@example.test".to_string()),
+                primary_phone: Some("+15550103000".to_string()),
+                notes: Some("Updated through incremental tail".to_string()),
+                avatar_key: Some("contact-avatar:runtime-contact-tail-1-updated".to_string()),
+            })
+            .expect("publisher writes typed contact metadata tail update");
         publisher_database
             .upsert_file_entry(&FileEntryUpdate {
                 profile: DEFAULT_PROFILE_ID.to_string(),
@@ -13348,7 +13533,7 @@ mod tests {
             tail.publication.snapshot_object_id,
             full.publication.snapshot_object_id
         );
-        assert_eq!(tail.publication.tail_change_object_ids.len(), 3);
+        assert_eq!(tail.publication.tail_change_object_ids.len(), 5);
         assert_eq!(
             tail.device_head.device_head.latest_change_object_id,
             tail.publication.tail_change_object_ids.last().cloned()
@@ -13371,7 +13556,16 @@ mod tests {
             tail.publication.manifest_object_id
         );
         assert!(application.snapshot.is_some());
-        assert_eq!(application.tail_changes.len(), 3);
+        assert_eq!(application.tail_changes.len(), 5);
+
+        let calendar_events = receiver_database
+            .calendar_events(DEFAULT_PROFILE_ID, 10)
+            .expect("read receiver updated typed calendar metadata");
+        assert_eq!(calendar_events.len(), 1);
+        assert_eq!(calendar_events[0].event_id, "runtime-event-tail-1");
+        assert_eq!(calendar_events[0].title, "Runtime planning updated");
+        assert_eq!(calendar_events[0].starts_at, 1_789_043_000);
+        assert_eq!(calendar_events[0].reminder_minutes, Some(5));
 
         let conversations = receiver_database
             .chat_conversations(DEFAULT_PROFILE_ID, 10)
@@ -13382,6 +13576,18 @@ mod tests {
         assert_eq!(conversations[0].unread_count, 7);
         assert!(conversations[0].archived);
         assert!(conversations[0].muted);
+
+        let contacts = receiver_database
+            .contact_cards(DEFAULT_PROFILE_ID, 10)
+            .expect("read receiver updated typed contact metadata");
+        assert_eq!(contacts.len(), 1);
+        assert_eq!(contacts[0].contact_id, "runtime-contact-tail-1");
+        assert_eq!(contacts[0].display_name, "Runtime Contact Updated");
+        assert_eq!(
+            contacts[0].primary_email.as_deref(),
+            Some("runtime-updated@example.test")
+        );
+        assert_eq!(contacts[0].primary_phone.as_deref(), Some("+15550103000"));
 
         let files = receiver_database
             .file_entries(DEFAULT_PROFILE_ID, 10)
@@ -13409,6 +13615,47 @@ mod tests {
         assert_eq!(providers[0].max_retained_objects, Some(32));
         assert_eq!(providers[0].pinning_policy.as_deref(), Some("auto"));
         assert!(!providers[0].enabled);
+
+        let tail_calendar_applied = calendar_watcher
+            .poll_apply_and_acknowledge(|tail_calendar_poll| {
+                assert!(tail_calendar_poll.advanced());
+                assert_eq!(
+                    tail_calendar_poll.previous_revision,
+                    snapshot_calendar_poll.latest_revision
+                );
+                assert_eq!(tail_calendar_poll.event_count(), 1);
+                assert_eq!(
+                    tail_calendar_poll.events[0].value.event_id,
+                    "runtime-event-tail-1"
+                );
+                assert_eq!(
+                    tail_calendar_poll.events[0].value.title,
+                    "Runtime planning updated"
+                );
+                assert_eq!(tail_calendar_poll.events[0].value.reminder_minutes, Some(5));
+                Ok::<(), &'static str>(())
+            })
+            .expect("receiver applies typed calendar tail payload");
+        let tail_calendar_poll = tail_calendar_applied.poll;
+        assert!(tail_calendar_poll.advanced());
+        assert_eq!(
+            tail_calendar_poll.previous_revision,
+            snapshot_calendar_poll.latest_revision
+        );
+        assert_eq!(tail_calendar_poll.event_count(), 1);
+        assert_eq!(
+            tail_calendar_poll.events[0].value.event_id,
+            "runtime-event-tail-1"
+        );
+        assert_eq!(
+            tail_calendar_poll.events[0].value.title,
+            "Runtime planning updated"
+        );
+        assert_eq!(tail_calendar_poll.events[0].value.reminder_minutes, Some(5));
+        assert_eq!(
+            tail_calendar_applied.cursor.latest_revision,
+            tail_calendar_poll.latest_revision
+        );
 
         let tail_chat_applied = chat_watcher
             .poll_apply_and_acknowledge(|tail_chat_poll| {
@@ -13453,6 +13700,53 @@ mod tests {
         assert_eq!(
             tail_chat_applied.cursor.latest_revision,
             tail_chat_poll.latest_revision
+        );
+
+        let tail_contact_applied = contact_watcher
+            .poll_apply_and_acknowledge(|tail_contact_poll| {
+                assert!(tail_contact_poll.advanced());
+                assert_eq!(
+                    tail_contact_poll.previous_revision,
+                    snapshot_contact_poll.latest_revision
+                );
+                assert_eq!(tail_contact_poll.event_count(), 1);
+                assert_eq!(
+                    tail_contact_poll.events[0].value.contact_id,
+                    "runtime-contact-tail-1"
+                );
+                assert_eq!(
+                    tail_contact_poll.events[0].value.display_name,
+                    "Runtime Contact Updated"
+                );
+                assert_eq!(
+                    tail_contact_poll.events[0].value.primary_email.as_deref(),
+                    Some("runtime-updated@example.test")
+                );
+                Ok::<(), &'static str>(())
+            })
+            .expect("receiver applies typed contact tail payload");
+        let tail_contact_poll = tail_contact_applied.poll;
+        assert!(tail_contact_poll.advanced());
+        assert_eq!(
+            tail_contact_poll.previous_revision,
+            snapshot_contact_poll.latest_revision
+        );
+        assert_eq!(tail_contact_poll.event_count(), 1);
+        assert_eq!(
+            tail_contact_poll.events[0].value.contact_id,
+            "runtime-contact-tail-1"
+        );
+        assert_eq!(
+            tail_contact_poll.events[0].value.display_name,
+            "Runtime Contact Updated"
+        );
+        assert_eq!(
+            tail_contact_poll.events[0].value.primary_email.as_deref(),
+            Some("runtime-updated@example.test")
+        );
+        assert_eq!(
+            tail_contact_applied.cursor.latest_revision,
+            tail_contact_poll.latest_revision
         );
 
         let tail_file_applied = file_watcher
