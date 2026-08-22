@@ -181,6 +181,36 @@
       margin-top: 18px;
     }
 
+    .profile-sync-status {
+      margin-top: 18px;
+      padding: 10px 12px;
+      border: 1px solid #dedbd5;
+      border-radius: 6px;
+      background: #fbfaf8;
+      color: #393a37;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .profile-sync-secret {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 118px;
+      margin-top: 14px;
+      border: 1px solid #c8c5bd;
+      border-radius: 6px;
+      background: #fffefa;
+      color: #242421;
+      padding: 10px;
+      font: 13px ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      line-height: 1.35;
+      resize: vertical;
+    }
+
+    .profile-sync-secret:focus {
+      border-color: #0b7e79;
+      outline: 3px solid rgba(11, 126, 121, 0.18);
+    }
+
     .shortcut-row {
       display: grid;
       grid-template-columns: minmax(140px, 1fr) minmax(180px, 260px);
@@ -250,6 +280,23 @@
       <div class="actions">
         <button id="save-shortcuts" class="primary">Save</button>
         <button id="reset-shortcuts">Reset shortcuts</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Profile Sync Preview</h2>
+      <div id="profile-sync-status" class="profile-sync-status">Not enrolled</div>
+      <textarea
+        id="profile-sync-secret"
+        class="profile-sync-secret"
+        spellcheck="false"
+        autocomplete="off"
+        aria-label="Slate Sync Secret key file"
+      ></textarea>
+      <div class="actions">
+        <button id="profile-sync-create" class="primary">Create key file</button>
+        <button id="profile-sync-download">Download key file</button>
+        <button id="profile-sync-import">Import pasted key</button>
       </div>
     </section>
 
@@ -332,6 +379,11 @@
     const saveShortcutsButton = document.getElementById("save-shortcuts");
     const keyBindings = document.getElementById("key-bindings");
     const resetShortcutsButton = document.getElementById("reset-shortcuts");
+    const profileSyncStatus = document.getElementById("profile-sync-status");
+    const profileSyncSecret = document.getElementById("profile-sync-secret");
+    const profileSyncCreateButton = document.getElementById("profile-sync-create");
+    const profileSyncDownloadButton = document.getElementById("profile-sync-download");
+    const profileSyncImportButton = document.getElementById("profile-sync-import");
     const params = new URLSearchParams(window.location.search);
     const initial = Number.parseFloat(params.get("chrome_zoom"));
     const fallbackImage = new Image();
@@ -743,6 +795,71 @@
         });
     }
 
+    function profileSyncUrl(path, secret) {
+      const query = new URLSearchParams();
+      query.set("nonce", String(Date.now()));
+      if (secret) {
+        query.set("secret", secret);
+      }
+      return `slate://settings/profile-sync/${path}?${query.toString()}`;
+    }
+
+    function setProfileSyncState(state) {
+      if (!state) {
+        profileSyncStatus.textContent = "Unavailable";
+        return;
+      }
+      if (state.last_error) {
+        profileSyncStatus.textContent = `Error: ${state.last_error}`;
+      } else if (state.has_secret) {
+        profileSyncStatus.textContent = `Ready for ${state.profile}`;
+      } else {
+        profileSyncStatus.textContent = "Not enrolled";
+      }
+      if (state.export_text) {
+        profileSyncSecret.value = state.export_text;
+      }
+    }
+
+    function fetchProfileSyncState(path, secret) {
+      if (!window.fetch) {
+        setProfileSyncState(null);
+        return Promise.resolve(null);
+      }
+      return window.fetch(profileSyncUrl(path, secret), { cache: "no-store" })
+        .then((response) => response.json())
+        .then((state) => {
+          setProfileSyncState(state);
+          return state;
+        })
+        .catch((error) => {
+          setProfileSyncState({ last_error: String(error) });
+          return null;
+        });
+    }
+
+    function createProfileSyncSecret() {
+      fetchProfileSyncState("create");
+    }
+
+    function importProfileSyncSecret() {
+      fetchProfileSyncState("import", profileSyncSecret.value.trim());
+    }
+
+    function downloadProfileSyncSecret() {
+      const text = profileSyncSecret.value.trim();
+      if (!text) {
+        fetchProfileSyncState("create").then(() => downloadProfileSyncSecret());
+        return;
+      }
+      const blob = new Blob([text], { type: "application/json" });
+      const link = document.createElement("a");
+      link.download = "slate-sync-secret.json";
+      link.href = URL.createObjectURL(blob);
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }
+
     function saveSettings() {
       sendSetting("save", sliderValue, true, true);
       setSaveButtons("Saved");
@@ -760,6 +877,9 @@
     slider.addEventListener("keydown", stepSlider);
     saveButton.addEventListener("click", saveSettings);
     saveShortcutsButton.addEventListener("click", saveSettings);
+    profileSyncCreateButton.addEventListener("click", createProfileSyncSecret);
+    profileSyncImportButton.addEventListener("click", importProfileSyncSecret);
+    profileSyncDownloadButton.addEventListener("click", downloadProfileSyncSecret);
     document.getElementById("reset").addEventListener("click", () => {
       setSliderValue(DEFAULT_ZOOM, true);
     });
@@ -767,6 +887,7 @@
     updateSlider();
     renderKeyBindings(DEFAULT_KEY_BINDINGS);
     loadNativeSettings();
+    fetchProfileSyncState("state");
   </script>
 </body>
 </html>

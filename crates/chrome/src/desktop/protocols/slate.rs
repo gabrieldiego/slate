@@ -7,6 +7,8 @@
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use headers::{ContentType, HeaderMapExt};
 use log::warn;
@@ -20,8 +22,8 @@ use slate_broadwebd::{
     default_session_state_root,
 };
 use slate_storage::{
-    DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, StorageError,
-    SyncSettingTextEvent,
+    DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, SlateSyncSecret,
+    SlateSyncSecretExport, StorageError, SyncObjectError, SyncSettingTextEvent,
 };
 use url::Url;
 
@@ -48,11 +50,15 @@ static CHROME_ELEMENT_ZOOM_PERCENT: AtomicU32 = AtomicU32::new(CHROME_ELEMENT_ZO
 
 pub struct SlateProtocolHandler {
     database: Option<SlateProfileDatabase>,
+    profile_sync_preview: Arc<Mutex<ProfileSyncPreviewState>>,
 }
 
 impl Default for SlateProtocolHandler {
     fn default() -> Self {
-        Self { database: None }
+        Self {
+            database: None,
+            profile_sync_preview: Arc::default(),
+        }
     }
 }
 
@@ -61,6 +67,7 @@ impl SlateProtocolHandler {
         initialize_chrome_settings_from_database(&database);
         Self {
             database: Some(database),
+            profile_sync_preview: Arc::default(),
         }
     }
 }
@@ -81,6 +88,9 @@ impl ProtocolHandler for SlateProtocolHandler {
             "settings/preview",
             "settings/save",
             "settings/apply",
+            "settings/profile-sync/state",
+            "settings/profile-sync/create",
+            "settings/profile-sync/import",
             "downloads",
             "downloads/state",
             "download",
@@ -100,6 +110,18 @@ impl ProtocolHandler for SlateProtocolHandler {
         let url = request.current_url();
         if is_slate_settings_state_url(url.as_url()) {
             return settings_json_response(request, current_chrome_element_zoom_setting());
+        }
+
+        if is_slate_settings_profile_sync_state_url(url.as_url()) {
+            return self.profile_sync_preview_json_response(request);
+        }
+
+        if is_slate_settings_profile_sync_create_url(url.as_url()) {
+            return self.create_profile_sync_preview_secret_response(request);
+        }
+
+        if is_slate_settings_profile_sync_import_url(url.as_url()) {
+            return self.import_profile_sync_preview_secret_response(request, url.as_url());
         }
 
         if is_slate_downloads_state_url(url.as_url()) {
@@ -179,6 +201,96 @@ impl SlateProtocolHandler {
         if let Some(database) = &self.database {
             persist_key_bindings_to_database(database, key_bindings);
         }
+    }
+
+    fn profile_sync_preview_json_response(
+        &self,
+        request: &Request,
+    ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
+        let state = self.profile_sync_preview.lock().unwrap();
+        json_response(request, 200, state.to_json())
+    }
+
+    fn create_profile_sync_preview_secret_response(
+        &self,
+        request: &Request,
+    ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
+        let mut state = self.profile_sync_preview.lock().unwrap();
+        match state.create_secret(DEFAULT_PROFILE_ID, unix_time_seconds()) {
+            Ok(()) => json_response(request, 200, state.to_json()),
+            Err(error) => {
+                state.last_error = Some(error.to_string());
+                json_response(request, 500, state.to_json())
+            }
+        }
+    }
+
+    fn import_profile_sync_preview_secret_response(
+        &self,
+        request: &Request,
+        url: &Url,
+    ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
+        let export_text = profile_sync_secret_export_text_from_url(url);
+        let mut state = self.profile_sync_preview.lock().unwrap();
+        match export_text {
+            Some(export_text) => {
+                match state.import_secret(DEFAULT_PROFILE_ID, export_text.as_str()) {
+                    Ok(()) => json_response(request, 200, state.to_json()),
+                    Err(error) => {
+                        state.last_error = Some(error.to_string());
+                        json_response(request, 400, state.to_json())
+                    }
+                }
+            }
+            None => {
+                state.last_error = Some("missing profile sync key file contents".to_string());
+                json_response(request, 400, state.to_json())
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct ProfileSyncPreviewState {
+    active_export: Option<SlateSyncSecretExport>,
+    last_error: Option<String>,
+}
+
+impl ProfileSyncPreviewState {
+    fn create_secret(&mut self, profile: &str, created_at: i64) -> Result<(), SyncObjectError> {
+        let secret = SlateSyncSecret::generate()?;
+        self.active_export = Some(secret.export_for_profile(profile, created_at));
+        self.last_error = None;
+        Ok(())
+    }
+
+    fn import_secret(
+        &mut self,
+        expected_profile: &str,
+        export_text: &str,
+    ) -> Result<(), SyncObjectError> {
+        let export = SlateSyncSecretExport::from_bytes(export_text.as_bytes())?;
+        let _ = SlateSyncSecret::from_export_for_profile(&export, expected_profile)?;
+        self.active_export = Some(export);
+        self.last_error = None;
+        Ok(())
+    }
+
+    fn to_json(&self) -> String {
+        let active_export_text = self
+            .active_export
+            .as_ref()
+            .and_then(|export| export.to_bytes().ok())
+            .and_then(|bytes| String::from_utf8(bytes).ok());
+        serde_json::json!({
+            "profile": DEFAULT_PROFILE_ID,
+            "status": if self.active_export.is_some() { "ready" } else { "not_enrolled" },
+            "has_secret": self.active_export.is_some(),
+            "export_filename": "slate-sync-secret.json",
+            "export_text": active_export_text,
+            "last_error": self.last_error,
+        })
+        .to_string()
     }
 }
 
@@ -304,12 +416,21 @@ fn settings_json_response(
     request: &Request,
     zoom: f32,
 ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
+    json_response(request, 200, settings_state_json(zoom))
+}
+
+fn json_response(
+    request: &Request,
+    status_code: u16,
+    body: String,
+) -> Pin<Box<dyn Future<Output = Response> + Send>> {
     let mut response = Response::new(
         request.current_url(),
         ResourceFetchTiming::new(request.timing_type()),
     );
+    response.status = slate_http_status(status_code);
     response.headers.typed_insert(ContentType::json());
-    *response.body.lock() = ResponseBody::Done(settings_state_json(zoom).into());
+    *response.body.lock() = ResponseBody::Done(body.into());
     Box::pin(std::future::ready(response))
 }
 
@@ -589,6 +710,42 @@ fn is_slate_settings_apply_url(url: &Url) -> bool {
         && url.path().trim_start_matches('/') == "apply"
 }
 
+fn is_slate_settings_profile_sync_state_url(url: &Url) -> bool {
+    url.scheme() == "slate"
+        && url.host_str() == Some("settings")
+        && url.path().trim_start_matches('/') == "profile-sync/state"
+}
+
+fn is_slate_settings_profile_sync_create_url(url: &Url) -> bool {
+    url.scheme() == "slate"
+        && url.host_str() == Some("settings")
+        && url.path().trim_start_matches('/') == "profile-sync/create"
+}
+
+fn is_slate_settings_profile_sync_import_url(url: &Url) -> bool {
+    url.scheme() == "slate"
+        && url.host_str() == Some("settings")
+        && url.path().trim_start_matches('/') == "profile-sync/import"
+}
+
+fn profile_sync_secret_export_text_from_url(url: &Url) -> Option<String> {
+    if !is_slate_settings_profile_sync_import_url(url) {
+        return None;
+    }
+
+    url.query_pairs()
+        .find(|(name, _)| name == "secret")
+        .map(|(_, value)| value.into_owned())
+        .filter(|value| !value.trim().is_empty())
+}
+
+fn unix_time_seconds() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs().min(i64::MAX as u64) as i64)
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -597,8 +754,10 @@ mod tests {
         is_slate_calendar_url, is_slate_chat_url, is_slate_contacts_url,
         is_slate_download_request_url, is_slate_downloads_state_url, is_slate_downloads_url,
         is_slate_files_url, is_slate_home_url, is_slate_settings_apply_url,
-        is_slate_settings_preview_url, is_slate_settings_save_url, is_slate_settings_url,
-        is_slate_web_url, slate_download_error_html,
+        is_slate_settings_preview_url, is_slate_settings_profile_sync_create_url,
+        is_slate_settings_profile_sync_import_url, is_slate_settings_profile_sync_state_url,
+        is_slate_settings_save_url, is_slate_settings_url, is_slate_web_url,
+        profile_sync_secret_export_text_from_url, slate_download_error_html,
     };
     use crate::desktop::key_bindings::{
         SlateKeyBindings, current_key_bindings_json_value, set_current_key_bindings,
@@ -858,6 +1017,59 @@ mod tests {
     }
 
     #[test]
+    fn slate_settings_profile_sync_action_urls_are_distinct() {
+        let state = Url::parse("slate://settings/profile-sync/state").unwrap();
+        let create = Url::parse("slate://settings/profile-sync/create").unwrap();
+        let import = Url::parse("slate://settings/profile-sync/import?secret=%7B%7D").unwrap();
+
+        assert!(is_slate_settings_profile_sync_state_url(&state));
+        assert!(is_slate_settings_profile_sync_create_url(&create));
+        assert!(is_slate_settings_profile_sync_import_url(&import));
+        assert!(!is_slate_settings_profile_sync_create_url(&state));
+        assert!(!is_slate_settings_profile_sync_import_url(&create));
+        assert_eq!(
+            profile_sync_secret_export_text_from_url(&import).as_deref(),
+            Some("{}")
+        );
+        assert_eq!(
+            profile_sync_secret_export_text_from_url(
+                &Url::parse("slate://settings/profile-sync/import?secret=").unwrap()
+            ),
+            None
+        );
+        assert_eq!(
+            profile_sync_secret_export_text_from_url(&Url::parse("slate://settings").unwrap()),
+            None
+        );
+    }
+
+    #[test]
+    fn profile_sync_preview_state_exports_and_imports_profile_key() {
+        let mut source = super::ProfileSyncPreviewState::default();
+        source.create_secret(DEFAULT_PROFILE_ID, 123).unwrap();
+        let source_json: serde_json::Value = serde_json::from_str(&source.to_json()).unwrap();
+        let export_text = source_json["export_text"].as_str().unwrap();
+
+        assert_eq!(source_json["profile"], DEFAULT_PROFILE_ID);
+        assert_eq!(source_json["status"], "ready");
+        assert_eq!(source_json["has_secret"], true);
+        assert!(export_text.contains(DEFAULT_PROFILE_ID));
+
+        let mut destination = super::ProfileSyncPreviewState::default();
+        destination
+            .import_secret(DEFAULT_PROFILE_ID, export_text)
+            .unwrap();
+        let destination_json: serde_json::Value =
+            serde_json::from_str(&destination.to_json()).unwrap();
+
+        assert_eq!(destination_json["status"], "ready");
+        assert_eq!(destination_json["last_error"], serde_json::Value::Null);
+
+        let error = destination.import_secret("work", export_text).unwrap_err();
+        assert!(error.to_string().contains("unexpected sync object profile"));
+    }
+
+    #[test]
     fn slate_settings_state_json_includes_key_bindings() {
         let parsed: serde_json::Value =
             serde_json::from_str(&super::settings_state_json(0.92)).unwrap();
@@ -1091,6 +1303,13 @@ mod tests {
         assert!(settings_page.contains("Primary+1 ... Primary+8"));
         assert!(settings_page.contains("Primary+R, F5"));
         assert!(settings_page.contains("Ctrl+F12"));
+        assert!(settings_page.contains("Profile Sync Preview"));
+        assert!(settings_page.contains("id=\"profile-sync-secret\""));
+        assert!(settings_page.contains("id=\"profile-sync-create\""));
+        assert!(settings_page.contains("id=\"profile-sync-download\""));
+        assert!(settings_page.contains("id=\"profile-sync-import\""));
+        assert!(settings_page.contains("slate://settings/profile-sync/"));
+        assert!(settings_page.contains("slate-sync-secret.json"));
         assert!(!settings_page.contains("replaceState"));
         assert!(!settings_page.contains("type=\"range\""));
     }

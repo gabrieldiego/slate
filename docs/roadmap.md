@@ -1311,6 +1311,12 @@ Current baseline:
   URL-safe base64 root-secret bytes, and creation time; import validates the
   schema, exact secret length, and optional expected profile id, while debug
   output redacts the encoded secret.
+- `slate://settings` now includes a first session-only Profile Sync Preview.
+  It can create a Slate Sync Secret key-file envelope, show it for copy/save,
+  download it as `slate-sync-secret.json`, and import pasted envelope contents
+  after profile-bound validation. This is deliberately local and rough: it does
+  not persist the root secret, render QR codes yet, or contact broadweb
+  providers.
 - `make profile-sync-boundary-check` now provides a low-memory regression gate
   for the sync work. It runs focused rail-app sync-domain checks, verifies that
   visible rail app sync descriptors match the seeded `slate-settings.db`
@@ -1341,14 +1347,12 @@ Next:
 - Extend the runtime watcher beyond the first chrome settings path so
   externally synced routing, privacy, app, and browser-core changes are applied
   through their normal update paths instead of raw database replacement.
-- Add QR/file transport, platform key-store loading, and runtime policy for
-  when derived manifest, mutable-root, enrollment, bootstrap, and content-key
-  material can be used.
-- Add a Settings-based `Profile Sync Preview` as the first user-facing trial:
-  create/export/import a Slate Sync Secret, show trusted devices and selected
-  providers, run a manual local-only sync, and show synced app-domain status for
-  Settings and Bookmarks before exposing real IPFS/IPNS or internet-backed
-  providers.
+- Extend the Settings-based `Profile Sync Preview` with QR-code rendering,
+  platform key-store loading, trusted-device/provider status, manual local-only
+  sync execution, and app-domain status for Settings and Bookmarks before
+  exposing real IPFS/IPNS or internet-backed providers.
+- Add runtime policy for when derived manifest, mutable-root, enrollment,
+  bootstrap, and content-key material can be used.
 - Publish encrypted profile manifests and snapshots through the selected
   backend, then point the profile mutable root at the newest manifest.
 - Use the storage compaction target to publish encrypted snapshots, trim
