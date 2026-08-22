@@ -309,17 +309,27 @@ fn validate_gateway_url(gateway_base: &str, scope: IpfsGatewayScope) -> Result<(
     let host = url.host_str().ok_or_else(|| {
         BroadwebdError::InvalidUrl(format!("{gateway_base} is missing a gateway host"))
     })?;
-    let is_loopback = matches!(host, "localhost" | "127.0.0.1" | "::1");
+    let is_loopback = is_numeric_loopback_host(host);
     match (scope, is_loopback) {
         (IpfsGatewayScope::Local, true) => Ok(()),
         (IpfsGatewayScope::Local, false) => Err(BroadwebdError::UnsupportedRequest(format!(
-            "public IPFS gateway requires explicit browser policy: {gateway_base}"
+            "local IPFS gateway must use a numeric loopback address: {gateway_base}"
         ))),
         (IpfsGatewayScope::Public, false) => Ok(()),
         (IpfsGatewayScope::Public, true) => Err(BroadwebdError::UnsupportedRequest(format!(
             "public IPFS gateway mode requires a non-loopback gateway: {gateway_base}"
         ))),
     }
+}
+
+fn is_numeric_loopback_host(host: &str) -> bool {
+    let host_for_parse = host
+        .strip_prefix('[')
+        .and_then(|host| host.strip_suffix(']'))
+        .unwrap_or(host);
+    host_for_parse
+        .parse::<std::net::IpAddr>()
+        .is_ok_and(|address| address.is_loopback())
 }
 
 #[cfg(any(test, feature = "test-fixtures"))]

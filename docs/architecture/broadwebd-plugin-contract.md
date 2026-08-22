@@ -245,7 +245,9 @@ IpfsService
 
 `ipfs-gateway` remains a transport adapter used by `http-fetch`. It maps
 `ipfs://` and `ipns://` to an explicitly configured gateway. The default and
-normal constructor use a local gateway such as `http://127.0.0.1:8080`.
+normal constructor use a local gateway such as `http://127.0.0.1:8080`; local
+gateway configuration must use a numeric loopback address rather than a
+hostname so local mode cannot trigger DNS or hosts-file resolution.
 `IpfsConfig::new` keeps that local gateway as the first-choice endpoint, then
 adds a bounded public gateway fallback list for IPFS/IPNS requests that fail to
 retrieve through the local gateway. The selected gateway is cached after a `200`

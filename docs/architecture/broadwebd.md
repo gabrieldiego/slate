@@ -447,9 +447,11 @@ candidates even when they return HTTP 200, because broadwebd must deliver the
 actual HTTP-like page response to Servo.
 
 Manual runs can override the first-choice gateway with `SLATE_IPFS_GATEWAY`.
-Public gateway mode can be selected with `SLATE_IPFS_GATEWAY_SCOPE=public`; if
-public scope is set without an explicit gateway, broadwebd uses its default
-public gateway list. These environment variables are temporary developer and
+Local gateway overrides must use numeric loopback addresses rather than
+hostnames so local mode cannot trigger DNS or hosts-file resolution. Public
+gateway mode can be selected with `SLATE_IPFS_GATEWAY_SCOPE=public`; if public
+scope is set without an explicit gateway, broadwebd uses its default public
+gateway list. These environment variables are temporary developer and
 manual-testing controls until Slate has profile-scoped configuration files.
 
 The daemon also has an opt-in `ipfs-kubo-rpc` transport for local Kubo nodes.

@@ -1754,6 +1754,16 @@ mod tests {
     }
 
     #[test]
+    fn ipfs_config_requires_numeric_loopback_for_local_gateway() {
+        assert!(IpfsConfig::new("http://127.0.0.1:8080").is_ok());
+        assert!(IpfsConfig::new("http://[::1]:8080").is_ok());
+        assert!(matches!(
+            IpfsConfig::new("http://localhost:8080"),
+            Err(BroadwebdError::UnsupportedRequest(_))
+        ));
+    }
+
+    #[test]
     fn ipfs_config_accepts_explicit_public_gateway() {
         let config = IpfsConfig::with_public_gateway("https://ipfs.io")
             .expect("explicit public gateway config");

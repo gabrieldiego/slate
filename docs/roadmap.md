@@ -283,10 +283,10 @@ Current baseline:
   in-process registry before constructing any real HTTP client. This keeps the
   default profile-sync and rendering fixture loops independent from loopback
   listeners, firewall state, DNS, public gateways, or escalation prompts.
-- The opt-in Kubo RPC endpoint validator now accepts only numeric loopback
-  addresses, plus synthetic in-process fixture URLs in tests. Hostname-shaped
-  endpoints such as `localhost` are rejected before any HTTP client or resolver
-  can be involved.
+- The opt-in Kubo RPC endpoint validator and local IPFS gateway validator now
+  accept only numeric loopback addresses, plus synthetic in-process fixture URLs
+  in tests. Hostname-shaped endpoints such as `localhost` are rejected before
+  any HTTP client or resolver can be involved.
 - broadwebd's own HTTP fixture unit tests now start daemons with
   `InProcessBroadwebNetwork` fixture registries whenever they consume
   `slate-fixture-http://` URLs. That keeps the production default direct HTTP
