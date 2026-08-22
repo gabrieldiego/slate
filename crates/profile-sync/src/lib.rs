@@ -18504,6 +18504,186 @@ mod tests {
     }
 
     #[test]
+    fn broadwebd_source_rejects_provider_authority_shared_root_without_mutation() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("shared-root-provider-authority-publisher");
+        let provider_state_root = test_state_root("shared-root-provider-authority-provider");
+        let receiver_state_root = test_state_root("shared-root-provider-authority-receiver");
+        let publisher_db_root = test_state_root("shared-root-provider-authority-publisher-db");
+        let provider_db_root = test_state_root("shared-root-provider-authority-provider-db");
+        let receiver_db_root = test_state_root("shared-root-provider-authority-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "runtime-authorized-shared-publisher",
+            )
+            .expect("start authorized shared-root publisher daemon");
+        let provider_daemon = network
+            .daemon_for_provider_with_roles(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "runtime-shared-provider-authority",
+                "local-fixture-provider-authority-publisher",
+                BroadwebdProfileSyncProviderRoles::logged_in_device(),
+            )
+            .expect("start provider-authority shared-root publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "runtime-provider-authority-shared-receiver",
+            )
+            .expect("start provider-authority shared-root receiver daemon");
+        let publisher_database = SlateProfileDatabase::open_resolved_with_device_id(
+            publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-authorized-shared-publisher",
+        )
+        .expect("open authorized shared-root publisher database");
+        let provider_database = SlateProfileDatabase::open_resolved_with_device_id(
+            provider_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-shared-provider-authority",
+        )
+        .expect("open provider-authority shared-root database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-provider-authority-shared-receiver",
+        )
+        .expect("open provider-authority shared-root receiver database");
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([108; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let publisher_signer =
+            ProfileSyncDeviceSigner::generate("runtime-authorized-shared-publisher")
+                .expect("generate authorized shared-root publisher signer");
+        let provider_signer =
+            ProfileSyncDeviceSigner::generate("runtime-shared-provider-authority")
+                .expect("generate provider-authority shared-root signer");
+        register_test_content_key_epoch(&receiver_database, DEFAULT_PROFILE_ID);
+        receiver_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: publisher_signer
+                    .public_key()
+                    .expect("authorized shared-root public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("receiver trusts authorized shared-root publisher");
+        receiver_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: provider_signer
+                    .public_key()
+                    .expect("provider-authority shared-root public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("receiver trusts provider-authority key for provider metadata");
+        receiver_database
+            .register_sync_device(&SyncDeviceRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                device_id: provider_signer.device_id().to_string(),
+                label: Some("Availability Provider".to_string()),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                provider_authority: true,
+            })
+            .expect("receiver marks provider signer as provider authority only");
+
+        let authorized_change = publisher_database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "ui.theme",
+                "trusted",
+            )
+            .expect("authorized publisher writes shared-root setting");
+        let authorized_manifest = BroadwebdProfileSyncPublisher::new(&publisher_daemon)
+            .publish_signed_settings_tail_changes(
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                std::slice::from_ref(&authorized_change),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &publisher_signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish authorized shared-root manifest");
+        let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
+        let authorized_apply = source
+            .pull_and_apply_active_trusted_settings_manifest_candidates_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                &content_key,
+            )
+            .expect("receiver applies authorized shared-root manifest");
+        assert!(matches!(
+            authorized_apply,
+            ProfileSyncSettingsCandidatePullApplyStatus::Applied(_)
+        ));
+
+        let provider_change = provider_database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "ui.theme",
+                "provider",
+            )
+            .expect("provider-authority writes unauthorized shared-root setting");
+        let provider_manifest = BroadwebdProfileSyncPublisher::new(&provider_daemon)
+            .publish_signed_settings_tail_changes(
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                std::slice::from_ref(&provider_change),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &provider_signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("provider-authority publishes shared-root manifest");
+        let error = source
+            .pull_and_apply_active_trusted_settings_manifest_candidates_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                &content_key,
+            )
+            .expect_err("provider-authority shared-root signer cannot authorize profile state");
+        assert!(matches!(
+            error,
+            ProfileSyncTrustedPullApplyError::Pull(
+                ProfileSyncTrustedPullError::Open(
+                    ProfileSyncTrustedOpenError::ProviderAuthoritySigner { profile, device_id }
+                )
+            ) if profile == DEFAULT_PROFILE_ID && device_id == "runtime-shared-provider-authority"
+        ));
+        assert_eq!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, settings_root_id)
+                .expect("read root after rejected provider-authority shared-root")
+                .expect("root after rejected provider-authority shared-root")
+                .object_id,
+            authorized_manifest.manifest_object_id
+        );
+        assert_ne!(
+            provider_manifest.manifest_object_id,
+            authorized_manifest.manifest_object_id
+        );
+        assert_eq!(
+            receiver_database
+                .get_setting_text("ui.theme")
+                .expect("read setting after provider-authority shared-root")
+                .as_deref(),
+            Some("trusted")
+        );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(provider_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
     fn broadwebd_source_rejects_wrong_key_id_shared_root_without_mutation() {
         let network = InProcessBroadwebNetwork::new();
         let publisher_state_root = test_state_root("shared-root-wrong-key-publisher");

@@ -1337,6 +1337,11 @@ Current baseline:
   rule at the runtime boundary: a provider-authority signer can publish a head
   object into the simulated network, but the receiver rejects it without
   advancing the stored per-device root.
+- The shared-root receive path now applies the same provider-authority
+  boundary through the socketless broadwebd transport: a provider-authority key
+  can publish a syntactically valid signed encrypted `settings/latest`
+  candidate, but the receiver rejects it before mutation and keeps the last
+  trusted materialized setting/root.
 - The account membership log now has an `enroll-provider` record kind for
   account-authorized availability providers. Applying the record stores the
   provider public key and materializes `sync_devices.provider_authority = true`
