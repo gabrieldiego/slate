@@ -77,6 +77,19 @@ pub struct BroadwebdProfileSyncRetentionStatus {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SettingsSyncCycleProviderRetentionIssueKind {
+    NotRetained,
+    NotAvailable,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncCycleProviderRetentionIssue {
+    pub provider_index: usize,
+    pub object_id: String,
+    pub kind: SettingsSyncCycleProviderRetentionIssueKind,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BroadwebdProfileSyncRootPublication {
     pub profile: String,
     pub root_id: String,
@@ -969,6 +982,18 @@ impl SettingsSyncCycleWithMembershipLogRetentionRun {
             })
             .count()
     }
+
+    pub fn retention_issues(&self) -> Vec<SettingsSyncCycleProviderRetentionIssue> {
+        cycle_provider_retention_issues(self.retention.as_slice())
+    }
+
+    pub fn retention_issue_count(&self) -> usize {
+        cycle_provider_retention_issue_count(self.retention.as_slice())
+    }
+
+    pub fn has_retention_issue(&self) -> bool {
+        self.retention_issue_count() > 0
+    }
 }
 
 fn push_unique_object_id(
@@ -990,6 +1015,25 @@ fn extend_unique_object_ids(
     for object_id in incoming {
         push_unique_object_id(object_ids, seen, &object_id);
     }
+}
+
+fn cycle_provider_retention_issues(
+    retention: &[SettingsSyncCycleProviderRetentionRun],
+) -> Vec<SettingsSyncCycleProviderRetentionIssue> {
+    let mut issues = Vec::with_capacity(cycle_provider_retention_issue_count(retention));
+    for provider in retention {
+        issues.extend(provider.retention_issues());
+    }
+    issues
+}
+
+fn cycle_provider_retention_issue_count(
+    retention: &[SettingsSyncCycleProviderRetentionRun],
+) -> usize {
+    retention
+        .iter()
+        .map(SettingsSyncCycleProviderRetentionRun::retention_issue_count)
+        .sum()
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1033,6 +1077,38 @@ impl SettingsSyncCycleProviderRetentionRun {
             .filter(|status| status.available)
             .count()
     }
+
+    pub fn retention_issues(&self) -> Vec<SettingsSyncCycleProviderRetentionIssue> {
+        let mut issues = Vec::with_capacity(self.retention_issue_count());
+        for status in &self.object_statuses {
+            if !status.retained {
+                issues.push(SettingsSyncCycleProviderRetentionIssue {
+                    provider_index: self.provider_index,
+                    object_id: status.object_id.clone(),
+                    kind: SettingsSyncCycleProviderRetentionIssueKind::NotRetained,
+                });
+            }
+            if !status.available {
+                issues.push(SettingsSyncCycleProviderRetentionIssue {
+                    provider_index: self.provider_index,
+                    object_id: status.object_id.clone(),
+                    kind: SettingsSyncCycleProviderRetentionIssueKind::NotAvailable,
+                });
+            }
+        }
+        issues
+    }
+
+    pub fn retention_issue_count(&self) -> usize {
+        self.object_statuses
+            .iter()
+            .map(|status| usize::from(!status.retained) + usize::from(!status.available))
+            .sum()
+    }
+
+    pub fn has_retention_issue(&self) -> bool {
+        self.retention_issue_count() > 0
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1059,6 +1135,18 @@ impl SettingsSyncCycleWithRetentionRun {
                 provider.object_count() > 0 && provider.object_count() == provider.retained_count()
             })
             .count()
+    }
+
+    pub fn retention_issues(&self) -> Vec<SettingsSyncCycleProviderRetentionIssue> {
+        cycle_provider_retention_issues(self.retention.as_slice())
+    }
+
+    pub fn retention_issue_count(&self) -> usize {
+        cycle_provider_retention_issue_count(self.retention.as_slice())
+    }
+
+    pub fn has_retention_issue(&self) -> bool {
+        self.retention_issue_count() > 0
     }
 }
 
@@ -1134,6 +1222,18 @@ impl SettingsSyncCycleWithSharedRootRetentionRun {
                 provider.object_count() > 0 && provider.object_count() == provider.retained_count()
             })
             .count()
+    }
+
+    pub fn retention_issues(&self) -> Vec<SettingsSyncCycleProviderRetentionIssue> {
+        cycle_provider_retention_issues(self.retention.as_slice())
+    }
+
+    pub fn retention_issue_count(&self) -> usize {
+        cycle_provider_retention_issue_count(self.retention.as_slice())
+    }
+
+    pub fn has_retention_issue(&self) -> bool {
+        self.retention_issue_count() > 0
     }
 }
 
@@ -8382,6 +8482,68 @@ mod tests {
     };
 
     const TEST_CONTENT_KEY_ID: &str = "content-key-epoch-1";
+
+    #[test]
+    fn settings_sync_cycle_provider_retention_run_reports_object_issues() {
+        let provider_retention = super::SettingsSyncCycleProviderRetentionRun {
+            provider_index: 7,
+            object_statuses: vec![
+                super::BroadwebdProfileSyncRetentionStatus {
+                    object_id: "object-ready".to_string(),
+                    retained: true,
+                    available: true,
+                },
+                super::BroadwebdProfileSyncRetentionStatus {
+                    object_id: "object-missing".to_string(),
+                    retained: false,
+                    available: false,
+                },
+                super::BroadwebdProfileSyncRetentionStatus {
+                    object_id: "object-unavailable".to_string(),
+                    retained: true,
+                    available: false,
+                },
+            ],
+        };
+
+        assert_eq!(provider_retention.object_count(), 3);
+        assert_eq!(provider_retention.retained_count(), 2);
+        assert_eq!(provider_retention.available_count(), 1);
+        assert_eq!(provider_retention.retention_issue_count(), 3);
+        assert!(provider_retention.has_retention_issue());
+        assert_eq!(
+            provider_retention.retention_issues(),
+            vec![
+                super::SettingsSyncCycleProviderRetentionIssue {
+                    provider_index: 7,
+                    object_id: "object-missing".to_string(),
+                    kind: super::SettingsSyncCycleProviderRetentionIssueKind::NotRetained,
+                },
+                super::SettingsSyncCycleProviderRetentionIssue {
+                    provider_index: 7,
+                    object_id: "object-missing".to_string(),
+                    kind: super::SettingsSyncCycleProviderRetentionIssueKind::NotAvailable,
+                },
+                super::SettingsSyncCycleProviderRetentionIssue {
+                    provider_index: 7,
+                    object_id: "object-unavailable".to_string(),
+                    kind: super::SettingsSyncCycleProviderRetentionIssueKind::NotAvailable,
+                },
+            ]
+        );
+
+        let healthy_provider_retention = super::SettingsSyncCycleProviderRetentionRun {
+            provider_index: 8,
+            object_statuses: vec![super::BroadwebdProfileSyncRetentionStatus {
+                object_id: "object-ready".to_string(),
+                retained: true,
+                available: true,
+            }],
+        };
+        assert_eq!(healthy_provider_retention.retention_issue_count(), 0);
+        assert!(!healthy_provider_retention.has_retention_issue());
+        assert!(healthy_provider_retention.retention_issues().is_empty());
+    }
 
     fn register_test_content_key_epoch(database: &SlateProfileDatabase, profile: &str) {
         database

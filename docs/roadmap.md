@@ -722,6 +722,11 @@ Current baseline:
   mismatch, duplicate-handle, and unsupported-endpoint providers. UI and
   scheduler callers can render why quorum failed without reinterpreting raw id
   buckets or opening any fixture, protocol, or socket transport.
+- Provider retention runs now expose structured retained-object issues for
+  objects that were not retained or not available after a retention attempt.
+  Aggregate retention cycle results forward the same issue list, so scheduler
+  callers can explain pinning/availability failures without scanning raw
+  per-object status booleans.
 - Stored-provider handle materialization now rejects duplicate supplied handles
   for the same selected provider instead of choosing the first one. The preview
   and runtime result report ambiguous provider ids separately, and those
