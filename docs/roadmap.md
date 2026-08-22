@@ -1024,6 +1024,10 @@ Current baseline:
   receiver validates and applies the signed provider record, records the
   provider-authority roster row, and still excludes that provider from trusted
   settings-head pulls.
+- Aggregate membership-log validation now fail-closes on unsupported record
+  kinds before preview or pull paths fetch individual signed records. The
+  accepted set is limited to device enrollment, provider enrollment, revocation,
+  and device-key rotation.
 
 Next:
 

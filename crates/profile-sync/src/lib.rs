@@ -21,17 +21,20 @@ use slate_storage::{
     DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH, EncryptedSyncObject, IncomingSyncSettingText,
     PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305, PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
     PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, PROFILE_SYNC_MANIFEST_OBJECT_KIND,
-    PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND, PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND,
-    PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION, ProfileSyncContentKey, ProfileSyncDeviceHead,
-    ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner, ProfileSyncManifest,
-    ProfileSyncMembershipRecord, ProfileSyncObjectBytes, ProfileSyncObjectSource,
-    ProfileSyncRetentionPolicy, ProfileSyncRootCandidate as StorageProfileSyncRootCandidate,
-    ProfileSyncRootRecord, ProfileSyncRootRegistration,
-    ProfileSyncSettingsCandidatePullApplyStatus, ProfileSyncSettingsManifestApplication,
-    ProfileSyncSettingsSnapshot, ProfileSyncSettingsSnapshotPublication,
-    ProfileSyncSettingsTailChangePublication, ProfileSyncTrustedPullApplyError,
-    SYNC_DOMAIN_SETTINGS, SignedSyncObject, SlateProfileDatabase, StorageError,
-    StorageProviderRecord, SyncAccountMembershipRecordApplication, SyncChangeRecord,
+    PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE,
+    PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER,
+    PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE,
+    PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY, PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND,
+    PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND, PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION,
+    ProfileSyncContentKey, ProfileSyncDeviceHead, ProfileSyncDevicePublicKey,
+    ProfileSyncDeviceSigner, ProfileSyncManifest, ProfileSyncMembershipRecord,
+    ProfileSyncObjectBytes, ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
+    ProfileSyncRootCandidate as StorageProfileSyncRootCandidate, ProfileSyncRootRecord,
+    ProfileSyncRootRegistration, ProfileSyncSettingsCandidatePullApplyStatus,
+    ProfileSyncSettingsManifestApplication, ProfileSyncSettingsSnapshot,
+    ProfileSyncSettingsSnapshotPublication, ProfileSyncSettingsTailChangePublication,
+    ProfileSyncTrustedPullApplyError, SYNC_DOMAIN_SETTINGS, SignedSyncObject, SlateProfileDatabase,
+    StorageError, StorageProviderRecord, SyncAccountMembershipRecordApplication, SyncChangeRecord,
     SyncCompactionTarget, SyncDevicePublicKeyRecord, SyncObjectError, SyncSettingTextEvent,
     SyncSnapshotRecord, SyncSnapshotRegistration, VerifiedProfileSyncDeviceHead,
     open_signed_profile_sync_device_head, settings_sync_manifest_for_snapshot_and_tail_changes,
@@ -5723,6 +5726,12 @@ fn validate_profile_sync_membership_log(
                 entry.record_id, entry.membership_epoch
             )));
         }
+        if !is_supported_membership_log_record_kind(entry.record_kind.as_str()) {
+            return Err(ProfileSyncReceiveError::InvalidMembershipLog(format!(
+                "record {} has unsupported record kind {}",
+                entry.record_id, entry.record_kind
+            )));
+        }
         if !seen_record_ids.insert(entry.record_id.clone()) {
             return Err(ProfileSyncReceiveError::InvalidMembershipLog(format!(
                 "record {} is duplicated",
@@ -5743,6 +5752,16 @@ fn validate_profile_sync_membership_log(
     }
 
     Ok(())
+}
+
+fn is_supported_membership_log_record_kind(record_kind: &str) -> bool {
+    matches!(
+        record_kind,
+        PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE
+            | PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER
+            | PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE
+            | PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY
+    )
 }
 
 fn validate_membership_log_entry_object(
@@ -7787,6 +7806,75 @@ mod tests {
         let _ = std::fs::remove_dir_all(provider_state_root);
         let _ = std::fs::remove_dir_all(unmaterialized_state_root);
         let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_membership_log_rejects_unknown_record_kinds_without_loopback() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("membership-log-kind-publisher");
+        let receiver_state_root = test_state_root("membership-log-kind-receiver");
+        let receiver_db_root = test_state_root("membership-log-kind-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "membership-log-kind-publisher",
+            )
+            .expect("start in-process membership log kind publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "membership-log-kind-receiver",
+            )
+            .expect("start in-process membership log kind receiver daemon");
+        let receiver_database =
+            SlateProfileDatabase::open_resolved(receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME))
+                .expect("open membership log kind receiver database");
+        let record_id = "epoch-1-enroll-membership-log-unknown-kind";
+        let log = ProfileSyncMembershipLog {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            schema_version: super::PROFILE_SYNC_MEMBERSHIP_LOG_SCHEMA_VERSION,
+            records: vec![ProfileSyncMembershipLogEntry {
+                record_id: record_id.to_string(),
+                root_id: sync_membership_record_root_id(record_id),
+                object_id: "missing-unknown-kind-record-object".to_string(),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                record_kind: "enroll-root-authority".to_string(),
+                device_id: "membership-log-unknown-kind-device".to_string(),
+                signer_device_id: "membership-log-kind-publisher".to_string(),
+            }],
+        };
+        BroadwebdProfileSyncPublisher::new(&publisher_daemon)
+            .put_retained_root(
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                serde_json::to_vec(&log).expect("encode unknown-kind membership log"),
+            )
+            .expect("publish unknown-kind membership log");
+
+        let error = BroadwebdProfileSyncObjectSource::new(&receiver_daemon)
+            .preview_sync_account_membership_log(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            )
+            .expect_err("unknown membership log record kind should be rejected");
+        assert!(matches!(
+            error,
+            ProfileSyncReceiveError::InvalidMembershipLog(reason)
+                if reason.contains("unsupported record kind enroll-root-authority")
+        ));
+        assert!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID)
+                .expect("read unknown-kind membership log root")
+                .is_none()
+        );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
         let _ = std::fs::remove_dir_all(receiver_db_root);
     }
 
