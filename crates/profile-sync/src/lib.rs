@@ -2508,6 +2508,20 @@ pub struct SettingsSyncProtocolProviderMaterializationReport {
     pub unsupported_provider_ids: Vec<String>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SettingsSyncProtocolProviderMaterializationIssueKind {
+    Missing,
+    EndpointMismatch,
+    Duplicate,
+    Unsupported,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncProtocolProviderMaterializationIssue {
+    pub provider_id: String,
+    pub kind: SettingsSyncProtocolProviderMaterializationIssueKind,
+}
+
 impl SettingsSyncProtocolProviderMaterializationReport {
     pub fn materialized_provider_count(&self) -> usize {
         self.materialized_provider_ids.len()
@@ -2536,8 +2550,54 @@ impl SettingsSyncProtocolProviderMaterializationReport {
             + self.unsupported_provider_count()
     }
 
+    pub fn materialization_issues(&self) -> Vec<SettingsSyncProtocolProviderMaterializationIssue> {
+        let mut issues = Vec::with_capacity(self.blocked_provider_count());
+        append_protocol_provider_materialization_issues(
+            &mut issues,
+            SettingsSyncProtocolProviderMaterializationIssueKind::Missing,
+            self.missing_provider_ids.as_slice(),
+        );
+        append_protocol_provider_materialization_issues(
+            &mut issues,
+            SettingsSyncProtocolProviderMaterializationIssueKind::EndpointMismatch,
+            self.endpoint_mismatch_provider_ids.as_slice(),
+        );
+        append_protocol_provider_materialization_issues(
+            &mut issues,
+            SettingsSyncProtocolProviderMaterializationIssueKind::Duplicate,
+            self.duplicate_provider_ids.as_slice(),
+        );
+        append_protocol_provider_materialization_issues(
+            &mut issues,
+            SettingsSyncProtocolProviderMaterializationIssueKind::Unsupported,
+            self.unsupported_provider_ids.as_slice(),
+        );
+        issues
+    }
+
+    pub fn materialization_issue_count(&self) -> usize {
+        self.blocked_provider_count()
+    }
+
+    pub fn has_materialization_issue(&self) -> bool {
+        self.materialization_issue_count() > 0
+    }
+
     pub fn all_providers_materialized(&self) -> bool {
         self.blocked_provider_count() == 0
+    }
+}
+
+fn append_protocol_provider_materialization_issues(
+    issues: &mut Vec<SettingsSyncProtocolProviderMaterializationIssue>,
+    kind: SettingsSyncProtocolProviderMaterializationIssueKind,
+    provider_ids: &[String],
+) {
+    for provider_id in provider_ids {
+        issues.push(SettingsSyncProtocolProviderMaterializationIssue {
+            provider_id: provider_id.clone(),
+            kind: kind.clone(),
+        });
     }
 }
 
@@ -8359,6 +8419,29 @@ mod tests {
         assert_eq!(materialization_report.duplicate_provider_count(), 1);
         assert_eq!(materialization_report.unsupported_provider_count(), 1);
         assert_eq!(materialization_report.blocked_provider_count(), 4);
+        assert_eq!(materialization_report.materialization_issue_count(), 4);
+        assert!(materialization_report.has_materialization_issue());
+        assert_eq!(
+            materialization_report.materialization_issues(),
+            vec![
+                super::SettingsSyncProtocolProviderMaterializationIssue {
+                    provider_id: missing_provider_id.to_string(),
+                    kind: super::SettingsSyncProtocolProviderMaterializationIssueKind::Missing,
+                },
+                super::SettingsSyncProtocolProviderMaterializationIssue {
+                    provider_id: mismatch_provider_id.to_string(),
+                    kind: super::SettingsSyncProtocolProviderMaterializationIssueKind::EndpointMismatch,
+                },
+                super::SettingsSyncProtocolProviderMaterializationIssue {
+                    provider_id: duplicate_provider_id.to_string(),
+                    kind: super::SettingsSyncProtocolProviderMaterializationIssueKind::Duplicate,
+                },
+                super::SettingsSyncProtocolProviderMaterializationIssue {
+                    provider_id: unsupported_provider_id.to_string(),
+                    kind: super::SettingsSyncProtocolProviderMaterializationIssueKind::Unsupported,
+                },
+            ]
+        );
         assert!(!materialization_report.all_providers_materialized());
         let retention_provider_handles = materialization.retention_provider_handles();
         assert_eq!(retention_provider_handles.len(), 2);
@@ -17078,6 +17161,20 @@ mod tests {
         assert_eq!(preview.protocol_materialized_provider_count(), 1);
         assert_eq!(preview.protocol_blocked_provider_count(), 0);
         assert!(preview.all_protocol_providers_materialized());
+        assert_eq!(
+            preview
+                .materialization_preview
+                .protocol_materialization
+                .materialization_issue_count(),
+            0
+        );
+        assert!(
+            preview
+                .materialization_preview
+                .protocol_materialization
+                .materialization_issues()
+                .is_empty()
+        );
         assert_eq!(preview.blocked_retention_provider_count(), 0);
         assert!(preview.all_selected_providers_materialized());
         assert_eq!(

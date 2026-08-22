@@ -668,6 +668,11 @@ Current baseline:
   missing/fail-closed endpoint metadata from materializer-blocked provider
   handles before any publish, retain, root mutation, socket dial, or fixture
   daemon handoff.
+- Protocol materialization reports now also expose structured materialization
+  issues for missing, endpoint-mismatched, duplicate, and unsupported protocol
+  providers. Scheduler/UI callers can render socketless or future real-adapter
+  failures without reinterpreting raw id buckets or contacting external
+  networks.
 - Legacy `fixture:<provider>` endpoint refs now also fail closed. They do not
   carry a fixture network id, so they cannot safely satisfy stored-provider
   materialization or quorum checks.
