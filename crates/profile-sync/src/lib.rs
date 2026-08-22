@@ -14520,6 +14520,57 @@ mod tests {
         );
         assert_eq!(run.retained_provider_count(), 1);
 
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.accent", "mint")
+            .expect("write scheduler stored unsupported fixture-daemon setting");
+        let roots_before_unsupported_fixture_daemons = database
+            .profile_sync_roots(profile)
+            .expect("read roots before unsupported fixture-daemon quorum failure");
+        let unsupported_fixture_error = match scheduler
+            .run_once_with_stored_in_process_fixture_retention_provider_daemons(
+                &database,
+                &strict_config,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                8,
+                &[
+                    super::SettingsSyncInProcessFixtureProviderDaemon::new(
+                        valid_provider_id,
+                        network.network_id(),
+                        &valid_provider_daemon,
+                    ),
+                    super::SettingsSyncInProcessFixtureProviderDaemon::new(
+                        unsupported_provider_id,
+                        network.network_id(),
+                        &unsupported_provider_daemon,
+                    ),
+                ],
+            ) {
+            Ok(_) => {
+                panic!("scheduler should not fixture-materialize unsupported endpoint refs")
+            }
+            Err(error) => error,
+        };
+        let ProfileSyncCycleWithHealthError::Policy(ProfileSyncPolicyError::ProviderMinimumUnmet {
+            provider_role,
+            minimum,
+            actual,
+            ..
+        }) = unsupported_fixture_error
+        else {
+            panic!(
+                "expected unsupported fixture-daemon provider minimum error, got {unsupported_fixture_error:?}"
+            );
+        };
+        assert_eq!(provider_role, "selected retention providers");
+        assert_eq!(minimum, 2);
+        assert_eq!(actual, 1);
+        assert_eq!(
+            database
+                .profile_sync_roots(profile)
+                .expect("read roots after unsupported fixture-daemon quorum failure"),
+            roots_before_unsupported_fixture_daemons
+        );
+
         let _ = std::fs::remove_dir_all(device_state_root);
         let _ = std::fs::remove_dir_all(valid_provider_state_root);
         let _ = std::fs::remove_dir_all(unsupported_provider_state_root);

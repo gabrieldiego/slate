@@ -642,6 +642,10 @@ Current baseline:
   the materialized retention-provider quorum, even if the caller supplies a
   daemon handle with the same socket-shaped endpoint string. This keeps
   loopback metadata from satisfying socketless fixture runs.
+- The in-process fixture-daemon stored-provider path now covers that
+  unsupported-endpoint boundary too: a matching fixture daemon cannot
+  materialize a provider whose stored endpoint is loopback-shaped, and strict
+  quorum fails before pending settings publish or roots mutate.
 - The membership-aware stored-provider scheduler now covers the same
   unsupported-endpoint boundary after membership trust is established: the
   read-only plan marks the loopback-shaped endpoint as fail-closed, strict
