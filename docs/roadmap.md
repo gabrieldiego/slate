@@ -1303,16 +1303,18 @@ Current baseline:
 - `SlateSyncSecretExport` now provides the first local JSON envelope for future
   QR-code or file-based device login. It carries profile id, schema version,
   URL-safe base64 root-secret bytes, and creation time; import validates the
-  schema and exact secret length, and debug output redacts the encoded secret.
+  schema, exact secret length, and optional expected profile id, while debug
+  output redacts the encoded secret.
 - `make profile-sync-boundary-check` now provides a low-memory regression gate
   for the sync work. It runs focused rail-app sync-domain checks, verifies that
   visible rail app sync descriptors match the seeded `slate-settings.db`
-  storage domain table, checks Slate Sync Secret domain separation and export
-  round-trip behavior, then covers storage/provider metadata, typed app-domain
-  cursors, the broadwebd app-domain fixture, and the profile-sync scheduler
-  fixture through the build-limits wrapper. Chrome settings watcher coverage is
-  opt-in because compiling `slate-chrome` currently pulls Servo script bindings
-  and exceeded the 2 GiB low-memory profile during verification.
+  storage domain table, checks Slate Sync Secret domain separation, export
+  round-trip behavior, and profile-bound import, then covers storage/provider
+  metadata, typed app-domain cursors, the broadwebd app-domain fixture, and the
+  profile-sync scheduler fixture through the build-limits wrapper. Chrome
+  settings watcher coverage is opt-in because compiling `slate-chrome`
+  currently pulls Servo script bindings and exceeded the 2 GiB low-memory
+  profile during verification.
 
 Next:
 

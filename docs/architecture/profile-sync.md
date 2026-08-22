@@ -274,7 +274,8 @@ decides which derived material a backend may use. Storage also has the first
 JSON export/import envelope for the root secret itself. The envelope is meant as
 a local primitive for future QR-code or file transfer surfaces; it validates its
 schema, round-trips the exact secret bytes with URL-safe base64, and redacts the
-encoded secret from debug output.
+encoded secret from debug output. Import callers can also require the envelope's
+profile id to match the target profile before accepting the root secret.
 The broadwebd settings-sync runner can use the same helper after active-key
 preflight: the database supplies only active key metadata, the caller supplies
 the in-memory secret, and the derived key is passed into the existing encrypted

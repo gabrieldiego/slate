@@ -230,6 +230,13 @@ impl SlateSyncSecret {
         export.to_sync_secret()
     }
 
+    pub fn from_export_for_profile(
+        export: &SlateSyncSecretExport,
+        expected_profile: &str,
+    ) -> Result<Self, SyncObjectError> {
+        export.to_sync_secret_for_profile(expected_profile)
+    }
+
     pub fn derive_profile_sync_content_key(
         &self,
         profile: &str,
@@ -381,11 +388,30 @@ impl SlateSyncSecretExport {
         Ok(SlateSyncSecret::from_bytes(bytes))
     }
 
+    fn to_sync_secret_for_profile(
+        &self,
+        expected_profile: &str,
+    ) -> Result<SlateSyncSecret, SyncObjectError> {
+        self.validate_expected_profile(expected_profile)?;
+        self.to_sync_secret()
+    }
+
     fn validate_schema(&self) -> Result<(), SyncObjectError> {
         if self.schema_version != SLATE_SYNC_SECRET_EXPORT_SCHEMA_VERSION {
             return Err(SyncObjectError::UnsupportedSchema {
                 object_kind: SLATE_SYNC_SECRET_EXPORT_OBJECT_KIND.to_string(),
                 schema_version: self.schema_version,
+            });
+        }
+        Ok(())
+    }
+
+    fn validate_expected_profile(&self, expected_profile: &str) -> Result<(), SyncObjectError> {
+        self.validate_schema()?;
+        if self.profile != expected_profile {
+            return Err(SyncObjectError::UnexpectedProfile {
+                expected: expected_profile.to_string(),
+                actual: self.profile.clone(),
             });
         }
         Ok(())
@@ -11168,6 +11194,29 @@ mod tests {
         assert!(matches!(
             SlateSyncSecret::from_export(&short_secret),
             Err(SyncObjectError::Key)
+        ));
+    }
+
+    #[test]
+    fn slate_sync_secret_export_import_can_require_profile_match() {
+        let secret = SlateSyncSecret::from_bytes([45; SLATE_SYNC_SECRET_BYTES]);
+        let export = secret.export_for_profile(DEFAULT_PROFILE_ID, 1_235);
+
+        let imported = SlateSyncSecret::from_export_for_profile(&export, DEFAULT_PROFILE_ID)
+            .expect("matching profile export should import");
+        assert_eq!(
+            imported
+                .derive_profile_sync_account_recovery_secret(DEFAULT_PROFILE_ID)
+                .unwrap(),
+            secret
+                .derive_profile_sync_account_recovery_secret(DEFAULT_PROFILE_ID)
+                .unwrap()
+        );
+
+        assert!(matches!(
+            SlateSyncSecret::from_export_for_profile(&export, "work"),
+            Err(SyncObjectError::UnexpectedProfile { expected, actual })
+                if expected == "work" && actual == DEFAULT_PROFILE_ID
         ));
     }
 
