@@ -15745,76 +15745,10 @@ mod tests {
     }
 
     #[test]
-    fn broadwebd_publisher_and_source_use_kubo_profile_sync_fixture_daemon() {
+    fn broadwebd_publisher_and_source_use_stateful_kubo_profile_sync_model() {
         let network = InProcessBroadwebNetwork::new();
         let state_root = test_state_root("kubo-profile-sync-publisher-source");
-        let dep_a_object_id = "bafybeigdyrztdependencya";
-        let dep_b_object_id = "bafybeigdyrztdependencyb";
-        let root_object_id = "bafybeigdyrztmanifestroot";
-        let fixture = network.kubo_rpc_sequence(vec![
-            InternalKuboRpcResponse {
-                status_code: 200,
-                content_type: "application/json".to_string(),
-                body:
-                    br#"{"Name":"profile-object","Hash":"bafybeigdyrztdependencya","Size":"128"}"#
-                        .to_vec(),
-            },
-            InternalKuboRpcResponse {
-                status_code: 200,
-                content_type: "application/json".to_string(),
-                body: br#"{"Pins":["bafybeigdyrztdependencya"]}"#.to_vec(),
-            },
-            InternalKuboRpcResponse {
-                status_code: 200,
-                content_type: "application/json".to_string(),
-                body:
-                    br#"{"Name":"profile-object","Hash":"bafybeigdyrztdependencyb","Size":"128"}"#
-                        .to_vec(),
-            },
-            InternalKuboRpcResponse {
-                status_code: 200,
-                content_type: "application/json".to_string(),
-                body: br#"{"Pins":["bafybeigdyrztdependencyb"]}"#.to_vec(),
-            },
-            InternalKuboRpcResponse {
-                status_code: 200,
-                content_type: "application/json".to_string(),
-                body:
-                    br#"{"Name":"profile-object","Hash":"bafybeigdyrztmanifestroot","Size":"128"}"#
-                        .to_vec(),
-            },
-            InternalKuboRpcResponse {
-                status_code: 200,
-                content_type: "application/json".to_string(),
-                body: br#"{"Pins":["bafybeigdyrztmanifestroot"]}"#.to_vec(),
-            },
-            InternalKuboRpcResponse {
-                status_code: 200,
-                content_type: "application/json".to_string(),
-                body: br#"{"Name":"settings-latest","Value":"/ipfs/bafybeigdyrztmanifestroot"}"#
-                    .to_vec(),
-            },
-            InternalKuboRpcResponse {
-                status_code: 200,
-                content_type: "application/json".to_string(),
-                body: br#"{"Path":"/ipfs/bafybeigdyrztmanifestroot"}"#.to_vec(),
-            },
-            InternalKuboRpcResponse {
-                status_code: 200,
-                content_type: "application/octet-stream".to_string(),
-                body: Vec::new(),
-            },
-            InternalKuboRpcResponse {
-                status_code: 200,
-                content_type: "application/octet-stream".to_string(),
-                body: Vec::new(),
-            },
-            InternalKuboRpcResponse {
-                status_code: 200,
-                content_type: "application/octet-stream".to_string(),
-                body: Vec::new(),
-            },
-        ]);
+        let fixture = network.kubo_profile_sync_model();
         let daemon = network
             .daemon_for_kubo_profile_sync(
                 &state_root,
@@ -15838,11 +15772,21 @@ mod tests {
             )
             .expect("publish retained root through Kubo profile-sync fixture daemon");
 
-        assert_eq!(publication.root_object_id, root_object_id);
+        assert!(publication.root_object_id.starts_with("bafyfixture"));
+        assert_eq!(publication.dependency_object_ids.len(), 2);
+        assert!(publication.dependency_object_ids[0].starts_with("bafyfixture"));
+        assert!(publication.dependency_object_ids[1].starts_with("bafyfixture"));
         assert_eq!(
-            publication.dependency_object_ids,
-            vec![dep_a_object_id.to_string(), dep_b_object_id.to_string()]
+            [publication.root_object_id.as_str()]
+                .into_iter()
+                .chain(publication.dependency_object_ids.iter().map(String::as_str))
+                .collect::<BTreeSet<_>>()
+                .len(),
+            3
         );
+        let dep_a_object_id = publication.dependency_object_ids[0].as_str();
+        let dep_b_object_id = publication.dependency_object_ids[1].as_str();
+        let root_object_id = publication.root_object_id.as_str();
         assert_eq!(
             source
                 .resolve_profile_sync_root(DEFAULT_PROFILE_ID, "settings-latest")
@@ -15874,17 +15818,20 @@ mod tests {
         assert_eq!(
             fixture.finish(),
             vec![
-                "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1",
-                "POST /api/v0/pin/add?arg=bafybeigdyrztdependencya&recursive=true HTTP/1.1",
-                "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1",
-                "POST /api/v0/pin/add?arg=bafybeigdyrztdependencyb&recursive=true HTTP/1.1",
-                "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1",
-                "POST /api/v0/pin/add?arg=bafybeigdyrztmanifestroot&recursive=true HTTP/1.1",
-                "POST /api/v0/name/publish?arg=%2Fipfs%2Fbafybeigdyrztmanifestroot&key=settings-latest&allow-offline=true HTTP/1.1",
-                "POST /api/v0/name/resolve?arg=%2Fipns%2Fsettings-latest&recursive=false HTTP/1.1",
-                "POST /api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrztmanifestroot HTTP/1.1",
-                "POST /api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrztdependencya HTTP/1.1",
-                "POST /api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrztdependencyb HTTP/1.1",
+                "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1".to_string(),
+                format!("POST /api/v0/pin/add?arg={dep_a_object_id}&recursive=true HTTP/1.1"),
+                "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1".to_string(),
+                format!("POST /api/v0/pin/add?arg={dep_b_object_id}&recursive=true HTTP/1.1"),
+                "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1".to_string(),
+                format!("POST /api/v0/pin/add?arg={root_object_id}&recursive=true HTTP/1.1"),
+                format!(
+                    "POST /api/v0/name/publish?arg=%2Fipfs%2F{root_object_id}&key=settings-latest&allow-offline=true HTTP/1.1"
+                ),
+                "POST /api/v0/name/resolve?arg=%2Fipns%2Fsettings-latest&recursive=false HTTP/1.1"
+                    .to_string(),
+                format!("POST /api/v0/cat?arg=%2Fipfs%2F{root_object_id} HTTP/1.1"),
+                format!("POST /api/v0/cat?arg=%2Fipfs%2F{dep_a_object_id} HTTP/1.1"),
+                format!("POST /api/v0/cat?arg=%2Fipfs%2F{dep_b_object_id} HTTP/1.1"),
             ]
         );
 

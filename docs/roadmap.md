@@ -359,9 +359,10 @@ Current baseline:
   Kubo responses remain available for explicit error and malformed-response
   tests.
 - `slate-profile-sync` now verifies its `BroadwebdProfileSyncPublisher` and
-  `BroadwebdProfileSyncObjectSource` bridge against that Kubo profile-sync
+  `BroadwebdProfileSyncObjectSource` bridge against the stateful Kubo profile-sync
   fixture daemon: dependency objects, retained root publish, root resolve, and
-  object fetch all flow through scripted in-process Kubo RPC responses.
+  object fetch all flow through Kubo-shaped RPC requests handled by the
+  in-process model.
 - The same bridge now publishes a real signed encrypted settings tail manifest
   through the Kubo fixture daemon and verifies the fetched manifest and tail
   bytes with the storage sync-object openers. Scripted Kubo `cat` responses are
