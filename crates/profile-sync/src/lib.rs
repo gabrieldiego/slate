@@ -14412,6 +14412,7 @@ mod tests {
         )
         .expect("open typed app tombstone tail receiver settings database");
         for (domain, privacy_classification, sync_content) in [
+            (SYNC_DOMAIN_CALENDAR, "sensitive", false),
             (SYNC_DOMAIN_CHAT, "sensitive", false),
             (SYNC_DOMAIN_DOWNLOADS, "metadata", false),
             (SYNC_DOMAIN_FILES, "content", true),
@@ -14428,6 +14429,19 @@ mod tests {
                 })
                 .expect("enable app sync domain for tombstone tail test profile");
         }
+        let calendar_update = CalendarEventUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            event_id: "runtime-event-tail-delete".to_string(),
+            calendar_id: Some("work".to_string()),
+            title: "Tail Runtime Planning".to_string(),
+            starts_at: 1_789_030_000,
+            ends_at: Some(1_789_033_600),
+            time_zone: Some("UTC".to_string()),
+            location: Some("Slate workspace".to_string()),
+            notes: Some("Delete through tombstone tail".to_string()),
+            recurrence_rule: None,
+            reminder_minutes: Some(15),
+        };
         let chat_update = ChatConversationUpdate {
             profile: DEFAULT_PROFILE_ID.to_string(),
             conversation_id: "runtime-chat-tail-delete".to_string(),
@@ -14485,6 +14499,9 @@ mod tests {
             enabled: true,
         };
         publisher_database
+            .upsert_calendar_event(&calendar_update)
+            .expect("publisher writes typed calendar metadata before snapshot");
+        publisher_database
             .upsert_chat_conversation(&chat_update)
             .expect("publisher writes typed chat metadata before snapshot");
         publisher_database
@@ -14509,6 +14526,13 @@ mod tests {
             .expect("receiver trusts typed app tombstone tail publisher key");
         let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
         let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
+        let calendar_watcher = TypedAppSyncDomainWatcher::<CalendarEventSyncPayload>::new(
+            receiver_database.clone(),
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_CALENDAR,
+            8,
+        )
+        .expect("initialize receiver calendar cursor before tombstone tail snapshot");
         let chat_watcher = TypedAppSyncDomainWatcher::<ChatConversationSyncPayload>::new(
             receiver_database.clone(),
             DEFAULT_PROFILE_ID,
@@ -14537,6 +14561,9 @@ mod tests {
             8,
         )
         .expect("initialize receiver storage cursor before tombstone tail snapshot");
+        let initial_calendar_revision = calendar_watcher
+            .current_revision()
+            .expect("read initial receiver calendar cursor before tombstone tail snapshot");
         let initial_chat_revision = chat_watcher
             .current_revision()
             .expect("read initial receiver chat cursor before tombstone tail snapshot");
@@ -14549,6 +14576,13 @@ mod tests {
         let initial_storage_revision = storage_watcher
             .current_revision()
             .expect("read initial receiver storage cursor before tombstone tail snapshot");
+        assert_eq!(
+            calendar_watcher
+                .poll_once()
+                .expect("poll idle calendar before tombstone tail snapshot")
+                .event_count(),
+            0
+        );
         assert_eq!(
             chat_watcher
                 .poll_once()
@@ -14605,6 +14639,13 @@ mod tests {
         ));
         assert_eq!(
             receiver_database
+                .calendar_events(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver typed calendar metadata")
+                .len(),
+            1
+        );
+        assert_eq!(
+            receiver_database
                 .chat_conversations(DEFAULT_PROFILE_ID, 10)
                 .expect("read receiver typed chat metadata")
                 .len(),
@@ -14631,6 +14672,47 @@ mod tests {
                 .len(),
             1
         );
+        let snapshot_calendar_applied = calendar_watcher
+            .poll_apply_and_acknowledge(|snapshot_calendar_poll| {
+                assert!(snapshot_calendar_poll.advanced());
+                assert_eq!(
+                    snapshot_calendar_poll.previous_revision,
+                    initial_calendar_revision
+                );
+                assert_eq!(snapshot_calendar_poll.event_count(), 1);
+                assert_eq!(
+                    snapshot_calendar_poll.events[0].value.event_id,
+                    "runtime-event-tail-delete"
+                );
+                assert_eq!(
+                    snapshot_calendar_poll.events[0].value.title,
+                    "Tail Runtime Planning"
+                );
+                assert!(!snapshot_calendar_poll.events[0].value.deleted);
+                Ok::<(), &'static str>(())
+            })
+            .expect("receiver applies typed calendar snapshot before tombstone tail");
+        let snapshot_calendar_poll = snapshot_calendar_applied.poll;
+        assert!(snapshot_calendar_poll.advanced());
+        assert_eq!(
+            snapshot_calendar_poll.previous_revision,
+            initial_calendar_revision
+        );
+        assert_eq!(snapshot_calendar_poll.event_count(), 1);
+        assert_eq!(
+            snapshot_calendar_poll.events[0].value.event_id,
+            "runtime-event-tail-delete"
+        );
+        assert_eq!(
+            snapshot_calendar_poll.events[0].value.title,
+            "Tail Runtime Planning"
+        );
+        assert!(!snapshot_calendar_poll.events[0].value.deleted);
+        assert_eq!(
+            snapshot_calendar_applied.cursor.latest_revision,
+            snapshot_calendar_poll.latest_revision
+        );
+
         let snapshot_chat_applied = chat_watcher
             .poll_apply_and_acknowledge(|snapshot_chat_poll| {
                 assert!(snapshot_chat_poll.advanced());
@@ -14778,6 +14860,9 @@ mod tests {
         );
 
         publisher_database
+            .remove_calendar_event(DEFAULT_PROFILE_ID, calendar_update.event_id.as_str())
+            .expect("publisher tombstones typed calendar metadata after snapshot");
+        publisher_database
             .remove_chat_conversation(DEFAULT_PROFILE_ID, chat_update.conversation_id.as_str())
             .expect("publisher tombstones typed chat metadata after snapshot");
         publisher_database
@@ -14806,7 +14891,7 @@ mod tests {
             tail.publication.snapshot_object_id,
             full.publication.snapshot_object_id
         );
-        assert_eq!(tail.publication.tail_change_object_ids.len(), 4);
+        assert_eq!(tail.publication.tail_change_object_ids.len(), 5);
         assert_eq!(
             tail.device_head.device_head.latest_change_object_id,
             tail.publication.tail_change_object_ids.last().cloned()
@@ -14829,7 +14914,13 @@ mod tests {
             tail.publication.manifest_object_id
         );
         assert!(application.snapshot.is_some());
-        assert_eq!(application.tail_changes.len(), 4);
+        assert_eq!(application.tail_changes.len(), 5);
+        assert!(
+            receiver_database
+                .calendar_events(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver typed calendar metadata after tombstone tail")
+                .is_empty()
+        );
         assert!(
             receiver_database
                 .chat_conversations(DEFAULT_PROFILE_ID, 10)
@@ -14854,6 +14945,21 @@ mod tests {
                 .expect("read receiver typed storage provider metadata after tombstone tail")
                 .is_empty()
         );
+
+        let calendar_value = receiver_database
+            .get_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                "event.runtime-event-tail-delete",
+            )
+            .expect("read receiver calendar tombstone tail sync setting")
+            .expect("receiver calendar tombstone tail sync setting")
+            .value;
+        let calendar_payload: CalendarEventSyncPayload =
+            serde_json::from_str(calendar_value.as_str())
+                .expect("decode calendar tombstone tail payload");
+        assert!(calendar_payload.deleted);
+        assert_eq!(calendar_payload.event_id, "runtime-event-tail-delete");
 
         let chat_value = receiver_database
             .get_sync_setting_text(
@@ -14912,6 +15018,47 @@ mod tests {
                 .expect("decode storage provider tombstone tail payload");
         assert!(provider_payload.deleted);
         assert_eq!(provider_payload.provider_id, "runtime-provider-tail-delete");
+
+        let tombstone_calendar_applied = calendar_watcher
+            .poll_apply_and_acknowledge(|tombstone_calendar_poll| {
+                assert!(tombstone_calendar_poll.advanced());
+                assert_eq!(
+                    tombstone_calendar_poll.previous_revision,
+                    snapshot_calendar_poll.latest_revision
+                );
+                assert_eq!(tombstone_calendar_poll.event_count(), 1);
+                assert_eq!(
+                    tombstone_calendar_poll.events[0].change.entity_key,
+                    "event.runtime-event-tail-delete"
+                );
+                assert!(tombstone_calendar_poll.events[0].value.deleted);
+                assert_eq!(
+                    tombstone_calendar_poll.events[0].value.event_id,
+                    "runtime-event-tail-delete"
+                );
+                Ok::<(), &'static str>(())
+            })
+            .expect("receiver applies typed calendar tombstone tail payload");
+        let tombstone_calendar_poll = tombstone_calendar_applied.poll;
+        assert!(tombstone_calendar_poll.advanced());
+        assert_eq!(
+            tombstone_calendar_poll.previous_revision,
+            snapshot_calendar_poll.latest_revision
+        );
+        assert_eq!(tombstone_calendar_poll.event_count(), 1);
+        assert_eq!(
+            tombstone_calendar_poll.events[0].change.entity_key,
+            "event.runtime-event-tail-delete"
+        );
+        assert!(tombstone_calendar_poll.events[0].value.deleted);
+        assert_eq!(
+            tombstone_calendar_poll.events[0].value.event_id,
+            "runtime-event-tail-delete"
+        );
+        assert_eq!(
+            tombstone_calendar_applied.cursor.latest_revision,
+            tombstone_calendar_poll.latest_revision
+        );
 
         let tombstone_chat_applied = chat_watcher
             .poll_apply_and_acknowledge(|tombstone_chat_poll| {
