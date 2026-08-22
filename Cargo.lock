@@ -10919,6 +10919,7 @@ dependencies = [
  "slate-broadwebd",
  "slate-browser-core",
  "slate-net",
+ "slate-profile-sync",
  "slate-storage",
  "surfman",
  "tokio",

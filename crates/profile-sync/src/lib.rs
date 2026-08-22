@@ -4,22 +4,24 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 use slate_broadwebd::{
     BroadwebDaemon, BroadwebdError, IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX,
+    LocalProfileSyncFixture, PluginRegistry,
     ProfileSyncObjectRequest as BroadwebdProfileSyncObjectRequest,
     ProfileSyncProfileRequest as BroadwebdProfileSyncProfileRequest,
     ProfileSyncProviderHealth as BroadwebdProfileSyncProviderHealth,
-    ProfileSyncProviderRecord as BroadwebdProfileSyncProviderRecord,
+    ProfileSyncProviderRecord as BroadwebdProfileSyncProviderRecord, ProfileSyncProviderRoles,
     ProfileSyncPutObjectRequest as BroadwebdProfileSyncPutObjectRequest,
     ProfileSyncRequest as BroadwebdProfileSyncRequest,
     ProfileSyncResponse as BroadwebdProfileSyncResponse,
     ProfileSyncRootHealth as BroadwebdProfileSyncRootHealth,
     ProfileSyncRootHealthRequest as BroadwebdProfileSyncRootHealthRequest,
     ProfileSyncRootRequest as BroadwebdProfileSyncRootRequest,
-    ProfileSyncRootUpdate as BroadwebdProfileSyncRootUpdate,
+    ProfileSyncRootUpdate as BroadwebdProfileSyncRootUpdate, ResourceBudget,
     parse_in_process_profile_sync_fixture_endpoint_ref,
 };
 use slate_routing::{Multiaddr, RoutingMode, RoutingPlan};
 use slate_storage::{
-    DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH, EncryptedSyncObject, IncomingSyncSettingText,
+    DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH, DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
+    DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_KIND, EncryptedSyncObject, IncomingSyncSettingText,
     PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305, PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
     PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, PROFILE_SYNC_MANIFEST_OBJECT_KIND,
     PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE,
@@ -43,12 +45,139 @@ use slate_storage::{
     settings_sync_snapshot_id,
 };
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
+use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const PROFILE_SYNC_MEMBERSHIP_LOG_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID: &str = "account/membership/log";
 pub const PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS: usize = 512;
+pub const LOCAL_SETTINGS_SYNC_PREVIEW_NETWORK_ID: &str = "preview";
+pub const LOCAL_SETTINGS_SYNC_PREVIEW_ROOT_ID: &str = "settings/latest";
+pub const LOCAL_SETTINGS_SYNC_PREVIEW_SETTING_KEY: &str = "profile_sync.preview.last_run";
 const PROFILE_SYNC_PROVIDER_MULTIADDR_PRIVACY_BOUNDARY: &str =
     "profile-sync provider endpoint; no browser navigation or public gateway fallback";
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LocalSettingsSyncPreviewCycleReport {
+    pub profile: String,
+    pub local_device_id: String,
+    pub provider_id: String,
+    pub provider_endpoint_ref: String,
+    pub preview_setting_key: String,
+    pub preview_setting_revision: i64,
+    pub ready_for_manual_sync: bool,
+    pub blocked_reason: Option<String>,
+    pub pulled_membership_application_count: usize,
+    pub selected_retention_provider_count: usize,
+    pub materialized_retention_provider_count: usize,
+    pub retained_provider_count: usize,
+    pub published_step_count: usize,
+    pub published_object_count: usize,
+    pub retained_object_count: usize,
+    pub fixture_materialization_issue_count: usize,
+    pub retention_provider_selection_issue_count: usize,
+    pub stored_provider_metadata_issue_count: usize,
+    pub all_fixture_providers_materialized: bool,
+    pub degraded_before: bool,
+    pub degraded_after: bool,
+}
+
+#[derive(Debug)]
+pub enum LocalSettingsSyncPreviewError {
+    Storage(StorageError),
+    SyncObject(SyncObjectError),
+    Broadwebd(BroadwebdError),
+    Cycle(ProfileSyncCycleWithHealthError),
+    Io(std::io::Error),
+}
+
+impl fmt::Display for LocalSettingsSyncPreviewError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Storage(error) => write!(formatter, "preview storage setup failed: {error}"),
+            Self::SyncObject(error) => write!(formatter, "preview key derivation failed: {error}"),
+            Self::Broadwebd(error) => write!(formatter, "preview broadwebd setup failed: {error}"),
+            Self::Cycle(error) => write!(formatter, "preview sync cycle failed: {error}"),
+            Self::Io(error) => write!(formatter, "preview state setup failed: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for LocalSettingsSyncPreviewError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Storage(error) => Some(error),
+            Self::SyncObject(error) => Some(error),
+            Self::Broadwebd(error) => Some(error),
+            Self::Cycle(error) => Some(error),
+            Self::Io(error) => Some(error),
+        }
+    }
+}
+
+impl From<StorageError> for LocalSettingsSyncPreviewError {
+    fn from(error: StorageError) -> Self {
+        Self::Storage(error)
+    }
+}
+
+impl From<SyncObjectError> for LocalSettingsSyncPreviewError {
+    fn from(error: SyncObjectError) -> Self {
+        Self::SyncObject(error)
+    }
+}
+
+impl From<BroadwebdError> for LocalSettingsSyncPreviewError {
+    fn from(error: BroadwebdError) -> Self {
+        Self::Broadwebd(error)
+    }
+}
+
+impl From<ProfileSyncCycleWithHealthError> for LocalSettingsSyncPreviewError {
+    fn from(error: ProfileSyncCycleWithHealthError) -> Self {
+        Self::Cycle(error)
+    }
+}
+
+impl From<std::io::Error> for LocalSettingsSyncPreviewError {
+    fn from(error: std::io::Error) -> Self {
+        Self::Io(error)
+    }
+}
+
+struct LocalSettingsSyncPreviewStateRoot {
+    path: PathBuf,
+}
+
+impl LocalSettingsSyncPreviewStateRoot {
+    fn prepare(parent: impl Into<PathBuf>) -> Result<Self, std::io::Error> {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_nanos())
+            .unwrap_or_default();
+        let path = parent.into().join(format!(
+            "local-settings-sync-preview-{}-{nanos}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&path)?;
+        Ok(Self { path })
+    }
+
+    fn device_state_root(&self) -> PathBuf {
+        self.path.join("device")
+    }
+
+    fn provider_state_root(&self) -> PathBuf {
+        self.path.join("provider")
+    }
+}
+
+impl Drop for LocalSettingsSyncPreviewStateRoot {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.path);
+    }
+}
 
 #[derive(Clone, Copy)]
 pub struct BroadwebdProfileSyncObjectSource<'a> {
@@ -7709,6 +7838,126 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
     }
 }
 
+pub fn run_local_settings_sync_preview_cycle(
+    database: &SlateProfileDatabase,
+    profile: &str,
+    sync_secret: &SlateSyncSecret,
+    state_root_parent: impl Into<PathBuf>,
+) -> Result<LocalSettingsSyncPreviewCycleReport, LocalSettingsSyncPreviewError> {
+    database.activate_local_profile_sync_from_secret(profile, sync_secret)?;
+    let provider_endpoint_ref = format!(
+        "{IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX}{LOCAL_SETTINGS_SYNC_PREVIEW_NETWORK_ID}/{DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID}"
+    );
+    database.activate_local_profile_sync_preview_provider_from_secret(
+        profile,
+        sync_secret,
+        Some(provider_endpoint_ref.clone()),
+    )?;
+    database.set_sync_setting_text(
+        profile,
+        SYNC_DOMAIN_SETTINGS,
+        LOCAL_SETTINGS_SYNC_PREVIEW_SETTING_KEY,
+        &format!("local-preview-run-{}", unix_time_seconds()),
+    )?;
+    let preview_setting_revision = database
+        .get_sync_setting_text(
+            profile,
+            SYNC_DOMAIN_SETTINGS,
+            LOCAL_SETTINGS_SYNC_PREVIEW_SETTING_KEY,
+        )?
+        .map(|setting| setting.revision)
+        .unwrap_or_default();
+    let local_device_id = database.local_sync_device_id().to_string();
+    let signer = sync_secret.derive_profile_sync_device_signer(
+        profile,
+        local_device_id.as_str(),
+        DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+    )?;
+
+    let state_root = LocalSettingsSyncPreviewStateRoot::prepare(state_root_parent)?;
+    let fixture = LocalProfileSyncFixture::new();
+    let mut device_registry = PluginRegistry::new();
+    device_registry.register_service(fixture.service_for_device(local_device_id.as_str()));
+    let mut provider_registry = PluginRegistry::new();
+    provider_registry.register_service(fixture.service_for_provider_with_roles(
+        DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
+        DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_KIND,
+        ProfileSyncProviderRoles::availability_provider(),
+    ));
+
+    let budget = ResourceBudget::default();
+    let device_daemon = BroadwebDaemon::start_with_registry(
+        state_root.device_state_root(),
+        budget.clone(),
+        device_registry,
+    )?;
+    let provider_daemon = BroadwebDaemon::start_with_registry(
+        state_root.provider_state_root(),
+        budget,
+        provider_registry,
+    )?;
+    let provider_daemons = [SettingsSyncInProcessFixtureProviderDaemon::new(
+        DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
+        LOCAL_SETTINGS_SYNC_PREVIEW_NETWORK_ID,
+        &provider_daemon,
+    )];
+    let policy = SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 8, 1);
+    let config = SettingsSyncSchedulerConfig::new(
+        profile,
+        LOCAL_SETTINGS_SYNC_PREVIEW_ROOT_ID,
+        policy.clone(),
+    );
+    let run = BroadwebdSettingsSyncScheduler::new(&device_daemon)
+        .run_once_with_membership_log_and_stored_in_process_fixture_retention_provider_daemons_and_sync_secret(
+            database,
+            &config,
+            PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            sync_secret,
+            &signer,
+            4,
+            &provider_daemons,
+        )?;
+    let after_health = BroadwebdSettingsSyncRunner::new(&device_daemon).settings_sync_health(
+        database,
+        profile,
+        LOCAL_SETTINGS_SYNC_PREVIEW_ROOT_ID,
+        config.policy.minimum_online_retaining_providers,
+    )?;
+    let readiness = database.profile_sync_local_readiness(profile)?;
+    let published_object_count = run.run.cycle.cycle.published_object_ids().len();
+
+    Ok(LocalSettingsSyncPreviewCycleReport {
+        profile: profile.to_string(),
+        local_device_id,
+        provider_id: DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID.to_string(),
+        provider_endpoint_ref,
+        preview_setting_key: LOCAL_SETTINGS_SYNC_PREVIEW_SETTING_KEY.to_string(),
+        preview_setting_revision,
+        ready_for_manual_sync: readiness.ready_for_manual_sync,
+        blocked_reason: readiness.blocked_reason,
+        pulled_membership_application_count: run.pulled_membership_application_count(),
+        selected_retention_provider_count: run.selected_retention_provider_count(),
+        materialized_retention_provider_count: run.materialized_retention_provider_count(),
+        retained_provider_count: run.retained_provider_count(),
+        published_step_count: run.run.cycle.cycle.cycle.published_step_count(),
+        published_object_count,
+        retained_object_count: run.run.cycle.retained_object_ids.len(),
+        fixture_materialization_issue_count: run.fixture_materialization_issue_count(),
+        retention_provider_selection_issue_count: run.retention_provider_selection_issue_count(),
+        stored_provider_metadata_issue_count: run.stored_provider_metadata_issue_count(),
+        all_fixture_providers_materialized: run.all_fixture_providers_materialized(),
+        degraded_before: run.run.preflight.preflight.before_health.degraded(),
+        degraded_after: after_health.degraded(),
+    })
+}
+
+fn unix_time_seconds() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs().min(i64::MAX as u64) as i64)
+        .unwrap_or_default()
+}
+
 impl<'a> BroadwebdProfileSyncPublisher<'a> {
     pub fn new(daemon: &'a BroadwebDaemon) -> Self {
         Self { daemon }
@@ -9273,11 +9522,12 @@ mod tests {
         CalendarEventSyncPayload, CalendarEventUpdate, ChatConversationSyncPayload,
         ChatConversationUpdate, ContactCardSyncPayload, ContactCardUpdate,
         DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
-        DownloadMetadataSyncPayload, DownloadMetadataUpdate, FileEntrySyncPayload, FileEntryUpdate,
-        IncomingSyncSettingText, PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305,
-        PROFILE_SYNC_CONTENT_KEY_BYTES, PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
-        PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, PROFILE_SYNC_MANIFEST_OBJECT_KIND,
-        PROFILE_SYNC_MANIFEST_SCHEMA_VERSION, PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE,
+        DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID, DownloadMetadataSyncPayload,
+        DownloadMetadataUpdate, FileEntrySyncPayload, FileEntryUpdate, IncomingSyncSettingText,
+        PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305, PROFILE_SYNC_CONTENT_KEY_BYTES,
+        PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND, PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
+        PROFILE_SYNC_MANIFEST_OBJECT_KIND, PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+        PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE,
         PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER,
         PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE,
         PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY,
@@ -12843,6 +13093,72 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(device_state_root);
         let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn local_settings_sync_preview_cycle_publishes_and_retains_without_loopback() {
+        let state_root = test_state_root("local-settings-sync-preview-state");
+        let db_root = test_state_root("local-settings-sync-preview-db");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "local-preview-device",
+        )
+        .expect("open local preview database");
+        let sync_secret = SlateSyncSecret::from_bytes([121; SLATE_SYNC_SECRET_BYTES]);
+
+        let report = super::run_local_settings_sync_preview_cycle(
+            &database,
+            DEFAULT_PROFILE_ID,
+            &sync_secret,
+            &state_root,
+        )
+        .expect("run local settings sync preview cycle");
+
+        assert!(report.ready_for_manual_sync);
+        assert_eq!(report.blocked_reason, None);
+        assert_eq!(report.local_device_id, "local-preview-device");
+        assert_eq!(report.provider_id, DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID);
+        assert_eq!(
+            report.provider_endpoint_ref,
+            "slate-fixture-profile-sync://preview/local-preview-provider"
+        );
+        assert_eq!(report.pulled_membership_application_count, 0);
+        assert_eq!(report.selected_retention_provider_count, 1);
+        assert_eq!(report.materialized_retention_provider_count, 1);
+        assert_eq!(report.retained_provider_count, 1);
+        assert_eq!(report.published_step_count, 1);
+        assert!(report.published_object_count > 0);
+        assert_eq!(report.retained_object_count, report.published_object_count);
+        assert_eq!(report.fixture_materialization_issue_count, 0);
+        assert_eq!(report.retention_provider_selection_issue_count, 0);
+        assert_eq!(report.stored_provider_metadata_issue_count, 0);
+        assert!(report.all_fixture_providers_materialized);
+        assert!(report.degraded_before);
+        assert!(!report.degraded_after);
+        assert!(
+            database
+                .get_sync_setting_text(
+                    DEFAULT_PROFILE_ID,
+                    SYNC_DOMAIN_SETTINGS,
+                    super::LOCAL_SETTINGS_SYNC_PREVIEW_SETTING_KEY,
+                )
+                .expect("read preview setting")
+                .is_some()
+        );
+        assert_eq!(
+            database
+                .sync_account_membership_record_count(DEFAULT_PROFILE_ID)
+                .expect("count membership records"),
+            3
+        );
+        let providers = database
+            .storage_providers(DEFAULT_PROFILE_ID, 4)
+            .expect("read preview providers");
+        assert_eq!(providers.len(), 1);
+        assert!(!providers[0].mutable_roots);
+
+        let _ = std::fs::remove_dir_all(state_root);
         let _ = std::fs::remove_dir_all(db_root);
     }
 

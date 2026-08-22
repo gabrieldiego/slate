@@ -42,6 +42,7 @@ run_test slate-storage storage_provider_writes_metadata_sync_change_without_secr
 run_test slate-storage typed_app_sync_domain_poll_decodes_payloads_and_records_cursor
 run_test slate-broadwebd app_domain_metadata_syncs_through_profile_fixture
 run_test slate-profile-sync scheduler_membership_fixture_stored_provider_derives_active_key_from_sync_secret
+run_test slate-profile-sync local_settings_sync_preview_cycle_publishes_and_retains_without_loopback
 
 case "$check_chrome" in
     1 | true | yes)

@@ -299,6 +299,7 @@
         <button id="profile-sync-import">Import pasted key</button>
         <button id="profile-sync-provider">Add local test provider</button>
         <button id="profile-sync-check">Check local sync</button>
+        <button id="profile-sync-run-local">Run local trial</button>
       </div>
     </section>
 
@@ -388,6 +389,7 @@
     const profileSyncImportButton = document.getElementById("profile-sync-import");
     const profileSyncProviderButton = document.getElementById("profile-sync-provider");
     const profileSyncCheckButton = document.getElementById("profile-sync-check");
+    const profileSyncRunLocalButton = document.getElementById("profile-sync-run-local");
     const params = new URLSearchParams(window.location.search);
     const initial = Number.parseFloat(params.get("chrome_zoom"));
     const fallbackImage = new Image();
@@ -813,11 +815,14 @@
         profileSyncStatus.textContent = "Unavailable";
         return;
       }
+      const trialStatus = state.last_trial ?
+        `; last trial retained ${state.last_trial.retained_object_count}/${state.last_trial.published_object_count} objects` :
+        "";
       if (state.last_error) {
         profileSyncStatus.textContent = `Error: ${state.last_error}`;
       } else if (state.has_secret && state.local_sync && state.local_sync.ready_for_manual_sync) {
         profileSyncStatus.textContent =
-          `Ready for ${state.profile} - local device trusted, local sync preflight passed`;
+          `Ready for ${state.profile} - local device trusted, local sync preflight passed${trialStatus}`;
       } else if (state.has_secret) {
         const trusted = state.local_sync && state.local_sync.local_device_trusted ?
           " - local device trusted" :
@@ -828,7 +833,7 @@
         const syncGap = state.local_sync && state.local_sync.blocked_reason ?
           ` - ${state.local_sync.blocked_reason}` :
           "";
-        profileSyncStatus.textContent = `Ready for ${state.profile}${suffix}${syncGap}`;
+        profileSyncStatus.textContent = `Ready for ${state.profile}${suffix}${syncGap}${trialStatus}`;
       } else if (state.metadata_ready) {
         const syncGap = state.local_sync && state.local_sync.blocked_reason ?
           `; ${state.local_sync.blocked_reason}` :
@@ -875,6 +880,10 @@
       fetchProfileSyncState("local-provider");
     }
 
+    function runProfileSyncLocalTrial() {
+      fetchProfileSyncState("run-local");
+    }
+
     function downloadProfileSyncSecret() {
       const text = profileSyncSecret.value.trim();
       if (!text) {
@@ -911,6 +920,7 @@
     profileSyncDownloadButton.addEventListener("click", downloadProfileSyncSecret);
     profileSyncProviderButton.addEventListener("click", addProfileSyncLocalProvider);
     profileSyncCheckButton.addEventListener("click", checkProfileSyncReadiness);
+    profileSyncRunLocalButton.addEventListener("click", runProfileSyncLocalTrial);
     document.getElementById("reset").addEventListener("click", () => {
       setSliderValue(DEFAULT_ZOOM, true);
     });

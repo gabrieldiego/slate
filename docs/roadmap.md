@@ -1340,9 +1340,17 @@ Current baseline:
   publish/pull operation runs. The preview can also seed a local test-provider
   metadata record using a Slate-only fixture endpoint ref, which advances the
   trial without opening sockets, binding loopback ports, or contacting external
-  broadweb services. The first practical trial still stops before encrypted
-  bundle export, QR enrollment, provider materialization, or broadweb
-  publication.
+  broadweb services.
+- The Profile Sync Preview can now run a first local-only trial cycle from
+  `slate://settings`. The action reuses the active session key-file secret,
+  signs the local preview provider into membership as a retention-only
+  authority, writes a harmless preview setting delta, materializes a socketless
+  broadwebd fixture provider, publishes encrypted settings and membership
+  objects, retains them on the simulated provider, and reports the object
+  counts back to the page. This is still a single-device simulation: QR
+  enrollment, handoff-file import/export, real provider daemons, remote-device
+  application, conflict handling, and production cadence policy remain future
+  work.
 - `make profile-sync-boundary-check` now provides a low-memory regression gate
   for the sync work. It runs focused rail-app sync-domain checks, verifies that
   visible rail app sync descriptors match the seeded `slate-settings.db`
@@ -1350,11 +1358,11 @@ Current baseline:
   round-trip behavior, stable signer derivation, profile-bound import,
   secret-backed local signer enrollment, and non-secret local activation
   metadata, then covers local readiness reports, preview provider activation,
-  storage/provider metadata, typed app-domain
-  cursors, the broadwebd app-domain fixture, and the profile-sync scheduler
-  fixture through the build-limits wrapper. Chrome settings watcher coverage is
-  opt-in because compiling `slate-chrome` currently pulls Servo script bindings
-  and exceeded the 2 GiB low-memory profile during verification.
+  storage/provider metadata, typed app-domain cursors, the broadwebd app-domain
+  fixture, the profile-sync scheduler fixture, and the local Profile Sync
+  Preview trial through the build-limits wrapper. Chrome settings watcher
+  coverage is opt-in because compiling `slate-chrome` currently pulls Servo
+  script bindings and exceeded the 2 GiB low-memory profile during verification.
 
 Next:
 
@@ -1377,7 +1385,7 @@ Next:
   through their normal update paths instead of raw database replacement.
 - Extend the Settings-based `Profile Sync Preview` with QR-code rendering,
   platform key-store loading, trusted-device/provider status, encrypted
-  handoff-file export/import, manual local-only sync execution, and app-domain
+  handoff-file export/import, multi-device local trial execution, and app-domain
   status for Settings and Bookmarks before exposing real IPFS/IPNS or
   internet-backed providers.
 - Add runtime policy for when derived manifest, mutable-root, enrollment,

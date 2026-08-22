@@ -828,6 +828,24 @@ fn profile_sync_enroll_device_record(
     }
 }
 
+fn profile_sync_enroll_provider_record(
+    profile: &str,
+    provider_id: &str,
+    membership_epoch: i64,
+    public_key: ProfileSyncDevicePublicKey,
+) -> ProfileSyncMembershipRecord {
+    ProfileSyncMembershipRecord {
+        profile: profile.to_string(),
+        record_id: profile_sync_enroll_device_record_id(membership_epoch, provider_id),
+        schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+        membership_epoch,
+        record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER.to_string(),
+        device_id: provider_id.to_string(),
+        device_public_key: Some(public_key),
+        created_at: membership_epoch,
+    }
+}
+
 fn profile_sync_enroll_device_record_id(membership_epoch: i64, device_id: &str) -> String {
     format!("epoch-{membership_epoch}-enroll-{device_id}")
 }
@@ -2516,6 +2534,12 @@ pub struct ProfileSyncLocalSecretActivationRecord {
     pub account_authority_device_id: String,
     pub local_device_id: String,
     pub membership_applications: Vec<SyncAccountMembershipRecordApplication>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncPreviewProviderActivationRecord {
+    pub provider: StorageProviderRecord,
+    pub membership_application: SyncAccountMembershipRecordApplication,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -6033,6 +6057,57 @@ impl SlateProfileDatabase {
             })?,
             membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
         })?;
+        self.upsert_local_profile_sync_preview_provider(profile, endpoint_ref)
+    }
+
+    pub fn activate_local_profile_sync_preview_provider_from_secret(
+        &self,
+        profile: &str,
+        sync_secret: &SlateSyncSecret,
+        endpoint_ref: Option<String>,
+    ) -> Result<ProfileSyncPreviewProviderActivationRecord, StorageError> {
+        let membership_epoch = DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH;
+        let account_authority_signer = sync_secret
+            .derive_profile_sync_device_signer(
+                profile,
+                DEFAULT_PROFILE_SYNC_ACCOUNT_AUTHORITY_DEVICE_ID,
+                membership_epoch,
+            )
+            .map_err(profile_sync_membership_record_error)?;
+        let provider_signer = sync_secret
+            .derive_profile_sync_device_signer(
+                profile,
+                DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
+                membership_epoch,
+            )
+            .map_err(profile_sync_membership_record_error)?;
+        let provider_record = profile_sync_enroll_provider_record(
+            profile,
+            DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
+            membership_epoch,
+            provider_signer
+                .public_key()
+                .map_err(profile_sync_membership_record_error)?,
+        );
+        let signed_provider_record = signed_profile_sync_membership_record_bytes(
+            &account_authority_signer,
+            &provider_record,
+        )?;
+        let membership_application =
+            self.apply_signed_sync_account_membership_record(signed_provider_record.as_slice())?;
+        let provider = self.upsert_local_profile_sync_preview_provider(profile, endpoint_ref)?;
+
+        Ok(ProfileSyncPreviewProviderActivationRecord {
+            provider,
+            membership_application,
+        })
+    }
+
+    fn upsert_local_profile_sync_preview_provider(
+        &self,
+        profile: &str,
+        endpoint_ref: Option<String>,
+    ) -> Result<StorageProviderRecord, StorageError> {
         self.upsert_storage_provider(&StorageProviderUpdate {
             profile: profile.to_string(),
             provider_id: DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID.to_string(),
@@ -6043,7 +6118,7 @@ impl SlateProfileDatabase {
             connectivity: true,
             object_transfer: true,
             availability: true,
-            mutable_roots: true,
+            mutable_roots: false,
             quota_bytes: None,
             max_retained_objects: Some(128),
             pinning_policy: Some("manual".to_string()),
@@ -16427,6 +16502,7 @@ mod tests {
             provider.endpoint_ref.as_deref(),
             Some("slate-fixture-profile-sync://preview/local-preview-provider")
         );
+        assert!(!provider.mutable_roots);
         assert!(report.metadata_ready);
         assert!(report.local_device_trusted);
         assert!(report.account_authority_trusted);
