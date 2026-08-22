@@ -357,10 +357,17 @@
         autocomplete="off"
         aria-label="Slate Sync Secret key file"
       ></textarea>
+      <input
+        id="profile-sync-secret-file"
+        class="profile-sync-file"
+        type="file"
+        accept="application/json,.json"
+        aria-label="Slate Sync Secret key file import"
+      />
       <div class="actions">
         <button id="profile-sync-create" class="primary">Create key file</button>
         <button id="profile-sync-download">Download key file</button>
-        <button id="profile-sync-import">Import pasted key</button>
+        <button id="profile-sync-import">Import key</button>
         <button id="profile-sync-provider">Add local test provider</button>
         <button id="profile-sync-check">Check local sync</button>
         <button id="profile-sync-run-local">Run local trial</button>
@@ -496,6 +503,7 @@
     const profileSyncStatus = document.getElementById("profile-sync-status");
     const profileSyncDetails = document.getElementById("profile-sync-details");
     const profileSyncSecret = document.getElementById("profile-sync-secret");
+    const profileSyncSecretFile = document.getElementById("profile-sync-secret-file");
     const profileSyncCreateButton = document.getElementById("profile-sync-create");
     const profileSyncDownloadButton = document.getElementById("profile-sync-download");
     const profileSyncImportButton = document.getElementById("profile-sync-import");
@@ -1134,7 +1142,16 @@
     }
 
     function importProfileSyncSecret() {
-      fetchProfileSyncState("import", { secret: profileSyncSecret.value.trim() });
+      readSelectedProfileSyncFile(profileSyncSecretFile, "key file").then((fileText) => {
+        if (fileText) {
+          profileSyncSecret.value = fileText.trim();
+        }
+        return fetchProfileSyncState("import", {
+          secret: profileSyncSecret.value.trim()
+        });
+      }).catch((error) => {
+        setProfileSyncState({ last_error: String(error) });
+      });
     }
 
     function checkProfileSyncReadiness() {
@@ -1158,7 +1175,7 @@
     }
 
     function importProfileSyncDeviceRequest() {
-      readSelectedProfileSyncDeviceRequestFile().then((fileText) => {
+      readSelectedProfileSyncFile(profileSyncDeviceRequestFile, "device request").then((fileText) => {
         if (fileText) {
           profileSyncDeviceRequest.value = fileText.trim();
         }
@@ -1177,7 +1194,7 @@
     }
 
     function importProfileSyncEnrollmentBundle() {
-      readSelectedProfileSyncEnrollmentFile().then((fileText) => {
+      readSelectedProfileSyncFile(profileSyncEnrollmentFile, "enrollment file").then((fileText) => {
         if (fileText) {
           profileSyncEnrollment.value = fileText.trim();
         }
@@ -1189,8 +1206,8 @@
       });
     }
 
-    function readSelectedProfileSyncDeviceRequestFile() {
-      const file = profileSyncDeviceRequestFile.files && profileSyncDeviceRequestFile.files[0];
+    function readSelectedProfileSyncFile(input, label) {
+      const file = input.files && input.files[0];
       if (!file) {
         return Promise.resolve(null);
       }
@@ -1200,23 +1217,7 @@
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.addEventListener("load", () => resolve(String(reader.result || "")));
-        reader.addEventListener("error", () => reject(reader.error || new Error("Could not read device request file")));
-        reader.readAsText(file);
-      });
-    }
-
-    function readSelectedProfileSyncEnrollmentFile() {
-      const file = profileSyncEnrollmentFile.files && profileSyncEnrollmentFile.files[0];
-      if (!file) {
-        return Promise.resolve(null);
-      }
-      if (file.text) {
-        return file.text();
-      }
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.addEventListener("load", () => resolve(String(reader.result || "")));
-        reader.addEventListener("error", () => reject(reader.error || new Error("Could not read enrollment file")));
+        reader.addEventListener("error", () => reject(reader.error || new Error(`Could not read ${label}`)));
         reader.readAsText(file);
       });
     }
@@ -1299,11 +1300,22 @@
     profileSyncCheckButton.addEventListener("click", checkProfileSyncReadiness);
     profileSyncRunLocalButton.addEventListener("click", runProfileSyncLocalTrial);
     profileSyncRunLocalTwoDeviceButton.addEventListener("click", runProfileSyncLocalTwoDeviceTrial);
+    profileSyncSecretFile.addEventListener("change", () => {
+      readSelectedProfileSyncFile(profileSyncSecretFile, "key file")
+        .then((fileText) => {
+          if (fileText) {
+            profileSyncSecret.value = fileText.trim();
+          }
+        })
+        .catch((error) => {
+          setProfileSyncState({ last_error: String(error) });
+        });
+    });
     profileSyncDeviceRequestCreateButton.addEventListener("click", createProfileSyncDeviceRequest);
     profileSyncDeviceRequestImportButton.addEventListener("click", importProfileSyncDeviceRequest);
     profileSyncDeviceRequestDownloadButton.addEventListener("click", downloadProfileSyncDeviceRequest);
     profileSyncDeviceRequestFile.addEventListener("change", () => {
-      readSelectedProfileSyncDeviceRequestFile()
+      readSelectedProfileSyncFile(profileSyncDeviceRequestFile, "device request")
         .then((fileText) => {
           if (fileText) {
             profileSyncDeviceRequest.value = fileText.trim();
@@ -1317,7 +1329,7 @@
     profileSyncEnrollmentImportButton.addEventListener("click", importProfileSyncEnrollmentBundle);
     profileSyncEnrollmentDownloadButton.addEventListener("click", downloadProfileSyncEnrollmentBundle);
     profileSyncEnrollmentFile.addEventListener("change", () => {
-      readSelectedProfileSyncEnrollmentFile()
+      readSelectedProfileSyncFile(profileSyncEnrollmentFile, "enrollment file")
         .then((fileText) => {
           if (fileText) {
             profileSyncEnrollment.value = fileText.trim();

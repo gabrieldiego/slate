@@ -1324,10 +1324,10 @@ Current baseline:
   output redacts the encoded secret.
 - `slate://settings` now includes a first session-only Profile Sync Preview.
   It can create a Slate Sync Secret key-file envelope, show it for copy/save,
-  download it as `slate-sync-secret.json`, and import pasted envelope contents
-  after profile-bound validation. This is deliberately local and rough: it does
-  not persist the root secret, render QR codes yet, or contact broadweb
-  providers.
+  download it as `slate-sync-secret.json`, and import selected or pasted
+  envelope contents after profile-bound validation. This is deliberately local
+  and rough: it does not persist the root secret, render QR codes yet, or
+  contact broadweb providers.
 - Creating or importing a Profile Sync Preview key file now activates local
   non-secret sync metadata in `slate-settings.db`: the local device record,
   default app sync domains, the active content-key epoch id, and trusted public

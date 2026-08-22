@@ -2285,6 +2285,7 @@ mod tests {
         assert!(settings_page.contains("Profile Sync Preview"));
         assert!(settings_page.contains("id=\"profile-sync-details\""));
         assert!(settings_page.contains("id=\"profile-sync-secret\""));
+        assert!(settings_page.contains("id=\"profile-sync-secret-file\""));
         assert!(settings_page.contains("id=\"profile-sync-create\""));
         assert!(settings_page.contains("id=\"profile-sync-download\""));
         assert!(settings_page.contains("id=\"profile-sync-import\""));
