@@ -894,7 +894,10 @@ Current baseline:
   `slate-settings.db` membership history and received through the same
   in-process fixture transport. It is non-authoritative discovery metadata:
   each listed object is checked against its signed membership payload before
-  storage applies enrollment or revocation.
+  storage applies enrollment or revocation. Applying a pulled single membership
+  record or aggregate membership log now advances its verified root in the same
+  SQLite transaction as the trust-state mutation, preventing root/trust drift
+  after a failed local write.
 - A membership-aware settings runner can now pull and apply the membership log
   before the existing settings sync cycle, so local fixture devices can be
   enrolled and then immediately use trusted device-head settings sync without

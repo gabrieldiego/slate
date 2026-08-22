@@ -2669,9 +2669,13 @@ impl<'a> BroadwebdProfileSyncObjectSource<'a> {
         }
 
         let signed_record = self.get_profile_sync_object(profile, object_id.as_str())?;
-        let application =
-            database.apply_signed_sync_account_membership_record(signed_record.bytes.as_slice())?;
-        let root = database.set_profile_sync_root(profile, root_id, object_id.as_str())?;
+        let (root, application) = database
+            .apply_signed_sync_account_membership_record_and_set_profile_sync_root(
+                profile,
+                root_id,
+                object_id.as_str(),
+                signed_record.bytes.as_slice(),
+            )?;
         Ok(ProfileSyncMembershipRecordPullStatus::Applied { root, application })
     }
 
@@ -2706,9 +2710,13 @@ impl<'a> BroadwebdProfileSyncObjectSource<'a> {
             validate_membership_log_entry_object(profile, entry, signed_record.bytes.as_slice())?;
             signed_records.push(signed_record.bytes);
         }
-        let applications =
-            database.apply_signed_sync_account_membership_records(signed_records.as_slice())?;
-        let root = database.set_profile_sync_root(profile, root_id, object_id.as_str())?;
+        let (root, applications) = database
+            .apply_signed_sync_account_membership_records_and_set_profile_sync_root(
+                profile,
+                root_id,
+                object_id.as_str(),
+                signed_records.as_slice(),
+            )?;
         Ok(ProfileSyncMembershipLogPullStatus::Applied {
             root,
             log,

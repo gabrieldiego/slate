@@ -276,7 +276,10 @@ signed record object before handing the batch to `slate-settings.db`; storage
 then applies the whole batch inside one SQLite transaction. If a later record
 fails authorization, earlier records from that log roll back as well, so a bad
 distributed membership log cannot leave partial trust mutations behind while
-the membership-log root stays unadvanced.
+the membership-log root stays unadvanced. The pull bridge also advances the
+single-record membership root or aggregate membership-log root inside the same
+transaction that applies the signed membership payloads, so local trust state
+and the locally verified distributed root move together.
 
 The active-key pull path also exposes an idempotent root-status helper for sync
 polling. It resolves the published root first and reports missing roots,

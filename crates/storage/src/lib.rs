@@ -4548,6 +4548,33 @@ impl SlateProfileDatabase {
             .ok_or_else(|| self.database_error(rusqlite::Error::QueryReturnedNoRows))
     }
 
+    pub fn apply_signed_sync_account_membership_record_and_set_profile_sync_root(
+        &self,
+        profile: &str,
+        root_id: &str,
+        object_id: &str,
+        signed_record: &[u8],
+    ) -> Result<
+        (
+            ProfileSyncRootRecord,
+            SyncAccountMembershipRecordApplication,
+        ),
+        StorageError,
+    > {
+        let signed_records = [signed_record.to_vec()];
+        let (root, mut applications) = self
+            .apply_signed_sync_account_membership_records_and_set_profile_sync_root(
+                profile,
+                root_id,
+                object_id,
+                &signed_records,
+            )?;
+        let application = applications
+            .pop()
+            .ok_or_else(|| self.database_error(rusqlite::Error::QueryReturnedNoRows))?;
+        Ok((root, application))
+    }
+
     pub fn apply_signed_sync_account_membership_records(
         &self,
         signed_records: &[Vec<u8>],
@@ -4579,6 +4606,50 @@ impl SlateProfileDatabase {
             .commit()
             .map_err(|source| self.database_error(source))?;
         Ok(applications)
+    }
+
+    pub fn apply_signed_sync_account_membership_records_and_set_profile_sync_root(
+        &self,
+        profile: &str,
+        root_id: &str,
+        object_id: &str,
+        signed_records: &[Vec<u8>],
+    ) -> Result<
+        (
+            ProfileSyncRootRecord,
+            Vec<SyncAccountMembershipRecordApplication>,
+        ),
+        StorageError,
+    > {
+        let decoded_records = signed_records
+            .iter()
+            .map(|signed_record| {
+                decode_signed_profile_sync_membership_record(signed_record.as_slice())
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let mut applications = Vec::with_capacity(signed_records.len());
+        for (signed_record, (signed_object, membership_record)) in
+            signed_records.iter().zip(decoded_records.iter())
+        {
+            applications.push(
+                self.apply_decoded_sync_account_membership_record_in_transaction(
+                    &transaction,
+                    signed_object,
+                    membership_record,
+                    signed_record.as_slice(),
+                )?,
+            );
+        }
+        let root =
+            self.set_profile_sync_root_in_transaction(&transaction, profile, root_id, object_id)?;
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok((root, applications))
     }
 
     fn apply_decoded_sync_account_membership_record_in_transaction(
@@ -6741,14 +6812,32 @@ impl SlateProfileDatabase {
         root_id: &str,
         object_id: &str,
     ) -> Result<ProfileSyncRootRecord, StorageError> {
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let root =
+            self.set_profile_sync_root_in_transaction(&transaction, profile, root_id, object_id)?;
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(root)
+    }
+
+    fn set_profile_sync_root_in_transaction(
+        &self,
+        transaction: &rusqlite::Transaction<'_>,
+        profile: &str,
+        root_id: &str,
+        object_id: &str,
+    ) -> Result<ProfileSyncRootRecord, StorageError> {
         if root_id.is_empty() {
             return Err(StorageError::InvalidSyncRootId(root_id.to_string()));
         }
 
-        let connection = self.connection()?;
         let now = unix_time_seconds()?;
         let key = profile_sync_root_key(root_id);
-        connection
+        transaction
             .execute(
                 "INSERT INTO sync_state (profile, key, value, updated_at)
                  VALUES (?1, ?2, ?3, ?4)
@@ -13386,6 +13475,84 @@ mod tests {
                 .unwrap()
                 .expect("device b remains present after conflicting same-epoch record")
                 .trusted
+        );
+    }
+
+    #[test]
+    fn signed_sync_account_membership_records_and_root_update_are_atomic() {
+        let database_path =
+            test_dir("sync-account-membership-root-atomic").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let signer = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let enroll = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-device-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-a".to_string(),
+            device_public_key: Some(signer.public_key().unwrap()),
+            created_at: 10,
+        };
+        let signed_enroll = signed_membership_record_bytes(&signer, &enroll);
+        let signed_records = [signed_enroll.clone()];
+
+        let error = database
+            .apply_signed_sync_account_membership_records_and_set_profile_sync_root(
+                DEFAULT_PROFILE_ID,
+                "",
+                "membership-log-object-1",
+                &signed_records,
+            )
+            .unwrap_err();
+
+        assert!(matches!(error, StorageError::InvalidSyncRootId(root_id) if root_id.is_empty()));
+        assert!(
+            database
+                .sync_account_membership_record(DEFAULT_PROFILE_ID, "epoch-1-enroll-device-a")
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "device-a")
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            database
+                .profile_sync_roots(DEFAULT_PROFILE_ID)
+                .unwrap()
+                .is_empty()
+        );
+
+        let (root, applications) = database
+            .apply_signed_sync_account_membership_records_and_set_profile_sync_root(
+                DEFAULT_PROFILE_ID,
+                "account/membership/log",
+                "membership-log-object-1",
+                &signed_records,
+            )
+            .unwrap();
+
+        assert_eq!(root.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(root.root_id, "account/membership/log");
+        assert_eq!(root.object_id, "membership-log-object-1");
+        assert_eq!(applications.len(), 1);
+        assert!(applications[0].applied);
+        assert!(
+            applications[0]
+                .device_key
+                .as_ref()
+                .expect("trusted device key")
+                .trusted
+        );
+        assert_eq!(
+            database
+                .profile_sync_root(DEFAULT_PROFILE_ID, "account/membership/log")
+                .unwrap()
+                .expect("membership log root"),
+            root
         );
     }
 
