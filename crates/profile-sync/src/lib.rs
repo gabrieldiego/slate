@@ -59,6 +59,8 @@ pub const LOCAL_SETTINGS_SYNC_PREVIEW_SETTING_KEY: &str = "profile_sync.preview.
 pub const LOCAL_SETTINGS_SYNC_PREVIEW_REMOTE_SETTING_KEY: &str =
     "profile_sync.preview.two_device_last_run";
 pub const LOCAL_SETTINGS_SYNC_PREVIEW_RECEIVER_DEVICE_ID: &str = "local-preview-receiver";
+pub const PROFILE_SYNC_DEFERRED_PROVIDER_PROTOCOL: &str = "provider";
+pub const PROFILE_SYNC_DEFERRED_IROH_NODE_PROTOCOL: &str = "iroh-node";
 const PROFILE_SYNC_PROVIDER_MULTIADDR_PRIVACY_BOUNDARY: &str =
     "profile-sync provider endpoint; no browser navigation or public gateway fallback";
 
@@ -3119,6 +3121,22 @@ impl SettingsSyncProtocolProviderMaterializerPolicy {
         }
     }
 
+    pub fn socketless_fixture_models() -> Self {
+        Self::new(
+            true,
+            vec![
+                PROFILE_SYNC_DEFERRED_PROVIDER_PROTOCOL.to_string(),
+                PROFILE_SYNC_DEFERRED_IROH_NODE_PROTOCOL.to_string(),
+            ],
+        )
+    }
+
+    pub fn supports_deferred_protocol(&self, protocol: &str) -> bool {
+        self.supported_deferred_protocols
+            .iter()
+            .any(|supported| supported == protocol)
+    }
+
     pub fn supports_target(
         &self,
         target: &SettingsSyncProtocolProviderMaterializationTarget,
@@ -3129,7 +3147,7 @@ impl SettingsSyncProtocolProviderMaterializerPolicy {
             }
             SettingsSyncProtocolProviderMaterializationTargetKind::DeferredProtocol {
                 protocol,
-            } => self.supported_deferred_protocols.contains(protocol),
+            } => self.supports_deferred_protocol(protocol),
         }
     }
 }
@@ -5103,7 +5121,10 @@ struct DeferredProtocolEndpoint {
 }
 
 fn parse_deferred_protocol_endpoint(endpoint_ref: &str) -> Option<DeferredProtocolEndpoint> {
-    for (prefix, protocol) in [("provider:", "provider"), ("iroh-node:", "iroh-node")] {
+    for (prefix, protocol) in [
+        ("provider:", PROFILE_SYNC_DEFERRED_PROVIDER_PROTOCOL),
+        ("iroh-node:", PROFILE_SYNC_DEFERRED_IROH_NODE_PROTOCOL),
+    ] {
         if let Some(target) = endpoint_ref.strip_prefix(prefix) {
             if is_endpoint_token(target) {
                 return Some(DeferredProtocolEndpoint {
@@ -20751,6 +20772,206 @@ mod tests {
                 .cycle
                 .after_health
                 .local_device_head_root_health
+                .online_retaining_providers,
+            2
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn scheduler_runs_with_iroh_node_protocol_materialized_provider() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("scheduler-iroh-provider-device");
+        let provider_state_root = test_state_root("scheduler-iroh-provider-provider");
+        let db_root = test_state_root("scheduler-iroh-provider-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-iroh-a",
+            )
+            .expect("start in-process Iroh scheduler device daemon");
+        let provider_id = "iroh-materialized-provider";
+        let provider_endpoint_ref = "iroh-node:profile-sync-node-a";
+        let provider_daemon = network
+            .daemon_for_provider_with_roles(
+                &provider_state_root,
+                ResourceBudget::default(),
+                provider_id,
+                "socketless-iroh-model-provider",
+                BroadwebdProfileSyncProviderRoles::availability_provider(),
+            )
+            .expect("start socketless Iroh-modeled provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-scheduler-iroh-a",
+        )
+        .expect("open Iroh scheduler settings database");
+        let profile = "schedulerirohproviderprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([93; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-scheduler-iroh-a")
+            .expect("generate Iroh scheduler local signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register Iroh scheduler local trusted public key");
+        authorize_test_storage_provider(&database, profile, provider_id);
+        database
+            .upsert_storage_provider(&StorageProviderUpdate {
+                endpoint_ref: Some(provider_endpoint_ref.to_string()),
+                ..test_storage_provider_update(
+                    &network,
+                    profile,
+                    provider_id,
+                    "socketless-iroh-model-provider",
+                    "Iroh-modeled profile-sync provider",
+                    true,
+                    true,
+                    true,
+                )
+            })
+            .expect("write Iroh stored provider metadata");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write Iroh scheduler local setting");
+
+        let materializer = super::SettingsSyncSocketlessProtocolProviderMaterializer::new(
+            super::SettingsSyncProtocolProviderMaterializerPolicy::socketless_fixture_models(),
+            vec![super::SettingsSyncProtocolProviderDaemon::new(
+                provider_id,
+                provider_endpoint_ref,
+                &provider_daemon,
+            )],
+        );
+        let config = SettingsSyncSchedulerConfig::new(
+            profile,
+            settings_root_id,
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
+        );
+        let scheduler = BroadwebdSettingsSyncScheduler::new(&device_daemon);
+        let latest_revision_before_preview = database
+            .latest_sync_revision(profile)
+            .expect("read Iroh preview latest revision");
+        assert!(
+            database
+                .profile_sync_roots(profile)
+                .expect("read roots before Iroh materializer preview")
+                .is_empty()
+        );
+
+        let preview = scheduler
+            .plan_once_with_stored_protocol_materializer_retention_provider_handles(
+                &database,
+                &config,
+                &signer,
+                4,
+                &materializer,
+            )
+            .expect("preview Iroh materialized stored provider");
+
+        assert_eq!(preview.selected_retention_provider_count(), 1);
+        assert!(preview.requires_protocol_materializer());
+        assert!(!preview.has_missing_protocol_endpoint());
+        assert!(!preview.has_fail_closed_protocol_endpoint());
+        assert!(preview.ready_for_protocol_materialization());
+        assert_eq!(preview.protocol_materialized_provider_count(), 1);
+        assert_eq!(preview.protocol_blocked_provider_count(), 0);
+        assert!(preview.all_protocol_providers_materialized());
+        assert_eq!(preview.materialized_retention_provider_count(), 1);
+        assert!(preview.all_selected_providers_materialized());
+        assert_eq!(
+            preview
+                .selected_protocol_materialization_plan()
+                .deferred_protocol_batches(),
+            vec![
+                super::SettingsSyncSelectedDeferredProtocolMaterializationBatch {
+                    protocol: super::PROFILE_SYNC_DEFERRED_IROH_NODE_PROTOCOL.to_string(),
+                    requests: vec![
+                        super::SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+                            provider_id: provider_id.to_string(),
+                            protocol: super::PROFILE_SYNC_DEFERRED_IROH_NODE_PROTOCOL.to_string(),
+                            target: "profile-sync-node-a".to_string(),
+                        },
+                    ],
+                }
+            ]
+        );
+        assert_eq!(
+            database
+                .latest_sync_revision(profile)
+                .expect("read latest revision after Iroh materializer preview"),
+            latest_revision_before_preview
+        );
+        assert!(
+            database
+                .profile_sync_roots(profile)
+                .expect("read roots after Iroh materializer preview")
+                .is_empty()
+        );
+
+        let run = scheduler
+            .run_once_with_stored_protocol_materializer_retention_provider_handles(
+                &database,
+                &config,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                4,
+                &materializer,
+            )
+            .expect("scheduler run uses socketless Iroh-modeled stored provider");
+
+        assert_eq!(run.protocol_materialized_provider_count(), 1);
+        assert_eq!(run.protocol_blocked_provider_count(), 0);
+        assert!(run.all_protocol_providers_materialized());
+        assert_eq!(run.selected_retention_provider_count(), 1);
+        assert_eq!(run.materialized_retention_provider_count(), 1);
+        assert_eq!(run.retained_provider_count(), 1);
+        assert_eq!(run.run.cycle.cycle.published_step_count(), 1);
+        assert_eq!(run.run.cycle.retention.len(), 1);
+        assert_eq!(
+            run.run.cycle.retention[0].object_count(),
+            run.run.cycle.retained_object_ids.len()
+        );
+        assert_eq!(
+            run.run.cycle.retention[0].retained_count(),
+            run.run.cycle.retained_object_ids.len()
+        );
+        assert_eq!(
+            run.run.cycle.retention[0].available_count(),
+            run.run.cycle.retained_object_ids.len()
+        );
+        assert_eq!(run.run.cycle.retention_issue_count(), 0);
+        assert!(!run.run.cycle.has_retention_issue());
+        assert_eq!(
+            run.selected_protocol_materialization_plan()
+                .deferred_protocol_requests,
+            vec![
+                super::SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+                    provider_id: provider_id.to_string(),
+                    protocol: super::PROFILE_SYNC_DEFERRED_IROH_NODE_PROTOCOL.to_string(),
+                    target: "profile-sync-node-a".to_string(),
+                }
+            ]
+        );
+        assert!(
+            run.run
+                .cycle
+                .after_health
+                .settings_root_health
+                .latest_object_available
+        );
+        assert_eq!(
+            run.run
+                .cycle
+                .after_health
+                .settings_root_health
                 .online_retaining_providers,
             2
         );

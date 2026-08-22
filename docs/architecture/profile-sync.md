@@ -967,6 +967,14 @@ Selected endpoint buckets are also folded into a compact materialization
 preview: fixture-ready providers can run against local in-process handles,
 missing, multiaddr, and deferred-protocol providers remain pending
 materialization work, and unsupported providers fail closed.
+The first `iroh-node:<node>` checkpoint stays at this materializer boundary:
+tests treat the endpoint as a deferred protocol target, materialize it through
+a caller-supplied socketless provider daemon, verify that read-only previews do
+not mutate `slate-settings.db`, and then retain encrypted settings objects
+through the same scheduler path. This is an internal model of rendezvous and
+transfer behavior, not a live Iroh adapter; a production adapter must replace
+only the socket handoff while preserving the same scheduler and provider-role
+contracts.
 For selected synthetic fixture endpoints, the plan also exposes
 materialization targets carrying the provider id, fixture network id, and
 endpoint ref. This lets local-only test fixtures bridge from stored metadata to

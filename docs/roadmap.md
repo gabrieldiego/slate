@@ -381,6 +381,12 @@ Current baseline:
   objects get model-derived fixture CIDs, retention is verified through Kubo
   `pin/ls`, and settings root storage no longer depends on pre-scripted object
   identifiers.
+- The stored-provider scheduler also has a first Iroh-shaped fixture model for
+  `iroh-node:<node>` endpoint refs. The run materializes the selected provider
+  through the caller-supplied socketless protocol materializer, verifies the
+  preview path leaves `slate-settings.db` roots unchanged, and retains the
+  published settings objects through the in-process provider without loopback
+  sockets or a live Iroh network.
 - The same bridge now publishes a real signed encrypted settings tail manifest
   through one Kubo fixture daemon, then verifies the manifest and tail bytes
   fetched by a second daemon through the shared stateful Kubo/IPNS model. The
@@ -1450,8 +1456,9 @@ Current baseline:
   and non-secret local activation metadata, then covers local readiness reports,
   preview provider activation, storage/provider metadata, raw and typed
   app-domain cursors, the broadwebd app-domain fixture, the profile-sync
-  scheduler fixture, and both local Profile Sync Preview trials through the
-  build-limits wrapper. Because compiling `slate-chrome` currently pulls Servo
+  scheduler fixture, the Iroh-shaped socketless materializer fixture, and both
+  local Profile Sync Preview trials through the build-limits wrapper. Because
+  compiling `slate-chrome` currently pulls Servo
   script bindings and exceeded the 2 GiB low-memory profile during
   verification, the gate also performs static chrome/resource assertions for
   the Settings handoff routes and controls while full chrome watcher coverage
