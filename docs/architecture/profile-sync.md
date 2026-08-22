@@ -387,6 +387,13 @@ require the manifest membership epoch to match the head epoch, require a
 matching manifest frontier for the head device, sequence, and latest change
 object, and apply the settings manifest without resolving the global settings
 root.
+The broadwebd receive bridge uses the stronger combined path: it verifies the
+device head and its referenced manifest object set before reporting unchanged,
+and only reports unchanged when both the per-device head root and the manifest
+settings root are already current. Otherwise, storage applies the manifest and
+advances the per-device head root in one `slate-settings.db` transaction, so a
+malformed tail cannot leave the device-head root advanced while the manifest is
+unapplied.
 Publishing per-device heads is now part of the `slate-profile-sync` runtime
 bridge: it validates the storage-owned head payload against the target
 per-device root and signing key, signs and retains the encrypted `device-head`
@@ -642,10 +649,10 @@ Membership-aware runner and scheduler runs also check that local publication
 plan first and refuse oversized local history before pulling remote membership,
 publishing settings objects, or advancing roots.
 The broadwebd source bridge can also run the receive side for one trusted
-device head: resolve and verify the head, record the verified head root in
-`slate-settings.db`, apply the referenced settings manifest when the head is
-new, and return an unchanged status when the stored head root is already
-current.
+device head: resolve and verify the head, verify the referenced settings
+manifest, apply that manifest with the per-device head root in one
+`slate-settings.db` transaction when either root is stale, and return an
+unchanged status only when both roots are already current.
 The first composed local publish helper emits a complete settings snapshot,
 publishes the snapshot manifest, publishes the local per-device head pointing at
 that manifest, and records both published roots locally. This favors a complete

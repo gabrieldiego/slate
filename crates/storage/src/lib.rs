@@ -5902,6 +5902,34 @@ impl SlateProfileDatabase {
         snapshot: Option<&VerifiedProfileSyncSettingsSnapshot>,
         tail_changes: &[VerifiedProfileSyncSettingsTailChange],
     ) -> Result<ProfileSyncSettingsManifestApplication, StorageError> {
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let now = unix_time_seconds()?;
+        let application = self.apply_verified_settings_manifest_in_transaction(
+            &transaction,
+            manifest_object_id,
+            manifest,
+            snapshot,
+            tail_changes,
+            now,
+        )?;
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(application)
+    }
+
+    fn apply_verified_settings_manifest_in_transaction(
+        &self,
+        transaction: &rusqlite::Transaction<'_>,
+        manifest_object_id: &str,
+        manifest: &ProfileSyncManifest,
+        snapshot: Option<&VerifiedProfileSyncSettingsSnapshot>,
+        tail_changes: &[VerifiedProfileSyncSettingsTailChange],
+        now: i64,
+    ) -> Result<ProfileSyncSettingsManifestApplication, StorageError> {
         validate_settings_manifest_application(manifest, snapshot, tail_changes)?;
 
         let mut sync_object_ids =
@@ -5916,18 +5944,13 @@ impl SlateProfileDatabase {
                 .map(|tail_change| tail_change.object_id.clone()),
         );
 
-        let mut connection = self.connection()?;
-        let transaction = connection
-            .transaction()
-            .map_err(|source| self.database_error(source))?;
-        let now = unix_time_seconds()?;
         let mut snapshot_record = None;
         let mut snapshot_changes = Vec::new();
         if let Some(snapshot) = snapshot {
             snapshot_changes =
-                self.apply_settings_snapshot_in_transaction(&transaction, &snapshot.snapshot, now)?;
+                self.apply_settings_snapshot_in_transaction(transaction, &snapshot.snapshot, now)?;
             snapshot_record = Some(self.record_sync_snapshot_in_transaction(
-                &transaction,
+                transaction,
                 &SyncSnapshotRegistration {
                     profile: manifest.profile.clone(),
                     snapshot_id: settings_sync_snapshot_id(snapshot.snapshot.covers_revision),
@@ -5942,20 +5965,17 @@ impl SlateProfileDatabase {
         let mut applied_tail_changes = Vec::new();
         for tail_change in tail_changes {
             applied_tail_changes.push(
-                apply_sync_setting_text_in_transaction(&transaction, &tail_change.change, now)
+                apply_sync_setting_text_in_transaction(transaction, &tail_change.change, now)
                     .map_err(|source| self.database_error(source))?,
             );
         }
 
         self.set_profile_sync_root_in_transaction(
-            &transaction,
+            transaction,
             manifest.profile.as_str(),
             manifest.root_id.as_str(),
             manifest_object_id,
         )?;
-        transaction
-            .commit()
-            .map_err(|source| self.database_error(source))?;
 
         Ok(ProfileSyncSettingsManifestApplication {
             profile: manifest.profile.clone(),
@@ -5978,6 +5998,40 @@ impl SlateProfileDatabase {
             objects.snapshot.as_ref(),
             objects.tail_changes.as_slice(),
         )
+    }
+
+    pub fn apply_verified_settings_manifest_objects_and_set_profile_sync_root(
+        &self,
+        objects: &VerifiedProfileSyncSettingsManifestObjects,
+        profile: &str,
+        root_id: &str,
+        object_id: &str,
+    ) -> Result<
+        (
+            ProfileSyncRootRecord,
+            ProfileSyncSettingsManifestApplication,
+        ),
+        StorageError,
+    > {
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let now = unix_time_seconds()?;
+        let application = self.apply_verified_settings_manifest_in_transaction(
+            &transaction,
+            objects.manifest_object_id.as_str(),
+            &objects.manifest,
+            objects.snapshot.as_ref(),
+            objects.tail_changes.as_slice(),
+            now,
+        )?;
+        let root =
+            self.set_profile_sync_root_in_transaction(&transaction, profile, root_id, object_id)?;
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok((root, application))
     }
 
     pub fn apply_verified_settings_manifest_candidates(

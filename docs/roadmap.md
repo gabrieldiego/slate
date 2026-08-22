@@ -775,15 +775,17 @@ Current baseline:
   include a matching frontier for the head device, sequence, and latest change
   object before it can be consumed.
 - `slate-profile-sync` can now run the broadwebd-backed trusted device-head
-  receive step: resolve and verify a per-device head, record the verified head
-  root in `slate-settings.db`, apply the referenced settings manifest when the
-  head changed, and report unchanged heads without reapplying.
+  receive step: resolve and verify a per-device head, verify the referenced
+  settings manifest, apply that manifest with the verified head root in one
+  `slate-settings.db` transaction when either root is stale, and report
+  unchanged only when both roots are already current.
 - The local two-device broadwebd fixture now publishes and pulls a trusted
   signed encrypted device head through an in-process per-device root. The test
   retains the head object on the receiving provider before the publishing
-  provider goes offline, records the verified head root in `slate-settings.db`,
-  verifies the unchanged-root short circuit on the next pull, and follows the
-  head to apply the referenced settings manifest while the publisher is offline.
+  provider goes offline, records the verified head root in `slate-settings.db`
+  together with the referenced manifest application, verifies unchanged status
+  on the next pull, and follows the head to apply the referenced settings
+  manifest while the publisher is offline.
 - `slate-settings.db` now has typed snapshot metadata APIs for recording
   encrypted backend object ids, covered revisions, included domains, and latest
   snapshot lookup. This is metadata only; snapshot payloads stay in encrypted

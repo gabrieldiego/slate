@@ -23,15 +23,14 @@ use slate_storage::{
     PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, PROFILE_SYNC_MANIFEST_OBJECT_KIND,
     PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND, PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND,
     PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION, ProfileSyncContentKey, ProfileSyncDeviceHead,
-    ProfileSyncDeviceHeadPullRecordStatus, ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner,
-    ProfileSyncManifest, ProfileSyncMembershipRecord, ProfileSyncObjectBytes,
-    ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
-    ProfileSyncRootCandidate as StorageProfileSyncRootCandidate, ProfileSyncRootRecord,
-    ProfileSyncSettingsCandidatePullApplyStatus, ProfileSyncSettingsManifestApplication,
-    ProfileSyncSettingsSnapshot, ProfileSyncSettingsSnapshotPublication,
-    ProfileSyncSettingsTailChangePublication, ProfileSyncTrustedPullApplyError,
-    SYNC_DOMAIN_SETTINGS, SignedSyncObject, SlateProfileDatabase, StorageError,
-    StorageProviderRecord, SyncAccountMembershipRecordApplication, SyncChangeRecord,
+    ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner, ProfileSyncManifest,
+    ProfileSyncMembershipRecord, ProfileSyncObjectBytes, ProfileSyncObjectSource,
+    ProfileSyncRetentionPolicy, ProfileSyncRootCandidate as StorageProfileSyncRootCandidate,
+    ProfileSyncRootRecord, ProfileSyncSettingsCandidatePullApplyStatus,
+    ProfileSyncSettingsManifestApplication, ProfileSyncSettingsSnapshot,
+    ProfileSyncSettingsSnapshotPublication, ProfileSyncSettingsTailChangePublication,
+    ProfileSyncTrustedPullApplyError, SYNC_DOMAIN_SETTINGS, SignedSyncObject, SlateProfileDatabase,
+    StorageError, StorageProviderRecord, SyncAccountMembershipRecordApplication, SyncChangeRecord,
     SyncCompactionTarget, SyncDevicePublicKeyRecord, SyncObjectError, SyncSettingTextEvent,
     SyncSnapshotRecord, SyncSnapshotRegistration, VerifiedProfileSyncDeviceHead,
     open_signed_profile_sync_device_head, settings_sync_manifest_for_snapshot_and_tail_changes,
@@ -2735,41 +2734,60 @@ impl<'a> BroadwebdProfileSyncObjectSource<'a> {
         BroadwebdTrustedDeviceHeadSyncStatus,
         ProfileSyncTrustedPullApplyError<BroadwebdError>,
     > {
-        match database.pull_and_record_trusted_signed_profile_sync_device_head_if_changed(
-            self,
-            profile,
-            root_id,
-            content_key,
-            key_id,
-        )? {
-            ProfileSyncDeviceHeadPullRecordStatus::NoPublishedRoot { profile, root_id } => {
-                Ok(BroadwebdTrustedDeviceHeadSyncStatus::NoPublishedRoot { profile, root_id })
-            }
-            ProfileSyncDeviceHeadPullRecordStatus::Unchanged {
+        let Some(device_head) = database
+            .pull_trusted_signed_profile_sync_device_head(
+                self,
                 profile,
                 root_id,
-                object_id,
-            } => Ok(BroadwebdTrustedDeviceHeadSyncStatus::Unchanged {
+                content_key,
+                key_id,
+            )
+            .map_err(ProfileSyncTrustedPullApplyError::Pull)?
+        else {
+            return Ok(BroadwebdTrustedDeviceHeadSyncStatus::NoPublishedRoot {
+                profile: profile.to_string(),
+                root_id: root_id.to_string(),
+            });
+        };
+        let objects = database
+            .pull_trusted_signed_profile_sync_settings_manifest_objects_from_device_head(
+                self,
                 profile,
-                root_id,
-                object_id,
-            }),
-            ProfileSyncDeviceHeadPullRecordStatus::Updated { device_head, root } => {
-                let application = database
-                    .pull_and_apply_trusted_signed_settings_manifest_objects_from_device_head(
-                        self,
-                        profile,
-                        &device_head,
-                        content_key,
-                        key_id,
-                    )?;
-                Ok(BroadwebdTrustedDeviceHeadSyncStatus::Applied {
-                    device_head,
-                    root,
-                    application,
-                })
-            }
+                &device_head,
+                content_key,
+                key_id,
+            )
+            .map_err(ProfileSyncTrustedPullApplyError::Pull)?;
+
+        let device_head_root_is_current = database
+            .profile_sync_root(profile, root_id)
+            .map_err(ProfileSyncTrustedPullApplyError::Storage)?
+            .is_some_and(|root| root.object_id == device_head.object_id);
+        let settings_root_is_current = database
+            .profile_sync_root(profile, objects.manifest.root_id.as_str())
+            .map_err(ProfileSyncTrustedPullApplyError::Storage)?
+            .is_some_and(|root| root.object_id == objects.manifest_object_id);
+        if device_head_root_is_current && settings_root_is_current {
+            return Ok(BroadwebdTrustedDeviceHeadSyncStatus::Unchanged {
+                profile: profile.to_string(),
+                root_id: root_id.to_string(),
+                object_id: device_head.object_id,
+            });
         }
+
+        let (root, application) = database
+            .apply_verified_settings_manifest_objects_and_set_profile_sync_root(
+                &objects,
+                profile,
+                root_id,
+                device_head.object_id.as_str(),
+            )
+            .map_err(ProfileSyncTrustedPullApplyError::Storage)?;
+        Ok(BroadwebdTrustedDeviceHeadSyncStatus::Applied {
+            device_head,
+            root,
+            application,
+        })
     }
 
     pub fn pull_and_apply_trusted_settings_from_registered_devices(
@@ -5549,7 +5567,7 @@ mod tests {
         ProfileSyncReceiveError, SettingsSyncCyclePolicy, SettingsSyncRetentionProviderHandle,
         SettingsSyncRuntimeSecrets, SettingsSyncSchedulerConfig,
         SettingsSyncStoredProviderEndpointStatus, settings_device_head_root_id,
-        sync_membership_record_root_id,
+        sign_encrypted_json_object, sync_membership_record_root_id,
     };
     use slate_broadwebd::{
         BroadwebdError, ProfileSyncProfileRequest as BroadwebdProfileSyncProfileRequest,
@@ -5565,22 +5583,24 @@ mod tests {
         DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
         DownloadMetadataSyncPayload, DownloadMetadataUpdate, FileEntrySyncPayload, FileEntryUpdate,
         IncomingSyncSettingText, PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305,
-        PROFILE_SYNC_CONTENT_KEY_BYTES, PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
-        PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE,
+        PROFILE_SYNC_CONTENT_KEY_BYTES, PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
+        PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+        PROFILE_SYNC_MANIFEST_SCHEMA_VERSION, PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE,
         PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE,
         PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY,
-        PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION, ProfileSyncContentKey,
-        ProfileSyncDeviceHead, ProfileSyncDeviceSigner, ProfileSyncMembershipRecord,
+        PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION, PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND,
+        ProfileSyncContentKey, ProfileSyncDeviceFrontier, ProfileSyncDeviceHead,
+        ProfileSyncDeviceSigner, ProfileSyncManifest, ProfileSyncMembershipRecord,
         ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
-        ProfileSyncSettingsCandidatePullApplyStatus, SYNC_DOMAIN_BOOKMARKS, SYNC_DOMAIN_CALENDAR,
-        SYNC_DOMAIN_CHAT, SYNC_DOMAIN_CONTACTS, SYNC_DOMAIN_DOWNLOADS, SYNC_DOMAIN_FILES,
-        SYNC_DOMAIN_SETTINGS, SYNC_DOMAIN_STORAGE, SlateProfileDatabase, StorageError,
-        StorageProviderRecord, StorageProviderSyncPayload, StorageProviderUpdate, SyncChangeRecord,
-        SyncContentKeyEpochRegistration, SyncDevicePublicKeyRegistration, SyncSnapshotRegistration,
-        TypedAppSyncDomainWatcher, open_signed_profile_sync_device_head,
-        open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
-        open_signed_sync_setting_text, pull_signed_profile_sync_device_head,
-        settings_sync_snapshot_id,
+        ProfileSyncSettingsCandidatePullApplyStatus, ProfileSyncTrustedPullApplyError,
+        SYNC_DOMAIN_BOOKMARKS, SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_CHAT, SYNC_DOMAIN_CONTACTS,
+        SYNC_DOMAIN_DOWNLOADS, SYNC_DOMAIN_FILES, SYNC_DOMAIN_SETTINGS, SYNC_DOMAIN_STORAGE,
+        SlateProfileDatabase, StorageError, StorageProviderRecord, StorageProviderSyncPayload,
+        StorageProviderUpdate, SyncChangeRecord, SyncContentKeyEpochRegistration,
+        SyncDevicePublicKeyRegistration, SyncSnapshotRegistration, TypedAppSyncDomainWatcher,
+        open_signed_profile_sync_device_head, open_signed_profile_sync_manifest,
+        open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
+        pull_signed_profile_sync_device_head, settings_sync_snapshot_id,
     };
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -8739,6 +8759,168 @@ mod tests {
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
         let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_source_does_not_advance_device_head_root_when_manifest_apply_fails() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("device-head-invalid-manifest-publisher");
+        let receiver_state_root = test_state_root("device-head-invalid-manifest-receiver");
+        let receiver_db_root = test_state_root("device-head-invalid-manifest-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "runtime-invalid-head-publisher",
+            )
+            .expect("start invalid manifest publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "runtime-invalid-head-receiver",
+            )
+            .expect("start invalid manifest receiver daemon");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-invalid-head-receiver",
+        )
+        .expect("open receiver settings database");
+        let content_key = ProfileSyncContentKey::from_bytes([46; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-invalid-head-publisher")
+            .expect("generate invalid manifest signer");
+        receiver_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: signer
+                    .public_key()
+                    .expect("read invalid manifest public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("receiver trusts invalid manifest publisher key");
+
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+        let invalid_tail = IncomingSyncSettingText::new(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_BOOKMARKS,
+            "home.slot.99",
+            "{not valid json",
+            "runtime-invalid-head-publisher",
+            1,
+            1,
+        );
+        let invalid_tail_object_id = publisher
+            .put_retained_object(
+                DEFAULT_PROFILE_ID,
+                sign_encrypted_json_object(
+                    DEFAULT_PROFILE_ID,
+                    SYNC_DOMAIN_BOOKMARKS,
+                    PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND,
+                    TEST_CONTENT_KEY_ID,
+                    &serde_json::to_vec(&invalid_tail).expect("encode invalid tail change"),
+                    &content_key,
+                    &signer,
+                )
+                .expect("sign invalid tail change"),
+            )
+            .expect("retain invalid tail object");
+        let manifest = ProfileSyncManifest {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: "settings/latest".to_string(),
+            schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            current_snapshot_object_id: None,
+            tail_change_object_ids: vec![invalid_tail_object_id.clone()],
+            included_domains: vec![SYNC_DOMAIN_BOOKMARKS.to_string()],
+            device_frontiers: vec![ProfileSyncDeviceFrontier {
+                device_id: "runtime-invalid-head-publisher".to_string(),
+                latest_sequence: invalid_tail.device_sequence,
+                latest_change_object_id: Some(invalid_tail_object_id.clone()),
+            }],
+            retention_policy: ProfileSyncRetentionPolicy::default(),
+            created_at: 10,
+        };
+        let manifest_object_id = publisher
+            .put_retained_object(
+                DEFAULT_PROFILE_ID,
+                sign_encrypted_json_object(
+                    DEFAULT_PROFILE_ID,
+                    SYNC_DOMAIN_SETTINGS,
+                    PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+                    TEST_CONTENT_KEY_ID,
+                    &serde_json::to_vec(&manifest).expect("encode invalid manifest"),
+                    &content_key,
+                    &signer,
+                )
+                .expect("sign invalid manifest"),
+            )
+            .expect("retain invalid manifest object");
+        let head_root_id = settings_device_head_root_id("runtime-invalid-head-publisher");
+        let device_head = ProfileSyncDeviceHead {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            device_id: "runtime-invalid-head-publisher".to_string(),
+            root_id: head_root_id.clone(),
+            schema_version: PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            latest_manifest_object_id: manifest_object_id,
+            latest_change_object_id: Some(invalid_tail_object_id),
+            device_sequence: invalid_tail.device_sequence,
+            logical_clock: invalid_tail.logical_clock,
+            created_at: 10,
+        };
+        let _head_object_id = publisher
+            .put_retained_root(
+                DEFAULT_PROFILE_ID,
+                head_root_id.as_str(),
+                sign_encrypted_json_object(
+                    DEFAULT_PROFILE_ID,
+                    SYNC_DOMAIN_SETTINGS,
+                    PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
+                    TEST_CONTENT_KEY_ID,
+                    &serde_json::to_vec(&device_head).expect("encode invalid device head"),
+                    &content_key,
+                    &signer,
+                )
+                .expect("sign invalid device head"),
+            )
+            .expect("publish invalid device head root");
+
+        let error = BroadwebdProfileSyncObjectSource::new(&receiver_daemon)
+            .pull_record_and_apply_trusted_settings_from_device_head(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                head_root_id.as_str(),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+            )
+            .expect_err("invalid manifest tail should fail during storage apply");
+
+        assert!(matches!(
+            error,
+            ProfileSyncTrustedPullApplyError::Storage(StorageError::Database { .. })
+        ));
+        assert_eq!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, head_root_id.as_str())
+                .expect("read invalid device head root"),
+            None
+        );
+        assert_eq!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, "settings/latest")
+                .expect("read invalid settings root"),
+            None
+        );
+        assert!(
+            receiver_database
+                .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_BOOKMARKS, "home.slot.99")
+                .expect("read invalid bookmark setting")
+                .is_none()
+        );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
         let _ = std::fs::remove_dir_all(receiver_db_root);
     }
 
