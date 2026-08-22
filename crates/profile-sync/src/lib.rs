@@ -4283,6 +4283,88 @@ impl SettingsSyncStoredProtocolProviderRetentionProviderRun<'_> {
     }
 }
 
+pub struct SettingsSyncStoredProtocolProviderCompactionRun<'a> {
+    pub protocol_materialization: SettingsSyncProtocolProviderMaterialization<'a>,
+    pub run: SettingsSyncStoredCompactionRun,
+}
+
+impl SettingsSyncStoredProtocolProviderCompactionRun<'_> {
+    pub fn protocol_materialization_report(
+        &self,
+    ) -> SettingsSyncProtocolProviderMaterializationReport {
+        self.protocol_materialization.report()
+    }
+
+    pub fn protocol_materialized_provider_count(&self) -> usize {
+        self.protocol_materialization_report()
+            .materialized_provider_count()
+    }
+
+    pub fn protocol_blocked_provider_count(&self) -> usize {
+        self.protocol_materialization_report()
+            .blocked_provider_count()
+    }
+
+    pub fn all_protocol_providers_materialized(&self) -> bool {
+        self.protocol_materialization_report()
+            .all_providers_materialized()
+    }
+
+    pub fn selected_protocol_materialization_plan(
+        &self,
+    ) -> SettingsSyncSelectedProtocolMaterializationPlan {
+        self.run.selected_protocol_materialization_plan()
+    }
+
+    pub fn selected_retention_provider_count(&self) -> usize {
+        self.run.selected_retention_provider_count()
+    }
+
+    pub fn materialized_retention_provider_count(&self) -> usize {
+        self.run.materialized_retention_provider_count()
+    }
+
+    pub fn retained_provider_count(&self) -> usize {
+        self.run.retained_provider_count()
+    }
+
+    pub fn retention_provider_selection_issues(
+        &self,
+    ) -> Vec<SettingsSyncRetentionProviderSelectionIssue> {
+        self.run.retention_provider_selection_issues()
+    }
+
+    pub fn retention_provider_selection_issue_count(&self) -> usize {
+        self.run.retention_provider_selection_issue_count()
+    }
+
+    pub fn has_retention_provider_selection_issue(&self) -> bool {
+        self.run.has_retention_provider_selection_issue()
+    }
+
+    pub fn stored_provider_metadata_issues(
+        &self,
+    ) -> Vec<SettingsSyncStoredRetentionProviderMetadataIssue> {
+        self.run.stored_provider_metadata_issues()
+    }
+
+    pub fn stored_provider_metadata_issue_count(&self) -> usize {
+        self.run.stored_provider_metadata_issue_count()
+    }
+
+    pub fn has_stored_provider_metadata_issue(&self) -> bool {
+        self.run.has_stored_provider_metadata_issue()
+    }
+
+    pub fn degraded_before(&self) -> bool {
+        self.run.degraded_before()
+    }
+
+    pub fn degraded_after(&self) -> bool {
+        self.run.degraded_after()
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettingsSyncStoredRetentionProviderMembershipPlan {
     pub membership_log_publication: ProfileSyncMembershipLogPublicationPlan,
@@ -7440,6 +7522,171 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
 
         Ok(SettingsSyncStoredInProcessFixtureCompactionRun {
             fixture_materialization,
+            run,
+        })
+    }
+
+    pub fn compact_once_with_stored_protocol_materializer_retention_provider_handles<
+        'provider,
+        Materializer,
+    >(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        secrets: SettingsSyncRuntimeSecrets<'_>,
+        max_stored_providers: u32,
+        now: i64,
+        materializer: &Materializer,
+    ) -> Result<
+        SettingsSyncStoredProtocolProviderCompactionRun<'provider>,
+        ProfileSyncCycleWithHealthError,
+    >
+    where
+        Materializer: SettingsSyncProtocolProviderMaterializer<'provider>,
+    {
+        let runner = BroadwebdSettingsSyncRunner::new(self.daemon);
+        let stored_provider_plan = self.plan_once_with_stored_retention_providers(
+            database,
+            config,
+            secrets.signer,
+            max_stored_providers,
+        )?;
+        config.policy.check_selected_retention_provider_freshness(
+            stored_provider_plan.stale_retention_provider_count(),
+            stored_provider_plan.offline_retention_provider_count(),
+            &stored_provider_plan.cycle.preflight.before_health,
+        )?;
+        config.policy.check_selected_retention_provider_roles(
+            stored_provider_plan.ineligible_retention_provider_count(),
+            &stored_provider_plan.cycle.preflight.before_health,
+        )?;
+        let protocol_materialization = stored_provider_plan
+            .materialize_selected_protocol_retention_provider_handles(materializer);
+        let run = {
+            let retention_provider_handles = protocol_materialization.retention_provider_handles();
+            let materialized_providers = materialize_stored_retention_provider_daemons(
+                &stored_provider_plan,
+                retention_provider_handles.as_slice(),
+            );
+            config.policy.check_selected_retention_provider_count(
+                materialized_providers.materialized_retention_provider_count(),
+                &stored_provider_plan.cycle.preflight.before_health,
+            )?;
+            let compaction = runner
+                .compact_settings_with_active_key_policy_and_retention_providers_after_preflight(
+                    database,
+                    secrets.content_key,
+                    secrets.signer,
+                    &config.policy,
+                    now,
+                    materialized_providers.daemons.as_slice(),
+                    &stored_provider_plan.cycle.preflight,
+                )?;
+
+            SettingsSyncStoredCompactionRun {
+                stored_provider_plan,
+                unmaterialized_retention_provider_ids: materialized_providers
+                    .unmaterialized_retention_provider_ids,
+                pending_endpoint_materialization_retention_provider_ids: materialized_providers
+                    .pending_endpoint_materialization_retention_provider_ids,
+                endpoint_mismatch_retention_provider_ids: materialized_providers
+                    .endpoint_mismatch_retention_provider_ids,
+                duplicate_handle_retention_provider_ids: materialized_providers
+                    .duplicate_handle_retention_provider_ids,
+                unsupported_endpoint_retention_provider_ids: materialized_providers
+                    .unsupported_endpoint_retention_provider_ids,
+                compaction,
+            }
+        };
+
+        Ok(SettingsSyncStoredProtocolProviderCompactionRun {
+            protocol_materialization,
+            run,
+        })
+    }
+
+    pub fn compact_once_with_stored_protocol_materializer_retention_provider_handles_and_sync_secret<
+        'provider,
+        Materializer,
+    >(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        sync_secret: &SlateSyncSecret,
+        signer: &ProfileSyncDeviceSigner,
+        max_stored_providers: u32,
+        now: i64,
+        materializer: &Materializer,
+    ) -> Result<
+        SettingsSyncStoredProtocolProviderCompactionRun<'provider>,
+        ProfileSyncCycleWithHealthError,
+    >
+    where
+        Materializer: SettingsSyncProtocolProviderMaterializer<'provider>,
+    {
+        let runner = BroadwebdSettingsSyncRunner::new(self.daemon);
+        let stored_provider_plan = self.plan_once_with_stored_retention_providers(
+            database,
+            config,
+            signer,
+            max_stored_providers,
+        )?;
+        let content_key = derive_settings_sync_content_key_from_secret(
+            config.profile.as_str(),
+            stored_provider_plan.cycle.preflight.active_key_id.as_str(),
+            sync_secret,
+        )
+        .map_err(ProfileSyncCycleError::from)?;
+        config.policy.check_selected_retention_provider_freshness(
+            stored_provider_plan.stale_retention_provider_count(),
+            stored_provider_plan.offline_retention_provider_count(),
+            &stored_provider_plan.cycle.preflight.before_health,
+        )?;
+        config.policy.check_selected_retention_provider_roles(
+            stored_provider_plan.ineligible_retention_provider_count(),
+            &stored_provider_plan.cycle.preflight.before_health,
+        )?;
+        let protocol_materialization = stored_provider_plan
+            .materialize_selected_protocol_retention_provider_handles(materializer);
+        let run = {
+            let retention_provider_handles = protocol_materialization.retention_provider_handles();
+            let materialized_providers = materialize_stored_retention_provider_daemons(
+                &stored_provider_plan,
+                retention_provider_handles.as_slice(),
+            );
+            config.policy.check_selected_retention_provider_count(
+                materialized_providers.materialized_retention_provider_count(),
+                &stored_provider_plan.cycle.preflight.before_health,
+            )?;
+            let compaction = runner
+                .compact_settings_with_active_key_policy_and_retention_providers_after_preflight(
+                    database,
+                    &content_key,
+                    signer,
+                    &config.policy,
+                    now,
+                    materialized_providers.daemons.as_slice(),
+                    &stored_provider_plan.cycle.preflight,
+                )?;
+
+            SettingsSyncStoredCompactionRun {
+                stored_provider_plan,
+                unmaterialized_retention_provider_ids: materialized_providers
+                    .unmaterialized_retention_provider_ids,
+                pending_endpoint_materialization_retention_provider_ids: materialized_providers
+                    .pending_endpoint_materialization_retention_provider_ids,
+                endpoint_mismatch_retention_provider_ids: materialized_providers
+                    .endpoint_mismatch_retention_provider_ids,
+                duplicate_handle_retention_provider_ids: materialized_providers
+                    .duplicate_handle_retention_provider_ids,
+                unsupported_endpoint_retention_provider_ids: materialized_providers
+                    .unsupported_endpoint_retention_provider_ids,
+                compaction,
+            }
+        };
+
+        Ok(SettingsSyncStoredProtocolProviderCompactionRun {
+            protocol_materialization,
             run,
         })
     }
@@ -21678,6 +21925,195 @@ mod tests {
         let _ = std::fs::remove_dir_all(device_state_root);
         let _ = std::fs::remove_dir_all(provider_state_root);
         let _ = std::fs::remove_dir_all(unmaterialized_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn scheduler_protocol_stored_compaction_derives_active_key_from_sync_secret() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("scheduler-protocol-secret-compaction-device");
+        let provider_state_root = test_state_root("scheduler-protocol-secret-compaction-provider");
+        let db_root = test_state_root("scheduler-protocol-secret-compaction-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-protocol-secret-compaction-a",
+            )
+            .expect("start in-process protocol secret compaction device daemon");
+        let provider_id = "protocol-secret-compaction-materialized-provider";
+        let provider_endpoint =
+            "/dnsaddr/protocol-secret-compaction-provider.example.test/p2p/materialized";
+        let provider_daemon = network
+            .daemon_for_provider_with_roles(
+                &provider_state_root,
+                ResourceBudget::default(),
+                provider_id,
+                "socketless-protocol-provider",
+                BroadwebdProfileSyncProviderRoles::availability_provider(),
+            )
+            .expect("start socketless protocol secret compaction materialized provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-scheduler-protocol-secret-compaction-a",
+        )
+        .expect("open protocol secret compaction settings database");
+        let profile = "schedulerprotocolsecretcompactionprofile";
+        let settings_root_id = "settings/latest";
+        let sync_secret = SlateSyncSecret::from_bytes([106; SLATE_SYNC_SECRET_BYTES]);
+        let signer =
+            ProfileSyncDeviceSigner::generate("runtime-scheduler-protocol-secret-compaction-a")
+                .expect("generate protocol secret compaction local device signer");
+        let policy = SettingsSyncCyclePolicy::new(
+            ProfileSyncRetentionPolicy {
+                min_tail_change_count: 1,
+                change_retention_seconds: 0,
+                ..ProfileSyncRetentionPolicy::default()
+            },
+            4,
+            4,
+            2,
+        )
+        .with_local_device_head_root_health_required_after_cycle(false);
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register protocol secret compaction local trusted public key");
+        authorize_test_storage_provider(&database, profile, provider_id);
+        database
+            .upsert_storage_provider(&StorageProviderUpdate {
+                endpoint_ref: Some(provider_endpoint.to_string()),
+                ..test_storage_provider_update(
+                    &network,
+                    profile,
+                    provider_id,
+                    "socketless-protocol-provider",
+                    "Protocol secret compaction pinner",
+                    true,
+                    true,
+                    true,
+                )
+            })
+            .expect("write protocol secret compaction materialized stored provider metadata");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write first protocol secret compacted setting");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.zoom", "110")
+            .expect("write second protocol secret compacted setting");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.font", "Inter")
+            .expect("write protocol secret retained compaction tail setting");
+
+        let materializer = super::SettingsSyncSocketlessProtocolProviderMaterializer::new(
+            super::SettingsSyncProtocolProviderMaterializerPolicy::new(true, Vec::new()),
+            vec![super::SettingsSyncProtocolProviderDaemon::new(
+                provider_id,
+                provider_endpoint,
+                &provider_daemon,
+            )],
+        );
+        let config = SettingsSyncSchedulerConfig::new(profile, settings_root_id, policy);
+        let run = BroadwebdSettingsSyncScheduler::new(&device_daemon)
+            .compact_once_with_stored_protocol_materializer_retention_provider_handles_and_sync_secret(
+                &database,
+                &config,
+                &sync_secret,
+                &signer,
+                4,
+                i64::MAX,
+                &materializer,
+            )
+            .expect("secret protocol materialized scheduler compacts settings state");
+
+        assert_eq!(
+            run.protocol_materialization_report(),
+            super::SettingsSyncProtocolProviderMaterializationReport {
+                materialized_provider_ids: vec![provider_id.to_string()],
+                missing_provider_ids: Vec::new(),
+                endpoint_mismatch_provider_ids: Vec::new(),
+                duplicate_provider_ids: Vec::new(),
+                unsupported_provider_ids: Vec::new(),
+            }
+        );
+        assert_eq!(run.protocol_materialized_provider_count(), 1);
+        assert_eq!(run.protocol_blocked_provider_count(), 0);
+        assert!(run.all_protocol_providers_materialized());
+        assert_eq!(run.selected_retention_provider_count(), 1);
+        assert_eq!(run.materialized_retention_provider_count(), 1);
+        assert_eq!(run.retained_provider_count(), 1);
+        assert!(run.run.unmaterialized_retention_provider_ids.is_empty());
+        assert!(
+            run.run
+                .pending_endpoint_materialization_retention_provider_ids
+                .is_empty()
+        );
+        assert!(run.run.endpoint_mismatch_retention_provider_ids.is_empty());
+        assert!(run.run.duplicate_handle_retention_provider_ids.is_empty());
+        assert!(
+            run.run
+                .unsupported_endpoint_retention_provider_ids
+                .is_empty()
+        );
+        assert_eq!(
+            run.selected_protocol_materialization_plan()
+                .multiaddr_requests,
+            vec![super::SettingsSyncSelectedMultiaddrMaterializationRequest {
+                provider_id: provider_id.to_string(),
+                endpoint: slate_routing::Multiaddr::parse(provider_endpoint)
+                    .expect("protocol secret compaction provider multiaddr"),
+            }]
+        );
+        assert!(
+            run.selected_protocol_materialization_plan()
+                .ready_for_protocol_materialization()
+        );
+        assert!(run.run.compaction.compacted());
+        let compaction = run
+            .run
+            .compaction
+            .compaction
+            .as_ref()
+            .expect("protocol secret stored scheduler compaction was published");
+        assert_eq!(compaction.target.retained_tail_change_count, 1);
+        assert_eq!(
+            run.run.compaction.retained_object_ids,
+            compaction.published_object_ids()
+        );
+        assert_eq!(run.run.compaction.retained_object_ids.len(), 3);
+        assert!(run.degraded_after());
+        assert!(
+            !run.run
+                .compaction
+                .after_health
+                .settings_root_health
+                .degraded
+        );
+
+        let derived_content_key = sync_secret
+            .derive_profile_sync_content_key(profile, TEST_CONTENT_KEY_ID)
+            .expect("derive protocol secret compaction content key");
+        let public_key = signer.public_key().expect("local public key");
+        let source = BroadwebdProfileSyncObjectSource::new(&device_daemon);
+        let manifest_object = source
+            .get_profile_sync_object(profile, compaction.publication.manifest_object_id.as_str())
+            .expect("fetch protocol secret-derived compaction manifest");
+        let manifest = open_signed_profile_sync_manifest(
+            manifest_object.bytes.as_slice(),
+            &derived_content_key,
+            &public_key,
+            profile,
+            TEST_CONTENT_KEY_ID,
+        )
+        .expect("decrypt protocol secret-derived compaction manifest");
+        assert_eq!(manifest, compaction.publication.manifest);
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
         let _ = std::fs::remove_dir_all(db_root);
     }
 

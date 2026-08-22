@@ -681,6 +681,11 @@ Current baseline:
   into normal retention-provider handles, reports missing fixture providers,
   and compacts through `SlateSyncSecret` without exposing fixture model state
   to scheduler logic.
+- Stored-provider compaction can now also run through the socketless protocol
+  materializer boundary. The scheduler consumes selected multiaddr/deferred
+  endpoint work, accepts materialized provider daemons from the materializer,
+  and compacts with `SlateSyncSecret` while preserving real protocol
+  request/response boundaries.
 - Internal protocol models are constrained to transport/test boundaries:
   protocol implementations must keep real-web request/response semantics and
   can only swap socket IO for internal shims in local deterministic fixtures.

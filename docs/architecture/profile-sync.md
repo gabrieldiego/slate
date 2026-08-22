@@ -989,6 +989,10 @@ callers can drive that compaction from stored synthetic fixture endpoints by
 supplying in-process fixture daemon refs; the scheduler materializes those
 refs into normal retention-provider handles and reports missing or mismatched
 fixtures before retention.
+Protocol materializers can drive the same compaction handoff from selected
+multiaddr or deferred endpoint plans; they return normal retention-provider
+handles before compaction, keeping adapter-specific socket behavior outside
+scheduler state.
 The first `iroh-node:<node>` checkpoint stays at this materializer boundary:
 tests treat the endpoint as a deferred protocol target, materialize it through
 a caller-supplied socketless provider daemon, verify that read-only previews do
