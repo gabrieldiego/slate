@@ -5553,9 +5553,10 @@ mod tests {
     };
     use slate_storage::{
         AppSyncDomainRegistration, BookmarkSlotSyncPayload, BookmarkUpdate,
-        ChatConversationSyncPayload, ChatConversationUpdate, DEFAULT_DATABASE_FILE_NAME,
-        DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH, FileEntrySyncPayload,
-        FileEntryUpdate, IncomingSyncSettingText,
+        CalendarEventSyncPayload, CalendarEventUpdate, ChatConversationSyncPayload,
+        ChatConversationUpdate, ContactCardSyncPayload, ContactCardUpdate,
+        DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+        FileEntrySyncPayload, FileEntryUpdate, IncomingSyncSettingText,
         PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305, PROFILE_SYNC_CONTENT_KEY_BYTES,
         PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE,
         PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE,
@@ -5564,13 +5565,14 @@ mod tests {
         ProfileSyncDeviceHead, ProfileSyncDeviceSigner, ProfileSyncMembershipRecord,
         ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
         ProfileSyncSettingsCandidatePullApplyStatus, SYNC_DOMAIN_BOOKMARKS, SYNC_DOMAIN_CALENDAR,
-        SYNC_DOMAIN_CHAT, SYNC_DOMAIN_FILES, SYNC_DOMAIN_SETTINGS, SYNC_DOMAIN_STORAGE,
-        SlateProfileDatabase, StorageError, StorageProviderRecord, StorageProviderSyncPayload,
-        StorageProviderUpdate, SyncChangeRecord, SyncContentKeyEpochRegistration,
-        SyncDevicePublicKeyRegistration, SyncSnapshotRegistration, TypedAppSyncDomainWatcher,
-        open_signed_profile_sync_device_head, open_signed_profile_sync_manifest,
-        open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
-        pull_signed_profile_sync_device_head, settings_sync_snapshot_id,
+        SYNC_DOMAIN_CHAT, SYNC_DOMAIN_CONTACTS, SYNC_DOMAIN_FILES, SYNC_DOMAIN_SETTINGS,
+        SYNC_DOMAIN_STORAGE, SlateProfileDatabase, StorageError, StorageProviderRecord,
+        StorageProviderSyncPayload, StorageProviderUpdate, SyncChangeRecord,
+        SyncContentKeyEpochRegistration, SyncDevicePublicKeyRegistration, SyncSnapshotRegistration,
+        TypedAppSyncDomainWatcher, open_signed_profile_sync_device_head,
+        open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
+        open_signed_sync_setting_text, pull_signed_profile_sync_device_head,
+        settings_sync_snapshot_id,
     };
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -12473,7 +12475,9 @@ mod tests {
         )
         .expect("open typed app receiver settings database");
         for (domain, privacy_classification, sync_content) in [
+            (SYNC_DOMAIN_CALENDAR, "sensitive", false),
             (SYNC_DOMAIN_CHAT, "sensitive", false),
+            (SYNC_DOMAIN_CONTACTS, "sensitive", false),
             (SYNC_DOMAIN_FILES, "content", true),
             (SYNC_DOMAIN_STORAGE, "sensitive", false),
         ] {
@@ -12489,6 +12493,21 @@ mod tests {
                 .expect("enable typed app sync domain for publisher test profile");
         }
         publisher_database
+            .upsert_calendar_event(&CalendarEventUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                event_id: "runtime-event-1".to_string(),
+                calendar_id: Some("work".to_string()),
+                title: "Runtime planning".to_string(),
+                starts_at: 1_789_009_000,
+                ends_at: Some(1_789_012_600),
+                time_zone: Some("UTC".to_string()),
+                location: Some("Slate workspace".to_string()),
+                notes: Some("Coordinate encrypted profile sync rollout".to_string()),
+                recurrence_rule: None,
+                reminder_minutes: Some(10),
+            })
+            .expect("publisher writes typed calendar metadata");
+        publisher_database
             .upsert_chat_conversation(&ChatConversationUpdate {
                 profile: DEFAULT_PROFILE_ID.to_string(),
                 conversation_id: "runtime-chat-1".to_string(),
@@ -12502,6 +12521,20 @@ mod tests {
                 muted: true,
             })
             .expect("publisher writes typed chat metadata");
+        publisher_database
+            .upsert_contact_card(&ContactCardUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                contact_id: "runtime-contact-1".to_string(),
+                display_name: "Runtime Contact".to_string(),
+                given_name: Some("Runtime".to_string()),
+                family_name: Some("Contact".to_string()),
+                organization: Some("Slate".to_string()),
+                primary_email: Some("runtime@example.test".to_string()),
+                primary_phone: None,
+                notes: Some("Synced through encrypted profile snapshot".to_string()),
+                avatar_key: Some("contact-avatar:runtime-contact-1".to_string()),
+            })
+            .expect("publisher writes typed contact metadata");
         publisher_database
             .upsert_file_entry(&FileEntryUpdate {
                 profile: DEFAULT_PROFILE_ID.to_string(),
@@ -12550,6 +12583,13 @@ mod tests {
                 membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
             })
             .expect("receiver trusts typed app publisher key");
+        let calendar_watcher = TypedAppSyncDomainWatcher::<CalendarEventSyncPayload>::new(
+            receiver_database.clone(),
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_CALENDAR,
+            8,
+        )
+        .expect("initialize receiver calendar watcher cursor");
         let chat_watcher = TypedAppSyncDomainWatcher::<ChatConversationSyncPayload>::new(
             receiver_database.clone(),
             DEFAULT_PROFILE_ID,
@@ -12557,6 +12597,13 @@ mod tests {
             8,
         )
         .expect("initialize receiver chat watcher cursor");
+        let contact_watcher = TypedAppSyncDomainWatcher::<ContactCardSyncPayload>::new(
+            receiver_database.clone(),
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_CONTACTS,
+            8,
+        )
+        .expect("initialize receiver contacts watcher cursor");
         let file_watcher = TypedAppSyncDomainWatcher::<FileEntrySyncPayload>::new(
             receiver_database.clone(),
             DEFAULT_PROFILE_ID,
@@ -12571,9 +12618,15 @@ mod tests {
             8,
         )
         .expect("initialize receiver storage watcher cursor");
+        let initial_calendar_revision = calendar_watcher
+            .current_revision()
+            .expect("read initial receiver calendar watcher cursor");
         let initial_chat_revision = chat_watcher
             .current_revision()
             .expect("read initial receiver chat watcher cursor");
+        let initial_contact_revision = contact_watcher
+            .current_revision()
+            .expect("read initial receiver contacts watcher cursor");
         let initial_file_revision = file_watcher
             .current_revision()
             .expect("read initial receiver files watcher cursor");
@@ -12581,9 +12634,23 @@ mod tests {
             .current_revision()
             .expect("read initial receiver storage watcher cursor");
         assert_eq!(
+            calendar_watcher
+                .poll_once()
+                .expect("poll idle calendar")
+                .event_count(),
+            0
+        );
+        assert_eq!(
             chat_watcher
                 .poll_once()
                 .expect("poll idle chat")
+                .event_count(),
+            0
+        );
+        assert_eq!(
+            contact_watcher
+                .poll_once()
+                .expect("poll idle contacts")
                 .event_count(),
             0
         );
@@ -12619,7 +12686,9 @@ mod tests {
         assert_eq!(
             published.publication.manifest.included_domains,
             vec![
+                SYNC_DOMAIN_CALENDAR.to_string(),
                 SYNC_DOMAIN_CHAT.to_string(),
+                SYNC_DOMAIN_CONTACTS.to_string(),
                 SYNC_DOMAIN_FILES.to_string(),
                 SYNC_DOMAIN_SETTINGS.to_string(),
                 SYNC_DOMAIN_STORAGE.to_string()
@@ -12654,6 +12723,15 @@ mod tests {
         assert!(application.snapshot.is_some());
         assert_eq!(application.tail_changes, Vec::<SyncChangeRecord>::new());
 
+        let calendar_events = receiver_database
+            .calendar_events(DEFAULT_PROFILE_ID, 10)
+            .expect("read receiver typed calendar metadata");
+        assert_eq!(calendar_events.len(), 1);
+        assert_eq!(calendar_events[0].event_id, "runtime-event-1");
+        assert_eq!(calendar_events[0].calendar_id.as_deref(), Some("work"));
+        assert_eq!(calendar_events[0].title, "Runtime planning");
+        assert_eq!(calendar_events[0].reminder_minutes, Some(10));
+
         let conversations = receiver_database
             .chat_conversations(DEFAULT_PROFILE_ID, 10)
             .expect("read receiver typed chat metadata");
@@ -12662,6 +12740,21 @@ mod tests {
         assert_eq!(conversations[0].display_name, "Runtime Team");
         assert_eq!(conversations[0].unread_count, 4);
         assert!(conversations[0].muted);
+
+        let contacts = receiver_database
+            .contact_cards(DEFAULT_PROFILE_ID, 10)
+            .expect("read receiver typed contact metadata");
+        assert_eq!(contacts.len(), 1);
+        assert_eq!(contacts[0].contact_id, "runtime-contact-1");
+        assert_eq!(contacts[0].display_name, "Runtime Contact");
+        assert_eq!(
+            contacts[0].primary_email.as_deref(),
+            Some("runtime@example.test")
+        );
+        assert_eq!(
+            contacts[0].avatar_key.as_deref(),
+            Some("contact-avatar:runtime-contact-1")
+        );
 
         let files = receiver_database
             .file_entries(DEFAULT_PROFILE_ID, 10)
@@ -12680,6 +12773,41 @@ mod tests {
         assert_eq!(providers[0].quota_bytes, Some(8_192));
         assert!(providers[0].availability);
         assert_eq!(providers[0].pinning_policy.as_deref(), Some("manual"));
+
+        let calendar_applied = calendar_watcher
+            .poll_apply_and_acknowledge(|calendar_poll| {
+                assert!(calendar_poll.advanced());
+                assert_eq!(calendar_poll.previous_revision, initial_calendar_revision);
+                assert_eq!(calendar_poll.event_count(), 1);
+                assert_eq!(
+                    calendar_poll.events[0].change.entity_key,
+                    "event.runtime-event-1"
+                );
+                assert_eq!(calendar_poll.events[0].value.event_id, "runtime-event-1");
+                assert_eq!(
+                    calendar_poll.events[0].value.calendar_id.as_deref(),
+                    Some("work")
+                );
+                assert_eq!(calendar_poll.events[0].value.title, "Runtime planning");
+                assert_eq!(calendar_poll.events[0].value.reminder_minutes, Some(10));
+                assert!(!calendar_poll.events[0].value.deleted);
+                Ok::<(), &'static str>(())
+            })
+            .expect("apply and acknowledge receiver calendar typed app events after sync apply");
+        let calendar_poll = calendar_applied.poll;
+        assert!(calendar_poll.advanced());
+        assert_eq!(calendar_poll.previous_revision, initial_calendar_revision);
+        assert_eq!(calendar_poll.event_count(), 1);
+        assert_eq!(
+            calendar_poll.events[0].change.entity_key,
+            "event.runtime-event-1"
+        );
+        assert_eq!(calendar_poll.events[0].value.event_id, "runtime-event-1");
+        assert_eq!(calendar_poll.events[0].value.title, "Runtime planning");
+        assert_eq!(
+            calendar_applied.cursor.latest_revision,
+            calendar_poll.latest_revision
+        );
 
         let chat_applied = chat_watcher
             .poll_apply_and_acknowledge(|chat_poll| {
@@ -12721,6 +12849,40 @@ mod tests {
         assert_eq!(
             chat_applied.cursor.latest_revision,
             chat_poll.latest_revision
+        );
+
+        let contact_applied = contact_watcher
+            .poll_apply_and_acknowledge(|contact_poll| {
+                assert!(contact_poll.advanced());
+                assert_eq!(contact_poll.previous_revision, initial_contact_revision);
+                assert_eq!(contact_poll.event_count(), 1);
+                assert_eq!(
+                    contact_poll.events[0].change.entity_key,
+                    "contact.runtime-contact-1"
+                );
+                assert_eq!(contact_poll.events[0].value.contact_id, "runtime-contact-1");
+                assert_eq!(contact_poll.events[0].value.display_name, "Runtime Contact");
+                assert_eq!(
+                    contact_poll.events[0].value.primary_email.as_deref(),
+                    Some("runtime@example.test")
+                );
+                assert!(!contact_poll.events[0].value.deleted);
+                Ok::<(), &'static str>(())
+            })
+            .expect("apply and acknowledge receiver contacts typed app events after sync apply");
+        let contact_poll = contact_applied.poll;
+        assert!(contact_poll.advanced());
+        assert_eq!(contact_poll.previous_revision, initial_contact_revision);
+        assert_eq!(contact_poll.event_count(), 1);
+        assert_eq!(
+            contact_poll.events[0].change.entity_key,
+            "contact.runtime-contact-1"
+        );
+        assert_eq!(contact_poll.events[0].value.contact_id, "runtime-contact-1");
+        assert_eq!(contact_poll.events[0].value.display_name, "Runtime Contact");
+        assert_eq!(
+            contact_applied.cursor.latest_revision,
+            contact_poll.latest_revision
         );
 
         let file_applied = file_watcher

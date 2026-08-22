@@ -291,9 +291,10 @@ Runtime code can use storage's typed app-domain watcher wrapper for the same
 contract: initialize at the domain head, poll bounded decoded batches, and
 acknowledge only after the app has applied the batch.
 The broadwebd runtime bridge fixture now covers this watcher contract after a
-trusted receive: Chat, Files, and Storage cursors are initialized before sync,
-the signed encrypted snapshot is applied, and each typed watcher runs an app
-callback over the decoded payload before acknowledging the cursor.
+trusted receive: Calendar, Chat, Contacts, Files, and Storage cursors are
+initialized before sync, the signed encrypted snapshot is applied, and each
+typed watcher runs an app callback over the decoded payload before
+acknowledging the cursor.
 The update-tail fixture then records those snapshot cursors, applies a
 post-snapshot manifest tail, and verifies each app-domain poll returns only the
 incremental decoded payload for that domain.
@@ -488,12 +489,13 @@ profile state. If an app needs a protocol-specific backend, broadwebd should
 expose it through the same discovery, connectivity, transfer, availability, and
 mutable-root roles.
 The current runtime bridge coverage includes signed encrypted full-snapshot
-handoffs for Chat, Files, and Storage metadata, including tombstone snapshots
-that remove stale typed rows from a receiver. It also covers post-snapshot
-update tails for all three domains and a Chat tombstone tail to verify
-incremental typed changes use the same trusted device-head path. These tests
-use `InProcessBroadwebNetwork`, so app-domain create, update, and delete
-propagation is verified without loopback sockets or external protocols.
+handoffs for Calendar, Chat, Contacts, Files, and Storage metadata. It also
+covers tombstone snapshots that remove stale Chat, Files, and Storage typed rows
+from a receiver, post-snapshot update tails for those three domains, and a Chat
+tombstone tail to verify incremental typed changes use the same trusted
+device-head path. These tests use `InProcessBroadwebNetwork`, so app-domain
+create, update, and delete propagation is verified without loopback sockets or
+external protocols.
 
 ## Compaction And Retention
 

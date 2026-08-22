@@ -231,15 +231,16 @@ Current baseline:
   health, and per-device availability stay local to runtime or secret storage.
 - The local broadwebd profile-sync fixture now carries typed app-domain
   metadata through the encrypted manifest path between two local
-  `slate-settings.db` instances. The regression covers Chat, Files, and Storage
-  provider projections over the in-process fixture network, with encrypted tail
-  objects and no loopback sockets.
+  `slate-settings.db` instances. The full-snapshot regression covers Calendar,
+  Chat, Contacts, Files, and Storage projections over the in-process fixture
+  network; encrypted tail regressions cover Chat, Files, and Storage without
+  loopback sockets.
 - The `slate-profile-sync` runtime bridge now also has full-snapshot
-  publisher/receiver regressions for typed Chat, Files, and Storage provider
-  metadata. The tests enable those opt-in domains on the publisher, publish
-  signed encrypted device-head snapshots through broadwebd's in-process
+  publisher/receiver regressions for typed Calendar, Chat, Contacts, Files, and
+  Storage metadata. The tests enable those opt-in domains on the publisher,
+  publish signed encrypted device-head snapshots through broadwebd's in-process
   fixture, verify the receiver materializes typed rows, verify post-snapshot
-  update tails for all three domains, and verify tombstone snapshots and
+  update tails for Chat, Files, and Storage, and verify tombstone snapshots and
   post-snapshot tombstone tails delete stale typed rows on the receiver.
 - Local settings/app-domain publishing now filters outgoing snapshots and tail
   manifests through the enabled app sync-domain table. Disabled domains can
@@ -305,13 +306,14 @@ Current baseline:
   decoded batches, and acknowledge the batch only after app-owned apply work
   succeeds. The wrapper also has an apply-and-acknowledge helper that runs an
   app callback first and persists the cursor only when that callback succeeds.
-- The `slate-profile-sync` runtime bridge now verifies received typed Chat,
-  Files, and Storage metadata is visible through those typed app-domain watcher
-  polls after a trusted broadwebd apply. The fixture initializes receiver
-  cursors before sync, applies a signed encrypted snapshot, then uses the
-  typed watcher apply-and-acknowledge helper so each cursor is persisted only
-  after the simulated app callback inspects the decoded payload batch. The same
-  watcher path now covers post-snapshot update tails for all three domains, so
+- The `slate-profile-sync` runtime bridge now verifies received typed Calendar,
+  Chat, Contacts, Files, and Storage metadata is visible through those typed
+  app-domain watcher polls after a trusted broadwebd apply. The fixture
+  initializes receiver cursors before sync, applies a signed encrypted snapshot,
+  then uses the typed watcher apply-and-acknowledge helper so each cursor is
+  persisted only after the simulated app callback inspects the decoded payload
+  batch. The same watcher path now covers post-snapshot update tails for Chat,
+  Files, and Storage, so
   apps can observe incremental metadata changes after acknowledging the
   snapshot batch. Chat tombstone tails are covered through the same typed
   watcher path, proving deletions are observable before the app advances its
