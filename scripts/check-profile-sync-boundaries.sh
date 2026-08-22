@@ -95,6 +95,19 @@ require_text \
     'profile-sync backend selection must remain explicit runtime configuration.'
 
 require_text \
+    crates/profile-sync/src/lib.rs \
+    'SettingsSyncProtocolProviderMaterializerBoundary' \
+    'profile-sync protocol materializers must distinguish runtime adapters from local simulations.'
+require_text \
+    crates/profile-sync/src/lib.rs \
+    'local_deterministic_simulation' \
+    'profile-sync local protocol simulations must be explicit materializer policies.'
+reject_protocol_model_leak \
+    crates/profile-sync/src/lib.rs \
+    'socketless_fixture_models' \
+    'profile-sync materializer policies should name local simulation boundaries, not fixture models.'
+
+require_text \
     crates/chrome/src/desktop/protocols/slate.rs \
     'settings/profile-sync/handoff/create' \
     'Slate settings protocol must expose the profile-sync handoff create route.'

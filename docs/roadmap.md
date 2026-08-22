@@ -427,6 +427,11 @@ Current baseline:
   The deterministic fixture layer only swaps the socket transport or daemon
   communication with in-process modeled behavior such as delayed discovery,
   unavailable transfer, stale roots, or malformed protocol responses.
+- Profile-sync protocol materializer policies now mark whether selected
+  provider endpoints are handled by real runtime adapters or by local
+  deterministic simulation. The scheduler still consumes typed multiaddr and
+  deferred-protocol materialization requests either way; fixture models remain
+  a transport boundary choice, not protocol logic.
 - Trusted device-head receives now ignore stale root rollback: if a resolved
   device head points at an older sequence than a locally applied head for the
   same trusted device, Slate leaves the newer settings and device-head roots in

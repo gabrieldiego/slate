@@ -3102,6 +3102,13 @@ pub struct SettingsSyncProtocolProviderMaterializationIssue {
     pub kind: SettingsSyncProtocolProviderMaterializationIssueKind,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum SettingsSyncProtocolProviderMaterializerBoundary {
+    #[default]
+    RuntimeAdapter,
+    LocalDeterministicSimulation,
+}
+
 impl SettingsSyncProtocolProviderMaterializationReport {
     pub fn materialized_provider_count(&self) -> usize {
         self.materialized_provider_ids.len()
@@ -3248,24 +3255,58 @@ impl<'a> SettingsSyncProtocolProviderMaterialization<'a> {
 pub struct SettingsSyncProtocolProviderMaterializerPolicy {
     pub supports_multiaddr: bool,
     pub supported_deferred_protocols: Vec<String>,
+    pub boundary: SettingsSyncProtocolProviderMaterializerBoundary,
 }
 
 impl SettingsSyncProtocolProviderMaterializerPolicy {
     pub fn new(supports_multiaddr: bool, supported_deferred_protocols: Vec<String>) -> Self {
+        Self::runtime_adapters(supports_multiaddr, supported_deferred_protocols)
+    }
+
+    pub fn runtime_adapters(
+        supports_multiaddr: bool,
+        supported_deferred_protocols: Vec<String>,
+    ) -> Self {
         Self {
             supports_multiaddr,
             supported_deferred_protocols,
+            boundary: SettingsSyncProtocolProviderMaterializerBoundary::RuntimeAdapter,
         }
     }
 
-    pub fn socketless_fixture_models() -> Self {
-        Self::new(
+    pub fn local_simulation(
+        supports_multiaddr: bool,
+        supported_deferred_protocols: Vec<String>,
+    ) -> Self {
+        Self {
+            supports_multiaddr,
+            supported_deferred_protocols,
+            boundary:
+                SettingsSyncProtocolProviderMaterializerBoundary::LocalDeterministicSimulation,
+        }
+    }
+
+    pub fn local_deterministic_simulation() -> Self {
+        Self::local_simulation(
             true,
             vec![
                 PROFILE_SYNC_DEFERRED_PROVIDER_PROTOCOL.to_string(),
                 PROFILE_SYNC_DEFERRED_IROH_NODE_PROTOCOL.to_string(),
             ],
         )
+    }
+
+    pub fn boundary(&self) -> SettingsSyncProtocolProviderMaterializerBoundary {
+        self.boundary
+    }
+
+    pub fn uses_local_simulation_boundary(&self) -> bool {
+        self.boundary
+            == SettingsSyncProtocolProviderMaterializerBoundary::LocalDeterministicSimulation
+    }
+
+    pub fn uses_runtime_adapter_boundary(&self) -> bool {
+        self.boundary == SettingsSyncProtocolProviderMaterializerBoundary::RuntimeAdapter
     }
 
     pub fn supports_deferred_protocol(&self, protocol: &str) -> bool {
@@ -11323,6 +11364,42 @@ mod tests {
         assert_eq!(
             batches[1].provider_ids(),
             vec!["contracted-provider".to_string()]
+        );
+    }
+
+    #[test]
+    fn protocol_materializer_policy_marks_runtime_and_local_simulation_boundaries() {
+        let runtime_policy = super::SettingsSyncProtocolProviderMaterializerPolicy::new(
+            true,
+            vec![super::PROFILE_SYNC_DEFERRED_IROH_NODE_PROTOCOL.to_string()],
+        );
+        assert_eq!(
+            runtime_policy.boundary(),
+            super::SettingsSyncProtocolProviderMaterializerBoundary::RuntimeAdapter
+        );
+        assert!(runtime_policy.uses_runtime_adapter_boundary());
+        assert!(!runtime_policy.uses_local_simulation_boundary());
+        assert!(
+            runtime_policy
+                .supports_deferred_protocol(super::PROFILE_SYNC_DEFERRED_IROH_NODE_PROTOCOL)
+        );
+
+        let simulation_policy =
+            super::SettingsSyncProtocolProviderMaterializerPolicy::local_deterministic_simulation();
+        assert_eq!(
+            simulation_policy.boundary(),
+            super::SettingsSyncProtocolProviderMaterializerBoundary::LocalDeterministicSimulation
+        );
+        assert!(simulation_policy.uses_local_simulation_boundary());
+        assert!(!simulation_policy.uses_runtime_adapter_boundary());
+        assert!(simulation_policy.supports_multiaddr);
+        assert!(
+            simulation_policy
+                .supports_deferred_protocol(super::PROFILE_SYNC_DEFERRED_PROVIDER_PROTOCOL)
+        );
+        assert!(
+            simulation_policy
+                .supports_deferred_protocol(super::PROFILE_SYNC_DEFERRED_IROH_NODE_PROTOCOL)
         );
     }
 
@@ -24539,7 +24616,7 @@ mod tests {
             .expect("write Iroh scheduler local setting");
 
         let materializer = super::SettingsSyncSocketlessProtocolProviderMaterializer::new(
-            super::SettingsSyncProtocolProviderMaterializerPolicy::socketless_fixture_models(),
+            super::SettingsSyncProtocolProviderMaterializerPolicy::local_deterministic_simulation(),
             vec![super::SettingsSyncProtocolProviderDaemon::new(
                 provider_id,
                 provider_endpoint_ref,
@@ -24739,7 +24816,7 @@ mod tests {
             .expect("write Iroh missing-shim local setting");
 
         let materializer = super::SettingsSyncSocketlessProtocolProviderMaterializer::new(
-            super::SettingsSyncProtocolProviderMaterializerPolicy::socketless_fixture_models(),
+            super::SettingsSyncProtocolProviderMaterializerPolicy::local_deterministic_simulation(),
             Vec::new(),
         );
         let config = SettingsSyncSchedulerConfig::new(
@@ -24892,7 +24969,7 @@ mod tests {
             .expect("write Iroh delayed-transfer local setting");
 
         let materializer = super::SettingsSyncSocketlessProtocolProviderMaterializer::new(
-            super::SettingsSyncProtocolProviderMaterializerPolicy::socketless_fixture_models(),
+            super::SettingsSyncProtocolProviderMaterializerPolicy::local_deterministic_simulation(),
             vec![super::SettingsSyncProtocolProviderDaemon::new(
                 provider_id,
                 provider_endpoint_ref,
@@ -25061,7 +25138,7 @@ mod tests {
             .expect("write Iroh live-transfer-only local setting");
 
         let materializer = super::SettingsSyncSocketlessProtocolProviderMaterializer::new(
-            super::SettingsSyncProtocolProviderMaterializerPolicy::socketless_fixture_models(),
+            super::SettingsSyncProtocolProviderMaterializerPolicy::local_deterministic_simulation(),
             vec![super::SettingsSyncProtocolProviderDaemon::new(
                 provider_id,
                 provider_endpoint_ref,
