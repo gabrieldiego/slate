@@ -1097,6 +1097,14 @@ distributed-system and hostile-network conditions:
 - Retention and compaction behavior when old devices have not synced.
 - Explicit fail-closed behavior for unmaterialized protocol endpoints.
 
+Internal protocol models must stay below the protocol boundary. IPFS/IPNS,
+Iroh, Tor, I2P, and future adapters should build the same routing plans,
+requests, parsers, response validation, privacy boundaries, and provider-role
+checks they would use against the real web. Local tests swap only the socket or
+daemon communication layer with deterministic in-process shims that model
+remote behavior, such as delayed discovery, missing bytes, stale roots, or
+malformed protocol responses.
+
 The low-memory boundary gate now includes a corrupt shared-root object
 regression through the socketless broadwebd bridge. A root may resolve and the
 object bytes may be available, but if those bytes are not a trusted signed
@@ -1113,14 +1121,18 @@ Malformed app-domain payloads delivered through a shared settings manifest are
 also covered at this bridge: storage application fails inside the transaction,
 leaving the previous root, materialized app rows, and app watcher cursors
 unchanged.
+Missing manifest dependencies are covered the same way: if a shared
+`settings/latest` manifest resolves but one referenced tail object is
+unavailable, the receiver reports a pull/source failure and leaves the prior
+root, materialized values, and trusted-device sequence unchanged.
 
 ### Internal Protocol Models
 
 External protocols should have internal deterministic model adapters before
 Slate depends on their real daemons or public networks. These adapters do not
-need to implement the protocol; they need to model the semantics Slate relies
-on, the privacy boundary the user will see, and the failures the runtime must
-handle.
+replace protocol implementations. They provide socketless model behavior below
+the same adapter surface, so Slate can validate the semantics, privacy boundary,
+and failures the runtime must handle before it talks to live peers.
 
 IPFS/IPNS model:
 

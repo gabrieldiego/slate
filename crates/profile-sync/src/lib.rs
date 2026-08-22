@@ -17957,6 +17957,161 @@ mod tests {
     }
 
     #[test]
+    fn broadwebd_source_rejects_missing_tail_object_shared_root_without_mutation() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("shared-root-missing-tail-publisher");
+        let receiver_state_root = test_state_root("shared-root-missing-tail-receiver");
+        let publisher_db_root = test_state_root("shared-root-missing-tail-publisher-db");
+        let receiver_db_root = test_state_root("shared-root-missing-tail-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "runtime-missing-tail-shared-publisher",
+            )
+            .expect("start missing-tail shared-root publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "runtime-missing-tail-shared-receiver",
+            )
+            .expect("start missing-tail shared-root receiver daemon");
+        let publisher_database = SlateProfileDatabase::open_resolved_with_device_id(
+            publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-missing-tail-shared-publisher",
+        )
+        .expect("open missing-tail shared-root publisher database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-missing-tail-shared-receiver",
+        )
+        .expect("open missing-tail shared-root receiver database");
+        let content_key = ProfileSyncContentKey::from_bytes([104; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-missing-tail-shared-publisher")
+            .expect("generate missing-tail shared-root signer");
+        receiver_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: signer
+                    .public_key()
+                    .expect("missing-tail shared-root public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("receiver trusts missing-tail shared-root publisher");
+        register_test_content_key_epoch(&receiver_database, DEFAULT_PROFILE_ID);
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+        let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
+        let settings_root_id = "settings/latest";
+
+        let valid_change = publisher_database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("publisher writes valid missing-tail baseline setting");
+        let valid_manifest = publisher
+            .publish_signed_settings_tail_changes(
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                std::slice::from_ref(&valid_change),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish valid missing-tail baseline manifest");
+        let valid_apply = source
+            .pull_and_apply_active_trusted_settings_manifest_candidates_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                &content_key,
+            )
+            .expect("receiver applies valid missing-tail baseline manifest");
+        assert!(matches!(
+            valid_apply,
+            ProfileSyncSettingsCandidatePullApplyStatus::Applied(_)
+        ));
+
+        let missing_tail_object_id = "missing-tail-object-shared-root-1";
+        let missing_manifest = ProfileSyncManifest {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: settings_root_id.to_string(),
+            schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            current_snapshot_object_id: None,
+            tail_change_object_ids: vec![missing_tail_object_id.to_string()],
+            included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            device_frontiers: vec![ProfileSyncDeviceFrontier {
+                device_id: "runtime-missing-tail-shared-publisher".to_string(),
+                latest_sequence: valid_change.device_sequence + 1,
+                latest_change_object_id: Some(missing_tail_object_id.to_string()),
+            }],
+            retention_policy: ProfileSyncRetentionPolicy::default(),
+            created_at: 23,
+        };
+        let missing_manifest_object_id = publisher
+            .put_retained_root(
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                sign_encrypted_json_object(
+                    DEFAULT_PROFILE_ID,
+                    SYNC_DOMAIN_SETTINGS,
+                    PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+                    TEST_CONTENT_KEY_ID,
+                    &serde_json::to_vec(&missing_manifest).expect("encode missing-tail manifest"),
+                    &content_key,
+                    &signer,
+                )
+                .expect("sign missing-tail manifest"),
+            )
+            .expect("publish missing-tail shared-root manifest");
+        let error = source
+            .pull_and_apply_active_trusted_settings_manifest_candidates_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                &content_key,
+            )
+            .expect_err("receiver rejects missing tail object shared root");
+        assert!(matches!(
+            error,
+            ProfileSyncTrustedPullApplyError::Pull(ProfileSyncTrustedPullError::Source(_))
+        ));
+        assert_eq!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, settings_root_id)
+                .expect("read root after missing tail object")
+                .expect("root after missing tail object")
+                .object_id,
+            valid_manifest.manifest_object_id
+        );
+        assert_ne!(
+            missing_manifest_object_id,
+            valid_manifest.manifest_object_id
+        );
+        assert_eq!(
+            receiver_database
+                .get_setting_text("ui.theme")
+                .expect("read setting after missing tail object")
+                .as_deref(),
+            Some("teal")
+        );
+        assert_eq!(
+            receiver_database
+                .latest_sync_device_sequence(
+                    DEFAULT_PROFILE_ID,
+                    "runtime-missing-tail-shared-publisher"
+                )
+                .expect("read missing-tail receiver sequence"),
+            Some(valid_change.device_sequence)
+        );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
     fn broadwebd_source_pulls_registered_trusted_device_heads_with_device_bound() {
         let network = InProcessBroadwebNetwork::new();
         let publisher_state_root = test_state_root("trusted-devices-publisher");

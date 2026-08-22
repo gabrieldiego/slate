@@ -398,9 +398,10 @@ Current baseline:
 - Internal broadweb models must remain socket substitutes, not protocol
   implementations. IPFS/IPNS, Iroh, Tor, I2P, and future adapters should keep
   building their normal routing plans, requests, responses, parsers, privacy
-  boundaries, and provider-role checks. The deterministic fixture layer only
-  swaps the socket transport with in-process modeled behavior such as delayed
-  discovery, unavailable transfer, stale roots, or malformed protocol responses.
+  boundaries, and provider-role checks as if they were talking to the real web.
+  The deterministic fixture layer only swaps the socket transport or daemon
+  communication with in-process modeled behavior such as delayed discovery,
+  unavailable transfer, stale roots, or malformed protocol responses.
 - Trusted device-head receives now ignore stale root rollback: if a resolved
   device head points at an older sequence than a locally applied head for the
   same trusted device, Slate leaves the newer settings and device-head roots in
@@ -425,6 +426,10 @@ Current baseline:
 - Malformed app-domain payloads in shared-root manifests are covered through
   the same bridge; application fails inside the storage transaction and leaves
   the previous shared root and materialized app state unchanged.
+- Shared-root manifests that reference unavailable tail objects are covered
+  through the same bridge. The receiver fails at the pull/source boundary and
+  leaves the previous shared root, materialized settings, and trusted-device
+  sequence unchanged.
 - The same bridge now publishes a real signed encrypted settings tail manifest
   through one Kubo fixture daemon, then verifies the manifest and tail bytes
   fetched by a second daemon through the shared stateful Kubo/IPNS model. The
