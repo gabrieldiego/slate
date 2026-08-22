@@ -422,6 +422,9 @@ Current baseline:
 - Invalid signatures on parseable shared-root objects are covered through the
   same socketless bridge, so available bytes cannot advance `settings/latest`
   unless the trusted-device signature verifies.
+- Malformed app-domain payloads in shared-root manifests are covered through
+  the same bridge; application fails inside the storage transaction and leaves
+  the previous shared root and materialized app state unchanged.
 - The same bridge now publishes a real signed encrypted settings tail manifest
   through one Kubo fixture daemon, then verifies the manifest and tail bytes
   fetched by a second daemon through the shared stateful Kubo/IPNS model. The

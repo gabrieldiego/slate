@@ -1109,6 +1109,10 @@ normal signed encrypted object parsing; only object transport is in-process.
 It also covers invalid signatures on otherwise parseable shared-root objects,
 so a fixture or future transport can deliver bytes without letting an
 unauthenticated manifest advance `settings/latest`.
+Malformed app-domain payloads delivered through a shared settings manifest are
+also covered at this bridge: storage application fails inside the transaction,
+leaving the previous root, materialized app rows, and app watcher cursors
+unchanged.
 
 ### Internal Protocol Models
 

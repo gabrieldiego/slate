@@ -17782,6 +17782,181 @@ mod tests {
     }
 
     #[test]
+    fn broadwebd_source_rejects_malformed_app_payload_shared_root_without_mutation() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("shared-root-malformed-app-publisher");
+        let receiver_state_root = test_state_root("shared-root-malformed-app-receiver");
+        let publisher_db_root = test_state_root("shared-root-malformed-app-publisher-db");
+        let receiver_db_root = test_state_root("shared-root-malformed-app-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "runtime-malformed-app-shared-publisher",
+            )
+            .expect("start malformed-app shared-root publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "runtime-malformed-app-shared-receiver",
+            )
+            .expect("start malformed-app shared-root receiver daemon");
+        let publisher_database = SlateProfileDatabase::open_resolved_with_device_id(
+            publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-malformed-app-shared-publisher",
+        )
+        .expect("open malformed-app shared-root publisher database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-malformed-app-shared-receiver",
+        )
+        .expect("open malformed-app shared-root receiver database");
+        let content_key = ProfileSyncContentKey::from_bytes([103; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-malformed-app-shared-publisher")
+            .expect("generate malformed-app shared-root signer");
+        receiver_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: signer
+                    .public_key()
+                    .expect("malformed-app shared-root public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("receiver trusts malformed-app shared-root publisher");
+        register_test_content_key_epoch(&receiver_database, DEFAULT_PROFILE_ID);
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+        let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
+        let settings_root_id = "settings/latest";
+
+        let valid_change = publisher_database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("publisher writes valid malformed-app baseline setting");
+        let valid_manifest = publisher
+            .publish_signed_settings_tail_changes(
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                std::slice::from_ref(&valid_change),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish valid malformed-app baseline manifest");
+        let valid_apply = source
+            .pull_and_apply_active_trusted_settings_manifest_candidates_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                &content_key,
+            )
+            .expect("receiver applies valid malformed-app baseline manifest");
+        assert!(matches!(
+            valid_apply,
+            ProfileSyncSettingsCandidatePullApplyStatus::Applied(_)
+        ));
+
+        let invalid_tail = IncomingSyncSettingText::new(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_BOOKMARKS,
+            "home.slot.99",
+            "{not valid json",
+            "runtime-malformed-app-shared-publisher",
+            valid_change.device_sequence + 1,
+            valid_change.logical_clock + 1,
+        );
+        let invalid_tail_object_id = publisher
+            .put_retained_object(
+                DEFAULT_PROFILE_ID,
+                sign_encrypted_json_object(
+                    DEFAULT_PROFILE_ID,
+                    SYNC_DOMAIN_BOOKMARKS,
+                    PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND,
+                    TEST_CONTENT_KEY_ID,
+                    &serde_json::to_vec(&invalid_tail).expect("encode malformed-app tail change"),
+                    &content_key,
+                    &signer,
+                )
+                .expect("sign malformed-app tail change"),
+            )
+            .expect("retain malformed-app tail object");
+        let invalid_manifest = ProfileSyncManifest {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: settings_root_id.to_string(),
+            schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            current_snapshot_object_id: None,
+            tail_change_object_ids: vec![invalid_tail_object_id.clone()],
+            included_domains: vec![SYNC_DOMAIN_BOOKMARKS.to_string()],
+            device_frontiers: vec![ProfileSyncDeviceFrontier {
+                device_id: "runtime-malformed-app-shared-publisher".to_string(),
+                latest_sequence: invalid_tail.device_sequence,
+                latest_change_object_id: Some(invalid_tail_object_id.clone()),
+            }],
+            retention_policy: ProfileSyncRetentionPolicy::default(),
+            created_at: 22,
+        };
+        let invalid_manifest_object_id = publisher
+            .put_retained_root(
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                sign_encrypted_json_object(
+                    DEFAULT_PROFILE_ID,
+                    SYNC_DOMAIN_SETTINGS,
+                    PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+                    TEST_CONTENT_KEY_ID,
+                    &serde_json::to_vec(&invalid_manifest).expect("encode malformed-app manifest"),
+                    &content_key,
+                    &signer,
+                )
+                .expect("sign malformed-app manifest"),
+            )
+            .expect("publish malformed-app shared-root manifest");
+        let error = source
+            .pull_and_apply_active_trusted_settings_manifest_candidates_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                &content_key,
+            )
+            .expect_err("receiver rejects malformed app payload shared root");
+        assert!(matches!(
+            error,
+            ProfileSyncTrustedPullApplyError::Storage(StorageError::Database { .. })
+        ));
+        assert_eq!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, settings_root_id)
+                .expect("read root after malformed app payload")
+                .expect("root after malformed app payload")
+                .object_id,
+            valid_manifest.manifest_object_id
+        );
+        assert_ne!(
+            invalid_manifest_object_id,
+            valid_manifest.manifest_object_id
+        );
+        assert_eq!(
+            receiver_database
+                .get_setting_text("ui.theme")
+                .expect("read setting after malformed app payload")
+                .as_deref(),
+            Some("teal")
+        );
+        assert!(
+            receiver_database
+                .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_BOOKMARKS, "home.slot.99")
+                .expect("read malformed app payload setting")
+                .is_none()
+        );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
     fn broadwebd_source_pulls_registered_trusted_device_heads_with_device_bound() {
         let network = InProcessBroadwebNetwork::new();
         let publisher_state_root = test_state_root("trusted-devices-publisher");
