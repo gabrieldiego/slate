@@ -148,6 +148,15 @@ device from mutating local trust state. A separate Slate Sync Secret is still
 needed for content-key derivation, recovery, and any secret-bearing enrollment
 flow.
 
+Storage also has a first `ProfileSyncSecretHandoffBundle` for local QR/file
+experiments. It combines a redacted-debug `SlateSyncSecretExport` with the
+non-secret enrollment bundle for one target device, validates that the profile
+and target device match across both nested artifacts, rejects bundles for the
+wrong local device before mutation, applies the signed membership records, and
+then activates key-derived local sync metadata. This is a preview handoff
+primitive, not the final encrypted recovery-file design: the artifact contains
+root sync secret material and must be treated like a login key.
+
 `slate-settings.db` now has the first local persistence primitive for that
 authority set: signed membership records are stored by profile, record id,
 membership epoch, record kind, target device id, signer device id, and exact

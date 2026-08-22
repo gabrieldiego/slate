@@ -35,6 +35,7 @@ pub const PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_ENROLLMENT_BUNDLE_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_DEVICE_ENROLLMENT_REQUEST_SCHEMA_VERSION: u8 = 1;
+pub const PROFILE_SYNC_SECRET_HANDOFF_BUNDLE_SCHEMA_VERSION: u8 = 1;
 pub const SLATE_SYNC_SECRET_EXPORT_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND: &str = "setting-change";
@@ -705,6 +706,17 @@ pub struct ProfileSyncEnrollmentBundle {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ProfileSyncSecretHandoffBundle {
+    pub profile: String,
+    #[serde(default = "default_profile_sync_secret_handoff_bundle_schema_version")]
+    pub schema_version: u8,
+    pub target_device_id: String,
+    pub created_at: i64,
+    pub sync_secret_export: SlateSyncSecretExport,
+    pub enrollment_bundle: ProfileSyncEnrollmentBundle,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct ProfileSyncDeviceEnrollmentRequest {
     pub profile: String,
     #[serde(default = "default_profile_sync_device_enrollment_request_schema_version")]
@@ -776,6 +788,10 @@ fn default_profile_sync_device_enrollment_request_schema_version() -> u8 {
     PROFILE_SYNC_DEVICE_ENROLLMENT_REQUEST_SCHEMA_VERSION
 }
 
+fn default_profile_sync_secret_handoff_bundle_schema_version() -> u8 {
+    PROFILE_SYNC_SECRET_HANDOFF_BUNDLE_SCHEMA_VERSION
+}
+
 fn default_slate_sync_secret_export_schema_version() -> u8 {
     SLATE_SYNC_SECRET_EXPORT_SCHEMA_VERSION
 }
@@ -822,6 +838,45 @@ impl ProfileSyncEnrollmentBundle {
             serde_json::from_slice(bytes).map_err(StorageError::DecodeSyncPayload)?;
         validate_profile_sync_enrollment_bundle(&bundle)?;
         Ok(bundle)
+    }
+}
+
+impl ProfileSyncSecretHandoffBundle {
+    pub fn new(
+        profile: impl Into<String>,
+        target_device_id: impl Into<String>,
+        sync_secret_export: SlateSyncSecretExport,
+        enrollment_bundle: ProfileSyncEnrollmentBundle,
+        created_at: i64,
+    ) -> Result<Self, StorageError> {
+        let bundle = Self {
+            profile: profile.into(),
+            schema_version: PROFILE_SYNC_SECRET_HANDOFF_BUNDLE_SCHEMA_VERSION,
+            target_device_id: target_device_id.into(),
+            created_at,
+            sync_secret_export,
+            enrollment_bundle,
+        };
+        validate_profile_sync_secret_handoff_bundle(&bundle)?;
+        Ok(bundle)
+    }
+
+    pub fn to_bytes(&self) -> Result<Vec<u8>, StorageError> {
+        validate_profile_sync_secret_handoff_bundle(self)?;
+        serde_json::to_vec(self).map_err(StorageError::EncodeSyncPayload)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, StorageError> {
+        let bundle: Self =
+            serde_json::from_slice(bytes).map_err(StorageError::DecodeSyncPayload)?;
+        validate_profile_sync_secret_handoff_bundle(&bundle)?;
+        Ok(bundle)
+    }
+
+    fn to_sync_secret(&self) -> Result<SlateSyncSecret, StorageError> {
+        validate_profile_sync_secret_handoff_bundle(self)?;
+        SlateSyncSecret::from_export_for_profile(&self.sync_secret_export, self.profile.as_str())
+            .map_err(profile_sync_secret_handoff_sync_object_error)
     }
 }
 
@@ -2597,6 +2652,12 @@ pub struct ProfileSyncLocalSecretActivationRecord {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncSecretHandoffApplication {
+    pub enrollment_applications: Vec<SyncAccountMembershipRecordApplication>,
+    pub activation: ProfileSyncLocalSecretActivationRecord,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProfileSyncPreviewProviderActivationRecord {
     pub provider: StorageProviderRecord,
     pub membership_application: SyncAccountMembershipRecordApplication,
@@ -3144,6 +3205,7 @@ pub enum StorageError {
     InvalidProfileSyncMembershipRecord(String),
     InvalidProfileSyncEnrollmentBundle(String),
     InvalidProfileSyncDeviceEnrollmentRequest(String),
+    InvalidProfileSyncSecretHandoffBundle(String),
     UntrustedSyncMembershipSigner {
         profile: String,
         device_id: String,
@@ -3181,6 +3243,7 @@ pub enum StorageError {
     UnsupportedProfileSyncMembershipRecordSchema(u8),
     UnsupportedProfileSyncEnrollmentBundleSchema(u8),
     UnsupportedProfileSyncDeviceEnrollmentRequestSchema(u8),
+    UnsupportedProfileSyncSecretHandoffBundleSchema(u8),
     UnsupportedSyncSnapshotSchema(u8),
 }
 
@@ -3265,6 +3328,12 @@ impl fmt::Display for StorageError {
                 write!(
                     formatter,
                     "invalid profile sync device enrollment request: {reason}"
+                )
+            }
+            Self::InvalidProfileSyncSecretHandoffBundle(reason) => {
+                write!(
+                    formatter,
+                    "invalid profile sync secret handoff bundle: {reason}"
                 )
             }
             Self::UntrustedSyncMembershipSigner { profile, device_id } => {
@@ -3382,6 +3451,12 @@ impl fmt::Display for StorageError {
                     "unsupported profile sync device enrollment request schema version: {schema_version}"
                 )
             }
+            Self::UnsupportedProfileSyncSecretHandoffBundleSchema(schema_version) => {
+                write!(
+                    formatter,
+                    "unsupported profile sync secret handoff bundle schema version: {schema_version}"
+                )
+            }
             Self::UnsupportedSyncSnapshotSchema(schema_version) => {
                 write!(
                     formatter,
@@ -3412,6 +3487,7 @@ impl std::error::Error for StorageError {
             Self::InvalidProfileSyncMembershipRecord(_) => None,
             Self::InvalidProfileSyncEnrollmentBundle(_) => None,
             Self::InvalidProfileSyncDeviceEnrollmentRequest(_) => None,
+            Self::InvalidProfileSyncSecretHandoffBundle(_) => None,
             Self::UntrustedSyncMembershipSigner { .. } => None,
             Self::InvalidSyncContentKeyId(_) => None,
             Self::InvalidSyncDomain(_) => None,
@@ -3438,6 +3514,7 @@ impl std::error::Error for StorageError {
             Self::UnsupportedProfileSyncMembershipRecordSchema(_) => None,
             Self::UnsupportedProfileSyncEnrollmentBundleSchema(_) => None,
             Self::UnsupportedProfileSyncDeviceEnrollmentRequestSchema(_) => None,
+            Self::UnsupportedProfileSyncSecretHandoffBundleSchema(_) => None,
             Self::UnsupportedSyncSnapshotSchema(_) => None,
         }
     }
@@ -5325,6 +5402,31 @@ impl SlateProfileDatabase {
         self.apply_signed_sync_account_membership_records(&bundle.signed_membership_records)
     }
 
+    pub fn apply_profile_sync_secret_handoff_bundle(
+        &self,
+        bundle: &ProfileSyncSecretHandoffBundle,
+    ) -> Result<ProfileSyncSecretHandoffApplication, StorageError> {
+        validate_profile_sync_secret_handoff_bundle(bundle)?;
+        if bundle.target_device_id != self.local_sync_device_id.as_str() {
+            return Err(StorageError::InvalidProfileSyncSecretHandoffBundle(
+                format!(
+                    "handoff targets device {}, but this database is for device {}",
+                    bundle.target_device_id,
+                    self.local_sync_device_id.as_str()
+                ),
+            ));
+        }
+        let sync_secret = bundle.to_sync_secret()?;
+        let enrollment_applications =
+            self.apply_profile_sync_enrollment_bundle(&bundle.enrollment_bundle)?;
+        let activation =
+            self.activate_local_profile_sync_from_secret(bundle.profile.as_str(), &sync_secret)?;
+        Ok(ProfileSyncSecretHandoffApplication {
+            enrollment_applications,
+            activation,
+        })
+    }
+
     pub fn apply_signed_sync_account_membership_record_and_set_profile_sync_root(
         &self,
         profile: &str,
@@ -6184,6 +6286,61 @@ impl SlateProfileDatabase {
             profile,
             sync_secret,
             request.device_id.as_str(),
+        )
+    }
+
+    pub fn profile_sync_secret_handoff_bundle_from_secret(
+        profile: &str,
+        sync_secret: &SlateSyncSecret,
+        target_device_id: &str,
+    ) -> Result<ProfileSyncSecretHandoffBundle, StorageError> {
+        Self::profile_sync_secret_handoff_bundle_from_secret_with_epoch(
+            profile,
+            sync_secret,
+            target_device_id,
+            DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            unix_time_seconds()?,
+        )
+    }
+
+    pub fn profile_sync_secret_handoff_bundle_from_device_request(
+        profile: &str,
+        sync_secret: &SlateSyncSecret,
+        request: &ProfileSyncDeviceEnrollmentRequest,
+    ) -> Result<ProfileSyncSecretHandoffBundle, StorageError> {
+        if request.profile != profile {
+            return Err(StorageError::InvalidProfileSyncDeviceEnrollmentRequest(
+                format!("expected profile {profile}, got {}", request.profile),
+            ));
+        }
+        Self::profile_sync_secret_handoff_bundle_from_secret(
+            profile,
+            sync_secret,
+            request.device_id.as_str(),
+        )
+    }
+
+    pub fn profile_sync_secret_handoff_bundle_from_secret_with_epoch(
+        profile: &str,
+        sync_secret: &SlateSyncSecret,
+        target_device_id: &str,
+        membership_epoch: i64,
+        created_at: i64,
+    ) -> Result<ProfileSyncSecretHandoffBundle, StorageError> {
+        let sync_secret_export = sync_secret.export_for_profile(profile, created_at);
+        let enrollment_bundle = Self::profile_sync_enrollment_bundle_from_secret_with_epoch(
+            profile,
+            sync_secret,
+            target_device_id,
+            membership_epoch,
+            created_at,
+        )?;
+        ProfileSyncSecretHandoffBundle::new(
+            profile,
+            target_device_id,
+            sync_secret_export,
+            enrollment_bundle,
+            created_at,
         )
     }
 
@@ -9712,6 +9869,57 @@ fn validate_profile_sync_enrollment_bundle(
         )));
     }
     Ok(())
+}
+
+fn validate_profile_sync_secret_handoff_bundle(
+    bundle: &ProfileSyncSecretHandoffBundle,
+) -> Result<(), StorageError> {
+    if bundle.schema_version != PROFILE_SYNC_SECRET_HANDOFF_BUNDLE_SCHEMA_VERSION {
+        return Err(
+            StorageError::UnsupportedProfileSyncSecretHandoffBundleSchema(bundle.schema_version),
+        );
+    }
+    if bundle.profile.trim().is_empty() {
+        return Err(StorageError::InvalidProfileSyncSecretHandoffBundle(
+            "missing profile id".to_string(),
+        ));
+    }
+    if !is_valid_sync_identifier(bundle.target_device_id.as_str()) {
+        return Err(StorageError::InvalidSyncDeviceId(
+            bundle.target_device_id.clone(),
+        ));
+    }
+    if bundle.sync_secret_export.profile != bundle.profile {
+        return Err(StorageError::InvalidProfileSyncSecretHandoffBundle(
+            format!(
+                "secret export profile {} does not match handoff profile {}",
+                bundle.sync_secret_export.profile, bundle.profile
+            ),
+        ));
+    }
+    if bundle.enrollment_bundle.profile != bundle.profile {
+        return Err(StorageError::InvalidProfileSyncSecretHandoffBundle(
+            format!(
+                "enrollment bundle profile {} does not match handoff profile {}",
+                bundle.enrollment_bundle.profile, bundle.profile
+            ),
+        ));
+    }
+    if bundle.enrollment_bundle.target_device_id != bundle.target_device_id {
+        return Err(StorageError::InvalidProfileSyncSecretHandoffBundle(
+            format!(
+                "enrollment bundle targets device {}, not handoff target {}",
+                bundle.enrollment_bundle.target_device_id, bundle.target_device_id
+            ),
+        ));
+    }
+    SlateSyncSecret::from_export_for_profile(&bundle.sync_secret_export, bundle.profile.as_str())
+        .map_err(profile_sync_secret_handoff_sync_object_error)?;
+    validate_profile_sync_enrollment_bundle(&bundle.enrollment_bundle)
+}
+
+fn profile_sync_secret_handoff_sync_object_error(error: SyncObjectError) -> StorageError {
+    StorageError::InvalidProfileSyncSecretHandoffBundle(error.to_string())
 }
 
 fn validate_profile_sync_device_enrollment_request(
@@ -15829,6 +16037,149 @@ mod tests {
             StorageError::InvalidProfileSyncDeviceEnrollmentRequest(reason)
                 if reason.contains("expected profile default, got work")
         ));
+    }
+
+    #[test]
+    fn profile_sync_secret_handoff_bundle_imports_secret_and_enrollment_for_local_device() {
+        let secret = SlateSyncSecret::from_bytes([52; SLATE_SYNC_SECRET_BYTES]);
+        let request =
+            ProfileSyncDeviceEnrollmentRequest::new(DEFAULT_PROFILE_ID, "device-b", 30).unwrap();
+        let bundle =
+            SlateProfileDatabase::profile_sync_secret_handoff_bundle_from_secret_with_epoch(
+                DEFAULT_PROFILE_ID,
+                &secret,
+                request.device_id.as_str(),
+                DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                40,
+            )
+            .unwrap();
+        let encoded = bundle.to_bytes().unwrap();
+        let decoded = ProfileSyncSecretHandoffBundle::from_bytes(encoded.as_slice()).unwrap();
+        let debug = format!("{decoded:?}");
+
+        assert_eq!(decoded, bundle);
+        assert_eq!(decoded.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(decoded.target_device_id, "device-b");
+        assert_eq!(
+            decoded.schema_version,
+            PROFILE_SYNC_SECRET_HANDOFF_BUNDLE_SCHEMA_VERSION
+        );
+        assert_eq!(decoded.sync_secret_export.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(decoded.enrollment_bundle.target_device_id, "device-b");
+        assert!(!debug.contains(decoded.sync_secret_export.secret.as_str()));
+        assert!(debug.contains("<redacted>"));
+
+        let database_path = test_dir("sync-secret-handoff-import").join(DEFAULT_DATABASE_FILE_NAME);
+        let database =
+            SlateProfileDatabase::open_resolved_with_device_id(database_path, "device-b").unwrap();
+        let application = database
+            .apply_profile_sync_secret_handoff_bundle(&decoded)
+            .unwrap();
+
+        assert_eq!(application.enrollment_applications.len(), 2);
+        assert!(
+            application
+                .enrollment_applications
+                .iter()
+                .all(|application| application.applied)
+        );
+        assert_eq!(application.activation.local_device_id, "device-b");
+        assert_eq!(
+            application.activation.activation.content_key_epoch.key_id,
+            DEFAULT_PROFILE_SYNC_CONTENT_KEY_ID
+        );
+        assert_eq!(
+            database
+                .sync_account_membership_record_count(DEFAULT_PROFILE_ID)
+                .unwrap(),
+            2
+        );
+
+        let target_signer = secret
+            .derive_profile_sync_device_signer(
+                DEFAULT_PROFILE_ID,
+                "device-b",
+                DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            )
+            .unwrap();
+        let target_key = database
+            .sync_device_public_key(DEFAULT_PROFILE_ID, "device-b")
+            .unwrap()
+            .expect("target device key imported");
+        assert!(target_key.trusted);
+        assert_eq!(target_key.public_key, target_signer.public_key().unwrap());
+        assert!(
+            database
+                .active_sync_content_key_epoch(DEFAULT_PROFILE_ID)
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            database
+                .get_sync_setting_text(
+                    DEFAULT_PROFILE_ID,
+                    SYNC_DOMAIN_SETTINGS,
+                    "slate-sync-secret"
+                )
+                .unwrap()
+                .is_none()
+        );
+
+        let replay = database
+            .apply_profile_sync_secret_handoff_bundle(&decoded)
+            .unwrap();
+        assert!(
+            replay
+                .enrollment_applications
+                .iter()
+                .all(|application| !application.applied)
+        );
+        assert_eq!(
+            database
+                .sync_account_membership_record_count(DEFAULT_PROFILE_ID)
+                .unwrap(),
+            2
+        );
+    }
+
+    #[test]
+    fn profile_sync_secret_handoff_bundle_rejects_wrong_local_device_without_mutation() {
+        let secret = SlateSyncSecret::from_bytes([53; SLATE_SYNC_SECRET_BYTES]);
+        let bundle =
+            SlateProfileDatabase::profile_sync_secret_handoff_bundle_from_secret_with_epoch(
+                DEFAULT_PROFILE_ID,
+                &secret,
+                "device-b",
+                DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                40,
+            )
+            .unwrap();
+        let database_path =
+            test_dir("sync-secret-handoff-wrong-device").join(DEFAULT_DATABASE_FILE_NAME);
+        let database =
+            SlateProfileDatabase::open_resolved_with_device_id(database_path, "device-c").unwrap();
+
+        let error = database
+            .apply_profile_sync_secret_handoff_bundle(&bundle)
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            StorageError::InvalidProfileSyncSecretHandoffBundle(reason)
+                if reason.contains("handoff targets device device-b")
+        ));
+        assert_eq!(
+            database
+                .sync_account_membership_record_count(DEFAULT_PROFILE_ID)
+                .unwrap(),
+            0
+        );
+        assert!(
+            database
+                .active_sync_content_key_epoch(DEFAULT_PROFILE_ID)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
