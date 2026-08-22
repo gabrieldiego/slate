@@ -607,6 +607,10 @@ Current baseline:
   providers with supplied handles, see materialized provider ids, pending
   protocol work, endpoint mismatches, and fail-closed endpoints, then decide
   whether it is safe to proceed without publishing or retaining anything.
+- Stored-provider handle materialization now rejects duplicate supplied handles
+  for the same selected provider instead of choosing the first one. The preview
+  and runtime result report ambiguous provider ids separately, and those
+  duplicates are excluded from materialized quorum before any sync mutation.
 - Selected synthetic fixture endpoints now expose materialization targets with
   provider id, fixture network id, and endpoint ref so local-only fixtures can
   bridge stored metadata to in-process providers without opening sockets.
