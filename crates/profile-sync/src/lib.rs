@@ -2481,6 +2481,13 @@ impl SettingsSyncStoredRetentionProviderRun {
         self.unsupported_endpoint_retention_provider_ids.len()
     }
 
+    pub fn selected_protocol_materialization_plan(
+        &self,
+    ) -> SettingsSyncSelectedProtocolMaterializationPlan {
+        self.stored_provider_plan
+            .selected_protocol_materialization_plan()
+    }
+
     pub fn selected_retention_provider_count(&self) -> usize {
         self.stored_provider_plan
             .selected_retention_provider_count()
@@ -2613,6 +2620,13 @@ impl SettingsSyncStoredRetentionProviderMembershipRun {
 
     pub fn unsupported_endpoint_retention_provider_count(&self) -> usize {
         self.unsupported_endpoint_retention_provider_ids.len()
+    }
+
+    pub fn selected_protocol_materialization_plan(
+        &self,
+    ) -> SettingsSyncSelectedProtocolMaterializationPlan {
+        self.stored_provider_plan
+            .selected_protocol_materialization_plan()
     }
 
     pub fn selected_retention_provider_count(&self) -> usize {
@@ -8844,6 +8858,10 @@ mod tests {
             0
         );
         assert_eq!(run.duplicate_handle_retention_provider_count(), 0);
+        assert_eq!(
+            run.selected_protocol_materialization_plan(),
+            super::SettingsSyncSelectedProtocolMaterializationPlan::default()
+        );
         assert_eq!(run.cycle.cycle.cycle.applied_count(), 1);
         assert_eq!(
             receiver_database
@@ -14891,6 +14909,18 @@ mod tests {
         );
         assert_eq!(
             run.stored_provider_plan.unsupported_endpoint_provider_ids(),
+            vec![unsupported_provider_id.to_string()]
+        );
+        let protocol_plan = run.selected_protocol_materialization_plan();
+        assert_eq!(protocol_plan.protocol_request_count(), 0);
+        assert_eq!(protocol_plan.missing_endpoint_provider_count(), 0);
+        assert_eq!(protocol_plan.fail_closed_provider_count(), 1);
+        assert!(!protocol_plan.requires_protocol_materializer());
+        assert!(!protocol_plan.has_missing_endpoint());
+        assert!(protocol_plan.has_fail_closed_endpoint());
+        assert!(!protocol_plan.ready_for_protocol_materialization());
+        assert_eq!(
+            protocol_plan.fail_closed_provider_ids,
             vec![unsupported_provider_id.to_string()]
         );
         assert_eq!(run.cycle.retention.len(), 1);

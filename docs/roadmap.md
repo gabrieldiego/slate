@@ -597,6 +597,10 @@ Current baseline:
 - Stored-provider plans now expose that selected protocol materialization
   summary directly, so scheduler/UI callers can inspect protocol work from the
   stored-provider plan without rebuilding endpoint plans themselves.
+- Stored-provider runtime result types now expose the same selected protocol
+  materialization summary. Successful runs can still report fail-closed or
+  pending protocol endpoints that were excluded from quorum, letting callers
+  surface follow-up materialization work without inferring it from raw ids.
 - Legacy `fixture:<provider>` endpoint refs now also fail closed. They do not
   carry a fixture network id, so they cannot safely satisfy stored-provider
   materialization or quorum checks.
