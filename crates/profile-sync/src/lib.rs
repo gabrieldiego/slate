@@ -14135,6 +14135,7 @@ mod tests {
         for (domain, privacy_classification, sync_content) in [
             (SYNC_DOMAIN_CALENDAR, "sensitive", false),
             (SYNC_DOMAIN_CHAT, "sensitive", false),
+            (SYNC_DOMAIN_CONTACTS, "sensitive", false),
             (SYNC_DOMAIN_DOWNLOADS, "metadata", false),
             (SYNC_DOMAIN_FILES, "content", true),
             (SYNC_DOMAIN_STORAGE, "sensitive", false),
@@ -14175,6 +14176,18 @@ mod tests {
             unread_count: 2,
             archived: false,
             muted: false,
+        };
+        let contact_update = ContactCardUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            contact_id: "runtime-contact-delete".to_string(),
+            display_name: "Old Runtime Contact".to_string(),
+            given_name: Some("Old".to_string()),
+            family_name: Some("Contact".to_string()),
+            organization: Some("Slate Sync".to_string()),
+            primary_email: Some("old-contact@example.test".to_string()),
+            primary_phone: Some("+15550105000".to_string()),
+            notes: Some("Delete through tombstone snapshot".to_string()),
+            avatar_key: Some("contact-avatar:runtime-contact-delete".to_string()),
         };
         let file_update = FileEntryUpdate {
             profile: DEFAULT_PROFILE_ID.to_string(),
@@ -14228,6 +14241,9 @@ mod tests {
                 .upsert_chat_conversation(&chat_update)
                 .expect("seed typed chat metadata");
             database
+                .upsert_contact_card(&contact_update)
+                .expect("seed typed contact metadata");
+            database
                 .upsert_file_entry(&file_update)
                 .expect("seed typed file metadata");
             database
@@ -14243,6 +14259,9 @@ mod tests {
         publisher_database
             .remove_chat_conversation(DEFAULT_PROFILE_ID, chat_update.conversation_id.as_str())
             .expect("publisher tombstones typed chat metadata");
+        publisher_database
+            .remove_contact_card(DEFAULT_PROFILE_ID, contact_update.contact_id.as_str())
+            .expect("publisher tombstones typed contact metadata");
         publisher_database
             .remove_file_entry(DEFAULT_PROFILE_ID, file_update.entry_id.as_str())
             .expect("publisher tombstones typed file metadata");
@@ -14282,6 +14301,7 @@ mod tests {
             vec![
                 SYNC_DOMAIN_CALENDAR.to_string(),
                 SYNC_DOMAIN_CHAT.to_string(),
+                SYNC_DOMAIN_CONTACTS.to_string(),
                 SYNC_DOMAIN_DOWNLOADS.to_string(),
                 SYNC_DOMAIN_FILES.to_string(),
                 SYNC_DOMAIN_SETTINGS.to_string(),
@@ -14322,6 +14342,12 @@ mod tests {
             receiver_database
                 .chat_conversations(DEFAULT_PROFILE_ID, 10)
                 .expect("read receiver typed chat metadata")
+                .is_empty()
+        );
+        assert!(
+            receiver_database
+                .contact_cards(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver typed contact metadata")
                 .is_empty()
         );
         assert!(
@@ -14371,6 +14397,20 @@ mod tests {
             serde_json::from_str(chat_value.as_str()).expect("decode chat tombstone payload");
         assert!(chat_payload.deleted);
         assert_eq!(chat_payload.conversation_id, "runtime-chat-delete");
+
+        let contact_value = receiver_database
+            .get_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CONTACTS,
+                "contact.runtime-contact-delete",
+            )
+            .expect("read receiver contact tombstone sync setting")
+            .expect("receiver contact tombstone sync setting")
+            .value;
+        let contact_payload: ContactCardSyncPayload =
+            serde_json::from_str(contact_value.as_str()).expect("decode contact tombstone payload");
+        assert!(contact_payload.deleted);
+        assert_eq!(contact_payload.contact_id, "runtime-contact-delete");
 
         let file_value = receiver_database
             .get_sync_setting_text(
