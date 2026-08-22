@@ -7130,6 +7130,86 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         })
     }
 
+    pub fn compact_once_with_stored_retention_provider_handles_and_sync_secret(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        sync_secret: &SlateSyncSecret,
+        signer: &ProfileSyncDeviceSigner,
+        max_stored_providers: u32,
+        now: i64,
+        retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'_>],
+    ) -> Result<SettingsSyncStoredCompactionRun, ProfileSyncCycleWithHealthError> {
+        let runner = BroadwebdSettingsSyncRunner::new(self.daemon);
+        let preflight = runner.settings_sync_cycle_preflight_with_active_key_policy(
+            database,
+            config.profile.as_str(),
+            config.settings_root_id.as_str(),
+            signer,
+            &config.policy,
+        )?;
+        let content_key = derive_settings_sync_content_key_from_secret(
+            config.profile.as_str(),
+            preflight.active_key_id.as_str(),
+            sync_secret,
+        )
+        .map_err(ProfileSyncCycleError::from)?;
+        let stored_selection = load_stored_retention_provider_selection(
+            database,
+            config.profile.as_str(),
+            max_stored_providers,
+        )
+        .map_err(ProfileSyncCredentialError::from)
+        .map_err(ProfileSyncCycleError::from)?;
+        let stored_provider_plan = settings_sync_stored_retention_provider_plan(
+            preflight,
+            max_stored_providers,
+            stored_selection,
+        );
+        config.policy.check_selected_retention_provider_freshness(
+            stored_provider_plan.stale_retention_provider_count(),
+            stored_provider_plan.offline_retention_provider_count(),
+            &stored_provider_plan.cycle.preflight.before_health,
+        )?;
+        config.policy.check_selected_retention_provider_roles(
+            stored_provider_plan.ineligible_retention_provider_count(),
+            &stored_provider_plan.cycle.preflight.before_health,
+        )?;
+        let materialized_providers = materialize_stored_retention_provider_daemons(
+            &stored_provider_plan,
+            retention_provider_handles,
+        );
+        config.policy.check_selected_retention_provider_count(
+            materialized_providers.materialized_retention_provider_count(),
+            &stored_provider_plan.cycle.preflight.before_health,
+        )?;
+        let compaction = runner
+            .compact_settings_with_active_key_policy_and_retention_providers_after_preflight(
+                database,
+                &content_key,
+                signer,
+                &config.policy,
+                now,
+                materialized_providers.daemons.as_slice(),
+                &stored_provider_plan.cycle.preflight,
+            )?;
+
+        Ok(SettingsSyncStoredCompactionRun {
+            stored_provider_plan,
+            unmaterialized_retention_provider_ids: materialized_providers
+                .unmaterialized_retention_provider_ids,
+            pending_endpoint_materialization_retention_provider_ids: materialized_providers
+                .pending_endpoint_materialization_retention_provider_ids,
+            endpoint_mismatch_retention_provider_ids: materialized_providers
+                .endpoint_mismatch_retention_provider_ids,
+            duplicate_handle_retention_provider_ids: materialized_providers
+                .duplicate_handle_retention_provider_ids,
+            unsupported_endpoint_retention_provider_ids: materialized_providers
+                .unsupported_endpoint_retention_provider_ids,
+            compaction,
+        })
+    }
+
     pub fn run_once_with_stored_retention_provider_handles_and_sync_secret(
         &self,
         database: &SlateProfileDatabase,
@@ -21049,6 +21129,137 @@ mod tests {
         let _ = std::fs::remove_dir_all(device_state_root);
         let _ = std::fs::remove_dir_all(provider_state_root);
         let _ = std::fs::remove_dir_all(unmaterialized_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_scheduler_stored_compaction_derives_active_key_from_sync_secret() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("scheduler-stored-secret-compaction-device");
+        let provider_state_root = test_state_root("scheduler-stored-secret-compaction-provider");
+        let db_root = test_state_root("scheduler-stored-secret-compaction-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-stored-secret-compaction-a",
+            )
+            .expect("start in-process stored secret compaction device daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-stored-secret-compaction-pinner",
+            )
+            .expect("start in-process stored secret compaction provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-scheduler-stored-secret-compaction-a",
+        )
+        .expect("open stored secret compaction settings database");
+        let profile = "schedulerstoredsecretcompactionprofile";
+        let settings_root_id = "settings/latest";
+        let sync_secret = SlateSyncSecret::from_bytes([104; SLATE_SYNC_SECRET_BYTES]);
+        let signer =
+            ProfileSyncDeviceSigner::generate("runtime-scheduler-stored-secret-compaction-a")
+                .expect("generate stored secret compaction signer");
+        let policy = SettingsSyncCyclePolicy::new(
+            ProfileSyncRetentionPolicy {
+                min_tail_change_count: 1,
+                change_retention_seconds: 0,
+                ..ProfileSyncRetentionPolicy::default()
+            },
+            4,
+            4,
+            2,
+        )
+        .with_local_device_head_root_health_required_after_cycle(false);
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register stored secret compaction local trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write first stored secret compacted setting");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.zoom", "110")
+            .expect("write second stored secret compacted setting");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.font", "Inter")
+            .expect("write stored secret retained compaction tail setting");
+
+        let provider_id =
+            "local-fixture-availability-runtime-scheduler-stored-secret-compaction-pinner";
+        let provider_endpoint_ref = network.profile_sync_provider_endpoint_ref(provider_id);
+        database
+            .upsert_storage_provider(&test_storage_provider_update(
+                &network,
+                profile,
+                provider_id,
+                "local-fixture-availability",
+                "Selected stored secret compaction pinner",
+                true,
+                true,
+                true,
+            ))
+            .expect("write stored secret compaction provider metadata");
+        authorize_test_storage_providers(&database, profile, &[provider_id]);
+
+        let config = SettingsSyncSchedulerConfig::new(profile, settings_root_id, policy);
+        let run = BroadwebdSettingsSyncScheduler::new(&device_daemon)
+            .compact_once_with_stored_retention_provider_handles_and_sync_secret(
+                &database,
+                &config,
+                &sync_secret,
+                &signer,
+                4,
+                i64::MAX,
+                &[SettingsSyncRetentionProviderHandle::with_endpoint_ref(
+                    provider_id,
+                    provider_endpoint_ref.as_str(),
+                    &provider_daemon,
+                )],
+            )
+            .expect("secret stored-provider scheduler compacts and retains settings state");
+
+        assert_eq!(run.stored_provider_plan.stored_provider_count, 1);
+        assert_eq!(run.materialized_retention_provider_count(), 1);
+        assert!(run.unmaterialized_retention_provider_ids.is_empty());
+        assert!(run.compaction.compacted());
+        let compaction = run
+            .compaction
+            .compaction
+            .as_ref()
+            .expect("secret stored scheduler compaction was published");
+        assert_eq!(compaction.target.retained_tail_change_count, 1);
+        assert_eq!(run.retained_provider_count(), 1);
+        assert!(run.degraded_after());
+        assert!(!run.compaction.after_health.settings_root_health.degraded);
+
+        let derived_content_key = sync_secret
+            .derive_profile_sync_content_key(profile, TEST_CONTENT_KEY_ID)
+            .expect("derive test compaction content key");
+        let public_key = signer.public_key().expect("local public key");
+        let source = BroadwebdProfileSyncObjectSource::new(&device_daemon);
+        let manifest_object = source
+            .get_profile_sync_object(profile, compaction.publication.manifest_object_id.as_str())
+            .expect("fetch secret-derived compaction manifest");
+        let manifest = open_signed_profile_sync_manifest(
+            manifest_object.bytes.as_slice(),
+            &derived_content_key,
+            &public_key,
+            profile,
+            TEST_CONTENT_KEY_ID,
+        )
+        .expect("decrypt secret-derived compaction manifest");
+        assert_eq!(manifest, compaction.publication.manifest);
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
         let _ = std::fs::remove_dir_all(db_root);
     }
 

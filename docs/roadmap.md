@@ -672,6 +672,10 @@ Current baseline:
   `slate-settings.db`, reports unmaterialized or pending endpoint providers
   before retention, and still hands compaction objects only to daemon handles
   supplied by runtime code.
+- Stored-provider compaction can now derive its active content key from
+  `SlateSyncSecret` after scheduler preflight. A socketless fixture decrypts
+  the published compaction manifest with the derived key, proving callers do
+  not need to pass raw content-key bytes for this compaction path.
 - Internal protocol models are constrained to transport/test boundaries:
   protocol implementations must keep real-web request/response semantics and
   can only swap socket IO for internal shims in local deterministic fixtures.

@@ -982,6 +982,9 @@ preflight and endpoint materialization state, then hands only materialized
 daemon handles to the compaction/retention runner. Missing or pending
 providers are reported before retention, and the fixture model remains behind
 the daemon transport handle rather than being visible to scheduler logic.
+It also has a `SlateSyncSecret` entry point that derives the active content key
+after preflight, so runtime callers can compact encrypted settings through
+stored providers without passing raw content-key bytes.
 The first `iroh-node:<node>` checkpoint stays at this materializer boundary:
 tests treat the endpoint as a deferred protocol target, materialize it through
 a caller-supplied socketless provider daemon, verify that read-only previews do
