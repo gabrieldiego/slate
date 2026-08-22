@@ -297,6 +297,7 @@
         <button id="profile-sync-create" class="primary">Create key file</button>
         <button id="profile-sync-download">Download key file</button>
         <button id="profile-sync-import">Import pasted key</button>
+        <button id="profile-sync-check">Check local sync</button>
       </div>
     </section>
 
@@ -384,6 +385,7 @@
     const profileSyncCreateButton = document.getElementById("profile-sync-create");
     const profileSyncDownloadButton = document.getElementById("profile-sync-download");
     const profileSyncImportButton = document.getElementById("profile-sync-import");
+    const profileSyncCheckButton = document.getElementById("profile-sync-check");
     const params = new URLSearchParams(window.location.search);
     const initial = Number.parseFloat(params.get("chrome_zoom"));
     const fallbackImage = new Image();
@@ -811,13 +813,22 @@
       }
       if (state.last_error) {
         profileSyncStatus.textContent = `Error: ${state.last_error}`;
+      } else if (state.local_sync && state.local_sync.ready_for_manual_sync) {
+        profileSyncStatus.textContent =
+          `Ready for ${state.profile} - local sync preflight passed`;
       } else if (state.has_secret) {
         const suffix = state.metadata_ready && state.active_key_id ?
           ` - local metadata ready (${state.active_key_id})` :
           "";
-        profileSyncStatus.textContent = `Ready for ${state.profile}${suffix}`;
+        const syncGap = state.local_sync && state.local_sync.blocked_reason ?
+          ` - ${state.local_sync.blocked_reason}` :
+          "";
+        profileSyncStatus.textContent = `Ready for ${state.profile}${suffix}${syncGap}`;
       } else if (state.metadata_ready) {
-        profileSyncStatus.textContent = "Local sync metadata ready; import key file";
+        const syncGap = state.local_sync && state.local_sync.blocked_reason ?
+          `; ${state.local_sync.blocked_reason}` :
+          "";
+        profileSyncStatus.textContent = `Local sync metadata ready; import key file${syncGap}`;
       } else {
         profileSyncStatus.textContent = "Not enrolled";
       }
@@ -849,6 +860,10 @@
 
     function importProfileSyncSecret() {
       fetchProfileSyncState("import", profileSyncSecret.value.trim());
+    }
+
+    function checkProfileSyncReadiness() {
+      fetchProfileSyncState("check");
     }
 
     function downloadProfileSyncSecret() {
@@ -885,6 +900,7 @@
     profileSyncCreateButton.addEventListener("click", createProfileSyncSecret);
     profileSyncImportButton.addEventListener("click", importProfileSyncSecret);
     profileSyncDownloadButton.addEventListener("click", downloadProfileSyncSecret);
+    profileSyncCheckButton.addEventListener("click", checkProfileSyncReadiness);
     document.getElementById("reset").addEventListener("click", () => {
       setSliderValue(DEFAULT_ZOOM, true);
     });

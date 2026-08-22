@@ -4,7 +4,7 @@ use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use ring::{aead, hkdf, rand, signature};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
@@ -2402,6 +2402,23 @@ pub struct ProfileSyncLocalActivationRecord {
     pub profile: String,
     pub device_id: String,
     pub content_key_epoch: SyncContentKeyEpochRecord,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncLocalReadinessReport {
+    pub profile: String,
+    pub local_device_id: String,
+    pub local_device_registered: bool,
+    pub metadata_ready: bool,
+    pub active_key_id: Option<String>,
+    pub app_domain_count: usize,
+    pub enabled_app_domain_count: usize,
+    pub storage_provider_count: usize,
+    pub enabled_storage_provider_count: usize,
+    pub retention_capable_provider_count: usize,
+    pub authorized_retention_provider_count: usize,
+    pub ready_for_manual_sync: bool,
+    pub blocked_reason: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -5786,6 +5803,88 @@ impl SlateProfileDatabase {
             profile: profile.to_string(),
             device_id: self.local_sync_device_id().to_string(),
             content_key_epoch,
+        })
+    }
+
+    pub fn profile_sync_local_readiness(
+        &self,
+        profile: &str,
+    ) -> Result<ProfileSyncLocalReadinessReport, StorageError> {
+        let local_device_id = self.local_sync_device_id().to_string();
+        let active_key_id = self
+            .active_sync_content_key_epoch(profile)?
+            .map(|content_key_epoch| content_key_epoch.key_id);
+        let devices = self.sync_devices(profile)?;
+        let local_device_registered = devices
+            .iter()
+            .any(|device| device.device_id == local_device_id && !device.provider_authority);
+        let provider_authority_device_ids = devices
+            .iter()
+            .filter(|device| device.provider_authority)
+            .map(|device| device.device_id.as_str())
+            .collect::<BTreeSet<_>>();
+        let trusted_provider_authority_device_ids = self
+            .sync_device_public_keys(profile)?
+            .into_iter()
+            .filter(|record| {
+                record.trusted
+                    && provider_authority_device_ids.contains(record.public_key.device_id.as_str())
+            })
+            .map(|record| record.public_key.device_id)
+            .collect::<BTreeSet<_>>();
+
+        let app_domains = self.app_sync_domains(profile)?;
+        let enabled_app_domain_count = app_domains.iter().filter(|domain| domain.enabled).count();
+        let storage_providers = self.storage_providers(profile, u32::MAX)?;
+        let enabled_storage_provider_count = storage_providers
+            .iter()
+            .filter(|provider| provider.enabled)
+            .count();
+        let retention_capable_provider_count = storage_providers
+            .iter()
+            .filter(|provider| {
+                provider.enabled && provider.availability && provider.object_transfer
+            })
+            .count();
+        let authorized_retention_provider_count = storage_providers
+            .iter()
+            .filter(|provider| {
+                provider.enabled
+                    && provider.availability
+                    && provider.object_transfer
+                    && trusted_provider_authority_device_ids.contains(provider.provider_id.as_str())
+            })
+            .count();
+
+        let metadata_ready =
+            active_key_id.is_some() && local_device_registered && enabled_app_domain_count > 0;
+        let blocked_reason = if active_key_id.is_none() {
+            Some("missing active content-key metadata".to_string())
+        } else if !local_device_registered {
+            Some("local device is not registered for profile sync".to_string())
+        } else if enabled_app_domain_count == 0 {
+            Some("no enabled app sync domains".to_string())
+        } else if authorized_retention_provider_count == 0 {
+            Some("no authorized retention provider configured".to_string())
+        } else {
+            None
+        };
+        let ready_for_manual_sync = metadata_ready && blocked_reason.is_none();
+
+        Ok(ProfileSyncLocalReadinessReport {
+            profile: profile.to_string(),
+            local_device_id,
+            local_device_registered,
+            metadata_ready,
+            active_key_id,
+            app_domain_count: app_domains.len(),
+            enabled_app_domain_count,
+            storage_provider_count: storage_providers.len(),
+            enabled_storage_provider_count,
+            retention_capable_provider_count,
+            authorized_retention_provider_count,
+            ready_for_manual_sync,
+            blocked_reason,
         })
     }
 
@@ -15842,6 +15941,108 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[test]
+    fn profile_sync_local_readiness_reports_provider_gap() {
+        let database_path =
+            test_dir("profile-sync-local-readiness-gap").join(DEFAULT_DATABASE_FILE_NAME);
+        let database =
+            SlateProfileDatabase::open_resolved_with_device_id(database_path, "device-preview")
+                .unwrap();
+        let initial_report = database
+            .profile_sync_local_readiness(DEFAULT_PROFILE_ID)
+            .unwrap();
+
+        assert!(!initial_report.metadata_ready);
+        assert!(!initial_report.ready_for_manual_sync);
+        assert_eq!(
+            initial_report.blocked_reason.as_deref(),
+            Some("missing active content-key metadata")
+        );
+
+        database
+            .activate_local_profile_sync_metadata(DEFAULT_PROFILE_ID)
+            .unwrap();
+        let report = database
+            .profile_sync_local_readiness(DEFAULT_PROFILE_ID)
+            .unwrap();
+
+        assert!(report.metadata_ready);
+        assert_eq!(
+            report.active_key_id.as_deref(),
+            Some(DEFAULT_PROFILE_SYNC_CONTENT_KEY_ID)
+        );
+        assert!(report.local_device_registered);
+        assert!(report.enabled_app_domain_count > 0);
+        assert_eq!(report.storage_provider_count, 0);
+        assert_eq!(report.authorized_retention_provider_count, 0);
+        assert!(!report.ready_for_manual_sync);
+        assert_eq!(
+            report.blocked_reason.as_deref(),
+            Some("no authorized retention provider configured")
+        );
+    }
+
+    #[test]
+    fn profile_sync_local_readiness_reports_authorized_retention_provider() {
+        let database_path =
+            test_dir("profile-sync-local-readiness-ready").join(DEFAULT_DATABASE_FILE_NAME);
+        let database =
+            SlateProfileDatabase::open_resolved_with_device_id(database_path, "device-preview")
+                .unwrap();
+        let provider_id = "local-pinner";
+        let provider_signer = ProfileSyncDeviceSigner::generate(provider_id).unwrap();
+
+        database
+            .activate_local_profile_sync_metadata(DEFAULT_PROFILE_ID)
+            .unwrap();
+        database
+            .register_sync_device(&SyncDeviceRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                device_id: provider_id.to_string(),
+                label: Some("Local Pinner".to_string()),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                provider_authority: true,
+            })
+            .unwrap();
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: provider_signer.public_key().unwrap(),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .unwrap();
+        database
+            .upsert_storage_provider(&StorageProviderUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                provider_id: provider_id.to_string(),
+                provider_kind: "local-fixture".to_string(),
+                display_name: "Local Pinner".to_string(),
+                endpoint_ref: Some("slate-fixture-profile-sync://preview/local-pinner".to_string()),
+                discovery: true,
+                connectivity: true,
+                object_transfer: true,
+                availability: true,
+                mutable_roots: true,
+                quota_bytes: None,
+                max_retained_objects: Some(128),
+                pinning_policy: Some("manual".to_string()),
+                enabled: true,
+            })
+            .unwrap();
+
+        let report = database
+            .profile_sync_local_readiness(DEFAULT_PROFILE_ID)
+            .unwrap();
+
+        assert!(report.metadata_ready);
+        assert_eq!(report.storage_provider_count, 1);
+        assert_eq!(report.enabled_storage_provider_count, 1);
+        assert_eq!(report.retention_capable_provider_count, 1);
+        assert_eq!(report.authorized_retention_provider_count, 1);
+        assert!(report.ready_for_manual_sync);
+        assert_eq!(report.blocked_reason, None);
     }
 
     #[test]
