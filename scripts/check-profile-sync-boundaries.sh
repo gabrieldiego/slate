@@ -163,6 +163,10 @@ require_text \
     crates/broadwebd/src/services/profile_sync.rs \
     'pub fn from_environment\(\) -> Result<Self, BroadwebdError>' \
     'profile-sync backend selection must remain explicit runtime configuration.'
+require_text \
+    crates/broadwebd/src/lib.rs \
+    'profile_sync_runtime_options_reject_fixture_backends_and_endpoints' \
+    'profile-sync runtime configuration must reject fixture backend names and synthetic endpoint refs.'
 
 require_text \
     crates/profile-sync/src/lib.rs \

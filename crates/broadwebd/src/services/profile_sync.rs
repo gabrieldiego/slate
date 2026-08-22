@@ -1821,7 +1821,7 @@ fn parse_profile_sync_backend(
     };
 
     match backend {
-        "local" | "fake" | "local-fake" => Ok(ProfileSyncRuntimeBackendSelection::Local),
+        "local" => Ok(ProfileSyncRuntimeBackendSelection::Local),
         "kubo" | "kubo-rpc" | "local-kubo-rpc" => Ok(ProfileSyncRuntimeBackendSelection::KuboRpc),
         value => Err(BroadwebdError::UnsupportedRequest(format!(
             "unsupported {SLATE_PROFILE_SYNC_BACKEND_ENV}: {value}; expected local or kubo-rpc"

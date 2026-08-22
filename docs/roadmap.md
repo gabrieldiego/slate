@@ -372,6 +372,11 @@ Current baseline:
   runtime backend config. With no profile-sync backend settings it keeps the
   local in-memory service; `kubo-rpc` selection or a profile-sync Kubo endpoint
   opts into the loopback-only Kubo HTTP backend with deterministic parser tests.
+- Profile-sync runtime selection is now fixture-blind: legacy `fake` and
+  `local-fake` backend aliases, in-process fixture names, and
+  `slate-fixture-*` endpoint refs are rejected from runtime config. Synthetic
+  broadweb models remain available only when the deterministic fixture harness
+  injects transport/executor shims under the same protocol request builders.
 - The same Kubo fixture service now records retained objects and published roots
   in its in-process profile-sync state after the corresponding Kubo RPC fixture
   calls succeed. Retained-object listing, provider health, root candidates, and

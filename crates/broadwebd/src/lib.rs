@@ -2314,6 +2314,55 @@ mod tests {
     }
 
     #[test]
+    fn profile_sync_runtime_options_reject_fixture_backends_and_endpoints() {
+        for backend in [
+            "fake",
+            "local-fake",
+            "fixture",
+            "local-fixture",
+            "in-process",
+            "socketless-fixture",
+            "kubo-fixture",
+            super::IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_SCHEME,
+        ] {
+            let error = ProfileSyncRuntimeConfig::from_runtime_options(Some(backend), None, None)
+                .expect_err("fixture-shaped runtime backend must be unsupported");
+            assert!(
+                matches!(
+                    &error,
+                    BroadwebdError::UnsupportedRequest(message)
+                        if message.contains(super::SLATE_PROFILE_SYNC_BACKEND_ENV)
+                ),
+                "unexpected error for backend {backend}: {error:?}"
+            );
+        }
+
+        for endpoint in [
+            format!(
+                "{}network/provider",
+                super::IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX
+            ),
+            "slate-fixture-kubo://network/rpc".to_string(),
+            "slate-fixture-http://network/gateway/ipfs/bafyfixture".to_string(),
+        ] {
+            let error = ProfileSyncRuntimeConfig::from_runtime_options(
+                Some("kubo-rpc"),
+                Some(endpoint.as_str()),
+                Some("fixture-provider"),
+            )
+            .expect_err("fixture-shaped runtime endpoint must be unsupported");
+            assert!(
+                matches!(
+                    &error,
+                    BroadwebdError::UnsupportedRequest(message)
+                        if message.contains("unsupported Kubo RPC scheme")
+                ),
+                "unexpected error for endpoint {endpoint}: {error:?}"
+            );
+        }
+    }
+
+    #[test]
     fn ipfs_public_gateway_transport_exposes_public_privacy_boundary() {
         let transport =
             IpfsGatewayTransport::public("https://ipfs.io").expect("public gateway transport");
