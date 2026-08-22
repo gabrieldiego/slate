@@ -32,13 +32,16 @@ SLATE_SHARED_RELEASE_BIN := $(SLATE_SHARED_TARGET_DIR)/release/slate
 SLATE_SHARED_DEBUG_LIB_PATH := $(SLATE_SHARED_TARGET_DIR)/debug/deps:$(SLATE_SHARED_TARGET_DIR)/debug
 SLATE_SHARED_RELEASE_LIB_PATH := $(SLATE_SHARED_TARGET_DIR)/release/deps:$(SLATE_SHARED_TARGET_DIR)/release
 
-.PHONY: check chrome-verify check-tools setup-local-rust ensure-local-rust slate-bin slate-release-bin slate-shared-bin slate-shared-release-bin release shared share shared-release share-release run run-release run-shared run-share run-shared-release run-share-release test-broadwebd test-network test-external-network clean-slate-bin clean-object-data
+.PHONY: check chrome-verify profile-sync-boundary-check check-tools setup-local-rust ensure-local-rust slate-bin slate-release-bin slate-shared-bin slate-shared-release-bin release shared share shared-release share-release run run-release run-shared run-share run-shared-release run-share-release test-broadwebd test-network test-external-network clean-slate-bin clean-object-data
 
 check: ensure-local-rust
 	$(SLATE_LIMITED_CARGO) check --workspace -j "$(CARGO_BUILD_JOBS)"
 
 chrome-verify: ensure-local-rust
 	$(SLATE_LIMITED_CARGO) run -p slate-chrome --bin slate-chrome-snapshot -j "$(CARGO_BUILD_JOBS)" -- --verify "$(SLATE_CHROME_VERIFICATION_DIR)"
+
+profile-sync-boundary-check: ensure-local-rust
+	SLATE_BUILD_MEMORY_LIMIT_MB="$(SLATE_BUILD_MEMORY_LIMIT_MB)" CARGO_BUILD_JOBS="$(CARGO_BUILD_JOBS)" SLATE_TEST_THREADS="$(SLATE_TEST_THREADS)" sh "$(CURDIR)/scripts/check-profile-sync-boundaries.sh"
 
 check-tools:
 	@set -eu; \

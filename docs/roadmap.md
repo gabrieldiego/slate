@@ -1295,6 +1295,13 @@ Current baseline:
   same secret-backed path. A local-only fixture publishes membership/settings
   state through a stored synthetic fixture endpoint and retains the combined
   object set without passing raw content-key bytes into scheduler calls.
+- `make profile-sync-boundary-check` now provides a low-memory regression gate
+  for the sync work. It runs focused rail-app sync-domain, `slate-settings.db`
+  storage/provider metadata, typed app-domain cursor, broadwebd app-domain
+  fixture, and profile-sync scheduler fixture tests through the build-limits
+  wrapper. Chrome settings watcher coverage is opt-in because compiling
+  `slate-chrome` currently pulls Servo script bindings and exceeded the 2 GiB
+  low-memory profile during verification.
 
 Next:
 
