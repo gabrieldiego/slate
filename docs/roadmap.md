@@ -241,8 +241,9 @@ Current baseline:
   publisher, publish signed encrypted device-head snapshots through broadwebd's
   in-process fixture, verify the receiver materializes typed rows, verify
   post-snapshot update tails for Calendar, Chat, Contacts, Downloads, Files,
-  and Storage, and verify tombstone snapshots and post-snapshot tombstone tails
-  delete stale typed rows on the receiver.
+  and Storage, verify tombstone snapshots for Chat, Downloads, Files, and
+  Storage, and verify post-snapshot tombstone tails delete stale typed rows on
+  the receiver.
 - Local settings/app-domain publishing now filters outgoing snapshots and tail
   manifests through the enabled app sync-domain table. Disabled domains can
   still be used as local typed state, but they are not published to broadweb

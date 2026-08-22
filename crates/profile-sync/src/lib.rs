@@ -14134,6 +14134,7 @@ mod tests {
         .expect("open typed app tombstone receiver settings database");
         for (domain, privacy_classification, sync_content) in [
             (SYNC_DOMAIN_CHAT, "sensitive", false),
+            (SYNC_DOMAIN_DOWNLOADS, "metadata", false),
             (SYNC_DOMAIN_FILES, "content", true),
             (SYNC_DOMAIN_STORAGE, "sensitive", false),
         ] {
@@ -14175,6 +14176,18 @@ mod tests {
             integrity: Some("sha256-runtime-delete".to_string()),
             retention_policy: Some("keep-latest".to_string()),
         };
+        let download_update = DownloadMetadataUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            download_id: "runtime-download-delete".to_string(),
+            source_url: "ipfs://bafy-runtime-download-delete".to_string(),
+            final_url: "ipfs://bafy-runtime-download-delete".to_string(),
+            route: Some("ipfs://bafy-runtime-download-delete".to_string()),
+            transport_id: Some("ipfs-fixture".to_string()),
+            filename: "old-runtime-download.bin".to_string(),
+            content_type: Some("application/octet-stream".to_string()),
+            size_bytes: 2_048,
+            integrity: Some("sha256-runtime-download-delete".to_string()),
+        };
         let provider_update = StorageProviderUpdate {
             profile: DEFAULT_PROFILE_ID.to_string(),
             provider_id: "runtime-provider-delete".to_string(),
@@ -14201,6 +14214,9 @@ mod tests {
                 .upsert_file_entry(&file_update)
                 .expect("seed typed file metadata");
             database
+                .record_download_metadata(&download_update)
+                .expect("seed typed download metadata");
+            database
                 .upsert_storage_provider(&provider_update)
                 .expect("seed typed storage provider metadata");
         }
@@ -14210,6 +14226,9 @@ mod tests {
         publisher_database
             .remove_file_entry(DEFAULT_PROFILE_ID, file_update.entry_id.as_str())
             .expect("publisher tombstones typed file metadata");
+        publisher_database
+            .remove_download_metadata(DEFAULT_PROFILE_ID, download_update.download_id.as_str())
+            .expect("publisher tombstones typed download metadata");
         publisher_database
             .remove_storage_provider(DEFAULT_PROFILE_ID, provider_update.provider_id.as_str())
             .expect("publisher tombstones typed storage provider metadata");
@@ -14242,6 +14261,7 @@ mod tests {
             published.publication.manifest.included_domains,
             vec![
                 SYNC_DOMAIN_CHAT.to_string(),
+                SYNC_DOMAIN_DOWNLOADS.to_string(),
                 SYNC_DOMAIN_FILES.to_string(),
                 SYNC_DOMAIN_SETTINGS.to_string(),
                 SYNC_DOMAIN_STORAGE.to_string()
@@ -14285,6 +14305,12 @@ mod tests {
         );
         assert!(
             receiver_database
+                .downloads(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver typed download metadata")
+                .is_empty()
+        );
+        assert!(
+            receiver_database
                 .storage_providers(DEFAULT_PROFILE_ID, 10)
                 .expect("read receiver typed storage provider metadata")
                 .is_empty()
@@ -14317,6 +14343,21 @@ mod tests {
             serde_json::from_str(file_value.as_str()).expect("decode file tombstone payload");
         assert!(file_payload.deleted);
         assert_eq!(file_payload.entry_id, "runtime-file-delete");
+
+        let download_value = receiver_database
+            .get_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_DOWNLOADS,
+                "download.runtime-download-delete",
+            )
+            .expect("read receiver download tombstone sync setting")
+            .expect("receiver download tombstone sync setting")
+            .value;
+        let download_payload: DownloadMetadataSyncPayload =
+            serde_json::from_str(download_value.as_str())
+                .expect("decode download tombstone payload");
+        assert!(download_payload.deleted);
+        assert_eq!(download_payload.download_id, "runtime-download-delete");
 
         let provider_value = receiver_database
             .get_sync_setting_text(

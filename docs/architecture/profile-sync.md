@@ -490,11 +490,11 @@ expose it through the same discovery, connectivity, transfer, availability, and
 mutable-root roles.
 The current runtime bridge coverage includes signed encrypted full-snapshot
 handoffs for Calendar, Chat, Contacts, Downloads, Files, and Storage metadata.
-It also covers tombstone snapshots that remove stale Chat, Files, and Storage
-typed rows from a receiver, post-snapshot update tails for Calendar, Chat,
-Contacts, Downloads, Files, and Storage, and a Chat tombstone tail to verify
-incremental typed changes use the same trusted device-head path. These tests
-use `InProcessBroadwebNetwork`, so app-domain create, update, and delete
+It also covers tombstone snapshots that remove stale Chat, Downloads, Files,
+and Storage typed rows from a receiver, post-snapshot update tails for Calendar,
+Chat, Contacts, Downloads, Files, and Storage, and a Chat tombstone tail to
+verify incremental typed changes use the same trusted device-head path. These
+tests use `InProcessBroadwebNetwork`, so app-domain create, update, and delete
 propagation is verified without
 loopback sockets or external protocols.
 
