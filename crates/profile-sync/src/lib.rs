@@ -8810,6 +8810,64 @@ mod tests {
                 .expect("read roots after stored membership unsupported endpoint"),
             roots_before_unsupported_endpoint
         );
+        receiver_database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "ui.density",
+                "compact",
+            )
+            .expect("receiver writes stored membership unsupported fixture-daemon setting");
+        let roots_before_unsupported_fixture_daemons = receiver_database
+            .profile_sync_roots(DEFAULT_PROFILE_ID)
+            .expect("read roots before stored membership unsupported fixture daemons");
+        let unsupported_fixture_error = match scheduler
+            .run_once_with_membership_log_and_stored_in_process_fixture_retention_provider_daemons(
+                &receiver_database,
+                &strict_unsupported_config,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer_b),
+                8,
+                &[
+                    super::SettingsSyncInProcessFixtureProviderDaemon::new(
+                        selected_provider_id,
+                        network.network_id(),
+                        &provider_daemon,
+                    ),
+                    super::SettingsSyncInProcessFixtureProviderDaemon::new(
+                        unmaterialized_provider_id,
+                        network.network_id(),
+                        &unmaterialized_provider_daemon,
+                    ),
+                ],
+            ) {
+            Ok(_) => {
+                panic!(
+                    "stored membership scheduler should not fixture-materialize unsupported endpoint refs"
+                )
+            }
+            Err(error) => error,
+        };
+        let ProfileSyncCycleWithHealthError::Policy(ProfileSyncPolicyError::ProviderMinimumUnmet {
+            provider_role,
+            minimum,
+            actual,
+            ..
+        }) = unsupported_fixture_error
+        else {
+            panic!(
+                "expected stored membership unsupported fixture-daemon quorum error, got {unsupported_fixture_error:?}"
+            );
+        };
+        assert_eq!(provider_role, "selected retention providers");
+        assert_eq!(minimum, 2);
+        assert_eq!(actual, 1);
+        assert_eq!(
+            receiver_database
+                .profile_sync_roots(DEFAULT_PROFILE_ID)
+                .expect("read roots after stored membership unsupported fixture daemons"),
+            roots_before_unsupported_fixture_daemons
+        );
 
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);

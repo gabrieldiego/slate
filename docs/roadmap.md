@@ -651,6 +651,10 @@ Current baseline:
   read-only plan marks the loopback-shaped endpoint as fail-closed, strict
   quorum excludes its supplied handle, and pending settings do not publish or
   mutate profile-sync roots.
+- The membership-aware in-process fixture-daemon stored-provider path now
+  covers that boundary as well: even after membership records have been pulled,
+  a matching fixture daemon cannot materialize a loopback-shaped stored
+  endpoint, and strict quorum fails before pending settings publish.
 - The membership-aware scheduler now has the same stored-provider path. Its
   read-only plan keeps the existing no-mutation boundary and will not pull
   membership records to satisfy credentials, while the runtime path pulls the
