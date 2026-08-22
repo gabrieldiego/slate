@@ -412,6 +412,10 @@ Current baseline:
   manifests whose device frontiers are already covered locally. The socketless
   broadwebd regression republishes an older manifest after a newer sequence was
   applied and verifies the receiver leaves the newer shared root in place.
+- Corrupt shared-root objects are now covered through the socketless broadwebd
+  bridge: when `settings/latest` resolves to available bytes that are not a
+  trusted signed encrypted manifest, the receiver fails closed and keeps the
+  previous valid root and materialized settings.
 - The same bridge now publishes a real signed encrypted settings tail manifest
   through one Kubo fixture daemon, then verifies the manifest and tail bytes
   fetched by a second daemon through the shared stateful Kubo/IPNS model. The

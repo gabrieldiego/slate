@@ -17375,6 +17375,123 @@ mod tests {
     }
 
     #[test]
+    fn broadwebd_source_rejects_corrupt_shared_root_object_without_mutation() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("shared-root-corrupt-object-publisher");
+        let receiver_state_root = test_state_root("shared-root-corrupt-object-receiver");
+        let publisher_db_root = test_state_root("shared-root-corrupt-object-publisher-db");
+        let receiver_db_root = test_state_root("shared-root-corrupt-object-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "runtime-corrupt-shared-publisher",
+            )
+            .expect("start corrupt shared-root publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "runtime-corrupt-shared-receiver",
+            )
+            .expect("start corrupt shared-root receiver daemon");
+        let publisher_database = SlateProfileDatabase::open_resolved_with_device_id(
+            publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-corrupt-shared-publisher",
+        )
+        .expect("open corrupt shared-root publisher database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-corrupt-shared-receiver",
+        )
+        .expect("open corrupt shared-root receiver database");
+        let content_key = ProfileSyncContentKey::from_bytes([100; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-corrupt-shared-publisher")
+            .expect("generate corrupt shared-root signer");
+        receiver_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: signer.public_key().expect("corrupt shared-root public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("receiver trusts corrupt shared-root publisher");
+        register_test_content_key_epoch(&receiver_database, DEFAULT_PROFILE_ID);
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+        let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
+        let settings_root_id = "settings/latest";
+
+        let change = publisher_database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("publisher writes valid shared-root setting");
+        let valid_manifest = publisher
+            .publish_signed_settings_tail_changes(
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                std::slice::from_ref(&change),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish valid shared-root manifest");
+        let valid_apply = source
+            .pull_and_apply_active_trusted_settings_manifest_candidates_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                &content_key,
+            )
+            .expect("receiver applies valid shared-root manifest");
+        assert!(matches!(
+            valid_apply,
+            ProfileSyncSettingsCandidatePullApplyStatus::Applied(_)
+        ));
+
+        let corrupt_object_id = publisher
+            .put_retained_root(
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                b"not a signed encrypted profile sync manifest".to_vec(),
+            )
+            .expect("publish corrupt shared-root object");
+        let error = source
+            .pull_and_apply_active_trusted_settings_manifest_candidates_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                &content_key,
+            )
+            .expect_err("receiver rejects corrupt shared-root object");
+        assert!(matches!(
+            error,
+            ProfileSyncTrustedPullApplyError::Pull(ProfileSyncTrustedPullError::Open(
+                ProfileSyncTrustedOpenError::SyncObject(_)
+            ))
+        ));
+        assert_eq!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, settings_root_id)
+                .expect("read root after corrupt shared-root object")
+                .expect("root after corrupt shared-root object")
+                .object_id,
+            valid_manifest.manifest_object_id
+        );
+        assert_ne!(corrupt_object_id, valid_manifest.manifest_object_id);
+        assert_eq!(
+            receiver_database
+                .get_setting_text("ui.theme")
+                .expect("read setting after corrupt shared-root object")
+                .as_deref(),
+            Some("teal")
+        );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
     fn broadwebd_source_pulls_registered_trusted_device_heads_with_device_bound() {
         let network = InProcessBroadwebNetwork::new();
         let publisher_state_root = test_state_root("trusted-devices-publisher");

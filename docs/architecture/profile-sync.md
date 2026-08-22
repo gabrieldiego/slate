@@ -1097,6 +1097,12 @@ distributed-system and hostile-network conditions:
 - Retention and compaction behavior when old devices have not synced.
 - Explicit fail-closed behavior for unmaterialized protocol endpoints.
 
+The low-memory boundary gate now includes a corrupt shared-root object
+regression through the socketless broadwebd bridge. A root may resolve and the
+object bytes may be available, but if those bytes are not a trusted signed
+encrypted settings manifest, the receiver reports a pull/open failure and keeps
+the last valid `settings/latest` root and materialized values unchanged.
+
 ### Internal Protocol Models
 
 External protocols should have internal deterministic model adapters before
