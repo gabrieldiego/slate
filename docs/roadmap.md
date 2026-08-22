@@ -824,8 +824,9 @@ Current baseline:
 - The runtime bridge can now ask `slate-settings.db` for the next settings
   compaction target, derive the covered snapshot domains, publish the signed
   encrypted snapshot manifest through broadwebd, and record the published
-  snapshot backend object id in storage so later compaction skips already
-  squashed revisions.
+  snapshot backend object id plus local settings root in one storage
+  transaction so later compaction skips already squashed revisions and local
+  verified-root state matches the published manifest.
 - `slate-profile-sync` now has an initial local publish-flow helper that
   creates a full settings snapshot from `slate-settings.db`, publishes the
   signed encrypted snapshot manifest, publishes the local per-device head

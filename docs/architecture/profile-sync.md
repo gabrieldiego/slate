@@ -589,7 +589,8 @@ by storage.
 The bridge can also drive one storage-selected compaction step: ask
 `slate-settings.db` for a compaction target, derive snapshot domains from the
 covered change records, publish the signed snapshot manifest, and record the
-published snapshot object id back into storage.
+published snapshot object id plus local verified settings root back into
+storage in one transaction.
 For per-device heads, the bridge signs and publishes storage-owned
 `ProfileSyncDeviceHead` payloads while keeping the head schema and trust checks
 in storage.

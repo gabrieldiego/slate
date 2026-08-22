@@ -654,6 +654,7 @@ pub struct PublishedSettingsCompaction {
     pub target: SyncCompactionTarget,
     pub publication: PublishedSettingsSnapshotManifest,
     pub snapshot_record: SyncSnapshotRecord,
+    pub settings_root: ProfileSyncRootRecord,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -4639,18 +4640,34 @@ impl<'a> BroadwebdProfileSyncPublisher<'a> {
             signer,
             retention_policy,
         )?;
-        let snapshot_record = database.record_sync_snapshot(&SyncSnapshotRegistration {
+        let snapshot_registration = SyncSnapshotRegistration {
             profile: profile.to_string(),
             snapshot_id: settings_sync_snapshot_id(target.covers_revision),
             backend_object_id: Some(publication.snapshot_object_id.clone()),
             covers_revision: target.covers_revision,
             included_domains: snapshot.included_domains,
+        };
+        let root_registrations = [ProfileSyncRootRegistration {
+            profile: profile.to_string(),
+            root_id: root_id.to_string(),
+            object_id: publication.manifest_object_id.clone(),
+        }];
+        let (snapshot_record, mut root_records) = database
+            .record_sync_snapshot_and_set_profile_sync_roots(
+                &snapshot_registration,
+                &root_registrations,
+            )?;
+        let settings_root = root_records.pop().ok_or_else(|| {
+            StorageError::InvalidProfileSyncManifest(
+                "published compaction did not record settings root".to_string(),
+            )
         })?;
 
         Ok(Some(PublishedSettingsCompaction {
             target,
             publication,
             snapshot_record,
+            settings_root,
         }))
     }
 
@@ -17338,6 +17355,17 @@ mod tests {
         assert_eq!(
             compaction.snapshot_record.backend_object_id.as_deref(),
             Some(compaction.publication.snapshot_object_id.as_str())
+        );
+        assert_eq!(compaction.settings_root.root_id, "settings/latest");
+        assert_eq!(
+            compaction.settings_root.object_id,
+            compaction.publication.manifest_object_id
+        );
+        assert_eq!(
+            database
+                .profile_sync_root(DEFAULT_PROFILE_ID, "settings/latest")
+                .expect("read compacted local settings root"),
+            Some(compaction.settings_root.clone())
         );
         assert_eq!(
             database
