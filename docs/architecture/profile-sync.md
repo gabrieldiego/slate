@@ -264,8 +264,10 @@ an applied revoke in the same epoch. Membership authorization also checks the
 signer's trust epoch: a signer key first trusted in a later epoch cannot
 authorize an older membership record. Device-key rotation is only valid for an
 already trusted target device key; it cannot enroll a new device or re-trust a
-revoked device. Exact record replay remains idempotent. Full account-level
-revocation still needs richer epoch transition and multi-approval policy.
+revoked device. Enrollment is only valid for a new or explicitly revoked target
+device; an already trusted device must use `rotate-device-key` to replace its
+key. Exact record replay remains idempotent. Full account-level revocation
+still needs richer epoch transition and multi-approval policy.
 The profile-sync membership-log receive path exercises the same storage guard:
 a stale older-epoch record carried through broadwebd fixture objects fails
 without storing that record, re-trusting the device, or advancing the

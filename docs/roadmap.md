@@ -944,6 +944,9 @@ Current baseline:
 - Device-key rotation records now require the target device to already have a
   trusted key. A rotation cannot enroll a new device or re-trust a revoked
   device; revoked devices must use an explicit later `enroll-device` record.
+- Enrollment records now reject already trusted target devices. This keeps
+  `enroll-device` for new or explicitly revoked devices and requires
+  `rotate-device-key` for trusted-device key replacement.
 - The broadwebd membership-log receive fixture now covers that epoch-ordering
   rule over in-process object transfer: a stale older-epoch record is rejected
   without storing it, re-trusting the device, or advancing the membership-log

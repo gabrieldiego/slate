@@ -4590,25 +4590,40 @@ impl SlateProfileDatabase {
         &self,
         membership_record: &ProfileSyncMembershipRecord,
     ) -> Result<(), StorageError> {
-        if membership_record.record_kind != PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY {
-            return Ok(());
-        }
-
-        let Some(existing_key) = self.sync_device_public_key(
-            membership_record.profile.as_str(),
-            membership_record.device_id.as_str(),
-        )?
-        else {
-            return Err(StorageError::InvalidProfileSyncMembershipRecord(format!(
-                "rotate-device-key record {} requires an existing trusted key for device {}",
-                membership_record.record_id, membership_record.device_id
-            )));
-        };
-        if !existing_key.trusted {
-            return Err(StorageError::InvalidProfileSyncMembershipRecord(format!(
-                "rotate-device-key record {} cannot re-trust revoked device {}; use enroll-device",
-                membership_record.record_id, membership_record.device_id
-            )));
+        match membership_record.record_kind.as_str() {
+            PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE => {
+                if self
+                    .sync_device_public_key(
+                        membership_record.profile.as_str(),
+                        membership_record.device_id.as_str(),
+                    )?
+                    .is_some_and(|existing_key| existing_key.trusted)
+                {
+                    return Err(StorageError::InvalidProfileSyncMembershipRecord(format!(
+                        "enroll-device record {} cannot replace already trusted device {}; use rotate-device-key",
+                        membership_record.record_id, membership_record.device_id
+                    )));
+                }
+            }
+            PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY => {
+                let Some(existing_key) = self.sync_device_public_key(
+                    membership_record.profile.as_str(),
+                    membership_record.device_id.as_str(),
+                )?
+                else {
+                    return Err(StorageError::InvalidProfileSyncMembershipRecord(format!(
+                        "rotate-device-key record {} requires an existing trusted key for device {}",
+                        membership_record.record_id, membership_record.device_id
+                    )));
+                };
+                if !existing_key.trusted {
+                    return Err(StorageError::InvalidProfileSyncMembershipRecord(format!(
+                        "rotate-device-key record {} cannot re-trust revoked device {}; use enroll-device",
+                        membership_record.record_id, membership_record.device_id
+                    )));
+                }
+            }
+            _ => {}
         }
         Ok(())
     }
@@ -13306,6 +13321,81 @@ mod tests {
             device_b_key.public_key,
             rotated_signer_b.public_key().unwrap()
         );
+    }
+
+    #[test]
+    fn signed_sync_account_membership_records_reject_enrollment_for_trusted_device() {
+        let database_path =
+            test_dir("sync-account-membership-duplicate-enroll").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let signer_a = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let signer_b = ProfileSyncDeviceSigner::generate("device-b").unwrap();
+        let replacement_signer_b = ProfileSyncDeviceSigner::generate("device-b").unwrap();
+        let enroll_a = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-device-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-a".to_string(),
+            device_public_key: Some(signer_a.public_key().unwrap()),
+            created_at: 10,
+        };
+        database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_a).as_slice(),
+            )
+            .unwrap();
+        let enroll_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-enroll-device-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 2,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-b".to_string(),
+            device_public_key: Some(signer_b.public_key().unwrap()),
+            created_at: 20,
+        };
+        database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_b).as_slice(),
+            )
+            .unwrap();
+
+        let duplicate_enroll_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-3-enroll-device-b-again".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 3,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-b".to_string(),
+            device_public_key: Some(replacement_signer_b.public_key().unwrap()),
+            created_at: 30,
+        };
+        let error = database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &duplicate_enroll_b).as_slice(),
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            StorageError::InvalidProfileSyncMembershipRecord(reason)
+                if reason.contains("cannot replace already trusted device device-b")
+        ));
+        assert!(
+            database
+                .sync_account_membership_record(DEFAULT_PROFILE_ID, "epoch-3-enroll-device-b-again")
+                .unwrap()
+                .is_none()
+        );
+        let device_b_key = database
+            .sync_device_public_key(DEFAULT_PROFILE_ID, "device-b")
+            .unwrap()
+            .expect("device b key");
+        assert!(device_b_key.trusted);
+        assert_eq!(device_b_key.membership_epoch, 2);
+        assert_eq!(device_b_key.public_key, signer_b.public_key().unwrap());
     }
 
     #[test]
