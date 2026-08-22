@@ -513,6 +513,9 @@ Current baseline:
 - The stored-provider scheduler can now run directly from those in-process
   fixture daemon refs, preserving socketless tests while exercising the normal
   stored-provider quorum and retention path.
+- The membership-log stored-provider scheduler now has the same fixture-daemon
+  run path, covering membership log pull/publish behavior and retained settings
+  objects through local-only fixtures.
 - Stored-provider runtime ticks now also exclude unsupported endpoint refs from
   the materialized retention-provider quorum, even if the caller supplies a
   daemon handle with the same socket-shaped endpoint string. This keeps
