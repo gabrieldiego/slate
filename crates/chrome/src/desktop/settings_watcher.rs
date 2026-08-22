@@ -7,7 +7,7 @@
 use std::sync::atomic::{AtomicI64, Ordering};
 
 use log::warn;
-use slate_storage::{DEFAULT_PROFILE_ID, SlateProfileDatabase, StorageError};
+use slate_storage::{DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, StorageError};
 
 use crate::desktop::protocols::slate::{
     apply_synced_chrome_settings_from_database, initialize_chrome_settings_from_database,
@@ -75,7 +75,7 @@ impl SyncedChromeSettingsWatcher {
 }
 
 fn latest_settings_sync_revision(database: &SlateProfileDatabase) -> i64 {
-    match database.latest_sync_revision(DEFAULT_PROFILE_ID) {
+    match database.latest_sync_revision_for_domain(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS) {
         Ok(revision) => revision,
         Err(error) => {
             warn!("failed to read latest settings sync revision: {error}");
@@ -94,7 +94,9 @@ mod tests {
         CHROME_ELEMENT_ZOOM_SETTING_DEFAULT, current_chrome_element_zoom_setting,
         set_current_chrome_element_zoom_setting,
     };
-    use slate_storage::{DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase};
+    use slate_storage::{
+        DEFAULT_PROFILE_ID, SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase,
+    };
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -129,6 +131,46 @@ mod tests {
         let poll = watcher.poll_once().unwrap();
         assert_eq!(poll.previous_revision, latest_before_watcher);
         assert_eq!(poll.latest_revision, latest_before_watcher);
+        assert!(!poll.advanced());
+
+        drop(database);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn watcher_initial_cursor_ignores_unrelated_app_domain_revisions() {
+        let path = unique_database_path("initial-domain");
+        let database = SlateProfileDatabase::open_resolved(path.clone()).unwrap();
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "chrome.zoom",
+                "1.04",
+            )
+            .unwrap();
+        let settings_head = database
+            .latest_sync_revision_for_domain(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS)
+            .unwrap();
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                "default_view",
+                "month",
+            )
+            .unwrap();
+        let profile_head = database.latest_sync_revision(DEFAULT_PROFILE_ID).unwrap();
+        assert!(profile_head > settings_head);
+
+        set_current_chrome_element_zoom_setting(CHROME_ELEMENT_ZOOM_SETTING_DEFAULT);
+        let watcher = SyncedChromeSettingsWatcher::new(database.clone());
+
+        assert_eq!(watcher.current_revision(), settings_head);
+        assert_eq!(current_chrome_element_zoom_setting(), 1.04);
+        let poll = watcher.poll_once().unwrap();
+        assert_eq!(poll.previous_revision, settings_head);
+        assert_eq!(poll.latest_revision, settings_head);
         assert!(!poll.advanced());
 
         drop(database);

@@ -858,7 +858,10 @@ Current baseline:
 - Chrome now has a runtime synced-settings watcher over that feed. The desktop
   app polls it during the normal Servo pump, applying recognized synced chrome
   zoom and key binding updates through the same in-memory runtime state used by
-  `slate://settings` instead of waiting for an internal page request.
+  `slate://settings` instead of waiting for an internal page request. Its
+  startup cursor is initialized from the `settings` domain head, not the
+  profile-wide revision, so unrelated app-domain sync does not define chrome
+  progress.
 - Storage now has a retention-policy-based settings compaction target helper
   that uses the latest snapshot and applied settings revisions to identify how
   far a future encrypted snapshot can squash while preserving the configured
