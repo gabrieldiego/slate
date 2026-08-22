@@ -5930,6 +5930,70 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
         })
     }
 
+    pub fn run_settings_sync_cycle_with_membership_log_and_sync_secret(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        settings_root_id: &str,
+        membership_log_root_id: &str,
+        sync_secret: &SlateSyncSecret,
+        signer: &ProfileSyncDeviceSigner,
+        retention_policy: ProfileSyncRetentionPolicy,
+        max_publish_steps: u32,
+        max_trusted_devices: u32,
+    ) -> Result<SettingsSyncCycleWithMembershipLogRun, ProfileSyncCycleError> {
+        let publisher = BroadwebdProfileSyncPublisher::new(self.daemon);
+        let membership_log_publication = publisher.plan_local_sync_account_membership_log(
+            database,
+            profile,
+            membership_log_root_id,
+        )?;
+        if membership_log_publication.requires_compaction() {
+            return Err(ProfileSyncCycleError::from(
+                ProfileSyncPublishError::MembershipLogTooLarge {
+                    profile: membership_log_publication.profile,
+                    max_records: membership_log_publication.max_records,
+                    actual_records: membership_log_publication.record_count,
+                },
+            ));
+        }
+
+        let source = BroadwebdProfileSyncObjectSource::new(self.daemon);
+        let pulled_membership_log = source
+            .pull_and_apply_sync_account_membership_log_if_changed(
+                database,
+                profile,
+                membership_log_root_id,
+            )
+            .map_err(ProfileSyncCycleError::from)?;
+        let active_key_id = active_settings_sync_content_key_id(database, profile)?;
+        let content_key = derive_settings_sync_content_key_from_secret(
+            profile,
+            active_key_id.as_str(),
+            sync_secret,
+        )?;
+        let cycle = self.run_settings_sync_cycle(
+            database,
+            profile,
+            settings_root_id,
+            &content_key,
+            active_key_id.as_str(),
+            signer,
+            retention_policy,
+            max_publish_steps,
+            max_trusted_devices,
+        )?;
+        let published_membership_log = publisher
+            .publish_local_sync_account_membership_log(database, profile, membership_log_root_id)
+            .map_err(ProfileSyncCycleError::from)?;
+
+        Ok(SettingsSyncCycleWithMembershipLogRun {
+            pulled_membership_log,
+            cycle,
+            published_membership_log,
+        })
+    }
+
     pub fn run_settings_sync_cycle_with_membership_log_and_retention_providers(
         &self,
         database: &SlateProfileDatabase,
@@ -11152,6 +11216,138 @@ mod tests {
                 .expect("read receiver local trusted key")
                 .expect("membership-aware preflight stores local key")
                 .trusted
+        );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn membership_log_runner_derives_active_key_from_sync_secret_without_loopback() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("membership-secret-publisher");
+        let receiver_state_root = test_state_root("membership-secret-receiver");
+        let publisher_db_root = test_state_root("membership-secret-publisher-db");
+        let receiver_db_root = test_state_root("membership-secret-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "membership-secret-device-a",
+            )
+            .expect("start in-process membership secret publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "membership-secret-device-b",
+            )
+            .expect("start in-process membership secret receiver daemon");
+        let publisher_database = SlateProfileDatabase::open_resolved_with_device_id(
+            publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "membership-secret-device-a",
+        )
+        .expect("open membership secret publisher database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "membership-secret-device-b",
+        )
+        .expect("open membership secret receiver database");
+        let sync_secret = SlateSyncSecret::from_bytes([96; SLATE_SYNC_SECRET_BYTES]);
+        let content_key = sync_secret
+            .derive_profile_sync_content_key(DEFAULT_PROFILE_ID, TEST_CONTENT_KEY_ID)
+            .expect("derive publisher content key");
+        let signer_a = ProfileSyncDeviceSigner::generate("membership-secret-device-a")
+            .expect("generate membership secret signer a");
+        let signer_b = ProfileSyncDeviceSigner::generate("membership-secret-device-b")
+            .expect("generate membership secret signer b");
+        register_test_content_key_epoch(&publisher_database, DEFAULT_PROFILE_ID);
+        register_test_content_key_epoch(&receiver_database, DEFAULT_PROFILE_ID);
+        let enroll_a = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-membership-secret-device-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-secret-device-a".to_string(),
+            device_public_key: Some(signer_a.public_key().expect("read signer a public key")),
+            created_at: 10,
+        };
+        publisher_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_a).as_slice(),
+            )
+            .expect("publisher bootstraps membership secret signer a");
+        let enroll_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-enroll-membership-secret-device-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-secret-device-b".to_string(),
+            device_public_key: Some(signer_b.public_key().expect("read signer b public key")),
+            created_at: 20,
+        };
+        publisher_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_b).as_slice(),
+            )
+            .expect("publisher enrolls membership secret signer b");
+        publisher_database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("publisher writes membership secret setting");
+        BroadwebdSettingsSyncRunner::new(&publisher_daemon)
+            .run_settings_sync_cycle_with_membership_log(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer_a,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+                4,
+            )
+            .expect("publisher publishes membership secret state");
+
+        assert!(
+            receiver_database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "membership-secret-device-b")
+                .expect("read receiver local key before secret run")
+                .is_none()
+        );
+        let receiver_run = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
+            .run_settings_sync_cycle_with_membership_log_and_sync_secret(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                &sync_secret,
+                &signer_b,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+                4,
+            )
+            .expect("receiver pulls membership and derives active key from sync secret");
+
+        assert_eq!(receiver_run.pulled_membership_application_count(), 2);
+        assert_eq!(receiver_run.cycle.applied_count(), 1);
+        assert!(
+            receiver_database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "membership-secret-device-b")
+                .expect("read receiver local key after secret run")
+                .expect("membership secret run stored local key")
+                .trusted
+        );
+        assert_eq!(
+            receiver_database
+                .get_setting_text("ui.theme")
+                .expect("read synced membership secret setting")
+                .as_deref(),
+            Some("teal")
         );
 
         let _ = std::fs::remove_dir_all(publisher_state_root);

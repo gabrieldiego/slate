@@ -847,6 +847,10 @@ active key metadata and trusted public keys, not plaintext content keys or
 device signing keys. The first secret-backed runner path derives that content
 key from `SlateSyncSecret` after preflight and then delegates to the same
 encrypted settings cycle used by explicit content-key callers.
+The membership-aware runner has the same secret-backed shape, but it pulls and
+applies the account membership log before credential validation so a freshly
+enrolled local device can become trusted, derive the active content key in
+memory, and then pull authorized device heads.
 The local device signer must match the database's local sync device id before a
 cycle can publish local device-head state. Trusted remote public keys remain
 valid receive-side trust anchors, but they cannot be reused as the local

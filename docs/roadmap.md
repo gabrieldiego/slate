@@ -1254,6 +1254,11 @@ Current baseline:
   same shared-root candidate cycle, and hands the published object set to a
   selected local-only retention provider without requiring the caller to handle
   raw content-key bytes.
+- Membership-aware settings sync can now use `SlateSyncSecret` too. The runner
+  pulls and applies the account membership log before credential validation,
+  loads the active content-key id from `slate-settings.db`, derives the content
+  key in memory, and then applies signed encrypted settings from a newly trusted
+  fixture device without loopback sockets or raw content-key storage.
 
 Next:
 
