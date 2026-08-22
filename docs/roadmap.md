@@ -554,6 +554,11 @@ Current baseline:
   providers. UI and scheduler callers can render degraded provider selection
   without reinterpreting the raw id buckets, while policy quorum checks remain
   responsible for deciding whether a cycle can proceed.
+- Stored-provider scheduler plans and runs now forward that same structured
+  selection issue summary through the `slate-settings.db` provider-metadata
+  path, including membership-aware, in-process fixture, and protocol
+  materializer wrappers. This keeps provider metadata UI/status callers from
+  reaching into embedded scheduler plans.
 - The scheduler can now also build a read-only retention-provider plan from
   enabled storage-provider metadata in `slate-settings.db`. Stored providers
   must locally advertise object-transfer and availability before they are

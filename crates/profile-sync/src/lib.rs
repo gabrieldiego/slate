@@ -2697,6 +2697,20 @@ impl SettingsSyncStoredRetentionProviderPlan {
         self.cycle.duplicate_retention_provider_count()
     }
 
+    pub fn retention_provider_selection_issues(
+        &self,
+    ) -> Vec<SettingsSyncRetentionProviderSelectionIssue> {
+        self.cycle.retention_provider_selection_issues()
+    }
+
+    pub fn retention_provider_selection_issue_count(&self) -> usize {
+        self.cycle.retention_provider_selection_issue_count()
+    }
+
+    pub fn has_retention_provider_selection_issue(&self) -> bool {
+        self.cycle.has_retention_provider_selection_issue()
+    }
+
     pub fn degraded_before(&self) -> bool {
         self.cycle.degraded_before()
     }
@@ -3019,6 +3033,23 @@ impl SettingsSyncStoredRetentionProviderRun {
         self.cycle.retained_provider_count()
     }
 
+    pub fn retention_provider_selection_issues(
+        &self,
+    ) -> Vec<SettingsSyncRetentionProviderSelectionIssue> {
+        self.stored_provider_plan
+            .retention_provider_selection_issues()
+    }
+
+    pub fn retention_provider_selection_issue_count(&self) -> usize {
+        self.stored_provider_plan
+            .retention_provider_selection_issue_count()
+    }
+
+    pub fn has_retention_provider_selection_issue(&self) -> bool {
+        self.stored_provider_plan
+            .has_retention_provider_selection_issue()
+    }
+
     pub fn degraded_before(&self) -> bool {
         self.cycle.degraded_before()
     }
@@ -3050,6 +3081,20 @@ impl SettingsSyncStoredInProcessFixtureRetentionProviderRun<'_> {
 
     pub fn retained_provider_count(&self) -> usize {
         self.run.retained_provider_count()
+    }
+
+    pub fn retention_provider_selection_issues(
+        &self,
+    ) -> Vec<SettingsSyncRetentionProviderSelectionIssue> {
+        self.run.retention_provider_selection_issues()
+    }
+
+    pub fn retention_provider_selection_issue_count(&self) -> usize {
+        self.run.retention_provider_selection_issue_count()
+    }
+
+    pub fn has_retention_provider_selection_issue(&self) -> bool {
+        self.run.has_retention_provider_selection_issue()
     }
 }
 
@@ -3127,6 +3172,23 @@ impl SettingsSyncStoredProtocolProviderRetentionProviderPlan {
             .selected_retention_provider_count()
     }
 
+    pub fn retention_provider_selection_issues(
+        &self,
+    ) -> Vec<SettingsSyncRetentionProviderSelectionIssue> {
+        self.stored_provider_plan
+            .retention_provider_selection_issues()
+    }
+
+    pub fn retention_provider_selection_issue_count(&self) -> usize {
+        self.stored_provider_plan
+            .retention_provider_selection_issue_count()
+    }
+
+    pub fn has_retention_provider_selection_issue(&self) -> bool {
+        self.stored_provider_plan
+            .has_retention_provider_selection_issue()
+    }
+
     pub fn protocol_materialized_provider_count(&self) -> usize {
         self.materialization_preview
             .protocol_materialized_provider_count()
@@ -3202,6 +3264,20 @@ impl SettingsSyncStoredProtocolProviderRetentionProviderRun<'_> {
     pub fn retained_provider_count(&self) -> usize {
         self.run.retained_provider_count()
     }
+
+    pub fn retention_provider_selection_issues(
+        &self,
+    ) -> Vec<SettingsSyncRetentionProviderSelectionIssue> {
+        self.run.retention_provider_selection_issues()
+    }
+
+    pub fn retention_provider_selection_issue_count(&self) -> usize {
+        self.run.retention_provider_selection_issue_count()
+    }
+
+    pub fn has_retention_provider_selection_issue(&self) -> bool {
+        self.run.has_retention_provider_selection_issue()
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -3218,6 +3294,20 @@ impl SettingsSyncStoredRetentionProviderMembershipPlan {
 
     pub fn selected_retention_provider_count(&self) -> usize {
         self.cycle.selected_retention_provider_count()
+    }
+
+    pub fn retention_provider_selection_issues(
+        &self,
+    ) -> Vec<SettingsSyncRetentionProviderSelectionIssue> {
+        self.cycle.retention_provider_selection_issues()
+    }
+
+    pub fn retention_provider_selection_issue_count(&self) -> usize {
+        self.cycle.retention_provider_selection_issue_count()
+    }
+
+    pub fn has_retention_provider_selection_issue(&self) -> bool {
+        self.cycle.has_retention_provider_selection_issue()
     }
 
     pub fn selected_protocol_materialization_plan(
@@ -3276,6 +3366,41 @@ impl SettingsSyncStoredRetentionProviderMembershipPlanAttempt {
         match &self.cycle {
             SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::Ready(cycle) => {
                 Some(cycle.selected_protocol_materialization_plan())
+            }
+            SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::CredentialBlocked {
+                ..
+            } => None,
+        }
+    }
+
+    pub fn retention_provider_selection_issues(
+        &self,
+    ) -> Option<Vec<SettingsSyncRetentionProviderSelectionIssue>> {
+        match &self.cycle {
+            SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::Ready(cycle) => {
+                Some(cycle.retention_provider_selection_issues())
+            }
+            SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::CredentialBlocked {
+                ..
+            } => None,
+        }
+    }
+
+    pub fn retention_provider_selection_issue_count(&self) -> Option<usize> {
+        match &self.cycle {
+            SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::Ready(cycle) => {
+                Some(cycle.retention_provider_selection_issue_count())
+            }
+            SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::CredentialBlocked {
+                ..
+            } => None,
+        }
+    }
+
+    pub fn has_retention_provider_selection_issue(&self) -> Option<bool> {
+        match &self.cycle {
+            SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::Ready(cycle) => {
+                Some(cycle.has_retention_provider_selection_issue())
             }
             SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::CredentialBlocked {
                 ..
@@ -3363,6 +3488,23 @@ impl SettingsSyncStoredRetentionProviderMembershipRun {
     pub fn retained_provider_count(&self) -> usize {
         self.cycle.retained_provider_count()
     }
+
+    pub fn retention_provider_selection_issues(
+        &self,
+    ) -> Vec<SettingsSyncRetentionProviderSelectionIssue> {
+        self.stored_provider_plan
+            .retention_provider_selection_issues()
+    }
+
+    pub fn retention_provider_selection_issue_count(&self) -> usize {
+        self.stored_provider_plan
+            .retention_provider_selection_issue_count()
+    }
+
+    pub fn has_retention_provider_selection_issue(&self) -> bool {
+        self.stored_provider_plan
+            .has_retention_provider_selection_issue()
+    }
 }
 
 pub struct SettingsSyncStoredInProcessFixtureRetentionProviderMembershipRun<'a> {
@@ -3391,6 +3533,20 @@ impl SettingsSyncStoredInProcessFixtureRetentionProviderMembershipRun<'_> {
 
     pub fn retained_provider_count(&self) -> usize {
         self.run.retained_provider_count()
+    }
+
+    pub fn retention_provider_selection_issues(
+        &self,
+    ) -> Vec<SettingsSyncRetentionProviderSelectionIssue> {
+        self.run.retention_provider_selection_issues()
+    }
+
+    pub fn retention_provider_selection_issue_count(&self) -> usize {
+        self.run.retention_provider_selection_issue_count()
+    }
+
+    pub fn has_retention_provider_selection_issue(&self) -> bool {
+        self.run.has_retention_provider_selection_issue()
     }
 }
 
@@ -3441,6 +3597,20 @@ impl SettingsSyncStoredProtocolProviderRetentionProviderMembershipRun<'_> {
 
     pub fn retained_provider_count(&self) -> usize {
         self.run.retained_provider_count()
+    }
+
+    pub fn retention_provider_selection_issues(
+        &self,
+    ) -> Vec<SettingsSyncRetentionProviderSelectionIssue> {
+        self.run.retention_provider_selection_issues()
+    }
+
+    pub fn retention_provider_selection_issue_count(&self) -> usize {
+        self.run.retention_provider_selection_issue_count()
+    }
+
+    pub fn has_retention_provider_selection_issue(&self) -> bool {
+        self.run.has_retention_provider_selection_issue()
     }
 }
 
@@ -16219,6 +16389,29 @@ mod tests {
         assert_eq!(plan.ineligible_retention_provider_count(), 1);
         assert_eq!(plan.undiscovered_retention_provider_count(), 1);
         assert_eq!(plan.duplicate_retention_provider_count(), 0);
+        assert_eq!(plan.retention_provider_selection_issue_count(), 4);
+        assert!(plan.has_retention_provider_selection_issue());
+        assert_eq!(
+            plan.retention_provider_selection_issues(),
+            vec![
+                super::SettingsSyncRetentionProviderSelectionIssue {
+                    provider_id: stale_provider_id.to_string(),
+                    kind: super::SettingsSyncRetentionProviderSelectionIssueKind::Stale,
+                },
+                super::SettingsSyncRetentionProviderSelectionIssue {
+                    provider_id: offline_provider_id.to_string(),
+                    kind: super::SettingsSyncRetentionProviderSelectionIssueKind::Offline,
+                },
+                super::SettingsSyncRetentionProviderSelectionIssue {
+                    provider_id: no_transfer_provider_id.to_string(),
+                    kind: super::SettingsSyncRetentionProviderSelectionIssueKind::Ineligible,
+                },
+                super::SettingsSyncRetentionProviderSelectionIssue {
+                    provider_id: "stored-provider-undiscovered".to_string(),
+                    kind: super::SettingsSyncRetentionProviderSelectionIssueKind::Undiscovered,
+                },
+            ]
+        );
         assert_eq!(plan.unauthorized_provider_count(), 1);
         assert!(plan.degraded_before());
         assert!(!plan.cycle.preflight.before_health.provider_health.degraded);
@@ -16504,6 +16697,13 @@ mod tests {
         assert_eq!(run.endpoint_mismatch_retention_provider_count(), 0);
         assert_eq!(run.duplicate_handle_retention_provider_count(), 0);
         assert_eq!(run.unsupported_endpoint_retention_provider_count(), 0);
+        assert!(
+            run.stored_provider_plan
+                .retention_provider_selection_issues()
+                .is_empty()
+        );
+        assert_eq!(run.retention_provider_selection_issue_count(), 0);
+        assert!(!run.has_retention_provider_selection_issue());
         assert!(run.degraded_before());
         assert_eq!(run.cycle.cycle.published_step_count(), 1);
         assert_eq!(run.cycle.retention.len(), 1);
