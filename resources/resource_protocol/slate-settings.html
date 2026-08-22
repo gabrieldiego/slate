@@ -817,10 +817,13 @@
         profileSyncStatus.textContent = `Error: ${state.last_error}`;
       } else if (state.has_secret && state.local_sync && state.local_sync.ready_for_manual_sync) {
         profileSyncStatus.textContent =
-          `Ready for ${state.profile} - local sync preflight passed`;
+          `Ready for ${state.profile} - local device trusted, local sync preflight passed`;
       } else if (state.has_secret) {
+        const trusted = state.local_sync && state.local_sync.local_device_trusted ?
+          " - local device trusted" :
+          "";
         const suffix = state.metadata_ready && state.active_key_id ?
-          ` - local metadata ready (${state.active_key_id})` :
+          ` - local metadata ready (${state.active_key_id})${trusted}` :
           "";
         const syncGap = state.local_sync && state.local_sync.blocked_reason ?
           ` - ${state.local_sync.blocked_reason}` :

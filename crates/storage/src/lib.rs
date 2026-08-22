@@ -21,6 +21,7 @@ pub const DEFAULT_HOME_DIRECTORY_NAME: &str = ".slate";
 pub const DEFAULT_PROFILE_ID: &str = "default";
 pub const DEFAULT_SYNC_DEVICE_ID: &str = "local-device";
 pub const DEFAULT_PROFILE_SYNC_CONTENT_KEY_ID: &str = "content-key-epoch-1";
+pub const DEFAULT_PROFILE_SYNC_ACCOUNT_AUTHORITY_DEVICE_ID: &str = "account-authority";
 pub const DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID: &str = "local-preview-provider";
 pub const DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_KIND: &str = "local-fixture";
 pub const SLATE_SYNC_SECRET_BYTES: usize = 32;
@@ -807,6 +808,45 @@ impl ProfileSyncEnrollmentBundle {
         validate_profile_sync_enrollment_bundle(&bundle)?;
         Ok(bundle)
     }
+}
+
+fn profile_sync_enroll_device_record(
+    profile: &str,
+    device_id: &str,
+    membership_epoch: i64,
+    public_key: ProfileSyncDevicePublicKey,
+) -> ProfileSyncMembershipRecord {
+    ProfileSyncMembershipRecord {
+        profile: profile.to_string(),
+        record_id: profile_sync_enroll_device_record_id(membership_epoch, device_id),
+        schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+        membership_epoch,
+        record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+        device_id: device_id.to_string(),
+        device_public_key: Some(public_key),
+        created_at: membership_epoch,
+    }
+}
+
+fn profile_sync_enroll_device_record_id(membership_epoch: i64, device_id: &str) -> String {
+    format!("epoch-{membership_epoch}-enroll-{device_id}")
+}
+
+fn signed_profile_sync_membership_record_bytes(
+    signer: &ProfileSyncDeviceSigner,
+    record: &ProfileSyncMembershipRecord,
+) -> Result<Vec<u8>, StorageError> {
+    let payload = record
+        .to_bytes()
+        .map_err(profile_sync_membership_record_error)?;
+    signer
+        .sign(payload.as_slice())
+        .and_then(|signed| signed.to_bytes())
+        .map_err(profile_sync_membership_record_error)
+}
+
+fn profile_sync_membership_record_error(error: SyncObjectError) -> StorageError {
+    StorageError::InvalidProfileSyncMembershipRecord(error.to_string())
 }
 
 impl SignedSyncObject {
@@ -2471,10 +2511,21 @@ pub struct ProfileSyncLocalActivationRecord {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncLocalSecretActivationRecord {
+    pub activation: ProfileSyncLocalActivationRecord,
+    pub account_authority_device_id: String,
+    pub local_device_id: String,
+    pub membership_applications: Vec<SyncAccountMembershipRecordApplication>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProfileSyncLocalReadinessReport {
     pub profile: String,
     pub local_device_id: String,
     pub local_device_registered: bool,
+    pub local_device_trusted: bool,
+    pub account_authority_trusted: bool,
+    pub trusted_device_count: usize,
     pub metadata_ready: bool,
     pub active_key_id: Option<String>,
     pub app_domain_count: usize,
@@ -5872,6 +5923,87 @@ impl SlateProfileDatabase {
         })
     }
 
+    pub fn activate_local_profile_sync_from_secret(
+        &self,
+        profile: &str,
+        sync_secret: &SlateSyncSecret,
+    ) -> Result<ProfileSyncLocalSecretActivationRecord, StorageError> {
+        self.activate_local_profile_sync_from_secret_with_key(
+            profile,
+            sync_secret,
+            DEFAULT_PROFILE_SYNC_CONTENT_KEY_ID,
+            DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+        )
+    }
+
+    pub fn activate_local_profile_sync_from_secret_with_key(
+        &self,
+        profile: &str,
+        sync_secret: &SlateSyncSecret,
+        key_id: &str,
+        membership_epoch: i64,
+    ) -> Result<ProfileSyncLocalSecretActivationRecord, StorageError> {
+        let activation =
+            self.activate_local_profile_sync_metadata_with_key(profile, key_id, membership_epoch)?;
+        let account_authority_signer = sync_secret
+            .derive_profile_sync_device_signer(
+                profile,
+                DEFAULT_PROFILE_SYNC_ACCOUNT_AUTHORITY_DEVICE_ID,
+                membership_epoch,
+            )
+            .map_err(profile_sync_membership_record_error)?;
+        let account_authority_public_key = account_authority_signer
+            .public_key()
+            .map_err(profile_sync_membership_record_error)?;
+        let account_authority_record = profile_sync_enroll_device_record(
+            profile,
+            DEFAULT_PROFILE_SYNC_ACCOUNT_AUTHORITY_DEVICE_ID,
+            membership_epoch,
+            account_authority_public_key,
+        );
+        let account_authority_signed_record = signed_profile_sync_membership_record_bytes(
+            &account_authority_signer,
+            &account_authority_record,
+        )?;
+        let mut membership_applications = Vec::new();
+        membership_applications.push(self.apply_signed_sync_account_membership_record(
+            account_authority_signed_record.as_slice(),
+        )?);
+
+        if self.local_sync_device_id() != DEFAULT_PROFILE_SYNC_ACCOUNT_AUTHORITY_DEVICE_ID {
+            let local_signer = sync_secret
+                .derive_profile_sync_device_signer(
+                    profile,
+                    self.local_sync_device_id(),
+                    membership_epoch,
+                )
+                .map_err(profile_sync_membership_record_error)?;
+            let local_record = profile_sync_enroll_device_record(
+                profile,
+                self.local_sync_device_id(),
+                membership_epoch,
+                local_signer
+                    .public_key()
+                    .map_err(profile_sync_membership_record_error)?,
+            );
+            let local_signed_record = signed_profile_sync_membership_record_bytes(
+                &account_authority_signer,
+                &local_record,
+            )?;
+            membership_applications.push(
+                self.apply_signed_sync_account_membership_record(local_signed_record.as_slice())?,
+            );
+        }
+
+        Ok(ProfileSyncLocalSecretActivationRecord {
+            activation,
+            account_authority_device_id: DEFAULT_PROFILE_SYNC_ACCOUNT_AUTHORITY_DEVICE_ID
+                .to_string(),
+            local_device_id: self.local_sync_device_id().to_string(),
+            membership_applications,
+        })
+    }
+
     pub fn activate_local_profile_sync_preview_provider(
         &self,
         profile: &str,
@@ -5936,8 +6068,16 @@ impl SlateProfileDatabase {
             .filter(|device| device.provider_authority)
             .map(|device| device.device_id.as_str())
             .collect::<BTreeSet<_>>();
-        let trusted_provider_authority_device_ids = self
-            .sync_device_public_keys(profile)?
+        let public_keys = self.sync_device_public_keys(profile)?;
+        let trusted_device_count = public_keys.iter().filter(|record| record.trusted).count();
+        let local_device_trusted = public_keys
+            .iter()
+            .any(|record| record.trusted && record.public_key.device_id == local_device_id);
+        let account_authority_trusted = public_keys.iter().any(|record| {
+            record.trusted
+                && record.public_key.device_id == DEFAULT_PROFILE_SYNC_ACCOUNT_AUTHORITY_DEVICE_ID
+        });
+        let trusted_provider_authority_device_ids = public_keys
             .into_iter()
             .filter(|record| {
                 record.trusted
@@ -5975,6 +6115,8 @@ impl SlateProfileDatabase {
             Some("missing active content-key metadata".to_string())
         } else if !local_device_registered {
             Some("local device is not registered for profile sync".to_string())
+        } else if !local_device_trusted {
+            Some("local device sync key is not trusted".to_string())
         } else if enabled_app_domain_count == 0 {
             Some("no enabled app sync domains".to_string())
         } else if authorized_retention_provider_count == 0 {
@@ -5988,6 +6130,9 @@ impl SlateProfileDatabase {
             profile: profile.to_string(),
             local_device_id,
             local_device_registered,
+            local_device_trusted,
+            account_authority_trusted,
+            trusted_device_count,
             metadata_ready,
             active_key_id,
             app_domain_count: app_domains.len(),
@@ -16101,6 +16246,109 @@ mod tests {
     }
 
     #[test]
+    fn profile_sync_secret_activation_trusts_derived_local_signer_without_storing_secret() {
+        let database_path =
+            test_dir("profile-sync-secret-activation").join(DEFAULT_DATABASE_FILE_NAME);
+        let database =
+            SlateProfileDatabase::open_resolved_with_device_id(database_path, "device-preview")
+                .unwrap();
+        let secret = SlateSyncSecret::from_bytes([47; SLATE_SYNC_SECRET_BYTES]);
+
+        let activation = database
+            .activate_local_profile_sync_from_secret(DEFAULT_PROFILE_ID, &secret)
+            .unwrap();
+
+        assert_eq!(activation.activation.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(activation.local_device_id, "device-preview");
+        assert_eq!(
+            activation.account_authority_device_id,
+            DEFAULT_PROFILE_SYNC_ACCOUNT_AUTHORITY_DEVICE_ID
+        );
+        assert_eq!(activation.membership_applications.len(), 2);
+        assert!(
+            activation
+                .membership_applications
+                .iter()
+                .all(|entry| entry.applied)
+        );
+        assert!(activation.membership_applications[0].bootstrapped);
+        assert!(!activation.membership_applications[1].bootstrapped);
+
+        let account_authority_signer = secret
+            .derive_profile_sync_device_signer(
+                DEFAULT_PROFILE_ID,
+                DEFAULT_PROFILE_SYNC_ACCOUNT_AUTHORITY_DEVICE_ID,
+                DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            )
+            .unwrap();
+        let local_signer = secret
+            .derive_profile_sync_device_signer(
+                DEFAULT_PROFILE_ID,
+                "device-preview",
+                DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            )
+            .unwrap();
+        assert_eq!(
+            database
+                .sync_device_public_key(
+                    DEFAULT_PROFILE_ID,
+                    DEFAULT_PROFILE_SYNC_ACCOUNT_AUTHORITY_DEVICE_ID
+                )
+                .unwrap()
+                .expect("account authority key")
+                .public_key,
+            account_authority_signer.public_key().unwrap()
+        );
+        assert_eq!(
+            database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "device-preview")
+                .unwrap()
+                .expect("local device key")
+                .public_key,
+            local_signer.public_key().unwrap()
+        );
+        assert_eq!(
+            database
+                .sync_account_membership_record_count(DEFAULT_PROFILE_ID)
+                .unwrap(),
+            2
+        );
+
+        let repeated = database
+            .activate_local_profile_sync_from_secret(DEFAULT_PROFILE_ID, &secret)
+            .unwrap();
+        assert_eq!(repeated.membership_applications.len(), 2);
+        assert!(
+            repeated
+                .membership_applications
+                .iter()
+                .all(|entry| !entry.applied)
+        );
+        assert_eq!(
+            database
+                .sync_account_membership_record_count(DEFAULT_PROFILE_ID)
+                .unwrap(),
+            2
+        );
+        assert!(
+            database
+                .get_blob(DEFAULT_PROFILE_ID, "slate-sync-secret")
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            database
+                .get_sync_setting_text(
+                    DEFAULT_PROFILE_ID,
+                    SYNC_DOMAIN_SETTINGS,
+                    "slate-sync-secret"
+                )
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
     fn profile_sync_local_readiness_reports_provider_gap() {
         let database_path =
             test_dir("profile-sync-local-readiness-gap").join(DEFAULT_DATABASE_FILE_NAME);
@@ -16126,6 +16374,9 @@ mod tests {
             .unwrap();
 
         assert!(report.metadata_ready);
+        assert!(!report.local_device_trusted);
+        assert!(!report.account_authority_trusted);
+        assert_eq!(report.trusted_device_count, 0);
         assert_eq!(
             report.active_key_id.as_deref(),
             Some(DEFAULT_PROFILE_SYNC_CONTENT_KEY_ID)
@@ -16137,7 +16388,7 @@ mod tests {
         assert!(!report.ready_for_manual_sync);
         assert_eq!(
             report.blocked_reason.as_deref(),
-            Some("no authorized retention provider configured")
+            Some("local device sync key is not trusted")
         );
     }
 
@@ -16148,9 +16399,10 @@ mod tests {
         let database =
             SlateProfileDatabase::open_resolved_with_device_id(database_path, "device-preview")
                 .unwrap();
+        let secret = SlateSyncSecret::from_bytes([48; SLATE_SYNC_SECRET_BYTES]);
 
         database
-            .activate_local_profile_sync_metadata(DEFAULT_PROFILE_ID)
+            .activate_local_profile_sync_from_secret(DEFAULT_PROFILE_ID, &secret)
             .unwrap();
         let provider = database
             .activate_local_profile_sync_preview_provider(
@@ -16176,6 +16428,9 @@ mod tests {
             Some("slate-fixture-profile-sync://preview/local-preview-provider")
         );
         assert!(report.metadata_ready);
+        assert!(report.local_device_trusted);
+        assert!(report.account_authority_trusted);
+        assert_eq!(report.trusted_device_count, 3);
         assert_eq!(report.storage_provider_count, 1);
         assert_eq!(report.enabled_storage_provider_count, 1);
         assert_eq!(report.retention_capable_provider_count, 1);
