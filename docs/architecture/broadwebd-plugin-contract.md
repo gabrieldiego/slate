@@ -335,7 +335,10 @@ minted by a different simulated network, preserving the no-socket fixture
 boundary for downstream settings-sync tests. For objects uploaded through that
 service, later get requests still exercise Kubo `cat` but return the cached
 uploaded bytes; this keeps the fixture protocol-shaped while allowing
-higher-level tests to verify real signed payload bytes.
+higher-level tests to verify real signed payload bytes. Successful retain,
+release, and publish calls also update the fixture's profile-sync state, so
+retained-object listing, provider health, root candidates, and root health can
+be tested against the Kubo-shaped backend.
 
 Pinning, publishing, providing, and reproviding are not part of the initial
 fetch contract. Pinning and publishing enter through `profile-sync` as explicit

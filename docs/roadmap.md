@@ -328,6 +328,11 @@ Current baseline:
   `GetEncryptedObject` calls after still exercising the scripted Kubo `cat`
   request. This lets higher-level settings-sync tests validate real signed
   payload bytes without hand-scripting every fetched body.
+- The same Kubo fixture service now records retained objects and published roots
+  in its in-process profile-sync state after the corresponding Kubo RPC fixture
+  calls succeed. Retained-object listing, provider health, root candidates, and
+  root health now work for that backend without adding sockets or external
+  services.
 - `InProcessBroadwebNetwork` now has Kubo profile-sync registry and daemon
   helpers that install the socketless Kubo-backed `profile-sync` service only
   when the Kubo fixture URL belongs to the same simulated network. Downstream

@@ -597,15 +597,16 @@ mod tests {
         PROFILE_SYNC_PLUGIN, PluginHealth, PluginKind, PluginMetadata, PluginRegistry,
         ProfileSyncObjectRequest, ProfileSyncProfileRequest, ProfileSyncProviderRoles,
         ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse,
-        ProfileSyncRootRequest, ProfileSyncRootUpdate, ProfileSyncService, ProtocolService,
-        ResourceBudget, ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, StateRoot, TOR_ARTI_HTTP_PLUGIN,
-        TOR_PROTOCOL_SERVICE, TorService, TransportHttpRequest, TransportPlugin,
-        ipfs_gateway_http_url, ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url,
-        ipfs_kubo_profile_sync_added_object_id, ipfs_kubo_profile_sync_name_publish_url,
-        ipfs_kubo_profile_sync_name_resolve_url, ipfs_kubo_profile_sync_pin_add_url,
-        ipfs_kubo_profile_sync_pin_ls_has_recursive_pin, ipfs_kubo_profile_sync_pin_ls_url,
-        ipfs_kubo_profile_sync_pin_rm_url, ipfs_kubo_profile_sync_published_object_id,
-        ipfs_kubo_profile_sync_resolved_object_id, tor_http_target, tor_url_from_http_url,
+        ProfileSyncRootHealthRequest, ProfileSyncRootRequest, ProfileSyncRootUpdate,
+        ProfileSyncService, ProtocolService, ResourceBudget, ResourceProfile,
+        SLATE_IPFS_TRANSPORT_ENV, StateRoot, TOR_ARTI_HTTP_PLUGIN, TOR_PROTOCOL_SERVICE,
+        TorService, TransportHttpRequest, TransportPlugin, ipfs_gateway_http_url,
+        ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url, ipfs_kubo_profile_sync_added_object_id,
+        ipfs_kubo_profile_sync_name_publish_url, ipfs_kubo_profile_sync_name_resolve_url,
+        ipfs_kubo_profile_sync_pin_add_url, ipfs_kubo_profile_sync_pin_ls_has_recursive_pin,
+        ipfs_kubo_profile_sync_pin_ls_url, ipfs_kubo_profile_sync_pin_rm_url,
+        ipfs_kubo_profile_sync_published_object_id, ipfs_kubo_profile_sync_resolved_object_id,
+        tor_http_target, tor_url_from_http_url,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -2530,6 +2531,33 @@ mod tests {
         assert_eq!(
             registry
                 .profile_sync(
+                    ProfileSyncRequest::ListRetainedObjects(ProfileSyncProfileRequest::new(
+                        "default",
+                    )),
+                    &budget,
+                )
+                .expect("list retained objects through Kubo fixture service"),
+            ProfileSyncResponse::RetainedObjects {
+                object_ids: vec![object_id.to_string()],
+            }
+        );
+        let ProfileSyncResponse::ProviderHealth { health } = registry
+            .profile_sync(
+                ProfileSyncRequest::ProviderHealth(ProfileSyncProfileRequest::new("default")),
+                &budget,
+            )
+            .expect("read Kubo fixture provider health")
+        else {
+            panic!("expected provider health response");
+        };
+        assert_eq!(health.retained_objects, 1);
+        assert_eq!(health.object_transfer_providers, 1);
+        assert_eq!(health.availability_providers, 1);
+        assert_eq!(health.mutable_root_providers, 1);
+        assert!(!health.degraded);
+        assert_eq!(
+            registry
+                .profile_sync(
                     ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
                         "default",
                         "settings-latest",
@@ -2543,6 +2571,40 @@ mod tests {
                 object_id: Some(object_id.to_string()),
             }
         );
+        let ProfileSyncResponse::RootCandidates { candidates, .. } = registry
+            .profile_sync(
+                ProfileSyncRequest::ListRootCandidates(ProfileSyncRootRequest::new(
+                    "default",
+                    "settings-latest",
+                )),
+                &budget,
+            )
+            .expect("list Kubo fixture root candidates")
+        else {
+            panic!("expected root candidates response");
+        };
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].publisher_provider_id, "kubo-fixture-provider");
+        assert_eq!(candidates[0].object_id, object_id);
+        let ProfileSyncResponse::RootHealth { health } = registry
+            .profile_sync(
+                ProfileSyncRequest::RootHealth(
+                    ProfileSyncRootHealthRequest::with_minimum_online_retaining_providers(
+                        "default",
+                        "settings-latest",
+                        1,
+                    ),
+                ),
+                &budget,
+            )
+            .expect("read Kubo fixture root health")
+        else {
+            panic!("expected root health response");
+        };
+        assert_eq!(health.latest_object_id.as_deref(), Some(object_id));
+        assert!(health.latest_object_available);
+        assert_eq!(health.online_retaining_providers, 1);
+        assert!(!health.degraded);
         assert_eq!(
             registry
                 .profile_sync(
@@ -2572,6 +2634,38 @@ mod tests {
                 retained: false,
             }
         );
+        assert_eq!(
+            registry
+                .profile_sync(
+                    ProfileSyncRequest::ListRetainedObjects(ProfileSyncProfileRequest::new(
+                        "default",
+                    )),
+                    &budget,
+                )
+                .expect("list retained objects after Kubo fixture release"),
+            ProfileSyncResponse::RetainedObjects {
+                object_ids: Vec::new(),
+            }
+        );
+        let ProfileSyncResponse::RootHealth { health } = registry
+            .profile_sync(
+                ProfileSyncRequest::RootHealth(
+                    ProfileSyncRootHealthRequest::with_minimum_online_retaining_providers(
+                        "default",
+                        "settings-latest",
+                        1,
+                    ),
+                ),
+                &budget,
+            )
+            .expect("read Kubo fixture root health after release")
+        else {
+            panic!("expected root health response after release");
+        };
+        assert_eq!(health.latest_object_id.as_deref(), Some(object_id));
+        assert!(health.latest_object_available);
+        assert_eq!(health.online_retaining_providers, 0);
+        assert!(health.degraded);
 
         assert_eq!(
             fixture.finish(),
