@@ -36,12 +36,52 @@ reject_protocol_model_leak() {
     fi
 }
 
+require_text() {
+    file=$1
+    pattern=$2
+    message=$3
+    if ! rg -q "$pattern" "$file"; then
+        printf '\nprofile-sync boundary violation: %s\n' "$message" >&2
+        printf 'missing pattern %s in %s\n' "$pattern" "$file" >&2
+        exit 1
+    fi
+}
+
 cd "$repo_root"
 
 reject_protocol_model_leak \
     crates/broadwebd/src/protocols/ipfs/kubo.rs \
     'InternalKubo(ProfileSyncModel|RpcFixture)|fetch_internal_kubo_rpc_fixture|internal_kubo_rpc_fixtures' \
     'Kubo protocol code must not call fixture models directly; route through transport executors or shims.'
+
+require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    'settings/profile-sync/handoff/create' \
+    'Slate settings protocol must expose the profile-sync handoff create route.'
+require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    'settings/profile-sync/handoff/import' \
+    'Slate settings protocol must expose the profile-sync handoff import route.'
+require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    'handoff_export_text' \
+    'Slate settings profile-sync JSON must include handoff export text for local file trials.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'id="profile-sync-handoff-create"' \
+    'Slate settings page must expose profile-sync handoff creation.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'id="profile-sync-handoff-import"' \
+    'Slate settings page must expose profile-sync handoff import.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'handoff/create' \
+    'Slate settings page must call the handoff create route.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'handoff/import' \
+    'Slate settings page must call the handoff import route.'
 
 run_test slate-apps sync_domains
 run_test slate-storage rail_app_sync_domains_match_seeded_storage_domains

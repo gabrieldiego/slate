@@ -1446,14 +1446,16 @@ Current baseline:
   storage domain table, checks Slate Sync Secret domain separation, export
   round-trip behavior, stable signer derivation, profile-bound import,
   secret-backed enrollment bundle derivation,
-  secret-backed local signer enrollment, and non-secret local activation
-  metadata, then covers local readiness reports, preview provider activation,
-  storage/provider metadata, raw and typed app-domain cursors, the broadwebd
-  app-domain fixture, the profile-sync scheduler fixture, and both local
-  Profile Sync Preview trials through the build-limits wrapper. Chrome settings
-  watcher coverage is opt-in because compiling `slate-chrome` currently pulls
-  Servo script bindings and exceeded the 2 GiB low-memory profile during
-  verification.
+  secret-backed local signer enrollment, secret handoff bundle import guards,
+  and non-secret local activation metadata, then covers local readiness reports,
+  preview provider activation, storage/provider metadata, raw and typed
+  app-domain cursors, the broadwebd app-domain fixture, the profile-sync
+  scheduler fixture, and both local Profile Sync Preview trials through the
+  build-limits wrapper. Because compiling `slate-chrome` currently pulls Servo
+  script bindings and exceeded the 2 GiB low-memory profile during
+  verification, the gate also performs static chrome/resource assertions for
+  the Settings handoff routes and controls while full chrome watcher coverage
+  remains opt-in.
 - The next networking checkpoint is deliberately internal-first. Profile sync
   should continue using socketless, deterministic simulated broadweb fixtures
   until the local model covers delayed roots, unavailable objects, stale/replayed
