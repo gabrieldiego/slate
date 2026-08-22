@@ -618,6 +618,10 @@ Current baseline:
   duplicate-handle failure after membership trust has been established: the
   duplicate handles fail quorum and the existing profile-sync roots remain
   unchanged.
+- The in-process fixture-daemon stored-provider runtime now also covers
+  duplicate daemon refs: duplicate fixture providers fail the materialized
+  quorum before publishing pending local settings, and the profile-sync roots
+  remain unchanged.
 - Selected synthetic fixture endpoints now expose materialization targets with
   provider id, fixture network id, and endpoint ref so local-only fixtures can
   bridge stored metadata to in-process providers without opening sockets.

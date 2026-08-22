@@ -14094,6 +14094,51 @@ mod tests {
         database
             .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.accent", "mint")
             .expect("write second scheduler stored-run local setting");
+        let roots_before_duplicate_fixture_daemons = database
+            .profile_sync_roots(profile)
+            .expect("read roots before duplicate stored fixture daemons");
+        let duplicate_fixture_error = match scheduler
+            .run_once_with_stored_in_process_fixture_retention_provider_daemons(
+                &database,
+                &config,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                8,
+                &[
+                    super::SettingsSyncInProcessFixtureProviderDaemon::new(
+                        selected_provider_id,
+                        network.network_id(),
+                        &provider_daemon,
+                    ),
+                    super::SettingsSyncInProcessFixtureProviderDaemon::new(
+                        selected_provider_id,
+                        network.network_id(),
+                        &provider_daemon,
+                    ),
+                ],
+            ) {
+            Ok(_) => panic!("scheduler should reject duplicate stored fixture provider daemons"),
+            Err(error) => error,
+        };
+        let ProfileSyncCycleWithHealthError::Policy(ProfileSyncPolicyError::ProviderMinimumUnmet {
+            provider_role,
+            minimum,
+            actual,
+            ..
+        }) = duplicate_fixture_error
+        else {
+            panic!(
+                "expected duplicate fixture daemon quorum error, got {duplicate_fixture_error:?}"
+            );
+        };
+        assert_eq!(provider_role, "selected retention providers");
+        assert_eq!(minimum, 1);
+        assert_eq!(actual, 0);
+        assert_eq!(
+            database
+                .profile_sync_roots(profile)
+                .expect("read roots after duplicate stored fixture daemons"),
+            roots_before_duplicate_fixture_daemons
+        );
         let fixture_run = scheduler
             .run_once_with_stored_in_process_fixture_retention_provider_daemons(
                 &database,
