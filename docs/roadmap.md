@@ -642,6 +642,11 @@ Current baseline:
   the materialized retention-provider quorum, even if the caller supplies a
   daemon handle with the same socket-shaped endpoint string. This keeps
   loopback metadata from satisfying socketless fixture runs.
+- The membership-aware stored-provider scheduler now covers the same
+  unsupported-endpoint boundary after membership trust is established: the
+  read-only plan marks the loopback-shaped endpoint as fail-closed, strict
+  quorum excludes its supplied handle, and pending settings do not publish or
+  mutate profile-sync roots.
 - The membership-aware scheduler now has the same stored-provider path. Its
   read-only plan keeps the existing no-mutation boundary and will not pull
   membership records to satisfy credentials, while the runtime path pulls the

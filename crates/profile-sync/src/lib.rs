@@ -8227,7 +8227,7 @@ mod tests {
                 "membership-stored-scheduler-pinner",
             )
             .expect("start in-process stored membership scheduler provider daemon");
-        let _unmaterialized_provider_daemon = network
+        let unmaterialized_provider_daemon = network
             .daemon_for_availability_provider(
                 &unmaterialized_state_root,
                 ResourceBudget::default(),
@@ -8710,6 +8710,106 @@ mod tests {
         assert_eq!(fixture_run.materialized_retention_provider_count(), 1);
         assert_eq!(fixture_run.retained_provider_count(), 1);
         assert_eq!(fixture_run.run.cycle.retention.len(), 1);
+
+        let unsupported_endpoint_ref = "http://127.0.0.1:5001";
+        let mut unsupported_provider = test_storage_provider_update(
+            &network,
+            DEFAULT_PROFILE_ID,
+            unmaterialized_provider_id,
+            "local-fixture-availability",
+            "Stored membership loopback pinner",
+            true,
+            true,
+            true,
+        );
+        unsupported_provider.endpoint_ref = Some(unsupported_endpoint_ref.to_string());
+        receiver_database
+            .upsert_storage_provider(&unsupported_provider)
+            .expect("receiver writes unsupported stored membership provider endpoint");
+        let unsupported_plan_attempt = scheduler
+            .try_plan_once_with_membership_log_and_stored_retention_providers(
+                &receiver_database,
+                &config,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                &signer_b,
+                8,
+            )
+            .expect("stored membership unsupported endpoint plan attempt succeeds");
+        let SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::Ready(unsupported_plan) =
+            unsupported_plan_attempt.cycle
+        else {
+            panic!("expected unsupported endpoint membership plan attempt to be ready");
+        };
+        assert_eq!(
+            unsupported_plan.unsupported_endpoint_provider_ids(),
+            vec![unmaterialized_provider_id.to_string()]
+        );
+        assert_eq!(
+            unsupported_plan
+                .selected_endpoint_materialization_plan()
+                .fail_closed_provider_ids(),
+            vec![unmaterialized_provider_id.to_string()]
+        );
+        receiver_database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "ui.font",
+                "system",
+            )
+            .expect("receiver writes stored membership unsupported-endpoint setting");
+        let roots_before_unsupported_endpoint = receiver_database
+            .profile_sync_roots(DEFAULT_PROFILE_ID)
+            .expect("read roots before stored membership unsupported endpoint");
+        let unsupported_handles = [
+            SettingsSyncRetentionProviderHandle::with_endpoint_ref(
+                selected_provider_id,
+                selected_provider_endpoint_ref.as_str(),
+                &provider_daemon,
+            ),
+            SettingsSyncRetentionProviderHandle::with_endpoint_ref(
+                unmaterialized_provider_id,
+                unsupported_endpoint_ref,
+                &unmaterialized_provider_daemon,
+            ),
+        ];
+        let strict_unsupported_config = SettingsSyncSchedulerConfig::new(
+            DEFAULT_PROFILE_ID,
+            "settings/latest",
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 3)
+                .with_provider_health_required(false)
+                .with_root_health_required_after_cycle(false),
+        );
+        let unsupported_error = scheduler
+            .run_once_with_membership_log_and_stored_retention_provider_handles(
+                &receiver_database,
+                &strict_unsupported_config,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer_b),
+                8,
+                &unsupported_handles,
+            )
+            .expect_err("stored membership scheduler excludes unsupported endpoint refs");
+        let ProfileSyncCycleWithHealthError::Policy(ProfileSyncPolicyError::ProviderMinimumUnmet {
+            provider_role,
+            minimum,
+            actual,
+            ..
+        }) = unsupported_error
+        else {
+            panic!(
+                "expected stored membership unsupported endpoint quorum error, got {unsupported_error:?}"
+            );
+        };
+        assert_eq!(provider_role, "selected retention providers");
+        assert_eq!(minimum, 2);
+        assert_eq!(actual, 1);
+        assert_eq!(
+            receiver_database
+                .profile_sync_roots(DEFAULT_PROFILE_ID)
+                .expect("read roots after stored membership unsupported endpoint"),
+            roots_before_unsupported_endpoint
+        );
 
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
