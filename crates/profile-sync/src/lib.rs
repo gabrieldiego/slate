@@ -2783,6 +2783,16 @@ impl SettingsSyncStoredRetentionProviderPlan {
         )
     }
 
+    pub fn materialize_selected_protocol_retention_provider_handles<'a, Materializer>(
+        &self,
+        materializer: &Materializer,
+    ) -> SettingsSyncProtocolProviderMaterialization<'a>
+    where
+        Materializer: SettingsSyncProtocolProviderMaterializer<'a>,
+    {
+        materializer.materialize_protocol_providers(&self.selected_protocol_materialization_plan())
+    }
+
     pub fn selected_retention_provider_handle_materialization(
         &self,
         retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'_>],
@@ -2864,6 +2874,31 @@ pub struct SettingsSyncStoredInProcessFixtureRetentionProviderRun<'a> {
 }
 
 impl SettingsSyncStoredInProcessFixtureRetentionProviderRun<'_> {
+    pub fn selected_protocol_materialization_plan(
+        &self,
+    ) -> SettingsSyncSelectedProtocolMaterializationPlan {
+        self.run.selected_protocol_materialization_plan()
+    }
+
+    pub fn selected_retention_provider_count(&self) -> usize {
+        self.run.selected_retention_provider_count()
+    }
+
+    pub fn materialized_retention_provider_count(&self) -> usize {
+        self.run.materialized_retention_provider_count()
+    }
+
+    pub fn retained_provider_count(&self) -> usize {
+        self.run.retained_provider_count()
+    }
+}
+
+pub struct SettingsSyncStoredProtocolProviderRetentionProviderRun<'a> {
+    pub protocol_materialization: SettingsSyncProtocolProviderMaterialization<'a>,
+    pub run: SettingsSyncStoredRetentionProviderRun,
+}
+
+impl SettingsSyncStoredProtocolProviderRetentionProviderRun<'_> {
     pub fn selected_protocol_materialization_plan(
         &self,
     ) -> SettingsSyncSelectedProtocolMaterializationPlan {
@@ -5015,6 +5050,83 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
 
         Ok(SettingsSyncStoredInProcessFixtureRetentionProviderRun {
             fixture_materialization,
+            run,
+        })
+    }
+
+    pub fn run_once_with_stored_protocol_materializer_retention_provider_handles<
+        'provider,
+        Materializer,
+    >(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        secrets: SettingsSyncRuntimeSecrets<'_>,
+        max_stored_providers: u32,
+        materializer: &Materializer,
+    ) -> Result<
+        SettingsSyncStoredProtocolProviderRetentionProviderRun<'provider>,
+        ProfileSyncCycleWithHealthError,
+    >
+    where
+        Materializer: SettingsSyncProtocolProviderMaterializer<'provider>,
+    {
+        let runner = BroadwebdSettingsSyncRunner::new(self.daemon);
+        let stored_provider_plan = self.plan_once_with_stored_retention_providers(
+            database,
+            config,
+            secrets.signer,
+            max_stored_providers,
+        )?;
+        config.policy.check_selected_retention_provider_freshness(
+            stored_provider_plan.stale_retention_provider_count(),
+            stored_provider_plan.offline_retention_provider_count(),
+            &stored_provider_plan.cycle.preflight.before_health,
+        )?;
+        config.policy.check_selected_retention_provider_roles(
+            stored_provider_plan.ineligible_retention_provider_count(),
+            &stored_provider_plan.cycle.preflight.before_health,
+        )?;
+        let protocol_materialization = stored_provider_plan
+            .materialize_selected_protocol_retention_provider_handles(materializer);
+        let run = {
+            let retention_provider_handles = protocol_materialization.retention_provider_handles();
+            let materialized_providers = materialize_stored_retention_provider_daemons(
+                &stored_provider_plan,
+                retention_provider_handles.as_slice(),
+            );
+            config.policy.check_selected_retention_provider_count(
+                materialized_providers.materialized_retention_provider_count(),
+                &stored_provider_plan.cycle.preflight.before_health,
+            )?;
+            let cycle = runner
+                .run_settings_sync_cycle_with_active_key_policy_shared_root_candidates_and_retention_providers_after_preflight(
+                    database,
+                    secrets.content_key,
+                    secrets.signer,
+                    &config.policy,
+                    materialized_providers.daemons.as_slice(),
+                    &stored_provider_plan.cycle.preflight,
+                )?;
+
+            SettingsSyncStoredRetentionProviderRun {
+                stored_provider_plan,
+                unmaterialized_retention_provider_ids: materialized_providers
+                    .unmaterialized_retention_provider_ids,
+                pending_endpoint_materialization_retention_provider_ids: materialized_providers
+                    .pending_endpoint_materialization_retention_provider_ids,
+                endpoint_mismatch_retention_provider_ids: materialized_providers
+                    .endpoint_mismatch_retention_provider_ids,
+                duplicate_handle_retention_provider_ids: materialized_providers
+                    .duplicate_handle_retention_provider_ids,
+                unsupported_endpoint_retention_provider_ids: materialized_providers
+                    .unsupported_endpoint_retention_provider_ids,
+                cycle,
+            }
+        };
+
+        Ok(SettingsSyncStoredProtocolProviderRetentionProviderRun {
+            protocol_materialization,
             run,
         })
     }
@@ -15441,6 +15553,158 @@ mod tests {
         let _ = std::fs::remove_dir_all(device_state_root);
         let _ = std::fs::remove_dir_all(provider_state_root);
         let _ = std::fs::remove_dir_all(unmaterialized_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_scheduler_runs_with_protocol_materialized_stored_provider() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("scheduler-protocol-provider-device");
+        let provider_state_root = test_state_root("scheduler-protocol-provider-provider");
+        let db_root = test_state_root("scheduler-protocol-provider-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-protocol-a",
+            )
+            .expect("start in-process protocol scheduler device daemon");
+        let provider_id = "protocol-materialized-provider";
+        let provider_endpoint = "/dnsaddr/protocol-provider.example.test/p2p/materialized";
+        let provider_daemon = network
+            .daemon_for_provider_with_roles(
+                &provider_state_root,
+                ResourceBudget::default(),
+                provider_id,
+                "socketless-protocol-provider",
+                BroadwebdProfileSyncProviderRoles::availability_provider(),
+            )
+            .expect("start socketless protocol materialized provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-scheduler-protocol-a",
+        )
+        .expect("open protocol scheduler settings database");
+        let profile = "schedulerprotocolproviderprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([87; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-scheduler-protocol-a")
+            .expect("generate protocol scheduler local device signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register protocol scheduler local trusted public key");
+        authorize_test_storage_provider(&database, profile, provider_id);
+        database
+            .upsert_storage_provider(&StorageProviderUpdate {
+                endpoint_ref: Some(provider_endpoint.to_string()),
+                ..test_storage_provider_update(
+                    &network,
+                    profile,
+                    provider_id,
+                    "socketless-protocol-provider",
+                    "Protocol materialized pinner",
+                    true,
+                    true,
+                    true,
+                )
+            })
+            .expect("write protocol materialized stored provider metadata");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write protocol scheduler local setting");
+
+        let config = SettingsSyncSchedulerConfig::new(
+            profile,
+            settings_root_id,
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
+        );
+        let materializer = super::SettingsSyncSocketlessProtocolProviderMaterializer::new(
+            super::SettingsSyncProtocolProviderMaterializerPolicy::new(true, Vec::new()),
+            vec![super::SettingsSyncProtocolProviderDaemon::new(
+                provider_id,
+                provider_endpoint,
+                &provider_daemon,
+            )],
+        );
+        let run = BroadwebdSettingsSyncScheduler::new(&device_daemon)
+            .run_once_with_stored_protocol_materializer_retention_provider_handles(
+                &database,
+                &config,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                4,
+                &materializer,
+            )
+            .expect("scheduler run uses protocol materialized stored provider");
+
+        assert_eq!(
+            run.protocol_materialization.report(),
+            super::SettingsSyncProtocolProviderMaterializationReport {
+                materialized_provider_ids: vec![provider_id.to_string()],
+                missing_provider_ids: Vec::new(),
+                endpoint_mismatch_provider_ids: Vec::new(),
+                duplicate_provider_ids: Vec::new(),
+                unsupported_provider_ids: Vec::new(),
+            }
+        );
+        assert!(run.protocol_materialization.all_providers_materialized());
+        assert_eq!(
+            run.protocol_materialization.materialized_provider_count(),
+            1
+        );
+        assert_eq!(run.selected_retention_provider_count(), 1);
+        assert_eq!(run.materialized_retention_provider_count(), 1);
+        assert_eq!(run.retained_provider_count(), 1);
+        assert!(run.run.unmaterialized_retention_provider_ids.is_empty());
+        assert!(
+            run.run
+                .pending_endpoint_materialization_retention_provider_ids
+                .is_empty()
+        );
+        assert!(run.run.endpoint_mismatch_retention_provider_ids.is_empty());
+        assert!(run.run.duplicate_handle_retention_provider_ids.is_empty());
+        assert!(
+            run.run
+                .unsupported_endpoint_retention_provider_ids
+                .is_empty()
+        );
+        assert_eq!(
+            run.selected_protocol_materialization_plan()
+                .multiaddr_requests,
+            vec![super::SettingsSyncSelectedMultiaddrMaterializationRequest {
+                provider_id: provider_id.to_string(),
+                endpoint: slate_routing::Multiaddr::parse(provider_endpoint)
+                    .expect("stored protocol provider multiaddr"),
+            }]
+        );
+        assert!(
+            run.selected_protocol_materialization_plan()
+                .ready_for_protocol_materialization()
+        );
+        assert_eq!(run.run.cycle.cycle.published_step_count(), 1);
+        assert_eq!(
+            run.run
+                .cycle
+                .after_health
+                .settings_root_health
+                .online_retaining_providers,
+            2
+        );
+        assert_eq!(
+            run.run
+                .cycle
+                .after_health
+                .local_device_head_root_health
+                .online_retaining_providers,
+            2
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
         let _ = std::fs::remove_dir_all(db_root);
     }
 

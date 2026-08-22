@@ -604,6 +604,11 @@ Current baseline:
   fixture or future adapter, verifies provider id and endpoint-ref matches, and
   reports missing, mismatched, duplicate, or unsupported providers before those
   handles can feed the stored-provider scheduler path.
+- Stored-provider scheduler runs can now use that protocol materializer
+  boundary directly. A selected stored provider with a multiaddr endpoint can
+  be materialized into a normal retention-provider handle, pass the existing
+  endpoint-ref checks, and satisfy the retention quorum in the socketless
+  in-process broadweb fixture without adding any live network dependency.
 - The selected endpoint materialization plan now exposes a combined protocol
   materialization summary that groups multiaddr work, deferred-protocol work,
   missing endpoints, and fail-closed endpoints. Scheduler/UI code can tell
