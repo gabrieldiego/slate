@@ -581,6 +581,10 @@ Current baseline:
   values for valid multiaddr endpoints. Future protocol materializers can
   consume structured routing targets from the scheduler handoff without
   reparsing provider metadata or opening sockets during planning.
+- The selected endpoint materialization plan now also groups valid multiaddr
+  endpoints into provider-id plus parsed-`Multiaddr` request records. This
+  gives future profile-sync protocol adapters a direct typed work queue while
+  missing and deferred-protocol endpoints remain pending materialization.
 - Legacy `fixture:<provider>` endpoint refs now also fail closed. They do not
   carry a fixture network id, so they cannot safely satisfy stored-provider
   materialization or quorum checks.

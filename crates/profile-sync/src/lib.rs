@@ -1729,6 +1729,12 @@ pub struct SettingsSyncSelectedEndpointMaterializationRequest {
     pub endpoint_status: SettingsSyncStoredProviderEndpointStatus,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncSelectedMultiaddrMaterializationRequest {
+    pub provider_id: String,
+    pub endpoint: Multiaddr,
+}
+
 impl SettingsSyncSelectedEndpointMaterializationRequest {
     pub fn fixture_ready(&self) -> bool {
         self.endpoint_status == SettingsSyncStoredProviderEndpointStatus::InProcessFixture
@@ -1754,6 +1760,17 @@ impl SettingsSyncSelectedEndpointMaterializationRequest {
         self.endpoint_ref
             .as_deref()
             .and_then(|endpoint_ref| Multiaddr::parse(endpoint_ref).ok())
+    }
+
+    pub fn multiaddr_materialization_request(
+        &self,
+    ) -> Option<SettingsSyncSelectedMultiaddrMaterializationRequest> {
+        self.parsed_multiaddr().map(|endpoint| {
+            SettingsSyncSelectedMultiaddrMaterializationRequest {
+                provider_id: self.provider_id.clone(),
+                endpoint,
+            }
+        })
     }
 }
 
@@ -1816,6 +1833,24 @@ impl SettingsSyncSelectedEndpointMaterializationPlan {
             .iter()
             .filter(|request| request.pending_materialization())
             .map(|request| request.provider_id.clone())
+            .collect()
+    }
+
+    pub fn multiaddr_requests(&self) -> Vec<SettingsSyncSelectedMultiaddrMaterializationRequest> {
+        self.requests
+            .iter()
+            .filter_map(|request| request.multiaddr_materialization_request())
+            .collect()
+    }
+
+    pub fn multiaddr_request_count(&self) -> usize {
+        self.multiaddr_requests().len()
+    }
+
+    pub fn multiaddr_provider_ids(&self) -> Vec<String> {
+        self.multiaddr_requests()
+            .into_iter()
+            .map(|request| request.provider_id)
             .collect()
     }
 
@@ -6888,6 +6923,16 @@ mod tests {
                 .as_str(),
             "/dnsaddr/home.example.test/p2p/provider-a"
         );
+        assert_eq!(
+            materialization_requests[2].multiaddr_materialization_request(),
+            Some(super::SettingsSyncSelectedMultiaddrMaterializationRequest {
+                provider_id: multiaddr_provider_id.to_string(),
+                endpoint: slate_routing::Multiaddr::parse(
+                    "/dnsaddr/home.example.test/p2p/provider-a"
+                )
+                .expect("expected test multiaddr")
+            })
+        );
         assert!(materialization_requests[3].parsed_multiaddr().is_none());
         assert!(materialization_requests[4].parsed_multiaddr().is_none());
         assert_eq!(
@@ -6937,6 +6982,21 @@ mod tests {
                 multiaddr_provider_id.to_string(),
                 deferred_provider_id.to_string(),
             ]
+        );
+        assert_eq!(materialization_plan.multiaddr_request_count(), 1);
+        assert_eq!(
+            materialization_plan.multiaddr_provider_ids(),
+            vec![multiaddr_provider_id.to_string()]
+        );
+        assert_eq!(
+            materialization_plan.multiaddr_requests(),
+            vec![super::SettingsSyncSelectedMultiaddrMaterializationRequest {
+                provider_id: multiaddr_provider_id.to_string(),
+                endpoint: slate_routing::Multiaddr::parse(
+                    "/dnsaddr/home.example.test/p2p/provider-a"
+                )
+                .expect("expected plan test multiaddr"),
+            }]
         );
         assert_eq!(
             materialization_plan.pending_requests(),
