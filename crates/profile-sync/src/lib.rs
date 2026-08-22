@@ -2231,6 +2231,21 @@ pub struct SettingsSyncStoredRetentionProviderHandleMaterialization {
     pub unsupported_endpoint_retention_provider_ids: Vec<String>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SettingsSyncStoredRetentionProviderMaterializationIssueKind {
+    Unmaterialized,
+    PendingEndpointMaterialization,
+    EndpointMismatch,
+    DuplicateHandle,
+    UnsupportedEndpoint,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncStoredRetentionProviderMaterializationIssue {
+    pub provider_id: String,
+    pub kind: SettingsSyncStoredRetentionProviderMaterializationIssueKind,
+}
+
 impl SettingsSyncStoredRetentionProviderHandleMaterialization {
     pub fn materialized_retention_provider_count(&self) -> usize {
         self.materialized_retention_provider_ids.len()
@@ -2265,6 +2280,46 @@ impl SettingsSyncStoredRetentionProviderHandleMaterialization {
             + self.unsupported_endpoint_retention_provider_count()
     }
 
+    pub fn retention_provider_materialization_issues(
+        &self,
+    ) -> Vec<SettingsSyncStoredRetentionProviderMaterializationIssue> {
+        let mut issues = Vec::with_capacity(self.blocked_retention_provider_count());
+        append_stored_retention_provider_materialization_issues(
+            &mut issues,
+            SettingsSyncStoredRetentionProviderMaterializationIssueKind::Unmaterialized,
+            self.unmaterialized_retention_provider_ids.as_slice(),
+        );
+        append_stored_retention_provider_materialization_issues(
+            &mut issues,
+            SettingsSyncStoredRetentionProviderMaterializationIssueKind::PendingEndpointMaterialization,
+            self.pending_endpoint_materialization_retention_provider_ids.as_slice(),
+        );
+        append_stored_retention_provider_materialization_issues(
+            &mut issues,
+            SettingsSyncStoredRetentionProviderMaterializationIssueKind::EndpointMismatch,
+            self.endpoint_mismatch_retention_provider_ids.as_slice(),
+        );
+        append_stored_retention_provider_materialization_issues(
+            &mut issues,
+            SettingsSyncStoredRetentionProviderMaterializationIssueKind::DuplicateHandle,
+            self.duplicate_handle_retention_provider_ids.as_slice(),
+        );
+        append_stored_retention_provider_materialization_issues(
+            &mut issues,
+            SettingsSyncStoredRetentionProviderMaterializationIssueKind::UnsupportedEndpoint,
+            self.unsupported_endpoint_retention_provider_ids.as_slice(),
+        );
+        issues
+    }
+
+    pub fn retention_provider_materialization_issue_count(&self) -> usize {
+        self.blocked_retention_provider_count()
+    }
+
+    pub fn has_retention_provider_materialization_issue(&self) -> bool {
+        self.retention_provider_materialization_issue_count() > 0
+    }
+
     pub fn requires_protocol_materializer(&self) -> bool {
         !self
             .pending_endpoint_materialization_retention_provider_ids
@@ -2281,6 +2336,19 @@ impl SettingsSyncStoredRetentionProviderHandleMaterialization {
 
     pub fn all_selected_providers_materialized(&self) -> bool {
         self.blocked_retention_provider_count() == 0
+    }
+}
+
+fn append_stored_retention_provider_materialization_issues(
+    issues: &mut Vec<SettingsSyncStoredRetentionProviderMaterializationIssue>,
+    kind: SettingsSyncStoredRetentionProviderMaterializationIssueKind,
+    provider_ids: &[String],
+) {
+    for provider_id in provider_ids {
+        issues.push(SettingsSyncStoredRetentionProviderMaterializationIssue {
+            provider_id: provider_id.clone(),
+            kind: kind.clone(),
+        });
     }
 }
 
@@ -9029,6 +9097,36 @@ mod tests {
             1
         );
         assert_eq!(materialization_report.blocked_retention_provider_count(), 5);
+        assert_eq!(
+            materialization_report.retention_provider_materialization_issue_count(),
+            5
+        );
+        assert!(materialization_report.has_retention_provider_materialization_issue());
+        assert_eq!(
+            materialization_report.retention_provider_materialization_issues(),
+            vec![
+                super::SettingsSyncStoredRetentionProviderMaterializationIssue {
+                    provider_id: fixture_provider_id.to_string(),
+                    kind: super::SettingsSyncStoredRetentionProviderMaterializationIssueKind::Unmaterialized,
+                },
+                super::SettingsSyncStoredRetentionProviderMaterializationIssue {
+                    provider_id: missing_provider_id.to_string(),
+                    kind: super::SettingsSyncStoredRetentionProviderMaterializationIssueKind::PendingEndpointMaterialization,
+                },
+                super::SettingsSyncStoredRetentionProviderMaterializationIssue {
+                    provider_id: multiaddr_provider_id.to_string(),
+                    kind: super::SettingsSyncStoredRetentionProviderMaterializationIssueKind::PendingEndpointMaterialization,
+                },
+                super::SettingsSyncStoredRetentionProviderMaterializationIssue {
+                    provider_id: deferred_provider_id.to_string(),
+                    kind: super::SettingsSyncStoredRetentionProviderMaterializationIssueKind::PendingEndpointMaterialization,
+                },
+                super::SettingsSyncStoredRetentionProviderMaterializationIssue {
+                    provider_id: unsupported_provider_id.to_string(),
+                    kind: super::SettingsSyncStoredRetentionProviderMaterializationIssueKind::UnsupportedEndpoint,
+                },
+            ]
+        );
         assert!(materialization_report.requires_protocol_materializer());
         assert!(!materialization_report.has_ambiguous_handle());
         assert!(materialization_report.has_fail_closed_endpoint());
@@ -16266,9 +16364,43 @@ mod tests {
         assert!(!handle_materialization.has_ambiguous_handle());
         assert!(!handle_materialization.has_fail_closed_endpoint());
         assert!(handle_materialization.all_selected_providers_materialized());
+        assert_eq!(
+            handle_materialization.retention_provider_materialization_issue_count(),
+            0
+        );
+        assert!(
+            handle_materialization
+                .retention_provider_materialization_issues()
+                .is_empty()
+        );
 
         let selected_endpoint_ref =
             network.profile_sync_provider_endpoint_ref(selected_provider_id);
+        let wrong_endpoint_ref =
+            network.profile_sync_provider_endpoint_ref("wrong-stored-provider");
+        let endpoint_mismatch_handle_materialization = plan
+            .selected_retention_provider_handle_materialization(&[
+                SettingsSyncRetentionProviderHandle::with_endpoint_ref(
+                    selected_provider_id,
+                    wrong_endpoint_ref.as_str(),
+                    &selected_provider_daemon,
+                ),
+            ]);
+        assert_eq!(
+            endpoint_mismatch_handle_materialization.endpoint_mismatch_retention_provider_ids,
+            vec![selected_provider_id.to_string()]
+        );
+        assert_eq!(
+            endpoint_mismatch_handle_materialization
+                .retention_provider_materialization_issues(),
+            vec![
+                super::SettingsSyncStoredRetentionProviderMaterializationIssue {
+                    provider_id: selected_provider_id.to_string(),
+                    kind: super::SettingsSyncStoredRetentionProviderMaterializationIssueKind::EndpointMismatch,
+                },
+            ]
+        );
+
         let duplicate_handle_materialization = plan
             .selected_retention_provider_handle_materialization(&[
                 SettingsSyncRetentionProviderHandle::with_endpoint_ref(
@@ -16298,6 +16430,15 @@ mod tests {
         assert_eq!(
             duplicate_handle_materialization.blocked_retention_provider_count(),
             1
+        );
+        assert_eq!(
+            duplicate_handle_materialization.retention_provider_materialization_issues(),
+            vec![
+                super::SettingsSyncStoredRetentionProviderMaterializationIssue {
+                    provider_id: selected_provider_id.to_string(),
+                    kind: super::SettingsSyncStoredRetentionProviderMaterializationIssueKind::DuplicateHandle,
+                },
+            ]
         );
         assert!(duplicate_handle_materialization.has_ambiguous_handle());
         assert!(!duplicate_handle_materialization.all_selected_providers_materialized());

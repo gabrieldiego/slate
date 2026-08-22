@@ -702,6 +702,11 @@ Current baseline:
   providers with supplied handles, see materialized provider ids, pending
   protocol work, endpoint mismatches, and fail-closed endpoints, then decide
   whether it is safe to proceed without publishing or retaining anything.
+- Stored-provider handle materialization reports now also expose structured
+  materialization issues for unmaterialized, pending-protocol, endpoint
+  mismatch, duplicate-handle, and unsupported-endpoint providers. UI and
+  scheduler callers can render why quorum failed without reinterpreting raw id
+  buckets or opening any fixture, protocol, or socket transport.
 - Stored-provider handle materialization now rejects duplicate supplied handles
   for the same selected provider instead of choosing the first one. The preview
   and runtime result report ambiguous provider ids separately, and those
