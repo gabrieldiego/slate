@@ -1413,6 +1413,19 @@ Current baseline:
   watcher coverage is opt-in because compiling `slate-chrome` currently pulls
   Servo script bindings and exceeded the 2 GiB low-memory profile during
   verification.
+- The next networking checkpoint is deliberately internal-first. Profile sync
+  should continue using socketless, deterministic simulated broadweb fixtures
+  until the local model covers delayed roots, unavailable objects, stale/replayed
+  manifests, conflicting equal-authority device heads, corrupt objects,
+  unauthorized membership/provider records, retention gaps, and fail-closed
+  endpoint materialization. Online protocol testing comes after those cases are
+  reproducible locally.
+- The fixture model should explicitly cover IPFS/IPNS, Iroh-like rendezvous and
+  transfer, Tor/I2P-style private routing, LAN discovery, and contracted or
+  self-hosted retention providers as internal deterministic adapters first.
+  Later opt-in real-network probes should compare observed behavior against
+  those models and drive fixture refinements when the real web behaves
+  differently.
 
 Next:
 

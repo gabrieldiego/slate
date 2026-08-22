@@ -1009,6 +1009,97 @@ The fixture also models availability-only providers: they may retain and serve
 encrypted bytes, but their provider policy denies mutable-root publishing and
 discovery reports that boundary.
 
+## Deterministic Fixture Gate
+
+Before Slate tests profile sync on real broadweb networks, the profile-sync
+logic should be exercised through deterministic in-process fixtures. This is a
+product and security checkpoint, not only a test convenience: the internal model
+must prove the sync logic before variable public networks make failures harder
+to reproduce.
+
+The simulated network fixtures should remain socketless by default. They should
+not bind loopback ports, contact public networks, require Tor/IPFS/Iroh daemons,
+or depend on wall-clock sleeps. Fixture state should be explicit and
+controllable from tests so each scenario can be reproduced from a small local
+test case.
+
+Fixture coverage should grow before real-network trials to model common
+distributed-system and hostile-network conditions:
+
+- Offline devices and providers.
+- Delayed mutable-root propagation.
+- Delayed or missing encrypted-object transfer.
+- Stale roots and replayed older manifests.
+- Conflicting equal-authority device heads.
+- Duplicate providers and endpoint mismatches.
+- Providers that can retain bytes but cannot publish roots.
+- Providers that claim objects are retained when bytes are unavailable.
+- Corrupt encrypted objects, invalid signatures, wrong content-key ids, and
+  malformed app-domain payloads.
+- Unauthorized device, provider, and membership records.
+- Retention and compaction behavior when old devices have not synced.
+- Explicit fail-closed behavior for unmaterialized protocol endpoints.
+
+### Internal Protocol Models
+
+External protocols should have internal deterministic model adapters before
+Slate depends on their real daemons or public networks. These adapters do not
+need to implement the protocol; they need to model the semantics Slate relies
+on, the privacy boundary the user will see, and the failures the runtime must
+handle.
+
+IPFS/IPNS model:
+
+- Content-addressed object storage with stable object ids.
+- Pin/retain, unpin/release, and retained-object verification.
+- Mutable root publish and resolve with configurable propagation delay.
+- Multiple providers where an object can exist on one provider but not another.
+- No public gateway fallback unless the fixture policy explicitly enables that
+  branch.
+- Kubo-like endpoint materialization as a separate step, including missing,
+  unsupported, and fail-closed endpoint states.
+
+Iroh-like model:
+
+- Device/provider discovery as a rendezvous result, not as guaranteed
+  availability.
+- Direct, relayed, delayed, and unavailable transfer paths.
+- Explicit distinction between live peer transfer and durable retention.
+- Relay/provider observability of timing, volume, and peer identifiers so UI
+  and policy code can surface that tradeoff.
+
+Tor/I2P-like model:
+
+- Hidden-service style endpoints that do not use OS DNS.
+- Separate proxy/routing identities from normal HTTPS browsing.
+- Offline or unreachable service states without falling back to direct network
+  routes.
+- Higher-latency and partial-transfer behavior that can be triggered
+  deterministically.
+
+LAN/local-provider model:
+
+- Local discovery records that may be stale, duplicated, or spoofed.
+- Same-network reachability that is useful for tests but not a requirement for
+  the account model.
+- Clear failure behavior when a device leaves the local network.
+
+Contracted or self-hosted provider model:
+
+- Retention-only providers that store encrypted bytes but cannot publish
+  account membership or device heads.
+- Providers that are online but missing bytes they claimed to retain.
+- Provider authorization, revocation, and stale-health states.
+
+Only after those cases are covered locally should Slate start online protocol
+testing. Real-network tests should be opt-in/manual at first, separated from the
+low-memory local regression gate, and should use test profiles and test
+providers rather than the developer's normal browsing profile. The first online
+trials should compare observed IPFS/IPNS, Iroh, Tor/I2P, LAN, and provider
+behavior against the internal models. When the real networks expose behavior
+the fixture did not model, the next step should be to refine the deterministic
+model and regression tests before relying on that behavior in production.
+
 ## Privacy Boundaries
 
 - Sync must be opt-in per profile.
