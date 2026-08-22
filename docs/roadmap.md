@@ -292,6 +292,10 @@ Current baseline:
   reuse the same numeric-loopback or synthetic-fixture endpoint validation and
   give the future backend client a tested RPC surface before any networked sync
   implementation is wired in.
+- Kubo profile-sync response parsing now extracts object ids from add,
+  pin-status, IPNS publish, and IPNS resolve responses, and fails malformed
+  local-node data before it can update a profile-sync root or retained-object
+  state.
 - broadwebd's own HTTP fixture unit tests now start daemons with
   `InProcessBroadwebNetwork` fixture registries whenever they consume
   `slate-fixture-http://` URLs. That keeps the production default direct HTTP

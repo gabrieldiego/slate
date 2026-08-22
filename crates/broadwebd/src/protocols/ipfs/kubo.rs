@@ -5,6 +5,8 @@ use crate::{
     PluginKind, PluginMetadata, ResourceBudget, ResourceProfile, TransportHttpRequest,
     TransportPlugin,
 };
+use serde::Deserialize;
+use std::collections::BTreeMap;
 use std::time::Duration;
 use url::Url;
 
@@ -270,10 +272,97 @@ pub fn ipfs_kubo_profile_sync_name_resolve_url(
     Ok(url.to_string())
 }
 
+pub fn ipfs_kubo_profile_sync_added_object_id(
+    response_body: &[u8],
+) -> Result<String, BroadwebdError> {
+    let response: KuboAddResponse = decode_kubo_json_response(response_body, "add")?;
+    validate_kubo_profile_sync_object_id(response.hash.as_str())?;
+    Ok(response.hash)
+}
+
+pub fn ipfs_kubo_profile_sync_pin_ls_has_recursive_pin(
+    object_id: &str,
+    response_body: &[u8],
+) -> Result<bool, BroadwebdError> {
+    validate_kubo_profile_sync_object_id(object_id)?;
+    let response: KuboPinLsResponse = decode_kubo_json_response(response_body, "pin/ls")?;
+    Ok(response
+        .keys
+        .get(object_id)
+        .is_some_and(|pin| pin.kind == "recursive"))
+}
+
+pub fn ipfs_kubo_profile_sync_published_object_id(
+    response_body: &[u8],
+) -> Result<String, BroadwebdError> {
+    let response: KuboNamePublishResponse =
+        decode_kubo_json_response(response_body, "name/publish")?;
+    let object_id = profile_sync_object_id_from_ipfs_path(response.value.as_str())?;
+    validate_kubo_profile_sync_name_token("IPNS name", response.name.as_str())?;
+    Ok(object_id)
+}
+
+pub fn ipfs_kubo_profile_sync_resolved_object_id(
+    response_body: &[u8],
+) -> Result<String, BroadwebdError> {
+    let response: KuboNameResolveResponse =
+        decode_kubo_json_response(response_body, "name/resolve")?;
+    profile_sync_object_id_from_ipfs_path(response.path.as_str())
+}
+
 fn kubo_cat_url_for_path(content_path: &str, api_base_url: &str) -> Result<String, BroadwebdError> {
     let mut url = kubo_rpc_api_url(api_base_url, "cat")?;
     url.query_pairs_mut().append_pair("arg", &content_path);
     Ok(url.to_string())
+}
+
+#[derive(Debug, Deserialize)]
+struct KuboAddResponse {
+    #[serde(rename = "Hash")]
+    hash: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct KuboPinLsResponse {
+    #[serde(rename = "Keys")]
+    keys: BTreeMap<String, KuboPinRecord>,
+}
+
+#[derive(Debug, Deserialize)]
+struct KuboPinRecord {
+    #[serde(rename = "Type")]
+    kind: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct KuboNamePublishResponse {
+    #[serde(rename = "Name")]
+    name: String,
+    #[serde(rename = "Value")]
+    value: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct KuboNameResolveResponse {
+    #[serde(rename = "Path")]
+    path: String,
+}
+
+fn decode_kubo_json_response<T>(response_body: &[u8], operation: &str) -> Result<T, BroadwebdError>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    serde_json::from_slice(response_body).map_err(|error| {
+        BroadwebdError::Request(format!("invalid Kubo {operation} response: {error}"))
+    })
+}
+
+fn profile_sync_object_id_from_ipfs_path(path: &str) -> Result<String, BroadwebdError> {
+    let object_id = path
+        .strip_prefix("/ipfs/")
+        .ok_or_else(|| BroadwebdError::InvalidUrl(format!("expected /ipfs/ path: {path}")))?;
+    validate_kubo_profile_sync_object_id(object_id)?;
+    Ok(object_id.to_string())
 }
 
 fn kubo_rpc_api_url(api_base_url: &str, endpoint: &str) -> Result<Url, BroadwebdError> {

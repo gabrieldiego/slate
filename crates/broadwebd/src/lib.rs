@@ -99,9 +99,11 @@ pub use http::{
 pub use protocols::ipfs::{
     IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport, IpfsKuboRpcEndpoint,
     IpfsKuboRpcTransport, IpfsService, IpfsTransportKind, ipfs_gateway_http_url, ipfs_kubo_cat_url,
-    ipfs_kubo_profile_sync_add_url, ipfs_kubo_profile_sync_name_publish_url,
-    ipfs_kubo_profile_sync_name_resolve_url, ipfs_kubo_profile_sync_pin_add_url,
+    ipfs_kubo_profile_sync_add_url, ipfs_kubo_profile_sync_added_object_id,
+    ipfs_kubo_profile_sync_name_publish_url, ipfs_kubo_profile_sync_name_resolve_url,
+    ipfs_kubo_profile_sync_pin_add_url, ipfs_kubo_profile_sync_pin_ls_has_recursive_pin,
     ipfs_kubo_profile_sync_pin_ls_url, ipfs_kubo_profile_sync_pin_rm_url,
+    ipfs_kubo_profile_sync_published_object_id, ipfs_kubo_profile_sync_resolved_object_id,
 };
 pub use protocols::tor::{
     TOR_HTTP_SCHEME, TOR_HTTPS_SCHEME, TorArtiHttpTransport, TorHttpTarget, TorNetworkScheme,
@@ -561,9 +563,11 @@ mod tests {
         ResourceBudget, ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, StateRoot, TOR_ARTI_HTTP_PLUGIN,
         TOR_PROTOCOL_SERVICE, TorService, TransportHttpRequest, TransportPlugin,
         ipfs_gateway_http_url, ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url,
-        ipfs_kubo_profile_sync_name_publish_url, ipfs_kubo_profile_sync_name_resolve_url,
-        ipfs_kubo_profile_sync_pin_add_url, ipfs_kubo_profile_sync_pin_ls_url,
-        ipfs_kubo_profile_sync_pin_rm_url, tor_http_target, tor_url_from_http_url,
+        ipfs_kubo_profile_sync_added_object_id, ipfs_kubo_profile_sync_name_publish_url,
+        ipfs_kubo_profile_sync_name_resolve_url, ipfs_kubo_profile_sync_pin_add_url,
+        ipfs_kubo_profile_sync_pin_ls_has_recursive_pin, ipfs_kubo_profile_sync_pin_ls_url,
+        ipfs_kubo_profile_sync_pin_rm_url, ipfs_kubo_profile_sync_published_object_id,
+        ipfs_kubo_profile_sync_resolved_object_id, tor_http_target, tor_url_from_http_url,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -2031,6 +2035,67 @@ mod tests {
         assert!(matches!(
             ipfs_kubo_profile_sync_add_url("https://ipfs.example.test:5001"),
             Err(BroadwebdError::UnsupportedRequest(_))
+        ));
+    }
+
+    #[test]
+    fn ipfs_kubo_profile_sync_response_parsers_extract_object_ids() {
+        let object_id = "bafybeigdyrztprofileobject";
+
+        assert_eq!(
+            ipfs_kubo_profile_sync_added_object_id(
+                br#"{"Name":"profile-object","Hash":"bafybeigdyrztprofileobject","Size":"128"}"#
+            )
+            .expect("parse Kubo add response"),
+            object_id
+        );
+        assert!(
+            ipfs_kubo_profile_sync_pin_ls_has_recursive_pin(
+                object_id,
+                br#"{"Keys":{"bafybeigdyrztprofileobject":{"Type":"recursive"}}}"#
+            )
+            .expect("parse recursive Kubo pin status")
+        );
+        assert!(
+            !ipfs_kubo_profile_sync_pin_ls_has_recursive_pin(
+                object_id,
+                br#"{"Keys":{"bafybeigdyrztprofileobject":{"Type":"indirect"}}}"#
+            )
+            .expect("parse non-recursive Kubo pin status")
+        );
+        assert_eq!(
+            ipfs_kubo_profile_sync_published_object_id(
+                br#"{"Name":"k51profilelatest","Value":"/ipfs/bafybeigdyrztprofileobject"}"#
+            )
+            .expect("parse Kubo IPNS publish response"),
+            object_id
+        );
+        assert_eq!(
+            ipfs_kubo_profile_sync_resolved_object_id(
+                br#"{"Path":"/ipfs/bafybeigdyrztprofileobject"}"#
+            )
+            .expect("parse Kubo IPNS resolve response"),
+            object_id
+        );
+    }
+
+    #[test]
+    fn ipfs_kubo_profile_sync_response_parsers_reject_malformed_kubo_data() {
+        assert!(matches!(
+            ipfs_kubo_profile_sync_added_object_id(br#"{"Name":"missing-hash"}"#),
+            Err(BroadwebdError::Request(_))
+        ));
+        assert!(matches!(
+            ipfs_kubo_profile_sync_published_object_id(
+                br#"{"Name":"k51profilelatest","Value":"/ipns/not-an-object"}"#
+            ),
+            Err(BroadwebdError::InvalidUrl(_))
+        ));
+        assert!(matches!(
+            ipfs_kubo_profile_sync_resolved_object_id(
+                br#"{"Path":"/ipfs/bafybeigdyrztprofileobject/extra"}"#
+            ),
+            Err(BroadwebdError::InvalidUrl(_))
         ));
     }
 
