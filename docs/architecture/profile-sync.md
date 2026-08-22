@@ -876,7 +876,10 @@ tests can model provider selection through `InProcessBroadwebNetwork` without
 loopback sockets or external discovery. That selector is also exposed as a
 read-only scheduler plan: it runs preflight, reports selected, undiscovered,
 and duplicate handles, and does not publish, pull, retain, or mutate sync
-roots. The scheduler can also derive that read-only plan from enabled
+roots. A secret-backed retained tick now follows the same active-key
+shared-root cycle but derives the content key from `SlateSyncSecret` after
+preflight, so runtime callers do not need to hand raw content-key bytes to the
+scheduler. The scheduler can also derive that read-only plan from enabled
 storage-provider metadata in `slate-settings.db`: stored providers must locally
 advertise object-transfer and availability before they are compared with
 broadwebd discovery, and disabled, locally role-ineligible, stale, offline,

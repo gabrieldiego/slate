@@ -1249,6 +1249,11 @@ Current baseline:
   normal encrypted settings cycle, and a second socketless fixture device can
   derive the same key and apply the signed encrypted device head. Plaintext
   keys still stay out of `slate-settings.db`.
+- The scheduler facade also has a secret-backed retained tick. It performs
+  active-key preflight, derives the content key from `SlateSyncSecret`, runs the
+  same shared-root candidate cycle, and hands the published object set to a
+  selected local-only retention provider without requiring the caller to handle
+  raw content-key bytes.
 
 Next:
 

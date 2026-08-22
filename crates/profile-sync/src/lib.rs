@@ -5520,10 +5520,12 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
             signer,
             policy,
         )?;
-        let content_key = sync_secret
-            .derive_profile_sync_content_key(profile, preflight.active_key_id.as_str())
-            .map_err(ProfileSyncCredentialError::from)
-            .map_err(ProfileSyncCycleError::from)?;
+        let content_key = derive_settings_sync_content_key_from_secret(
+            profile,
+            preflight.active_key_id.as_str(),
+            sync_secret,
+        )
+        .map_err(ProfileSyncCycleError::from)?;
         let cycle = self.run_settings_sync_cycle(
             database,
             profile,
@@ -6944,6 +6946,39 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
                 retention_provider_daemons,
             )
     }
+
+    pub fn run_once_with_sync_secret(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        sync_secret: &SlateSyncSecret,
+        signer: &ProfileSyncDeviceSigner,
+        retention_provider_daemons: &[&BroadwebDaemon],
+    ) -> Result<SettingsSyncCycleWithSharedRootRetentionRun, ProfileSyncCycleWithHealthError> {
+        let runner = BroadwebdSettingsSyncRunner::new(self.daemon);
+        let preflight = runner.settings_sync_cycle_preflight_with_active_key_policy(
+            database,
+            config.profile.as_str(),
+            config.settings_root_id.as_str(),
+            signer,
+            &config.policy,
+        )?;
+        let content_key = derive_settings_sync_content_key_from_secret(
+            config.profile.as_str(),
+            preflight.active_key_id.as_str(),
+            sync_secret,
+        )
+        .map_err(ProfileSyncCycleError::from)?;
+        runner
+            .run_settings_sync_cycle_with_active_key_policy_shared_root_candidates_and_retention_providers_after_preflight(
+                database,
+                &content_key,
+                signer,
+                &config.policy,
+                retention_provider_daemons,
+                &preflight,
+            )
+    }
 }
 
 impl<'a> BroadwebdProfileSyncPublisher<'a> {
@@ -8025,6 +8060,16 @@ pub fn validate_settings_sync_cycle_credentials(
     }
 
     Ok(())
+}
+
+fn derive_settings_sync_content_key_from_secret(
+    profile: &str,
+    key_id: &str,
+    sync_secret: &SlateSyncSecret,
+) -> Result<ProfileSyncContentKey, ProfileSyncCredentialError> {
+    sync_secret
+        .derive_profile_sync_content_key(profile, key_id)
+        .map_err(ProfileSyncCredentialError::from)
 }
 
 pub fn active_settings_sync_content_key_id(
@@ -16572,6 +16617,80 @@ mod tests {
         assert_eq!(
             run.after_health
                 .local_device_head_root_health
+                .online_retaining_providers,
+            2
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_scheduler_derives_active_key_from_sync_secret() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("scheduler-secret-device");
+        let provider_state_root = test_state_root("scheduler-secret-provider");
+        let db_root = test_state_root("scheduler-secret-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-secret-a",
+            )
+            .expect("start in-process secret scheduler device daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-secret-pinner",
+            )
+            .expect("start in-process secret scheduler availability provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-scheduler-secret-a",
+        )
+        .expect("open secret scheduler local settings database");
+        let profile = "schedulersecretprofile";
+        let settings_root_id = "settings/latest";
+        let sync_secret = SlateSyncSecret::from_bytes([95; SLATE_SYNC_SECRET_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-scheduler-secret-a")
+            .expect("generate secret scheduler local device signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register secret scheduler local trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write secret scheduler local setting");
+
+        let config = SettingsSyncSchedulerConfig::new(
+            profile,
+            settings_root_id,
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
+        );
+        let run = BroadwebdSettingsSyncScheduler::new(&device_daemon)
+            .run_once_with_sync_secret(
+                &database,
+                &config,
+                &sync_secret,
+                &signer,
+                &[&provider_daemon],
+            )
+            .expect("secret scheduler tick publishes and retains settings state");
+
+        assert!(run.degraded_before());
+        assert_eq!(run.cycle.published_step_count(), 1);
+        assert_eq!(run.retained_object_ids, run.cycle.published_object_ids());
+        assert_eq!(run.retained_provider_count(), 1);
+        assert!(!run.degraded_after());
+        assert_eq!(
+            run.after_health
+                .settings_root_health
                 .online_retaining_providers,
             2
         );
