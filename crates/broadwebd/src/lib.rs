@@ -98,14 +98,14 @@ pub use http::{
 };
 pub use protocols::ipfs::{
     IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport,
-    IpfsKuboProfileSyncOperation, IpfsKuboProfileSyncRpc, IpfsKuboProfileSyncRpcRequest,
-    IpfsKuboRpcEndpoint, IpfsKuboRpcTransport, IpfsService, IpfsTransportKind,
-    ipfs_gateway_http_url, ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url,
-    ipfs_kubo_profile_sync_added_object_id, ipfs_kubo_profile_sync_name_publish_url,
-    ipfs_kubo_profile_sync_name_resolve_url, ipfs_kubo_profile_sync_pin_add_url,
-    ipfs_kubo_profile_sync_pin_ls_has_recursive_pin, ipfs_kubo_profile_sync_pin_ls_url,
-    ipfs_kubo_profile_sync_pin_rm_url, ipfs_kubo_profile_sync_published_object_id,
-    ipfs_kubo_profile_sync_resolved_object_id,
+    IpfsKuboProfileSyncOperation, IpfsKuboProfileSyncRpc, IpfsKuboProfileSyncRpcExecutor,
+    IpfsKuboProfileSyncRpcRequest, IpfsKuboRpcEndpoint, IpfsKuboRpcResponse, IpfsKuboRpcTransport,
+    IpfsService, IpfsTransportKind, ipfs_gateway_http_url, ipfs_kubo_cat_url,
+    ipfs_kubo_profile_sync_add_url, ipfs_kubo_profile_sync_added_object_id,
+    ipfs_kubo_profile_sync_name_publish_url, ipfs_kubo_profile_sync_name_resolve_url,
+    ipfs_kubo_profile_sync_pin_add_url, ipfs_kubo_profile_sync_pin_ls_has_recursive_pin,
+    ipfs_kubo_profile_sync_pin_ls_url, ipfs_kubo_profile_sync_pin_rm_url,
+    ipfs_kubo_profile_sync_published_object_id, ipfs_kubo_profile_sync_resolved_object_id,
 };
 pub use protocols::tor::{
     TOR_HTTP_SCHEME, TOR_HTTPS_SCHEME, TorArtiHttpTransport, TorHttpTarget, TorNetworkScheme,
@@ -600,20 +600,20 @@ mod tests {
         DEFAULT_IPFS_KUBO_RPC_API, DIRECT_HTTP_PLUGIN, FetchDisposition, FetchPurpose,
         HttpFetchRequest, HttpFetchResponse, IPFS_GATEWAY_PLUGIN, IPFS_KUBO_RPC_PLUGIN, IpfsConfig,
         IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport, IpfsKuboProfileSyncOperation,
-        IpfsKuboProfileSyncRpc, IpfsKuboRpcEndpoint, IpfsService, IpfsTransportKind,
-        PROFILE_SYNC_PLUGIN, PluginHealth, PluginKind, PluginMetadata, PluginRegistry,
-        ProfileSyncObjectRequest, ProfileSyncProfileRequest, ProfileSyncProviderRoles,
-        ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse,
-        ProfileSyncRootHealthRequest, ProfileSyncRootRequest, ProfileSyncRootUpdate,
-        ProfileSyncService, ProtocolService, ResourceBudget, ResourceProfile,
-        SLATE_IPFS_TRANSPORT_ENV, StateRoot, TOR_ARTI_HTTP_PLUGIN, TOR_PROTOCOL_SERVICE,
-        TorService, TransportHttpRequest, TransportPlugin, ipfs_gateway_http_url,
-        ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url, ipfs_kubo_profile_sync_added_object_id,
-        ipfs_kubo_profile_sync_name_publish_url, ipfs_kubo_profile_sync_name_resolve_url,
-        ipfs_kubo_profile_sync_pin_add_url, ipfs_kubo_profile_sync_pin_ls_has_recursive_pin,
-        ipfs_kubo_profile_sync_pin_ls_url, ipfs_kubo_profile_sync_pin_rm_url,
-        ipfs_kubo_profile_sync_published_object_id, ipfs_kubo_profile_sync_resolved_object_id,
-        tor_http_target, tor_url_from_http_url,
+        IpfsKuboProfileSyncRpc, IpfsKuboProfileSyncRpcExecutor, IpfsKuboRpcEndpoint, IpfsService,
+        IpfsTransportKind, PROFILE_SYNC_PLUGIN, PluginHealth, PluginKind, PluginMetadata,
+        PluginRegistry, ProfileSyncObjectRequest, ProfileSyncProfileRequest,
+        ProfileSyncProviderRoles, ProfileSyncPutObjectRequest, ProfileSyncRequest,
+        ProfileSyncResponse, ProfileSyncRootHealthRequest, ProfileSyncRootRequest,
+        ProfileSyncRootUpdate, ProfileSyncService, ProtocolService, ResourceBudget,
+        ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, StateRoot, TOR_ARTI_HTTP_PLUGIN,
+        TOR_PROTOCOL_SERVICE, TorService, TransportHttpRequest, TransportPlugin,
+        ipfs_gateway_http_url, ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url,
+        ipfs_kubo_profile_sync_added_object_id, ipfs_kubo_profile_sync_name_publish_url,
+        ipfs_kubo_profile_sync_name_resolve_url, ipfs_kubo_profile_sync_pin_add_url,
+        ipfs_kubo_profile_sync_pin_ls_has_recursive_pin, ipfs_kubo_profile_sync_pin_ls_url,
+        ipfs_kubo_profile_sync_pin_rm_url, ipfs_kubo_profile_sync_published_object_id,
+        ipfs_kubo_profile_sync_resolved_object_id, tor_http_target, tor_url_from_http_url,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -2164,7 +2164,7 @@ mod tests {
     }
 
     #[test]
-    fn ipfs_kubo_profile_sync_rpc_executes_over_internal_transport_shim() {
+    fn ipfs_kubo_profile_sync_rpc_executes_over_fixture_executor() {
         let object_id = "bafybeigdyrztprofileobject";
         let fixture = InProcessBroadwebNetwork::new().kubo_rpc_response(InternalKuboRpcResponse {
             status_code: 200,
@@ -2177,12 +2177,10 @@ mod tests {
         let request = rpc
             .put_encrypted_object_request()
             .expect("plan fixture Kubo object add");
-        let response = InternalKuboRpcTransportShim::execute_profile_sync_request(
-            &request,
-            &ResourceBudget::default(),
-            None,
-        )
-        .expect("execute Kubo profile sync request through internal transport");
+        let executor = InternalKuboRpcTransportShim;
+        let response = executor
+            .execute_profile_sync_request(&request, &ResourceBudget::default(), None)
+            .expect("execute Kubo profile sync request through fixture executor");
 
         assert_eq!(
             ipfs_kubo_profile_sync_added_object_id(response.body.as_slice())
@@ -2193,6 +2191,22 @@ mod tests {
             fixture.finish(),
             vec!["POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1"]
         );
+    }
+
+    #[test]
+    fn ipfs_kubo_profile_sync_fixture_executor_rejects_non_fixture_endpoints() {
+        let rpc =
+            IpfsKuboProfileSyncRpc::local("http://127.0.0.1:5001").expect("Kubo profile sync RPC");
+
+        assert!(matches!(
+            rpc.put_encrypted_object(
+                &InternalKuboRpcTransportShim,
+                b"encrypted object",
+                &ResourceBudget::default()
+            ),
+            Err(BroadwebdError::UnsupportedRequest(message))
+                if message.contains("requires an in-process fixture endpoint")
+        ));
     }
 
     #[test]
@@ -2208,7 +2222,8 @@ mod tests {
             .expect("fixture Kubo profile sync RPC");
 
         assert_eq!(
-            rpc.put_encrypted_object_via_internal_transport(
+            rpc.put_encrypted_object(
+                &InternalKuboRpcTransportShim,
                 b"encrypted slate-settings snapshot",
                 &ResourceBudget::default()
             )
@@ -2237,7 +2252,7 @@ mod tests {
         };
 
         assert!(matches!(
-            rpc.put_encrypted_object_via_internal_transport(b"encrypted object", &budget),
+            rpc.put_encrypted_object(&InternalKuboRpcTransportShim, b"encrypted object", &budget),
             Err(BroadwebdError::ResponseTooLarge {
                 limit: 4,
                 actual: 16
@@ -2257,7 +2272,7 @@ mod tests {
             .expect("fixture Kubo profile sync RPC");
 
         assert!(matches!(
-            rpc.put_encrypted_object_via_internal_transport(b"encrypted object", &ResourceBudget::default()),
+            rpc.put_encrypted_object(&InternalKuboRpcTransportShim, b"encrypted object", &ResourceBudget::default()),
             Err(BroadwebdError::Request(message))
                 if message == "Kubo profile-sync add returned HTTP status 500"
         ));
@@ -2279,8 +2294,12 @@ mod tests {
             .expect("fixture Kubo profile sync RPC");
 
         assert_eq!(
-            rpc.get_encrypted_object_via_internal_transport(object_id, &ResourceBudget::default())
-                .expect("get encrypted object through fixture Kubo RPC"),
+            rpc.get_encrypted_object(
+                &InternalKuboRpcTransportShim,
+                object_id,
+                &ResourceBudget::default()
+            )
+            .expect("get encrypted object through fixture Kubo RPC"),
             b"encrypted slate-settings snapshot".to_vec()
         );
         assert_eq!(
@@ -2312,17 +2331,26 @@ mod tests {
         let rpc = IpfsKuboProfileSyncRpc::local(fixture.base_url())
             .expect("fixture Kubo profile sync RPC");
 
-        rpc.retain_object_via_internal_transport(object_id, &ResourceBudget::default())
-            .expect("retain profile object through fixture Kubo RPC");
+        rpc.retain_object(
+            &InternalKuboRpcTransportShim,
+            object_id,
+            &ResourceBudget::default(),
+        )
+        .expect("retain profile object through fixture Kubo RPC");
         assert!(
-            rpc.verify_retained_object_via_internal_transport(
+            rpc.verify_retained_object(
+                &InternalKuboRpcTransportShim,
                 object_id,
                 &ResourceBudget::default()
             )
             .expect("verify retained profile object through fixture Kubo RPC")
         );
-        rpc.release_object_via_internal_transport(object_id, &ResourceBudget::default())
-            .expect("release profile object through fixture Kubo RPC");
+        rpc.release_object(
+            &InternalKuboRpcTransportShim,
+            object_id,
+            &ResourceBudget::default(),
+        )
+        .expect("release profile object through fixture Kubo RPC");
 
         assert_eq!(
             fixture.finish(),
@@ -2346,7 +2374,8 @@ mod tests {
             .expect("fixture Kubo profile sync RPC");
 
         assert!(
-            !rpc.verify_retained_object_via_internal_transport(
+            !rpc.verify_retained_object(
+                &InternalKuboRpcTransportShim,
                 object_id,
                 &ResourceBudget::default()
             )
@@ -2378,7 +2407,8 @@ mod tests {
             .expect("fixture Kubo profile sync RPC");
 
         assert_eq!(
-            rpc.publish_root_via_internal_transport(
+            rpc.publish_root(
+                &InternalKuboRpcTransportShim,
                 "settings-latest",
                 object_id,
                 &ResourceBudget::default()
@@ -2387,8 +2417,12 @@ mod tests {
             object_id
         );
         assert_eq!(
-            rpc.resolve_root_via_internal_transport("k51syncroot", &ResourceBudget::default())
-                .expect("resolve profile root through fixture Kubo RPC"),
+            rpc.resolve_root(
+                &InternalKuboRpcTransportShim,
+                "k51syncroot",
+                &ResourceBudget::default()
+            )
+            .expect("resolve profile root through fixture Kubo RPC"),
             object_id
         );
         assert_eq!(
@@ -2413,7 +2447,7 @@ mod tests {
             .expect("fixture Kubo profile sync RPC");
 
         assert!(matches!(
-            rpc.publish_root_via_internal_transport("settings-latest", object_id, &ResourceBudget::default()),
+            rpc.publish_root(&InternalKuboRpcTransportShim, "settings-latest", object_id, &ResourceBudget::default()),
             Err(BroadwebdError::Request(message))
                 if message == "Kubo profile-sync name/publish returned bafybeigdyrztdifferentobject, expected bafybeigdyrztprofileobject"
         ));
@@ -2426,7 +2460,7 @@ mod tests {
     }
 
     #[test]
-    fn kubo_profile_sync_fixture_reports_protocol_semantics_over_internal_transport() {
+    fn kubo_profile_sync_fixture_reports_protocol_semantics_over_fixture_executor() {
         let network = InProcessBroadwebNetwork::new();
         let fixture = network.kubo_rpc_response(InternalKuboRpcResponse {
             status_code: 200,

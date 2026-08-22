@@ -1,8 +1,6 @@
 use super::address::ipfs_url_parts;
 #[cfg(any(test, feature = "test-fixtures"))]
-use super::kubo_fixtures::{
-    InternalKuboRpcTransportShim, fetch_internal_kubo_rpc_fixture, is_internal_kubo_rpc_fixture_url,
-};
+use super::kubo_fixtures::{fetch_internal_kubo_rpc_fixture, is_internal_kubo_rpc_fixture_url};
 use crate::http::{infer_content_type, parse_http_url};
 use crate::{
     BroadwebdError, DEFAULT_IPFS_KUBO_RPC_API, HttpFetchResponse, HttpHeader, IPFS_KUBO_RPC_PLUGIN,
@@ -68,6 +66,28 @@ pub struct IpfsKuboProfileSyncRpc {
 pub struct IpfsKuboProfileSyncRpcRequest {
     operation: IpfsKuboProfileSyncOperation,
     url: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IpfsKuboRpcResponse {
+    pub status_code: u16,
+    pub content_type: String,
+    pub body: Vec<u8>,
+}
+
+pub trait IpfsKuboProfileSyncRpcExecutor {
+    fn execute_profile_sync_request(
+        &self,
+        request: &IpfsKuboProfileSyncRpcRequest,
+        budget: &ResourceBudget,
+        body: Option<&[u8]>,
+    ) -> Result<IpfsKuboRpcResponse, BroadwebdError>;
+
+    fn execute_content_request(
+        &self,
+        url: &Url,
+        max_response_bytes: usize,
+    ) -> Result<IpfsKuboRpcResponse, BroadwebdError>;
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -175,13 +195,12 @@ impl IpfsKuboProfileSyncRpc {
         ))
     }
 
-    #[cfg(any(test, feature = "test-fixtures"))]
-    pub fn put_encrypted_object_via_internal_transport(
+    pub fn put_encrypted_object(
         &self,
+        executor: &impl IpfsKuboProfileSyncRpcExecutor,
         object_bytes: &[u8],
         budget: &ResourceBudget,
     ) -> Result<String, BroadwebdError> {
-        self.require_internal_transport_endpoint()?;
         if object_bytes.len() > budget.max_profile_sync_object_bytes {
             return Err(BroadwebdError::ResponseTooLarge {
                 limit: budget.max_profile_sync_object_bytes,
@@ -190,86 +209,72 @@ impl IpfsKuboProfileSyncRpc {
         }
 
         let request = self.put_encrypted_object_request()?;
-        let response = InternalKuboRpcTransportShim::execute_profile_sync_request(
-            &request,
-            budget,
-            Some(object_bytes),
-        )?;
+        let response =
+            executor.execute_profile_sync_request(&request, budget, Some(object_bytes))?;
         require_kubo_profile_sync_success("add", response.status_code)?;
         ipfs_kubo_profile_sync_added_object_id(response.body.as_slice())
     }
 
-    #[cfg(any(test, feature = "test-fixtures"))]
-    pub fn get_encrypted_object_via_internal_transport(
+    pub fn get_encrypted_object(
         &self,
+        executor: &impl IpfsKuboProfileSyncRpcExecutor,
         object_id: &str,
         budget: &ResourceBudget,
     ) -> Result<Vec<u8>, BroadwebdError> {
-        self.require_internal_transport_endpoint()?;
         validate_kubo_profile_sync_object_id(object_id)?;
         let content_path = format!("/ipfs/{object_id}");
         let url = parse_http_url(
             kubo_cat_url_for_path(content_path.as_str(), self.endpoint.api_base_url())?.as_str(),
         )?;
-        let response = InternalKuboRpcTransportShim::execute_content_request(
-            &url,
-            budget.max_profile_sync_object_bytes,
-        )?;
+        let response =
+            executor.execute_content_request(&url, budget.max_profile_sync_object_bytes)?;
         require_kubo_profile_sync_success("cat", response.status_code)?;
         Ok(response.body)
     }
 
-    #[cfg(any(test, feature = "test-fixtures"))]
-    pub fn retain_object_via_internal_transport(
+    pub fn retain_object(
         &self,
+        executor: &impl IpfsKuboProfileSyncRpcExecutor,
         object_id: &str,
         budget: &ResourceBudget,
     ) -> Result<(), BroadwebdError> {
-        self.require_internal_transport_endpoint()?;
         let request = self.retain_object_request(object_id)?;
-        let response =
-            InternalKuboRpcTransportShim::execute_profile_sync_request(&request, budget, None)?;
+        let response = executor.execute_profile_sync_request(&request, budget, None)?;
         require_kubo_profile_sync_success("pin/add", response.status_code)
     }
 
-    #[cfg(any(test, feature = "test-fixtures"))]
-    pub fn release_object_via_internal_transport(
+    pub fn release_object(
         &self,
+        executor: &impl IpfsKuboProfileSyncRpcExecutor,
         object_id: &str,
         budget: &ResourceBudget,
     ) -> Result<(), BroadwebdError> {
-        self.require_internal_transport_endpoint()?;
         let request = self.release_object_request(object_id)?;
-        let response =
-            InternalKuboRpcTransportShim::execute_profile_sync_request(&request, budget, None)?;
+        let response = executor.execute_profile_sync_request(&request, budget, None)?;
         require_kubo_profile_sync_success("pin/rm", response.status_code)
     }
 
-    #[cfg(any(test, feature = "test-fixtures"))]
-    pub fn verify_retained_object_via_internal_transport(
+    pub fn verify_retained_object(
         &self,
+        executor: &impl IpfsKuboProfileSyncRpcExecutor,
         object_id: &str,
         budget: &ResourceBudget,
     ) -> Result<bool, BroadwebdError> {
-        self.require_internal_transport_endpoint()?;
         let request = self.verify_retained_object_request(object_id)?;
-        let response =
-            InternalKuboRpcTransportShim::execute_profile_sync_request(&request, budget, None)?;
+        let response = executor.execute_profile_sync_request(&request, budget, None)?;
         require_kubo_profile_sync_success("pin/ls", response.status_code)?;
         ipfs_kubo_profile_sync_pin_ls_has_recursive_pin(object_id, response.body.as_slice())
     }
 
-    #[cfg(any(test, feature = "test-fixtures"))]
-    pub fn publish_root_via_internal_transport(
+    pub fn publish_root(
         &self,
+        executor: &impl IpfsKuboProfileSyncRpcExecutor,
         key_id: &str,
         object_id: &str,
         budget: &ResourceBudget,
     ) -> Result<String, BroadwebdError> {
-        self.require_internal_transport_endpoint()?;
         let request = self.publish_root_request(key_id, object_id)?;
-        let response =
-            InternalKuboRpcTransportShim::execute_profile_sync_request(&request, budget, None)?;
+        let response = executor.execute_profile_sync_request(&request, budget, None)?;
         require_kubo_profile_sync_success("name/publish", response.status_code)?;
         let published_object_id =
             ipfs_kubo_profile_sync_published_object_id(response.body.as_slice())?;
@@ -282,30 +287,16 @@ impl IpfsKuboProfileSyncRpc {
         )))
     }
 
-    #[cfg(any(test, feature = "test-fixtures"))]
-    pub fn resolve_root_via_internal_transport(
+    pub fn resolve_root(
         &self,
+        executor: &impl IpfsKuboProfileSyncRpcExecutor,
         name: &str,
         budget: &ResourceBudget,
     ) -> Result<String, BroadwebdError> {
-        self.require_internal_transport_endpoint()?;
         let request = self.resolve_root_request(name)?;
-        let response =
-            InternalKuboRpcTransportShim::execute_profile_sync_request(&request, budget, None)?;
+        let response = executor.execute_profile_sync_request(&request, budget, None)?;
         require_kubo_profile_sync_success("name/resolve", response.status_code)?;
         ipfs_kubo_profile_sync_resolved_object_id(response.body.as_slice())
-    }
-
-    #[cfg(any(test, feature = "test-fixtures"))]
-    fn require_internal_transport_endpoint(&self) -> Result<(), BroadwebdError> {
-        if self.endpoint.is_internal_fixture() {
-            return Ok(());
-        }
-
-        Err(BroadwebdError::UnsupportedRequest(
-            "Kubo profile-sync internal transport requires an in-process fixture endpoint"
-                .to_string(),
-        ))
     }
 }
 
@@ -560,7 +551,6 @@ pub fn ipfs_kubo_profile_sync_resolved_object_id(
     profile_sync_object_id_from_ipfs_path(response.path.as_str())
 }
 
-#[cfg(any(test, feature = "test-fixtures"))]
 fn require_kubo_profile_sync_success(
     operation: &str,
     status_code: u16,

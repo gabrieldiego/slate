@@ -1,6 +1,7 @@
 use super::kubo::{
-    IpfsKuboProfileSyncRpcRequest, profile_sync_object_id_from_ipfs_path,
-    validate_kubo_profile_sync_name_token, validate_kubo_profile_sync_object_id,
+    IpfsKuboProfileSyncRpcExecutor, IpfsKuboProfileSyncRpcRequest, IpfsKuboRpcResponse,
+    profile_sync_object_id_from_ipfs_path, validate_kubo_profile_sync_name_token,
+    validate_kubo_profile_sync_object_id,
 };
 use crate::http::{infer_content_type, parse_http_url};
 use crate::{BroadwebdError, HttpFetchResponse, HttpHeader, ResourceBudget};
@@ -18,15 +19,11 @@ const INTERNAL_KUBO_RPC_FIXTURE_SCHEME: &str = "slate-fixture-kubo";
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct InternalKuboRpcTransportShim;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct InternalKuboRpcResponse {
-    pub status_code: u16,
-    pub content_type: String,
-    pub body: Vec<u8>,
-}
+pub type InternalKuboRpcResponse = IpfsKuboRpcResponse;
 
-impl InternalKuboRpcTransportShim {
-    pub fn execute_profile_sync_request(
+impl IpfsKuboProfileSyncRpcExecutor for InternalKuboRpcTransportShim {
+    fn execute_profile_sync_request(
+        &self,
         request: &IpfsKuboProfileSyncRpcRequest,
         budget: &ResourceBudget,
         body: Option<&[u8]>,
@@ -34,7 +31,8 @@ impl InternalKuboRpcTransportShim {
         fetch_internal_kubo_profile_sync_fixture(request, budget, body)
     }
 
-    pub fn execute_content_request(
+    fn execute_content_request(
+        &self,
         url: &Url,
         max_response_bytes: usize,
     ) -> Result<InternalKuboRpcResponse, BroadwebdError> {
@@ -134,7 +132,18 @@ fn fetch_internal_kubo_profile_sync_fixture(
     body: Option<&[u8]>,
 ) -> Result<InternalKuboRpcResponse, BroadwebdError> {
     let url = parse_http_url(request.url())?;
+    require_internal_kubo_rpc_fixture_url(&url)?;
     fetch_internal_kubo_rpc_response(&url, budget.max_profile_sync_object_bytes, body)
+}
+
+fn require_internal_kubo_rpc_fixture_url(url: &Url) -> Result<(), BroadwebdError> {
+    if is_internal_kubo_rpc_fixture_url(url) {
+        return Ok(());
+    }
+
+    Err(BroadwebdError::UnsupportedRequest(format!(
+        "internal Kubo RPC transport requires an in-process fixture endpoint: {url}"
+    )))
 }
 
 fn next_internal_kubo_rpc_fixture_base_url(network_id: &str) -> String {
@@ -311,6 +320,7 @@ fn fetch_internal_kubo_rpc_response(
     max_response_bytes: usize,
     body: Option<&[u8]>,
 ) -> Result<InternalKuboRpcResponse, BroadwebdError> {
+    require_internal_kubo_rpc_fixture_url(url)?;
     let base_url = internal_kubo_rpc_base_url(url)?;
     let request_target = internal_kubo_rpc_request_target(url);
 

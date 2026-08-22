@@ -345,6 +345,10 @@ Current baseline:
   should keep building and validating the same HTTP/RPC requests and responses
   they would use on the real web; fixture models only replace socket I/O with
   process-local simulated behavior.
+- Kubo profile-sync verbs now execute through an explicit RPC executor trait.
+  The protocol methods remain production-shaped (`put`, `cat`, `pin`,
+  `name/publish`, and `name/resolve`), while the in-process fixture implements
+  the executor and rejects non-fixture URLs before any socket can be touched.
 - The same Kubo fixture service now records retained objects and published roots
   in its in-process profile-sync state after the corresponding Kubo RPC fixture
   calls succeed. Retained-object listing, provider health, root candidates, and
@@ -357,8 +361,8 @@ Current baseline:
   registry or opening loopback ports.
 - `InProcessBroadwebNetwork` now also exposes a stateful socketless Kubo
   profile-sync model. The protocol adapter still builds normal Kubo RPC URLs
-  and parses normal Kubo JSON responses, while the internal transport shim
-  delivers those requests to a deterministic in-process model for `add`, `cat`,
+  and parses normal Kubo JSON responses, while the fixture executor delivers
+  those requests to a deterministic in-process model for `add`, `cat`,
   `pin/add`, `pin/rm`, `pin/ls`, `name/publish`, and `name/resolve`. Queued
   Kubo responses remain available for explicit error and malformed-response
   tests.
@@ -1489,7 +1493,7 @@ Next:
   delayed sync, availability loss, pinning policy, and conflicts entirely
   through in-process fixture transports, without loopback ports, the real
   internet, Tor, public IPFS/IPNS, or external relays.
-- Keep fixture behavior behind internal transport shims. Protocol adapters
+- Keep fixture behavior behind transport executors or shims. Protocol adapters
   should still build and parse production-shaped HTTP, Kubo, IPNS, Iroh-like,
   Tor/I2P, LAN, or retention-provider messages; the test layer only swaps the
   socket path for deterministic in-process delivery.
