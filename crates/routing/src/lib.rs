@@ -11,6 +11,7 @@ pub enum MultiaddrError {
     Empty,
     MissingLeadingSlash,
     EmptySegment,
+    InvalidSegment(String),
 }
 
 impl Multiaddr {
@@ -42,9 +43,25 @@ impl FromStr for Multiaddr {
         if input.split('/').skip(1).any(str::is_empty) {
             return Err(MultiaddrError::EmptySegment);
         }
+        if let Some(segment) = input
+            .split('/')
+            .skip(1)
+            .find(|segment| !is_valid_multiaddr_segment(segment))
+        {
+            return Err(MultiaddrError::InvalidSegment(segment.to_string()));
+        }
 
         Ok(Self(input.to_string()))
     }
+}
+
+fn is_valid_multiaddr_segment(segment: &str) -> bool {
+    !segment.is_empty()
+        && segment.len() <= 512
+        && segment.chars().all(|character| {
+            character.is_ascii_alphanumeric()
+                || matches!(character, '-' | '_' | '.' | ':' | '~' | '%' | '+' | '=')
+        })
 }
 
 impl fmt::Display for Multiaddr {
@@ -59,6 +76,9 @@ impl fmt::Display for MultiaddrError {
             Self::Empty => formatter.write_str("multiaddr is empty"),
             Self::MissingLeadingSlash => formatter.write_str("multiaddr must start with '/'"),
             Self::EmptySegment => formatter.write_str("multiaddr contains an empty segment"),
+            Self::InvalidSegment(segment) => {
+                write!(formatter, "invalid multiaddr segment: {segment}")
+            }
         }
     }
 }
@@ -113,6 +133,14 @@ mod tests {
         assert_eq!(
             Multiaddr::parse("ip4/127.0.0.1").unwrap_err(),
             MultiaddrError::MissingLeadingSlash
+        );
+        assert_eq!(
+            Multiaddr::parse("/dnsaddr/example.test//p2p/provider").unwrap_err(),
+            MultiaddrError::EmptySegment
+        );
+        assert_eq!(
+            Multiaddr::parse("/dnsaddr/example test/p2p/provider").unwrap_err(),
+            MultiaddrError::InvalidSegment("example test".to_string())
         );
     }
 }

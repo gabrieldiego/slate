@@ -573,6 +573,10 @@ Current baseline:
   multiaddr and deferred protocol refs are tracked separately, and
   loopback-shaped `http://` or `https://` refs are unsupported so fixture tests
   cannot silently open sockets or rely on DNS.
+- Stored-provider multiaddr endpoint classification now uses the shared
+  `slate-routing` `Multiaddr` parser instead of local slash parsing. Malformed
+  multiaddr-shaped endpoint refs with empty or invalid segments fail closed,
+  while valid multiaddrs remain pending protocol materialization.
 - Legacy `fixture:<provider>` endpoint refs now also fail closed. They do not
   carry a fixture network id, so they cannot safely satisfy stored-provider
   materialization or quorum checks.

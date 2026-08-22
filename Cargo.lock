@@ -10954,6 +10954,7 @@ dependencies = [
  "serde",
  "serde_json",
  "slate-broadwebd",
+ "slate-routing",
  "slate-storage",
 ]
 

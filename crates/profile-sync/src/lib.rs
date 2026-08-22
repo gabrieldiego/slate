@@ -17,6 +17,7 @@ use slate_broadwebd::{
     ProfileSyncRootUpdate as BroadwebdProfileSyncRootUpdate,
     parse_in_process_profile_sync_fixture_endpoint_ref,
 };
+use slate_routing::Multiaddr;
 use slate_storage::{
     DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH, EncryptedSyncObject, IncomingSyncSettingText,
     PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305, PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
@@ -3079,17 +3080,7 @@ fn is_deferred_protocol_endpoint(endpoint_ref: &str) -> bool {
 }
 
 fn is_multiaddr_like_endpoint(endpoint_ref: &str) -> bool {
-    if !endpoint_ref.starts_with('/') {
-        return false;
-    }
-    let mut segment_count = 0usize;
-    for segment in endpoint_ref.split('/').skip(1) {
-        if !is_endpoint_token(segment) {
-            return false;
-        }
-        segment_count += 1;
-    }
-    segment_count >= 2
+    Multiaddr::parse(endpoint_ref).is_ok_and(|multiaddr| multiaddr.segments().count() >= 2)
 }
 
 fn is_endpoint_token(token: &str) -> bool {
@@ -6514,6 +6505,24 @@ mod tests {
                 Some("/dnsaddr/home.example.test/p2p/provider-a")
             ),
             SettingsSyncStoredProviderEndpointStatus::Multiaddr
+        );
+        assert_eq!(
+            super::classify_stored_provider_endpoint(
+                "provider-a",
+                Some("/dnsaddr/home.example.test//p2p/provider-a")
+            ),
+            SettingsSyncStoredProviderEndpointStatus::Unsupported
+        );
+        assert_eq!(
+            super::classify_stored_provider_endpoint(
+                "provider-a",
+                Some("/dnsaddr/home example.test/p2p/provider-a")
+            ),
+            SettingsSyncStoredProviderEndpointStatus::Unsupported
+        );
+        assert_eq!(
+            super::classify_stored_provider_endpoint("provider-a", Some("/ip4")),
+            SettingsSyncStoredProviderEndpointStatus::Unsupported
         );
         assert_eq!(
             super::classify_stored_provider_endpoint("provider-a", Some("iroh-node:provider-a")),
