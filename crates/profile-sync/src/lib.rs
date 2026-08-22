@@ -2203,6 +2203,45 @@ impl SettingsSyncSelectedEndpointMaterializationPlan {
             .collect()
     }
 
+    pub fn materialization_issues(&self) -> Vec<SettingsSyncSelectedEndpointMaterializationIssue> {
+        let mut issues = Vec::with_capacity(self.materialization_issue_count());
+        for request in &self.requests {
+            let kind = match request.endpoint_status {
+                SettingsSyncStoredProviderEndpointStatus::Missing => {
+                    SettingsSyncSelectedEndpointMaterializationIssueKind::MissingEndpoint
+                }
+                SettingsSyncStoredProviderEndpointStatus::Unsupported => {
+                    SettingsSyncSelectedEndpointMaterializationIssueKind::UnsupportedEndpoint
+                }
+                SettingsSyncStoredProviderEndpointStatus::InProcessFixture
+                | SettingsSyncStoredProviderEndpointStatus::Multiaddr
+                | SettingsSyncStoredProviderEndpointStatus::DeferredProtocol => continue,
+            };
+            issues.push(SettingsSyncSelectedEndpointMaterializationIssue {
+                provider_id: request.provider_id.clone(),
+                kind,
+            });
+        }
+        issues
+    }
+
+    pub fn materialization_issue_count(&self) -> usize {
+        self.requests
+            .iter()
+            .filter(|request| {
+                matches!(
+                    request.endpoint_status,
+                    SettingsSyncStoredProviderEndpointStatus::Missing
+                        | SettingsSyncStoredProviderEndpointStatus::Unsupported
+                )
+            })
+            .count()
+    }
+
+    pub fn has_materialization_issue(&self) -> bool {
+        self.materialization_issue_count() > 0
+    }
+
     pub fn requires_protocol_materializer(&self) -> bool {
         self.requests
             .iter()
@@ -2374,6 +2413,18 @@ pub enum SettingsSyncStoredProviderEndpointStatus {
     Unsupported,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SettingsSyncSelectedEndpointMaterializationIssueKind {
+    MissingEndpoint,
+    UnsupportedEndpoint,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncSelectedEndpointMaterializationIssue {
+    pub provider_id: String,
+    pub kind: SettingsSyncSelectedEndpointMaterializationIssueKind,
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SettingsSyncSelectedEndpointMaterializationPreview {
     pub fixture_ready_provider_ids: Vec<String>,
@@ -2396,6 +2447,29 @@ impl SettingsSyncSelectedEndpointMaterializationPreview {
 
     pub fn fail_closed_provider_count(&self) -> usize {
         self.unsupported_provider_ids.len()
+    }
+
+    pub fn materialization_issues(&self) -> Vec<SettingsSyncSelectedEndpointMaterializationIssue> {
+        let mut issues = Vec::with_capacity(self.materialization_issue_count());
+        append_selected_endpoint_materialization_issues(
+            &mut issues,
+            SettingsSyncSelectedEndpointMaterializationIssueKind::MissingEndpoint,
+            self.missing_endpoint_provider_ids.as_slice(),
+        );
+        append_selected_endpoint_materialization_issues(
+            &mut issues,
+            SettingsSyncSelectedEndpointMaterializationIssueKind::UnsupportedEndpoint,
+            self.unsupported_provider_ids.as_slice(),
+        );
+        issues
+    }
+
+    pub fn materialization_issue_count(&self) -> usize {
+        self.missing_endpoint_provider_ids.len() + self.unsupported_provider_ids.len()
+    }
+
+    pub fn has_materialization_issue(&self) -> bool {
+        self.materialization_issue_count() > 0
     }
 }
 
@@ -4329,6 +4403,19 @@ fn selected_endpoint_provider_count_with_status(
             })
         })
         .count()
+}
+
+fn append_selected_endpoint_materialization_issues(
+    issues: &mut Vec<SettingsSyncSelectedEndpointMaterializationIssue>,
+    kind: SettingsSyncSelectedEndpointMaterializationIssueKind,
+    provider_ids: &[String],
+) {
+    for provider_id in provider_ids {
+        issues.push(SettingsSyncSelectedEndpointMaterializationIssue {
+            provider_id: provider_id.clone(),
+            kind: kind.clone(),
+        });
+    }
 }
 
 fn selected_endpoint_materialization_preview(
@@ -9091,6 +9178,21 @@ mod tests {
         assert_eq!(preview.ready_provider_count(), 1);
         assert_eq!(preview.pending_materialization_provider_count(), 3);
         assert_eq!(preview.fail_closed_provider_count(), 1);
+        assert_eq!(preview.materialization_issue_count(), 2);
+        assert!(preview.has_materialization_issue());
+        assert_eq!(
+            preview.materialization_issues(),
+            vec![
+                super::SettingsSyncSelectedEndpointMaterializationIssue {
+                    provider_id: missing_provider_id.to_string(),
+                    kind: super::SettingsSyncSelectedEndpointMaterializationIssueKind::MissingEndpoint,
+                },
+                super::SettingsSyncSelectedEndpointMaterializationIssue {
+                    provider_id: unsupported_provider_id.to_string(),
+                    kind: super::SettingsSyncSelectedEndpointMaterializationIssueKind::UnsupportedEndpoint,
+                },
+            ]
+        );
 
         let materialization_requests = super::selected_endpoint_materialization_requests(
             selected.enabled_retention_provider_endpoints.as_slice(),
@@ -9371,6 +9473,21 @@ mod tests {
                 endpoint_status: SettingsSyncStoredProviderEndpointStatus::Unsupported,
             }]
         );
+        assert_eq!(materialization_plan.materialization_issue_count(), 2);
+        assert!(materialization_plan.has_materialization_issue());
+        assert_eq!(
+            materialization_plan.materialization_issues(),
+            vec![
+                super::SettingsSyncSelectedEndpointMaterializationIssue {
+                    provider_id: missing_provider_id.to_string(),
+                    kind: super::SettingsSyncSelectedEndpointMaterializationIssueKind::MissingEndpoint,
+                },
+                super::SettingsSyncSelectedEndpointMaterializationIssue {
+                    provider_id: unsupported_provider_id.to_string(),
+                    kind: super::SettingsSyncSelectedEndpointMaterializationIssueKind::UnsupportedEndpoint,
+                },
+            ]
+        );
         assert!(materialization_plan.requires_protocol_materializer());
         assert!(materialization_plan.has_fail_closed_request());
         assert!(!materialization_plan.ready_for_fixture_materialization_only());
@@ -9395,6 +9512,9 @@ mod tests {
         assert_eq!(fixture_only_plan.fixture_ready_request_count(), 1);
         assert_eq!(fixture_only_plan.pending_request_count(), 0);
         assert_eq!(fixture_only_plan.fail_closed_request_count(), 0);
+        assert_eq!(fixture_only_plan.materialization_issue_count(), 0);
+        assert!(!fixture_only_plan.has_materialization_issue());
+        assert!(fixture_only_plan.materialization_issues().is_empty());
         assert!(!fixture_only_plan.requires_protocol_materializer());
         assert!(!fixture_only_plan.has_fail_closed_request());
         assert!(fixture_only_plan.ready_for_fixture_materialization_only());

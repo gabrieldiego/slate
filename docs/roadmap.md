@@ -692,6 +692,11 @@ Current baseline:
   fixture-ready providers can use the current local-only handles, missing,
   multiaddr, and deferred-protocol providers are pending materialization, and
   unsupported providers fail closed.
+- Selected endpoint materialization previews and plans now expose structured
+  issues for missing endpoints and unsupported fail-closed endpoints. Multiaddr
+  and deferred-protocol endpoints remain protocol work queues rather than
+  blocker issues, so callers can distinguish adapter work from invalid provider
+  metadata.
 - Selected endpoint materialization now also exposes ordered request records
   carrying provider id, endpoint ref, and endpoint status. Future multiaddr or
   protocol-specific materializers can consume the scheduler handoff without
