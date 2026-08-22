@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+base64.workspace = true
 dirs.workspace = true
 ring = "0.17"
 rusqlite.workspace = true

@@ -268,9 +268,13 @@ labels to derive content-key epochs, account-recovery material, enrollment
 material, mutable-root publishing material, manifest-signing delegation
 material, and device-bootstrap material from the root secret, so one raw secret
 is not reused directly across profile-sync purposes. The helper redacts root and
-derived bytes from debug output. It still does not define the persisted/exported
-recovery-secret format, QR/file secret transport, platform key-store loading, or
-the runtime policy that decides which derived material a backend may use.
+derived bytes from debug output. It still does not define the user-facing
+QR/file secret transport, platform key-store loading, or the runtime policy that
+decides which derived material a backend may use. Storage also has the first
+JSON export/import envelope for the root secret itself. The envelope is meant as
+a local primitive for future QR-code or file transfer surfaces; it validates its
+schema, round-trips the exact secret bytes with URL-safe base64, and redacts the
+encoded secret from debug output.
 The broadwebd settings-sync runner can use the same helper after active-key
 preflight: the database supplies only active key metadata, the caller supplies
 the in-memory secret, and the derived key is passed into the existing encrypted

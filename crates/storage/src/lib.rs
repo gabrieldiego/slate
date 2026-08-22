@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+use base64::Engine as _;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use ring::{aead, hkdf, rand, signature};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::collections::BTreeMap;
@@ -27,11 +29,13 @@ pub const PROFILE_SYNC_MANIFEST_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_ENROLLMENT_BUNDLE_SCHEMA_VERSION: u8 = 1;
+pub const SLATE_SYNC_SECRET_EXPORT_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND: &str = "setting-change";
 pub const PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND: &str = "settings-snapshot";
 pub const PROFILE_SYNC_MANIFEST_OBJECT_KIND: &str = "manifest";
 pub const PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND: &str = "device-head";
+pub const SLATE_SYNC_SECRET_EXPORT_OBJECT_KIND: &str = "slate-sync-secret-export";
 pub const PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE: &str = "enroll-device";
 pub const PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER: &str = "enroll-provider";
 pub const PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE: &str = "revoke-device";
@@ -214,6 +218,18 @@ impl SlateSyncSecret {
         Self { bytes }
     }
 
+    pub fn export_for_profile(
+        &self,
+        profile: impl Into<String>,
+        created_at: i64,
+    ) -> SlateSyncSecretExport {
+        SlateSyncSecretExport::new(profile, self, created_at)
+    }
+
+    pub fn from_export(export: &SlateSyncSecretExport) -> Result<Self, SyncObjectError> {
+        export.to_sync_secret()
+    }
+
     pub fn derive_profile_sync_content_key(
         &self,
         profile: &str,
@@ -321,6 +337,69 @@ impl fmt::Debug for SlateSyncSecret {
         formatter
             .debug_struct("SlateSyncSecret")
             .field("bytes", &"<redacted>")
+            .finish()
+    }
+}
+
+#[derive(Clone, Eq, PartialEq, Deserialize, Serialize)]
+pub struct SlateSyncSecretExport {
+    pub profile: String,
+    #[serde(default = "default_slate_sync_secret_export_schema_version")]
+    pub schema_version: u8,
+    pub secret: String,
+    pub created_at: i64,
+}
+
+impl SlateSyncSecretExport {
+    pub fn new(profile: impl Into<String>, secret: &SlateSyncSecret, created_at: i64) -> Self {
+        Self {
+            profile: profile.into(),
+            schema_version: SLATE_SYNC_SECRET_EXPORT_SCHEMA_VERSION,
+            secret: URL_SAFE_NO_PAD.encode(secret.bytes.as_slice()),
+            created_at,
+        }
+    }
+
+    pub fn to_bytes(&self) -> Result<Vec<u8>, SyncObjectError> {
+        self.validate_schema()?;
+        serde_json::to_vec(self).map_err(SyncObjectError::Encode)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, SyncObjectError> {
+        let export: Self = serde_json::from_slice(bytes).map_err(SyncObjectError::Decode)?;
+        export.validate_schema()?;
+        Ok(export)
+    }
+
+    fn to_sync_secret(&self) -> Result<SlateSyncSecret, SyncObjectError> {
+        self.validate_schema()?;
+        let decoded = URL_SAFE_NO_PAD
+            .decode(self.secret.as_bytes())
+            .map_err(|_| SyncObjectError::Key)?;
+        let bytes: [u8; SLATE_SYNC_SECRET_BYTES] =
+            decoded.try_into().map_err(|_| SyncObjectError::Key)?;
+        Ok(SlateSyncSecret::from_bytes(bytes))
+    }
+
+    fn validate_schema(&self) -> Result<(), SyncObjectError> {
+        if self.schema_version != SLATE_SYNC_SECRET_EXPORT_SCHEMA_VERSION {
+            return Err(SyncObjectError::UnsupportedSchema {
+                object_kind: SLATE_SYNC_SECRET_EXPORT_OBJECT_KIND.to_string(),
+                schema_version: self.schema_version,
+            });
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Debug for SlateSyncSecretExport {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SlateSyncSecretExport")
+            .field("profile", &self.profile)
+            .field("schema_version", &self.schema_version)
+            .field("secret", &"<redacted>")
+            .field("created_at", &self.created_at)
             .finish()
     }
 }
@@ -595,6 +674,10 @@ fn default_profile_sync_membership_record_schema_version() -> u8 {
 
 fn default_profile_sync_enrollment_bundle_schema_version() -> u8 {
     PROFILE_SYNC_ENROLLMENT_BUNDLE_SCHEMA_VERSION
+}
+
+fn default_slate_sync_secret_export_schema_version() -> u8 {
+    SLATE_SYNC_SECRET_EXPORT_SCHEMA_VERSION
 }
 
 fn default_profile_sync_membership_epoch() -> i64 {
@@ -10502,6 +10585,7 @@ fn insert_sync_setting_text_change_record_in_transaction(
 
 #[cfg(test)]
 mod tests {
+    use base64::Engine as _;
     use std::collections::BTreeMap;
     use std::process;
 
@@ -11017,6 +11101,73 @@ mod tests {
         assert!(matches!(
             object.open(&other_epoch_key),
             Err(SyncObjectError::Decrypt)
+        ));
+    }
+
+    #[test]
+    fn slate_sync_secret_export_round_trips_with_redacted_debug() {
+        let secret = SlateSyncSecret::from_bytes([44; SLATE_SYNC_SECRET_BYTES]);
+        let export = secret.export_for_profile(DEFAULT_PROFILE_ID, 1_234);
+
+        assert_eq!(export.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(
+            export.schema_version,
+            SLATE_SYNC_SECRET_EXPORT_SCHEMA_VERSION
+        );
+        assert_eq!(export.created_at, 1_234);
+
+        let imported = SlateSyncSecret::from_export(&export).unwrap();
+        assert_eq!(
+            imported
+                .derive_profile_sync_content_key(DEFAULT_PROFILE_ID, "content-key-epoch-1")
+                .unwrap(),
+            secret
+                .derive_profile_sync_content_key(DEFAULT_PROFILE_ID, "content-key-epoch-1")
+                .unwrap()
+        );
+
+        let encoded = export.to_bytes().unwrap();
+        let decoded = SlateSyncSecretExport::from_bytes(encoded.as_slice()).unwrap();
+        assert_eq!(decoded, export);
+        assert_eq!(
+            SlateSyncSecret::from_export(&decoded)
+                .unwrap()
+                .derive_profile_sync_account_recovery_secret(DEFAULT_PROFILE_ID)
+                .unwrap(),
+            secret
+                .derive_profile_sync_account_recovery_secret(DEFAULT_PROFILE_ID)
+                .unwrap()
+        );
+
+        let debug = format!("{export:?}");
+        assert!(debug.contains("<redacted>"));
+        assert!(!debug.contains(export.secret.as_str()));
+        assert!(!debug.contains("44"));
+
+        let mut unsupported_schema = export.clone();
+        unsupported_schema.schema_version = SLATE_SYNC_SECRET_EXPORT_SCHEMA_VERSION + 1;
+        assert!(matches!(
+            unsupported_schema.to_bytes(),
+            Err(SyncObjectError::UnsupportedSchema {
+                object_kind,
+                schema_version
+            }) if object_kind == SLATE_SYNC_SECRET_EXPORT_OBJECT_KIND
+                && schema_version == SLATE_SYNC_SECRET_EXPORT_SCHEMA_VERSION + 1
+        ));
+
+        let mut malformed_secret = export.clone();
+        malformed_secret.secret = "not-base64*".to_string();
+        assert!(matches!(
+            SlateSyncSecret::from_export(&malformed_secret),
+            Err(SyncObjectError::Key)
+        ));
+
+        let mut short_secret = export.clone();
+        short_secret.secret =
+            URL_SAFE_NO_PAD.encode([1_u8; SLATE_SYNC_SECRET_BYTES - 1].as_slice());
+        assert!(matches!(
+            SlateSyncSecret::from_export(&short_secret),
+            Err(SyncObjectError::Key)
         ));
     }
 
