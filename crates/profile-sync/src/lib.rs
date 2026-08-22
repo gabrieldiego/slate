@@ -8615,6 +8615,56 @@ mod tests {
                 "mint",
             )
             .expect("receiver writes stored membership fixture-run setting");
+        let roots_before_duplicate_fixture_daemons = receiver_database
+            .profile_sync_roots(DEFAULT_PROFILE_ID)
+            .expect("read roots before stored membership duplicate fixture daemons");
+        let duplicate_fixture_error = match scheduler
+            .run_once_with_membership_log_and_stored_in_process_fixture_retention_provider_daemons(
+                &receiver_database,
+                &config,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer_b),
+                8,
+                &[
+                    super::SettingsSyncInProcessFixtureProviderDaemon::new(
+                        selected_provider_id,
+                        network.network_id(),
+                        &provider_daemon,
+                    ),
+                    super::SettingsSyncInProcessFixtureProviderDaemon::new(
+                        selected_provider_id,
+                        network.network_id(),
+                        &provider_daemon,
+                    ),
+                ],
+            ) {
+            Ok(_) => {
+                panic!(
+                    "stored membership scheduler should reject duplicate fixture provider daemons"
+                )
+            }
+            Err(error) => error,
+        };
+        let ProfileSyncCycleWithHealthError::Policy(ProfileSyncPolicyError::ProviderMinimumUnmet {
+            provider_role,
+            minimum,
+            actual,
+            ..
+        }) = duplicate_fixture_error
+        else {
+            panic!(
+                "expected stored membership duplicate fixture daemon quorum error, got {duplicate_fixture_error:?}"
+            );
+        };
+        assert_eq!(provider_role, "selected retention providers");
+        assert_eq!(minimum, 1);
+        assert_eq!(actual, 0);
+        assert_eq!(
+            receiver_database
+                .profile_sync_roots(DEFAULT_PROFILE_ID)
+                .expect("read roots after stored membership duplicate fixture daemons"),
+            roots_before_duplicate_fixture_daemons
+        );
         let fixture_run = scheduler
             .run_once_with_membership_log_and_stored_in_process_fixture_retention_provider_daemons(
                 &receiver_database,

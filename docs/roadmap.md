@@ -622,6 +622,10 @@ Current baseline:
   duplicate daemon refs: duplicate fixture providers fail the materialized
   quorum before publishing pending local settings, and the profile-sync roots
   remain unchanged.
+- The membership-aware in-process fixture-daemon stored-provider runtime now
+  covers duplicate fixture refs after membership trust is established:
+  duplicate fixture daemons fail quorum and existing profile-sync roots stay
+  unchanged before pending settings publish.
 - Selected synthetic fixture endpoints now expose materialization targets with
   provider id, fixture network id, and endpoint ref so local-only fixtures can
   bridge stored metadata to in-process providers without opening sockets.
