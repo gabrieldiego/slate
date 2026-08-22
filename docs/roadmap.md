@@ -287,6 +287,11 @@ Current baseline:
   accept only numeric loopback addresses, plus synthetic in-process fixture URLs
   in tests. Hostname-shaped endpoints such as `localhost` are rejected before
   any HTTP client or resolver can be involved.
+- Kubo RPC now exposes pure profile-sync endpoint builders for encrypted object
+  add, pin, unpin, pin-status, IPNS publish, and IPNS resolve. The helpers
+  reuse the same numeric-loopback or synthetic-fixture endpoint validation and
+  give the future backend client a tested RPC surface before any networked sync
+  implementation is wired in.
 - broadwebd's own HTTP fixture unit tests now start daemons with
   `InProcessBroadwebNetwork` fixture registries whenever they consume
   `slate-fixture-http://` URLs. That keeps the production default direct HTTP

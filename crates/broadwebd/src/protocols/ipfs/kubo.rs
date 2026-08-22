@@ -192,13 +192,126 @@ pub fn ipfs_kubo_cat_url(source: &str, api_base_url: &str) -> Result<String, Bro
     kubo_cat_url_for_path(&content_path.content_path, api_base_url)
 }
 
+pub fn ipfs_kubo_profile_sync_add_url(api_base_url: &str) -> Result<String, BroadwebdError> {
+    let mut url = kubo_rpc_api_url(api_base_url, "add")?;
+    url.query_pairs_mut()
+        .append_pair("cid-version", "1")
+        .append_pair("raw-leaves", "true")
+        .append_pair("pin", "false");
+    Ok(url.to_string())
+}
+
+pub fn ipfs_kubo_profile_sync_pin_add_url(
+    object_id: &str,
+    api_base_url: &str,
+) -> Result<String, BroadwebdError> {
+    validate_kubo_profile_sync_object_id(object_id)?;
+    let mut url = kubo_rpc_api_url(api_base_url, "pin/add")?;
+    url.query_pairs_mut()
+        .append_pair("arg", object_id)
+        .append_pair("recursive", "true");
+    Ok(url.to_string())
+}
+
+pub fn ipfs_kubo_profile_sync_pin_rm_url(
+    object_id: &str,
+    api_base_url: &str,
+) -> Result<String, BroadwebdError> {
+    validate_kubo_profile_sync_object_id(object_id)?;
+    let mut url = kubo_rpc_api_url(api_base_url, "pin/rm")?;
+    url.query_pairs_mut()
+        .append_pair("arg", object_id)
+        .append_pair("recursive", "true");
+    Ok(url.to_string())
+}
+
+pub fn ipfs_kubo_profile_sync_pin_ls_url(
+    object_id: &str,
+    api_base_url: &str,
+) -> Result<String, BroadwebdError> {
+    validate_kubo_profile_sync_object_id(object_id)?;
+    let mut url = kubo_rpc_api_url(api_base_url, "pin/ls")?;
+    url.query_pairs_mut()
+        .append_pair("arg", object_id)
+        .append_pair("type", "recursive");
+    Ok(url.to_string())
+}
+
+pub fn ipfs_kubo_profile_sync_name_publish_url(
+    key_id: &str,
+    object_id: &str,
+    api_base_url: &str,
+) -> Result<String, BroadwebdError> {
+    validate_kubo_profile_sync_name_token("IPNS key id", key_id)?;
+    validate_kubo_profile_sync_object_id(object_id)?;
+    let mut url = kubo_rpc_api_url(api_base_url, "name/publish")?;
+    let object_path = format!("/ipfs/{object_id}");
+    url.query_pairs_mut()
+        .append_pair("arg", object_path.as_str())
+        .append_pair("key", key_id)
+        .append_pair("allow-offline", "true");
+    Ok(url.to_string())
+}
+
+pub fn ipfs_kubo_profile_sync_name_resolve_url(
+    name: &str,
+    api_base_url: &str,
+) -> Result<String, BroadwebdError> {
+    validate_kubo_profile_sync_name_token("IPNS name", name)?;
+    let mut url = kubo_rpc_api_url(api_base_url, "name/resolve")?;
+    let name_path = if name.starts_with("/ipns/") {
+        name.to_string()
+    } else {
+        format!("/ipns/{name}")
+    };
+    url.query_pairs_mut()
+        .append_pair("arg", name_path.as_str())
+        .append_pair("recursive", "false");
+    Ok(url.to_string())
+}
+
 fn kubo_cat_url_for_path(content_path: &str, api_base_url: &str) -> Result<String, BroadwebdError> {
-    let mut url = parse_http_url(api_base_url)?;
-    let api_path = format!("{}/api/v0/cat", url.path().trim_end_matches('/'));
-    url.set_path(&api_path);
-    url.set_query(None);
+    let mut url = kubo_rpc_api_url(api_base_url, "cat")?;
     url.query_pairs_mut().append_pair("arg", &content_path);
     Ok(url.to_string())
+}
+
+fn kubo_rpc_api_url(api_base_url: &str, endpoint: &str) -> Result<Url, BroadwebdError> {
+    validate_kubo_rpc_url(api_base_url)?;
+    let mut url = parse_http_url(api_base_url)?;
+    let api_path = format!(
+        "{}/api/v0/{}",
+        url.path().trim_end_matches('/'),
+        endpoint.trim_start_matches('/')
+    );
+    url.set_path(&api_path);
+    url.set_query(None);
+    Ok(url)
+}
+
+fn validate_kubo_profile_sync_object_id(object_id: &str) -> Result<(), BroadwebdError> {
+    validate_kubo_profile_sync_name_token("profile sync object id", object_id)?;
+    if object_id.contains('/') {
+        return Err(BroadwebdError::InvalidUrl(format!(
+            "profile sync object id must not contain a path separator: {object_id}"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_kubo_profile_sync_name_token(label: &str, value: &str) -> Result<(), BroadwebdError> {
+    if value.is_empty() {
+        return Err(BroadwebdError::InvalidUrl(format!("{label} is empty")));
+    }
+    if value.len() > 2048 {
+        return Err(BroadwebdError::InvalidUrl(format!("{label} is too long")));
+    }
+    if value.chars().any(char::is_control) {
+        return Err(BroadwebdError::InvalidUrl(format!(
+            "{label} must not contain control characters"
+        )));
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

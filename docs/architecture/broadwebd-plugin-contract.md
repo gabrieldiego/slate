@@ -302,6 +302,12 @@ ipfs-trustless-fetch
 ipfs-delegated-routing
 ```
 
+The first Kubo profile-sync slice is a set of pure RPC endpoint builders for
+encrypted object add, pin, unpin, pin-status, IPNS publish, and IPNS resolve.
+They share Kubo's numeric-loopback or synthetic-fixture endpoint validation so
+tests can prove the command surface before broadwebd wires a networked backend
+client into `profile-sync`.
+
 Pinning, publishing, providing, and reproviding are not part of the initial
 fetch contract. Pinning and publishing enter through `profile-sync` as explicit
 capabilities because they change network visibility and storage persistence.

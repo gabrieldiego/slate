@@ -99,6 +99,9 @@ pub use http::{
 pub use protocols::ipfs::{
     IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport, IpfsKuboRpcEndpoint,
     IpfsKuboRpcTransport, IpfsService, IpfsTransportKind, ipfs_gateway_http_url, ipfs_kubo_cat_url,
+    ipfs_kubo_profile_sync_add_url, ipfs_kubo_profile_sync_name_publish_url,
+    ipfs_kubo_profile_sync_name_resolve_url, ipfs_kubo_profile_sync_pin_add_url,
+    ipfs_kubo_profile_sync_pin_ls_url, ipfs_kubo_profile_sync_pin_rm_url,
 };
 pub use protocols::tor::{
     TOR_HTTP_SCHEME, TOR_HTTPS_SCHEME, TorArtiHttpTransport, TorHttpTarget, TorNetworkScheme,
@@ -557,7 +560,10 @@ mod tests {
         ProfileSyncResponse, ProfileSyncRootRequest, ProfileSyncRootUpdate, ProtocolService,
         ResourceBudget, ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, StateRoot, TOR_ARTI_HTTP_PLUGIN,
         TOR_PROTOCOL_SERVICE, TorService, TransportHttpRequest, TransportPlugin,
-        ipfs_gateway_http_url, ipfs_kubo_cat_url, tor_http_target, tor_url_from_http_url,
+        ipfs_gateway_http_url, ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url,
+        ipfs_kubo_profile_sync_name_publish_url, ipfs_kubo_profile_sync_name_resolve_url,
+        ipfs_kubo_profile_sync_pin_add_url, ipfs_kubo_profile_sync_pin_ls_url,
+        ipfs_kubo_profile_sync_pin_rm_url, tor_http_target, tor_url_from_http_url,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -1967,6 +1973,65 @@ mod tests {
             .expect("CIDv0 Kubo cat URL"),
             "http://127.0.0.1:5001/api/v0/cat?arg=%2Fipfs%2FQmUKwop8CmB4ictvQyCJQru97NRVakJFVWpV74guJ89tcb%2Findex.html"
         );
+    }
+
+    #[test]
+    fn ipfs_kubo_profile_sync_rpc_urls_map_to_local_endpoints() {
+        let object_id = "bafybeigdyrztprofileobject";
+
+        assert_eq!(
+            ipfs_kubo_profile_sync_add_url("http://127.0.0.1:5001").expect("profile sync add URL"),
+            "http://127.0.0.1:5001/api/v0/add?cid-version=1&raw-leaves=true&pin=false"
+        );
+        assert_eq!(
+            ipfs_kubo_profile_sync_pin_add_url(object_id, "http://127.0.0.1:5001")
+                .expect("profile sync pin add URL"),
+            "http://127.0.0.1:5001/api/v0/pin/add?arg=bafybeigdyrztprofileobject&recursive=true"
+        );
+        assert_eq!(
+            ipfs_kubo_profile_sync_pin_rm_url(object_id, "http://127.0.0.1:5001")
+                .expect("profile sync pin remove URL"),
+            "http://127.0.0.1:5001/api/v0/pin/rm?arg=bafybeigdyrztprofileobject&recursive=true"
+        );
+        assert_eq!(
+            ipfs_kubo_profile_sync_pin_ls_url(object_id, "http://127.0.0.1:5001")
+                .expect("profile sync pin status URL"),
+            "http://127.0.0.1:5001/api/v0/pin/ls?arg=bafybeigdyrztprofileobject&type=recursive"
+        );
+        assert_eq!(
+            ipfs_kubo_profile_sync_name_publish_url(
+                "settings-latest",
+                object_id,
+                "http://127.0.0.1:5001"
+            )
+            .expect("profile sync IPNS publish URL"),
+            "http://127.0.0.1:5001/api/v0/name/publish?arg=%2Fipfs%2Fbafybeigdyrztprofileobject&key=settings-latest&allow-offline=true"
+        );
+        assert_eq!(
+            ipfs_kubo_profile_sync_name_resolve_url("k51syncroot", "http://127.0.0.1:5001")
+                .expect("profile sync IPNS resolve URL"),
+            "http://127.0.0.1:5001/api/v0/name/resolve?arg=%2Fipns%2Fk51syncroot&recursive=false"
+        );
+    }
+
+    #[test]
+    fn ipfs_kubo_profile_sync_rpc_urls_reject_path_shaped_object_ids() {
+        assert!(matches!(
+            ipfs_kubo_profile_sync_pin_add_url("../settings", "http://127.0.0.1:5001"),
+            Err(BroadwebdError::InvalidUrl(_))
+        ));
+        assert!(matches!(
+            ipfs_kubo_profile_sync_name_publish_url(
+                "settings-latest",
+                "bafy/object",
+                "http://127.0.0.1:5001"
+            ),
+            Err(BroadwebdError::InvalidUrl(_))
+        ));
+        assert!(matches!(
+            ipfs_kubo_profile_sync_add_url("https://ipfs.example.test:5001"),
+            Err(BroadwebdError::UnsupportedRequest(_))
+        ));
     }
 
     #[test]
