@@ -992,6 +992,10 @@ boundaries, provider-role checks, and error paths exactly as the real network
 adapter would. The socketless fixture sits underneath that boundary and feeds
 the adapter modeled responses for unavailable peers, delayed transfer,
 retention failures, malformed responses, or stale roots.
+Fixture model state must not be imported directly by protocol clients. Tests
+may install an in-process executor or stream provider in place of a socket, but
+the client under test should still speak the same protocol-shaped request and
+response contract that a real daemon, gateway, proxy, or peer would expose.
 For selected synthetic fixture endpoints, the plan also exposes
 materialization targets carrying the provider id, fixture network id, and
 endpoint ref. This lets local-only test fixtures bridge from stored metadata to
@@ -1047,6 +1051,14 @@ signed roots.
 The fixture also models availability-only providers: they may retain and serve
 encrypted bytes, but their provider policy denies mutable-root publishing and
 discovery reports that boundary.
+The trusted-device receive path treats a resolved device head as stale when the
+same trusted device already has a locally applied newer device sequence. It
+also rejects equal-sequence heads that would replace an existing different
+device-head root, while still allowing an equal-sequence head to populate a
+missing per-device root after the receiver learned the changes through the
+shared settings root first. In stale cases the receiver leaves both the shared
+settings root and the per-device-head root at the newer local frontier, even if
+the fixture or future network presents an older mutable-root value.
 
 ## Deterministic Fixture Gate
 

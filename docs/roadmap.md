@@ -401,6 +401,13 @@ Current baseline:
   boundaries, and provider-role checks. The deterministic fixture layer only
   swaps the socket transport with in-process modeled behavior such as delayed
   discovery, unavailable transfer, stale roots, or malformed protocol responses.
+- Trusted device-head receives now ignore stale root rollback: if a resolved
+  device head points at an older sequence than a locally applied head for the
+  same trusted device, Slate leaves the newer settings and device-head roots in
+  place. Equal-sequence pulls may still record a missing device-head root after
+  the receiver learned the same changes through the shared settings root first.
+  The regressions run through the socketless broadwebd path so the sync logic
+  sees the same root/object boundary a real protocol adapter will expose.
 - The same bridge now publishes a real signed encrypted settings tail manifest
   through one Kubo fixture daemon, then verifies the manifest and tail bytes
   fetched by a second daemon through the shared stateful Kubo/IPNS model. The

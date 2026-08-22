@@ -6787,6 +6787,23 @@ impl SlateProfileDatabase {
         Ok(changes)
     }
 
+    pub fn latest_sync_device_sequence(
+        &self,
+        profile: &str,
+        device_id: &str,
+    ) -> Result<Option<i64>, StorageError> {
+        let connection = self.connection()?;
+        connection
+            .query_row(
+                "SELECT MAX(device_sequence)
+                 FROM settings_changes
+                 WHERE profile = ?1 AND device_id = ?2",
+                params![profile, device_id],
+                |row| row.get::<_, Option<i64>>(0),
+            )
+            .map_err(|source| self.database_error(source))
+    }
+
     pub fn sync_revisions_after(
         &self,
         profile: &str,

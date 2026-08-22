@@ -1076,6 +1076,14 @@ pub enum BroadwebdTrustedDeviceHeadSyncStatus {
         root_id: String,
         object_id: String,
     },
+    Stale {
+        profile: String,
+        root_id: String,
+        object_id: String,
+        device_id: String,
+        current_device_sequence: i64,
+        incoming_device_sequence: i64,
+    },
     Applied {
         device_head: VerifiedProfileSyncDeviceHead,
         root: ProfileSyncRootRecord,
@@ -5399,6 +5407,28 @@ impl<'a> BroadwebdProfileSyncObjectSource<'a> {
                 root_id: root_id.to_string(),
             });
         };
+        let local_device_head_object_id = database
+            .profile_sync_root(profile, root_id)
+            .map_err(ProfileSyncTrustedPullApplyError::Storage)?
+            .map(|root| root.object_id);
+        if local_device_head_object_id.as_deref() != Some(device_head.object_id.as_str())
+            && let Some(current_device_sequence) = database
+                .latest_sync_device_sequence(profile, device_head.device_head.device_id.as_str())
+                .map_err(ProfileSyncTrustedPullApplyError::Storage)?
+            && (current_device_sequence > device_head.device_head.device_sequence
+                || (current_device_sequence == device_head.device_head.device_sequence
+                    && local_device_head_object_id.is_some()))
+        {
+            return Ok(BroadwebdTrustedDeviceHeadSyncStatus::Stale {
+                profile: profile.to_string(),
+                root_id: root_id.to_string(),
+                object_id: device_head.object_id,
+                device_id: device_head.device_head.device_id,
+                current_device_sequence,
+                incoming_device_sequence: device_head.device_head.device_sequence,
+            });
+        }
+
         let objects = database
             .pull_trusted_signed_profile_sync_settings_manifest_objects_from_device_head(
                 self,
@@ -5409,10 +5439,8 @@ impl<'a> BroadwebdProfileSyncObjectSource<'a> {
             )
             .map_err(ProfileSyncTrustedPullApplyError::Pull)?;
 
-        let device_head_root_is_current = database
-            .profile_sync_root(profile, root_id)
-            .map_err(ProfileSyncTrustedPullApplyError::Storage)?
-            .is_some_and(|root| root.object_id == device_head.object_id);
+        let device_head_root_is_current =
+            local_device_head_object_id.as_deref() == Some(device_head.object_id.as_str());
         let settings_root_is_current = database
             .profile_sync_root(profile, objects.manifest.root_id.as_str())
             .map_err(ProfileSyncTrustedPullApplyError::Storage)?
@@ -16384,6 +16412,376 @@ mod tests {
             BroadwebdTrustedDeviceHeadSyncStatus::Unchanged { object_id, .. }
                 if object_id == head_publication.object_id
         ));
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_source_ignores_stale_device_head_root_rollback() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("device-head-stale-rollback-publisher");
+        let receiver_state_root = test_state_root("device-head-stale-rollback-receiver");
+        let publisher_db_root = test_state_root("device-head-stale-rollback-publisher-db");
+        let receiver_db_root = test_state_root("device-head-stale-rollback-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "runtime-stale-head-publisher",
+            )
+            .expect("start stale-head publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "runtime-stale-head-receiver",
+            )
+            .expect("start stale-head receiver daemon");
+        let publisher_database = SlateProfileDatabase::open_resolved_with_device_id(
+            publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-stale-head-publisher",
+        )
+        .expect("open stale-head publisher settings database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-stale-head-receiver",
+        )
+        .expect("open stale-head receiver settings database");
+        let content_key = ProfileSyncContentKey::from_bytes([97; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-stale-head-publisher")
+            .expect("generate stale-head signer");
+        receiver_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: signer.public_key().expect("stale-head public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("receiver trusts stale-head publisher");
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+        let head_root_id = settings_device_head_root_id("runtime-stale-head-publisher");
+
+        let first_change = publisher_database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("publisher writes first stale-head setting");
+        let first_manifest = publisher
+            .publish_signed_settings_tail_changes(
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                std::slice::from_ref(&first_change),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish first stale-head manifest");
+        let first_device_head = ProfileSyncDeviceHead {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            device_id: "runtime-stale-head-publisher".to_string(),
+            root_id: head_root_id.clone(),
+            schema_version: PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            latest_manifest_object_id: first_manifest.manifest_object_id.clone(),
+            latest_change_object_id: first_manifest.tail_change_object_ids.first().cloned(),
+            device_sequence: first_change.device_sequence,
+            logical_clock: first_change.logical_clock,
+            created_at: first_change.created_at,
+        };
+        let first_head = publisher
+            .publish_signed_profile_sync_device_head(
+                DEFAULT_PROFILE_ID,
+                head_root_id.as_str(),
+                &first_device_head,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+            )
+            .expect("publish first stale-head device head");
+
+        let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
+        let first_apply = source
+            .pull_record_and_apply_trusted_settings_from_device_head(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                head_root_id.as_str(),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+            )
+            .expect("receiver applies first stale-head device head");
+        assert!(matches!(
+            first_apply,
+            BroadwebdTrustedDeviceHeadSyncStatus::Applied { .. }
+        ));
+
+        let second_change = publisher_database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "ui.theme",
+                "green",
+            )
+            .expect("publisher writes second stale-head setting");
+        let second_manifest = publisher
+            .publish_signed_settings_tail_changes(
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                std::slice::from_ref(&second_change),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish second stale-head manifest");
+        let second_device_head = ProfileSyncDeviceHead {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            device_id: "runtime-stale-head-publisher".to_string(),
+            root_id: head_root_id.clone(),
+            schema_version: PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            latest_manifest_object_id: second_manifest.manifest_object_id.clone(),
+            latest_change_object_id: second_manifest.tail_change_object_ids.first().cloned(),
+            device_sequence: second_change.device_sequence,
+            logical_clock: second_change.logical_clock,
+            created_at: second_change.created_at,
+        };
+        let second_head = publisher
+            .publish_signed_profile_sync_device_head(
+                DEFAULT_PROFILE_ID,
+                head_root_id.as_str(),
+                &second_device_head,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+            )
+            .expect("publish second stale-head device head");
+
+        let second_apply = source
+            .pull_record_and_apply_trusted_settings_from_device_head(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                head_root_id.as_str(),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+            )
+            .expect("receiver applies second stale-head device head");
+        assert!(matches!(
+            second_apply,
+            BroadwebdTrustedDeviceHeadSyncStatus::Applied { .. }
+        ));
+        assert_eq!(
+            receiver_database
+                .latest_sync_device_sequence(DEFAULT_PROFILE_ID, "runtime-stale-head-publisher")
+                .expect("read latest stale-head receiver sequence"),
+            Some(second_change.device_sequence)
+        );
+        assert_eq!(
+            receiver_database
+                .get_setting_text("ui.theme")
+                .expect("read second stale-head setting")
+                .as_deref(),
+            Some("green")
+        );
+
+        publisher
+            .publish_root(
+                DEFAULT_PROFILE_ID,
+                head_root_id.as_str(),
+                first_head.object_id.as_str(),
+            )
+            .expect("rollback stale-head device root to first object");
+        let stale = source
+            .pull_record_and_apply_trusted_settings_from_device_head(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                head_root_id.as_str(),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+            )
+            .expect("receiver ignores stale device head rollback");
+
+        let BroadwebdTrustedDeviceHeadSyncStatus::Stale {
+            object_id,
+            device_id,
+            current_device_sequence,
+            incoming_device_sequence,
+            ..
+        } = stale
+        else {
+            panic!("expected stale device head rollback status, got {stale:?}");
+        };
+        assert_eq!(object_id, first_head.object_id);
+        assert_eq!(device_id, "runtime-stale-head-publisher");
+        assert_eq!(current_device_sequence, second_change.device_sequence);
+        assert_eq!(incoming_device_sequence, first_change.device_sequence);
+        assert_eq!(
+            receiver_database
+                .get_setting_text("ui.theme")
+                .expect("read setting after stale-head rollback")
+                .as_deref(),
+            Some("green")
+        );
+        assert_eq!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, "settings/latest")
+                .expect("read settings root after stale-head rollback")
+                .expect("settings root after stale-head rollback")
+                .object_id,
+            second_manifest.manifest_object_id
+        );
+        assert_eq!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, head_root_id.as_str())
+                .expect("read device-head root after stale-head rollback")
+                .expect("device-head root after stale-head rollback")
+                .object_id,
+            second_head.object_id
+        );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_source_records_missing_device_head_after_shared_root_sequence_seen() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("device-head-missing-root-publisher");
+        let receiver_state_root = test_state_root("device-head-missing-root-receiver");
+        let publisher_db_root = test_state_root("device-head-missing-root-publisher-db");
+        let receiver_db_root = test_state_root("device-head-missing-root-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "runtime-missing-head-publisher",
+            )
+            .expect("start missing-head publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "runtime-missing-head-receiver",
+            )
+            .expect("start missing-head receiver daemon");
+        let publisher_database = SlateProfileDatabase::open_resolved_with_device_id(
+            publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-missing-head-publisher",
+        )
+        .expect("open missing-head publisher settings database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-missing-head-receiver",
+        )
+        .expect("open missing-head receiver settings database");
+        let content_key = ProfileSyncContentKey::from_bytes([98; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-missing-head-publisher")
+            .expect("generate missing-head signer");
+        receiver_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: signer.public_key().expect("missing-head public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("receiver trusts missing-head publisher");
+        register_test_content_key_epoch(&receiver_database, DEFAULT_PROFILE_ID);
+
+        let change = publisher_database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("publisher writes missing-head setting");
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+        let manifest = publisher
+            .publish_signed_settings_tail_changes(
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                std::slice::from_ref(&change),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish missing-head shared settings manifest");
+        let head_root_id = settings_device_head_root_id("runtime-missing-head-publisher");
+        let device_head = ProfileSyncDeviceHead {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            device_id: "runtime-missing-head-publisher".to_string(),
+            root_id: head_root_id.clone(),
+            schema_version: PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            latest_manifest_object_id: manifest.manifest_object_id.clone(),
+            latest_change_object_id: manifest.tail_change_object_ids.first().cloned(),
+            device_sequence: change.device_sequence,
+            logical_clock: change.logical_clock,
+            created_at: change.created_at,
+        };
+        let head = publisher
+            .publish_signed_profile_sync_device_head(
+                DEFAULT_PROFILE_ID,
+                head_root_id.as_str(),
+                &device_head,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+            )
+            .expect("publish missing-head device head");
+
+        let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
+        let candidate_apply = source
+            .pull_and_apply_active_trusted_settings_manifest_candidates_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                &content_key,
+            )
+            .expect("receiver applies shared settings root before device head");
+        assert!(matches!(
+            candidate_apply,
+            ProfileSyncSettingsCandidatePullApplyStatus::Applied(_)
+        ));
+        assert_eq!(
+            receiver_database
+                .latest_sync_device_sequence(DEFAULT_PROFILE_ID, "runtime-missing-head-publisher")
+                .expect("read latest missing-head receiver sequence"),
+            Some(change.device_sequence)
+        );
+        assert_eq!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, head_root_id.as_str())
+                .expect("read missing device-head root before pull"),
+            None
+        );
+
+        let head_apply = source
+            .pull_record_and_apply_trusted_settings_from_device_head(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                head_root_id.as_str(),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+            )
+            .expect("receiver records equal-sequence device head root");
+        assert!(matches!(
+            head_apply,
+            BroadwebdTrustedDeviceHeadSyncStatus::Applied { .. }
+        ));
+        assert_eq!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, head_root_id.as_str())
+                .expect("read stored missing-head device root")
+                .expect("stored missing-head device root")
+                .object_id,
+            head.object_id
+        );
+        assert_eq!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, "settings/latest")
+                .expect("read stored missing-head settings root")
+                .expect("stored missing-head settings root")
+                .object_id,
+            manifest.manifest_object_id
+        );
 
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
