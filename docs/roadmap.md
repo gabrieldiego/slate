@@ -386,7 +386,9 @@ Current baseline:
   through the caller-supplied socketless protocol materializer, verifies the
   preview path leaves `slate-settings.db` roots unchanged, and retains the
   published settings objects through the in-process provider without loopback
-  sockets or a live Iroh network.
+  sockets or a live Iroh network. The same checkpoint now covers a missing
+  socketless materializer handle: selected Iroh endpoints remain blocked by
+  provider quorum before publishing or mutating sync roots.
 - The same bridge now publishes a real signed encrypted settings tail manifest
   through one Kubo fixture daemon, then verifies the manifest and tail bytes
   fetched by a second daemon through the shared stateful Kubo/IPNS model. The
@@ -1456,7 +1458,7 @@ Current baseline:
   and non-secret local activation metadata, then covers local readiness reports,
   preview provider activation, storage/provider metadata, raw and typed
   app-domain cursors, the broadwebd app-domain fixture, the profile-sync
-  scheduler fixture, the Iroh-shaped socketless materializer fixture, and both
+  scheduler fixture, the Iroh-shaped socketless materializer fixtures, and both
   local Profile Sync Preview trials through the build-limits wrapper. Because
   compiling `slate-chrome` currently pulls Servo
   script bindings and exceeded the 2 GiB low-memory profile during

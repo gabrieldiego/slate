@@ -20982,6 +20982,157 @@ mod tests {
     }
 
     #[test]
+    fn scheduler_blocks_iroh_node_provider_without_socketless_materializer() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("scheduler-iroh-missing-shim-device");
+        let provider_state_root = test_state_root("scheduler-iroh-missing-shim-provider");
+        let db_root = test_state_root("scheduler-iroh-missing-shim-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-iroh-missing-a",
+            )
+            .expect("start in-process Iroh missing-shim device daemon");
+        let provider_id = "iroh-missing-shim-provider";
+        let provider_endpoint_ref = "iroh-node:missing-profile-sync-node";
+        let _provider_daemon = network
+            .daemon_for_provider_with_roles(
+                &provider_state_root,
+                ResourceBudget::default(),
+                provider_id,
+                "socketless-iroh-model-provider",
+                BroadwebdProfileSyncProviderRoles::availability_provider(),
+            )
+            .expect("start in-process Iroh missing-shim provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-scheduler-iroh-missing-a",
+        )
+        .expect("open Iroh missing-shim settings database");
+        let profile = "schedulerirohmissingshimprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([94; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-scheduler-iroh-missing-a")
+            .expect("generate Iroh missing-shim local signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register Iroh missing-shim local trusted public key");
+        authorize_test_storage_provider(&database, profile, provider_id);
+        database
+            .upsert_storage_provider(&StorageProviderUpdate {
+                endpoint_ref: Some(provider_endpoint_ref.to_string()),
+                ..test_storage_provider_update(
+                    &network,
+                    profile,
+                    provider_id,
+                    "socketless-iroh-model-provider",
+                    "Iroh missing-shim profile-sync provider",
+                    true,
+                    true,
+                    true,
+                )
+            })
+            .expect("write Iroh missing-shim provider metadata");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write Iroh missing-shim local setting");
+
+        let materializer = super::SettingsSyncSocketlessProtocolProviderMaterializer::new(
+            super::SettingsSyncProtocolProviderMaterializerPolicy::socketless_fixture_models(),
+            Vec::new(),
+        );
+        let config = SettingsSyncSchedulerConfig::new(
+            profile,
+            settings_root_id,
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
+        );
+        let scheduler = BroadwebdSettingsSyncScheduler::new(&device_daemon);
+        let latest_revision_before_run = database
+            .latest_sync_revision(profile)
+            .expect("read Iroh missing-shim latest revision");
+        let preview = scheduler
+            .plan_once_with_stored_protocol_materializer_retention_provider_handles(
+                &database,
+                &config,
+                &signer,
+                4,
+                &materializer,
+            )
+            .expect("preview Iroh missing-shim stored provider");
+
+        assert_eq!(
+            preview
+                .materialization_preview
+                .protocol_materialization
+                .missing_provider_ids,
+            vec![provider_id.to_string()]
+        );
+        assert_eq!(preview.protocol_materialized_provider_count(), 0);
+        assert_eq!(preview.protocol_blocked_provider_count(), 1);
+        assert!(!preview.all_protocol_providers_materialized());
+        assert_eq!(preview.materialized_retention_provider_count(), 0);
+        assert!(!preview.all_selected_providers_materialized());
+        assert_eq!(
+            preview
+                .selected_protocol_materialization_plan()
+                .deferred_protocol_requests,
+            vec![
+                super::SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+                    provider_id: provider_id.to_string(),
+                    protocol: super::PROFILE_SYNC_DEFERRED_IROH_NODE_PROTOCOL.to_string(),
+                    target: "missing-profile-sync-node".to_string(),
+                }
+            ]
+        );
+
+        let error = match scheduler
+            .run_once_with_stored_protocol_materializer_retention_provider_handles(
+                &database,
+                &config,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                4,
+                &materializer,
+            ) {
+            Ok(_) => panic!("scheduler should require an Iroh socketless materializer handle"),
+            Err(error) => error,
+        };
+        let ProfileSyncCycleWithHealthError::Policy(ProfileSyncPolicyError::ProviderMinimumUnmet {
+            provider_role,
+            minimum,
+            actual,
+            ..
+        }) = error
+        else {
+            panic!("expected missing Iroh shim to fail provider quorum, got {error:?}");
+        };
+        assert_eq!(provider_role, "selected retention providers");
+        assert_eq!(minimum, 1);
+        assert_eq!(actual, 0);
+        assert_eq!(
+            database
+                .latest_sync_revision(profile)
+                .expect("read latest revision after Iroh missing-shim failure"),
+            latest_revision_before_run
+        );
+        assert!(
+            database
+                .profile_sync_roots(profile)
+                .expect("read roots after Iroh missing-shim failure")
+                .is_empty()
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
     fn broadwebd_settings_sync_scheduler_runs_with_kubo_profile_sync_materialized_provider() {
         let network = InProcessBroadwebNetwork::new();
         let fixture = network.kubo_profile_sync_model();
