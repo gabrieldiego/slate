@@ -70,6 +70,11 @@ reject_protocol_model_leak \
     'IPFS gateway transport must keep real gateway semantics; fixture behavior belongs in the injected HTTP transport.'
 
 reject_protocol_model_leak \
+    crates/broadwebd/src/protocols/ipfs/gateway.rs \
+    'fetch_http_url\(' \
+    'IPFS gateway transport must not call the fixture-aware shared HTTP helper; use an executor so fixtures only swap socket IO.'
+
+reject_protocol_model_leak \
     crates/broadwebd/src/services/profile_sync.rs \
     'InProcessBroadwebNetwork|InternalKubo(ProfileSyncModel|RpcFixture)|fetch_internal_kubo|internal_kubo_rpc_fixtures|register_internal_kubo|take_internal_kubo' \
     'broadwebd profile-sync service code must not call Kubo fixture models directly; route through transport executors or shims.'
@@ -93,6 +98,27 @@ require_text \
     crates/broadwebd/src/protocols/ipfs/kubo.rs \
     'impl IpfsKuboProfileSyncRpcExecutor for IpfsKuboReqwestProfileSyncRpcExecutor' \
     'Kubo profile-sync must keep a real HTTP executor so fixtures only swap transport.'
+
+require_text \
+    crates/broadwebd/src/protocols/ipfs/gateway.rs \
+    'IpfsGatewayHttpExecutor' \
+    'IPFS gateway fetches must go through an executor boundary.'
+require_text \
+    crates/broadwebd/src/protocols/ipfs/gateway.rs \
+    'fetch_http_with_executor' \
+    'IPFS gateway transport must expose executor-based fetching for fixture shims.'
+require_text \
+    crates/broadwebd/src/protocols/ipfs/gateway.rs \
+    'fetch_http_url_over_network' \
+    'Default IPFS gateway fetching must use the real-network HTTP helper.'
+require_text \
+    crates/broadwebd/src/lib.rs \
+    'impl IpfsGatewayHttpExecutor for InProcessIpfsGatewayFixtureExecutor' \
+    'In-process IPFS gateway fixtures must swap socket IO through the gateway HTTP executor.'
+require_text \
+    crates/broadwebd/src/lib.rs \
+    'impl TransportPlugin for InProcessIpfsGatewayFixtureTransport' \
+    'In-process IPFS gateway fixtures must be installed as transport wrappers.'
 
 require_text \
     crates/broadwebd/src/lib.rs \

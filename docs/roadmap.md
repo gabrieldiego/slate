@@ -433,6 +433,13 @@ Current baseline:
   adapter no longer branches on synthetic fixture schemes or advertises
   fixture-specific metadata; the injected HTTP transport owns the no-socket
   simulation behavior.
+- IPFS gateway fetching now also uses an explicit HTTP executor boundary. The
+  default gateway transport calls the real-network HTTP helper, while
+  `InProcessBroadwebNetwork` installs a fixture transport wrapper whose
+  executor resolves only same-network synthetic HTTP fixture URLs. This keeps
+  gateway fallback, service-worker bootstrap detection, route metadata, and
+  response parsing on the same path a real gateway uses while swapping only
+  socket I/O in local tests.
 - Profile-sync protocol materializer policies now mark whether selected
   provider endpoints are handled by real runtime adapters or by local
   deterministic simulation. The scheduler still consumes typed multiaddr and

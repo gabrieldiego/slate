@@ -141,16 +141,17 @@ pub mod test_fixtures {
         unregistered_internal_fixture_http_url_for_network,
     };
     use crate::protocols::ipfs::{
-        InternalKuboRpcFixtureTransport, internal_kubo_rpc_url_belongs_to_network,
+        InternalKuboRpcFixtureTransport, IpfsGatewayEndpoint, IpfsGatewayHttpExecutor,
+        IpfsGatewayTransport, internal_kubo_rpc_url_belongs_to_network,
         register_internal_kubo_profile_sync_model_for_network,
         register_internal_kubo_rpc_fixture_for_network, take_internal_kubo_rpc_fixture_requests,
     };
     use crate::services::{http_fetch::HttpFetchService, profile_sync::ProfileSyncService};
     use crate::{
-        BroadwebDaemon, BroadwebdError, DIRECT_HTTP_PLUGIN,
-        IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX, IpfsConfig, IpfsService, PluginKind,
-        PluginMetadata, PluginRegistry, ProfileSyncProviderRoles, ResourceBudget, ResourceProfile,
-        TransportHttpRequest, TransportPlugin,
+        BroadwebDaemon, BroadwebStatusReporter, BroadwebdError, DIRECT_HTTP_PLUGIN,
+        IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX, IPFS_GATEWAY_PLUGIN, IpfsConfig,
+        IpfsService, PluginKind, PluginMetadata, PluginRegistry, ProfileSyncProviderRoles,
+        ResourceBudget, ResourceProfile, TransportHttpRequest, TransportPlugin,
     };
     use std::path::PathBuf;
 
@@ -212,6 +213,129 @@ pub mod test_fixtures {
                 "in-process fixture HTTP transport cannot fetch external URL: {}",
                 request.url
             )))
+        }
+    }
+
+    pub struct InProcessIpfsGatewayFixtureTransport {
+        network_id: String,
+        transport: IpfsGatewayTransport,
+    }
+
+    impl InProcessIpfsGatewayFixtureTransport {
+        pub fn from_gateway_endpoint(gateway: IpfsGatewayEndpoint) -> Result<Self, BroadwebdError> {
+            let network_id = internal_fixture_network_id_from_gateway(gateway.base_url())?;
+            Ok(Self {
+                network_id,
+                transport: IpfsGatewayTransport::from_endpoint(gateway),
+            })
+        }
+
+        pub fn from_gateways(gateways: Vec<IpfsGatewayEndpoint>) -> Result<Self, BroadwebdError> {
+            Self::from_gateways_with_status(gateways, BroadwebStatusReporter::new())
+        }
+
+        pub fn from_gateways_with_status(
+            gateways: Vec<IpfsGatewayEndpoint>,
+            status: BroadwebStatusReporter,
+        ) -> Result<Self, BroadwebdError> {
+            let primary = gateways.first().ok_or_else(|| {
+                BroadwebdError::UnsupportedRequest(
+                    "in-process IPFS gateway fixture requires at least one gateway".to_string(),
+                )
+            })?;
+            let network_id = internal_fixture_network_id_from_gateway(primary.base_url())?;
+            for gateway in gateways.iter().skip(1) {
+                let url = parse_http_url(gateway.base_url())?;
+                if !internal_fixture_http_url_belongs_to_network(&url, network_id.as_str()) {
+                    return Err(BroadwebdError::UnsupportedRequest(format!(
+                        "in-process IPFS gateway fixture endpoint does not belong to network {}: {}",
+                        network_id,
+                        gateway.base_url()
+                    )));
+                }
+            }
+            Ok(Self {
+                network_id,
+                transport: IpfsGatewayTransport::from_gateways_with_status(gateways, status)?,
+            })
+        }
+
+        pub fn cached_gateway_base(&self) -> String {
+            self.transport.cached_gateway_base()
+        }
+    }
+
+    impl TransportPlugin for InProcessIpfsGatewayFixtureTransport {
+        fn metadata(&self) -> PluginMetadata {
+            PluginMetadata::new(IPFS_GATEWAY_PLUGIN, PluginKind::Transport)
+                .with_capabilities(&[
+                    "ipfs",
+                    "ipns",
+                    "http-fetch",
+                    "in-process-fixture",
+                    "socketless-fixture",
+                ])
+                .with_privacy_boundary(
+                    "in-process IPFS gateway fixture; no sockets, DNS, loopback listener, or external network",
+                )
+                .with_resource_profile(ResourceProfile::Low)
+        }
+
+        fn fetch_http(
+            &self,
+            request: &TransportHttpRequest,
+            budget: &ResourceBudget,
+        ) -> Result<crate::HttpFetchResponse, BroadwebdError> {
+            let executor = InProcessIpfsGatewayFixtureExecutor {
+                network_id: self.network_id.as_str(),
+            };
+            self.transport
+                .fetch_http_with_executor(request, budget, &executor)
+        }
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    struct InProcessIpfsGatewayFixtureExecutor<'a> {
+        network_id: &'a str,
+    }
+
+    impl IpfsGatewayHttpExecutor for InProcessIpfsGatewayFixtureExecutor<'_> {
+        fn execute_gateway_request(
+            &self,
+            url: &url::Url,
+            budget: &ResourceBudget,
+        ) -> Result<crate::HttpFetchResponse, BroadwebdError> {
+            if !is_internal_fixture_http_url(url) {
+                return Err(BroadwebdError::UnsupportedRequest(format!(
+                    "in-process IPFS gateway fixture cannot fetch external URL: {url}"
+                )));
+            }
+            if !internal_fixture_http_url_belongs_to_network(url, self.network_id) {
+                return Err(BroadwebdError::UnsupportedRequest(format!(
+                    "internal HTTP fixture URL does not belong to in-process network {}: {}",
+                    self.network_id, url
+                )));
+            }
+            fetch_http_url(url.clone(), budget)
+        }
+    }
+
+    fn internal_fixture_network_id_from_gateway(
+        gateway_base: &str,
+    ) -> Result<String, BroadwebdError> {
+        let url = parse_http_url(gateway_base)?;
+        if !is_internal_fixture_http_url(&url) {
+            return Err(BroadwebdError::UnsupportedRequest(format!(
+                "in-process IPFS gateway fixture requires an internal fixture URL: {gateway_base}"
+            )));
+        }
+        let host = url.host_str().ok_or_else(|| {
+            BroadwebdError::InvalidUrl(format!("internal fixture gateway is missing a host: {url}"))
+        })?;
+        if host.starts_with("fixture-") || host.starts_with("missing-") {
+            Ok("global".to_string())
+        } else {
+            Ok(host.to_string())
         }
     }
 
@@ -348,8 +472,13 @@ pub mod test_fixtures {
             }
             let mut registry = self.fixture_registry();
             registry.register_protocol_service(IpfsService::new(
-                IpfsConfig::with_prevalidated_local_gateway(gateway_base)?,
+                IpfsConfig::with_prevalidated_local_gateway(gateway_base.clone())?,
             ));
+            registry.install_transport(
+                InProcessIpfsGatewayFixtureTransport::from_gateway_endpoint(
+                    IpfsGatewayEndpoint::from_prevalidated_local_base_url(gateway_base),
+                )?,
+            );
             Ok(registry)
         }
 
@@ -603,8 +732,9 @@ pub mod test_fixtures {
 #[cfg(test)]
 mod tests {
     use super::test_fixtures::{
-        InProcessBroadwebNetwork, InProcessHttpFixture, InProcessKuboRpcFixture,
-        InternalFixtureHttpResponse, InternalKuboRpcResponse, InternalKuboRpcTransportShim,
+        InProcessBroadwebNetwork, InProcessHttpFixture, InProcessIpfsGatewayFixtureTransport,
+        InProcessKuboRpcFixture, InternalFixtureHttpResponse, InternalKuboRpcResponse,
+        InternalKuboRpcTransportShim,
     };
     use super::{
         BroadwebDaemon, BroadwebStatusKind, BroadwebStatusReporter, BroadwebdError,
@@ -1066,6 +1196,7 @@ mod tests {
         );
         let mut registry = PluginRegistry::new();
         registry.register_protocol_service(IpfsService::new(fixture_gateway_config(&gateway)));
+        registry.install_transport(fixture_gateway_transport(&gateway));
         registry.register_service(super::HttpFetchService);
         let daemon = BroadwebDaemon::start_with_registry(
             test_state_root("ipfs-service-html"),
@@ -1094,6 +1225,7 @@ mod tests {
         );
         let mut registry = PluginRegistry::new();
         registry.register_protocol_service(IpfsService::new(fixture_gateway_config(&gateway)));
+        registry.install_transport(fixture_gateway_transport(&gateway));
         registry.register_service(super::HttpFetchService);
         let daemon = BroadwebDaemon::start_with_registry(
             test_state_root("ipfs-route-context"),
@@ -1245,12 +1377,14 @@ mod tests {
 
     #[test]
     fn ipfs_gateway_transport_falls_back_from_unavailable_local_gateway() {
-        let missing_gateway = missing_in_process_http_fixture_url();
-        let (fallback_gateway, fixture) = in_process_http_fixture(
+        let network = InProcessBroadwebNetwork::new();
+        let missing_gateway = network.missing_http_url();
+        let (fallback_gateway, fixture) = in_process_http_fixture_for_network(
+            &network,
             "text/html; charset=utf-8",
             "<!doctype html><title>Fallback Gateway</title>",
         );
-        let transport = IpfsGatewayTransport::from_gateways(vec![
+        let transport = InProcessIpfsGatewayFixtureTransport::from_gateways(vec![
             fixture_gateway_endpoint(&missing_gateway),
             fixture_gateway_endpoint(&fallback_gateway),
         ])
@@ -1273,13 +1407,15 @@ mod tests {
 
     #[test]
     fn ipfs_gateway_transport_reports_fallback_status() {
-        let missing_gateway = missing_in_process_http_fixture_url();
-        let (fallback_gateway, fixture) = in_process_http_fixture(
+        let network = InProcessBroadwebNetwork::new();
+        let missing_gateway = network.missing_http_url();
+        let (fallback_gateway, fixture) = in_process_http_fixture_for_network(
+            &network,
             "text/html; charset=utf-8",
             "<!doctype html><title>Status Gateway</title>",
         );
         let status = BroadwebStatusReporter::new();
-        let transport = IpfsGatewayTransport::from_gateways_with_status(
+        let transport = InProcessIpfsGatewayFixtureTransport::from_gateways_with_status(
             vec![
                 fixture_gateway_endpoint(&missing_gateway),
                 fixture_gateway_endpoint(&fallback_gateway),
@@ -1309,15 +1445,18 @@ mod tests {
 
     #[test]
     fn ipfs_gateway_transport_skips_service_worker_gateway_bootstrap() {
-        let (service_worker_gateway, service_worker_fixture) = in_process_http_fixture(
+        let network = InProcessBroadwebNetwork::new();
+        let (service_worker_gateway, service_worker_fixture) = in_process_http_fixture_for_network(
+            &network,
             "text/html; charset=utf-8",
             "<!doctype html><title>IPFS Service Worker Gateway</title><h1>Service Worker Required</h1>",
         );
-        let (fallback_gateway, fallback_fixture) = in_process_http_fixture(
+        let (fallback_gateway, fallback_fixture) = in_process_http_fixture_for_network(
+            &network,
             "text/html; charset=utf-8",
             "<!doctype html><title>Actual IPFS Page</title>",
         );
-        let transport = IpfsGatewayTransport::from_gateways(vec![
+        let transport = InProcessIpfsGatewayFixtureTransport::from_gateways(vec![
             fixture_gateway_endpoint(&service_worker_gateway),
             fixture_gateway_endpoint(&fallback_gateway),
         ])
@@ -1341,12 +1480,14 @@ mod tests {
 
     #[test]
     fn ipfs_gateway_transport_caches_success_and_resets_after_bounded_failure() {
-        let missing_gateway = missing_in_process_http_fixture_url();
-        let (fallback_gateway, fixture) = in_process_http_fixture(
+        let network = InProcessBroadwebNetwork::new();
+        let missing_gateway = network.missing_http_url();
+        let (fallback_gateway, fixture) = in_process_http_fixture_for_network(
+            &network,
             "text/html; charset=utf-8",
             "<!doctype html><title>Cached Gateway</title>",
         );
-        let transport = IpfsGatewayTransport::from_gateways(vec![
+        let transport = InProcessIpfsGatewayFixtureTransport::from_gateways(vec![
             fixture_gateway_endpoint(&missing_gateway),
             fixture_gateway_endpoint(&fallback_gateway),
         ])
@@ -1825,8 +1966,9 @@ mod tests {
             matches!(error, BroadwebdError::UnsupportedRequest(message) if message.contains("unsupported IPFS gateway scheme: slate-fixture-http"))
         );
 
-        let transport = fixture_gateway_transport(fixture.base_url());
-        let metadata = transport.metadata();
+        let adapter_transport =
+            IpfsGatewayTransport::from_endpoint(fixture_gateway_endpoint(fixture.base_url()));
+        let metadata = adapter_transport.metadata();
         assert!(
             metadata
                 .capabilities
@@ -1840,6 +1982,34 @@ mod tests {
                 .any(|capability| capability == "socketless-fixture")
         );
         assert!(metadata.privacy_boundary.contains("local IPFS gateway"));
+
+        let adapter_error = adapter_transport
+            .fetch_http(
+                &TransportHttpRequest {
+                    profile: "default".to_string(),
+                    url: "ipfs://bafybeigdyrzt/index.html".to_string(),
+                    purpose: FetchPurpose::Navigation,
+                },
+                &ResourceBudget::default(),
+            )
+            .expect_err("normal gateway adapter must not consume fixture URLs");
+        assert!(
+            matches!(adapter_error, BroadwebdError::UnsupportedRequest(message) if message.contains("unsupported HTTP fetch scheme: slate-fixture-http"))
+        );
+
+        let fixture_transport = fixture_gateway_transport(fixture.base_url());
+        let fixture_metadata = fixture_transport.metadata();
+        assert!(
+            fixture_metadata
+                .capabilities
+                .iter()
+                .any(|capability| capability == "socketless-fixture")
+        );
+        assert!(
+            fixture_metadata
+                .privacy_boundary
+                .contains("in-process IPFS gateway fixture")
+        );
 
         assert!(fixture.finish().is_empty());
     }
@@ -3818,8 +3988,11 @@ mod tests {
         IpfsGatewayEndpoint::from_prevalidated_local_base_url(gateway_base)
     }
 
-    fn fixture_gateway_transport(gateway_base: &str) -> IpfsGatewayTransport {
-        IpfsGatewayTransport::from_endpoint(fixture_gateway_endpoint(gateway_base))
+    fn fixture_gateway_transport(gateway_base: &str) -> InProcessIpfsGatewayFixtureTransport {
+        InProcessIpfsGatewayFixtureTransport::from_gateway_endpoint(fixture_gateway_endpoint(
+            gateway_base,
+        ))
+        .expect("fixture gateway transport")
     }
 
     fn fixture_gateway_config(gateway_base: &str) -> IpfsConfig {
@@ -3908,10 +4081,6 @@ mod tests {
             body: body.as_bytes().to_vec(),
         });
         (fixture.base_url().to_string(), fixture)
-    }
-
-    fn missing_in_process_http_fixture_url() -> String {
-        InProcessBroadwebNetwork::new().missing_http_url()
     }
 
     fn in_process_kubo_rpc_fixture(

@@ -1,11 +1,33 @@
 use super::{IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, address::ipfs_url_parts};
-use crate::http::{fetch_http_url, parse_http_url};
+use crate::http::{fetch_http_url_over_network, parse_http_url};
 use crate::{
     BroadwebStatusKind, BroadwebStatusReporter, BroadwebdError, DEFAULT_IPFS_GATEWAY,
     FetchRouteInfo, HttpFetchResponse, IPFS_GATEWAY_PLUGIN, PluginKind, PluginMetadata,
     ResourceBudget, ResourceProfile, TransportHttpRequest, TransportPlugin,
 };
 use std::sync::Mutex;
+use url::Url;
+
+pub(crate) trait IpfsGatewayHttpExecutor {
+    fn execute_gateway_request(
+        &self,
+        url: &Url,
+        budget: &ResourceBudget,
+    ) -> Result<HttpFetchResponse, BroadwebdError>;
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct IpfsGatewayReqwestHttpExecutor;
+
+impl IpfsGatewayHttpExecutor for IpfsGatewayReqwestHttpExecutor {
+    fn execute_gateway_request(
+        &self,
+        url: &Url,
+        budget: &ResourceBudget,
+    ) -> Result<HttpFetchResponse, BroadwebdError> {
+        fetch_http_url_over_network(url.clone(), budget)
+    }
+}
 
 pub struct IpfsGatewayTransport {
     gateways: Vec<IpfsGatewayEndpoint>,
@@ -172,6 +194,17 @@ impl TransportPlugin for IpfsGatewayTransport {
         request: &TransportHttpRequest,
         budget: &ResourceBudget,
     ) -> Result<HttpFetchResponse, BroadwebdError> {
+        self.fetch_http_with_executor(request, budget, &IpfsGatewayReqwestHttpExecutor)
+    }
+}
+
+impl IpfsGatewayTransport {
+    pub(crate) fn fetch_http_with_executor(
+        &self,
+        request: &TransportHttpRequest,
+        budget: &ResourceBudget,
+        executor: &impl IpfsGatewayHttpExecutor,
+    ) -> Result<HttpFetchResponse, BroadwebdError> {
         let mut last_error = None;
         let mut last_response = None;
 
@@ -180,7 +213,7 @@ impl TransportPlugin for IpfsGatewayTransport {
             self.publish_gateway_attempt_status(gateway, &request.url);
             let gateway_url = ipfs_gateway_http_url(&request.url, gateway.base_url())?;
             let url = parse_http_url(&gateway_url)?;
-            match fetch_http_url(url, budget) {
+            match executor.execute_gateway_request(&url, budget) {
                 Ok(response) if is_usable_gateway_response(&response) => {
                     self.set_active_gateway_index(index);
                     self.publish_gateway_complete_status(gateway, &request.url);

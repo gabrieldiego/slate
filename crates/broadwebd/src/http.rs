@@ -459,6 +459,20 @@ pub(crate) fn fetch_http_url(
         return fetch_internal_fixture_http_url(&url, budget);
     }
 
+    fetch_http_url_over_network(url, budget)
+}
+
+pub(crate) fn fetch_http_url_over_network(
+    url: Url,
+    budget: &ResourceBudget,
+) -> Result<HttpFetchResponse, BroadwebdError> {
+    if !matches!(url.scheme(), "http" | "https") {
+        return Err(BroadwebdError::UnsupportedRequest(format!(
+            "unsupported HTTP fetch scheme: {}",
+            url.scheme()
+        )));
+    }
+
     let client = reqwest::blocking::Client::builder()
         .timeout(REQUEST_TIMEOUT)
         .user_agent(BROWSER_USER_AGENT)
