@@ -1746,6 +1746,15 @@ impl SettingsSyncSelectedEndpointMaterializationRequest {
     pub fn fail_closed(&self) -> bool {
         self.endpoint_status == SettingsSyncStoredProviderEndpointStatus::Unsupported
     }
+
+    pub fn parsed_multiaddr(&self) -> Option<Multiaddr> {
+        if self.endpoint_status != SettingsSyncStoredProviderEndpointStatus::Multiaddr {
+            return None;
+        }
+        self.endpoint_ref
+            .as_deref()
+            .and_then(|endpoint_ref| Multiaddr::parse(endpoint_ref).ok())
+    }
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -6870,6 +6879,17 @@ mod tests {
         assert!(materialization_requests[2].pending_materialization());
         assert!(materialization_requests[3].pending_materialization());
         assert!(materialization_requests[4].fail_closed());
+        assert!(materialization_requests[0].parsed_multiaddr().is_none());
+        assert!(materialization_requests[1].parsed_multiaddr().is_none());
+        assert_eq!(
+            materialization_requests[2]
+                .parsed_multiaddr()
+                .expect("multiaddr materialization request parses")
+                .as_str(),
+            "/dnsaddr/home.example.test/p2p/provider-a"
+        );
+        assert!(materialization_requests[3].parsed_multiaddr().is_none());
+        assert!(materialization_requests[4].parsed_multiaddr().is_none());
         assert_eq!(
             materialization_requests
                 .iter()

@@ -577,6 +577,10 @@ Current baseline:
   `slate-routing` `Multiaddr` parser instead of local slash parsing. Malformed
   multiaddr-shaped endpoint refs with empty or invalid segments fail closed,
   while valid multiaddrs remain pending protocol materialization.
+- Selected endpoint materialization requests now expose parsed `Multiaddr`
+  values for valid multiaddr endpoints. Future protocol materializers can
+  consume structured routing targets from the scheduler handoff without
+  reparsing provider metadata or opening sockets during planning.
 - Legacy `fixture:<provider>` endpoint refs now also fail closed. They do not
   carry a fixture network id, so they cannot safely satisfy stored-provider
   materialization or quorum checks.
