@@ -559,6 +559,11 @@ Current baseline:
   path, including membership-aware, in-process fixture, and protocol
   materializer wrappers. This keeps provider metadata UI/status callers from
   reaching into embedded scheduler plans.
+- Stored-provider metadata filtering now also exposes structured metadata
+  issues for disabled, locally role-ineligible, and unauthorized providers
+  before they enter broadwebd discovery. Scheduler and UI callers can explain
+  why a `slate-settings.db` provider never becomes a retention candidate
+  without reinterpreting the raw filter buckets.
 - The scheduler can now also build a read-only retention-provider plan from
   enabled storage-provider metadata in `slate-settings.db`. Stored providers
   must locally advertise object-transfer and availability before they are

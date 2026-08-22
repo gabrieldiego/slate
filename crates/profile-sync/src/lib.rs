@@ -1825,6 +1825,19 @@ pub struct SettingsSyncStoredRetentionProviderPlan {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SettingsSyncStoredRetentionProviderMetadataIssueKind {
+    Disabled,
+    StoredRoleIneligible,
+    Unauthorized,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncStoredRetentionProviderMetadataIssue {
+    pub provider_id: String,
+    pub kind: SettingsSyncStoredRetentionProviderMetadataIssueKind,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettingsSyncStoredRetentionProviderEndpoint {
     pub provider_id: String,
     pub endpoint_ref: Option<String>,
@@ -2861,6 +2874,28 @@ impl SettingsSyncStoredRetentionProviderPlan {
         self.unauthorized_provider_ids.len()
     }
 
+    pub fn stored_provider_metadata_issues(
+        &self,
+    ) -> Vec<SettingsSyncStoredRetentionProviderMetadataIssue> {
+        stored_provider_metadata_issues(
+            self.disabled_provider_ids.as_slice(),
+            self.stored_role_ineligible_provider_ids.as_slice(),
+            self.unauthorized_provider_ids.as_slice(),
+        )
+    }
+
+    pub fn stored_provider_metadata_issue_count(&self) -> usize {
+        stored_provider_metadata_issue_count(
+            self.disabled_provider_ids.as_slice(),
+            self.stored_role_ineligible_provider_ids.as_slice(),
+            self.unauthorized_provider_ids.as_slice(),
+        )
+    }
+
+    pub fn has_stored_provider_metadata_issue(&self) -> bool {
+        self.stored_provider_metadata_issue_count() > 0
+    }
+
     pub fn retention_candidate_count(&self) -> usize {
         self.cycle.retention_candidate_count()
     }
@@ -3242,6 +3277,22 @@ impl SettingsSyncStoredRetentionProviderRun {
             .has_retention_provider_selection_issue()
     }
 
+    pub fn stored_provider_metadata_issues(
+        &self,
+    ) -> Vec<SettingsSyncStoredRetentionProviderMetadataIssue> {
+        self.stored_provider_plan.stored_provider_metadata_issues()
+    }
+
+    pub fn stored_provider_metadata_issue_count(&self) -> usize {
+        self.stored_provider_plan
+            .stored_provider_metadata_issue_count()
+    }
+
+    pub fn has_stored_provider_metadata_issue(&self) -> bool {
+        self.stored_provider_plan
+            .has_stored_provider_metadata_issue()
+    }
+
     pub fn degraded_before(&self) -> bool {
         self.cycle.degraded_before()
     }
@@ -3305,6 +3356,20 @@ impl SettingsSyncStoredInProcessFixtureRetentionProviderRun<'_> {
 
     pub fn has_retention_provider_selection_issue(&self) -> bool {
         self.run.has_retention_provider_selection_issue()
+    }
+
+    pub fn stored_provider_metadata_issues(
+        &self,
+    ) -> Vec<SettingsSyncStoredRetentionProviderMetadataIssue> {
+        self.run.stored_provider_metadata_issues()
+    }
+
+    pub fn stored_provider_metadata_issue_count(&self) -> usize {
+        self.run.stored_provider_metadata_issue_count()
+    }
+
+    pub fn has_stored_provider_metadata_issue(&self) -> bool {
+        self.run.has_stored_provider_metadata_issue()
     }
 }
 
@@ -3399,6 +3464,22 @@ impl SettingsSyncStoredProtocolProviderRetentionProviderPlan {
             .has_retention_provider_selection_issue()
     }
 
+    pub fn stored_provider_metadata_issues(
+        &self,
+    ) -> Vec<SettingsSyncStoredRetentionProviderMetadataIssue> {
+        self.stored_provider_plan.stored_provider_metadata_issues()
+    }
+
+    pub fn stored_provider_metadata_issue_count(&self) -> usize {
+        self.stored_provider_plan
+            .stored_provider_metadata_issue_count()
+    }
+
+    pub fn has_stored_provider_metadata_issue(&self) -> bool {
+        self.stored_provider_plan
+            .has_stored_provider_metadata_issue()
+    }
+
     pub fn protocol_materialized_provider_count(&self) -> usize {
         self.materialization_preview
             .protocol_materialized_provider_count()
@@ -3488,6 +3569,20 @@ impl SettingsSyncStoredProtocolProviderRetentionProviderRun<'_> {
     pub fn has_retention_provider_selection_issue(&self) -> bool {
         self.run.has_retention_provider_selection_issue()
     }
+
+    pub fn stored_provider_metadata_issues(
+        &self,
+    ) -> Vec<SettingsSyncStoredRetentionProviderMetadataIssue> {
+        self.run.stored_provider_metadata_issues()
+    }
+
+    pub fn stored_provider_metadata_issue_count(&self) -> usize {
+        self.run.stored_provider_metadata_issue_count()
+    }
+
+    pub fn has_stored_provider_metadata_issue(&self) -> bool {
+        self.run.has_stored_provider_metadata_issue()
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -3518,6 +3613,20 @@ impl SettingsSyncStoredRetentionProviderMembershipPlan {
 
     pub fn has_retention_provider_selection_issue(&self) -> bool {
         self.cycle.has_retention_provider_selection_issue()
+    }
+
+    pub fn stored_provider_metadata_issues(
+        &self,
+    ) -> Vec<SettingsSyncStoredRetentionProviderMetadataIssue> {
+        self.cycle.stored_provider_metadata_issues()
+    }
+
+    pub fn stored_provider_metadata_issue_count(&self) -> usize {
+        self.cycle.stored_provider_metadata_issue_count()
+    }
+
+    pub fn has_stored_provider_metadata_issue(&self) -> bool {
+        self.cycle.has_stored_provider_metadata_issue()
     }
 
     pub fn selected_protocol_materialization_plan(
@@ -3611,6 +3720,41 @@ impl SettingsSyncStoredRetentionProviderMembershipPlanAttempt {
         match &self.cycle {
             SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::Ready(cycle) => {
                 Some(cycle.has_retention_provider_selection_issue())
+            }
+            SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::CredentialBlocked {
+                ..
+            } => None,
+        }
+    }
+
+    pub fn stored_provider_metadata_issues(
+        &self,
+    ) -> Option<Vec<SettingsSyncStoredRetentionProviderMetadataIssue>> {
+        match &self.cycle {
+            SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::Ready(cycle) => {
+                Some(cycle.stored_provider_metadata_issues())
+            }
+            SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::CredentialBlocked {
+                ..
+            } => None,
+        }
+    }
+
+    pub fn stored_provider_metadata_issue_count(&self) -> Option<usize> {
+        match &self.cycle {
+            SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::Ready(cycle) => {
+                Some(cycle.stored_provider_metadata_issue_count())
+            }
+            SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::CredentialBlocked {
+                ..
+            } => None,
+        }
+    }
+
+    pub fn has_stored_provider_metadata_issue(&self) -> Option<bool> {
+        match &self.cycle {
+            SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::Ready(cycle) => {
+                Some(cycle.has_stored_provider_metadata_issue())
             }
             SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle::CredentialBlocked {
                 ..
@@ -3715,6 +3859,22 @@ impl SettingsSyncStoredRetentionProviderMembershipRun {
         self.stored_provider_plan
             .has_retention_provider_selection_issue()
     }
+
+    pub fn stored_provider_metadata_issues(
+        &self,
+    ) -> Vec<SettingsSyncStoredRetentionProviderMetadataIssue> {
+        self.stored_provider_plan.stored_provider_metadata_issues()
+    }
+
+    pub fn stored_provider_metadata_issue_count(&self) -> usize {
+        self.stored_provider_plan
+            .stored_provider_metadata_issue_count()
+    }
+
+    pub fn has_stored_provider_metadata_issue(&self) -> bool {
+        self.stored_provider_plan
+            .has_stored_provider_metadata_issue()
+    }
 }
 
 pub struct SettingsSyncStoredInProcessFixtureRetentionProviderMembershipRun<'a> {
@@ -3775,6 +3935,20 @@ impl SettingsSyncStoredInProcessFixtureRetentionProviderMembershipRun<'_> {
 
     pub fn has_retention_provider_selection_issue(&self) -> bool {
         self.run.has_retention_provider_selection_issue()
+    }
+
+    pub fn stored_provider_metadata_issues(
+        &self,
+    ) -> Vec<SettingsSyncStoredRetentionProviderMetadataIssue> {
+        self.run.stored_provider_metadata_issues()
+    }
+
+    pub fn stored_provider_metadata_issue_count(&self) -> usize {
+        self.run.stored_provider_metadata_issue_count()
+    }
+
+    pub fn has_stored_provider_metadata_issue(&self) -> bool {
+        self.run.has_stored_provider_metadata_issue()
     }
 }
 
@@ -3840,11 +4014,76 @@ impl SettingsSyncStoredProtocolProviderRetentionProviderMembershipRun<'_> {
     pub fn has_retention_provider_selection_issue(&self) -> bool {
         self.run.has_retention_provider_selection_issue()
     }
+
+    pub fn stored_provider_metadata_issues(
+        &self,
+    ) -> Vec<SettingsSyncStoredRetentionProviderMetadataIssue> {
+        self.run.stored_provider_metadata_issues()
+    }
+
+    pub fn stored_provider_metadata_issue_count(&self) -> usize {
+        self.run.stored_provider_metadata_issue_count()
+    }
+
+    pub fn has_stored_provider_metadata_issue(&self) -> bool {
+        self.run.has_stored_provider_metadata_issue()
+    }
 }
 
 struct SelectedSettingsSyncRetentionProviders<'a> {
     plan: SettingsSyncScheduledCyclePlan,
     daemons: Vec<&'a BroadwebDaemon>,
+}
+
+fn stored_provider_metadata_issues(
+    disabled_provider_ids: &[String],
+    stored_role_ineligible_provider_ids: &[String],
+    unauthorized_provider_ids: &[String],
+) -> Vec<SettingsSyncStoredRetentionProviderMetadataIssue> {
+    let mut issues = Vec::with_capacity(stored_provider_metadata_issue_count(
+        disabled_provider_ids,
+        stored_role_ineligible_provider_ids,
+        unauthorized_provider_ids,
+    ));
+    append_stored_provider_metadata_issues(
+        &mut issues,
+        SettingsSyncStoredRetentionProviderMetadataIssueKind::Disabled,
+        disabled_provider_ids,
+    );
+    append_stored_provider_metadata_issues(
+        &mut issues,
+        SettingsSyncStoredRetentionProviderMetadataIssueKind::StoredRoleIneligible,
+        stored_role_ineligible_provider_ids,
+    );
+    append_stored_provider_metadata_issues(
+        &mut issues,
+        SettingsSyncStoredRetentionProviderMetadataIssueKind::Unauthorized,
+        unauthorized_provider_ids,
+    );
+    issues
+}
+
+fn append_stored_provider_metadata_issues(
+    issues: &mut Vec<SettingsSyncStoredRetentionProviderMetadataIssue>,
+    kind: SettingsSyncStoredRetentionProviderMetadataIssueKind,
+    provider_ids: &[String],
+) {
+    for provider_id in provider_ids {
+        issues.push(SettingsSyncStoredRetentionProviderMetadataIssue {
+            provider_id: provider_id.clone(),
+            kind: kind.clone(),
+        });
+    }
+}
+
+fn stored_provider_metadata_issue_count(
+    disabled_provider_ids: &[String],
+    stored_role_ineligible_provider_ids: &[String],
+    unauthorized_provider_ids: &[String],
+) -> usize {
+    disabled_provider_ids.len()
+        + stored_role_ineligible_provider_ids.len()
+        + unauthorized_provider_ids.len()
 }
 
 fn retention_provider_selection_issues(
@@ -16734,6 +16973,8 @@ mod tests {
             plan.unauthorized_provider_ids,
             vec![unauthorized_provider_id.to_string()]
         );
+        assert_eq!(plan.disabled_provider_count(), 1);
+        assert_eq!(plan.stored_role_ineligible_provider_count(), 1);
         assert_eq!(plan.selected_retention_provider_count(), 1);
         assert_eq!(plan.stale_retention_provider_count(), 1);
         assert_eq!(plan.offline_retention_provider_count(), 1);
@@ -16764,6 +17005,25 @@ mod tests {
             ]
         );
         assert_eq!(plan.unauthorized_provider_count(), 1);
+        assert_eq!(plan.stored_provider_metadata_issue_count(), 3);
+        assert!(plan.has_stored_provider_metadata_issue());
+        assert_eq!(
+            plan.stored_provider_metadata_issues(),
+            vec![
+                super::SettingsSyncStoredRetentionProviderMetadataIssue {
+                    provider_id: "stored-provider-disabled".to_string(),
+                    kind: super::SettingsSyncStoredRetentionProviderMetadataIssueKind::Disabled,
+                },
+                super::SettingsSyncStoredRetentionProviderMetadataIssue {
+                    provider_id: "stored-provider-no-local-retention-role".to_string(),
+                    kind: super::SettingsSyncStoredRetentionProviderMetadataIssueKind::StoredRoleIneligible,
+                },
+                super::SettingsSyncStoredRetentionProviderMetadataIssue {
+                    provider_id: unauthorized_provider_id.to_string(),
+                    kind: super::SettingsSyncStoredRetentionProviderMetadataIssueKind::Unauthorized,
+                },
+            ]
+        );
         assert!(plan.degraded_before());
         assert!(!plan.cycle.preflight.before_health.provider_health.degraded);
         assert_eq!(
