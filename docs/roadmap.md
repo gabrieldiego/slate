@@ -1362,10 +1362,15 @@ Current baseline:
   target device id, show the JSON for paste/debugging, download it as a small
   file, and import a selected or pasted bundle through the same local
   transactional membership path. This is enough to exercise the expected
-  onboarding shape, but normal app launches still use the preview
-  `local-device` id, so production multi-device use still needs durable
-  per-install device identity, QR rendering, encrypted handoff/recovery files,
-  real provider daemons, conflict handling, and cadence policy.
+  onboarding shape.
+- Runtime profile opens now create or reuse a non-secret
+  `slate-local-device-id` sidecar next to the selected `slate-settings.db`,
+  giving each install a durable sync device id without storing local identity
+  inside the syncable database. Fixture-only `open_resolved` paths still use
+  the deterministic `local-device` id so local tests remain reproducible.
+  Production multi-device use still needs QR rendering, encrypted
+  handoff/recovery files, real provider daemons, conflict handling, and cadence
+  policy.
 - `make profile-sync-boundary-check` now provides a low-memory regression gate
   for the sync work. It runs focused rail-app sync-domain checks, verifies that
   visible rail app sync descriptors match the seeded `slate-settings.db`
@@ -1400,10 +1405,10 @@ Next:
   externally synced routing, privacy, app, and browser-core changes are applied
   through their normal update paths instead of raw database replacement.
 - Extend the Settings-based `Profile Sync Preview` with QR-code rendering,
-  platform key-store loading, durable per-install device identity,
-  trusted-device/provider status, encrypted recovery/handoff-file flows,
-  richer multi-device local trial execution, and app-domain status for Settings
-  and Bookmarks before exposing real IPFS/IPNS or internet-backed providers.
+  platform key-store loading, device identity rotation/repair,
+  trusted-device/provider status, encrypted recovery/handoff-file flows, richer
+  multi-device local trial execution, and app-domain status for Settings and
+  Bookmarks before exposing real IPFS/IPNS or internet-backed providers.
 - Add runtime policy for when derived manifest, mutable-root, enrollment,
   bootstrap, and content-key material can be used.
 - Publish encrypted profile manifests and snapshots through the selected

@@ -20,6 +20,7 @@ pub const DEFAULT_DATABASE_FILE_NAME: &str = "slate-settings.db";
 pub const DEFAULT_HOME_DIRECTORY_NAME: &str = ".slate";
 pub const DEFAULT_PROFILE_ID: &str = "default";
 pub const DEFAULT_SYNC_DEVICE_ID: &str = "local-device";
+pub const DEFAULT_LOCAL_SYNC_DEVICE_ID_FILE_NAME: &str = "slate-local-device-id";
 pub const DEFAULT_PROFILE_SYNC_CONTENT_KEY_ID: &str = "content-key-epoch-1";
 pub const DEFAULT_PROFILE_SYNC_ACCOUNT_AUTHORITY_DEVICE_ID: &str = "account-authority";
 pub const DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID: &str = "local-preview-provider";
@@ -2968,6 +2969,15 @@ pub enum StorageError {
         path: PathBuf,
         source: std::io::Error,
     },
+    ReadLocalSyncDeviceId {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    WriteLocalSyncDeviceId {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    GenerateLocalSyncDeviceId,
     Database {
         path: PathBuf,
         source: rusqlite::Error,
@@ -3033,6 +3043,23 @@ impl fmt::Display for StorageError {
                     "failed to create database directory {}: {source}",
                     path.display()
                 )
+            }
+            Self::ReadLocalSyncDeviceId { path, source } => {
+                write!(
+                    formatter,
+                    "failed to read local sync device id from {}: {source}",
+                    path.display()
+                )
+            }
+            Self::WriteLocalSyncDeviceId { path, source } => {
+                write!(
+                    formatter,
+                    "failed to write local sync device id to {}: {source}",
+                    path.display()
+                )
+            }
+            Self::GenerateLocalSyncDeviceId => {
+                write!(formatter, "failed to generate local sync device id")
             }
             Self::Database { path, source } => {
                 write!(
@@ -3205,6 +3232,9 @@ impl std::error::Error for StorageError {
         match self {
             Self::CurrentDirectory(error) => Some(error),
             Self::CreateDirectory { source, .. } => Some(source),
+            Self::ReadLocalSyncDeviceId { source, .. } => Some(source),
+            Self::WriteLocalSyncDeviceId { source, .. } => Some(source),
+            Self::GenerateLocalSyncDeviceId => None,
             Self::Database { source, .. } => Some(source),
             Self::EncodeSyncPayload(error) => Some(error),
             Self::DecodeSyncPayload(error) => Some(error),
@@ -3254,11 +3284,17 @@ impl SlateProfileDatabase {
             &launch_directory,
             dirs::home_dir().as_deref(),
         );
-        Self::open_resolved(resolved.path)
+        Self::open_resolved_with_persistent_device_id(resolved.path)
     }
 
     pub fn open_resolved(path: PathBuf) -> Result<Self, StorageError> {
         Self::open_resolved_with_device_id(path, DEFAULT_SYNC_DEVICE_ID)
+    }
+
+    pub fn open_resolved_with_persistent_device_id(path: PathBuf) -> Result<Self, StorageError> {
+        ensure_database_parent_directory(&path)?;
+        let local_sync_device_id = load_or_create_persistent_local_sync_device_id(&path)?;
+        Self::open_resolved_with_device_id(path, local_sync_device_id)
     }
 
     pub fn open_resolved_with_device_id(
@@ -3270,14 +3306,7 @@ impl SlateProfileDatabase {
             return Err(StorageError::InvalidSyncDeviceId(local_sync_device_id));
         }
 
-        if let Some(parent) = path.parent()
-            && !parent.as_os_str().is_empty()
-        {
-            std::fs::create_dir_all(parent).map_err(|source| StorageError::CreateDirectory {
-                path: parent.to_path_buf(),
-                source,
-            })?;
-        }
+        ensure_database_parent_directory(&path)?;
 
         let database = Self {
             path: Arc::new(path),
@@ -8622,6 +8651,64 @@ pub fn resolve_database_path(
         path: launch_database,
         source: DatabasePathSource::LaunchDirectoryCreated,
     }
+}
+
+fn ensure_database_parent_directory(path: &Path) -> Result<(), StorageError> {
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent).map_err(|source| StorageError::CreateDirectory {
+            path: parent.to_path_buf(),
+            source,
+        })?;
+    }
+    Ok(())
+}
+
+fn local_sync_device_id_path(database_path: &Path) -> PathBuf {
+    database_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .map(|parent| parent.join(DEFAULT_LOCAL_SYNC_DEVICE_ID_FILE_NAME))
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_LOCAL_SYNC_DEVICE_ID_FILE_NAME))
+}
+
+fn load_or_create_persistent_local_sync_device_id(
+    database_path: &Path,
+) -> Result<String, StorageError> {
+    let device_id_path = local_sync_device_id_path(database_path);
+    match std::fs::read_to_string(&device_id_path) {
+        Ok(device_id) => {
+            let device_id = device_id.trim().to_string();
+            if is_valid_sync_identifier(device_id.as_str()) {
+                Ok(device_id)
+            } else {
+                Err(StorageError::InvalidSyncDeviceId(device_id))
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let device_id = generate_local_sync_device_id()?;
+            std::fs::write(&device_id_path, format!("{device_id}\n")).map_err(|source| {
+                StorageError::WriteLocalSyncDeviceId {
+                    path: device_id_path,
+                    source,
+                }
+            })?;
+            Ok(device_id)
+        }
+        Err(source) => Err(StorageError::ReadLocalSyncDeviceId {
+            path: device_id_path,
+            source,
+        }),
+    }
+}
+
+fn generate_local_sync_device_id() -> Result<String, StorageError> {
+    let mut random_bytes = [0_u8; 16];
+    rand::SystemRandom::new()
+        .fill(&mut random_bytes)
+        .map_err(|_| StorageError::GenerateLocalSyncDeviceId)?;
+    Ok(format!("device-{}", URL_SAFE_NO_PAD.encode(random_bytes)))
 }
 
 fn unix_time_seconds() -> Result<i64, StorageError> {
@@ -14786,6 +14873,48 @@ mod tests {
         let error =
             SlateProfileDatabase::open_resolved_with_device_id(database_path, "../device-a")
                 .unwrap_err();
+
+        assert!(matches!(error, StorageError::InvalidSyncDeviceId(_)));
+    }
+
+    #[test]
+    fn database_runtime_open_reuses_persistent_local_sync_device_id() {
+        let directory = test_dir("persistent-sync-device-id");
+        let database_path = directory.join(DEFAULT_DATABASE_FILE_NAME);
+        let first =
+            SlateProfileDatabase::open_resolved_with_persistent_device_id(database_path.clone())
+                .unwrap();
+        let first_device_id = first.local_sync_device_id().to_string();
+        let sidecar_path = local_sync_device_id_path(&database_path);
+
+        assert!(first_device_id.starts_with("device-"));
+        assert_ne!(first_device_id, DEFAULT_SYNC_DEVICE_ID);
+        assert_eq!(
+            std::fs::read_to_string(&sidecar_path).unwrap().trim(),
+            first_device_id
+        );
+
+        let reopened =
+            SlateProfileDatabase::open_resolved_with_persistent_device_id(database_path).unwrap();
+        assert_eq!(reopened.local_sync_device_id(), first_device_id);
+
+        let fixture_database =
+            SlateProfileDatabase::open_resolved(directory.join("fixture-settings.db")).unwrap();
+        assert_eq!(
+            fixture_database.local_sync_device_id(),
+            DEFAULT_SYNC_DEVICE_ID
+        );
+    }
+
+    #[test]
+    fn database_runtime_open_rejects_invalid_persistent_local_sync_device_id() {
+        let database_path =
+            test_dir("invalid-persistent-sync-device-id").join(DEFAULT_DATABASE_FILE_NAME);
+        let sidecar_path = local_sync_device_id_path(&database_path);
+        std::fs::write(&sidecar_path, "../device-a\n").unwrap();
+
+        let error = SlateProfileDatabase::open_resolved_with_persistent_device_id(database_path)
+            .unwrap_err();
 
         assert!(matches!(error, StorageError::InvalidSyncDeviceId(_)));
     }
