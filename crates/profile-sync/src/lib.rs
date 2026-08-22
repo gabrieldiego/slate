@@ -14133,6 +14133,7 @@ mod tests {
         )
         .expect("open typed app tombstone receiver settings database");
         for (domain, privacy_classification, sync_content) in [
+            (SYNC_DOMAIN_CALENDAR, "sensitive", false),
             (SYNC_DOMAIN_CHAT, "sensitive", false),
             (SYNC_DOMAIN_DOWNLOADS, "metadata", false),
             (SYNC_DOMAIN_FILES, "content", true),
@@ -14150,6 +14151,19 @@ mod tests {
                 .expect("enable typed app tombstone sync domain for publisher test profile");
         }
 
+        let calendar_update = CalendarEventUpdate {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            event_id: "runtime-event-delete".to_string(),
+            calendar_id: Some("work".to_string()),
+            title: "Old Runtime Planning".to_string(),
+            starts_at: 1_789_020_000,
+            ends_at: Some(1_789_023_600),
+            time_zone: Some("UTC".to_string()),
+            location: Some("Old Slate workspace".to_string()),
+            notes: Some("Delete through tombstone snapshot".to_string()),
+            recurrence_rule: None,
+            reminder_minutes: Some(20),
+        };
         let chat_update = ChatConversationUpdate {
             profile: DEFAULT_PROFILE_ID.to_string(),
             conversation_id: "runtime-chat-delete".to_string(),
@@ -14208,6 +14222,9 @@ mod tests {
         };
         for database in [&publisher_database, &receiver_database] {
             database
+                .upsert_calendar_event(&calendar_update)
+                .expect("seed typed calendar metadata");
+            database
                 .upsert_chat_conversation(&chat_update)
                 .expect("seed typed chat metadata");
             database
@@ -14220,6 +14237,9 @@ mod tests {
                 .upsert_storage_provider(&provider_update)
                 .expect("seed typed storage provider metadata");
         }
+        publisher_database
+            .remove_calendar_event(DEFAULT_PROFILE_ID, calendar_update.event_id.as_str())
+            .expect("publisher tombstones typed calendar metadata");
         publisher_database
             .remove_chat_conversation(DEFAULT_PROFILE_ID, chat_update.conversation_id.as_str())
             .expect("publisher tombstones typed chat metadata");
@@ -14260,6 +14280,7 @@ mod tests {
         assert_eq!(
             published.publication.manifest.included_domains,
             vec![
+                SYNC_DOMAIN_CALENDAR.to_string(),
                 SYNC_DOMAIN_CHAT.to_string(),
                 SYNC_DOMAIN_DOWNLOADS.to_string(),
                 SYNC_DOMAIN_FILES.to_string(),
@@ -14293,6 +14314,12 @@ mod tests {
 
         assert!(
             receiver_database
+                .calendar_events(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver typed calendar metadata")
+                .is_empty()
+        );
+        assert!(
+            receiver_database
                 .chat_conversations(DEFAULT_PROFILE_ID, 10)
                 .expect("read receiver typed chat metadata")
                 .is_empty()
@@ -14315,6 +14342,21 @@ mod tests {
                 .expect("read receiver typed storage provider metadata")
                 .is_empty()
         );
+
+        let calendar_value = receiver_database
+            .get_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_CALENDAR,
+                "event.runtime-event-delete",
+            )
+            .expect("read receiver calendar tombstone sync setting")
+            .expect("receiver calendar tombstone sync setting")
+            .value;
+        let calendar_payload: CalendarEventSyncPayload =
+            serde_json::from_str(calendar_value.as_str())
+                .expect("decode calendar tombstone payload");
+        assert!(calendar_payload.deleted);
+        assert_eq!(calendar_payload.event_id, "runtime-event-delete");
 
         let chat_value = receiver_database
             .get_sync_setting_text(
