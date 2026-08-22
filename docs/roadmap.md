@@ -471,6 +471,10 @@ Current baseline:
   the requester is paused. The profile-sync runner surfaces that signal so
   scheduler-facing health can distinguish missing objects from local fixture
   transfer delay without opening sockets or contacting external services.
+- Runtime health coverage now exercises those delayed root and object-transfer
+  signals through arbitrary in-process provider IDs, not only device-shaped
+  fixture providers. This keeps future provider-backed sync paths testable
+  without modeling every provider as a logged-in Slate device.
 - `slate-profile-sync` now has a typed settings sync cycle policy carrying
   retention, publish-step, trusted-device, and retaining-provider quorum
   limits. The runtime-facing policy path checks provider health before touching

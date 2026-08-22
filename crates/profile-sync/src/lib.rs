@@ -10599,6 +10599,149 @@ mod tests {
     }
 
     #[test]
+    fn broadwebd_settings_sync_health_reports_custom_provider_delays() {
+        let network = InProcessBroadwebNetwork::new();
+        let fixture = network.profile_sync();
+        let source_state_root = test_state_root("cycle-custom-provider-delay-source");
+        let receiver_state_root = test_state_root("cycle-custom-provider-delay-receiver");
+        let receiver_db_root = test_state_root("cycle-custom-provider-delay-receiver-db");
+        let source_provider_id = "runtime-custom-delay-source-provider";
+        let receiver_device_id = "runtime-custom-delay-receiver";
+        let receiver_provider_id = "local-fixture-device-runtime-custom-delay-receiver";
+        let source_daemon = network
+            .daemon_for_provider_with_roles(
+                &source_state_root,
+                ResourceBudget::default(),
+                source_provider_id,
+                "local-fixture-custom",
+                BroadwebdProfileSyncProviderRoles::logged_in_device(),
+            )
+            .expect("start in-process custom delayed source provider daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                receiver_device_id,
+            )
+            .expect("start in-process custom delayed receiver daemon");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            receiver_device_id,
+        )
+        .expect("open custom delayed receiver settings database");
+        let profile = "customproviderdelayhealthprofile";
+        let settings_root_id = "settings/latest";
+
+        fixture
+            .set_provider_root_available(
+                source_provider_id,
+                receiver_provider_id,
+                profile,
+                settings_root_id,
+                false,
+            )
+            .expect("delay custom provider root propagation to receiver");
+        let object_id = BroadwebdProfileSyncPublisher::new(&source_daemon)
+            .put_retained_root(
+                profile,
+                settings_root_id,
+                b"encrypted custom provider delayed settings root".to_vec(),
+            )
+            .expect("custom provider publishes delayed settings root");
+        let delayed_root_health = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
+            .settings_sync_health(&receiver_database, profile, settings_root_id, 1)
+            .expect("receiver reads custom provider delayed root health");
+        assert_eq!(
+            delayed_root_health.settings_root_health.visible_candidates,
+            0
+        );
+        assert_eq!(
+            delayed_root_health.settings_root_health.delayed_candidates,
+            1
+        );
+        assert_eq!(
+            delayed_root_health
+                .settings_root_health
+                .delayed_publisher_provider_ids,
+            vec![source_provider_id.to_string()]
+        );
+        assert!(delayed_root_health.settings_root_health.degraded);
+
+        fixture
+            .set_provider_root_available(
+                source_provider_id,
+                receiver_provider_id,
+                profile,
+                settings_root_id,
+                true,
+            )
+            .expect("release custom provider root propagation to receiver");
+        let released_root_health = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
+            .settings_sync_health(&receiver_database, profile, settings_root_id, 1)
+            .expect("receiver reads released custom provider root health");
+        assert_eq!(
+            released_root_health
+                .settings_root_health
+                .latest_object_id
+                .as_deref(),
+            Some(object_id.as_str())
+        );
+        assert!(
+            released_root_health
+                .settings_root_health
+                .latest_object_available
+        );
+
+        fixture
+            .set_provider_transfer_available(source_provider_id, receiver_provider_id, false)
+            .expect("delay custom provider object transfer to receiver");
+        let delayed_transfer_health = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
+            .settings_sync_health(&receiver_database, profile, settings_root_id, 1)
+            .expect("receiver reads custom provider delayed transfer health");
+        assert_eq!(
+            delayed_transfer_health
+                .settings_root_health
+                .latest_object_id
+                .as_deref(),
+            Some(object_id.as_str())
+        );
+        assert!(
+            !delayed_transfer_health
+                .settings_root_health
+                .latest_object_available
+        );
+        assert_eq!(
+            delayed_transfer_health
+                .settings_root_health
+                .delayed_object_provider_ids,
+            vec![source_provider_id.to_string()]
+        );
+        assert!(delayed_transfer_health.settings_root_health.degraded);
+
+        fixture
+            .set_provider_transfer_available(source_provider_id, receiver_provider_id, true)
+            .expect("release custom provider object transfer to receiver");
+        let released_transfer_health = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
+            .settings_sync_health(&receiver_database, profile, settings_root_id, 1)
+            .expect("receiver reads released custom provider transfer health");
+        assert!(
+            released_transfer_health
+                .settings_root_health
+                .latest_object_available
+        );
+        assert!(
+            released_transfer_health
+                .settings_root_health
+                .delayed_object_provider_ids
+                .is_empty()
+        );
+
+        let _ = std::fs::remove_dir_all(source_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
     fn broadwebd_settings_sync_runner_wraps_cycle_with_health() {
         let network = InProcessBroadwebNetwork::new();
         let state_root = test_state_root("cycle-with-health");
