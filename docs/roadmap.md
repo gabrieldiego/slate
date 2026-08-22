@@ -609,6 +609,11 @@ Current baseline:
   be materialized into a normal retention-provider handle, pass the existing
   endpoint-ref checks, and satisfy the retention quorum in the socketless
   in-process broadweb fixture without adding any live network dependency.
+- Membership-log stored-provider scheduler runs now have the same protocol
+  materializer path. A provider enrolled through the account membership log and
+  stored with a multiaddr endpoint can be materialized through the socketless
+  boundary, then retain both settings and membership-log publications without
+  opening loopback sockets or contacting live protocol networks.
 - The selected endpoint materialization plan now exposes a combined protocol
   materialization summary that groups multiaddr work, deferred-protocol work,
   missing endpoints, and fail-closed endpoints. Scheduler/UI code can tell

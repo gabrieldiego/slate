@@ -3080,6 +3080,35 @@ impl SettingsSyncStoredInProcessFixtureRetentionProviderMembershipRun<'_> {
     }
 }
 
+pub struct SettingsSyncStoredProtocolProviderRetentionProviderMembershipRun<'a> {
+    pub protocol_materialization: SettingsSyncProtocolProviderMaterialization<'a>,
+    pub run: SettingsSyncStoredRetentionProviderMembershipRun,
+}
+
+impl SettingsSyncStoredProtocolProviderRetentionProviderMembershipRun<'_> {
+    pub fn pulled_membership_application_count(&self) -> usize {
+        self.run.pulled_membership_application_count()
+    }
+
+    pub fn selected_protocol_materialization_plan(
+        &self,
+    ) -> SettingsSyncSelectedProtocolMaterializationPlan {
+        self.run.selected_protocol_materialization_plan()
+    }
+
+    pub fn selected_retention_provider_count(&self) -> usize {
+        self.run.selected_retention_provider_count()
+    }
+
+    pub fn materialized_retention_provider_count(&self) -> usize {
+        self.run.materialized_retention_provider_count()
+    }
+
+    pub fn retained_provider_count(&self) -> usize {
+        self.run.retained_provider_count()
+    }
+}
+
 struct SelectedSettingsSyncRetentionProviders<'a> {
     plan: SettingsSyncScheduledCyclePlan,
     daemons: Vec<&'a BroadwebDaemon>,
@@ -5406,6 +5435,120 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         Ok(
             SettingsSyncStoredInProcessFixtureRetentionProviderMembershipRun {
                 fixture_materialization,
+                run,
+            },
+        )
+    }
+
+    pub fn run_once_with_membership_log_and_stored_protocol_materializer_retention_provider_handles<
+        'provider,
+        Materializer,
+    >(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        membership_log_root_id: &str,
+        secrets: SettingsSyncRuntimeSecrets<'_>,
+        max_stored_providers: u32,
+        materializer: &Materializer,
+    ) -> Result<
+        SettingsSyncStoredProtocolProviderRetentionProviderMembershipRun<'provider>,
+        ProfileSyncCycleWithHealthError,
+    >
+    where
+        Materializer: SettingsSyncProtocolProviderMaterializer<'provider>,
+    {
+        let membership_log_publication = BroadwebdProfileSyncPublisher::new(self.daemon)
+            .plan_local_sync_account_membership_log(
+                database,
+                config.profile.as_str(),
+                membership_log_root_id,
+            )
+            .map_err(ProfileSyncCycleError::from)?;
+        if membership_log_publication.requires_compaction() {
+            return Err(ProfileSyncCycleWithHealthError::Cycle(
+                ProfileSyncCycleError::from(ProfileSyncPublishError::MembershipLogTooLarge {
+                    profile: membership_log_publication.profile,
+                    max_records: membership_log_publication.max_records,
+                    actual_records: membership_log_publication.record_count,
+                }),
+            ));
+        }
+
+        let runner = BroadwebdSettingsSyncRunner::new(self.daemon);
+        let preflight = runner
+            .settings_sync_cycle_preflight_with_membership_log_and_active_key_policy(
+                database,
+                config.profile.as_str(),
+                config.settings_root_id.as_str(),
+                membership_log_root_id,
+                secrets.signer,
+                &config.policy,
+            )?;
+        let stored_selection = load_stored_retention_provider_selection(
+            database,
+            config.profile.as_str(),
+            max_stored_providers,
+        )
+        .map_err(ProfileSyncCredentialError::from)
+        .map_err(ProfileSyncCycleError::from)?;
+        let stored_provider_plan = settings_sync_stored_retention_provider_plan(
+            preflight.preflight.clone(),
+            max_stored_providers,
+            stored_selection,
+        );
+        config.policy.check_selected_retention_provider_freshness(
+            stored_provider_plan.stale_retention_provider_count(),
+            stored_provider_plan.offline_retention_provider_count(),
+            &preflight.preflight.before_health,
+        )?;
+        config.policy.check_selected_retention_provider_roles(
+            stored_provider_plan.ineligible_retention_provider_count(),
+            &preflight.preflight.before_health,
+        )?;
+        let protocol_materialization = stored_provider_plan
+            .materialize_selected_protocol_retention_provider_handles(materializer);
+        let run = {
+            let retention_provider_handles = protocol_materialization.retention_provider_handles();
+            let materialized_providers = materialize_stored_retention_provider_daemons(
+                &stored_provider_plan,
+                retention_provider_handles.as_slice(),
+            );
+            config.policy.check_selected_retention_provider_count(
+                materialized_providers.materialized_retention_provider_count(),
+                &preflight.preflight.before_health,
+            )?;
+            let cycle = runner
+                .run_settings_sync_cycle_with_membership_log_and_retention_providers_after_preflight(
+                    database,
+                    secrets.content_key,
+                    secrets.signer,
+                    &config.policy,
+                    membership_log_root_id,
+                    materialized_providers.daemons.as_slice(),
+                    &preflight,
+                )?;
+
+            SettingsSyncStoredRetentionProviderMembershipRun {
+                preflight,
+                stored_provider_plan,
+                unmaterialized_retention_provider_ids: materialized_providers
+                    .unmaterialized_retention_provider_ids,
+                pending_endpoint_materialization_retention_provider_ids: materialized_providers
+                    .pending_endpoint_materialization_retention_provider_ids,
+                endpoint_mismatch_retention_provider_ids: materialized_providers
+                    .endpoint_mismatch_retention_provider_ids,
+                duplicate_handle_retention_provider_ids: materialized_providers
+                    .duplicate_handle_retention_provider_ids,
+                unsupported_endpoint_retention_provider_ids: materialized_providers
+                    .unsupported_endpoint_retention_provider_ids,
+                cycle,
+            }
+        };
+
+        Ok(
+            SettingsSyncStoredProtocolProviderRetentionProviderMembershipRun {
+                protocol_materialization,
                 run,
             },
         )
@@ -8943,6 +9086,177 @@ mod tests {
         );
         assert_eq!(run.retained_provider_count(), 1);
         assert_eq!(run.retained_object_ids, run.cycle.published_object_ids());
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn membership_stored_scheduler_runs_with_protocol_materialized_provider_without_loopback() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("membership-protocol-provider-device");
+        let provider_state_root = test_state_root("membership-protocol-provider-provider");
+        let db_root = test_state_root("membership-protocol-provider-db");
+        let device_id = "membership-protocol-provider-device";
+        let provider_id = "membership-protocol-materialized-provider";
+        let provider_endpoint = "/dnsaddr/membership-provider.example.test/p2p/materialized";
+        let device_daemon = network
+            .daemon_for_device(&device_state_root, ResourceBudget::default(), device_id)
+            .expect("start in-process membership protocol device daemon");
+        let provider_daemon = network
+            .daemon_for_provider_with_roles(
+                &provider_state_root,
+                ResourceBudget::default(),
+                provider_id,
+                "socketless-protocol-provider",
+                BroadwebdProfileSyncProviderRoles::availability_provider(),
+            )
+            .expect("start socketless membership protocol provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            device_id,
+        )
+        .expect("open membership protocol scheduler database");
+        let content_key = ProfileSyncContentKey::from_bytes([89; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer =
+            ProfileSyncDeviceSigner::generate(device_id).expect("generate membership signer");
+        let provider_signer =
+            ProfileSyncDeviceSigner::generate(provider_id).expect("generate provider signer");
+        register_test_content_key_epoch(&database, DEFAULT_PROFILE_ID);
+        let enroll_device = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-membership-protocol-provider-device".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: device_id.to_string(),
+            device_public_key: Some(signer.public_key().expect("read device public key")),
+            created_at: 10,
+        };
+        database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer, &enroll_device).as_slice(),
+            )
+            .expect("bootstrap membership protocol scheduler device");
+        let enroll_provider = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-enroll-membership-protocol-provider".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER.to_string(),
+            device_id: provider_id.to_string(),
+            device_public_key: Some(
+                provider_signer
+                    .public_key()
+                    .expect("read provider public key"),
+            ),
+            created_at: 20,
+        };
+        database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer, &enroll_provider).as_slice(),
+            )
+            .expect("enroll protocol materialized provider authority");
+        database
+            .upsert_storage_provider(&StorageProviderUpdate {
+                endpoint_ref: Some(provider_endpoint.to_string()),
+                ..test_storage_provider_update(
+                    &network,
+                    DEFAULT_PROFILE_ID,
+                    provider_id,
+                    "socketless-protocol-provider",
+                    "Membership protocol pinner",
+                    true,
+                    true,
+                    true,
+                )
+            })
+            .expect("write membership protocol provider metadata");
+        database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write membership protocol scheduler setting");
+
+        let config = SettingsSyncSchedulerConfig::new(
+            DEFAULT_PROFILE_ID,
+            "settings/latest",
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
+        );
+        let materializer = super::SettingsSyncSocketlessProtocolProviderMaterializer::new(
+            super::SettingsSyncProtocolProviderMaterializerPolicy::new(true, Vec::new()),
+            vec![super::SettingsSyncProtocolProviderDaemon::new(
+                provider_id,
+                provider_endpoint,
+                &provider_daemon,
+            )],
+        );
+        let run = BroadwebdSettingsSyncScheduler::new(&device_daemon)
+            .run_once_with_membership_log_and_stored_protocol_materializer_retention_provider_handles(
+                &database,
+                &config,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                4,
+                &materializer,
+            )
+            .expect("membership stored scheduler uses protocol materialized provider");
+
+        assert_eq!(run.pulled_membership_application_count(), 0);
+        assert_eq!(
+            run.protocol_materialization.report(),
+            super::SettingsSyncProtocolProviderMaterializationReport {
+                materialized_provider_ids: vec![provider_id.to_string()],
+                missing_provider_ids: Vec::new(),
+                endpoint_mismatch_provider_ids: Vec::new(),
+                duplicate_provider_ids: Vec::new(),
+                unsupported_provider_ids: Vec::new(),
+            }
+        );
+        assert!(run.protocol_materialization.all_providers_materialized());
+        assert_eq!(run.selected_retention_provider_count(), 1);
+        assert_eq!(run.materialized_retention_provider_count(), 1);
+        assert_eq!(run.retained_provider_count(), 1);
+        assert_eq!(
+            run.selected_protocol_materialization_plan()
+                .multiaddr_requests,
+            vec![super::SettingsSyncSelectedMultiaddrMaterializationRequest {
+                provider_id: provider_id.to_string(),
+                endpoint: slate_routing::Multiaddr::parse(provider_endpoint)
+                    .expect("membership stored provider multiaddr"),
+            }]
+        );
+        assert!(
+            run.selected_protocol_materialization_plan()
+                .ready_for_protocol_materialization()
+        );
+        assert!(run.run.unmaterialized_retention_provider_ids.is_empty());
+        assert!(
+            run.run
+                .pending_endpoint_materialization_retention_provider_ids
+                .is_empty()
+        );
+        assert!(run.run.endpoint_mismatch_retention_provider_ids.is_empty());
+        assert!(run.run.duplicate_handle_retention_provider_ids.is_empty());
+        assert!(
+            run.run
+                .unsupported_endpoint_retention_provider_ids
+                .is_empty()
+        );
+        assert_eq!(run.run.cycle.cycle.cycle.published_step_count(), 1);
+        assert!(run.run.cycle.cycle.published_membership_log.is_some());
+        assert_eq!(run.run.cycle.retention.len(), 1);
+        assert_eq!(
+            run.run.cycle.retention[0].object_count(),
+            run.run.cycle.retained_object_ids.len()
+        );
+        assert_eq!(
+            run.run.cycle.retention[0].retained_count(),
+            run.run.cycle.retained_object_ids.len()
+        );
+        assert_eq!(
+            run.run.cycle.retained_object_ids,
+            run.run.cycle.cycle.published_object_ids()
+        );
 
         let _ = std::fs::remove_dir_all(device_state_root);
         let _ = std::fs::remove_dir_all(provider_state_root);
