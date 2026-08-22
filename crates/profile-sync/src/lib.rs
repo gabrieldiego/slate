@@ -2700,15 +2700,14 @@ impl<'a> BroadwebdProfileSyncObjectSource<'a> {
 
         let log_object = self.get_profile_sync_object(profile, object_id.as_str())?;
         let log = decode_profile_sync_membership_log(log_object.bytes.as_slice(), profile)?;
-        let mut applications = Vec::with_capacity(log.records.len());
+        let mut signed_records = Vec::with_capacity(log.records.len());
         for entry in &log.records {
             let signed_record = self.get_profile_sync_object(profile, entry.object_id.as_str())?;
             validate_membership_log_entry_object(profile, entry, signed_record.bytes.as_slice())?;
-            applications.push(
-                database
-                    .apply_signed_sync_account_membership_record(signed_record.bytes.as_slice())?,
-            );
+            signed_records.push(signed_record.bytes);
         }
+        let applications =
+            database.apply_signed_sync_account_membership_records(signed_records.as_slice())?;
         let root = database.set_profile_sync_root(profile, root_id, object_id.as_str())?;
         Ok(ProfileSyncMembershipLogPullStatus::Applied {
             root,
@@ -7491,6 +7490,185 @@ mod tests {
             receiver_database
                 .profile_sync_root(DEFAULT_PROFILE_ID, PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID)
                 .expect("read duplicate enrollment membership log root")
+                .is_none()
+        );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_membership_log_failure_does_not_partially_apply_without_loopback() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("membership-log-atomic-publisher");
+        let receiver_state_root = test_state_root("membership-log-atomic-receiver");
+        let receiver_db_root = test_state_root("membership-log-atomic-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "membership-log-atomic-publisher",
+            )
+            .expect("start in-process atomic membership publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "membership-log-atomic-receiver",
+            )
+            .expect("start in-process atomic membership receiver daemon");
+        let receiver_database =
+            SlateProfileDatabase::open_resolved(receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME))
+                .expect("open atomic membership receiver database");
+        let signer_a = ProfileSyncDeviceSigner::generate("membership-log-atomic-a")
+            .expect("generate atomic signer a");
+        let signer_b = ProfileSyncDeviceSigner::generate("membership-log-atomic-b")
+            .expect("generate atomic signer b");
+        let signer_c = ProfileSyncDeviceSigner::generate("membership-log-atomic-c")
+            .expect("generate atomic signer c");
+        let replacement_b = ProfileSyncDeviceSigner::generate("membership-log-atomic-b")
+            .expect("generate atomic replacement signer b");
+        let enroll_a = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-membership-log-atomic-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-log-atomic-a".to_string(),
+            device_public_key: Some(signer_a.public_key().expect("read signer a public key")),
+            created_at: 10,
+        };
+        receiver_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_a).as_slice(),
+            )
+            .expect("bootstrap atomic membership receiver signer a");
+        let enroll_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-enroll-membership-log-atomic-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-log-atomic-b".to_string(),
+            device_public_key: Some(signer_b.public_key().expect("read signer b public key")),
+            created_at: 20,
+        };
+        receiver_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_b).as_slice(),
+            )
+            .expect("apply atomic membership receiver signer b enrollment");
+
+        let enroll_c = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-3-enroll-membership-log-atomic-c".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 2,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-log-atomic-c".to_string(),
+            device_public_key: Some(signer_c.public_key().expect("read signer c public key")),
+            created_at: 30,
+        };
+        let duplicate_enroll_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-4-enroll-membership-log-atomic-b-again".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 3,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-log-atomic-b".to_string(),
+            device_public_key: Some(
+                replacement_b
+                    .public_key()
+                    .expect("read replacement signer b public key"),
+            ),
+            created_at: 40,
+        };
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+        let enroll_c_object_id = publisher
+            .put_retained_object(
+                DEFAULT_PROFILE_ID,
+                signed_membership_record_bytes(&signer_a, &enroll_c),
+            )
+            .expect("put valid enroll c membership object");
+        let duplicate_b_object_id = publisher
+            .put_retained_object(
+                DEFAULT_PROFILE_ID,
+                signed_membership_record_bytes(&signer_a, &duplicate_enroll_b),
+            )
+            .expect("put invalid duplicate b membership object");
+        let log = ProfileSyncMembershipLog {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            schema_version: super::PROFILE_SYNC_MEMBERSHIP_LOG_SCHEMA_VERSION,
+            records: vec![
+                ProfileSyncMembershipLogEntry {
+                    record_id: enroll_c.record_id.clone(),
+                    root_id: sync_membership_record_root_id(enroll_c.record_id.as_str()),
+                    object_id: enroll_c_object_id,
+                    membership_epoch: enroll_c.membership_epoch,
+                    record_kind: enroll_c.record_kind.clone(),
+                    device_id: enroll_c.device_id.clone(),
+                    signer_device_id: signer_a.device_id().to_string(),
+                },
+                ProfileSyncMembershipLogEntry {
+                    record_id: duplicate_enroll_b.record_id.clone(),
+                    root_id: sync_membership_record_root_id(duplicate_enroll_b.record_id.as_str()),
+                    object_id: duplicate_b_object_id,
+                    membership_epoch: duplicate_enroll_b.membership_epoch,
+                    record_kind: duplicate_enroll_b.record_kind.clone(),
+                    device_id: duplicate_enroll_b.device_id.clone(),
+                    signer_device_id: signer_a.device_id().to_string(),
+                },
+            ],
+        };
+        publisher
+            .put_retained_root(
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                serde_json::to_vec(&log).expect("encode atomic membership log"),
+            )
+            .expect("publish atomic membership log");
+
+        let error = BroadwebdProfileSyncObjectSource::new(&receiver_daemon)
+            .pull_and_apply_sync_account_membership_log_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            )
+            .expect_err("atomic membership log should reject the invalid tail record");
+        assert!(matches!(
+            error,
+            ProfileSyncReceiveError::Storage(StorageError::InvalidProfileSyncMembershipRecord(reason))
+                if reason.contains("cannot replace already trusted device membership-log-atomic-b")
+        ));
+        assert!(
+            receiver_database
+                .sync_account_membership_record(
+                    DEFAULT_PROFILE_ID,
+                    "epoch-3-enroll-membership-log-atomic-c",
+                )
+                .expect("read atomic enroll c record")
+                .is_none()
+        );
+        assert!(
+            receiver_database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "membership-log-atomic-c")
+                .expect("read atomic signer c key")
+                .is_none()
+        );
+        assert!(
+            receiver_database
+                .sync_account_membership_record(
+                    DEFAULT_PROFILE_ID,
+                    "epoch-4-enroll-membership-log-atomic-b-again",
+                )
+                .expect("read atomic duplicate b record")
+                .is_none()
+        );
+        assert!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID)
+                .expect("read atomic membership log root")
                 .is_none()
         );
 

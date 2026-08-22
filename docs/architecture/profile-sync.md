@@ -271,7 +271,12 @@ still needs richer epoch transition and multi-approval policy.
 The profile-sync membership-log receive path exercises the same storage guard:
 a stale older-epoch record carried through broadwebd fixture objects fails
 without storing that record, re-trusting the device, or advancing the
-membership-log root.
+membership-log root. Membership-log receive now fetches and validates every
+signed record object before handing the batch to `slate-settings.db`; storage
+then applies the whole batch inside one SQLite transaction. If a later record
+fails authorization, earlier records from that log roll back as well, so a bad
+distributed membership log cannot leave partial trust mutations behind while
+the membership-log root stays unadvanced.
 
 The active-key pull path also exposes an idempotent root-status helper for sync
 polling. It resolves the published root first and reports missing roots,

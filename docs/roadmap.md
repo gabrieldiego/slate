@@ -955,6 +955,10 @@ Current baseline:
   enrollment rejection: a later `enroll-device` record for an already trusted
   target device fails without replacing that device key or advancing the
   membership-log root.
+- Membership-log application is now transactional inside `slate-settings.db`.
+  The receiver fetches and validates every signed record object first, then
+  applies the whole log in one storage transaction; if any record fails, earlier
+  records in that log do not leave partial trusted-key mutations behind.
 
 Next:
 

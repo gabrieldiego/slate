@@ -4403,6 +4403,121 @@ impl SlateProfileDatabase {
         Ok(keys)
     }
 
+    fn register_sync_device_public_key_in_transaction(
+        &self,
+        transaction: &rusqlite::Transaction<'_>,
+        registration: &SyncDevicePublicKeyRegistration,
+    ) -> Result<SyncDevicePublicKeyRecord, StorageError> {
+        if !is_valid_sync_identifier(registration.public_key.device_id.as_str()) {
+            return Err(StorageError::InvalidSyncDeviceId(
+                registration.public_key.device_id.clone(),
+            ));
+        }
+
+        let now = unix_time_seconds()?;
+        transaction
+            .execute(
+                "INSERT INTO sync_device_public_keys
+                   (profile, device_id, public_key, membership_epoch, trusted, created_at,
+                    updated_at)
+                 VALUES (?1, ?2, ?3, ?4, 1, ?5, ?5)
+                 ON CONFLICT(profile, device_id) DO UPDATE SET
+                   public_key = excluded.public_key,
+                   membership_epoch = excluded.membership_epoch,
+                   trusted = 1,
+                   updated_at = excluded.updated_at",
+                params![
+                    registration.profile.as_str(),
+                    registration.public_key.device_id.as_str(),
+                    registration.public_key.bytes.as_slice(),
+                    registration.membership_epoch,
+                    now
+                ],
+            )
+            .map_err(|source| self.database_error(source))?;
+
+        self.sync_device_public_key_in_transaction(
+            transaction,
+            registration.profile.as_str(),
+            registration.public_key.device_id.as_str(),
+        )?
+        .ok_or_else(|| self.database_error(rusqlite::Error::QueryReturnedNoRows))
+    }
+
+    fn set_sync_device_public_key_trusted_in_transaction(
+        &self,
+        transaction: &rusqlite::Transaction<'_>,
+        profile: &str,
+        device_id: &str,
+        trusted: bool,
+    ) -> Result<Option<SyncDevicePublicKeyRecord>, StorageError> {
+        if !is_valid_sync_identifier(device_id) {
+            return Err(StorageError::InvalidSyncDeviceId(device_id.to_string()));
+        }
+
+        let now = unix_time_seconds()?;
+        let updated = transaction
+            .execute(
+                "UPDATE sync_device_public_keys
+                 SET trusted = ?3, updated_at = ?4
+                 WHERE profile = ?1 AND device_id = ?2",
+                params![profile, device_id, bool_to_integer(trusted), now],
+            )
+            .map_err(|source| self.database_error(source))?;
+        if updated == 0 {
+            return Ok(None);
+        }
+        self.sync_device_public_key_in_transaction(transaction, profile, device_id)
+    }
+
+    fn sync_device_public_key_in_transaction(
+        &self,
+        transaction: &rusqlite::Transaction<'_>,
+        profile: &str,
+        device_id: &str,
+    ) -> Result<Option<SyncDevicePublicKeyRecord>, StorageError> {
+        if !is_valid_sync_identifier(device_id) {
+            return Err(StorageError::InvalidSyncDeviceId(device_id.to_string()));
+        }
+
+        transaction
+            .query_row(
+                "SELECT profile, device_id, public_key, membership_epoch, trusted, created_at,
+                        updated_at
+                 FROM sync_device_public_keys
+                 WHERE profile = ?1 AND device_id = ?2",
+                params![profile, device_id],
+                sync_device_public_key_record_from_row,
+            )
+            .optional()
+            .map_err(|source| self.database_error(source))
+    }
+
+    fn sync_device_public_keys_in_transaction(
+        &self,
+        transaction: &rusqlite::Transaction<'_>,
+        profile: &str,
+    ) -> Result<Vec<SyncDevicePublicKeyRecord>, StorageError> {
+        let mut statement = transaction
+            .prepare(
+                "SELECT profile, device_id, public_key, membership_epoch, trusted, created_at,
+                        updated_at
+                 FROM sync_device_public_keys
+                 WHERE profile = ?1
+                 ORDER BY device_id",
+            )
+            .map_err(|source| self.database_error(source))?;
+        let records = statement
+            .query_map([profile], sync_device_public_key_record_from_row)
+            .map_err(|source| self.database_error(source))?;
+
+        let mut keys = Vec::new();
+        for record in records {
+            keys.push(record.map_err(|source| self.database_error(source))?);
+        }
+        Ok(keys)
+    }
+
     pub fn record_signed_sync_account_membership_record(
         &self,
         signed_record: &[u8],
@@ -4425,11 +4540,61 @@ impl SlateProfileDatabase {
         &self,
         signed_record: &[u8],
     ) -> Result<SyncAccountMembershipRecordApplication, StorageError> {
-        let (signed_object, membership_record) =
-            decode_signed_profile_sync_membership_record(signed_record)?;
-        let bootstrapped =
-            self.authorize_sync_account_membership_record(&signed_object, &membership_record)?;
-        if let Some(existing_record) = self.sync_account_membership_record(
+        let signed_records = [signed_record.to_vec()];
+        let mut applications =
+            self.apply_signed_sync_account_membership_records(&signed_records)?;
+        applications
+            .pop()
+            .ok_or_else(|| self.database_error(rusqlite::Error::QueryReturnedNoRows))
+    }
+
+    pub fn apply_signed_sync_account_membership_records(
+        &self,
+        signed_records: &[Vec<u8>],
+    ) -> Result<Vec<SyncAccountMembershipRecordApplication>, StorageError> {
+        let decoded_records = signed_records
+            .iter()
+            .map(|signed_record| {
+                decode_signed_profile_sync_membership_record(signed_record.as_slice())
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|source| self.database_error(source))?;
+        let mut applications = Vec::with_capacity(signed_records.len());
+        for (signed_record, (signed_object, membership_record)) in
+            signed_records.iter().zip(decoded_records.iter())
+        {
+            applications.push(
+                self.apply_decoded_sync_account_membership_record_in_transaction(
+                    &transaction,
+                    signed_object,
+                    membership_record,
+                    signed_record.as_slice(),
+                )?,
+            );
+        }
+        transaction
+            .commit()
+            .map_err(|source| self.database_error(source))?;
+        Ok(applications)
+    }
+
+    fn apply_decoded_sync_account_membership_record_in_transaction(
+        &self,
+        transaction: &rusqlite::Transaction<'_>,
+        signed_object: &SignedSyncObject,
+        membership_record: &ProfileSyncMembershipRecord,
+        signed_record: &[u8],
+    ) -> Result<SyncAccountMembershipRecordApplication, StorageError> {
+        let bootstrapped = self.authorize_sync_account_membership_record_in_transaction(
+            transaction,
+            signed_object,
+            membership_record,
+        )?;
+        if let Some(existing_record) = self.sync_account_membership_record_in_transaction(
+            transaction,
             membership_record.profile.as_str(),
             membership_record.record_id.as_str(),
         )? {
@@ -4441,7 +4606,8 @@ impl SlateProfileDatabase {
             }
             if existing_record.applied_at.is_some() {
                 return Ok(SyncAccountMembershipRecordApplication {
-                    device_key: self.sync_device_public_key(
+                    device_key: self.sync_device_public_key_in_transaction(
+                        transaction,
                         existing_record.profile.as_str(),
                         existing_record.device_id.as_str(),
                     )?,
@@ -4451,47 +4617,62 @@ impl SlateProfileDatabase {
                 });
             }
         }
-        self.reject_stale_sync_account_membership_record(&membership_record)?;
-        self.reject_invalid_sync_account_membership_transition(&membership_record)?;
-        let stored_record =
-            self.record_sync_account_membership_record(&SyncAccountMembershipRecordRegistration {
+        self.reject_stale_sync_account_membership_record_in_transaction(
+            transaction,
+            membership_record,
+        )?;
+        self.reject_invalid_sync_account_membership_transition_in_transaction(
+            transaction,
+            membership_record,
+        )?;
+        let stored_record = self.record_sync_account_membership_record_in_transaction(
+            transaction,
+            &SyncAccountMembershipRecordRegistration {
                 profile: membership_record.profile.clone(),
                 record_id: membership_record.record_id.clone(),
                 membership_epoch: membership_record.membership_epoch,
                 record_kind: membership_record.record_kind.clone(),
                 device_id: membership_record.device_id.clone(),
-                signer_device_id: signed_object.device_id,
+                signer_device_id: signed_object.device_id.clone(),
                 signed_record: signed_record.to_vec(),
-            })?;
+            },
+        )?;
 
         let device_key = match membership_record.record_kind.as_str() {
             PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE
-            | PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY => Some(
-                self.register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
-                    profile: membership_record.profile.clone(),
-                    public_key: membership_record.device_public_key.clone().ok_or_else(|| {
-                        StorageError::InvalidProfileSyncMembershipRecord(format!(
-                            "{} requires a device public key",
-                            membership_record.record_kind
-                        ))
-                    })?,
-                    membership_epoch: membership_record.membership_epoch,
-                })?,
-            ),
+            | PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY => {
+                Some(self.register_sync_device_public_key_in_transaction(
+                    transaction,
+                    &SyncDevicePublicKeyRegistration {
+                        profile: membership_record.profile.clone(),
+                        public_key: membership_record.device_public_key.clone().ok_or_else(
+                            || {
+                                StorageError::InvalidProfileSyncMembershipRecord(format!(
+                                    "{} requires a device public key",
+                                    membership_record.record_kind
+                                ))
+                            },
+                        )?,
+                        membership_epoch: membership_record.membership_epoch,
+                    },
+                )?)
+            }
             PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE => self
-                .set_sync_device_public_key_trusted(
+                .set_sync_device_public_key_trusted_in_transaction(
+                    transaction,
                     membership_record.profile.as_str(),
                     membership_record.device_id.as_str(),
                     false,
                 )?,
             _ => {
                 return Err(StorageError::InvalidSyncMembershipRecordKind(
-                    membership_record.record_kind,
+                    membership_record.record_kind.clone(),
                 ));
             }
         };
 
-        let applied_record = self.mark_sync_account_membership_record_applied(
+        let applied_record = self.mark_sync_account_membership_record_applied_in_transaction(
+            transaction,
             stored_record.profile.as_str(),
             stored_record.record_id.as_str(),
         )?;
@@ -4503,12 +4684,16 @@ impl SlateProfileDatabase {
         })
     }
 
-    fn authorize_sync_account_membership_record(
+    fn authorize_sync_account_membership_record_in_transaction(
         &self,
+        transaction: &rusqlite::Transaction<'_>,
         signed_object: &SignedSyncObject,
         membership_record: &ProfileSyncMembershipRecord,
     ) -> Result<bool, StorageError> {
-        let known_keys = self.sync_device_public_keys(membership_record.profile.as_str())?;
+        let known_keys = self.sync_device_public_keys_in_transaction(
+            transaction,
+            membership_record.profile.as_str(),
+        )?;
         let bootstrapped = known_keys.is_empty()
             && membership_record.record_kind == PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE
             && membership_record.device_id == signed_object.device_id
@@ -4524,7 +4709,8 @@ impl SlateProfileDatabase {
         }
 
         let trusted_signer = self
-            .sync_device_public_key(
+            .sync_device_public_key_in_transaction(
+                transaction,
                 membership_record.profile.as_str(),
                 signed_object.device_id.as_str(),
             )?
@@ -4547,11 +4733,13 @@ impl SlateProfileDatabase {
         Ok(false)
     }
 
-    fn reject_stale_sync_account_membership_record(
+    fn reject_stale_sync_account_membership_record_in_transaction(
         &self,
+        transaction: &rusqlite::Transaction<'_>,
         membership_record: &ProfileSyncMembershipRecord,
     ) -> Result<(), StorageError> {
-        let Some(latest_epoch) = self.latest_applied_sync_account_membership_epoch(
+        let Some(latest_epoch) = self.latest_applied_sync_account_membership_epoch_in_transaction(
+            transaction,
             membership_record.profile.as_str(),
             membership_record.device_id.as_str(),
         )?
@@ -4569,7 +4757,8 @@ impl SlateProfileDatabase {
         }
         if membership_record.membership_epoch == latest_epoch
             && let Some(applied_record) = self
-                .applied_sync_account_membership_record_for_device_epoch(
+                .applied_sync_account_membership_record_for_device_epoch_in_transaction(
+                    transaction,
                     membership_record.profile.as_str(),
                     membership_record.device_id.as_str(),
                     membership_record.membership_epoch,
@@ -4586,14 +4775,16 @@ impl SlateProfileDatabase {
         Ok(())
     }
 
-    fn reject_invalid_sync_account_membership_transition(
+    fn reject_invalid_sync_account_membership_transition_in_transaction(
         &self,
+        transaction: &rusqlite::Transaction<'_>,
         membership_record: &ProfileSyncMembershipRecord,
     ) -> Result<(), StorageError> {
         match membership_record.record_kind.as_str() {
             PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE => {
                 if self
-                    .sync_device_public_key(
+                    .sync_device_public_key_in_transaction(
+                        transaction,
                         membership_record.profile.as_str(),
                         membership_record.device_id.as_str(),
                     )?
@@ -4606,7 +4797,8 @@ impl SlateProfileDatabase {
                 }
             }
             PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY => {
-                let Some(existing_key) = self.sync_device_public_key(
+                let Some(existing_key) = self.sync_device_public_key_in_transaction(
+                    transaction,
                     membership_record.profile.as_str(),
                     membership_record.device_id.as_str(),
                 )?
@@ -4628,8 +4820,9 @@ impl SlateProfileDatabase {
         Ok(())
     }
 
-    fn applied_sync_account_membership_record_for_device_epoch(
+    fn applied_sync_account_membership_record_for_device_epoch_in_transaction(
         &self,
+        transaction: &rusqlite::Transaction<'_>,
         profile: &str,
         device_id: &str,
         membership_epoch: i64,
@@ -4638,8 +4831,7 @@ impl SlateProfileDatabase {
             return Err(StorageError::InvalidSyncDeviceId(device_id.to_string()));
         }
 
-        let connection = self.connection()?;
-        connection
+        transaction
             .query_row(
                 "SELECT profile, record_id, membership_epoch, record_kind, device_id,
                         signer_device_id, signed_record, created_at, applied_at
@@ -4657,8 +4849,9 @@ impl SlateProfileDatabase {
             .map_err(|source| self.database_error(source))
     }
 
-    fn latest_applied_sync_account_membership_epoch(
+    fn latest_applied_sync_account_membership_epoch_in_transaction(
         &self,
+        transaction: &rusqlite::Transaction<'_>,
         profile: &str,
         device_id: &str,
     ) -> Result<Option<i64>, StorageError> {
@@ -4666,8 +4859,7 @@ impl SlateProfileDatabase {
             return Err(StorageError::InvalidSyncDeviceId(device_id.to_string()));
         }
 
-        let connection = self.connection()?;
-        connection
+        transaction
             .query_row(
                 "SELECT MAX(membership_epoch)
                  FROM sync_account_membership_records
@@ -4675,6 +4867,95 @@ impl SlateProfileDatabase {
                 params![profile, device_id],
                 |row| row.get::<_, Option<i64>>(0),
             )
+            .map_err(|source| self.database_error(source))
+    }
+
+    fn record_sync_account_membership_record_in_transaction(
+        &self,
+        transaction: &rusqlite::Transaction<'_>,
+        registration: &SyncAccountMembershipRecordRegistration,
+    ) -> Result<SyncAccountMembershipRecord, StorageError> {
+        validate_sync_account_membership_registration(registration)?;
+
+        transaction
+            .execute(
+                "INSERT OR IGNORE INTO sync_account_membership_records
+                   (profile, record_id, membership_epoch, record_kind, device_id,
+                    signer_device_id, signed_record, created_at, applied_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL)",
+                params![
+                    registration.profile.as_str(),
+                    registration.record_id.as_str(),
+                    registration.membership_epoch,
+                    registration.record_kind.as_str(),
+                    registration.device_id.as_str(),
+                    registration.signer_device_id.as_str(),
+                    registration.signed_record.as_slice(),
+                    unix_time_seconds()?,
+                ],
+            )
+            .map_err(|source| self.database_error(source))?;
+
+        let record = self
+            .sync_account_membership_record_in_transaction(
+                transaction,
+                registration.profile.as_str(),
+                registration.record_id.as_str(),
+            )?
+            .ok_or_else(|| self.database_error(rusqlite::Error::QueryReturnedNoRows))?;
+        if record.signed_record != registration.signed_record {
+            return Err(StorageError::InvalidProfileSyncMembershipRecord(format!(
+                "membership record {} already exists with different signed bytes",
+                registration.record_id
+            )));
+        }
+        Ok(record)
+    }
+
+    fn mark_sync_account_membership_record_applied_in_transaction(
+        &self,
+        transaction: &rusqlite::Transaction<'_>,
+        profile: &str,
+        record_id: &str,
+    ) -> Result<SyncAccountMembershipRecord, StorageError> {
+        let now = unix_time_seconds()?;
+        let updated = transaction
+            .execute(
+                "UPDATE sync_account_membership_records
+                 SET applied_at = COALESCE(applied_at, ?3)
+                 WHERE profile = ?1 AND record_id = ?2",
+                params![profile, record_id, now],
+            )
+            .map_err(|source| self.database_error(source))?;
+        if updated == 0 {
+            return Err(self.database_error(rusqlite::Error::QueryReturnedNoRows));
+        }
+        self.sync_account_membership_record_in_transaction(transaction, profile, record_id)?
+            .ok_or_else(|| self.database_error(rusqlite::Error::QueryReturnedNoRows))
+    }
+
+    fn sync_account_membership_record_in_transaction(
+        &self,
+        transaction: &rusqlite::Transaction<'_>,
+        profile: &str,
+        record_id: &str,
+    ) -> Result<Option<SyncAccountMembershipRecord>, StorageError> {
+        if !is_valid_sync_identifier(record_id) {
+            return Err(StorageError::InvalidSyncMembershipRecordId(
+                record_id.to_string(),
+            ));
+        }
+
+        transaction
+            .query_row(
+                "SELECT profile, record_id, membership_epoch, record_kind, device_id,
+                        signer_device_id, signed_record, created_at, applied_at
+                 FROM sync_account_membership_records
+                 WHERE profile = ?1 AND record_id = ?2",
+                params![profile, record_id],
+                sync_account_membership_record_from_row,
+            )
+            .optional()
             .map_err(|source| self.database_error(source))
     }
 
@@ -4717,28 +4998,6 @@ impl SlateProfileDatabase {
             )));
         }
         Ok(record)
-    }
-
-    fn mark_sync_account_membership_record_applied(
-        &self,
-        profile: &str,
-        record_id: &str,
-    ) -> Result<SyncAccountMembershipRecord, StorageError> {
-        let connection = self.connection()?;
-        let now = unix_time_seconds()?;
-        let updated = connection
-            .execute(
-                "UPDATE sync_account_membership_records
-                 SET applied_at = COALESCE(applied_at, ?3)
-                 WHERE profile = ?1 AND record_id = ?2",
-                params![profile, record_id, now],
-            )
-            .map_err(|source| self.database_error(source))?;
-        if updated == 0 {
-            return Err(self.database_error(rusqlite::Error::QueryReturnedNoRows));
-        }
-        self.sync_account_membership_record(profile, record_id)?
-            .ok_or_else(|| self.database_error(rusqlite::Error::QueryReturnedNoRows))
     }
 
     pub fn sync_account_membership_record(
