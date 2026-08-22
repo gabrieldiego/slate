@@ -959,8 +959,9 @@ future protocol materializers. The fixture-daemon stored-provider run path can
 also derive the active content key from `SlateSyncSecret`, so local-only
 runtime tests do not need to pass raw content-key bytes just to exercise stored
 fixture endpoint materialization. The membership-log scheduler has the same
-fixture-daemon stored-provider path, so local tests cover pulling/publishing
-membership logs plus retained settings objects without binding loopback ports.
+secret-backed fixture-daemon stored-provider path, so local tests cover
+pulling/publishing membership logs plus retained settings objects without
+binding loopback ports or passing raw content-key bytes into scheduler calls.
 Stored-provider runtime ticks exclude unsupported endpoint refs from
 materialized provider quorum even when the caller supplies a daemon handle with
 the same unsupported string, so socket-shaped metadata cannot be laundered into

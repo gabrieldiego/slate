@@ -1291,6 +1291,10 @@ Current baseline:
   endpoint in `slate-settings.db`, materializes it through the in-process
   network id, publishes encrypted settings, and retains the object set without
   exposing raw content-key bytes to fixture scheduler callers.
+- Membership-aware fixture-daemon stored-provider scheduler runs now have the
+  same secret-backed path. A local-only fixture publishes membership/settings
+  state through a stored synthetic fixture endpoint and retains the combined
+  object set without passing raw content-key bytes into scheduler calls.
 
 Next:
 

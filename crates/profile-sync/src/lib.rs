@@ -7304,6 +7304,123 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         )
     }
 
+    pub fn run_once_with_membership_log_and_stored_in_process_fixture_retention_provider_daemons_and_sync_secret<
+        'provider,
+    >(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        membership_log_root_id: &str,
+        sync_secret: &SlateSyncSecret,
+        signer: &ProfileSyncDeviceSigner,
+        max_stored_providers: u32,
+        provider_daemons: &[SettingsSyncInProcessFixtureProviderDaemon<'provider>],
+    ) -> Result<
+        SettingsSyncStoredInProcessFixtureRetentionProviderMembershipRun<'provider>,
+        ProfileSyncCycleWithHealthError,
+    > {
+        let membership_log_publication = BroadwebdProfileSyncPublisher::new(self.daemon)
+            .plan_local_sync_account_membership_log(
+                database,
+                config.profile.as_str(),
+                membership_log_root_id,
+            )
+            .map_err(ProfileSyncCycleError::from)?;
+        if membership_log_publication.requires_compaction() {
+            return Err(ProfileSyncCycleWithHealthError::Cycle(
+                ProfileSyncCycleError::from(ProfileSyncPublishError::MembershipLogTooLarge {
+                    profile: membership_log_publication.profile,
+                    max_records: membership_log_publication.max_records,
+                    actual_records: membership_log_publication.record_count,
+                }),
+            ));
+        }
+
+        let runner = BroadwebdSettingsSyncRunner::new(self.daemon);
+        let preflight = runner
+            .settings_sync_cycle_preflight_with_membership_log_and_active_key_policy(
+                database,
+                config.profile.as_str(),
+                config.settings_root_id.as_str(),
+                membership_log_root_id,
+                signer,
+                &config.policy,
+            )?;
+        let content_key = derive_settings_sync_content_key_from_secret(
+            config.profile.as_str(),
+            preflight.preflight.active_key_id.as_str(),
+            sync_secret,
+        )
+        .map_err(ProfileSyncCycleError::from)?;
+        let stored_selection = load_stored_retention_provider_selection(
+            database,
+            config.profile.as_str(),
+            max_stored_providers,
+        )
+        .map_err(ProfileSyncCredentialError::from)
+        .map_err(ProfileSyncCycleError::from)?;
+        let stored_provider_plan = settings_sync_stored_retention_provider_plan(
+            preflight.preflight.clone(),
+            max_stored_providers,
+            stored_selection,
+        );
+        config.policy.check_selected_retention_provider_freshness(
+            stored_provider_plan.stale_retention_provider_count(),
+            stored_provider_plan.offline_retention_provider_count(),
+            &preflight.preflight.before_health,
+        )?;
+        config.policy.check_selected_retention_provider_roles(
+            stored_provider_plan.ineligible_retention_provider_count(),
+            &preflight.preflight.before_health,
+        )?;
+        let fixture_materialization = stored_provider_plan
+            .materialize_selected_in_process_fixture_retention_provider_handles(provider_daemons);
+        let run = {
+            let retention_provider_handles = fixture_materialization.retention_provider_handles();
+            let materialized_providers = materialize_stored_retention_provider_daemons(
+                &stored_provider_plan,
+                retention_provider_handles.as_slice(),
+            );
+            config.policy.check_selected_retention_provider_count(
+                materialized_providers.materialized_retention_provider_count(),
+                &preflight.preflight.before_health,
+            )?;
+            let cycle = runner
+                .run_settings_sync_cycle_with_membership_log_and_retention_providers_after_preflight(
+                    database,
+                    &content_key,
+                    signer,
+                    &config.policy,
+                    membership_log_root_id,
+                    materialized_providers.daemons.as_slice(),
+                    &preflight,
+                )?;
+
+            SettingsSyncStoredRetentionProviderMembershipRun {
+                preflight,
+                stored_provider_plan,
+                unmaterialized_retention_provider_ids: materialized_providers
+                    .unmaterialized_retention_provider_ids,
+                pending_endpoint_materialization_retention_provider_ids: materialized_providers
+                    .pending_endpoint_materialization_retention_provider_ids,
+                endpoint_mismatch_retention_provider_ids: materialized_providers
+                    .endpoint_mismatch_retention_provider_ids,
+                duplicate_handle_retention_provider_ids: materialized_providers
+                    .duplicate_handle_retention_provider_ids,
+                unsupported_endpoint_retention_provider_ids: materialized_providers
+                    .unsupported_endpoint_retention_provider_ids,
+                cycle,
+            }
+        };
+
+        Ok(
+            SettingsSyncStoredInProcessFixtureRetentionProviderMembershipRun {
+                fixture_materialization,
+                run,
+            },
+        )
+    }
+
     pub fn run_once_with_membership_log_and_stored_protocol_materializer_retention_provider_handles<
         'provider,
         Materializer,
@@ -12608,6 +12725,125 @@ mod tests {
         let _ = std::fs::remove_dir_all(provider_state_root);
         let _ = std::fs::remove_dir_all(publisher_db_root);
         let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn scheduler_membership_fixture_stored_provider_derives_active_key_from_sync_secret() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("membership-fixture-secret-device");
+        let provider_state_root = test_state_root("membership-fixture-secret-provider");
+        let db_root = test_state_root("membership-fixture-secret-db");
+        let device_id = "membership-fixture-secret-device";
+        let provider_id = "local-fixture-availability-membership-fixture-secret-pinner";
+        let device_daemon = network
+            .daemon_for_device(&device_state_root, ResourceBudget::default(), device_id)
+            .expect("start in-process membership fixture secret device daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "membership-fixture-secret-pinner",
+            )
+            .expect("start in-process membership fixture secret provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            device_id,
+        )
+        .expect("open membership fixture secret scheduler database");
+        let sync_secret = SlateSyncSecret::from_bytes([103; SLATE_SYNC_SECRET_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate(device_id)
+            .expect("generate membership fixture secret signer");
+        let provider_signer = ProfileSyncDeviceSigner::generate(provider_id)
+            .expect("generate membership fixture secret provider signer");
+        register_test_content_key_epoch(&database, DEFAULT_PROFILE_ID);
+        let enroll_device = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-membership-fixture-secret-device".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: device_id.to_string(),
+            device_public_key: Some(signer.public_key().expect("read device public key")),
+            created_at: 10,
+        };
+        database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer, &enroll_device).as_slice(),
+            )
+            .expect("bootstrap membership fixture secret device");
+        let enroll_provider = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-enroll-membership-fixture-secret-provider".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER.to_string(),
+            device_id: provider_id.to_string(),
+            device_public_key: Some(
+                provider_signer
+                    .public_key()
+                    .expect("read provider public key"),
+            ),
+            created_at: 20,
+        };
+        database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer, &enroll_provider).as_slice(),
+            )
+            .expect("enroll membership fixture secret provider authority");
+        database
+            .upsert_storage_provider(&test_storage_provider_update(
+                &network,
+                DEFAULT_PROFILE_ID,
+                provider_id,
+                "local-fixture-availability",
+                "Membership fixture secret pinner",
+                true,
+                true,
+                true,
+            ))
+            .expect("write membership fixture secret provider metadata");
+        database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write membership fixture secret scheduler setting");
+
+        let config = SettingsSyncSchedulerConfig::new(
+            DEFAULT_PROFILE_ID,
+            "settings/latest",
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
+        );
+        let run = BroadwebdSettingsSyncScheduler::new(&device_daemon)
+            .run_once_with_membership_log_and_stored_in_process_fixture_retention_provider_daemons_and_sync_secret(
+                &database,
+                &config,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                &sync_secret,
+                &signer,
+                4,
+                &[super::SettingsSyncInProcessFixtureProviderDaemon::new(
+                    provider_id,
+                    network.network_id(),
+                    &provider_daemon,
+                )],
+            )
+            .expect("secret membership fixture scheduler uses stored fixture provider");
+
+        assert_eq!(run.pulled_membership_application_count(), 0);
+        assert_eq!(run.fixture_materialization.materialized_provider_count(), 1);
+        assert!(run.all_fixture_providers_materialized());
+        assert_eq!(run.selected_retention_provider_count(), 1);
+        assert_eq!(run.materialized_retention_provider_count(), 1);
+        assert_eq!(run.run.cycle.cycle.cycle.published_step_count(), 1);
+        assert!(run.run.cycle.cycle.published_membership_log.is_some());
+        assert_eq!(run.run.cycle.retention.len(), 1);
+        assert_eq!(run.retained_provider_count(), 1);
+        assert_eq!(
+            run.run.cycle.retained_object_ids,
+            run.run.cycle.cycle.published_object_ids()
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
     }
 
     #[test]
