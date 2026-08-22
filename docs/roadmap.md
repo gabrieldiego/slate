@@ -606,6 +606,10 @@ Current baseline:
   report no protocol summary, while ready attempts expose missing,
   fail-closed, multiaddr, and deferred-protocol work before membership-aware
   runtime mutation.
+- In-process fixture stored-provider run wrappers now forward the same selected
+  protocol materialization summary as their wrapped runtime result. Local-only
+  fixture callers can inspect follow-up protocol work without bypassing the
+  fixture-specific result type.
 - Legacy `fixture:<provider>` endpoint refs now also fail closed. They do not
   carry a fixture network id, so they cannot safely satisfy stored-provider
   materialization or quorum checks.

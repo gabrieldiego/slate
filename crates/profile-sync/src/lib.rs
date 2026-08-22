@@ -2521,6 +2521,12 @@ pub struct SettingsSyncStoredInProcessFixtureRetentionProviderRun<'a> {
 }
 
 impl SettingsSyncStoredInProcessFixtureRetentionProviderRun<'_> {
+    pub fn selected_protocol_materialization_plan(
+        &self,
+    ) -> SettingsSyncSelectedProtocolMaterializationPlan {
+        self.run.selected_protocol_materialization_plan()
+    }
+
     pub fn selected_retention_provider_count(&self) -> usize {
         self.run.selected_retention_provider_count()
     }
@@ -2675,6 +2681,12 @@ pub struct SettingsSyncStoredInProcessFixtureRetentionProviderMembershipRun<'a> 
 impl SettingsSyncStoredInProcessFixtureRetentionProviderMembershipRun<'_> {
     pub fn pulled_membership_application_count(&self) -> usize {
         self.run.pulled_membership_application_count()
+    }
+
+    pub fn selected_protocol_materialization_plan(
+        &self,
+    ) -> SettingsSyncSelectedProtocolMaterializationPlan {
+        self.run.selected_protocol_materialization_plan()
     }
 
     pub fn selected_retention_provider_count(&self) -> usize {
@@ -9073,6 +9085,10 @@ mod tests {
         assert_eq!(fixture_run.selected_retention_provider_count(), 2);
         assert_eq!(fixture_run.materialized_retention_provider_count(), 1);
         assert_eq!(fixture_run.retained_provider_count(), 1);
+        assert_eq!(
+            fixture_run.selected_protocol_materialization_plan(),
+            fixture_run.run.selected_protocol_materialization_plan()
+        );
         assert_eq!(fixture_run.run.cycle.retention.len(), 1);
 
         let unsupported_endpoint_ref = "http://127.0.0.1:5001";
@@ -14775,6 +14791,10 @@ mod tests {
         assert_eq!(fixture_run.selected_retention_provider_count(), 2);
         assert_eq!(fixture_run.materialized_retention_provider_count(), 1);
         assert_eq!(fixture_run.retained_provider_count(), 1);
+        assert_eq!(
+            fixture_run.selected_protocol_materialization_plan(),
+            fixture_run.run.selected_protocol_materialization_plan()
+        );
 
         let _ = std::fs::remove_dir_all(device_state_root);
         let _ = std::fs::remove_dir_all(provider_state_root);
