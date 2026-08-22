@@ -5471,11 +5471,19 @@ fn trusted_remote_device_public_keys(
     profile: &str,
     max_devices: u32,
 ) -> Result<Vec<SyncDevicePublicKeyRecord>, ProfileSyncReceiveError> {
+    let provider_authority_device_ids = database
+        .sync_devices(profile)?
+        .into_iter()
+        .filter(|device| device.provider_authority)
+        .map(|device| device.device_id)
+        .collect::<BTreeSet<_>>();
     let trusted_devices = database
         .sync_device_public_keys(profile)?
         .into_iter()
         .filter(|record| {
-            record.trusted && record.public_key.device_id != database.local_sync_device_id()
+            record.trusted
+                && record.public_key.device_id != database.local_sync_device_id()
+                && !provider_authority_device_ids.contains(record.public_key.device_id.as_str())
         })
         .collect::<Vec<_>>();
     if trusted_devices.len() > max_devices as usize {
@@ -5889,10 +5897,11 @@ mod tests {
         SYNC_DOMAIN_DOWNLOADS, SYNC_DOMAIN_FILES, SYNC_DOMAIN_SETTINGS, SYNC_DOMAIN_STORAGE,
         SlateProfileDatabase, StorageError, StorageProviderRecord, StorageProviderSyncPayload,
         StorageProviderUpdate, SyncChangeRecord, SyncContentKeyEpochRegistration,
-        SyncDevicePublicKeyRegistration, SyncSnapshotRegistration, TypedAppSyncDomainWatcher,
-        open_signed_profile_sync_device_head, open_signed_profile_sync_manifest,
-        open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
-        pull_signed_profile_sync_device_head, settings_sync_snapshot_id,
+        SyncDevicePublicKeyRegistration, SyncDeviceRegistration, SyncSnapshotRegistration,
+        TypedAppSyncDomainWatcher, open_signed_profile_sync_device_head,
+        open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
+        open_signed_sync_setting_text, pull_signed_profile_sync_device_head,
+        settings_sync_snapshot_id,
     };
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -13362,6 +13371,8 @@ mod tests {
             ProfileSyncDeviceSigner::generate("runtime-preflight").expect("generate signer");
         let remote_signer =
             ProfileSyncDeviceSigner::generate("runtime-preflight-remote").expect("remote signer");
+        let provider_signer = ProfileSyncDeviceSigner::generate("runtime-preflight-provider")
+            .expect("provider signer");
         register_test_content_key_epoch(&database, profile);
         database
             .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
@@ -13377,6 +13388,22 @@ mod tests {
                 membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
             })
             .expect("register remote public key");
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: provider_signer.public_key().expect("provider public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register provider public key");
+        database
+            .register_sync_device(&SyncDeviceRegistration {
+                profile: profile.to_string(),
+                device_id: provider_signer.device_id().to_string(),
+                label: Some("Runtime provider".to_string()),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                provider_authority: true,
+            })
+            .expect("register provider-authority device metadata");
 
         let preflight = BroadwebdSettingsSyncRunner::new(&daemon)
             .settings_sync_cycle_preflight_with_active_key_policy(
@@ -13394,6 +13421,13 @@ mod tests {
         assert_eq!(preflight.signer_device_id, "runtime-preflight");
         assert_eq!(preflight.active_key_id, TEST_CONTENT_KEY_ID);
         assert_eq!(preflight.trusted_remote_device_count, 1);
+        assert!(
+            database
+                .sync_device_public_key(profile, provider_signer.device_id())
+                .expect("read provider trusted key")
+                .expect("provider trusted key exists")
+                .trusted
+        );
         assert_eq!(preflight.retention_provider_candidates.len(), 2);
         assert!(
             preflight

@@ -981,6 +981,10 @@ Current baseline:
   `sync_devices` with the applied membership epoch and no provider authority by
   default. That device-roster write is part of the same membership transaction,
   so invalid roots or failed records cannot leave orphaned device metadata.
+- Runtime trusted-device selection now consults `sync_devices` and excludes
+  devices explicitly marked with provider authority from settings-head pulls.
+  This keeps future provider records from gaining profile write authority merely
+  because they have a trusted key record.
 
 Next:
 
