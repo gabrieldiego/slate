@@ -1368,6 +1368,12 @@ Current baseline:
   giving each install a durable sync device id without storing local identity
   inside the syncable database. Fixture-only `open_resolved` paths still use
   the deterministic `local-device` id so local tests remain reproducible.
+- The enrollment preview now has a first non-secret device-request file. A new
+  device can export its profile id and durable device id, an existing enrolled
+  device can import that request to fill the enrollment target, and the
+  existing enrollment-bundle flow can then grant membership to the requested
+  device. The request carries no root secret, signed membership records, or
+  sync payloads.
   Production multi-device use still needs QR rendering, encrypted
   handoff/recovery files, real provider daemons, conflict handling, and cadence
   policy.
@@ -1406,6 +1412,7 @@ Next:
   through their normal update paths instead of raw database replacement.
 - Extend the Settings-based `Profile Sync Preview` with QR-code rendering,
   platform key-store loading, device identity rotation/repair,
+  POST/body-capable custom protocol imports for larger artifacts,
   trusted-device/provider status, encrypted recovery/handoff-file flows, richer
   multi-device local trial execution, and app-domain status for Settings and
   Bookmarks before exposing real IPFS/IPNS or internet-backed providers.

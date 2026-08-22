@@ -27,7 +27,8 @@ use slate_profile_sync::{
     run_local_settings_sync_two_device_preview_cycle,
 };
 use slate_storage::{
-    DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID, ProfileSyncEnrollmentBundle,
+    DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
+    ProfileSyncDeviceEnrollmentRequest, ProfileSyncEnrollmentBundle,
     ProfileSyncLocalReadinessReport, ProfileSyncLocalSecretActivationRecord, SYNC_DOMAIN_SETTINGS,
     SlateProfileDatabase, SlateSyncSecret, SlateSyncSecretExport, StorageError, SyncObjectError,
     SyncSettingTextEvent,
@@ -100,6 +101,8 @@ impl ProtocolHandler for SlateProtocolHandler {
             "settings/profile-sync/import",
             "settings/profile-sync/check",
             "settings/profile-sync/local-provider",
+            "settings/profile-sync/device-request/create",
+            "settings/profile-sync/device-request/import",
             "settings/profile-sync/enrollment/create",
             "settings/profile-sync/enrollment/import",
             "settings/profile-sync/run-local",
@@ -143,6 +146,14 @@ impl ProtocolHandler for SlateProtocolHandler {
 
         if is_slate_settings_profile_sync_local_provider_url(url.as_url()) {
             return self.activate_profile_sync_preview_provider_response(request);
+        }
+
+        if is_slate_settings_profile_sync_device_request_create_url(url.as_url()) {
+            return self.create_profile_sync_device_request_response(request);
+        }
+
+        if is_slate_settings_profile_sync_device_request_import_url(url.as_url()) {
+            return self.import_profile_sync_device_request_response(request, url.as_url());
         }
 
         if is_slate_settings_profile_sync_enrollment_create_url(url.as_url()) {
@@ -373,6 +384,71 @@ impl SlateProtocolHandler {
             Err(error) => {
                 state.last_error = Some(error.to_string());
                 json_response(request, 500, state.to_json(None))
+            }
+        }
+    }
+
+    fn create_profile_sync_device_request_response(
+        &self,
+        request: &Request,
+    ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
+        let device_request = {
+            let mut state = self.profile_sync_preview.lock().unwrap();
+            self.refresh_profile_sync_preview_metadata(&mut state);
+            let Some(local_device_id) = state.local_device_id.as_deref() else {
+                state.last_error =
+                    Some("local profile sync device id is not available".to_string());
+                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+                return json_response(request, 400, state.to_json(readiness.as_ref()));
+            };
+            ProfileSyncDeviceEnrollmentRequest::new(
+                DEFAULT_PROFILE_ID,
+                local_device_id,
+                unix_time_seconds(),
+            )
+        };
+        let mut state = self.profile_sync_preview.lock().unwrap();
+        match device_request {
+            Ok(device_request) => {
+                state.mark_device_request(&device_request);
+                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+                json_response(request, 200, state.to_json(readiness.as_ref()))
+            }
+            Err(error) => {
+                state.last_error = Some(error.to_string());
+                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+                json_response(request, 400, state.to_json(readiness.as_ref()))
+            }
+        }
+    }
+
+    fn import_profile_sync_device_request_response(
+        &self,
+        request: &Request,
+        url: &Url,
+    ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
+        let Some(request_text) = profile_sync_device_request_text_from_url(url) else {
+            let mut state = self.profile_sync_preview.lock().unwrap();
+            state.last_error =
+                Some("missing profile sync device enrollment request contents".to_string());
+            let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+            return json_response(request, 400, state.to_json(readiness.as_ref()));
+        };
+        let device_request = ProfileSyncDeviceEnrollmentRequest::from_bytes_for_profile(
+            request_text.as_bytes(),
+            DEFAULT_PROFILE_ID,
+        );
+        let mut state = self.profile_sync_preview.lock().unwrap();
+        match device_request {
+            Ok(device_request) => {
+                state.mark_device_request(&device_request);
+                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+                json_response(request, 200, state.to_json(readiness.as_ref()))
+            }
+            Err(error) => {
+                state.last_error = Some(error.to_string());
+                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+                json_response(request, 400, state.to_json(readiness.as_ref()))
             }
         }
     }
@@ -663,6 +739,7 @@ struct ProfileSyncPreviewState {
     metadata_ready: bool,
     active_key_id: Option<String>,
     local_device_id: Option<String>,
+    active_device_request: Option<ProfileSyncDeviceEnrollmentRequest>,
     active_enrollment_bundle: Option<ProfileSyncEnrollmentBundle>,
     last_trial: Option<ProfileSyncPreviewTrialState>,
     last_two_device_trial: Option<ProfileSyncPreviewTwoDeviceTrialState>,
@@ -828,6 +905,7 @@ impl ProfileSyncPreviewState {
         self.metadata_ready = false;
         self.active_key_id = None;
         self.local_device_id = None;
+        self.active_device_request = None;
         self.active_enrollment_bundle = None;
         self.last_trial = None;
         self.last_two_device_trial = None;
@@ -846,6 +924,7 @@ impl ProfileSyncPreviewState {
         self.metadata_ready = false;
         self.active_key_id = None;
         self.local_device_id = None;
+        self.active_device_request = None;
         self.active_enrollment_bundle = None;
         self.last_trial = None;
         self.last_two_device_trial = None;
@@ -906,12 +985,30 @@ impl ProfileSyncPreviewState {
         self.last_error = None;
     }
 
+    fn mark_device_request(&mut self, request: &ProfileSyncDeviceEnrollmentRequest) {
+        self.active_device_request = Some(request.clone());
+        self.last_error = None;
+    }
+
     fn to_json(&self, readiness: Option<&ProfileSyncLocalReadinessReport>) -> String {
         let active_export_text = self
             .active_export
             .as_ref()
             .and_then(|export| export.to_bytes().ok())
             .and_then(|bytes| String::from_utf8(bytes).ok());
+        let device_request_text = self
+            .active_device_request
+            .as_ref()
+            .and_then(|request| request.to_bytes().ok())
+            .and_then(|bytes| String::from_utf8(bytes).ok());
+        let device_request_device_id = self
+            .active_device_request
+            .as_ref()
+            .map(|request| request.device_id.as_str());
+        let device_request_filename = self
+            .active_device_request
+            .as_ref()
+            .map(|request| profile_sync_device_request_filename(request.device_id.as_str()));
         let enrollment_export_text = self
             .active_enrollment_bundle
             .as_ref()
@@ -947,6 +1044,9 @@ impl ProfileSyncPreviewState {
             "last_two_device_trial": self.last_two_device_trial.as_ref().map(ProfileSyncPreviewTwoDeviceTrialState::to_json),
             "export_filename": "slate-sync-secret.json",
             "export_text": active_export_text,
+            "device_request_export_filename": device_request_filename.as_deref(),
+            "device_request_export_text": device_request_text,
+            "device_request_device_id": device_request_device_id,
             "enrollment_export_filename": enrollment_filename.as_deref(),
             "enrollment_export_text": enrollment_export_text,
             "enrollment_target_device_id": enrollment_target_device_id,
@@ -1426,6 +1526,18 @@ fn is_slate_settings_profile_sync_local_provider_url(url: &Url) -> bool {
         && url.path().trim_start_matches('/') == "profile-sync/local-provider"
 }
 
+fn is_slate_settings_profile_sync_device_request_create_url(url: &Url) -> bool {
+    url.scheme() == "slate"
+        && url.host_str() == Some("settings")
+        && url.path().trim_start_matches('/') == "profile-sync/device-request/create"
+}
+
+fn is_slate_settings_profile_sync_device_request_import_url(url: &Url) -> bool {
+    url.scheme() == "slate"
+        && url.host_str() == Some("settings")
+        && url.path().trim_start_matches('/') == "profile-sync/device-request/import"
+}
+
 fn is_slate_settings_profile_sync_enrollment_create_url(url: &Url) -> bool {
     url.scheme() == "slate"
         && url.host_str() == Some("settings")
@@ -1459,6 +1571,21 @@ fn profile_sync_secret_export_text_from_url(url: &Url) -> Option<String> {
         .find(|(name, _)| name == "secret")
         .map(|(_, value)| value.into_owned())
         .filter(|value| !value.trim().is_empty())
+}
+
+fn profile_sync_device_request_text_from_url(url: &Url) -> Option<String> {
+    if !is_slate_settings_profile_sync_device_request_import_url(url) {
+        return None;
+    }
+
+    url.query_pairs()
+        .find(|(name, _)| name == "request")
+        .map(|(_, value)| value.into_owned())
+        .filter(|value| !value.trim().is_empty())
+}
+
+fn profile_sync_device_request_filename(device_id: &str) -> String {
+    format!("slate-profile-device-request-{device_id}.json")
 }
 
 fn profile_sync_enrollment_target_device_id_from_url(url: &Url) -> Option<String> {
@@ -1504,12 +1631,15 @@ mod tests {
         is_slate_files_url, is_slate_home_url, is_slate_settings_apply_url,
         is_slate_settings_preview_url, is_slate_settings_profile_sync_check_url,
         is_slate_settings_profile_sync_create_url,
+        is_slate_settings_profile_sync_device_request_create_url,
+        is_slate_settings_profile_sync_device_request_import_url,
         is_slate_settings_profile_sync_enrollment_create_url,
         is_slate_settings_profile_sync_enrollment_import_url,
         is_slate_settings_profile_sync_import_url,
         is_slate_settings_profile_sync_local_provider_url,
         is_slate_settings_profile_sync_state_url, is_slate_settings_save_url,
-        is_slate_settings_url, is_slate_web_url, profile_sync_enrollment_bundle_text_from_url,
+        is_slate_settings_url, is_slate_web_url, profile_sync_device_request_text_from_url,
+        profile_sync_enrollment_bundle_text_from_url,
         profile_sync_enrollment_target_device_id_from_url,
         profile_sync_secret_export_text_from_url, slate_download_error_html,
     };
@@ -1519,8 +1649,8 @@ mod tests {
     use slate_broadwebd::FetchPurpose;
     use slate_broadwebd::TemporaryDownloadRecord;
     use slate_storage::{
-        DEFAULT_PROFILE_ID, IncomingSyncSettingText, SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_SETTINGS,
-        SlateProfileDatabase,
+        DEFAULT_PROFILE_ID, IncomingSyncSettingText, ProfileSyncDeviceEnrollmentRequest,
+        SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase,
     };
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -1777,6 +1907,11 @@ mod tests {
         let import = Url::parse("slate://settings/profile-sync/import?secret=%7B%7D").unwrap();
         let check = Url::parse("slate://settings/profile-sync/check").unwrap();
         let local_provider = Url::parse("slate://settings/profile-sync/local-provider").unwrap();
+        let device_request_create =
+            Url::parse("slate://settings/profile-sync/device-request/create").unwrap();
+        let device_request_import =
+            Url::parse("slate://settings/profile-sync/device-request/import?request=%7B%7D")
+                .unwrap();
         let enrollment_create =
             Url::parse("slate://settings/profile-sync/enrollment/create?target_device=device-b")
                 .unwrap();
@@ -1793,6 +1928,12 @@ mod tests {
         assert!(is_slate_settings_profile_sync_local_provider_url(
             &local_provider
         ));
+        assert!(is_slate_settings_profile_sync_device_request_create_url(
+            &device_request_create
+        ));
+        assert!(is_slate_settings_profile_sync_device_request_import_url(
+            &device_request_import
+        ));
         assert!(is_slate_settings_profile_sync_enrollment_create_url(
             &enrollment_create
         ));
@@ -1807,6 +1948,12 @@ mod tests {
         assert!(!is_slate_settings_profile_sync_import_url(&create));
         assert!(!is_slate_settings_profile_sync_check_url(&import));
         assert!(!is_slate_settings_profile_sync_local_provider_url(&check));
+        assert!(!is_slate_settings_profile_sync_device_request_create_url(
+            &local_provider
+        ));
+        assert!(!is_slate_settings_profile_sync_device_request_import_url(
+            &device_request_create
+        ));
         assert!(!is_slate_settings_profile_sync_enrollment_create_url(
             &local_provider
         ));
@@ -1821,6 +1968,10 @@ mod tests {
         ));
         assert_eq!(
             profile_sync_secret_export_text_from_url(&import).as_deref(),
+            Some("{}")
+        );
+        assert_eq!(
+            profile_sync_device_request_text_from_url(&device_request_import).as_deref(),
             Some("{}")
         );
         assert_eq!(
@@ -1853,15 +2004,26 @@ mod tests {
             "device-b",
         )
         .unwrap();
+        let device_request =
+            ProfileSyncDeviceEnrollmentRequest::new(DEFAULT_PROFILE_ID, "device-b", 124).unwrap();
+        source.mark_device_request(&device_request);
         source.mark_enrollment_bundle(&enrollment_bundle);
         let source_json: serde_json::Value = serde_json::from_str(&source.to_json(None)).unwrap();
         let export_text = source_json["export_text"].as_str().unwrap();
+        let device_request_text = source_json["device_request_export_text"].as_str().unwrap();
         let enrollment_export_text = source_json["enrollment_export_text"].as_str().unwrap();
 
         assert_eq!(source_json["profile"], DEFAULT_PROFILE_ID);
         assert_eq!(source_json["status"], "ready");
         assert_eq!(source_json["has_secret"], true);
         assert!(export_text.contains(DEFAULT_PROFILE_ID));
+        assert!(device_request_text.contains("device-b"));
+        assert!(!device_request_text.contains("secret"));
+        assert_eq!(
+            source_json["device_request_export_filename"],
+            "slate-profile-device-request-device-b.json"
+        );
+        assert_eq!(source_json["device_request_device_id"], "device-b");
         assert!(enrollment_export_text.contains("device-b"));
         assert_eq!(
             source_json["enrollment_export_filename"],
@@ -2126,6 +2288,11 @@ mod tests {
         assert!(settings_page.contains("id=\"profile-sync-check\""));
         assert!(settings_page.contains("id=\"profile-sync-run-local\""));
         assert!(settings_page.contains("id=\"profile-sync-run-local-two-device\""));
+        assert!(settings_page.contains("id=\"profile-sync-device-request-file\""));
+        assert!(settings_page.contains("id=\"profile-sync-device-request\""));
+        assert!(settings_page.contains("id=\"profile-sync-device-request-create\""));
+        assert!(settings_page.contains("id=\"profile-sync-device-request-download\""));
+        assert!(settings_page.contains("id=\"profile-sync-device-request-import\""));
         assert!(settings_page.contains("id=\"profile-sync-enrollment-device\""));
         assert!(settings_page.contains("id=\"profile-sync-enrollment-file\""));
         assert!(settings_page.contains("id=\"profile-sync-enrollment\""));

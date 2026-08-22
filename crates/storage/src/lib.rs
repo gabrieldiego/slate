@@ -34,6 +34,7 @@ pub const PROFILE_SYNC_MANIFEST_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_ENROLLMENT_BUNDLE_SCHEMA_VERSION: u8 = 1;
+pub const PROFILE_SYNC_DEVICE_ENROLLMENT_REQUEST_SCHEMA_VERSION: u8 = 1;
 pub const SLATE_SYNC_SECRET_EXPORT_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND: &str = "setting-change";
@@ -704,6 +705,15 @@ pub struct ProfileSyncEnrollmentBundle {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ProfileSyncDeviceEnrollmentRequest {
+    pub profile: String,
+    #[serde(default = "default_profile_sync_device_enrollment_request_schema_version")]
+    pub schema_version: u8,
+    pub device_id: String,
+    pub created_at: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct ProfileSyncRetentionPolicy {
     pub min_tail_change_count: u32,
     pub change_retention_seconds: i64,
@@ -762,6 +772,10 @@ fn default_profile_sync_enrollment_bundle_schema_version() -> u8 {
     PROFILE_SYNC_ENROLLMENT_BUNDLE_SCHEMA_VERSION
 }
 
+fn default_profile_sync_device_enrollment_request_schema_version() -> u8 {
+    PROFILE_SYNC_DEVICE_ENROLLMENT_REQUEST_SCHEMA_VERSION
+}
+
 fn default_slate_sync_secret_export_schema_version() -> u8 {
     SLATE_SYNC_SECRET_EXPORT_SCHEMA_VERSION
 }
@@ -808,6 +822,51 @@ impl ProfileSyncEnrollmentBundle {
             serde_json::from_slice(bytes).map_err(StorageError::DecodeSyncPayload)?;
         validate_profile_sync_enrollment_bundle(&bundle)?;
         Ok(bundle)
+    }
+}
+
+impl ProfileSyncDeviceEnrollmentRequest {
+    pub fn new(
+        profile: impl Into<String>,
+        device_id: impl Into<String>,
+        created_at: i64,
+    ) -> Result<Self, StorageError> {
+        let request = Self {
+            profile: profile.into(),
+            schema_version: PROFILE_SYNC_DEVICE_ENROLLMENT_REQUEST_SCHEMA_VERSION,
+            device_id: device_id.into(),
+            created_at,
+        };
+        validate_profile_sync_device_enrollment_request(&request)?;
+        Ok(request)
+    }
+
+    pub fn to_bytes(&self) -> Result<Vec<u8>, StorageError> {
+        validate_profile_sync_device_enrollment_request(self)?;
+        serde_json::to_vec(self).map_err(StorageError::EncodeSyncPayload)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, StorageError> {
+        let request: Self =
+            serde_json::from_slice(bytes).map_err(StorageError::DecodeSyncPayload)?;
+        validate_profile_sync_device_enrollment_request(&request)?;
+        Ok(request)
+    }
+
+    pub fn from_bytes_for_profile(
+        bytes: &[u8],
+        expected_profile: &str,
+    ) -> Result<Self, StorageError> {
+        let request = Self::from_bytes(bytes)?;
+        if request.profile != expected_profile {
+            return Err(StorageError::InvalidProfileSyncDeviceEnrollmentRequest(
+                format!(
+                    "expected profile {expected_profile}, got {}",
+                    request.profile
+                ),
+            ));
+        }
+        Ok(request)
     }
 }
 
@@ -2992,6 +3051,7 @@ pub enum StorageError {
     InvalidSyncMembershipEpoch(i64),
     InvalidProfileSyncMembershipRecord(String),
     InvalidProfileSyncEnrollmentBundle(String),
+    InvalidProfileSyncDeviceEnrollmentRequest(String),
     UntrustedSyncMembershipSigner {
         profile: String,
         device_id: String,
@@ -3028,6 +3088,7 @@ pub enum StorageError {
     UnsupportedProfileSyncManifestSchema(u8),
     UnsupportedProfileSyncMembershipRecordSchema(u8),
     UnsupportedProfileSyncEnrollmentBundleSchema(u8),
+    UnsupportedProfileSyncDeviceEnrollmentRequestSchema(u8),
     UnsupportedSyncSnapshotSchema(u8),
 }
 
@@ -3106,6 +3167,12 @@ impl fmt::Display for StorageError {
                 write!(
                     formatter,
                     "invalid profile sync enrollment bundle: {reason}"
+                )
+            }
+            Self::InvalidProfileSyncDeviceEnrollmentRequest(reason) => {
+                write!(
+                    formatter,
+                    "invalid profile sync device enrollment request: {reason}"
                 )
             }
             Self::UntrustedSyncMembershipSigner { profile, device_id } => {
@@ -3217,6 +3284,12 @@ impl fmt::Display for StorageError {
                     "unsupported profile sync enrollment bundle schema version: {schema_version}"
                 )
             }
+            Self::UnsupportedProfileSyncDeviceEnrollmentRequestSchema(schema_version) => {
+                write!(
+                    formatter,
+                    "unsupported profile sync device enrollment request schema version: {schema_version}"
+                )
+            }
             Self::UnsupportedSyncSnapshotSchema(schema_version) => {
                 write!(
                     formatter,
@@ -3246,6 +3319,7 @@ impl std::error::Error for StorageError {
             Self::InvalidSyncMembershipEpoch(_) => None,
             Self::InvalidProfileSyncMembershipRecord(_) => None,
             Self::InvalidProfileSyncEnrollmentBundle(_) => None,
+            Self::InvalidProfileSyncDeviceEnrollmentRequest(_) => None,
             Self::UntrustedSyncMembershipSigner { .. } => None,
             Self::InvalidSyncContentKeyId(_) => None,
             Self::InvalidSyncDomain(_) => None,
@@ -3271,6 +3345,7 @@ impl std::error::Error for StorageError {
             Self::UnsupportedProfileSyncManifestSchema(_) => None,
             Self::UnsupportedProfileSyncMembershipRecordSchema(_) => None,
             Self::UnsupportedProfileSyncEnrollmentBundleSchema(_) => None,
+            Self::UnsupportedProfileSyncDeviceEnrollmentRequestSchema(_) => None,
             Self::UnsupportedSyncSnapshotSchema(_) => None,
         }
     }
@@ -9530,6 +9605,27 @@ fn validate_profile_sync_enrollment_bundle(
     Ok(())
 }
 
+fn validate_profile_sync_device_enrollment_request(
+    request: &ProfileSyncDeviceEnrollmentRequest,
+) -> Result<(), StorageError> {
+    if request.schema_version != PROFILE_SYNC_DEVICE_ENROLLMENT_REQUEST_SCHEMA_VERSION {
+        return Err(
+            StorageError::UnsupportedProfileSyncDeviceEnrollmentRequestSchema(
+                request.schema_version,
+            ),
+        );
+    }
+    if request.profile.trim().is_empty() {
+        return Err(StorageError::InvalidProfileSyncDeviceEnrollmentRequest(
+            "missing profile id".to_string(),
+        ));
+    }
+    if !is_valid_sync_identifier(request.device_id.as_str()) {
+        return Err(StorageError::InvalidSyncDeviceId(request.device_id.clone()));
+    }
+    Ok(())
+}
+
 fn validate_profile_sync_membership_record(
     record: &ProfileSyncMembershipRecord,
 ) -> Result<(), StorageError> {
@@ -15450,6 +15546,71 @@ mod tests {
             .unwrap();
         assert_eq!(replay.len(), 2);
         assert!(replay.iter().all(|application| !application.applied));
+    }
+
+    #[test]
+    fn profile_sync_device_enrollment_request_round_trips_without_secret_material() {
+        let request =
+            ProfileSyncDeviceEnrollmentRequest::new(DEFAULT_PROFILE_ID, "device-b", 123).unwrap();
+        let encoded = request.to_bytes().unwrap();
+        let decoded = ProfileSyncDeviceEnrollmentRequest::from_bytes(encoded.as_slice()).unwrap();
+        let json: serde_json::Value = serde_json::from_slice(encoded.as_slice()).unwrap();
+
+        assert_eq!(decoded, request);
+        assert_eq!(json["profile"], DEFAULT_PROFILE_ID);
+        assert_eq!(json["device_id"], "device-b");
+        assert_eq!(
+            json["schema_version"],
+            PROFILE_SYNC_DEVICE_ENROLLMENT_REQUEST_SCHEMA_VERSION
+        );
+        assert!(json.get("secret").is_none());
+        assert!(json.get("signed_membership_records").is_none());
+    }
+
+    #[test]
+    fn profile_sync_device_enrollment_request_rejects_invalid_shape() {
+        assert!(matches!(
+            ProfileSyncDeviceEnrollmentRequest::new(DEFAULT_PROFILE_ID, "../device-b", 123),
+            Err(StorageError::InvalidSyncDeviceId(device_id)) if device_id == "../device-b"
+        ));
+
+        let mut unsupported =
+            ProfileSyncDeviceEnrollmentRequest::new(DEFAULT_PROFILE_ID, "device-b", 123).unwrap();
+        unsupported.schema_version = PROFILE_SYNC_DEVICE_ENROLLMENT_REQUEST_SCHEMA_VERSION + 1;
+        let error = unsupported.to_bytes().unwrap_err();
+        assert!(matches!(
+            error,
+            StorageError::UnsupportedProfileSyncDeviceEnrollmentRequestSchema(schema_version)
+                if schema_version == PROFILE_SYNC_DEVICE_ENROLLMENT_REQUEST_SCHEMA_VERSION + 1
+        ));
+
+        let missing_profile = serde_json::json!({
+            "profile": "",
+            "schema_version": PROFILE_SYNC_DEVICE_ENROLLMENT_REQUEST_SCHEMA_VERSION,
+            "device_id": "device-b",
+            "created_at": 123,
+        });
+        let error =
+            ProfileSyncDeviceEnrollmentRequest::from_bytes(missing_profile.to_string().as_bytes())
+                .unwrap_err();
+        assert!(matches!(
+            error,
+            StorageError::InvalidProfileSyncDeviceEnrollmentRequest(reason)
+                if reason.contains("missing profile id")
+        ));
+
+        let wrong_profile =
+            ProfileSyncDeviceEnrollmentRequest::new("work", "device-b", 123).unwrap();
+        let wrong_profile_error = ProfileSyncDeviceEnrollmentRequest::from_bytes_for_profile(
+            wrong_profile.to_bytes().unwrap().as_slice(),
+            DEFAULT_PROFILE_ID,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            wrong_profile_error,
+            StorageError::InvalidProfileSyncDeviceEnrollmentRequest(reason)
+                if reason.contains("expected profile default, got work")
+        ));
     }
 
     #[test]

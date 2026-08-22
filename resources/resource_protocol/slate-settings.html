@@ -328,6 +328,25 @@
         <button id="profile-sync-run-local-two-device">Run two-device trial</button>
       </div>
       <input
+        id="profile-sync-device-request-file"
+        class="profile-sync-file"
+        type="file"
+        accept="application/json,.json"
+        aria-label="Profile sync device request file"
+      />
+      <textarea
+        id="profile-sync-device-request"
+        class="profile-sync-secret"
+        spellcheck="false"
+        autocomplete="off"
+        aria-label="Profile sync device enrollment request"
+      ></textarea>
+      <div class="actions">
+        <button id="profile-sync-device-request-create">Create device request</button>
+        <button id="profile-sync-device-request-download">Download device request</button>
+        <button id="profile-sync-device-request-import">Import device request</button>
+      </div>
+      <input
         id="profile-sync-enrollment-device"
         class="profile-sync-input"
         placeholder="local-device"
@@ -444,6 +463,11 @@
     const profileSyncCheckButton = document.getElementById("profile-sync-check");
     const profileSyncRunLocalButton = document.getElementById("profile-sync-run-local");
     const profileSyncRunLocalTwoDeviceButton = document.getElementById("profile-sync-run-local-two-device");
+    const profileSyncDeviceRequestFile = document.getElementById("profile-sync-device-request-file");
+    const profileSyncDeviceRequest = document.getElementById("profile-sync-device-request");
+    const profileSyncDeviceRequestCreateButton = document.getElementById("profile-sync-device-request-create");
+    const profileSyncDeviceRequestDownloadButton = document.getElementById("profile-sync-device-request-download");
+    const profileSyncDeviceRequestImportButton = document.getElementById("profile-sync-device-request-import");
     const profileSyncEnrollmentDevice = document.getElementById("profile-sync-enrollment-device");
     const profileSyncEnrollmentFile = document.getElementById("profile-sync-enrollment-file");
     const profileSyncEnrollment = document.getElementById("profile-sync-enrollment");
@@ -878,9 +902,35 @@
         "slate-profile-enrollment.json";
     }
 
+    function deviceRequestFilename(state) {
+      return state && state.device_request_export_filename ?
+        state.device_request_export_filename :
+        "slate-profile-device-request.json";
+    }
+
+    function currentDeviceRequestFilename() {
+      try {
+        const parsed = JSON.parse(profileSyncDeviceRequest.value);
+        if (parsed && parsed.device_id) {
+          return `slate-profile-device-request-${parsed.device_id}.json`;
+        }
+      } catch (_) {
+      }
+      return deviceRequestFilename(null);
+    }
+
     function updateProfileSyncEnrollmentState(state) {
       if (!state) {
         return;
+      }
+      if (state.device_request_export_text) {
+        profileSyncDeviceRequest.value = state.device_request_export_text;
+      }
+      if (
+        state.device_request_device_id &&
+        state.device_request_device_id !== state.local_device_id
+      ) {
+        profileSyncEnrollmentDevice.value = state.device_request_device_id;
       }
       if (state.enrollment_export_text) {
         profileSyncEnrollment.value = state.enrollment_export_text;
@@ -906,6 +956,9 @@
       const enrollmentStatus = state.enrollment_target_device_id ?
         `; enrollment bundle for ${state.enrollment_target_device_id}` :
         "";
+      const deviceRequestStatus = state.device_request_device_id ?
+        `; device request for ${state.device_request_device_id}` :
+        "";
       const deviceStatus = state.local_device_id ?
         ` (${state.local_device_id})` :
         "";
@@ -913,7 +966,7 @@
         profileSyncStatus.textContent = `Error: ${state.last_error}`;
       } else if (state.has_secret && state.local_sync && state.local_sync.ready_for_manual_sync) {
         profileSyncStatus.textContent =
-          `Ready for ${state.profile}${deviceStatus} - local device trusted, local sync preflight passed${trialStatus}${twoDeviceStatus}${enrollmentStatus}`;
+          `Ready for ${state.profile}${deviceStatus} - local device trusted, local sync preflight passed${trialStatus}${twoDeviceStatus}${deviceRequestStatus}${enrollmentStatus}`;
       } else if (state.has_secret) {
         const trusted = state.local_sync && state.local_sync.local_device_trusted ?
           " - local device trusted" :
@@ -924,7 +977,7 @@
         const syncGap = state.local_sync && state.local_sync.blocked_reason ?
           ` - ${state.local_sync.blocked_reason}` :
           "";
-        profileSyncStatus.textContent = `Ready for ${state.profile}${deviceStatus}${suffix}${syncGap}${trialStatus}${twoDeviceStatus}${enrollmentStatus}`;
+        profileSyncStatus.textContent = `Ready for ${state.profile}${deviceStatus}${suffix}${syncGap}${trialStatus}${twoDeviceStatus}${deviceRequestStatus}${enrollmentStatus}`;
       } else if (state.metadata_ready) {
         const syncGap = state.local_sync && state.local_sync.blocked_reason ?
           `; ${state.local_sync.blocked_reason}` :
@@ -980,6 +1033,23 @@
       fetchProfileSyncState("run-local-two-device");
     }
 
+    function createProfileSyncDeviceRequest() {
+      fetchProfileSyncState("device-request/create");
+    }
+
+    function importProfileSyncDeviceRequest() {
+      readSelectedProfileSyncDeviceRequestFile().then((fileText) => {
+        if (fileText) {
+          profileSyncDeviceRequest.value = fileText.trim();
+        }
+        return fetchProfileSyncState("device-request/import", {
+          request: profileSyncDeviceRequest.value.trim()
+        });
+      }).catch((error) => {
+        setProfileSyncState({ last_error: String(error) });
+      });
+    }
+
     function createProfileSyncEnrollmentBundle() {
       fetchProfileSyncState("enrollment/create", {
         target_device: profileSyncEnrollmentDevice.value.trim()
@@ -996,6 +1066,22 @@
         });
       }).catch((error) => {
         setProfileSyncState({ last_error: String(error) });
+      });
+    }
+
+    function readSelectedProfileSyncDeviceRequestFile() {
+      const file = profileSyncDeviceRequestFile.files && profileSyncDeviceRequestFile.files[0];
+      if (!file) {
+        return Promise.resolve(null);
+      }
+      if (file.text) {
+        return file.text();
+      }
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.addEventListener("load", () => resolve(String(reader.result || "")));
+        reader.addEventListener("error", () => reject(reader.error || new Error("Could not read device request file")));
+        reader.readAsText(file);
       });
     }
 
@@ -1024,6 +1110,24 @@
       const blob = new Blob([text], { type: "application/json" });
       const link = document.createElement("a");
       link.download = "slate-sync-secret.json";
+      link.href = URL.createObjectURL(blob);
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }
+
+    function downloadProfileSyncDeviceRequest() {
+      const text = profileSyncDeviceRequest.value.trim();
+      if (!text) {
+        fetchProfileSyncState("device-request/create").then((state) => {
+          if (state && state.device_request_export_text) {
+            downloadProfileSyncDeviceRequest();
+          }
+        });
+        return;
+      }
+      const blob = new Blob([text], { type: "application/json" });
+      const link = document.createElement("a");
+      link.download = currentDeviceRequestFilename();
       link.href = URL.createObjectURL(blob);
       link.click();
       URL.revokeObjectURL(link.href);
@@ -1075,6 +1179,20 @@
     profileSyncCheckButton.addEventListener("click", checkProfileSyncReadiness);
     profileSyncRunLocalButton.addEventListener("click", runProfileSyncLocalTrial);
     profileSyncRunLocalTwoDeviceButton.addEventListener("click", runProfileSyncLocalTwoDeviceTrial);
+    profileSyncDeviceRequestCreateButton.addEventListener("click", createProfileSyncDeviceRequest);
+    profileSyncDeviceRequestImportButton.addEventListener("click", importProfileSyncDeviceRequest);
+    profileSyncDeviceRequestDownloadButton.addEventListener("click", downloadProfileSyncDeviceRequest);
+    profileSyncDeviceRequestFile.addEventListener("change", () => {
+      readSelectedProfileSyncDeviceRequestFile()
+        .then((fileText) => {
+          if (fileText) {
+            profileSyncDeviceRequest.value = fileText.trim();
+          }
+        })
+        .catch((error) => {
+          setProfileSyncState({ last_error: String(error) });
+        });
+    });
     profileSyncEnrollmentCreateButton.addEventListener("click", createProfileSyncEnrollmentBundle);
     profileSyncEnrollmentImportButton.addEventListener("click", importProfileSyncEnrollmentBundle);
     profileSyncEnrollmentDownloadButton.addEventListener("click", downloadProfileSyncEnrollmentBundle);
