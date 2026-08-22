@@ -877,11 +877,7 @@ impl LocalProfileSyncFixture {
             .store
             .lock()
             .map_err(|_| BroadwebdError::Request("profile sync store lock poisoned".to_string()))?;
-        if !store.providers.contains_key(provider_id) {
-            return Err(BroadwebdError::UnsupportedRequest(format!(
-                "unknown profile sync provider: {provider_id}"
-            )));
-        }
+        require_known_profile_sync_provider(&store, provider_id)?;
         if online {
             store.offline_providers.remove(provider_id);
         } else {
@@ -919,11 +915,7 @@ impl LocalProfileSyncFixture {
             .store
             .lock()
             .map_err(|_| BroadwebdError::Request("profile sync store lock poisoned".to_string()))?;
-        if !store.providers.contains_key(provider_id) {
-            return Err(BroadwebdError::UnsupportedRequest(format!(
-                "unknown profile sync provider: {provider_id}"
-            )));
-        }
+        require_known_profile_sync_provider(&store, provider_id)?;
         if available {
             store.retention_blocked_providers.remove(provider_id);
         } else {
@@ -966,11 +958,7 @@ impl LocalProfileSyncFixture {
             .store
             .lock()
             .map_err(|_| BroadwebdError::Request("profile sync store lock poisoned".to_string()))?;
-        if !store.providers.contains_key(provider_id) {
-            return Err(BroadwebdError::UnsupportedRequest(format!(
-                "unknown profile sync provider: {provider_id}"
-            )));
-        }
+        require_known_profile_sync_provider(&store, provider_id)?;
         if let Some(max_retained_objects) = max_retained_objects {
             store
                 .retention_quota_by_provider
@@ -987,13 +975,31 @@ impl LocalProfileSyncFixture {
         target_device_id: impl AsRef<str>,
         available: bool,
     ) -> Result<(), BroadwebdError> {
-        let source_provider_id = local_fixture_provider_id(source_device_id);
-        let target_provider_id = local_fixture_provider_id(target_device_id);
+        self.set_provider_transfer_available(
+            local_fixture_provider_id(source_device_id),
+            local_fixture_provider_id(target_device_id),
+            available,
+        )
+    }
+
+    pub fn set_provider_transfer_available(
+        &self,
+        source_provider_id: impl AsRef<str>,
+        target_provider_id: impl AsRef<str>,
+        available: bool,
+    ) -> Result<(), BroadwebdError> {
+        let source_provider_id = source_provider_id.as_ref();
+        let target_provider_id = target_provider_id.as_ref();
         let mut store = self
             .store
             .lock()
             .map_err(|_| BroadwebdError::Request("profile sync store lock poisoned".to_string()))?;
-        let link = (source_provider_id, target_provider_id);
+        require_known_profile_sync_provider(&store, source_provider_id)?;
+        require_known_profile_sync_provider(&store, target_provider_id)?;
+        let link = (
+            source_provider_id.to_string(),
+            target_provider_id.to_string(),
+        );
         if available {
             store.delayed_transfers.remove(&link);
         } else {
@@ -1010,22 +1016,41 @@ impl LocalProfileSyncFixture {
         root_id: impl AsRef<str>,
         available: bool,
     ) -> Result<(), BroadwebdError> {
+        self.set_provider_root_available(
+            local_fixture_provider_id(source_device_id),
+            local_fixture_provider_id(target_device_id),
+            profile,
+            root_id,
+            available,
+        )
+    }
+
+    pub fn set_provider_root_available(
+        &self,
+        source_provider_id: impl AsRef<str>,
+        target_provider_id: impl AsRef<str>,
+        profile: impl AsRef<str>,
+        root_id: impl AsRef<str>,
+        available: bool,
+    ) -> Result<(), BroadwebdError> {
         let profile = profile.as_ref();
         let root_id = root_id.as_ref();
         validate_profile(profile)?;
         validate_profile_sync_root_id(root_id)?;
-        let source_provider_id = local_fixture_provider_id(source_device_id);
-        let target_provider_id = local_fixture_provider_id(target_device_id);
-        let link = (
-            source_provider_id,
-            target_provider_id,
-            profile.to_string(),
-            root_id.to_string(),
-        );
+        let source_provider_id = source_provider_id.as_ref();
+        let target_provider_id = target_provider_id.as_ref();
         let mut store = self
             .store
             .lock()
             .map_err(|_| BroadwebdError::Request("profile sync store lock poisoned".to_string()))?;
+        require_known_profile_sync_provider(&store, source_provider_id)?;
+        require_known_profile_sync_provider(&store, target_provider_id)?;
+        let link = (
+            source_provider_id.to_string(),
+            target_provider_id.to_string(),
+            profile.to_string(),
+            root_id.to_string(),
+        );
         if available {
             store.delayed_roots.remove(&link);
         } else {
@@ -1273,6 +1298,19 @@ fn retained_provider_object_count(store: &ProfileSyncStore, provider_id: &str) -
         .iter()
         .filter(|(retained_provider_id, _, _)| retained_provider_id == provider_id)
         .count()
+}
+
+fn require_known_profile_sync_provider(
+    store: &ProfileSyncStore,
+    provider_id: &str,
+) -> Result<(), BroadwebdError> {
+    if store.providers.contains_key(provider_id) {
+        Ok(())
+    } else {
+        Err(BroadwebdError::UnsupportedRequest(format!(
+            "unknown profile sync provider: {provider_id}"
+        )))
+    }
 }
 
 fn online_retaining_provider_count(
@@ -3157,6 +3195,195 @@ mod tests {
             ProfileSyncResponse::GetEncryptedObject {
                 object_id,
                 bytes: b"encrypted object waiting for delayed transfer".to_vec(),
+            }
+        );
+    }
+
+    #[test]
+    fn local_fixture_can_delay_between_custom_providers() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut source = PluginRegistry::new();
+        let mut requester = PluginRegistry::new();
+        let budget = ResourceBudget::default();
+        let source_provider_id = "custom-source-provider";
+        let requester_provider_id = "custom-requester-provider";
+
+        source.register_service(fixture.service_for_provider_with_roles(
+            source_provider_id,
+            "local-fixture-custom",
+            ProfileSyncProviderRoles::logged_in_device(),
+        ));
+        requester.register_service(fixture.service_for_provider_with_roles(
+            requester_provider_id,
+            "local-fixture-custom",
+            ProfileSyncProviderRoles::logged_in_device(),
+        ));
+
+        let put = source
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"custom provider propagation object".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("custom source can put object into fixture");
+        let ProfileSyncResponse::PutEncryptedObject { object_id } = put else {
+            panic!("unexpected put response");
+        };
+
+        let unknown_transfer_error = fixture
+            .set_provider_transfer_available("missing-provider", requester_provider_id, false)
+            .expect_err("unknown transfer provider should fail");
+        assert!(matches!(
+            unknown_transfer_error,
+            BroadwebdError::UnsupportedRequest(message) if message.contains("missing-provider")
+        ));
+
+        fixture
+            .set_provider_transfer_available(source_provider_id, requester_provider_id, false)
+            .expect("delay object transfer between custom providers");
+        let transfer_error = requester
+            .profile_sync(
+                ProfileSyncRequest::GetEncryptedObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect_err("custom requester cannot fetch while provider transfer is delayed");
+        assert!(matches!(
+            transfer_error,
+            BroadwebdError::UnsupportedRequest(message) if message.contains("not available")
+        ));
+        let own_fetch = source
+            .profile_sync(
+                ProfileSyncRequest::GetEncryptedObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("custom source can fetch its own delayed object");
+        assert_eq!(
+            own_fetch,
+            ProfileSyncResponse::GetEncryptedObject {
+                object_id: object_id.clone(),
+                bytes: b"custom provider propagation object".to_vec(),
+            }
+        );
+
+        fixture
+            .set_provider_transfer_available(source_provider_id, requester_provider_id, true)
+            .expect("release custom provider object transfer");
+        let released_fetch = requester
+            .profile_sync(
+                ProfileSyncRequest::GetEncryptedObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("custom requester can fetch after transfer release");
+        assert_eq!(
+            released_fetch,
+            ProfileSyncResponse::GetEncryptedObject {
+                object_id: object_id.clone(),
+                bytes: b"custom provider propagation object".to_vec(),
+            }
+        );
+
+        source
+            .profile_sync(
+                ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+                    "default",
+                    "settings/custom-provider/latest",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("custom source can publish mutable root");
+        let unknown_root_error = fixture
+            .set_provider_root_available(
+                source_provider_id,
+                "missing-provider",
+                "default",
+                "settings/custom-provider/latest",
+                false,
+            )
+            .expect_err("unknown root target provider should fail");
+        assert!(matches!(
+            unknown_root_error,
+            BroadwebdError::UnsupportedRequest(message) if message.contains("missing-provider")
+        ));
+
+        fixture
+            .set_provider_root_available(
+                source_provider_id,
+                requester_provider_id,
+                "default",
+                "settings/custom-provider/latest",
+                false,
+            )
+            .expect("delay custom provider root propagation");
+        let delayed_root = requester
+            .profile_sync(
+                ProfileSyncRequest::ResolveRoot(ProfileSyncRootRequest::new(
+                    "default",
+                    "settings/custom-provider/latest",
+                )),
+                &budget,
+            )
+            .expect("custom requester can resolve delayed root as empty");
+        assert_eq!(
+            delayed_root,
+            ProfileSyncResponse::Root {
+                root_id: "settings/custom-provider/latest".to_string(),
+                object_id: None,
+            }
+        );
+        let delayed_health = requester
+            .profile_sync(
+                ProfileSyncRequest::RootHealth(ProfileSyncRootHealthRequest::new(
+                    "default",
+                    "settings/custom-provider/latest",
+                )),
+                &budget,
+            )
+            .expect("custom requester can inspect delayed custom root health");
+        let ProfileSyncResponse::RootHealth { health } = delayed_health else {
+            panic!("unexpected root health response");
+        };
+        assert_eq!(health.visible_candidates, 0);
+        assert_eq!(health.delayed_candidates, 1);
+        assert_eq!(
+            health.delayed_publisher_provider_ids,
+            vec![source_provider_id.to_string()]
+        );
+
+        fixture
+            .set_provider_root_available(
+                source_provider_id,
+                requester_provider_id,
+                "default",
+                "settings/custom-provider/latest",
+                true,
+            )
+            .expect("release custom provider root propagation");
+        let released_root = requester
+            .profile_sync(
+                ProfileSyncRequest::ResolveRoot(ProfileSyncRootRequest::new(
+                    "default",
+                    "settings/custom-provider/latest",
+                )),
+                &budget,
+            )
+            .expect("custom requester can resolve root after release");
+        assert_eq!(
+            released_root,
+            ProfileSyncResponse::Root {
+                root_id: "settings/custom-provider/latest".to_string(),
+                object_id: Some(object_id),
             }
         );
     }

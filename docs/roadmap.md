@@ -264,6 +264,10 @@ Current baseline:
 - The local profile-sync fixture can now mark arbitrary known provider IDs
   online or offline, not only device-shaped providers. Unknown provider IDs are
   rejected so local protocol tests do not silently model the wrong peer.
+- Object-transfer and mutable-root propagation delays can now target arbitrary
+  known provider IDs as well as device-shaped providers. This lets socketless
+  tests model delayed custom availability, transfer, and root providers without
+  inventing fake device identities.
 - broadwebd's simulated HTTP gateway and Kubo RPC fixtures now use test-only
   `slate-fixture-http://` and `slate-fixture-kubo://` schemes that resolve
   through the `InProcessBroadwebNetwork` fixture layer inside the test process
