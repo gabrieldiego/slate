@@ -1281,6 +1281,11 @@ Current baseline:
   caller-supplied protocol materializer, publishes encrypted settings, and
   retains the object set without scheduler callers passing raw content-key
   bytes.
+- Membership-aware protocol-materialized stored-provider scheduler runs now
+  have the same secret-backed path. A local-only fixture publishes the
+  membership log, materializes the selected multiaddr provider, publishes
+  encrypted settings, and retains the membership/settings object set without
+  passing raw content-key bytes into scheduler calls.
 
 Next:
 

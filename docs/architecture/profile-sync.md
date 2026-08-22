@@ -908,6 +908,10 @@ Protocol-materialized stored-provider ticks can now use the same
 `SlateSyncSecret` entry point: the scheduler derives the active content key
 after stored-provider preflight, then hands selected multiaddr endpoints to the
 caller-supplied materializer before publishing, pulling, and retaining objects.
+Membership-aware protocol-materialized stored-provider ticks have the same
+shape after membership-log preflight, so local membership publication, selected
+multiaddr materialization, encrypted settings publication, and object retention
+can run without scheduler callers handling raw content-key bytes.
 When a stored row has an `endpoint_ref`, the materialized handle must report
 the same endpoint before it can be used for retention. Endpoint mismatches are
 tracked separately from missing handles and excluded from quorum, so runtime
