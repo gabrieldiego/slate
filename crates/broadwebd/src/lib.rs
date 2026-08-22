@@ -34,6 +34,8 @@ pub const SLATE_IPFS_GATEWAY_ENV: &str = "SLATE_IPFS_GATEWAY";
 pub const SLATE_IPFS_GATEWAY_SCOPE_ENV: &str = "SLATE_IPFS_GATEWAY_SCOPE";
 pub const SLATE_IPFS_TRANSPORT_ENV: &str = "SLATE_IPFS_TRANSPORT";
 pub const SLATE_IPFS_KUBO_RPC_ENV: &str = "SLATE_IPFS_KUBO_RPC";
+pub const IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_SCHEME: &str = "slate-fixture-profile-sync";
+pub const IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX: &str = "slate-fixture-profile-sync://";
 
 pub use budget::ResourceBudget;
 pub use daemon::{
@@ -88,7 +90,8 @@ pub mod test_fixtures {
     };
     use crate::services::{http_fetch::HttpFetchService, profile_sync::ProfileSyncService};
     use crate::{
-        BroadwebDaemon, BroadwebdError, DIRECT_HTTP_PLUGIN, IpfsConfig, IpfsService, PluginKind,
+        BroadwebDaemon, BroadwebdError, DIRECT_HTTP_PLUGIN,
+        IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX, IpfsConfig, IpfsService, PluginKind,
         PluginMetadata, PluginRegistry, ProfileSyncProviderRoles, ResourceBudget, ResourceProfile,
         TransportHttpRequest, TransportPlugin,
     };
@@ -178,7 +181,9 @@ pub mod test_fixtures {
         fn new(network_id: &str, provider_id: impl Into<String>) -> Self {
             let provider_id = provider_id.into();
             Self {
-                endpoint_ref: format!("slate-fixture-profile-sync://{network_id}/{provider_id}"),
+                endpoint_ref: format!(
+                    "{IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX}{network_id}/{provider_id}"
+                ),
                 provider_id,
             }
         }
@@ -2350,7 +2355,15 @@ mod tests {
         assert!(
             profile_sync_endpoint
                 .endpoint_ref()
-                .starts_with("slate-fixture-profile-sync://")
+                .starts_with(crate::IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX)
+        );
+        assert_eq!(
+            profile_sync_endpoint
+                .endpoint_ref()
+                .split_once("://")
+                .unwrap()
+                .0,
+            crate::IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_SCHEME
         );
     }
 

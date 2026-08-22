@@ -486,10 +486,12 @@ Current baseline:
 - Stored-provider plans now classify endpoint refs before runtime
   materialization. `InProcessBroadwebNetwork` now mints
   `slate-fixture-profile-sync://<network>/<provider>` refs for socketless
-  profile-sync fixtures, matching provider-scoped fixture refs are marked as
-  in-process endpoints, multiaddr and deferred protocol refs are tracked
-  separately, and loopback-shaped `http://` or `https://` refs are unsupported
-  so fixture tests cannot silently open sockets or rely on DNS.
+  profile-sync fixtures, with the scheme and prefix exported from broadwebd so
+  fixture minting and profile-sync classification share one constant. Matching
+  provider-scoped fixture refs are marked as in-process endpoints, multiaddr
+  and deferred protocol refs are tracked separately, and loopback-shaped
+  `http://` or `https://` refs are unsupported so fixture tests cannot silently
+  open sockets or rely on DNS.
 - Stored-provider runtime ticks now also exclude unsupported endpoint refs from
   the materialized retention-provider quorum, even if the caller supplies a
   daemon handle with the same socket-shaped endpoint string. This keeps
