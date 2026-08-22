@@ -1106,6 +1106,9 @@ The same bridge now covers wrong content-key ids for shared settings roots: a
 manifest object signed by a trusted device but encrypted/labeled for a
 non-active key epoch is rejected before root mutation. The fixture still uses
 normal signed encrypted object parsing; only object transport is in-process.
+It also covers invalid signatures on otherwise parseable shared-root objects,
+so a fixture or future transport can deliver bytes without letting an
+unauthenticated manifest advance `settings/latest`.
 
 ### Internal Protocol Models
 
