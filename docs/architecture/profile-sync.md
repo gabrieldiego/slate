@@ -1059,6 +1059,12 @@ missing per-device root after the receiver learned the changes through the
 shared settings root first. In stale cases the receiver leaves both the shared
 settings root and the per-device-head root at the newer local frontier, even if
 the fixture or future network presents an older mutable-root value.
+The shared settings-root candidate path applies the same frontier principle:
+once a local database has applied all device frontiers referenced by a manifest,
+a later visible candidate for that older manifest cannot move `settings/latest`
+backward. This protects against delayed or replayed mutable-root observations
+without requiring the fixture or a future protocol adapter to special-case the
+rollback.
 
 ## Deterministic Fixture Gate
 

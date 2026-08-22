@@ -408,6 +408,10 @@ Current baseline:
   the receiver learned the same changes through the shared settings root first.
   The regressions run through the socketless broadwebd path so the sync logic
   sees the same root/object boundary a real protocol adapter will expose.
+- Shared `settings/latest` candidate receives now also ignore replayed older
+  manifests whose device frontiers are already covered locally. The socketless
+  broadwebd regression republishes an older manifest after a newer sequence was
+  applied and verifies the receiver leaves the newer shared root in place.
 - The same bridge now publishes a real signed encrypted settings tail manifest
   through one Kubo fixture daemon, then verifies the manifest and tail bytes
   fetched by a second daemon through the shared stateful Kubo/IPNS model. The

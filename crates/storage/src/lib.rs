@@ -7994,10 +7994,10 @@ impl SlateProfileDatabase {
             );
         };
 
-        if let Some(local_root) = self
+        let local_root = self
             .profile_sync_root(profile, root_id)
-            .map_err(ProfileSyncTrustedPullApplyError::Storage)?
-        {
+            .map_err(ProfileSyncTrustedPullApplyError::Storage)?;
+        if let Some(local_root) = &local_root {
             if local_root.object_id == newest_candidate.object_id {
                 return Ok(ProfileSyncSettingsCandidatePullApplyStatus::Unchanged {
                     profile: profile.to_string(),
@@ -8026,9 +8026,55 @@ impl SlateProfileDatabase {
             });
         }
 
-        self.apply_verified_settings_manifest_candidates(verified_candidates.as_slice())
+        let mut candidates_to_apply = Vec::with_capacity(verified_candidates.len());
+        for candidate in verified_candidates {
+            if local_root.is_some()
+                && self
+                    .settings_manifest_frontiers_locally_covered(
+                        profile,
+                        &candidate.objects.manifest,
+                    )
+                    .map_err(ProfileSyncTrustedPullApplyError::Storage)?
+            {
+                continue;
+            }
+            candidates_to_apply.push(candidate);
+        }
+
+        if candidates_to_apply.is_empty() {
+            if let Some(local_root) = local_root {
+                return Ok(ProfileSyncSettingsCandidatePullApplyStatus::Unchanged {
+                    profile: profile.to_string(),
+                    root_id: root_id.to_string(),
+                    object_id: local_root.object_id,
+                });
+            }
+        }
+
+        self.apply_verified_settings_manifest_candidates(candidates_to_apply.as_slice())
             .map(ProfileSyncSettingsCandidatePullApplyStatus::Applied)
             .map_err(ProfileSyncTrustedPullApplyError::Storage)
+    }
+
+    fn settings_manifest_frontiers_locally_covered(
+        &self,
+        profile: &str,
+        manifest: &ProfileSyncManifest,
+    ) -> Result<bool, StorageError> {
+        if manifest.device_frontiers.is_empty() {
+            return Ok(false);
+        }
+        for frontier in &manifest.device_frontiers {
+            let Some(current_sequence) =
+                self.latest_sync_device_sequence(profile, frontier.device_id.as_str())?
+            else {
+                return Ok(false);
+            };
+            if current_sequence < frontier.latest_sequence {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 
     pub fn pull_trusted_signed_profile_sync_settings_manifest_objects<Source>(

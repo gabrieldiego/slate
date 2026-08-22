@@ -17212,6 +17212,169 @@ mod tests {
     }
 
     #[test]
+    fn broadwebd_source_ignores_stale_shared_root_candidate_rollback() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("shared-root-stale-rollback-publisher");
+        let receiver_state_root = test_state_root("shared-root-stale-rollback-receiver");
+        let publisher_db_root = test_state_root("shared-root-stale-rollback-publisher-db");
+        let receiver_db_root = test_state_root("shared-root-stale-rollback-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "runtime-stale-shared-publisher",
+            )
+            .expect("start stale shared-root publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "runtime-stale-shared-receiver",
+            )
+            .expect("start stale shared-root receiver daemon");
+        let publisher_database = SlateProfileDatabase::open_resolved_with_device_id(
+            publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-stale-shared-publisher",
+        )
+        .expect("open stale shared-root publisher database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-stale-shared-receiver",
+        )
+        .expect("open stale shared-root receiver database");
+        let content_key = ProfileSyncContentKey::from_bytes([99; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-stale-shared-publisher")
+            .expect("generate stale shared-root signer");
+        receiver_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: signer.public_key().expect("stale shared-root public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("receiver trusts stale shared-root publisher");
+        register_test_content_key_epoch(&receiver_database, DEFAULT_PROFILE_ID);
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+        let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
+        let settings_root_id = "settings/latest";
+
+        let first_change = publisher_database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("publisher writes first stale shared-root setting");
+        let first_manifest = publisher
+            .publish_signed_settings_tail_changes(
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                std::slice::from_ref(&first_change),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish first stale shared-root manifest");
+        let first_apply = source
+            .pull_and_apply_active_trusted_settings_manifest_candidates_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                &content_key,
+            )
+            .expect("receiver applies first shared-root candidate");
+        assert!(matches!(
+            first_apply,
+            ProfileSyncSettingsCandidatePullApplyStatus::Applied(_)
+        ));
+
+        let second_change = publisher_database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "ui.theme",
+                "green",
+            )
+            .expect("publisher writes second stale shared-root setting");
+        let second_manifest = publisher
+            .publish_signed_settings_tail_changes(
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                std::slice::from_ref(&second_change),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish second stale shared-root manifest");
+        let second_apply = source
+            .pull_and_apply_active_trusted_settings_manifest_candidates_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                &content_key,
+            )
+            .expect("receiver applies second shared-root candidate");
+        assert!(matches!(
+            second_apply,
+            ProfileSyncSettingsCandidatePullApplyStatus::Applied(_)
+        ));
+        assert_eq!(
+            receiver_database
+                .latest_sync_device_sequence(DEFAULT_PROFILE_ID, "runtime-stale-shared-publisher")
+                .expect("read latest stale shared-root receiver sequence"),
+            Some(second_change.device_sequence)
+        );
+        assert_eq!(
+            receiver_database
+                .get_setting_text("ui.theme")
+                .expect("read second stale shared-root setting")
+                .as_deref(),
+            Some("green")
+        );
+
+        publisher
+            .publish_root(
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                first_manifest.manifest_object_id.as_str(),
+            )
+            .expect("rollback shared settings root to first manifest");
+        let stale = source
+            .pull_and_apply_active_trusted_settings_manifest_candidates_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                &content_key,
+            )
+            .expect("receiver ignores stale shared-root rollback");
+        assert_eq!(
+            stale,
+            ProfileSyncSettingsCandidatePullApplyStatus::Unchanged {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                root_id: settings_root_id.to_string(),
+                object_id: second_manifest.manifest_object_id.clone(),
+            }
+        );
+        assert_eq!(
+            receiver_database
+                .get_setting_text("ui.theme")
+                .expect("read setting after stale shared-root rollback")
+                .as_deref(),
+            Some("green")
+        );
+        assert_eq!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, settings_root_id)
+                .expect("read settings root after stale shared-root rollback")
+                .expect("settings root after stale shared-root rollback")
+                .object_id,
+            second_manifest.manifest_object_id
+        );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
     fn broadwebd_source_pulls_registered_trusted_device_heads_with_device_bound() {
         let network = InProcessBroadwebNetwork::new();
         let publisher_state_root = test_state_root("trusted-devices-publisher");
