@@ -13100,6 +13100,7 @@ mod tests {
             (SYNC_DOMAIN_CALENDAR, "sensitive", false),
             (SYNC_DOMAIN_CHAT, "sensitive", false),
             (SYNC_DOMAIN_CONTACTS, "sensitive", false),
+            (SYNC_DOMAIN_DOWNLOADS, "metadata", false),
             (SYNC_DOMAIN_FILES, "content", true),
             (SYNC_DOMAIN_STORAGE, "sensitive", false),
         ] {
@@ -13158,6 +13159,20 @@ mod tests {
                 avatar_key: Some("contact-avatar:runtime-contact-tail-1".to_string()),
             })
             .expect("publisher writes initial typed contact metadata");
+        publisher_database
+            .record_download_metadata(&DownloadMetadataUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                download_id: "runtime-download-tail-1".to_string(),
+                source_url: "ipfs://bafy-runtime-download-tail".to_string(),
+                final_url: "ipfs://bafy-runtime-download-tail".to_string(),
+                route: Some("ipfs://bafy-runtime-download-tail".to_string()),
+                transport_id: Some("ipfs-fixture".to_string()),
+                filename: "runtime-download-initial.bin".to_string(),
+                content_type: Some("application/octet-stream".to_string()),
+                size_bytes: 1_024,
+                integrity: Some("sha256-runtime-download-initial".to_string()),
+            })
+            .expect("publisher writes initial typed download metadata");
         publisher_database
             .upsert_file_entry(&FileEntryUpdate {
                 profile: DEFAULT_PROFILE_ID.to_string(),
@@ -13228,6 +13243,13 @@ mod tests {
             8,
         )
         .expect("initialize receiver contacts cursor before typed app snapshot");
+        let download_watcher = TypedAppSyncDomainWatcher::<DownloadMetadataSyncPayload>::new(
+            receiver_database.clone(),
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_DOWNLOADS,
+            8,
+        )
+        .expect("initialize receiver downloads cursor before typed app snapshot");
         let file_watcher = TypedAppSyncDomainWatcher::<FileEntrySyncPayload>::new(
             receiver_database.clone(),
             DEFAULT_PROFILE_ID,
@@ -13251,6 +13273,9 @@ mod tests {
         let initial_contact_revision = contact_watcher
             .current_revision()
             .expect("read initial contacts cursor before typed app snapshot");
+        let initial_download_revision = download_watcher
+            .current_revision()
+            .expect("read initial downloads cursor before typed app snapshot");
         let initial_file_revision = file_watcher
             .current_revision()
             .expect("read initial files cursor before typed app snapshot");
@@ -13275,6 +13300,13 @@ mod tests {
             contact_watcher
                 .poll_once()
                 .expect("poll idle contacts before typed app snapshot")
+                .event_count(),
+            0
+        );
+        assert_eq!(
+            download_watcher
+                .poll_once()
+                .expect("poll idle downloads before typed app snapshot")
                 .event_count(),
             0
         );
@@ -13338,6 +13370,13 @@ mod tests {
                 .expect("read receiver initial typed contact metadata")[0]
                 .display_name,
             "Runtime Contact"
+        );
+        assert_eq!(
+            receiver_database
+                .downloads(DEFAULT_PROFILE_ID, 10)
+                .expect("read receiver initial typed download metadata")[0]
+                .filename,
+            "runtime-download-initial.bin"
         );
         assert_eq!(
             receiver_database
@@ -13463,6 +13502,45 @@ mod tests {
             snapshot_contact_poll.latest_revision
         );
 
+        let snapshot_download_applied = download_watcher
+            .poll_apply_and_acknowledge(|snapshot_download_poll| {
+                assert!(snapshot_download_poll.advanced());
+                assert_eq!(
+                    snapshot_download_poll.previous_revision,
+                    initial_download_revision
+                );
+                assert_eq!(snapshot_download_poll.event_count(), 1);
+                assert_eq!(
+                    snapshot_download_poll.events[0].value.download_id,
+                    "runtime-download-tail-1"
+                );
+                assert_eq!(
+                    snapshot_download_poll.events[0].value.filename,
+                    "runtime-download-initial.bin"
+                );
+                Ok::<(), &'static str>(())
+            })
+            .expect("receiver applies initial typed downloads snapshot payload");
+        let snapshot_download_poll = snapshot_download_applied.poll;
+        assert!(snapshot_download_poll.advanced());
+        assert_eq!(
+            snapshot_download_poll.previous_revision,
+            initial_download_revision
+        );
+        assert_eq!(snapshot_download_poll.event_count(), 1);
+        assert_eq!(
+            snapshot_download_poll.events[0].value.download_id,
+            "runtime-download-tail-1"
+        );
+        assert_eq!(
+            snapshot_download_poll.events[0].value.filename,
+            "runtime-download-initial.bin"
+        );
+        assert_eq!(
+            snapshot_download_applied.cursor.latest_revision,
+            snapshot_download_poll.latest_revision
+        );
+
         let snapshot_file_applied = file_watcher
             .poll_apply_and_acknowledge(|snapshot_file_poll| {
                 assert!(snapshot_file_poll.advanced());
@@ -13573,6 +13651,20 @@ mod tests {
             })
             .expect("publisher writes typed contact metadata tail update");
         publisher_database
+            .record_download_metadata(&DownloadMetadataUpdate {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                download_id: "runtime-download-tail-1".to_string(),
+                source_url: "ipfs://bafy-runtime-download-tail".to_string(),
+                final_url: "ipfs://bafy-runtime-download-tail-updated".to_string(),
+                route: Some("ipfs://bafy-runtime-download-tail-updated".to_string()),
+                transport_id: Some("ipfs-fixture-updated".to_string()),
+                filename: "runtime-download-updated.bin".to_string(),
+                content_type: Some("application/octet-stream".to_string()),
+                size_bytes: 8_192,
+                integrity: Some("sha256-runtime-download-updated".to_string()),
+            })
+            .expect("publisher writes typed download metadata tail update");
+        publisher_database
             .upsert_file_entry(&FileEntryUpdate {
                 profile: DEFAULT_PROFILE_ID.to_string(),
                 entry_id: "runtime-file-tail-1".to_string(),
@@ -13627,7 +13719,7 @@ mod tests {
             tail.publication.snapshot_object_id,
             full.publication.snapshot_object_id
         );
-        assert_eq!(tail.publication.tail_change_object_ids.len(), 5);
+        assert_eq!(tail.publication.tail_change_object_ids.len(), 6);
         assert_eq!(
             tail.device_head.device_head.latest_change_object_id,
             tail.publication.tail_change_object_ids.last().cloned()
@@ -13650,7 +13742,7 @@ mod tests {
             tail.publication.manifest_object_id
         );
         assert!(application.snapshot.is_some());
-        assert_eq!(application.tail_changes.len(), 5);
+        assert_eq!(application.tail_changes.len(), 6);
 
         let calendar_events = receiver_database
             .calendar_events(DEFAULT_PROFILE_ID, 10)
@@ -13682,6 +13774,22 @@ mod tests {
             Some("runtime-updated@example.test")
         );
         assert_eq!(contacts[0].primary_phone.as_deref(), Some("+15550103000"));
+
+        let downloads = receiver_database
+            .downloads(DEFAULT_PROFILE_ID, 10)
+            .expect("read receiver updated typed download metadata");
+        assert_eq!(downloads.len(), 1);
+        assert_eq!(downloads[0].download_id, "runtime-download-tail-1");
+        assert_eq!(
+            downloads[0].final_url,
+            "ipfs://bafy-runtime-download-tail-updated"
+        );
+        assert_eq!(
+            downloads[0].transport_id.as_deref(),
+            Some("ipfs-fixture-updated")
+        );
+        assert_eq!(downloads[0].filename, "runtime-download-updated.bin");
+        assert_eq!(downloads[0].size_bytes, 8_192);
 
         let files = receiver_database
             .file_entries(DEFAULT_PROFILE_ID, 10)
@@ -13841,6 +13949,62 @@ mod tests {
         assert_eq!(
             tail_contact_applied.cursor.latest_revision,
             tail_contact_poll.latest_revision
+        );
+
+        let tail_download_applied = download_watcher
+            .poll_apply_and_acknowledge(|tail_download_poll| {
+                assert!(tail_download_poll.advanced());
+                assert_eq!(
+                    tail_download_poll.previous_revision,
+                    snapshot_download_poll.latest_revision
+                );
+                assert_eq!(tail_download_poll.event_count(), 1);
+                assert_eq!(
+                    tail_download_poll.events[0].value.download_id,
+                    "runtime-download-tail-1"
+                );
+                assert_eq!(
+                    tail_download_poll.events[0].value.filename,
+                    "runtime-download-updated.bin"
+                );
+                assert_eq!(tail_download_poll.events[0].value.size_bytes, 8_192);
+                assert_eq!(
+                    tail_download_poll.events[0].value.transport_id.as_deref(),
+                    Some("ipfs-fixture-updated")
+                );
+                let payload_json: serde_json::Value =
+                    serde_json::from_str(tail_download_poll.events[0].change.payload.as_str())
+                        .expect("decode replicated download tail metadata payload");
+                assert!(payload_json.get("path").is_none());
+                assert!(payload_json.get("local_path").is_none());
+                assert!(payload_json.get("file_bytes").is_none());
+                assert!(payload_json.get("contents").is_none());
+                Ok::<(), &'static str>(())
+            })
+            .expect("receiver applies typed downloads tail payload");
+        let tail_download_poll = tail_download_applied.poll;
+        assert!(tail_download_poll.advanced());
+        assert_eq!(
+            tail_download_poll.previous_revision,
+            snapshot_download_poll.latest_revision
+        );
+        assert_eq!(tail_download_poll.event_count(), 1);
+        assert_eq!(
+            tail_download_poll.events[0].value.download_id,
+            "runtime-download-tail-1"
+        );
+        assert_eq!(
+            tail_download_poll.events[0].value.filename,
+            "runtime-download-updated.bin"
+        );
+        assert_eq!(tail_download_poll.events[0].value.size_bytes, 8_192);
+        assert_eq!(
+            tail_download_poll.events[0].value.transport_id.as_deref(),
+            Some("ipfs-fixture-updated")
+        );
+        assert_eq!(
+            tail_download_applied.cursor.latest_revision,
+            tail_download_poll.latest_revision
         );
 
         let tail_file_applied = file_watcher
