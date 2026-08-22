@@ -3,7 +3,9 @@ use crate::protocols::{
     tor::TorService,
 };
 use crate::services::http_fetch::HttpFetchService;
-use crate::services::profile_sync::ProfileSyncService;
+use crate::services::profile_sync::{
+    ProfileSyncRuntimeBackend, ProfileSyncRuntimeConfig, ProfileSyncService,
+};
 use crate::transports::direct_http::DirectHttpTransport;
 use crate::{
     BroadwebStatusReporter, BroadwebStatusSnapshot, BroadwebdError, DIRECT_HTTP_PLUGIN,
@@ -138,6 +140,27 @@ impl PluginRegistry {
     ) -> Result<Self, BroadwebdError> {
         let mut registry = Self::with_default_http_and_ipfs_config_and_status(ipfs_config, status);
         registry.install_service(ProfileSyncService::kubo(api_base_url, provider_id)?);
+        Ok(registry)
+    }
+
+    pub fn with_default_http_and_runtime_profile_sync_config(
+        ipfs_config: IpfsConfig,
+        status: BroadwebStatusReporter,
+        profile_sync_config: ProfileSyncRuntimeConfig,
+    ) -> Result<Self, BroadwebdError> {
+        let mut registry = Self::with_default_http_and_ipfs_config_and_status(ipfs_config, status);
+        match profile_sync_config.backend() {
+            ProfileSyncRuntimeBackend::Local => {}
+            ProfileSyncRuntimeBackend::KuboRpc {
+                api_base_url,
+                provider_id,
+            } => {
+                registry.install_service(ProfileSyncService::kubo(
+                    api_base_url.as_str(),
+                    provider_id.as_str(),
+                )?);
+            }
+        }
         Ok(registry)
     }
 

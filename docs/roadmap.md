@@ -363,6 +363,10 @@ Current baseline:
   constructor. That constructor replaces the fake profile-sync service, rejects
   non-loopback Kubo endpoints up front, and advertises `profile-sync/kubo-http`
   rather than fixture capabilities.
+- `BroadwebDaemon::start_default_session` now reads an explicit profile-sync
+  runtime backend config. With no profile-sync backend settings it keeps the
+  local in-memory service; `kubo-rpc` selection or a profile-sync Kubo endpoint
+  opts into the loopback-only Kubo HTTP backend with deterministic parser tests.
 - The same Kubo fixture service now records retained objects and published roots
   in its in-process profile-sync state after the corresponding Kubo RPC fixture
   calls succeed. Retained-object listing, provider health, root candidates, and

@@ -34,6 +34,10 @@ pub const SLATE_IPFS_GATEWAY_ENV: &str = "SLATE_IPFS_GATEWAY";
 pub const SLATE_IPFS_GATEWAY_SCOPE_ENV: &str = "SLATE_IPFS_GATEWAY_SCOPE";
 pub const SLATE_IPFS_TRANSPORT_ENV: &str = "SLATE_IPFS_TRANSPORT";
 pub const SLATE_IPFS_KUBO_RPC_ENV: &str = "SLATE_IPFS_KUBO_RPC";
+pub const SLATE_PROFILE_SYNC_BACKEND_ENV: &str = "SLATE_PROFILE_SYNC_BACKEND";
+pub const SLATE_PROFILE_SYNC_KUBO_RPC_ENV: &str = "SLATE_PROFILE_SYNC_KUBO_RPC";
+pub const SLATE_PROFILE_SYNC_PROVIDER_ID_ENV: &str = "SLATE_PROFILE_SYNC_PROVIDER_ID";
+pub const DEFAULT_PROFILE_SYNC_KUBO_PROVIDER_ID: &str = "local-kubo-profile";
 pub const IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_SCHEME: &str = "slate-fixture-profile-sync";
 pub const IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX: &str = "slate-fixture-profile-sync://";
 
@@ -119,7 +123,10 @@ pub use registry::{
 };
 pub use services::{
     http_fetch::HttpFetchService,
-    profile_sync::{LocalProfileSyncFixture, ProfileSyncService},
+    profile_sync::{
+        LocalProfileSyncFixture, ProfileSyncRuntimeBackend, ProfileSyncRuntimeConfig,
+        ProfileSyncService,
+    },
 };
 pub use state::{StateRoot, TemporaryDownloadRecord};
 pub use status::{BroadwebStatusKind, BroadwebStatusReporter, BroadwebStatusSnapshot};
@@ -606,15 +613,16 @@ mod tests {
         PluginRegistry, ProfileSyncObjectRequest, ProfileSyncProfileRequest,
         ProfileSyncProviderRoles, ProfileSyncPutObjectRequest, ProfileSyncRequest,
         ProfileSyncResponse, ProfileSyncRootHealthRequest, ProfileSyncRootRequest,
-        ProfileSyncRootUpdate, ProfileSyncService, ProtocolService, ResourceBudget,
-        ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, StateRoot, TOR_ARTI_HTTP_PLUGIN,
-        TOR_PROTOCOL_SERVICE, TorService, TransportHttpRequest, TransportPlugin,
-        ipfs_gateway_http_url, ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url,
-        ipfs_kubo_profile_sync_added_object_id, ipfs_kubo_profile_sync_name_publish_url,
-        ipfs_kubo_profile_sync_name_resolve_url, ipfs_kubo_profile_sync_pin_add_url,
-        ipfs_kubo_profile_sync_pin_ls_has_recursive_pin, ipfs_kubo_profile_sync_pin_ls_url,
-        ipfs_kubo_profile_sync_pin_rm_url, ipfs_kubo_profile_sync_published_object_id,
-        ipfs_kubo_profile_sync_resolved_object_id, tor_http_target, tor_url_from_http_url,
+        ProfileSyncRootUpdate, ProfileSyncRuntimeBackend, ProfileSyncRuntimeConfig,
+        ProfileSyncService, ProtocolService, ResourceBudget, ResourceProfile,
+        SLATE_IPFS_TRANSPORT_ENV, StateRoot, TOR_ARTI_HTTP_PLUGIN, TOR_PROTOCOL_SERVICE,
+        TorService, TransportHttpRequest, TransportPlugin, ipfs_gateway_http_url,
+        ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url, ipfs_kubo_profile_sync_added_object_id,
+        ipfs_kubo_profile_sync_name_publish_url, ipfs_kubo_profile_sync_name_resolve_url,
+        ipfs_kubo_profile_sync_pin_add_url, ipfs_kubo_profile_sync_pin_ls_has_recursive_pin,
+        ipfs_kubo_profile_sync_pin_ls_url, ipfs_kubo_profile_sync_pin_rm_url,
+        ipfs_kubo_profile_sync_published_object_id, ipfs_kubo_profile_sync_resolved_object_id,
+        tor_http_target, tor_url_from_http_url,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -1943,6 +1951,94 @@ mod tests {
     }
 
     #[test]
+    fn profile_sync_runtime_options_default_to_local_backend() {
+        let config = ProfileSyncRuntimeConfig::from_runtime_options(None, None, None)
+            .expect("default profile-sync runtime config");
+
+        assert!(config.uses_local_backend());
+        assert!(matches!(config.backend(), ProfileSyncRuntimeBackend::Local));
+    }
+
+    #[test]
+    fn profile_sync_runtime_options_accept_kubo_backend() {
+        let config = ProfileSyncRuntimeConfig::from_runtime_options(
+            Some("kubo-rpc"),
+            Some("http://127.0.0.1:5050"),
+            Some("runtime-kubo-provider"),
+        )
+        .expect("Kubo profile-sync runtime config");
+
+        assert!(config.uses_kubo_rpc());
+        assert!(matches!(
+            config.backend(),
+            ProfileSyncRuntimeBackend::KuboRpc {
+                api_base_url,
+                provider_id,
+            } if api_base_url == "http://127.0.0.1:5050"
+                && provider_id == "runtime-kubo-provider"
+        ));
+    }
+
+    #[test]
+    fn profile_sync_runtime_options_select_kubo_when_rpc_endpoint_is_set() {
+        let config = ProfileSyncRuntimeConfig::from_runtime_options(
+            None,
+            Some("http://127.0.0.1:5050"),
+            None,
+        )
+        .expect("Kubo profile-sync runtime config");
+
+        assert!(matches!(
+            config.backend(),
+            ProfileSyncRuntimeBackend::KuboRpc {
+                api_base_url,
+                provider_id,
+            } if api_base_url == "http://127.0.0.1:5050"
+                && provider_id == super::DEFAULT_PROFILE_SYNC_KUBO_PROVIDER_ID
+        ));
+    }
+
+    #[test]
+    fn profile_sync_runtime_options_reject_provider_without_kubo_backend() {
+        assert!(matches!(
+            ProfileSyncRuntimeConfig::from_runtime_options(None, None, Some("provider-only")),
+            Err(BroadwebdError::UnsupportedRequest(error))
+                if error.contains(super::SLATE_PROFILE_SYNC_PROVIDER_ID_ENV)
+        ));
+        assert!(matches!(
+            ProfileSyncRuntimeConfig::from_runtime_options(
+                Some("local"),
+                None,
+                Some("provider-only")
+            ),
+            Err(BroadwebdError::UnsupportedRequest(error))
+                if error.contains(super::SLATE_PROFILE_SYNC_BACKEND_ENV)
+        ));
+    }
+
+    #[test]
+    fn profile_sync_runtime_options_reject_external_or_malformed_kubo_backend() {
+        assert!(matches!(
+            ProfileSyncRuntimeConfig::from_runtime_options(
+                Some("kubo-rpc"),
+                Some("https://kubo.example.test:5001"),
+                None
+            ),
+            Err(BroadwebdError::UnsupportedRequest(error))
+                if error.contains("Kubo RPC endpoint must be a numeric loopback address")
+        ));
+        assert!(matches!(
+            ProfileSyncRuntimeConfig::from_runtime_options(
+                Some("kubo-rpc"),
+                Some("http://127.0.0.1:5001"),
+                Some("../provider")
+            ),
+            Err(BroadwebdError::InvalidUrl(error))
+                if error.contains("invalid profile sync provider id")
+        ));
+    }
+
+    #[test]
     fn ipfs_public_gateway_transport_exposes_public_privacy_boundary() {
         let transport =
             IpfsGatewayTransport::public("https://ipfs.io").expect("public gateway transport");
@@ -2610,6 +2706,40 @@ mod tests {
                 .any(|capability| capability == "socketless-fixture")
         );
         assert_eq!(metadata.resource_profile, ResourceProfile::Medium);
+    }
+
+    #[test]
+    fn registry_can_apply_kubo_profile_sync_runtime_config() {
+        let config = ProfileSyncRuntimeConfig::from_runtime_options(
+            Some("kubo-rpc"),
+            Some("http://127.0.0.1:5050"),
+            Some("runtime-kubo-profile"),
+        )
+        .expect("Kubo profile-sync runtime config");
+        let registry = PluginRegistry::with_default_http_and_runtime_profile_sync_config(
+            IpfsConfig::default(),
+            BroadwebStatusReporter::new(),
+            config,
+        )
+        .expect("construct registry with runtime Kubo profile-sync config");
+        let metadata = registry
+            .list_application_services()
+            .into_iter()
+            .find(|metadata| metadata.id == PROFILE_SYNC_PLUGIN)
+            .expect("profile-sync service metadata");
+
+        assert!(
+            metadata
+                .capabilities
+                .iter()
+                .any(|capability| capability == "profile-sync/kubo-http")
+        );
+        assert!(
+            !metadata
+                .capabilities
+                .iter()
+                .any(|capability| capability == "profile-sync/fake")
+        );
     }
 
     #[test]

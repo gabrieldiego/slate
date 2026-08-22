@@ -9,7 +9,10 @@ use crate::{
     ResourceProfile, ServiceRequest, ServiceResponse,
 };
 use crate::{
-    IpfsKuboProfileSyncRpc, IpfsKuboProfileSyncRpcExecutor, IpfsKuboReqwestProfileSyncRpcExecutor,
+    DEFAULT_IPFS_KUBO_RPC_API, DEFAULT_PROFILE_SYNC_KUBO_PROVIDER_ID, IpfsKuboProfileSyncRpc,
+    IpfsKuboProfileSyncRpcExecutor, IpfsKuboReqwestProfileSyncRpcExecutor,
+    SLATE_PROFILE_SYNC_BACKEND_ENV, SLATE_PROFILE_SYNC_KUBO_RPC_ENV,
+    SLATE_PROFILE_SYNC_PROVIDER_ID_ENV,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
@@ -46,6 +49,99 @@ enum KuboProfileSyncTransport {
 impl KuboProfileSyncBackend {
     fn rpc(&self) -> &IpfsKuboProfileSyncRpc {
         &self.rpc
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ProfileSyncRuntimeBackend {
+    Local,
+    KuboRpc {
+        api_base_url: String,
+        provider_id: String,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncRuntimeConfig {
+    backend: ProfileSyncRuntimeBackend,
+}
+
+impl ProfileSyncRuntimeConfig {
+    pub fn local() -> Self {
+        Self {
+            backend: ProfileSyncRuntimeBackend::Local,
+        }
+    }
+
+    pub fn kubo_rpc(
+        api_base_url: impl Into<String>,
+        provider_id: impl Into<String>,
+    ) -> Result<Self, BroadwebdError> {
+        let api_base_url = api_base_url.into();
+        let provider_id = provider_id.into();
+        let _ = IpfsKuboProfileSyncRpc::local(api_base_url.as_str())?;
+        validate_profile_sync_provider_id(provider_id.as_str())?;
+        Ok(Self {
+            backend: ProfileSyncRuntimeBackend::KuboRpc {
+                api_base_url,
+                provider_id,
+            },
+        })
+    }
+
+    pub fn from_environment() -> Result<Self, BroadwebdError> {
+        let backend = std::env::var(SLATE_PROFILE_SYNC_BACKEND_ENV).ok();
+        let kubo_rpc = std::env::var(SLATE_PROFILE_SYNC_KUBO_RPC_ENV).ok();
+        let provider_id = std::env::var(SLATE_PROFILE_SYNC_PROVIDER_ID_ENV).ok();
+        Self::from_runtime_options(
+            backend.as_deref(),
+            kubo_rpc.as_deref(),
+            provider_id.as_deref(),
+        )
+    }
+
+    pub fn from_runtime_options(
+        backend: Option<&str>,
+        kubo_rpc_api: Option<&str>,
+        provider_id: Option<&str>,
+    ) -> Result<Self, BroadwebdError> {
+        let backend = non_empty_trimmed(backend);
+        let kubo_rpc_api = non_empty_trimmed(kubo_rpc_api);
+        let provider_id = non_empty_trimmed(provider_id);
+
+        match parse_profile_sync_backend(backend, kubo_rpc_api, provider_id)? {
+            ProfileSyncRuntimeBackendSelection::Local => {
+                Self::local_without_kubo_options(kubo_rpc_api, provider_id)
+            }
+            ProfileSyncRuntimeBackendSelection::KuboRpc => Self::kubo_rpc(
+                kubo_rpc_api.unwrap_or(DEFAULT_IPFS_KUBO_RPC_API),
+                provider_id.unwrap_or(DEFAULT_PROFILE_SYNC_KUBO_PROVIDER_ID),
+            ),
+        }
+    }
+
+    fn local_without_kubo_options(
+        kubo_rpc_api: Option<&str>,
+        provider_id: Option<&str>,
+    ) -> Result<Self, BroadwebdError> {
+        if kubo_rpc_api.is_some() || provider_id.is_some() {
+            return Err(BroadwebdError::UnsupportedRequest(format!(
+                "{SLATE_PROFILE_SYNC_BACKEND_ENV}=local cannot be combined with {SLATE_PROFILE_SYNC_KUBO_RPC_ENV} or {SLATE_PROFILE_SYNC_PROVIDER_ID_ENV}"
+            )));
+        }
+        Ok(Self::local())
+    }
+
+    pub fn backend(&self) -> &ProfileSyncRuntimeBackend {
+        &self.backend
+    }
+
+    pub fn uses_local_backend(&self) -> bool {
+        matches!(self.backend, ProfileSyncRuntimeBackend::Local)
+    }
+
+    pub fn uses_kubo_rpc(&self) -> bool {
+        matches!(self.backend, ProfileSyncRuntimeBackend::KuboRpc { .. })
     }
 }
 
@@ -1679,6 +1775,57 @@ fn local_fixture_provider_id(device_id: impl AsRef<str>) -> String {
 
 fn local_fixture_availability_provider_id(provider_id: impl AsRef<str>) -> String {
     format!("local-fixture-availability-{}", provider_id.as_ref())
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProfileSyncRuntimeBackendSelection {
+    Local,
+    KuboRpc,
+}
+
+fn non_empty_trimmed(input: Option<&str>) -> Option<&str> {
+    input.map(str::trim).filter(|value| !value.is_empty())
+}
+
+fn parse_profile_sync_backend(
+    backend: Option<&str>,
+    kubo_rpc_api: Option<&str>,
+    provider_id: Option<&str>,
+) -> Result<ProfileSyncRuntimeBackendSelection, BroadwebdError> {
+    let Some(backend) = backend else {
+        if kubo_rpc_api.is_some() {
+            return Ok(ProfileSyncRuntimeBackendSelection::KuboRpc);
+        }
+        if provider_id.is_some() {
+            return Err(BroadwebdError::UnsupportedRequest(format!(
+                "{SLATE_PROFILE_SYNC_PROVIDER_ID_ENV} requires {SLATE_PROFILE_SYNC_BACKEND_ENV}=kubo-rpc or {SLATE_PROFILE_SYNC_KUBO_RPC_ENV}"
+            )));
+        }
+        return Ok(ProfileSyncRuntimeBackendSelection::Local);
+    };
+
+    match backend {
+        "local" | "fake" | "local-fake" => Ok(ProfileSyncRuntimeBackendSelection::Local),
+        "kubo" | "kubo-rpc" | "local-kubo-rpc" => Ok(ProfileSyncRuntimeBackendSelection::KuboRpc),
+        value => Err(BroadwebdError::UnsupportedRequest(format!(
+            "unsupported {SLATE_PROFILE_SYNC_BACKEND_ENV}: {value}; expected local or kubo-rpc"
+        ))),
+    }
+}
+
+fn validate_profile_sync_provider_id(provider_id: &str) -> Result<(), BroadwebdError> {
+    if !provider_id.is_empty()
+        && provider_id.len() <= 512
+        && provider_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    {
+        return Ok(());
+    }
+
+    Err(BroadwebdError::InvalidUrl(format!(
+        "invalid profile sync provider id: {provider_id}"
+    )))
 }
 
 fn local_object_id(bytes: &[u8]) -> String {

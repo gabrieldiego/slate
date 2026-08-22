@@ -80,6 +80,11 @@ require_text \
     'broadwebd must expose an explicit local-Kubo profile-sync registry constructor.'
 
 require_text \
+    crates/broadwebd/src/services/profile_sync.rs \
+    'pub fn from_environment\(\) -> Result<Self, BroadwebdError>' \
+    'profile-sync backend selection must remain explicit runtime configuration.'
+
+require_text \
     crates/chrome/src/desktop/protocols/slate.rs \
     'settings/profile-sync/handoff/create' \
     'Slate settings protocol must expose the profile-sync handoff create route.'
@@ -129,7 +134,9 @@ run_test slate-broadwebd app_domain_metadata_syncs_through_profile_fixture
 run_test slate-broadwebd ipfs_kubo_profile_sync_fixture_executor_rejects_non_fixture_endpoints
 run_test slate-broadwebd kubo_profile_sync_fixture_reports_protocol_semantics_over_fixture_executor
 run_test slate-broadwebd kubo_profile_sync_http_service_advertises_real_http_boundary
+run_test slate-broadwebd profile_sync_runtime_options
 run_test slate-broadwebd registry_can_opt_into_kubo_profile_sync_without_fixture_transport
+run_test slate-broadwebd registry_can_apply_kubo_profile_sync_runtime_config
 run_test slate-broadwebd registry_rejects_external_kubo_profile_sync_endpoint
 run_test slate-broadwebd kubo_profile_sync_get_uses_transport_bytes_not_local_upload_metadata
 run_test slate-broadwebd kubo_profile_sync_model_round_trips_state_without_canned_responses

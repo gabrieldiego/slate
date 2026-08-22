@@ -289,6 +289,14 @@ directory. This mode is useful for local-node integration and deterministic
 tests, but the gateway transport remains the default because gateway semantics
 still handle broader web-style responses more completely.
 
+Profile sync uses separate runtime selection from page/content IPFS transport.
+`BroadwebDaemon::start_default_session` keeps the local in-memory profile-sync
+service unless `SLATE_PROFILE_SYNC_BACKEND=kubo-rpc` or
+`SLATE_PROFILE_SYNC_KUBO_RPC` is set. The Kubo profile-sync endpoint must be a
+numeric loopback URL and `SLATE_PROFILE_SYNC_PROVIDER_ID`, when provided, must
+be a simple identifier. This makes early local-node trials explicit while
+avoiding startup DNS, public gateways, or fixture transports by default.
+
 Both IPFS transports use the common HTTP response classification helper. A
 specific `Content-Type` header is preserved; generic binary responses may be
 classified from the URL path or an HTML-looking body so simple websites render

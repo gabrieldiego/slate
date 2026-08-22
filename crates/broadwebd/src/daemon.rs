@@ -2,8 +2,8 @@ use crate::{
     ApplicationServicePlugin, BroadwebdError, DEFAULT_PROFILE, DaemonHealth, DaemonLifecycle,
     DownloadRecord, FetchDisposition, FetchPurpose, HttpFetchRequest, HttpFetchResponse,
     IpfsConfig, PluginInstallReport, PluginMetadata, PluginRegistry, ProfileSyncRequest,
-    ProfileSyncResponse, ProtocolInstallReport, ProtocolService, ResourceBudget, StateRoot,
-    TemporaryDownloadRecord, TransportPlugin,
+    ProfileSyncResponse, ProfileSyncRuntimeConfig, ProtocolInstallReport, ProtocolService,
+    ResourceBudget, StateRoot, TemporaryDownloadRecord, TransportPlugin,
 };
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -71,10 +71,11 @@ impl BroadwebDaemon {
         Self::start_with_registry(
             default_session_state_root(),
             ResourceBudget::default(),
-            PluginRegistry::with_default_http_and_ipfs_config_and_status(
+            PluginRegistry::with_default_http_and_runtime_profile_sync_config(
                 IpfsConfig::from_environment()?,
                 default_session_status_reporter(),
-            ),
+                ProfileSyncRuntimeConfig::from_environment()?,
+            )?,
         )
     }
 
