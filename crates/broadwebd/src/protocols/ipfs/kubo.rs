@@ -231,6 +231,41 @@ impl IpfsKuboProfileSyncRpc {
     }
 
     #[cfg(any(test, feature = "test-fixtures"))]
+    pub fn publish_root_fixture(
+        &self,
+        key_id: &str,
+        object_id: &str,
+        budget: &ResourceBudget,
+    ) -> Result<String, BroadwebdError> {
+        self.require_internal_fixture_endpoint()?;
+        let request = self.publish_root_request(key_id, object_id)?;
+        let response = fetch_internal_kubo_profile_sync_fixture(&request, budget)?;
+        require_kubo_profile_sync_success("name/publish", response.status_code)?;
+        let published_object_id =
+            ipfs_kubo_profile_sync_published_object_id(response.body.as_slice())?;
+        if published_object_id == object_id {
+            return Ok(published_object_id);
+        }
+
+        Err(BroadwebdError::Request(format!(
+            "Kubo profile-sync name/publish returned {published_object_id}, expected {object_id}"
+        )))
+    }
+
+    #[cfg(any(test, feature = "test-fixtures"))]
+    pub fn resolve_root_fixture(
+        &self,
+        name: &str,
+        budget: &ResourceBudget,
+    ) -> Result<String, BroadwebdError> {
+        self.require_internal_fixture_endpoint()?;
+        let request = self.resolve_root_request(name)?;
+        let response = fetch_internal_kubo_profile_sync_fixture(&request, budget)?;
+        require_kubo_profile_sync_success("name/resolve", response.status_code)?;
+        ipfs_kubo_profile_sync_resolved_object_id(response.body.as_slice())
+    }
+
+    #[cfg(any(test, feature = "test-fixtures"))]
     fn require_internal_fixture_endpoint(&self) -> Result<(), BroadwebdError> {
         if self.endpoint.is_internal_fixture() {
             return Ok(());

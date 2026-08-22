@@ -313,6 +313,10 @@ Current baseline:
   encrypted profile-sync objects: retain through `pin/add`, verify recursive
   retention through `pin/ls`, and release through `pin/rm`. The tests still run
   entirely inside the in-process fixture and do not open loopback sockets.
+- Kubo mutable-root fixture calls now publish and resolve profile-sync roots
+  through the socketless IPNS `name/publish` and `name/resolve` paths. Publish
+  rejects a Kubo response that points at a different object id than the one Slate
+  requested, so a mismatched root cannot be accepted by the backend client.
 - broadwebd's own HTTP fixture unit tests now start daemons with
   `InProcessBroadwebNetwork` fixture registries whenever they consume
   `slate-fixture-http://` URLs. That keeps the production default direct HTTP

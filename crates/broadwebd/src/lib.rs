@@ -2288,6 +2288,69 @@ mod tests {
     }
 
     #[test]
+    fn ipfs_kubo_profile_sync_fixture_publishes_and_resolves_root() {
+        let object_id = "bafybeigdyrztprofileobject";
+        let fixture = InProcessBroadwebNetwork::new().kubo_rpc_sequence(vec![
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body: br#"{"Name":"k51syncroot","Value":"/ipfs/bafybeigdyrztprofileobject"}"#
+                    .to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body: br#"{"Path":"/ipfs/bafybeigdyrztprofileobject"}"#.to_vec(),
+            },
+        ]);
+        let rpc = IpfsKuboProfileSyncRpc::local(fixture.base_url())
+            .expect("fixture Kubo profile sync RPC");
+
+        assert_eq!(
+            rpc.publish_root_fixture("settings-latest", object_id, &ResourceBudget::default())
+                .expect("publish profile root through fixture Kubo RPC"),
+            object_id
+        );
+        assert_eq!(
+            rpc.resolve_root_fixture("k51syncroot", &ResourceBudget::default())
+                .expect("resolve profile root through fixture Kubo RPC"),
+            object_id
+        );
+        assert_eq!(
+            fixture.finish(),
+            vec![
+                "POST /api/v0/name/publish?arg=%2Fipfs%2Fbafybeigdyrztprofileobject&key=settings-latest&allow-offline=true HTTP/1.1",
+                "POST /api/v0/name/resolve?arg=%2Fipns%2Fk51syncroot&recursive=false HTTP/1.1",
+            ]
+        );
+    }
+
+    #[test]
+    fn ipfs_kubo_profile_sync_fixture_rejects_mismatched_published_root() {
+        let object_id = "bafybeigdyrztprofileobject";
+        let fixture = InProcessBroadwebNetwork::new().kubo_rpc_response(InternalKuboRpcResponse {
+            status_code: 200,
+            content_type: "application/json".to_string(),
+            body: br#"{"Name":"k51syncroot","Value":"/ipfs/bafybeigdyrztdifferentobject"}"#
+                .to_vec(),
+        });
+        let rpc = IpfsKuboProfileSyncRpc::local(fixture.base_url())
+            .expect("fixture Kubo profile sync RPC");
+
+        assert!(matches!(
+            rpc.publish_root_fixture("settings-latest", object_id, &ResourceBudget::default()),
+            Err(BroadwebdError::Request(message))
+                if message == "Kubo profile-sync name/publish returned bafybeigdyrztdifferentobject, expected bafybeigdyrztprofileobject"
+        ));
+        assert_eq!(
+            fixture.finish(),
+            vec![
+                "POST /api/v0/name/publish?arg=%2Fipfs%2Fbafybeigdyrztprofileobject&key=settings-latest&allow-offline=true HTTP/1.1"
+            ]
+        );
+    }
+
+    #[test]
     fn ipfs_kubo_profile_sync_response_parsers_extract_object_ids() {
         let object_id = "bafybeigdyrztprofileobject";
 
