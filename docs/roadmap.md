@@ -1014,6 +1014,11 @@ Current baseline:
   rule at the runtime boundary: a provider-authority signer can publish a head
   object into the simulated network, but the receiver rejects it without
   advancing the stored per-device root.
+- The account membership log now has an `enroll-provider` record kind for
+  account-authorized availability providers. Applying the record stores the
+  provider public key and materializes `sync_devices.provider_authority = true`
+  transactionally, so providers can be distributed through the membership log
+  without gaining membership-signing or profile-state authority.
 
 Next:
 

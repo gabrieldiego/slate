@@ -30,6 +30,7 @@ pub const PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND: &str = "settings-snapshot"
 pub const PROFILE_SYNC_MANIFEST_OBJECT_KIND: &str = "manifest";
 pub const PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND: &str = "device-head";
 pub const PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE: &str = "enroll-device";
+pub const PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER: &str = "enroll-provider";
 pub const PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE: &str = "revoke-device";
 pub const PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY: &str = "rotate-device-key";
 pub const DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH: i64 = 1;
@@ -4764,6 +4765,7 @@ impl SlateProfileDatabase {
 
         let device_key = match membership_record.record_kind.as_str() {
             PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE
+            | PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER
             | PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY => {
                 Some(self.register_sync_device_public_key_in_transaction(
                     transaction,
@@ -4874,13 +4876,35 @@ impl SlateProfileDatabase {
         membership_record: &ProfileSyncMembershipRecord,
     ) -> Result<(), StorageError> {
         let now = unix_time_seconds()?;
-        record_sync_device_roster_entry_in_transaction(
-            transaction,
-            membership_record.profile.as_str(),
-            membership_record.device_id.as_str(),
-            membership_record.membership_epoch,
-            now,
-        )
+        match membership_record.record_kind.as_str() {
+            PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE => {
+                record_sync_device_roster_entry_with_provider_authority_in_transaction(
+                    transaction,
+                    membership_record.profile.as_str(),
+                    membership_record.device_id.as_str(),
+                    membership_record.membership_epoch,
+                    false,
+                    now,
+                )
+            }
+            PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER => {
+                record_sync_device_roster_entry_with_provider_authority_in_transaction(
+                    transaction,
+                    membership_record.profile.as_str(),
+                    membership_record.device_id.as_str(),
+                    membership_record.membership_epoch,
+                    true,
+                    now,
+                )
+            }
+            _ => record_sync_device_roster_entry_in_transaction(
+                transaction,
+                membership_record.profile.as_str(),
+                membership_record.device_id.as_str(),
+                membership_record.membership_epoch,
+                now,
+            ),
+        }
         .map_err(|source| self.database_error(source))?;
         Ok(())
     }
@@ -4933,7 +4957,8 @@ impl SlateProfileDatabase {
         membership_record: &ProfileSyncMembershipRecord,
     ) -> Result<(), StorageError> {
         match membership_record.record_kind.as_str() {
-            PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE => {
+            PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE
+            | PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER => {
                 if self
                     .sync_device_public_key_in_transaction(
                         transaction,
@@ -4943,8 +4968,10 @@ impl SlateProfileDatabase {
                     .is_some_and(|existing_key| existing_key.trusted)
                 {
                     return Err(StorageError::InvalidProfileSyncMembershipRecord(format!(
-                        "enroll-device record {} cannot replace already trusted device {}; use rotate-device-key",
-                        membership_record.record_id, membership_record.device_id
+                        "{} record {} cannot replace already trusted device {}; use rotate-device-key",
+                        membership_record.record_kind,
+                        membership_record.record_id,
+                        membership_record.device_id
                     )));
                 }
             }
@@ -8476,6 +8503,7 @@ fn validate_profile_sync_membership_record(
 
     match record.record_kind.as_str() {
         PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE
+        | PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER
         | PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY => {
             let public_key = record.device_public_key.as_ref().ok_or_else(|| {
                 StorageError::InvalidProfileSyncMembershipRecord(format!(
@@ -8566,6 +8594,7 @@ fn is_valid_profile_sync_membership_record_kind(record_kind: &str) -> bool {
     matches!(
         record_kind,
         PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE
+            | PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER
             | PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE
             | PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY
     )
@@ -8605,6 +8634,34 @@ fn record_sync_device_roster_entry_in_transaction(
            membership_epoch = excluded.membership_epoch,
            last_seen_at = excluded.last_seen_at",
         params![profile, device_id, membership_epoch, now],
+    )?;
+    Ok(())
+}
+
+fn record_sync_device_roster_entry_with_provider_authority_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    profile: &str,
+    device_id: &str,
+    membership_epoch: i64,
+    provider_authority: bool,
+    now: i64,
+) -> Result<(), rusqlite::Error> {
+    transaction.execute(
+        "INSERT INTO sync_devices
+           (profile, device_id, label, membership_epoch, provider_authority,
+            created_at, last_seen_at)
+         VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?5)
+         ON CONFLICT(profile, device_id) DO UPDATE SET
+           membership_epoch = excluded.membership_epoch,
+           provider_authority = excluded.provider_authority,
+           last_seen_at = excluded.last_seen_at",
+        params![
+            profile,
+            device_id,
+            membership_epoch,
+            bool_to_integer(provider_authority),
+            now
+        ],
     )?;
     Ok(())
 }
@@ -14067,6 +14124,98 @@ mod tests {
             StorageError::UntrustedSyncMembershipSigner { profile, device_id }
                 if profile == DEFAULT_PROFILE_ID && device_id == "device-c"
         ));
+    }
+
+    #[test]
+    fn signed_sync_account_membership_records_enroll_provider_authority_devices() {
+        let database_path =
+            test_dir("sync-account-membership-enroll-provider").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let signer_a = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let provider_signer = ProfileSyncDeviceSigner::generate("provider-device").unwrap();
+        let signer_c = ProfileSyncDeviceSigner::generate("device-c").unwrap();
+        let enroll_a = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-device-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-a".to_string(),
+            device_public_key: Some(signer_a.public_key().unwrap()),
+            created_at: 10,
+        };
+        database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_a).as_slice(),
+            )
+            .unwrap();
+
+        let enroll_provider = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-enroll-provider-device".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 2,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER.to_string(),
+            device_id: "provider-device".to_string(),
+            device_public_key: Some(provider_signer.public_key().unwrap()),
+            created_at: 20,
+        };
+        let provider_application = database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_provider).as_slice(),
+            )
+            .unwrap();
+        assert!(!provider_application.bootstrapped);
+        assert!(provider_application.applied);
+        assert_eq!(
+            provider_application.membership_record.record_kind,
+            PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER
+        );
+        let provider_key = provider_application
+            .device_key
+            .expect("provider key application");
+        assert_eq!(
+            provider_key.public_key,
+            provider_signer.public_key().unwrap()
+        );
+        assert_eq!(provider_key.membership_epoch, 2);
+        assert!(provider_key.trusted);
+        let provider_device = database
+            .sync_devices(DEFAULT_PROFILE_ID)
+            .unwrap()
+            .into_iter()
+            .find(|device| device.device_id == "provider-device")
+            .expect("provider roster entry");
+        assert_eq!(provider_device.membership_epoch, 2);
+        assert!(provider_device.provider_authority);
+
+        let provider_enrolls_c = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-3-provider-enrolls-device-c".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 3,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-c".to_string(),
+            device_public_key: Some(signer_c.public_key().unwrap()),
+            created_at: 30,
+        };
+        let error = database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&provider_signer, &provider_enrolls_c).as_slice(),
+            )
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            StorageError::InvalidProfileSyncMembershipRecord(reason)
+                if reason.contains("provider-device")
+                    && reason.contains("provider authority")
+        ));
+        assert!(
+            database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "device-c")
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
