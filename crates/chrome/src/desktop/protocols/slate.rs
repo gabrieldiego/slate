@@ -23,7 +23,8 @@ use slate_broadwebd::{
 };
 use slate_profile_sync::{
     LocalSettingsSyncPreviewCycleReport, LocalSettingsSyncPreviewError,
-    run_local_settings_sync_preview_cycle,
+    LocalSettingsSyncTwoDevicePreviewCycleReport, run_local_settings_sync_preview_cycle,
+    run_local_settings_sync_two_device_preview_cycle,
 };
 use slate_storage::{
     DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID, ProfileSyncLocalReadinessReport,
@@ -99,6 +100,7 @@ impl ProtocolHandler for SlateProtocolHandler {
             "settings/profile-sync/check",
             "settings/profile-sync/local-provider",
             "settings/profile-sync/run-local",
+            "settings/profile-sync/run-local-two-device",
             "downloads",
             "downloads/state",
             "download",
@@ -142,6 +144,10 @@ impl ProtocolHandler for SlateProtocolHandler {
 
         if is_slate_settings_profile_sync_run_local_url(url.as_url()) {
             return self.run_profile_sync_preview_local_trial_response(request);
+        }
+
+        if is_slate_settings_profile_sync_run_local_two_device_url(url.as_url()) {
+            return self.run_profile_sync_preview_two_device_local_trial_response(request);
         }
 
         if is_slate_downloads_state_url(url.as_url()) {
@@ -403,6 +409,49 @@ impl SlateProtocolHandler {
         }
     }
 
+    fn run_profile_sync_preview_two_device_local_trial_response(
+        &self,
+        request: &Request,
+    ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
+        let sync_secret = {
+            let mut state = self.profile_sync_preview.lock().unwrap();
+            self.refresh_profile_sync_preview_metadata(&mut state);
+            match state.active_sync_secret(DEFAULT_PROFILE_ID) {
+                Ok(Some(sync_secret)) => sync_secret,
+                Ok(None) => {
+                    state.last_error = Some(
+                        "create or import a profile sync key before running a two-device trial"
+                            .to_string(),
+                    );
+                    let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+                    return json_response(request, 400, state.to_json(readiness.as_ref()));
+                }
+                Err(error) => {
+                    state.last_error = Some(error.to_string());
+                    return json_response(request, 400, state.to_json(None));
+                }
+            }
+        };
+        let trial = self.run_profile_sync_preview_two_device_local_trial(&sync_secret);
+        let mut state = self.profile_sync_preview.lock().unwrap();
+        match trial {
+            Ok(Some(report)) => {
+                state.mark_two_device_trial_result(&report, unix_time_seconds());
+                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+                json_response(request, 200, state.to_json(readiness.as_ref()))
+            }
+            Ok(None) => {
+                state.last_error = Some("settings database is not available".to_string());
+                json_response(request, 500, state.to_json(None))
+            }
+            Err(error) => {
+                state.last_error = Some(error.to_string());
+                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+                json_response(request, 500, state.to_json(readiness.as_ref()))
+            }
+        }
+    }
+
     fn activate_profile_sync_preview_from_secret(
         &self,
         sync_secret: &SlateSyncSecret,
@@ -449,6 +498,24 @@ impl SlateProtocolHandler {
             .transpose()
     }
 
+    fn run_profile_sync_preview_two_device_local_trial(
+        &self,
+        sync_secret: &SlateSyncSecret,
+    ) -> Result<Option<LocalSettingsSyncTwoDevicePreviewCycleReport>, LocalSettingsSyncPreviewError>
+    {
+        self.database
+            .as_ref()
+            .map(|database| {
+                run_local_settings_sync_two_device_preview_cycle(
+                    database,
+                    DEFAULT_PROFILE_ID,
+                    sync_secret,
+                    default_session_state_root().join("profile-sync-preview"),
+                )
+            })
+            .transpose()
+    }
+
     fn profile_sync_local_readiness_report(
         &self,
     ) -> Result<Option<ProfileSyncLocalReadinessReport>, StorageError> {
@@ -483,6 +550,7 @@ struct ProfileSyncPreviewState {
     active_key_id: Option<String>,
     local_device_id: Option<String>,
     last_trial: Option<ProfileSyncPreviewTrialState>,
+    last_two_device_trial: Option<ProfileSyncPreviewTwoDeviceTrialState>,
     last_error: Option<String>,
 }
 
@@ -560,6 +628,77 @@ impl ProfileSyncPreviewTrialState {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ProfileSyncPreviewTwoDeviceTrialState {
+    completed_at: i64,
+    publisher_device_id: String,
+    receiver_device_id: String,
+    provider_id: String,
+    provider_endpoint_ref: String,
+    preview_setting_key: String,
+    preview_setting_value: String,
+    publisher_published_step_count: usize,
+    publisher_published_object_count: usize,
+    publisher_retained_object_count: usize,
+    publisher_retained_provider_count: usize,
+    receiver_pulled_membership_application_count: usize,
+    receiver_applied_setting_count: usize,
+    receiver_published_step_count: usize,
+    receiver_received_value: Option<String>,
+    receiver_membership_record_count: usize,
+    receiver_trusted_device_count: usize,
+}
+
+impl ProfileSyncPreviewTwoDeviceTrialState {
+    fn from_report(
+        report: &LocalSettingsSyncTwoDevicePreviewCycleReport,
+        completed_at: i64,
+    ) -> Self {
+        Self {
+            completed_at,
+            publisher_device_id: report.publisher_device_id.clone(),
+            receiver_device_id: report.receiver_device_id.clone(),
+            provider_id: report.provider_id.clone(),
+            provider_endpoint_ref: report.provider_endpoint_ref.clone(),
+            preview_setting_key: report.preview_setting_key.clone(),
+            preview_setting_value: report.preview_setting_value.clone(),
+            publisher_published_step_count: report.publisher_published_step_count,
+            publisher_published_object_count: report.publisher_published_object_count,
+            publisher_retained_object_count: report.publisher_retained_object_count,
+            publisher_retained_provider_count: report.publisher_retained_provider_count,
+            receiver_pulled_membership_application_count: report
+                .receiver_pulled_membership_application_count,
+            receiver_applied_setting_count: report.receiver_applied_setting_count,
+            receiver_published_step_count: report.receiver_published_step_count,
+            receiver_received_value: report.receiver_received_value.clone(),
+            receiver_membership_record_count: report.receiver_membership_record_count,
+            receiver_trusted_device_count: report.receiver_trusted_device_count,
+        }
+    }
+
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "completed_at": self.completed_at,
+            "publisher_device_id": self.publisher_device_id.as_str(),
+            "receiver_device_id": self.receiver_device_id.as_str(),
+            "provider_id": self.provider_id.as_str(),
+            "provider_endpoint_ref": self.provider_endpoint_ref.as_str(),
+            "preview_setting_key": self.preview_setting_key.as_str(),
+            "preview_setting_value": self.preview_setting_value.as_str(),
+            "publisher_published_step_count": self.publisher_published_step_count,
+            "publisher_published_object_count": self.publisher_published_object_count,
+            "publisher_retained_object_count": self.publisher_retained_object_count,
+            "publisher_retained_provider_count": self.publisher_retained_provider_count,
+            "receiver_pulled_membership_application_count": self.receiver_pulled_membership_application_count,
+            "receiver_applied_setting_count": self.receiver_applied_setting_count,
+            "receiver_published_step_count": self.receiver_published_step_count,
+            "receiver_received_value": self.receiver_received_value.as_deref(),
+            "receiver_membership_record_count": self.receiver_membership_record_count,
+            "receiver_trusted_device_count": self.receiver_trusted_device_count,
+        })
+    }
+}
+
 impl ProfileSyncPreviewState {
     fn create_secret(
         &mut self,
@@ -572,6 +711,7 @@ impl ProfileSyncPreviewState {
         self.active_key_id = None;
         self.local_device_id = None;
         self.last_trial = None;
+        self.last_two_device_trial = None;
         self.last_error = None;
         Ok(secret)
     }
@@ -588,6 +728,7 @@ impl ProfileSyncPreviewState {
         self.active_key_id = None;
         self.local_device_id = None;
         self.last_trial = None;
+        self.last_two_device_trial = None;
         self.last_error = None;
         Ok(sync_secret)
     }
@@ -626,6 +767,20 @@ impl ProfileSyncPreviewState {
         self.last_error = None;
     }
 
+    fn mark_two_device_trial_result(
+        &mut self,
+        report: &LocalSettingsSyncTwoDevicePreviewCycleReport,
+        completed_at: i64,
+    ) {
+        self.metadata_ready = true;
+        self.local_device_id = Some(report.publisher_device_id.clone());
+        self.last_two_device_trial = Some(ProfileSyncPreviewTwoDeviceTrialState::from_report(
+            report,
+            completed_at,
+        ));
+        self.last_error = None;
+    }
+
     fn to_json(&self, readiness: Option<&ProfileSyncLocalReadinessReport>) -> String {
         let active_export_text = self
             .active_export
@@ -647,6 +802,7 @@ impl ProfileSyncPreviewState {
             "local_device_id": self.local_device_id.as_deref(),
             "local_sync": readiness.map(profile_sync_local_readiness_json),
             "last_trial": self.last_trial.as_ref().map(ProfileSyncPreviewTrialState::to_json),
+            "last_two_device_trial": self.last_two_device_trial.as_ref().map(ProfileSyncPreviewTwoDeviceTrialState::to_json),
             "export_filename": "slate-sync-secret.json",
             "export_text": active_export_text,
             "last_error": self.last_error.as_deref(),
@@ -1130,6 +1286,12 @@ fn is_slate_settings_profile_sync_run_local_url(url: &Url) -> bool {
         && url.path().trim_start_matches('/') == "profile-sync/run-local"
 }
 
+fn is_slate_settings_profile_sync_run_local_two_device_url(url: &Url) -> bool {
+    url.scheme() == "slate"
+        && url.host_str() == Some("settings")
+        && url.path().trim_start_matches('/') == "profile-sync/run-local-two-device"
+}
+
 fn profile_sync_secret_export_text_from_url(url: &Url) -> Option<String> {
     if !is_slate_settings_profile_sync_import_url(url) {
         return None;
@@ -1428,6 +1590,8 @@ mod tests {
         let check = Url::parse("slate://settings/profile-sync/check").unwrap();
         let local_provider = Url::parse("slate://settings/profile-sync/local-provider").unwrap();
         let run_local = Url::parse("slate://settings/profile-sync/run-local").unwrap();
+        let run_two_device =
+            Url::parse("slate://settings/profile-sync/run-local-two-device").unwrap();
 
         assert!(is_slate_settings_profile_sync_state_url(&state));
         assert!(is_slate_settings_profile_sync_create_url(&create));
@@ -1437,12 +1601,18 @@ mod tests {
             &local_provider
         ));
         assert!(is_slate_settings_profile_sync_run_local_url(&run_local));
+        assert!(is_slate_settings_profile_sync_run_local_two_device_url(
+            &run_two_device
+        ));
         assert!(!is_slate_settings_profile_sync_create_url(&state));
         assert!(!is_slate_settings_profile_sync_import_url(&create));
         assert!(!is_slate_settings_profile_sync_check_url(&import));
         assert!(!is_slate_settings_profile_sync_local_provider_url(&check));
         assert!(!is_slate_settings_profile_sync_run_local_url(
             &local_provider
+        ));
+        assert!(!is_slate_settings_profile_sync_run_local_two_device_url(
+            &run_local
         ));
         assert_eq!(
             profile_sync_secret_export_text_from_url(&import).as_deref(),
@@ -1728,6 +1898,7 @@ mod tests {
         assert!(settings_page.contains("id=\"profile-sync-provider\""));
         assert!(settings_page.contains("id=\"profile-sync-check\""));
         assert!(settings_page.contains("id=\"profile-sync-run-local\""));
+        assert!(settings_page.contains("id=\"profile-sync-run-local-two-device\""));
         assert!(settings_page.contains("slate://settings/profile-sync/"));
         assert!(settings_page.contains("slate-sync-secret.json"));
         assert!(!settings_page.contains("replaceState"));

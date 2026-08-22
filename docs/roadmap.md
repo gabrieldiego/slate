@@ -1347,10 +1347,16 @@ Current baseline:
   authority, writes a harmless preview setting delta, materializes a socketless
   broadwebd fixture provider, publishes encrypted settings and membership
   objects, retains them on the simulated provider, and reports the object
-  counts back to the page. This is still a single-device simulation: QR
-  enrollment, handoff-file import/export, real provider daemons, remote-device
-  application, conflict handling, and production cadence policy remain future
-  work.
+  counts back to the page.
+- The Profile Sync Preview can also run a two-device local simulation. The
+  preview creates a temporary receiver `slate-settings.db`, derives its signer
+  from the same session key-file secret, signs that receiver into the
+  publisher's membership log, publishes one encrypted setting from the real
+  local database, pulls it into the receiver through socketless broadwebd
+  fixture daemons, and reports the receiver-applied setting count. This models
+  enrollment and remote application without opening ports or using a public
+  protocol. QR enrollment, handoff-file import/export, real provider daemons,
+  conflict handling, and production cadence policy remain future work.
 - `make profile-sync-boundary-check` now provides a low-memory regression gate
   for the sync work. It runs focused rail-app sync-domain checks, verifies that
   visible rail app sync descriptors match the seeded `slate-settings.db`
@@ -1359,8 +1365,8 @@ Current baseline:
   secret-backed local signer enrollment, and non-secret local activation
   metadata, then covers local readiness reports, preview provider activation,
   storage/provider metadata, typed app-domain cursors, the broadwebd app-domain
-  fixture, the profile-sync scheduler fixture, and the local Profile Sync
-  Preview trial through the build-limits wrapper. Chrome settings watcher
+  fixture, the profile-sync scheduler fixture, and both local Profile Sync
+  Preview trials through the build-limits wrapper. Chrome settings watcher
   coverage is opt-in because compiling `slate-chrome` currently pulls Servo
   script bindings and exceeded the 2 GiB low-memory profile during verification.
 

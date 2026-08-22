@@ -20,8 +20,9 @@ use slate_broadwebd::{
 };
 use slate_routing::{Multiaddr, RoutingMode, RoutingPlan};
 use slate_storage::{
-    DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH, DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
-    DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_KIND, EncryptedSyncObject, IncomingSyncSettingText,
+    DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+    DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID, DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_KIND,
+    EncryptedSyncObject, IncomingSyncSettingText,
     PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305, PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
     PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, PROFILE_SYNC_MANIFEST_OBJECT_KIND,
     PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE,
@@ -55,6 +56,9 @@ pub const PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS: usize = 512;
 pub const LOCAL_SETTINGS_SYNC_PREVIEW_NETWORK_ID: &str = "preview";
 pub const LOCAL_SETTINGS_SYNC_PREVIEW_ROOT_ID: &str = "settings/latest";
 pub const LOCAL_SETTINGS_SYNC_PREVIEW_SETTING_KEY: &str = "profile_sync.preview.last_run";
+pub const LOCAL_SETTINGS_SYNC_PREVIEW_REMOTE_SETTING_KEY: &str =
+    "profile_sync.preview.two_device_last_run";
+pub const LOCAL_SETTINGS_SYNC_PREVIEW_RECEIVER_DEVICE_ID: &str = "local-preview-receiver";
 const PROFILE_SYNC_PROVIDER_MULTIADDR_PRIVACY_BOUNDARY: &str =
     "profile-sync provider endpoint; no browser navigation or public gateway fallback";
 
@@ -81,6 +85,27 @@ pub struct LocalSettingsSyncPreviewCycleReport {
     pub all_fixture_providers_materialized: bool,
     pub degraded_before: bool,
     pub degraded_after: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LocalSettingsSyncTwoDevicePreviewCycleReport {
+    pub profile: String,
+    pub publisher_device_id: String,
+    pub receiver_device_id: String,
+    pub provider_id: String,
+    pub provider_endpoint_ref: String,
+    pub preview_setting_key: String,
+    pub preview_setting_value: String,
+    pub publisher_published_step_count: usize,
+    pub publisher_published_object_count: usize,
+    pub publisher_retained_object_count: usize,
+    pub publisher_retained_provider_count: usize,
+    pub receiver_pulled_membership_application_count: usize,
+    pub receiver_applied_setting_count: usize,
+    pub receiver_published_step_count: usize,
+    pub receiver_received_value: Option<String>,
+    pub receiver_membership_record_count: usize,
+    pub receiver_trusted_device_count: usize,
 }
 
 #[derive(Debug)]
@@ -170,6 +195,16 @@ impl LocalSettingsSyncPreviewStateRoot {
 
     fn provider_state_root(&self) -> PathBuf {
         self.path.join("provider")
+    }
+
+    fn receiver_state_root(&self) -> PathBuf {
+        self.path.join("receiver")
+    }
+
+    fn receiver_database_path(&self) -> PathBuf {
+        self.path
+            .join("receiver-db")
+            .join(DEFAULT_DATABASE_FILE_NAME)
     }
 }
 
@@ -7951,6 +7986,155 @@ pub fn run_local_settings_sync_preview_cycle(
     })
 }
 
+pub fn run_local_settings_sync_two_device_preview_cycle(
+    database: &SlateProfileDatabase,
+    profile: &str,
+    sync_secret: &SlateSyncSecret,
+    state_root_parent: impl Into<PathBuf>,
+) -> Result<LocalSettingsSyncTwoDevicePreviewCycleReport, LocalSettingsSyncPreviewError> {
+    database.activate_local_profile_sync_from_secret(profile, sync_secret)?;
+    let provider_endpoint_ref = format!(
+        "{IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX}{LOCAL_SETTINGS_SYNC_PREVIEW_NETWORK_ID}/{DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID}"
+    );
+    database.activate_local_profile_sync_preview_provider_from_secret(
+        profile,
+        sync_secret,
+        Some(provider_endpoint_ref.clone()),
+    )?;
+    let publisher_device_id = database.local_sync_device_id().to_string();
+    let publisher_signer = sync_secret.derive_profile_sync_device_signer(
+        profile,
+        publisher_device_id.as_str(),
+        DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+    )?;
+
+    let state_root = LocalSettingsSyncPreviewStateRoot::prepare(state_root_parent)?;
+    let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+        state_root.receiver_database_path(),
+        LOCAL_SETTINGS_SYNC_PREVIEW_RECEIVER_DEVICE_ID,
+    )?;
+    let receiver_activation =
+        receiver_database.activate_local_profile_sync_from_secret(profile, sync_secret)?;
+    for application in &receiver_activation.membership_applications {
+        database.apply_signed_sync_account_membership_record(
+            application.membership_record.signed_record.as_slice(),
+        )?;
+    }
+
+    let preview_setting_value = format!("two-device-preview-run-{}", unix_time_seconds());
+    database.set_sync_setting_text(
+        profile,
+        SYNC_DOMAIN_SETTINGS,
+        LOCAL_SETTINGS_SYNC_PREVIEW_REMOTE_SETTING_KEY,
+        preview_setting_value.as_str(),
+    )?;
+
+    let fixture = LocalProfileSyncFixture::new();
+    let mut publisher_registry = PluginRegistry::new();
+    publisher_registry.register_service(fixture.service_for_device(publisher_device_id.as_str()));
+    let mut receiver_registry = PluginRegistry::new();
+    receiver_registry.register_service(
+        fixture.service_for_device(LOCAL_SETTINGS_SYNC_PREVIEW_RECEIVER_DEVICE_ID),
+    );
+    let mut provider_registry = PluginRegistry::new();
+    provider_registry.register_service(fixture.service_for_provider_with_roles(
+        DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
+        DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_KIND,
+        ProfileSyncProviderRoles::availability_provider(),
+    ));
+
+    let budget = ResourceBudget::default();
+    let publisher_daemon = BroadwebDaemon::start_with_registry(
+        state_root.device_state_root(),
+        budget.clone(),
+        publisher_registry,
+    )?;
+    let receiver_daemon = BroadwebDaemon::start_with_registry(
+        state_root.receiver_state_root(),
+        budget.clone(),
+        receiver_registry,
+    )?;
+    let provider_daemon = BroadwebDaemon::start_with_registry(
+        state_root.provider_state_root(),
+        budget,
+        provider_registry,
+    )?;
+    let provider_daemons = [SettingsSyncInProcessFixtureProviderDaemon::new(
+        DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
+        LOCAL_SETTINGS_SYNC_PREVIEW_NETWORK_ID,
+        &provider_daemon,
+    )];
+    let policy = SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 8, 1);
+    let config = SettingsSyncSchedulerConfig::new(
+        profile,
+        LOCAL_SETTINGS_SYNC_PREVIEW_ROOT_ID,
+        policy.clone(),
+    );
+    let publisher_run = BroadwebdSettingsSyncScheduler::new(&publisher_daemon)
+        .run_once_with_membership_log_and_stored_in_process_fixture_retention_provider_daemons_and_sync_secret(
+            database,
+            &config,
+            PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            sync_secret,
+            &publisher_signer,
+            4,
+            &provider_daemons,
+        )?;
+
+    let receiver_signer = sync_secret.derive_profile_sync_device_signer(
+        profile,
+        LOCAL_SETTINGS_SYNC_PREVIEW_RECEIVER_DEVICE_ID,
+        DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+    )?;
+    let receiver_run = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
+        .run_settings_sync_cycle_with_membership_log_and_sync_secret(
+            &receiver_database,
+            profile,
+            LOCAL_SETTINGS_SYNC_PREVIEW_ROOT_ID,
+            PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            sync_secret,
+            &receiver_signer,
+            ProfileSyncRetentionPolicy::default(),
+            4,
+            8,
+        )
+        .map_err(ProfileSyncCycleWithHealthError::from)?;
+    let receiver_value = receiver_database
+        .get_sync_setting_text(
+            profile,
+            SYNC_DOMAIN_SETTINGS,
+            LOCAL_SETTINGS_SYNC_PREVIEW_REMOTE_SETTING_KEY,
+        )?
+        .map(|setting| setting.value);
+    let receiver_readiness = receiver_database.profile_sync_local_readiness(profile)?;
+    Ok(LocalSettingsSyncTwoDevicePreviewCycleReport {
+        profile: profile.to_string(),
+        publisher_device_id,
+        receiver_device_id: LOCAL_SETTINGS_SYNC_PREVIEW_RECEIVER_DEVICE_ID.to_string(),
+        provider_id: DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID.to_string(),
+        provider_endpoint_ref,
+        preview_setting_key: LOCAL_SETTINGS_SYNC_PREVIEW_REMOTE_SETTING_KEY.to_string(),
+        preview_setting_value,
+        publisher_published_step_count: publisher_run.run.cycle.cycle.cycle.published_step_count(),
+        publisher_published_object_count: publisher_run
+            .run
+            .cycle
+            .cycle
+            .published_object_ids()
+            .len(),
+        publisher_retained_object_count: publisher_run.run.cycle.retained_object_ids.len(),
+        publisher_retained_provider_count: publisher_run.retained_provider_count(),
+        receiver_pulled_membership_application_count: receiver_run
+            .pulled_membership_application_count(),
+        receiver_applied_setting_count: receiver_run.cycle.applied_count(),
+        receiver_published_step_count: receiver_run.cycle.published_step_count(),
+        receiver_received_value: receiver_value,
+        receiver_membership_record_count: receiver_database
+            .sync_account_membership_record_count(profile)?,
+        receiver_trusted_device_count: receiver_readiness.trusted_device_count,
+    })
+}
+
 fn unix_time_seconds() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -13157,6 +13341,69 @@ mod tests {
             .expect("read preview providers");
         assert_eq!(providers.len(), 1);
         assert!(!providers[0].mutable_roots);
+
+        let _ = std::fs::remove_dir_all(state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn local_settings_sync_two_device_preview_cycle_applies_on_receiver_without_loopback() {
+        let state_root = test_state_root("local-settings-sync-two-device-state");
+        let db_root = test_state_root("local-settings-sync-two-device-db");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "local-preview-publisher",
+        )
+        .expect("open local two-device publisher database");
+        let sync_secret = SlateSyncSecret::from_bytes([122; SLATE_SYNC_SECRET_BYTES]);
+
+        let report = super::run_local_settings_sync_two_device_preview_cycle(
+            &database,
+            DEFAULT_PROFILE_ID,
+            &sync_secret,
+            &state_root,
+        )
+        .expect("run local two-device settings sync preview cycle");
+
+        assert_eq!(report.publisher_device_id, "local-preview-publisher");
+        assert_eq!(
+            report.receiver_device_id,
+            super::LOCAL_SETTINGS_SYNC_PREVIEW_RECEIVER_DEVICE_ID
+        );
+        assert_eq!(
+            report.provider_endpoint_ref,
+            "slate-fixture-profile-sync://preview/local-preview-provider"
+        );
+        assert_eq!(
+            report.preview_setting_key,
+            super::LOCAL_SETTINGS_SYNC_PREVIEW_REMOTE_SETTING_KEY
+        );
+        assert_eq!(report.publisher_published_step_count, 1);
+        assert!(report.publisher_published_object_count > 0);
+        assert_eq!(
+            report.publisher_retained_object_count,
+            report.publisher_published_object_count
+        );
+        assert_eq!(report.publisher_retained_provider_count, 1);
+        assert!(report.receiver_pulled_membership_application_count >= 2);
+        assert_eq!(report.receiver_applied_setting_count, 1);
+        assert_eq!(report.receiver_published_step_count, 1);
+        assert_eq!(
+            report.receiver_received_value.as_deref(),
+            Some(report.preview_setting_value.as_str())
+        );
+        assert!(report.receiver_membership_record_count >= 4);
+        assert!(report.receiver_trusted_device_count >= 4);
+
+        assert!(
+            database
+                .sync_device_public_key(
+                    DEFAULT_PROFILE_ID,
+                    super::LOCAL_SETTINGS_SYNC_PREVIEW_RECEIVER_DEVICE_ID,
+                )
+                .expect("read receiver key in publisher database")
+                .is_some()
+        );
 
         let _ = std::fs::remove_dir_all(state_root);
         let _ = std::fs::remove_dir_all(db_root);

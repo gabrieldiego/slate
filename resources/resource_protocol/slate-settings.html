@@ -300,6 +300,7 @@
         <button id="profile-sync-provider">Add local test provider</button>
         <button id="profile-sync-check">Check local sync</button>
         <button id="profile-sync-run-local">Run local trial</button>
+        <button id="profile-sync-run-local-two-device">Run two-device trial</button>
       </div>
     </section>
 
@@ -390,6 +391,7 @@
     const profileSyncProviderButton = document.getElementById("profile-sync-provider");
     const profileSyncCheckButton = document.getElementById("profile-sync-check");
     const profileSyncRunLocalButton = document.getElementById("profile-sync-run-local");
+    const profileSyncRunLocalTwoDeviceButton = document.getElementById("profile-sync-run-local-two-device");
     const params = new URLSearchParams(window.location.search);
     const initial = Number.parseFloat(params.get("chrome_zoom"));
     const fallbackImage = new Image();
@@ -818,11 +820,14 @@
       const trialStatus = state.last_trial ?
         `; last trial retained ${state.last_trial.retained_object_count}/${state.last_trial.published_object_count} objects` :
         "";
+      const twoDeviceStatus = state.last_two_device_trial ?
+        `; receiver applied ${state.last_two_device_trial.receiver_applied_setting_count} setting` :
+        "";
       if (state.last_error) {
         profileSyncStatus.textContent = `Error: ${state.last_error}`;
       } else if (state.has_secret && state.local_sync && state.local_sync.ready_for_manual_sync) {
         profileSyncStatus.textContent =
-          `Ready for ${state.profile} - local device trusted, local sync preflight passed${trialStatus}`;
+          `Ready for ${state.profile} - local device trusted, local sync preflight passed${trialStatus}${twoDeviceStatus}`;
       } else if (state.has_secret) {
         const trusted = state.local_sync && state.local_sync.local_device_trusted ?
           " - local device trusted" :
@@ -833,7 +838,7 @@
         const syncGap = state.local_sync && state.local_sync.blocked_reason ?
           ` - ${state.local_sync.blocked_reason}` :
           "";
-        profileSyncStatus.textContent = `Ready for ${state.profile}${suffix}${syncGap}${trialStatus}`;
+        profileSyncStatus.textContent = `Ready for ${state.profile}${suffix}${syncGap}${trialStatus}${twoDeviceStatus}`;
       } else if (state.metadata_ready) {
         const syncGap = state.local_sync && state.local_sync.blocked_reason ?
           `; ${state.local_sync.blocked_reason}` :
@@ -884,6 +889,10 @@
       fetchProfileSyncState("run-local");
     }
 
+    function runProfileSyncLocalTwoDeviceTrial() {
+      fetchProfileSyncState("run-local-two-device");
+    }
+
     function downloadProfileSyncSecret() {
       const text = profileSyncSecret.value.trim();
       if (!text) {
@@ -921,6 +930,7 @@
     profileSyncProviderButton.addEventListener("click", addProfileSyncLocalProvider);
     profileSyncCheckButton.addEventListener("click", checkProfileSyncReadiness);
     profileSyncRunLocalButton.addEventListener("click", runProfileSyncLocalTrial);
+    profileSyncRunLocalTwoDeviceButton.addEventListener("click", runProfileSyncLocalTwoDeviceTrial);
     document.getElementById("reset").addEventListener("click", () => {
       setSliderValue(DEFAULT_ZOOM, true);
     });
