@@ -55,6 +55,11 @@ reject_protocol_model_leak \
     'Kubo protocol code must not call fixture models directly; route through transport executors or shims.'
 
 reject_protocol_model_leak \
+    crates/broadwebd/src/protocols/ipfs/kubo.rs \
+    'kubo_fixtures|InternalKuboRpcTransportShim|is_internal_kubo_rpc_fixture_url|slate-fixture-kubo|in-process-fixture|socketless-fixture' \
+    'Kubo protocol transport must stay fixture-blind; install fixture transports from the in-process network layer.'
+
+reject_protocol_model_leak \
     crates/broadwebd/src/services/profile_sync.rs \
     'InProcessBroadwebNetwork|InternalKubo(ProfileSyncModel|RpcFixture)|fetch_internal_kubo|internal_kubo_rpc_fixtures|register_internal_kubo|take_internal_kubo' \
     'broadwebd profile-sync service code must not call Kubo fixture models directly; route through transport executors or shims.'
@@ -68,6 +73,11 @@ require_text \
     crates/broadwebd/src/protocols/ipfs/kubo_fixtures.rs \
     'impl IpfsKuboHttpContentExecutor for InternalKuboRpcTransportShim' \
     'Kubo fixture models must be reachable through the HTTP content executor shim.'
+
+require_text \
+    crates/broadwebd/src/protocols/ipfs/kubo_fixtures.rs \
+    'impl TransportPlugin for InternalKuboRpcFixtureTransport' \
+    'Kubo fixture HTTP transport must be a fixture-side wrapper, not a branch inside Kubo protocol code.'
 
 require_text \
     crates/broadwebd/src/protocols/ipfs/kubo.rs \

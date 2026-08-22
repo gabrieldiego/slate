@@ -1,4 +1,6 @@
 #[cfg(any(test, feature = "test-fixtures"))]
+use crate::IpfsKuboRpcEndpoint;
+#[cfg(any(test, feature = "test-fixtures"))]
 use crate::protocols::ipfs::InternalKuboRpcTransportShim;
 use crate::{
     ApplicationServicePlugin, BroadwebdError, PROFILE_SYNC_PLUGIN, PluginKind, PluginMetadata,
@@ -285,6 +287,7 @@ impl ProfileSyncService {
         privacy_boundary: impl Into<String>,
         transport: KuboProfileSyncTransport,
     ) -> Result<Self, BroadwebdError> {
+        let api_base_url = api_base_url.into();
         let provider_id = provider_id.into();
         let provider_kind = provider_kind.into();
         let privacy_boundary = privacy_boundary.into();
@@ -307,7 +310,7 @@ impl ProfileSyncService {
             privacy_boundary,
             roles,
             kubo_backend: Some(KuboProfileSyncBackend {
-                rpc: IpfsKuboProfileSyncRpc::local(api_base_url)?,
+                rpc: kubo_profile_sync_rpc_for_transport(api_base_url, transport)?,
                 transport,
             }),
         })
@@ -1306,6 +1309,19 @@ impl ApplicationServicePlugin for ProfileSyncService {
             ProfileSyncRequest::RootHealth(request) => self.root_health(request)?,
         };
         Ok(ServiceResponse::ProfileSync(response))
+    }
+}
+
+fn kubo_profile_sync_rpc_for_transport(
+    api_base_url: String,
+    transport: KuboProfileSyncTransport,
+) -> Result<IpfsKuboProfileSyncRpc, BroadwebdError> {
+    match transport {
+        KuboProfileSyncTransport::Http => IpfsKuboProfileSyncRpc::local(api_base_url),
+        #[cfg(any(test, feature = "test-fixtures"))]
+        KuboProfileSyncTransport::Fixture => Ok(IpfsKuboProfileSyncRpc::from_endpoint(
+            IpfsKuboRpcEndpoint::from_prevalidated_api_base_url(api_base_url),
+        )),
     }
 }
 

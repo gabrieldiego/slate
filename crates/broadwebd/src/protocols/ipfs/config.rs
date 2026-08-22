@@ -174,6 +174,21 @@ impl IpfsConfig {
         })
     }
 
+    #[cfg(any(test, feature = "test-fixtures"))]
+    pub(crate) fn with_prevalidated_kubo_rpc(
+        api_base_url: impl Into<String>,
+    ) -> Result<Self, BroadwebdError> {
+        Ok(Self {
+            gateway: IpfsGatewayEndpoint::local(DEFAULT_IPFS_GATEWAY)?,
+            public_gateway_fallbacks: Vec::new(),
+            kubo_rpc: Some(IpfsKuboRpcEndpoint::from_prevalidated_api_base_url(
+                api_base_url,
+            )),
+            transport: IpfsTransportKind::KuboRpc,
+            allow_public_gateway_fallback: false,
+        })
+    }
+
     pub fn gateway_endpoint(&self) -> &IpfsGatewayEndpoint {
         &self.gateway
     }

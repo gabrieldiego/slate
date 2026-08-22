@@ -1,6 +1,4 @@
 use super::address::ipfs_url_parts;
-#[cfg(any(test, feature = "test-fixtures"))]
-use super::kubo_fixtures::is_internal_kubo_rpc_fixture_url;
 use crate::http::{infer_content_type, parse_http_url};
 use crate::{
     BroadwebdError, DEFAULT_IPFS_KUBO_RPC_API, HttpFetchResponse, HttpHeader, IPFS_KUBO_RPC_PLUGIN,
@@ -27,21 +25,16 @@ impl IpfsKuboRpcEndpoint {
         Ok(Self { api_base_url })
     }
 
-    pub fn api_base_url(&self) -> &str {
-        &self.api_base_url
+    #[cfg(any(test, feature = "test-fixtures"))]
+    /// Builds an endpoint after a boundary-specific caller has already validated the base URL.
+    pub(crate) fn from_prevalidated_api_base_url(api_base_url: impl Into<String>) -> Self {
+        Self {
+            api_base_url: api_base_url.into(),
+        }
     }
 
-    fn is_internal_fixture(&self) -> bool {
-        #[cfg(any(test, feature = "test-fixtures"))]
-        {
-            Url::parse(self.api_base_url.as_str())
-                .ok()
-                .is_some_and(|url| is_internal_kubo_rpc_fixture_url(&url))
-        }
-        #[cfg(not(any(test, feature = "test-fixtures")))]
-        {
-            false
-        }
+    pub fn api_base_url(&self) -> &str {
+        &self.api_base_url
     }
 }
 
@@ -246,7 +239,7 @@ impl IpfsKuboProfileSyncRpc {
     ) -> Result<IpfsKuboProfileSyncRpcRequest, BroadwebdError> {
         Ok(IpfsKuboProfileSyncRpcRequest::new(
             IpfsKuboProfileSyncOperation::PutEncryptedObject,
-            ipfs_kubo_profile_sync_add_url(self.endpoint.api_base_url())?,
+            ipfs_kubo_profile_sync_add_url_from_validated_base(self.endpoint.api_base_url())?,
         ))
     }
 
@@ -256,7 +249,10 @@ impl IpfsKuboProfileSyncRpc {
     ) -> Result<IpfsKuboProfileSyncRpcRequest, BroadwebdError> {
         Ok(IpfsKuboProfileSyncRpcRequest::new(
             IpfsKuboProfileSyncOperation::RetainObject,
-            ipfs_kubo_profile_sync_pin_add_url(object_id, self.endpoint.api_base_url())?,
+            ipfs_kubo_profile_sync_pin_add_url_from_validated_base(
+                object_id,
+                self.endpoint.api_base_url(),
+            )?,
         ))
     }
 
@@ -266,7 +262,10 @@ impl IpfsKuboProfileSyncRpc {
     ) -> Result<IpfsKuboProfileSyncRpcRequest, BroadwebdError> {
         Ok(IpfsKuboProfileSyncRpcRequest::new(
             IpfsKuboProfileSyncOperation::ReleaseObject,
-            ipfs_kubo_profile_sync_pin_rm_url(object_id, self.endpoint.api_base_url())?,
+            ipfs_kubo_profile_sync_pin_rm_url_from_validated_base(
+                object_id,
+                self.endpoint.api_base_url(),
+            )?,
         ))
     }
 
@@ -276,7 +275,10 @@ impl IpfsKuboProfileSyncRpc {
     ) -> Result<IpfsKuboProfileSyncRpcRequest, BroadwebdError> {
         Ok(IpfsKuboProfileSyncRpcRequest::new(
             IpfsKuboProfileSyncOperation::VerifyRetainedObject,
-            ipfs_kubo_profile_sync_pin_ls_url(object_id, self.endpoint.api_base_url())?,
+            ipfs_kubo_profile_sync_pin_ls_url_from_validated_base(
+                object_id,
+                self.endpoint.api_base_url(),
+            )?,
         ))
     }
 
@@ -287,7 +289,7 @@ impl IpfsKuboProfileSyncRpc {
     ) -> Result<IpfsKuboProfileSyncRpcRequest, BroadwebdError> {
         Ok(IpfsKuboProfileSyncRpcRequest::new(
             IpfsKuboProfileSyncOperation::PublishRoot,
-            ipfs_kubo_profile_sync_name_publish_url(
+            ipfs_kubo_profile_sync_name_publish_url_from_validated_base(
                 key_id,
                 object_id,
                 self.endpoint.api_base_url(),
@@ -301,7 +303,10 @@ impl IpfsKuboProfileSyncRpc {
     ) -> Result<IpfsKuboProfileSyncRpcRequest, BroadwebdError> {
         Ok(IpfsKuboProfileSyncRpcRequest::new(
             IpfsKuboProfileSyncOperation::ResolveRoot,
-            ipfs_kubo_profile_sync_name_resolve_url(name, self.endpoint.api_base_url())?,
+            ipfs_kubo_profile_sync_name_resolve_url_from_validated_base(
+                name,
+                self.endpoint.api_base_url(),
+            )?,
         ))
     }
 
@@ -334,7 +339,8 @@ impl IpfsKuboProfileSyncRpc {
         validate_kubo_profile_sync_object_id(object_id)?;
         let content_path = format!("/ipfs/{object_id}");
         let url = parse_http_url(
-            kubo_cat_url_for_path(content_path.as_str(), self.endpoint.api_base_url())?.as_str(),
+            kubo_cat_url_for_validated_base(content_path.as_str(), self.endpoint.api_base_url())?
+                .as_str(),
         )?;
         let response =
             executor.execute_content_request(&url, budget.max_profile_sync_object_bytes)?;
@@ -432,29 +438,11 @@ impl Default for IpfsKuboRpcTransport {
 
 impl TransportPlugin for IpfsKuboRpcTransport {
     fn metadata(&self) -> PluginMetadata {
-        let (capabilities, privacy_boundary): (&[&str], &str) = if self
-            .endpoint
-            .is_internal_fixture()
-        {
-            (
-                &[
-                    "ipfs",
-                    "ipns",
-                    "http-fetch",
-                    "in-process-fixture",
-                    "socketless-fixture",
-                ],
-                "in-process Kubo RPC fixture; no sockets, DNS, loopback listener, or external network",
-            )
-        } else {
-            (
-                &["ipfs", "ipns", "http-fetch", "local-kubo-rpc"],
+        PluginMetadata::new(IPFS_KUBO_RPC_PLUGIN, PluginKind::Transport)
+            .with_capabilities(&["ipfs", "ipns", "http-fetch", "local-kubo-rpc"])
+            .with_privacy_boundary(
                 "local Kubo RPC over HTTP; sends requested CIDs and IPNS names to the local node",
             )
-        };
-        PluginMetadata::new(IPFS_KUBO_RPC_PLUGIN, PluginKind::Transport)
-            .with_capabilities(capabilities)
-            .with_privacy_boundary(privacy_boundary)
             .with_resource_profile(ResourceProfile::Medium)
     }
 
@@ -463,19 +451,13 @@ impl TransportPlugin for IpfsKuboRpcTransport {
         request: &TransportHttpRequest,
         budget: &ResourceBudget,
     ) -> Result<HttpFetchResponse, BroadwebdError> {
-        #[cfg(any(test, feature = "test-fixtures"))]
-        if self.endpoint.is_internal_fixture() {
-            let executor = super::kubo_fixtures::InternalKuboRpcTransportShim;
-            return self.fetch_http_with_executor(request, budget, &executor);
-        }
-
         let executor = IpfsKuboReqwestHttpContentExecutor::new()?;
         self.fetch_http_with_executor(request, budget, &executor)
     }
 }
 
 impl IpfsKuboRpcTransport {
-    fn fetch_http_with_executor(
+    pub(super) fn fetch_http_with_executor(
         &self,
         request: &TransportHttpRequest,
         budget: &ResourceBudget,
@@ -483,8 +465,10 @@ impl IpfsKuboRpcTransport {
     ) -> Result<HttpFetchResponse, BroadwebdError> {
         let mut last_response = None;
         for candidate in ipfs_content_path_candidates(&request.url)? {
-            let cat_url =
-                kubo_cat_url_for_path(&candidate.content_path, self.endpoint.api_base_url())?;
+            let cat_url = kubo_cat_url_for_validated_base(
+                &candidate.content_path,
+                self.endpoint.api_base_url(),
+            )?;
             let url = parse_http_url(&cat_url)?;
 
             let fetch_response =
@@ -513,7 +497,14 @@ pub fn ipfs_kubo_cat_url(source: &str, api_base_url: &str) -> Result<String, Bro
 }
 
 pub fn ipfs_kubo_profile_sync_add_url(api_base_url: &str) -> Result<String, BroadwebdError> {
-    let mut url = kubo_rpc_api_url(api_base_url, "add")?;
+    validate_kubo_rpc_url(api_base_url)?;
+    ipfs_kubo_profile_sync_add_url_from_validated_base(api_base_url)
+}
+
+fn ipfs_kubo_profile_sync_add_url_from_validated_base(
+    api_base_url: &str,
+) -> Result<String, BroadwebdError> {
+    let mut url = kubo_rpc_api_url_from_validated_base(api_base_url, "add")?;
     url.query_pairs_mut()
         .append_pair("cid-version", "1")
         .append_pair("raw-leaves", "true")
@@ -525,8 +516,16 @@ pub fn ipfs_kubo_profile_sync_pin_add_url(
     object_id: &str,
     api_base_url: &str,
 ) -> Result<String, BroadwebdError> {
+    validate_kubo_rpc_url(api_base_url)?;
+    ipfs_kubo_profile_sync_pin_add_url_from_validated_base(object_id, api_base_url)
+}
+
+fn ipfs_kubo_profile_sync_pin_add_url_from_validated_base(
+    object_id: &str,
+    api_base_url: &str,
+) -> Result<String, BroadwebdError> {
     validate_kubo_profile_sync_object_id(object_id)?;
-    let mut url = kubo_rpc_api_url(api_base_url, "pin/add")?;
+    let mut url = kubo_rpc_api_url_from_validated_base(api_base_url, "pin/add")?;
     url.query_pairs_mut()
         .append_pair("arg", object_id)
         .append_pair("recursive", "true");
@@ -537,8 +536,16 @@ pub fn ipfs_kubo_profile_sync_pin_rm_url(
     object_id: &str,
     api_base_url: &str,
 ) -> Result<String, BroadwebdError> {
+    validate_kubo_rpc_url(api_base_url)?;
+    ipfs_kubo_profile_sync_pin_rm_url_from_validated_base(object_id, api_base_url)
+}
+
+fn ipfs_kubo_profile_sync_pin_rm_url_from_validated_base(
+    object_id: &str,
+    api_base_url: &str,
+) -> Result<String, BroadwebdError> {
     validate_kubo_profile_sync_object_id(object_id)?;
-    let mut url = kubo_rpc_api_url(api_base_url, "pin/rm")?;
+    let mut url = kubo_rpc_api_url_from_validated_base(api_base_url, "pin/rm")?;
     url.query_pairs_mut()
         .append_pair("arg", object_id)
         .append_pair("recursive", "true");
@@ -549,8 +556,16 @@ pub fn ipfs_kubo_profile_sync_pin_ls_url(
     object_id: &str,
     api_base_url: &str,
 ) -> Result<String, BroadwebdError> {
+    validate_kubo_rpc_url(api_base_url)?;
+    ipfs_kubo_profile_sync_pin_ls_url_from_validated_base(object_id, api_base_url)
+}
+
+fn ipfs_kubo_profile_sync_pin_ls_url_from_validated_base(
+    object_id: &str,
+    api_base_url: &str,
+) -> Result<String, BroadwebdError> {
     validate_kubo_profile_sync_object_id(object_id)?;
-    let mut url = kubo_rpc_api_url(api_base_url, "pin/ls")?;
+    let mut url = kubo_rpc_api_url_from_validated_base(api_base_url, "pin/ls")?;
     url.query_pairs_mut()
         .append_pair("arg", object_id)
         .append_pair("type", "recursive");
@@ -562,9 +577,18 @@ pub fn ipfs_kubo_profile_sync_name_publish_url(
     object_id: &str,
     api_base_url: &str,
 ) -> Result<String, BroadwebdError> {
+    validate_kubo_rpc_url(api_base_url)?;
+    ipfs_kubo_profile_sync_name_publish_url_from_validated_base(key_id, object_id, api_base_url)
+}
+
+fn ipfs_kubo_profile_sync_name_publish_url_from_validated_base(
+    key_id: &str,
+    object_id: &str,
+    api_base_url: &str,
+) -> Result<String, BroadwebdError> {
     validate_kubo_profile_sync_name_token("IPNS key id", key_id)?;
     validate_kubo_profile_sync_object_id(object_id)?;
-    let mut url = kubo_rpc_api_url(api_base_url, "name/publish")?;
+    let mut url = kubo_rpc_api_url_from_validated_base(api_base_url, "name/publish")?;
     let object_path = format!("/ipfs/{object_id}");
     url.query_pairs_mut()
         .append_pair("arg", object_path.as_str())
@@ -577,8 +601,16 @@ pub fn ipfs_kubo_profile_sync_name_resolve_url(
     name: &str,
     api_base_url: &str,
 ) -> Result<String, BroadwebdError> {
+    validate_kubo_rpc_url(api_base_url)?;
+    ipfs_kubo_profile_sync_name_resolve_url_from_validated_base(name, api_base_url)
+}
+
+fn ipfs_kubo_profile_sync_name_resolve_url_from_validated_base(
+    name: &str,
+    api_base_url: &str,
+) -> Result<String, BroadwebdError> {
     validate_kubo_profile_sync_name_token("IPNS name", name)?;
-    let mut url = kubo_rpc_api_url(api_base_url, "name/resolve")?;
+    let mut url = kubo_rpc_api_url_from_validated_base(api_base_url, "name/resolve")?;
     let name_path = if name.starts_with("/ipns/") {
         name.to_string()
     } else {
@@ -642,7 +674,15 @@ fn require_kubo_profile_sync_success(
 }
 
 fn kubo_cat_url_for_path(content_path: &str, api_base_url: &str) -> Result<String, BroadwebdError> {
-    let mut url = kubo_rpc_api_url(api_base_url, "cat")?;
+    validate_kubo_rpc_url(api_base_url)?;
+    kubo_cat_url_for_validated_base(content_path, api_base_url)
+}
+
+fn kubo_cat_url_for_validated_base(
+    content_path: &str,
+    api_base_url: &str,
+) -> Result<String, BroadwebdError> {
+    let mut url = kubo_rpc_api_url_from_validated_base(api_base_url, "cat")?;
     url.query_pairs_mut().append_pair("arg", &content_path);
     Ok(url.to_string())
 }
@@ -696,8 +736,10 @@ pub(super) fn profile_sync_object_id_from_ipfs_path(path: &str) -> Result<String
     Ok(object_id.to_string())
 }
 
-fn kubo_rpc_api_url(api_base_url: &str, endpoint: &str) -> Result<Url, BroadwebdError> {
-    validate_kubo_rpc_url(api_base_url)?;
+fn kubo_rpc_api_url_from_validated_base(
+    api_base_url: &str,
+    endpoint: &str,
+) -> Result<Url, BroadwebdError> {
     let mut url = parse_http_url(api_base_url)?;
     let api_path = format!(
         "{}/api/v0/{}",
@@ -801,10 +843,6 @@ fn should_try_directory_index(path: &str) -> bool {
 fn validate_kubo_rpc_url(api_base_url: &str) -> Result<(), BroadwebdError> {
     let url =
         Url::parse(api_base_url).map_err(|error| BroadwebdError::InvalidUrl(error.to_string()))?;
-    #[cfg(any(test, feature = "test-fixtures"))]
-    if is_internal_kubo_rpc_fixture_url(&url) {
-        return Ok(());
-    }
 
     if !matches!(url.scheme(), "http" | "https") {
         return Err(BroadwebdError::UnsupportedRequest(format!(

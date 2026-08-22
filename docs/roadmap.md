@@ -354,6 +354,11 @@ Current baseline:
   The protocol methods remain production-shaped (`put`, `cat`, `pin`,
   `name/publish`, and `name/resolve`), while the in-process fixture implements
   the executor and rejects non-fixture URLs before any socket can be touched.
+- Kubo IPFS content fetches now keep the same boundary: the normal
+  `IpfsKuboRpcTransport` is fixture-blind and always represents local Kubo
+  HTTP, while `InProcessBroadwebNetwork` installs a fixture-side transport
+  wrapper that reuses the same Kubo `cat` request builder through the internal
+  executor shim.
 - broadwebd now also has a real HTTP Kubo profile-sync executor and service
   constructor. Production Kubo profile-sync uses the same request builders,
   response parsers, role checks, and resource budgets over HTTP; socketless

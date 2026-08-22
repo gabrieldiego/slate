@@ -1,10 +1,14 @@
 use super::kubo::{
     IpfsKuboHttpContentExecutor, IpfsKuboProfileSyncRpcExecutor, IpfsKuboProfileSyncRpcRequest,
-    IpfsKuboRpcResponse, profile_sync_object_id_from_ipfs_path,
-    validate_kubo_profile_sync_name_token, validate_kubo_profile_sync_object_id,
+    IpfsKuboRpcEndpoint, IpfsKuboRpcResponse, IpfsKuboRpcTransport,
+    profile_sync_object_id_from_ipfs_path, validate_kubo_profile_sync_name_token,
+    validate_kubo_profile_sync_object_id,
 };
 use crate::http::{infer_content_type, parse_http_url};
-use crate::{BroadwebdError, HttpFetchResponse, HttpHeader, ResourceBudget};
+use crate::{
+    BroadwebdError, HttpFetchResponse, HttpHeader, IPFS_KUBO_RPC_PLUGIN, PluginKind,
+    PluginMetadata, ResourceBudget, ResourceProfile, TransportHttpRequest, TransportPlugin,
+};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::{Mutex, OnceLock};
 use url::Url;
@@ -20,6 +24,50 @@ const INTERNAL_KUBO_RPC_FIXTURE_SCHEME: &str = "slate-fixture-kubo";
 pub struct InternalKuboRpcTransportShim;
 
 pub type InternalKuboRpcResponse = IpfsKuboRpcResponse;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct InternalKuboRpcFixtureTransport {
+    transport: IpfsKuboRpcTransport,
+}
+
+impl InternalKuboRpcFixtureTransport {
+    pub(crate) fn new(api_base_url: impl Into<String>) -> Result<Self, BroadwebdError> {
+        let api_base_url = api_base_url.into();
+        let url = parse_http_url(api_base_url.as_str())?;
+        require_internal_kubo_rpc_fixture_url(&url)?;
+        Ok(Self {
+            transport: IpfsKuboRpcTransport::from_endpoint(
+                IpfsKuboRpcEndpoint::from_prevalidated_api_base_url(api_base_url),
+            ),
+        })
+    }
+}
+
+impl TransportPlugin for InternalKuboRpcFixtureTransport {
+    fn metadata(&self) -> PluginMetadata {
+        PluginMetadata::new(IPFS_KUBO_RPC_PLUGIN, PluginKind::Transport)
+            .with_capabilities(&[
+                "ipfs",
+                "ipns",
+                "http-fetch",
+                "in-process-fixture",
+                "socketless-fixture",
+            ])
+            .with_privacy_boundary(
+                "in-process Kubo RPC fixture; no sockets, DNS, loopback listener, or external network",
+            )
+            .with_resource_profile(ResourceProfile::Low)
+    }
+
+    fn fetch_http(
+        &self,
+        request: &TransportHttpRequest,
+        budget: &ResourceBudget,
+    ) -> Result<HttpFetchResponse, BroadwebdError> {
+        self.transport
+            .fetch_http_with_executor(request, budget, &InternalKuboRpcTransportShim)
+    }
+}
 
 impl IpfsKuboProfileSyncRpcExecutor for InternalKuboRpcTransportShim {
     fn execute_profile_sync_request(

@@ -141,7 +141,7 @@ pub mod test_fixtures {
         unregistered_internal_fixture_http_url_for_network,
     };
     use crate::protocols::ipfs::{
-        internal_kubo_rpc_url_belongs_to_network,
+        InternalKuboRpcFixtureTransport, internal_kubo_rpc_url_belongs_to_network,
         register_internal_kubo_profile_sync_model_for_network,
         register_internal_kubo_rpc_fixture_for_network, take_internal_kubo_rpc_fixture_requests,
     };
@@ -364,9 +364,10 @@ pub mod test_fixtures {
                 )));
             }
             let mut registry = self.fixture_registry();
-            registry.register_protocol_service(IpfsService::new(IpfsConfig::with_kubo_rpc(
-                api_base_url,
-            )?));
+            registry.register_protocol_service(IpfsService::new(
+                IpfsConfig::with_prevalidated_kubo_rpc(api_base_url.clone())?,
+            ));
+            registry.install_transport(InternalKuboRpcFixtureTransport::new(api_base_url)?);
             Ok(registry)
         }
 
