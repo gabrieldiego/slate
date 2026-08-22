@@ -1654,6 +1654,13 @@ impl SettingsSyncSelectedEndpointMaterializationPreview {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncInProcessFixtureMaterializationTarget {
+    pub provider_id: String,
+    pub fixture_network_id: String,
+    pub endpoint_ref: String,
+}
+
 impl SettingsSyncStoredRetentionProviderPlan {
     pub fn enabled_retention_provider_count(&self) -> usize {
         self.enabled_retention_provider_ids.len()
@@ -1853,6 +1860,15 @@ impl SettingsSyncStoredRetentionProviderPlan {
         &self,
     ) -> SettingsSyncSelectedEndpointMaterializationPreview {
         selected_endpoint_materialization_preview(
+            self.enabled_retention_provider_endpoints.as_slice(),
+            self.cycle.selected_retention_provider_ids.as_slice(),
+        )
+    }
+
+    pub fn selected_in_process_fixture_materialization_targets(
+        &self,
+    ) -> Vec<SettingsSyncInProcessFixtureMaterializationTarget> {
+        selected_in_process_fixture_materialization_targets(
             self.enabled_retention_provider_endpoints.as_slice(),
             self.cycle.selected_retention_provider_ids.as_slice(),
         )
@@ -2181,6 +2197,33 @@ fn selected_endpoint_materialization_preview(
             SettingsSyncStoredProviderEndpointStatus::Unsupported,
         ),
     }
+}
+
+fn selected_in_process_fixture_materialization_targets(
+    endpoints: &[SettingsSyncStoredRetentionProviderEndpoint],
+    selected_provider_ids: &[String],
+) -> Vec<SettingsSyncInProcessFixtureMaterializationTarget> {
+    selected_provider_ids
+        .iter()
+        .filter_map(|provider_id| {
+            let endpoint = endpoints.iter().find(|endpoint| {
+                endpoint.provider_id == *provider_id
+                    && endpoint.endpoint_status
+                        == SettingsSyncStoredProviderEndpointStatus::InProcessFixture
+            })?;
+            let endpoint_ref = endpoint.endpoint_ref.as_deref()?;
+            let fixture_endpoint =
+                parse_in_process_profile_sync_fixture_endpoint_ref(endpoint_ref)?;
+            if fixture_endpoint.provider_id() != provider_id {
+                return None;
+            }
+            Some(SettingsSyncInProcessFixtureMaterializationTarget {
+                provider_id: provider_id.clone(),
+                fixture_network_id: fixture_endpoint.network_id().to_string(),
+                endpoint_ref: endpoint_ref.to_string(),
+            })
+        })
+        .collect()
 }
 
 fn select_stored_retention_provider_ids(
@@ -5613,6 +5656,18 @@ mod tests {
         assert_eq!(preview.ready_provider_count(), 1);
         assert_eq!(preview.pending_materialization_provider_count(), 3);
         assert_eq!(preview.fail_closed_provider_count(), 1);
+
+        assert_eq!(
+            super::selected_in_process_fixture_materialization_targets(
+                selected.enabled_retention_provider_endpoints.as_slice(),
+                materialization_provider_ids.as_slice(),
+            ),
+            vec![super::SettingsSyncInProcessFixtureMaterializationTarget {
+                provider_id: fixture_provider_id.to_string(),
+                fixture_network_id: network.network_id().to_string(),
+                endpoint_ref: network.profile_sync_provider_endpoint_ref(fixture_provider_id),
+            }]
+        );
     }
 
     #[test]
@@ -10188,6 +10243,14 @@ mod tests {
         assert_eq!(preview.ready_provider_count(), 1);
         assert_eq!(preview.pending_materialization_provider_count(), 0);
         assert_eq!(preview.fail_closed_provider_count(), 0);
+        assert_eq!(
+            plan.selected_in_process_fixture_materialization_targets(),
+            vec![super::SettingsSyncInProcessFixtureMaterializationTarget {
+                provider_id: selected_provider_id.to_string(),
+                fixture_network_id: network.network_id().to_string(),
+                endpoint_ref: network.profile_sync_provider_endpoint_ref(selected_provider_id),
+            }]
+        );
         assert_eq!(
             plan.cycle.selected_retention_provider_ids,
             vec![selected_provider_id.to_string()]

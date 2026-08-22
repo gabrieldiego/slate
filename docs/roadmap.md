@@ -504,6 +504,9 @@ Current baseline:
   fixture-ready providers can use the current local-only handles, missing,
   multiaddr, and deferred-protocol providers are pending materialization, and
   unsupported providers fail closed.
+- Selected synthetic fixture endpoints now expose materialization targets with
+  provider id, fixture network id, and endpoint ref so local-only fixtures can
+  bridge stored metadata to in-process providers without opening sockets.
 - Stored-provider runtime ticks now also exclude unsupported endpoint refs from
   the materialized retention-provider quorum, even if the caller supplies a
   daemon handle with the same socket-shaped endpoint string. This keeps

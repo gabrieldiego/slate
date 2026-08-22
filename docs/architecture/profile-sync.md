@@ -849,6 +849,11 @@ Selected endpoint buckets are also folded into a compact materialization
 preview: fixture-ready providers can run against local in-process handles,
 missing, multiaddr, and deferred-protocol providers remain pending
 materialization work, and unsupported providers fail closed.
+For selected synthetic fixture endpoints, the plan also exposes
+materialization targets carrying the provider id, fixture network id, and
+endpoint ref. This lets local-only test fixtures bridge from stored metadata to
+in-process providers without opening sockets, while legacy fixture refs and
+future protocol refs still require explicit materializers.
 Stored-provider runtime ticks exclude unsupported endpoint refs from
 materialized provider quorum even when the caller supplies a daemon handle with
 the same unsupported string, so socket-shaped metadata cannot be laundered into
