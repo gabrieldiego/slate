@@ -135,8 +135,9 @@ pub use transports::direct_http::DirectHttpTransport;
 #[cfg(any(test, feature = "test-fixtures"))]
 pub mod test_fixtures {
     use crate::http::{
-        fetch_http_url, internal_fixture_http_url_belongs_to_network, is_internal_fixture_http_url,
-        parse_http_url, register_internal_fixture_http_response_for_network,
+        fetch_internal_fixture_http_url, internal_fixture_http_url_belongs_to_network,
+        is_internal_fixture_http_url, parse_http_url,
+        register_internal_fixture_http_response_for_network,
         register_internal_fixture_http_sequence_for_network, take_internal_fixture_http_requests,
         unregistered_internal_fixture_http_url_for_network,
     };
@@ -206,7 +207,7 @@ pub mod test_fixtures {
                         self.network_id, request.url
                     )));
                 }
-                return fetch_http_url(url, budget);
+                return fetch_internal_fixture_http_url(&url, budget);
             }
 
             Err(BroadwebdError::UnsupportedRequest(format!(
@@ -316,7 +317,7 @@ pub mod test_fixtures {
                     self.network_id, url
                 )));
             }
-            fetch_http_url(url.clone(), budget)
+            fetch_internal_fixture_http_url(url, budget)
         }
     }
 

@@ -440,6 +440,10 @@ Current baseline:
   gateway fallback, service-worker bootstrap detection, route metadata, and
   response parsing on the same path a real gateway uses while swapping only
   socket I/O in local tests.
+- The ambiguous shared HTTP fetch helper was removed. Default/direct HTTP
+  fetching now calls `fetch_http_url_over_network` and rejects synthetic
+  fixture schemes as unsupported, while in-process HTTP transports call the
+  explicit internal fixture fetch helper after same-network validation.
 - Profile-sync protocol materializer policies now mark whether selected
   provider endpoints are handled by real runtime adapters or by local
   deterministic simulation. The scheduler still consumes typed multiaddr and

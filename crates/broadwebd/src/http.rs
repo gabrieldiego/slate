@@ -450,18 +450,6 @@ pub(crate) fn parse_http_url(input: &str) -> Result<Url, BroadwebdError> {
     Url::parse(input).map_err(|error| BroadwebdError::InvalidUrl(error.to_string()))
 }
 
-pub(crate) fn fetch_http_url(
-    url: Url,
-    budget: &ResourceBudget,
-) -> Result<HttpFetchResponse, BroadwebdError> {
-    #[cfg(any(test, feature = "test-fixtures"))]
-    if is_internal_fixture_http_url(&url) {
-        return fetch_internal_fixture_http_url(&url, budget);
-    }
-
-    fetch_http_url_over_network(url, budget)
-}
-
 pub(crate) fn fetch_http_url_over_network(
     url: Url,
     budget: &ResourceBudget,
@@ -625,7 +613,7 @@ pub(crate) fn internal_fixture_http_url_belongs_to_network(url: &Url, network_id
 }
 
 #[cfg(any(test, feature = "test-fixtures"))]
-fn fetch_internal_fixture_http_url(
+pub(crate) fn fetch_internal_fixture_http_url(
     url: &Url,
     budget: &ResourceBudget,
 ) -> Result<HttpFetchResponse, BroadwebdError> {

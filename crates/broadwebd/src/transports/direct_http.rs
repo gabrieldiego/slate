@@ -1,4 +1,4 @@
-use crate::http::{fetch_http_url, parse_http_url};
+use crate::http::{fetch_http_url_over_network, parse_http_url};
 use crate::{
     BroadwebdError, DIRECT_HTTP_PLUGIN, HttpFetchResponse, PluginKind, PluginMetadata,
     ResourceBudget, ResourceProfile, TransportHttpRequest, TransportPlugin,
@@ -35,6 +35,6 @@ impl TransportPlugin for DirectHttpTransport {
             )));
         }
 
-        fetch_http_url(url, budget)
+        fetch_http_url_over_network(url, budget)
     }
 }

@@ -75,6 +75,15 @@ reject_protocol_model_leak \
     'IPFS gateway transport must not call the fixture-aware shared HTTP helper; use an executor so fixtures only swap socket IO.'
 
 reject_protocol_model_leak \
+    crates/broadwebd/src/http.rs \
+    'return fetch_internal_fixture_http_url' \
+    'Default HTTP fetching must not branch into fixture storage; in-process transports must call fixture helpers explicitly.'
+reject_protocol_model_leak \
+    crates/broadwebd/src/http.rs \
+    'fn fetch_http_url\(' \
+    'The ambiguous shared HTTP helper name must stay removed; use fetch_http_url_over_network or explicit fixture helpers.'
+
+reject_protocol_model_leak \
     crates/broadwebd/src/services/profile_sync.rs \
     'InProcessBroadwebNetwork|InternalKubo(ProfileSyncModel|RpcFixture)|fetch_internal_kubo|internal_kubo_rpc_fixtures|register_internal_kubo|take_internal_kubo' \
     'broadwebd profile-sync service code must not call Kubo fixture models directly; route through transport executors or shims.'
@@ -119,6 +128,10 @@ require_text \
     crates/broadwebd/src/lib.rs \
     'impl TransportPlugin for InProcessIpfsGatewayFixtureTransport' \
     'In-process IPFS gateway fixtures must be installed as transport wrappers.'
+require_text \
+    crates/broadwebd/src/lib.rs \
+    'fetch_internal_fixture_http_url' \
+    'In-process HTTP fixture transports must call explicit fixture fetch helpers.'
 
 require_text \
     crates/broadwebd/src/lib.rs \
