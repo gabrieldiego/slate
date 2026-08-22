@@ -589,6 +589,11 @@ Current baseline:
   `provider:` and `iroh-node:` refs: invalid deferred targets fail closed, and
   valid refs are grouped into provider-id, protocol, and target records for
   future protocol materializers.
+- The selected endpoint materialization plan now exposes a combined protocol
+  materialization summary that groups multiaddr work, deferred-protocol work,
+  missing endpoints, and fail-closed endpoints. Scheduler/UI code can tell
+  whether a real adapter is required and whether the selected provider set is
+  ready before any publish, retain, or root mutation.
 - Legacy `fixture:<provider>` endpoint refs now also fail closed. They do not
   carry a fixture network id, so they cannot safely satisfy stored-provider
   materialization or quorum checks.

@@ -1742,6 +1742,46 @@ pub struct SettingsSyncSelectedDeferredProtocolMaterializationRequest {
     pub target: String,
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct SettingsSyncSelectedProtocolMaterializationPlan {
+    pub multiaddr_requests: Vec<SettingsSyncSelectedMultiaddrMaterializationRequest>,
+    pub deferred_protocol_requests: Vec<SettingsSyncSelectedDeferredProtocolMaterializationRequest>,
+    pub missing_endpoint_provider_ids: Vec<String>,
+    pub fail_closed_provider_ids: Vec<String>,
+}
+
+impl SettingsSyncSelectedProtocolMaterializationPlan {
+    pub fn protocol_request_count(&self) -> usize {
+        self.multiaddr_requests.len() + self.deferred_protocol_requests.len()
+    }
+
+    pub fn missing_endpoint_provider_count(&self) -> usize {
+        self.missing_endpoint_provider_ids.len()
+    }
+
+    pub fn fail_closed_provider_count(&self) -> usize {
+        self.fail_closed_provider_ids.len()
+    }
+
+    pub fn requires_protocol_materializer(&self) -> bool {
+        self.protocol_request_count() > 0
+    }
+
+    pub fn has_missing_endpoint(&self) -> bool {
+        !self.missing_endpoint_provider_ids.is_empty()
+    }
+
+    pub fn has_fail_closed_endpoint(&self) -> bool {
+        !self.fail_closed_provider_ids.is_empty()
+    }
+
+    pub fn ready_for_protocol_materialization(&self) -> bool {
+        self.requires_protocol_materializer()
+            && !self.has_missing_endpoint()
+            && !self.has_fail_closed_endpoint()
+    }
+}
+
 impl SettingsSyncSelectedEndpointMaterializationRequest {
     pub fn fixture_ready(&self) -> bool {
         self.endpoint_status == SettingsSyncStoredProviderEndpointStatus::InProcessFixture
@@ -1926,6 +1966,22 @@ impl SettingsSyncSelectedEndpointMaterializationPlan {
         self.requests
             .iter()
             .any(|request| request.pending_materialization())
+    }
+
+    pub fn protocol_materialization_plan(&self) -> SettingsSyncSelectedProtocolMaterializationPlan {
+        SettingsSyncSelectedProtocolMaterializationPlan {
+            multiaddr_requests: self.multiaddr_requests(),
+            deferred_protocol_requests: self.deferred_protocol_requests(),
+            missing_endpoint_provider_ids: self
+                .requests
+                .iter()
+                .filter(|request| {
+                    request.endpoint_status == SettingsSyncStoredProviderEndpointStatus::Missing
+                })
+                .map(|request| request.provider_id.clone())
+                .collect(),
+            fail_closed_provider_ids: self.fail_closed_provider_ids(),
+        }
     }
 
     pub fn has_fail_closed_request(&self) -> bool {
@@ -7111,6 +7167,59 @@ mod tests {
                 }
             ]
         );
+        let protocol_materialization_plan = materialization_plan.protocol_materialization_plan();
+        assert_eq!(
+            protocol_materialization_plan,
+            super::SettingsSyncSelectedProtocolMaterializationPlan {
+                multiaddr_requests: vec![
+                    super::SettingsSyncSelectedMultiaddrMaterializationRequest {
+                        provider_id: multiaddr_provider_id.to_string(),
+                        endpoint: slate_routing::Multiaddr::parse(
+                            "/dnsaddr/home.example.test/p2p/provider-a"
+                        )
+                        .expect("expected protocol plan test multiaddr"),
+                    }
+                ],
+                deferred_protocol_requests: vec![
+                    super::SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+                        provider_id: deferred_provider_id.to_string(),
+                        protocol: "iroh-node".to_string(),
+                        target: "provider-a".to_string(),
+                    }
+                ],
+                missing_endpoint_provider_ids: vec![missing_provider_id.to_string()],
+                fail_closed_provider_ids: vec![unsupported_provider_id.to_string()],
+            }
+        );
+        assert_eq!(protocol_materialization_plan.protocol_request_count(), 2);
+        assert_eq!(
+            protocol_materialization_plan.missing_endpoint_provider_count(),
+            1
+        );
+        assert_eq!(
+            protocol_materialization_plan.fail_closed_provider_count(),
+            1
+        );
+        assert!(protocol_materialization_plan.requires_protocol_materializer());
+        assert!(protocol_materialization_plan.has_missing_endpoint());
+        assert!(protocol_materialization_plan.has_fail_closed_endpoint());
+        assert!(!protocol_materialization_plan.ready_for_protocol_materialization());
+        let protocol_only_plan = super::selected_endpoint_materialization_plan(
+            selected.enabled_retention_provider_endpoints.as_slice(),
+            [
+                multiaddr_provider_id.to_string(),
+                deferred_provider_id.to_string(),
+            ]
+            .as_slice(),
+        )
+        .protocol_materialization_plan();
+        assert_eq!(protocol_only_plan.protocol_request_count(), 2);
+        assert_eq!(protocol_only_plan.missing_endpoint_provider_count(), 0);
+        assert_eq!(protocol_only_plan.fail_closed_provider_count(), 0);
+        assert!(protocol_only_plan.requires_protocol_materializer());
+        assert!(!protocol_only_plan.has_missing_endpoint());
+        assert!(!protocol_only_plan.has_fail_closed_endpoint());
+        assert!(protocol_only_plan.ready_for_protocol_materialization());
         assert_eq!(
             materialization_plan.pending_requests(),
             vec![
