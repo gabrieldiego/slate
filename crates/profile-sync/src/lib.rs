@@ -2676,9 +2676,6 @@ fn classify_stored_provider_endpoint(
             SettingsSyncStoredProviderEndpointStatus::Unsupported
         };
     }
-    if endpoint_ref.strip_prefix("fixture:") == Some(provider_id) {
-        return SettingsSyncStoredProviderEndpointStatus::InProcessFixture;
-    }
     if endpoint_ref.starts_with("fixture:") {
         return SettingsSyncStoredProviderEndpointStatus::Unsupported;
     }
@@ -6009,7 +6006,7 @@ mod tests {
         );
         assert_eq!(
             super::classify_stored_provider_endpoint("provider-a", Some("fixture:provider-a")),
-            SettingsSyncStoredProviderEndpointStatus::InProcessFixture
+            SettingsSyncStoredProviderEndpointStatus::Unsupported
         );
         assert_eq!(
             super::classify_stored_provider_endpoint("provider-a", Some("fixture:provider-b")),

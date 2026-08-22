@@ -573,6 +573,9 @@ Current baseline:
   multiaddr and deferred protocol refs are tracked separately, and
   loopback-shaped `http://` or `https://` refs are unsupported so fixture tests
   cannot silently open sockets or rely on DNS.
+- Legacy `fixture:<provider>` endpoint refs now also fail closed. They do not
+  carry a fixture network id, so they cannot safely satisfy stored-provider
+  materialization or quorum checks.
 - Stored-provider plans now expose provider-id buckets and counts for each
   endpoint materialization status: in-process fixture, missing, multiaddr,
   deferred protocol, and unsupported. This gives runtime and UI code a
