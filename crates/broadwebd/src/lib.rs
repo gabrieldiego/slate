@@ -37,6 +37,47 @@ pub const SLATE_IPFS_KUBO_RPC_ENV: &str = "SLATE_IPFS_KUBO_RPC";
 pub const IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_SCHEME: &str = "slate-fixture-profile-sync";
 pub const IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX: &str = "slate-fixture-profile-sync://";
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InProcessProfileSyncFixtureEndpointRef<'a> {
+    network_id: &'a str,
+    provider_id: &'a str,
+}
+
+impl<'a> InProcessProfileSyncFixtureEndpointRef<'a> {
+    pub fn network_id(&self) -> &'a str {
+        self.network_id
+    }
+
+    pub fn provider_id(&self) -> &'a str {
+        self.provider_id
+    }
+}
+
+pub fn parse_in_process_profile_sync_fixture_endpoint_ref(
+    endpoint_ref: &str,
+) -> Option<InProcessProfileSyncFixtureEndpointRef<'_>> {
+    let endpoint = endpoint_ref.strip_prefix(IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX)?;
+    let (network_id, provider_id) = endpoint.split_once('/')?;
+    if !is_in_process_profile_sync_fixture_endpoint_token(network_id)
+        || !is_in_process_profile_sync_fixture_endpoint_token(provider_id)
+    {
+        return None;
+    }
+
+    Some(InProcessProfileSyncFixtureEndpointRef {
+        network_id,
+        provider_id,
+    })
+}
+
+fn is_in_process_profile_sync_fixture_endpoint_token(token: &str) -> bool {
+    !token.is_empty()
+        && token.len() <= 512
+        && token
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+}
+
 pub use budget::ResourceBudget;
 pub use daemon::{
     BroadwebDaemon, default_session_state_root, default_session_status_reporter,
@@ -2364,6 +2405,22 @@ mod tests {
                 .unwrap()
                 .0,
             crate::IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_SCHEME
+        );
+        let parsed_endpoint = crate::parse_in_process_profile_sync_fixture_endpoint_ref(
+            profile_sync_endpoint.endpoint_ref(),
+        )
+        .expect("profile-sync fixture endpoint should parse");
+        assert_eq!(parsed_endpoint.network_id(), network.network_id());
+        assert_eq!(parsed_endpoint.provider_id(), "provider-a");
+        assert!(
+            crate::parse_in_process_profile_sync_fixture_endpoint_ref(
+                "slate-fixture-profile-sync://network-1/provider-a/extra",
+            )
+            .is_none()
+        );
+        assert!(
+            crate::parse_in_process_profile_sync_fixture_endpoint_ref("http://127.0.0.1:5001")
+                .is_none()
         );
     }
 

@@ -828,9 +828,10 @@ endpoint. The stored-provider plan also classifies endpoint references before
 runtime materialization: `InProcessBroadwebNetwork` mints
 `slate-fixture-profile-sync://<network>/<provider>` endpoint refs for
 socketless profile-sync tests. The scheme and prefix are exported from
-broadwebd so profile-sync classification and fixture minting share one source
-of truth, and those refs are treated as in-process fixture endpoints only when
-the provider component matches the stored provider id.
+broadwebd along with a pure parser/validator, so profile-sync classification,
+future materialization code, and fixture minting share one source of truth.
+Those refs are treated as in-process fixture endpoints only when the parser
+accepts the shape and the provider component matches the stored provider id.
 Multiaddr-like and deferred protocol references are reported separately, and
 ordinary `http://`, `https://`, `localhost`, or stale fixture-shaped references
 are reported as unsupported. This keeps test fixtures from drifting back to

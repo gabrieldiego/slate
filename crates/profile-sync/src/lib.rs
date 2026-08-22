@@ -15,6 +15,7 @@ use slate_broadwebd::{
     ProfileSyncRootHealthRequest as BroadwebdProfileSyncRootHealthRequest,
     ProfileSyncRootRequest as BroadwebdProfileSyncRootRequest,
     ProfileSyncRootUpdate as BroadwebdProfileSyncRootUpdate,
+    parse_in_process_profile_sync_fixture_endpoint_ref,
 };
 use slate_storage::{
     DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH, EncryptedSyncObject, IncomingSyncSettingText,
@@ -2085,10 +2086,9 @@ fn classify_stored_provider_endpoint(
     };
 
     if endpoint_ref.starts_with(IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX) {
-        return if in_process_profile_sync_fixture_endpoint_matches_provider(
-            provider_id,
-            endpoint_ref,
-        ) {
+        return if parse_in_process_profile_sync_fixture_endpoint_ref(endpoint_ref)
+            .is_some_and(|endpoint| endpoint.provider_id() == provider_id)
+        {
             SettingsSyncStoredProviderEndpointStatus::InProcessFixture
         } else {
             SettingsSyncStoredProviderEndpointStatus::Unsupported
@@ -2108,23 +2108,6 @@ fn classify_stored_provider_endpoint(
     }
 
     SettingsSyncStoredProviderEndpointStatus::Unsupported
-}
-
-fn in_process_profile_sync_fixture_endpoint_matches_provider(
-    provider_id: &str,
-    endpoint_ref: &str,
-) -> bool {
-    let Some(endpoint) = endpoint_ref.strip_prefix(IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX)
-    else {
-        return false;
-    };
-    let Some((network_id, endpoint_provider_id)) = endpoint.split_once('/') else {
-        return false;
-    };
-
-    is_endpoint_token(network_id)
-        && is_endpoint_token(endpoint_provider_id)
-        && endpoint_provider_id == provider_id
 }
 
 fn is_deferred_protocol_endpoint(endpoint_ref: &str) -> bool {
@@ -5037,6 +5020,13 @@ mod tests {
             super::classify_stored_provider_endpoint(
                 "provider-a",
                 Some("slate-fixture-profile-sync://network-1/provider-b")
+            ),
+            SettingsSyncStoredProviderEndpointStatus::Unsupported
+        );
+        assert_eq!(
+            super::classify_stored_provider_endpoint(
+                "provider-a",
+                Some("slate-fixture-profile-sync://network-1/provider-a/extra")
             ),
             SettingsSyncStoredProviderEndpointStatus::Unsupported
         );
