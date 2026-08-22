@@ -1024,6 +1024,12 @@ Current baseline:
   receiver validates and applies the signed provider record, records the
   provider-authority roster row, and still excludes that provider from trusted
   settings-head pulls.
+- Stored retention-provider selection now requires the stored provider id to
+  also be a trusted provider-authority device in `slate-settings.db`. The
+  scheduler reports unauthorized stored provider metadata separately and
+  excludes it before endpoint materialization, so synced provider listings
+  cannot satisfy retention quorum unless the account membership log authorized
+  that provider.
 - The same membership-log bridge now covers the provider-signer failure mode
   transactionally: if a log enrolls a provider and then uses that provider to
   sign an account membership change, the whole pulled log is rejected, the

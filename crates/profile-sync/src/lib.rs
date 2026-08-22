@@ -1710,6 +1710,7 @@ pub struct SettingsSyncStoredRetentionProviderPlan {
     pub enabled_retention_provider_endpoints: Vec<SettingsSyncStoredRetentionProviderEndpoint>,
     pub disabled_provider_ids: Vec<String>,
     pub stored_role_ineligible_provider_ids: Vec<String>,
+    pub unauthorized_provider_ids: Vec<String>,
     pub cycle: SettingsSyncScheduledCyclePlan,
 }
 
@@ -1844,6 +1845,10 @@ impl SettingsSyncStoredRetentionProviderPlan {
 
     pub fn stored_role_ineligible_provider_count(&self) -> usize {
         self.stored_role_ineligible_provider_ids.len()
+    }
+
+    pub fn unauthorized_provider_count(&self) -> usize {
+        self.unauthorized_provider_ids.len()
     }
 
     pub fn retention_candidate_count(&self) -> usize {
@@ -2367,6 +2372,7 @@ struct StoredRetentionProviderSelection {
     enabled_retention_provider_endpoints: Vec<SettingsSyncStoredRetentionProviderEndpoint>,
     disabled_provider_ids: Vec<String>,
     stored_role_ineligible_provider_ids: Vec<String>,
+    unauthorized_provider_ids: Vec<String>,
 }
 
 fn endpoint_provider_ids_with_status(
@@ -2522,13 +2528,50 @@ fn materialize_selected_in_process_fixture_retention_provider_handles<'a>(
     }
 }
 
+fn load_stored_retention_provider_selection(
+    database: &SlateProfileDatabase,
+    profile: &str,
+    max_stored_providers: u32,
+) -> Result<StoredRetentionProviderSelection, StorageError> {
+    let stored_providers = database.storage_providers(profile, max_stored_providers)?;
+    let authorized_provider_ids = trusted_provider_authority_device_ids(database, profile)?;
+    Ok(select_stored_retention_provider_ids(
+        stored_providers,
+        &authorized_provider_ids,
+    ))
+}
+
+fn trusted_provider_authority_device_ids(
+    database: &SlateProfileDatabase,
+    profile: &str,
+) -> Result<BTreeSet<String>, StorageError> {
+    let provider_authority_device_ids = database
+        .sync_devices(profile)?
+        .into_iter()
+        .filter(|device| device.provider_authority)
+        .map(|device| device.device_id)
+        .collect::<BTreeSet<_>>();
+
+    Ok(database
+        .sync_device_public_keys(profile)?
+        .into_iter()
+        .filter(|record| {
+            record.trusted
+                && provider_authority_device_ids.contains(record.public_key.device_id.as_str())
+        })
+        .map(|record| record.public_key.device_id)
+        .collect())
+}
+
 fn select_stored_retention_provider_ids(
     providers: Vec<StorageProviderRecord>,
+    authorized_provider_ids: &BTreeSet<String>,
 ) -> StoredRetentionProviderSelection {
     let mut enabled_retention_provider_ids = Vec::new();
     let mut enabled_retention_provider_endpoints = Vec::new();
     let mut disabled_provider_ids = Vec::new();
     let mut stored_role_ineligible_provider_ids = Vec::new();
+    let mut unauthorized_provider_ids = Vec::new();
     let stored_provider_count = providers.len();
 
     for provider in providers {
@@ -2538,6 +2581,10 @@ fn select_stored_retention_provider_ids(
         }
         if !(provider.availability && provider.object_transfer) {
             stored_role_ineligible_provider_ids.push(provider.provider_id);
+            continue;
+        }
+        if !authorized_provider_ids.contains(provider.provider_id.as_str()) {
+            unauthorized_provider_ids.push(provider.provider_id);
             continue;
         }
         enabled_retention_provider_endpoints.push(SettingsSyncStoredRetentionProviderEndpoint {
@@ -2557,6 +2604,7 @@ fn select_stored_retention_provider_ids(
         enabled_retention_provider_endpoints,
         disabled_provider_ids,
         stored_role_ineligible_provider_ids,
+        unauthorized_provider_ids,
     }
 }
 
@@ -2577,6 +2625,7 @@ fn settings_sync_stored_retention_provider_plan(
         enabled_retention_provider_endpoints: stored_selection.enabled_retention_provider_endpoints,
         disabled_provider_ids: stored_selection.disabled_provider_ids,
         stored_role_ineligible_provider_ids: stored_selection.stored_role_ineligible_provider_ids,
+        unauthorized_provider_ids: stored_selection.unauthorized_provider_ids,
         cycle,
     }
 }
@@ -3744,11 +3793,13 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             signer,
             &config.policy,
         )?;
-        let stored_providers = database
-            .storage_providers(config.profile.as_str(), max_stored_providers)
-            .map_err(ProfileSyncCredentialError::from)
-            .map_err(ProfileSyncCycleError::from)?;
-        let stored_selection = select_stored_retention_provider_ids(stored_providers);
+        let stored_selection = load_stored_retention_provider_selection(
+            database,
+            config.profile.as_str(),
+            max_stored_providers,
+        )
+        .map_err(ProfileSyncCredentialError::from)
+        .map_err(ProfileSyncCycleError::from)?;
         Ok(settings_sync_stored_retention_provider_plan(
             preflight,
             max_stored_providers,
@@ -3967,14 +4018,17 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             secrets.signer,
             &config.policy,
         )?;
-        let stored_providers = database
-            .storage_providers(config.profile.as_str(), max_stored_providers)
-            .map_err(ProfileSyncCredentialError::from)
-            .map_err(ProfileSyncCycleError::from)?;
+        let stored_selection = load_stored_retention_provider_selection(
+            database,
+            config.profile.as_str(),
+            max_stored_providers,
+        )
+        .map_err(ProfileSyncCredentialError::from)
+        .map_err(ProfileSyncCycleError::from)?;
         let stored_provider_plan = settings_sync_stored_retention_provider_plan(
             preflight,
             max_stored_providers,
-            select_stored_retention_provider_ids(stored_providers),
+            stored_selection,
         );
         config.policy.check_selected_retention_provider_freshness(
             stored_provider_plan.stale_retention_provider_count(),
@@ -4195,14 +4249,17 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
                 secrets.signer,
                 &config.policy,
             )?;
-        let stored_providers = database
-            .storage_providers(config.profile.as_str(), max_stored_providers)
-            .map_err(ProfileSyncCredentialError::from)
-            .map_err(ProfileSyncCycleError::from)?;
+        let stored_selection = load_stored_retention_provider_selection(
+            database,
+            config.profile.as_str(),
+            max_stored_providers,
+        )
+        .map_err(ProfileSyncCredentialError::from)
+        .map_err(ProfileSyncCycleError::from)?;
         let stored_provider_plan = settings_sync_stored_retention_provider_plan(
             preflight.preflight.clone(),
             max_stored_providers,
-            select_stored_retention_provider_ids(stored_providers),
+            stored_selection,
         );
         config.policy.check_selected_retention_provider_freshness(
             stored_provider_plan.stale_retention_provider_count(),
@@ -4286,14 +4343,17 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
                 secrets.signer,
                 &config.policy,
             )?;
-        let stored_providers = database
-            .storage_providers(config.profile.as_str(), max_stored_providers)
-            .map_err(ProfileSyncCredentialError::from)
-            .map_err(ProfileSyncCycleError::from)?;
+        let stored_selection = load_stored_retention_provider_selection(
+            database,
+            config.profile.as_str(),
+            max_stored_providers,
+        )
+        .map_err(ProfileSyncCredentialError::from)
+        .map_err(ProfileSyncCycleError::from)?;
         let stored_provider_plan = settings_sync_stored_retention_provider_plan(
             preflight.preflight.clone(),
             max_stored_providers,
-            select_stored_retention_provider_ids(stored_providers),
+            stored_selection,
         );
         config.policy.check_selected_retention_provider_freshness(
             stored_provider_plan.stale_retention_provider_count(),
@@ -5945,7 +6005,10 @@ mod tests {
         open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
         pull_signed_profile_sync_device_head, settings_sync_snapshot_id,
     };
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::{
+        collections::BTreeSet,
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     const TEST_CONTENT_KEY_ID: &str = "content-key-epoch-1";
 
@@ -6023,6 +6086,41 @@ mod tests {
             enabled: update.enabled,
             created_at: 1,
             updated_at: 1,
+        }
+    }
+
+    fn authorize_test_storage_provider(
+        database: &SlateProfileDatabase,
+        profile: &str,
+        provider_id: &str,
+    ) {
+        let provider_signer =
+            ProfileSyncDeviceSigner::generate(provider_id).expect("generate provider signer");
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: provider_signer.public_key().expect("provider public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register provider public key");
+        database
+            .register_sync_device(&SyncDeviceRegistration {
+                profile: profile.to_string(),
+                device_id: provider_id.to_string(),
+                label: Some("Authorized provider".to_string()),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                provider_authority: true,
+            })
+            .expect("register provider authority metadata");
+    }
+
+    fn authorize_test_storage_providers(
+        database: &SlateProfileDatabase,
+        profile: &str,
+        provider_ids: &[&str],
+    ) {
+        for provider_id in provider_ids {
+            authorize_test_storage_provider(database, profile, provider_id);
         }
     }
 
@@ -6151,6 +6249,16 @@ mod tests {
                 true,
             )
         };
+        let authorized_provider_ids = [
+            fixture_provider_id,
+            missing_provider_id,
+            multiaddr_provider_id,
+            deferred_provider_id,
+            unsupported_provider_id,
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect::<BTreeSet<_>>();
 
         let selected = super::select_stored_retention_provider_ids(
             [
@@ -6172,6 +6280,7 @@ mod tests {
             .into_iter()
             .map(test_storage_provider_record)
             .collect(),
+            &authorized_provider_ids,
         );
 
         assert_eq!(
@@ -7514,6 +7623,16 @@ mod tests {
             .expect("generate stored membership scheduler signer a");
         let signer_b = ProfileSyncDeviceSigner::generate("membership-stored-scheduler-device-b")
             .expect("generate stored membership scheduler signer b");
+        let selected_provider_id = "local-fixture-availability-membership-stored-scheduler-pinner";
+        let selected_provider_endpoint_ref =
+            network.profile_sync_provider_endpoint_ref(selected_provider_id);
+        let unmaterialized_provider_id =
+            "local-fixture-availability-membership-stored-scheduler-extra";
+        let selected_provider_signer = ProfileSyncDeviceSigner::generate(selected_provider_id)
+            .expect("generate stored membership selected provider signer");
+        let unmaterialized_provider_signer =
+            ProfileSyncDeviceSigner::generate(unmaterialized_provider_id)
+                .expect("generate stored membership unmaterialized provider signer");
         register_test_content_key_epoch(&publisher_database, DEFAULT_PROFILE_ID);
         register_test_content_key_epoch(&receiver_database, DEFAULT_PROFILE_ID);
         let enroll_a = ProfileSyncMembershipRecord {
@@ -7546,6 +7665,45 @@ mod tests {
                 signed_membership_record_bytes(&signer_a, &enroll_b).as_slice(),
             )
             .expect("publisher applies stored membership scheduler signer b enrollment");
+        let enroll_selected_provider = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-3-enroll-membership-stored-scheduler-selected-provider".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 2,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER.to_string(),
+            device_id: selected_provider_signer.device_id().to_string(),
+            device_public_key: Some(
+                selected_provider_signer
+                    .public_key()
+                    .expect("read selected provider public key"),
+            ),
+            created_at: 30,
+        };
+        publisher_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_selected_provider).as_slice(),
+            )
+            .expect("publisher applies stored membership selected provider enrollment");
+        let enroll_unmaterialized_provider = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-4-enroll-membership-stored-scheduler-extra-provider".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 3,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER.to_string(),
+            device_id: unmaterialized_provider_signer.device_id().to_string(),
+            device_public_key: Some(
+                unmaterialized_provider_signer
+                    .public_key()
+                    .expect("read unmaterialized provider public key"),
+            ),
+            created_at: 40,
+        };
+        publisher_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_unmaterialized_provider)
+                    .as_slice(),
+            )
+            .expect("publisher applies stored membership unmaterialized provider enrollment");
         publisher_database
             .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
             .expect("publisher writes stored membership scheduler setting");
@@ -7570,11 +7728,6 @@ mod tests {
             .object_id
             .clone();
 
-        let selected_provider_id = "local-fixture-availability-membership-stored-scheduler-pinner";
-        let selected_provider_endpoint_ref =
-            network.profile_sync_provider_endpoint_ref(selected_provider_id);
-        let unmaterialized_provider_id =
-            "local-fixture-availability-membership-stored-scheduler-extra";
         for provider in [
             test_storage_provider_update(
                 &network,
@@ -7635,7 +7788,7 @@ mod tests {
             membership_log_plan.remote_preview.object_id.as_deref(),
             Some(published_membership_log_object_id.as_str())
         );
-        assert_eq!(membership_log_plan.remote_preview.record_count, 2);
+        assert_eq!(membership_log_plan.remote_preview.record_count, 4);
         assert!(
             receiver_database
                 .sync_device_public_key(DEFAULT_PROFILE_ID, "membership-stored-scheduler-device-b")
@@ -7714,7 +7867,7 @@ mod tests {
                 "stored membership scheduler applies and retains through materialized provider",
             );
 
-        assert_eq!(run.pulled_membership_application_count(), 2);
+        assert_eq!(run.pulled_membership_application_count(), 4);
         assert_eq!(run.stored_provider_plan.stored_provider_count, 2);
         assert_eq!(
             run.stored_provider_plan
@@ -12526,6 +12679,7 @@ mod tests {
         let stale_state_root = test_state_root("scheduler-stored-provider-stale");
         let offline_state_root = test_state_root("scheduler-stored-provider-offline");
         let no_transfer_state_root = test_state_root("scheduler-stored-provider-no-transfer");
+        let unauthorized_state_root = test_state_root("scheduler-stored-provider-unauthorized");
         let db_root = test_state_root("scheduler-stored-provider-db");
         let device_daemon = network
             .daemon_for_device(
@@ -12572,6 +12726,15 @@ mod tests {
                 },
             )
             .expect("start in-process stored no-transfer provider daemon");
+        let unauthorized_provider_id =
+            "local-fixture-availability-runtime-scheduler-stored-unauthorized";
+        let _unauthorized_provider_daemon = network
+            .daemon_for_availability_provider(
+                &unauthorized_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-stored-unauthorized",
+            )
+            .expect("start in-process stored unauthorized provider daemon");
         fixture
             .expire_current_provider_freshness()
             .expect("expire provider freshness before stored plan");
@@ -12584,6 +12747,9 @@ mod tests {
         fixture
             .mark_provider_seen(no_transfer_provider_id)
             .expect("keep role-ineligible provider fresh");
+        fixture
+            .mark_availability_provider_seen("runtime-scheduler-stored-unauthorized")
+            .expect("keep unauthorized provider fresh");
         fixture
             .set_device_online("runtime-scheduler-stored-offline", false)
             .expect("mark stored provider offline");
@@ -12649,6 +12815,16 @@ mod tests {
             test_storage_provider_update(
                 &network,
                 profile,
+                unauthorized_provider_id,
+                "local-fixture-availability",
+                "Unauthorized pinner",
+                true,
+                true,
+                true,
+            ),
+            test_storage_provider_update(
+                &network,
+                profile,
                 "stored-provider-no-local-retention-role",
                 "local-fixture",
                 "No local retention role",
@@ -12681,6 +12857,17 @@ mod tests {
                 .upsert_storage_provider(&provider)
                 .expect("write stored retention provider metadata");
         }
+        authorize_test_storage_providers(
+            &database,
+            profile,
+            &[
+                selected_provider_id,
+                stale_provider_id,
+                offline_provider_id,
+                no_transfer_provider_id,
+                "stored-provider-undiscovered",
+            ],
+        );
 
         let config = SettingsSyncSchedulerConfig::new(
             profile,
@@ -12695,8 +12882,8 @@ mod tests {
             .expect("scheduler plan materializes stored retention providers");
 
         assert_eq!(plan.max_stored_provider_count, 16);
-        assert_eq!(plan.stored_provider_count, 7);
-        assert_eq!(plan.retention_candidate_count(), 2);
+        assert_eq!(plan.stored_provider_count, 8);
+        assert_eq!(plan.retention_candidate_count(), 3);
         assert_eq!(plan.enabled_retention_provider_count(), 5);
         let mut fixture_endpoint_provider_ids = plan.in_process_fixture_endpoint_provider_ids();
         fixture_endpoint_provider_ids.sort();
@@ -12853,12 +13040,17 @@ mod tests {
             plan.disabled_provider_ids,
             vec!["stored-provider-disabled".to_string()]
         );
+        assert_eq!(
+            plan.unauthorized_provider_ids,
+            vec![unauthorized_provider_id.to_string()]
+        );
         assert_eq!(plan.selected_retention_provider_count(), 1);
         assert_eq!(plan.stale_retention_provider_count(), 1);
         assert_eq!(plan.offline_retention_provider_count(), 1);
         assert_eq!(plan.ineligible_retention_provider_count(), 1);
         assert_eq!(plan.undiscovered_retention_provider_count(), 1);
         assert_eq!(plan.duplicate_retention_provider_count(), 0);
+        assert_eq!(plan.unauthorized_provider_count(), 1);
         assert!(plan.degraded_before());
         assert!(!plan.cycle.preflight.before_health.provider_health.degraded);
         assert_eq!(
@@ -12879,6 +13071,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(stale_state_root);
         let _ = std::fs::remove_dir_all(offline_state_root);
         let _ = std::fs::remove_dir_all(no_transfer_state_root);
+        let _ = std::fs::remove_dir_all(unauthorized_state_root);
         let _ = std::fs::remove_dir_all(db_root);
     }
 
@@ -12962,6 +13155,11 @@ mod tests {
                 .upsert_storage_provider(&provider)
                 .expect("write stored-run retention provider metadata");
         }
+        authorize_test_storage_providers(
+            &database,
+            profile,
+            &[selected_provider_id, unmaterialized_provider_id],
+        );
 
         let scheduler = BroadwebdSettingsSyncScheduler::new(&device_daemon);
         let materialized_provider_handles =
@@ -13055,6 +13253,12 @@ mod tests {
             .expect("scheduler tick uses stored provider metadata and materialized daemon handle");
 
         assert_eq!(run.stored_provider_plan.stored_provider_count, 2);
+        assert!(
+            run.stored_provider_plan
+                .unauthorized_provider_ids
+                .is_empty()
+        );
+        assert_eq!(run.stored_provider_plan.unauthorized_provider_count(), 0);
         assert_eq!(
             run.stored_provider_plan.enabled_retention_provider_ids,
             vec![
@@ -13247,6 +13451,11 @@ mod tests {
                 .upsert_storage_provider(&provider)
                 .expect("write unsupported endpoint retention provider metadata");
         }
+        authorize_test_storage_providers(
+            &database,
+            profile,
+            &[valid_provider_id, unsupported_provider_id],
+        );
 
         let scheduler = BroadwebdSettingsSyncScheduler::new(&device_daemon);
         let materialized_provider_handles = [
