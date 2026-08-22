@@ -597,6 +597,11 @@ Current baseline:
   fail-closed groups. Runtime code can decide whether in-process fixtures are
   enough, whether a real protocol materializer is required, or whether the
   selected provider set must fail closed before any adapter dials or binds.
+- Stored-provider runtime reports now distinguish fixture-ready providers that
+  simply lack a supplied in-process daemon handle from selected endpoints that
+  still need protocol materialization, such as missing, multiaddr, or deferred
+  protocol endpoints. The materialized quorum count subtracts that pending
+  bucket separately from endpoint mismatches and fail-closed endpoints.
 - Selected synthetic fixture endpoints now expose materialization targets with
   provider id, fixture network id, and endpoint ref so local-only fixtures can
   bridge stored metadata to in-process providers without opening sockets.

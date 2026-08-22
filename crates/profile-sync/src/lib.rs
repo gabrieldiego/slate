@@ -2229,6 +2229,7 @@ impl SettingsSyncStoredRetentionProviderPlan {
 pub struct SettingsSyncStoredRetentionProviderRun {
     pub stored_provider_plan: SettingsSyncStoredRetentionProviderPlan,
     pub unmaterialized_retention_provider_ids: Vec<String>,
+    pub pending_endpoint_materialization_retention_provider_ids: Vec<String>,
     pub endpoint_mismatch_retention_provider_ids: Vec<String>,
     pub unsupported_endpoint_retention_provider_ids: Vec<String>,
     pub cycle: SettingsSyncCycleWithSharedRootRetentionRun,
@@ -2237,6 +2238,11 @@ pub struct SettingsSyncStoredRetentionProviderRun {
 impl SettingsSyncStoredRetentionProviderRun {
     pub fn unmaterialized_retention_provider_count(&self) -> usize {
         self.unmaterialized_retention_provider_ids.len()
+    }
+
+    pub fn pending_endpoint_materialization_retention_provider_count(&self) -> usize {
+        self.pending_endpoint_materialization_retention_provider_ids
+            .len()
     }
 
     pub fn endpoint_mismatch_retention_provider_count(&self) -> usize {
@@ -2255,6 +2261,7 @@ impl SettingsSyncStoredRetentionProviderRun {
     pub fn materialized_retention_provider_count(&self) -> usize {
         self.selected_retention_provider_count()
             .saturating_sub(self.unmaterialized_retention_provider_count())
+            .saturating_sub(self.pending_endpoint_materialization_retention_provider_count())
             .saturating_sub(self.endpoint_mismatch_retention_provider_count())
             .saturating_sub(self.unsupported_endpoint_retention_provider_count())
     }
@@ -2346,6 +2353,7 @@ pub struct SettingsSyncStoredRetentionProviderMembershipRun {
     pub preflight: SettingsSyncCyclePreflightWithMembershipLog,
     pub stored_provider_plan: SettingsSyncStoredRetentionProviderPlan,
     pub unmaterialized_retention_provider_ids: Vec<String>,
+    pub pending_endpoint_materialization_retention_provider_ids: Vec<String>,
     pub endpoint_mismatch_retention_provider_ids: Vec<String>,
     pub unsupported_endpoint_retention_provider_ids: Vec<String>,
     pub cycle: SettingsSyncCycleWithMembershipLogRetentionRun,
@@ -2358,6 +2366,11 @@ impl SettingsSyncStoredRetentionProviderMembershipRun {
 
     pub fn unmaterialized_retention_provider_count(&self) -> usize {
         self.unmaterialized_retention_provider_ids.len()
+    }
+
+    pub fn pending_endpoint_materialization_retention_provider_count(&self) -> usize {
+        self.pending_endpoint_materialization_retention_provider_ids
+            .len()
     }
 
     pub fn endpoint_mismatch_retention_provider_count(&self) -> usize {
@@ -2376,6 +2389,7 @@ impl SettingsSyncStoredRetentionProviderMembershipRun {
     pub fn materialized_retention_provider_count(&self) -> usize {
         self.selected_retention_provider_count()
             .saturating_sub(self.unmaterialized_retention_provider_count())
+            .saturating_sub(self.pending_endpoint_materialization_retention_provider_count())
             .saturating_sub(self.endpoint_mismatch_retention_provider_count())
             .saturating_sub(self.unsupported_endpoint_retention_provider_count())
     }
@@ -2822,6 +2836,7 @@ fn settings_sync_stored_retention_provider_plan(
 
 struct MaterializedStoredRetentionProviders<'a> {
     unmaterialized_retention_provider_ids: Vec<String>,
+    pending_endpoint_materialization_retention_provider_ids: Vec<String>,
     endpoint_mismatch_retention_provider_ids: Vec<String>,
     unsupported_endpoint_retention_provider_ids: Vec<String>,
     daemons: Vec<&'a BroadwebDaemon>,
@@ -2838,14 +2853,14 @@ fn materialize_stored_retention_provider_daemons<'a>(
     retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'a>],
 ) -> MaterializedStoredRetentionProviders<'a> {
     let mut unmaterialized_retention_provider_ids = Vec::new();
+    let mut pending_endpoint_materialization_retention_provider_ids = Vec::new();
     let mut endpoint_mismatch_retention_provider_ids = Vec::new();
     let mut unsupported_endpoint_retention_provider_ids = Vec::new();
     let mut daemons = Vec::new();
 
     for provider_id in &plan.cycle.selected_retention_provider_ids {
-        if stored_provider_endpoint_status(plan, provider_id)
-            == SettingsSyncStoredProviderEndpointStatus::Unsupported
-        {
+        let endpoint_status = stored_provider_endpoint_status(plan, provider_id);
+        if endpoint_status == SettingsSyncStoredProviderEndpointStatus::Unsupported {
             unsupported_endpoint_retention_provider_ids.push(provider_id.clone());
             continue;
         }
@@ -2859,12 +2874,22 @@ fn materialize_stored_retention_provider_daemons<'a>(
             }
             daemons.push(handle.daemon);
         } else {
-            unmaterialized_retention_provider_ids.push(provider_id.clone());
+            if matches!(
+                endpoint_status,
+                SettingsSyncStoredProviderEndpointStatus::Missing
+                    | SettingsSyncStoredProviderEndpointStatus::Multiaddr
+                    | SettingsSyncStoredProviderEndpointStatus::DeferredProtocol
+            ) {
+                pending_endpoint_materialization_retention_provider_ids.push(provider_id.clone());
+            } else {
+                unmaterialized_retention_provider_ids.push(provider_id.clone());
+            }
         }
     }
 
     MaterializedStoredRetentionProviders {
         unmaterialized_retention_provider_ids,
+        pending_endpoint_materialization_retention_provider_ids,
         endpoint_mismatch_retention_provider_ids,
         unsupported_endpoint_retention_provider_ids,
         daemons,
@@ -4251,6 +4276,8 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             stored_provider_plan,
             unmaterialized_retention_provider_ids: materialized_providers
                 .unmaterialized_retention_provider_ids,
+            pending_endpoint_materialization_retention_provider_ids: materialized_providers
+                .pending_endpoint_materialization_retention_provider_ids,
             endpoint_mismatch_retention_provider_ids: materialized_providers
                 .endpoint_mismatch_retention_provider_ids,
             unsupported_endpoint_retention_provider_ids: materialized_providers
@@ -4312,6 +4339,8 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
                 stored_provider_plan,
                 unmaterialized_retention_provider_ids: materialized_providers
                     .unmaterialized_retention_provider_ids,
+                pending_endpoint_materialization_retention_provider_ids: materialized_providers
+                    .pending_endpoint_materialization_retention_provider_ids,
                 endpoint_mismatch_retention_provider_ids: materialized_providers
                     .endpoint_mismatch_retention_provider_ids,
                 unsupported_endpoint_retention_provider_ids: materialized_providers
@@ -4484,6 +4513,8 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             stored_provider_plan,
             unmaterialized_retention_provider_ids: materialized_providers
                 .unmaterialized_retention_provider_ids,
+            pending_endpoint_materialization_retention_provider_ids: materialized_providers
+                .pending_endpoint_materialization_retention_provider_ids,
             endpoint_mismatch_retention_provider_ids: materialized_providers
                 .endpoint_mismatch_retention_provider_ids,
             unsupported_endpoint_retention_provider_ids: materialized_providers
@@ -4582,6 +4613,8 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
                 stored_provider_plan,
                 unmaterialized_retention_provider_ids: materialized_providers
                     .unmaterialized_retention_provider_ids,
+                pending_endpoint_materialization_retention_provider_ids: materialized_providers
+                    .pending_endpoint_materialization_retention_provider_ids,
                 endpoint_mismatch_retention_provider_ids: materialized_providers
                     .endpoint_mismatch_retention_provider_ids,
                 unsupported_endpoint_retention_provider_ids: materialized_providers
@@ -6814,6 +6847,101 @@ mod tests {
         assert!(!fixture_only_plan.requires_protocol_materializer());
         assert!(!fixture_only_plan.has_fail_closed_request());
         assert!(fixture_only_plan.ready_for_fixture_materialization_only());
+
+        let empty_provider_health = slate_broadwebd::ProfileSyncProviderHealth {
+            profile: profile.to_string(),
+            known_providers: 0,
+            online_providers: 0,
+            offline_providers: 0,
+            fresh_online_providers: 0,
+            stale_online_providers: 0,
+            fresh_online_provider_ids: Vec::new(),
+            stale_online_provider_ids: Vec::new(),
+            offline_provider_ids: Vec::new(),
+            minimum_provider_seen_sequence: 0,
+            object_transfer_providers: 0,
+            availability_providers: 0,
+            mutable_root_providers: 0,
+            retained_objects: 0,
+            degraded: false,
+            message: String::new(),
+        };
+        let empty_root_health = slate_broadwebd::ProfileSyncRootHealth {
+            profile: profile.to_string(),
+            root_id: "settings/latest".to_string(),
+            visible_candidates: 0,
+            delayed_candidates: 0,
+            delayed_publisher_provider_ids: Vec::new(),
+            latest_object_id: None,
+            latest_object_available: false,
+            delayed_object_provider_ids: Vec::new(),
+            online_retaining_providers: 0,
+            minimum_online_retaining_providers: 0,
+            degraded: false,
+            message: String::new(),
+        };
+        let stored_materialization_plan = super::SettingsSyncStoredRetentionProviderPlan {
+            max_stored_provider_count: 5,
+            stored_provider_count: 5,
+            enabled_retention_provider_ids: materialization_provider_ids.clone(),
+            enabled_retention_provider_endpoints: selected
+                .enabled_retention_provider_endpoints
+                .clone(),
+            disabled_provider_ids: Vec::new(),
+            stored_role_ineligible_provider_ids: Vec::new(),
+            unauthorized_provider_ids: Vec::new(),
+            cycle: super::SettingsSyncScheduledCyclePlan {
+                preflight: super::SettingsSyncCyclePreflight {
+                    profile: profile.to_string(),
+                    settings_root_id: "settings/latest".to_string(),
+                    local_device_id: "local-device".to_string(),
+                    signer_device_id: "local-device".to_string(),
+                    active_key_id: TEST_CONTENT_KEY_ID.to_string(),
+                    trusted_remote_device_count: 0,
+                    retention_provider_candidates: Vec::new(),
+                    before_health: super::SettingsSyncHealthReport {
+                        profile: profile.to_string(),
+                        settings_root_id: "settings/latest".to_string(),
+                        local_device_head_root_id: super::settings_device_head_root_id(
+                            "local-device",
+                        ),
+                        provider_health: empty_provider_health,
+                        settings_root_health: empty_root_health.clone(),
+                        local_device_head_root_health: empty_root_health,
+                    },
+                },
+                selected_retention_provider_ids: materialization_provider_ids.clone(),
+                stale_retention_provider_ids: Vec::new(),
+                offline_retention_provider_ids: Vec::new(),
+                ineligible_retention_provider_ids: Vec::new(),
+                undiscovered_retention_provider_ids: Vec::new(),
+                duplicate_retention_provider_ids: Vec::new(),
+            },
+        };
+        let materialized =
+            super::materialize_stored_retention_provider_daemons(&stored_materialization_plan, &[]);
+        assert_eq!(
+            materialized.unmaterialized_retention_provider_ids,
+            vec![fixture_provider_id.to_string()]
+        );
+        assert_eq!(
+            materialized.pending_endpoint_materialization_retention_provider_ids,
+            vec![
+                missing_provider_id.to_string(),
+                multiaddr_provider_id.to_string(),
+                deferred_provider_id.to_string(),
+            ]
+        );
+        assert!(
+            materialized
+                .endpoint_mismatch_retention_provider_ids
+                .is_empty()
+        );
+        assert_eq!(
+            materialized.unsupported_endpoint_retention_provider_ids,
+            vec![unsupported_provider_id.to_string()]
+        );
+        assert_eq!(materialized.materialized_retention_provider_count(), 0);
     }
 
     #[test]
@@ -8210,10 +8338,18 @@ mod tests {
             run.unmaterialized_retention_provider_ids,
             vec![unmaterialized_provider_id.to_string()]
         );
+        assert!(
+            run.pending_endpoint_materialization_retention_provider_ids
+                .is_empty()
+        );
         assert!(run.endpoint_mismatch_retention_provider_ids.is_empty());
         assert_eq!(run.selected_retention_provider_count(), 2);
         assert_eq!(run.materialized_retention_provider_count(), 1);
         assert_eq!(run.endpoint_mismatch_retention_provider_count(), 0);
+        assert_eq!(
+            run.pending_endpoint_materialization_retention_provider_count(),
+            0
+        );
         assert_eq!(run.cycle.cycle.cycle.applied_count(), 1);
         assert_eq!(
             receiver_database
@@ -13607,10 +13743,18 @@ mod tests {
             run.unmaterialized_retention_provider_ids,
             vec![unmaterialized_provider_id.to_string()]
         );
+        assert!(
+            run.pending_endpoint_materialization_retention_provider_ids
+                .is_empty()
+        );
         assert!(run.endpoint_mismatch_retention_provider_ids.is_empty());
         assert_eq!(run.selected_retention_provider_count(), 2);
         assert_eq!(run.materialized_retention_provider_count(), 1);
         assert_eq!(run.unmaterialized_retention_provider_count(), 1);
+        assert_eq!(
+            run.pending_endpoint_materialization_retention_provider_count(),
+            0
+        );
         assert_eq!(run.endpoint_mismatch_retention_provider_count(), 0);
         assert_eq!(run.unsupported_endpoint_retention_provider_count(), 0);
         assert!(run.degraded_before());
@@ -13849,6 +13993,10 @@ mod tests {
         assert_eq!(run.selected_retention_provider_count(), 2);
         assert_eq!(run.materialized_retention_provider_count(), 1);
         assert_eq!(run.unmaterialized_retention_provider_count(), 0);
+        assert_eq!(
+            run.pending_endpoint_materialization_retention_provider_count(),
+            0
+        );
         assert_eq!(run.endpoint_mismatch_retention_provider_count(), 0);
         assert_eq!(run.unsupported_endpoint_retention_provider_count(), 1);
         assert_eq!(
