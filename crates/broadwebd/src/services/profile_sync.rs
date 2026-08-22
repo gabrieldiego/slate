@@ -856,15 +856,36 @@ impl LocalProfileSyncFixture {
         device_id: impl AsRef<str>,
         online: bool,
     ) -> Result<(), BroadwebdError> {
-        let provider_id = local_fixture_provider_id(device_id);
+        self.set_provider_online(local_fixture_provider_id(device_id), online)
+    }
+
+    pub fn set_availability_provider_online(
+        &self,
+        provider_id: impl AsRef<str>,
+        online: bool,
+    ) -> Result<(), BroadwebdError> {
+        self.set_provider_online(local_fixture_availability_provider_id(provider_id), online)
+    }
+
+    pub fn set_provider_online(
+        &self,
+        provider_id: impl AsRef<str>,
+        online: bool,
+    ) -> Result<(), BroadwebdError> {
+        let provider_id = provider_id.as_ref();
         let mut store = self
             .store
             .lock()
             .map_err(|_| BroadwebdError::Request("profile sync store lock poisoned".to_string()))?;
+        if !store.providers.contains_key(provider_id) {
+            return Err(BroadwebdError::UnsupportedRequest(format!(
+                "unknown profile sync provider: {provider_id}"
+            )));
+        }
         if online {
-            store.offline_providers.remove(provider_id.as_str());
+            store.offline_providers.remove(provider_id);
         } else {
-            store.offline_providers.insert(provider_id);
+            store.offline_providers.insert(provider_id.to_string());
         }
         Ok(())
     }
@@ -2515,6 +2536,84 @@ mod tests {
         assert_eq!(health.retained_objects, 1);
         assert!(health.degraded);
         assert!(health.message.contains("mutable-root provider"));
+    }
+
+    #[test]
+    fn local_fixture_can_mark_custom_provider_offline() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut device = PluginRegistry::new();
+        let mut custom_provider = PluginRegistry::new();
+        let budget = ResourceBudget::default();
+
+        device.register_service(fixture.service_for_device("observer"));
+        custom_provider.register_service(fixture.service_for_provider_with_roles(
+            "custom-availability-provider",
+            "local-fixture-custom",
+            ProfileSyncProviderRoles::availability_provider(),
+        ));
+
+        let unknown_error = fixture
+            .set_provider_online("missing-provider", false)
+            .expect_err("unknown provider online state should fail");
+        assert!(matches!(
+            unknown_error,
+            BroadwebdError::UnsupportedRequest(message) if message.contains("missing-provider")
+        ));
+
+        fixture
+            .set_provider_online("custom-availability-provider", false)
+            .expect("mark custom provider offline");
+        let offline_error = custom_provider
+            .profile_sync(
+                ProfileSyncRequest::ProviderHealth(ProfileSyncProfileRequest::new("default")),
+                &budget,
+            )
+            .expect_err("offline custom provider rejects its own service calls");
+        assert!(matches!(
+            offline_error,
+            BroadwebdError::Request(message) if message.contains("custom-availability-provider")
+        ));
+
+        let health = device
+            .profile_sync(
+                ProfileSyncRequest::ProviderHealth(ProfileSyncProfileRequest::new("default")),
+                &budget,
+            )
+            .expect("online device can inspect custom provider health");
+        let ProfileSyncResponse::ProviderHealth { health } = health else {
+            panic!("unexpected health response");
+        };
+        assert_eq!(health.known_providers, 2);
+        assert_eq!(health.online_providers, 1);
+        assert_eq!(health.offline_providers, 1);
+        assert_eq!(
+            health.fresh_online_provider_ids,
+            vec!["local-fixture-device-observer".to_string()]
+        );
+        assert_eq!(
+            health.offline_provider_ids,
+            vec!["custom-availability-provider".to_string()]
+        );
+        assert_eq!(health.object_transfer_providers, 1);
+        assert_eq!(health.availability_providers, 1);
+        assert_eq!(health.mutable_root_providers, 1);
+        assert!(!health.degraded);
+
+        fixture
+            .set_provider_online("custom-availability-provider", true)
+            .expect("restore custom provider online");
+        let recovered = device
+            .profile_sync(
+                ProfileSyncRequest::ProviderHealth(ProfileSyncProfileRequest::new("default")),
+                &budget,
+            )
+            .expect("online device can inspect recovered provider health");
+        let ProfileSyncResponse::ProviderHealth { health } = recovered else {
+            panic!("unexpected health response");
+        };
+        assert_eq!(health.online_providers, 2);
+        assert!(health.offline_provider_ids.is_empty());
+        assert_eq!(health.availability_providers, 2);
     }
 
     #[test]

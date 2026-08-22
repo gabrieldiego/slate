@@ -261,6 +261,9 @@ Current baseline:
   mutable root publish/resolve, provider discovery, per-object transfer
   budgets, and two local `slate-settings.db` files syncing one setting through
   fixture bytes.
+- The local profile-sync fixture can now mark arbitrary known provider IDs
+  online or offline, not only device-shaped providers. Unknown provider IDs are
+  rejected so local protocol tests do not silently model the wrong peer.
 - broadwebd's simulated HTTP gateway and Kubo RPC fixtures now use test-only
   `slate-fixture-http://` and `slate-fixture-kubo://` schemes that resolve
   through the `InProcessBroadwebNetwork` fixture layer inside the test process
