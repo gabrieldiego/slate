@@ -16019,67 +16019,28 @@ mod tests {
     }
 
     #[test]
-    fn broadwebd_publisher_publishes_signed_settings_tail_manifest_through_kubo_fixture() {
+    fn broadwebd_publisher_publishes_signed_settings_tail_manifest_through_stateful_kubo_model() {
         let network = InProcessBroadwebNetwork::new();
-        let state_root = test_state_root("signed-tail-kubo-publish");
+        let writer_state_root = test_state_root("signed-tail-kubo-writer");
+        let reader_state_root = test_state_root("signed-tail-kubo-reader");
         let db_root = test_state_root("signed-tail-kubo-db");
-        let tail_object_id = "bafybeigdyrzttailchange";
-        let manifest_object_id = "bafybeigdyrztsettingsmanifest";
-        let fixture = network.kubo_rpc_sequence(vec![
-            InternalKuboRpcResponse {
-                status_code: 200,
-                content_type: "application/json".to_string(),
-                body: br#"{"Name":"profile-object","Hash":"bafybeigdyrzttailchange","Size":"128"}"#
-                    .to_vec(),
-            },
-            InternalKuboRpcResponse {
-                status_code: 200,
-                content_type: "application/json".to_string(),
-                body: br#"{"Pins":["bafybeigdyrzttailchange"]}"#.to_vec(),
-            },
-            InternalKuboRpcResponse {
-                status_code: 200,
-                content_type: "application/json".to_string(),
-                body:
-                    br#"{"Name":"profile-object","Hash":"bafybeigdyrztsettingsmanifest","Size":"128"}"#
-                        .to_vec(),
-            },
-            InternalKuboRpcResponse {
-                status_code: 200,
-                content_type: "application/json".to_string(),
-                body: br#"{"Pins":["bafybeigdyrztsettingsmanifest"]}"#.to_vec(),
-            },
-            InternalKuboRpcResponse {
-                status_code: 200,
-                content_type: "application/json".to_string(),
-                body:
-                    br#"{"Name":"settings/latest","Value":"/ipfs/bafybeigdyrztsettingsmanifest"}"#
-                        .to_vec(),
-            },
-            InternalKuboRpcResponse {
-                status_code: 200,
-                content_type: "application/json".to_string(),
-                body: br#"{"Path":"/ipfs/bafybeigdyrztsettingsmanifest"}"#.to_vec(),
-            },
-            InternalKuboRpcResponse {
-                status_code: 200,
-                content_type: "application/octet-stream".to_string(),
-                body: Vec::new(),
-            },
-            InternalKuboRpcResponse {
-                status_code: 200,
-                content_type: "application/octet-stream".to_string(),
-                body: Vec::new(),
-            },
-        ]);
-        let daemon = network
+        let fixture = network.kubo_profile_sync_model();
+        let writer_daemon = network
             .daemon_for_kubo_profile_sync(
-                &state_root,
+                &writer_state_root,
                 ResourceBudget::default(),
                 fixture.base_url(),
                 "kubo-profile-sync-provider",
             )
-            .expect("start Kubo profile-sync fixture daemon");
+            .expect("start writer Kubo profile-sync fixture daemon");
+        let reader_daemon = network
+            .daemon_for_kubo_profile_sync(
+                &reader_state_root,
+                ResourceBudget::default(),
+                fixture.base_url(),
+                "kubo-profile-sync-provider",
+            )
+            .expect("start reader Kubo profile-sync fixture daemon");
         let database = SlateProfileDatabase::open_resolved_with_device_id(
             db_root.join(DEFAULT_DATABASE_FILE_NAME),
             "runtime-kubo-tail",
@@ -16092,7 +16053,7 @@ mod tests {
         let signer =
             ProfileSyncDeviceSigner::generate("runtime-kubo-tail").expect("generate signer");
         let public_key = signer.public_key().expect("read signer public key");
-        let publisher = BroadwebdProfileSyncPublisher::new(&daemon);
+        let publisher = BroadwebdProfileSyncPublisher::new(&writer_daemon);
 
         let publication = publisher
             .publish_signed_settings_tail_changes(
@@ -16106,12 +16067,16 @@ mod tests {
             )
             .expect("publish signed settings tail manifest through Kubo fixture");
 
-        assert_eq!(publication.manifest_object_id, manifest_object_id);
-        assert_eq!(
-            publication.tail_change_object_ids,
-            vec![tail_object_id.to_string()]
+        assert!(publication.manifest_object_id.starts_with("bafyfixture"));
+        assert_eq!(publication.tail_change_object_ids.len(), 1);
+        assert!(publication.tail_change_object_ids[0].starts_with("bafyfixture"));
+        assert_ne!(
+            publication.manifest_object_id,
+            publication.tail_change_object_ids[0]
         );
-        let source = BroadwebdProfileSyncObjectSource::new(&daemon);
+        let manifest_object_id = publication.manifest_object_id.as_str();
+        let tail_object_id = publication.tail_change_object_ids[0].as_str();
+        let source = BroadwebdProfileSyncObjectSource::new(&reader_daemon);
         assert_eq!(
             source
                 .resolve_profile_sync_root(DEFAULT_PROFILE_ID, "settings/latest")
@@ -16150,18 +16115,22 @@ mod tests {
         assert_eq!(
             fixture.finish(),
             vec![
-                "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1",
-                "POST /api/v0/pin/add?arg=bafybeigdyrzttailchange&recursive=true HTTP/1.1",
-                "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1",
-                "POST /api/v0/pin/add?arg=bafybeigdyrztsettingsmanifest&recursive=true HTTP/1.1",
-                "POST /api/v0/name/publish?arg=%2Fipfs%2Fbafybeigdyrztsettingsmanifest&key=settings%2Flatest&allow-offline=true HTTP/1.1",
-                "POST /api/v0/name/resolve?arg=%2Fipns%2Fsettings%2Flatest&recursive=false HTTP/1.1",
-                "POST /api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrztsettingsmanifest HTTP/1.1",
-                "POST /api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrzttailchange HTTP/1.1",
+                "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1".to_string(),
+                format!("POST /api/v0/pin/add?arg={tail_object_id}&recursive=true HTTP/1.1"),
+                "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1".to_string(),
+                format!("POST /api/v0/pin/add?arg={manifest_object_id}&recursive=true HTTP/1.1"),
+                format!(
+                    "POST /api/v0/name/publish?arg=%2Fipfs%2F{manifest_object_id}&key=settings%2Flatest&allow-offline=true HTTP/1.1"
+                ),
+                "POST /api/v0/name/resolve?arg=%2Fipns%2Fsettings%2Flatest&recursive=false HTTP/1.1"
+                    .to_string(),
+                format!("POST /api/v0/cat?arg=%2Fipfs%2F{manifest_object_id} HTTP/1.1"),
+                format!("POST /api/v0/cat?arg=%2Fipfs%2F{tail_object_id} HTTP/1.1"),
             ]
         );
 
-        let _ = std::fs::remove_dir_all(state_root);
+        let _ = std::fs::remove_dir_all(writer_state_root);
+        let _ = std::fs::remove_dir_all(reader_state_root);
         let _ = std::fs::remove_dir_all(db_root);
     }
 

@@ -803,11 +803,12 @@ The runtime bridge now also has a Kubo-shaped fixture path: tests can start a
 profile-sync service, then drive `BroadwebdProfileSyncPublisher` and
 `BroadwebdProfileSyncObjectSource` through normal broadwebd requests. The test
 publishes retained dependency objects and a root, resolves that root, and
-fetches the referenced bytes through scripted in-process Kubo RPC responses.
+fetches the referenced bytes through Kubo-shaped in-process model responses.
 That path now also covers a signed encrypted settings tail manifest: the
-publisher uploads the real signed manifest and tail bytes, the Kubo fixture only
-scripts successful add, pin, publish, resolve, and empty cat responses, and the
-source verifies the fetched bytes with the normal storage sync-object openers.
+publisher uploads the real signed manifest and tail bytes through one daemon,
+another daemon resolves and fetches them through the shared Kubo/IPNS fixture
+model, and the source verifies the fetched bytes with the normal storage
+sync-object openers.
 The runner can also return before-and-after health around one bounded settings
 sync cycle. That keeps the future runtime scheduler's first responsibility
 simple: run a capped cycle, inspect whether provider/root health changed, and

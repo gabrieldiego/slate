@@ -374,10 +374,10 @@ Current baseline:
   `pin/ls`, and settings root storage no longer depends on pre-scripted object
   identifiers.
 - The same bridge now publishes a real signed encrypted settings tail manifest
-  through the Kubo fixture daemon and verifies the fetched manifest and tail
-  bytes with the storage sync-object openers. Scripted Kubo `cat` responses are
-  empty in that test, so the verification exercises cached uploaded bytes rather
-  than hand-authored payloads.
+  through one Kubo fixture daemon, then verifies the manifest and tail bytes
+  fetched by a second daemon through the shared stateful Kubo/IPNS model. The
+  verification uses the normal storage sync-object openers instead of
+  hand-authored payloads or cached writer-daemon bytes.
 - broadwebd's own HTTP fixture unit tests now start daemons with
   `InProcessBroadwebNetwork` fixture registries whenever they consume
   `slate-fixture-http://` URLs. That keeps the production default direct HTTP
