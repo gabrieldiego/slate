@@ -888,8 +888,13 @@ membership-log preflight, letting enrollment, active-key derivation, remote head
 receive, and selected-provider retention run without exposing raw content-key
 bytes to scheduler callers. Stored-provider retained ticks now have the same
 secret-backed entry point for provider metadata loaded from
-`slate-settings.db`. The scheduler can also derive that read-only plan from
-enabled storage-provider metadata in `slate-settings.db`: stored providers must
+`slate-settings.db`. Membership-aware stored-provider retained ticks also
+derive the active content key from `SlateSyncSecret` after membership-log
+preflight, so a newly enrolled local device can pull membership, use stored
+provider metadata, and retain the combined membership/settings object set
+without scheduler callers handling raw content-key bytes. The scheduler can
+also derive that read-only plan from enabled storage-provider metadata in
+`slate-settings.db`: stored providers must
 locally advertise object-transfer and availability before they are compared
 with broadwebd discovery, and disabled, locally role-ineligible, stale,
 offline, broadweb-role-ineligible, and undiscovered providers are reported

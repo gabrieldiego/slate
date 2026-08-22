@@ -1269,6 +1269,12 @@ Current baseline:
   `slate-settings.db`, materializes the matching endpoint handle, publishes
   encrypted settings, and retains the object set without exposing raw
   content-key bytes to scheduler callers.
+- Membership-aware stored-provider scheduler runs now have the same
+  secret-backed form. A socketless fixture pulls membership records for a newly
+  enrolled local device and provider, derives the active key from
+  `SlateSyncSecret`, applies encrypted settings, and retains the combined
+  membership/settings object set through provider metadata from
+  `slate-settings.db`.
 
 Next:
 

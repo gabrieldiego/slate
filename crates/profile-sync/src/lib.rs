@@ -6929,6 +6929,107 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         })
     }
 
+    pub fn run_once_with_membership_log_and_stored_retention_provider_handles_and_sync_secret(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        membership_log_root_id: &str,
+        sync_secret: &SlateSyncSecret,
+        signer: &ProfileSyncDeviceSigner,
+        max_stored_providers: u32,
+        retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'_>],
+    ) -> Result<SettingsSyncStoredRetentionProviderMembershipRun, ProfileSyncCycleWithHealthError>
+    {
+        let membership_log_publication = BroadwebdProfileSyncPublisher::new(self.daemon)
+            .plan_local_sync_account_membership_log(
+                database,
+                config.profile.as_str(),
+                membership_log_root_id,
+            )
+            .map_err(ProfileSyncCycleError::from)?;
+        if membership_log_publication.requires_compaction() {
+            return Err(ProfileSyncCycleWithHealthError::Cycle(
+                ProfileSyncCycleError::from(ProfileSyncPublishError::MembershipLogTooLarge {
+                    profile: membership_log_publication.profile,
+                    max_records: membership_log_publication.max_records,
+                    actual_records: membership_log_publication.record_count,
+                }),
+            ));
+        }
+
+        let runner = BroadwebdSettingsSyncRunner::new(self.daemon);
+        let preflight = runner
+            .settings_sync_cycle_preflight_with_membership_log_and_active_key_policy(
+                database,
+                config.profile.as_str(),
+                config.settings_root_id.as_str(),
+                membership_log_root_id,
+                signer,
+                &config.policy,
+            )?;
+        let content_key = derive_settings_sync_content_key_from_secret(
+            config.profile.as_str(),
+            preflight.preflight.active_key_id.as_str(),
+            sync_secret,
+        )
+        .map_err(ProfileSyncCycleError::from)?;
+        let stored_selection = load_stored_retention_provider_selection(
+            database,
+            config.profile.as_str(),
+            max_stored_providers,
+        )
+        .map_err(ProfileSyncCredentialError::from)
+        .map_err(ProfileSyncCycleError::from)?;
+        let stored_provider_plan = settings_sync_stored_retention_provider_plan(
+            preflight.preflight.clone(),
+            max_stored_providers,
+            stored_selection,
+        );
+        config.policy.check_selected_retention_provider_freshness(
+            stored_provider_plan.stale_retention_provider_count(),
+            stored_provider_plan.offline_retention_provider_count(),
+            &preflight.preflight.before_health,
+        )?;
+        config.policy.check_selected_retention_provider_roles(
+            stored_provider_plan.ineligible_retention_provider_count(),
+            &preflight.preflight.before_health,
+        )?;
+        let materialized_providers = materialize_stored_retention_provider_daemons(
+            &stored_provider_plan,
+            retention_provider_handles,
+        );
+        config.policy.check_selected_retention_provider_count(
+            materialized_providers.materialized_retention_provider_count(),
+            &preflight.preflight.before_health,
+        )?;
+        let cycle = runner
+            .run_settings_sync_cycle_with_membership_log_and_retention_providers_after_preflight(
+                database,
+                &content_key,
+                signer,
+                &config.policy,
+                membership_log_root_id,
+                materialized_providers.daemons.as_slice(),
+                &preflight,
+            )?;
+
+        Ok(SettingsSyncStoredRetentionProviderMembershipRun {
+            preflight,
+            stored_provider_plan,
+            unmaterialized_retention_provider_ids: materialized_providers
+                .unmaterialized_retention_provider_ids,
+            pending_endpoint_materialization_retention_provider_ids: materialized_providers
+                .pending_endpoint_materialization_retention_provider_ids,
+            endpoint_mismatch_retention_provider_ids: materialized_providers
+                .endpoint_mismatch_retention_provider_ids,
+            duplicate_handle_retention_provider_ids: materialized_providers
+                .duplicate_handle_retention_provider_ids,
+            unsupported_endpoint_retention_provider_ids: materialized_providers
+                .unsupported_endpoint_retention_provider_ids,
+            cycle,
+        })
+    }
+
     pub fn run_once_with_membership_log_and_stored_in_process_fixture_retention_provider_daemons<
         'provider,
     >(
@@ -11889,6 +11990,191 @@ mod tests {
             receiver_database
                 .get_setting_text("ui.theme")
                 .expect("read synced secret membership scheduler setting")
+                .as_deref(),
+            Some("teal")
+        );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn scheduler_membership_stored_provider_derives_active_key_from_sync_secret() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("membership-secret-stored-publisher");
+        let receiver_state_root = test_state_root("membership-secret-stored-receiver");
+        let provider_state_root = test_state_root("membership-secret-stored-provider");
+        let publisher_db_root = test_state_root("membership-secret-stored-publisher-db");
+        let receiver_db_root = test_state_root("membership-secret-stored-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "membership-secret-stored-device-a",
+            )
+            .expect("start in-process secret stored membership publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "membership-secret-stored-device-b",
+            )
+            .expect("start in-process secret stored membership receiver daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "membership-secret-stored-pinner",
+            )
+            .expect("start in-process secret stored membership provider daemon");
+        let publisher_database = SlateProfileDatabase::open_resolved_with_device_id(
+            publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "membership-secret-stored-device-a",
+        )
+        .expect("open secret stored membership publisher database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "membership-secret-stored-device-b",
+        )
+        .expect("open secret stored membership receiver database");
+        let sync_secret = SlateSyncSecret::from_bytes([99; SLATE_SYNC_SECRET_BYTES]);
+        let content_key = sync_secret
+            .derive_profile_sync_content_key(DEFAULT_PROFILE_ID, TEST_CONTENT_KEY_ID)
+            .expect("derive secret stored scheduler publisher content key");
+        let signer_a = ProfileSyncDeviceSigner::generate("membership-secret-stored-device-a")
+            .expect("generate secret stored membership signer a");
+        let signer_b = ProfileSyncDeviceSigner::generate("membership-secret-stored-device-b")
+            .expect("generate secret stored membership signer b");
+        let provider_id = "local-fixture-availability-membership-secret-stored-pinner";
+        let provider_endpoint_ref = network.profile_sync_provider_endpoint_ref(provider_id);
+        let provider_signer = ProfileSyncDeviceSigner::generate(provider_id)
+            .expect("generate secret stored membership provider signer");
+        register_test_content_key_epoch(&publisher_database, DEFAULT_PROFILE_ID);
+        register_test_content_key_epoch(&receiver_database, DEFAULT_PROFILE_ID);
+        let enroll_a = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-membership-secret-stored-device-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-secret-stored-device-a".to_string(),
+            device_public_key: Some(signer_a.public_key().expect("read signer a public key")),
+            created_at: 10,
+        };
+        publisher_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_a).as_slice(),
+            )
+            .expect("publisher bootstraps secret stored membership signer a");
+        let enroll_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-enroll-membership-secret-stored-device-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "membership-secret-stored-device-b".to_string(),
+            device_public_key: Some(signer_b.public_key().expect("read signer b public key")),
+            created_at: 20,
+        };
+        publisher_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_b).as_slice(),
+            )
+            .expect("publisher enrolls secret stored membership signer b");
+        let enroll_provider = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-3-enroll-membership-secret-stored-provider".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 2,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER.to_string(),
+            device_id: provider_signer.device_id().to_string(),
+            device_public_key: Some(
+                provider_signer
+                    .public_key()
+                    .expect("read provider public key"),
+            ),
+            created_at: 30,
+        };
+        publisher_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_provider).as_slice(),
+            )
+            .expect("publisher enrolls secret stored membership provider");
+        publisher_database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("publisher writes secret stored membership setting");
+        BroadwebdSettingsSyncRunner::new(&publisher_daemon)
+            .run_settings_sync_cycle_with_membership_log(
+                &publisher_database,
+                DEFAULT_PROFILE_ID,
+                "settings/latest",
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer_a,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+                4,
+            )
+            .expect("publisher publishes secret stored membership state");
+
+        receiver_database
+            .upsert_storage_provider(&test_storage_provider_update(
+                &network,
+                DEFAULT_PROFILE_ID,
+                provider_id,
+                "local-fixture-availability",
+                "Secret stored membership pinner",
+                true,
+                true,
+                true,
+            ))
+            .expect("receiver writes secret stored membership provider metadata");
+        let retention_provider_handles = [SettingsSyncRetentionProviderHandle::with_endpoint_ref(
+            provider_id,
+            provider_endpoint_ref.as_str(),
+            &provider_daemon,
+        )];
+        let config = SettingsSyncSchedulerConfig::new(
+            DEFAULT_PROFILE_ID,
+            "settings/latest",
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2)
+                .with_provider_health_required(false)
+                .with_root_health_required_after_cycle(false),
+        );
+        let run = BroadwebdSettingsSyncScheduler::new(&receiver_daemon)
+            .run_once_with_membership_log_and_stored_retention_provider_handles_and_sync_secret(
+                &receiver_database,
+                &config,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                &sync_secret,
+                &signer_b,
+                4,
+                &retention_provider_handles,
+            )
+            .expect(
+                "secret stored membership scheduler applies and retains through stored provider",
+            );
+
+        assert_eq!(run.pulled_membership_application_count(), 3);
+        assert_eq!(run.stored_provider_plan.stored_provider_count, 1);
+        assert_eq!(
+            run.stored_provider_plan
+                .cycle
+                .selected_retention_provider_ids,
+            vec![provider_id.to_string()]
+        );
+        assert_eq!(run.materialized_retention_provider_count(), 1);
+        assert!(run.unmaterialized_retention_provider_ids.is_empty());
+        assert_eq!(run.cycle.cycle.cycle.applied_count(), 1);
+        assert_eq!(run.retained_provider_count(), 1);
+        assert_eq!(
+            receiver_database
+                .get_setting_text("ui.theme")
+                .expect("read synced secret stored membership setting")
                 .as_deref(),
             Some("teal")
         );
