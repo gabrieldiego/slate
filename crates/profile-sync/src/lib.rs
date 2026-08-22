@@ -5889,16 +5889,16 @@ mod tests {
         ProfileSyncContentKey, ProfileSyncDeviceFrontier, ProfileSyncDeviceHead,
         ProfileSyncDeviceSigner, ProfileSyncManifest, ProfileSyncMembershipRecord,
         ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
-        ProfileSyncSettingsCandidatePullApplyStatus, ProfileSyncTrustedPullApplyError,
-        SYNC_DOMAIN_BOOKMARKS, SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_CHAT, SYNC_DOMAIN_CONTACTS,
-        SYNC_DOMAIN_DOWNLOADS, SYNC_DOMAIN_FILES, SYNC_DOMAIN_SETTINGS, SYNC_DOMAIN_STORAGE,
-        SlateProfileDatabase, StorageError, StorageProviderRecord, StorageProviderSyncPayload,
-        StorageProviderUpdate, SyncChangeRecord, SyncContentKeyEpochRegistration,
-        SyncDevicePublicKeyRegistration, SyncDeviceRegistration, SyncSnapshotRegistration,
-        TypedAppSyncDomainWatcher, open_signed_profile_sync_device_head,
-        open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
-        open_signed_sync_setting_text, pull_signed_profile_sync_device_head,
-        settings_sync_snapshot_id,
+        ProfileSyncSettingsCandidatePullApplyStatus, ProfileSyncTrustedOpenError,
+        ProfileSyncTrustedPullApplyError, ProfileSyncTrustedPullError, SYNC_DOMAIN_BOOKMARKS,
+        SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_CHAT, SYNC_DOMAIN_CONTACTS, SYNC_DOMAIN_DOWNLOADS,
+        SYNC_DOMAIN_FILES, SYNC_DOMAIN_SETTINGS, SYNC_DOMAIN_STORAGE, SlateProfileDatabase,
+        StorageError, StorageProviderRecord, StorageProviderSyncPayload, StorageProviderUpdate,
+        SyncChangeRecord, SyncContentKeyEpochRegistration, SyncDevicePublicKeyRegistration,
+        SyncDeviceRegistration, SyncSnapshotRegistration, TypedAppSyncDomainWatcher,
+        open_signed_profile_sync_device_head, open_signed_profile_sync_manifest,
+        open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
+        pull_signed_profile_sync_device_head, settings_sync_snapshot_id,
     };
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -9278,6 +9278,106 @@ mod tests {
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
         let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_source_rejects_provider_authority_device_head_signers() {
+        let network = InProcessBroadwebNetwork::new();
+        let provider_state_root = test_state_root("device-head-provider-authority-publisher");
+        let receiver_state_root = test_state_root("device-head-provider-authority-receiver");
+        let receiver_db_root = test_state_root("device-head-provider-authority-receiver-db");
+        let provider_daemon = network
+            .daemon_for_device(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "runtime-provider-head",
+            )
+            .expect("start provider-authority publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "runtime-provider-head-receiver",
+            )
+            .expect("start receiver daemon");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-provider-head-receiver",
+        )
+        .expect("open receiver settings database");
+        let content_key = ProfileSyncContentKey::from_bytes([45; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let provider_signer =
+            ProfileSyncDeviceSigner::generate("runtime-provider-head").expect("provider signer");
+        receiver_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: provider_signer.public_key().expect("provider public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("receiver trusts provider key for retention metadata");
+        receiver_database
+            .register_sync_device(&SyncDeviceRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                device_id: provider_signer.device_id().to_string(),
+                label: Some("Availability Provider".to_string()),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                provider_authority: true,
+            })
+            .expect("receiver marks provider as availability authority only");
+
+        let publisher = BroadwebdProfileSyncPublisher::new(&provider_daemon);
+        let head_root_id = settings_device_head_root_id(provider_signer.device_id());
+        let device_head = ProfileSyncDeviceHead {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            device_id: provider_signer.device_id().to_string(),
+            root_id: head_root_id.clone(),
+            schema_version: PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            latest_manifest_object_id: "provider-manifest-object-1".to_string(),
+            latest_change_object_id: None,
+            device_sequence: 1,
+            logical_clock: 1,
+            created_at: 1234,
+        };
+        let _head_publication = publisher
+            .publish_signed_profile_sync_device_head(
+                DEFAULT_PROFILE_ID,
+                head_root_id.as_str(),
+                &device_head,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &provider_signer,
+            )
+            .expect("publish provider-authority signed head");
+
+        let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
+        let error = source
+            .pull_record_and_apply_trusted_settings_from_device_head(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                head_root_id.as_str(),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+            )
+            .expect_err("provider-authority signer cannot authorize device head");
+        assert!(matches!(
+            error,
+            ProfileSyncTrustedPullApplyError::Pull(
+                ProfileSyncTrustedPullError::Open(
+                    ProfileSyncTrustedOpenError::ProviderAuthoritySigner { profile, device_id }
+                )
+            ) if profile == DEFAULT_PROFILE_ID && device_id == "runtime-provider-head"
+        ));
+        assert!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, head_root_id.as_str())
+                .expect("read rejected provider head root")
+                .is_none()
+        );
+
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
         let _ = std::fs::remove_dir_all(receiver_db_root);
     }
 

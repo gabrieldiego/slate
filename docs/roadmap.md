@@ -1010,6 +1010,10 @@ Current baseline:
   accepting device heads, manifests, snapshots, or tail changes. This closes the
   direct storage path so availability providers can retain encrypted bytes
   without being able to publish or apply signed settings state.
+- The socketless broadwebd device-head receive fixture now covers that same
+  rule at the runtime boundary: a provider-authority signer can publish a head
+  object into the simulated network, but the receiver rejects it without
+  advancing the stored per-device root.
 
 Next:
 
