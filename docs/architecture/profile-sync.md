@@ -736,6 +736,12 @@ broadwebd daemon without publishing, pulling, or opening any additional
 transport. Fixture tests use `InProcessBroadwebNetwork` for this path so health
 policy can be validated without loopback ports, OS DNS, public gateways, Tor,
 IPFS/IPNS, or external relays.
+The runtime bridge now also has a Kubo-shaped fixture path: tests can start a
+`BroadwebDaemon` from `InProcessBroadwebNetwork` with the socketless Kubo
+profile-sync service, then drive `BroadwebdProfileSyncPublisher` and
+`BroadwebdProfileSyncObjectSource` through normal broadwebd requests. The test
+publishes retained dependency objects and a root, resolves that root, and
+fetches the referenced bytes through scripted in-process Kubo RPC responses.
 The runner can also return before-and-after health around one bounded settings
 sync cycle. That keeps the future runtime scheduler's first responsibility
 simple: run a capped cycle, inspect whether provider/root health changed, and

@@ -5549,7 +5549,7 @@ mod tests {
         ProfileSyncProviderRoles as BroadwebdProfileSyncProviderRoles,
         ProfileSyncRequest as BroadwebdProfileSyncRequest,
         ProfileSyncResponse as BroadwebdProfileSyncResponse, ResourceBudget,
-        test_fixtures::InProcessBroadwebNetwork,
+        test_fixtures::{InProcessBroadwebNetwork, InternalKuboRpcResponse},
     };
     use slate_storage::{
         AppSyncDomainRegistration, BookmarkSlotSyncPayload, BookmarkUpdate,
@@ -7791,6 +7791,153 @@ mod tests {
                 .expect("fetch dependency object");
             assert!(object.bytes.starts_with(b"encrypted dependency "));
         }
+
+        let _ = std::fs::remove_dir_all(state_root);
+    }
+
+    #[test]
+    fn broadwebd_publisher_and_source_use_kubo_profile_sync_fixture_daemon() {
+        let network = InProcessBroadwebNetwork::new();
+        let state_root = test_state_root("kubo-profile-sync-publisher-source");
+        let dep_a_object_id = "bafybeigdyrztdependencya";
+        let dep_b_object_id = "bafybeigdyrztdependencyb";
+        let root_object_id = "bafybeigdyrztmanifestroot";
+        let fixture = network.kubo_rpc_sequence(vec![
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body:
+                    br#"{"Name":"profile-object","Hash":"bafybeigdyrztdependencya","Size":"128"}"#
+                        .to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body: br#"{"Pins":["bafybeigdyrztdependencya"]}"#.to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body:
+                    br#"{"Name":"profile-object","Hash":"bafybeigdyrztdependencyb","Size":"128"}"#
+                        .to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body: br#"{"Pins":["bafybeigdyrztdependencyb"]}"#.to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body:
+                    br#"{"Name":"profile-object","Hash":"bafybeigdyrztmanifestroot","Size":"128"}"#
+                        .to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body: br#"{"Pins":["bafybeigdyrztmanifestroot"]}"#.to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body: br#"{"Name":"settings-latest","Value":"/ipfs/bafybeigdyrztmanifestroot"}"#
+                    .to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body: br#"{"Path":"/ipfs/bafybeigdyrztmanifestroot"}"#.to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/octet-stream".to_string(),
+                body: b"encrypted manifest root".to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/octet-stream".to_string(),
+                body: b"encrypted dependency a".to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/octet-stream".to_string(),
+                body: b"encrypted dependency b".to_vec(),
+            },
+        ]);
+        let daemon = network
+            .daemon_for_kubo_profile_sync(
+                &state_root,
+                ResourceBudget::default(),
+                fixture.base_url(),
+                "kubo-profile-sync-provider",
+            )
+            .expect("start Kubo profile-sync fixture daemon");
+        let publisher = BroadwebdProfileSyncPublisher::new(&daemon);
+        let source = BroadwebdProfileSyncObjectSource::new(&daemon);
+
+        let publication = publisher
+            .put_retained_root_with_dependencies(
+                DEFAULT_PROFILE_ID,
+                "settings-latest",
+                vec![
+                    b"encrypted dependency a".to_vec(),
+                    b"encrypted dependency b".to_vec(),
+                ],
+                b"encrypted manifest root".to_vec(),
+            )
+            .expect("publish retained root through Kubo profile-sync fixture daemon");
+
+        assert_eq!(publication.root_object_id, root_object_id);
+        assert_eq!(
+            publication.dependency_object_ids,
+            vec![dep_a_object_id.to_string(), dep_b_object_id.to_string()]
+        );
+        assert_eq!(
+            source
+                .resolve_profile_sync_root(DEFAULT_PROFILE_ID, "settings-latest")
+                .expect("resolve Kubo fixture profile-sync root")
+                .as_deref(),
+            Some(root_object_id)
+        );
+        assert_eq!(
+            source
+                .get_profile_sync_object(DEFAULT_PROFILE_ID, root_object_id)
+                .expect("fetch Kubo fixture root object")
+                .bytes,
+            b"encrypted manifest root".to_vec()
+        );
+        assert_eq!(
+            source
+                .get_profile_sync_object(DEFAULT_PROFILE_ID, dep_a_object_id)
+                .expect("fetch Kubo fixture dependency a")
+                .bytes,
+            b"encrypted dependency a".to_vec()
+        );
+        assert_eq!(
+            source
+                .get_profile_sync_object(DEFAULT_PROFILE_ID, dep_b_object_id)
+                .expect("fetch Kubo fixture dependency b")
+                .bytes,
+            b"encrypted dependency b".to_vec()
+        );
+        assert_eq!(
+            fixture.finish(),
+            vec![
+                "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1",
+                "POST /api/v0/pin/add?arg=bafybeigdyrztdependencya&recursive=true HTTP/1.1",
+                "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1",
+                "POST /api/v0/pin/add?arg=bafybeigdyrztdependencyb&recursive=true HTTP/1.1",
+                "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1",
+                "POST /api/v0/pin/add?arg=bafybeigdyrztmanifestroot&recursive=true HTTP/1.1",
+                "POST /api/v0/name/publish?arg=%2Fipfs%2Fbafybeigdyrztmanifestroot&key=settings-latest&allow-offline=true HTTP/1.1",
+                "POST /api/v0/name/resolve?arg=%2Fipns%2Fsettings-latest&recursive=false HTTP/1.1",
+                "POST /api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrztmanifestroot HTTP/1.1",
+                "POST /api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrztdependencya HTTP/1.1",
+                "POST /api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrztdependencyb HTTP/1.1",
+            ]
+        );
 
         let _ = std::fs::remove_dir_all(state_root);
     }

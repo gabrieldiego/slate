@@ -328,6 +328,10 @@ Current baseline:
   when the Kubo fixture URL belongs to the same simulated network. Downstream
   settings-sync tests can use those helpers without manually assembling a
   registry or opening loopback ports.
+- `slate-profile-sync` now verifies its `BroadwebdProfileSyncPublisher` and
+  `BroadwebdProfileSyncObjectSource` bridge against that Kubo profile-sync
+  fixture daemon: dependency objects, retained root publish, root resolve, and
+  object fetch all flow through scripted in-process Kubo RPC responses.
 - broadwebd's own HTTP fixture unit tests now start daemons with
   `InProcessBroadwebNetwork` fixture registries whenever they consume
   `slate-fixture-http://` URLs. That keeps the production default direct HTTP
