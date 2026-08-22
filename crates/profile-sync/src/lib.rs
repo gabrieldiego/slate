@@ -2,10 +2,10 @@
 
 use core::fmt;
 use serde::{Deserialize, Serialize};
+use slate_broadwebd::test_fixtures::LocalProfileSyncFixture;
 use slate_broadwebd::{
     BroadwebDaemon, BroadwebdError, IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX,
-    LocalProfileSyncFixture, PluginRegistry,
-    ProfileSyncObjectRequest as BroadwebdProfileSyncObjectRequest,
+    PluginRegistry, ProfileSyncObjectRequest as BroadwebdProfileSyncObjectRequest,
     ProfileSyncProfileRequest as BroadwebdProfileSyncProfileRequest,
     ProfileSyncProviderHealth as BroadwebdProfileSyncProviderHealth,
     ProfileSyncProviderRecord as BroadwebdProfileSyncProviderRecord, ProfileSyncProviderRoles,

@@ -267,6 +267,11 @@ Current baseline:
   mutable root publish/resolve, provider discovery, per-object transfer
   budgets, and two local `slate-settings.db` files syncing one setting through
   fixture bytes.
+- The in-memory `LocalProfileSyncFixture` is no longer re-exported from
+  broadwebd's normal root API. Local preview helpers that still need the
+  deterministic model import it through `slate_broadwebd::test_fixtures`, so the
+  user-facing preview path remains clearly backed by a fixture-layer socket
+  substitute rather than a runtime protocol implementation.
 - The local profile-sync fixture can now mark arbitrary known provider IDs
   online or offline, not only device-shaped providers. Unknown provider IDs are
   rejected so local protocol tests do not silently model the wrong peer.

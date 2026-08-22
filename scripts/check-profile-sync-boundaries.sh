@@ -26,6 +26,16 @@ run_test() {
         "$cargo_bin" test -p "$package" "$filter" -j "$jobs" -- --test-threads="$threads"
 }
 
+run_test_with_features() {
+    package=$1
+    features=$2
+    filter=$3
+    printf '\n==> %s [%s] :: %s\n' "$package" "$features" "$filter"
+    SLATE_BUILD_MEMORY_LIMIT_MB="$memory_mb" \
+        "$repo_root/scripts/with-build-limits.sh" \
+        "$cargo_bin" test -p "$package" --features "$features" "$filter" -j "$jobs" -- --test-threads="$threads"
+}
+
 reject_protocol_model_leak() {
     file=$1
     pattern=$2
@@ -103,6 +113,10 @@ reject_protocol_model_leak \
     crates/broadwebd/src/services/profile_sync.rs \
     'profile-sync/fake|local-fake|local in-memory fake|local test backend' \
     'runtime-visible local profile-sync service must be named as a local preview backend, not a fake/test fixture.'
+reject_protocol_model_leak \
+    crates/broadwebd/src/lib.rs \
+    'pub use services::profile_sync::LocalProfileSyncFixture|profile_sync::\{LocalProfileSyncFixture|LocalProfileSyncFixture, ProfileSyncRuntime' \
+    'LocalProfileSyncFixture must not be exported from broadwebd root API; use test_fixtures instead.'
 
 require_text \
     crates/broadwebd/src/protocols/ipfs/kubo_fixtures.rs \
@@ -135,6 +149,10 @@ require_text \
     crates/broadwebd/src/lib.rs \
     'impl KuboProfileSyncExecutorFactory for InProcessKuboProfileSyncExecutorFactory' \
     'In-process Kubo profile-sync fixtures must inject the socketless executor from the fixture layer.'
+require_text \
+    crates/profile-sync/src/lib.rs \
+    'slate_broadwebd::test_fixtures::LocalProfileSyncFixture' \
+    'profile-sync local preview helpers must import fixture models through broadwebd test_fixtures.'
 
 require_text \
     crates/broadwebd/src/protocols/ipfs/gateway.rs \
@@ -247,20 +265,20 @@ run_test slate-storage profile_sync_local_readiness_reports_authorized_retention
 run_test slate-storage storage_provider_writes_metadata_sync_change_without_secrets_or_local_state
 run_test slate-storage tests::app_sync_domain_watcher_polls_and_acknowledges_batches
 run_test slate-storage typed_app_sync_domain_poll_decodes_payloads_and_records_cursor
-run_test slate-broadwebd app_domain_metadata_syncs_through_profile_fixture
-run_test slate-broadwebd ipfs_kubo_profile_sync_fixture_executor_rejects_non_fixture_endpoints
-run_test slate-broadwebd kubo_profile_sync_fixture_reports_protocol_semantics_over_fixture_executor
-run_test slate-broadwebd kubo_profile_sync_http_service_advertises_real_http_boundary
-run_test slate-broadwebd profile_sync_runtime_options
-run_test slate-broadwebd ipfs_gateway_fixtures_are_injected_without_runtime_config_backdoor
-run_test slate-broadwebd default_registry_does_not_resolve_in_process_http_fixture_urls
-run_test slate-broadwebd http_fetch_uses_in_process_http_transport
-run_test slate-broadwebd registry_can_opt_into_kubo_profile_sync_without_fixture_transport
-run_test slate-broadwebd registry_can_apply_kubo_profile_sync_runtime_config
-run_test slate-broadwebd registry_rejects_external_kubo_profile_sync_endpoint
-run_test slate-broadwebd kubo_profile_sync_get_uses_transport_bytes_not_local_upload_metadata
-run_test slate-broadwebd kubo_profile_sync_model_round_trips_state_without_canned_responses
-run_test slate-broadwebd kubo_profile_sync_model_release_updates_retention_health
+run_test_with_features slate-broadwebd test-fixtures app_domain_metadata_syncs_through_profile_fixture
+run_test_with_features slate-broadwebd test-fixtures ipfs_kubo_profile_sync_fixture_executor_rejects_non_fixture_endpoints
+run_test_with_features slate-broadwebd test-fixtures kubo_profile_sync_fixture_reports_protocol_semantics_over_fixture_executor
+run_test_with_features slate-broadwebd test-fixtures kubo_profile_sync_http_service_advertises_real_http_boundary
+run_test_with_features slate-broadwebd test-fixtures profile_sync_runtime_options
+run_test_with_features slate-broadwebd test-fixtures ipfs_gateway_fixtures_are_injected_without_runtime_config_backdoor
+run_test_with_features slate-broadwebd test-fixtures default_registry_does_not_resolve_in_process_http_fixture_urls
+run_test_with_features slate-broadwebd test-fixtures http_fetch_uses_in_process_http_transport
+run_test_with_features slate-broadwebd test-fixtures registry_can_opt_into_kubo_profile_sync_without_fixture_transport
+run_test_with_features slate-broadwebd test-fixtures registry_can_apply_kubo_profile_sync_runtime_config
+run_test_with_features slate-broadwebd test-fixtures registry_rejects_external_kubo_profile_sync_endpoint
+run_test_with_features slate-broadwebd test-fixtures kubo_profile_sync_get_uses_transport_bytes_not_local_upload_metadata
+run_test_with_features slate-broadwebd test-fixtures kubo_profile_sync_model_round_trips_state_without_canned_responses
+run_test_with_features slate-broadwebd test-fixtures kubo_profile_sync_model_release_updates_retention_health
 run_test slate-profile-sync broadwebd_publisher_and_source_use_stateful_kubo_profile_sync_model
 run_test slate-profile-sync broadwebd_stateful_kubo_model_shares_roots_and_objects_across_daemons
 run_test slate-profile-sync broadwebd_publisher_publishes_signed_settings_tail_manifest_through_stateful_kubo_model

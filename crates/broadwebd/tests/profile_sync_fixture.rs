@@ -1,9 +1,11 @@
 #![forbid(unsafe_code)]
+#![cfg(feature = "test-fixtures")]
 
+use slate_broadwebd::test_fixtures::LocalProfileSyncFixture;
 use slate_broadwebd::{
-    BroadwebdError, LocalProfileSyncFixture, PluginRegistry, ProfileSyncObjectRequest,
-    ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootRequest,
-    ProfileSyncRootUpdate, ResourceBudget,
+    BroadwebdError, PluginRegistry, ProfileSyncObjectRequest, ProfileSyncPutObjectRequest,
+    ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootRequest, ProfileSyncRootUpdate,
+    ResourceBudget,
 };
 use slate_storage::{
     ChatConversationUpdate, DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID,

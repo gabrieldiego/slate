@@ -183,6 +183,7 @@ struct ProfileSyncProviderState {
     last_seen_sequence: u64,
 }
 
+#[cfg(any(test, feature = "test-fixtures"))]
 #[derive(Clone, Debug, Default)]
 pub struct LocalProfileSyncFixture {
     store: Arc<Mutex<ProfileSyncStore>>,
@@ -206,6 +207,7 @@ impl ProfileSyncService {
         Self::default()
     }
 
+    #[cfg(any(test, feature = "test-fixtures"))]
     fn local_fixture(store: Arc<Mutex<ProfileSyncStore>>, provider_id: impl Into<String>) -> Self {
         Self::local_fixture_provider(
             store,
@@ -215,6 +217,7 @@ impl ProfileSyncService {
         )
     }
 
+    #[cfg(any(test, feature = "test-fixtures"))]
     fn local_fixture_availability_provider(
         store: Arc<Mutex<ProfileSyncStore>>,
         provider_id: impl Into<String>,
@@ -227,6 +230,7 @@ impl ProfileSyncService {
         )
     }
 
+    #[cfg(any(test, feature = "test-fixtures"))]
     fn local_fixture_provider(
         store: Arc<Mutex<ProfileSyncStore>>,
         provider_id: impl Into<String>,
@@ -923,6 +927,7 @@ impl ProfileSyncService {
     }
 }
 
+#[cfg(any(test, feature = "test-fixtures"))]
 impl LocalProfileSyncFixture {
     pub fn new() -> Self {
         Self::default()
@@ -1446,6 +1451,7 @@ fn retained_provider_object_count(store: &ProfileSyncStore, provider_id: &str) -
         .count()
 }
 
+#[cfg(any(test, feature = "test-fixtures"))]
 fn require_known_profile_sync_provider(
     store: &ProfileSyncStore,
     provider_id: &str,
@@ -1755,10 +1761,12 @@ fn provider_has_role(
         .map_or(true, |state| role(state.roles))
 }
 
+#[cfg(any(test, feature = "test-fixtures"))]
 fn local_fixture_provider_id(device_id: impl AsRef<str>) -> String {
     format!("local-fixture-device-{}", device_id.as_ref())
 }
 
+#[cfg(any(test, feature = "test-fixtures"))]
 fn local_fixture_availability_provider_id(provider_id: impl AsRef<str>) -> String {
     format!("local-fixture-availability-{}", provider_id.as_ref())
 }

@@ -123,10 +123,7 @@ pub use registry::{
 };
 pub use services::{
     http_fetch::HttpFetchService,
-    profile_sync::{
-        LocalProfileSyncFixture, ProfileSyncRuntimeBackend, ProfileSyncRuntimeConfig,
-        ProfileSyncService,
-    },
+    profile_sync::{ProfileSyncRuntimeBackend, ProfileSyncRuntimeConfig, ProfileSyncService},
 };
 pub use state::{StateRoot, TemporaryDownloadRecord};
 pub use status::{BroadwebStatusKind, BroadwebStatusReporter, BroadwebStatusSnapshot};
