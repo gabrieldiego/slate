@@ -4452,6 +4452,7 @@ impl SlateProfileDatabase {
             }
         }
         self.reject_stale_sync_account_membership_record(&membership_record)?;
+        self.reject_invalid_sync_account_membership_transition(&membership_record)?;
         let stored_record =
             self.record_sync_account_membership_record(&SyncAccountMembershipRecordRegistration {
                 profile: membership_record.profile.clone(),
@@ -4580,6 +4581,33 @@ impl SlateProfileDatabase {
                 applied_record.record_id,
                 membership_record.membership_epoch,
                 membership_record.device_id
+            )));
+        }
+        Ok(())
+    }
+
+    fn reject_invalid_sync_account_membership_transition(
+        &self,
+        membership_record: &ProfileSyncMembershipRecord,
+    ) -> Result<(), StorageError> {
+        if membership_record.record_kind != PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY {
+            return Ok(());
+        }
+
+        let Some(existing_key) = self.sync_device_public_key(
+            membership_record.profile.as_str(),
+            membership_record.device_id.as_str(),
+        )?
+        else {
+            return Err(StorageError::InvalidProfileSyncMembershipRecord(format!(
+                "rotate-device-key record {} requires an existing trusted key for device {}",
+                membership_record.record_id, membership_record.device_id
+            )));
+        };
+        if !existing_key.trusted {
+            return Err(StorageError::InvalidProfileSyncMembershipRecord(format!(
+                "rotate-device-key record {} cannot re-trust revoked device {}; use enroll-device",
+                membership_record.record_id, membership_record.device_id
             )));
         }
         Ok(())
@@ -13205,6 +13233,221 @@ mod tests {
                 .sync_device_public_key(DEFAULT_PROFILE_ID, "device-c")
                 .unwrap()
                 .is_none()
+        );
+    }
+
+    #[test]
+    fn signed_sync_account_membership_records_rotate_existing_trusted_device_key() {
+        let database_path =
+            test_dir("sync-account-membership-valid-rotation").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let signer_a = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let signer_b = ProfileSyncDeviceSigner::generate("device-b").unwrap();
+        let rotated_signer_b = ProfileSyncDeviceSigner::generate("device-b").unwrap();
+        let enroll_a = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-device-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-a".to_string(),
+            device_public_key: Some(signer_a.public_key().unwrap()),
+            created_at: 10,
+        };
+        database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_a).as_slice(),
+            )
+            .unwrap();
+        let enroll_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-enroll-device-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 2,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-b".to_string(),
+            device_public_key: Some(signer_b.public_key().unwrap()),
+            created_at: 20,
+        };
+        database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_b).as_slice(),
+            )
+            .unwrap();
+
+        let rotate_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-3-rotate-device-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 3,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY.to_string(),
+            device_id: "device-b".to_string(),
+            device_public_key: Some(rotated_signer_b.public_key().unwrap()),
+            created_at: 30,
+        };
+        let rotated = database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &rotate_b).as_slice(),
+            )
+            .unwrap();
+
+        assert!(rotated.applied);
+        assert_eq!(
+            rotated.membership_record.record_kind,
+            PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY
+        );
+        let device_b_key = database
+            .sync_device_public_key(DEFAULT_PROFILE_ID, "device-b")
+            .unwrap()
+            .expect("rotated device b key");
+        assert!(device_b_key.trusted);
+        assert_eq!(device_b_key.membership_epoch, 3);
+        assert_eq!(
+            device_b_key.public_key,
+            rotated_signer_b.public_key().unwrap()
+        );
+    }
+
+    #[test]
+    fn signed_sync_account_membership_records_reject_invalid_rotation_transitions() {
+        let database_path =
+            test_dir("sync-account-membership-invalid-rotation").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let signer_a = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let signer_b = ProfileSyncDeviceSigner::generate("device-b").unwrap();
+        let rotated_signer_b = ProfileSyncDeviceSigner::generate("device-b").unwrap();
+        let enroll_a = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-device-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-a".to_string(),
+            device_public_key: Some(signer_a.public_key().unwrap()),
+            created_at: 10,
+        };
+        database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_a).as_slice(),
+            )
+            .unwrap();
+
+        let rotate_missing_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-rotate-missing-device-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 2,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY.to_string(),
+            device_id: "device-b".to_string(),
+            device_public_key: Some(rotated_signer_b.public_key().unwrap()),
+            created_at: 20,
+        };
+        let missing_error = database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &rotate_missing_b).as_slice(),
+            )
+            .unwrap_err();
+        assert!(matches!(
+            missing_error,
+            StorageError::InvalidProfileSyncMembershipRecord(reason)
+                if reason.contains("requires an existing trusted key for device device-b")
+        ));
+        assert!(
+            database
+                .sync_account_membership_record(
+                    DEFAULT_PROFILE_ID,
+                    "epoch-2-rotate-missing-device-b"
+                )
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "device-b")
+                .unwrap()
+                .is_none()
+        );
+
+        let enroll_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-enroll-device-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 2,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-b".to_string(),
+            device_public_key: Some(signer_b.public_key().unwrap()),
+            created_at: 25,
+        };
+        database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_b).as_slice(),
+            )
+            .unwrap();
+        let revoke_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-3-revoke-device-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 3,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE.to_string(),
+            device_id: "device-b".to_string(),
+            device_public_key: None,
+            created_at: 30,
+        };
+        database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &revoke_b).as_slice(),
+            )
+            .unwrap();
+
+        let rotate_revoked_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-4-rotate-revoked-device-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 4,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY.to_string(),
+            device_id: "device-b".to_string(),
+            device_public_key: Some(rotated_signer_b.public_key().unwrap()),
+            created_at: 40,
+        };
+        let revoked_error = database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &rotate_revoked_b).as_slice(),
+            )
+            .unwrap_err();
+        assert!(matches!(
+            revoked_error,
+            StorageError::InvalidProfileSyncMembershipRecord(reason)
+                if reason.contains("cannot re-trust revoked device device-b")
+        ));
+        assert!(
+            !database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "device-b")
+                .unwrap()
+                .expect("revoked device b key remains recorded")
+                .trusted
+        );
+
+        let re_enroll_b = ProfileSyncMembershipRecord {
+            record_id: "epoch-4-reenroll-device-b".to_string(),
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            created_at: 45,
+            ..rotate_revoked_b
+        };
+        let re_enrolled = database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &re_enroll_b).as_slice(),
+            )
+            .unwrap();
+        assert!(re_enrolled.applied);
+        let device_b_key = database
+            .sync_device_public_key(DEFAULT_PROFILE_ID, "device-b")
+            .unwrap()
+            .expect("device b key after explicit re-enrollment");
+        assert!(device_b_key.trusted);
+        assert_eq!(device_b_key.membership_epoch, 4);
+        assert_eq!(
+            device_b_key.public_key,
+            rotated_signer_b.public_key().unwrap()
         );
     }
 

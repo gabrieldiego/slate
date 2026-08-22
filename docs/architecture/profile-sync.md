@@ -262,9 +262,10 @@ rejects a different same-epoch operation for a target device when another
 record at that epoch has already applied, so a conflicting rotate cannot undo
 an applied revoke in the same epoch. Membership authorization also checks the
 signer's trust epoch: a signer key first trusted in a later epoch cannot
-authorize an older membership record. Exact record replay remains idempotent.
-Full account-level revocation still needs richer epoch transition and
-multi-approval policy.
+authorize an older membership record. Device-key rotation is only valid for an
+already trusted target device key; it cannot enroll a new device or re-trust a
+revoked device. Exact record replay remains idempotent. Full account-level
+revocation still needs richer epoch transition and multi-approval policy.
 The profile-sync membership-log receive path exercises the same storage guard:
 a stale older-epoch record carried through broadwebd fixture objects fails
 without storing that record, re-trusting the device, or advancing the

@@ -941,6 +941,9 @@ Current baseline:
   applying a signed membership record. A device key first trusted in a later
   epoch cannot authorize an older account membership operation, preventing newly
   enrolled devices from rewriting earlier account history.
+- Device-key rotation records now require the target device to already have a
+  trusted key. A rotation cannot enroll a new device or re-trust a revoked
+  device; revoked devices must use an explicit later `enroll-device` record.
 - The broadwebd membership-log receive fixture now covers that epoch-ordering
   rule over in-process object transfer: a stale older-epoch record is rejected
   without storing it, re-trusting the device, or advancing the membership-log
