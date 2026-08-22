@@ -643,10 +643,9 @@ impl ProfileSyncService {
                 validate_profile(&request.profile)?;
                 validate_profile_sync_object_id(&request.object_id)?;
                 self.require_role(self.roles.object_transfer, "profile-sync/object-transfer")?;
-                Err(BroadwebdError::UnsupportedRequest(
-                    "Kubo profile-sync fixture backend does not fetch encrypted objects yet"
-                        .to_string(),
-                ))
+                let object_id = request.object_id;
+                let bytes = kubo_rpc.get_encrypted_object_fixture(&object_id, budget)?;
+                Ok(ProfileSyncResponse::GetEncryptedObject { object_id, bytes })
             }
             ProfileSyncRequest::RetainObject(request) => {
                 validate_profile(&request.profile)?;

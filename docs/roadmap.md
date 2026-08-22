@@ -318,10 +318,11 @@ Current baseline:
   rejects a Kubo response that points at a different object id than the one Slate
   requested, so a mismatched root cannot be accepted by the backend client.
 - broadwebd's `profile-sync` service can now be constructed with a socketless
-  Kubo fixture backend. Normal `ProfileSyncRequest` calls for put, retain,
+  Kubo fixture backend. Normal `ProfileSyncRequest` calls for put, get, retain,
   verify, release, publish, resolve, and provider discovery are translated into
-  the same in-process Kubo RPC fixture calls, giving the runtime service
-  contract a protocol-shaped backend path without opening sockets.
+  the same in-process Kubo RPC fixture calls. Object fetch uses Kubo `cat` under
+  the profile-sync object budget, giving the runtime service contract a
+  protocol-shaped backend path without opening sockets.
 - broadwebd's own HTTP fixture unit tests now start daemons with
   `InProcessBroadwebNetwork` fixture registries whenever they consume
   `slate-fixture-http://` URLs. That keeps the production default direct HTTP

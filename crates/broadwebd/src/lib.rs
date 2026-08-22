@@ -2225,6 +2225,28 @@ mod tests {
     }
 
     #[test]
+    fn ipfs_kubo_profile_sync_fixture_gets_encrypted_object() {
+        let object_id = "bafybeigdyrztprofileobject";
+        let fixture = InProcessBroadwebNetwork::new().kubo_rpc_response(InternalKuboRpcResponse {
+            status_code: 200,
+            content_type: "application/octet-stream".to_string(),
+            body: b"encrypted slate-settings snapshot".to_vec(),
+        });
+        let rpc = IpfsKuboProfileSyncRpc::local(fixture.base_url())
+            .expect("fixture Kubo profile sync RPC");
+
+        assert_eq!(
+            rpc.get_encrypted_object_fixture(object_id, &ResourceBudget::default())
+                .expect("get encrypted object through fixture Kubo RPC"),
+            b"encrypted slate-settings snapshot".to_vec()
+        );
+        assert_eq!(
+            fixture.finish(),
+            vec!["POST /api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrztprofileobject HTTP/1.1"]
+        );
+    }
+
+    #[test]
     fn ipfs_kubo_profile_sync_fixture_retains_verifies_and_releases_object() {
         let object_id = "bafybeigdyrztprofileobject";
         let fixture = InProcessBroadwebNetwork::new().kubo_rpc_sequence(vec![
@@ -2363,6 +2385,11 @@ mod tests {
             },
             InternalKuboRpcResponse {
                 status_code: 200,
+                content_type: "application/octet-stream".to_string(),
+                body: b"encrypted slate-settings snapshot".to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
                 content_type: "application/json".to_string(),
                 body: br#"{"Pins":["bafybeigdyrztprofileobject"]}"#.to_vec(),
             },
@@ -2425,6 +2452,20 @@ mod tests {
         };
         assert_eq!(put_object_id, object_id);
 
+        assert_eq!(
+            registry
+                .profile_sync(
+                    ProfileSyncRequest::GetEncryptedObject(ProfileSyncObjectRequest::new(
+                        "default", object_id,
+                    )),
+                    &budget,
+                )
+                .expect("get profile sync object through Kubo fixture service"),
+            ProfileSyncResponse::GetEncryptedObject {
+                object_id: object_id.to_string(),
+                bytes: b"encrypted slate-settings snapshot".to_vec(),
+            }
+        );
         assert_eq!(
             registry
                 .profile_sync(
@@ -2504,6 +2545,7 @@ mod tests {
             fixture.finish(),
             vec![
                 "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1",
+                "POST /api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrztprofileobject HTTP/1.1",
                 "POST /api/v0/pin/add?arg=bafybeigdyrztprofileobject&recursive=true HTTP/1.1",
                 "POST /api/v0/pin/ls?arg=bafybeigdyrztprofileobject&type=recursive HTTP/1.1",
                 "POST /api/v0/name/publish?arg=%2Fipfs%2Fbafybeigdyrztprofileobject&key=settings-latest&allow-offline=true HTTP/1.1",

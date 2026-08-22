@@ -194,6 +194,24 @@ impl IpfsKuboProfileSyncRpc {
     }
 
     #[cfg(any(test, feature = "test-fixtures"))]
+    pub fn get_encrypted_object_fixture(
+        &self,
+        object_id: &str,
+        budget: &ResourceBudget,
+    ) -> Result<Vec<u8>, BroadwebdError> {
+        self.require_internal_fixture_endpoint()?;
+        validate_kubo_profile_sync_object_id(object_id)?;
+        let content_path = format!("/ipfs/{object_id}");
+        let url = parse_http_url(
+            kubo_cat_url_for_path(content_path.as_str(), self.endpoint.api_base_url())?.as_str(),
+        )?;
+        let response =
+            fetch_internal_kubo_rpc_response(&url, budget.max_profile_sync_object_bytes)?;
+        require_kubo_profile_sync_success("cat", response.status_code)?;
+        Ok(response.body)
+    }
+
+    #[cfg(any(test, feature = "test-fixtures"))]
     pub fn retain_object_fixture(
         &self,
         object_id: &str,
