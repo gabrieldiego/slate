@@ -3967,11 +3967,76 @@ pub struct SettingsSyncHealthReport {
     pub local_device_head_root_health: BroadwebdProfileSyncRootHealth,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SettingsSyncHealthIssueComponent {
+    Providers,
+    SettingsRoot,
+    LocalDeviceHeadRoot,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncHealthIssue {
+    pub component: SettingsSyncHealthIssueComponent,
+    pub root_id: Option<String>,
+    pub message: String,
+}
+
 impl SettingsSyncHealthReport {
     pub fn degraded(&self) -> bool {
         self.provider_health.degraded
             || self.settings_root_health.degraded
             || self.local_device_head_root_health.degraded
+    }
+
+    pub fn healthy(&self) -> bool {
+        !self.degraded()
+    }
+
+    pub fn provider_degraded(&self) -> bool {
+        self.provider_health.degraded
+    }
+
+    pub fn settings_root_degraded(&self) -> bool {
+        self.settings_root_health.degraded
+    }
+
+    pub fn local_device_head_root_degraded(&self) -> bool {
+        self.local_device_head_root_health.degraded
+    }
+
+    pub fn degraded_root_count(&self) -> usize {
+        usize::from(self.settings_root_degraded())
+            + usize::from(self.local_device_head_root_degraded())
+    }
+
+    pub fn degradation_issue_count(&self) -> usize {
+        self.degradation_issues().len()
+    }
+
+    pub fn degradation_issues(&self) -> Vec<SettingsSyncHealthIssue> {
+        let mut issues = Vec::new();
+        if self.provider_degraded() {
+            issues.push(SettingsSyncHealthIssue {
+                component: SettingsSyncHealthIssueComponent::Providers,
+                root_id: None,
+                message: self.provider_health.message.clone(),
+            });
+        }
+        if self.settings_root_degraded() {
+            issues.push(SettingsSyncHealthIssue {
+                component: SettingsSyncHealthIssueComponent::SettingsRoot,
+                root_id: Some(self.settings_root_id.clone()),
+                message: self.settings_root_health.message.clone(),
+            });
+        }
+        if self.local_device_head_root_degraded() {
+            issues.push(SettingsSyncHealthIssue {
+                component: SettingsSyncHealthIssueComponent::LocalDeviceHeadRoot,
+                root_id: Some(self.local_device_head_root_id.clone()),
+                message: self.local_device_head_root_health.message.clone(),
+            });
+        }
+        issues
     }
 }
 
@@ -13929,6 +13994,27 @@ mod tests {
         assert!(empty_health.settings_root_health.degraded);
         assert!(empty_health.local_device_head_root_health.degraded);
         assert!(empty_health.degraded());
+        assert!(!empty_health.healthy());
+        assert!(!empty_health.provider_degraded());
+        assert!(empty_health.settings_root_degraded());
+        assert!(empty_health.local_device_head_root_degraded());
+        assert_eq!(empty_health.degraded_root_count(), 2);
+        assert_eq!(empty_health.degradation_issue_count(), 2);
+        assert_eq!(
+            empty_health.degradation_issues(),
+            vec![
+                super::SettingsSyncHealthIssue {
+                    component: super::SettingsSyncHealthIssueComponent::SettingsRoot,
+                    root_id: Some(settings_root_id.to_string()),
+                    message: empty_health.settings_root_health.message.clone(),
+                },
+                super::SettingsSyncHealthIssue {
+                    component: super::SettingsSyncHealthIssueComponent::LocalDeviceHeadRoot,
+                    root_id: Some("settings/devices/runtime-health/head".to_string()),
+                    message: empty_health.local_device_head_root_health.message.clone(),
+                },
+            ]
+        );
         assert!(
             empty_health
                 .settings_root_health
@@ -13968,6 +14054,13 @@ mod tests {
             .settings_sync_health(&database, profile, settings_root_id, 1)
             .expect("read published in-process settings sync health");
         assert!(!published_health.degraded());
+        assert!(published_health.healthy());
+        assert!(!published_health.provider_degraded());
+        assert!(!published_health.settings_root_degraded());
+        assert!(!published_health.local_device_head_root_degraded());
+        assert_eq!(published_health.degraded_root_count(), 0);
+        assert_eq!(published_health.degradation_issue_count(), 0);
+        assert!(published_health.degradation_issues().is_empty());
         assert_eq!(published_health.provider_health.online_providers, 1);
         assert_eq!(published_health.provider_health.retained_objects, 3);
         assert_eq!(published_health.settings_root_health.visible_candidates, 1);
@@ -14462,6 +14555,16 @@ mod tests {
         };
         assert_eq!(health.profile, profile);
         assert!(health.provider_health.degraded);
+        assert!(health.provider_degraded());
+        assert_eq!(health.degradation_issue_count(), 3);
+        assert_eq!(
+            health.degradation_issues()[0],
+            super::SettingsSyncHealthIssue {
+                component: super::SettingsSyncHealthIssueComponent::Providers,
+                root_id: None,
+                message: health.provider_health.message.clone(),
+            }
+        );
         assert_eq!(health.provider_health.online_providers, 1);
         assert_eq!(health.provider_health.mutable_root_providers, 0);
         assert!(

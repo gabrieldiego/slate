@@ -445,6 +445,10 @@ Current baseline:
   local device-head root health. The regression test runs through
   `InProcessBroadwebNetwork`, so scheduler-facing health checks stay inside the
   test process and do not open loopback ports.
+- Settings sync health reports now also expose structured degradation issues
+  for provider health, shared settings-root health, and local device-head-root
+  health. Scheduler/UI callers can render or gate degraded sync status without
+  reinterpreting broadwebd's nested fixture health payloads or opening sockets.
 - The settings sync runner can now wrap one bounded sync cycle with before and
   after health reports using the same in-process daemon path. This gives the
   eventual scheduler/UI a single result that shows whether a degraded local
