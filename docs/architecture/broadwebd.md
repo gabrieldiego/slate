@@ -460,7 +460,9 @@ Fallback responses expose the effective `ipfs://` or `ipns://` index URL to
 the renderer so relative page assets resolve under the directory that actually
 provided the document.
 Manual runs can select it with `SLATE_IPFS_TRANSPORT=kubo-rpc` and optionally
-override the loopback endpoint with `SLATE_IPFS_KUBO_RPC`. This is an
+override the endpoint with `SLATE_IPFS_KUBO_RPC`. The configured endpoint must
+be a numeric loopback address, not a hostname, so this path cannot perform DNS
+or hosts-file resolution before contacting the local node. This is an
 integration point for local-node retrieval, not a public RPC mode and not the
 default browsing path.
 

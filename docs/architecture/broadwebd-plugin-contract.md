@@ -272,11 +272,13 @@ configuration should replace them before production use.
 `ipfs-kubo-rpc` is an opt-in local-node transport behind the same protocol
 service. `IpfsConfig::with_kubo_rpc` selects it, the service installs the
 `ipfs-kubo-rpc` transport, and HTTP-like retrieval maps `ipfs://` and
-`ipns://` to Kubo's local `/api/v0/cat` RPC. The endpoint must be loopback.
+`ipns://` to Kubo's local `/api/v0/cat` RPC. The endpoint must be a numeric
+loopback address so Slate does not resolve a hostname before contacting the
+local node.
 `BroadwebDaemon::start_default_session` can select this mode with
 `SLATE_IPFS_TRANSPORT=kubo-rpc`, using `SLATE_IPFS_KUBO_RPC` when a non-default
-loopback endpoint is needed. Kubo RPC selection is mutually exclusive with
-gateway policy variables.
+numeric loopback endpoint is needed. Kubo RPC selection is mutually exclusive
+with gateway policy variables.
 For directory-style paths, it retries `<path>/index.html` after a non-success
 `cat` response so simple IPFS/IPNS websites can load through a local node. The
 fallback reports the effective `ipfs://` or `ipns://` index URL in the response

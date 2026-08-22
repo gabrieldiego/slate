@@ -284,12 +284,19 @@ fn validate_kubo_rpc_url(api_base_url: &str) -> Result<(), BroadwebdError> {
     let host = url.host_str().ok_or_else(|| {
         BroadwebdError::InvalidUrl(format!("{api_base_url} is missing a Kubo RPC host"))
     })?;
-    if matches!(host, "localhost" | "127.0.0.1" | "::1") {
+    let host_for_parse = host
+        .strip_prefix('[')
+        .and_then(|host| host.strip_suffix(']'))
+        .unwrap_or(host);
+    if host_for_parse
+        .parse::<std::net::IpAddr>()
+        .is_ok_and(|address| address.is_loopback())
+    {
         return Ok(());
     }
 
     Err(BroadwebdError::UnsupportedRequest(format!(
-        "Kubo RPC endpoint must be loopback: {api_base_url}"
+        "Kubo RPC endpoint must be a numeric loopback address: {api_base_url}"
     )))
 }
 

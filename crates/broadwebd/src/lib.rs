@@ -1962,6 +1962,11 @@ mod tests {
     #[test]
     fn ipfs_kubo_config_requires_loopback_rpc_endpoint() {
         assert!(IpfsKuboRpcEndpoint::local("http://127.0.0.1:5001").is_ok());
+        assert!(IpfsKuboRpcEndpoint::local("http://[::1]:5001").is_ok());
+        assert!(matches!(
+            IpfsKuboRpcEndpoint::local("http://localhost:5001"),
+            Err(BroadwebdError::UnsupportedRequest(_))
+        ));
         assert!(matches!(
             IpfsKuboRpcEndpoint::local("https://ipfs.example.test:5001"),
             Err(BroadwebdError::UnsupportedRequest(_))
