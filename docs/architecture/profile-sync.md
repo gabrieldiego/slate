@@ -904,6 +904,10 @@ sockets. A stored provider scheduler tick can then run only against
 already-materialized daemon handles supplied by runtime code. Stored selected
 providers without a matching handle are reported as unmaterialized, and only
 materialized selected providers count toward the retaining-provider quorum.
+Protocol-materialized stored-provider ticks can now use the same
+`SlateSyncSecret` entry point: the scheduler derives the active content key
+after stored-provider preflight, then hands selected multiaddr endpoints to the
+caller-supplied materializer before publishing, pulling, and retaining objects.
 When a stored row has an `endpoint_ref`, the materialized handle must report
 the same endpoint before it can be used for retention. Endpoint mismatches are
 tracked separately from missing handles and excluded from quorum, so runtime

@@ -1275,6 +1275,12 @@ Current baseline:
   `SlateSyncSecret`, applies encrypted settings, and retains the combined
   membership/settings object set through provider metadata from
   `slate-settings.db`.
+- Protocol-materialized stored-provider scheduler runs can now use
+  `SlateSyncSecret` as well. The socketless multiaddr fixture stores provider
+  metadata in `slate-settings.db`, materializes the selected provider through a
+  caller-supplied protocol materializer, publishes encrypted settings, and
+  retains the object set without scheduler callers passing raw content-key
+  bytes.
 
 Next:
 
