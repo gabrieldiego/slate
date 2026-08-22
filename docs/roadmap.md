@@ -444,6 +444,11 @@ Current baseline:
   fetching now calls `fetch_http_url_over_network` and rejects synthetic
   fixture schemes as unsupported, while in-process HTTP transports call the
   explicit internal fixture fetch helper after same-network validation.
+- Default registry and direct HTTP transport are now fixture-blind too.
+  `InProcessBroadwebNetwork` installs a fixture-only protocol service that
+  maps same-network synthetic HTTP fixture URLs to the in-process fixture
+  transport; the default registry has a regression proving fixture URLs do not
+  resolve without that fixture protocol service.
 - Profile-sync protocol materializer policies now mark whether selected
   provider endpoints are handled by real runtime adapters or by local
   deterministic simulation. The scheduler still consumes typed multiaddr and

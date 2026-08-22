@@ -82,6 +82,14 @@ reject_protocol_model_leak \
     crates/broadwebd/src/http.rs \
     'fn fetch_http_url\(' \
     'The ambiguous shared HTTP helper name must stay removed; use fetch_http_url_over_network or explicit fixture helpers.'
+reject_protocol_model_leak \
+    crates/broadwebd/src/transports/direct_http.rs \
+    'is_internal_fixture_http_url|internal_fixture_http|slate-fixture-http|InProcessBroadwebNetwork|socketless-fixture|in-process-fixture' \
+    'Direct HTTP transport must stay fixture-blind; fixture URLs require the in-process fixture transport.'
+reject_protocol_model_leak \
+    crates/broadwebd/src/registry.rs \
+    'is_internal_fixture_http_url|internal_fixture_http|slate-fixture-http|InProcessBroadwebNetwork|socketless-fixture|in-process-fixture' \
+    'Default plugin registry must stay fixture-blind; in-process fixtures install their own protocol service.'
 
 reject_protocol_model_leak \
     crates/broadwebd/src/services/profile_sync.rs \
@@ -132,6 +140,14 @@ require_text \
     crates/broadwebd/src/lib.rs \
     'fetch_internal_fixture_http_url' \
     'In-process HTTP fixture transports must call explicit fixture fetch helpers.'
+require_text \
+    crates/broadwebd/src/lib.rs \
+    'impl ProtocolService for InProcessFixtureHttpProtocolService' \
+    'In-process HTTP fixture URL routing must live in a fixture protocol service.'
+require_text \
+    crates/broadwebd/src/lib.rs \
+    'default_registry_does_not_resolve_in_process_http_fixture_urls' \
+    'Default registry must have a regression proving fixture URLs do not resolve without in-process fixtures.'
 
 require_text \
     crates/broadwebd/src/lib.rs \
@@ -213,6 +229,8 @@ run_test slate-broadwebd kubo_profile_sync_fixture_reports_protocol_semantics_ov
 run_test slate-broadwebd kubo_profile_sync_http_service_advertises_real_http_boundary
 run_test slate-broadwebd profile_sync_runtime_options
 run_test slate-broadwebd ipfs_gateway_fixtures_are_injected_without_runtime_config_backdoor
+run_test slate-broadwebd default_registry_does_not_resolve_in_process_http_fixture_urls
+run_test slate-broadwebd http_fetch_uses_in_process_http_transport
 run_test slate-broadwebd registry_can_opt_into_kubo_profile_sync_without_fixture_transport
 run_test slate-broadwebd registry_can_apply_kubo_profile_sync_runtime_config
 run_test slate-broadwebd registry_rejects_external_kubo_profile_sync_endpoint

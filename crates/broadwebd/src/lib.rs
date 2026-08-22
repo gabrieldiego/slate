@@ -151,8 +151,9 @@ pub mod test_fixtures {
     use crate::{
         BroadwebDaemon, BroadwebStatusReporter, BroadwebdError, DIRECT_HTTP_PLUGIN,
         IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX, IPFS_GATEWAY_PLUGIN, IpfsConfig,
-        IpfsService, PluginKind, PluginMetadata, PluginRegistry, ProfileSyncProviderRoles,
-        ResourceBudget, ResourceProfile, TransportHttpRequest, TransportPlugin,
+        IpfsService, PluginInstallReport, PluginKind, PluginMetadata, PluginRegistry,
+        ProfileSyncProviderRoles, ProtocolService, ResourceBudget, ResourceProfile,
+        TransportHttpRequest, TransportPlugin,
     };
     use std::path::PathBuf;
 
@@ -214,6 +215,48 @@ pub mod test_fixtures {
                 "in-process fixture HTTP transport cannot fetch external URL: {}",
                 request.url
             )))
+        }
+    }
+
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    struct InProcessFixtureHttpProtocolService {
+        network_id: String,
+    }
+
+    impl InProcessFixtureHttpProtocolService {
+        fn new(network_id: impl Into<String>) -> Self {
+            Self {
+                network_id: network_id.into(),
+            }
+        }
+    }
+
+    impl ProtocolService for InProcessFixtureHttpProtocolService {
+        fn metadata(&self) -> PluginMetadata {
+            PluginMetadata::new("in-process-http-fixture", PluginKind::ProtocolService)
+                .with_capabilities(&["http-fixture", "in-process", "socketless-fixture"])
+                .with_dependencies(&[DIRECT_HTTP_PLUGIN])
+                .with_privacy_boundary(
+                    "routes synthetic in-process HTTP fixture URLs to the fixture transport; no sockets, DNS, or external network",
+                )
+                .with_resource_profile(ResourceProfile::Low)
+        }
+
+        fn install_plugins(&self, _registry: &mut PluginRegistry) -> Vec<PluginInstallReport> {
+            Vec::new()
+        }
+
+        fn http_transport_for_url(&self, url: &url::Url) -> Option<Result<String, BroadwebdError>> {
+            if !is_internal_fixture_http_url(url) {
+                return None;
+            }
+            if !internal_fixture_http_url_belongs_to_network(url, self.network_id.as_str()) {
+                return Some(Err(BroadwebdError::UnsupportedRequest(format!(
+                    "internal HTTP fixture URL does not belong to in-process network {}: {}",
+                    self.network_id, url
+                ))));
+            }
+            Some(Ok(DIRECT_HTTP_PLUGIN.to_string()))
         }
     }
 
@@ -404,6 +447,9 @@ pub mod test_fixtures {
             let mut registry = PluginRegistry::new();
             registry
                 .register_transport(InProcessFixtureHttpTransport::new(self.network_id.clone()));
+            registry.register_protocol_service(InProcessFixtureHttpProtocolService::new(
+                self.network_id.clone(),
+            ));
             registry.register_service(HttpFetchService);
             registry.register_service(ProfileSyncService::new());
             registry
@@ -1156,6 +1202,30 @@ mod tests {
         assert_eq!(response.status_code, 200);
         assert_eq!(response.disposition, FetchDisposition::RenderHtml);
         assert!(response.body_text_lossy().contains("Broadwebd Fixture"));
+
+        let _ = fs::remove_dir_all(daemon.state_root().path());
+    }
+
+    #[test]
+    fn default_registry_does_not_resolve_in_process_http_fixture_urls() {
+        let network = InProcessBroadwebNetwork::new();
+        let fixture = network.http_response(InternalFixtureHttpResponse {
+            status_code: 200,
+            content_type: Some("text/html; charset=utf-8".to_string()),
+            headers: vec![],
+            body: b"fixture should stay isolated".to_vec(),
+        });
+        let daemon = BroadwebDaemon::start(test_state_root("http-fixture-default-registry"))
+            .expect("daemon");
+
+        let error = daemon
+            .fetch_http(HttpFetchRequest::default_profile(fixture.base_url()))
+            .expect_err("default registry should not resolve fixture URL schemes");
+
+        assert!(
+            matches!(error, BroadwebdError::UnsupportedRequest(message) if message.contains("no HTTP transport for slate-fixture-http"))
+        );
+        assert!(fixture.finish().is_empty());
 
         let _ = fs::remove_dir_all(daemon.state_root().path());
     }
