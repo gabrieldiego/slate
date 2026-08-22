@@ -10376,6 +10376,7 @@ fn insert_sync_setting_text_change_record_in_transaction(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
     use std::process;
 
     use super::*;
@@ -13651,6 +13652,40 @@ mod tests {
         assert_eq!(devices[0].device_id, DEFAULT_SYNC_DEVICE_ID);
         assert_eq!(devices[0].membership_epoch, 1);
         assert!(!devices[0].provider_authority);
+    }
+
+    #[test]
+    fn rail_app_sync_domains_match_seeded_storage_domains() {
+        let database_path = test_dir("rail-sync-domains").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let seeded_domains = database
+            .app_sync_domains(DEFAULT_PROFILE_ID)
+            .unwrap()
+            .into_iter()
+            .map(|domain| (domain.domain.clone(), domain))
+            .collect::<BTreeMap<_, _>>();
+
+        for app in slate_apps::default_apps() {
+            let seeded = seeded_domains
+                .get(app.sync.domain)
+                .unwrap_or_else(|| panic!("missing seeded storage sync domain for {}", app.label));
+            assert_eq!(seeded.schema_version, 1);
+            assert_eq!(
+                seeded.privacy_classification,
+                app.sync.privacy_classification.as_str()
+            );
+            assert_eq!(seeded.sync_content, app.sync.sync_content);
+            assert_eq!(seeded.enabled, app.sync.default_enabled);
+        }
+
+        assert!(
+            seeded_domains.contains_key(SYNC_DOMAIN_STORAGE),
+            "storage remains seeded as a future sync domain"
+        );
+        assert!(
+            slate_apps::app_for_sync_domain(SYNC_DOMAIN_STORAGE).is_none(),
+            "storage should not appear as a visible rail app until its surface exists"
+        );
     }
 
     #[test]

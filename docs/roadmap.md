@@ -1296,12 +1296,13 @@ Current baseline:
   state through a stored synthetic fixture endpoint and retains the combined
   object set without passing raw content-key bytes into scheduler calls.
 - `make profile-sync-boundary-check` now provides a low-memory regression gate
-  for the sync work. It runs focused rail-app sync-domain, `slate-settings.db`
-  storage/provider metadata, typed app-domain cursor, broadwebd app-domain
-  fixture, and profile-sync scheduler fixture tests through the build-limits
-  wrapper. Chrome settings watcher coverage is opt-in because compiling
-  `slate-chrome` currently pulls Servo script bindings and exceeded the 2 GiB
-  low-memory profile during verification.
+  for the sync work. It runs focused rail-app sync-domain checks, verifies that
+  visible rail app sync descriptors match the seeded `slate-settings.db`
+  storage domain table, then covers storage/provider metadata, typed app-domain
+  cursors, the broadwebd app-domain fixture, and the profile-sync scheduler
+  fixture through the build-limits wrapper. Chrome settings watcher coverage is
+  opt-in because compiling `slate-chrome` currently pulls Servo script bindings
+  and exceeded the 2 GiB low-memory profile during verification.
 
 Next:
 

@@ -29,6 +29,7 @@ run_test() {
 cd "$repo_root"
 
 run_test slate-apps sync_domains
+run_test slate-storage rail_app_sync_domains_match_seeded_storage_domains
 run_test slate-storage storage_provider_writes_metadata_sync_change_without_secrets_or_local_state
 run_test slate-storage typed_app_sync_domain_poll_decodes_payloads_and_records_cursor
 run_test slate-broadwebd app_domain_metadata_syncs_through_profile_fixture
