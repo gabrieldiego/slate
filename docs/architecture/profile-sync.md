@@ -804,6 +804,10 @@ profile-sync service, then drive `BroadwebdProfileSyncPublisher` and
 `BroadwebdProfileSyncObjectSource` through normal broadwebd requests. The test
 publishes retained dependency objects and a root, resolves that root, and
 fetches the referenced bytes through Kubo-shaped in-process model responses.
+The model is intentionally isolated behind the internal transport shim: the
+Kubo protocol client still constructs normal Kubo HTTP RPC URLs and decodes
+normal Kubo responses, while the fixture layer only swaps socket I/O for
+process-local modeled behavior.
 That path now also covers a signed encrypted settings tail manifest: the
 publisher uploads the real signed manifest and tail bytes through one daemon,
 another daemon resolves and fetches them through the shared Kubo/IPNS fixture

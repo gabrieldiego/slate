@@ -336,11 +336,15 @@ Current baseline:
   the same in-process Kubo RPC fixture calls. Object fetch uses Kubo `cat` under
   the profile-sync object budget, giving the runtime service contract a
   protocol-shaped backend path without opening sockets.
-- The Kubo-backed fixture service now records bytes uploaded through
-  `PutEncryptedObject` and returns those cached bytes for later
-  `GetEncryptedObject` calls after still exercising the scripted Kubo `cat`
-  request. This lets higher-level settings-sync tests validate real signed
-  payload bytes without hand-scripting every fetched body.
+- The Kubo-backed fixture service now treats object fetch as authoritative from
+  the Kubo-shaped transport path: `GetEncryptedObject` returns the bytes from
+  the internal `cat` request or stateful Kubo model, not a hidden local upload
+  cache. Upload bookkeeping remains local service metadata for health and
+  retention policy only.
+- Socketless broadweb models must stay behind transport shims. Protocol clients
+  should keep building and validating the same HTTP/RPC requests and responses
+  they would use on the real web; fixture models only replace socket I/O with
+  process-local simulated behavior.
 - The same Kubo fixture service now records retained objects and published roots
   in its in-process profile-sync state after the corresponding Kubo RPC fixture
   calls succeed. Retained-object listing, provider health, root candidates, and

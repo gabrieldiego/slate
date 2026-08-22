@@ -214,6 +214,9 @@ pub mod test_fixtures {
     /// `slate-fixture-profile-sync://`. They are
     /// resolved through process-local registries and never bind loopback
     /// sockets, start listeners, or contact external networks.
+    /// Protocol implementations still build normal protocol requests; the
+    /// fixture layer only replaces socket I/O with modeled in-process
+    /// responses.
     #[derive(Clone, Debug)]
     pub struct InProcessBroadwebNetwork {
         network_id: String,
@@ -2492,6 +2495,68 @@ mod tests {
     }
 
     #[test]
+    fn kubo_profile_sync_get_uses_transport_bytes_not_local_upload_metadata() {
+        let object_id = "bafybeigdyrztprofileobject";
+        let fixture = InProcessBroadwebNetwork::new().kubo_rpc_sequence(vec![
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                body:
+                    br#"{"Name":"profile-object","Hash":"bafybeigdyrztprofileobject","Size":"128"}"#
+                        .to_vec(),
+            },
+            InternalKuboRpcResponse {
+                status_code: 200,
+                content_type: "application/octet-stream".to_string(),
+                body: b"bytes returned by Kubo cat".to_vec(),
+            },
+        ]);
+        let mut registry = PluginRegistry::new();
+        registry.register_service(
+            ProfileSyncService::kubo_fixture(fixture.base_url(), "kubo-fixture-provider")
+                .expect("Kubo fixture profile-sync service"),
+        );
+        let budget = ResourceBudget::default();
+
+        let ProfileSyncResponse::PutEncryptedObject {
+            object_id: put_object_id,
+        } = registry
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"bytes retained in local upload metadata".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("put object through Kubo fixture service")
+        else {
+            panic!("expected put object response");
+        };
+        assert_eq!(put_object_id, object_id);
+        assert_eq!(
+            registry
+                .profile_sync(
+                    ProfileSyncRequest::GetEncryptedObject(ProfileSyncObjectRequest::new(
+                        "default", object_id,
+                    )),
+                    &budget,
+                )
+                .expect("get object through Kubo fixture service"),
+            ProfileSyncResponse::GetEncryptedObject {
+                object_id: object_id.to_string(),
+                bytes: b"bytes returned by Kubo cat".to_vec(),
+            }
+        );
+        assert_eq!(
+            fixture.finish(),
+            vec![
+                "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1",
+                "POST /api/v0/cat?arg=%2Fipfs%2Fbafybeigdyrztprofileobject HTTP/1.1",
+            ]
+        );
+    }
+
+    #[test]
     fn kubo_profile_sync_model_round_trips_state_without_canned_responses() {
         let network = InProcessBroadwebNetwork::new();
         let fixture = network.kubo_profile_sync_model();
@@ -2632,7 +2697,7 @@ mod tests {
             InternalKuboRpcResponse {
                 status_code: 200,
                 content_type: "application/octet-stream".to_string(),
-                body: Vec::new(),
+                body: b"encrypted slate-settings snapshot".to_vec(),
             },
             InternalKuboRpcResponse {
                 status_code: 200,
@@ -2909,7 +2974,7 @@ mod tests {
             InternalKuboRpcResponse {
                 status_code: 200,
                 content_type: "application/octet-stream".to_string(),
-                body: Vec::new(),
+                body: b"encrypted slate-settings snapshot".to_vec(),
             },
         ]);
         let state_root = test_state_root("kubo-profile-sync-daemon");

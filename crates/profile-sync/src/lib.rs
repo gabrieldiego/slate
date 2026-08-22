@@ -16086,7 +16086,7 @@ mod tests {
         );
         let manifest_object = source
             .get_profile_sync_object(DEFAULT_PROFILE_ID, manifest_object_id)
-            .expect("fetch signed manifest object from Kubo fixture cache");
+            .expect("fetch signed manifest object through Kubo model");
         let manifest = open_signed_profile_sync_manifest(
             manifest_object.bytes.as_slice(),
             &content_key,
@@ -16099,7 +16099,7 @@ mod tests {
 
         let tail_object = source
             .get_profile_sync_object(DEFAULT_PROFILE_ID, tail_object_id)
-            .expect("fetch signed tail object from Kubo fixture cache");
+            .expect("fetch signed tail object through Kubo model");
         let incoming = open_signed_sync_setting_text(
             tail_object.bytes.as_slice(),
             &content_key,
