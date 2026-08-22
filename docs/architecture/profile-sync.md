@@ -135,6 +135,19 @@ device to approve a new device, but the format should leave room for stricter
 policies such as M-of-N approval for device revocation, recovery, or sensitive
 sync domains.
 
+The first local onboarding artifact is a `ProfileSyncEnrollmentBundle` suitable
+for future QR-code or file transfer surfaces. It carries only non-secret signed
+membership records, ordered so a fresh device can learn enough account history
+to trust the signer before applying its own enrollment. Storage validates the
+bundle schema, profile, target device id, record count, and the presence of an
+enrollment or key-rotation record for the target device before applying it
+through the same transactional signed-membership path used by distributed
+membership logs. Import also checks that the target device id matches the local
+`slate-settings.db` sync device id, preventing a bundle meant for another
+device from mutating local trust state. A separate Slate Sync Secret is still
+needed for content-key derivation, recovery, and any secret-bearing enrollment
+flow.
+
 `slate-settings.db` now has the first local persistence primitive for that
 authority set: signed membership records are stored by profile, record id,
 membership epoch, record kind, target device id, signer device id, and exact

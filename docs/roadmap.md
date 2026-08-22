@@ -1229,6 +1229,14 @@ Current baseline:
 - Aggregate membership-log validation now also checks record, target-device,
   and signer-device identifiers before object fetch. Malformed ids fail during
   socketless preview without advancing the local membership-log root.
+- `slate-settings.db` now has the first local device-enrollment bundle for
+  future QR-code or file-based onboarding. The bundle carries an ordered,
+  bounded chain of signed membership records, validates profile and target
+  device metadata, requires an enrollment or key-rotation record for the target
+  device, and imports only when the target matches the local sync device id.
+  Import still uses the same transactional signed-membership application path,
+  so the artifact adds no root server, no plaintext sync payloads, and no
+  socket or live protocol dependency.
 
 Next:
 

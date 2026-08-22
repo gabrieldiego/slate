@@ -24,6 +24,7 @@ pub const SYNC_OBJECT_VERSION: u8 = 1;
 pub const PROFILE_SYNC_MANIFEST_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION: u8 = 1;
+pub const PROFILE_SYNC_ENROLLMENT_BUNDLE_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND: &str = "setting-change";
 pub const PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND: &str = "settings-snapshot";
@@ -34,6 +35,7 @@ pub const PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER: &str = "enroll-pr
 pub const PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE: &str = "revoke-device";
 pub const PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY: &str = "rotate-device-key";
 pub const DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH: i64 = 1;
+pub const DEFAULT_PROFILE_SYNC_ENROLLMENT_BUNDLE_MAX_RECORDS: usize = 128;
 pub const DEFAULT_PROFILE_SYNC_MIN_TAIL_CHANGE_COUNT: u32 = 32;
 pub const DEFAULT_PROFILE_SYNC_CHANGE_RETENTION_SECONDS: i64 = 14 * 24 * 60 * 60;
 pub const DEFAULT_PROFILE_SYNC_INACTIVE_DEVICE_GRACE_SECONDS: i64 = 30 * 24 * 60 * 60;
@@ -353,6 +355,16 @@ pub struct ProfileSyncMembershipRecord {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ProfileSyncEnrollmentBundle {
+    pub profile: String,
+    #[serde(default = "default_profile_sync_enrollment_bundle_schema_version")]
+    pub schema_version: u8,
+    pub target_device_id: String,
+    pub created_at: i64,
+    pub signed_membership_records: Vec<Vec<u8>>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct ProfileSyncRetentionPolicy {
     pub min_tail_change_count: u32,
     pub change_retention_seconds: i64,
@@ -407,6 +419,10 @@ fn default_profile_sync_membership_record_schema_version() -> u8 {
     PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION
 }
 
+fn default_profile_sync_enrollment_bundle_schema_version() -> u8 {
+    PROFILE_SYNC_ENROLLMENT_BUNDLE_SCHEMA_VERSION
+}
+
 fn default_profile_sync_membership_epoch() -> i64 {
     DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH
 }
@@ -418,6 +434,37 @@ impl ProfileSyncMembershipRecord {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, SyncObjectError> {
         serde_json::from_slice(bytes).map_err(SyncObjectError::Decode)
+    }
+}
+
+impl ProfileSyncEnrollmentBundle {
+    pub fn new_device_enrollment(
+        profile: impl Into<String>,
+        target_device_id: impl Into<String>,
+        signed_membership_records: Vec<Vec<u8>>,
+        created_at: i64,
+    ) -> Result<Self, StorageError> {
+        let bundle = Self {
+            profile: profile.into(),
+            schema_version: PROFILE_SYNC_ENROLLMENT_BUNDLE_SCHEMA_VERSION,
+            target_device_id: target_device_id.into(),
+            created_at,
+            signed_membership_records,
+        };
+        validate_profile_sync_enrollment_bundle(&bundle)?;
+        Ok(bundle)
+    }
+
+    pub fn to_bytes(&self) -> Result<Vec<u8>, StorageError> {
+        validate_profile_sync_enrollment_bundle(self)?;
+        serde_json::to_vec(self).map_err(StorageError::EncodeSyncPayload)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, StorageError> {
+        let bundle: Self =
+            serde_json::from_slice(bytes).map_err(StorageError::DecodeSyncPayload)?;
+        validate_profile_sync_enrollment_bundle(&bundle)?;
+        Ok(bundle)
     }
 }
 
@@ -2485,6 +2532,7 @@ pub enum StorageError {
     InvalidSyncMembershipRecordKind(String),
     InvalidSyncMembershipEpoch(i64),
     InvalidProfileSyncMembershipRecord(String),
+    InvalidProfileSyncEnrollmentBundle(String),
     UntrustedSyncMembershipSigner {
         profile: String,
         device_id: String,
@@ -2520,6 +2568,7 @@ pub enum StorageError {
     InvalidProfileSyncManifest(String),
     UnsupportedProfileSyncManifestSchema(u8),
     UnsupportedProfileSyncMembershipRecordSchema(u8),
+    UnsupportedProfileSyncEnrollmentBundleSchema(u8),
     UnsupportedSyncSnapshotSchema(u8),
 }
 
@@ -2575,6 +2624,12 @@ impl fmt::Display for StorageError {
                 write!(
                     formatter,
                     "invalid profile sync membership record: {reason}"
+                )
+            }
+            Self::InvalidProfileSyncEnrollmentBundle(reason) => {
+                write!(
+                    formatter,
+                    "invalid profile sync enrollment bundle: {reason}"
                 )
             }
             Self::UntrustedSyncMembershipSigner { profile, device_id } => {
@@ -2680,6 +2735,12 @@ impl fmt::Display for StorageError {
                     "unsupported profile sync membership record schema version: {schema_version}"
                 )
             }
+            Self::UnsupportedProfileSyncEnrollmentBundleSchema(schema_version) => {
+                write!(
+                    formatter,
+                    "unsupported profile sync enrollment bundle schema version: {schema_version}"
+                )
+            }
             Self::UnsupportedSyncSnapshotSchema(schema_version) => {
                 write!(
                     formatter,
@@ -2705,6 +2766,7 @@ impl std::error::Error for StorageError {
             Self::InvalidSyncMembershipRecordKind(_) => None,
             Self::InvalidSyncMembershipEpoch(_) => None,
             Self::InvalidProfileSyncMembershipRecord(_) => None,
+            Self::InvalidProfileSyncEnrollmentBundle(_) => None,
             Self::UntrustedSyncMembershipSigner { .. } => None,
             Self::InvalidSyncContentKeyId(_) => None,
             Self::InvalidSyncDomain(_) => None,
@@ -2729,6 +2791,7 @@ impl std::error::Error for StorageError {
             Self::InvalidProfileSyncManifest(_) => None,
             Self::UnsupportedProfileSyncManifestSchema(_) => None,
             Self::UnsupportedProfileSyncMembershipRecordSchema(_) => None,
+            Self::UnsupportedProfileSyncEnrollmentBundleSchema(_) => None,
             Self::UnsupportedSyncSnapshotSchema(_) => None,
         }
     }
@@ -4600,6 +4663,21 @@ impl SlateProfileDatabase {
         applications
             .pop()
             .ok_or_else(|| self.database_error(rusqlite::Error::QueryReturnedNoRows))
+    }
+
+    pub fn apply_profile_sync_enrollment_bundle(
+        &self,
+        bundle: &ProfileSyncEnrollmentBundle,
+    ) -> Result<Vec<SyncAccountMembershipRecordApplication>, StorageError> {
+        validate_profile_sync_enrollment_bundle(bundle)?;
+        if bundle.target_device_id != self.local_sync_device_id.as_str() {
+            return Err(StorageError::InvalidProfileSyncEnrollmentBundle(format!(
+                "bundle targets device {}, but this database is for device {}",
+                bundle.target_device_id,
+                self.local_sync_device_id.as_str()
+            )));
+        }
+        self.apply_signed_sync_account_membership_records(&bundle.signed_membership_records)
     }
 
     pub fn apply_signed_sync_account_membership_record_and_set_profile_sync_root(
@@ -8472,6 +8550,66 @@ fn decode_signed_profile_sync_membership_record(
         .map_err(|error| StorageError::InvalidProfileSyncMembershipRecord(error.to_string()))?;
     validate_profile_sync_membership_record(&membership_record)?;
     Ok((signed_object, membership_record))
+}
+
+fn validate_profile_sync_enrollment_bundle(
+    bundle: &ProfileSyncEnrollmentBundle,
+) -> Result<(), StorageError> {
+    if bundle.schema_version != PROFILE_SYNC_ENROLLMENT_BUNDLE_SCHEMA_VERSION {
+        return Err(StorageError::UnsupportedProfileSyncEnrollmentBundleSchema(
+            bundle.schema_version,
+        ));
+    }
+    if bundle.profile.is_empty() {
+        return Err(StorageError::InvalidProfileSyncEnrollmentBundle(
+            "bundle profile must not be empty".to_string(),
+        ));
+    }
+    if !is_valid_sync_identifier(bundle.target_device_id.as_str()) {
+        return Err(StorageError::InvalidSyncDeviceId(
+            bundle.target_device_id.clone(),
+        ));
+    }
+    if bundle.signed_membership_records.is_empty() {
+        return Err(StorageError::InvalidProfileSyncEnrollmentBundle(
+            "bundle must contain at least one signed membership record".to_string(),
+        ));
+    }
+    if bundle.signed_membership_records.len() > DEFAULT_PROFILE_SYNC_ENROLLMENT_BUNDLE_MAX_RECORDS {
+        return Err(StorageError::InvalidProfileSyncEnrollmentBundle(format!(
+            "bundle has {} signed membership records, exceeding max {}",
+            bundle.signed_membership_records.len(),
+            DEFAULT_PROFILE_SYNC_ENROLLMENT_BUNDLE_MAX_RECORDS
+        )));
+    }
+
+    let mut target_record_seen = false;
+    for signed_record in &bundle.signed_membership_records {
+        let (_, membership_record) =
+            decode_signed_profile_sync_membership_record(signed_record.as_slice())?;
+        if membership_record.profile != bundle.profile {
+            return Err(StorageError::InvalidProfileSyncEnrollmentBundle(format!(
+                "membership record {} belongs to profile {}, not bundle profile {}",
+                membership_record.record_id, membership_record.profile, bundle.profile
+            )));
+        }
+        if membership_record.device_id == bundle.target_device_id
+            && matches!(
+                membership_record.record_kind.as_str(),
+                PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE
+                    | PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY
+            )
+        {
+            target_record_seen = true;
+        }
+    }
+    if !target_record_seen {
+        return Err(StorageError::InvalidProfileSyncEnrollmentBundle(format!(
+            "bundle does not include an enrollment or key-rotation record for target device {}",
+            bundle.target_device_id
+        )));
+    }
+    Ok(())
 }
 
 fn validate_profile_sync_membership_record(
@@ -13984,6 +14122,142 @@ mod tests {
                 .unwrap()
                 .expect("device b remains present after conflicting same-epoch record")
                 .trusted
+        );
+    }
+
+    #[test]
+    fn profile_sync_enrollment_bundle_imports_ordered_membership_chain_for_local_device() {
+        let signer_a = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let signer_b = ProfileSyncDeviceSigner::generate("device-b").unwrap();
+        let enroll_a = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-device-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-a".to_string(),
+            device_public_key: Some(signer_a.public_key().unwrap()),
+            created_at: 10,
+        };
+        let enroll_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-enroll-device-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 2,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-b".to_string(),
+            device_public_key: Some(signer_b.public_key().unwrap()),
+            created_at: 20,
+        };
+        let signed_enroll_a = signed_membership_record_bytes(&signer_a, &enroll_a);
+        let signed_enroll_b = signed_membership_record_bytes(&signer_a, &enroll_b);
+        let bundle = ProfileSyncEnrollmentBundle::new_device_enrollment(
+            DEFAULT_PROFILE_ID,
+            "device-b",
+            vec![signed_enroll_a.clone(), signed_enroll_b.clone()],
+            30,
+        )
+        .unwrap();
+        let encoded = bundle.to_bytes().unwrap();
+        let decoded = ProfileSyncEnrollmentBundle::from_bytes(encoded.as_slice()).unwrap();
+        assert_eq!(decoded, bundle);
+
+        let database_path =
+            test_dir("sync-enrollment-bundle-import").join(DEFAULT_DATABASE_FILE_NAME);
+        let database =
+            SlateProfileDatabase::open_resolved_with_device_id(database_path, "device-b").unwrap();
+        let applications = database
+            .apply_profile_sync_enrollment_bundle(&decoded)
+            .unwrap();
+
+        assert_eq!(applications.len(), 2);
+        assert!(applications[0].bootstrapped);
+        assert!(applications[0].applied);
+        assert_eq!(applications[0].membership_record.device_id, "device-a");
+        assert!(!applications[1].bootstrapped);
+        assert!(applications[1].applied);
+        assert_eq!(applications[1].membership_record.device_id, "device-b");
+        assert_eq!(
+            database
+                .sync_account_membership_record_count(DEFAULT_PROFILE_ID)
+                .unwrap(),
+            2
+        );
+        assert_eq!(
+            database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "device-b")
+                .unwrap()
+                .expect("imported target device key")
+                .public_key,
+            signer_b.public_key().unwrap()
+        );
+
+        let replay = database
+            .apply_profile_sync_enrollment_bundle(&decoded)
+            .unwrap();
+        assert_eq!(replay.len(), 2);
+        assert!(replay.iter().all(|application| !application.applied));
+    }
+
+    #[test]
+    fn profile_sync_enrollment_bundle_rejects_wrong_local_device_without_mutation() {
+        let signer_a = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let signer_b = ProfileSyncDeviceSigner::generate("device-b").unwrap();
+        let enroll_a = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-device-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-a".to_string(),
+            device_public_key: Some(signer_a.public_key().unwrap()),
+            created_at: 10,
+        };
+        let enroll_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-enroll-device-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 2,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-b".to_string(),
+            device_public_key: Some(signer_b.public_key().unwrap()),
+            created_at: 20,
+        };
+        let bundle = ProfileSyncEnrollmentBundle::new_device_enrollment(
+            DEFAULT_PROFILE_ID,
+            "device-b",
+            vec![
+                signed_membership_record_bytes(&signer_a, &enroll_a),
+                signed_membership_record_bytes(&signer_a, &enroll_b),
+            ],
+            30,
+        )
+        .unwrap();
+        let database_path =
+            test_dir("sync-enrollment-bundle-wrong-device").join(DEFAULT_DATABASE_FILE_NAME);
+        let database =
+            SlateProfileDatabase::open_resolved_with_device_id(database_path, "device-c").unwrap();
+
+        let error = database
+            .apply_profile_sync_enrollment_bundle(&bundle)
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            StorageError::InvalidProfileSyncEnrollmentBundle(reason)
+                if reason.contains("bundle targets device device-b")
+        ));
+        assert_eq!(
+            database
+                .sync_account_membership_record_count(DEFAULT_PROFILE_ID)
+                .unwrap(),
+            0
+        );
+        assert!(
+            database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "device-a")
+                .unwrap()
+                .is_none()
         );
     }
 
