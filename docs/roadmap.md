@@ -923,8 +923,10 @@ Current baseline:
 - The scheduler facade now has an explicit membership-aware selected-provider
   run path, with fixture coverage for applying a remote settings head and
   retaining the combined settings plus membership object set through an
-  in-process availability provider. The read-only plan path remains
-  membership-unaware until membership discovery has a non-mutating preview mode.
+  in-process availability provider. A separate read-only membership-log preview
+  can now report missing, unchanged, or available remote log roots by resolving
+  and decoding only the aggregate log object, without applying trust records or
+  advancing verified roots.
 - Membership-log receive fixtures now reject mismatched index entries before
   advancing the stored log root or writing trusted device keys.
 - Membership logs now have a fixed record-count cap enforced before entry

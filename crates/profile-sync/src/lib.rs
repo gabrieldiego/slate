@@ -128,6 +128,23 @@ pub struct ProfileSyncMembershipLogPublicationPlan {
     pub status: ProfileSyncMembershipLogPublicationPlanStatus,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ProfileSyncMembershipLogPreviewStatus {
+    NoPublishedRoot,
+    Unchanged,
+    Available,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSyncMembershipLogPreview {
+    pub profile: String,
+    pub root_id: String,
+    pub object_id: Option<String>,
+    pub record_count: usize,
+    pub max_records: usize,
+    pub status: ProfileSyncMembershipLogPreviewStatus,
+}
+
 impl ProfileSyncMembershipLogPublicationPlan {
     pub fn for_record_count(profile: &str, root_id: &str, record_count: usize) -> Self {
         let status = if record_count == 0 {
@@ -156,6 +173,49 @@ impl ProfileSyncMembershipLogPublicationPlan {
 
     pub fn requires_compaction(&self) -> bool {
         self.status == ProfileSyncMembershipLogPublicationPlanStatus::TooLarge
+    }
+}
+
+impl ProfileSyncMembershipLogPreview {
+    pub fn no_published_root(profile: &str, root_id: &str) -> Self {
+        Self {
+            profile: profile.to_string(),
+            root_id: root_id.to_string(),
+            object_id: None,
+            record_count: 0,
+            max_records: PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS,
+            status: ProfileSyncMembershipLogPreviewStatus::NoPublishedRoot,
+        }
+    }
+
+    pub fn unchanged(profile: &str, root_id: &str, object_id: String) -> Self {
+        Self {
+            profile: profile.to_string(),
+            root_id: root_id.to_string(),
+            object_id: Some(object_id),
+            record_count: 0,
+            max_records: PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS,
+            status: ProfileSyncMembershipLogPreviewStatus::Unchanged,
+        }
+    }
+
+    pub fn available(profile: &str, root_id: &str, object_id: String, record_count: usize) -> Self {
+        Self {
+            profile: profile.to_string(),
+            root_id: root_id.to_string(),
+            object_id: Some(object_id),
+            record_count,
+            max_records: PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS,
+            status: ProfileSyncMembershipLogPreviewStatus::Available,
+        }
+    }
+
+    pub fn requires_pull(&self) -> bool {
+        self.status == ProfileSyncMembershipLogPreviewStatus::Available
+    }
+
+    pub fn is_unchanged(&self) -> bool {
+        self.status == ProfileSyncMembershipLogPreviewStatus::Unchanged
     }
 }
 
@@ -1566,6 +1626,7 @@ impl SettingsSyncScheduledCyclePlan {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettingsSyncScheduledMembershipCyclePlan {
     pub membership_log_publication: ProfileSyncMembershipLogPublicationPlan,
+    pub membership_log_preview: ProfileSyncMembershipLogPreview,
     pub cycle: SettingsSyncScheduledCyclePlan,
 }
 
@@ -1601,6 +1662,12 @@ impl SettingsSyncScheduledMembershipCyclePlan {
     pub fn degraded_before(&self) -> bool {
         self.cycle.degraded_before()
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncMembershipLogPlan {
+    pub local_publication: ProfileSyncMembershipLogPublicationPlan,
+    pub remote_preview: ProfileSyncMembershipLogPreview,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -2028,6 +2095,7 @@ impl SettingsSyncStoredInProcessFixtureRetentionProviderRun<'_> {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettingsSyncStoredRetentionProviderMembershipPlan {
     pub membership_log_publication: ProfileSyncMembershipLogPublicationPlan,
+    pub membership_log_preview: ProfileSyncMembershipLogPreview,
     pub cycle: SettingsSyncStoredRetentionProviderPlan,
 }
 
@@ -2644,6 +2712,36 @@ pub fn sync_membership_record_root_id(record_id: &str) -> String {
 impl<'a> BroadwebdProfileSyncObjectSource<'a> {
     pub fn new(daemon: &'a BroadwebDaemon) -> Self {
         Self { daemon }
+    }
+
+    pub fn preview_sync_account_membership_log(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        root_id: &str,
+    ) -> Result<ProfileSyncMembershipLogPreview, ProfileSyncReceiveError> {
+        let Some(object_id) = self.resolve_profile_sync_root(profile, root_id)? else {
+            return Ok(ProfileSyncMembershipLogPreview::no_published_root(
+                profile, root_id,
+            ));
+        };
+        if database
+            .profile_sync_root(profile, root_id)?
+            .is_some_and(|root| root.object_id == object_id)
+        {
+            return Ok(ProfileSyncMembershipLogPreview::unchanged(
+                profile, root_id, object_id,
+            ));
+        }
+
+        let log_object = self.get_profile_sync_object(profile, object_id.as_str())?;
+        let log = decode_profile_sync_membership_log(log_object.bytes.as_slice(), profile)?;
+        Ok(ProfileSyncMembershipLogPreview::available(
+            profile,
+            root_id,
+            object_id,
+            log.records.len(),
+        ))
     }
 
     pub fn pull_and_apply_sync_account_membership_record_if_changed(
@@ -3600,6 +3698,25 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         ))
     }
 
+    pub fn plan_membership_log(
+        &self,
+        database: &SlateProfileDatabase,
+        profile: &str,
+        membership_log_root_id: &str,
+    ) -> Result<SettingsSyncMembershipLogPlan, ProfileSyncCycleWithHealthError> {
+        let local_publication = BroadwebdProfileSyncPublisher::new(self.daemon)
+            .plan_local_sync_account_membership_log(database, profile, membership_log_root_id)
+            .map_err(ProfileSyncCycleError::from)?;
+        let remote_preview = BroadwebdProfileSyncObjectSource::new(self.daemon)
+            .preview_sync_account_membership_log(database, profile, membership_log_root_id)
+            .map_err(ProfileSyncCycleError::from)?;
+
+        Ok(SettingsSyncMembershipLogPlan {
+            local_publication,
+            remote_preview,
+        })
+    }
+
     pub fn plan_once_with_membership_log_selecting_retention_providers(
         &self,
         database: &SlateProfileDatabase,
@@ -3608,13 +3725,8 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         signer: &ProfileSyncDeviceSigner,
         retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'_>],
     ) -> Result<SettingsSyncScheduledMembershipCyclePlan, ProfileSyncCycleWithHealthError> {
-        let membership_log_publication = BroadwebdProfileSyncPublisher::new(self.daemon)
-            .plan_local_sync_account_membership_log(
-                database,
-                config.profile.as_str(),
-                membership_log_root_id,
-            )
-            .map_err(ProfileSyncCycleError::from)?;
+        let membership_log_plan =
+            self.plan_membership_log(database, config.profile.as_str(), membership_log_root_id)?;
         let cycle = self.plan_once_selecting_retention_providers(
             database,
             config,
@@ -3623,7 +3735,8 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         )?;
 
         Ok(SettingsSyncScheduledMembershipCyclePlan {
-            membership_log_publication,
+            membership_log_publication: membership_log_plan.local_publication,
+            membership_log_preview: membership_log_plan.remote_preview,
             cycle,
         })
     }
@@ -3637,13 +3750,8 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         max_stored_providers: u32,
     ) -> Result<SettingsSyncStoredRetentionProviderMembershipPlan, ProfileSyncCycleWithHealthError>
     {
-        let membership_log_publication = BroadwebdProfileSyncPublisher::new(self.daemon)
-            .plan_local_sync_account_membership_log(
-                database,
-                config.profile.as_str(),
-                membership_log_root_id,
-            )
-            .map_err(ProfileSyncCycleError::from)?;
+        let membership_log_plan =
+            self.plan_membership_log(database, config.profile.as_str(), membership_log_root_id)?;
         let cycle = self.plan_once_with_stored_retention_providers(
             database,
             config,
@@ -3652,7 +3760,8 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         )?;
 
         Ok(SettingsSyncStoredRetentionProviderMembershipPlan {
-            membership_log_publication,
+            membership_log_publication: membership_log_plan.local_publication,
+            membership_log_preview: membership_log_plan.remote_preview,
             cycle,
         })
     }
@@ -5611,12 +5720,12 @@ mod tests {
         BroadwebdTrustedDeviceHeadSyncStatus, LocalSettingsHeadPublishStatus,
         PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID, ProfileSyncCredentialError, ProfileSyncCycleError,
         ProfileSyncCycleWithHealthError, ProfileSyncMembershipLog, ProfileSyncMembershipLogEntry,
-        ProfileSyncMembershipLogPublicationPlanStatus, ProfileSyncMembershipLogPullStatus,
-        ProfileSyncMembershipRecordPullStatus, ProfileSyncPolicyError, ProfileSyncPublishError,
-        ProfileSyncReceiveError, SettingsSyncCyclePolicy, SettingsSyncRetentionProviderHandle,
-        SettingsSyncRuntimeSecrets, SettingsSyncSchedulerConfig,
-        SettingsSyncStoredProviderEndpointStatus, settings_device_head_root_id,
-        sign_encrypted_json_object, sync_membership_record_root_id,
+        ProfileSyncMembershipLogPreviewStatus, ProfileSyncMembershipLogPublicationPlanStatus,
+        ProfileSyncMembershipLogPullStatus, ProfileSyncMembershipRecordPullStatus,
+        ProfileSyncPolicyError, ProfileSyncPublishError, ProfileSyncReceiveError,
+        SettingsSyncCyclePolicy, SettingsSyncRetentionProviderHandle, SettingsSyncRuntimeSecrets,
+        SettingsSyncSchedulerConfig, SettingsSyncStoredProviderEndpointStatus,
+        settings_device_head_root_id, sign_encrypted_json_object, sync_membership_record_root_id,
     };
     use slate_broadwebd::{
         BroadwebdError, ProfileSyncProfileRequest as BroadwebdProfileSyncProfileRequest,
@@ -6387,6 +6496,36 @@ mod tests {
                 .as_deref(),
             Some(publication.log.records[1].object_id.as_str())
         );
+        let preview = source
+            .preview_sync_account_membership_log(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            )
+            .expect("preview remote membership log through in-process broadwebd");
+        assert_eq!(
+            preview.status,
+            ProfileSyncMembershipLogPreviewStatus::Available
+        );
+        assert!(preview.requires_pull());
+        assert_eq!(
+            preview.object_id.as_deref(),
+            Some(publication.object_id.as_str())
+        );
+        assert_eq!(preview.record_count, 2);
+        assert!(
+            receiver_database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "membership-log-device-a")
+                .expect("read receiver signer a key before preview apply")
+                .is_none()
+        );
+        assert!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID)
+                .expect("read membership log root before preview apply")
+                .is_none()
+        );
+
         let applied = source
             .pull_and_apply_sync_account_membership_log_if_changed(
                 &receiver_database,
@@ -6438,6 +6577,22 @@ mod tests {
                 ..
             } if object_id == publication.object_id
         ));
+        let unchanged_preview = source
+            .preview_sync_account_membership_log(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            )
+            .expect("preview unchanged membership log");
+        assert_eq!(
+            unchanged_preview.status,
+            ProfileSyncMembershipLogPreviewStatus::Unchanged
+        );
+        assert!(unchanged_preview.is_unchanged());
+        assert_eq!(
+            unchanged_preview.object_id.as_deref(),
+            Some(publication.object_id.as_str())
+        );
 
         let _ = std::fs::remove_dir_all(publisher_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
@@ -6983,7 +7138,7 @@ mod tests {
         publisher_database
             .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
             .expect("publisher writes stored membership scheduler setting");
-        BroadwebdSettingsSyncRunner::new(&publisher_daemon)
+        let publisher_run = BroadwebdSettingsSyncRunner::new(&publisher_daemon)
             .run_settings_sync_cycle_with_membership_log(
                 &publisher_database,
                 DEFAULT_PROFILE_ID,
@@ -6997,6 +7152,12 @@ mod tests {
                 4,
             )
             .expect("publisher publishes stored membership and settings state");
+        let published_membership_log_object_id = publisher_run
+            .published_membership_log
+            .as_ref()
+            .expect("publisher published stored scheduler membership log")
+            .object_id
+            .clone();
 
         let selected_provider_id = "local-fixture-availability-membership-stored-scheduler-pinner";
         let selected_provider_endpoint_ref =
@@ -7042,6 +7203,39 @@ mod tests {
             SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2)
                 .with_provider_health_required(false)
                 .with_root_health_required_after_cycle(false),
+        );
+        let membership_log_plan = scheduler
+            .plan_membership_log(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            )
+            .expect("read-only scheduler membership-log preview succeeds without local trust");
+        assert_eq!(
+            membership_log_plan.local_publication.status,
+            ProfileSyncMembershipLogPublicationPlanStatus::Empty
+        );
+        assert_eq!(
+            membership_log_plan.remote_preview.status,
+            ProfileSyncMembershipLogPreviewStatus::Available
+        );
+        assert!(membership_log_plan.remote_preview.requires_pull());
+        assert_eq!(
+            membership_log_plan.remote_preview.object_id.as_deref(),
+            Some(published_membership_log_object_id.as_str())
+        );
+        assert_eq!(membership_log_plan.remote_preview.record_count, 2);
+        assert!(
+            receiver_database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "membership-stored-scheduler-device-b")
+                .expect("read receiver local key after membership preview")
+                .is_none()
+        );
+        assert!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID)
+                .expect("read membership log root after membership preview")
+                .is_none()
         );
 
         let plan_error = scheduler
@@ -11164,6 +11358,10 @@ mod tests {
         assert_eq!(
             membership_plan.membership_log_publication.status,
             ProfileSyncMembershipLogPublicationPlanStatus::Publishable
+        );
+        assert_eq!(
+            membership_plan.membership_log_preview.status,
+            ProfileSyncMembershipLogPreviewStatus::NoPublishedRoot
         );
         assert_eq!(membership_plan.membership_log_publication.record_count, 1);
         assert_eq!(
