@@ -585,6 +585,10 @@ Current baseline:
   endpoints into provider-id plus parsed-`Multiaddr` request records. This
   gives future profile-sync protocol adapters a direct typed work queue while
   missing and deferred-protocol endpoints remain pending materialization.
+- Deferred protocol endpoints now have the same typed scheduler handoff for
+  `provider:` and `iroh-node:` refs: invalid deferred targets fail closed, and
+  valid refs are grouped into provider-id, protocol, and target records for
+  future protocol materializers.
 - Legacy `fixture:<provider>` endpoint refs now also fail closed. They do not
   carry a fixture network id, so they cannot safely satisfy stored-provider
   materialization or quorum checks.

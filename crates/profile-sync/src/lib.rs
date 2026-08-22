@@ -1735,6 +1735,13 @@ pub struct SettingsSyncSelectedMultiaddrMaterializationRequest {
     pub endpoint: Multiaddr,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+    pub provider_id: String,
+    pub protocol: String,
+    pub target: String,
+}
+
 impl SettingsSyncSelectedEndpointMaterializationRequest {
     pub fn fixture_ready(&self) -> bool {
         self.endpoint_status == SettingsSyncStoredProviderEndpointStatus::InProcessFixture
@@ -1771,6 +1778,24 @@ impl SettingsSyncSelectedEndpointMaterializationRequest {
                 endpoint,
             }
         })
+    }
+
+    pub fn deferred_protocol_materialization_request(
+        &self,
+    ) -> Option<SettingsSyncSelectedDeferredProtocolMaterializationRequest> {
+        if self.endpoint_status != SettingsSyncStoredProviderEndpointStatus::DeferredProtocol {
+            return None;
+        }
+        self.endpoint_ref
+            .as_deref()
+            .and_then(parse_deferred_protocol_endpoint)
+            .map(
+                |endpoint| SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+                    provider_id: self.provider_id.clone(),
+                    protocol: endpoint.protocol,
+                    target: endpoint.target,
+                },
+            )
     }
 }
 
@@ -1849,6 +1874,26 @@ impl SettingsSyncSelectedEndpointMaterializationPlan {
 
     pub fn multiaddr_provider_ids(&self) -> Vec<String> {
         self.multiaddr_requests()
+            .into_iter()
+            .map(|request| request.provider_id)
+            .collect()
+    }
+
+    pub fn deferred_protocol_requests(
+        &self,
+    ) -> Vec<SettingsSyncSelectedDeferredProtocolMaterializationRequest> {
+        self.requests
+            .iter()
+            .filter_map(|request| request.deferred_protocol_materialization_request())
+            .collect()
+    }
+
+    pub fn deferred_protocol_request_count(&self) -> usize {
+        self.deferred_protocol_requests().len()
+    }
+
+    pub fn deferred_protocol_provider_ids(&self) -> Vec<String> {
+        self.deferred_protocol_requests()
             .into_iter()
             .map(|request| request.provider_id)
             .collect()
@@ -3116,11 +3161,26 @@ fn classify_stored_provider_endpoint(
 }
 
 fn is_deferred_protocol_endpoint(endpoint_ref: &str) -> bool {
-    ["provider:", "iroh-node:"].iter().any(|prefix| {
-        endpoint_ref
-            .strip_prefix(prefix)
-            .is_some_and(is_endpoint_token)
-    })
+    parse_deferred_protocol_endpoint(endpoint_ref).is_some()
+}
+
+struct DeferredProtocolEndpoint {
+    protocol: String,
+    target: String,
+}
+
+fn parse_deferred_protocol_endpoint(endpoint_ref: &str) -> Option<DeferredProtocolEndpoint> {
+    for (prefix, protocol) in [("provider:", "provider"), ("iroh-node:", "iroh-node")] {
+        if let Some(target) = endpoint_ref.strip_prefix(prefix) {
+            if is_endpoint_token(target) {
+                return Some(DeferredProtocolEndpoint {
+                    protocol: protocol.to_string(),
+                    target: target.to_string(),
+                });
+            }
+        }
+    }
+    None
 }
 
 fn is_multiaddr_like_endpoint(endpoint_ref: &str) -> bool {
@@ -6573,6 +6633,14 @@ mod tests {
             SettingsSyncStoredProviderEndpointStatus::DeferredProtocol
         );
         assert_eq!(
+            super::classify_stored_provider_endpoint("provider-a", Some("iroh-node:")),
+            SettingsSyncStoredProviderEndpointStatus::Unsupported
+        );
+        assert_eq!(
+            super::classify_stored_provider_endpoint("provider-a", Some("iroh-node:bad target")),
+            SettingsSyncStoredProviderEndpointStatus::Unsupported
+        );
+        assert_eq!(
             super::classify_stored_provider_endpoint(
                 "provider-a",
                 Some("provider:contracted-pinning")
@@ -6935,6 +7003,36 @@ mod tests {
         );
         assert!(materialization_requests[3].parsed_multiaddr().is_none());
         assert!(materialization_requests[4].parsed_multiaddr().is_none());
+        assert!(
+            materialization_requests[0]
+                .deferred_protocol_materialization_request()
+                .is_none()
+        );
+        assert!(
+            materialization_requests[1]
+                .deferred_protocol_materialization_request()
+                .is_none()
+        );
+        assert!(
+            materialization_requests[2]
+                .deferred_protocol_materialization_request()
+                .is_none()
+        );
+        assert_eq!(
+            materialization_requests[3].deferred_protocol_materialization_request(),
+            Some(
+                super::SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+                    provider_id: deferred_provider_id.to_string(),
+                    protocol: "iroh-node".to_string(),
+                    target: "provider-a".to_string(),
+                }
+            )
+        );
+        assert!(
+            materialization_requests[4]
+                .deferred_protocol_materialization_request()
+                .is_none()
+        );
         assert_eq!(
             materialization_requests
                 .iter()
@@ -6997,6 +7095,21 @@ mod tests {
                 )
                 .expect("expected plan test multiaddr"),
             }]
+        );
+        assert_eq!(materialization_plan.deferred_protocol_request_count(), 1);
+        assert_eq!(
+            materialization_plan.deferred_protocol_provider_ids(),
+            vec![deferred_provider_id.to_string()]
+        );
+        assert_eq!(
+            materialization_plan.deferred_protocol_requests(),
+            vec![
+                super::SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+                    provider_id: deferred_provider_id.to_string(),
+                    protocol: "iroh-node".to_string(),
+                    target: "provider-a".to_string(),
+                }
+            ]
         );
         assert_eq!(
             materialization_plan.pending_requests(),
