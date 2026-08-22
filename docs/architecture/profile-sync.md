@@ -331,6 +331,10 @@ their own domain instead of using the profile-wide latest revision. The storage
 poll helper returns the previous cursor, latest cursor, and bounded applied
 event batch for one domain, which lets app watchers share one local-only polling
 contract while dispatching through app-owned update paths.
+Storage also exposes a reusable raw app-domain watcher for non-JSON settings
+values. It initializes a persisted cursor at the current domain head, polls
+bounded text batches, runs the app-owned apply callback, and records the cursor
+only after that callback succeeds.
 For typed app domains, storage also provides a decoded poll helper that turns
 the JSON payload into an app-owned type before the caller records the cursor.
 Decode failures leave the persisted cursor unchanged, so a malformed replicated

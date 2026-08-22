@@ -4,13 +4,14 @@
 
 //! Runtime watcher for syncable profile settings.
 
-use std::sync::atomic::{AtomicI64, Ordering};
-
 use log::warn;
-use slate_storage::{DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, StorageError};
+use slate_storage::{
+    AppSyncDomainWatcher, AppSyncDomainWatcherApplyError, DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS,
+    SlateProfileDatabase, StorageError,
+};
 
 use crate::desktop::protocols::slate::{
-    apply_synced_chrome_settings_from_database, initialize_chrome_settings_from_database,
+    apply_synced_chrome_settings_events, initialize_chrome_settings_from_database,
 };
 
 const DEFAULT_SETTINGS_EVENT_BATCH_LIMIT: u32 = 64;
@@ -28,9 +29,7 @@ impl SyncedChromeSettingsPoll {
 }
 
 pub(crate) struct SyncedChromeSettingsWatcher {
-    database: SlateProfileDatabase,
-    settings_sync_revision: AtomicI64,
-    batch_limit: u32,
+    watcher: AppSyncDomainWatcher,
 }
 
 impl SyncedChromeSettingsWatcher {
@@ -39,47 +38,55 @@ impl SyncedChromeSettingsWatcher {
     }
 
     pub(crate) fn with_batch_limit(database: SlateProfileDatabase, batch_limit: u32) -> Self {
+        Self::try_with_batch_limit(database, batch_limit)
+            .expect("failed to initialize synced chrome settings watcher")
+    }
+
+    pub(crate) fn try_with_batch_limit(
+        database: SlateProfileDatabase,
+        batch_limit: u32,
+    ) -> Result<Self, StorageError> {
         initialize_chrome_settings_from_database(&database);
-        let settings_sync_revision = latest_settings_sync_revision(&database);
-        Self {
+        let watcher = AppSyncDomainWatcher::new(
             database,
-            settings_sync_revision: AtomicI64::new(settings_sync_revision),
-            batch_limit: batch_limit.max(1),
-        }
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            batch_limit,
+        )?;
+        Ok(Self { watcher })
     }
 
     pub(crate) fn current_revision(&self) -> i64 {
-        self.settings_sync_revision.load(Ordering::Relaxed)
+        match self.watcher.current_revision() {
+            Ok(revision) => revision,
+            Err(error) => {
+                warn!("failed to read synced chrome settings cursor: {error}");
+                0
+            }
+        }
     }
 
     pub(crate) fn poll_once(&self) -> Result<SyncedChromeSettingsPoll, StorageError> {
-        let previous_revision = self.current_revision();
-        let latest_revision = apply_synced_chrome_settings_from_database(
-            &self.database,
-            previous_revision,
-            self.batch_limit,
-        )?;
-        self.settings_sync_revision
-            .store(latest_revision, Ordering::Relaxed);
+        let applied = self
+            .watcher
+            .poll_apply_and_acknowledge(|poll| {
+                apply_synced_chrome_settings_events(poll.previous_revision, poll.events.as_slice());
+                Ok::<(), StorageError>(())
+            })
+            .map_err(|error| match error {
+                AppSyncDomainWatcherApplyError::Storage(error) => error,
+                AppSyncDomainWatcherApplyError::Apply(error) => error,
+            })?;
+
         Ok(SyncedChromeSettingsPoll {
-            previous_revision,
-            latest_revision,
+            previous_revision: applied.poll.previous_revision,
+            latest_revision: applied.cursor.latest_revision,
         })
     }
 
     pub(crate) fn poll_once_logged(&self) {
         if let Err(error) = self.poll_once() {
             warn!("failed to refresh synced chrome settings: {error}");
-        }
-    }
-}
-
-fn latest_settings_sync_revision(database: &SlateProfileDatabase) -> i64 {
-    match database.latest_sync_revision_for_domain(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS) {
-        Ok(revision) => revision,
-        Err(error) => {
-            warn!("failed to read latest settings sync revision: {error}");
-            0
         }
     }
 }

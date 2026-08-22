@@ -1115,7 +1115,7 @@ pub(crate) fn apply_synced_chrome_settings_from_database(
     ))
 }
 
-fn apply_synced_chrome_settings_events(
+pub(crate) fn apply_synced_chrome_settings_events(
     after_revision: i64,
     events: &[SyncSettingTextEvent],
 ) -> i64 {

@@ -2742,6 +2742,98 @@ impl<T> TypedSyncSettingTextDomainPoll<T> {
 }
 
 #[derive(Clone, Debug)]
+pub struct AppSyncDomainWatcher {
+    database: SlateProfileDatabase,
+    profile: String,
+    domain: String,
+    batch_limit: u32,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AppSyncDomainWatcherApply {
+    pub poll: SyncSettingTextDomainPoll,
+    pub cursor: AppSyncDomainCursorRecord,
+}
+
+#[derive(Debug)]
+pub enum AppSyncDomainWatcherApplyError<E> {
+    Storage(StorageError),
+    Apply(E),
+}
+
+impl<E> From<StorageError> for AppSyncDomainWatcherApplyError<E> {
+    fn from(error: StorageError) -> Self {
+        Self::Storage(error)
+    }
+}
+
+impl AppSyncDomainWatcher {
+    pub fn new(
+        database: SlateProfileDatabase,
+        profile: impl Into<String>,
+        domain: impl Into<String>,
+        batch_limit: u32,
+    ) -> Result<Self, StorageError> {
+        let profile = profile.into();
+        let domain = domain.into();
+        let batch_limit = batch_limit.max(1);
+        database.ensure_app_sync_domain_cursor_at_domain_head(profile.as_str(), domain.as_str())?;
+
+        Ok(Self {
+            database,
+            profile,
+            domain,
+            batch_limit,
+        })
+    }
+
+    pub fn profile(&self) -> &str {
+        self.profile.as_str()
+    }
+
+    pub fn domain(&self) -> &str {
+        self.domain.as_str()
+    }
+
+    pub fn batch_limit(&self) -> u32 {
+        self.batch_limit
+    }
+
+    pub fn current_revision(&self) -> Result<i64, StorageError> {
+        Ok(self
+            .database
+            .app_sync_domain_cursor(self.profile.as_str(), self.domain.as_str())?
+            .map(|cursor| cursor.latest_revision)
+            .unwrap_or(0))
+    }
+
+    pub fn poll_once(&self) -> Result<SyncSettingTextDomainPoll, StorageError> {
+        self.database.poll_sync_setting_text_events_for_app_domain(
+            self.profile.as_str(),
+            self.domain.as_str(),
+            self.batch_limit,
+        )
+    }
+
+    pub fn acknowledge(
+        &self,
+        poll: &SyncSettingTextDomainPoll,
+    ) -> Result<AppSyncDomainCursorRecord, StorageError> {
+        self.database.record_app_sync_domain_poll_cursor(poll)
+    }
+
+    pub fn poll_apply_and_acknowledge<E>(
+        &self,
+        apply: impl FnOnce(&SyncSettingTextDomainPoll) -> Result<(), E>,
+    ) -> Result<AppSyncDomainWatcherApply, AppSyncDomainWatcherApplyError<E>> {
+        let poll = self.poll_once()?;
+        apply(&poll).map_err(AppSyncDomainWatcherApplyError::Apply)?;
+        let cursor = self.acknowledge(&poll)?;
+        Ok(AppSyncDomainWatcherApply { poll, cursor })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct TypedAppSyncDomainWatcher<T> {
     database: SlateProfileDatabase,
     profile: String,
@@ -19929,6 +20021,115 @@ mod tests {
                 .unwrap()
                 .map(|cursor| cursor.latest_revision),
             Some(initial_revision)
+        );
+    }
+
+    #[test]
+    fn app_sync_domain_watcher_polls_and_acknowledges_batches() {
+        let database_path = test_dir("app-sync-domain-watcher").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "chrome.zoom",
+                "1.02",
+            )
+            .unwrap();
+        let settings_head = database
+            .latest_sync_revision_for_domain(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS)
+            .unwrap();
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_DOWNLOADS,
+                "last_filter",
+                "active",
+            )
+            .unwrap();
+        assert!(
+            database.latest_sync_revision(DEFAULT_PROFILE_ID).unwrap() > settings_head,
+            "the watcher cursor should use the domain head, not the profile head"
+        );
+
+        let watcher = AppSyncDomainWatcher::new(
+            database.clone(),
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            1,
+        )
+        .unwrap();
+        assert_eq!(watcher.profile(), DEFAULT_PROFILE_ID);
+        assert_eq!(watcher.domain(), SYNC_DOMAIN_SETTINGS);
+        assert_eq!(watcher.batch_limit(), 1);
+        assert_eq!(watcher.current_revision().unwrap(), settings_head);
+        let idle = watcher.poll_once().unwrap();
+        assert_eq!(idle.previous_revision, settings_head);
+        assert_eq!(idle.latest_revision, settings_head);
+        assert_eq!(idle.event_count(), 0);
+
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "chrome.zoom",
+                "1.03",
+            )
+            .unwrap();
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "keybindings.next_tab",
+                "Alt+ArrowRight",
+            )
+            .unwrap();
+
+        let first = watcher.poll_once().unwrap();
+        assert!(first.advanced());
+        assert_eq!(first.previous_revision, settings_head);
+        assert_eq!(first.event_count(), 1);
+        assert_eq!(first.events[0].change.entity_key, "chrome.zoom");
+        assert_eq!(first.events[0].change.payload, "1.03");
+        assert_eq!(watcher.current_revision().unwrap(), settings_head);
+        let cursor = watcher.acknowledge(&first).unwrap();
+        assert_eq!(cursor.latest_revision, first.latest_revision);
+        assert_eq!(watcher.current_revision().unwrap(), first.latest_revision);
+
+        let second = watcher.poll_once().unwrap();
+        assert!(second.advanced());
+        assert_eq!(second.previous_revision, first.latest_revision);
+        assert_eq!(second.event_count(), 1);
+        assert_eq!(second.events[0].change.entity_key, "keybindings.next_tab");
+        assert_eq!(second.events[0].change.payload, "Alt+ArrowRight");
+        assert_eq!(watcher.current_revision().unwrap(), first.latest_revision);
+
+        let apply_error = watcher
+            .poll_apply_and_acknowledge(|poll| {
+                assert_eq!(poll.event_count(), 1);
+                assert_eq!(poll.events[0].change.entity_key, "keybindings.next_tab");
+                Err("app apply failed")
+            })
+            .expect_err("failed app apply should not acknowledge the batch");
+        assert!(matches!(
+            apply_error,
+            AppSyncDomainWatcherApplyError::Apply("app apply failed")
+        ));
+        assert_eq!(watcher.current_revision().unwrap(), first.latest_revision);
+
+        let applied = watcher
+            .poll_apply_and_acknowledge(|poll| {
+                assert_eq!(poll.previous_revision, first.latest_revision);
+                assert_eq!(poll.event_count(), 1);
+                assert_eq!(poll.events[0].change.entity_key, "keybindings.next_tab");
+                Ok::<(), &'static str>(())
+            })
+            .unwrap();
+        assert_eq!(applied.poll.event_count(), 1);
+        assert_eq!(applied.cursor.latest_revision, applied.poll.latest_revision);
+        assert_eq!(
+            watcher.current_revision().unwrap(),
+            applied.poll.latest_revision
         );
     }
 

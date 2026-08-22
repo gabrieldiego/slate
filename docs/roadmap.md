@@ -386,6 +386,10 @@ Current baseline:
   decoded batches, and acknowledge the batch only after app-owned apply work
   succeeds. The wrapper also has an apply-and-acknowledge helper that runs an
   app callback first and persists the cursor only when that callback succeeds.
+- Storage now also has the same reusable app-domain watcher shape for raw text
+  payloads. This lets runtime code such as Chrome settings watch non-JSON
+  setting values while still acknowledging the persisted cursor only after the
+  app apply step succeeds.
 - The `slate-profile-sync` runtime bridge now verifies received typed Calendar,
   Chat, Contacts, Downloads, Files, and Storage metadata is visible through
   those typed app-domain watcher polls after a trusted broadwebd apply. The
@@ -1069,7 +1073,9 @@ Current baseline:
   `slate://settings` instead of waiting for an internal page request. Its
   startup cursor is initialized from the `settings` domain head, not the
   profile-wide revision, so unrelated app-domain sync does not define chrome
-  progress.
+  progress. The watcher now uses storage's persisted raw app-domain cursor, so
+  the local runtime cursor can survive restarts and only advances after Chrome
+  applies a synced settings batch.
 - Storage now has a retention-policy-based settings compaction target helper
   that uses the latest snapshot and applied settings revisions to identify how
   far a future encrypted snapshot can squash while preserving the configured
@@ -1391,11 +1397,12 @@ Current baseline:
   secret-backed enrollment bundle derivation,
   secret-backed local signer enrollment, and non-secret local activation
   metadata, then covers local readiness reports, preview provider activation,
-  storage/provider metadata, typed app-domain cursors, the broadwebd app-domain
-  fixture, the profile-sync scheduler fixture, and both local Profile Sync
-  Preview trials through the build-limits wrapper. Chrome settings watcher
-  coverage is opt-in because compiling `slate-chrome` currently pulls Servo
-  script bindings and exceeded the 2 GiB low-memory profile during verification.
+  storage/provider metadata, raw and typed app-domain cursors, the broadwebd
+  app-domain fixture, the profile-sync scheduler fixture, and both local
+  Profile Sync Preview trials through the build-limits wrapper. Chrome settings
+  watcher coverage is opt-in because compiling `slate-chrome` currently pulls
+  Servo script bindings and exceeded the 2 GiB low-memory profile during
+  verification.
 
 Next:
 
