@@ -955,7 +955,10 @@ The scheduler also has a local-only stored-provider run path that accepts those
 in-process fixture daemon refs directly, materializes selected fixture handles,
 and then runs the existing stored-provider quorum and retention logic. That
 keeps test runs socketless while exercising the same scheduler behavior as
-future protocol materializers. The membership-log scheduler has the same
+future protocol materializers. The fixture-daemon stored-provider run path can
+also derive the active content key from `SlateSyncSecret`, so local-only
+runtime tests do not need to pass raw content-key bytes just to exercise stored
+fixture endpoint materialization. The membership-log scheduler has the same
 fixture-daemon stored-provider path, so local tests cover pulling/publishing
 membership logs plus retained settings objects without binding loopback ports.
 Stored-provider runtime ticks exclude unsupported endpoint refs from

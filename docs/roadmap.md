@@ -1286,6 +1286,11 @@ Current baseline:
   membership log, materializes the selected multiaddr provider, publishes
   encrypted settings, and retains the membership/settings object set without
   passing raw content-key bytes into scheduler calls.
+- In-process fixture-daemon stored-provider scheduler runs can now use
+  `SlateSyncSecret` too. A socketless fixture stores the synthetic fixture
+  endpoint in `slate-settings.db`, materializes it through the in-process
+  network id, publishes encrypted settings, and retains the object set without
+  exposing raw content-key bytes to fixture scheduler callers.
 
 Next:
 
