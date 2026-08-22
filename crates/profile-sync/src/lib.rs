@@ -8581,6 +8581,186 @@ mod tests {
     }
 
     #[test]
+    fn broadwebd_membership_log_provider_signer_failure_rolls_back_provider_enrollment() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("membership-log-provider-atomic-publisher");
+        let receiver_state_root = test_state_root("membership-log-provider-atomic-receiver");
+        let receiver_db_root = test_state_root("membership-log-provider-atomic-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "membership-log-provider-atomic-publisher",
+            )
+            .expect("start in-process provider atomic membership publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "membership-log-provider-atomic-receiver",
+            )
+            .expect("start in-process provider atomic membership receiver daemon");
+        let receiver_database =
+            SlateProfileDatabase::open_resolved(receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME))
+                .expect("open provider atomic membership receiver database");
+        let signer_a = ProfileSyncDeviceSigner::generate("membership-log-provider-atomic-a")
+            .expect("generate provider atomic signer a");
+        let provider_signer =
+            ProfileSyncDeviceSigner::generate("membership-log-provider-atomic-provider")
+                .expect("generate provider atomic signer");
+        let signer_c = ProfileSyncDeviceSigner::generate("membership-log-provider-atomic-c")
+            .expect("generate provider atomic signer c");
+        let enroll_a = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-provider-atomic-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: signer_a.device_id().to_string(),
+            device_public_key: Some(signer_a.public_key().expect("read signer a public key")),
+            created_at: 10,
+        };
+        receiver_database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_a).as_slice(),
+            )
+            .expect("bootstrap provider atomic membership receiver signer a");
+
+        let enroll_provider = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-enroll-provider-atomic-provider".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER.to_string(),
+            device_id: provider_signer.device_id().to_string(),
+            device_public_key: Some(
+                provider_signer
+                    .public_key()
+                    .expect("read provider public key"),
+            ),
+            created_at: 20,
+        };
+        let provider_enrolls_c = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-3-provider-atomic-enrolls-c".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH + 2,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: signer_c.device_id().to_string(),
+            device_public_key: Some(signer_c.public_key().expect("read signer c public key")),
+            created_at: 30,
+        };
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+        let enroll_provider_object_id = publisher
+            .put_retained_object(
+                DEFAULT_PROFILE_ID,
+                signed_membership_record_bytes(&signer_a, &enroll_provider),
+            )
+            .expect("put provider enrollment membership object");
+        let provider_enrolls_c_object_id = publisher
+            .put_retained_object(
+                DEFAULT_PROFILE_ID,
+                signed_membership_record_bytes(&provider_signer, &provider_enrolls_c),
+            )
+            .expect("put provider-signed membership object");
+        let log = ProfileSyncMembershipLog {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            schema_version: super::PROFILE_SYNC_MEMBERSHIP_LOG_SCHEMA_VERSION,
+            records: vec![
+                ProfileSyncMembershipLogEntry {
+                    record_id: enroll_provider.record_id.clone(),
+                    root_id: sync_membership_record_root_id(enroll_provider.record_id.as_str()),
+                    object_id: enroll_provider_object_id,
+                    membership_epoch: enroll_provider.membership_epoch,
+                    record_kind: enroll_provider.record_kind.clone(),
+                    device_id: enroll_provider.device_id.clone(),
+                    signer_device_id: signer_a.device_id().to_string(),
+                },
+                ProfileSyncMembershipLogEntry {
+                    record_id: provider_enrolls_c.record_id.clone(),
+                    root_id: sync_membership_record_root_id(provider_enrolls_c.record_id.as_str()),
+                    object_id: provider_enrolls_c_object_id,
+                    membership_epoch: provider_enrolls_c.membership_epoch,
+                    record_kind: provider_enrolls_c.record_kind.clone(),
+                    device_id: provider_enrolls_c.device_id.clone(),
+                    signer_device_id: provider_signer.device_id().to_string(),
+                },
+            ],
+        };
+        publisher
+            .put_retained_root(
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+                serde_json::to_vec(&log).expect("encode provider atomic membership log"),
+            )
+            .expect("publish provider atomic membership log");
+
+        let error = BroadwebdProfileSyncObjectSource::new(&receiver_daemon)
+            .pull_and_apply_sync_account_membership_log_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
+            )
+            .expect_err("provider signer should reject the whole membership log");
+        assert!(matches!(
+            error,
+            ProfileSyncReceiveError::Storage(StorageError::InvalidProfileSyncMembershipRecord(reason))
+                if reason.contains("membership-log-provider-atomic-provider")
+                    && reason.contains("provider authority")
+        ));
+        assert!(
+            receiver_database
+                .sync_account_membership_record(
+                    DEFAULT_PROFILE_ID,
+                    "epoch-2-enroll-provider-atomic-provider",
+                )
+                .expect("read rolled-back provider membership record")
+                .is_none()
+        );
+        assert!(
+            receiver_database
+                .sync_device_public_key(
+                    DEFAULT_PROFILE_ID,
+                    "membership-log-provider-atomic-provider",
+                )
+                .expect("read rolled-back provider key")
+                .is_none()
+        );
+        assert!(
+            !receiver_database
+                .sync_devices(DEFAULT_PROFILE_ID)
+                .expect("read provider atomic roster")
+                .iter()
+                .any(|device| device.device_id == "membership-log-provider-atomic-provider")
+        );
+        assert!(
+            receiver_database
+                .sync_account_membership_record(
+                    DEFAULT_PROFILE_ID,
+                    "epoch-3-provider-atomic-enrolls-c",
+                )
+                .expect("read rejected provider-signed membership record")
+                .is_none()
+        );
+        assert!(
+            receiver_database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "membership-log-provider-atomic-c")
+                .expect("read rejected provider-signed target key")
+                .is_none()
+        );
+        assert!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID)
+                .expect("read provider atomic membership log root")
+                .is_none()
+        );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
     fn broadwebd_membership_log_rejects_oversized_indexes_without_loopback() {
         let network = InProcessBroadwebNetwork::new();
         let publisher_state_root = test_state_root("membership-log-oversized-publisher");

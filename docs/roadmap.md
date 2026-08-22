@@ -1024,6 +1024,10 @@ Current baseline:
   receiver validates and applies the signed provider record, records the
   provider-authority roster row, and still excludes that provider from trusted
   settings-head pulls.
+- The same membership-log bridge now covers the provider-signer failure mode
+  transactionally: if a log enrolls a provider and then uses that provider to
+  sign an account membership change, the whole pulled log is rejected, the
+  provider key is not materialized, and the membership-log root is not advanced.
 - Aggregate membership-log validation now fail-closes on unsupported record
   kinds before preview or pull paths fetch individual signed records. The
   accepted set is limited to device enrollment, provider enrollment, revocation,
