@@ -1721,6 +1721,32 @@ pub struct SettingsSyncStoredRetentionProviderEndpoint {
     pub endpoint_status: SettingsSyncStoredProviderEndpointStatus,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncSelectedEndpointMaterializationRequest {
+    pub provider_id: String,
+    pub endpoint_ref: Option<String>,
+    pub endpoint_status: SettingsSyncStoredProviderEndpointStatus,
+}
+
+impl SettingsSyncSelectedEndpointMaterializationRequest {
+    pub fn fixture_ready(&self) -> bool {
+        self.endpoint_status == SettingsSyncStoredProviderEndpointStatus::InProcessFixture
+    }
+
+    pub fn pending_materialization(&self) -> bool {
+        matches!(
+            self.endpoint_status,
+            SettingsSyncStoredProviderEndpointStatus::Missing
+                | SettingsSyncStoredProviderEndpointStatus::Multiaddr
+                | SettingsSyncStoredProviderEndpointStatus::DeferredProtocol
+        )
+    }
+
+    pub fn fail_closed(&self) -> bool {
+        self.endpoint_status == SettingsSyncStoredProviderEndpointStatus::Unsupported
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SettingsSyncStoredProviderEndpointStatus {
     Missing,
@@ -2040,6 +2066,33 @@ impl SettingsSyncStoredRetentionProviderPlan {
             self.enabled_retention_provider_endpoints.as_slice(),
             self.cycle.selected_retention_provider_ids.as_slice(),
         )
+    }
+
+    pub fn selected_endpoint_materialization_requests(
+        &self,
+    ) -> Vec<SettingsSyncSelectedEndpointMaterializationRequest> {
+        selected_endpoint_materialization_requests(
+            self.enabled_retention_provider_endpoints.as_slice(),
+            self.cycle.selected_retention_provider_ids.as_slice(),
+        )
+    }
+
+    pub fn selected_pending_endpoint_materialization_requests(
+        &self,
+    ) -> Vec<SettingsSyncSelectedEndpointMaterializationRequest> {
+        self.selected_endpoint_materialization_requests()
+            .into_iter()
+            .filter(SettingsSyncSelectedEndpointMaterializationRequest::pending_materialization)
+            .collect()
+    }
+
+    pub fn selected_fail_closed_endpoint_materialization_requests(
+        &self,
+    ) -> Vec<SettingsSyncSelectedEndpointMaterializationRequest> {
+        self.selected_endpoint_materialization_requests()
+            .into_iter()
+            .filter(SettingsSyncSelectedEndpointMaterializationRequest::fail_closed)
+            .collect()
     }
 
     pub fn selected_in_process_fixture_materialization_targets(
@@ -2458,6 +2511,25 @@ fn selected_endpoint_materialization_preview(
             SettingsSyncStoredProviderEndpointStatus::Unsupported,
         ),
     }
+}
+
+fn selected_endpoint_materialization_requests(
+    endpoints: &[SettingsSyncStoredRetentionProviderEndpoint],
+    selected_provider_ids: &[String],
+) -> Vec<SettingsSyncSelectedEndpointMaterializationRequest> {
+    selected_provider_ids
+        .iter()
+        .filter_map(|provider_id| {
+            let endpoint = endpoints
+                .iter()
+                .find(|endpoint| endpoint.provider_id == *provider_id)?;
+            Some(SettingsSyncSelectedEndpointMaterializationRequest {
+                provider_id: endpoint.provider_id.clone(),
+                endpoint_ref: endpoint.endpoint_ref.clone(),
+                endpoint_status: endpoint.endpoint_status,
+            })
+        })
+        .collect()
 }
 
 fn selected_in_process_fixture_materialization_targets(
@@ -6474,6 +6546,68 @@ mod tests {
         assert_eq!(preview.ready_provider_count(), 1);
         assert_eq!(preview.pending_materialization_provider_count(), 3);
         assert_eq!(preview.fail_closed_provider_count(), 1);
+
+        let materialization_requests = super::selected_endpoint_materialization_requests(
+            selected.enabled_retention_provider_endpoints.as_slice(),
+            materialization_provider_ids.as_slice(),
+        );
+        assert_eq!(
+            materialization_requests,
+            vec![
+                super::SettingsSyncSelectedEndpointMaterializationRequest {
+                    provider_id: fixture_provider_id.to_string(),
+                    endpoint_ref: Some(
+                        network.profile_sync_provider_endpoint_ref(fixture_provider_id)
+                    ),
+                    endpoint_status: SettingsSyncStoredProviderEndpointStatus::InProcessFixture,
+                },
+                super::SettingsSyncSelectedEndpointMaterializationRequest {
+                    provider_id: missing_provider_id.to_string(),
+                    endpoint_ref: None,
+                    endpoint_status: SettingsSyncStoredProviderEndpointStatus::Missing,
+                },
+                super::SettingsSyncSelectedEndpointMaterializationRequest {
+                    provider_id: multiaddr_provider_id.to_string(),
+                    endpoint_ref: Some("/dnsaddr/home.example.test/p2p/provider-a".to_string()),
+                    endpoint_status: SettingsSyncStoredProviderEndpointStatus::Multiaddr,
+                },
+                super::SettingsSyncSelectedEndpointMaterializationRequest {
+                    provider_id: deferred_provider_id.to_string(),
+                    endpoint_ref: Some("iroh-node:provider-a".to_string()),
+                    endpoint_status: SettingsSyncStoredProviderEndpointStatus::DeferredProtocol,
+                },
+                super::SettingsSyncSelectedEndpointMaterializationRequest {
+                    provider_id: unsupported_provider_id.to_string(),
+                    endpoint_ref: Some("http://127.0.0.1:5001".to_string()),
+                    endpoint_status: SettingsSyncStoredProviderEndpointStatus::Unsupported,
+                },
+            ]
+        );
+        assert!(materialization_requests[0].fixture_ready());
+        assert!(materialization_requests[1].pending_materialization());
+        assert!(materialization_requests[2].pending_materialization());
+        assert!(materialization_requests[3].pending_materialization());
+        assert!(materialization_requests[4].fail_closed());
+        assert_eq!(
+            materialization_requests
+                .iter()
+                .filter(|request| request.pending_materialization())
+                .map(|request| request.provider_id.clone())
+                .collect::<Vec<_>>(),
+            vec![
+                missing_provider_id.to_string(),
+                multiaddr_provider_id.to_string(),
+                deferred_provider_id.to_string(),
+            ]
+        );
+        assert_eq!(
+            materialization_requests
+                .iter()
+                .filter(|request| request.fail_closed())
+                .map(|request| request.provider_id.clone())
+                .collect::<Vec<_>>(),
+            vec![unsupported_provider_id.to_string()]
+        );
 
         assert_eq!(
             super::selected_in_process_fixture_materialization_targets(

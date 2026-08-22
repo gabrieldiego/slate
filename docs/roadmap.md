@@ -587,6 +587,11 @@ Current baseline:
   fixture-ready providers can use the current local-only handles, missing,
   multiaddr, and deferred-protocol providers are pending materialization, and
   unsupported providers fail closed.
+- Selected endpoint materialization now also exposes ordered request records
+  carrying provider id, endpoint ref, and endpoint status. Future multiaddr or
+  protocol-specific materializers can consume the scheduler handoff without
+  re-reading `slate-settings.db`, reparsing provider metadata, or opening
+  sockets during read-only planning.
 - Selected synthetic fixture endpoints now expose materialization targets with
   provider id, fixture network id, and endpoint ref so local-only fixtures can
   bridge stored metadata to in-process providers without opening sockets.
