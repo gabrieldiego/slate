@@ -1629,6 +1629,31 @@ pub enum SettingsSyncStoredProviderEndpointStatus {
     Unsupported,
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct SettingsSyncSelectedEndpointMaterializationPreview {
+    pub fixture_ready_provider_ids: Vec<String>,
+    pub missing_endpoint_provider_ids: Vec<String>,
+    pub multiaddr_provider_ids: Vec<String>,
+    pub deferred_protocol_provider_ids: Vec<String>,
+    pub unsupported_provider_ids: Vec<String>,
+}
+
+impl SettingsSyncSelectedEndpointMaterializationPreview {
+    pub fn ready_provider_count(&self) -> usize {
+        self.fixture_ready_provider_ids.len()
+    }
+
+    pub fn pending_materialization_provider_count(&self) -> usize {
+        self.missing_endpoint_provider_ids.len()
+            + self.multiaddr_provider_ids.len()
+            + self.deferred_protocol_provider_ids.len()
+    }
+
+    pub fn fail_closed_provider_count(&self) -> usize {
+        self.unsupported_provider_ids.len()
+    }
+}
+
 impl SettingsSyncStoredRetentionProviderPlan {
     pub fn enabled_retention_provider_count(&self) -> usize {
         self.enabled_retention_provider_ids.len()
@@ -1821,6 +1846,15 @@ impl SettingsSyncStoredRetentionProviderPlan {
             self.enabled_retention_provider_endpoints.as_slice(),
             self.cycle.selected_retention_provider_ids.as_slice(),
             SettingsSyncStoredProviderEndpointStatus::Unsupported,
+        )
+    }
+
+    pub fn selected_endpoint_materialization_preview(
+        &self,
+    ) -> SettingsSyncSelectedEndpointMaterializationPreview {
+        selected_endpoint_materialization_preview(
+            self.enabled_retention_provider_endpoints.as_slice(),
+            self.cycle.selected_retention_provider_ids.as_slice(),
         )
     }
 }
@@ -2114,6 +2148,39 @@ fn selected_endpoint_provider_count_with_status(
             })
         })
         .count()
+}
+
+fn selected_endpoint_materialization_preview(
+    endpoints: &[SettingsSyncStoredRetentionProviderEndpoint],
+    selected_provider_ids: &[String],
+) -> SettingsSyncSelectedEndpointMaterializationPreview {
+    SettingsSyncSelectedEndpointMaterializationPreview {
+        fixture_ready_provider_ids: selected_endpoint_provider_ids_with_status(
+            endpoints,
+            selected_provider_ids,
+            SettingsSyncStoredProviderEndpointStatus::InProcessFixture,
+        ),
+        missing_endpoint_provider_ids: selected_endpoint_provider_ids_with_status(
+            endpoints,
+            selected_provider_ids,
+            SettingsSyncStoredProviderEndpointStatus::Missing,
+        ),
+        multiaddr_provider_ids: selected_endpoint_provider_ids_with_status(
+            endpoints,
+            selected_provider_ids,
+            SettingsSyncStoredProviderEndpointStatus::Multiaddr,
+        ),
+        deferred_protocol_provider_ids: selected_endpoint_provider_ids_with_status(
+            endpoints,
+            selected_provider_ids,
+            SettingsSyncStoredProviderEndpointStatus::DeferredProtocol,
+        ),
+        unsupported_provider_ids: selected_endpoint_provider_ids_with_status(
+            endpoints,
+            selected_provider_ids,
+            SettingsSyncStoredProviderEndpointStatus::Unsupported,
+        ),
+    }
 }
 
 fn select_stored_retention_provider_ids(
@@ -5511,6 +5578,41 @@ mod tests {
             ),
             1
         );
+
+        let materialization_provider_ids = vec![
+            fixture_provider_id.to_string(),
+            missing_provider_id.to_string(),
+            multiaddr_provider_id.to_string(),
+            deferred_provider_id.to_string(),
+            unsupported_provider_id.to_string(),
+        ];
+        let preview = super::selected_endpoint_materialization_preview(
+            selected.enabled_retention_provider_endpoints.as_slice(),
+            materialization_provider_ids.as_slice(),
+        );
+        assert_eq!(
+            preview.fixture_ready_provider_ids,
+            vec![fixture_provider_id.to_string()]
+        );
+        assert_eq!(
+            preview.missing_endpoint_provider_ids,
+            vec![missing_provider_id.to_string()]
+        );
+        assert_eq!(
+            preview.multiaddr_provider_ids,
+            vec![multiaddr_provider_id.to_string()]
+        );
+        assert_eq!(
+            preview.deferred_protocol_provider_ids,
+            vec![deferred_provider_id.to_string()]
+        );
+        assert_eq!(
+            preview.unsupported_provider_ids,
+            vec![unsupported_provider_id.to_string()]
+        );
+        assert_eq!(preview.ready_provider_count(), 1);
+        assert_eq!(preview.pending_materialization_provider_count(), 3);
+        assert_eq!(preview.fail_closed_provider_count(), 1);
     }
 
     #[test]
@@ -10074,6 +10176,18 @@ mod tests {
         assert!(plan.selected_unsupported_endpoint_provider_ids().is_empty());
         assert_eq!(plan.selected_unsupported_endpoint_provider_count(), 0);
         assert!(plan.unsupported_endpoint_provider_ids().is_empty());
+        let preview = plan.selected_endpoint_materialization_preview();
+        assert_eq!(
+            preview.fixture_ready_provider_ids,
+            vec![selected_provider_id.to_string()]
+        );
+        assert!(preview.missing_endpoint_provider_ids.is_empty());
+        assert!(preview.multiaddr_provider_ids.is_empty());
+        assert!(preview.deferred_protocol_provider_ids.is_empty());
+        assert!(preview.unsupported_provider_ids.is_empty());
+        assert_eq!(preview.ready_provider_count(), 1);
+        assert_eq!(preview.pending_materialization_provider_count(), 0);
+        assert_eq!(preview.fail_closed_provider_count(), 0);
         assert_eq!(
             plan.cycle.selected_retention_provider_ids,
             vec![selected_provider_id.to_string()]

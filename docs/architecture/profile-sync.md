@@ -845,6 +845,10 @@ are available for only the selected retention providers after preflight, so
 runtime code can distinguish selected fixture providers from selected future
 protocol endpoints without re-filtering disabled, stale, offline, or
 undiscovered providers.
+Selected endpoint buckets are also folded into a compact materialization
+preview: fixture-ready providers can run against local in-process handles,
+missing, multiaddr, and deferred-protocol providers remain pending
+materialization work, and unsupported providers fail closed.
 Stored-provider runtime ticks exclude unsupported endpoint refs from
 materialized provider quorum even when the caller supplies a daemon handle with
 the same unsupported string, so socket-shaped metadata cannot be laundered into

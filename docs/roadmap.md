@@ -500,6 +500,10 @@ Current baseline:
 - The same endpoint buckets are also available for selected retention
   providers after preflight, so materialization code can focus on the providers
   that are actually eligible for the next scheduler run.
+- Selected endpoint buckets now also have a compact materialization preview:
+  fixture-ready providers can use the current local-only handles, missing,
+  multiaddr, and deferred-protocol providers are pending materialization, and
+  unsupported providers fail closed.
 - Stored-provider runtime ticks now also exclude unsupported endpoint refs from
   the materialized retention-provider quorum, even if the caller supplies a
   daemon handle with the same socket-shaped endpoint string. This keeps
