@@ -2395,6 +2395,13 @@ impl SettingsSyncStoredRetentionProviderPlan {
         )
     }
 
+    pub fn selected_protocol_materialization_plan(
+        &self,
+    ) -> SettingsSyncSelectedProtocolMaterializationPlan {
+        self.selected_endpoint_materialization_plan()
+            .protocol_materialization_plan()
+    }
+
     pub fn selected_pending_endpoint_materialization_requests(
         &self,
     ) -> Vec<SettingsSyncSelectedEndpointMaterializationRequest> {
@@ -7355,6 +7362,10 @@ mod tests {
             super::materialize_stored_retention_provider_daemons(&stored_materialization_plan, &[]);
         let materialization_report =
             stored_materialization_plan.selected_retention_provider_handle_materialization(&[]);
+        assert_eq!(
+            stored_materialization_plan.selected_protocol_materialization_plan(),
+            materialization_plan.protocol_materialization_plan()
+        );
         assert_eq!(
             materialization_report,
             super::SettingsSyncStoredRetentionProviderHandleMaterialization {

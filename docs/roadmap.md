@@ -594,6 +594,9 @@ Current baseline:
   missing endpoints, and fail-closed endpoints. Scheduler/UI code can tell
   whether a real adapter is required and whether the selected provider set is
   ready before any publish, retain, or root mutation.
+- Stored-provider plans now expose that selected protocol materialization
+  summary directly, so scheduler/UI callers can inspect protocol work from the
+  stored-provider plan without rebuilding endpoint plans themselves.
 - Legacy `fixture:<provider>` endpoint refs now also fail closed. They do not
   carry a fixture network id, so they cannot safely satisfy stored-provider
   materialization or quorum checks.
