@@ -30,20 +30,20 @@ use slate_storage::{
     PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE,
     PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY, PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND,
     PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND, PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION,
-    ProfileSyncContentKey, ProfileSyncDeviceHead, ProfileSyncDevicePublicKey,
-    ProfileSyncDeviceSigner, ProfileSyncManifest, ProfileSyncMembershipRecord,
-    ProfileSyncObjectBytes, ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
-    ProfileSyncRootCandidate as StorageProfileSyncRootCandidate, ProfileSyncRootRecord,
-    ProfileSyncRootRegistration, ProfileSyncSettingsCandidatePullApplyStatus,
-    ProfileSyncSettingsManifestApplication, ProfileSyncSettingsSnapshot,
-    ProfileSyncSettingsSnapshotPublication, ProfileSyncSettingsTailChangePublication,
-    ProfileSyncTrustedPullApplyError, SYNC_DOMAIN_SETTINGS, SignedSyncObject, SlateProfileDatabase,
-    SlateSyncSecret, StorageError, StorageProviderRecord, SyncAccountMembershipRecordApplication,
-    SyncChangeRecord, SyncCompactionTarget, SyncDevicePublicKeyRecord, SyncObjectError,
-    SyncSettingTextEvent, SyncSnapshotRecord, SyncSnapshotRegistration,
-    VerifiedProfileSyncDeviceHead, open_signed_profile_sync_device_head,
-    settings_sync_manifest_for_snapshot_and_tail_changes, settings_sync_manifest_for_tail_changes,
-    settings_sync_snapshot_id,
+    ProfileSyncContentKey, ProfileSyncDeviceEnrollmentRequest, ProfileSyncDeviceHead,
+    ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner, ProfileSyncManifest,
+    ProfileSyncMembershipRecord, ProfileSyncObjectBytes, ProfileSyncObjectSource,
+    ProfileSyncRetentionPolicy, ProfileSyncRootCandidate as StorageProfileSyncRootCandidate,
+    ProfileSyncRootRecord, ProfileSyncRootRegistration,
+    ProfileSyncSettingsCandidatePullApplyStatus, ProfileSyncSettingsManifestApplication,
+    ProfileSyncSettingsSnapshot, ProfileSyncSettingsSnapshotPublication,
+    ProfileSyncSettingsTailChangePublication, ProfileSyncTrustedPullApplyError,
+    SYNC_DOMAIN_SETTINGS, SignedSyncObject, SlateProfileDatabase, SlateSyncSecret, StorageError,
+    StorageProviderRecord, SyncAccountMembershipRecordApplication, SyncChangeRecord,
+    SyncCompactionTarget, SyncDevicePublicKeyRecord, SyncObjectError, SyncSettingTextEvent,
+    SyncSnapshotRecord, SyncSnapshotRegistration, VerifiedProfileSyncDeviceHead,
+    open_signed_profile_sync_device_head, settings_sync_manifest_for_snapshot_and_tail_changes,
+    settings_sync_manifest_for_tail_changes, settings_sync_snapshot_id,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -100,6 +100,7 @@ pub struct LocalSettingsSyncTwoDevicePreviewCycleReport {
     pub publisher_published_object_count: usize,
     pub publisher_retained_object_count: usize,
     pub publisher_retained_provider_count: usize,
+    pub receiver_device_request_device_id: String,
     pub receiver_enrollment_bundle_record_count: usize,
     pub receiver_pulled_membership_application_count: usize,
     pub receiver_applied_setting_count: usize,
@@ -8015,11 +8016,16 @@ pub fn run_local_settings_sync_two_device_preview_cycle(
         LOCAL_SETTINGS_SYNC_PREVIEW_RECEIVER_DEVICE_ID,
     )?;
     receiver_database.activate_local_profile_sync_metadata(profile)?;
+    let receiver_device_request = ProfileSyncDeviceEnrollmentRequest::new(
+        profile,
+        receiver_database.local_sync_device_id(),
+        unix_time_seconds(),
+    )?;
     let receiver_enrollment_bundle =
-        SlateProfileDatabase::profile_sync_enrollment_bundle_from_secret(
+        SlateProfileDatabase::profile_sync_enrollment_bundle_from_device_request(
             profile,
             sync_secret,
-            LOCAL_SETTINGS_SYNC_PREVIEW_RECEIVER_DEVICE_ID,
+            &receiver_device_request,
         )?;
     receiver_database.apply_profile_sync_enrollment_bundle(&receiver_enrollment_bundle)?;
     for signed_record in &receiver_enrollment_bundle.signed_membership_records {
@@ -8129,6 +8135,7 @@ pub fn run_local_settings_sync_two_device_preview_cycle(
             .len(),
         publisher_retained_object_count: publisher_run.run.cycle.retained_object_ids.len(),
         publisher_retained_provider_count: publisher_run.retained_provider_count(),
+        receiver_device_request_device_id: receiver_device_request.device_id,
         receiver_enrollment_bundle_record_count: receiver_enrollment_bundle
             .signed_membership_records
             .len(),
@@ -13376,6 +13383,10 @@ mod tests {
         assert_eq!(report.publisher_device_id, "local-preview-publisher");
         assert_eq!(
             report.receiver_device_id,
+            super::LOCAL_SETTINGS_SYNC_PREVIEW_RECEIVER_DEVICE_ID
+        );
+        assert_eq!(
+            report.receiver_device_request_device_id,
             super::LOCAL_SETTINGS_SYNC_PREVIEW_RECEIVER_DEVICE_ID
         );
         assert_eq!(

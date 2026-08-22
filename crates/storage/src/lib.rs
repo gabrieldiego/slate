@@ -6078,6 +6078,23 @@ impl SlateProfileDatabase {
         )
     }
 
+    pub fn profile_sync_enrollment_bundle_from_device_request(
+        profile: &str,
+        sync_secret: &SlateSyncSecret,
+        request: &ProfileSyncDeviceEnrollmentRequest,
+    ) -> Result<ProfileSyncEnrollmentBundle, StorageError> {
+        if request.profile != profile {
+            return Err(StorageError::InvalidProfileSyncDeviceEnrollmentRequest(
+                format!("expected profile {profile}, got {}", request.profile),
+            ));
+        }
+        Self::profile_sync_enrollment_bundle_from_secret(
+            profile,
+            sync_secret,
+            request.device_id.as_str(),
+        )
+    }
+
     pub fn profile_sync_enrollment_bundle_from_secret_with_epoch(
         profile: &str,
         sync_secret: &SlateSyncSecret,
@@ -15689,6 +15706,37 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[test]
+    fn profile_sync_enrollment_bundle_can_be_derived_from_device_request() {
+        let secret = SlateSyncSecret::from_bytes([51; SLATE_SYNC_SECRET_BYTES]);
+        let request =
+            ProfileSyncDeviceEnrollmentRequest::new(DEFAULT_PROFILE_ID, "device-b", 30).unwrap();
+        let bundle = SlateProfileDatabase::profile_sync_enrollment_bundle_from_device_request(
+            DEFAULT_PROFILE_ID,
+            &secret,
+            &request,
+        )
+        .unwrap();
+
+        assert_eq!(bundle.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(bundle.target_device_id, request.device_id);
+        assert_eq!(bundle.signed_membership_records.len(), 2);
+
+        let wrong_profile_request =
+            ProfileSyncDeviceEnrollmentRequest::new("work", "device-b", 30).unwrap();
+        let error = SlateProfileDatabase::profile_sync_enrollment_bundle_from_device_request(
+            DEFAULT_PROFILE_ID,
+            &secret,
+            &wrong_profile_request,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            StorageError::InvalidProfileSyncDeviceEnrollmentRequest(reason)
+                if reason.contains("expected profile default, got work")
+        ));
     }
 
     #[test]

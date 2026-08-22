@@ -1374,6 +1374,12 @@ Current baseline:
   existing enrollment-bundle flow can then grant membership to the requested
   device. The request carries no root secret, signed membership records, or
   sync payloads.
+- The socketless two-device Profile Sync Preview now uses the same request
+  shape: the receiver emits a `ProfileSyncDeviceEnrollmentRequest`, the
+  publisher derives the enrollment bundle from that request, and the normal
+  signed membership import path applies the result before encrypted settings
+  sync runs. This keeps the local-only broadweb fixture aligned with the
+  user-facing handoff flow.
   Production multi-device use still needs QR rendering, encrypted
   handoff/recovery files, real provider daemons, conflict handling, and cadence
   policy.
