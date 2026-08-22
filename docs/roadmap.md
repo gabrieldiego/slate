@@ -358,7 +358,9 @@ Current baseline:
   in its in-process profile-sync state after the corresponding Kubo RPC fixture
   calls succeed. Retained-object listing, provider health, root candidates, and
   root health now work for that backend without adding sockets or external
-  services.
+  services. A release/unpin through the Kubo-shaped executor also clears the
+  retained-object view and makes root health degrade when the newest root no
+  longer meets the local retention policy.
 - `InProcessBroadwebNetwork` now has Kubo profile-sync registry and daemon
   helpers that install the socketless Kubo-backed `profile-sync` service only
   when the Kubo fixture URL belongs to the same simulated network. Downstream
