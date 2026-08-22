@@ -19679,6 +19679,199 @@ mod tests {
     }
 
     #[test]
+    fn broadwebd_settings_sync_cycle_retains_losing_shared_root_conflict() {
+        let network = InProcessBroadwebNetwork::new();
+        let winner_state_root = test_state_root("cycle-conflict-winner");
+        let loser_state_root = test_state_root("cycle-conflict-loser");
+        let receiver_state_root = test_state_root("cycle-conflict-receiver");
+        let provider_state_root = test_state_root("cycle-conflict-provider");
+        let winner_db_root = test_state_root("cycle-conflict-winner-db");
+        let loser_db_root = test_state_root("cycle-conflict-loser-db");
+        let receiver_db_root = test_state_root("cycle-conflict-receiver-db");
+        let winner_device_id = "runtime-cycle-conflict-z";
+        let loser_device_id = "runtime-cycle-conflict-a";
+        let receiver_device_id = "runtime-cycle-conflict-c";
+        let winner_daemon = network
+            .daemon_for_device(
+                &winner_state_root,
+                ResourceBudget::default(),
+                winner_device_id,
+            )
+            .expect("start winning candidate publisher daemon");
+        let loser_daemon = network
+            .daemon_for_device(
+                &loser_state_root,
+                ResourceBudget::default(),
+                loser_device_id,
+            )
+            .expect("start losing candidate publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                receiver_device_id,
+            )
+            .expect("start conflict receiver daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "runtime-cycle-conflict-pinner",
+            )
+            .expect("start conflict availability provider daemon");
+        let winner_database = SlateProfileDatabase::open_resolved_with_device_id(
+            winner_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            winner_device_id,
+        )
+        .expect("open winning candidate database");
+        let loser_database = SlateProfileDatabase::open_resolved_with_device_id(
+            loser_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            loser_device_id,
+        )
+        .expect("open losing candidate database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            receiver_device_id,
+        )
+        .expect("open conflict receiver database");
+        let profile = "cycleconflictprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([107; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let winner_signer =
+            ProfileSyncDeviceSigner::generate(winner_device_id).expect("winner signer");
+        let loser_signer =
+            ProfileSyncDeviceSigner::generate(loser_device_id).expect("loser signer");
+        let receiver_signer =
+            ProfileSyncDeviceSigner::generate(receiver_device_id).expect("receiver signer");
+        register_test_content_key_epoch(&receiver_database, profile);
+        for public_key in [
+            winner_signer.public_key().expect("winner public key"),
+            loser_signer.public_key().expect("loser public key"),
+            receiver_signer.public_key().expect("receiver public key"),
+        ] {
+            receiver_database
+                .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                    profile: profile.to_string(),
+                    public_key,
+                    membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                })
+                .expect("receiver trusts sync device key");
+        }
+
+        let winner_change = winner_database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "zeta")
+            .expect("winner candidate writes setting");
+        let winner_publication = BroadwebdProfileSyncPublisher::new(&winner_daemon)
+            .publish_signed_settings_tail_changes(
+                profile,
+                settings_root_id,
+                std::slice::from_ref(&winner_change),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &winner_signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("winner candidate publishes shared root");
+        let loser_change = loser_database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "alpha")
+            .expect("losing candidate writes setting");
+        let loser_publication = BroadwebdProfileSyncPublisher::new(&loser_daemon)
+            .publish_signed_settings_tail_changes(
+                profile,
+                settings_root_id,
+                std::slice::from_ref(&loser_change),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &loser_signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("losing candidate publishes shared root");
+
+        let receive_only_policy =
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2)
+                .with_local_device_head_root_health_required_after_cycle(false);
+        let run = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
+            .run_settings_sync_cycle_with_active_key_policy_shared_root_candidates_and_retention_providers(
+                &receiver_database,
+                profile,
+                settings_root_id,
+                &content_key,
+                &receiver_signer,
+                &receive_only_policy,
+                &[&provider_daemon],
+            )
+            .expect("receiver applies conflicting shared-root candidates");
+
+        assert_eq!(run.shared_root_candidate_application_count(), 2);
+        let ProfileSyncSettingsCandidatePullApplyStatus::Applied(applications) =
+            &run.shared_root_candidates
+        else {
+            panic!(
+                "expected conflicting shared-root candidate applications, got {:?}",
+                run.shared_root_candidates
+            );
+        };
+        assert_eq!(
+            applications
+                .iter()
+                .map(|application| application.application.manifest_object_id.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                winner_publication.manifest_object_id.as_str(),
+                loser_publication.manifest_object_id.as_str(),
+            ]
+        );
+        assert_eq!(
+            receiver_database
+                .get_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme")
+                .expect("read receiver conflict value")
+                .expect("receiver conflict value")
+                .value,
+            "zeta"
+        );
+        let changes = receiver_database
+            .sync_changes_after(profile, 0, 10)
+            .expect("read receiver conflict changes");
+        let winning_change = changes
+            .iter()
+            .find(|change| change.payload == "zeta")
+            .expect("winning conflicting change is retained");
+        assert_eq!(winning_change.device_id, winner_device_id);
+        assert!(winning_change.applied_at.is_some());
+        let losing_change = changes
+            .iter()
+            .find(|change| change.payload == "alpha")
+            .expect("losing conflicting change is retained");
+        assert_eq!(losing_change.device_id, loser_device_id);
+        assert_eq!(losing_change.applied_at, None);
+        assert_eq!(
+            receiver_database
+                .sync_setting_text_events_after(profile, 0, 10)
+                .expect("read receiver conflict events")
+                .into_iter()
+                .map(|event| event.change.payload)
+                .collect::<Vec<_>>(),
+            vec!["zeta".to_string()]
+        );
+        assert_eq!(
+            receiver_database
+                .profile_sync_root(profile, settings_root_id)
+                .expect("read receiver conflict root")
+                .expect("receiver conflict root")
+                .object_id,
+            loser_publication.manifest_object_id.as_str()
+        );
+
+        let _ = std::fs::remove_dir_all(winner_state_root);
+        let _ = std::fs::remove_dir_all(loser_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(winner_db_root);
+        let _ = std::fs::remove_dir_all(loser_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
     fn broadwebd_settings_sync_runner_rejects_invalid_cycle_credentials() {
         let network = InProcessBroadwebNetwork::new();
         let state_root = test_state_root("cycle-credentials");

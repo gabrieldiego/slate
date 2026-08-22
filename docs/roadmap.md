@@ -510,6 +510,11 @@ Current baseline:
   The in-process regression covers two equal-control devices publishing
   different signed `settings/latest` roots and a third trusted device applying
   both candidates without loopback sockets.
+- The low-memory boundary gate now also covers the losing side of that
+  equal-control conflict: a lower-tie-break shared-root candidate is fetched,
+  verified, retained in `settings_changes`, and left unapplied while the
+  materialized setting and watcher events continue to reflect the deterministic
+  winner.
 - `slate-profile-sync` now exposes a bounded settings sync cycle that preflights
   the trusted-device count, publishes local pending settings first, then pulls
   registered trusted device heads. The in-process two-device fixture covers a
