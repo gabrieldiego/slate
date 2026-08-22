@@ -883,8 +883,11 @@ and duplicate handles, and does not publish, pull, retain, or mutate sync
 roots. A secret-backed retained tick now follows the same active-key
 shared-root cycle but derives the content key from `SlateSyncSecret` after
 preflight, so runtime callers do not need to hand raw content-key bytes to the
-scheduler. The scheduler can also derive that read-only plan from enabled
-storage-provider metadata in `slate-settings.db`: stored providers must locally
+scheduler. The membership-aware selected-provider tick has the same shape after
+membership-log preflight, letting enrollment, active-key derivation, remote head
+receive, and selected-provider retention run without exposing raw content-key
+bytes to scheduler callers. The scheduler can also derive that read-only plan
+from enabled storage-provider metadata in `slate-settings.db`: stored providers must locally
 advertise object-transfer and availability before they are compared with
 broadwebd discovery, and disabled, locally role-ineligible, stale, offline,
 broadweb-role-ineligible, and undiscovered providers are reported separately.

@@ -1259,6 +1259,11 @@ Current baseline:
   loads the active content-key id from `slate-settings.db`, derives the content
   key in memory, and then applies signed encrypted settings from a newly trusted
   fixture device without loopback sockets or raw content-key storage.
+- The membership-aware selected-provider scheduler path now has the same
+  secret-backed form. After membership-log preflight enrolls the local device,
+  the scheduler derives the active content key from `SlateSyncSecret`, applies
+  the trusted remote device head, and retains the published membership/settings
+  object set through a selected in-process provider.
 
 Next:
 
