@@ -21,6 +21,8 @@ pub const DEFAULT_HOME_DIRECTORY_NAME: &str = ".slate";
 pub const DEFAULT_PROFILE_ID: &str = "default";
 pub const DEFAULT_SYNC_DEVICE_ID: &str = "local-device";
 pub const DEFAULT_PROFILE_SYNC_CONTENT_KEY_ID: &str = "content-key-epoch-1";
+pub const DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID: &str = "local-preview-provider";
+pub const DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_KIND: &str = "local-fixture";
 pub const SLATE_SYNC_SECRET_BYTES: usize = 32;
 pub const PROFILE_SYNC_DERIVED_SECRET_BYTES: usize = 32;
 pub const PROFILE_SYNC_CONTENT_KEY_BYTES: usize = 32;
@@ -5803,6 +5805,53 @@ impl SlateProfileDatabase {
             profile: profile.to_string(),
             device_id: self.local_sync_device_id().to_string(),
             content_key_epoch,
+        })
+    }
+
+    pub fn activate_local_profile_sync_preview_provider(
+        &self,
+        profile: &str,
+        endpoint_ref: Option<String>,
+    ) -> Result<StorageProviderRecord, StorageError> {
+        let provider_signer = ProfileSyncDeviceSigner::generate(
+            DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
+        )
+        .map_err(|error| {
+            StorageError::InvalidProfileSyncMembershipRecord(format!(
+                "failed to create preview provider key: {error}"
+            ))
+        })?;
+        self.register_sync_device(&SyncDeviceRegistration {
+            profile: profile.to_string(),
+            device_id: DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID.to_string(),
+            label: Some("Local Preview Provider".to_string()),
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            provider_authority: true,
+        })?;
+        self.register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+            profile: profile.to_string(),
+            public_key: provider_signer.public_key().map_err(|error| {
+                StorageError::InvalidProfileSyncMembershipRecord(format!(
+                    "failed to read preview provider public key: {error}"
+                ))
+            })?,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+        })?;
+        self.upsert_storage_provider(&StorageProviderUpdate {
+            profile: profile.to_string(),
+            provider_id: DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID.to_string(),
+            provider_kind: DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_KIND.to_string(),
+            display_name: "Local Preview Provider".to_string(),
+            endpoint_ref,
+            discovery: true,
+            connectivity: true,
+            object_transfer: true,
+            availability: true,
+            mutable_roots: true,
+            quota_bytes: None,
+            max_retained_objects: Some(128),
+            pinning_policy: Some("manual".to_string()),
+            enabled: true,
         })
     }
 
@@ -15991,51 +16040,33 @@ mod tests {
         let database =
             SlateProfileDatabase::open_resolved_with_device_id(database_path, "device-preview")
                 .unwrap();
-        let provider_id = "local-pinner";
-        let provider_signer = ProfileSyncDeviceSigner::generate(provider_id).unwrap();
 
         database
             .activate_local_profile_sync_metadata(DEFAULT_PROFILE_ID)
             .unwrap();
-        database
-            .register_sync_device(&SyncDeviceRegistration {
-                profile: DEFAULT_PROFILE_ID.to_string(),
-                device_id: provider_id.to_string(),
-                label: Some("Local Pinner".to_string()),
-                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
-                provider_authority: true,
-            })
-            .unwrap();
-        database
-            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
-                profile: DEFAULT_PROFILE_ID.to_string(),
-                public_key: provider_signer.public_key().unwrap(),
-                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
-            })
-            .unwrap();
-        database
-            .upsert_storage_provider(&StorageProviderUpdate {
-                profile: DEFAULT_PROFILE_ID.to_string(),
-                provider_id: provider_id.to_string(),
-                provider_kind: "local-fixture".to_string(),
-                display_name: "Local Pinner".to_string(),
-                endpoint_ref: Some("slate-fixture-profile-sync://preview/local-pinner".to_string()),
-                discovery: true,
-                connectivity: true,
-                object_transfer: true,
-                availability: true,
-                mutable_roots: true,
-                quota_bytes: None,
-                max_retained_objects: Some(128),
-                pinning_policy: Some("manual".to_string()),
-                enabled: true,
-            })
+        let provider = database
+            .activate_local_profile_sync_preview_provider(
+                DEFAULT_PROFILE_ID,
+                Some("slate-fixture-profile-sync://preview/local-preview-provider".to_string()),
+            )
             .unwrap();
 
         let report = database
             .profile_sync_local_readiness(DEFAULT_PROFILE_ID)
             .unwrap();
 
+        assert_eq!(
+            provider.provider_id,
+            DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID
+        );
+        assert_eq!(
+            provider.provider_kind,
+            DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_KIND
+        );
+        assert_eq!(
+            provider.endpoint_ref.as_deref(),
+            Some("slate-fixture-profile-sync://preview/local-preview-provider")
+        );
         assert!(report.metadata_ready);
         assert_eq!(report.storage_provider_count, 1);
         assert_eq!(report.enabled_storage_provider_count, 1);

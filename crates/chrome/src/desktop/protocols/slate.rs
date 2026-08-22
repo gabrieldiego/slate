@@ -18,13 +18,13 @@ use servo::protocol_handler::{
     ResourceFetchTiming, Response, ResponseBody,
 };
 use slate_broadwebd::{
-    FetchDisposition, HttpFetchRequest, StateRoot, TemporaryDownloadRecord,
-    default_session_state_root,
+    FetchDisposition, HttpFetchRequest, IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX, StateRoot,
+    TemporaryDownloadRecord, default_session_state_root,
 };
 use slate_storage::{
-    DEFAULT_PROFILE_ID, ProfileSyncLocalActivationRecord, ProfileSyncLocalReadinessReport,
-    SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, SlateSyncSecret, SlateSyncSecretExport,
-    StorageError, SyncObjectError, SyncSettingTextEvent,
+    DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID, ProfileSyncLocalActivationRecord,
+    ProfileSyncLocalReadinessReport, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, SlateSyncSecret,
+    SlateSyncSecretExport, StorageError, SyncObjectError, SyncSettingTextEvent,
 };
 use url::Url;
 
@@ -93,6 +93,7 @@ impl ProtocolHandler for SlateProtocolHandler {
             "settings/profile-sync/create",
             "settings/profile-sync/import",
             "settings/profile-sync/check",
+            "settings/profile-sync/local-provider",
             "downloads",
             "downloads/state",
             "download",
@@ -128,6 +129,10 @@ impl ProtocolHandler for SlateProtocolHandler {
 
         if is_slate_settings_profile_sync_check_url(url.as_url()) {
             return self.check_profile_sync_preview_response(request);
+        }
+
+        if is_slate_settings_profile_sync_local_provider_url(url.as_url()) {
+            return self.activate_profile_sync_preview_provider_response(request);
         }
 
         if is_slate_downloads_state_url(url.as_url()) {
@@ -303,6 +308,30 @@ impl SlateProtocolHandler {
         }
     }
 
+    fn activate_profile_sync_preview_provider_response(
+        &self,
+        request: &Request,
+    ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
+        let mut state = self.profile_sync_preview.lock().unwrap();
+        self.refresh_profile_sync_preview_metadata(&mut state);
+        match self.activate_profile_sync_preview_provider() {
+            Ok(()) => match self.profile_sync_local_readiness_report() {
+                Ok(readiness) => {
+                    state.last_error = None;
+                    json_response(request, 200, state.to_json(readiness.as_ref()))
+                }
+                Err(error) => {
+                    state.last_error = Some(error.to_string());
+                    json_response(request, 500, state.to_json(None))
+                }
+            },
+            Err(error) => {
+                state.last_error = Some(error.to_string());
+                json_response(request, 500, state.to_json(None))
+            }
+        }
+    }
+
     fn activate_profile_sync_preview_metadata(
         &self,
     ) -> Result<Option<ProfileSyncLocalActivationRecord>, StorageError> {
@@ -310,6 +339,19 @@ impl SlateProtocolHandler {
             .as_ref()
             .map(|database| database.activate_local_profile_sync_metadata(DEFAULT_PROFILE_ID))
             .transpose()
+    }
+
+    fn activate_profile_sync_preview_provider(&self) -> Result<(), StorageError> {
+        if let Some(database) = &self.database {
+            let endpoint_ref = format!(
+                "{IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX}preview/{DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID}"
+            );
+            database.activate_local_profile_sync_preview_provider(
+                DEFAULT_PROFILE_ID,
+                Some(endpoint_ref),
+            )?;
+        }
+        Ok(())
     }
 
     fn profile_sync_local_readiness_report(
@@ -869,6 +911,12 @@ fn is_slate_settings_profile_sync_check_url(url: &Url) -> bool {
         && url.path().trim_start_matches('/') == "profile-sync/check"
 }
 
+fn is_slate_settings_profile_sync_local_provider_url(url: &Url) -> bool {
+    url.scheme() == "slate"
+        && url.host_str() == Some("settings")
+        && url.path().trim_start_matches('/') == "profile-sync/local-provider"
+}
+
 fn profile_sync_secret_export_text_from_url(url: &Url) -> Option<String> {
     if !is_slate_settings_profile_sync_import_url(url) {
         return None;
@@ -897,6 +945,7 @@ mod tests {
         is_slate_files_url, is_slate_home_url, is_slate_settings_apply_url,
         is_slate_settings_preview_url, is_slate_settings_profile_sync_check_url,
         is_slate_settings_profile_sync_create_url, is_slate_settings_profile_sync_import_url,
+        is_slate_settings_profile_sync_local_provider_url,
         is_slate_settings_profile_sync_state_url, is_slate_settings_save_url,
         is_slate_settings_url, is_slate_web_url, profile_sync_secret_export_text_from_url,
         slate_download_error_html,
@@ -1164,14 +1213,19 @@ mod tests {
         let create = Url::parse("slate://settings/profile-sync/create").unwrap();
         let import = Url::parse("slate://settings/profile-sync/import?secret=%7B%7D").unwrap();
         let check = Url::parse("slate://settings/profile-sync/check").unwrap();
+        let local_provider = Url::parse("slate://settings/profile-sync/local-provider").unwrap();
 
         assert!(is_slate_settings_profile_sync_state_url(&state));
         assert!(is_slate_settings_profile_sync_create_url(&create));
         assert!(is_slate_settings_profile_sync_import_url(&import));
         assert!(is_slate_settings_profile_sync_check_url(&check));
+        assert!(is_slate_settings_profile_sync_local_provider_url(
+            &local_provider
+        ));
         assert!(!is_slate_settings_profile_sync_create_url(&state));
         assert!(!is_slate_settings_profile_sync_import_url(&create));
         assert!(!is_slate_settings_profile_sync_check_url(&import));
+        assert!(!is_slate_settings_profile_sync_local_provider_url(&check));
         assert_eq!(
             profile_sync_secret_export_text_from_url(&import).as_deref(),
             Some("{}")
@@ -1453,6 +1507,7 @@ mod tests {
         assert!(settings_page.contains("id=\"profile-sync-create\""));
         assert!(settings_page.contains("id=\"profile-sync-download\""));
         assert!(settings_page.contains("id=\"profile-sync-import\""));
+        assert!(settings_page.contains("id=\"profile-sync-provider\""));
         assert!(settings_page.contains("id=\"profile-sync-check\""));
         assert!(settings_page.contains("slate://settings/profile-sync/"));
         assert!(settings_page.contains("slate-sync-secret.json"));

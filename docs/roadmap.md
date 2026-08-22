@@ -1326,19 +1326,22 @@ Current baseline:
   only local `slate-settings.db` metadata and reports whether the local device,
   active content-key epoch, enabled app domains, and authorized retention-capable
   storage providers are present before any real publish/pull operation runs.
-  The first practical trial still stops before encrypted bundle export, QR
+  The preview can also seed a local test-provider metadata record using a
+  Slate-only fixture endpoint ref, which advances the trial without opening
+  sockets, binding loopback ports, or contacting external broadweb services. The
+  first practical trial still stops before encrypted bundle export, QR
   enrollment, provider materialization, or broadweb publication.
 - `make profile-sync-boundary-check` now provides a low-memory regression gate
   for the sync work. It runs focused rail-app sync-domain checks, verifies that
   visible rail app sync descriptors match the seeded `slate-settings.db`
   storage domain table, checks Slate Sync Secret domain separation, export
   round-trip behavior, profile-bound import, and non-secret local activation
-  metadata, then covers local readiness reports, storage/provider metadata,
-  typed app-domain cursors, the broadwebd app-domain fixture, and the
-  profile-sync scheduler fixture through the build-limits wrapper. Chrome
-  settings watcher coverage is opt-in because compiling `slate-chrome`
-  currently pulls Servo script bindings and exceeded the 2 GiB low-memory
-  profile during verification.
+  metadata, then covers local readiness reports, preview provider activation,
+  storage/provider metadata, typed app-domain cursors, the broadwebd app-domain
+  fixture, and the profile-sync scheduler fixture through the build-limits
+  wrapper. Chrome settings watcher coverage is opt-in because compiling
+  `slate-chrome` currently pulls Servo script bindings and exceeded the 2 GiB
+  low-memory profile during verification.
 
 Next:
 
