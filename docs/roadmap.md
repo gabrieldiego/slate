@@ -1391,6 +1391,11 @@ Current baseline:
   local device, key state, provider readiness, trusted-device count, app-domain
   count, device-request target, enrollment target, and last local/two-device
   trial result without adding any protocol endpoints.
+- The Profile Sync Preview now also has a local-only "Sync current settings"
+  action. It reuses the session key file and stored preview provider metadata
+  to publish/receive the current pending `slate-settings.db` changes through
+  socketless fixture daemons without writing the synthetic preview setting used
+  by the older smoke-test trial.
   Production multi-device use still needs QR rendering, encrypted
   handoff/recovery files, real provider daemons, conflict handling, and cadence
   policy.

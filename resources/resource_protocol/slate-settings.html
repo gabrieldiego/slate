@@ -370,6 +370,7 @@
         <button id="profile-sync-import">Import key</button>
         <button id="profile-sync-provider">Add local test provider</button>
         <button id="profile-sync-check">Check local sync</button>
+        <button id="profile-sync-run-current">Sync current settings</button>
         <button id="profile-sync-run-local">Run local trial</button>
         <button id="profile-sync-run-local-two-device">Run two-device trial</button>
       </div>
@@ -509,6 +510,7 @@
     const profileSyncImportButton = document.getElementById("profile-sync-import");
     const profileSyncProviderButton = document.getElementById("profile-sync-provider");
     const profileSyncCheckButton = document.getElementById("profile-sync-check");
+    const profileSyncRunCurrentButton = document.getElementById("profile-sync-run-current");
     const profileSyncRunLocalButton = document.getElementById("profile-sync-run-local");
     const profileSyncRunLocalTwoDeviceButton = document.getElementById("profile-sync-run-local-two-device");
     const profileSyncDeviceRequestFile = document.getElementById("profile-sync-device-request-file");
@@ -1032,6 +1034,14 @@
       return `${trial.retained_object_count}/${trial.published_object_count} objects retained`;
     }
 
+    function profileSyncCurrentSyncStatus(state) {
+      if (!state || !state.last_current_sync) {
+        return "not run";
+      }
+      const run = state.last_current_sync;
+      return `${run.published_step_count} step; ${run.retained_object_count}/${run.published_object_count} objects retained`;
+    }
+
     function profileSyncTwoDeviceTrialStatus(state) {
       if (!state || !state.last_two_device_trial) {
         return "not run";
@@ -1052,6 +1062,7 @@
         ["App domains", localSync ? profileSyncCount(localSync.app_domain_count) : "0"],
         ["Device request", profileSyncText(state && state.device_request_device_id, "none")],
         ["Enrollment", profileSyncText(state && state.enrollment_target_device_id, "none")],
+        ["Current sync", profileSyncCurrentSyncStatus(state)],
         ["Local trial", profileSyncLocalTrialStatus(state)],
         ["Two-device trial", profileSyncTwoDeviceTrialStatus(state)]
       ];
@@ -1081,6 +1092,9 @@
       const twoDeviceStatus = state.last_two_device_trial ?
         `; receiver applied ${state.last_two_device_trial.receiver_applied_setting_count} setting` :
         "";
+      const currentSyncStatus = state.last_current_sync ?
+        `; current sync retained ${state.last_current_sync.retained_object_count}/${state.last_current_sync.published_object_count} objects` :
+        "";
       const enrollmentStatus = state.enrollment_target_device_id ?
         `; enrollment bundle for ${state.enrollment_target_device_id}` :
         "";
@@ -1094,7 +1108,7 @@
         profileSyncStatus.textContent = `Error: ${state.last_error}`;
       } else if (state.has_secret && state.local_sync && state.local_sync.ready_for_manual_sync) {
         profileSyncStatus.textContent =
-          `Ready for ${state.profile}${deviceStatus} - local device trusted, local sync preflight passed${trialStatus}${twoDeviceStatus}${deviceRequestStatus}${enrollmentStatus}`;
+          `Ready for ${state.profile}${deviceStatus} - local device trusted, local sync preflight passed${currentSyncStatus}${trialStatus}${twoDeviceStatus}${deviceRequestStatus}${enrollmentStatus}`;
       } else if (state.has_secret) {
         const trusted = state.local_sync && state.local_sync.local_device_trusted ?
           " - local device trusted" :
@@ -1105,7 +1119,7 @@
         const syncGap = state.local_sync && state.local_sync.blocked_reason ?
           ` - ${state.local_sync.blocked_reason}` :
           "";
-        profileSyncStatus.textContent = `Ready for ${state.profile}${deviceStatus}${suffix}${syncGap}${trialStatus}${twoDeviceStatus}${deviceRequestStatus}${enrollmentStatus}`;
+        profileSyncStatus.textContent = `Ready for ${state.profile}${deviceStatus}${suffix}${syncGap}${currentSyncStatus}${trialStatus}${twoDeviceStatus}${deviceRequestStatus}${enrollmentStatus}`;
       } else if (state.metadata_ready) {
         const syncGap = state.local_sync && state.local_sync.blocked_reason ?
           `; ${state.local_sync.blocked_reason}` :
@@ -1160,6 +1174,10 @@
 
     function addProfileSyncLocalProvider() {
       fetchProfileSyncState("local-provider");
+    }
+
+    function runProfileSyncCurrentSync() {
+      fetchProfileSyncState("run-current");
     }
 
     function runProfileSyncLocalTrial() {
@@ -1298,6 +1316,7 @@
     profileSyncDownloadButton.addEventListener("click", downloadProfileSyncSecret);
     profileSyncProviderButton.addEventListener("click", addProfileSyncLocalProvider);
     profileSyncCheckButton.addEventListener("click", checkProfileSyncReadiness);
+    profileSyncRunCurrentButton.addEventListener("click", runProfileSyncCurrentSync);
     profileSyncRunLocalButton.addEventListener("click", runProfileSyncLocalTrial);
     profileSyncRunLocalTwoDeviceButton.addEventListener("click", runProfileSyncLocalTwoDeviceTrial);
     profileSyncSecretFile.addEventListener("change", () => {

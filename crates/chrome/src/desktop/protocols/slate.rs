@@ -22,8 +22,9 @@ use slate_broadwebd::{
     TemporaryDownloadRecord, default_session_state_root,
 };
 use slate_profile_sync::{
-    LocalSettingsSyncPreviewCycleReport, LocalSettingsSyncPreviewError,
-    LocalSettingsSyncTwoDevicePreviewCycleReport, run_local_settings_sync_preview_cycle,
+    LocalSettingsSyncCurrentCycleReport, LocalSettingsSyncPreviewCycleReport,
+    LocalSettingsSyncPreviewError, LocalSettingsSyncTwoDevicePreviewCycleReport,
+    run_local_settings_sync_current_cycle, run_local_settings_sync_preview_cycle,
     run_local_settings_sync_two_device_preview_cycle,
 };
 use slate_storage::{
@@ -105,6 +106,7 @@ impl ProtocolHandler for SlateProtocolHandler {
             "settings/profile-sync/device-request/import",
             "settings/profile-sync/enrollment/create",
             "settings/profile-sync/enrollment/import",
+            "settings/profile-sync/run-current",
             "settings/profile-sync/run-local",
             "settings/profile-sync/run-local-two-device",
             "downloads",
@@ -162,6 +164,10 @@ impl ProtocolHandler for SlateProtocolHandler {
 
         if is_slate_settings_profile_sync_enrollment_import_url(url.as_url()) {
             return self.import_profile_sync_enrollment_bundle_response(request, url.as_url());
+        }
+
+        if is_slate_settings_profile_sync_run_current_url(url.as_url()) {
+            return self.run_profile_sync_preview_current_sync_response(request);
         }
 
         if is_slate_settings_profile_sync_run_local_url(url.as_url()) {
@@ -545,6 +551,49 @@ impl SlateProtocolHandler {
         }
     }
 
+    fn run_profile_sync_preview_current_sync_response(
+        &self,
+        request: &Request,
+    ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
+        let sync_secret = {
+            let mut state = self.profile_sync_preview.lock().unwrap();
+            self.refresh_profile_sync_preview_metadata(&mut state);
+            match state.active_sync_secret(DEFAULT_PROFILE_ID) {
+                Ok(Some(sync_secret)) => sync_secret,
+                Ok(None) => {
+                    state.last_error = Some(
+                        "create or import a profile sync key before syncing current settings"
+                            .to_string(),
+                    );
+                    let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+                    return json_response(request, 400, state.to_json(readiness.as_ref()));
+                }
+                Err(error) => {
+                    state.last_error = Some(error.to_string());
+                    return json_response(request, 400, state.to_json(None));
+                }
+            }
+        };
+        let run = self.run_profile_sync_preview_current_sync(&sync_secret);
+        let mut state = self.profile_sync_preview.lock().unwrap();
+        match run {
+            Ok(Some(report)) => {
+                state.mark_current_sync_result(&report, unix_time_seconds());
+                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+                json_response(request, 200, state.to_json(readiness.as_ref()))
+            }
+            Ok(None) => {
+                state.last_error = Some("settings database is not available".to_string());
+                json_response(request, 500, state.to_json(None))
+            }
+            Err(error) => {
+                state.last_error = Some(error.to_string());
+                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+                json_response(request, 500, state.to_json(readiness.as_ref()))
+            }
+        }
+    }
+
     fn run_profile_sync_preview_local_trial_response(
         &self,
         request: &Request,
@@ -670,6 +719,23 @@ impl SlateProtocolHandler {
         Ok(())
     }
 
+    fn run_profile_sync_preview_current_sync(
+        &self,
+        sync_secret: &SlateSyncSecret,
+    ) -> Result<Option<LocalSettingsSyncCurrentCycleReport>, LocalSettingsSyncPreviewError> {
+        self.database
+            .as_ref()
+            .map(|database| {
+                run_local_settings_sync_current_cycle(
+                    database,
+                    DEFAULT_PROFILE_ID,
+                    sync_secret,
+                    default_session_state_root().join("profile-sync-preview"),
+                )
+            })
+            .transpose()
+    }
+
     fn run_profile_sync_preview_local_trial(
         &self,
         sync_secret: &SlateSyncSecret,
@@ -741,9 +807,78 @@ struct ProfileSyncPreviewState {
     local_device_id: Option<String>,
     active_device_request: Option<ProfileSyncDeviceEnrollmentRequest>,
     active_enrollment_bundle: Option<ProfileSyncEnrollmentBundle>,
+    last_current_sync: Option<ProfileSyncPreviewCurrentSyncState>,
     last_trial: Option<ProfileSyncPreviewTrialState>,
     last_two_device_trial: Option<ProfileSyncPreviewTwoDeviceTrialState>,
     last_error: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ProfileSyncPreviewCurrentSyncState {
+    completed_at: i64,
+    provider_id: String,
+    provider_endpoint_ref: String,
+    ready_for_manual_sync: bool,
+    pulled_membership_application_count: usize,
+    selected_retention_provider_count: usize,
+    materialized_retention_provider_count: usize,
+    retained_provider_count: usize,
+    published_step_count: usize,
+    published_object_count: usize,
+    retained_object_count: usize,
+    fixture_materialization_issue_count: usize,
+    retention_provider_selection_issue_count: usize,
+    stored_provider_metadata_issue_count: usize,
+    all_fixture_providers_materialized: bool,
+    degraded_before: bool,
+    degraded_after: bool,
+}
+
+impl ProfileSyncPreviewCurrentSyncState {
+    fn from_report(report: &LocalSettingsSyncCurrentCycleReport, completed_at: i64) -> Self {
+        Self {
+            completed_at,
+            provider_id: report.provider_id.clone(),
+            provider_endpoint_ref: report.provider_endpoint_ref.clone(),
+            ready_for_manual_sync: report.ready_for_manual_sync,
+            pulled_membership_application_count: report.pulled_membership_application_count,
+            selected_retention_provider_count: report.selected_retention_provider_count,
+            materialized_retention_provider_count: report.materialized_retention_provider_count,
+            retained_provider_count: report.retained_provider_count,
+            published_step_count: report.published_step_count,
+            published_object_count: report.published_object_count,
+            retained_object_count: report.retained_object_count,
+            fixture_materialization_issue_count: report.fixture_materialization_issue_count,
+            retention_provider_selection_issue_count: report
+                .retention_provider_selection_issue_count,
+            stored_provider_metadata_issue_count: report.stored_provider_metadata_issue_count,
+            all_fixture_providers_materialized: report.all_fixture_providers_materialized,
+            degraded_before: report.degraded_before,
+            degraded_after: report.degraded_after,
+        }
+    }
+
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "completed_at": self.completed_at,
+            "provider_id": self.provider_id.as_str(),
+            "provider_endpoint_ref": self.provider_endpoint_ref.as_str(),
+            "ready_for_manual_sync": self.ready_for_manual_sync,
+            "pulled_membership_application_count": self.pulled_membership_application_count,
+            "selected_retention_provider_count": self.selected_retention_provider_count,
+            "materialized_retention_provider_count": self.materialized_retention_provider_count,
+            "retained_provider_count": self.retained_provider_count,
+            "published_step_count": self.published_step_count,
+            "published_object_count": self.published_object_count,
+            "retained_object_count": self.retained_object_count,
+            "fixture_materialization_issue_count": self.fixture_materialization_issue_count,
+            "retention_provider_selection_issue_count": self.retention_provider_selection_issue_count,
+            "stored_provider_metadata_issue_count": self.stored_provider_metadata_issue_count,
+            "all_fixture_providers_materialized": self.all_fixture_providers_materialized,
+            "degraded_before": self.degraded_before,
+            "degraded_after": self.degraded_after,
+        })
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -910,6 +1045,7 @@ impl ProfileSyncPreviewState {
         self.local_device_id = None;
         self.active_device_request = None;
         self.active_enrollment_bundle = None;
+        self.last_current_sync = None;
         self.last_trial = None;
         self.last_two_device_trial = None;
         self.last_error = None;
@@ -929,6 +1065,7 @@ impl ProfileSyncPreviewState {
         self.local_device_id = None;
         self.active_device_request = None;
         self.active_enrollment_bundle = None;
+        self.last_current_sync = None;
         self.last_trial = None;
         self.last_two_device_trial = None;
         self.last_error = None;
@@ -952,6 +1089,20 @@ impl ProfileSyncPreviewState {
         self.metadata_ready = true;
         self.active_key_id = Some(activation.activation.content_key_epoch.key_id.clone());
         self.local_device_id = Some(activation.local_device_id.clone());
+        self.last_error = None;
+    }
+
+    fn mark_current_sync_result(
+        &mut self,
+        report: &LocalSettingsSyncCurrentCycleReport,
+        completed_at: i64,
+    ) {
+        self.metadata_ready = true;
+        self.local_device_id = Some(report.local_device_id.clone());
+        self.last_current_sync = Some(ProfileSyncPreviewCurrentSyncState::from_report(
+            report,
+            completed_at,
+        ));
         self.last_error = None;
     }
 
@@ -1043,6 +1194,7 @@ impl ProfileSyncPreviewState {
             "active_key_id": self.active_key_id.as_deref(),
             "local_device_id": self.local_device_id.as_deref(),
             "local_sync": readiness.map(profile_sync_local_readiness_json),
+            "last_current_sync": self.last_current_sync.as_ref().map(ProfileSyncPreviewCurrentSyncState::to_json),
             "last_trial": self.last_trial.as_ref().map(ProfileSyncPreviewTrialState::to_json),
             "last_two_device_trial": self.last_two_device_trial.as_ref().map(ProfileSyncPreviewTwoDeviceTrialState::to_json),
             "export_filename": "slate-sync-secret.json",
@@ -1553,6 +1705,12 @@ fn is_slate_settings_profile_sync_enrollment_import_url(url: &Url) -> bool {
         && url.path().trim_start_matches('/') == "profile-sync/enrollment/import"
 }
 
+fn is_slate_settings_profile_sync_run_current_url(url: &Url) -> bool {
+    url.scheme() == "slate"
+        && url.host_str() == Some("settings")
+        && url.path().trim_start_matches('/') == "profile-sync/run-current"
+}
+
 fn is_slate_settings_profile_sync_run_local_url(url: &Url) -> bool {
     url.scheme() == "slate"
         && url.host_str() == Some("settings")
@@ -1640,9 +1798,9 @@ mod tests {
         is_slate_settings_profile_sync_enrollment_import_url,
         is_slate_settings_profile_sync_import_url,
         is_slate_settings_profile_sync_local_provider_url,
-        is_slate_settings_profile_sync_state_url, is_slate_settings_save_url,
-        is_slate_settings_url, is_slate_web_url, profile_sync_device_request_text_from_url,
-        profile_sync_enrollment_bundle_text_from_url,
+        is_slate_settings_profile_sync_run_current_url, is_slate_settings_profile_sync_state_url,
+        is_slate_settings_save_url, is_slate_settings_url, is_slate_web_url,
+        profile_sync_device_request_text_from_url, profile_sync_enrollment_bundle_text_from_url,
         profile_sync_enrollment_target_device_id_from_url,
         profile_sync_secret_export_text_from_url, slate_download_error_html,
     };
@@ -1920,6 +2078,7 @@ mod tests {
                 .unwrap();
         let enrollment_import =
             Url::parse("slate://settings/profile-sync/enrollment/import?bundle=%7B%7D").unwrap();
+        let run_current = Url::parse("slate://settings/profile-sync/run-current").unwrap();
         let run_local = Url::parse("slate://settings/profile-sync/run-local").unwrap();
         let run_two_device =
             Url::parse("slate://settings/profile-sync/run-local-two-device").unwrap();
@@ -1943,6 +2102,7 @@ mod tests {
         assert!(is_slate_settings_profile_sync_enrollment_import_url(
             &enrollment_import
         ));
+        assert!(is_slate_settings_profile_sync_run_current_url(&run_current));
         assert!(is_slate_settings_profile_sync_run_local_url(&run_local));
         assert!(is_slate_settings_profile_sync_run_local_two_device_url(
             &run_two_device
@@ -1966,6 +2126,7 @@ mod tests {
         assert!(!is_slate_settings_profile_sync_run_local_url(
             &local_provider
         ));
+        assert!(!is_slate_settings_profile_sync_run_current_url(&run_local));
         assert!(!is_slate_settings_profile_sync_run_local_two_device_url(
             &run_local
         ));
@@ -2291,6 +2452,7 @@ mod tests {
         assert!(settings_page.contains("id=\"profile-sync-import\""));
         assert!(settings_page.contains("id=\"profile-sync-provider\""));
         assert!(settings_page.contains("id=\"profile-sync-check\""));
+        assert!(settings_page.contains("id=\"profile-sync-run-current\""));
         assert!(settings_page.contains("id=\"profile-sync-run-local\""));
         assert!(settings_page.contains("id=\"profile-sync-run-local-two-device\""));
         assert!(settings_page.contains("id=\"profile-sync-device-request-file\""));
@@ -2304,6 +2466,7 @@ mod tests {
         assert!(settings_page.contains("id=\"profile-sync-enrollment-create\""));
         assert!(settings_page.contains("id=\"profile-sync-enrollment-download\""));
         assert!(settings_page.contains("id=\"profile-sync-enrollment-import\""));
+        assert!(settings_page.contains("Current sync"));
         assert!(settings_page.contains("Two-device trial"));
         assert!(settings_page.contains("slate://settings/profile-sync/"));
         assert!(settings_page.contains("slate-sync-secret.json"));

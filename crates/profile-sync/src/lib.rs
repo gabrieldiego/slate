@@ -88,6 +88,29 @@ pub struct LocalSettingsSyncPreviewCycleReport {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LocalSettingsSyncCurrentCycleReport {
+    pub profile: String,
+    pub local_device_id: String,
+    pub provider_id: String,
+    pub provider_endpoint_ref: String,
+    pub ready_for_manual_sync: bool,
+    pub blocked_reason: Option<String>,
+    pub pulled_membership_application_count: usize,
+    pub selected_retention_provider_count: usize,
+    pub materialized_retention_provider_count: usize,
+    pub retained_provider_count: usize,
+    pub published_step_count: usize,
+    pub published_object_count: usize,
+    pub retained_object_count: usize,
+    pub fixture_materialization_issue_count: usize,
+    pub retention_provider_selection_issue_count: usize,
+    pub stored_provider_metadata_issue_count: usize,
+    pub all_fixture_providers_materialized: bool,
+    pub degraded_before: bool,
+    pub degraded_after: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalSettingsSyncTwoDevicePreviewCycleReport {
     pub profile: String,
     pub publisher_device_id: String,
@@ -7875,12 +7898,39 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
     }
 }
 
-pub fn run_local_settings_sync_preview_cycle(
+struct LocalSettingsSyncFixturePreparation {
+    local_device_id: String,
+    provider_endpoint_ref: String,
+    signer: ProfileSyncDeviceSigner,
+}
+
+struct LocalSettingsSyncFixtureCycleSummary {
+    profile: String,
+    local_device_id: String,
+    provider_id: String,
+    provider_endpoint_ref: String,
+    ready_for_manual_sync: bool,
+    blocked_reason: Option<String>,
+    pulled_membership_application_count: usize,
+    selected_retention_provider_count: usize,
+    materialized_retention_provider_count: usize,
+    retained_provider_count: usize,
+    published_step_count: usize,
+    published_object_count: usize,
+    retained_object_count: usize,
+    fixture_materialization_issue_count: usize,
+    retention_provider_selection_issue_count: usize,
+    stored_provider_metadata_issue_count: usize,
+    all_fixture_providers_materialized: bool,
+    degraded_before: bool,
+    degraded_after: bool,
+}
+
+fn prepare_local_settings_sync_fixture(
     database: &SlateProfileDatabase,
     profile: &str,
     sync_secret: &SlateSyncSecret,
-    state_root_parent: impl Into<PathBuf>,
-) -> Result<LocalSettingsSyncPreviewCycleReport, LocalSettingsSyncPreviewError> {
+) -> Result<LocalSettingsSyncFixturePreparation, LocalSettingsSyncPreviewError> {
     database.activate_local_profile_sync_from_secret(profile, sync_secret)?;
     let provider_endpoint_ref = format!(
         "{IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX}{LOCAL_SETTINGS_SYNC_PREVIEW_NETWORK_ID}/{DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID}"
@@ -7890,20 +7940,6 @@ pub fn run_local_settings_sync_preview_cycle(
         sync_secret,
         Some(provider_endpoint_ref.clone()),
     )?;
-    database.set_sync_setting_text(
-        profile,
-        SYNC_DOMAIN_SETTINGS,
-        LOCAL_SETTINGS_SYNC_PREVIEW_SETTING_KEY,
-        &format!("local-preview-run-{}", unix_time_seconds()),
-    )?;
-    let preview_setting_revision = database
-        .get_sync_setting_text(
-            profile,
-            SYNC_DOMAIN_SETTINGS,
-            LOCAL_SETTINGS_SYNC_PREVIEW_SETTING_KEY,
-        )?
-        .map(|setting| setting.revision)
-        .unwrap_or_default();
     let local_device_id = database.local_sync_device_id().to_string();
     let signer = sync_secret.derive_profile_sync_device_signer(
         profile,
@@ -7911,10 +7947,25 @@ pub fn run_local_settings_sync_preview_cycle(
         DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
     )?;
 
+    Ok(LocalSettingsSyncFixturePreparation {
+        local_device_id,
+        provider_endpoint_ref,
+        signer,
+    })
+}
+
+fn run_local_settings_sync_fixture_cycle(
+    database: &SlateProfileDatabase,
+    profile: &str,
+    sync_secret: &SlateSyncSecret,
+    state_root_parent: impl Into<PathBuf>,
+    preparation: LocalSettingsSyncFixturePreparation,
+) -> Result<LocalSettingsSyncFixtureCycleSummary, LocalSettingsSyncPreviewError> {
     let state_root = LocalSettingsSyncPreviewStateRoot::prepare(state_root_parent)?;
     let fixture = LocalProfileSyncFixture::new();
     let mut device_registry = PluginRegistry::new();
-    device_registry.register_service(fixture.service_for_device(local_device_id.as_str()));
+    device_registry
+        .register_service(fixture.service_for_device(preparation.local_device_id.as_str()));
     let mut provider_registry = PluginRegistry::new();
     provider_registry.register_service(fixture.service_for_provider_with_roles(
         DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
@@ -7950,7 +8001,7 @@ pub fn run_local_settings_sync_preview_cycle(
             &config,
             PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID,
             sync_secret,
-            &signer,
+            &preparation.signer,
             4,
             &provider_daemons,
         )?;
@@ -7963,13 +8014,11 @@ pub fn run_local_settings_sync_preview_cycle(
     let readiness = database.profile_sync_local_readiness(profile)?;
     let published_object_count = run.run.cycle.cycle.published_object_ids().len();
 
-    Ok(LocalSettingsSyncPreviewCycleReport {
+    Ok(LocalSettingsSyncFixtureCycleSummary {
         profile: profile.to_string(),
-        local_device_id,
+        local_device_id: preparation.local_device_id,
         provider_id: DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID.to_string(),
-        provider_endpoint_ref,
-        preview_setting_key: LOCAL_SETTINGS_SYNC_PREVIEW_SETTING_KEY.to_string(),
-        preview_setting_revision,
+        provider_endpoint_ref: preparation.provider_endpoint_ref,
         ready_for_manual_sync: readiness.ready_for_manual_sync,
         blocked_reason: readiness.blocked_reason,
         pulled_membership_application_count: run.pulled_membership_application_count(),
@@ -7985,6 +8034,98 @@ pub fn run_local_settings_sync_preview_cycle(
         all_fixture_providers_materialized: run.all_fixture_providers_materialized(),
         degraded_before: run.run.preflight.preflight.before_health.degraded(),
         degraded_after: after_health.degraded(),
+    })
+}
+
+pub fn run_local_settings_sync_current_cycle(
+    database: &SlateProfileDatabase,
+    profile: &str,
+    sync_secret: &SlateSyncSecret,
+    state_root_parent: impl Into<PathBuf>,
+) -> Result<LocalSettingsSyncCurrentCycleReport, LocalSettingsSyncPreviewError> {
+    let preparation = prepare_local_settings_sync_fixture(database, profile, sync_secret)?;
+    let summary = run_local_settings_sync_fixture_cycle(
+        database,
+        profile,
+        sync_secret,
+        state_root_parent,
+        preparation,
+    )?;
+
+    Ok(LocalSettingsSyncCurrentCycleReport {
+        profile: summary.profile,
+        local_device_id: summary.local_device_id,
+        provider_id: summary.provider_id,
+        provider_endpoint_ref: summary.provider_endpoint_ref,
+        ready_for_manual_sync: summary.ready_for_manual_sync,
+        blocked_reason: summary.blocked_reason,
+        pulled_membership_application_count: summary.pulled_membership_application_count,
+        selected_retention_provider_count: summary.selected_retention_provider_count,
+        materialized_retention_provider_count: summary.materialized_retention_provider_count,
+        retained_provider_count: summary.retained_provider_count,
+        published_step_count: summary.published_step_count,
+        published_object_count: summary.published_object_count,
+        retained_object_count: summary.retained_object_count,
+        fixture_materialization_issue_count: summary.fixture_materialization_issue_count,
+        retention_provider_selection_issue_count: summary.retention_provider_selection_issue_count,
+        stored_provider_metadata_issue_count: summary.stored_provider_metadata_issue_count,
+        all_fixture_providers_materialized: summary.all_fixture_providers_materialized,
+        degraded_before: summary.degraded_before,
+        degraded_after: summary.degraded_after,
+    })
+}
+
+pub fn run_local_settings_sync_preview_cycle(
+    database: &SlateProfileDatabase,
+    profile: &str,
+    sync_secret: &SlateSyncSecret,
+    state_root_parent: impl Into<PathBuf>,
+) -> Result<LocalSettingsSyncPreviewCycleReport, LocalSettingsSyncPreviewError> {
+    let preparation = prepare_local_settings_sync_fixture(database, profile, sync_secret)?;
+    database.set_sync_setting_text(
+        profile,
+        SYNC_DOMAIN_SETTINGS,
+        LOCAL_SETTINGS_SYNC_PREVIEW_SETTING_KEY,
+        &format!("local-preview-run-{}", unix_time_seconds()),
+    )?;
+    let preview_setting_revision = database
+        .get_sync_setting_text(
+            profile,
+            SYNC_DOMAIN_SETTINGS,
+            LOCAL_SETTINGS_SYNC_PREVIEW_SETTING_KEY,
+        )?
+        .map(|setting| setting.revision)
+        .unwrap_or_default();
+    let summary = run_local_settings_sync_fixture_cycle(
+        database,
+        profile,
+        sync_secret,
+        state_root_parent,
+        preparation,
+    )?;
+
+    Ok(LocalSettingsSyncPreviewCycleReport {
+        profile: summary.profile,
+        local_device_id: summary.local_device_id,
+        provider_id: summary.provider_id,
+        provider_endpoint_ref: summary.provider_endpoint_ref,
+        preview_setting_key: LOCAL_SETTINGS_SYNC_PREVIEW_SETTING_KEY.to_string(),
+        preview_setting_revision,
+        ready_for_manual_sync: summary.ready_for_manual_sync,
+        blocked_reason: summary.blocked_reason,
+        pulled_membership_application_count: summary.pulled_membership_application_count,
+        selected_retention_provider_count: summary.selected_retention_provider_count,
+        materialized_retention_provider_count: summary.materialized_retention_provider_count,
+        retained_provider_count: summary.retained_provider_count,
+        published_step_count: summary.published_step_count,
+        published_object_count: summary.published_object_count,
+        retained_object_count: summary.retained_object_count,
+        fixture_materialization_issue_count: summary.fixture_materialization_issue_count,
+        retention_provider_selection_issue_count: summary.retention_provider_selection_issue_count,
+        stored_provider_metadata_issue_count: summary.stored_provider_metadata_issue_count,
+        all_fixture_providers_materialized: summary.all_fixture_providers_materialized,
+        degraded_before: summary.degraded_before,
+        degraded_after: summary.degraded_after,
     })
 }
 
@@ -13292,6 +13433,71 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(device_state_root);
         let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn local_settings_sync_current_cycle_publishes_existing_settings_without_preview_write() {
+        let state_root = test_state_root("local-settings-sync-current-state");
+        let db_root = test_state_root("local-settings-sync-current-db");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "local-current-device",
+        )
+        .expect("open local current database");
+        let sync_secret = SlateSyncSecret::from_bytes([123; SLATE_SYNC_SECRET_BYTES]);
+        database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write current setting");
+
+        let report = super::run_local_settings_sync_current_cycle(
+            &database,
+            DEFAULT_PROFILE_ID,
+            &sync_secret,
+            &state_root,
+        )
+        .expect("run local settings sync current cycle");
+
+        assert!(report.ready_for_manual_sync);
+        assert_eq!(report.blocked_reason, None);
+        assert_eq!(report.local_device_id, "local-current-device");
+        assert_eq!(report.provider_id, DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID);
+        assert_eq!(
+            report.provider_endpoint_ref,
+            "slate-fixture-profile-sync://preview/local-preview-provider"
+        );
+        assert_eq!(report.selected_retention_provider_count, 1);
+        assert_eq!(report.materialized_retention_provider_count, 1);
+        assert_eq!(report.retained_provider_count, 1);
+        assert_eq!(report.published_step_count, 1);
+        assert!(report.published_object_count > 0);
+        assert_eq!(report.retained_object_count, report.published_object_count);
+        assert_eq!(report.fixture_materialization_issue_count, 0);
+        assert_eq!(report.retention_provider_selection_issue_count, 0);
+        assert_eq!(report.stored_provider_metadata_issue_count, 0);
+        assert!(report.all_fixture_providers_materialized);
+        assert!(report.degraded_before);
+        assert!(!report.degraded_after);
+        assert!(
+            database
+                .get_sync_setting_text(
+                    DEFAULT_PROFILE_ID,
+                    SYNC_DOMAIN_SETTINGS,
+                    super::LOCAL_SETTINGS_SYNC_PREVIEW_SETTING_KEY,
+                )
+                .expect("read preview setting")
+                .is_none()
+        );
+        assert_eq!(
+            database
+                .get_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme")
+                .expect("read current setting")
+                .expect("current setting")
+                .value,
+            "teal"
+        );
+
+        let _ = std::fs::remove_dir_all(state_root);
         let _ = std::fs::remove_dir_all(db_root);
     }
 
