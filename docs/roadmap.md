@@ -628,6 +628,12 @@ Current baseline:
   be materialized into a normal retention-provider handle, pass the existing
   endpoint-ref checks, and satisfy the retention quorum in the socketless
   in-process broadweb fixture without adding any live network dependency.
+- Stored-provider scheduler runs now also cover a socketless Kubo
+  profile-sync provider materialized from a deferred `provider:` endpoint. The
+  regression publishes a `slate-settings.db` snapshot, updates the settings and
+  local device-head roots, and retains the resulting objects through
+  broadwebd's in-process Kubo fixture without loopback sockets, DNS, public
+  IPFS/IPNS, or an external Kubo daemon.
 - Membership-log stored-provider scheduler runs now have the same protocol
   materializer path. A provider enrolled through the account membership log and
   stored with a multiaddr endpoint can be materialized through the socketless

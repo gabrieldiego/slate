@@ -8483,6 +8483,39 @@ mod tests {
 
     const TEST_CONTENT_KEY_ID: &str = "content-key-epoch-1";
 
+    fn kubo_add_response(object_id: &str) -> InternalKuboRpcResponse {
+        InternalKuboRpcResponse {
+            status_code: 200,
+            content_type: "application/json".to_string(),
+            body: format!(r#"{{"Name":"profile-object","Hash":"{object_id}","Size":"128"}}"#)
+                .into_bytes(),
+        }
+    }
+
+    fn kubo_pin_response(object_id: &str) -> InternalKuboRpcResponse {
+        InternalKuboRpcResponse {
+            status_code: 200,
+            content_type: "application/json".to_string(),
+            body: format!(r#"{{"Pins":["{object_id}"]}}"#).into_bytes(),
+        }
+    }
+
+    fn kubo_pin_ls_response(object_id: &str) -> InternalKuboRpcResponse {
+        InternalKuboRpcResponse {
+            status_code: 200,
+            content_type: "application/json".to_string(),
+            body: format!(r#"{{"Keys":{{"{object_id}":{{"Type":"recursive"}}}}}}"#).into_bytes(),
+        }
+    }
+
+    fn kubo_publish_response(root_id: &str, object_id: &str) -> InternalKuboRpcResponse {
+        InternalKuboRpcResponse {
+            status_code: 200,
+            content_type: "application/json".to_string(),
+            body: format!(r#"{{"Name":"{root_id}","Value":"/ipfs/{object_id}"}}"#).into_bytes(),
+        }
+    }
+
     #[test]
     fn settings_sync_cycle_provider_retention_run_reports_object_issues() {
         let provider_retention = super::SettingsSyncCycleProviderRetentionRun {
@@ -17998,6 +18031,213 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(device_state_root);
         let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_scheduler_runs_with_kubo_profile_sync_materialized_provider() {
+        let network = InProcessBroadwebNetwork::new();
+        let fixture = network.kubo_rpc_sequence(vec![
+            kubo_add_response("bafykubosnapshotobject"),
+            kubo_pin_response("bafykubosnapshotobject"),
+            kubo_add_response("bafykubomanifestobject"),
+            kubo_pin_response("bafykubomanifestobject"),
+            kubo_publish_response("settings/latest", "bafykubomanifestobject"),
+            kubo_add_response("bafykubodeviceheadobject"),
+            kubo_pin_response("bafykubodeviceheadobject"),
+            kubo_publish_response(
+                "settings/devices/runtime-scheduler-kubo-a/head",
+                "bafykubodeviceheadobject",
+            ),
+            kubo_pin_response("bafykubosnapshotobject"),
+            kubo_pin_ls_response("bafykubosnapshotobject"),
+            kubo_pin_response("bafykubomanifestobject"),
+            kubo_pin_ls_response("bafykubomanifestobject"),
+            kubo_pin_response("bafykubodeviceheadobject"),
+            kubo_pin_ls_response("bafykubodeviceheadobject"),
+        ]);
+        let kubo_state_root = test_state_root("scheduler-kubo-provider-daemon");
+        let db_root = test_state_root("scheduler-kubo-provider-db");
+        let provider_id = "kubo-profile-sync-provider";
+        let provider_endpoint_ref = "provider:kubo-profile-sync-provider";
+        let kubo_daemon = network
+            .daemon_for_kubo_profile_sync(
+                &kubo_state_root,
+                ResourceBudget::default(),
+                fixture.base_url(),
+                provider_id,
+            )
+            .expect("start socketless Kubo profile-sync daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-scheduler-kubo-a",
+        )
+        .expect("open Kubo scheduler settings database");
+        let profile = "schedulerkuboproviderprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([91; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-scheduler-kubo-a")
+            .expect("generate Kubo scheduler local signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register Kubo scheduler local trusted public key");
+        authorize_test_storage_provider(&database, profile, provider_id);
+        database
+            .upsert_storage_provider(&StorageProviderUpdate {
+                endpoint_ref: Some(provider_endpoint_ref.to_string()),
+                ..test_storage_provider_update(
+                    &network,
+                    profile,
+                    provider_id,
+                    "ipfs-kubo-fixture",
+                    "Kubo profile-sync provider",
+                    true,
+                    true,
+                    true,
+                )
+            })
+            .expect("write Kubo stored provider metadata");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write Kubo scheduler local setting");
+
+        let materializer = super::SettingsSyncSocketlessProtocolProviderMaterializer::new(
+            super::SettingsSyncProtocolProviderMaterializerPolicy::new(
+                false,
+                vec!["provider".to_string()],
+            ),
+            vec![super::SettingsSyncProtocolProviderDaemon::new(
+                provider_id,
+                provider_endpoint_ref,
+                &kubo_daemon,
+            )],
+        );
+        let config = SettingsSyncSchedulerConfig::new(
+            profile,
+            settings_root_id,
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 1),
+        );
+        let scheduler = BroadwebdSettingsSyncScheduler::new(&kubo_daemon);
+        let preview = scheduler
+            .plan_once_with_stored_protocol_materializer_retention_provider_handles(
+                &database,
+                &config,
+                &signer,
+                4,
+                &materializer,
+            )
+            .expect("preview Kubo protocol materialized stored provider");
+        assert_eq!(preview.selected_retention_provider_count(), 1);
+        assert!(preview.requires_protocol_materializer());
+        assert_eq!(
+            preview
+                .selected_protocol_materialization_plan()
+                .deferred_protocol_requests,
+            vec![
+                super::SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+                    provider_id: provider_id.to_string(),
+                    protocol: "provider".to_string(),
+                    target: "kubo-profile-sync-provider".to_string(),
+                }
+            ]
+        );
+        assert_eq!(preview.protocol_materialized_provider_count(), 1);
+        assert_eq!(preview.protocol_blocked_provider_count(), 0);
+        assert!(preview.all_protocol_providers_materialized());
+        assert_eq!(preview.materialized_retention_provider_count(), 1);
+        assert!(preview.all_selected_providers_materialized());
+
+        let run = scheduler
+            .run_once_with_stored_protocol_materializer_retention_provider_handles(
+                &database,
+                &config,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                4,
+                &materializer,
+            )
+            .expect("scheduler run uses socketless Kubo profile-sync provider");
+
+        assert_eq!(run.protocol_materialized_provider_count(), 1);
+        assert_eq!(run.protocol_blocked_provider_count(), 0);
+        assert!(run.all_protocol_providers_materialized());
+        assert_eq!(run.selected_retention_provider_count(), 1);
+        assert_eq!(run.materialized_retention_provider_count(), 1);
+        assert_eq!(run.retained_provider_count(), 1);
+        assert_eq!(run.run.cycle.cycle.published_step_count(), 1);
+        assert_eq!(
+            run.run.cycle.retained_object_ids,
+            vec![
+                "bafykubosnapshotobject".to_string(),
+                "bafykubomanifestobject".to_string(),
+                "bafykubodeviceheadobject".to_string(),
+            ]
+        );
+        assert_eq!(run.run.cycle.retention.len(), 1);
+        assert_eq!(run.run.cycle.retention[0].object_count(), 3);
+        assert_eq!(run.run.cycle.retention[0].retained_count(), 3);
+        assert_eq!(run.run.cycle.retention[0].available_count(), 3);
+        assert_eq!(run.run.cycle.retention_issue_count(), 0);
+        assert!(!run.run.cycle.has_retention_issue());
+        assert!(
+            run.run
+                .cycle
+                .after_health
+                .settings_root_health
+                .latest_object_available
+        );
+        assert_eq!(
+            run.run
+                .cycle
+                .after_health
+                .settings_root_health
+                .online_retaining_providers,
+            1
+        );
+        assert_eq!(
+            run.run
+                .cycle
+                .after_health
+                .local_device_head_root_health
+                .online_retaining_providers,
+            1
+        );
+        assert_eq!(
+            database
+                .profile_sync_root(profile, settings_root_id)
+                .expect("read Kubo settings root")
+                .expect("Kubo settings root exists")
+                .object_id,
+            "bafykubomanifestobject"
+        );
+
+        let requests = fixture.finish();
+        assert_eq!(requests.len(), 14);
+        assert_eq!(
+            requests
+                .iter()
+                .filter(|request| request.contains("/api/v0/name/publish"))
+                .count(),
+            2
+        );
+        assert_eq!(
+            requests
+                .iter()
+                .filter(|request| request.contains("/api/v0/pin/ls"))
+                .count(),
+            3
+        );
+        assert!(
+            requests
+                .iter()
+                .all(|request| request.starts_with("POST /api/v0/"))
+        );
+
+        let _ = std::fs::remove_dir_all(kubo_state_root);
         let _ = std::fs::remove_dir_all(db_root);
     }
 
