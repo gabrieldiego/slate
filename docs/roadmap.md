@@ -223,6 +223,12 @@ Current baseline:
   MIME type, size, modified time, integrity, and retention policy. File bytes,
   local paths, and per-device availability stay out of replicated settings
   payloads until heavier object-transfer backends are wired.
+- The Files rail app should present a normal file-browser surface first:
+  folders, files, search, sort, details, sync sets, and clear local/remote
+  availability states. Users should not need to know whether backing data came
+  from IPFS, cache, a retained object, or another broadweb provider during
+  everyday file browsing; provider/cache/IPFS details belong in settings,
+  diagnostics, or advanced per-file metadata.
 - Storage provider metadata now has a local-first `slate-settings.db`
   materialized table and sync-domain JSON projection with tombstones. The
   initial projection tracks provider kind, display name, endpoint reference,
@@ -1338,6 +1344,11 @@ Next:
 - Add QR/file transport, platform key-store loading, and runtime policy for
   when derived manifest, mutable-root, enrollment, bootstrap, and content-key
   material can be used.
+- Add a Settings-based `Profile Sync Preview` as the first user-facing trial:
+  create/export/import a Slate Sync Secret, show trusted devices and selected
+  providers, run a manual local-only sync, and show synced app-domain status for
+  Settings and Bookmarks before exposing real IPFS/IPNS or internet-backed
+  providers.
 - Publish encrypted profile manifests and snapshots through the selected
   backend, then point the profile mutable root at the newest manifest.
 - Use the storage compaction target to publish encrypted snapshots, trim
