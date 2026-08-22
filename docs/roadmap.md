@@ -1237,6 +1237,12 @@ Current baseline:
   Import still uses the same transactional signed-membership application path,
   so the artifact adds no root server, no plaintext sync payloads, and no
   socket or live protocol dependency.
+- Storage now has the first in-memory `SlateSyncSecret` helper for key
+  separation. It derives profile-scoped content encryption keys with HKDF over
+  the profile id and content-key id, redacts the root bytes from debug output,
+  and is covered by a local sync-object encryption regression. This does not yet
+  define the persisted/exported recovery-secret format or mutable-root
+  delegation keys.
 
 Next:
 

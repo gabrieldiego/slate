@@ -262,6 +262,13 @@ after the manifest membership epoch before applying profile state. It does not
 store raw content encryption keys. Key bytes should come from a keychain entry,
 recovery-secret derivation, or an enrollment flow before being passed into the
 decrypt/apply path.
+Storage now exposes the first in-memory `SlateSyncSecret` helper for that
+derivation path. It uses HKDF to derive a profile-sync content key from the root
+secret, profile id, and content-key id, so one raw secret is not reused directly
+as object encryption material. The helper redacts its root bytes from debug
+output and does not yet define the persisted/exported recovery-secret format,
+mutable-root delegation keys, device signing-key derivation, or QR/file secret
+transport.
 
 The local trust store can also mark a stored device signing key as distrusted.
 Runtime trusted-device enumeration skips distrusted remote keys, trusted object

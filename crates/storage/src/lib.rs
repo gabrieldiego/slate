@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use ring::{aead, rand, signature};
+use ring::{aead, hkdf, rand, signature};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::collections::BTreeMap;
 use std::fmt;
@@ -18,6 +18,7 @@ pub const DEFAULT_DATABASE_FILE_NAME: &str = "slate-settings.db";
 pub const DEFAULT_HOME_DIRECTORY_NAME: &str = ".slate";
 pub const DEFAULT_PROFILE_ID: &str = "default";
 pub const DEFAULT_SYNC_DEVICE_ID: &str = "local-device";
+pub const SLATE_SYNC_SECRET_BYTES: usize = 32;
 pub const PROFILE_SYNC_CONTENT_KEY_BYTES: usize = 32;
 pub const PROFILE_SYNC_NONCE_BYTES: usize = 12;
 pub const SYNC_OBJECT_VERSION: u8 = 1;
@@ -192,6 +193,53 @@ pub struct DefaultAppSyncDomain {
     pub privacy_classification: &'static str,
     pub sync_content: bool,
     pub default_enabled: bool,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct SlateSyncSecret {
+    bytes: [u8; SLATE_SYNC_SECRET_BYTES],
+}
+
+impl SlateSyncSecret {
+    pub fn generate() -> Result<Self, SyncObjectError> {
+        let mut bytes = [0_u8; SLATE_SYNC_SECRET_BYTES];
+        rand::SystemRandom::new()
+            .fill(&mut bytes)
+            .map_err(|_| SyncObjectError::Random)?;
+        Ok(Self { bytes })
+    }
+
+    pub fn from_bytes(bytes: [u8; SLATE_SYNC_SECRET_BYTES]) -> Self {
+        Self { bytes }
+    }
+
+    pub fn derive_profile_sync_content_key(
+        &self,
+        profile: &str,
+        key_id: &str,
+    ) -> Result<ProfileSyncContentKey, SyncObjectError> {
+        let salt_bytes = format!("slate/profile-sync/{profile}").into_bytes();
+        let salt = hkdf::Salt::new(hkdf::HKDF_SHA256, salt_bytes.as_slice());
+        let prk = salt.extract(self.bytes.as_slice());
+        let info_bytes = format!("content-key/v1/{key_id}").into_bytes();
+        let info = [info_bytes.as_slice()];
+        let okm = prk
+            .expand(&info, hkdf::HKDF_SHA256)
+            .map_err(|_| SyncObjectError::Key)?;
+        let mut content_key = [0_u8; PROFILE_SYNC_CONTENT_KEY_BYTES];
+        okm.fill(&mut content_key)
+            .map_err(|_| SyncObjectError::Key)?;
+        Ok(ProfileSyncContentKey::from_bytes(content_key))
+    }
+}
+
+impl fmt::Debug for SlateSyncSecret {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SlateSyncSecret")
+            .field("bytes", &"<redacted>")
+            .finish()
+    }
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -10800,6 +10848,49 @@ mod tests {
 
         assert_eq!(resolved.path, launch_dir.join(DEFAULT_DATABASE_FILE_NAME));
         assert_eq!(resolved.source, DatabasePathSource::LaunchDirectoryCreated);
+    }
+
+    #[test]
+    fn slate_sync_secret_derives_separated_profile_content_keys() {
+        let secret = SlateSyncSecret::from_bytes([42; SLATE_SYNC_SECRET_BYTES]);
+        let same_key = secret
+            .derive_profile_sync_content_key(DEFAULT_PROFILE_ID, "content-key-epoch-1")
+            .unwrap();
+        let repeated_key = secret
+            .derive_profile_sync_content_key(DEFAULT_PROFILE_ID, "content-key-epoch-1")
+            .unwrap();
+        let other_epoch_key = secret
+            .derive_profile_sync_content_key(DEFAULT_PROFILE_ID, "content-key-epoch-2")
+            .unwrap();
+        let other_profile_key = secret
+            .derive_profile_sync_content_key("work", "content-key-epoch-1")
+            .unwrap();
+
+        assert_eq!(same_key, repeated_key);
+        assert_ne!(same_key, other_epoch_key);
+        assert_ne!(same_key, other_profile_key);
+        let debug = format!("{secret:?}");
+        assert!(debug.contains("<redacted>"));
+        assert!(!debug.contains("42"));
+
+        let object = EncryptedSyncObject::seal_with_nonce(
+            DEFAULT_PROFILE_ID,
+            SYNC_DOMAIN_SETTINGS,
+            "setting-change",
+            "content-key-epoch-1",
+            br#"{"value":"teal"}"#,
+            &same_key,
+            [6; PROFILE_SYNC_NONCE_BYTES],
+        )
+        .unwrap();
+        assert_eq!(
+            object.open(&same_key).unwrap(),
+            br#"{"value":"teal"}"#.to_vec()
+        );
+        assert!(matches!(
+            object.open(&other_epoch_key),
+            Err(SyncObjectError::Decrypt)
+        ));
     }
 
     #[test]
