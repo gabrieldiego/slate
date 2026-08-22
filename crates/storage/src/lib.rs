@@ -4532,6 +4532,14 @@ impl SlateProfileDatabase {
                 profile: membership_record.profile.clone(),
                 device_id: signed_object.device_id.clone(),
             })?;
+        if trusted_signer.membership_epoch > membership_record.membership_epoch {
+            return Err(StorageError::InvalidProfileSyncMembershipRecord(format!(
+                "membership signer {} was trusted at epoch {}, after membership record epoch {}",
+                signed_object.device_id,
+                trusted_signer.membership_epoch,
+                membership_record.membership_epoch
+            )));
+        }
         signed_object
             .verify_with(&trusted_signer.public_key)
             .map_err(|error| StorageError::InvalidProfileSyncMembershipRecord(error.to_string()))?;
@@ -13123,6 +13131,81 @@ mod tests {
             StorageError::UntrustedSyncMembershipSigner { profile, device_id }
                 if profile == DEFAULT_PROFILE_ID && device_id == "device-c"
         ));
+    }
+
+    #[test]
+    fn signed_sync_account_membership_records_reject_future_epoch_signers() {
+        let database_path =
+            test_dir("sync-account-membership-future-signer").join(DEFAULT_DATABASE_FILE_NAME);
+        let database = SlateProfileDatabase::open_resolved(database_path).unwrap();
+        let signer_a = ProfileSyncDeviceSigner::generate("device-a").unwrap();
+        let signer_b = ProfileSyncDeviceSigner::generate("device-b").unwrap();
+        let signer_c = ProfileSyncDeviceSigner::generate("device-c").unwrap();
+        let enroll_a = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-1-enroll-device-a".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 1,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-a".to_string(),
+            device_public_key: Some(signer_a.public_key().unwrap()),
+            created_at: 10,
+        };
+        database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_a).as_slice(),
+            )
+            .unwrap();
+
+        let enroll_b = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-4-enroll-device-b".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 4,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-b".to_string(),
+            device_public_key: Some(signer_b.public_key().unwrap()),
+            created_at: 40,
+        };
+        database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_a, &enroll_b).as_slice(),
+            )
+            .unwrap();
+
+        let stale_enroll_c = ProfileSyncMembershipRecord {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            record_id: "epoch-2-enroll-device-c".to_string(),
+            schema_version: PROFILE_SYNC_MEMBERSHIP_RECORD_SCHEMA_VERSION,
+            membership_epoch: 2,
+            record_kind: PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE.to_string(),
+            device_id: "device-c".to_string(),
+            device_public_key: Some(signer_c.public_key().unwrap()),
+            created_at: 20,
+        };
+        let error = database
+            .apply_signed_sync_account_membership_record(
+                signed_membership_record_bytes(&signer_b, &stale_enroll_c).as_slice(),
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            StorageError::InvalidProfileSyncMembershipRecord(reason)
+                if reason.contains("trusted at epoch 4, after membership record epoch 2")
+        ));
+        assert!(
+            database
+                .sync_account_membership_record(DEFAULT_PROFILE_ID, "epoch-2-enroll-device-c")
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            database
+                .sync_device_public_key(DEFAULT_PROFILE_ID, "device-c")
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]

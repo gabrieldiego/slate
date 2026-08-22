@@ -260,7 +260,9 @@ revocation record, and it rejects a different older-epoch membership operation
 for that target device once a newer operation has already applied. It also
 rejects a different same-epoch operation for a target device when another
 record at that epoch has already applied, so a conflicting rotate cannot undo
-an applied revoke in the same epoch. Exact record replay remains idempotent.
+an applied revoke in the same epoch. Membership authorization also checks the
+signer's trust epoch: a signer key first trusted in a later epoch cannot
+authorize an older membership record. Exact record replay remains idempotent.
 Full account-level revocation still needs richer epoch transition and
 multi-approval policy.
 The profile-sync membership-log receive path exercises the same storage guard:

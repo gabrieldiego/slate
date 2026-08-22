@@ -937,6 +937,10 @@ Current baseline:
   A different same-epoch operation for a target device is also rejected once
   another record at that epoch has applied, while exact replay of an
   already-applied record remains idempotent.
+- Membership authorization now also checks the signer's own trust epoch before
+  applying a signed membership record. A device key first trusted in a later
+  epoch cannot authorize an older account membership operation, preventing newly
+  enrolled devices from rewriting earlier account history.
 - The broadwebd membership-log receive fixture now covers that epoch-ordering
   rule over in-process object transfer: a stale older-epoch record is rejected
   without storing it, re-trusting the device, or advancing the membership-log
