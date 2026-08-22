@@ -60,6 +60,16 @@ reject_protocol_model_leak \
     'Kubo protocol transport must stay fixture-blind; install fixture transports from the in-process network layer.'
 
 reject_protocol_model_leak \
+    crates/broadwebd/src/protocols/ipfs/config.rs \
+    'is_internal_fixture_http_url|internal_fixture_http|slate-fixture-http|in-process-fixture|socketless-fixture|InProcessBroadwebNetwork|InternalFixture|ProfileSyncModel|Simulation|simulated' \
+    'IPFS gateway config must stay fixture-blind; in-process tests may inject prevalidated endpoints from the fixture layer.'
+
+reject_protocol_model_leak \
+    crates/broadwebd/src/protocols/ipfs/gateway.rs \
+    'is_internal_fixture_http_url|internal_fixture_http|slate-fixture-http|in-process-fixture|socketless-fixture|InProcessBroadwebNetwork|InternalFixture|ProfileSyncModel|Simulation|simulated' \
+    'IPFS gateway transport must keep real gateway semantics; fixture behavior belongs in the injected HTTP transport.'
+
+reject_protocol_model_leak \
     crates/broadwebd/src/services/profile_sync.rs \
     'InProcessBroadwebNetwork|InternalKubo(ProfileSyncModel|RpcFixture)|fetch_internal_kubo|internal_kubo_rpc_fixtures|register_internal_kubo|take_internal_kubo' \
     'broadwebd profile-sync service code must not call Kubo fixture models directly; route through transport executors or shims.'
@@ -83,6 +93,11 @@ require_text \
     crates/broadwebd/src/protocols/ipfs/kubo.rs \
     'impl IpfsKuboProfileSyncRpcExecutor for IpfsKuboReqwestProfileSyncRpcExecutor' \
     'Kubo profile-sync must keep a real HTTP executor so fixtures only swap transport.'
+
+require_text \
+    crates/broadwebd/src/lib.rs \
+    'with_prevalidated_local_gateway' \
+    'In-process IPFS gateway fixtures must be injected through a prevalidated fixture-layer config path.'
 
 require_text \
     crates/broadwebd/src/registry.rs \
@@ -158,6 +173,7 @@ run_test slate-broadwebd ipfs_kubo_profile_sync_fixture_executor_rejects_non_fix
 run_test slate-broadwebd kubo_profile_sync_fixture_reports_protocol_semantics_over_fixture_executor
 run_test slate-broadwebd kubo_profile_sync_http_service_advertises_real_http_boundary
 run_test slate-broadwebd profile_sync_runtime_options
+run_test slate-broadwebd ipfs_gateway_fixtures_are_injected_without_runtime_config_backdoor
 run_test slate-broadwebd registry_can_opt_into_kubo_profile_sync_without_fixture_transport
 run_test slate-broadwebd registry_can_apply_kubo_profile_sync_runtime_config
 run_test slate-broadwebd registry_rejects_external_kubo_profile_sync_endpoint

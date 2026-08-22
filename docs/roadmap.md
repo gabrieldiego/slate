@@ -427,6 +427,12 @@ Current baseline:
   The deterministic fixture layer only swaps the socket transport or daemon
   communication with in-process modeled behavior such as delayed discovery,
   unavailable transfer, stale roots, or malformed protocol responses.
+- IPFS gateway fixtures now follow that boundary too: runtime gateway
+  validation stays strict HTTP(S), and socketless tests inject a prevalidated
+  local gateway endpoint from `InProcessBroadwebNetwork`. The IPFS gateway
+  adapter no longer branches on synthetic fixture schemes or advertises
+  fixture-specific metadata; the injected HTTP transport owns the no-socket
+  simulation behavior.
 - Profile-sync protocol materializer policies now mark whether selected
   provider endpoints are handled by real runtime adapters or by local
   deterministic simulation. The scheduler still consumes typed multiaddr and

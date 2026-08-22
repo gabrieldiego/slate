@@ -347,7 +347,9 @@ pub mod test_fixtures {
                 )));
             }
             let mut registry = self.fixture_registry();
-            registry.register_protocol_service(IpfsService::new(IpfsConfig::new(gateway_base)?));
+            registry.register_protocol_service(IpfsService::new(
+                IpfsConfig::with_prevalidated_local_gateway(gateway_base)?,
+            ));
             Ok(registry)
         }
 
@@ -1034,7 +1036,7 @@ mod tests {
             "<!doctype html><title>IPFS Fixture</title><h1>Fetched From IPFS</h1>",
         );
         let mut registry = PluginRegistry::new();
-        registry.register_transport(IpfsGatewayTransport::local(&gateway).expect("local gateway"));
+        registry.register_transport(fixture_gateway_transport(&gateway));
         registry.register_service(super::HttpFetchService);
         let daemon = BroadwebDaemon::start_with_registry(
             test_state_root("ipfs-html"),
@@ -1063,9 +1065,7 @@ mod tests {
             "<!doctype html><title>IPFS Service Fixture</title><h1>Fetched From IPFS Service</h1>",
         );
         let mut registry = PluginRegistry::new();
-        registry.register_protocol_service(IpfsService::new(
-            IpfsConfig::new(&gateway).expect("local gateway config"),
-        ));
+        registry.register_protocol_service(IpfsService::new(fixture_gateway_config(&gateway)));
         registry.register_service(super::HttpFetchService);
         let daemon = BroadwebDaemon::start_with_registry(
             test_state_root("ipfs-service-html"),
@@ -1093,9 +1093,7 @@ mod tests {
             "<!doctype html><title>IPFS Profile Fixture</title>",
         );
         let mut registry = PluginRegistry::new();
-        registry.register_protocol_service(IpfsService::new(
-            IpfsConfig::new(&gateway).expect("local gateway config"),
-        ));
+        registry.register_protocol_service(IpfsService::new(fixture_gateway_config(&gateway)));
         registry.register_service(super::HttpFetchService);
         let daemon = BroadwebDaemon::start_with_registry(
             test_state_root("ipfs-route-context"),
@@ -1132,7 +1130,7 @@ mod tests {
     fn http_fetch_can_use_ipfs_gateway_transport_for_downloads() {
         let (gateway, fixture) = in_process_http_fixture("image/png", "png-ish");
         let mut registry = PluginRegistry::new();
-        registry.register_transport(IpfsGatewayTransport::local(&gateway).expect("local gateway"));
+        registry.register_transport(fixture_gateway_transport(&gateway));
         registry.register_service(super::HttpFetchService);
         let state_root = test_state_root("ipfs-download");
         let download_root = test_download_root("ipfs-download");
@@ -1172,7 +1170,7 @@ mod tests {
     fn http_fetch_does_not_record_subresource_downloads() {
         let (gateway, fixture) = in_process_http_fixture("text/css", "body{color:#123}");
         let mut registry = PluginRegistry::new();
-        registry.register_transport(IpfsGatewayTransport::local(&gateway).expect("local gateway"));
+        registry.register_transport(fixture_gateway_transport(&gateway));
         registry.register_service(super::HttpFetchService);
         let daemon = BroadwebDaemon::start_with_registry(
             test_state_root("ipfs-subresource"),
@@ -1218,7 +1216,7 @@ mod tests {
             "missing IPFS content",
         );
         let mut registry = PluginRegistry::new();
-        registry.register_transport(IpfsGatewayTransport::local(&gateway).expect("local gateway"));
+        registry.register_transport(fixture_gateway_transport(&gateway));
         registry.register_service(super::HttpFetchService);
         let daemon = BroadwebDaemon::start_with_registry(
             test_state_root("ipfs-gateway-error"),
@@ -1253,8 +1251,8 @@ mod tests {
             "<!doctype html><title>Fallback Gateway</title>",
         );
         let transport = IpfsGatewayTransport::from_gateways(vec![
-            IpfsGatewayEndpoint::local(&missing_gateway).expect("missing local gateway"),
-            IpfsGatewayEndpoint::local(&fallback_gateway).expect("fallback gateway"),
+            fixture_gateway_endpoint(&missing_gateway),
+            fixture_gateway_endpoint(&fallback_gateway),
         ])
         .expect("transport");
         let request = TransportHttpRequest {
@@ -1283,8 +1281,8 @@ mod tests {
         let status = BroadwebStatusReporter::new();
         let transport = IpfsGatewayTransport::from_gateways_with_status(
             vec![
-                IpfsGatewayEndpoint::local(&missing_gateway).expect("missing local gateway"),
-                IpfsGatewayEndpoint::local(&fallback_gateway).expect("fallback gateway"),
+                fixture_gateway_endpoint(&missing_gateway),
+                fixture_gateway_endpoint(&fallback_gateway),
             ],
             status.clone(),
         )
@@ -1320,8 +1318,8 @@ mod tests {
             "<!doctype html><title>Actual IPFS Page</title>",
         );
         let transport = IpfsGatewayTransport::from_gateways(vec![
-            IpfsGatewayEndpoint::local(&service_worker_gateway).expect("service worker gateway"),
-            IpfsGatewayEndpoint::local(&fallback_gateway).expect("fallback gateway"),
+            fixture_gateway_endpoint(&service_worker_gateway),
+            fixture_gateway_endpoint(&fallback_gateway),
         ])
         .expect("transport");
         let request = TransportHttpRequest {
@@ -1349,8 +1347,8 @@ mod tests {
             "<!doctype html><title>Cached Gateway</title>",
         );
         let transport = IpfsGatewayTransport::from_gateways(vec![
-            IpfsGatewayEndpoint::local(&missing_gateway).expect("missing local gateway"),
-            IpfsGatewayEndpoint::local(&fallback_gateway).expect("fallback gateway"),
+            fixture_gateway_endpoint(&missing_gateway),
+            fixture_gateway_endpoint(&fallback_gateway),
         ])
         .expect("transport");
         let request = TransportHttpRequest {
@@ -1809,6 +1807,41 @@ mod tests {
                 .iter()
                 .any(|metadata| metadata.id == IPFS_GATEWAY_PLUGIN)
         );
+    }
+
+    #[test]
+    fn ipfs_gateway_fixtures_are_injected_without_runtime_config_backdoor() {
+        let network = InProcessBroadwebNetwork::new();
+        let fixture = network.http_response(InternalFixtureHttpResponse {
+            status_code: 200,
+            content_type: Some("text/html".to_string()),
+            headers: vec![],
+            body: b"fixture gateway".to_vec(),
+        });
+
+        let error =
+            IpfsConfig::new(fixture.base_url()).expect_err("runtime config rejects fixture scheme");
+        assert!(
+            matches!(error, BroadwebdError::UnsupportedRequest(message) if message.contains("unsupported IPFS gateway scheme: slate-fixture-http"))
+        );
+
+        let transport = fixture_gateway_transport(fixture.base_url());
+        let metadata = transport.metadata();
+        assert!(
+            metadata
+                .capabilities
+                .iter()
+                .any(|capability| capability == "local-gateway-only")
+        );
+        assert!(
+            !metadata
+                .capabilities
+                .iter()
+                .any(|capability| capability == "socketless-fixture")
+        );
+        assert!(metadata.privacy_boundary.contains("local IPFS gateway"));
+
+        assert!(fixture.finish().is_empty());
     }
 
     #[test]
@@ -3779,6 +3812,18 @@ mod tests {
         assert!(response.final_url.starts_with("https://ipfs.io/ipfs/"));
 
         let _ = fs::remove_dir_all(daemon.state_root().path());
+    }
+
+    fn fixture_gateway_endpoint(gateway_base: &str) -> IpfsGatewayEndpoint {
+        IpfsGatewayEndpoint::from_prevalidated_local_base_url(gateway_base)
+    }
+
+    fn fixture_gateway_transport(gateway_base: &str) -> IpfsGatewayTransport {
+        IpfsGatewayTransport::from_endpoint(fixture_gateway_endpoint(gateway_base))
+    }
+
+    fn fixture_gateway_config(gateway_base: &str) -> IpfsConfig {
+        IpfsConfig::with_prevalidated_local_gateway(gateway_base).expect("fixture gateway config")
     }
 
     fn in_process_http_fixture(

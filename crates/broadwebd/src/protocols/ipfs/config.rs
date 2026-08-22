@@ -51,6 +51,14 @@ impl IpfsGatewayEndpoint {
     pub fn scope(&self) -> IpfsGatewayScope {
         self.scope
     }
+
+    #[cfg(any(test, feature = "test-fixtures"))]
+    pub(crate) fn from_prevalidated_local_base_url(base_url: impl Into<String>) -> Self {
+        Self {
+            base_url: base_url.into(),
+            scope: IpfsGatewayScope::Local,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -134,18 +142,12 @@ impl IpfsConfig {
 
     pub fn with_local_gateway(gateway_base: impl Into<String>) -> Result<Self, BroadwebdError> {
         let gateway = IpfsGatewayEndpoint::local(gateway_base)?;
-        let allow_public_gateway_fallback = !is_internal_fixture_gateway(gateway.base_url());
-        let public_gateway_fallbacks = if allow_public_gateway_fallback {
-            public_gateway_fallbacks_excluding(gateway.base_url())?
-        } else {
-            Vec::new()
-        };
         Ok(Self {
+            public_gateway_fallbacks: public_gateway_fallbacks_excluding(gateway.base_url())?,
             gateway,
-            public_gateway_fallbacks,
             kubo_rpc: None,
             transport: IpfsTransportKind::Gateway,
-            allow_public_gateway_fallback,
+            allow_public_gateway_fallback: true,
         })
     }
 
@@ -170,6 +172,19 @@ impl IpfsConfig {
             public_gateway_fallbacks: public_gateway_fallbacks_excluding(DEFAULT_IPFS_GATEWAY)?,
             kubo_rpc: Some(IpfsKuboRpcEndpoint::local(api_base_url)?),
             transport: IpfsTransportKind::KuboRpc,
+            allow_public_gateway_fallback: false,
+        })
+    }
+
+    #[cfg(any(test, feature = "test-fixtures"))]
+    pub(crate) fn with_prevalidated_local_gateway(
+        gateway_base: impl Into<String>,
+    ) -> Result<Self, BroadwebdError> {
+        Ok(Self {
+            gateway: IpfsGatewayEndpoint::from_prevalidated_local_base_url(gateway_base),
+            public_gateway_fallbacks: Vec::new(),
+            kubo_rpc: None,
+            transport: IpfsTransportKind::Gateway,
             allow_public_gateway_fallback: false,
         })
     }
@@ -304,16 +319,6 @@ impl IpfsConfig {
 fn validate_gateway_url(gateway_base: &str, scope: IpfsGatewayScope) -> Result<(), BroadwebdError> {
     let url =
         Url::parse(gateway_base).map_err(|error| BroadwebdError::InvalidUrl(error.to_string()))?;
-    #[cfg(any(test, feature = "test-fixtures"))]
-    if crate::http::is_internal_fixture_http_url(&url) {
-        return match scope {
-            IpfsGatewayScope::Local => Ok(()),
-            IpfsGatewayScope::Public => Err(BroadwebdError::UnsupportedRequest(format!(
-                "public IPFS gateway mode cannot use an internal fixture gateway: {gateway_base}"
-            ))),
-        };
-    }
-
     if !matches!(url.scheme(), "http" | "https") {
         return Err(BroadwebdError::UnsupportedRequest(format!(
             "unsupported IPFS gateway scheme: {}",
@@ -345,16 +350,4 @@ fn is_numeric_loopback_host(host: &str) -> bool {
     host_for_parse
         .parse::<std::net::IpAddr>()
         .is_ok_and(|address| address.is_loopback())
-}
-
-#[cfg(any(test, feature = "test-fixtures"))]
-fn is_internal_fixture_gateway(gateway_base: &str) -> bool {
-    Url::parse(gateway_base)
-        .ok()
-        .is_some_and(|url| crate::http::is_internal_fixture_http_url(&url))
-}
-
-#[cfg(not(any(test, feature = "test-fixtures")))]
-fn is_internal_fixture_gateway(_gateway_base: &str) -> bool {
-    false
 }
