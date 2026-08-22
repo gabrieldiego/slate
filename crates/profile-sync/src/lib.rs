@@ -9931,10 +9931,10 @@ mod tests {
         SlateProfileDatabase, SlateSyncSecret, StorageError, StorageProviderRecord,
         StorageProviderSyncPayload, StorageProviderUpdate, SyncChangeRecord,
         SyncContentKeyEpochRegistration, SyncDevicePublicKeyRegistration, SyncDeviceRegistration,
-        SyncSnapshotRegistration, TypedAppSyncDomainWatcher, open_signed_profile_sync_device_head,
-        open_signed_profile_sync_manifest, open_signed_profile_sync_settings_snapshot,
-        open_signed_sync_setting_text, pull_signed_profile_sync_device_head,
-        settings_sync_snapshot_id,
+        SyncObjectError, SyncSnapshotRegistration, TypedAppSyncDomainWatcher,
+        open_signed_profile_sync_device_head, open_signed_profile_sync_manifest,
+        open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
+        pull_signed_profile_sync_device_head, settings_sync_snapshot_id,
     };
     use std::{
         collections::BTreeSet,
@@ -17481,6 +17481,150 @@ mod tests {
             receiver_database
                 .get_setting_text("ui.theme")
                 .expect("read setting after corrupt shared-root object")
+                .as_deref(),
+            Some("teal")
+        );
+
+        let _ = std::fs::remove_dir_all(publisher_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(publisher_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_source_rejects_wrong_key_id_shared_root_without_mutation() {
+        let network = InProcessBroadwebNetwork::new();
+        let publisher_state_root = test_state_root("shared-root-wrong-key-publisher");
+        let receiver_state_root = test_state_root("shared-root-wrong-key-receiver");
+        let publisher_db_root = test_state_root("shared-root-wrong-key-publisher-db");
+        let receiver_db_root = test_state_root("shared-root-wrong-key-receiver-db");
+        let publisher_daemon = network
+            .daemon_for_device(
+                &publisher_state_root,
+                ResourceBudget::default(),
+                "runtime-wrong-key-shared-publisher",
+            )
+            .expect("start wrong-key shared-root publisher daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "runtime-wrong-key-shared-receiver",
+            )
+            .expect("start wrong-key shared-root receiver daemon");
+        let publisher_database = SlateProfileDatabase::open_resolved_with_device_id(
+            publisher_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-wrong-key-shared-publisher",
+        )
+        .expect("open wrong-key shared-root publisher database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-wrong-key-shared-receiver",
+        )
+        .expect("open wrong-key shared-root receiver database");
+        let content_key = ProfileSyncContentKey::from_bytes([101; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-wrong-key-shared-publisher")
+            .expect("generate wrong-key shared-root signer");
+        receiver_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: signer
+                    .public_key()
+                    .expect("wrong-key shared-root public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("receiver trusts wrong-key shared-root publisher");
+        register_test_content_key_epoch(&receiver_database, DEFAULT_PROFILE_ID);
+        let publisher = BroadwebdProfileSyncPublisher::new(&publisher_daemon);
+        let source = BroadwebdProfileSyncObjectSource::new(&receiver_daemon);
+        let settings_root_id = "settings/latest";
+
+        let change = publisher_database
+            .set_sync_setting_text(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("publisher writes valid wrong-key baseline setting");
+        let valid_manifest = publisher
+            .publish_signed_settings_tail_changes(
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                std::slice::from_ref(&change),
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &signer,
+                ProfileSyncRetentionPolicy::default(),
+            )
+            .expect("publish valid wrong-key baseline manifest");
+        let valid_apply = source
+            .pull_and_apply_active_trusted_settings_manifest_candidates_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                &content_key,
+            )
+            .expect("receiver applies valid wrong-key baseline manifest");
+        assert!(matches!(
+            valid_apply,
+            ProfileSyncSettingsCandidatePullApplyStatus::Applied(_)
+        ));
+
+        let wrong_manifest = ProfileSyncManifest {
+            profile: DEFAULT_PROFILE_ID.to_string(),
+            root_id: settings_root_id.to_string(),
+            schema_version: PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
+            membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            current_snapshot_object_id: None,
+            tail_change_object_ids: Vec::new(),
+            included_domains: vec![SYNC_DOMAIN_SETTINGS.to_string()],
+            device_frontiers: Vec::new(),
+            retention_policy: ProfileSyncRetentionPolicy::default(),
+            created_at: 20,
+        };
+        let wrong_key_id = "content-key-epoch-2";
+        let wrong_key_object_id = publisher
+            .put_retained_root(
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                sign_encrypted_json_object(
+                    DEFAULT_PROFILE_ID,
+                    SYNC_DOMAIN_SETTINGS,
+                    PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+                    wrong_key_id,
+                    &serde_json::to_vec(&wrong_manifest).expect("encode wrong-key manifest"),
+                    &content_key,
+                    &signer,
+                )
+                .expect("sign wrong-key shared-root manifest"),
+            )
+            .expect("publish wrong-key shared-root manifest");
+        let error = source
+            .pull_and_apply_active_trusted_settings_manifest_candidates_if_changed(
+                &receiver_database,
+                DEFAULT_PROFILE_ID,
+                settings_root_id,
+                &content_key,
+            )
+            .expect_err("receiver rejects wrong-key shared-root object");
+        assert!(matches!(
+            error,
+            ProfileSyncTrustedPullApplyError::Pull(ProfileSyncTrustedPullError::Open(
+                ProfileSyncTrustedOpenError::SyncObject(SyncObjectError::UnexpectedKeyId {
+                    expected,
+                    actual
+                })
+            )) if expected == TEST_CONTENT_KEY_ID && actual == wrong_key_id
+        ));
+        assert_eq!(
+            receiver_database
+                .profile_sync_root(DEFAULT_PROFILE_ID, settings_root_id)
+                .expect("read root after wrong-key shared-root object")
+                .expect("root after wrong-key shared-root object")
+                .object_id,
+            valid_manifest.manifest_object_id
+        );
+        assert_ne!(wrong_key_object_id, valid_manifest.manifest_object_id);
+        assert_eq!(
+            receiver_database
+                .get_setting_text("ui.theme")
+                .expect("read setting after wrong-key shared-root object")
                 .as_deref(),
             Some("teal")
         );

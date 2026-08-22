@@ -1102,6 +1102,10 @@ regression through the socketless broadwebd bridge. A root may resolve and the
 object bytes may be available, but if those bytes are not a trusted signed
 encrypted settings manifest, the receiver reports a pull/open failure and keeps
 the last valid `settings/latest` root and materialized values unchanged.
+The same bridge now covers wrong content-key ids for shared settings roots: a
+manifest object signed by a trusted device but encrypted/labeled for a
+non-active key epoch is rejected before root mutation. The fixture still uses
+normal signed encrypted object parsing; only object transport is in-process.
 
 ### Internal Protocol Models
 

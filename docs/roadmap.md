@@ -416,6 +416,9 @@ Current baseline:
   bridge: when `settings/latest` resolves to available bytes that are not a
   trusted signed encrypted manifest, the receiver fails closed and keeps the
   previous valid root and materialized settings.
+- Shared-root objects carrying the wrong content-key id are covered through the
+  same bridge. A trusted signer cannot move `settings/latest` with an object
+  labeled for a non-active key epoch; the receiver rejects it before mutation.
 - The same bridge now publishes a real signed encrypted settings tail manifest
   through one Kubo fixture daemon, then verifies the manifest and tail bytes
   fetched by a second daemon through the shared stateful Kubo/IPNS model. The
