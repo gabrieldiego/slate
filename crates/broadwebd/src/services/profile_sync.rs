@@ -634,6 +634,12 @@ impl ProfileSyncService {
                 online_retaining_provider_count(&store, request.profile.as_str(), object_id)
             })
             .unwrap_or_default();
+        let unavailable_retaining_provider_ids = latest_object_id
+            .as_deref()
+            .map(|object_id| {
+                unavailable_retaining_provider_ids(&store, request.profile.as_str(), object_id)
+            })
+            .unwrap_or_default();
         let (degraded, message) = profile_sync_root_health_message(
             candidates.len(),
             delayed_candidates.len(),
@@ -659,6 +665,7 @@ impl ProfileSyncService {
                 latest_object_stale_provider_ids: latest_object_providers.stale_provider_ids,
                 latest_object_offline_provider_ids: latest_object_providers.offline_provider_ids,
                 delayed_object_provider_ids: latest_object_providers.delayed_provider_ids,
+                unavailable_retaining_provider_ids,
                 online_retaining_providers,
                 minimum_online_retaining_providers: request.minimum_online_retaining_providers,
                 degraded,
@@ -1593,6 +1600,30 @@ fn online_retaining_provider_count(
                 && provider_has_object(store, provider_id, profile, object_id)
         })
         .count()
+}
+
+fn unavailable_retaining_provider_ids(
+    store: &ProfileSyncStore,
+    profile: &str,
+    object_id: &str,
+) -> Vec<String> {
+    store
+        .retained
+        .iter()
+        .filter_map(|(provider_id, retained_profile, retained_object_id)| {
+            if retained_profile == profile
+                && retained_object_id == object_id
+                && provider_is_fresh_online_for_role(store, provider_id, |roles| {
+                    roles.availability && roles.object_transfer
+                })
+                && !provider_has_object(store, provider_id, profile, object_id)
+            {
+                Some(provider_id.clone())
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 fn profile_sync_root_health_message(
@@ -3616,6 +3647,10 @@ mod tests {
             health.latest_object_available_provider_ids,
             vec!["local-fixture-device-a".to_string()]
         );
+        assert_eq!(
+            health.unavailable_retaining_provider_ids,
+            vec!["local-fixture-availability-pin-1".to_string()]
+        );
         assert_eq!(health.online_retaining_providers, 0);
         assert!(health.degraded);
         assert!(health.message.contains("not retained"));
@@ -3645,6 +3680,20 @@ mod tests {
                 available: true,
             }
         );
+        let restored_health = device_b
+            .profile_sync(
+                ProfileSyncRequest::RootHealth(ProfileSyncRootHealthRequest::new(
+                    "default",
+                    "settings/latest",
+                )),
+                &budget,
+            )
+            .expect("receiver can inspect restored retained-byte health");
+        let ProfileSyncResponse::RootHealth { health } = restored_health else {
+            panic!("unexpected root health response");
+        };
+        assert!(health.unavailable_retaining_provider_ids.is_empty());
+        assert_eq!(health.online_retaining_providers, 1);
     }
 
     #[test]

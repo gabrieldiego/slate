@@ -183,6 +183,7 @@ fn settings_sync_root_object_provider_issue_kind_name(
         SettingsSyncRootObjectProviderIssueKind::Delayed => "delayed",
         SettingsSyncRootObjectProviderIssueKind::Stale => "stale",
         SettingsSyncRootObjectProviderIssueKind::Offline => "offline",
+        SettingsSyncRootObjectProviderIssueKind::RetainedUnavailable => "retained_unavailable",
     }
 }
 
@@ -5806,6 +5807,7 @@ pub enum SettingsSyncRootObjectProviderIssueKind {
     Delayed,
     Stale,
     Offline,
+    RetainedUnavailable,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -5921,11 +5923,19 @@ fn append_settings_sync_root_object_provider_issues(
     );
     append_settings_sync_root_object_provider_issue_kind(
         issues,
-        component,
+        component.clone(),
         root_id,
         health.latest_object_id.clone(),
         SettingsSyncRootObjectProviderIssueKind::Offline,
         health.latest_object_offline_provider_ids.as_slice(),
+    );
+    append_settings_sync_root_object_provider_issue_kind(
+        issues,
+        component,
+        root_id,
+        health.latest_object_id.clone(),
+        SettingsSyncRootObjectProviderIssueKind::RetainedUnavailable,
+        health.unavailable_retaining_provider_ids.as_slice(),
     );
 }
 
@@ -12596,6 +12606,7 @@ mod tests {
             latest_object_stale_provider_ids: Vec::new(),
             latest_object_offline_provider_ids: Vec::new(),
             delayed_object_provider_ids: Vec::new(),
+            unavailable_retaining_provider_ids: Vec::new(),
             online_retaining_providers: 0,
             minimum_online_retaining_providers: 0,
             degraded: false,
@@ -14890,6 +14901,18 @@ mod tests {
         assert_eq!(summary.object_id.as_deref(), Some("bafyfixture123"));
         assert_eq!(summary.provider_id, "provider-a");
         assert_eq!(summary.kind, "offline");
+
+        let retained_unavailable =
+            super::LocalSettingsSyncRootObjectProviderIssueSummary::from_issue(
+                SettingsSyncRootObjectProviderIssue {
+                    component: SettingsSyncHealthIssueComponent::SettingsRoot,
+                    root_id: "settings/latest".to_string(),
+                    object_id: Some("bafyfixture456".to_string()),
+                    provider_id: "provider-b".to_string(),
+                    kind: SettingsSyncRootObjectProviderIssueKind::RetainedUnavailable,
+                },
+            );
+        assert_eq!(retained_unavailable.kind, "retained_unavailable");
     }
 
     #[cfg(feature = "local-preview-fixtures")]
@@ -20958,6 +20981,140 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(source_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_health_reports_unavailable_retained_provider_bytes() {
+        let network = InProcessBroadwebNetwork::new();
+        let fixture = network.profile_sync();
+        let source_state_root = test_state_root("cycle-retained-unavailable-source");
+        let receiver_state_root = test_state_root("cycle-retained-unavailable-receiver");
+        let provider_state_root = test_state_root("cycle-retained-unavailable-provider");
+        let receiver_db_root = test_state_root("cycle-retained-unavailable-receiver-db");
+        let source_device_id = "runtime-retained-unavailable-source";
+        let receiver_device_id = "runtime-retained-unavailable-receiver";
+        let provider_id = "runtime-retained-unavailable-pinner";
+        let source_provider_id = "local-fixture-device-runtime-retained-unavailable-source";
+        let retaining_provider_id =
+            "local-fixture-availability-runtime-retained-unavailable-pinner";
+        let source_daemon = network
+            .daemon_for_device(
+                &source_state_root,
+                ResourceBudget::default(),
+                source_device_id,
+            )
+            .expect("start in-process retained-unavailable source daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                receiver_device_id,
+            )
+            .expect("start in-process retained-unavailable receiver daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                provider_id,
+            )
+            .expect("start in-process retained-unavailable provider daemon");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            receiver_device_id,
+        )
+        .expect("open retained-unavailable receiver settings database");
+        let profile = "retainedunavailablehealthprofile";
+        let settings_root_id = "settings/latest";
+        let object_id = BroadwebdProfileSyncPublisher::new(&source_daemon)
+            .put_retained_root(
+                profile,
+                settings_root_id,
+                b"encrypted retained unavailable settings root".to_vec(),
+            )
+            .expect("source publishes retained-unavailable settings root");
+        provider_daemon
+            .profile_sync(BroadwebdProfileSyncRequest::RetainObject(
+                slate_broadwebd::ProfileSyncObjectRequest::new(profile, object_id.clone()),
+            ))
+            .expect("availability provider retains settings root object");
+        assert!(
+            fixture
+                .remove_availability_provider_object_bytes(provider_id, profile, object_id.as_str())
+                .expect("fixture removes retained provider bytes")
+        );
+
+        let missing_bytes_health = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
+            .settings_sync_health(&receiver_database, profile, settings_root_id, 2)
+            .expect("receiver reads retained-unavailable root health");
+        assert_eq!(
+            missing_bytes_health
+                .settings_root_health
+                .latest_object_id
+                .as_deref(),
+            Some(object_id.as_str())
+        );
+        assert!(
+            missing_bytes_health
+                .settings_root_health
+                .latest_object_available
+        );
+        assert_eq!(
+            missing_bytes_health
+                .settings_root_health
+                .latest_object_available_provider_ids,
+            vec![source_provider_id.to_string()]
+        );
+        assert_eq!(
+            missing_bytes_health
+                .settings_root_health
+                .unavailable_retaining_provider_ids,
+            vec![retaining_provider_id.to_string()]
+        );
+        assert_eq!(
+            missing_bytes_health
+                .settings_root_health
+                .online_retaining_providers,
+            1
+        );
+        assert!(missing_bytes_health.settings_root_health.degraded);
+        assert_eq!(missing_bytes_health.root_object_provider_issue_count(), 1);
+        assert_eq!(
+            missing_bytes_health.root_object_provider_issues(),
+            vec![SettingsSyncRootObjectProviderIssue {
+                component: SettingsSyncHealthIssueComponent::SettingsRoot,
+                root_id: settings_root_id.to_string(),
+                object_id: Some(object_id.clone()),
+                provider_id: retaining_provider_id.to_string(),
+                kind: SettingsSyncRootObjectProviderIssueKind::RetainedUnavailable,
+            }]
+        );
+
+        provider_daemon
+            .profile_sync(BroadwebdProfileSyncRequest::RetainObject(
+                slate_broadwebd::ProfileSyncObjectRequest::new(profile, object_id),
+            ))
+            .expect("availability provider restores retained bytes from online source");
+        let restored_health = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
+            .settings_sync_health(&receiver_database, profile, settings_root_id, 2)
+            .expect("receiver reads restored retained-byte root health");
+        assert!(
+            restored_health
+                .settings_root_health
+                .unavailable_retaining_provider_ids
+                .is_empty()
+        );
+        assert_eq!(
+            restored_health
+                .settings_root_health
+                .online_retaining_providers,
+            2
+        );
+        assert!(restored_health.root_object_provider_issues().is_empty());
+
+        let _ = std::fs::remove_dir_all(source_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
         let _ = std::fs::remove_dir_all(receiver_db_root);
     }
 

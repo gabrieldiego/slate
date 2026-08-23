@@ -528,7 +528,10 @@ Current baseline:
   retained object after its provider-held bytes disappear. Retained-object
   verification reports `retained: true` with unavailable bytes, and root health
   no longer counts that provider toward retaining-provider quorum until bytes
-  are restored through the normal retain path.
+  are restored through the normal retain path. The profile-sync runner now
+  preserves that provider identity as a structured `retained_unavailable`
+  root-object provider issue, so settings previews and scheduler diagnostics can
+  distinguish missing retained bytes from delayed, stale, or offline providers.
 - The same bridge now publishes a real signed encrypted settings tail manifest
   through one Kubo fixture daemon, then verifies the manifest and tail bytes
   fetched by a second daemon through the shared stateful Kubo/IPNS model. The

@@ -412,6 +412,7 @@ pub struct ProfileSyncRootHealth {
     pub latest_object_stale_provider_ids: Vec<String>,
     pub latest_object_offline_provider_ids: Vec<String>,
     pub delayed_object_provider_ids: Vec<String>,
+    pub unavailable_retaining_provider_ids: Vec<String>,
     pub online_retaining_providers: usize,
     pub minimum_online_retaining_providers: usize,
     pub degraded: bool,
