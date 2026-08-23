@@ -29,6 +29,7 @@ pub struct ProfileSyncService {
     provider_kind: String,
     privacy_boundary: String,
     roles: ProfileSyncProviderRoles,
+    registration_error: Option<BroadwebdError>,
     kubo_backend: Option<KuboProfileSyncBackend>,
 }
 
@@ -154,6 +155,7 @@ impl ProfileSyncRuntimeConfig {
 
 #[derive(Clone, Debug, Default)]
 struct ProfileSyncStore {
+    capacity: ProfileSyncFixtureCapacity,
     objects: BTreeMap<(String, String, String), Vec<u8>>,
     retained: BTreeSet<(String, String, String)>,
     roots: BTreeMap<(String, String, String), ProfileSyncRootState>,
@@ -166,6 +168,13 @@ struct ProfileSyncStore {
     delayed_roots: BTreeSet<(String, String, String, String)>,
     retention_blocked_providers: BTreeSet<String>,
     retention_quota_by_provider: BTreeMap<String, usize>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ProfileSyncFixtureCapacity {
+    pub max_providers: Option<usize>,
+    pub max_objects: Option<usize>,
+    pub max_roots: Option<usize>,
 }
 
 #[derive(Clone, Debug)]
@@ -197,6 +206,7 @@ impl Default for ProfileSyncService {
             provider_kind: LOCAL_PROVIDER_KIND.to_string(),
             privacy_boundary: LOCAL_PRIVACY_BOUNDARY.to_string(),
             roles: ProfileSyncProviderRoles::logged_in_device(),
+            registration_error: None,
             kubo_backend: None,
         }
     }
@@ -240,24 +250,37 @@ impl ProfileSyncService {
         let provider_id = provider_id.into();
         let provider_kind = provider_kind.into();
         let privacy_boundary = LOCAL_PRIVACY_BOUNDARY.to_string();
-        if let Ok(mut store) = store.lock() {
-            let last_seen_sequence = next_provider_seen_sequence(&mut store);
-            store.providers.insert(
-                provider_id.clone(),
-                ProfileSyncProviderState {
-                    provider_kind: provider_kind.clone(),
-                    privacy_boundary: privacy_boundary.clone(),
-                    roles,
-                    last_seen_sequence,
-                },
-            );
-        }
+        let registration_error = match store.lock() {
+            Ok(mut store) => {
+                if let Err(error) =
+                    check_profile_sync_fixture_provider_capacity(&store, provider_id.as_str())
+                {
+                    Some(error)
+                } else {
+                    let last_seen_sequence = next_provider_seen_sequence(&mut store);
+                    store.providers.insert(
+                        provider_id.clone(),
+                        ProfileSyncProviderState {
+                            provider_kind: provider_kind.clone(),
+                            privacy_boundary: privacy_boundary.clone(),
+                            roles,
+                            last_seen_sequence,
+                        },
+                    );
+                    None
+                }
+            }
+            Err(_) => Some(BroadwebdError::Request(
+                "profile sync store lock poisoned".to_string(),
+            )),
+        };
         Self {
             store,
             provider_id,
             provider_kind,
             privacy_boundary,
             roles,
+            registration_error,
             kubo_backend: None,
         }
     }
@@ -309,6 +332,7 @@ impl ProfileSyncService {
             provider_kind,
             privacy_boundary,
             roles,
+            registration_error: None,
             kubo_backend: Some(KuboProfileSyncBackend {
                 rpc,
                 executor_factory,
@@ -343,10 +367,9 @@ impl ProfileSyncService {
         validate_object_budget(request.bytes.len(), budget)?;
         let object_id = local_object_id(&request.bytes);
         let mut store = self.store()?;
-        store.objects.insert(
-            (self.provider_id.clone(), request.profile, object_id.clone()),
-            request.bytes,
-        );
+        let object_key = (self.provider_id.clone(), request.profile, object_id.clone());
+        check_profile_sync_fixture_object_capacity(&store, &object_key)?;
+        store.objects.insert(object_key, request.bytes);
         Ok(ProfileSyncResponse::PutEncryptedObject { object_id })
     }
 
@@ -419,14 +442,13 @@ impl ProfileSyncService {
                 request.object_id
             )));
         };
-        store.objects.insert(
-            (
-                self.provider_id.clone(),
-                request.profile.clone(),
-                request.object_id.clone(),
-            ),
-            bytes,
+        let object_key = (
+            self.provider_id.clone(),
+            request.profile.clone(),
+            request.object_id.clone(),
         );
+        check_profile_sync_fixture_object_capacity(&store, &object_key)?;
+        store.objects.insert(object_key, bytes);
         store.retained.insert(retained_key);
         Ok(ProfileSyncResponse::RetainObject {
             object_id: request.object_id,
@@ -529,14 +551,16 @@ impl ProfileSyncService {
                 request.object_id
             )));
         }
+        let root_key = (
+            request.profile,
+            request.root_id.clone(),
+            self.provider_id.clone(),
+        );
+        check_profile_sync_fixture_root_capacity(&store, &root_key)?;
         store.next_root_sequence += 1;
         let publish_sequence = store.next_root_sequence;
         store.roots.insert(
-            (
-                request.profile,
-                request.root_id.clone(),
-                self.provider_id.clone(),
-            ),
+            root_key,
             ProfileSyncRootState {
                 object_id: request.object_id.clone(),
                 publisher_provider_id: self.provider_id.clone(),
@@ -796,6 +820,14 @@ impl ProfileSyncService {
             .map_err(|_| BroadwebdError::Request("profile sync store lock poisoned".to_string()))
     }
 
+    fn ensure_registered(&self) -> Result<(), BroadwebdError> {
+        if let Some(error) = &self.registration_error {
+            Err(error.clone())
+        } else {
+            Ok(())
+        }
+    }
+
     fn require_role(&self, enabled: bool, role: &str) -> Result<(), BroadwebdError> {
         if enabled {
             Ok(())
@@ -818,12 +850,15 @@ impl ProfileSyncService {
             ProfileSyncRequest::PutEncryptedObject(request) => {
                 validate_profile(&request.profile)?;
                 self.require_role(self.roles.object_transfer, "profile-sync/object-transfer")?;
+                {
+                    let store = self.store()?;
+                    check_profile_sync_fixture_new_object_capacity(&store)?;
+                }
                 let object_id = kubo_rpc.put_encrypted_object(executor, &request.bytes, budget)?;
                 let mut store = self.store()?;
-                store.objects.insert(
-                    (self.provider_id.clone(), request.profile, object_id.clone()),
-                    request.bytes,
-                );
+                let object_key = (self.provider_id.clone(), request.profile, object_id.clone());
+                check_profile_sync_fixture_object_capacity(&store, &object_key)?;
+                store.objects.insert(object_key, request.bytes);
                 Ok(ProfileSyncResponse::PutEncryptedObject { object_id })
             }
             ProfileSyncRequest::GetEncryptedObject(request) => {
@@ -840,13 +875,24 @@ impl ProfileSyncService {
                 validate_profile_sync_object_id(&request.object_id)?;
                 self.require_role(self.roles.availability, "profile-sync/availability")?;
                 self.require_role(self.roles.object_transfer, "profile-sync/object-transfer")?;
+                {
+                    let store = self.store()?;
+                    let retained_key = (
+                        self.provider_id.clone(),
+                        request.profile.clone(),
+                        request.object_id.clone(),
+                    );
+                    check_profile_sync_fixture_object_capacity(&store, &retained_key)?;
+                }
                 kubo_rpc.retain_object(executor, &request.object_id, budget)?;
                 let mut store = self.store()?;
-                store.retained.insert((
+                let retained_key = (
                     self.provider_id.clone(),
                     request.profile.clone(),
                     request.object_id.clone(),
-                ));
+                );
+                check_profile_sync_fixture_object_capacity(&store, &retained_key)?;
+                store.retained.insert(retained_key);
                 Ok(ProfileSyncResponse::RetainObject {
                     object_id: request.object_id,
                     retained: true,
@@ -897,6 +943,15 @@ impl ProfileSyncService {
                 validate_profile_sync_root_id(&request.root_id)?;
                 validate_profile_sync_object_id(&request.object_id)?;
                 self.require_role(self.roles.mutable_roots, "profile-sync/mutable-root")?;
+                {
+                    let store = self.store()?;
+                    let root_key = (
+                        request.profile.clone(),
+                        request.root_id.clone(),
+                        self.provider_id.clone(),
+                    );
+                    check_profile_sync_fixture_root_capacity(&store, &root_key)?;
+                }
                 let object_id = kubo_rpc.publish_root(
                     executor,
                     &request.root_id,
@@ -904,14 +959,16 @@ impl ProfileSyncService {
                     budget,
                 )?;
                 let mut store = self.store()?;
+                let root_key = (
+                    request.profile.clone(),
+                    request.root_id.clone(),
+                    self.provider_id.clone(),
+                );
+                check_profile_sync_fixture_root_capacity(&store, &root_key)?;
                 store.next_root_sequence = store.next_root_sequence.saturating_add(1);
                 let publish_sequence = store.next_root_sequence;
                 store.roots.insert(
-                    (
-                        request.profile.clone(),
-                        request.root_id.clone(),
-                        self.provider_id.clone(),
-                    ),
+                    root_key,
                     ProfileSyncRootState {
                         object_id: object_id.clone(),
                         publisher_provider_id: self.provider_id.clone(),
@@ -1001,6 +1058,15 @@ fn latest_object_provider_availability(
 impl LocalProfileSyncFixture {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn with_capacity(capacity: ProfileSyncFixtureCapacity) -> Self {
+        Self {
+            store: Arc::new(Mutex::new(ProfileSyncStore {
+                capacity,
+                ..ProfileSyncStore::default()
+            })),
+        }
     }
 
     pub fn service_for_device(&self, device_id: impl AsRef<str>) -> ProfileSyncService {
@@ -1381,6 +1447,7 @@ impl ApplicationServicePlugin for ProfileSyncService {
             ));
         };
 
+        self.ensure_registered()?;
         self.ensure_online()?;
 
         if let Some(backend) = &self.kubo_backend {
@@ -1472,6 +1539,70 @@ fn validate_object_budget(size: usize, budget: &ResourceBudget) -> Result<(), Br
     } else {
         Ok(())
     }
+}
+
+#[cfg(any(test, feature = "test-fixtures"))]
+fn check_profile_sync_fixture_provider_capacity(
+    store: &ProfileSyncStore,
+    provider_id: &str,
+) -> Result<(), BroadwebdError> {
+    if store.providers.contains_key(provider_id) {
+        return Ok(());
+    }
+    if let Some(max_providers) = store.capacity.max_providers
+        && store.providers.len() >= max_providers
+    {
+        return Err(BroadwebdError::UnsupportedRequest(format!(
+            "profile sync fixture provider capacity exceeded: max {max_providers} providers"
+        )));
+    }
+    Ok(())
+}
+
+fn check_profile_sync_fixture_object_capacity(
+    store: &ProfileSyncStore,
+    object_key: &(String, String, String),
+) -> Result<(), BroadwebdError> {
+    if store.objects.contains_key(object_key) || store.retained.contains(object_key) {
+        return Ok(());
+    }
+    check_profile_sync_fixture_new_object_capacity(store)
+}
+
+fn check_profile_sync_fixture_new_object_capacity(
+    store: &ProfileSyncStore,
+) -> Result<(), BroadwebdError> {
+    let retained_without_bytes = store
+        .retained
+        .iter()
+        .filter(|key| !store.objects.contains_key(*key))
+        .count();
+    let object_reference_count = store.objects.len() + retained_without_bytes;
+    if let Some(max_objects) = store.capacity.max_objects
+        && object_reference_count >= max_objects
+    {
+        return Err(BroadwebdError::UnsupportedRequest(format!(
+            "profile sync fixture object capacity exceeded: max {max_objects} object refs"
+        )));
+    }
+    Ok(())
+}
+
+fn check_profile_sync_fixture_root_capacity(
+    store: &ProfileSyncStore,
+    root_key: &(String, String, String),
+) -> Result<(), BroadwebdError> {
+    if store.roots.contains_key(root_key) {
+        return Ok(());
+    }
+    if let Some(max_roots) = store.capacity.max_roots
+        && store.roots.len() >= max_roots
+    {
+        return Err(BroadwebdError::UnsupportedRequest(format!(
+            "profile sync fixture root capacity exceeded: max {max_roots} roots"
+        )));
+    }
+    Ok(())
 }
 
 #[derive(Clone, Copy)]

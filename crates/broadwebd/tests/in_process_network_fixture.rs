@@ -6,7 +6,9 @@ use slate_broadwebd::{
     BroadwebDaemon, BroadwebdError, HttpFetchRequest, HttpHeader, PluginRegistry,
     ProfileSyncObjectRequest, ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse,
     ProfileSyncRootRequest, ProfileSyncRootUpdate, ResourceBudget,
-    test_fixtures::{InProcessBroadwebNetwork, InternalFixtureHttpResponse},
+    test_fixtures::{
+        InProcessBroadwebNetwork, InternalFixtureHttpResponse, ProfileSyncFixtureCapacity,
+    },
 };
 
 #[test]
@@ -161,6 +163,8 @@ fn default_registry_rejects_internal_http_fixture_urls() {
         error,
         BroadwebdError::UnsupportedRequest(message)
             if message.contains("cannot fetch internal fixture URL")
+                || message.contains("direct-http cannot fetch")
+                || message.contains("no HTTP transport for slate-fixture-http")
     ));
 
     assert!(fixture.finish().is_empty());
@@ -242,6 +246,108 @@ fn device_daemons_share_profile_sync_without_loopback_transport() {
 
     let _ = std::fs::remove_dir_all(first_state_root);
     let _ = std::fs::remove_dir_all(second_state_root);
+}
+
+#[test]
+fn in_process_profile_sync_fixture_enforces_provider_capacity() {
+    let network =
+        InProcessBroadwebNetwork::with_profile_sync_capacity(ProfileSyncFixtureCapacity {
+            max_providers: Some(1),
+            max_objects: Some(4),
+            max_roots: Some(4),
+        });
+    let first_state_root = std::env::temp_dir().join(format!(
+        "slate-broadwebd-provider-capacity-first-{}",
+        std::process::id()
+    ));
+    let second_state_root = std::env::temp_dir().join(format!(
+        "slate-broadwebd-provider-capacity-second-{}",
+        std::process::id()
+    ));
+    let first = network
+        .daemon_for_device(&first_state_root, ResourceBudget::default(), "fixture-a")
+        .expect("start first capacity-bounded device daemon");
+    let second = network
+        .daemon_for_device(&second_state_root, ResourceBudget::default(), "fixture-b")
+        .expect("start second capacity-bounded device daemon");
+
+    first
+        .profile_sync(ProfileSyncRequest::PutEncryptedObject(
+            ProfileSyncPutObjectRequest::new("default", b"first fixture object".to_vec()),
+        ))
+        .expect("first provider fits fixture capacity");
+    let error = second
+        .profile_sync(ProfileSyncRequest::PutEncryptedObject(
+            ProfileSyncPutObjectRequest::new("default", b"second fixture object".to_vec()),
+        ))
+        .expect_err("second provider should exceed fixture capacity");
+
+    assert!(matches!(
+        error,
+        BroadwebdError::UnsupportedRequest(message)
+            if message.contains("provider capacity exceeded")
+    ));
+
+    let _ = std::fs::remove_dir_all(first_state_root);
+    let _ = std::fs::remove_dir_all(second_state_root);
+}
+
+#[test]
+fn in_process_profile_sync_fixture_enforces_object_and_root_capacity() {
+    let network =
+        InProcessBroadwebNetwork::with_profile_sync_capacity(ProfileSyncFixtureCapacity {
+            max_providers: Some(1),
+            max_objects: Some(1),
+            max_roots: Some(1),
+        });
+    let state_root = std::env::temp_dir().join(format!(
+        "slate-broadwebd-object-root-capacity-{}",
+        std::process::id()
+    ));
+    let daemon = network
+        .daemon_for_device(&state_root, ResourceBudget::default(), "fixture-a")
+        .expect("start capacity-bounded device daemon");
+
+    let ProfileSyncResponse::PutEncryptedObject { object_id } = daemon
+        .profile_sync(ProfileSyncRequest::PutEncryptedObject(
+            ProfileSyncPutObjectRequest::new("default", b"first fixture object".to_vec()),
+        ))
+        .expect("first fixture object fits capacity")
+    else {
+        panic!("put object returned unexpected response");
+    };
+    let object_error = daemon
+        .profile_sync(ProfileSyncRequest::PutEncryptedObject(
+            ProfileSyncPutObjectRequest::new("default", b"second fixture object".to_vec()),
+        ))
+        .expect_err("second unique object should exceed fixture capacity");
+    assert!(matches!(
+        object_error,
+        BroadwebdError::UnsupportedRequest(message)
+            if message.contains("object capacity exceeded")
+    ));
+
+    daemon
+        .profile_sync(ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+            "default",
+            "settings/latest",
+            object_id.as_str(),
+        )))
+        .expect("first fixture root fits capacity");
+    let root_error = daemon
+        .profile_sync(ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+            "default",
+            "settings/alternate",
+            object_id.as_str(),
+        )))
+        .expect_err("second root should exceed fixture capacity");
+    assert!(matches!(
+        root_error,
+        BroadwebdError::UnsupportedRequest(message)
+            if message.contains("root capacity exceeded")
+    ));
+
+    let _ = std::fs::remove_dir_all(state_root);
 }
 
 #[test]

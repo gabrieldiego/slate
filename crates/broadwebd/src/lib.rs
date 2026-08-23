@@ -166,6 +166,7 @@ pub mod test_fixtures {
         InternalKuboRpcResponse, InternalKuboRpcTransportShim,
     };
     pub use crate::services::profile_sync::LocalProfileSyncFixture;
+    pub use crate::services::profile_sync::ProfileSyncFixtureCapacity;
 
     #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
     struct InProcessKuboProfileSyncExecutorFactory;
@@ -489,6 +490,13 @@ pub mod test_fixtures {
     impl InProcessBroadwebNetwork {
         pub fn new() -> Self {
             Self::default()
+        }
+
+        pub fn with_profile_sync_capacity(capacity: ProfileSyncFixtureCapacity) -> Self {
+            Self {
+                network_id: next_in_process_network_id(),
+                profile_sync: LocalProfileSyncFixture::with_capacity(capacity),
+            }
         }
 
         pub fn fixture_registry(&self) -> PluginRegistry {

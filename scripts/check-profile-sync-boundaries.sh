@@ -359,6 +359,14 @@ require_text \
     docs/roadmap.md \
     'Socketless broadweb models must stay behind transport shims' \
     'Roadmap must record that protocol models only replace socket IO, not protocol implementation logic.'
+require_text \
+    crates/broadwebd/src/lib.rs \
+    'with_profile_sync_capacity' \
+    'In-process broadweb fixtures must expose profile-sync capacity controls for local simulations.'
+require_text \
+    docs/roadmap.md \
+    'fixture capacity limits' \
+    'Roadmap must record bounded in-process profile-sync fixture state.'
 
 require_text \
     crates/chrome/src/desktop/protocols/slate.rs \

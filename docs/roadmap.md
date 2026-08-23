@@ -802,6 +802,11 @@ Current baseline:
 - Internal protocol models are constrained to transport/test boundaries:
   protocol implementations must keep real-web request/response semantics and
   can only swap socket IO for internal shims in local deterministic fixtures.
+- `InProcessBroadwebNetwork` can now be constructed with explicit profile-sync
+  fixture capacity limits for local simulations. The shared local fixture store
+  fails closed when simulated providers, object refs, or mutable-root entries
+  exceed those caps, keeping multi-device test benches from silently growing
+  unbounded state while still avoiding loopback sockets or external networks.
 - The profile-sync boundary gate now rejects simulator endpoint/model language
   from production protocol and routing modules. Fixture models can still live
   in the dedicated test-fixture layer, but IPFS, Kubo/IPNS, Tor, protocol
@@ -1729,6 +1734,9 @@ Next:
   delayed sync, availability loss, pinning policy, and conflicts entirely
   through in-process fixture transports, without loopback ports, the real
   internet, Tor, public IPFS/IPNS, or external relays.
+- Extend bounded fixture-state accounting from the shared local profile-sync
+  fixture store into Kubo/IPNS, Iroh-like, and future protocol models at the
+  socket/transport shim layer, not inside production protocol request builders.
 - Keep fixture behavior behind transport executors or shims. Protocol adapters
   should still build and parse production-shaped HTTP, Kubo, IPNS, Iroh-like,
   Tor/I2P, LAN, or retention-provider messages; the test layer only swaps the
