@@ -341,7 +341,7 @@ impl SlateProtocolHandler {
                 }
             }
             None => {
-                state.last_error = Some("missing profile sync key file contents".to_string());
+                state.last_error = Some("missing profile sync secret contents".to_string());
                 json_response(request, 400, state.to_json(None))
             }
         }
@@ -376,7 +376,8 @@ impl SlateProtocolHandler {
                 Ok(Some(sync_secret)) => sync_secret,
                 Ok(None) => {
                     state.last_error = Some(
-                        "create or import a profile sync key before adding a provider".to_string(),
+                        "create a local profile or import an enrollment file before adding a provider"
+                            .to_string(),
                     );
                     let readiness = self.profile_sync_local_readiness_report().ok().flatten();
                     return json_response(request, 400, state.to_json(readiness.as_ref()));
@@ -486,7 +487,7 @@ impl SlateProtocolHandler {
             ) {
                 (None, _) => {
                     state.last_error = Some(
-                        "enter a target device id before creating an enrollment bundle".to_string(),
+                        "enter a target device id before creating an enrollment file".to_string(),
                     );
                     let readiness = self.profile_sync_local_readiness_report().ok().flatten();
                     return json_response(request, 400, state.to_json(readiness.as_ref()));
@@ -494,8 +495,7 @@ impl SlateProtocolHandler {
                 (_, Ok(Some(sync_secret))) => sync_secret,
                 (_, Ok(None)) => {
                     state.last_error = Some(
-                        "create or import a profile sync key before creating an enrollment bundle"
-                            .to_string(),
+                        "create a local profile before creating an enrollment file".to_string(),
                     );
                     let readiness = self.profile_sync_local_readiness_report().ok().flatten();
                     return json_response(request, 400, state.to_json(readiness.as_ref()));
@@ -534,7 +534,7 @@ impl SlateProtocolHandler {
     ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
         let Some(bundle_text) = profile_sync_enrollment_bundle_text_from_url(url) else {
             let mut state = self.profile_sync_preview.lock().unwrap();
-            state.last_error = Some("missing profile sync enrollment bundle contents".to_string());
+            state.last_error = Some("missing profile sync enrollment file contents".to_string());
             let readiness = self.profile_sync_local_readiness_report().ok().flatten();
             return json_response(request, 400, state.to_json(readiness.as_ref()));
         };
@@ -666,7 +666,7 @@ impl SlateProtocolHandler {
                 Ok(Some(sync_secret)) => sync_secret,
                 Ok(None) => {
                     state.last_error = Some(
-                        "create or import a profile sync key before syncing current settings"
+                        "create a local profile or import an enrollment file before syncing current settings"
                             .to_string(),
                     );
                     let readiness = self.profile_sync_local_readiness_report().ok().flatten();
@@ -709,7 +709,7 @@ impl SlateProtocolHandler {
                 Ok(Some(sync_secret)) => sync_secret,
                 Ok(None) => {
                     state.last_error = Some(
-                        "create or import a profile sync key before running a local trial"
+                        "create a local profile or import an enrollment file before running a local trial"
                             .to_string(),
                     );
                     let readiness = self.profile_sync_local_readiness_report().ok().flatten();
@@ -752,7 +752,7 @@ impl SlateProtocolHandler {
                 Ok(Some(sync_secret)) => sync_secret,
                 Ok(None) => {
                     state.last_error = Some(
-                        "create or import a profile sync key before running a two-device trial"
+                        "create a local profile or import an enrollment file before running a two-device trial"
                             .to_string(),
                     );
                     let readiness = self.profile_sync_local_readiness_report().ok().flatten();
@@ -3016,36 +3016,30 @@ mod tests {
         assert!(settings_page.contains("Ctrl+F12"));
         assert!(settings_page.contains("Profile Sync Preview"));
         assert!(settings_page.contains("id=\"profile-sync-details\""));
-        assert!(settings_page.contains("id=\"profile-sync-secret\""));
-        assert!(settings_page.contains("id=\"profile-sync-secret-file\""));
         assert!(settings_page.contains("id=\"profile-sync-create\""));
         assert!(settings_page.contains("Create local profile"));
-        assert!(settings_page.contains("id=\"profile-sync-download\" hidden"));
-        assert!(settings_page.contains("id=\"profile-sync-import\" hidden"));
         assert!(settings_page.contains("id=\"profile-sync-provider\""));
         assert!(settings_page.contains("id=\"profile-sync-check\""));
         assert!(settings_page.contains("id=\"profile-sync-run-current\""));
         assert!(settings_page.contains("id=\"profile-sync-run-local\""));
         assert!(settings_page.contains("id=\"profile-sync-run-local-two-device\""));
-        assert!(settings_page.contains("id=\"profile-sync-device-request-file\""));
-        assert!(settings_page.contains("id=\"profile-sync-device-request\""));
-        assert!(settings_page.contains("id=\"profile-sync-device-request-create\" hidden"));
-        assert!(settings_page.contains("id=\"profile-sync-device-request-download\" hidden"));
-        assert!(settings_page.contains("id=\"profile-sync-device-request-import\" hidden"));
-        assert!(settings_page.contains("id=\"profile-sync-enrollment-device\""));
-        assert!(settings_page.contains("id=\"profile-sync-enrollment-file\""));
-        assert!(settings_page.contains("id=\"profile-sync-enrollment\""));
-        assert!(settings_page.contains("id=\"profile-sync-enrollment-create\" hidden"));
-        assert!(settings_page.contains("id=\"profile-sync-enrollment-download\" hidden"));
-        assert!(settings_page.contains("id=\"profile-sync-enrollment-import\" hidden"));
+        assert!(settings_page.contains("id=\"profile-sync-handoff-device\""));
         assert!(settings_page.contains("id=\"profile-sync-handoff-file\""));
         assert!(settings_page.contains("id=\"profile-sync-handoff\""));
-        assert!(settings_page.contains("id=\"profile-sync-handoff-create\" hidden"));
         assert!(settings_page.contains("id=\"profile-sync-handoff-download\""));
         assert!(settings_page.contains("id=\"profile-sync-handoff-import\""));
         assert!(settings_page.contains("Download enrollment file"));
         assert!(settings_page.contains("Import enrollment file"));
         assert!(settings_page.contains("Enrollment file"));
+        assert!(!settings_page.contains("id=\"profile-sync-secret\""));
+        assert!(!settings_page.contains("id=\"profile-sync-secret-file\""));
+        assert!(!settings_page.contains("id=\"profile-sync-download\""));
+        assert!(!settings_page.contains("id=\"profile-sync-import\""));
+        assert!(!settings_page.contains("id=\"profile-sync-device-request-file\""));
+        assert!(!settings_page.contains("id=\"profile-sync-device-request\""));
+        assert!(!settings_page.contains("id=\"profile-sync-enrollment-file\""));
+        assert!(!settings_page.contains("id=\"profile-sync-enrollment\""));
+        assert!(!settings_page.contains("id=\"profile-sync-handoff-create\""));
         assert!(settings_page.contains("Current sync"));
         assert!(settings_page.contains("Two-device trial"));
         assert!(settings_page.contains("Enabled domains"));
@@ -3067,7 +3061,8 @@ mod tests {
         assert!(settings_page.contains("stored_provider_metadata_issues"));
         assert!(settings_page.contains("profileSyncIssueLabel"));
         assert!(settings_page.contains("slate://settings/profile-sync/"));
-        assert!(settings_page.contains("slate-sync-secret.json"));
+        assert!(settings_page.contains("slate-profile-enrollment"));
+        assert!(!settings_page.contains("slate-sync-secret.json"));
         assert!(!settings_page.contains("replaceState"));
         assert!(!settings_page.contains("type=\"range\""));
     }

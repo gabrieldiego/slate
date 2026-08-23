@@ -1608,16 +1608,16 @@ Current baseline:
   schema, exact secret length, and optional expected profile id, while debug
   output redacts the encoded secret.
 - `slate://settings` now includes a first session-only Profile Sync Preview.
-  It can create a Slate Sync Secret key-file envelope, show it for copy/save,
-  download it as `slate-sync-secret.json`, and import selected or pasted
-  envelope contents after profile-bound validation. This is deliberately local
-  and rough: it does not persist the root secret, render QR codes yet, or
-  contact broadweb providers.
-- Creating or importing a Profile Sync Preview key file now activates local
-  non-secret sync metadata in `slate-settings.db`: the local device record,
-  default app sync domains, the active content-key epoch id, and trusted public
-  membership records derived from the key file. The raw root secret still
-  remains session/key-file material rather than plaintext database state.
+  It can create a local profile from a Slate Sync Secret and can import the
+  same secret-bearing material only through the enrollment-file handoff flow.
+  The rendered page no longer exposes the raw key-file download/import controls;
+  the root secret remains session/file material rather than plaintext database
+  state. This is deliberately local and rough: it does not render QR codes yet
+  or contact broadweb providers.
+- Creating a local Profile Sync Preview profile or importing an enrollment file
+  now activates local non-secret sync metadata in `slate-settings.db`: the local
+  device record, default app sync domains, the active content-key epoch id, and
+  trusted public membership records derived from the secret material.
 - The first key-file enrollment shape now derives a stable account-authority
   signer and a stable local-device signer from `SlateSyncSecret`. Storage
   self-enrolls the account authority, uses it to enroll the local device, and
@@ -1679,11 +1679,12 @@ Current baseline:
   `slate-profile-enrollment-<device>.json` file, and a target device can import
   a selected or pasted enrollment file to apply membership and activate the
   session key-derived local metadata in one step. The lower-level key-file,
-  device-request, and non-secret enrollment-bundle controls remain hidden
-  implementation helpers until QR-code or unbound onboarding semantics are
+  device-request, and non-secret enrollment-bundle protocol routes remain
+  diagnostic implementation helpers, but their controls have been removed from
+  the rendered Settings page until QR-code or unbound onboarding semantics are
   designed deliberately. This remains a sensitive local preview flow and still
-  uses the existing query-string internal action transport until
-  POST/body-capable Slate protocol imports are added.
+  uses the existing query-string internal action transport until POST/body-capable
+  Slate protocol imports are added.
 - The socketless two-device Profile Sync Preview now uses the same request
   shape: the receiver emits a `ProfileSyncDeviceEnrollmentRequest`, the
   publisher derives the enrollment bundle from that request, and the normal

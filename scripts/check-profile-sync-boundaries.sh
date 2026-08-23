@@ -496,10 +496,10 @@ require_text \
     crates/chrome/src/desktop/protocols/slate.rs \
     'handoff_export_text' \
     'Slate settings profile-sync JSON must include handoff export text for local file trials.'
-require_text \
+reject_protocol_model_leak \
     resources/resource_protocol/slate-settings.html \
-    'id="profile-sync-handoff-create" hidden' \
-    'Slate settings page must keep low-level handoff creation hidden behind the file download action.'
+    'id="profile-sync-handoff-create"' \
+    'Slate settings page must not expose a separate handoff creation control; download should create the file on demand.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'Download enrollment file' \
@@ -668,6 +668,26 @@ require_text \
     resources/resource_protocol/slate-settings.html \
     'Issue details' \
     'Slate settings page must expose protocol-neutral profile-sync issue details.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'profile-sync-handoff-device' \
+    'Slate settings page must expose one target-device field for enrollment file handoff.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'Download enrollment file' \
+    'Slate settings page must expose one enrollment file export action.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'Import enrollment file' \
+    'Slate settings page must expose one enrollment file import action.'
+reject_protocol_model_leak \
+    resources/resource_protocol/slate-settings.html \
+    'id="profile-sync-(secret|download|import|device-request|enrollment)([^a-zA-Z_-]|")' \
+    'Settings Profile Sync Preview must not expose obsolete internal key, device-request, or enrollment-bundle file controls.'
+reject_protocol_model_leak \
+    resources/resource_protocol/slate-settings.html \
+    'slate-sync-secret\.json|Download internal key file|Import internal key|internal device request|internal enrollment bundle' \
+    'Settings Profile Sync Preview should present a single enrollment-file handoff, not internal sync artifacts.'
 
 run_test slate-apps sync_domains
 run_test slate-storage rail_app_sync_domains_match_seeded_storage_domains
