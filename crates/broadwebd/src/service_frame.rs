@@ -1,4 +1,11 @@
-use crate::{BroadwebdError, ServiceRequest, ServiceResponse};
+use crate::{
+    daemon::BroadwebdClient,
+    error::BroadwebdError,
+    health::DaemonHealth,
+    http::{ServiceRequest, ServiceResponse},
+    state::TemporaryDownloadRecord,
+    status::BroadwebStatusSnapshot,
+};
 use serde::{Serialize, de::DeserializeOwned};
 use std::io::{self, Write};
 
@@ -38,6 +45,57 @@ impl ServiceFrameCodec {
 impl Default for ServiceFrameCodec {
     fn default() -> Self {
         Self::new(DEFAULT_SERVICE_FRAME_MAX_BYTES)
+    }
+}
+
+pub struct ServiceFrameBroadwebdClient<'a> {
+    inner: &'a dyn BroadwebdClient,
+    codec: ServiceFrameCodec,
+}
+
+impl<'a> ServiceFrameBroadwebdClient<'a> {
+    pub fn new(inner: &'a dyn BroadwebdClient) -> Self {
+        Self::with_codec(inner, ServiceFrameCodec::default())
+    }
+
+    pub fn with_codec(inner: &'a dyn BroadwebdClient, codec: ServiceFrameCodec) -> Self {
+        Self { inner, codec }
+    }
+
+    pub fn codec(&self) -> ServiceFrameCodec {
+        self.codec
+    }
+}
+
+impl BroadwebdClient for ServiceFrameBroadwebdClient<'_> {
+    fn health(&self) -> DaemonHealth {
+        self.inner.health()
+    }
+
+    fn status_snapshot(&self) -> BroadwebStatusSnapshot {
+        self.inner.status_snapshot()
+    }
+
+    fn dispatch_service_request(
+        &self,
+        request: ServiceRequest,
+    ) -> Result<ServiceResponse, BroadwebdError> {
+        let request_frame = self.codec.encode_request(&request)?;
+        let decoded_request = self.codec.decode_request(request_frame.as_slice())?;
+        let response = self.inner.dispatch_service_request(decoded_request)?;
+        let response_frame = self.codec.encode_response(&response)?;
+        self.codec.decode_response(response_frame.as_slice())
+    }
+
+    fn temporary_downloads(
+        &self,
+        profile: &str,
+    ) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+        self.inner.temporary_downloads(profile)
+    }
+
+    fn downloads(&self, profile: &str) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+        self.inner.downloads(profile)
     }
 }
 

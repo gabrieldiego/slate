@@ -122,7 +122,9 @@ pub use registry::{
     ApplicationServicePlugin, PluginInstallReport, PluginRegistry, ProtocolInstallReport,
     ProtocolService, TransportPlugin,
 };
-pub use service_frame::{DEFAULT_SERVICE_FRAME_MAX_BYTES, ServiceFrameCodec};
+pub use service_frame::{
+    DEFAULT_SERVICE_FRAME_MAX_BYTES, ServiceFrameBroadwebdClient, ServiceFrameCodec,
+};
 pub use services::{
     http_fetch::HttpFetchService,
     profile_sync::{ProfileSyncRuntimeBackend, ProfileSyncRuntimeConfig, ProfileSyncService},
@@ -928,15 +930,15 @@ mod tests {
         ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse,
         ProfileSyncRootHealthRequest, ProfileSyncRootRequest, ProfileSyncRootUpdate,
         ProfileSyncRuntimeBackend, ProfileSyncRuntimeConfig, ProfileSyncService, ProtocolService,
-        ResourceBudget, ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, ServiceFrameCodec,
-        ServiceRequest, ServiceResponse, StateRoot, TOR_ARTI_HTTP_PLUGIN, TOR_PROTOCOL_SERVICE,
-        TorService, TransportHttpRequest, TransportPlugin, ipfs_gateway_http_url,
-        ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url, ipfs_kubo_profile_sync_added_object_id,
-        ipfs_kubo_profile_sync_name_publish_url, ipfs_kubo_profile_sync_name_resolve_url,
-        ipfs_kubo_profile_sync_pin_add_url, ipfs_kubo_profile_sync_pin_ls_has_recursive_pin,
-        ipfs_kubo_profile_sync_pin_ls_url, ipfs_kubo_profile_sync_pin_rm_url,
-        ipfs_kubo_profile_sync_published_object_id, ipfs_kubo_profile_sync_resolved_object_id,
-        tor_http_target, tor_url_from_http_url,
+        ResourceBudget, ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, ServiceFrameBroadwebdClient,
+        ServiceFrameCodec, ServiceRequest, ServiceResponse, StateRoot, TOR_ARTI_HTTP_PLUGIN,
+        TOR_PROTOCOL_SERVICE, TorService, TransportHttpRequest, TransportPlugin,
+        ipfs_gateway_http_url, ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url,
+        ipfs_kubo_profile_sync_added_object_id, ipfs_kubo_profile_sync_name_publish_url,
+        ipfs_kubo_profile_sync_name_resolve_url, ipfs_kubo_profile_sync_pin_add_url,
+        ipfs_kubo_profile_sync_pin_ls_has_recursive_pin, ipfs_kubo_profile_sync_pin_ls_url,
+        ipfs_kubo_profile_sync_pin_rm_url, ipfs_kubo_profile_sync_published_object_id,
+        ipfs_kubo_profile_sync_resolved_object_id, tor_http_target, tor_url_from_http_url,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -1301,6 +1303,57 @@ mod tests {
             matches!(error, BroadwebdError::Request(ref message) if message.contains("decode request service frame")),
             "{error:?}"
         );
+    }
+
+    #[test]
+    fn service_frame_broadwebd_client_dispatches_profile_sync_through_byte_frames() {
+        let daemon =
+            BroadwebDaemon::start(test_state_root("framed-client-profile-sync")).expect("daemon");
+        let framed = ServiceFrameBroadwebdClient::new(&daemon);
+        let client: &dyn BroadwebdClient = &framed;
+
+        let put = client
+            .profile_sync(ProfileSyncRequest::PutEncryptedObject(
+                ProfileSyncPutObjectRequest::new("default", b"encrypted framed object".to_vec()),
+            ))
+            .expect("put through framed client");
+        let ProfileSyncResponse::PutEncryptedObject { object_id } = put else {
+            panic!("unexpected put response through framed client");
+        };
+
+        let fetched = client
+            .profile_sync(ProfileSyncRequest::GetEncryptedObject(
+                ProfileSyncObjectRequest::new("default", object_id.clone()),
+            ))
+            .expect("fetch through framed client");
+        assert_eq!(
+            fetched,
+            ProfileSyncResponse::GetEncryptedObject {
+                object_id,
+                bytes: b"encrypted framed object".to_vec()
+            }
+        );
+
+        let _ = fs::remove_dir_all(daemon.state_root().path());
+    }
+
+    #[test]
+    fn service_frame_broadwebd_client_rejects_oversized_request_before_dispatch() {
+        let daemon =
+            BroadwebDaemon::start(test_state_root("framed-client-request-limit")).expect("daemon");
+        let framed = ServiceFrameBroadwebdClient::with_codec(&daemon, ServiceFrameCodec::new(64));
+
+        let error = framed
+            .profile_sync(ProfileSyncRequest::PutEncryptedObject(
+                ProfileSyncPutObjectRequest::new("default", vec![3; 256]),
+            ))
+            .expect_err("oversized framed client request should fail");
+        assert!(
+            matches!(error, BroadwebdError::FrameTooLarge { limit: 64, actual } if actual > 64),
+            "{error:?}"
+        );
+
+        let _ = fs::remove_dir_all(daemon.state_root().path());
     }
 
     #[test]

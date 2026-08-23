@@ -434,6 +434,11 @@ envelopes. It rejects oversized incoming frames before parsing and rejects
 oversized encoded frames while writing, so local fixtures and future IPC clients
 have a concrete memory boundary even before the final OS-local transport is
 chosen.
+`ServiceFrameBroadwebdClient` is the current socketless framed-client adapter:
+it implements `BroadwebdClient` by round-tripping service requests and responses
+through the bounded frame codec before and after dispatching to an inner client.
+This gives local tests an IPC-shaped byte boundary without opening loopback
+ports or choosing the final daemon transport.
 
 ## IPFS Initial Shape
 

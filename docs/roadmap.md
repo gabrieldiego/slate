@@ -286,6 +286,10 @@ Current baseline:
   encoded frames while writing, giving local fixtures and future IPC clients an
   explicit memory boundary without opening sockets or choosing the final IPC
   transport.
+- broadwebd now has a socketless framed-client adapter that implements
+  `BroadwebdClient` by round-tripping service requests and responses through the
+  bounded frame codec before dispatch. This lets future profile-sync and
+  browser-core tests validate IPC-shaped byte boundaries without loopback ports.
 - `slate-profile-sync` has started consuming that boundary directly: its
   source, publisher, runner, and scheduler bridge wrappers now hold
   `BroadwebdClient` trait objects instead of concrete daemon references.

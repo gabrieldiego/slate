@@ -394,6 +394,10 @@ The current bounded JSON service-frame codec is deliberately transport-neutral:
 tests can exercise byte-framed request/response behavior without opening
 loopback ports, and future local IPC clients can reuse the same memory limit
 until streamed bodies replace large inline payload frames.
+The socketless framed-client adapter wraps an inner `BroadwebdClient` and
+round-trips each service request and response through that codec. Protocol and
+application-service tests can therefore validate IPC-shaped byte boundaries
+without giving the test process a listening port.
 
 ## Testing Contract
 

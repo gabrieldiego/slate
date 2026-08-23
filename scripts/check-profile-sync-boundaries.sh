@@ -191,6 +191,14 @@ require_text \
     'pub struct ServiceFrameCodec' \
     'broadwebd must expose a bounded service-envelope frame codec for future IPC clients.'
 require_text \
+    crates/broadwebd/src/service_frame.rs \
+    'pub struct ServiceFrameBroadwebdClient' \
+    'broadwebd must expose an in-process framed client adapter for socketless IPC-boundary tests.'
+require_text \
+    crates/broadwebd/src/service_frame.rs \
+    'impl BroadwebdClient for ServiceFrameBroadwebdClient' \
+    'broadwebd framed client adapter must implement the normal client trait.'
+require_text \
     crates/broadwebd/src/lib.rs \
     'daemon_dispatches_profile_sync_through_service_request_envelope' \
     'broadwebd must cover profile-sync dispatch through the IPC-shaped service request envelope.'
@@ -214,6 +222,10 @@ require_text \
     crates/broadwebd/src/lib.rs \
     'service_frame_codec_rejects_oversized_decoded_request_before_json_parse' \
     'broadwebd bounded frame codec must reject oversized incoming frames before JSON parsing.'
+require_text \
+    crates/broadwebd/src/lib.rs \
+    'service_frame_broadwebd_client_dispatches_profile_sync_through_byte_frames' \
+    'broadwebd must prove profile-sync dispatch can run through byte-framed service envelopes.'
 require_text \
     crates/profile-sync/src/lib.rs \
     'daemon: &.*dyn BroadwebdClient' \
@@ -468,6 +480,10 @@ require_text \
     'bounded JSON service-frame codec' \
     'broadwebd architecture must document the bounded service-frame codec.'
 require_text \
+    docs/architecture/broadwebd.md \
+    'socketless framed-client adapter' \
+    'broadwebd architecture must document the socketless framed-client adapter.'
+require_text \
     docs/roadmap.md \
     'public `BroadwebdClient` trait' \
     'Roadmap must record the current broadwebd client boundary.'
@@ -483,6 +499,10 @@ require_text \
     docs/roadmap.md \
     'bounded JSON service-frame codec' \
     'Roadmap must record the bounded broadwebd service-frame codec.'
+require_text \
+    docs/roadmap.md \
+    'socketless framed-client adapter' \
+    'Roadmap must record the broadwebd socketless framed-client adapter.'
 require_text \
     docs/architecture/profile-sync.md \
     '`ProfileSyncObjectSource` trait over broadwebd'\''s `BroadwebdClient` boundary' \
@@ -817,6 +837,8 @@ run_test_with_features slate-broadwebd test-fixtures registry_can_apply_kubo_pro
 run_test_with_features slate-broadwebd test-fixtures registry_rejects_external_kubo_profile_sync_endpoint
 run_test slate-broadwebd daemon_dispatches_through_ipc_neutral_client_trait
 run_test slate-broadwebd daemon_dispatches_profile_sync_through_service_request_envelope
+run_test slate-broadwebd service_request_response_envelopes_round_trip_for_ipc_framing
+run_test slate-broadwebd service_frame
 run_test_with_features slate-broadwebd test-fixtures kubo_profile_sync_get_uses_transport_bytes_not_local_upload_metadata
 run_test_with_features slate-broadwebd test-fixtures kubo_profile_sync_model_round_trips_state_without_canned_responses
 run_test_with_features slate-broadwebd test-fixtures kubo_profile_sync_model_release_updates_retention_health
