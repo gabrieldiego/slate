@@ -306,6 +306,10 @@ Current baseline:
   framed broadwebd clients over the local fixture network. This proves a real
   runtime settings sync path works across the socketless byte boundary, not only
   the lower-level bridge wrappers.
+- Selected retention-provider settings sync now also runs through framed
+  broadwebd clients for both the local device scheduler and provider handles,
+  so provider retention and availability calls are covered across the same
+  socketless byte boundary.
 - The in-memory `LocalProfileSyncFixture` is no longer re-exported from
   broadwebd's normal root API. Local preview helpers that still need the
   deterministic model import it through `slate_broadwebd::test_fixtures`, so the

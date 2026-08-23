@@ -23260,6 +23260,113 @@ mod tests {
     }
 
     #[test]
+    fn broadwebd_settings_sync_cycle_retains_with_framed_selected_provider() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("framed-retention-cycle-device");
+        let provider_state_root = test_state_root("framed-retention-cycle-provider");
+        let db_root = test_state_root("framed-retention-cycle-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-framed-retention-cycle-a",
+            )
+            .expect("start in-process framed retention-cycle device daemon");
+        let provider_daemon = network
+            .daemon_for_availability_provider(
+                &provider_state_root,
+                ResourceBudget::default(),
+                "runtime-framed-retention-cycle-pinner",
+            )
+            .expect("start in-process framed retention-cycle availability provider daemon");
+        let device_client = ServiceFrameBroadwebdClient::new(&device_daemon);
+        let provider_client = ServiceFrameBroadwebdClient::new(&provider_daemon);
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-framed-retention-cycle-a",
+        )
+        .expect("open framed retention-cycle local settings database");
+        let profile = "framedretentioncycleprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([75; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer = ProfileSyncDeviceSigner::generate("runtime-framed-retention-cycle-a")
+            .expect("generate framed retention-cycle local device signer");
+        let policy = SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2);
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register framed retention-cycle trusted public key");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write framed retention-cycle local setting");
+
+        let selected_provider_id =
+            "local-fixture-availability-runtime-framed-retention-cycle-pinner";
+        let run = BroadwebdSettingsSyncScheduler::new(&device_client)
+            .run_once_selecting_retention_providers(
+                &database,
+                &SettingsSyncSchedulerConfig::new(profile, settings_root_id, policy),
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                &[SettingsSyncRetentionProviderHandle::new(
+                    selected_provider_id,
+                    &provider_client,
+                )],
+            )
+            .expect("framed scheduler selects and retains through framed provider handle");
+
+        assert_eq!(
+            run.selected_retention_provider_ids,
+            vec![selected_provider_id.to_string()]
+        );
+        assert_eq!(run.selected_retention_provider_count(), 1);
+        assert_eq!(run.retention_provider_selection_issue_count(), 0);
+        assert!(!run.has_retention_provider_selection_issue());
+        assert_eq!(run.cycle.cycle.published_step_count(), 1);
+        assert_eq!(run.cycle.retention.len(), 1);
+        assert_eq!(run.cycle.retention[0].provider_index, 0);
+        assert_eq!(
+            run.cycle.retention[0].object_count(),
+            run.cycle.retained_object_ids.len()
+        );
+        assert_eq!(
+            run.cycle.retention[0].object_count(),
+            run.cycle.retention[0].retained_count()
+        );
+        assert_eq!(
+            run.cycle.retention[0].object_count(),
+            run.cycle.retention[0].available_count()
+        );
+        assert_eq!(run.retained_provider_count(), 1);
+        assert!(!run.cycle.has_retention_issue());
+        assert!(!run.degraded_after());
+
+        let retained = provider_client
+            .profile_sync(BroadwebdProfileSyncRequest::ListRetainedObjects(
+                BroadwebdProfileSyncProfileRequest::new(profile),
+            ))
+            .expect("framed provider client can list retained objects");
+        let BroadwebdProfileSyncResponse::RetainedObjects { object_ids } = retained else {
+            panic!("expected retained object list");
+        };
+        assert_eq!(
+            object_ids.into_iter().collect::<BTreeSet<_>>(),
+            run.cycle
+                .retained_object_ids
+                .iter()
+                .cloned()
+                .collect::<BTreeSet<_>>()
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
     fn broadwebd_settings_compaction_retains_objects_before_strict_root_policy_check() {
         let network = InProcessBroadwebNetwork::new();
         let device_state_root = test_state_root("compaction-policy-retention-device");

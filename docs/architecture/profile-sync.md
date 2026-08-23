@@ -635,7 +635,9 @@ construction are checked across an IPC-shaped byte boundary without opening a
 loopback port. A settings-cycle regression now also publishes and applies one
 setting through framed clients on two local fixture devices, proving the runtime
 cycle path can cross the byte boundary before the final daemon IPC transport is
-chosen.
+chosen. Selected retention-provider coverage also wraps the provider handle in
+a framed client, so retention and availability checks cross the same byte
+boundary as normal device sync calls.
 The publisher also has a retained dependency/root helper for publish flows that
 must upload snapshot or tail objects before publishing the manifest root.
 For settings tails, the bridge can convert local `SyncChangeRecord` values into
