@@ -24,9 +24,9 @@ use slate_broadwebd::{
 use slate_profile_sync::{
     LocalSettingsSyncCurrentCycleReport, LocalSettingsSyncPreviewCycleReport,
     LocalSettingsSyncPreviewError, LocalSettingsSyncProviderIssueSummary,
-    LocalSettingsSyncRootObjectProviderIssueSummary, LocalSettingsSyncTwoDevicePreviewCycleReport,
-    run_local_settings_sync_current_cycle, run_local_settings_sync_preview_cycle,
-    run_local_settings_sync_two_device_preview_cycle,
+    LocalSettingsSyncRetentionIssueSummary, LocalSettingsSyncRootObjectProviderIssueSummary,
+    LocalSettingsSyncTwoDevicePreviewCycleReport, run_local_settings_sync_current_cycle,
+    run_local_settings_sync_preview_cycle, run_local_settings_sync_two_device_preview_cycle,
 };
 use slate_storage::{
     DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
@@ -944,6 +944,8 @@ struct ProfileSyncPreviewCurrentSyncState {
     published_step_count: usize,
     published_object_count: usize,
     retained_object_count: usize,
+    retention_issue_count: usize,
+    retention_issues: Vec<LocalSettingsSyncRetentionIssueSummary>,
     fixture_materialization_issue_count: usize,
     retention_provider_selection_issue_count: usize,
     retention_provider_selection_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
@@ -975,6 +977,8 @@ impl ProfileSyncPreviewCurrentSyncState {
             published_step_count: report.published_step_count,
             published_object_count: report.published_object_count,
             retained_object_count: report.retained_object_count,
+            retention_issue_count: report.retention_issue_count,
+            retention_issues: report.retention_issues.clone(),
             fixture_materialization_issue_count: report.fixture_materialization_issue_count,
             retention_provider_selection_issue_count: report
                 .retention_provider_selection_issue_count,
@@ -1011,6 +1015,8 @@ impl ProfileSyncPreviewCurrentSyncState {
             "published_step_count": self.published_step_count,
             "published_object_count": self.published_object_count,
             "retained_object_count": self.retained_object_count,
+            "retention_issue_count": self.retention_issue_count,
+            "retention_issues": profile_sync_retention_issues_json(self.retention_issues.as_slice()),
             "fixture_materialization_issue_count": self.fixture_materialization_issue_count,
             "retention_provider_selection_issue_count": self.retention_provider_selection_issue_count,
             "retention_provider_selection_issues": profile_sync_provider_issues_json(self.retention_provider_selection_issues.as_slice()),
@@ -1045,6 +1051,8 @@ struct ProfileSyncPreviewTrialState {
     published_step_count: usize,
     published_object_count: usize,
     retained_object_count: usize,
+    retention_issue_count: usize,
+    retention_issues: Vec<LocalSettingsSyncRetentionIssueSummary>,
     fixture_materialization_issue_count: usize,
     retention_provider_selection_issue_count: usize,
     retention_provider_selection_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
@@ -1078,6 +1086,8 @@ impl ProfileSyncPreviewTrialState {
             published_step_count: report.published_step_count,
             published_object_count: report.published_object_count,
             retained_object_count: report.retained_object_count,
+            retention_issue_count: report.retention_issue_count,
+            retention_issues: report.retention_issues.clone(),
             fixture_materialization_issue_count: report.fixture_materialization_issue_count,
             retention_provider_selection_issue_count: report
                 .retention_provider_selection_issue_count,
@@ -1116,6 +1126,8 @@ impl ProfileSyncPreviewTrialState {
             "published_step_count": self.published_step_count,
             "published_object_count": self.published_object_count,
             "retained_object_count": self.retained_object_count,
+            "retention_issue_count": self.retention_issue_count,
+            "retention_issues": profile_sync_retention_issues_json(self.retention_issues.as_slice()),
             "fixture_materialization_issue_count": self.fixture_materialization_issue_count,
             "retention_provider_selection_issue_count": self.retention_provider_selection_issue_count,
             "retention_provider_selection_issues": profile_sync_provider_issues_json(self.retention_provider_selection_issues.as_slice()),
@@ -1175,6 +1187,27 @@ fn profile_sync_provider_issue_json(
     serde_json::json!({
         "category": issue.category.as_str(),
         "provider_id": issue.provider_id.as_str(),
+        "kind": issue.kind.as_str(),
+    })
+}
+
+fn profile_sync_retention_issues_json(
+    issues: &[LocalSettingsSyncRetentionIssueSummary],
+) -> serde_json::Value {
+    serde_json::Value::Array(
+        issues
+            .iter()
+            .map(profile_sync_retention_issue_json)
+            .collect(),
+    )
+}
+
+fn profile_sync_retention_issue_json(
+    issue: &LocalSettingsSyncRetentionIssueSummary,
+) -> serde_json::Value {
+    serde_json::json!({
+        "provider_index": issue.provider_index,
+        "object_id": issue.object_id.as_str(),
         "kind": issue.kind.as_str(),
     })
 }
@@ -2616,6 +2649,12 @@ mod tests {
             published_step_count: 2,
             published_object_count: 3,
             retained_object_count: 2,
+            retention_issue_count: 1,
+            retention_issues: vec![super::LocalSettingsSyncRetentionIssueSummary {
+                provider_index: 0,
+                object_id: "bafyfixture-retention".to_string(),
+                kind: "not_available".to_string(),
+            }],
             fixture_materialization_issue_count: 0,
             retention_provider_selection_issue_count: 1,
             retention_provider_selection_issues: vec![
@@ -2696,6 +2735,13 @@ mod tests {
             json["stored_provider_metadata_issues"][0]["kind"],
             "unauthorized"
         );
+        assert_eq!(json["retention_issue_count"], 1);
+        assert_eq!(json["retention_issues"][0]["provider_index"], 0);
+        assert_eq!(
+            json["retention_issues"][0]["object_id"],
+            "bafyfixture-retention"
+        );
+        assert_eq!(json["retention_issues"][0]["kind"], "not_available");
         assert_eq!(json["selected_endpoint_ready_provider_count"], 1);
         assert_eq!(json["selected_endpoint_pending_protocol_provider_count"], 2);
         assert_eq!(json["selected_endpoint_missing_provider_count"], 1);

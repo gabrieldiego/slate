@@ -97,6 +97,14 @@ pub struct LocalSettingsSyncProviderIssueSummary {
 }
 
 #[cfg(feature = "local-preview-fixtures")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LocalSettingsSyncRetentionIssueSummary {
+    pub provider_index: usize,
+    pub object_id: String,
+    pub kind: String,
+}
+
+#[cfg(feature = "local-preview-fixtures")]
 impl LocalSettingsSyncRootObjectProviderIssueSummary {
     fn from_issue(issue: SettingsSyncRootObjectProviderIssue) -> Self {
         Self {
@@ -134,6 +142,17 @@ impl LocalSettingsSyncProviderIssueSummary {
 }
 
 #[cfg(feature = "local-preview-fixtures")]
+impl LocalSettingsSyncRetentionIssueSummary {
+    fn from_issue(issue: SettingsSyncCycleProviderRetentionIssue) -> Self {
+        Self {
+            provider_index: issue.provider_index,
+            object_id: issue.object_id,
+            kind: settings_sync_cycle_provider_retention_issue_kind_name(issue.kind).to_string(),
+        }
+    }
+}
+
+#[cfg(feature = "local-preview-fixtures")]
 fn local_settings_sync_root_object_provider_issue_summaries(
     health: &SettingsSyncHealthReport,
 ) -> Vec<LocalSettingsSyncRootObjectProviderIssueSummary> {
@@ -165,6 +184,16 @@ fn local_settings_sync_stored_provider_metadata_issue_summaries(
 }
 
 #[cfg(feature = "local-preview-fixtures")]
+fn local_settings_sync_retention_issue_summaries(
+    issues: Vec<SettingsSyncCycleProviderRetentionIssue>,
+) -> Vec<LocalSettingsSyncRetentionIssueSummary> {
+    issues
+        .into_iter()
+        .map(LocalSettingsSyncRetentionIssueSummary::from_issue)
+        .collect()
+}
+
+#[cfg(feature = "local-preview-fixtures")]
 fn settings_sync_health_issue_component_name(
     component: SettingsSyncHealthIssueComponent,
 ) -> &'static str {
@@ -184,6 +213,16 @@ fn settings_sync_root_object_provider_issue_kind_name(
         SettingsSyncRootObjectProviderIssueKind::Stale => "stale",
         SettingsSyncRootObjectProviderIssueKind::Offline => "offline",
         SettingsSyncRootObjectProviderIssueKind::RetainedUnavailable => "retained_unavailable",
+    }
+}
+
+#[cfg(feature = "local-preview-fixtures")]
+fn settings_sync_cycle_provider_retention_issue_kind_name(
+    kind: SettingsSyncCycleProviderRetentionIssueKind,
+) -> &'static str {
+    match kind {
+        SettingsSyncCycleProviderRetentionIssueKind::NotRetained => "not_retained",
+        SettingsSyncCycleProviderRetentionIssueKind::NotAvailable => "not_available",
     }
 }
 
@@ -231,6 +270,8 @@ pub struct LocalSettingsSyncPreviewCycleReport {
     pub published_step_count: usize,
     pub published_object_count: usize,
     pub retained_object_count: usize,
+    pub retention_issue_count: usize,
+    pub retention_issues: Vec<LocalSettingsSyncRetentionIssueSummary>,
     pub fixture_materialization_issue_count: usize,
     pub retention_provider_selection_issue_count: usize,
     pub retention_provider_selection_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
@@ -264,6 +305,8 @@ pub struct LocalSettingsSyncCurrentCycleReport {
     pub published_step_count: usize,
     pub published_object_count: usize,
     pub retained_object_count: usize,
+    pub retention_issue_count: usize,
+    pub retention_issues: Vec<LocalSettingsSyncRetentionIssueSummary>,
     pub fixture_materialization_issue_count: usize,
     pub retention_provider_selection_issue_count: usize,
     pub retention_provider_selection_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
@@ -9291,6 +9334,8 @@ struct LocalSettingsSyncFixtureCycleSummary {
     published_step_count: usize,
     published_object_count: usize,
     retained_object_count: usize,
+    retention_issue_count: usize,
+    retention_issues: Vec<LocalSettingsSyncRetentionIssueSummary>,
     fixture_materialization_issue_count: usize,
     retention_provider_selection_issue_count: usize,
     retention_provider_selection_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
@@ -9407,6 +9452,8 @@ fn run_local_settings_sync_fixture_cycle(
         local_settings_sync_stored_provider_metadata_issue_summaries(
             run.stored_provider_metadata_issues(),
         );
+    let retention_issues =
+        local_settings_sync_retention_issue_summaries(run.run.cycle.retention_issues());
     let endpoint_plan = run
         .run
         .stored_provider_plan
@@ -9427,6 +9474,8 @@ fn run_local_settings_sync_fixture_cycle(
         published_step_count: run.run.cycle.cycle.cycle.published_step_count(),
         published_object_count,
         retained_object_count: run.run.cycle.retained_object_ids.len(),
+        retention_issue_count: retention_issues.len(),
+        retention_issues,
         fixture_materialization_issue_count: run.fixture_materialization_issue_count(),
         retention_provider_selection_issue_count: retention_provider_selection_issues.len(),
         retention_provider_selection_issues,
@@ -9476,6 +9525,8 @@ pub fn run_local_settings_sync_current_cycle(
         published_step_count: summary.published_step_count,
         published_object_count: summary.published_object_count,
         retained_object_count: summary.retained_object_count,
+        retention_issue_count: summary.retention_issue_count,
+        retention_issues: summary.retention_issues,
         fixture_materialization_issue_count: summary.fixture_materialization_issue_count,
         retention_provider_selection_issue_count: summary.retention_provider_selection_issue_count,
         retention_provider_selection_issues: summary.retention_provider_selection_issues,
@@ -9543,6 +9594,8 @@ pub fn run_local_settings_sync_preview_cycle(
         published_step_count: summary.published_step_count,
         published_object_count: summary.published_object_count,
         retained_object_count: summary.retained_object_count,
+        retention_issue_count: summary.retention_issue_count,
+        retention_issues: summary.retention_issues,
         fixture_materialization_issue_count: summary.fixture_materialization_issue_count,
         retention_provider_selection_issue_count: summary.retention_provider_selection_issue_count,
         retention_provider_selection_issues: summary.retention_provider_selection_issues,
@@ -14959,6 +15012,32 @@ mod tests {
 
     #[cfg(feature = "local-preview-fixtures")]
     #[test]
+    fn local_settings_sync_retention_issue_summary_names_states() {
+        let not_retained = super::LocalSettingsSyncRetentionIssueSummary::from_issue(
+            super::SettingsSyncCycleProviderRetentionIssue {
+                provider_index: 2,
+                object_id: "bafyfixture123".to_string(),
+                kind: super::SettingsSyncCycleProviderRetentionIssueKind::NotRetained,
+            },
+        );
+        let not_available = super::LocalSettingsSyncRetentionIssueSummary::from_issue(
+            super::SettingsSyncCycleProviderRetentionIssue {
+                provider_index: 3,
+                object_id: "bafyfixture456".to_string(),
+                kind: super::SettingsSyncCycleProviderRetentionIssueKind::NotAvailable,
+            },
+        );
+
+        assert_eq!(not_retained.provider_index, 2);
+        assert_eq!(not_retained.object_id, "bafyfixture123");
+        assert_eq!(not_retained.kind, "not_retained");
+        assert_eq!(not_available.provider_index, 3);
+        assert_eq!(not_available.object_id, "bafyfixture456");
+        assert_eq!(not_available.kind, "not_available");
+    }
+
+    #[cfg(feature = "local-preview-fixtures")]
+    #[test]
     fn local_settings_sync_provider_issue_summary_names_states() {
         let selection =
             super::LocalSettingsSyncProviderIssueSummary::from_retention_provider_selection_issue(
@@ -15020,6 +15099,8 @@ mod tests {
         assert_eq!(report.published_step_count, 1);
         assert!(report.published_object_count > 0);
         assert_eq!(report.retained_object_count, report.published_object_count);
+        assert_eq!(report.retention_issue_count, 0);
+        assert!(report.retention_issues.is_empty());
         assert_eq!(report.fixture_materialization_issue_count, 0);
         assert_eq!(report.retention_provider_selection_issue_count, 0);
         assert!(report.retention_provider_selection_issues.is_empty());
@@ -15093,6 +15174,8 @@ mod tests {
         assert_eq!(report.published_step_count, 1);
         assert!(report.published_object_count > 0);
         assert_eq!(report.retained_object_count, report.published_object_count);
+        assert_eq!(report.retention_issue_count, 0);
+        assert!(report.retention_issues.is_empty());
         assert_eq!(report.fixture_materialization_issue_count, 0);
         assert_eq!(report.retention_provider_selection_issue_count, 0);
         assert!(report.retention_provider_selection_issues.is_empty());

@@ -417,6 +417,10 @@ require_text \
     'selected_endpoint_pending_protocol_provider_count' \
     'Slate settings profile-sync JSON must expose selected endpoint materialization summary counts.'
 require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    'retention_issues: Vec<LocalSettingsSyncRetentionIssueSummary>' \
+    'Slate settings profile-sync JSON must expose retained-object issue summaries.'
+require_text \
     resources/resource_protocol/slate-settings.html \
     'Sync issues' \
     'Slate settings page must show profile-sync issue status.'
@@ -444,6 +448,10 @@ require_text \
     resources/resource_protocol/slate-settings.html \
     'profileSyncEndpointMaterializationStatus' \
     'Slate settings page must render endpoint materialization status from protocol-neutral reports.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'retention_issues' \
+    'Slate settings page must include retained-object issues in sync issue details.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'Issue details' \

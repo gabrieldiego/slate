@@ -501,9 +501,12 @@ Current baseline:
   summary: fixture-ready providers, pending protocol-provider work, missing
   endpoint metadata, fail-closed endpoints, and whether a protocol materializer
   is required. The settings page renders that summary from protocol-neutral
-  report fields. Those records remain profile state while protocol adapters
-  continue to behave as real-web clients with only their socket or daemon
-  transport swapped by local deterministic shims in tests.
+  report fields. Local preview reports also carry structured retained-object
+  issues for objects that a selected provider did not retain or cannot serve
+  after a retention attempt, and the settings page includes those issues in the
+  compact sync-issue status. Those records remain profile state while protocol
+  adapters continue to behave as real-web clients with only their socket or
+  daemon transport swapped by local deterministic shims in tests.
 - Trusted device-head receives now ignore stale root rollback: if a resolved
   device head points at an older sequence than a locally applied head for the
   same trusted device, Slate leaves the newer settings and device-head roots in

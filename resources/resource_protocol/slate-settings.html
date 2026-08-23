@@ -1187,6 +1187,9 @@
       const rootIssueCount = Number.isFinite(run.root_object_provider_issue_count) ?
         run.root_object_provider_issue_count :
         0;
+      const retentionIssueCount = Number.isFinite(run.retention_issue_count) ?
+        run.retention_issue_count :
+        0;
       const providerIssueCount =
         (Number.isFinite(run.retention_provider_selection_issue_count) ?
           run.retention_provider_selection_issue_count :
@@ -1194,7 +1197,7 @@
         (Number.isFinite(run.stored_provider_metadata_issue_count) ?
           run.stored_provider_metadata_issue_count :
           0);
-      const issueCount = rootIssueCount + providerIssueCount;
+      const issueCount = rootIssueCount + retentionIssueCount + providerIssueCount;
       if (issueCount > 0) {
         return `${issueCount} sync ${issueCount === 1 ? "issue" : "issues"}`;
       }
@@ -1244,6 +1247,9 @@
       const rootIssues = run && Array.isArray(run.root_object_provider_issues) ?
         run.root_object_provider_issues :
         [];
+      const retentionIssues = run && Array.isArray(run.retention_issues) ?
+        run.retention_issues :
+        [];
       const providerIssues = run ? []
         .concat(Array.isArray(run.retention_provider_selection_issues) ?
           run.retention_provider_selection_issues :
@@ -1260,6 +1266,14 @@
         const objectId = profileSyncText(issue && issue.object_id, "unknown object");
         const providerId = profileSyncText(issue && issue.provider_id, "unknown provider");
         rendered.push(`${kind} ${component} ${rootId}/${objectId} on ${providerId}`);
+      });
+      retentionIssues.forEach((issue) => {
+        const kind = profileSyncIssueLabel(issue && issue.kind, "retention issue");
+        const objectId = profileSyncText(issue && issue.object_id, "unknown object");
+        const providerIndex = Number.isFinite(issue && issue.provider_index) ?
+          issue.provider_index :
+          "?";
+        rendered.push(`retention ${kind} ${objectId} on provider ${providerIndex}`);
       });
       providerIssues.forEach((issue) => {
         const category = profileSyncIssueLabel(issue && issue.category, "provider");
