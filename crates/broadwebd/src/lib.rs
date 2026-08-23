@@ -139,8 +139,9 @@ pub mod test_fixtures {
         unregistered_internal_fixture_http_url_for_network,
     };
     use crate::protocols::ipfs::kubo_fixtures::{
-        InternalKuboRpcFixtureTransport, internal_kubo_rpc_url_belongs_to_network,
-        register_internal_kubo_profile_sync_model_for_network,
+        InternalKuboProfileSyncModelCapacity, InternalKuboRpcFixtureTransport,
+        internal_kubo_rpc_url_belongs_to_network,
+        register_internal_kubo_profile_sync_model_for_network_with_capacity,
         register_internal_kubo_rpc_fixture_for_network, take_internal_kubo_rpc_fixture_requests,
     };
     use crate::protocols::ipfs::{
@@ -183,6 +184,7 @@ pub mod test_fixtures {
         api_base_url: impl Into<String>,
         provider_id: impl Into<String>,
         network_id: &str,
+        capacity: ProfileSyncFixtureCapacity,
     ) -> Result<ProfileSyncService, BroadwebdError> {
         let api_base_url = api_base_url.into();
         let api_url = parse_http_url(api_base_url.as_str())?;
@@ -195,7 +197,7 @@ pub mod test_fixtures {
         let rpc = IpfsKuboProfileSyncRpc::from_endpoint(
             IpfsKuboRpcEndpoint::from_prevalidated_api_base_url(api_base_url),
         );
-        ProfileSyncService::kubo_with_rpc_executor_factory(
+        ProfileSyncService::kubo_with_rpc_executor_factory_and_capacity(
             rpc,
             provider_id,
             "ipfs-kubo-fixture",
@@ -206,6 +208,7 @@ pub mod test_fixtures {
                 "profile-sync/internal-transport-shim",
                 "socketless-fixture",
             ],
+            capacity,
             Arc::new(InProcessKuboProfileSyncExecutorFactory),
         )
     }
@@ -446,6 +449,7 @@ pub mod test_fixtures {
     pub struct InProcessBroadwebNetwork {
         network_id: String,
         profile_sync: LocalProfileSyncFixture,
+        profile_sync_capacity: ProfileSyncFixtureCapacity,
     }
 
     #[derive(Clone, Debug, Eq, PartialEq)]
@@ -483,6 +487,7 @@ pub mod test_fixtures {
             Self {
                 network_id: next_in_process_network_id(),
                 profile_sync: LocalProfileSyncFixture::new(),
+                profile_sync_capacity: ProfileSyncFixtureCapacity::default(),
             }
         }
     }
@@ -496,6 +501,7 @@ pub mod test_fixtures {
             Self {
                 network_id: next_in_process_network_id(),
                 profile_sync: LocalProfileSyncFixture::with_capacity(capacity),
+                profile_sync_capacity: capacity,
             }
         }
 
@@ -623,6 +629,7 @@ pub mod test_fixtures {
                 api_base_url,
                 provider_id,
                 self.network_id.as_str(),
+                self.profile_sync_capacity,
             )?);
             Ok(registry)
         }
@@ -753,14 +760,27 @@ pub mod test_fixtures {
         }
 
         pub fn kubo_profile_sync_model(&self) -> InProcessKuboRpcFixture {
-            InProcessKuboRpcFixture::new(
-                register_internal_kubo_profile_sync_model_for_network(self.network_id.as_str()),
+            InProcessKuboRpcFixture::new_with_profile_sync_capacity(
+                register_internal_kubo_profile_sync_model_for_network_with_capacity(
+                    self.network_id.as_str(),
+                    kubo_profile_sync_model_capacity(self.profile_sync_capacity),
+                ),
                 self.network_id.clone(),
+                self.profile_sync_capacity,
             )
         }
 
         pub fn profile_sync(&self) -> LocalProfileSyncFixture {
             self.profile_sync.clone()
+        }
+    }
+
+    fn kubo_profile_sync_model_capacity(
+        capacity: ProfileSyncFixtureCapacity,
+    ) -> InternalKuboProfileSyncModelCapacity {
+        InternalKuboProfileSyncModelCapacity {
+            max_objects: capacity.max_objects,
+            max_names: capacity.max_roots,
         }
     }
 
@@ -810,13 +830,27 @@ pub mod test_fixtures {
     pub struct InProcessKuboRpcFixture {
         base_url: String,
         network_id: String,
+        profile_sync_capacity: ProfileSyncFixtureCapacity,
     }
 
     impl InProcessKuboRpcFixture {
         fn new(base_url: String, network_id: impl Into<String>) -> Self {
+            Self::new_with_profile_sync_capacity(
+                base_url,
+                network_id,
+                ProfileSyncFixtureCapacity::default(),
+            )
+        }
+
+        fn new_with_profile_sync_capacity(
+            base_url: String,
+            network_id: impl Into<String>,
+            profile_sync_capacity: ProfileSyncFixtureCapacity,
+        ) -> Self {
             Self {
                 base_url,
                 network_id: network_id.into(),
+                profile_sync_capacity,
             }
         }
 
@@ -849,6 +883,7 @@ pub mod test_fixtures {
                 self.base_url.as_str(),
                 provider_id,
                 self.network_id.as_str(),
+                self.profile_sync_capacity,
             )
         }
 

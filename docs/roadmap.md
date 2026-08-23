@@ -375,6 +375,12 @@ Current baseline:
   construction supplies the reqwest HTTP executor, while
   `InProcessBroadwebNetwork` supplies the socketless fixture executor from the
   fixture layer after validating same-network synthetic endpoints.
+- The Kubo/IPNS profile-sync model now inherits `InProcessBroadwebNetwork`
+  fixture capacity limits. The socketless model rejects new encrypted objects,
+  and IPNS names after the configured object/root bounds, and the Kubo-backed
+  profile-sync service preflights the same limits before issuing a fixture RPC.
+  This keeps multi-device local simulations bounded while still exercising
+  Kubo-shaped `add`, `pin`, and `name/publish` requests.
 - The default broadwebd registry remains local-only, but callers can now opt in
   to a local Kubo HTTP profile-sync backend through an explicit registry
   constructor. That constructor replaces the local preview profile-sync service,

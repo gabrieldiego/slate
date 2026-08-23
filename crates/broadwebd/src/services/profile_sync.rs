@@ -310,12 +310,38 @@ impl ProfileSyncService {
         capabilities: &[&str],
         executor_factory: Arc<dyn KuboProfileSyncExecutorFactory>,
     ) -> Result<Self, BroadwebdError> {
+        Self::kubo_with_rpc_executor_factory_and_capacity(
+            rpc,
+            provider_id,
+            provider_kind,
+            privacy_boundary,
+            resource_profile,
+            capabilities,
+            ProfileSyncFixtureCapacity::default(),
+            executor_factory,
+        )
+    }
+
+    pub(crate) fn kubo_with_rpc_executor_factory_and_capacity(
+        rpc: IpfsKuboProfileSyncRpc,
+        provider_id: impl Into<String>,
+        provider_kind: impl Into<String>,
+        privacy_boundary: impl Into<String>,
+        resource_profile: ResourceProfile,
+        capabilities: &[&str],
+        capacity: ProfileSyncFixtureCapacity,
+        executor_factory: Arc<dyn KuboProfileSyncExecutorFactory>,
+    ) -> Result<Self, BroadwebdError> {
         let provider_id = provider_id.into();
         validate_profile_sync_provider_id(provider_id.as_str())?;
         let provider_kind = provider_kind.into();
         let privacy_boundary = privacy_boundary.into();
         let roles = ProfileSyncProviderRoles::logged_in_device();
-        let mut store = ProfileSyncStore::default();
+        let mut store = ProfileSyncStore {
+            capacity,
+            ..ProfileSyncStore::default()
+        };
+        check_profile_sync_fixture_provider_capacity(&store, provider_id.as_str())?;
         let last_seen_sequence = next_provider_seen_sequence(&mut store);
         store.providers.insert(
             provider_id.clone(),
@@ -1541,7 +1567,6 @@ fn validate_object_budget(size: usize, budget: &ResourceBudget) -> Result<(), Br
     }
 }
 
-#[cfg(any(test, feature = "test-fixtures"))]
 fn check_profile_sync_fixture_provider_capacity(
     store: &ProfileSyncStore,
     provider_id: &str,

@@ -1,13 +1,13 @@
 #![forbid(unsafe_code)]
 #![cfg(feature = "test-fixtures")]
 
-use slate_broadwebd::test_fixtures::InternalKuboRpcResponse;
 use slate_broadwebd::{
     BroadwebDaemon, BroadwebdError, HttpFetchRequest, HttpHeader, PluginRegistry,
     ProfileSyncObjectRequest, ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse,
     ProfileSyncRootRequest, ProfileSyncRootUpdate, ResourceBudget,
     test_fixtures::{
-        InProcessBroadwebNetwork, InternalFixtureHttpResponse, ProfileSyncFixtureCapacity,
+        InProcessBroadwebNetwork, InternalFixtureHttpResponse, InternalKuboRpcResponse,
+        InternalKuboRpcTransportShim, ProfileSyncFixtureCapacity,
     },
 };
 
@@ -348,6 +348,140 @@ fn in_process_profile_sync_fixture_enforces_object_and_root_capacity() {
     ));
 
     let _ = std::fs::remove_dir_all(state_root);
+}
+
+#[test]
+fn in_process_kubo_profile_sync_fixture_enforces_service_capacity() {
+    let network =
+        InProcessBroadwebNetwork::with_profile_sync_capacity(ProfileSyncFixtureCapacity {
+            max_providers: Some(1),
+            max_objects: Some(1),
+            max_roots: Some(1),
+        });
+    let kubo_fixture = network.kubo_profile_sync_model();
+    let state_root = std::env::temp_dir().join(format!(
+        "slate-broadwebd-kubo-profile-capacity-{}",
+        std::process::id()
+    ));
+    let daemon = network
+        .daemon_for_kubo_profile_sync(
+            &state_root,
+            ResourceBudget::default(),
+            kubo_fixture.base_url().to_string(),
+            "kubo-capacity",
+        )
+        .expect("start capacity-bounded Kubo profile-sync daemon");
+
+    let ProfileSyncResponse::PutEncryptedObject { object_id } = daemon
+        .profile_sync(ProfileSyncRequest::PutEncryptedObject(
+            ProfileSyncPutObjectRequest::new("default", b"first Kubo fixture object".to_vec()),
+        ))
+        .expect("first Kubo object fits service capacity")
+    else {
+        panic!("put object returned unexpected response");
+    };
+    let object_error = daemon
+        .profile_sync(ProfileSyncRequest::PutEncryptedObject(
+            ProfileSyncPutObjectRequest::new("default", b"second Kubo fixture object".to_vec()),
+        ))
+        .expect_err("second unique Kubo object should exceed service capacity");
+    assert!(matches!(
+        object_error,
+        BroadwebdError::UnsupportedRequest(message)
+            if message.contains("object capacity exceeded")
+    ));
+
+    daemon
+        .profile_sync(ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+            "default",
+            "settings/latest",
+            object_id.as_str(),
+        )))
+        .expect("first Kubo root fits service capacity");
+    let root_error = daemon
+        .profile_sync(ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+            "default",
+            "settings/alternate",
+            object_id.as_str(),
+        )))
+        .expect_err("second Kubo root should exceed service capacity");
+    assert!(matches!(
+        root_error,
+        BroadwebdError::UnsupportedRequest(message)
+            if message.contains("root capacity exceeded")
+    ));
+    assert_eq!(
+        kubo_fixture.finish(),
+        vec![
+            "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1".to_string(),
+            format!(
+                "POST /api/v0/name/publish?arg=%2Fipfs%2F{}&key=settings%2Flatest&allow-offline=true HTTP/1.1",
+                object_id
+            ),
+        ]
+    );
+
+    let _ = std::fs::remove_dir_all(state_root);
+}
+
+#[test]
+fn in_process_kubo_profile_sync_model_enforces_capacity_before_sockets() {
+    let network =
+        InProcessBroadwebNetwork::with_profile_sync_capacity(ProfileSyncFixtureCapacity {
+            max_providers: None,
+            max_objects: Some(1),
+            max_roots: Some(1),
+        });
+    let kubo_fixture = network.kubo_profile_sync_model();
+    let rpc = kubo_fixture
+        .profile_sync_rpc()
+        .expect("build fixture Kubo profile-sync RPC");
+    let executor = InternalKuboRpcTransportShim;
+    let budget = ResourceBudget::default();
+
+    let object_id = rpc
+        .put_encrypted_object(&executor, b"first Kubo model object", &budget)
+        .expect("first Kubo model object fits capacity");
+    let object_error = rpc
+        .put_encrypted_object(&executor, b"second Kubo model object", &budget)
+        .expect_err("second Kubo model object should exceed capacity");
+    assert!(matches!(
+        object_error,
+        BroadwebdError::Request(message)
+            if message.contains("Kubo profile-sync add returned HTTP status 507")
+    ));
+
+    rpc.publish_root(&executor, "settings/latest", object_id.as_str(), &budget)
+        .expect("first Kubo model IPNS name fits capacity");
+    let name_error = rpc
+        .publish_root(&executor, "settings/alternate", object_id.as_str(), &budget)
+        .expect_err("second Kubo model IPNS name should exceed capacity");
+    assert!(matches!(
+        name_error,
+        BroadwebdError::Request(message)
+            if message.contains("Kubo profile-sync name/publish returned HTTP status 507")
+    ));
+
+    let requests = kubo_fixture.finish();
+    assert_eq!(requests.len(), 4);
+    assert_eq!(
+        requests[0],
+        "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1"
+    );
+    assert_eq!(
+        requests[1],
+        "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1"
+    );
+    assert!(
+        requests[2].starts_with("POST /api/v0/name/publish?"),
+        "first publish request should be Kubo-shaped: {:?}",
+        requests
+    );
+    assert!(
+        requests[3].starts_with("POST /api/v0/name/publish?"),
+        "second publish request should be Kubo-shaped: {:?}",
+        requests
+    );
 }
 
 #[test]

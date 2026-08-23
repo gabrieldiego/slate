@@ -25,6 +25,12 @@ pub struct InternalKuboRpcTransportShim;
 
 pub type InternalKuboRpcResponse = IpfsKuboRpcResponse;
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct InternalKuboProfileSyncModelCapacity {
+    pub(crate) max_objects: Option<usize>,
+    pub(crate) max_names: Option<usize>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct InternalKuboRpcFixtureTransport {
     transport: IpfsKuboRpcTransport,
@@ -114,14 +120,17 @@ pub(crate) fn register_internal_kubo_rpc_fixture_for_network(
     base_url
 }
 
-pub(crate) fn register_internal_kubo_profile_sync_model_for_network(network_id: &str) -> String {
+pub(crate) fn register_internal_kubo_profile_sync_model_for_network_with_capacity(
+    network_id: &str,
+    capacity: InternalKuboProfileSyncModelCapacity,
+) -> String {
     let base_url = next_internal_kubo_rpc_fixture_base_url(network_id);
     internal_kubo_rpc_fixtures()
         .lock()
         .expect("internal Kubo fixture registry should not be poisoned")
         .insert(
             base_url.clone(),
-            InternalKuboRpcFixture::profile_sync_model(),
+            InternalKuboRpcFixture::profile_sync_model_with_capacity(capacity),
         );
     base_url
 }
@@ -232,10 +241,10 @@ impl InternalKuboRpcFixture {
         }
     }
 
-    fn profile_sync_model() -> Self {
+    fn profile_sync_model_with_capacity(capacity: InternalKuboProfileSyncModelCapacity) -> Self {
         Self {
             behavior: InternalKuboRpcFixtureBehavior::ProfileSyncModel(
-                InternalKuboProfileSyncModel::default(),
+                InternalKuboProfileSyncModel::with_capacity(capacity),
             ),
             requests: Vec::new(),
         }
@@ -252,12 +261,20 @@ enum InternalKuboRpcFixtureBehavior {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct InternalKuboProfileSyncModel {
+    capacity: InternalKuboProfileSyncModelCapacity,
     objects: BTreeMap<String, Vec<u8>>,
     pins: BTreeSet<String>,
     names: BTreeMap<String, String>,
 }
 
 impl InternalKuboProfileSyncModel {
+    fn with_capacity(capacity: InternalKuboProfileSyncModelCapacity) -> Self {
+        Self {
+            capacity,
+            ..Self::default()
+        }
+    }
+
     fn response_for(
         &mut self,
         url: &Url,
@@ -285,6 +302,17 @@ impl InternalKuboProfileSyncModel {
             )
         })?;
         let object_id = internal_kubo_profile_sync_model_object_id(bytes);
+        if !self.objects.contains_key(object_id.as_str())
+            && let Some(max_objects) = self.capacity.max_objects
+            && self.objects.len() >= max_objects
+        {
+            return Ok(internal_kubo_rpc_error_response(
+                507,
+                format!(
+                    "Kubo profile-sync fixture object capacity exceeded: max {max_objects} objects"
+                ),
+            ));
+        }
         self.objects.insert(object_id.clone(), bytes.to_vec());
         kubo_json_response(serde_json::json!({
             "Name": "profile-object",
@@ -351,6 +379,17 @@ impl InternalKuboProfileSyncModel {
             return Ok(internal_kubo_rpc_error_response(
                 404,
                 format!("cannot publish missing IPFS object: {object_id}"),
+            ));
+        }
+        if !self.names.contains_key(key_id.as_str())
+            && let Some(max_names) = self.capacity.max_names
+            && self.names.len() >= max_names
+        {
+            return Ok(internal_kubo_rpc_error_response(
+                507,
+                format!(
+                    "Kubo profile-sync fixture IPNS name capacity exceeded: max {max_names} names"
+                ),
             ));
         }
         self.names.insert(key_id.clone(), object_id.clone());

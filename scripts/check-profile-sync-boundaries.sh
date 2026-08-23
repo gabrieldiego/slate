@@ -364,9 +364,17 @@ require_text \
     'with_profile_sync_capacity' \
     'In-process broadweb fixtures must expose profile-sync capacity controls for local simulations.'
 require_text \
+    crates/broadwebd/src/protocols/ipfs/kubo_fixtures.rs \
+    'InternalKuboProfileSyncModelCapacity' \
+    'Socketless Kubo/IPNS profile-sync models must expose fixture-local capacity controls.'
+require_text \
+    crates/broadwebd/tests/in_process_network_fixture.rs \
+    'in_process_kubo_profile_sync_model_enforces_capacity_before_sockets' \
+    'Kubo/IPNS profile-sync capacity must be verified through the socketless transport shim.'
+require_text \
     docs/roadmap.md \
-    'fixture capacity limits' \
-    'Roadmap must record bounded in-process profile-sync fixture state.'
+    'socketless model rejects new encrypted objects' \
+    'Roadmap must record bounded Kubo/IPNS profile-sync fixture state.'
 
 require_text \
     crates/chrome/src/desktop/protocols/slate.rs \
