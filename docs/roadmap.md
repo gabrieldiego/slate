@@ -1628,11 +1628,15 @@ Current baseline:
   material and still needs encrypted recovery/handoff policy before production
   use.
 - `slate://settings` now exposes that handoff primitive in the Profile Sync
-  Preview. An enrolled session can create and download a target-specific
-  `slate-profile-handoff-<device>.json` file, and a target device can import a
-  selected or pasted handoff file to apply membership and activate the session
-  key-derived local metadata in one step. This remains a sensitive local preview
-  flow and still uses the existing query-string internal action transport until
+  Preview as the single visible PC-to-PC enrollment-file flow. An enrolled
+  session can download a target-specific
+  `slate-profile-enrollment-<device>.json` file, and a target device can import
+  a selected or pasted enrollment file to apply membership and activate the
+  session key-derived local metadata in one step. The lower-level key-file,
+  device-request, and non-secret enrollment-bundle controls remain hidden
+  implementation helpers until QR-code or unbound onboarding semantics are
+  designed deliberately. This remains a sensitive local preview flow and still
+  uses the existing query-string internal action transport until
   POST/body-capable Slate protocol imports are added.
 - The socketless two-device Profile Sync Preview now uses the same request
   shape: the receiver emits a `ProfileSyncDeviceEnrollmentRequest`, the
@@ -1643,8 +1647,8 @@ Current baseline:
 - `slate://settings` now renders a compact Profile Sync Preview checkpoint
   panel from the same local JSON state. The manual trial surface shows the
   local device, key state, provider readiness, trusted-device count, app-domain
-  count, device-request target, enrollment target, and last local/two-device
-  trial result without adding any protocol endpoints.
+  count, enrollment-file target, and last local/two-device trial result without
+  adding any protocol endpoints.
 - The Profile Sync Preview now also has a local-only "Sync current settings"
   action. It reuses the session key file and stored preview provider metadata
   to publish/receive the current pending `slate-settings.db` changes through
@@ -1703,9 +1707,10 @@ Next:
 - Extend the runtime watcher beyond the first chrome settings path so
   externally synced routing, privacy, app, and browser-core changes are applied
   through their normal update paths instead of raw database replacement.
-- Extend the Settings-based `Profile Sync Preview` with QR-code rendering,
-  platform key-store loading, device identity rotation/repair,
-  POST/body-capable custom protocol imports for larger artifacts,
+- Extend the Settings-based `Profile Sync Preview` with QR-code rendering for
+  smartphone-mediated enrollment, an explicit decision on target-bound versus
+  unbound enrollment files, platform key-store loading, device identity
+  rotation/repair, POST/body-capable custom protocol imports for larger artifacts,
   trusted-device/provider status, encrypted recovery/handoff-file flows, richer
   multi-device local trial execution, and app-domain status for Settings and
   Bookmarks before exposing real IPFS/IPNS or internet-backed providers.

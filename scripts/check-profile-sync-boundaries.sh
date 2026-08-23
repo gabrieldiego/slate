@@ -374,12 +374,16 @@ require_text \
     'Slate settings profile-sync JSON must include handoff export text for local file trials.'
 require_text \
     resources/resource_protocol/slate-settings.html \
-    'id="profile-sync-handoff-create"' \
-    'Slate settings page must expose profile-sync handoff creation.'
+    'id="profile-sync-handoff-create" hidden' \
+    'Slate settings page must keep low-level handoff creation hidden behind the file download action.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'Download enrollment file' \
+    'Slate settings page must expose a single enrollment-file download action.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'id="profile-sync-handoff-import"' \
-    'Slate settings page must expose profile-sync handoff import.'
+    'Slate settings page must expose profile-sync enrollment-file import.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'handoff/create' \
